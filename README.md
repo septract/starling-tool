@@ -1,2 +1,3 @@
-# starling-tool
-A verifier for concurrent algorithms, based on separation logic
+# Project Starling 
+
+This is a placeholder. There's nothing here yet. 
