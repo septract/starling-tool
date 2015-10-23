@@ -2,25 +2,26 @@ open System
 open FParsec
 open Microsoft.Z3
 
-type Command =
+type View =
+    | Apply of View * args: string list
+    | NamedView of string
+    | Unit
+    | Join of View * View
+and Command =
     | Atomic of string
     | Skip
     | Seq of Command * Command
     | Choice of Command * Command
     | Par of Command * Command
     | Star of Command
+    | Viewed of ViewedCommand
+and ViewedCommand =
+    | PreViewCommand of View * Command
+    | PostViewCommand of Command * View
+    | BothViewCommand of View * Command * View
 
-type View =
-    | Apply of View * args: string list
-    | NamedView of string
-    | Unit
-    | Join of View * View
-
-type Method =
-    | End of postcondition: View
-    | Step of precondition: View * cmd: Command
-
-let wsc = anyOf " \t"
+let wsChars = " \t\n"
+let wsc = anyOf wsChars
 let ws = manyChars wsc
 let ws1 = many1Chars wsc
 
@@ -30,30 +31,46 @@ let inBraces p = inBrackets "{" "}" p
 
 let parseBin sep fn = pstring sep .>> ws >>% fun x y -> fn(x, y)
 
+let parseView, parseViewRef = createParserForwardedToRef<View, unit>()
+let parseViewLine = inBraces parseView
+
 let parseCommand, parseCommandRef = createParserForwardedToRef<Command, unit>()
 let parseAtomic = between (pstring "<") (pstring ">") (charsTillString ">" false 255) |>> Atomic
 let parseSkip = pstring "skip" >>% Skip
 let parseBracketedCommand = inParens parseCommand
+
+let maybeAddCondition lcond cmd rcond =
+    match (lcond, rcond) with
+        | (Some l, Some r) -> Viewed (BothViewCommand (l, cmd, r))
+        | (None  , Some r) -> Viewed (PostViewCommand (cmd, r))
+        | (Some l, None  ) -> Viewed (PreViewCommand  (l, cmd))
+        | (None,   None  ) -> cmd
+let parseCondition = ws >>. opt parseViewLine .>> ws
+let tryWrapInCondition parser =
+    pipe3 parseCondition parser parseCondition maybeAddCondition
+
 let maybeAddStar x =
     match x with
         | (v, Some _) -> Star v
         | (v, None)   -> v
+let parseStar = ws >>. opt (pstring "*") .>> ws
+let tryWrapInStar parser = parser .>>. parseStar |>> maybeAddStar
 let parseSimpleCommand =
-    choice [ parseAtomic
-           ; parseSkip
-           ; parseBracketedCommand
-           ] .>>. ((pstring "*" |>> Some <|>% None) .>> ws) |>> maybeAddStar
+    choice [parseAtomic; parseSkip; parseBracketedCommand]
+
+
 do parseCommandRef :=
-    chainl1 parseSimpleCommand
+    chainl1 (tryWrapInCondition (tryWrapInStar parseSimpleCommand))
         (choice [ parseBin ";" Seq
                 ; parseBin "||" Par
                 ; parseBin "+" Choice
                 ])
 
-let notSpecial c = c <> ',' && c <> '(' && c <> ')' && c <> ' ' && c <> '\t' && c <> '{' && c <> '}'
+let specChars = ",(){}*<>+|;"
+let notSpecial c = String.forall (fun d -> d <> c) (specChars + wsChars)
+let notSpecialWs c = String.forall (fun d -> d <> c) specChars
 
-let parseView, parseViewRef = createParserForwardedToRef<View, unit>()
-let parseArgList = inParens (sepBy (many1Satisfy notSpecial) (ws >>. pstring "," .>> ws))
+let parseArgList = inParens (sepBy (many1Satisfy notSpecialWs) (ws >>. pstring "," .>> ws))
 let parseNamedView = many1Satisfy notSpecial |>> NamedView
 let parseUnit = pstring "emp" >>% Unit
 let parseBracketedView = inParens parseView
@@ -68,8 +85,6 @@ let parseSimpleView =
            ] .>>. ((parseArgList |>> Some <|>% None) .>> ws) |>> maybeAddArgs
 do parseViewRef :=
     chainl1 parseSimpleView (pstring "*" .>> ws >>% fun x y -> Join(x, y))
-
-let parseViewLine = inBraces parseView
 
 let cas =
     Choice(Atomic("foo"), Skip)
@@ -175,11 +190,26 @@ let runZ3Example =
 
     ctx.Dispose
 
-let main =
-    Console.WriteLine("Hello, world!")
-    match run parseCommand "<a := b> || <c := d>* + (<foo>; <bar>)" with
+let demoCommand line =
+    match run parseCommand line with
         | Success(result, _, _)   -> printfn "Success: %A" result
         | Failure(errorMsg, _, _) -> printfn "Failure: %s" errorMsg
+
+let main =
+    Console.WriteLine("Hello, world!")
+    demoCommand "<a := b> || <c := d>* + (<foo>; <bar>)"
+    demoCommand "{emp} <a := b> {fooBar()} || <c := d>* + (<foo>; <bar>)"
+    demoCommand """
+    {emp}
+        <a := b>
+    {holdTickIf(true, t)};
+        (
+            {holdTickIf(true, t)}
+            <s = serving;>
+            {holdTickIf(s != t) * holdLockIf(s = t) * termIf(s = t)}
+        )*
+    {holdLockIf(true)}
+    """
     match run parseViewLine pv2 with
         | Success(result, _, _)   -> printfn "Success: %A" result
         | Failure(errorMsg, _, _) -> printfn "Failure: %s" errorMsg
