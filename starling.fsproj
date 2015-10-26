@@ -21,7 +21,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="mscorlib" />
-    <Reference Include="FSharp.Core" />
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="FParsec">
@@ -33,6 +32,12 @@
     <Reference Include="Microsoft.Z3">
       <HintPath>packages\z3x86win.4.3.2.1\lib\Microsoft.Z3.dll</HintPath>
     </Reference>
+    <Reference Include="CommandLine">
+      <HintPath>packages\CommandLineParser.2.0.275-beta\lib\net40\CommandLine.dll</HintPath>
+    </Reference>
+    <Reference Include="FSharp.Core">
+      <HintPath>packages\FSharp.Core.4.0.0.1\lib\net40\FSharp.Core.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="test.fs" />
@@ -40,5 +45,6 @@
   <Import Project="$(MSBuildExtensionsPath32)\..\Microsoft SDKs\F#\3.1\Framework\v4.0\Microsoft.FSharp.Targets" />
   <ItemGroup>
     <None Include="packages.config" />
+    <None Include="ticketLock.cvf" />
   </ItemGroup>
 </Project>

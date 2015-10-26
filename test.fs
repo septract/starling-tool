@@ -1,6 +1,8 @@
 open System
 open FParsec
 open Microsoft.Z3
+open CommandLine
+open CommandLine.Text
 
 type View =
     | Apply of View * args: string list
@@ -216,34 +218,28 @@ let demoCommand = demoParser parseCommand
 
 let parseScript = ws >>. sepEndBy parseMethod ws
 
-let main =
-    Console.WriteLine("Hello, world!")
-    demoCommand "<a := b> || <c := d>* + (<foo>; <bar>)"
-    demoCommand "{emp} <a := b> {fooBar()} || <c := d>* + (<foo>; <bar>)"
-    demoParser parseScript """
-    lock() {
-      {emp}
-        <t = ticket++;>
-      {holdTickIf(true, t)}
-        ;
-        (
-          {holdTickIf(true, t)}
-            <s = serving;>
-          {holdTickIf(s != t) * holdLockIf(s = t) * termIf(s = t)}
-        )*
-      {holdLockIf(true)}
-    }
+type Options = {
+    [<Value(0,
+            MetaName = "input",
+            HelpText = "The file to load (omit, or supply -, for standard input).")>]
+    input: string option;
+}
 
-    unlock() {
-      {holdLock()}
-        <serving++>
-      {emp}
-    }
-    """
-    match run parseViewLine pv2 with
+let parseFile name =
+    let (stream, streamName) =
+        match name with
+            | Some("-") -> (Console.OpenStandardInput(),        "(stdin)")
+            | None      -> (Console.OpenStandardInput(),        "(stdin)")
+            | Some(nam) -> (IO.File.OpenRead(nam) :> IO.Stream, nam      )
+    let pres = runParserOnStream parseScript () streamName stream Text.Encoding.UTF8
+    match pres with
         | Success(result, _, _)   -> printfn "Success: %A" result
         | Failure(errorMsg, _, _) -> printfn "Failure: %s" errorMsg
 
-    runZ3Example
-
-main()
+[<EntryPoint>]
+let main argv =
+    let result = CommandLine.Parser.Default.ParseArguments<Options>(argv)
+    match result with
+        | :? Parsed<Options> as parsed -> parseFile parsed.Value.input
+        | :? NotParsed<Options> as notParsed -> printfn "failure: %A" notParsed.Errors
+    0
