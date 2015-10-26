@@ -233,6 +233,12 @@ let main =
         )*
       {holdLockIf(true)}
     }
+
+    unlock() {
+      {holdLock()}
+        <serving++>
+      {emp}
+    }
     """
     match run parseViewLine pv2 with
         | Success(result, _, _)   -> printfn "Success: %A" result
