@@ -20,14 +20,21 @@ and ViewedCommand =
     | PostViewCommand of Command * View
     | BothViewCommand of View * Command * View
 
-let wsChars = " \t\n"
-let wsc = anyOf wsChars
-let ws = manyChars wsc
+type Method = {
+    Name   : string
+    Params : string list
+    Body   : Command
+}
+
+let wsChars = " \t\r\n"
+let wsc : Parser<char, unit> = anyOf wsChars
+let ws = spaces // skips over " \t\r\n" by definition
 let ws1 = many1Chars wsc
 
 let inBrackets bra ket = between (pstring bra .>> ws) (ws >>. pstring ket)
 let inParens p = inBrackets "(" ")" p
 let inBraces p = inBrackets "{" "}" p
+let inAngles p = inBrackets "<" ">" p
 
 let parseBin sep fn = pstring sep .>> ws >>% fun x y -> fn(x, y)
 
@@ -35,7 +42,7 @@ let parseView, parseViewRef = createParserForwardedToRef<View, unit>()
 let parseViewLine = inBraces parseView
 
 let parseCommand, parseCommandRef = createParserForwardedToRef<Command, unit>()
-let parseAtomic = between (pstring "<") (pstring ">") (charsTillString ">" false 255) |>> Atomic
+let parseAtomic = inAngles (charsTillString ">" false 255) |>> Atomic
 let parseSkip = pstring "skip" >>% Skip
 let parseBracketedCommand = inParens parseCommand
 
@@ -70,21 +77,31 @@ let specChars = ",(){}*<>+|;"
 let notSpecial c = String.forall (fun d -> d <> c) (specChars + wsChars)
 let notSpecialWs c = String.forall (fun d -> d <> c) specChars
 
-let parseArgList = inParens (sepBy (many1Satisfy notSpecialWs) (ws >>. pstring "," .>> ws))
-let parseNamedView = many1Satisfy notSpecial |>> NamedView
+let parseIdent = many1Satisfy notSpecial
+
+let parseArgList = inParens (sepBy (many1Satisfy notSpecialWs) (pstring "," .>> ws))
+let parseNamedView = parseIdent |>> NamedView
 let parseUnit = pstring "emp" >>% Unit
 let parseBracketedView = inParens parseView
 let maybeAddArgs x =
     match x with
         | (v, Some args) -> Apply(v,args)
         | (v, None)      -> v
+let tryWrapInApply parser = parser .>>. opt parseArgList .>> ws |>> maybeAddArgs
 let parseSimpleView = 
     choice [ parseUnit
            ; parseBracketedView
            ; parseNamedView
-           ] .>>. ((parseArgList |>> Some <|>% None) .>> ws) |>> maybeAddArgs
+           ] 
 do parseViewRef :=
-    chainl1 parseSimpleView (pstring "*" .>> ws >>% fun x y -> Join(x, y))
+    chainl1 (tryWrapInApply parseSimpleView) (pstring "*" .>> ws >>% fun x y -> Join(x, y))
+
+let parseMethod =
+    // Example method:               'main (argc, argv) { skip }'
+    pipe3 (parseIdent .>> ws)     // 'main '
+          (parseArgList .>> ws)   //      '(argc, argv) '
+          (inBraces parseCommand) //                   '{ skip }'
+          (fun n ps b -> { Name = n; Params = ps; Body = b })
 
 let cas =
     Choice(Atomic("foo"), Skip)
@@ -190,25 +207,32 @@ let runZ3Example =
 
     ctx.Dispose
 
-let demoCommand line =
-    match run parseCommand line with
+let demoParser parser line =
+    match run parser line with
         | Success(result, _, _)   -> printfn "Success: %A" result
         | Failure(errorMsg, _, _) -> printfn "Failure: %s" errorMsg
+
+let demoCommand = demoParser parseCommand
+
+let parseScript = ws >>. sepEndBy parseMethod ws
 
 let main =
     Console.WriteLine("Hello, world!")
     demoCommand "<a := b> || <c := d>* + (<foo>; <bar>)"
     demoCommand "{emp} <a := b> {fooBar()} || <c := d>* + (<foo>; <bar>)"
-    demoCommand """
-    {emp}
-        <a := b>
-    {holdTickIf(true, t)};
+    demoParser parseScript """
+    lock() {
+      {emp}
+        <t = ticket++;>
+      {holdTickIf(true, t)}
+        ;
         (
-            {holdTickIf(true, t)}
+          {holdTickIf(true, t)}
             <s = serving;>
-            {holdTickIf(s != t) * holdLockIf(s = t) * termIf(s = t)}
+          {holdTickIf(s != t) * holdLockIf(s = t) * termIf(s = t)}
         )*
-    {holdLockIf(true)}
+      {holdLockIf(true)}
+    }
     """
     match run parseViewLine pv2 with
         | Success(result, _, _)   -> printfn "Success: %A" result
