@@ -29,6 +29,8 @@ module Parser =
     let inParens p = inBrackets "(" ")" p
     /// Parser for items in {braces}.
     let inBraces p = inBrackets "{" "}" p
+    /// Parser for items in {|view braces|}.
+    let inViewBraces p = inBrackets "{|" "|}" p
     /// Parser for items in <angle brackets>.
     let inAngles p = inBrackets "<" ">" p
 
@@ -42,7 +44,7 @@ module Parser =
     /// Parser for `raw` views (not surrounded in {braces}).
     let parseView, parseViewRef = createParserForwardedToRef<View, unit>()
     /// Parser for braced view statements.
-    let parseViewLine = inBraces parseView
+    let parseViewLine = inViewBraces parseView
 
     /// Parser for commands.
     let parseCommand, parseCommandRef = createParserForwardedToRef<Command, unit>()

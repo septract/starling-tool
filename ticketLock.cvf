@@ -1,18 +1,18 @@
 ﻿    lock() {
-      {emp}
+      {| emp |}
         <t = ticket++;>
-      {holdTickIf(true, t)}
+      {| holdTickIf(true, t) |}
         ;
         (
-          {holdTickIf(true, t)}
+          {| holdTickIf(true, t) |}
             <s = serving;>
-          {holdTickIf(s != t) * holdLockIf(s = t) * termIf(s = t)}
+          {| holdTickIf(s != t) * holdLockIf(s = t) * termIf(s = t) |}
         )*
-      {holdLockIf(true)}
+      {| holdLockIf(true) |}
     }
 
     unlock() {
-      {holdLock()}
+      {| holdLock() |}
         <serving++>
-      {emp}
+      {| emp |}
     }
