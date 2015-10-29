@@ -7,22 +7,30 @@ module Types =
         | NamedView of string
         | Unit
         | Join of View * View
+        | IfView of string * View * View
 
     type Command =
         | Atomic of string
         | Skip
-        | Seq of Command * Command
-        | Choice of Command * Command
-        | Par of Command * Command
-        | Star of Command
-        | Viewed of ViewedCommand
+        | If of string * Block * Block
+        | While of string * Block
+        | DoWhile of Block * string
+        | Blocks of Block list
+
     and ViewedCommand =
-        | PreViewCommand of View * Command
-        | PostViewCommand of Command * View
-        | BothViewCommand of View * Command * View
+        {
+            Command : Command
+            Post    : View
+        }
+
+    and Block = {
+        Pre      : View
+        // Post-condition is that in the last Seq.
+        Contents : ViewedCommand list
+    }
 
     type Method = {
         Name   : string
         Params : string list
-        Body   : Command
+        Body   : Block
     }

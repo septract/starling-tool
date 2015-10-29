@@ -1,18 +1,17 @@
-﻿    lock() {
+﻿    method lock() {
       {| emp |}
-        <t = ticket++;>
-      {| holdTickIf(true, t) |}
-        ;
-        (
-          {| holdTickIf(true, t) |}
-            <s = serving;>
-          {| holdTickIf(s != t) * holdLockIf(s = t) * termIf(s = t) |}
-        )*
-      {| holdLockIf(true) |}
+        <t = ticket++>;
+      {| holdTick(t) |}
+        do {
+          {| holdTick(t) |}
+            <s = serving>;
+          {| if s = t then holdLock else holdTick(t) |}
+        } while (s = t)
+      {| holdLock |}
     }
 
-    unlock() {
+    method unlock() {
       {| holdLock() |}
-        <serving++>
+        <serving++>;
       {| emp |}
     }

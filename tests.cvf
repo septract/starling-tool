@@ -1,0 +1,13 @@
+method testSkip() {
+  {| emp |}
+    ;
+  {| emp |}
+}
+
+method testPar() {
+  {| foo |}
+    { {| foo |} while (x < 20) { {| foobar |} <x++>; {| barbar |} } {| bar |}}
+    ||
+    { {| foo |} while (x < 20) { {| foobar |} <x++>; {| bazbar |} } {| baz |}}
+  {| bar * baz |}
+}
