@@ -11,3 +11,13 @@ method testPar() {
     { {| foo |} while (x < 20) { {| foobar |} <x++>; {| bazbar |} } {| baz |}}
   {| bar * baz |}
 }
+
+method testBimdas() {
+  {| emp |}
+    while (a + b * c < 23 && (a + b) * c < 23) {
+      {| emp |}
+      ;
+      {| emp |}
+    }
+  {| emp |}
+}

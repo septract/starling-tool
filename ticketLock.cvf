@@ -1,7 +1,7 @@
 ﻿constraint emp                       => ticket >= serving;
 constraint holdTick(t)               => ticket > t;
 constraint holdLock()                => ticket > serving;
-constraint holdLock()  * holdTick(t) => serving 6 = t;
+constraint holdLock()  * holdTick(t) => serving != t;
 constraint holdTick(t) * holdTick(t) => false;
 constraint holdLock()  * holdLock()  => false;
 
@@ -12,8 +12,8 @@ method lock() {
     do {
       {| holdTick(t) |}
         <s = serving>;
-      {| if s = t then holdLock else holdTick(t) |}
-    } while (s = t)
+      {| if s == t then holdLock else holdTick(t) |}
+    } while (s == t)
   {| holdLock |}
 }
 

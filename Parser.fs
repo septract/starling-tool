@@ -78,7 +78,10 @@ module Parser =
     let parseCommand, parseCommandRef = createParserForwardedToRef<Command, unit>()
     /// Parser for blocks.
     let parseBlock, parseBlockRef = createParserForwardedToRef<Block, unit>()
-
+    /// Parser for expressions.
+    /// The expression parser is split into several chains as per
+    /// preference rank.
+    let parseExpression, parseExpressionRef = createParserForwardedToRef<Expression, unit>()
 
     // From here on out, everything should line up more or less with the
     // BNF, except in reverse, bottom-up order.
@@ -87,15 +90,6 @@ module Parser =
     //
     // To be implemented.
     //
-
-    /// Parser for expressions.
-    let parseExpression =
-        // TODO(CaptainHayashi):
-        //   as in Types.fs, this probably doesn't want to be a string
-        charsTillString ")" false 255
-
-    /// Eventually parse a view expression.
-    let parseViewExprn = charsTillString "then" false 255
 
     /// Parser for atomic actions.
     let parseAtomic =
@@ -127,6 +121,69 @@ module Parser =
 
 
     //
+    // Expressions.
+    //
+
+    /// Parser for primary expressions.
+    let parsePrimaryExpression =
+        choice [ pstring "true"  >>% TrueExp
+               ; pstring "false" >>% FalseExp
+               ; pint64          |>> IntExp
+               ; parseIdentifier |>> IdExp
+               ; inParens parseExpression
+               ] .>> ws
+
+    /// Parser for multiplicative expressions.
+    let parseMultiplicativeExpression =
+        chainl1 (parsePrimaryExpression .>> ws)
+                (choice
+                    [ pstring "*" .>> ws >>% fun x y -> MulExp(x, y)
+                    ; pstring "/" .>> ws >>% fun x y -> DivExp(x, y)
+                    ]
+                )
+
+    /// Parser for additive expressions.
+    let parseAdditiveExpression =
+        chainl1 (parseMultiplicativeExpression .>> ws)
+                (choice
+                    [ pstring "+" .>> ws >>% fun x y -> AddExp(x, y)
+                    ; pstring "-" .>> ws >>% fun x y -> SubExp(x, y)
+                    ]
+                )
+
+    /// Parser for relational expressions.
+    let parseRelationalExpression =
+        chainl1 (parseAdditiveExpression .>> ws)
+                (choice
+                    [ pstring ">=" .>> ws >>% fun x y -> GeExp(x, y)
+                    ; pstring "<=" .>> ws >>% fun x y -> LeExp(x, y)
+                    ; pstring ">"  .>> ws >>% fun x y -> GtExp(x, y)
+                    ; pstring "<"  .>> ws >>% fun x y -> LtExp(x, y)
+                    ]
+                )
+
+    /// Parser for equality expressions.
+    let parseEqualityExpression =
+        chainl1 (parseRelationalExpression .>> ws)
+                (choice
+                    [ pstring "==" .>> ws >>% fun x y -> EqExp(x, y)
+                    ; pstring "!=" .>> ws >>% fun x y -> NeqExp(x, y)
+                    ]
+                )
+
+    /// Parser for logical AND expressions.
+    let parseAndExpression =
+        chainl1 (parseEqualityExpression .>> ws)
+                (pstring "&&" .>> ws >>% fun x y -> AndExp(x, y))
+
+    /// Parser for logical OR expressions.
+    let parseOrExpression =
+        chainl1 (parseAndExpression .>> ws)
+                (pstring "||" .>> ws >>% fun x y -> OrExp(x, y))
+
+    do parseExpressionRef := parseOrExpression
+
+    //
     // Views.
     //
 
@@ -135,7 +192,7 @@ module Parser =
 
     /// Parses a conditional view.
     let parseIfView =
-        pipe3ws (pstring "if" >>. ws >>. parseViewExprn)
+        pipe3ws (pstring "if" >>. ws >>. parseExpression)
                 // ^- if <view-exprn> ...
                 (pstring "then" >>. ws >>. parseView)
                 // ^-                 ... then <view> ...
@@ -267,16 +324,13 @@ module Parser =
     // Top-level definitions.
     //
 
-    /// TODO(CaptainHayashi): get rid of this, use parseExpression.
-    let parseCExpr = charsTillString ";" false 255
-
     /// Parses a constraint.
     let parseConstraint =
         pstring "constraint" >>. ws >>.
         // ^- constraint ..
             pipe2ws parseView
                     // ^- <view> ...
-                    (pstring "=>" >>. ws >>. parseCExpr .>> ws .>> pstring ";" .>> ws)
+                    (pstring "=>" >>. ws >>. parseExpression .>> ws .>> pstring ";" .>> ws)
                     // ^-        ... => <expression> ;
                     (fun v ex -> { CView = v; CExpression = ex })
 

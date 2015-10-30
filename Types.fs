@@ -2,19 +2,37 @@
 
 [<AutoOpen>]
 module Types =
+    type Expression =
+        | TrueExp
+        | FalseExp
+        | IntExp of int64
+        | IdExp of string
+        | MulExp of Expression * Expression
+        | DivExp of Expression * Expression
+        | AddExp of Expression * Expression
+        | SubExp of Expression * Expression
+        | GtExp of Expression * Expression
+        | GeExp of Expression * Expression
+        | LeExp of Expression * Expression
+        | LtExp of Expression * Expression
+        | EqExp of Expression * Expression
+        | NeqExp of Expression * Expression
+        | AndExp of Expression * Expression
+        | OrExp of Expression * Expression
+
     type View =
         | Apply of View * args: string list
         | NamedView of string
         | Unit
         | Join of View * View
-        | IfView of string * View * View
+        | IfView of Expression * View * View
 
     type Command =
         | Atomic of string
         | Skip
-        | If of string * Block * Block
-        | While of string * Block
-        | DoWhile of Block * string
+        | If of Expression * Block * Block
+        | While of Expression * Block
+        | DoWhile of Block * Expression
         | Blocks of Block list
 
     and ViewedCommand =
@@ -31,7 +49,7 @@ module Types =
 
     type Constraint = {
         CView       : View
-        CExpression : string
+        CExpression : Expression
     }
 
     type Method = {
