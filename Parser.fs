@@ -29,7 +29,7 @@ module Parser =
     // Special characters.
 
     /// All non-whitespace special characters.
-    let specChars = ",(){}*<>+|;"
+    let specChars = ",(){}*<>+|;="
 
     // TODO(CaptainHayashi):
     //   these two predicates should probably have their names transposed!
@@ -41,7 +41,7 @@ module Parser =
     let notSpecialWs c = String.forall (fun d -> d <> c) specChars
 
     /// Parses a run of one or more non-special non-whitespace characters.
-    let parseIdent = many1Satisfy notSpecial
+    let parseIdentifier = many1Satisfy notSpecial
 
 
     // Bracket parsers.
@@ -58,14 +58,6 @@ module Parser =
     /// Parser for items in <angle brackets>.
     let inAngles p = inBrackets "<" ">" p
 
-    /// Parses a comma-delimited, parenthesised list.
-    let parseArgList =
-        // TODO(CaptainHayashi):
-        //   Make this generic in the first argument to sepBy, and also
-        //   make said first argument more robust -- currently this parses all
-        //   whitespace before the ,!
-        inParens (sepBy (many1Satisfy notSpecialWs) (pstring "," .>> ws))
-
     /// Helper for defining `chain1`s representing binary functions.
     /// When supplied as the chaining parser, tries to parse `op`, then
     /// whitespace, and finally passes the result to a `fn` as a pair.
@@ -73,30 +65,28 @@ module Parser =
 
 
     //
-    // High-level parser forwards.
+    // Forwards.
     //
+
+    // These parsers are recursively defined, so we must set up
+    // forwarding stubs to them before we can proceed with the
+    // definitions.
 
     /// Parser for `raw` views (not surrounded in {braces}).
     let parseView, parseViewRef = createParserForwardedToRef<View, unit>()
-    /// Parser for braced view statements.
-    let parseViewLine = inViewBraces parseView
-
     /// Parser for commands.
     let parseCommand, parseCommandRef = createParserForwardedToRef<Command, unit>()
-
     /// Parser for blocks.
     let parseBlock, parseBlockRef = createParserForwardedToRef<Block, unit>()
 
 
-    //
-    // Commands
-    //
+    // From here on out, everything should line up more or less with the
+    // BNF, except in reverse, bottom-up order.
 
-    /// Parser for atomic actions.
-    let parseAtomic =
-        // TODO(CaptainHayashi):
-        //   as in Types.fs, this probably doesn't want to be a string
-        inAngles (charsTillString ">" false 255) |>> Atomic
+
+    //
+    // To be implemented.
+    //
 
     /// Parser for expressions.
     let parseExpression =
@@ -104,19 +94,108 @@ module Parser =
         //   as in Types.fs, this probably doesn't want to be a string
         charsTillString ")" false 255
 
-    /// Parser for `skip` commands.
-    /// Skip is inserted when we're in command position, but see a semicolon.
-    let parseSkip = pstring ";" .>> ws >>% Skip
+    /// Eventually parse a view expression.
+    let parseViewExprn = charsTillString "then" false 255
+
+    /// Parser for atomic actions.
+    let parseAtomic =
+        // TODO(CaptainHayashi):
+        //   as in Types.fs, this probably doesn't want to be a string
+        charsTillString ">" false 255 |>> Atomic
+
+
+    //
+    // Parameters and lists.
+    //
+
+    /// Parses a comma-delimited parameter list.
+    let parseParams =
+        sepBy parseIdentifier (pstring "," .>> ws)
+        // ^- {empty}
+        //  | <identifier>
+        //  | <identifier> , <params>
+
+    /// Parses a comma-delimited, parenthesised parameter list.
+    let parseParamList =
+        // TODO(CaptainHayashi):
+        //   Make this generic in the first argument to sepBy, and also
+        //   make said first argument more robust -- currently this parses all
+        //   whitespace before the ,!
+        inParens parseParams
+        // ^- ()
+        //  | ( <params> )
+
+
+    //
+    // Views.
+    //
+
+    /// Parses a view in parentheses.
+    let parseBracketedView = inParens parseView
+
+    /// Parses a conditional view.
+    let parseIfView =
+        pipe3ws (pstring "if" >>. ws >>. parseViewExprn)
+                // ^- if <view-exprn> ...
+                (pstring "then" >>. ws >>. parseView)
+                // ^-                 ... then <view> ...
+                (pstring "else" >>. ws >>. parseView .>> ws)
+                // ^-                                 ... else <view>
+                (fun c t f -> IfView(c, t, f))
+
+    /// Takes a view and optional argument list, and potentially wraps the
+    /// view in `Apply` if the optional argument list exists.
+    let maybeAddApply view x =
+        match x with
+            | Some args -> Apply(view,args)
+            | None      -> view
+
+    /// Parses a possible argument list for an application of a parametric view.
+    let parseApply = ws >>. opt parseParamList .>> ws
+
+    /// Takes a view parser and tries to parse an argument list after it.
+    /// Wraps the parsed command in `Apply` if an argument list exists.
+    let tryWrapInApply parser = pipe2 parser parseApply maybeAddApply
+
+    /// Parses a named view (identifier).
+    let parseNamedView = parseIdentifier |>> NamedView
+
+    /// Parses the unit view (`emp`, for our purposes).
+    let parseUnit = pstring "emp" >>% Unit
+
+    /// Parses a `basic` view (unit, if, named, or bracketed).
+    let parseBasicView =
+        choice [ parseUnit
+                 // ^- `emp'
+               ; parseIfView
+                 // ^- if <view-exprn> then <view> else <view>
+               ; tryWrapInApply parseNamedView
+                 // ^- <identifier>
+                 //  | <identifier> <param-list>
+               ; parseBracketedView
+                 // ( <view> )
+               ]
+
+    do parseViewRef :=
+        chainl1 (tryWrapInApply parseBasicView)
+                // ^- <basic-view>
+                //  | <basic-view> ...
+                (pstring "*" .>> ws >>% fun x y -> Join(x, y))
+                //                 ... * <view>
+
+    /// Parser for braced view statements.
+    let parseViewLine = inViewBraces parseView
+                        // ^- {| <view> |}
+
+    //
+    // Commands.
+    //
 
     /// Parser for blocks.
-    let parseBlocks = (sepBy1 (parseBlock .>> ws) (pstring "||" .>> ws))
+    let parseParSet = (sepBy1 (parseBlock .>> ws) (pstring "||" .>> ws))
+                      // ^- <block>
+                      //  | <block> || <par-set>
                       |>> Blocks
-
-    /// Parser for if (expr) block else block.
-    let parseIf = pipe3ws (pstring "if" >>. ws >>. inParens parseExpression)
-                          (parseBlock .>> ws .>> pstring "else")
-                          parseBlock
-                          (fun c t f -> If(c, t, f))
 
     /// Parser for the 'while (expr)' leg of while and do-while commands.
     let parseWhileLeg =
@@ -129,96 +208,99 @@ module Parser =
     let parseDoWhile =
         pstring "do" >>. ws >>. parseBlock .>>. (ws >>. parseWhileLeg) |>> DoWhile
 
+    /// Parser for if (expr) block else block.
+    let parseIf = pipe3ws (pstring "if" >>. ws >>. inParens parseExpression)
+                          (parseBlock .>> ws .>> pstring "else")
+                          parseBlock
+                          (fun c t f -> If(c, t, f))
+
+    /// Parser for `skip` commands.
+    /// Skip is inserted when we're in command position, but see a semicolon.
+    let parseSkip = pstring ";" .>> ws >>% Skip
+                    // ^- ;
+
     /// Parser for simple commands (atomics, skips, and bracketed commands).
     do parseCommandRef :=
-        choice [ parseAtomic .>> ws .>> pstring ";"
+        choice [ parseSkip
+                 // ^- `;'
+               ; inAngles parseAtomic .>> ws .>> pstring ";"
+                 // ^- < <atomic> > ;
                ; parseIf
+                 // ^- if ( <expression> ) <block> <block>
                ; parseDoWhile
+                 // ^- do <block> while ( <expression> )
                ; parseWhile
-               ; parseBlocks
-               ; parseSkip
+                 // ^- while ( <expression> ) <block>
+               ; parseParSet
+                 // ^- <par-set>
                ]
+
+
     //
-    // Blocks
+    // Blocks.
     //
 
-    /// Parser for semicolon-delimited, postconditioned commands.
-    let parseViewedCommand =
-        pipe2ws parseCommand
-                parseViewLine
-                (fun c v -> { Command = c; Post = v })
+    /// Parser for lists of semicolon-delimited, postconditioned
+    /// commands.
+    let parseCommands =
+        many1 (
+            pipe2ws parseCommand
+                    // ^- <command> ...
+                    (parseViewLine .>> ws)
+                    // ^-           ... <view-line>
+                    (fun c v -> { Command = c; Post = v })
+        )
+        //  |             <command> ... <view-line> ... <commands>
 
     do parseBlockRef :=
         inBraces (
+            // ^- {       ...                            ... }
             pipe2ws parseViewLine
-                    (sepEndBy parseViewedCommand ws)
-                //    parseViewLine
+                    // ^- ... <view-line> ...
+                    parseCommands
+                    //                    ... <commands> ...
                     (fun p c -> { Pre = p; Contents = c })
         )
 
+
     //
-    // Views
+    // Top-level definitions.
     //
 
-    /// Parses a named view (identifier).
-    let parseNamedView = parseIdent |>> NamedView
+    /// TODO(CaptainHayashi): get rid of this, use parseExpression.
+    let parseCExpr = charsTillString ";" false 255
 
-    /// Parses the unit view (`emp`, for our purposes).
-    let parseUnit = pstring "emp" >>% Unit
-
-    /// Parses a view in parentheses.
-    let parseBracketedView = inParens parseView
-
-    /// Takes a view and optional argument list, and potentially wraps the
-    /// view in `Apply` if the optional argument list exists.
-    let maybeAddApply view x =
-        match x with
-            | Some args -> Apply(view,args)
-            | None     -> view
-
-    /// Parses a possible argument list for an application of a parametric view.
-    let parseApply = ws >>. opt parseArgList .>> ws
-
-    /// Takes a view parser and tries to parse an argument list after it.
-    /// Wraps the parsed command in `Apply` if an argument list exists.
-    let tryWrapInApply parser = pipe2 parser parseApply maybeAddApply
-
-    /// Eventually parse a view expression.
-    let parseVExpression = charsTillString "then" false 255
-
-    /// Parses a conditional view.
-    let parseIfView =
-        pipe3ws (pstring "if" >>. ws >>. parseVExpression)
-                (pstring "then" >>. ws >>. parseView)
-                (pstring "else" >>. ws >>. parseView .>> ws)
-                (fun c t f -> IfView(c, t, f))
-
-    /// Parses a `simple` view (unit, bracketed, or named).
-    let parseSimpleView =
-        choice [ parseUnit
-               ; parseIfView
-               ; parseNamedView
-               ; parseBracketedView
-               ]
-
-    do parseViewRef :=
-        chainl1 (tryWrapInApply parseSimpleView) (pstring "*" .>> ws >>% fun x y -> Join(x, y))
+    /// Parses a constraint.
+    let parseConstraint =
+        pstring "constraint" >>. ws >>.
+        // ^- constraint ..
+            pipe2ws parseView
+                    // ^- <view> ...
+                    (pstring "=>" >>. ws >>. parseCExpr .>> ws .>> pstring ";" .>> ws)
+                    // ^-        ... => <expression> ;
+                    (fun v ex -> { CView = v; CExpression = ex })
 
     /// Parses a single method, excluding leading or trailing whitespace.
     let parseMethod =
-        // TODO(CaptainHayashi):
-        //   we may later need to add more syntax to the beginning of method
-        //   definitions (eg `method main (argc, argv) { skip }`)
-
-        // Example method:             `method main (argc, argv) { skip }`
-        pstring "method" >>. ws >>. // `method `
-            pipe3ws parseIdent      //        `main `
-                    parseArgList    //             `(argc, argv) `
-                    parseBlock      //                          `{ skip }`
+        pstring "method" >>. ws >>.
+        // ^- method ...
+            pipe3ws parseIdentifier
+                    // ^- <identifier> ...
+                    parseParamList
+                    // ^-              ... <arg-list> ...
+                    (parseBlock .>> ws)
+                    // ^-                             ... <block>
                     (fun n ps b -> { Name = n; Params = ps; Body = b })
 
     /// Parses a script of zero or more methods, including leading and trailing whitespace.
     let parseScript =
         // TODO(CaptainHayashi): parse things that aren't methods:
         //   axioms definitions, etc
-        ws >>. sepEndBy parseMethod ws
+        ws >>. manyTill (
+            choice [ parseMethod |>> SMethod
+                     // ^- method <identifier> <arg-list> <block>
+                   ; parseConstraint |>> SConstraint
+                     // ^- constraint <view> => <expression> ;
+                   ]
+        ) eof
+

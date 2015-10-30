@@ -29,8 +29,17 @@ module Types =
         Contents : ViewedCommand list
     }
 
+    type Constraint = {
+        CView       : View
+        CExpression : string
+    }
+
     type Method = {
         Name   : string
         Params : string list
         Body   : Block
     }
+
+    type ScriptItem =
+        | SMethod of Method
+        | SConstraint of Constraint
