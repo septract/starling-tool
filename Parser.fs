@@ -20,11 +20,11 @@ module Parser =
     /// Parser for skipping ONE or more whitespace characters.
     let ws1 = many1Chars wsc
 
-    /// As pipe2, but with automatic whitespace parsing between the parsers.
-    let pipe2ws x y f = pipe2 (x .>> ws) y f
+    /// As pipe2, but with automatic whitespace parsing after each parser.
+    let pipe2ws x y f = pipe2 (x .>> ws) (y .>> ws) f
 
-    /// As pipe3, but with automatic whitespace parsing between the parsers.
-    let pipe3ws x y z f = pipe3 (x .>> ws) (y .>> ws) z f
+    /// As pipe3, but with automatic whitespace parsing after each parser.
+    let pipe3ws x y z f = pipe3 (x .>> ws) (y .>> ws) (z .>> ws) f
 
     // Special characters.
 
@@ -303,7 +303,7 @@ module Parser =
         many1 (
             pipe2ws parseCommand
                     // ^- <command> ...
-                    (parseViewLine .>> ws)
+                    parseViewLine
                     // ^-           ... <view-line>
                     (fun c v -> { Command = c; Post = v })
         )
@@ -330,7 +330,7 @@ module Parser =
         // ^- constraint ..
             pipe2ws parseView
                     // ^- <view> ...
-                    (pstring "=>" >>. ws >>. parseExpression .>> ws .>> pstring ";" .>> ws)
+                    (pstring "=>" >>. ws >>. parseExpression .>> ws .>> pstring ";")
                     // ^-        ... => <expression> ;
                     (fun v ex -> { CView = v; CExpression = ex })
 
@@ -342,7 +342,7 @@ module Parser =
                     // ^- <identifier> ...
                     parseParamList
                     // ^-              ... <arg-list> ...
-                    (parseBlock .>> ws)
+                    parseBlock
                     // ^-                             ... <block>
                     (fun n ps b -> { Name = n; Params = ps; Body = b })
 
