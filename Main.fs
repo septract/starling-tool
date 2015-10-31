@@ -30,4 +30,5 @@ let main argv =
     match result with
         | :? Parsed<Options> as parsed -> parseFile parsed.Value.input
         | :? NotParsed<Options> as notParsed -> printfn "failure: %A" notParsed.Errors
+        | _ -> printfn "parse result of unknown type"
     0
