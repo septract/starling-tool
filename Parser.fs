@@ -133,53 +133,54 @@ module Parser =
                ; inParens parseExpression
                ] .>> ws
 
+    /// Generic parser for tiers of binary expressions.
+    /// Accepts the next precedence level parser, and a list of pairs of operator and AST representation.
+    /// This generates a LEFT-associative precedence level.
+    let parseBinaryExpressionLevel nextLevel expList =
+        chainl1 (nextLevel .>> ws)
+                (choice
+                    (List.map (fun (op, fn) -> (pstring op .>> ws >>% fun x y -> fn(x, y))) expList)
+                )
+
     /// Parser for multiplicative expressions.
     let parseMultiplicativeExpression =
-        chainl1 (parsePrimaryExpression .>> ws)
-                (choice
-                    [ pstring "*" .>> ws >>% fun x y -> MulExp(x, y)
-                    ; pstring "/" .>> ws >>% fun x y -> DivExp(x, y)
-                    ]
-                )
+        parseBinaryExpressionLevel parsePrimaryExpression
+            [ ("*", MulExp)
+            ; ("/", DivExp)
+            ]
 
     /// Parser for additive expressions.
     let parseAdditiveExpression =
-        chainl1 (parseMultiplicativeExpression .>> ws)
-                (choice
-                    [ pstring "+" .>> ws >>% fun x y -> AddExp(x, y)
-                    ; pstring "-" .>> ws >>% fun x y -> SubExp(x, y)
-                    ]
-                )
+        parseBinaryExpressionLevel parseMultiplicativeExpression
+            [ ("+", AddExp)
+            ; ("-", SubExp)
+            ]
 
     /// Parser for relational expressions.
     let parseRelationalExpression =
-        chainl1 (parseAdditiveExpression .>> ws)
-                (choice
-                    [ pstring ">=" .>> ws >>% fun x y -> GeExp(x, y)
-                    ; pstring "<=" .>> ws >>% fun x y -> LeExp(x, y)
-                    ; pstring ">"  .>> ws >>% fun x y -> GtExp(x, y)
-                    ; pstring "<"  .>> ws >>% fun x y -> LtExp(x, y)
-                    ]
-                )
+        parseBinaryExpressionLevel parseAdditiveExpression
+            [ (">=", GeExp)
+            ; ("<=", LeExp)
+            ; (">" , GtExp)
+            ; ("<" , LtExp)
+            ]
 
     /// Parser for equality expressions.
     let parseEqualityExpression =
-        chainl1 (parseRelationalExpression .>> ws)
-                (choice
-                    [ pstring "==" .>> ws >>% fun x y -> EqExp(x, y)
-                    ; pstring "!=" .>> ws >>% fun x y -> NeqExp(x, y)
-                    ]
-                )
+        parseBinaryExpressionLevel parseRelationalExpression
+            [ ("==", EqExp)
+            ; ("!=", NeqExp)
+            ]
 
     /// Parser for logical AND expressions.
     let parseAndExpression =
-        chainl1 (parseEqualityExpression .>> ws)
-                (pstring "&&" .>> ws >>% fun x y -> AndExp(x, y))
+        parseBinaryExpressionLevel parseEqualityExpression
+            [ ("&&", AndExp) ]
 
     /// Parser for logical OR expressions.
     let parseOrExpression =
-        chainl1 (parseAndExpression .>> ws)
-                (pstring "||" .>> ws >>% fun x y -> OrExp(x, y))
+        parseBinaryExpressionLevel parseAndExpression
+            [ ("||", OrExp ) ]
 
     do parseExpressionRef := parseOrExpression
 
