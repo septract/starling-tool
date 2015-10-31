@@ -8,6 +8,9 @@ open FParsec
 //   - TODO(CaptainHayashi): make more idiomatic!
 
 module Parser =
+    /// Converts a triple-wise function to a function of three arguments
+    let curry3 f a b c = f (a, b, c)
+
     // Whitespace.
     //   TODO(CaptainHayashi): is some of this redundant?
 
@@ -88,14 +91,46 @@ module Parser =
 
 
     //
-    // To be implemented.
+    // Atomic actions.
     //
 
+    /// Parser for compare-and-swaps.
+    /// This parser DOES NOT parse whitespace afterwards.
+    let parseCAS = pstring "CAS"
+                       >>. inBraces ( pipe3ws (parseIdentifier .>> ws .>> pstring ",")
+                                              (parseExpression .>> ws .>> pstring ",")
+                                              parseExpression
+                                              (curry3 CompareAndSwap)
+                                   )
+
+    /// Parser for fetch sigils.
+    /// This parser SOMETIMES parses whitespace afterwards.
+    let parseFetchSigil = choice [ pstring "++" .>> ws >>% Increment
+                                 ; pstring "--" .>> ws >>% Decrement
+                                 ] <|>% Direct
+
+    /// Parser for fetch right-hand-sides.
+    /// This parser SOMETIMES parses whitespace afterwards.
+    let parseFetch fetcher =
+        pipe2ws parseIdentifier
+                parseFetchSigil
+                (fun fetchee sigil -> Fetch (fetcher, fetchee, sigil))
+
+    /// Parser for fetch actions.
+    /// This parser SOMETIMES parses whitespace afterwards.
+    let parseFetchOrPostfix =
+        parseIdentifier .>> ws >>= (
+            fun id -> choice [ pstring "++" >>% Postfix (id, Increment)
+                             ; pstring "--" >>% Postfix (id, Decrement)
+                             ; pstring "=" >>. ws >>. parseFetch id 
+                             ]
+        )
+    
     /// Parser for atomic actions.
     let parseAtomic =
         // TODO(CaptainHayashi):
         //   as in Types.fs, this probably doesn't want to be a string
-        charsTillString ">" false 255 |>> Atomic
+        parseCAS <|> parseFetchOrPostfix
 
 
     //
@@ -272,6 +307,9 @@ module Parser =
                           parseBlock
                           (fun c t f -> If(c, t, f))
 
+    /// Parser for atomic commands (not the actions themselves; that is parseAtomic).
+    let parseAtomicCommand = inAngles parseAtomic .>> ws .>> pstring ";" |>> Atomic
+
     /// Parser for `skip` commands.
     /// Skip is inserted when we're in command position, but see a semicolon.
     let parseSkip = pstring ";" .>> ws >>% Skip
@@ -281,7 +319,7 @@ module Parser =
     do parseCommandRef :=
         choice [ parseSkip
                  // ^- `;'
-               ; inAngles parseAtomic .>> ws .>> pstring ";"
+               ; parseAtomicCommand
                  // ^- < <atomic> > ;
                ; parseIf
                  // ^- if ( <expression> ) <block> <block>

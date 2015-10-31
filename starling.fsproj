@@ -14,6 +14,8 @@
     <OutputPath>bin\Debug</OutputPath>
     <ErrorReport>prompt</ErrorReport>
     <Externalconsole>true</Externalconsole>
+    <StartArguments>ticketLock.cvf</StartArguments>
+    <StartWorkingDirectory>..\..</StartWorkingDirectory>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
     <OutputPath>bin\Release</OutputPath>

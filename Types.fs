@@ -29,9 +29,10 @@ module Types =
         | Decrement // <a = b-->
 
     /// An atomic action.
-    type Atomic =
+    type AtomicAction =
         | CompareAndSwap of string * Expression * Expression // <CAS(a, b, c)>
         | Fetch of string * string * FetchMode               // <a = b??>
+        | Postfix of string * FetchMode                      // <a++> or <a-->
 
     /// A view.
     type View =
@@ -44,7 +45,7 @@ module Types =
 
     /// A statement in the command language.
     type Command =
-        | Atomic  of string                     // <a := b++>;
+        | Atomic  of AtomicAction               // <a := b++>;
         | Skip                                  // ;
         | If      of Expression * Block * Block // if (e) { t } { f }
         | While   of Expression * Block         // while (e) { b }
