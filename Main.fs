@@ -4,6 +4,7 @@ open System
 open CommandLine
 open CommandLine.Text
 
+open Fuchu
 open FParsec // TODO: push fparsec references out of Main.
 
 type Options = {
@@ -27,19 +28,19 @@ let parseFile name =
         | Success(result, _, _)   -> printfn "Success: %A" result
         | Failure(errorMsg, _, _) -> printfn "Failure: %s" errorMsg
 
-let runTests () =
-    printfn "tests go here"
+    0
 
-let mainWithOptions opts =
+let mainWithOptions opts argv =
     if opts.test
-    then runTests ()
+    then defaultMainThisAssembly argv
     else parseFile opts.input
 
 [<EntryPoint>]
 let main argv =
     let result = CommandLine.Parser.Default.ParseArguments<Options>(argv)
     match result with
-        | :? Parsed<Options> as parsed -> mainWithOptions parsed.Value
+        | :? Parsed<Options> as parsed -> mainWithOptions parsed.Value argv
         | :? NotParsed<Options> as notParsed -> printfn "failure: %A" notParsed.Errors
+                                                2
         | _ -> printfn "parse result of unknown type"
-    0
+               3
