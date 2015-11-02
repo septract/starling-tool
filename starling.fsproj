@@ -39,6 +39,8 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Z3.fs" />
     <Compile Include="Types.fs" />
+    <Compile Include="Pretty.fs" />
+    <Compile Include="PrettyTests.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="ParserTests.fs" />
     <Compile Include="Main.fs" />
