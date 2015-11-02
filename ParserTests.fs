@@ -44,8 +44,38 @@ module Parser =
         ]
 
     let testAtomicFetch =
-        testList "Test that atomic fetch actions are correctly parsed" [
-        ]
+        testList "Test that atomic fetch actions are correctly parsed"
+                 [ testCase "foo++" <|
+                       fun _ -> assertParse Parser.parseAtomic
+                                            "foo++"
+                                            "foo++"
+                                            ( Postfix ( "foo", Increment ) )
+                   testCase "foo--" <|
+                       fun _ -> assertParse Parser.parseAtomic
+                                            "foo--"
+                                            "foo--"
+                                            ( Postfix ( "foo", Decrement ) )
+                   testCase "foo = bar" <|
+                       fun _ -> assertParse Parser.parseAtomic
+                                            "foo = bar"
+                                            "foo = bar"
+                                            ( Fetch ( "foo", "bar", Direct ) )
+                   testCase "foo = bar++" <|
+                       fun _ -> assertParse Parser.parseAtomic
+                                            "foo = bar++"
+                                            "foo = bar++"
+                                            ( Fetch ( "foo", "bar", Increment ) )
+                   testCase "foo = bar--" <|
+                       fun _ -> assertParse Parser.parseAtomic
+                                            "foo = bar--"
+                                            "foo = bar--"
+                                            ( Fetch ( "foo", "bar", Decrement ) )
+                   testCase "CAS(foo, 1, 2)" <|
+                       fun _ -> assertParse Parser.parseAtomic
+                                            "CAS(foo, 1, 2)"
+                                            "CAS(foo, 1, 2)"
+                                            ( CompareAndSwap ( "foo", IntExp 1L, IntExp 2L ) )
+                 ]
 
     [<Tests>]
     let testParser =
