@@ -7,6 +7,9 @@ open CommandLine.Text
 open FParsec // TODO: push fparsec references out of Main.
 
 type Options = {
+    [<Option('t',
+             HelpText = "Ignore input and run regression tests.")>]
+    test: bool;
     [<Value(0,
             MetaName = "input",
             HelpText = "The file to load (omit, or supply -, for standard input).")>]
@@ -24,11 +27,19 @@ let parseFile name =
         | Success(result, _, _)   -> printfn "Success: %A" result
         | Failure(errorMsg, _, _) -> printfn "Failure: %s" errorMsg
 
+let runTests () =
+    printfn "tests go here"
+
+let mainWithOptions opts =
+    if opts.test
+    then runTests ()
+    else parseFile opts.input
+
 [<EntryPoint>]
 let main argv =
     let result = CommandLine.Parser.Default.ParseArguments<Options>(argv)
     match result with
-        | :? Parsed<Options> as parsed -> parseFile parsed.Value.input
+        | :? Parsed<Options> as parsed -> mainWithOptions parsed.Value
         | :? NotParsed<Options> as notParsed -> printfn "failure: %A" notParsed.Errors
         | _ -> printfn "parse result of unknown type"
     0
