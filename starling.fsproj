@@ -36,6 +36,7 @@
   </Choose>
   <Import Project="$(FSharpTargetsPath)" Condition="Exists('$(FSharpTargetsPath)')" />
   <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Z3.fs" />
     <Compile Include="Types.fs" />
     <Compile Include="Parser.fs" />
