@@ -32,7 +32,7 @@ module Parser =
     // Special characters.
 
     /// All non-whitespace special characters.
-    let specChars = ",(){}*<>+|;="
+    let specChars = ",(){}*<>+|;=-"
 
     // TODO(CaptainHayashi):
     //   these two predicates should probably have their names transposed!
@@ -97,11 +97,11 @@ module Parser =
     /// Parser for compare-and-swaps.
     /// This parser DOES NOT parse whitespace afterwards.
     let parseCAS = pstring "CAS"
-                       >>. inBraces ( pipe3ws (parseIdentifier .>> ws .>> pstring ",")
+                       >>. inParens ( pipe3ws (parseIdentifier .>> ws .>> pstring ",")
                                               (parseExpression .>> ws .>> pstring ",")
                                               parseExpression
                                               (curry3 CompareAndSwap)
-                                   )
+                                    )
 
     /// Parser for fetch sigils.
     /// This parser SOMETIMES parses whitespace afterwards.
@@ -122,10 +122,10 @@ module Parser =
         parseIdentifier .>> ws >>= (
             fun id -> choice [ pstring "++" >>% Postfix (id, Increment)
                              ; pstring "--" >>% Postfix (id, Decrement)
-                             ; pstring "=" >>. ws >>. parseFetch id 
+                             ; pstring "=" >>. ws >>. parseFetch id
                              ]
         )
-    
+
     /// Parser for atomic actions.
     let parseAtomic =
         // TODO(CaptainHayashi):
