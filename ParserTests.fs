@@ -21,6 +21,25 @@ module Parser =
                     expr
                     ast
 
+    let testLValueIndirection =
+        testList "Test that LValue indirection syntax works" [
+            testCase "'foo' -> 0 indirections" <|
+                fun _ -> assertParse Parser.parseLValue
+                                     "'foo' -> 0 indirections"
+                                     "foo"
+                                     ( LVIdent "foo" )
+            testCase "'*foo' -> 1 indirection" <|
+                fun _ -> assertParse Parser.parseLValue
+                                     "'*foo' -> 1 indirection"
+                                     "*foo"
+                                     ( LVPtr ( LVIdent "foo" ) )
+            testCase "'**foo' -> 2 indirections" <|
+                fun _ -> assertParse Parser.parseLValue
+                                     "'**foo' -> 2 indirections"
+                                     "**foo"
+                                     ( LVPtr ( LVPtr ( LVIdent "foo" ) ) )
+        ]
+
     let testExpressionPrecedence =
         testList "Test that parsing expressions yields correct precedence" [
             testCase "1 + 2 * 3 -> 1 + (2 * 3)" <|
@@ -80,6 +99,9 @@ module Parser =
     [<Tests>]
     let testParser =
         testList "Test the parser" [
+            testList "Test parsing of lvalues" [
+                testLValueIndirection
+            ]
             testList "Test parsing of expressions" [
                 testExpressionPrecedence
             ]

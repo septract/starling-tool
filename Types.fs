@@ -5,7 +5,8 @@ module Types =
     /// An lvalue.
     /// This is given a separate type in case we add to it later.
     type LValue =
-        LVIdent of string
+        | LVIdent of string
+        | LVPtr   of LValue
 
     /// An expression.
     /// These currently cover all languages, but this may change later.

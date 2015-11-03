@@ -2,9 +2,10 @@ namespace Starling
 
 module Pretty =
     /// Pretty-prints lvalues.
-    let printLValue lv =
+    let rec printLValue lv =
         match lv with
             | LVIdent i -> i
+            | LVPtr   v -> "*" + printLValue v
 
     /// Pretty-prints expressions.
     /// This is not guaranteed to produce an optimal expression.
