@@ -91,80 +91,20 @@ module Parser =
 
 
     //
-    // Atomic actions.
-    //
-
-    /// Parser for compare-and-swaps.
-    /// This parser DOES NOT parse whitespace afterwards.
-    let parseCAS = pstring "CAS"
-                       >>. inParens ( pipe3ws (parseIdentifier .>> ws .>> pstring ",")
-                                              (parseExpression .>> ws .>> pstring ",")
-                                              parseExpression
-                                              (curry3 CompareAndSwap)
-                                    )
-
-    /// Parser for fetch sigils.
-    /// This parser SOMETIMES parses whitespace afterwards.
-    let parseFetchSigil = choice [ pstring "++" .>> ws >>% Increment
-                                 ; pstring "--" .>> ws >>% Decrement
-                                 ] <|>% Direct
-
-    /// Parser for fetch right-hand-sides.
-    /// This parser SOMETIMES parses whitespace afterwards.
-    let parseFetch fetcher =
-        pipe2ws parseIdentifier
-                parseFetchSigil
-                (fun fetchee sigil -> Fetch (fetcher, fetchee, sigil))
-
-    /// Parser for fetch actions.
-    /// This parser SOMETIMES parses whitespace afterwards.
-    let parseFetchOrPostfix =
-        parseIdentifier .>> ws >>= (
-            fun id -> choice [ pstring "++" >>% Postfix (id, Increment)
-                             ; pstring "--" >>% Postfix (id, Decrement)
-                             ; pstring "=" >>. ws >>. parseFetch id
-                             ]
-        )
-
-    /// Parser for atomic actions.
-    let parseAtomic =
-        // TODO(CaptainHayashi):
-        //   as in Types.fs, this probably doesn't want to be a string
-        parseCAS <|> parseFetchOrPostfix
-
-
-    //
-    // Parameters and lists.
-    //
-
-    /// Parses a comma-delimited parameter list.
-    let parseParams =
-        sepBy parseIdentifier (pstring "," .>> ws)
-        // ^- {empty}
-        //  | <identifier>
-        //  | <identifier> , <params>
-
-    /// Parses a comma-delimited, parenthesised parameter list.
-    let parseParamList =
-        // TODO(CaptainHayashi):
-        //   Make this generic in the first argument to sepBy, and also
-        //   make said first argument more robust -- currently this parses all
-        //   whitespace before the ,!
-        inParens parseParams
-        // ^- ()
-        //  | ( <params> )
-
-
-    //
     // Expressions.
     //
+
+    /// Parser for lvalues.
+    let parseLValue =
+        // TODO(CaptainHayashi): add pointers etc.
+        parseIdentifier |>> LVIdent
 
     /// Parser for primary expressions.
     let parsePrimaryExpression =
         choice [ pstring "true"  >>% TrueExp
                ; pstring "false" >>% FalseExp
                ; pint64          |>> IntExp
-               ; parseIdentifier |>> IdExp
+               ; parseLValue     |>> LVExp
                ; inParens parseExpression
                ] .>> ws
 
@@ -219,6 +159,72 @@ module Parser =
 
     do parseExpressionRef := parseOrExpression
 
+
+
+
+    //
+    // Atomic actions.
+    //
+
+    /// Parser for compare-and-swaps.
+    /// This parser DOES NOT parse whitespace afterwards.
+    let parseCAS = pstring "CAS"
+                       >>. inParens ( pipe3ws (parseLValue .>> ws .>> pstring ",")
+                                              (parseExpression .>> ws .>> pstring ",")
+                                              parseExpression
+                                              (curry3 CompareAndSwap)
+                                    )
+
+    /// Parser for fetch sigils.
+    /// This parser SOMETIMES parses whitespace afterwards.
+    let parseFetchSigil = choice [ pstring "++" .>> ws >>% Increment
+                                 ; pstring "--" .>> ws >>% Decrement
+                                 ] <|>% Direct
+
+    /// Parser for fetch right-hand-sides.
+    /// This parser SOMETIMES parses whitespace afterwards.
+    let parseFetch fetcher =
+        pipe2ws parseLValue
+                parseFetchSigil
+                (fun fetchee sigil -> Fetch (fetcher, fetchee, sigil))
+
+    /// Parser for fetch actions.
+    /// This parser SOMETIMES parses whitespace afterwards.
+    let parseFetchOrPostfix =
+        parseLValue .>> ws >>= (
+            fun id -> choice [ pstring "++" >>% Postfix (id, Increment)
+                             ; pstring "--" >>% Postfix (id, Decrement)
+                             ; pstring "=" >>. ws >>. parseFetch id
+                             ]
+        )
+
+    /// Parser for atomic actions.
+    let parseAtomic =
+        // TODO(CaptainHayashi):
+        //   as in Types.fs, this probably doesn't want to be a string
+        parseCAS <|> parseFetchOrPostfix
+
+
+    //
+    // Parameters and lists.
+    //
+
+    /// Parses a comma-delimited parameter list.
+    let parseParams =
+        sepBy parseIdentifier (pstring "," .>> ws)
+        // ^- {empty}
+        //  | <identifier>
+        //  | <identifier> , <params>
+
+    /// Parses a comma-delimited, parenthesised parameter list.
+    let parseParamList =
+        // TODO(CaptainHayashi):
+        //   Make this generic in the first argument to sepBy, and also
+        //   make said first argument more robust -- currently this parses all
+        //   whitespace before the ,!
+        inParens parseParams
+        // ^- ()
+        //  | ( <params> )
     //
     // Views.
     //

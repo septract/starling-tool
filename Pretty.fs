@@ -1,6 +1,11 @@
 namespace Starling
 
 module Pretty =
+    /// Pretty-prints lvalues.
+    let printLValue lv =
+        match lv with
+            | LVIdent i -> i
+
     /// Pretty-prints expressions.
     /// This is not guaranteed to produce an optimal expression.
     let rec printExpression exp =
@@ -8,7 +13,7 @@ module Pretty =
             | TrueExp    -> "true"
             | FalseExp   -> "false"
             | IntExp   i -> i.ToString ()
-            | IdExp    x -> x
+            | LVExp    x -> printLValue x
             | MulExp   (a, b) -> printBinop a "*"  b
             | DivExp   (a, b) -> printBinop a "/"  b
             | AddExp   (a, b) -> printBinop a "+"  b

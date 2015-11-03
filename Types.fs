@@ -2,13 +2,18 @@
 
 [<AutoOpen>]
 module Types =
+    /// An lvalue.
+    /// This is given a separate type in case we add to it later.
+    type LValue =
+        LVIdent of string
+
     /// An expression.
     /// These currently cover all languages, but this may change later.
     type Expression =
         | TrueExp                             // true
         | FalseExp                            // false
         | IntExp   of int64                   // 42
-        | IdExp    of string                  // foobaz
+        | LVExp    of LValue                  // foobaz
         | MulExp   of Expression * Expression // a * b
         | DivExp   of Expression * Expression // a / b
         | AddExp   of Expression * Expression // a + b
@@ -30,9 +35,9 @@ module Types =
 
     /// An atomic action.
     type AtomicAction =
-        | CompareAndSwap of string * Expression * Expression // <CAS(a, b, c)>
-        | Fetch of string * string * FetchMode               // <a = b??>
-        | Postfix of string * FetchMode                      // <a++> or <a-->
+        | CompareAndSwap of LValue * Expression * Expression // <CAS(a, b, c)>
+        | Fetch of LValue * LValue * FetchMode               // <a = b??>
+        | Postfix of LValue * FetchMode                      // <a++> or <a-->
 
     /// A view.
     type View =

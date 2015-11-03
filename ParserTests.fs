@@ -49,32 +49,32 @@ module Parser =
                        fun _ -> assertParse Parser.parseAtomic
                                             "foo++"
                                             "foo++"
-                                            ( Postfix ( "foo", Increment ) )
+                                            ( Postfix ( LVIdent "foo", Increment ) )
                    testCase "foo--" <|
                        fun _ -> assertParse Parser.parseAtomic
                                             "foo--"
                                             "foo--"
-                                            ( Postfix ( "foo", Decrement ) )
+                                            ( Postfix ( LVIdent "foo", Decrement ) )
                    testCase "foo = bar" <|
                        fun _ -> assertParse Parser.parseAtomic
                                             "foo = bar"
                                             "foo = bar"
-                                            ( Fetch ( "foo", "bar", Direct ) )
+                                            ( Fetch ( LVIdent "foo", LVIdent "bar", Direct ) )
                    testCase "foo = bar++" <|
                        fun _ -> assertParse Parser.parseAtomic
                                             "foo = bar++"
                                             "foo = bar++"
-                                            ( Fetch ( "foo", "bar", Increment ) )
+                                            ( Fetch ( LVIdent "foo", LVIdent "bar", Increment ) )
                    testCase "foo = bar--" <|
                        fun _ -> assertParse Parser.parseAtomic
                                             "foo = bar--"
                                             "foo = bar--"
-                                            ( Fetch ( "foo", "bar", Decrement ) )
+                                            ( Fetch ( LVIdent "foo", LVIdent "bar", Decrement ) )
                    testCase "CAS(foo, 1, 2)" <|
                        fun _ -> assertParse Parser.parseAtomic
                                             "CAS(foo, 1, 2)"
                                             "CAS(foo, 1, 2)"
-                                            ( CompareAndSwap ( "foo", IntExp 1L, IntExp 2L ) )
+                                            ( CompareAndSwap ( LVIdent "foo", IntExp 1L, IntExp 2L ) )
                  ]
 
     [<Tests>]
