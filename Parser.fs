@@ -14,14 +14,8 @@ module Parser =
     // Whitespace.
     //   TODO(CaptainHayashi): is some of this redundant?
 
-    /// String containing all whitespace characters (as per `spaces`).
-    let wsChars = " \t\r\n"
-    /// Character parser accepting any character in `wsChars`.
-    let wsc : Parser<char, unit> = anyOf wsChars
     /// Parser for skipping zero or more whitespace characters.
     let ws = spaces // skips over " \t\r\n" by definition
-    /// Parser for skipping ONE or more whitespace characters.
-    let ws1 = many1Chars wsc
 
     /// As pipe2, but with automatic whitespace parsing after each parser.
     let pipe2ws x y f = pipe2 (x .>> ws) (y .>> ws) f
@@ -29,22 +23,9 @@ module Parser =
     /// As pipe3, but with automatic whitespace parsing after each parser.
     let pipe3ws x y z f = pipe3 (x .>> ws) (y .>> ws) (z .>> ws) f
 
-    // Special characters.
-
-    /// All non-whitespace special characters.
-    let specChars = ",(){}*<>+|;=-"
-
-    // TODO(CaptainHayashi):
-    //   these two predicates should probably have their names transposed!
-
-    /// Predicate returning true if a character is not special or whitespace.
-    let notSpecial c = String.forall (fun d -> d <> c) (specChars + wsChars)
-
-    /// Predicate returning true if a character is not special.
-    let notSpecialWs c = String.forall (fun d -> d <> c) specChars
-
-    /// Parses a run of one or more non-special non-whitespace characters.
-    let parseIdentifier = many1Satisfy notSpecial
+    /// Parses an identifier.
+    let parseIdentifier = many1Satisfy2 ( fun c -> c.Equals('_') || System.Char.IsLetter c )
+                                        ( fun c -> c.Equals('_') || System.Char.IsLetterOrDigit c )
 
 
     // Bracket parsers.
