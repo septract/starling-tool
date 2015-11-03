@@ -28,7 +28,7 @@ module Pretty =
             | AndExp   (a, b) -> printBinop a "&&" b
             | OrExp    (a, b) -> printBinop a "||" b
     /// Pretty-prints binary operations.
-    and printBinop a o b = "(" + printExpression a + o + printExpression b + ")"
+    and printBinop a o b = "(" + printExpression a + " " + o + " " + printExpression b + ")"
 
     /// Pretty-prints argument lists.
     let printArgList ss = "(" + String.concat ", " ss + ")"
