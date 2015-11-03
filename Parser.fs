@@ -178,8 +178,8 @@ module Parser =
     /// This parser SOMETIMES parses whitespace afterwards.
     let parseFetchOrPostfix =
         parseLValue .>> ws >>= (
-            fun id -> choice [ pstring "++" >>% Postfix (id, Increment)
-                             ; pstring "--" >>% Postfix (id, Decrement)
+            fun id -> choice [ stringReturn "++" ( Postfix ( id, Increment ) )
+                             ; stringReturn "--" ( Postfix ( id, Decrement ) )
                              ; pstring "=" >>. ws >>. parseFetch id
                              ]
         )
@@ -246,7 +246,7 @@ module Parser =
     let parseNamedView = parseIdentifier |>> NamedView
 
     /// Parses the unit view (`emp`, for our purposes).
-    let parseUnit = pstring "emp" >>% Unit
+    let parseUnit = stringReturn "emp" Unit
 
     /// Parses a `basic` view (unit, if, named, or bracketed).
     let parseBasicView =
@@ -262,10 +262,10 @@ module Parser =
                ]
 
     do parseViewRef :=
-        chainl1 (tryWrapInApply parseBasicView)
+        chainl1 ( tryWrapInApply parseBasicView )
                 // ^- <basic-view>
                 //  | <basic-view> ...
-                (pstring "*" .>> ws >>% fun x y -> Join(x, y))
+                ( stringReturn "*" ( fun x y -> Join ( x, y ) ) .>> ws )
                 //                 ... * <view>
 
     /// Parser for braced view statements.
@@ -304,7 +304,7 @@ module Parser =
 
     /// Parser for `skip` commands.
     /// Skip is inserted when we're in command position, but see a semicolon.
-    let parseSkip = pstring ";" .>> ws >>% Skip
+    let parseSkip = stringReturn ";" Skip .>> ws
                     // ^- ;
 
     /// Parser for simple commands (atomics, skips, and bracketed commands).
