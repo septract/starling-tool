@@ -28,8 +28,8 @@ module Parser =
     let pipe3ws x y z f = pipe3 (x .>> ws) (y .>> ws) (z .>> ws) f
 
     /// Parses an identifier.
-    let parseIdentifier = many1Satisfy2 ( fun c -> c.Equals('_') || System.Char.IsLetter c )
-                                        ( fun c -> c.Equals('_') || System.Char.IsLetterOrDigit c )
+    let parseIdentifier = many1Chars2 ( pchar '_' <|> asciiLetter )
+                                      ( pchar '_' <|> asciiLetter <|> digit )
 
 
     // Bracket parsers.
