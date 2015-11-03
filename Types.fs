@@ -51,12 +51,13 @@ module Types =
 
     /// A statement in the command language.
     type Command =
-        | Atomic  of AtomicAction               // <a := b++>;
+        | Atomic  of AtomicAction               // <a = b++>;
         | Skip                                  // ;
         | If      of Expression * Block * Block // if (e) { t } { f }
         | While   of Expression * Block         // while (e) { b }
         | DoWhile of Block * Expression         // do { b } while (e)
         | Blocks  of Block list                 // { a } || { b } || { c }
+        | Assign  of LValue * Expression        // a = b;
 
     /// A combination of a command and its postcondition view.
     and ViewedCommand =

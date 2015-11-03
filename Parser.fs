@@ -276,6 +276,13 @@ module Parser =
     // Commands.
     //
 
+    /// Parser for assignments.
+    let parseAssign = pipe2ws parseLValue
+                      // ^- <lvalue> ...
+                              ( pstring "=" >>. ws >>. parseExpression .>> ws .>> pstring ";" )
+                      //             ... = <expression> ;
+                              ( fun l r -> Assign ( l, r ) )
+
     /// Parser for blocks.
     let parseParSet = (sepBy1 (parseBlock .>> ws) (pstring "||" .>> ws))
                       // ^- <block>
@@ -321,6 +328,8 @@ module Parser =
                  // ^- while ( <expression> ) <block>
                ; parseParSet
                  // ^- <par-set>
+               ; parseAssign
+                 // ^- <lvalue> = <expression>
                ]
 
 

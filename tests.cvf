@@ -12,6 +12,14 @@ method testPar() {
   {| bar * baz |}
 }
 
+method testAssign() {
+  {| foo |}
+    a = b;
+  {| bar |}
+    <a = b>;
+  {| baz |}
+}
+
 method testBimdas() {
   {| emp |}
     while (a + b * c < 23 && (a + b) * c < 23) {
