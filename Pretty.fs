@@ -100,4 +100,4 @@ module Pretty =
             | SConstraint c -> printConstraint c
 
     /// Pretty-prints scripts.
-    let printScript = List.map printScriptLine >> String.concat "\n"
+    let printScript = List.map printScriptLine >> String.concat "\n\n"
