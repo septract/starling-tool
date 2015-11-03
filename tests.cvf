@@ -21,3 +21,13 @@ method testBimdas() {
     }
   {| emp |}
 }
+
+method testComments() {
+    // This is the view
+    {| emp /* this is the empty view */ |}
+      </* atomic */a = //;
+       baz/* foo */++>;
+    {| foo // |}
+       * /* bar */ baz /* |} */
+    |}
+}

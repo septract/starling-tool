@@ -2,9 +2,14 @@
 constraint holdTick(t)               => ticket > t;
 constraint holdLock()                => ticket > serving;
 constraint holdLock()  * holdTick(t) => serving != t;
+
+// These combinations cannot hold:
 constraint holdTick(t) * holdTick(t) => false;
 constraint holdLock()  * holdLock()  => false;
 
+/*
+ * Locks the ticket lock.
+ */
 method lock() {
   {| emp |}
     <t = ticket++>;
@@ -17,6 +22,9 @@ method lock() {
   {| holdLock |}
 }
 
+/*
+ * Unlocks the ticket lock.
+ */
 method unlock() {
   {| holdLock() |}
     <serving++>;

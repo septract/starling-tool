@@ -15,7 +15,11 @@ module Parser =
     //   TODO(CaptainHayashi): is some of this redundant?
 
     /// Parser for skipping zero or more whitespace characters.
-    let ws = spaces // skips over " \t\r\n" by definition
+    let ws = many ( choice [ skipString "//" .>> skipRestOfLine true
+                             skipString "/*" .>> skipManyTill anyChar ( pstring "*/" )
+                             spaces1
+                           ]
+                  )
 
     /// As pipe2, but with automatic whitespace parsing after each parser.
     let pipe2ws x y f = pipe2 (x .>> ws) (y .>> ws) f
