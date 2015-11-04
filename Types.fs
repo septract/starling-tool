@@ -8,7 +8,7 @@ module Types =
         | LVIdent of string
         | LVPtr   of LValue
 
-    /// An expression.
+    /// An untyped, raw expression.
     /// These currently cover all languages, but this may change later.
     type Expression =
         | TrueExp                             // true
