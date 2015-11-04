@@ -6,6 +6,7 @@ open CommandLine.Text
 
 open Fuchu
 open FParsec // TODO: push fparsec references out of Main.
+open Microsoft.Z3 // TODO: this too.
 
 type Options = {
     [<Option('t',
@@ -20,6 +21,28 @@ type Options = {
     input: string option;
 }
 
+/// Pretty-prints a Z3 conversion result.
+let printCR cr =
+    // TODO(CaptainHayashi): does this belong in the Z3 module?
+    match cr with
+        | Starling.Z3.Bool  b -> b.ToString ()
+        | Starling.Z3.Arith a -> a.ToString ()
+        | Starling.Z3.Fail  e -> "ERROR: " + e
+
+/// Runs Starling on the given parsed script.
+let runStarlingOnScript result =
+    // TODO(CaptainHayashi): eventually this will run the actual prover
+    printfn "AST: \n%A" result
+    printfn "---"
+    printfn "Constraints: \n"
+    let ctx = new Context ()
+    List.iter (
+        fun vc ->
+            printfn "  View: %s" <| Starling.Pretty.printView ( fst vc )
+            printfn "    Z3: %s" <| printCR ( snd vc )
+    ) <| Starling.Z3.scriptViewConstraintsZ3 ctx result
+    printfn "---"
+
 let parseFile name pprint =
     let (stream, streamName) =
         match name with
@@ -30,7 +53,7 @@ let parseFile name pprint =
     match pres with
         | Success(result, _, _)   -> if pprint
                                      then printfn "%s" ( Starling.Pretty.printScript result )
-                                     else printfn "Success: %A" result
+                                     else runStarlingOnScript result
         | Failure(errorMsg, _, _) -> printfn "Failure: %s" errorMsg
 
     0
