@@ -1,0 +1,73 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
+    <ProjectGuid>{FB248950-5C1B-4AE6-B7AE-E167C623D60F}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>starling</RootNamespace>
+    <AssemblyName>starling</AssemblyName>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\Debug</OutputPath>
+    <ErrorReport>prompt</ErrorReport>
+    <Externalconsole>true</Externalconsole>
+    <StartArguments>ticketLock.cvf</StartArguments>
+    <StartWorkingDirectory>..\..</StartWorkingDirectory>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <OutputPath>bin\Release</OutputPath>
+    <ErrorReport>prompt</ErrorReport>
+    <Externalconsole>true</Externalconsole>
+  </PropertyGroup>
+  <Choose>
+    <When Condition="'$(VisualStudioVersion)' == '11.0'">
+      <PropertyGroup>
+        <FSharpTargetsPath>$(MSBuildExtensionsPath32)\..\Microsoft SDKs\F#\3.0\Framework\v4.0\Microsoft.FSharp.Targets</FSharpTargetsPath>
+      </PropertyGroup>
+    </When>
+    <Otherwise>
+      <PropertyGroup>
+        <FSharpTargetsPath>$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\FSharp\Microsoft.FSharp.Targets</FSharpTargetsPath>
+      </PropertyGroup>
+    </Otherwise>
+  </Choose>
+  <Import Project="$(FSharpTargetsPath)" Condition="Exists('$(FSharpTargetsPath)')" />
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="Types.fs" />
+    <Compile Include="Z3.fs" />
+    <Compile Include="Pretty.fs" />
+    <Compile Include="PrettyTests.fs" />
+    <Compile Include="Parser.fs" />
+    <Compile Include="ParserTests.fs" />
+    <Compile Include="Main.fs" />
+    <None Include="packages.config" />
+    <None Include="ticketLock.cvf" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="mscorlib" />
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="FParsec">
+      <HintPath>packages\FParsec-Big-Data-Edition.1.0.2\lib\net40-client\FParsec.dll</HintPath>
+    </Reference>
+    <Reference Include="FParsecCS">
+      <HintPath>packages\FParsec-Big-Data-Edition.1.0.2\lib\net40-client\FParsecCS.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Z3">
+      <HintPath>packages\z3x86win.4.3.2.1\lib\Microsoft.Z3.dll</HintPath>
+    </Reference>
+    <Reference Include="CommandLine">
+      <HintPath>packages\CommandLineParser.2.0.275-beta\lib\net40\CommandLine.dll</HintPath>
+    </Reference>
+    <Reference Include="Fuchu">
+      <HintPath>packages\Fuchu.1.0.1.0\lib\Fuchu.dll</HintPath>
+    </Reference>
+    <Reference Include="FSharp.Core">
+      <HintPath>packages\FSharp.Core.4.0.0.1\lib\net40\FSharp.Core.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

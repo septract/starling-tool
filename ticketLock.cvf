@@ -1,0 +1,32 @@
+﻿constraint emp                       => ticket >= serving;
+constraint holdTick(t)               => ticket > t;
+constraint holdLock()                => ticket > serving;
+constraint holdLock()  * holdTick(t) => serving != t;
+
+// These combinations cannot hold:
+constraint holdTick(t) * holdTick(t) => false;
+constraint holdLock()  * holdLock()  => false;
+
+/*
+ * Locks the ticket lock.
+ */
+method lock() {
+  {| emp |}
+    <t = ticket++>;
+  {| holdTick(t) |}
+    do {
+      {| holdTick(t) |}
+        <s = serving>;
+      {| if s == t then holdLock else holdTick(t) |}
+    } while (s == t)
+  {| holdLock |}
+}
+
+/*
+ * Unlocks the ticket lock.
+ */
+method unlock() {
+  {| holdLock() |}
+    <serving++>;
+  {| emp |}
+}

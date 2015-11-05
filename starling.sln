@@ -1,0 +1,35 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{f2a71f9b-5d33-465a-a702-920d77279786}") = "starling", "starling.fsproj", "{FB248950-5C1B-4AE6-B7AE-E167C623D60F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x86 = Debug|x86
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FB248950-5C1B-4AE6-B7AE-E167C623D60F}.Debug|x86.ActiveCfg = Debug|x86
+		{FB248950-5C1B-4AE6-B7AE-E167C623D60F}.Debug|x86.Build.0 = Debug|x86
+		{FB248950-5C1B-4AE6-B7AE-E167C623D60F}.Release|x86.ActiveCfg = Release|x86
+		{FB248950-5C1B-4AE6-B7AE-E167C623D60F}.Release|x86.Build.0 = Release|x86
+	EndGlobalSection
+	GlobalSection(MonoDevelopProperties) = preSolution
+		StartupItem = starling.fsproj
+		Policies = $0
+		$0.TextStylePolicy = $1
+		$1.inheritsSet = VisualStudio
+		$1.inheritsScope = text/plain
+		$1.scope = text/x-fsharp
+		$0.FSharpFormattingPolicy = $2
+		$2.DefaultFormat = $3
+		$3.IndentOnTryWith = False
+		$3.ReorderOpenDeclaration = False
+		$3.SpaceAfterComma = True
+		$3.SpaceAfterSemicolon = True
+		$3.SpaceAroundDelimiter = True
+		$3.SpaceBeforeArgument = True
+		$3.SpaceBeforeColon = True
+		$2.scope = text/x-fsharp
+	EndGlobalSection
+EndGlobal

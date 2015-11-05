@@ -1,0 +1,41 @@
+method testSkip() {
+  {| emp |}
+    ;
+  {| emp |}
+}
+
+method testPar() {
+  {| foo |}
+    { {| foo |} while (x < 20) { {| foobar |} <x++>; {| barbar |} } {| bar |}}
+    ||
+    { {| foo |} while (x < 20) { {| foobar |} <x++>; {| bazbar |} } {| baz |}}
+  {| bar * baz |}
+}
+
+method testAssign() {
+  {| foo |}
+    a = b;
+  {| bar |}
+    <a = b>;
+  {| baz |}
+}
+
+method testBimdas() {
+  {| emp |}
+    while (a + b * c < 23 && (a + b) * c < 23) {
+      {| emp |}
+      ;
+      {| emp |}
+    }
+  {| emp |}
+}
+
+method testComments() {
+    // This is the view
+    {| emp /* this is the empty view */ |}
+      </* atomic */a = //;
+       baz/* foo */++>;
+    {| foo // |}
+       * /* bar */ baz /* |} */
+    |}
+}
