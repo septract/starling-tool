@@ -1,5 +1,7 @@
 namespace Starling
 
+open Starling.AST
+
 module Pretty =
     /// Pretty-prints lvalues.
     let rec printLValue lv =

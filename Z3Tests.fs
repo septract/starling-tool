@@ -3,6 +3,7 @@ namespace Starling.Tests
 open Fuchu
 open Microsoft.Z3
 open Starling
+open Starling.AST
 
 module Z3 =
     /// Assertion that converting the arithmetic expression `expr` to Z3

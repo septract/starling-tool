@@ -1,7 +1,6 @@
 ﻿namespace Starling
 
-[<AutoOpen>]
-module Types =
+module AST =
     /// An lvalue.
     /// This is given a separate type in case we add to it later.
     type LValue =

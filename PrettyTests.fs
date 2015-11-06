@@ -2,6 +2,7 @@ namespace Starling.Tests
 
 open Fuchu
 open Starling
+open Starling.AST
 
 module Pretty =
     [<Tests>]

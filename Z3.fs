@@ -3,6 +3,8 @@
 open System
 open Microsoft.Z3
 
+open Starling.AST
+
 module Z3 =
     /// 'Flattened' (multiset-representation) views.
     type View =

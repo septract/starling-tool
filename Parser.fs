@@ -2,6 +2,8 @@
 
 open FParsec
 
+open Starling.AST
+
 // General TODOs:
 //   - TODO(CaptainHayashi): remove leftwards uses of ws
 //   - TODO(CaptainHayashi): create and parse proper syntax definition
