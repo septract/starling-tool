@@ -1,4 +1,5 @@
 open Starling
+open Starling.Model
 
 open System
 open CommandLine
@@ -21,13 +22,8 @@ type Options = {
     input: string option;
 }
 
-/// Pretty-prints a Z3 conversion result.
-let printCR cr =
-    // TODO(CaptainHayashi): does this belong in the Z3 module?
-    match cr with
-        | Starling.Z3.Bool  b -> b.ToString ()
-        | Starling.Z3.Arith a -> a.ToString ()
-        | Starling.Z3.Fail  e -> "ERROR: " + e
+let printViews vs =
+    "[" + String.concat ", " ( List.map Starling.Model.printView vs ) + "]"
 
 /// Runs Starling on the given parsed script.
 let runStarlingOnScript result =
@@ -38,8 +34,12 @@ let runStarlingOnScript result =
     let ctx = new Context ()
     List.iter (
         fun vc ->
-            printfn "  View: %s" <| Starling.Pretty.printView ( fst vc )
-            printfn "    Z3: %s" <| printCR ( snd vc )
+            match vc with
+                | Starling.Z3.CSuccess c ->
+                    printfn "  View: %s" <| printViews ( c.CViews )
+                    printfn "    Z3: %s" <| c.CZ3.ToString ()
+                | Starling.Z3.CFail    f ->
+                    printfn "  <FAIL: %s>" f
     ) <| Starling.Z3.scriptViewConstraintsZ3 ctx result
     printfn "---"
 
