@@ -4,6 +4,13 @@ open System
 open Microsoft.Z3
 
 module Z3 =
+    /// 'Flattened' (multiset-representation) views.
+    type View =
+        {
+            Name  : string
+            Params: string list
+        }
+
     /// Flattens a LV to a string.
     let rec flattenLV v =
         // TODO(CaptainHayashi): this is completely wrong, but we don't
