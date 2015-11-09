@@ -1,6 +1,7 @@
 namespace Starling
 
 open Starling.AST
+open Starling.Z3
 
 module Pretty =
     /// Pretty-prints lvalues.
@@ -103,3 +104,26 @@ module Pretty =
 
     /// Pretty-prints scripts.
     let printScript = List.map printScriptLine >> String.concat "\n\n"
+
+    /// Pretty-prints view conversion errors.
+    let printViewConversionError ve =
+        match ve with
+            | VNotConstrainable view ->
+                "cannot use " + printView view
+                              + " as subject of a constraint"
+    /// Pretty-prints expression conversion errors.
+    let printExprConversionError ee =
+        match ee with
+            | EBadType ( expr, got, want ) ->
+                "bad type for Z3 expression " + expr.ToString ()
+                                              + ": want " + want
+                                              + ", got " + got
+            | EBadAST ( ast, reason ) ->
+                "cannot convert " + printExpression ast
+                                  + " to Z3: " + reason
+
+    /// Pretty-prints constraint conversion errors.
+    let printConstraintConversionError ce =
+        match ce with
+            | CFView ve -> printViewConversionError ve
+            | CFExpr ee -> printExprConversionError ee

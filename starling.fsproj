@@ -38,10 +38,10 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="AST.fs" />
-    <Compile Include="Pretty.fs" />
     <Compile Include="Model.fs" />
     <Compile Include="Z3.fs" />
     <Compile Include="Parser.fs" />
+    <Compile Include="Pretty.fs" />
     <Compile Include="Z3Tests.fs" />
     <Compile Include="PrettyTests.fs" />
     <Compile Include="ParserTests.fs" />

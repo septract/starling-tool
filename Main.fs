@@ -39,7 +39,7 @@ let runStarlingOnScript result =
                     printfn "  View: %s" <| printViews ( c.CViews )
                     printfn "    Z3: %s" <| c.CZ3.ToString ()
                 | Starling.Z3.CFail    f ->
-                    printfn "  <FAIL: %s>" f
+                    printfn "  <FAIL: %s>" <| Starling.Pretty.printConstraintConversionError f
     ) <| Starling.Z3.scriptViewConstraintsZ3 ctx result
     printfn "---"
 

@@ -5,26 +5,39 @@ open Microsoft.Z3
 
 open Starling.AST
 open Starling.Model
-open Starling.Pretty
 
 module Z3 =
     // TODO(CaptainHayashi): these could be generalised, use Chessie?
 
+    /// Represents an error when converting a view.
+    type ViewConversionError =
+        | VNotConstrainable of AST.View
+
     /// Represents a multiset view conversion result.
     type ViewConversionResult =
         | VSuccess of Model.View list
-        | VFail    of string
+        | VFail    of ViewConversionError
+
+    /// Represents an error when converting an expression.
+    type ExprConversionError =
+        | EBadType of expr: Microsoft.Z3.Expr * gotType: string * wantType: string
+        | EBadAST  of ast: AST.Expression * reason: string
 
     /// Represents a Z3 expression conversion result.
     type ExprConversionResult =
         | Bool  of Microsoft.Z3.BoolExpr
         | Arith of Microsoft.Z3.ArithExpr
-        | EFail of string
+        | EFail of ExprConversionError
+
+    /// Represents an error when converting a constraint.
+    type ConstraintConversionError =
+        | CFView of ViewConversionError
+        | CFExpr of ExprConversionError
 
     /// Represents a constraint conversion result.
     type ConstraintConversionResult =
         | CSuccess of Model.Constraint
-        | CFail    of string
+        | CFail    of ConstraintConversionError
 
     /// Tries to flatten a constraint LHS view AST into a multiset.
     let rec viewASTToSet vast =
@@ -32,12 +45,14 @@ module Z3 =
             | Apply ( NamedView s, pars ) -> VSuccess [ { VName = s; VParams = pars } ]
             | NamedView s                 -> VSuccess [ { VName = s; VParams = []   } ]
             | Unit                        -> VSuccess []
-            | Join ( l, r )               ->
-                match viewASTToSet l, viewASTToSet r with
-                    | VSuccess sl, VSuccess sr -> VSuccess <| List.concat [ sl; sr ]
-                    | VFail    m , _           -> VFail m
-                    | _          , VFail m     -> VFail m
-            | v                           -> VFail <| "view " + Pretty.printView v + " cannot be converted to multiset form"
+            | Join ( l, r )               -> joinViews l r
+            | v                           -> VFail <| VNotConstrainable vast
+    /// Merges two sides of a view monoid in the AST into one multiset.
+    and joinViews l r =
+        match viewASTToSet l, viewASTToSet r with
+            | VSuccess sl, VSuccess sr -> VSuccess <| List.concat [ sl; sr ]
+            | VFail    m , _           -> VFail m
+            | _          , VFail m     -> VFail m
 
     /// Flattens a LV to a string.
     let rec flattenLV v =
@@ -65,8 +80,8 @@ module Z3 =
             | ( Arith l, Arith r ) -> f ( l, r )
             | ( EFail l, _       ) -> EFail l
             | ( _      , EFail r ) -> EFail r
-            | ( Bool  l, _       ) -> EFail "lhs is bool, expected arith"
-            | ( _      , Bool  r ) -> EFail "rhs is bool, expected arith"
+            | ( Bool  l, _       ) -> EFail <| EBadType ( l :> Microsoft.Z3.Expr, "bool", "arith" )
+            | ( _      , Bool  r ) -> EFail <| EBadType ( r :> Microsoft.Z3.Expr, "bool", "arith" )
 
     /// Chains a pair of two successful boolean ConversionResults into a
     /// function returning a ConversionResult.
@@ -75,8 +90,8 @@ module Z3 =
             | ( Bool  l, Bool  r ) -> f ( l, r )
             | ( EFail l, _       ) -> EFail l
             | ( _      , EFail r ) -> EFail r
-            | ( Arith l, _       ) -> EFail "lhs is arith, expected bool"
-            | ( _      , Arith r ) -> EFail "rhs is arith, expected bool"
+            | ( Arith l, _       ) -> EFail <| EBadType ( l :> Microsoft.Z3.Expr, "arith", "bool" )
+            | ( _      , Arith r ) -> EFail <| EBadType ( r :> Microsoft.Z3.Expr, "arith", "bool" )
 
     /// Applies f to both items in a pair.
     let pairMap f lr = ( fst lr |> f, snd lr |> f )
@@ -104,7 +119,7 @@ module Z3 =
             | NeqExp   ( l, r ) -> chainBoolExprs  ctx ( ctx.MkEq   >> ctx.MkNot >> Bool ) ( l, r )
             | AndExp   ( l, r ) -> chainBoolExprs  ctx ( mkAnd2 ctx >> Bool ) ( l, r )
             | OrExp    ( l, r ) -> chainBoolExprs  ctx ( mkOr2 ctx  >> Bool ) ( l, r )
-            | _                 -> EFail "expected bool expr, got arith expr"
+            | _                 -> EFail <| EBadAST ( expr, "cannot be a Boolean expression" )
 
     /// Converts a Starling arithmetic expression ot a Z3 predicate using
     /// the given Z3 context.
@@ -116,7 +131,7 @@ module Z3 =
             | DivExp ( l, r ) -> chainArithExprs ctx ( ctx.MkDiv  >> Arith ) ( l, r )
             | AddExp ( l, r ) -> chainArithExprs ctx ( mkAdd2 ctx >> Arith ) ( l, r )
             | SubExp ( l, r ) -> chainArithExprs ctx ( mkSub2 ctx >> Arith ) ( l, r )
-            | _               -> EFail "expected arith expr, got bool expr"
+            | _               -> EFail <| EBadAST ( expr, "cannot be an arithmetic expression" )
 
     /// Extracts constraints from a script.
     let scriptViewConstraints =
@@ -133,8 +148,8 @@ module Z3 =
         scriptViewConstraints >> List.map (
             fun con ->
                 match viewASTToSet con.CView, boolExprToZ3 ctx con.CExpression with
-                    | VSuccess v, Bool     c -> CSuccess { CViews = v; CZ3 = c }
-                    | VFail    m, _          -> CFail m
-                    | _         , Arith    e -> CFail <| "needed bool expr, got arith " + e.ToString ()
-                    | _         , EFail    m -> CFail m
+                    | VSuccess v , Bool  c  -> CSuccess { CViews = v; CZ3 = c }
+                    | VFail    ve, _        -> CFail <| CFView ve
+                    | _          , Arith e  -> CFail <| CFExpr ( EBadType ( e :> Microsoft.Z3.Expr, "arith", "bool" ) )
+                    | _          , EFail ee -> CFail <| CFExpr ee
         )
