@@ -65,6 +65,9 @@
     <Reference Include="CommandLine">
       <HintPath>packages\CommandLineParser.2.0.275-beta\lib\net40\CommandLine.dll</HintPath>
     </Reference>
+    <Reference Include="FSharp.Core">
+      <HintPath>packages\FSharp.Core.4.0.0.1\lib\net40\FSharp.Core.dll</HintPath>
+    </Reference>
     <Reference Include="Fuchu">
       <HintPath>packages\Fuchu.1.0.1.0\lib\Fuchu.dll</HintPath>
     </Reference>
