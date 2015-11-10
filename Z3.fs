@@ -121,14 +121,24 @@ module Z3 =
         either ( fun pair -> Ok ( fst pair, List.map f ( snd pair ) ) )
                ( fun msgs -> List.map f msgs |> Bad )
 
-    /// Extracts the view constraints from a Script, turning each into a
+    /// Extracts the view constraints from a CollatedScript, turning each into a
     /// Model.Constraint.
-    let scriptViewConstraintsZ3 ctx =
-        scriptViewConstraints >> List.map (
+    let scriptViewConstraintsZ3 ctx cs =
+        List.map (
             fun con -> trial {
                 let! v = mapMessages CFView ( viewASTToSet con.CView )
                 let! c = mapMessages CFExpr ( boolExprToZ3 ctx con.CExpression )
                 return { CViews = v; CZ3 = c }
             }
-        ) >> collect
+        ) cs.Constraints |> collect
+
+    /// Collates a script, grouping all like-typed ScriptItems together.
+    let collate script =
+        // We foldBack instead of fold to preserve the original order.
+        List.foldBack (
+            fun item collation ->
+                match item with
+                    | SMethod m     -> { collation with Methods     = m :: collation.Methods }
+                    | SConstraint c -> { collation with Constraints = c :: collation.Constraints }
+        ) script { Constraints = []; Methods = [] }
 

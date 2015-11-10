@@ -41,7 +41,7 @@ let runStarlingOnScript result =
             // TODO: snd has warnings in it
            )
            ( List.iter ( Starling.Pretty.printConstraintConversionError >> printfn "  <FAIL: %s>" ) )
-    ) <| Starling.Z3.scriptViewConstraintsZ3 ctx result
+    ) <| Starling.Z3.scriptViewConstraintsZ3 ctx ( Starling.Z3.collate result )
     printfn "---"
 
 let parseFile name pprint =

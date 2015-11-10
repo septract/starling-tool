@@ -89,3 +89,9 @@ module AST =
     type ScriptItem =
         | SMethod of Method         // method main(argv, argc) { ... }
         | SConstraint of Constraint // constraint emp => true
+
+    /// A script whose items have been partitioned by type.
+    type CollatedScript = {
+        Constraints: Constraint list
+        Methods:     Method list
+    }
