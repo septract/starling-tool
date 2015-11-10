@@ -6,6 +6,7 @@ open Microsoft.Z3
 open Chessie.ErrorHandling
 
 open Starling.AST
+open Starling.Collator
 open Starling.Model
 
 module Z3 =
