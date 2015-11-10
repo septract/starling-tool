@@ -23,25 +23,16 @@ type Options = {
     input: string option;
 }
 
-let printViews vs =
-    "[" + String.concat ", " ( List.map Starling.Model.printView vs ) + "]"
-
 /// Runs Starling on the given parsed script.
 let runStarlingOnScript result =
     // TODO(CaptainHayashi): eventually this will run the actual prover
     printfn "AST: \n%A" result
     printfn "---"
-    printfn "Constraints: \n"
     let ctx = new Context ()
-    ( either ( fst >> List.iter (
-                fun c ->
-                    printfn "  View: %s" <| printViews ( c.CViews )
-                    printfn "    Z3: %s" <| c.CZ3.ToString ()
-            )
-            // TODO: snd has warnings in it
-           )
-           ( List.iter ( Starling.Pretty.printConstraintConversionError >> printfn "  <FAIL: %s>" ) )
-    ) <| Starling.Z3.scriptViewConstraintsZ3 ctx ( Starling.Z3.collate result )
+    ( either ( fst >> Starling.Pretty.printModel >> printfn "%s" )
+             // TODO(CaptainHayashi): don't ignore warnings in snd.
+             ( List.iter ( Starling.Pretty.printModelConversionError >> printfn "  <FAIL: %s>" ) )
+    ) <| Starling.Z3.model ctx ( Starling.Collator.collate result )
     printfn "---"
 
 let parseFile name pprint =

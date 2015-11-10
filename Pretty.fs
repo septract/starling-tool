@@ -1,6 +1,7 @@
 namespace Starling
 
 open Starling.AST
+open Starling.Model
 open Starling.Z3
 
 module Pretty =
@@ -127,3 +128,28 @@ module Pretty =
         match ce with
             | CFView ve -> printViewConversionError ve
             | CFExpr ee -> printExprConversionError ee
+
+    /// Pretty-prints model conversion errors.
+    let printModelConversionError ce =
+        match ce with
+            | MFConstraint ce -> printConstraintConversionError ce
+
+    /// Pretty-prints a flat view.
+    let printModelView v =
+        // TODO(CaptainHayashi): sort pretty-printing out so this can move
+        v.VName + "(" + String.concat ", " v.VParams + ")"
+
+    /// Pretty-prints a multiset of views.
+    let printModelViews vs =
+        "[" + String.concat ", " ( List.map printModelView vs ) + "]"
+
+    /// Pretty-prints a model.
+    let printModel model =
+        "Constraints: \n" + String.concat "\n\n" (
+            List.map (
+                fun c ->
+                    "  View: " + printModelViews ( c.CViews )
+                               + "\n"
+                               + "    Z3: " + c.CZ3.ToString ()
+             ) model.DefViews
+        )

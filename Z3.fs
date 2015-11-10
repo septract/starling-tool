@@ -26,6 +26,10 @@ module Z3 =
         | CFView of ViewConversionError
         | CFExpr of ExprConversionError
 
+    /// Represents an error when converting a model.
+    type ModelConversionError =
+        | MFConstraint of ConstraintConversionError
+
     /// Tries to flatten a constraint LHS view AST into a multiset.
     let rec viewASTToSet vast =
         match vast with
@@ -133,13 +137,29 @@ module Z3 =
             }
         ) cs.Constraints |> collect
 
-    /// Collates a script, grouping all like-typed ScriptItems together.
-    let collate script =
-        // We foldBack instead of fold to preserve the original order.
-        List.foldBack (
-            fun item collation ->
-                match item with
-                    | SMethod m     -> { collation with Methods     = m :: collation.Methods }
-                    | SConstraint c -> { collation with Constraints = c :: collation.Constraints }
-        ) script { Constraints = []; Methods = [] }
+    /// Converts a collated script to a model.
+    let model ctx collated =
+        trial {
+            let! constraints = mapMessages MFConstraint ( scriptViewConstraintsZ3 ctx collated )
+            // TODO(CaptainHayashi): axioms, etc.
 
+            return {
+                DefViews = constraints
+            }
+        }
+
+(*
+    /// Tries to convert an inline view AST into a CondView.
+    let viewASTToCond vast =
+        // TODO(CaptainHayashi): currently we allow only one level of conditionality.
+        match vast with
+            | IfView expast lview rview ->
+                match boolExprToZ3 ctx east, viewASTToSet last, viewASTToSet rast with
+                    | EBool  e, VSuccess l, VSuccess r -> CITEView ( e, l, r )
+                    | EArith e, _         , _          ->
+
+
+    /// Finds the atomic commands in a Script, turning each into a
+    /// Model.Axiom.
+    let scriptAxioms ctx =
+*)
