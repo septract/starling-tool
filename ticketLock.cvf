@@ -7,6 +7,12 @@ constraint holdLock()  * holdTick(t) => serving != t;
 constraint holdTick(t) * holdTick(t) => false;
 constraint holdLock()  * holdLock()  => false;
 
+// Variables.
+global int ticket;
+global int serving;
+local int t;
+local int s;
+
 /*
  * Locks the ticket lock.
  */

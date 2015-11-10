@@ -22,9 +22,19 @@ module Model =
             CZ3:    Z3.BoolExpr
         }
 
+    /// A record of a variable in the program model.
+    type Var =
+        {
+            VarName:  string
+            VarType:  Z3.Sort
+        }
+
     /// A model of a Starling program.
     type Model =
         {
+            Globals: Var list
+            Locals:  Var list
+
             // This corresponds to the function D.
             DefViews: Constraint list
         }

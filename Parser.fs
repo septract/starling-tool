@@ -388,6 +388,18 @@ module Parser =
                     // ^-                             ... <block>
                     (fun n ps b -> { Name = n; Params = ps; Body = b })
 
+    /// Parses a type identifier.
+    let parseType = stringReturn "int" Int <|> stringReturn "bool" Bool;
+
+    /// Parses a variable with the given initial keyword.
+    let parseVar kw = pstring kw >>. ws
+                      // ^- global     ...
+                                 >>. ( parseType .>> ws )
+                                 // ^- ... <type> ...
+                                 .>>. ( parseIdentifier .>> ws .>> pstring ";" .>> ws )
+                                 // ^-            ... <identifier> ;
+
+
     /// Parses a script of zero or more methods, including leading and trailing whitespace.
     let parseScript =
         // TODO(CaptainHayashi): parse things that aren't methods:
@@ -397,6 +409,10 @@ module Parser =
                      // ^- method <identifier> <arg-list> <block>
                    ; parseConstraint |>> SConstraint
                      // ^- constraint <view> => <expression> ;
+                   ; parseVar "global" |>> SGlobal
+                     // ^- global <type> <identifier> ;
+                   ; parseVar "local" |>> SLocal
+                     // ^- local <type> <identifier> ;
                    ]
         ) eof
 

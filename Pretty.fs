@@ -97,11 +97,23 @@ module Pretty =
                   + " " + printArgList meth.Params
                   + " " + printBlock 0 meth.Body
 
+    /// Pretty-prints a variable type.
+    let printType t =
+        match t with
+            | Int  -> "int"
+            | Bool -> "bool"
+
+    /// Pretty-prints a script variable of the given class.
+    let printScriptVar cls t v =
+        cls + " " + printType t + " " + v + ";"
+
     /// Pretty-prints script lines.
     let printScriptLine sl =
         match sl with
-            | SMethod     m -> printMethod m
-            | SConstraint c -> printConstraint c
+            | SGlobal     ( t, v ) -> printScriptVar "global" t v
+            | SLocal      ( t, v ) -> printScriptVar "local" t v
+            | SMethod     m        -> printMethod m
+            | SConstraint c        -> printConstraint c
 
     /// Pretty-prints scripts.
     let printScript = List.map printScriptLine >> String.concat "\n\n"
@@ -129,10 +141,16 @@ module Pretty =
             | CFView ve -> printViewConversionError ve
             | CFExpr ee -> printExprConversionError ee
 
+    /// Pretty-prints variable conversion errors.
+    let printVarConversionError ve =
+        match ve with
+            | VarDup vn -> "variable '" + vn + "' is defined multiple times"
+
     /// Pretty-prints model conversion errors.
     let printModelConversionError ce =
         match ce with
             | MFConstraint ce -> printConstraintConversionError ce
+            | MFVar        ve -> printVarConversionError ve
 
     /// Pretty-prints a flat view.
     let printModelView v =
@@ -143,13 +161,24 @@ module Pretty =
     let printModelViews vs =
         "[" + String.concat ", " ( List.map printModelView vs ) + "]"
 
+    /// Pretty-prints model variables.
+    let printModelVar var =
+        var.VarName + ": " + var.VarType.ToString ()
+
     /// Pretty-prints a model.
     let printModel model =
-        "Constraints: \n" + String.concat "\n\n" (
-            List.map (
-                fun c ->
-                    "  View: " + printModelViews ( c.CViews )
-                               + "\n"
-                               + "    Z3: " + c.CZ3.ToString ()
-             ) model.DefViews
-        )
+        "Model: \n" +
+            "  Globals: \n    " + String.concat "\n    " (
+                List.map printModelVar model.Globals
+            ) + "\n\n" +
+            "  Locals: \n    " + String.concat "\n    " (
+                List.map printModelVar model.Locals
+            ) + "\n\n" +
+            "  Constraints: \n" + String.concat "\n" (
+                List.map (
+                    fun c ->
+                        "    View: " + printModelViews ( c.CViews )
+                                   + "\n"
+                                   + "      Z3: " + c.CZ3.ToString ()
+                 ) model.DefViews
+            )

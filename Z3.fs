@@ -10,7 +10,7 @@ open Starling.Collator
 open Starling.Model
 
 module Z3 =
-    // TODO(CaptainHayashi): these could be generalised, use Chessie?
+    // TODO(CaptainHayashi): more consistent constructor names
 
     /// Represents an error when converting a view.
     type ViewConversionError =
@@ -26,9 +26,14 @@ module Z3 =
         | CFView of ViewConversionError
         | CFExpr of ExprConversionError
 
+    /// Represents an error when converting a variable list.
+    type VarConversionError =
+        | VarDup of string
+
     /// Represents an error when converting a model.
     type ModelConversionError =
         | MFConstraint of ConstraintConversionError
+        | MFVar        of VarConversionError
 
     /// Tries to flatten a constraint LHS view AST into a multiset.
     let rec viewASTToSet vast =
@@ -112,15 +117,6 @@ module Z3 =
             | SubExp ( l, r ) -> chainArithExprs ctx ( mkSub2 ctx ) ( l, r )
             | _               -> fail <| EBadAST ( expr, "cannot be an arithmetic expression" )
 
-    /// Extracts constraints from a script.
-    let scriptViewConstraints =
-        List.choose (
-            fun s ->
-                match s with
-                    | SMethod     _ -> None
-                    | SConstraint c -> Some c
-        )
-
     /// Maps f over e's messages.
     let mapMessages f =
         either ( fun pair -> Ok ( fst pair, List.map f ( snd pair ) ) )
@@ -137,13 +133,47 @@ module Z3 =
             }
         ) cs.Constraints |> collect
 
+    /// Tries to find duplicate entries in a list.
+    /// Returns a list of the duplicates found.
+    let findDuplicates =
+        List.groupBy id
+            >> List.choose (
+                fun xs ->
+                    match xs with
+                        | ( _, []    ) -> None
+                        | ( _, [ _ ] ) -> None
+                        | ( x, _     ) -> Some x
+              )
+
+    /// Converts a variable type to a Z3 sort.
+    let typeToZ3 ( ctx : Context ) ty =
+        match ty with
+            | Int  -> ctx.IntSort  :> Sort
+            | Bool -> ctx.BoolSort :> Sort
+
+    /// Converts a AST variable list to Var record lists.
+    let modelVarList ctx lst =
+        let names = List.map snd lst
+        match ( findDuplicates names ) with
+            | [] ->
+                ok (
+                    List.map (
+                        fun x -> { VarName = snd x; VarType = typeToZ3 ctx ( fst x ) }
+                    ) lst
+                )
+            | ds -> Bad <| List.map VarDup ds
+
     /// Converts a collated script to a model.
     let model ctx collated =
         trial {
             let! constraints = mapMessages MFConstraint ( scriptViewConstraintsZ3 ctx collated )
+            let! globals     = mapMessages MFVar        ( modelVarList ctx collated.Globals )
+            let! locals      = mapMessages MFVar        ( modelVarList ctx collated.Locals )
             // TODO(CaptainHayashi): axioms, etc.
 
             return {
+                Globals  = globals
+                Locals   = locals
                 DefViews = constraints
             }
         }
