@@ -1,7 +1,8 @@
 namespace Starling.Tests
 
-open Fuchu
-open Microsoft.Z3
+open Chessie.ErrorHandling  // ok
+open Fuchu                  // general test framework
+open Microsoft.Z3           // anything involving ctx
 open Starling
 open Starling.AST
 
@@ -12,7 +13,7 @@ module Z3 =
         Assert.Equal ( Starling.Pretty.printExpression expr
                        + " -Z3-> " + z3.ToString ()
                      , Starling.Z3.arithExprToZ3 ctx expr
-                     , Starling.Z3.Arith z3
+                     , ok z3
                      )
 
     /// Assertion that converting the Boolean expression `expr` to Z3
@@ -21,7 +22,7 @@ module Z3 =
         Assert.Equal ( Starling.Pretty.printExpression expr
                        + " -Z3-> " + z3.ToString ()
                      , Starling.Z3.boolExprToZ3 ctx expr
-                     , Starling.Z3.Bool z3
+                     , ok z3
                      )
 
     let testExprToZ3 =

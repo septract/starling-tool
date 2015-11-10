@@ -5,6 +5,7 @@ open System
 open CommandLine
 open CommandLine.Text
 
+open Chessie.ErrorHandling
 open Fuchu
 open FParsec // TODO: push fparsec references out of Main.
 open Microsoft.Z3 // TODO: this too.
@@ -32,14 +33,14 @@ let runStarlingOnScript result =
     printfn "---"
     printfn "Constraints: \n"
     let ctx = new Context ()
-    List.iter (
-        fun vc ->
-            match vc with
-                | Starling.Z3.CSuccess c ->
+    ( either ( fst >> List.iter (
+                fun c ->
                     printfn "  View: %s" <| printViews ( c.CViews )
                     printfn "    Z3: %s" <| c.CZ3.ToString ()
-                | Starling.Z3.CFail    f ->
-                    printfn "  <FAIL: %s>" <| Starling.Pretty.printConstraintConversionError f
+            )
+            // TODO: snd has warnings in it
+           )
+           ( List.iter ( Starling.Pretty.printConstraintConversionError >> printfn "  <FAIL: %s>" ) )
     ) <| Starling.Z3.scriptViewConstraintsZ3 ctx result
     printfn "---"
 

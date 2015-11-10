@@ -53,6 +53,9 @@
     <Reference Include="mscorlib" />
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="Chessie">
+      <HintPath>packages\Chessie.0.2.2\lib\net40\Chessie.dll</HintPath>
+    </Reference>
     <Reference Include="FParsec">
       <HintPath>packages\FParsec-Big-Data-Edition.1.0.2\lib\net40-client\FParsec.dll</HintPath>
     </Reference>
