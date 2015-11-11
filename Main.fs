@@ -45,15 +45,18 @@ let printResult pOk pBad =
            )
 
 /// Runs Starling on the given parsed script.
-let runStarlingOnScript result =
+let runStarlingOnScript script =
     // TODO(CaptainHayashi): eventually this will run the actual prover
-    printfn "AST: \n%A" result
+    printfn "AST: \n%A" script
     printfn "---"
-    let ctx = new Context ()
-    ( either ( fst >> Starling.Pretty.printModel >> printfn "%s" )
-             // TODO(CaptainHayashi): don't ignore warnings in snd.
-             ( List.iter ( Starling.Pretty.printModelError >> printfn "  <FAIL: %s>" ) )
-    ) <| Starling.Z3.model ctx ( Starling.Collator.collate result )
+
+    let ctx         = new Context ()
+    let collated    = Starling.Collator.collate script
+    let modelResult = Starling.Z3.model ctx collated
+    printfn "%s" <| printResult Starling.Pretty.printModel
+                                ( List.map Starling.Pretty.printModelError )
+                                modelResult
+
     printfn "---"
 
 let parseFile name pprint =
