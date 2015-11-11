@@ -19,3 +19,22 @@ module Utils =
 
     /// Converts a function of two arguments to a pairwise function.
     let uncurry f ab = f ( fst ab ) ( snd ab )
+
+    //
+    // Chessie-related functions.
+    //
+
+    /// If both sides of a pair are ok, return f applied to them.
+    /// Else, return the errors.
+    let pairBindMap f g lr =
+        trial {
+            let! l = f ( fst lr )
+            let! r = f ( snd lr )
+            return g ( l, r )
+        }
+
+    /// Maps f over e's messages.
+    let mapMessages f =
+        either ( fun pair -> Ok ( fst pair, List.map f ( snd pair ) ) )
+               ( fun msgs -> List.map f msgs |> Bad )
+

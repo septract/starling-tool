@@ -1,6 +1,7 @@
 namespace Starling
 
 open Starling.AST
+open Starling.Collator
 open Starling.Model
 open Starling.Z3
 
@@ -118,6 +119,15 @@ module Pretty =
     /// Pretty-prints scripts.
     let printScript = List.map printScriptLine >> String.concat "\n\n"
 
+    /// Pretty-prints a collated script.
+    let printCollatedScript cs =
+        String.concat "\n\n" [
+            String.concat "\n" <| List.map ( uncurry ( printScriptVar "global" ) ) cs.CGlobals
+            String.concat "\n" <| List.map ( uncurry ( printScriptVar "local"  ) ) cs.CLocals
+            String.concat "\n" <| List.map printConstraint                         cs.CConstraints
+            String.concat "\n\n" <| List.map printMethod                             cs.CMethods
+        ]
+
     /// Pretty-prints view conversion errors.
     let printViewError ve =
         match ve with
@@ -163,18 +173,17 @@ module Pretty =
 
     /// Pretty-prints a model.
     let printModel model =
-        "Model: \n" +
-            "  Globals: \n    " + String.concat "\n    " (
-                List.map printModelVar model.Globals
-            ) + "\n\n" +
-            "  Locals: \n    " + String.concat "\n    " (
-                List.map printModelVar model.Locals
-            ) + "\n\n" +
-            "  Constraints: \n" + String.concat "\n" (
-                List.map (
-                    fun c ->
-                        "    View: " + printModelViews ( c.CViews )
-                                   + "\n"
-                                   + "      Z3: " + c.CZ3.ToString ()
-                 ) model.DefViews
-            )
+        "Globals: \n    " + String.concat "\n    " (
+            List.map printModelVar model.Globals
+        ) + "\n\n" +
+        "Locals: \n    " + String.concat "\n    " (
+            List.map printModelVar model.Locals
+        ) + "\n\n" +
+        "Constraints: \n" + String.concat "\n" (
+            List.map (
+                fun c ->
+                    "    View: " + printModelViews ( c.CViews )
+                               + "\n"
+                               + "      Z3: " + c.CZ3.ToString ()
+             ) model.DefViews
+        )

@@ -7,23 +7,23 @@ open Starling.AST
 module Collator =
     /// A script whose items have been partitioned by type.
     type CollatedScript = {
-        Globals:     ( Type * string ) list
-        Locals:     ( Type * string ) list
-        Constraints: Constraint list
-        Methods:     Method list
+        CGlobals:     ( Type * string ) list
+        CLocals:     ( Type * string ) list
+        CConstraints: Constraint list
+        CMethods:     Method list
     }
 
     /// The empty collated script.
-    let empty = { Constraints = []; Methods = []; Globals = []; Locals = [] }
+    let empty = { CConstraints = []; CMethods = []; CGlobals = []; CLocals = [] }
 
     /// Files a script item into the appropriate bin in a
     /// CollatedScript.
     let collateStep item collation =
         match item with
-            | SGlobal     ( v, t ) -> { collation with Globals     = ( v, t ) :: collation.Globals }
-            | SLocal      ( v, t ) -> { collation with Locals      = ( v, t ) :: collation.Locals }
-            | SMethod     m        -> { collation with Methods     = m :: collation.Methods }
-            | SConstraint c        -> { collation with Constraints = c :: collation.Constraints }
+            | SGlobal     ( v, t ) -> { collation with CGlobals     = ( v, t ) :: collation.CGlobals }
+            | SLocal      ( v, t ) -> { collation with CLocals      = ( v, t ) :: collation.CLocals }
+            | SMethod     m        -> { collation with CMethods     = m :: collation.CMethods }
+            | SConstraint c        -> { collation with CConstraints = c :: collation.CConstraints }
 
     /// Collates a script, grouping all like-typed ScriptItems together.
     let collate script =

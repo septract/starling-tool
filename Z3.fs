@@ -67,15 +67,6 @@ module Z3 =
     /// Makes a Mul out of a pair of two expressions.
     let mkMul2 (ctx: Context) lr = ctx.MkMul [| fst lr; snd lr |]
 
-    /// If both sides of a pair are ok, return f applied to them.
-    /// Else, return the errors.
-    let pairBindMap f g lr =
-        trial {
-            let! l = f ( fst lr )
-            let! r = f ( snd lr )
-            return g ( l, r )
-        }
-
     /// Converts a pair of arith-exps to Z3, then chains f onto them.
     let rec chainArithExprs ( ctx : Context )
                             ( f : ( ArithExpr * ArithExpr ) -> 'a )
@@ -116,11 +107,6 @@ module Z3 =
             | SubExp ( l, r ) -> chainArithExprs ctx ( mkSub2 ctx ) ( l, r )
             | _               -> fail <| EEBadAST ( expr, "cannot be an arithmetic expression" )
 
-    /// Maps f over e's messages.
-    let mapMessages f =
-        either ( fun pair -> Ok ( fst pair, List.map f ( snd pair ) ) )
-               ( fun msgs -> List.map f msgs |> Bad )
-
     /// Extracts the view constraints from a CollatedScript, turning each into a
     /// Model.Constraint.
     let scriptViewConstraintsZ3 ctx cs =
@@ -130,7 +116,7 @@ module Z3 =
                 let! c = mapMessages CEExpr ( boolExprToZ3 ctx con.CExpression )
                 return { CViews = v; CZ3 = c }
             }
-        ) cs.Constraints |> collect
+        ) cs.CConstraints |> collect
 
     /// Tries to find duplicate entries in a list.
     /// Returns a list of the duplicates found.
@@ -166,8 +152,8 @@ module Z3 =
     let model ctx collated =
         trial {
             let! constraints = mapMessages MEConstraint ( scriptViewConstraintsZ3 ctx collated )
-            let! globals     = mapMessages MEVar        ( modelVarList ctx collated.Globals )
-            let! locals      = mapMessages MEVar        ( modelVarList ctx collated.Locals )
+            let! globals     = mapMessages MEVar        ( modelVarList ctx collated.CGlobals )
+            let! locals      = mapMessages MEVar        ( modelVarList ctx collated.CLocals )
             // TODO(CaptainHayashi): axioms, etc.
 
             return {
