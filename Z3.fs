@@ -13,27 +13,26 @@ module Z3 =
     // TODO(CaptainHayashi): more consistent constructor names
 
     /// Represents an error when converting a view.
-    type ViewConversionError =
-        | VNotConstrainable of AST.View
+    type ViewError =
+        | VENotFlat of AST.View
 
     /// Represents an error when converting an expression.
-    type ExprConversionError =
-        | EBadType of expr: Microsoft.Z3.Expr * gotType: string * wantType: string
-        | EBadAST  of ast: AST.Expression * reason: string
+    type ExprError =
+        | EEBadAST  of ast: AST.Expression * reason: string
 
     /// Represents an error when converting a constraint.
-    type ConstraintConversionError =
-        | CFView of ViewConversionError
-        | CFExpr of ExprConversionError
+    type ConstraintError =
+        | CEView of ViewError
+        | CEExpr of ExprError
 
     /// Represents an error when converting a variable list.
-    type VarConversionError =
-        | VarDup of string
+    type VarError =
+        | VEDuplicate of string
 
     /// Represents an error when converting a model.
-    type ModelConversionError =
-        | MFConstraint of ConstraintConversionError
-        | MFVar        of VarConversionError
+    type ModelError =
+        | MEConstraint of ConstraintError
+        | MEVar        of VarError
 
     /// Tries to flatten a constraint LHS view AST into a multiset.
     let rec viewASTToSet vast =
@@ -42,7 +41,7 @@ module Z3 =
             | NamedView s                 -> ok [ { VName = s; VParams = []   } ]
             | Unit                        -> ok []
             | Join ( l, r )               -> joinViews l r
-            | v                           -> fail <| VNotConstrainable vast
+            | v                           -> fail <| VENotFlat vast
     /// Merges two sides of a view monoid in the AST into one multiset.
     and joinViews l r =
         lift2 ( fun l r -> List.concat [ l; r ] )
@@ -81,7 +80,7 @@ module Z3 =
     let rec chainArithExprs ( ctx : Context )
                             ( f : ( ArithExpr * ArithExpr ) -> 'a )
                             ( pair : ( AST.Expression * AST.Expression ) )
-                                : Result<'a, ExprConversionError> =
+                                : Result<'a, ExprError> =
         pairBindMap ( arithExprToZ3 ctx ) f pair
 
     /// Converts a pair of bool-exps to Z3, then chains f onto them.
@@ -103,7 +102,7 @@ module Z3 =
             | NeqExp   ( l, r ) -> chainBoolExprs  ctx ( ctx.MkEq   >> ctx.MkNot ) ( l, r )
             | AndExp   ( l, r ) -> chainBoolExprs  ctx ( mkAnd2 ctx ) ( l, r )
             | OrExp    ( l, r ) -> chainBoolExprs  ctx ( mkOr2 ctx  ) ( l, r )
-            | _                 -> fail <| EBadAST ( expr, "cannot be a Boolean expression" )
+            | _                 -> fail <| EEBadAST ( expr, "cannot be a Boolean expression" )
 
     /// Converts a Starling arithmetic expression ot a Z3 predicate using
     /// the given Z3 context.
@@ -115,7 +114,7 @@ module Z3 =
             | DivExp ( l, r ) -> chainArithExprs ctx ( ctx.MkDiv  ) ( l, r )
             | AddExp ( l, r ) -> chainArithExprs ctx ( mkAdd2 ctx ) ( l, r )
             | SubExp ( l, r ) -> chainArithExprs ctx ( mkSub2 ctx ) ( l, r )
-            | _               -> fail <| EBadAST ( expr, "cannot be an arithmetic expression" )
+            | _               -> fail <| EEBadAST ( expr, "cannot be an arithmetic expression" )
 
     /// Maps f over e's messages.
     let mapMessages f =
@@ -127,8 +126,8 @@ module Z3 =
     let scriptViewConstraintsZ3 ctx cs =
         List.map (
             fun con -> trial {
-                let! v = mapMessages CFView ( viewASTToSet con.CView )
-                let! c = mapMessages CFExpr ( boolExprToZ3 ctx con.CExpression )
+                let! v = mapMessages CEView ( viewASTToSet con.CView )
+                let! c = mapMessages CEExpr ( boolExprToZ3 ctx con.CExpression )
                 return { CViews = v; CZ3 = c }
             }
         ) cs.Constraints |> collect
@@ -161,14 +160,14 @@ module Z3 =
                         fun x -> { VarName = snd x; VarType = typeToZ3 ctx ( fst x ) }
                     ) lst
                 )
-            | ds -> Bad <| List.map VarDup ds
+            | ds -> Bad <| List.map VEDuplicate ds
 
     /// Converts a collated script to a model.
     let model ctx collated =
         trial {
-            let! constraints = mapMessages MFConstraint ( scriptViewConstraintsZ3 ctx collated )
-            let! globals     = mapMessages MFVar        ( modelVarList ctx collated.Globals )
-            let! locals      = mapMessages MFVar        ( modelVarList ctx collated.Locals )
+            let! constraints = mapMessages MEConstraint ( scriptViewConstraintsZ3 ctx collated )
+            let! globals     = mapMessages MEVar        ( modelVarList ctx collated.Globals )
+            let! locals      = mapMessages MEVar        ( modelVarList ctx collated.Locals )
             // TODO(CaptainHayashi): axioms, etc.
 
             return {

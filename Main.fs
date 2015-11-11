@@ -23,6 +23,27 @@ type Options = {
     input: string option;
 }
 
+/// Pretty-prints a list of error or warning strings, with the given
+/// header.
+let printWarns header ws =
+    header + ":\n  " + String.concat "\n  " ws
+
+/// Pretty-prints a Chessie result, given printers for the successful
+/// case and failure messages.
+let printResult pOk pBad =
+    either ( pairMap pOk pBad >> (
+                fun okbad ->
+                    // Only show warnings if there actually were some.
+                    match okbad with
+                        | ( ok, [] ) -> ok
+                        | ( ok, ws ) -> ok + "\n\n" + printWarns "Warnings" ws
+            )
+           )
+           ( pBad >> (
+                fun bad -> printWarns "Errors" bad
+            )
+           )
+
 /// Runs Starling on the given parsed script.
 let runStarlingOnScript result =
     // TODO(CaptainHayashi): eventually this will run the actual prover
@@ -31,7 +52,7 @@ let runStarlingOnScript result =
     let ctx = new Context ()
     ( either ( fst >> Starling.Pretty.printModel >> printfn "%s" )
              // TODO(CaptainHayashi): don't ignore warnings in snd.
-             ( List.iter ( Starling.Pretty.printModelConversionError >> printfn "  <FAIL: %s>" ) )
+             ( List.iter ( Starling.Pretty.printModelError >> printfn "  <FAIL: %s>" ) )
     ) <| Starling.Z3.model ctx ( Starling.Collator.collate result )
     printfn "---"
 

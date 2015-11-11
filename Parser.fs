@@ -10,9 +10,6 @@ open Starling.AST
 //   - TODO(CaptainHayashi): make more idiomatic!
 
 module Parser =
-    /// Converts a triple-wise function to a function of three arguments
-    let curry3 f a b c = f (a, b, c)
-
     // Whitespace.
     //   TODO(CaptainHayashi): is some of this redundant?
 
@@ -146,8 +143,6 @@ module Parser =
             [ ("||", OrExp ) ]
 
     do parseExpressionRef := parseOrExpression
-
-
 
 
     //

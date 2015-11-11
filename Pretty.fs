@@ -119,38 +119,34 @@ module Pretty =
     let printScript = List.map printScriptLine >> String.concat "\n\n"
 
     /// Pretty-prints view conversion errors.
-    let printViewConversionError ve =
+    let printViewError ve =
         match ve with
-            | VNotConstrainable view ->
+            | VENotFlat view ->
                 "cannot use " + printView view
-                              + " as subject of a constraint"
+                              + " as flat view (eg subject of a constraint)"
     /// Pretty-prints expression conversion errors.
-    let printExprConversionError ee =
+    let printExprError ee =
         match ee with
-            | EBadType ( expr, got, want ) ->
-                "bad type for Z3 expression " + expr.ToString ()
-                                              + ": want " + want
-                                              + ", got " + got
-            | EBadAST ( ast, reason ) ->
+            | EEBadAST ( ast, reason ) ->
                 "cannot convert " + printExpression ast
                                   + " to Z3: " + reason
 
     /// Pretty-prints constraint conversion errors.
-    let printConstraintConversionError ce =
+    let printConstraintError ce =
         match ce with
-            | CFView ve -> printViewConversionError ve
-            | CFExpr ee -> printExprConversionError ee
+            | CEView ve -> printViewError ve
+            | CEExpr ee -> printExprError ee
 
     /// Pretty-prints variable conversion errors.
-    let printVarConversionError ve =
+    let printVarError ve =
         match ve with
-            | VarDup vn -> "variable '" + vn + "' is defined multiple times"
+            | VEDuplicate vn -> "variable '" + vn + "' is defined multiple times"
 
     /// Pretty-prints model conversion errors.
-    let printModelConversionError ce =
+    let printModelError ce =
         match ce with
-            | MFConstraint ce -> printConstraintConversionError ce
-            | MFVar        ve -> printVarConversionError ve
+            | MEConstraint ce -> printConstraintError ce
+            | MEVar        ve -> printVarError ve
 
     /// Pretty-prints a flat view.
     let printModelView v =

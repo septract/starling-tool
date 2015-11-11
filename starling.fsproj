@@ -37,6 +37,7 @@
   <Import Project="$(FSharpTargetsPath)" Condition="Exists('$(FSharpTargetsPath)')" />
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="Utils.fs" />
     <Compile Include="AST.fs" />
     <Compile Include="Collator.fs" />
     <Compile Include="Model.fs" />
