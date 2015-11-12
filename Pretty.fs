@@ -185,16 +185,18 @@ module Pretty =
         "[" + String.concat ", " ( List.map printModelView vs ) + "]"
 
     /// Pretty-prints model variables.
-    let printModelVar var =
-        var.VarName + ": " + var.VarType.ToString ()
+    let printModelVar nvar =
+        let name, var = nvar
+        name + ": " + var.VarType.ToString ()
+             + " (Z3 expr: " + var.VarExpr.ToString () + ")"
 
     /// Pretty-prints a model.
     let printModel model =
         "Globals: \n    " + String.concat "\n    " (
-            List.map printModelVar model.Globals
+            List.map printModelVar ( Map.toList model.Globals )
         ) + "\n\n" +
         "Locals: \n    " + String.concat "\n    " (
-            List.map printModelVar model.Locals
+            List.map printModelVar ( Map.toList model.Locals )
         ) + "\n\n" +
         "Constraints: \n" + String.concat "\n" (
             List.map (

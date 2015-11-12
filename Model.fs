@@ -25,15 +25,15 @@ module Model =
     /// A record of a variable in the program model.
     type Var =
         {
-            VarName:  string
+            VarExpr:  Z3.Expr
             VarType:  Z3.Sort
         }
 
     /// A model of a Starling program.
     type Model =
         {
-            Globals: Var list
-            Locals:  Var list
+            Globals: Map<string, Var>
+            Locals:  Map<string, Var>
 
             // This corresponds to the function D.
             DefViews: Constraint list

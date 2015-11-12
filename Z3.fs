@@ -135,14 +135,20 @@ module Z3 =
             | Bool -> ctx.BoolSort :> Sort
 
     /// Converts a AST variable list to Var record lists.
-    let modelVarList ctx lst =
+    let modelVarList ( ctx : Context ) lst =
         let names = List.map snd lst
         match ( findDuplicates names ) with
             | [] ->
                 ok (
-                    List.map (
-                        fun x -> { VarName = snd x; VarType = typeToZ3 ctx ( fst x ) }
-                    ) lst
+                    List.foldBack (
+                        fun x ( map : Map<string, Var> ) ->
+                            let sort = typeToZ3 ctx ( fst x )
+                            map.Add ( snd x
+                                    , { VarType = sort
+                                        VarExpr = ctx.MkConst ( snd x, sort )
+                                      }
+                                    )
+                    ) lst Map.empty
                 )
             | ds -> Bad <| List.map VEDuplicate ds
 
