@@ -14,7 +14,7 @@ module Z3 =
 
     /// Represents an error when converting a view.
     type ViewError =
-        | VENotFlat of AST.View
+        | VENotFlat of AST.ViewDef
 
     /// Represents an error when converting an expression.
     type ExprError =
@@ -34,19 +34,17 @@ module Z3 =
         | MEConstraint of ConstraintError
         | MEVar        of VarError
 
-    /// Tries to flatten a constraint LHS view AST into a multiset.
-    let rec viewASTToSet vast =
+    /// Tries to flatten a view definition AST into a multiset.
+    let rec viewDefToSet vast =
         match vast with
-            | Apply ( NamedView s, pars ) -> ok [ { VName = s; VParams = pars } ]
-            | NamedView s                 -> ok [ { VName = s; VParams = []   } ]
-            | Unit                        -> ok []
-            | Join ( l, r )               -> joinViews l r
-            | v                           -> fail <| VENotFlat vast
+            | DFunc ( s, pars ) -> ok [ { VName = s; VParams = pars } ]
+            | DUnit             -> ok []
+            | DJoin ( l, r )    -> joinViewDefs l r
     /// Merges two sides of a view monoid in the AST into one multiset.
-    and joinViews l r =
+    and joinViewDefs l r =
         lift2 ( fun l r -> List.concat [ l; r ] )
-              ( viewASTToSet l )
-              ( viewASTToSet r )
+              ( viewDefToSet l )
+              ( viewDefToSet r )
 
     /// Flattens a LV to a string.
     let rec flattenLV v =
@@ -112,7 +110,7 @@ module Z3 =
     let scriptViewConstraintsZ3 ctx cs =
         List.map (
             fun con -> trial {
-                let! v = mapMessages CEView ( viewASTToSet con.CView )
+                let! v = mapMessages CEView ( viewDefToSet con.CView )
                 let! c = mapMessages CEExpr ( boolExprToZ3 ctx con.CExpression )
                 return { CViews = v; CZ3 = c }
             }
@@ -169,7 +167,7 @@ module Z3 =
         // TODO(CaptainHayashi): currently we allow only one level of conditionality.
         match vast with
             | IfView expast lview rview ->
-                match boolExprToZ3 ctx east, viewASTToSet last, viewASTToSet rast with
+                match boolExprToZ3 ctx east, viewDefToSet last, viewDefToSet rast with
                     | EBool  e, VSuccess l, VSuccess r -> CITEView ( e, l, r )
                     | EArith e, _         , _          ->
 

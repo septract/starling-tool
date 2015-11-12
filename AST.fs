@@ -39,13 +39,17 @@ module AST =
         | Fetch of LValue * LValue * FetchMode               // <a = b??>
         | Postfix of LValue * FetchMode                      // <a++> or <a-->
 
-    /// A view.
+    /// A view definition.
+    type ViewDef =
+        | DUnit
+        | DJoin of ViewDef * ViewDef
+        | DFunc of string * pars: string list
+
+    /// A view expression.
     type View =
-        // TODO(CaptainHayashi): fold Apply and NamedView into one thing?
-        | Apply of View * args: string list
-        | NamedView of string
         | Unit
-        | Join of View * View
+        | Join   of View * View
+        | Func   of string * args: Expression list
         | IfView of Expression * View * View
 
     /// A statement in the command language.
@@ -74,7 +78,7 @@ module AST =
 
     /// A constraint, binding a view to an expression.
     type Constraint = {
-        CView       : View
+        CView       : ViewDef
         CExpression : Expression
     }
 

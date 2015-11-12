@@ -36,23 +36,29 @@ module Pretty =
     and printBinop a o b = "(" + printExpression a + " " + o + " " + printExpression b + ")"
 
     /// Pretty-prints argument lists.
-    let printArgList ss = "(" + String.concat ", " ss + ")"
+    let printArgList argp ss = "(" + String.concat ", " ( List.map argp ss ) + ")"
 
     /// Pretty-prints views.
     let rec printView v =
         match v with
-            | Apply     ( vv,  xs ) -> printView vv + printArgList xs
-            | NamedView s           -> s
+            | Func      ( vv,  xs ) -> vv + printArgList printExpression xs
             | Unit                  -> "emp"
             | Join      ( l, r )    -> printView l + " * " + printView r
             | IfView    ( e, l, r ) -> "if " + printExpression e + " then " + printView l + " else " + printView r
+
+    /// Pretty-prints view definitions.
+    let rec printViewDef v =
+        match v with
+            | DFunc      ( vv,  xs ) -> vv + printArgList id xs
+            | DUnit                  -> "emp"
+            | DJoin      ( l, r )    -> printViewDef l + " * " + printViewDef r
 
     /// Pretty-prints view lines.
     let printViewLine vl = "{| " + printView vl + " |}"
 
     /// Pretty-prints constraints.
     let printConstraint cs =
-        "constraint " + printView cs.CView + " => " + printExpression cs.CExpression + ";"
+        "constraint " + printViewDef cs.CView + " => " + printExpression cs.CExpression + ";"
 
     /// Pretty-prints fetch modes.
     let printFetchMode m =
@@ -95,7 +101,7 @@ module Pretty =
     /// Pretty-prints methods.
     let printMethod meth =
         "method " + meth.Name
-                  + " " + printArgList meth.Params
+                  + " " + printArgList id meth.Params
                   + " " + printBlock 0 meth.Body
 
     /// Pretty-prints a variable type.
@@ -132,8 +138,9 @@ module Pretty =
     let printViewError ve =
         match ve with
             | VENotFlat view ->
-                "cannot use " + printView view
+                "cannot use " + printViewDef view
                               + " as flat view (eg subject of a constraint)"
+                              
     /// Pretty-prints expression conversion errors.
     let printExprError ee =
         match ee with

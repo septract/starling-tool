@@ -61,6 +61,8 @@ module Parser =
 
     /// Parser for `raw` views (not surrounded in {braces}).
     let parseView, parseViewRef = createParserForwardedToRef<View, unit>()
+    /// Parser for view definitions.
+    let parseViewDef, parseViewDefRef = createParserForwardedToRef<ViewDef, unit>()
     /// Parser for commands.
     let parseCommand, parseCommandRef = createParserForwardedToRef<Command, unit>()
     /// Parser for blocks.
@@ -193,54 +195,68 @@ module Parser =
     //
 
     /// Parses a comma-delimited parameter list.
-    let parseParams =
-        sepBy parseIdentifier (pstring "," .>> ws)
+    /// Each parameter is parsed by argp.
+    let parseParams argp =
+        sepBy argp (pstring "," .>> ws)
         // ^- {empty}
         //  | <identifier>
         //  | <identifier> , <params>
 
     /// Parses a comma-delimited, parenthesised parameter list.
-    let parseParamList =
+    let parseParamList argp =
         // TODO(CaptainHayashi):
         //   Make this generic in the first argument to sepBy, and also
         //   make said first argument more robust -- currently this parses all
         //   whitespace before the ,!
-        inParens parseParams
+        inParens ( parseParams argp )
         // ^- ()
         //  | ( <params> )
+
+    //
+    // View-likes (views and view definitions).
+
+    /// Parses a view-like thing, with the given basic parser and
+    /// joining constructor.
+    let parseViewLike basic join =
+        chainl1 basic
+                // ^- <basic-view>
+                //  | <basic-view> ...
+                ( stringReturn "*" ( fun x y -> join ( x, y ) ) .>> ws )
+                //                 ... * <view>
+
+    /// Takes a view name and optional argument list, and creates the
+    /// view using `ctor`, substituting in an empty list if none exists.
+    /// view in `Apply` if the optional argument list exists.
+    let addViewArgs ctor vname x =
+        match x with
+            | Some args -> ctor ( vname, args )
+            | None      -> ctor ( vname, []   )
+
+    /// Parses a possible argument list for an application of a parametric view.
+    let parseFuncLike argp = ws >>. opt ( parseParamList argp ) .>> ws
+
+    /// Takes a view parser and tries to parse an argument list after it.
+    /// Wraps the parsed command in `Apply` if an argument list exists.
+    let wrapFuncLike parser ctor argp =
+        pipe2 parser ( parseFuncLike argp ) ( addViewArgs ctor )
+
+
     //
     // Views.
     //
 
-    /// Parses a view in parentheses.
-    let parseBracketedView = inParens parseView
-
     /// Parses a conditional view.
     let parseIfView =
-        pipe3ws (pstring "if" >>. ws >>. parseExpression)
+        pipe3ws ( pstring "if" >>. ws >>. parseExpression )
                 // ^- if <view-exprn> ...
-                (pstring "then" >>. ws >>. parseView)
+                ( pstring "then" >>. ws >>. parseView )
                 // ^-                 ... then <view> ...
-                (pstring "else" >>. ws >>. parseView .>> ws)
+                ( pstring "else" >>. ws >>. parseView .>> ws )
                 // ^-                                 ... else <view>
-                (fun c t f -> IfView(c, t, f))
+                ( fun c t f -> IfView ( c, t, f ) )
 
-    /// Takes a view and optional argument list, and potentially wraps the
-    /// view in `Apply` if the optional argument list exists.
-    let maybeAddApply view x =
-        match x with
-            | Some args -> Apply(view,args)
-            | None      -> view
-
-    /// Parses a possible argument list for an application of a parametric view.
-    let parseApply = ws >>. opt parseParamList .>> ws
-
-    /// Takes a view parser and tries to parse an argument list after it.
-    /// Wraps the parsed command in `Apply` if an argument list exists.
-    let tryWrapInApply parser = pipe2 parser parseApply maybeAddApply
-
-    /// Parses a named view (identifier).
-    let parseNamedView = parseIdentifier |>> NamedView
+    /// Parses a functional view.
+    let parseFuncView = wrapFuncLike parseIdentifier Func parseExpression
 
     /// Parses the unit view (`emp`, for our purposes).
     let parseUnit = stringReturn "emp" Unit
@@ -251,23 +267,43 @@ module Parser =
                  // ^- `emp'
                ; parseIfView
                  // ^- if <view-exprn> then <view> else <view>
-               ; tryWrapInApply parseNamedView
+               ; parseFuncView
                  // ^- <identifier>
-                 //  | <identifier> <param-list>
-               ; parseBracketedView
+                 //  | <identifier> <arg-list>
+               ; inParens parseView
                  // ( <view> )
                ]
 
-    do parseViewRef :=
-        chainl1 ( tryWrapInApply parseBasicView )
-                // ^- <basic-view>
-                //  | <basic-view> ...
-                ( stringReturn "*" ( fun x y -> Join ( x, y ) ) .>> ws )
-                //                 ... * <view>
+    do parseViewRef := parseViewLike parseBasicView Join
 
     /// Parser for braced view statements.
     let parseViewLine = inViewBraces parseView
                         // ^- {| <view> |}
+
+
+    //
+    // View definitions.
+    //
+
+    /// Parses a functional view definition.
+    let parseDFuncView = wrapFuncLike parseIdentifier DFunc parseIdentifier
+
+    /// Parses the unit view definition.
+    let parseDUnit = stringReturn "emp" DUnit
+
+    /// Parses a `basic` view definition (unit, if, named, or bracketed).
+    let parseBasicViewDef =
+        choice [ parseDUnit
+                 // ^- `emp'
+               ; parseDFuncView
+                 // ^- <identifier>
+                 //  | <identifier> <arg-list>
+               ; inParens parseViewDef
+                 // ( <view> )
+               ]
+
+    do parseViewDefRef := parseViewLike parseBasicViewDef DJoin
+
 
     //
     // Commands.
@@ -365,7 +401,7 @@ module Parser =
     let parseConstraint =
         pstring "constraint" >>. ws >>.
         // ^- constraint ..
-            pipe2ws parseView
+            pipe2ws parseViewDef
                     // ^- <view> ...
                     (pstring "=>" >>. ws >>. parseExpression .>> ws .>> pstring ";")
                     // ^-        ... => <expression> ;
@@ -377,7 +413,7 @@ module Parser =
         // ^- method ...
             pipe3ws parseIdentifier
                     // ^- <identifier> ...
-                    parseParamList
+                    ( parseParamList parseIdentifier )
                     // ^-              ... <arg-list> ...
                     parseBlock
                     // ^-                             ... <block>
