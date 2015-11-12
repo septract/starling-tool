@@ -73,6 +73,8 @@ module Pretty =
             | CompareAndSwap ( l, f, t ) -> "CAS(" + printLValue l + ", " + printExpression f + ", " + printExpression t
             | Fetch          ( l, r, m ) -> printLValue l + " = " + printLValue r + printFetchMode m
             | Postfix        ( l, m )    -> printLValue l + printFetchMode m
+            | Id                         -> "id"
+            | Assume         e           -> "assume(" + printExpression e + ")"
 
     /// Enters a new line at the given indent level.
     let lnIndent level = "\n" + new string ( ' ', level * 4 )

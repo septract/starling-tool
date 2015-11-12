@@ -183,11 +183,18 @@ module Parser =
                              ]
         )
 
+    /// Parser for assume actions.
+    let parseAssume =
+        pstring "assume" >>. ws >>. inParens parseExpression |>> Assume
+
     /// Parser for atomic actions.
     let parseAtomic =
-        // TODO(CaptainHayashi):
-        //   as in Types.fs, this probably doesn't want to be a string
-        parseCAS <|> parseFetchOrPostfix
+        choice [
+            stringReturn "id" Id
+            parseAssume
+            parseCAS
+            parseFetchOrPostfix
+        ]
 
 
     //
