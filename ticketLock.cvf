@@ -1,4 +1,7 @@
-﻿constraint emp                       => ticket >= serving;
+﻿view holdTick(int t);
+view holdLock();
+
+constraint emp                       => ticket >= serving;
 constraint holdTick(t)               => ticket > t;
 constraint holdLock()                => ticket > serving;
 constraint holdLock()  * holdTick(t) => serving != t;

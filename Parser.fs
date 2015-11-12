@@ -242,6 +242,17 @@ module Parser =
 
 
     //
+    // Types.
+    //
+
+    /// Parses a type identifier.
+    let parseType = stringReturn "int" Int <|> stringReturn "bool" Bool;
+
+    /// Parses a pair of type identifier and parameter name.
+    let parseTypedParam = parseType .>> ws .>>. parseIdentifier
+                          //^ <type> <identifier>
+
+    //
     // Views.
     //
 
@@ -303,6 +314,21 @@ module Parser =
                ]
 
     do parseViewDefRef := parseViewLike parseBasicViewDef DJoin
+
+
+    //
+    // View prototypes.
+    //
+
+    /// Parses a view prototype.
+    let parseViewProto =
+        pstring "view"
+            >>. ws
+            >>. wrapFuncLike parseIdentifier
+                             ( fun np -> { VPName = fst np
+                                           VPPars = snd np } )
+                             parseTypedParam
+            .>> ws .>> pstring ";" .>> ws
 
 
     //
@@ -419,17 +445,13 @@ module Parser =
                     // ^-                             ... <block>
                     (fun n ps b -> { Name = n; Params = ps; Body = b })
 
-    /// Parses a type identifier.
-    let parseType = stringReturn "int" Int <|> stringReturn "bool" Bool;
-
     /// Parses a variable with the given initial keyword.
     let parseVar kw = pstring kw >>. ws
                       // ^- global     ...
-                                 >>. ( parseType .>> ws )
-                                 // ^- ... <type> ...
-                                 .>>. ( parseIdentifier .>> ws .>> pstring ";" .>> ws )
-                                 // ^-            ... <identifier> ;
-
+                                 >>. parseTypedParam
+                                 // ^- ... <type> <identifier> ...
+                                 .>> pstring ";" .>> ws
+                                 // ^-                         ... ;
 
     /// Parses a script of zero or more methods, including leading and trailing whitespace.
     let parseScript =
@@ -440,6 +462,9 @@ module Parser =
                      // ^- method <identifier> <arg-list> <block>
                    ; parseConstraint |>> SConstraint
                      // ^- constraint <view> => <expression> ;
+                   ; parseViewProto |>> SViewProto
+                     // ^- view <identifier> ;
+                     //  | view <identifier> <view-proto-param-list> ;
                    ; parseVar "global" |>> SGlobal
                      // ^- global <type> <identifier> ;
                    ; parseVar "local" |>> SLocal

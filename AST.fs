@@ -39,6 +39,18 @@ module AST =
         | Fetch of LValue * LValue * FetchMode               // <a = b??>
         | Postfix of LValue * FetchMode                      // <a++> or <a-->
 
+    /// A variable type.
+    type Type =
+        | Int  // int
+        | Bool // bool
+
+    /// A view prototype.
+    type ViewProto =
+        {
+            VPName: string
+            VPPars: ( Type * string ) list
+        }
+
     /// A view definition.
     type ViewDef =
         | DUnit
@@ -89,14 +101,10 @@ module AST =
         Body   : Block       //                       ... { ... }
     }
 
-    /// A variable type.
-    type Type =
-        | Int  // int
-        | Bool // bool
-
     /// A top-level item in a Starling script.
     type ScriptItem =
         | SGlobal of Type * string  // global int name;
         | SLocal  of Type * string  // local int name;
         | SMethod of Method         // method main(argv, argc) { ... }
+        | SViewProto of ViewProto   // view name(int arg);
         | SConstraint of Constraint // constraint emp => true

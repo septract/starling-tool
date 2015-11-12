@@ -110,6 +110,14 @@ module Pretty =
             | Int  -> "int"
             | Bool -> "bool"
 
+    /// Pretty-prints a view prototype.
+    let printViewProto vp =
+        "view "
+            + vp.VPName
+            + printArgList ( fun tv -> printType ( fst tv ) + " " + snd tv )
+                           vp.VPPars
+            + ";"
+
     /// Pretty-prints a script variable of the given class.
     let printScriptVar cls t v =
         cls + " " + printType t + " " + v + ";"
@@ -120,6 +128,7 @@ module Pretty =
             | SGlobal     ( t, v ) -> printScriptVar "global" t v
             | SLocal      ( t, v ) -> printScriptVar "local" t v
             | SMethod     m        -> printMethod m
+            | SViewProto  v        -> printViewProto v
             | SConstraint c        -> printConstraint c
 
     /// Pretty-prints scripts.
@@ -128,9 +137,10 @@ module Pretty =
     /// Pretty-prints a collated script.
     let printCollatedScript cs =
         String.concat "\n\n" [
-            String.concat "\n" <| List.map ( uncurry ( printScriptVar "global" ) ) cs.CGlobals
-            String.concat "\n" <| List.map ( uncurry ( printScriptVar "local"  ) ) cs.CLocals
-            String.concat "\n" <| List.map printConstraint                         cs.CConstraints
+            String.concat "\n"   <| List.map printViewProto                          cs.CVProtos
+            String.concat "\n"   <| List.map ( uncurry ( printScriptVar "global" ) ) cs.CGlobals
+            String.concat "\n"   <| List.map ( uncurry ( printScriptVar "local"  ) ) cs.CLocals
+            String.concat "\n"   <| List.map printConstraint                         cs.CConstraints
             String.concat "\n\n" <| List.map printMethod                             cs.CMethods
         ]
 
@@ -140,7 +150,7 @@ module Pretty =
             | VENotFlat view ->
                 "cannot use " + printViewDef view
                               + " as flat view (eg subject of a constraint)"
-                              
+
     /// Pretty-prints expression conversion errors.
     let printExprError ee =
         match ee with
