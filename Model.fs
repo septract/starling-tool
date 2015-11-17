@@ -46,10 +46,29 @@ module Model =
             DefViews: Constraint list
         }
 
+    /// A pair of conditions.
+    type ConditionPair =
+        {
+            Pre: CondView
+            Post: CondView
+        }
+
+    /// A modelled primitive command.
+    type Prim =
+        | ArithFetch of dest: AST.LValue option * src: AST.LValue * mode: AST.FetchMode
+        | BoolFetch of dest: AST.LValue option * src: AST.LValue
+        | ArithCAS of dest: AST.LValue
+
     /// An axiom, containing a Hoare triple on an atomic action.
     type Axiom =
         {
-            APre: CondView
-            ACommand: AST.AtomicAction // TODO(CaptainHayashi): model-ify
-            APost: CondView
+            AConditions: ConditionPair
+            ACommand: Prim list
         }
+
+    /// A partially resolved axiom.
+    type PartAxiom =
+        | PAAxiom of Axiom
+        | PAWhile of outer: ConditionPair * inner: ConditionPair
+        | PADoWhile of outer: ConditionPair * inner: ConditionPair
+        | PAITE of outer: ConditionPair * inTrue: ConditionPair * inFalse: ConditionPair
