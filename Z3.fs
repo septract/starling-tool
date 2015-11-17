@@ -128,11 +128,35 @@ module Z3 =
                         | ( x, _     ) -> Some x
               )
 
-    /// Converts a variable type to a Z3 sort.
-    let typeToZ3 ( ctx : Context ) ty =
+    //
+    // Name rewrites
+    //
+
+    /// Rewrites the name of a constant to its pre-state form.
+    let rewritePre name = name + "!before"
+
+    /// Rewrites the name of a constant to its post-state form.
+    let rewritePost name = name + "!after"
+
+    /// Rewrites the name of a constant to its frame form.
+    let rewriteFrame name = name + "!r"
+
+
+    /// Converts a variable name and type to a Var.
+    let makeVar ( ctx : Context ) ty ( name : string ) =
         match ty with
-            | Int  -> ctx.IntSort  :> Sort
-            | Bool -> ctx.BoolSort :> Sort
+            | Int  ->
+              IntVar { VarExpr      = ctx.MkIntConst name
+                       VarPreExpr   = ctx.MkIntConst ( rewritePre name )
+                       VarPostExpr  = ctx.MkIntConst ( rewritePost name )
+                       VarFrameExpr = ctx.MkIntConst ( rewriteFrame name )
+                     }
+            | Bool ->
+              BoolVar { VarExpr      = ctx.MkBoolConst name
+                        VarPreExpr   = ctx.MkBoolConst ( rewritePre name )
+                        VarPostExpr  = ctx.MkBoolConst ( rewritePost name )
+                        VarFrameExpr = ctx.MkBoolConst ( rewriteFrame name )
+                      }
 
     /// Converts a AST variable list to Var record lists.
     let modelVarList ( ctx : Context ) lst =
@@ -142,12 +166,7 @@ module Z3 =
                 ok (
                     List.foldBack (
                         fun x ( map : Map<string, Var> ) ->
-                            let sort = typeToZ3 ctx ( fst x )
-                            map.Add ( snd x
-                                    , { VarType = sort
-                                        VarExpr = ctx.MkConst ( snd x, sort )
-                                      }
-                                    )
+                            map.Add ( snd x, makeVar ctx ( fst x ) ( snd x ) )
                     ) lst Map.empty
                 )
             | ds -> Bad <| List.map VEDuplicate ds

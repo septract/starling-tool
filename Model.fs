@@ -22,12 +22,19 @@ module Model =
             CZ3:    Z3.BoolExpr
         }
 
+    /// A typed inner record of a variable.
+    type TVar<'E when 'E :> Z3.Expr> =
+        {
+            VarExpr:       'E
+            VarPreExpr:    'E
+            VarPostExpr:   'E
+            VarFrameExpr:  'E
+        }
+
     /// A record of a variable in the program model.
     type Var =
-        {
-            VarExpr:  Z3.Expr
-            VarType:  Z3.Sort
-        }
+        | IntVar  of TVar<Z3.IntExpr>
+        | BoolVar of TVar<Z3.BoolExpr>
 
     /// A model of a Starling program.
     type Model =

@@ -186,11 +186,21 @@ module Pretty =
     let printModelViews vs =
         "[" + String.concat ", " ( List.map printModelView vs ) + "]"
 
+    /// Pretty-prints TVars.
+    let printTVar tvar =
+        "(Z3: " + tvar.VarExpr.ToString () + ", "
+                + tvar.VarPreExpr.ToString () + ", "
+                + tvar.VarPostExpr.ToString () + ", "
+                + tvar.VarFrameExpr.ToString () + ")"
+
     /// Pretty-prints model variables.
     let printModelVar nvar =
         let name, var = nvar
-        name + ": " + var.VarType.ToString ()
-             + " (Z3 expr: " + var.VarExpr.ToString () + ")"
+        name + ": " + (
+            match var with
+                | IntVar  tv -> "int " + printTVar tv
+                | BoolVar tv -> "bool " + printTVar tv
+        )
 
     /// Pretty-prints a model.
     let printModel model =
