@@ -163,9 +163,9 @@ let modelVarList ( ctx : Context ) lst =
 /// Converts a collated script to a model.
 let model ctx collated =
     trial {
-        let! constraints = mapMessages MEConstraint ( scriptViewConstraintsZ3 ctx collated )
         let! globals = mapMessages MEVar ( modelVarList ctx collated.CGlobals )
         let! locals = mapMessages MEVar ( modelVarList ctx collated.CLocals )
+        let! constraints = mapMessages MEConstraint ( scriptViewConstraintsZ3 ctx collated )
         // TODO(CaptainHayashi): axioms, etc.
 
         return { Globals = globals
