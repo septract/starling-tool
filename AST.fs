@@ -35,11 +35,11 @@ module AST =
 
     /// An atomic action.
     type AtomicAction =
-        | CompareAndSwap of LValue * Expression * Expression // <CAS(a, b, c)>
-        | Fetch of LValue * LValue * FetchMode               // <a = b??>
-        | Postfix of LValue * FetchMode                      // <a++> or <a-->
-        | Id                                                 // <id>
-        | Assume of Expression                               // <assume(e)
+        | CompareAndSwap of LValue * LValue * Expression // <CAS(a, b, c)>
+        | Fetch of LValue * LValue * FetchMode           // <a = b??>
+        | Postfix of LValue * FetchMode                  // <a++> or <a-->
+        | Id                                             // <id>
+        | Assume of Expression                           // <assume(e)
 
     /// A variable type.
     type Type =

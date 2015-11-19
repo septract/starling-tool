@@ -155,7 +155,7 @@ module Parser =
     /// This parser DOES NOT parse whitespace afterwards.
     let parseCAS = pstring "CAS"
                        >>. inParens ( pipe3ws (parseLValue .>> ws .>> pstring ",")
-                                              (parseExpression .>> ws .>> pstring ",")
+                                              (parseLValue .>> ws .>> pstring ",")
                                               parseExpression
                                               (curry3 CompareAndSwap)
                                     )

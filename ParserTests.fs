@@ -90,11 +90,11 @@ module Parser =
                                             "foo = bar--"
                                             "foo = bar--"
                                             ( Fetch ( LVIdent "foo", LVIdent "bar", Decrement ) )
-                   testCase "CAS(foo, 1, 2)" <|
+                   testCase "CAS(foo, bar, 2)" <|
                        fun _ -> assertParse Parser.parseAtomic
-                                            "CAS(foo, 1, 2)"
-                                            "CAS(foo, 1, 2)"
-                                            ( CompareAndSwap ( LVIdent "foo", IntExp 1L, IntExp 2L ) )
+                                            "CAS(foo, bar, 2)"
+                                            "CAS(foo, bar, 2)"
+                                            ( CompareAndSwap ( LVIdent "foo", LVIdent "bar", IntExp 2L ) )
                  ]
 
     [<Tests>]

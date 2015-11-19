@@ -20,6 +20,9 @@ module Utils =
     /// Converts a function of two arguments to a pairwise function.
     let uncurry f ab = f ( fst ab ) ( snd ab )
 
+    /// Constructs a pair from left to right.
+    let mkPair x y = (x, y)
+
     //
     // Chessie-related functions.
     //
