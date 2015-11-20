@@ -4,6 +4,7 @@ open Starling.AST
 open Starling.Collator
 open Starling.Model
 open Starling.Modeller
+open Starling.Errors.Modeller
 
 /// Pretty-prints lvalues.
 let rec printLValue lv =

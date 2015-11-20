@@ -42,7 +42,7 @@ type Options = {
 /// Errors occurring during the operation of Starling.
 type StarlingError =
     | SEParse of string
-    | SEModel of Starling.Modeller.ModelError
+    | SEModel of Starling.Errors.Modeller.ModelError
     | SEOther of string
 
 /// Pretty-prints a Starling error.

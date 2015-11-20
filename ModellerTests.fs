@@ -65,12 +65,12 @@ let testModelVarListNoDuplicates ctx =
           <| fun _ -> Assert.Equal ("bool foo; bool foo -> error",
                                     Starling.Modeller.modelVarList ctx [ (Bool, "foo")
                                                                          (Bool, "foo") ],
-                                    fail <| Starling.Modeller.VEDuplicate "foo")
+                                    fail <| Starling.Errors.Modeller.VEDuplicate "foo")
           testCase "Forbid duplicate with different type"
           <| fun _ -> Assert.Equal ("bool foo; int foo -> error",
                                     Starling.Modeller.modelVarList ctx [ (Bool, "foo")
                                                                          (Int, "foo") ],
-                                    fail <| Starling.Modeller.VEDuplicate "foo")
+                                    fail <| Starling.Errors.Modeller.VEDuplicate "foo")
         ]
 
 let testModelVars ctx =
