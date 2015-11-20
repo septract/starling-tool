@@ -110,32 +110,36 @@ let printOutput out =
 *)
 
 /// Runs the model generator and further Starling processes.
-let runStarlingModel ctx collatedR otype =
+let runStarlingModel collatedR otype =
     // Convert the errors from ModelError to StarlingError.
-    let modelR = bind ( Starling.Modeller.model ctx >> mapMessages SEModel ) collatedR
+    let modelR = bind ( Starling.Modeller.model >> mapMessages SEModel ) collatedR
 
-    match otype with
+    let om =
+        match otype with
         | OutputTModel -> lift OutputModel modelR
         | _            -> fail ( SEOther "this should be unreachable!" )
 
+    ignore (lift Starling.Model.disposeZ3 modelR)
+    om
+
 /// Runs the collation and further Starling processes on Starling.
-let runStarlingCollate ctx scriptR otype =
+let runStarlingCollate scriptR otype =
     // Collation cannot fail, so lift instead of bind.
     let collatedR = lift Starling.Collator.collate scriptR
 
     match otype with
-        | OutputTCollation -> lift OutputCollation collatedR
-        | _                -> runStarlingModel ctx collatedR otype
+    | OutputTCollation -> lift OutputCollation collatedR
+    | _                -> runStarlingModel collatedR otype
 
 /// Runs Starling on the given file script.
-let runStarling ctx file otype =
+let runStarling file otype =
     let scriptPR = Starling.Parser.parseFile file
     // Convert the errors from string to StarlingError.
     let scriptR  = mapMessages SEParse scriptPR
 
     match otype with
         | OutputTParse -> lift OutputParse scriptR
-        | _            -> runStarlingCollate ctx scriptR otype
+        | _            -> runStarlingCollate scriptR otype
 
 /// Deduces the output type from the options.
 let otypeFromOpts opts =
@@ -152,15 +156,14 @@ let starlingMain opts =
     let human = opts.human
     let otype = otypeFromOpts opts
 
-    let ctx       = new Context ()
-    let starlingR = runStarling ctx input otype
-    ctx.Dispose ()
+    let starlingR = runStarling input otype
 
     let pfn = if human then printOutput else fun a -> sprintf "%A" a
 
     printfn "%s" <| printResult pfn
                                 ( List.map printStarlingError )
                                 starlingR
+
     0
 
 

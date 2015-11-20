@@ -82,4 +82,5 @@ type Model =
         DefViews: Constraint list
     }
 
-
+/// Disposes the Z3 context inside a Model.
+let disposeZ3 model = model.Context.Dispose ()

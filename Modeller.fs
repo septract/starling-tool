@@ -403,7 +403,9 @@ let modelAxioms ctx globals locals methods =
     |> lift List.concat
 
 /// Converts a collated script to a model.
-let model ctx collated =
+let model collated =
+    let ctx = new Context ()
+
     trial {
         let! globals = mapMessages MEVar ( modelVarList ctx collated.CGlobals )
         let! locals = mapMessages MEVar ( modelVarList ctx collated.CLocals )
