@@ -6,7 +6,6 @@ open CommandLine
 open CommandLine.Text
 
 open Fuchu
-open Microsoft.Z3 // TODO: this too.
 
 // This is down here to force Chessie's fail to override FParsec's.
 open Chessie.ErrorHandling
