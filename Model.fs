@@ -73,6 +73,8 @@ module Model =
     /// A model of a Starling program.
     type Model =
         {
+            Context: Z3.Context
+
             Globals: Map<string, Var>
             Locals:  Map<string, Var>
             Axioms:  PartAxiom list

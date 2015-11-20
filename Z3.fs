@@ -454,7 +454,8 @@ let model ctx collated =
         let! axioms = mapMessages MEAxiom ( modelAxioms ctx globals locals collated.CMethods )
         // TODO(CaptainHayashi): axioms, etc.
 
-        return { Globals = globals
+        return { Context = ctx
+                 Globals = globals
                  Locals = locals
                  DefViews = constraints
                  Axioms = axioms }
