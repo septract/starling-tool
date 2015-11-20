@@ -6,7 +6,6 @@ open CommandLine
 open CommandLine.Text
 
 open Fuchu
-open FParsec // TODO: push fparsec references out of Main.
 open Microsoft.Z3 // TODO: this too.
 
 // This is down here to force Chessie's fail to override FParsec's.
@@ -73,19 +72,6 @@ let printResult pOk pBad =
             )
            )
 
-let parseFile name =
-    // If - or no name was given, parse from the console.
-    let stream, streamName =
-        match name with
-            | Some("-") -> (Console.OpenStandardInput ()      , "(stdin)")
-            | None      -> (Console.OpenStandardInput ()      , "(stdin)")
-            | Some(nam) -> (IO.File.OpenRead(nam) :> IO.Stream, nam      )
-
-    let pres = runParserOnStream Starling.Parser.parseScript () streamName stream Text.Encoding.UTF8
-    match pres with
-        | Success ( result,   _, _ ) -> ok result
-        | Failure ( errorMsg, _, _ ) -> fail errorMsg
-
 (*
     Starling can output the results of various stages in its pipeline;
     the OutputType and Output types provide framework for the user to
@@ -143,7 +129,7 @@ let runStarlingCollate ctx scriptR otype =
 
 /// Runs Starling on the given file script.
 let runStarling ctx file otype =
-    let scriptPR = parseFile file
+    let scriptPR = Starling.Parser.parseFile file
     // Convert the errors from string to StarlingError.
     let scriptR  = mapMessages SEParse scriptPR
 

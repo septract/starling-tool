@@ -1,8 +1,14 @@
 ﻿module Starling.Parser
 
+open System
+
 open FParsec
+open Chessie.ErrorHandling
 
 open Starling.AST
+
+// Manually re-overload some FParsec operators Chessie overloaded.
+let (>>=) = FParsec.Primitives.(>>=)
 
 // General TODOs:
 //   - TODO(CaptainHayashi): remove leftwards uses of ws
@@ -477,4 +483,23 @@ let parseScript =
                  // ^- local <type> <identifier> ;
                ]
     ) eof
+
+//
+// Frontend
+//
+
+/// Opens the file with the given name, parses it, and returns the AST.
+/// The AST is given inside a Chessie result.
+let parseFile name =
+    // If - or no name was given, parse from the console.
+    let stream, streamName =
+        match name with
+            | Some("-") -> (Console.OpenStandardInput (), "(stdin)")
+            | None      -> (Console.OpenStandardInput (), "(stdin)")
+            | Some(nam) -> (IO.File.OpenRead(nam) :> IO.Stream, nam)
+
+    let pres = runParserOnStream parseScript () streamName stream Text.Encoding.UTF8
+    match pres with
+    | Success ( result,   _, _ ) -> ok result
+    | Failure ( errorMsg, _, _ ) -> fail errorMsg
 
