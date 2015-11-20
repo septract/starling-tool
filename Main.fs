@@ -49,7 +49,7 @@ type StarlingError =
 let printStarlingError err =
     match err with
         | SEParse e -> e
-        | SEModel e -> Starling.Pretty.printModelError e
+        | SEModel e -> Starling.Pretty.Misc.printModelError e
         | SEOther e -> e
 
 /// Pretty-prints a list of error or warning strings, with the given
@@ -106,9 +106,9 @@ type Output =
 
 let printOutput out =
     match out with
-        | OutputParse     s -> Starling.Pretty.printScript s
-        | OutputCollation c -> Starling.Pretty.printCollatedScript c
-        | OutputModel     m -> Starling.Pretty.printModel m
+        | OutputParse     s -> Starling.Pretty.Misc.printScript s
+        | OutputCollation c -> Starling.Pretty.Misc.printCollatedScript c
+        | OutputModel     m -> Starling.Pretty.Misc.printModel m
 
 (*
     Starling pipeline (here defined in reverse):

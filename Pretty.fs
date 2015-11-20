@@ -1,5 +1,6 @@
-module Starling.Pretty
+module Starling.Pretty.Misc
 
+open Starling
 open Starling.AST
 open Starling.Collator
 open Starling.Model

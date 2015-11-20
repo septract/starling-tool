@@ -8,7 +8,7 @@ open Starling
 /// Represents an error when converting an expression.
 type ExprError =
     | EEBadAST of ast: AST.Expression * reason: string
-    ///
+
 /// Represents an error when converting a view.
 type ViewError =
     | VEBadExpr of AST.View * ExprError
