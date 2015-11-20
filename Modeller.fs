@@ -1,4 +1,4 @@
-﻿module Starling.Z3
+﻿module Starling.Modeller
 
 open System
 open Microsoft.Z3

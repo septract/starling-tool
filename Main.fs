@@ -42,7 +42,7 @@ type Options = {
 /// Errors occurring during the operation of Starling.
 type StarlingError =
     | SEParse of string
-    | SEModel of Starling.Z3.ModelError
+    | SEModel of Starling.Modeller.ModelError
     | SEOther of string
 
 /// Pretty-prints a Starling error.
@@ -126,7 +126,7 @@ let printOutput out =
 /// Runs the model generator and further Starling processes.
 let runStarlingModel ctx collatedR otype =
     // Convert the errors from ModelError to StarlingError.
-    let modelR = bind ( Starling.Z3.model ctx >> mapMessages SEModel ) collatedR
+    let modelR = bind ( Starling.Modeller.model ctx >> mapMessages SEModel ) collatedR
 
     match otype with
         | OutputTModel -> lift OutputModel modelR

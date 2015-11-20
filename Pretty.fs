@@ -3,7 +3,7 @@ module Starling.Pretty
 open Starling.AST
 open Starling.Collator
 open Starling.Model
-open Starling.Z3
+open Starling.Modeller
 
 /// Pretty-prints lvalues.
 let rec printLValue lv =

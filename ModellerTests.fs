@@ -1,4 +1,4 @@
-module Starling.Tests.Z3
+module Starling.Tests.Modeller
 
 open Chessie.ErrorHandling  // ok
 open Fuchu                  // general test framework
@@ -11,7 +11,7 @@ open Starling.AST
 let assertZ3ArithExpr ctx expr z3 =
     Assert.Equal ( Starling.Pretty.printExpression expr
                    + " -Z3-> " + z3.ToString ()
-                 , Starling.Z3.arithExprToZ3 ctx expr
+                 , Starling.Modeller.arithExprToZ3 ctx expr
                  , ok z3
                  )
 
@@ -20,7 +20,7 @@ let assertZ3ArithExpr ctx expr z3 =
 let assertZ3BoolExpr ctx expr z3 =
     Assert.Equal ( Starling.Pretty.printExpression expr
                    + " -Z3-> " + z3.ToString ()
-                 , Starling.Z3.boolExprToZ3 ctx expr
+                 , Starling.Modeller.boolExprToZ3 ctx expr
                  , ok z3
                  )
 
@@ -63,14 +63,14 @@ let testModelVarListNoDuplicates ctx =
     testList "Test modelling of variables forbids duplicates"
         [ testCase "Forbid duplicate with same type"
           <| fun _ -> Assert.Equal ("bool foo; bool foo -> error",
-                                    Starling.Z3.modelVarList ctx [ (Bool, "foo")
-                                                                   (Bool, "foo") ],
-                                    fail <| Starling.Z3.VEDuplicate "foo")
+                                    Starling.Modeller.modelVarList ctx [ (Bool, "foo")
+                                                                         (Bool, "foo") ],
+                                    fail <| Starling.Modeller.VEDuplicate "foo")
           testCase "Forbid duplicate with different type"
           <| fun _ -> Assert.Equal ("bool foo; int foo -> error",
-                                    Starling.Z3.modelVarList ctx [ (Bool, "foo")
-                                                                   (Int, "foo") ],
-                                    fail <| Starling.Z3.VEDuplicate "foo")
+                                    Starling.Modeller.modelVarList ctx [ (Bool, "foo")
+                                                                         (Int, "foo") ],
+                                    fail <| Starling.Modeller.VEDuplicate "foo")
         ]
 
 let testModelVars ctx =
