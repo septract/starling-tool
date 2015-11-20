@@ -17,7 +17,7 @@ let assertParse pp msg concrete ast =
 /// Assertion that parsing expression `expr` with parser `pp` gets the AST `ast`.
 let assertParseExpr expr ast =
     assertParse Parser.parseExpression
-                ( expr + " -> " + Pretty.Misc.printExpression ast )
+                ( expr + " -> " + Pretty.AST.printExpression ast )
                 expr
                 ast
 

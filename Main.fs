@@ -106,7 +106,7 @@ type Output =
 
 let printOutput out =
     match out with
-        | OutputParse     s -> Starling.Pretty.Misc.printScript s
+        | OutputParse     s -> Starling.Pretty.AST.printScript s
         | OutputCollation c -> Starling.Pretty.Misc.printCollatedScript c
         | OutputModel     m -> Starling.Pretty.Misc.printModel m
 

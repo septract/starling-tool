@@ -9,7 +9,7 @@ open Starling.AST
 /// Assertion that converting the arithmetic expression `expr` to Z3
 /// yields the given AST.
 let assertZ3ArithExpr ctx expr z3 =
-    Assert.Equal ( Starling.Pretty.Misc.printExpression expr
+    Assert.Equal ( Starling.Pretty.AST.printExpression expr
                    + " -Z3-> " + z3.ToString ()
                  , Starling.Modeller.arithExprToZ3 ctx expr
                  , ok z3
@@ -18,7 +18,7 @@ let assertZ3ArithExpr ctx expr z3 =
 /// Assertion that converting the Boolean expression `expr` to Z3
 /// yields the given AST.
 let assertZ3BoolExpr ctx expr z3 =
-    Assert.Equal ( Starling.Pretty.Misc.printExpression expr
+    Assert.Equal ( Starling.Pretty.AST.printExpression expr
                    + " -Z3-> " + z3.ToString ()
                  , Starling.Modeller.boolExprToZ3 ctx expr
                  , ok z3

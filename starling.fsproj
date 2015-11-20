@@ -39,6 +39,7 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Utils.fs" />
     <Compile Include="AST.fs" />
+    <Compile Include="ASTPretty.fs" />
     <Compile Include="Collator.fs" />
     <Compile Include="Model.fs" />
     <Compile Include="ModellerErrors.fs" />
