@@ -70,17 +70,23 @@ type PartAxiom =
     | PAITE of expr: Z3.BoolExpr * outer: ConditionPair * inTrue: PartAxiom list * inFalse: PartAxiom list
 
 /// A model of a Starling program.
-type Model =
+type PartModel<'g, 'l, 'a, 'c> =
     {
         Context: Z3.Context
 
-        Globals: Map<string, Var>
-        Locals:  Map<string, Var>
-        Axioms:  PartAxiom list
+        Globals: 'g
+        Locals:  'l
+        Axioms:  'a
 
         // This corresponds to the function D.
-        DefViews: Constraint list
+        DefViews: 'c
     }
+
+/// A variable map
+type VarMap = Map<string, Var>
+
+/// A full model of a Starling program.
+type Model = PartModel<VarMap, VarMap, PartAxiom list, Constraint list>
 
 /// Disposes the Z3 context inside a Model.
 let disposeZ3 model = model.Context.Dispose ()
