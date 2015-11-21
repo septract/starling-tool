@@ -174,13 +174,6 @@ let makeConditionPair ctx preAst postAst =
 // Axioms
 //
 
-type AxiomContext =
-    { ACtxZ3: Context
-      ACtxLocals: Map<string, Var>
-      ACtxGlobals: Map<string, Var>
-      // TODO(CaptainHayashi): encode views as well.
-    }
-
 /// Retrieves the type of a Var.
 let varType var =
     match var with
@@ -204,23 +197,23 @@ let primToAxiom cpair prim = { AConditions = cpair
 
 /// Tries to look up the type of a local variable in an axiom context.
 /// Returns a Chessie result; failures have AEBadLocal messages.
-let lookupLocalType actx lvalue =
-    lookupVarType actx.ACtxLocals lvalue |> mapMessages AEBadLocal
+let lookupLocalType pmod lvalue =
+    lookupVarType pmod.Locals lvalue |> mapMessages AEBadLocal
 
 /// Tries to look up the type of a global variable in an axiom context.
 /// Returns a Chessie result; failures have AEBadGlobal messages.
-let lookupGlobalType actx lvalue =
-    lookupVarType actx.ACtxGlobals lvalue |> mapMessages AEBadGlobal
+let lookupGlobalType pmod lvalue =
+    lookupVarType pmod.Globals lvalue |> mapMessages AEBadGlobal
 
 /// Converts a Boolean expression to z3 within the given axiom context.
 /// Returns a Chessie result; failures have AEBadExpr messages.
-let axiomBoolExprToZ3 actx expr =
-    boolExprToZ3 actx.ACtxZ3 expr |> mapMessages AEBadExpr
+let axiomBoolExprToZ3 pmod expr =
+    boolExprToZ3 pmod.Context expr |> mapMessages AEBadExpr
 
 /// Converts an arithmetic expression to z3 within the given axiom context.
 /// Returns a Chessie result; failures have AEBadExpr messages.
-let axiomArithExprToZ3 actx expr =
-    arithExprToZ3 actx.ACtxZ3 expr |> mapMessages AEBadExpr
+let axiomArithExprToZ3 pmod expr =
+    arithExprToZ3 pmod.Context expr |> mapMessages AEBadExpr
 
 /// Extracts the precondition of a part-axiom.
 let preOfPartAxiom pa =
@@ -253,7 +246,7 @@ let axiomsToConditionPair axioms =
                    Post = postOfPartAxiom xs.[List.length xs - 1] }
 
 /// Converts an atomic action to a Prim.
-let rec modelPrimOnAtomic actx atom =
+let rec modelPrimOnAtomic pmod atom =
     match atom with
     | CompareAndSwap (dest, test, set) ->
         (* In a CAS, the destination must be GLOBAL;
@@ -262,16 +255,16 @@ let rec modelPrimOnAtomic actx atom =
          * dest, test, and set must agree on type.
          * The type of dest and test influences how we interpret set.
          *)
-        trial { let! dtype = lookupGlobalType actx dest
-                let! ttype = lookupLocalType actx test
+        trial { let! dtype = lookupGlobalType pmod dest
+                let! ttype = lookupLocalType pmod test
 
                 match dtype, ttype with
                 | Bool, Bool ->
-                    let! setz3 = axiomBoolExprToZ3 actx set
+                    let! setz3 = axiomBoolExprToZ3 pmod set
                     // TODO(CaptainHayashi): test locality of c
                     return BoolCAS (dest, test, setz3)
                 | Int, Int ->
-                    let! setz3 = axiomArithExprToZ3 actx set
+                    let! setz3 = axiomArithExprToZ3 pmod set
                     // TODO(CaptainHayashi): test locality of c
                     return ArithCAS (dest, test, setz3)
                 | _ ->
@@ -284,8 +277,8 @@ let rec modelPrimOnAtomic actx atom =
          *             and the fetch mode can be any valid fetch mode.
          * dest and src must agree on type.
          *)
-        trial { let! dtype = lookupLocalType actx dest
-                let! stype = lookupGlobalType actx src
+        trial { let! dtype = lookupLocalType pmod dest
+                let! stype = lookupGlobalType pmod src
 
                 match dtype, stype, mode with
                 | Int, Int, _ -> return ArithFetch (Some dest, src, mode)
@@ -299,7 +292,7 @@ let rec modelPrimOnAtomic actx atom =
          * Thus, the source must be GLOBAL.
          * We don't allow the Direct fetch mode, as it is useless.
          *)
-        trial { let! stype = lookupGlobalType actx operand
+        trial { let! stype = lookupGlobalType pmod operand
 
                 match mode, stype with
                 | Direct, _ -> return! fail <| AEUnsupportedAtomic (atom, "<var>; has no effect; use <id>; or ; for no-ops")
@@ -307,79 +300,79 @@ let rec modelPrimOnAtomic actx atom =
                 | Decrement, Bool -> return! fail <| AEUnsupportedAtomic (atom, "cannot decrement a Boolean global")
                 | _, Int -> return ArithFetch (None, operand, mode) }
     | Id -> ok PrimId
-    | Assume e -> axiomBoolExprToZ3 actx e |> lift PrimAssume
+    | Assume e -> axiomBoolExprToZ3 pmod e |> lift PrimAssume
 
 /// Converts a local variable assignment to a Prim.
-and modelPrimOnAssign actx l e =
+and modelPrimOnAssign pmod l e =
     (* We model assignments as ArithLocalSet or BoolLocalSet, depending on the
      * type of l, which _must_ be in the locals set..
      * We thus also have to make sure that e is the correct type.
      *)
-    trial { let! ltype = lookupLocalType actx l
+    trial { let! ltype = lookupLocalType pmod l
             match ltype with
             | Bool ->
-                let! ez3 = axiomBoolExprToZ3 actx e
+                let! ez3 = axiomBoolExprToZ3 pmod e
                 return BoolLocalSet (l, ez3)
             | Int ->
-                let! ez3 = axiomArithExprToZ3 actx e
+                let! ez3 = axiomArithExprToZ3 pmod e
                 return ArithLocalSet (l, ez3)
           }
 
 /// Creates a partially resolved axiom for an if-then-else.
-and modelAxiomOnITE actx outcond i t f =
+and modelAxiomOnITE pmod outcond i t f =
     (* An ITE is not fully resolved yet.  We:
      * 0) Convert the if-statement into a Z3 expression;
      * 1) Place the ITE in the axioms pile;
      * 2) Merge in the axioms from the ‘then’ block;
      * 3) Merge in the axioms from the ‘else’ block.
      *)
-    trial { let! iz3 = axiomBoolExprToZ3 actx i
+    trial { let! iz3 = axiomBoolExprToZ3 pmod i
             (* We need to calculate the recursive axioms first, because we
              * need the inner cpairs for each to store the ITE placeholder.
              *)
-            let! taxioms = modelAxiomsOnBlock actx t
-            let! faxioms = modelAxiomsOnBlock actx f
+            let! taxioms = modelAxiomsOnBlock pmod t
+            let! faxioms = modelAxiomsOnBlock pmod f
 
             return PAITE (iz3, outcond, taxioms, faxioms) }
 
 /// Converts a while or do-while to a partially-resolved axiom.
 /// Which is being modelled is determined by the isDo parameter.
 /// The list is enclosed in a Chessie result.
-and modelAxiomOnWhile isDo actx cpair e b =
+and modelAxiomOnWhile isDo pmod cpair e b =
     (* A while is also not fully resolved.
      * Similarly, we convert the condition, recursively find the axioms,
      * inject a placeholder, and add in the recursive axioms.
      *)
-    trial { let! ez3 = axiomBoolExprToZ3 actx e
-            let! baxioms = modelAxiomsOnBlock actx b
+    trial { let! ez3 = axiomBoolExprToZ3 pmod e
+            let! baxioms = modelAxiomsOnBlock pmod b
 
             return PAWhile (isDo, ez3, cpair, baxioms) }
 
 /// Converts a command and its precondition and postcondition to a
 /// list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
-and modelAxiomOnCommand actx cpair cmd =
+and modelAxiomOnCommand pmod cpair cmd =
     match cmd with
-    | Atomic a -> modelPrimOnAtomic actx a |> lift (primToAxiom cpair)
-    | Assign (l, e) -> modelPrimOnAssign actx l e |> lift (primToAxiom cpair)
-    | Skip -> modelPrimOnAtomic actx Id |> lift (primToAxiom cpair)
-    | If (i, t, e) -> modelAxiomOnITE actx cpair i t e
-    | While (e, b) -> modelAxiomOnWhile false actx cpair e b
-    | DoWhile (b, e) -> modelAxiomOnWhile true actx cpair e b
+    | Atomic a -> modelPrimOnAtomic pmod a |> lift (primToAxiom cpair)
+    | Assign (l, e) -> modelPrimOnAssign pmod l e |> lift (primToAxiom cpair)
+    | Skip -> modelPrimOnAtomic pmod Id |> lift (primToAxiom cpair)
+    | If (i, t, e) -> modelAxiomOnITE pmod cpair i t e
+    | While (e, b) -> modelAxiomOnWhile false pmod cpair e b
+    | DoWhile (b, e) -> modelAxiomOnWhile true pmod cpair e b
     | c -> fail <| AEUnsupportedCommand (c, "TODO: implement")
 
 /// Converts a block to a list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
-and modelAxiomsOnBlock actx block =
+and modelAxiomsOnBlock pmod block =
     List.foldBack
         (fun vcom state ->
              let cmd = vcom.Command
              let post = vcom.Post
              (post, trial { let pre, axiomsR = state
                             let! axioms = axiomsR
-                            let! cpair = makeConditionPair actx.ACtxZ3 pre post
+                            let! cpair = makeConditionPair pmod.Context pre post
                                          |> mapMessages AEBadView
-                            let! axiom = modelAxiomOnCommand actx cpair cmd
+                            let! axiom = modelAxiomOnCommand pmod cpair cmd
                             return axiom :: axioms } ))
         block.Contents
         (block.Pre, ok [])
@@ -387,18 +380,15 @@ and modelAxiomsOnBlock actx block =
 
 /// Converts a method to a list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
-let modelAxiomsOnMethod actx meth =
+let modelAxiomsOnMethod pmod meth =
     // TODO(CaptainHayashi): method parameters
-    modelAxiomsOnBlock actx meth.Body
+    modelAxiomsOnBlock pmod meth.Body
 
 /// Converts a list of methods to a list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
-let modelAxioms ctx globals locals methods =
-    let actx = { ACtxZ3 = ctx
-                 ACtxGlobals = globals
-                 ACtxLocals = locals }
+let modelAxioms pmod methods =
     // TODO(CaptainHayashi): method parameters
-    List.map (modelAxiomsOnMethod actx) methods
+    List.map (modelAxiomsOnMethod pmod) methods
     |> collect
     |> lift List.concat
 
@@ -411,12 +401,15 @@ let model collated =
         let! locals = mapMessages MEVar ( modelVarList ctx collated.CLocals )
         // TODO(CaptainHayashi): checking of constraints against locals and globals
         let! constraints = mapMessages MEConstraint ( scriptViewConstraintsZ3 ctx collated )
-        let! axioms = mapMessages MEAxiom ( modelAxioms ctx globals locals collated.CMethods )
+
+        let pmod = { Context = ctx
+                     Globals = globals
+                     Locals = locals
+                     DefViews = constraints
+                     Axioms = () }
+
+        let! axioms = mapMessages MEAxiom ( modelAxioms pmod collated.CMethods )
         // TODO(CaptainHayashi): axioms, etc.
 
-        return { Context = ctx
-                 Globals = globals
-                 Locals = locals
-                 DefViews = constraints
-                 Axioms = axioms }
+        return (withAxioms axioms pmod)
     }

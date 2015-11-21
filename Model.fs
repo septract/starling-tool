@@ -90,3 +90,13 @@ type Model = PartModel<VarMap, VarMap, PartAxiom list, Constraint list>
 
 /// Disposes the Z3 context inside a Model.
 let disposeZ3 model = model.Context.Dispose ()
+
+/// Creates a new model that is the input model with a different axiom set.
+/// The axiom set may be of a different type.
+let withAxioms (axioms: 'y) (model: PartModel<'g, 'l, 'x, 'c>): PartModel<'g, 'l, 'y, 'c> =
+    { Context = model.Context
+      Globals = model.Globals
+      Locals = model.Locals
+      DefViews = model.DefViews
+      Axioms = axioms }
+
