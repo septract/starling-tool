@@ -165,10 +165,10 @@ and joinViews ctx l r =
 /// Converts a pair of AST views into a ConditionPair.
 /// The pair is enclosed in a Chessie result.
 let makeConditionPair ctx preAst postAst =
-    trial { let! pre = modelView ctx preAst
-            let! post = modelView ctx postAst
-            return { Pre = pre
-                     Post = post }}
+    lift2 (fun pre post -> { Pre = pre
+                             Post = post } )
+          (modelView ctx preAst)
+          (modelView ctx postAst)
 
 //
 // Axioms
@@ -215,19 +215,12 @@ let axiomBoolExprToZ3 pmod expr =
 let axiomArithExprToZ3 pmod expr =
     arithExprToZ3 pmod.Context expr |> mapMessages AEBadExpr
 
-/// Extracts the precondition of a part-axiom.
-let preOfPartAxiom pa =
+/// Extracts the outer condition pair of a part-axiom.
+let cpairOfPartAxiom pa =
     match pa with
-    | PAAxiom a -> a.AConditions.Pre
-    | PAWhile (outer = o) -> o.Pre
-    | PAITE (outer = o) -> o.Pre
-
-/// Extracts the postcondition of a part-axiom.
-let postOfPartAxiom pa =
-    match pa with
-    | PAAxiom a -> a.AConditions.Post
-    | PAWhile (outer = o) -> o.Post
-    | PAITE (outer = o) -> o.Post
+    | PAAxiom a -> a.AConditions
+    | PAWhile (outer = o) -> o
+    | PAITE (outer = o) -> o
 
 /// Extracts a condition pair from a list of part-axioms.
 ///
@@ -242,8 +235,8 @@ let postOfPartAxiom pa =
 let axiomsToConditionPair axioms =
     match axioms with
     | [] -> None
-    | xs -> Some { Pre = preOfPartAxiom xs.[0]
-                   Post = postOfPartAxiom xs.[List.length xs - 1] }
+    | xs -> Some { Pre = (cpairOfPartAxiom xs.[0]).Pre
+                   Post = (cpairOfPartAxiom xs.[List.length xs - 1]).Post }
 
 /// Converts an atomic action to a Prim.
 let rec modelPrimOnAtomic pmod atom =
