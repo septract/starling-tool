@@ -219,15 +219,15 @@ let axiomArithExprToZ3 pmod expr =
 let preOfPartAxiom pa =
     match pa with
     | PAAxiom a -> a.AConditions.Pre
-    | PAWhile (_, _, o, _) -> o.Pre
-    | PAITE (_, o, _, _) -> o.Pre
+    | PAWhile (outer = o) -> o.Pre
+    | PAITE (outer = o) -> o.Pre
 
 /// Extracts the postcondition of a part-axiom.
 let postOfPartAxiom pa =
     match pa with
     | PAAxiom a -> a.AConditions.Post
-    | PAWhile (_, _, o, _) -> o.Post
-    | PAITE (_, o, _, _) -> o.Post
+    | PAWhile (outer = o) -> o.Post
+    | PAITE (outer = o) -> o.Post
 
 /// Extracts a condition pair from a list of part-axioms.
 ///
