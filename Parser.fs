@@ -48,11 +48,6 @@ let inViewBraces p = inBrackets "{|" "|}" p
 /// Parser for items in <angle brackets>.
 let inAngles p = inBrackets "<" ">" p
 
-/// Helper for defining `chain1`s representing binary functions.
-/// When supplied as the chaining parser, tries to parse `op`, then
-/// whitespace, and finally passes the result to a `fn` as a pair.
-let parseBin op fn = pstring op .>> ws >>% fun x y -> fn (x, y)
-
 
 //
 // Forwards.
@@ -103,7 +98,7 @@ let parsePrimaryExpression =
 let parseBinaryExpressionLevel nextLevel expList =
     chainl1 (nextLevel .>> ws)
             (choice
-                (List.map (fun (op, fn) -> (pstring op .>> ws >>% fun x y -> fn (x, y))) expList)
+                (List.map (fun (op, fn) -> (pstring op .>> ws >>% curry fn)) expList)
             )
 
 /// Parser for multiplicative expressions.
@@ -176,9 +171,9 @@ let parseFetch fetcher =
 let parseFetchOrPostfix =
     parseLValue
     .>> ws
-    >>= ( fun id -> choice [ stringReturn "++" (Postfix (id, Increment))
-                             stringReturn "--" (Postfix (id, Decrement))
-                             pstring "=" >>. ws >>. parseFetch id ] )
+    >>= (fun id -> choice [ stringReturn "++" (Postfix (id, Increment))
+                            stringReturn "--" (Postfix (id, Decrement))
+                            pstring "=" >>. ws >>. parseFetch id ])
 
 /// Parser for assume actions.
 let parseAssume =
@@ -223,7 +218,7 @@ let parseViewLike basic join =
     chainl1 basic
             // ^- <basic-view>
             //  | <basic-view> ...
-            (stringReturn "*" (fun x y -> join (x, y)) .>> ws)
+            (stringReturn "*" (curry join) .>> ws)
             //                 ... * <view>
 
 /// Takes a view name and optional argument list, and creates the
@@ -266,7 +261,7 @@ let parseIfView =
             // ^-                 ... then <view> ...
             (pstring "else" >>. ws >>. parseView)
             // ^-                                 ... else <view>
-            (fun c t f -> IfView ( c, t, f ))
+            (curry3 IfView)
 
 /// Parses a functional view.
 let parseFuncView = wrapFuncLike parseIdentifier Func parseExpression
@@ -325,8 +320,8 @@ let parseViewProto =
     pstring "view"
     >>. ws
     >>. wrapFuncLike parseIdentifier
-                     (fun np -> { VPName = fst np
-                                  VPPars = snd np } )
+                     (fun (n, p) -> { VPName = n
+                                      VPPars = p } )
                      parseTypedParam
     .>> ws .>> pstring ";" .>> ws
 
@@ -341,7 +336,7 @@ let parseAssign =
     // ^- <lvalue> ...
             (pstring "=" >>. ws >>. parseExpression .>> ws .>> pstring ";")
                   //             ... = <expression> ;
-            (fun l r -> Assign (l, r))
+            (curry Assign)
 
 /// Parser for blocks.
 let parseParSet =
@@ -366,7 +361,7 @@ let parseIf =
     pipe3ws (pstring "if" >>. ws >>. inParens parseExpression)
             (parseBlock .>> ws .>> pstring "else")
             parseBlock
-            (fun c t f -> If (c, t, f))
+            (curry3 If)
 
 /// Parser for atomic commands (not the actions themselves; that is parseAtomic).
 let parseAtomicCommand =
