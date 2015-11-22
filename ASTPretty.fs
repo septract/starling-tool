@@ -1,6 +1,7 @@
 module Starling.Pretty.AST
 
 open Starling.AST
+open Starling.Pretty.Types
 
 /// Pretty-prints lvalues.
 let rec printLValue lv =
@@ -71,9 +72,6 @@ let printAtomicAction atom =
     | Postfix (l, m) -> printLValue l + printFetchMode m
     | Id -> "id"
     | Assume e -> "assume(" + printExpression e + ")"
-
-/// Enters a new line at the given indent level.
-let lnIndent level = "\n" + new string (' ', level * 4)
 
 /// Pretty-prints commands with the given indent level (in spaces).
 let rec printCommand level cmd =

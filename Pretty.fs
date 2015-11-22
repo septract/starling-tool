@@ -7,15 +7,16 @@ open Starling.Model
 open Starling.Modeller
 open Starling.Errors.Modeller
 open Starling.Pretty.AST
+open Starling.Pretty.Types
 
 /// Pretty-prints a collated script.
 let printCollatedScript cs =
-    String.concat "\n\n" [
-        String.concat "\n" <| List.map printViewProto cs.CVProtos
-        String.concat "\n" <| List.map (uncurry (printScriptVar "global")) cs.CGlobals
-        String.concat "\n" <| List.map (uncurry (printScriptVar "local")) cs.CLocals
-        String.concat "\n" <| List.map printConstraint cs.CConstraints
-        String.concat "\n\n" <| List.map printMethod cs.CMethods ]
+    VSep ([ vsep <| List.map (printViewProto >> String) cs.CVProtos
+            vsep <| List.map (uncurry (printScriptVar "global") >> String) cs.CGlobals
+            vsep <| List.map (uncurry (printScriptVar "local") >> String) cs.CLocals
+            vsep <| List.map (printConstraint >> String) cs.CConstraints
+            VSep (List.map (printMethod >> String) cs.CMethods, Separator) ],
+          Separator)
 
 /// Pretty-prints expression conversion errors.
 let printExprError ee =
@@ -78,76 +79,89 @@ let printModelError ce =
 /// Pretty-prints a flat view.
 let printModelView v =
     // TODO(CaptainHayashi): sort pretty-printing out so this can move
-    v.VName + "(" + String.concat ", " v.VParams + ")"
+    hsep [ String v.VName
+           parened (HSep (List.map String v.VParams, String ",")) ]
 
 /// Pretty-prints a multiset of views.
 let printModelViews vs =
-    "[" + String.concat ", " ( List.map printModelView vs ) + "]"
+    squared (HSep (List.map printModelView vs, String ","))
+
+/// Pretty-prints Z3 expressions
+let printZ3Exp expr = String (expr.ToString ())
 
 /// Pretty-prints TVars.
 let printTVar tvar =
-    "(Z3: " + tvar.VarExpr.ToString () + ", "
-            + tvar.VarPreExpr.ToString () + ", "
-            + tvar.VarPostExpr.ToString () + ", "
-            + tvar.VarFrameExpr.ToString () + ")"
+    ssurround "(Z3:"
+              ")"
+              (HSep ( [ printZ3Exp tvar.VarExpr
+                        printZ3Exp tvar.VarPreExpr
+                        printZ3Exp tvar.VarPostExpr
+                        printZ3Exp tvar.VarFrameExpr ], String ","))
 
 /// Pretty-prints model variables.
 let printModelVar nvar =
     let name, var = nvar
-    name + ": " + (match var with
-                   | IntVar  tv -> "int " + printTVar tv
-                   | BoolVar tv -> "bool " + printTVar tv)
+    HSep ( [ String name
+             (match var with
+              | IntVar tv -> hsep [ String "int"
+                                    printTVar tv ]
+              | BoolVar tv -> hsep [ String "bool"
+                                     printTVar tv ] ) ],
+           String ":")
 
 /// Pretty-prints a conditional view.
 let rec printCondView cv =
     match cv with
-    | CITEView (i, t, e) -> "if " + (i.ToString ())
-                                  + " then " + printCondViewList t
-                                  + " else " + printCondViewList e
+    | CITEView (i, t, e) ->
+        hsep [ String "if"
+               printZ3Exp i
+               String "then"
+               printCondViewList t
+               String "else"
+               printCondViewList e ]
     | CSetView v -> printModelView v
 
 /// Pretty-prints a list of cond-views.
 and printCondViewList cvs =
-    "[| " + (List.map printCondView cvs |> String.concat "; ") + " |]"
+    ssurround "[| "
+              " |]"
+              (HSep (List.map printCondView cvs, String ";"))
 
 
 /// Pretty-prints something wrapped in a condition pair.
 let printInConditionPair cpair inner =
-   printCondViewList cpair.Pre
-   + inner
-   + printCondViewList cpair.Post
+    Surround (hsep [ printCondViewList cpair.Pre ; Nop ],
+              inner,
+              hsep [ Nop ; printCondViewList cpair.Post ])
     
 /// Lifts a pretty-printer to optional values.
 let printOption pp ov =
     match ov with
-    | None -> "(none)"
+    | None -> String "(none)"
     | Some v -> pp v
 
 /// Pretty-prints a fetch prim.
 let printFetchPrim ty dest src mode =
-    "fetch<" + ty + "> {"
-    + printOption printLValue dest
-    + " = "
-    + printLValue src
-    + printFetchMode mode
-    + "}"
+    hsep [ String ("fetch<" + ty + ">")
+           parened (hsep [ printOption (printLValue >> String) dest
+                           String "="
+                           String (printLValue src)
+                           String (printFetchMode mode) ] ) ]
 
 /// Pretty-prints a CAS prim.
 let printCASPrim ty dest src set =
-    "cas<" + ty + "> {"
-    + printLValue dest
-    + " = "
-    + printLValue src
-    + (set.ToString ())
-    + "}"
+    hsep [ String ("cas<" + ty + ">")
+           parened (HSep ( [ String (printLValue dest)
+                             String (printLValue src)
+                             String (set.ToString ()) ],
+                           String ",")) ]
 
 /// Pretty-prints a local-set prim.
 let printLocalPrim ty dest src =
-    "lset<" + ty + "> {"
-    + printLValue dest
-    + " = "
-    + (src.ToString ())
-    + "}"
+    hsep [ String ("lset<" + ty + ">")
+           parened (hsep [ String (printLValue dest)
+                           String "="
+                           String (src.ToString ()) ] ) ]
 
 /// Pretty-prints a prim.
 let printPrim prim =
@@ -158,70 +172,51 @@ let printPrim prim =
     | BoolCAS (dest, src, set) -> printCASPrim "bool" dest src set
     | ArithLocalSet (dest, src) -> printLocalPrim "arith" dest src
     | BoolLocalSet (dest, src) -> printLocalPrim "bool" dest src
-    | PrimId -> "id"
-    | PrimAssume expr -> "assume {" + (expr.ToString ()) + "}"
+    | PrimId -> String "id"
+    | PrimAssume expr -> hsep [ String "assume"
+                                braced (String (expr.ToString ())) ]
 
 /// Pretty-prints a model axiom.
 let printModelAxiom axiom =
-    printInConditionPair axiom.AConditions (" <" + String.concat "; " ( List.map printPrim axiom.ACommand ) + "> ")
+    printInConditionPair axiom.AConditions
+                         (angled (HSep (List.map printPrim axiom.ACommand, String ";")))
 
 /// Pretty-prints a part-axiom at the given indent level.
-let rec printPartAxiom level axiom =
+let rec printPartAxiom axiom =
     match axiom with
     | PAAxiom ax -> printModelAxiom ax
     | PAWhile (isDo, expr, outer, inner) ->
-        "begin " + (if isDo then "do-while" else "while")
-                 + " " + (expr.ToString ())
-                 + lnIndent level
-                 + printInConditionPair outer (lnIndent (level + 1)
-                                               + "begin block"
-                                               + lnIndent (level + 1)
-                                               + String.concat (lnIndent (level + 1))
-                                                               (List.map (printPartAxiom (level + 1)) inner)
-                                               + lnIndent (level + 1) 
-                                               + "end block"
-                                               + lnIndent level)
-                       + lnIndent level + "end"
+        vsep [ hsep [ String "begin"
+                      String (if isDo then "do-while" else "while")
+                      String (expr.ToString ()) ]
+               printInConditionPair outer
+                                    (vsep [ String "begin block"
+                                            ivsep <| List.map printPartAxiom inner
+                                            String "end block" ] )
+               String "end" ]
     | PAITE (expr, outer, inTrue, inFalse) ->
-        "begin if " + (expr.ToString ())
-                    + lnIndent level
-                    + printInConditionPair outer (lnIndent (level + 1)
-                                                  + "begin true"
-                                                  + lnIndent (level + 1)
-                                                  + String.concat (lnIndent (level + 1))
-                                                                  (List.map (printPartAxiom (level + 1)) inTrue)
-                                                  + lnIndent (level + 1)
-                                                  + "end true; begin false"
-                                                  + lnIndent (level + 1)
-                                                  + String.concat (lnIndent (level + 1))
-                                                                  (List.map (printPartAxiom (level + 1)) inFalse)
-                                                  + lnIndent (level + 1)
-                                                  + "end false"
-                                                  + lnIndent level)
-                    + lnIndent level + "end"
+        vsep [ hsep [ String "begin if"
+                      String (expr.ToString ()) ]
+               printInConditionPair outer
+                                    (vsep [ String "begin true"
+                                            ivsep <| List.map printPartAxiom inTrue
+                                            String "end true; begin false"
+                                            ivsep <| List.map printPartAxiom inFalse
+                                            String "end false" ] )
+               String "end" ]
 
 /// Pretty-prints a model constraint.
 let printModelConstraint c =
-    "    View: " + printModelViews (c.CViews)
-    + "\n"
-    + "      Z3: " + c.CZ3.ToString ()
-
+    keyMap [ ("View", printModelViews (c.CViews))
+             ("Z3", c.CZ3.ToString () |> String) ]
 
 /// Pretty-prints a model.
 let printModel model =
-    "Globals: \n    "
-    + String.concat "\n    "
-                    (List.map printModelVar (Map.toList model.Globals))
-    + "\n\n"
-    + "Locals: \n    "
-    + String.concat "\n    "
-                    (List.map printModelVar (Map.toList model.Locals))
-    + "\n\n"
-    + "Constraints: \n"
-    + String.concat "\n"
-                    (List.map printModelConstraint model.DefViews)
-    + "\n\n"
-    + "Axioms:"
-    + lnIndent 1
-    + String.concat (lnIndent 1)
-                    (List.map (printPartAxiom 1) model.Axioms)
+    headed "Model"
+           [ headed "Globals" <| List.map printModelVar (Map.toList model.Globals)
+             Separator
+             headed "Locals" <| List.map printModelVar (Map.toList model.Locals)
+             Separator
+             headed "Constraints"  <| List.map printModelConstraint model.DefViews
+             Separator
+             headed "Axioms" <| List.map printPartAxiom model.Axioms ]

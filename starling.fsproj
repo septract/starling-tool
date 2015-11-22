@@ -38,6 +38,7 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Utils.fs" />
+    <Compile Include="PrettyTypes.fs" />
     <Compile Include="AST.fs" />
     <Compile Include="ASTPretty.fs" />
     <Compile Include="Collator.fs" />

@@ -92,8 +92,8 @@ type Output =
 let printOutput out =
     match out with
         | OutputParse     s -> Starling.Pretty.AST.printScript s
-        | OutputCollation c -> Starling.Pretty.Misc.printCollatedScript c
-        | OutputModel     m -> Starling.Pretty.Misc.printModel m
+        | OutputCollation c -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printCollatedScript c)
+        | OutputModel     m -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printModel m)
 
 (*
     Starling pipeline (here defined in reverse):
