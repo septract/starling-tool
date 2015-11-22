@@ -19,11 +19,9 @@ let (>>=) = FParsec.Primitives.(>>=)
 //   TODO(CaptainHayashi): is some of this redundant?
 
 /// Parser for skipping zero or more whitespace characters.
-let ws = many ( choice [ skipString "//" .>> skipRestOfLine true
-                         skipString "/*" .>> skipManyTill anyChar ( pstring "*/" )
-                         spaces1
-                       ]
-              )
+let ws = many (choice [ skipString "//" .>> skipRestOfLine true
+                        skipString "/*" .>> skipManyTill anyChar (pstring "*/")
+                        spaces1 ] )
 
 /// As pipe2, but with automatic whitespace parsing after each parser.
 let pipe2ws x y f = pipe2 (x .>> ws) (y .>> ws) f
@@ -32,8 +30,8 @@ let pipe2ws x y f = pipe2 (x .>> ws) (y .>> ws) f
 let pipe3ws x y z f = pipe3 (x .>> ws) (y .>> ws) (z .>> ws) f
 
 /// Parses an identifier.
-let parseIdentifier = many1Chars2 ( pchar '_' <|> asciiLetter )
-                                  ( pchar '_' <|> asciiLetter <|> digit )
+let parseIdentifier = many1Chars2 (pchar '_' <|> asciiLetter)
+                                  (pchar '_' <|> asciiLetter <|> digit)
 
 
 // Bracket parsers.
@@ -53,7 +51,7 @@ let inAngles p = inBrackets "<" ">" p
 /// Helper for defining `chain1`s representing binary functions.
 /// When supplied as the chaining parser, tries to parse `op`, then
 /// whitespace, and finally passes the result to a `fn` as a pair.
-let parseBin op fn = pstring op .>> ws >>% fun x y -> fn(x, y)
+let parseBin op fn = pstring op .>> ws >>% fun x y -> fn (x, y)
 
 
 //
@@ -65,17 +63,17 @@ let parseBin op fn = pstring op .>> ws >>% fun x y -> fn(x, y)
 // definitions.
 
 /// Parser for `raw` views (not surrounded in {braces}).
-let parseView, parseViewRef = createParserForwardedToRef<View, unit>()
+let parseView, parseViewRef = createParserForwardedToRef<View, unit> ()
 /// Parser for view definitions.
-let parseViewDef, parseViewDefRef = createParserForwardedToRef<ViewDef, unit>()
+let parseViewDef, parseViewDefRef = createParserForwardedToRef<ViewDef, unit> ()
 /// Parser for commands.
-let parseCommand, parseCommandRef = createParserForwardedToRef<Command, unit>()
+let parseCommand, parseCommandRef = createParserForwardedToRef<Command, unit> ()
 /// Parser for blocks.
-let parseBlock, parseBlockRef = createParserForwardedToRef<Block, unit>()
+let parseBlock, parseBlockRef = createParserForwardedToRef<Block, unit> ()
 /// Parser for expressions.
 /// The expression parser is split into several chains as per
 /// preference rank.
-let parseExpression, parseExpressionRef = createParserForwardedToRef<Expression, unit>()
+let parseExpression, parseExpressionRef = createParserForwardedToRef<Expression, unit> ()
 
 // From here on out, everything should line up more or less with the
 // BNF, except in reverse, bottom-up order.
@@ -86,19 +84,18 @@ let parseExpression, parseExpressionRef = createParserForwardedToRef<Expression,
 //
 
 /// Parser for lvalues.
-let parseLValue, parseLValueRef = createParserForwardedToRef<LValue, unit>()
+let parseLValue, parseLValueRef = createParserForwardedToRef<LValue, unit> ()
 do parseLValueRef :=
-    ( pstring "*" >>. ws >>. parseLValue |>> LVPtr )
-    <|> ( parseIdentifier |>> LVIdent )
+    (pstring "*" >>. ws >>. parseLValue |>> LVPtr)
+    <|> (parseIdentifier |>> LVIdent)
 
 /// Parser for primary expressions.
 let parsePrimaryExpression =
-    choice [ pstring "true"  >>% TrueExp
-           ; pstring "false" >>% FalseExp
-           ; pint64          |>> IntExp
-           ; parseLValue     |>> LVExp
-           ; inParens parseExpression
-           ] .>> ws
+    choice [ pstring "true" >>% TrueExp
+             pstring "false" >>% FalseExp
+             pint64 |>> IntExp
+             parseLValue |>> LVExp
+             inParens parseExpression ] .>> ws
 
 /// Generic parser for tiers of binary expressions.
 /// Accepts the next precedence level parser, and a list of pairs of operator and AST representation.
@@ -106,38 +103,34 @@ let parsePrimaryExpression =
 let parseBinaryExpressionLevel nextLevel expList =
     chainl1 (nextLevel .>> ws)
             (choice
-                (List.map (fun (op, fn) -> (pstring op .>> ws >>% fun x y -> fn(x, y))) expList)
+                (List.map (fun (op, fn) -> (pstring op .>> ws >>% fun x y -> fn (x, y))) expList)
             )
 
 /// Parser for multiplicative expressions.
 let parseMultiplicativeExpression =
     parseBinaryExpressionLevel parsePrimaryExpression
         [ ("*", MulExp)
-        ; ("/", DivExp)
-        ]
+          ("/", DivExp) ]
 
 /// Parser for additive expressions.
 let parseAdditiveExpression =
     parseBinaryExpressionLevel parseMultiplicativeExpression
         [ ("+", AddExp)
-        ; ("-", SubExp)
-        ]
+          ("-", SubExp) ]
 
 /// Parser for relational expressions.
 let parseRelationalExpression =
     parseBinaryExpressionLevel parseAdditiveExpression
         [ (">=", GeExp)
-        ; ("<=", LeExp)
-        ; (">" , GtExp)
-        ; ("<" , LtExp)
-        ]
+          ("<=", LeExp)
+          (">" , GtExp)
+          ("<" , LtExp) ]
 
 /// Parser for equality expressions.
 let parseEqualityExpression =
     parseBinaryExpressionLevel parseRelationalExpression
         [ ("==", EqExp)
-        ; ("!=", NeqExp)
-        ]
+          ("!=", NeqExp) ]
 
 /// Parser for logical AND expressions.
 let parseAndExpression =
@@ -158,18 +151,18 @@ do parseExpressionRef := parseOrExpression
 
 /// Parser for compare-and-swaps.
 /// This parser DOES NOT parse whitespace afterwards.
-let parseCAS = pstring "CAS"
-                   >>. inParens ( pipe3ws (parseLValue .>> ws .>> pstring ",")
-                                          (parseLValue .>> ws .>> pstring ",")
-                                          parseExpression
-                                          (curry3 CompareAndSwap)
-                                )
+let parseCAS =
+    pstring "CAS"
+    >>. inParens (pipe3ws (parseLValue .>> ws .>> pstring ",")
+                          (parseLValue .>> ws .>> pstring ",")
+                          parseExpression
+                          (curry3 CompareAndSwap))
 
 /// Parser for fetch sigils.
 /// This parser SOMETIMES parses whitespace afterwards.
-let parseFetchSigil = choice [ pstring "++" .>> ws >>% Increment
-                             ; pstring "--" .>> ws >>% Decrement
-                             ] <|>% Direct
+let parseFetchSigil =
+    choice [ pstring "++" .>> ws >>% Increment
+             pstring "--" .>> ws >>% Decrement ] <|>% Direct
 
 /// Parser for fetch right-hand-sides.
 /// This parser SOMETIMES parses whitespace afterwards.
@@ -181,12 +174,11 @@ let parseFetch fetcher =
 /// Parser for fetch actions.
 /// This parser SOMETIMES parses whitespace afterwards.
 let parseFetchOrPostfix =
-    parseLValue .>> ws >>= (
-        fun id -> choice [ stringReturn "++" ( Postfix ( id, Increment ) )
-                         ; stringReturn "--" ( Postfix ( id, Decrement ) )
-                         ; pstring "=" >>. ws >>. parseFetch id
-                         ]
-    )
+    parseLValue
+    .>> ws
+    >>= ( fun id -> choice [ stringReturn "++" (Postfix (id, Increment))
+                             stringReturn "--" (Postfix (id, Decrement))
+                             pstring "=" >>. ws >>. parseFetch id ] )
 
 /// Parser for assume actions.
 let parseAssume =
@@ -194,12 +186,10 @@ let parseAssume =
 
 /// Parser for atomic actions.
 let parseAtomic =
-    choice [
-        stringReturn "id" Id
-        parseAssume
-        parseCAS
-        parseFetchOrPostfix
-    ]
+    choice [ stringReturn "id" Id
+             parseAssume
+             parseCAS
+             parseFetchOrPostfix ]
 
 
 //
@@ -220,7 +210,7 @@ let parseParamList argp =
     //   Make this generic in the first argument to sepBy, and also
     //   make said first argument more robust -- currently this parses all
     //   whitespace before the ,!
-    inParens ( parseParams argp )
+    inParens (parseParams argp)
     // ^- ()
     //  | ( <params> )
 
@@ -233,7 +223,7 @@ let parseViewLike basic join =
     chainl1 basic
             // ^- <basic-view>
             //  | <basic-view> ...
-            ( stringReturn "*" ( fun x y -> join ( x, y ) ) .>> ws )
+            (stringReturn "*" (fun x y -> join (x, y)) .>> ws)
             //                 ... * <view>
 
 /// Takes a view name and optional argument list, and creates the
@@ -241,16 +231,16 @@ let parseViewLike basic join =
 /// view in `Apply` if the optional argument list exists.
 let addViewArgs ctor vname x =
     match x with
-        | Some args -> ctor ( vname, args )
-        | None      -> ctor ( vname, []   )
+    | Some args -> ctor (vname, args)
+    | None -> ctor (vname, [])
 
 /// Parses a possible argument list for an application of a parametric view.
-let parseFuncLike argp = ws >>. opt ( parseParamList argp ) .>> ws
+let parseFuncLike argp = ws >>. opt (parseParamList argp) .>> ws
 
 /// Takes a view parser and tries to parse an argument list after it.
 /// Wraps the parsed command in `Apply` if an argument list exists.
 let wrapFuncLike parser ctor argp =
-    pipe2 parser ( parseFuncLike argp ) ( addViewArgs ctor )
+    pipe2 parser (parseFuncLike argp) (addViewArgs ctor)
 
 
 //
@@ -270,13 +260,13 @@ let parseTypedParam = parseType .>> ws .>>. parseIdentifier
 
 /// Parses a conditional view.
 let parseIfView =
-    pipe3ws ( pstring "if" >>. ws >>. parseExpression )
+    pipe3ws (pstring "if" >>. ws >>. parseExpression)
             // ^- if <view-exprn> ...
-            ( pstring "then" >>. ws >>. parseView )
+            (pstring "then" >>. ws >>. parseView)
             // ^-                 ... then <view> ...
-            ( pstring "else" >>. ws >>. parseView .>> ws )
+            (pstring "else" >>. ws >>. parseView)
             // ^-                                 ... else <view>
-            ( fun c t f -> IfView ( c, t, f ) )
+            (fun c t f -> IfView ( c, t, f ))
 
 /// Parses a functional view.
 let parseFuncView = wrapFuncLike parseIdentifier Func parseExpression
@@ -288,14 +278,13 @@ let parseUnit = stringReturn "emp" Unit
 let parseBasicView =
     choice [ parseUnit
              // ^- `emp'
-           ; parseIfView
+             parseIfView
              // ^- if <view-exprn> then <view> else <view>
-           ; parseFuncView
+             parseFuncView
              // ^- <identifier>
              //  | <identifier> <arg-list>
-           ; inParens parseView
+             inParens parseView ]
              // ( <view> )
-           ]
 
 do parseViewRef := parseViewLike parseBasicView Join
 
@@ -318,12 +307,11 @@ let parseDUnit = stringReturn "emp" DUnit
 let parseBasicViewDef =
     choice [ parseDUnit
              // ^- `emp'
-           ; parseDFuncView
+             parseDFuncView
              // ^- <identifier>
              //  | <identifier> <arg-list>
-           ; inParens parseViewDef
+             inParens parseViewDef ]
              // ( <view> )
-           ]
 
 do parseViewDefRef := parseViewLike parseBasicViewDef DJoin
 
@@ -335,12 +323,12 @@ do parseViewDefRef := parseViewLike parseBasicViewDef DJoin
 /// Parses a view prototype.
 let parseViewProto =
     pstring "view"
-        >>. ws
-        >>. wrapFuncLike parseIdentifier
-                         ( fun np -> { VPName = fst np
-                                       VPPars = snd np } )
-                         parseTypedParam
-        .>> ws .>> pstring ";" .>> ws
+    >>. ws
+    >>. wrapFuncLike parseIdentifier
+                     (fun np -> { VPName = fst np
+                                  VPPars = snd np } )
+                     parseTypedParam
+    .>> ws .>> pstring ";" .>> ws
 
 
 //
@@ -348,60 +336,64 @@ let parseViewProto =
 //
 
 /// Parser for assignments.
-let parseAssign = pipe2ws parseLValue
-                  // ^- <lvalue> ...
-                          ( pstring "=" >>. ws >>. parseExpression .>> ws .>> pstring ";" )
+let parseAssign =
+    pipe2ws parseLValue
+    // ^- <lvalue> ...
+            (pstring "=" >>. ws >>. parseExpression .>> ws .>> pstring ";")
                   //             ... = <expression> ;
-                          ( fun l r -> Assign ( l, r ) )
+            (fun l r -> Assign (l, r))
 
 /// Parser for blocks.
-let parseParSet = (sepBy1 (parseBlock .>> ws) (pstring "||" .>> ws))
-                  // ^- <block>
-                  //  | <block> || <par-set>
-                  |>> Blocks
+let parseParSet =
+    (sepBy1 (parseBlock .>> ws) (pstring "||" .>> ws)) |>> Blocks
+    // ^- <block>
+    //  | <block> || <par-set>
 
 /// Parser for the 'while (expr)' leg of while and do-while commands.
 let parseWhileLeg =
     pstring "while" >>. ws >>. inParens parseExpression
 
 /// Parser for while (expr) block.
-let parseWhile = parseWhileLeg .>> ws .>>. parseBlock |>> While
+let parseWhile =
+    parseWhileLeg .>> ws .>>. parseBlock |>> While
 
 /// Parser for do (expr) while block.
 let parseDoWhile =
     pstring "do" >>. ws >>. parseBlock .>>. (ws >>. parseWhileLeg) |>> DoWhile
 
 /// Parser for if (expr) block else block.
-let parseIf = pipe3ws (pstring "if" >>. ws >>. inParens parseExpression)
-                      (parseBlock .>> ws .>> pstring "else")
-                      parseBlock
-                      (fun c t f -> If(c, t, f))
+let parseIf =
+    pipe3ws (pstring "if" >>. ws >>. inParens parseExpression)
+            (parseBlock .>> ws .>> pstring "else")
+            parseBlock
+            (fun c t f -> If (c, t, f))
 
 /// Parser for atomic commands (not the actions themselves; that is parseAtomic).
-let parseAtomicCommand = inAngles parseAtomic .>> ws .>> pstring ";" |>> Atomic
+let parseAtomicCommand =
+    inAngles parseAtomic .>> ws .>> pstring ";" |>> Atomic
 
 /// Parser for `skip` commands.
 /// Skip is inserted when we're in command position, but see a semicolon.
-let parseSkip = stringReturn ";" Skip .>> ws
-                // ^- ;
+let parseSkip
+    = stringReturn ";" Skip .>> ws
+    // ^- ;
 
 /// Parser for simple commands (atomics, skips, and bracketed commands).
 do parseCommandRef :=
     choice [ parseSkip
              // ^- `;'
-           ; parseAtomicCommand
+             parseAtomicCommand
              // ^- < <atomic> > ;
-           ; parseIf
+             parseIf
              // ^- if ( <expression> ) <block> <block>
-           ; parseDoWhile
+             parseDoWhile
              // ^- do <block> while ( <expression> )
-           ; parseWhile
+             parseWhile
              // ^- while ( <expression> ) <block>
-           ; parseParSet
+             parseParSet
              // ^- <par-set>
-           ; parseAssign
+             parseAssign ]
              // ^- <lvalue> = <expression>
-           ]
 
 
 //
@@ -411,24 +403,22 @@ do parseCommandRef :=
 /// Parser for lists of semicolon-delimited, postconditioned
 /// commands.
 let parseCommands =
-    many1 (
-        pipe2ws parseCommand
-                // ^- <command> ...
-                parseViewLine
-                // ^-           ... <view-line>
-                (fun c v -> { Command = c; Post = v })
-    )
-    //  |             <command> ... <view-line> ... <commands>
+    many1
+    <| pipe2ws parseCommand
+               // ^- <command> ...
+               parseViewLine
+               // ^-           ... <view-line>
+               (fun c v -> { Command = c; Post = v })
+               //  |             <command> ... <view-line> ... <commands>
 
 do parseBlockRef :=
-    inBraces (
+    inBraces
+    <| pipe2ws parseViewLine
         // ^- {       ...                            ... }
-        pipe2ws parseViewLine
-                // ^- ... <view-line> ...
-                parseCommands
-                //                    ... <commands> ...
-                (fun p c -> { Pre = p; Contents = c })
-    )
+               // ^- ... <view-line> ...
+               parseCommands
+               //                    ... <commands> ...
+               (fun p c -> { Pre = p; Contents = c })
 
 
 //
@@ -451,7 +441,7 @@ let parseMethod =
     // ^- method ...
         pipe3ws parseIdentifier
                 // ^- <identifier> ...
-                ( parseParamList parseIdentifier )
+                (parseParamList parseIdentifier)
                 // ^-              ... <arg-list> ...
                 parseBlock
                 // ^-                             ... <block>
@@ -469,20 +459,17 @@ let parseVar kw = pstring kw >>. ws
 let parseScript =
     // TODO(CaptainHayashi): parse things that aren't methods:
     //   axioms definitions, etc
-    ws >>. manyTill (
-        choice [ parseMethod |>> SMethod
-                 // ^- method <identifier> <arg-list> <block>
-               ; parseConstraint |>> SConstraint
-                 // ^- constraint <view> => <expression> ;
-               ; parseViewProto |>> SViewProto
-                 // ^- view <identifier> ;
-                 //  | view <identifier> <view-proto-param-list> ;
-               ; parseVar "global" |>> SGlobal
-                 // ^- global <type> <identifier> ;
-               ; parseVar "local" |>> SLocal
-                 // ^- local <type> <identifier> ;
-               ]
-    ) eof
+    ws >>. manyTill ( choice [ parseMethod |>> SMethod
+                               // ^- method <identifier> <arg-list> <block>
+                               parseConstraint |>> SConstraint
+                               // ^- constraint <view> => <expression> ;
+                               parseViewProto |>> SViewProto
+                               // ^- view <identifier> ;
+                               //  | view <identifier> <view-proto-param-list> ;
+                               parseVar "global" |>> SGlobal
+                               // ^- global <type> <identifier> ;
+                               parseVar "local" |>> SLocal ] ) eof
+                               // ^- local <type> <identifier> ;
 
 //
 // Frontend
@@ -494,12 +481,12 @@ let parseFile name =
     // If - or no name was given, parse from the console.
     let stream, streamName =
         match name with
-            | Some("-") -> (Console.OpenStandardInput (), "(stdin)")
-            | None      -> (Console.OpenStandardInput (), "(stdin)")
-            | Some(nam) -> (IO.File.OpenRead(nam) :> IO.Stream, nam)
+        | Some("-") -> (Console.OpenStandardInput (), "(stdin)")
+        | None -> (Console.OpenStandardInput (), "(stdin)")
+        | Some(nam) -> (IO.File.OpenRead(nam) :> IO.Stream, nam)
 
     let pres = runParserOnStream parseScript () streamName stream Text.Encoding.UTF8
     match pres with
-    | Success ( result,   _, _ ) -> ok result
-    | Failure ( errorMsg, _, _ ) -> fail errorMsg
+    | Success (result, _, _) -> ok result
+    | Failure (errorMsg, _, _) -> fail errorMsg
 

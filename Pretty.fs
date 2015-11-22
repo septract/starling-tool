@@ -11,19 +11,18 @@ open Starling.Pretty.AST
 /// Pretty-prints a collated script.
 let printCollatedScript cs =
     String.concat "\n\n" [
-        String.concat "\n"   <| List.map printViewProto                          cs.CVProtos
-        String.concat "\n"   <| List.map ( uncurry ( printScriptVar "global" ) ) cs.CGlobals
-        String.concat "\n"   <| List.map ( uncurry ( printScriptVar "local"  ) ) cs.CLocals
-        String.concat "\n"   <| List.map printConstraint                         cs.CConstraints
-        String.concat "\n\n" <| List.map printMethod                             cs.CMethods
-    ]
+        String.concat "\n" <| List.map printViewProto cs.CVProtos
+        String.concat "\n" <| List.map (uncurry (printScriptVar "global")) cs.CGlobals
+        String.concat "\n" <| List.map (uncurry (printScriptVar "local")) cs.CLocals
+        String.concat "\n" <| List.map printConstraint cs.CConstraints
+        String.concat "\n\n" <| List.map printMethod cs.CMethods ]
 
 /// Pretty-prints expression conversion errors.
 let printExprError ee =
     match ee with
-        | EEBadAST ( ast, reason ) ->
-            "cannot convert " + printExpression ast
-                              + " to Z3: " + reason
+    | EEBadAST (ast, reason) ->
+        "cannot convert " + printExpression ast
+                          + " to Z3: " + reason
 
 /// Pretty-prints view conversion errors.
 let printViewError ve =
@@ -37,13 +36,13 @@ let printViewError ve =
 /// Pretty-prints constraint conversion errors.
 let printConstraintError ce =
     match ce with
-        | CEView ve -> printViewError ve
-        | CEExpr ee -> printExprError ee
+    | CEView ve -> printViewError ve
+    | CEExpr ee -> printExprError ee
 
 /// Pretty-prints variable conversion errors.
 let printVarError ve =
     match ve with
-        | VEDuplicate vn -> "variable '" + vn + "' is defined multiple times"
+    | VEDuplicate vn -> "variable '" + vn + "' is defined multiple times"
 
 /// Pretty-prints lookup errors.
 let printLookupError le =
@@ -72,9 +71,9 @@ let printAxiomError ae =
 /// Pretty-prints model conversion errors.
 let printModelError ce =
     match ce with
-        | MEConstraint ce -> printConstraintError ce
-        | MEVar ve -> printVarError ve
-        | MEAxiom ae -> printAxiomError ae
+    | MEConstraint ce -> printConstraintError ce
+    | MEVar ve -> printVarError ve
+    | MEAxiom ae -> printAxiomError ae
 
 /// Pretty-prints a flat view.
 let printModelView v =
@@ -95,11 +94,9 @@ let printTVar tvar =
 /// Pretty-prints model variables.
 let printModelVar nvar =
     let name, var = nvar
-    name + ": " + (
-        match var with
-            | IntVar  tv -> "int " + printTVar tv
-            | BoolVar tv -> "bool " + printTVar tv
-    )
+    name + ": " + (match var with
+                   | IntVar  tv -> "int " + printTVar tv
+                   | BoolVar tv -> "bool " + printTVar tv)
 
 /// Pretty-prints a conditional view.
 let rec printCondView cv =
@@ -176,48 +173,55 @@ let rec printPartAxiom level axiom =
         "begin " + (if isDo then "do-while" else "while")
                  + " " + (expr.ToString ())
                  + lnIndent level
-                 + printInConditionPair outer ( lnIndent (level + 1)
-                                                + "begin block"
-                                                + lnIndent (level + 1)
-                                                + String.concat (lnIndent (level + 1))
-                                                                (List.map (printPartAxiom (level + 1)) inner)
-                                                + lnIndent (level + 1) 
-                                                + "end block"
-                                                + lnIndent level )
+                 + printInConditionPair outer (lnIndent (level + 1)
+                                               + "begin block"
+                                               + lnIndent (level + 1)
+                                               + String.concat (lnIndent (level + 1))
+                                                               (List.map (printPartAxiom (level + 1)) inner)
+                                               + lnIndent (level + 1) 
+                                               + "end block"
+                                               + lnIndent level)
                        + lnIndent level + "end"
     | PAITE (expr, outer, inTrue, inFalse) ->
         "begin if " + (expr.ToString ())
                     + lnIndent level
-                    + printInConditionPair outer ( lnIndent (level + 1)
-                                                   + "begin true"
-                                                   + lnIndent (level + 1)
-                                                   + String.concat (lnIndent (level + 1))
-                                                                   (List.map (printPartAxiom (level + 1)) inTrue)
-                                                   + lnIndent (level + 1)
-                                                   + "end true; begin false"
-                                                   + lnIndent (level + 1)
-                                                   + String.concat (lnIndent (level + 1))
-                                                                   (List.map (printPartAxiom (level + 1)) inFalse)
-                                                   + lnIndent (level + 1)
-                                                   + "end false"
-                                                   + lnIndent level )
+                    + printInConditionPair outer (lnIndent (level + 1)
+                                                  + "begin true"
+                                                  + lnIndent (level + 1)
+                                                  + String.concat (lnIndent (level + 1))
+                                                                  (List.map (printPartAxiom (level + 1)) inTrue)
+                                                  + lnIndent (level + 1)
+                                                  + "end true; begin false"
+                                                  + lnIndent (level + 1)
+                                                  + String.concat (lnIndent (level + 1))
+                                                                  (List.map (printPartAxiom (level + 1)) inFalse)
+                                                  + lnIndent (level + 1)
+                                                  + "end false"
+                                                  + lnIndent level)
                     + lnIndent level + "end"
+
+/// Pretty-prints a model constraint.
+let printModelConstraint c =
+    "    View: " + printModelViews (c.CViews)
+    + "\n"
+    + "      Z3: " + c.CZ3.ToString ()
+
 
 /// Pretty-prints a model.
 let printModel model =
-    "Globals: \n    " + String.concat "\n    " (
-        List.map printModelVar ( Map.toList model.Globals )
-    ) + "\n\n" +
-    "Locals: \n    " + String.concat "\n    " (
-        List.map printModelVar ( Map.toList model.Locals )
-    ) + "\n\n" +
-    "Constraints: \n" + String.concat "\n" (
-        List.map (
-            fun c ->
-                "    View: " + printModelViews ( c.CViews )
-                           + "\n"
-                           + "      Z3: " + c.CZ3.ToString ()
-         ) model.DefViews
-    ) + "\n\n" +
-    "Axioms:" + lnIndent 1 + String.concat (lnIndent 1) (
-        List.map (printPartAxiom 1) model.Axioms )
+    "Globals: \n    "
+    + String.concat "\n    "
+                    (List.map printModelVar (Map.toList model.Globals))
+    + "\n\n"
+    + "Locals: \n    "
+    + String.concat "\n    "
+                    (List.map printModelVar (Map.toList model.Locals))
+    + "\n\n"
+    + "Constraints: \n"
+    + String.concat "\n"
+                    (List.map printModelConstraint model.DefViews)
+    + "\n\n"
+    + "Axioms:"
+    + lnIndent 1
+    + String.concat (lnIndent 1)
+                    (List.map (printPartAxiom 1) model.Axioms)

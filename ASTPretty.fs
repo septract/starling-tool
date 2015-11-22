@@ -122,11 +122,11 @@ let printScriptVar cls t v =
 /// Pretty-prints script lines.
 let printScriptLine sl =
     match sl with
-        | SGlobal (t, v) -> printScriptVar "global" t v
-        | SLocal (t, v) -> printScriptVar "local" t v
-        | SMethod m -> printMethod m
-        | SViewProto v -> printViewProto v
-        | SConstraint c -> printConstraint c
+    | SGlobal (t, v) -> printScriptVar "global" t v
+    | SLocal (t, v) -> printScriptVar "local" t v
+    | SMethod m -> printMethod m
+    | SViewProto v -> printViewProto v
+    | SConstraint c -> printConstraint c
 
 /// Pretty-prints scripts.
 let printScript = List.map printScriptLine >> String.concat "\n\n"

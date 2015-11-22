@@ -4,11 +4,9 @@ open Microsoft
 
 /// A 'flattened' (multiset-representation) view.
 type View =
-    {
-        // TODO(CaptainHayashi): rename to ViewDef.
-        VName:   string
-        VParams: string list
-    }
+    // TODO(CaptainHayashi): rename to ViewDef.
+    { VName: string
+      VParams: string list }
 
 /// A conditional (flat or if-then-else) view.
 type CondView =
@@ -19,31 +17,25 @@ type CondView =
 
 /// A constraint, containing a multiset of views and a Z3 predicate.
 type Constraint =
-    {
-        CViews: View list
-        CZ3:    Z3.BoolExpr
-    }
+    { CViews: View list
+      CZ3: Z3.BoolExpr }
 
 /// A typed inner record of a variable.
 type TVar<'E when 'E :> Z3.Expr> =
-    {
-        VarExpr:       'E
-        VarPreExpr:    'E
-        VarPostExpr:   'E
-        VarFrameExpr:  'E
-    }
+    { VarExpr: 'E
+      VarPreExpr: 'E
+      VarPostExpr: 'E
+      VarFrameExpr: 'E }
 
 /// A record of a variable in the program model.
 type Var =
-    | IntVar  of TVar<Z3.IntExpr>
+    | IntVar of TVar<Z3.IntExpr>
     | BoolVar of TVar<Z3.BoolExpr>
 
 /// A pair of conditions.
 type ConditionPair =
-    {
-        Pre: CondView list
-        Post: CondView list
-    }
+    { Pre: CondView list
+      Post: CondView list }
 
 /// A modelled primitive command.
 type Prim =
@@ -58,10 +50,8 @@ type Prim =
 
 /// An axiom, containing a Hoare triple on an atomic action.
 type Axiom =
-    {
-        AConditions: ConditionPair
-        ACommand: Prim list
-    }
+    { AConditions: ConditionPair
+      ACommand: Prim list }
 
 /// A partially resolved axiom.
 type PartAxiom =
@@ -71,16 +61,14 @@ type PartAxiom =
 
 /// A model of a Starling program.
 type PartModel<'g, 'l, 'a, 'c> =
-    {
-        Context: Z3.Context
+    { Context: Z3.Context
 
-        Globals: 'g
-        Locals:  'l
-        Axioms:  'a
+      Globals: 'g
+      Locals:  'l
+      Axioms:  'a
 
-        // This corresponds to the function D.
-        DefViews: 'c
-    }
+      // This corresponds to the function D.
+      DefViews: 'c }
 
 /// A variable map
 type VarMap = Map<string, Var>
