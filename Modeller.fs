@@ -31,15 +31,15 @@ let rec flattenLV v =
     | LVPtr vv -> "*" + flattenLV vv
 
 /// Makes an And out of a pair of two expressions.
-let mkAnd2 (ctx: Context) lr = ctx.MkAnd [| fst lr; snd lr |]
+let mkAnd2 (ctx: Context) (l, r) = ctx.MkAnd [| l; r |]
 /// Makes an Or out of a pair of two expressions.
-let mkOr2 (ctx: Context) lr = ctx.MkOr [| fst lr; snd lr |]
+let mkOr2 (ctx: Context) (l, r) = ctx.MkOr [| l; r |]
 /// Makes an Add out of a pair of two expressions.
-let mkAdd2 (ctx: Context) lr = ctx.MkAdd [| fst lr; snd lr |]
+let mkAdd2 (ctx: Context) (l, r) = ctx.MkAdd [| l; r |]
 /// Makes a Sub out of a pair of two expressions.
-let mkSub2 (ctx: Context) lr = ctx.MkSub [| fst lr; snd lr |]
+let mkSub2 (ctx: Context) (l, r) = ctx.MkSub [| l; r |]
 /// Makes a Mul out of a pair of two expressions.
-let mkMul2 (ctx: Context) lr = ctx.MkMul [| fst lr; snd lr |]
+let mkMul2 (ctx: Context) (l, r) = ctx.MkMul [| l; r |]
 
 /// Converts a pair of arith-exps to Z3, then chains f onto them.
 let rec chainArithExprs (ctx : Context)
@@ -131,8 +131,8 @@ let modelVarList (ctx : Context) lst =
     let names = List.map snd lst
     match (findDuplicates names) with
     | [] -> ok <| List.foldBack
-                    (fun x (map: VarMap) ->
-                         map.Add (snd x, makeVar ctx (fst x) (snd x)))
+                    (fun (ty, name) (map: VarMap) ->
+                         map.Add (name, makeVar ctx ty name))
                     lst
                     Map.empty
     | ds -> Bad <| List.map VEDuplicate ds
