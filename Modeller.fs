@@ -191,8 +191,8 @@ let lookupVarType env lvalue =
     lookupVar env lvalue |> lift varType
 
 /// Lifts a Prim to an partially resolved axiom list.
-let primToAxiom cpair prim = { AConditions = cpair
-                               ACommand = [prim] }
+let primToAxiom cpair prim = { Conditions = cpair
+                               Inner = [prim] }
                              |> PAAxiom
 
 /// Tries to look up the type of a local variable in an axiom context.
@@ -214,29 +214,6 @@ let axiomBoolExprToZ3 pmod expr =
 /// Returns a Chessie result; failures have AEBadExpr messages.
 let axiomArithExprToZ3 pmod expr =
     arithExprToZ3 pmod.Context expr |> mapMessages AEBadExpr
-
-/// Extracts the outer condition pair of a part-axiom.
-let cpairOfPartAxiom pa =
-    match pa with
-    | PAAxiom a -> a.AConditions
-    | PAWhile (outer = o) -> o
-    | PAITE (outer = o) -> o
-
-/// Extracts a condition pair from a list of part-axioms.
-///
-/// This pair is (P, Q), where {P}C{Q} and C is the sequential composition of
-/// each command in the axiom list.
-///
-/// Less poetically, it is the precondition of the first command, and the
-/// postcondition of the last command.
-///
-/// The result is optional, because C could be empty (and returning (true,
-/// true) is not quite sound!).
-let axiomsToConditionPair axioms =
-    match axioms with
-    | [] -> None
-    | xs -> Some { Pre = (cpairOfPartAxiom xs.[0]).Pre
-                   Post = (cpairOfPartAxiom xs.[List.length xs - 1]).Post }
 
 /// Converts an atomic action to a Prim.
 let rec modelPrimOnAtomic pmod atom =
@@ -354,28 +331,58 @@ and modelAxiomOnCommand pmod cpair cmd =
     | DoWhile (b, e) -> modelAxiomOnWhile true pmod cpair e b
     | c -> fail <| AEUnsupportedCommand (c, "TODO: implement")
 
-/// Converts a block to a list of partially resolved axioms.
+/// Converts a precondition and postcondition to a condition pair, using
+/// the given model and returning errors as AxiomErrors.
+and makeAxiomConditionPair pmod pre post =
+    makeConditionPair pmod.Context pre post
+    |> mapMessages AEBadView
+
+/// Converts a block to a Conditioned list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
 and modelAxiomsOnBlock pmod block =
-    List.foldBack
-        (fun vcom state ->
-             let cmd = vcom.Command
-             let post = vcom.Post
-             (post, trial { let pre, axiomsR = state
-                            let! axioms = axiomsR
-                            let! cpair = makeConditionPair pmod.Context pre post
-                                         |> mapMessages AEBadView
-                            let! axiom = modelAxiomOnCommand pmod cpair cmd
-                            return axiom :: axioms } ))
-        block.Contents
-        (block.Pre, ok [])
-    |> snd
+    (* We flip through every entry in the block, extracting its postcondition
+     * and block.  At the same time, we hold onto the postcondition of the
+     * _last_ entry (or the block precondition if we're at the first entry).
+     *
+     * Because the previous postcondition is this entry's precondition, we can
+     * piece together the Hoare triple.  We also try to manipulate the command
+     * into its representation in the model.
+     * 
+     * Supposing all of these steps worked, we can place the finished axiom
+     * into the axioms list, and put the postcondition in place to serve as the
+     * precondition for the next line.  Otherwise, our axiom list turns into a
+     * failure.
+     *)
+    let bpost, axioms =
+        List.foldBack
+            (fun vcom state ->
+                 let cmd = vcom.Command
+                 let post = vcom.Post
+                 (post, trial { let pre, axiomsR = state
+                                // If our last axiomatisation failed, this will
+                                // cause failure here.
+                                let! axioms = axiomsR
+                                let! cpair = makeAxiomConditionPair pmod pre post
+                                let! axiom = modelAxiomOnCommand pmod cpair cmd
+                                return axiom :: axioms } ))
+            block.Contents
+            (block.Pre, ok [])
+
+    (* At the end of the above, we either have a list of axioms or an
+     * error.  If we have the former, surround the axioms with the condition
+     * pair derived from the precondition and postcondition of the block.
+     *)
+    trial { let! xs = axioms
+            let! cpair = makeAxiomConditionPair pmod block.Pre bpost
+            return { Conditions = cpair
+                     Inner = xs }}
 
 /// Converts a method to a list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
 let modelAxiomsOnMethod pmod meth =
     // TODO(CaptainHayashi): method parameters
     modelAxiomsOnBlock pmod meth.Body
+    |> lift (fun c -> c.Inner)
 
 /// Converts a list of methods to a list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.

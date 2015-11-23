@@ -28,8 +28,11 @@ type Options = {
              HelpText = "Stop at collating and output the collated script.")>]
     collate: bool;
     [<Option('m',
-             HelpText = "Stop at modelling and output the model..")>]
+             HelpText = "Stop at modelling and output the model.")>]
     model: bool;
+    [<Option('f',
+             HelpText = "Stop at modelling and output the flattened model.")>]
+    flatten: bool;
 
     [<Value(0,
             MetaName = "input",
@@ -82,31 +85,44 @@ type OutputType =
     | OutputTParse
     | OutputTCollation
     | OutputTModel
+    | OutputTFlatten
 
 /// The output from a Starling run.
 type Output =
-    | OutputParse     of Starling.AST.ScriptItem list
+    | OutputParse of Starling.AST.ScriptItem list
     | OutputCollation of Starling.Collator.CollatedScript
-    | OutputModel     of Starling.Model.Model
+    | OutputModel of Starling.Model.Model
+    | OutputFlatten of Starling.Model.FlatModel
 
 let printOutput out =
     match out with
-        | OutputParse     s -> Starling.Pretty.AST.printScript s
-        | OutputCollation c -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printCollatedScript c)
-        | OutputModel     m -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printModel m)
+    | OutputParse s -> Starling.Pretty.AST.printScript s
+    | OutputCollation c -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printCollatedScript c)
+    | OutputModel m -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printPartModel m)
+    | OutputFlatten f -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printFlatModel f)
 
 (*
     Starling pipeline (here defined in reverse):
 
     1) Parse AST;
     2) Collate AST into buckets of variable, constraint, method defs;
-    3) Make model from AST;
-    4) Run proof on model.
+    3) Make model from AST, with ‘partially resolved’ (structured) axioms;
+    4) Flatten model to produce flattened axioms;
+    5) De-conditionalise model, removing if-then-else conditions in axioms;
+    6) Run proof on model.
 
     The Starling pipeline can be halted at the end of any of these
     stages, producing the various Output types above (in addition to
     just dumping the AST directly).
 *)
+
+/// Runs the model flattener and further Starling processes.
+let runStarlingFlatten modelR otype =
+    let flattenR = lift Starling.Flattener.flatten modelR
+
+    match otype with
+    | OutputTFlatten -> lift OutputFlatten flattenR
+    | _ -> fail ( SEOther "this should be unreachable!" )
 
 /// Runs the model generator and further Starling processes.
 let runStarlingModel collatedR otype =
@@ -116,12 +132,13 @@ let runStarlingModel collatedR otype =
     let om =
         match otype with
         | OutputTModel -> lift OutputModel modelR
-        | _            -> fail ( SEOther "this should be unreachable!" )
+        | _            -> runStarlingFlatten modelR otype
 
+    // This stage has the responsibility for disposing of the Z3 context.
     ignore (lift Starling.Model.disposeZ3 modelR)
     om
 
-/// Runs the collation and further Starling processes on Starling.
+/// Runs the collation and further Starling processes.
 let runStarlingCollate scriptR otype =
     // Collation cannot fail, so lift instead of bind.
     let collatedR = lift Starling.Collator.collate scriptR
@@ -144,10 +161,11 @@ let runStarling file otype =
 let otypeFromOpts opts =
     // We stop at the earliest chosen stopping point,
     // and default to the latest if no option has been given.
-    match ( opts.parse, opts.collate, opts.model ) with
-        | ( true , _    , _ ) -> OutputTParse
-        | ( false, true , _ ) -> OutputTCollation
-        | ( false, false, _ ) -> OutputTModel
+    match ( opts.parse, opts.collate, opts.model, opts.flatten ) with
+        | ( true, _, _, _ ) -> OutputTParse
+        | ( false, true, _ , _) -> OutputTCollation
+        | ( false, false, true , _) -> OutputTModel
+        | ( false, false, false , _) -> OutputTFlatten
 
 /// Runs Starling and outputs the results.
 let starlingMain opts =

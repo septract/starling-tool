@@ -178,8 +178,8 @@ let printPrim prim =
 
 /// Pretty-prints a model axiom.
 let printModelAxiom axiom =
-    printInConditionPair axiom.AConditions
-                         (angled (HSep (List.map printPrim axiom.ACommand, String ";")))
+    printInConditionPair axiom.Conditions
+                         (angled (HSep (List.map printPrim axiom.Inner, String ";")))
 
 /// Pretty-prints a part-axiom at the given indent level.
 let rec printPartAxiom axiom =
@@ -191,7 +191,7 @@ let rec printPartAxiom axiom =
                       String (expr.ToString ()) ]
                printInConditionPair outer
                                     (vsep [ String "begin block"
-                                            ivsep <| List.map printPartAxiom inner
+                                            ivsep <| List.map printPartAxiom inner.Inner
                                             String "end block" ] )
                String "end" ]
     | PAITE (expr, outer, inTrue, inFalse) ->
@@ -199,9 +199,9 @@ let rec printPartAxiom axiom =
                       String (expr.ToString ()) ]
                printInConditionPair outer
                                     (vsep [ String "begin true"
-                                            ivsep <| List.map printPartAxiom inTrue
+                                            ivsep <| List.map printPartAxiom inTrue.Inner
                                             String "end true; begin false"
-                                            ivsep <| List.map printPartAxiom inFalse
+                                            ivsep <| List.map printPartAxiom inFalse.Inner
                                             String "end false" ] )
                String "end" ]
 
@@ -210,13 +210,19 @@ let printModelConstraint c =
     keyMap [ ("View", printModelViews (c.CViews))
              ("Z3", c.CZ3.ToString () |> String) ]
 
-/// Pretty-prints a model.
-let printModel model =
+/// Pretty-prints a model given an axiom printer.
+let printModel axpp model =
     headed "Model"
            [ headed "Globals" <| List.map printModelVar (Map.toList model.Globals)
              Separator
              headed "Locals" <| List.map printModelVar (Map.toList model.Locals)
              Separator
-             headed "Constraints"  <| List.map printModelConstraint model.DefViews
+             headed "Constraints" <| List.map printModelConstraint model.DefViews
              Separator
-             headed "Axioms" <| List.map printPartAxiom model.Axioms ]
+             headed "Axioms" <| List.map axpp model.Axioms ]
+
+/// Pretty-prints a model with partially resolved axioms.
+let printPartModel = printModel printPartAxiom
+
+/// Pretty-prints a model with flattened but not fully resolved axioms.
+let printFlatModel = printModel printModelAxiom
