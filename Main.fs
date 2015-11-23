@@ -91,7 +91,7 @@ type OutputType =
 type Output =
     | OutputParse of Starling.AST.ScriptItem list
     | OutputCollation of Starling.Collator.CollatedScript
-    | OutputModel of Starling.Model.Model
+    | OutputModel of Starling.Model.PartModel
     | OutputFlatten of Starling.Model.FlatModel
 
 let printOutput out =

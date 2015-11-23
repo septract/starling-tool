@@ -19,17 +19,17 @@ let rec flatWhile model expr outer inner precom =
     // For while loops: [|P1|} assume C {|P2|}
     let p1p2 = {Conditions = {Pre = p1
                               Post = p2}
-                Inner = [precom] }
+                Inner = precom}
 
     // [|P3|] assume C [|P2|]
     let p3p2 = {Conditions = {Pre = p3
                               Post = p2}
-                Inner = [PrimAssume expr] }
+                Inner = PrimAssume expr}
 
     // [|P3|] assume ¬C [|P4|]
     let p3p4 = {Conditions = {Pre = p3
                               Post = p2}
-                Inner = [PrimAssume (model.Context.MkNot expr) ] }
+                Inner = PrimAssume (model.Context.MkNot expr) }
 
     p1p2 :: p3p2 :: p3p4 :: flatAxioms model inner.Inner
 
@@ -48,22 +48,22 @@ and flatITE model expr outer inTrue inFalse =
     // [|P1|} assume C {|P2|}
     let p1p2 = {Conditions = {Pre = p1
                               Post = p2}
-                Inner = [PrimAssume expr] }
+                Inner = PrimAssume expr }
 
     // [|P3|] id [|P6|]
     let p3p6 = {Conditions = {Pre = p3
                               Post = p6}
-                Inner = [PrimId] }
+                Inner = PrimId }
 
     // [|P1|] assume ~C [|P4|]
     let p1p4 = {Conditions = {Pre = p1
                               Post = p4}
-                Inner = [PrimAssume (model.Context.MkNot expr) ] }
+                Inner = PrimAssume (model.Context.MkNot expr) }
 
     // [|P5|] id [|P6|]
     let p5p6 = {Conditions = {Pre = p5
                               Post = p6}
-                Inner = [PrimId] }
+                Inner = PrimId }
 
     let trues = p1p2 :: p3p6 :: flatAxioms model inTrue.Inner
     let falses = p1p4 :: p5p6 :: flatAxioms model inFalse.Inner

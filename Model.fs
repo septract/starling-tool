@@ -33,9 +33,9 @@ type Var =
     | BoolVar of TVar<Z3.BoolExpr>
 
 /// A pair of conditions.
-type ConditionPair =
-    { Pre: CondView list
-      Post: CondView list }
+type ConditionPair<'v> =
+    { Pre: 'v 
+      Post: 'v }
 
 /// A modelled primitive command.
 type Prim =
@@ -50,18 +50,26 @@ type Prim =
 
 /// A general Hoare triple, consisting of precondition, inner item, and
 /// postcondition.
-type Hoare<'a> =
-    { Conditions: ConditionPair 
-      Inner: 'a }
+type Hoare<'c, 'i> =
+    { Conditions: ConditionPair<'c>
+      Inner: 'i }
 
-/// An axiom, containing a Hoare triple on an atomic action.
-type Axiom = Hoare<Prim list>
+type PartConditionPair = ConditionPair<CondView list>
+type PartHoare<'i> = Hoare<CondView list, 'i>
+
+/// A flat axiom, containing a possibly-conditional Hoare triple on a single
+/// atomic action.
+type FlatAxiom = Hoare<CondView list, Prim>
+
+/// A fully rsolved axiom, containing an unconditional Hoare triple on multiple
+/// atomic actions.
+type FullAxiom = Hoare<View list, Prim list>
 
 /// A partially resolved axiom.
 type PartAxiom =
-    | PAAxiom of Axiom
-    | PAWhile of isDo: bool * expr: Z3.BoolExpr * outer: ConditionPair * inner: Hoare<PartAxiom list>
-    | PAITE of expr: Z3.BoolExpr * outer: ConditionPair * inTrue: Hoare<PartAxiom list> * inFalse: Hoare<PartAxiom list>
+    | PAAxiom of FlatAxiom
+    | PAWhile of isDo: bool * expr: Z3.BoolExpr * outer: PartConditionPair * inner: PartHoare<PartAxiom list>
+    | PAITE of expr: Z3.BoolExpr * outer: PartConditionPair * inTrue: PartHoare<PartAxiom list> * inFalse: PartHoare<PartAxiom list>
 
 /// Extracts the outer condition pair of a part-axiom.
 let cpairOfPartAxiom pa =
@@ -70,8 +78,8 @@ let cpairOfPartAxiom pa =
     | PAWhile (outer = o) -> o
     | PAITE (outer = o) -> o
 
-/// A model of a Starling program.
-type PartModel<'g, 'l, 'a, 'c> =
+/// A parameterised model of a Starling program.
+type Model<'g, 'l, 'a, 'c> =
     { Context: Z3.Context
 
       Globals: 'g
@@ -84,18 +92,21 @@ type PartModel<'g, 'l, 'a, 'c> =
 /// A variable map
 type VarMap = Map<string, Var>
 
-/// A full model of a Starling program.
-type Model = PartModel<VarMap, VarMap, PartAxiom list, Constraint list>
+/// A partly-resolved-axiom model of a Starling program.
+type PartModel = Model<VarMap, VarMap, PartAxiom list, Constraint list>
 
 /// A flattened model of a Starling program.
-type FlatModel = PartModel<VarMap, VarMap, Axiom list, Constraint list>
+type FlatModel = Model<VarMap, VarMap, FlatAxiom list, Constraint list>
+
+/// A full model of a Starling program.
+type FullModel = Model<VarMap, VarMap, FullAxiom list, Constraint list>
 
 /// Disposes the Z3 context inside a Model.
 let disposeZ3 model = model.Context.Dispose ()
 
 /// Creates a new model that is the input model with a different axiom set.
 /// The axiom set may be of a different type.
-let withAxioms (axioms: 'y) (model: PartModel<'g, 'l, 'x, 'c>): PartModel<'g, 'l, 'y, 'c> =
+let withAxioms (axioms: 'y) (model: Model<'g, 'l, 'x, 'c>): Model<'g, 'l, 'y, 'c> =
     { Context = model.Context
       Globals = model.Globals
       Locals = model.Locals

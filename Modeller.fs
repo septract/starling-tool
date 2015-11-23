@@ -192,7 +192,7 @@ let lookupVarType env lvalue =
 
 /// Lifts a Prim to an partially resolved axiom list.
 let primToAxiom cpair prim = { Conditions = cpair
-                               Inner = [prim] }
+                               Inner = prim }
                              |> PAAxiom
 
 /// Tries to look up the type of a local variable in an axiom context.

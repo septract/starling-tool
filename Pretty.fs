@@ -179,7 +179,7 @@ let printPrim prim =
 /// Pretty-prints a model axiom.
 let printModelAxiom axiom =
     printInConditionPair axiom.Conditions
-                         (angled (HSep (List.map printPrim axiom.Inner, String ";")))
+                         (angled (printPrim axiom.Inner))
 
 /// Pretty-prints a part-axiom at the given indent level.
 let rec printPartAxiom axiom =
