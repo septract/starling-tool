@@ -87,6 +87,13 @@ let testAtomicFetch =
                                         "CAS(foo, bar, 2)"
                                         (CompareAndSwap (LVIdent "foo", LVIdent "bar", IntExp 2L)) ]
 
+let testTicketedLock =
+    testCase "Parse the ticketed lock" <|
+        fun _ -> assertParse Parser.parseScript
+                             Starling.Tests.Studies.ticketLock
+                             Starling.Tests.Studies.ticketLock
+                             Starling.Tests.Studies.ticketLockParsed
+
 [<Tests>]
 let testParser =
     testList "Test the parser" [
@@ -95,4 +102,6 @@ let testParser =
         testList "Test parsing of expressions" [
             testExpressionPrecedence ]
         testList "Test parsing of atomics" [
-            testAtomicFetch ]]
+            testAtomicFetch ]
+        testList "Test parsing of case studies" [
+            testTicketedLock ]]
