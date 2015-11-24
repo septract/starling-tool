@@ -15,6 +15,11 @@ type CondView =
     // TODO(CaptainHayashi): expand to all expressions.
     | CSetView of View
 
+/// A guarded view.
+type GuarView =
+    { GCond: Z3.BoolExpr list
+      GView: View }
+
 /// A constraint, containing a multiset of views and a Z3 predicate.
 type Constraint =
     { CViews: View list
@@ -59,11 +64,11 @@ type PartHoare<'i> = Hoare<CondView list, 'i>
 
 /// A flat axiom, containing a possibly-conditional Hoare triple on a single
 /// atomic action.
-type FlatAxiom = Hoare<CondView list, Prim>
+type FlatAxiom = PartHoare<Prim>
 
 /// A fully rsolved axiom, containing an unconditional Hoare triple on multiple
 /// atomic actions.
-type FullAxiom = Hoare<View list, Prim list>
+type FullAxiom = Hoare<GuarView list, Prim>
 
 /// A partially resolved axiom.
 type PartAxiom =
