@@ -50,9 +50,10 @@
     <Compile Include="Parser.fs" />
     <Compile Include="Pretty.fs" />
     <Compile Include="TestStudies.fs" />
-    <Compile Include="ModellerTests.fs" />
     <Compile Include="PrettyTests.fs" />
     <Compile Include="ParserTests.fs" />
+    <Compile Include="ModellerTests.fs" />
+    <Compile Include="ExpanderTests.fs" />
     <Compile Include="Main.fs" />
     <None Include="packages.config" />
     <None Include="ticketLock.cvf" />

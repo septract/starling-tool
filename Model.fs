@@ -17,7 +17,7 @@ type CondView =
 
 /// A guarded view.
 type GuarView =
-    { GCond: Z3.BoolExpr list
+    { GCond: Set<Z3.BoolExpr>
       GView: View }
 
 /// A constraint, containing a multiset of views and a Z3 predicate.
