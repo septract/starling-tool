@@ -24,3 +24,19 @@ and resolveCondViewsIn suffix ctx = concatMap (resolveCondViewIn suffix ctx)
 
 /// Resolves a full condition-view list into a guarded-view multiset.
 let resolveCondViews ctx = resolveCondViewsIn Set.empty ctx
+
+/// Expands a condition pair.
+let expandCondPair ctx cpair =
+    { Pre = resolveCondViews ctx cpair.Pre
+      Post = resolveCondViews ctx cpair.Post }
+
+/// Expands an axiom.
+let expandAxiom ctx axiom =
+    { Conditions = expandCondPair ctx axiom.Conditions
+      Inner = axiom.Inner }
+
+/// Expands a list of axioms.
+let expandAxioms ctx axioms = List.map (expandAxiom ctx) axioms
+
+/// Expands an entire model.
+let expand (model: FlatModel) = withAxioms (expandAxioms model.Context model.Axioms) model

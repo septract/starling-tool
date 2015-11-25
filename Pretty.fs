@@ -127,13 +127,30 @@ and printCondViewList cvs =
               " |]"
               (HSep (List.map printCondView cvs, String ";"))
 
+/// Pretty-prints a set of conjoined expressions.
+let printExprSet exps =
+    HSep (Set.toList exps |> List.map (fun e -> e.ToString () |> String), String "&")
 
-/// Pretty-prints something wrapped in a condition pair.
-let printInConditionPair cpair inner =
-    Surround (hsep [ printCondViewList cpair.Pre ; Nop ],
+/// Pretty-prints a guarded view.
+let printGuarView gv =
+    ssurround "("
+              ")"
+              (HSep ([ printExprSet gv.GCond
+                       printModelView gv.GView
+                     ], String ","))
+
+/// Pretty-prints a list of guar-views.
+let printGuarViewList cvs =
+    ssurround "<| "
+              " |>"
+              (HSep (List.map printGuarView cvs, String ";"))
+
+/// Pretty-prints something wrapped in a general condition pair.
+let printInConditionPair pcond cpair inner =
+    Surround (hsep [ pcond cpair.Pre ; Nop ],
               inner,
-              hsep [ Nop ; printCondViewList cpair.Post ])
-    
+              hsep [ Nop ; pcond cpair.Post ])
+
 /// Lifts a pretty-printer to optional values.
 let printOption pp ov =
     match ov with
@@ -176,20 +193,27 @@ let printPrim prim =
     | PrimAssume expr -> hsep [ String "assume"
                                 braced (String (expr.ToString ())) ]
 
+/// Pretty-prints a generic axiom.
+let printAxiom pcond axiom = printInConditionPair pcond
+                                                  axiom.Conditions
+                                                  (angled (printPrim axiom.Inner))
+
 /// Pretty-prints a model axiom.
-let printModelAxiom axiom =
-    printInConditionPair axiom.Conditions
-                         (angled (printPrim axiom.Inner))
+let printFlatAxiom = printAxiom printCondViewList
+
+/// Pretty-prints a model axiom.
+let printFullAxiom = printAxiom printGuarViewList
 
 /// Pretty-prints a part-axiom at the given indent level.
 let rec printPartAxiom axiom =
     match axiom with
-    | PAAxiom ax -> printModelAxiom ax
+    | PAAxiom ax -> printFlatAxiom ax
     | PAWhile (isDo, expr, outer, inner) ->
         vsep [ hsep [ String "begin"
                       String (if isDo then "do-while" else "while")
                       String (expr.ToString ()) ]
-               printInConditionPair outer
+               printInConditionPair printCondViewList
+                                    outer
                                     (vsep [ String "begin block"
                                             ivsep <| List.map printPartAxiom inner.Inner
                                             String "end block" ] )
@@ -197,7 +221,8 @@ let rec printPartAxiom axiom =
     | PAITE (expr, outer, inTrue, inFalse) ->
         vsep [ hsep [ String "begin if"
                       String (expr.ToString ()) ]
-               printInConditionPair outer
+               printInConditionPair printCondViewList
+                                    outer
                                     (vsep [ String "begin true"
                                             ivsep <| List.map printPartAxiom inTrue.Inner
                                             String "end true; begin false"
@@ -225,4 +250,7 @@ let printModel axpp model =
 let printPartModel = printModel printPartAxiom
 
 /// Pretty-prints a model with flattened but not fully resolved axioms.
-let printFlatModel = printModel printModelAxiom
+let printFlatModel = printModel printFlatAxiom
+
+/// Pretty-prints a model with flattened but not fully resolved axioms.
+let printFullModel = printModel printFullAxiom

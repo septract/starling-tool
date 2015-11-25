@@ -33,7 +33,9 @@ type Options = {
     [<Option('f',
              HelpText = "Stop at modelling and output the flattened model.")>]
     flatten: bool;
-
+    [<Option('e',
+             HelpText = "Stop at expanding and output the expanded model.")>]
+    expand: bool;
     [<Value(0,
             MetaName = "input",
             HelpText = "The file to load (omit, or supply -, for standard input).")>]
@@ -86,6 +88,7 @@ type OutputType =
     | OutputTCollation
     | OutputTModel
     | OutputTFlatten
+    | OutputTExpand
 
 /// The output from a Starling run.
 type Output =
@@ -93,6 +96,7 @@ type Output =
     | OutputCollation of Starling.Collator.CollatedScript
     | OutputModel of Starling.Model.PartModel
     | OutputFlatten of Starling.Model.FlatModel
+    | OutputExpand of Starling.Model.FullModel
 
 let printOutput out =
     match out with
@@ -100,6 +104,7 @@ let printOutput out =
     | OutputCollation c -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printCollatedScript c)
     | OutputModel m -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printPartModel m)
     | OutputFlatten f -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printFlatModel f)
+    | OutputExpand e -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printFullModel e)
 
 (*
     Starling pipeline (here defined in reverse):
@@ -108,7 +113,7 @@ let printOutput out =
     2) Collate AST into buckets of variable, constraint, method defs;
     3) Make model from AST, with ‘partially resolved’ (structured) axioms;
     4) Flatten model to produce flattened axioms;
-    5) De-conditionalise model, removing if-then-else conditions in axioms;
+    5) Expand conditionals in axioms into guarded axioms;
     6) Run proof on model.
 
     The Starling pipeline can be halted at the end of any of these
@@ -116,13 +121,22 @@ let printOutput out =
     just dumping the AST directly).
 *)
 
+/// Runs the model expander and further Starling processes.
+let runStarlingExpand modelR otype =
+    let expandR = lift Starling.Expander.expand modelR
+
+    match otype with
+    | OutputTExpand -> lift OutputExpand expandR
+    | _ -> fail ( SEOther "this should be unreachable!" )
+
+
 /// Runs the model flattener and further Starling processes.
 let runStarlingFlatten modelR otype =
     let flattenR = lift Starling.Flattener.flatten modelR
 
     match otype with
     | OutputTFlatten -> lift OutputFlatten flattenR
-    | _ -> fail ( SEOther "this should be unreachable!" )
+    | _ -> runStarlingExpand flattenR otype
 
 /// Runs the model generator and further Starling processes.
 let runStarlingModel collatedR otype =
@@ -161,11 +175,12 @@ let runStarling file otype =
 let otypeFromOpts opts =
     // We stop at the earliest chosen stopping point,
     // and default to the latest if no option has been given.
-    match ( opts.parse, opts.collate, opts.model, opts.flatten ) with
-        | ( true, _, _, _ ) -> OutputTParse
-        | ( false, true, _ , _) -> OutputTCollation
-        | ( false, false, true , _) -> OutputTModel
-        | ( false, false, false , _) -> OutputTFlatten
+    match (opts.parse, opts.collate, opts.model, opts.flatten, opts.expand) with
+        | ( true, _, _, _, _ ) -> OutputTParse
+        | ( false, true, _, _ , _) -> OutputTCollation
+        | ( false, false, true , _, _) -> OutputTModel
+        | ( false, false, false , true, _) -> OutputTFlatten
+        | _ -> OutputTExpand
 
 /// Runs Starling and outputs the results.
 let starlingMain opts =
