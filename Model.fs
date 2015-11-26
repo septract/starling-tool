@@ -45,7 +45,7 @@ type ConditionPair<'v> =
 /// A modelled primitive command.
 type Prim =
     | ArithFetch of dest: AST.LValue option * src: AST.LValue * mode: AST.FetchMode
-    | BoolFetch of dest: AST.LValue option * src: AST.LValue
+    | BoolFetch of dest: AST.LValue * src: AST.LValue
     | ArithCAS of dest: AST.LValue * test: AST.LValue * set: Z3.ArithExpr
     | BoolCAS of dest: AST.LValue * test: AST.LValue * set: Z3.BoolExpr
     | ArithLocalSet of dest: AST.LValue * src: Z3.ArithExpr

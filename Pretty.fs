@@ -184,7 +184,7 @@ let printLocalPrim ty dest src =
 let printPrim prim =
     match prim with
     | ArithFetch (dest, src, mode) -> printFetchPrim "arith" dest src mode
-    | BoolFetch (dest, src) -> printFetchPrim "bool" dest src Direct
+    | BoolFetch (dest, src) -> printFetchPrim "bool" (Some dest) src Direct
     | ArithCAS (dest, src, set) -> printCASPrim "arith" dest src set
     | BoolCAS (dest, src, set) -> printCASPrim "bool" dest src set
     | ArithLocalSet (dest, src) -> printLocalPrim "arith" dest src

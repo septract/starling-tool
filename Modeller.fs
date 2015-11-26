@@ -30,6 +30,27 @@ let rec flattenLV v =
     | LVIdent s -> s
     | LVPtr vv -> "*" + flattenLV vv
 
+/// Creates a reference to a Boolean lvalue.
+/// This does NOT check to see if the lvalue exists!
+let mkBoolLV (ctx: Context) lv =
+    (* TODO(CaptainHayashi): when we support pointers, this will
+     *                       need totally changing.
+     *)
+    lv
+    |> flattenLV
+    |> ctx.MkBoolConst
+
+/// Creates a reference to an integer lvalue.
+/// This does NOT check to see if the lvalue exists!
+let mkIntLV (ctx: Context) lv =
+    (* TODO(CaptainHayashi): when we support pointers, this will
+     *                       need totally changing.
+     *)
+    lv
+    |> flattenLV
+    |> ctx.MkIntConst
+
+
 /// Makes an And out of a pair of two expressions.
 let mkAnd2 (ctx: Context) (l, r) = ctx.MkAnd [| l; r |]
 /// Makes an Or out of a pair of two expressions.
@@ -253,7 +274,7 @@ let rec modelPrimOnAtomic pmod atom =
                 match dtype, stype, mode with
                 | Int, Int, _ -> return ArithFetch (Some dest, src, mode)
                 // For Booleans we cannot have a fetch mode other than Direct.
-                | Bool, Bool, Direct -> return BoolFetch (Some dest, src)
+                | Bool, Bool, Direct -> return BoolFetch (dest, src)
                 | Bool, Bool, Increment -> return! fail <| AEUnsupportedAtomic (atom, "cannot increment a Boolean global")
                 | Bool, Bool, Decrement -> return! fail <| AEUnsupportedAtomic (atom, "cannot decrement a Boolean global")
                 | _ -> return! fail <| AETypeMismatch (dtype, src, stype) }
