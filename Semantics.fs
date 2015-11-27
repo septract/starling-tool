@@ -11,14 +11,6 @@ open Starling.Modeller
 // Atomic emitters
 //
 
-/// Finds the variable of a LValue.
-let rec varOfLValue lv =
-    // TODO(CaptainHayashi): this approach is only sound when we don't
-    // allow pointer lvalues.
-    match lv with
-    | LVIdent a -> a
-    | LVPtr lp -> varOfLValue lp
-
 /// Substitutes the before version of a variable in an expression.
 /// Returns the expression unchanged if the requested variable does not
 /// exist.
