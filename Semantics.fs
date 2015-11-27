@@ -11,6 +11,33 @@ open Starling.Modeller
 // Atomic emitters
 //
 
+/// Returns all of the exprs in es that are contained inside the expression e.
+let rec exprsInExpr es (e: Expr): Set<Expr> =
+    // Is this expression the same as any expressions in es?
+    let self = es
+               |> Set.filter e.Equals
+    // Are any of the expressions inside e the same?
+    let inner = e.Args
+                |> Set.ofArray
+                |> unionMap (exprsInExpr es)
+    self + inner
+
+/// Extracts the post-states of the given environment.
+let aftersOfEnv map =
+    map
+    |> Map.toSeq
+    |> Seq.map (snd >> fun v -> v.VarPostExpr)
+    |> Set.ofSeq
+
+/// Extracts all the post-state variables in the model.
+let aftersInModel model =
+    let g = aftersOfEnv model.Globals
+    let l = aftersOfEnv model.Locals
+    g + l
+     
+/// For a given expression, finds all the bound post-state variables.
+let aftersInExpr model = exprsInExpr (aftersInModel model)
+
 /// Substitutes the before version of a variable in an expression.
 /// Returns the expression unchanged if the requested variable does not
 /// exist.

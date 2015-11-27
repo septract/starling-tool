@@ -413,10 +413,8 @@ let modelAxioms pmod methods =
     |> collect
     |> lift List.concat
 
-/// Converts a collated script to a model.
-let model collated =
-    let ctx = new Context ()
-
+/// Converts a collated script to a model with the given context.
+let modelWith ctx collated =
     trial {
         let! globals = mapMessages MEVar (modelVarList ctx collated.CGlobals)
         let! locals = mapMessages MEVar (modelVarList ctx collated.CLocals)
@@ -434,3 +432,7 @@ let model collated =
 
         return (withAxioms axioms pmod)
     }
+
+/// Converts a collated script to a model.
+let model = modelWith (new Context ())
+    

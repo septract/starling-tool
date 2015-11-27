@@ -3,6 +3,7 @@ module Starling.Tests.Studies
 
 open Starling
 open Starling.AST
+open Starling.Model
 open Starling.Collator
 
 /// The raw form of the ticketed lock.
@@ -154,4 +155,96 @@ let ticketLockCollated =
           [ ticketLockLockMethodAST
             ticketLockUnlockMethodAST ] }
 
-
+/// The model of a ticketed lock method.
+/// Takes an existing Z3 context.
+let ticketLockModel ctx =
+    {Context = ctx
+     Globals =
+         Map.ofList [ ("serving",
+                       IntVar {VarExpr = ctx.MkIntConst "serving"
+                               VarPreExpr = ctx.MkIntConst "serving!before"
+                               VarPostExpr = ctx.MkIntConst "serving!after"
+                               VarFrameExpr = ctx.MkIntConst "serving!r"} )
+                      ("ticket",
+                       IntVar {VarExpr = ctx.MkIntConst "ticket"
+                               VarPreExpr = ctx.MkIntConst "ticket!before"
+                               VarPostExpr = ctx.MkIntConst "ticket!after"
+                               VarFrameExpr = ctx.MkIntConst "ticket!r"} ) ]
+     Locals =
+         Map.ofList [ ("s",
+                       IntVar {VarExpr = ctx.MkIntConst "s"
+                               VarPreExpr = ctx.MkIntConst "s!before"
+                               VarPostExpr = ctx.MkIntConst "s!after"
+                               VarFrameExpr = ctx.MkIntConst "s!r"} )
+                      ("t",
+                       IntVar {VarExpr = ctx.MkIntConst "t"
+                               VarPreExpr = ctx.MkIntConst "t!before"
+                               VarPostExpr = ctx.MkIntConst "t!after"
+                               VarFrameExpr = ctx.MkIntConst "t!r"} ) ]
+     Axioms =
+         [PAAxiom {Conditions = {Pre = [CSetView {VName = "holdLock"
+                                                  VParams = []} ]
+                                 Post = [CSetView {VName = "holdTick";
+                                                   VParams = ["t"]} ] }
+                   Inner = ArithFetch (Some (LVIdent "t"),
+                                       LVIdent "ticket",
+                                       Increment) }
+          PAWhile (true,
+                   ctx.MkEq (ctx.MkIntConst "s",
+                             ctx.MkIntConst "t"),
+                   {Pre = []
+                    Post = [CSetView {VName = "holdLock"
+                                      VParams = [] } ] },
+                   {Conditions = {Pre = [CSetView {VName = "holdTick"
+                                                   VParams = ["t"] } ]
+                                  Post = [CITEView (ctx.MkEq (ctx.MkIntConst "s",
+                                                              ctx.MkIntConst "t"),
+                                                    [CSetView {VName = "holdLock"
+                                                               VParams = [] } ],
+                                                    [CSetView {VName = "holdTick"
+                                                               VParams = ["t"] } ] ) ] }
+                    Inner =
+                        [PAAxiom {Conditions = {Pre = [CSetView {VName = "holdTick"
+                                                                 VParams = ["t"] } ]
+                                                Post = [CITEView (ctx.MkEq (ctx.MkIntConst "s",
+                                                                            ctx.MkIntConst "t"),
+                                                                  [CSetView {VName = "holdLock"
+                                                                             VParams = [] } ],
+                                                                  [CSetView {VName = "holdTick"
+                                                                             VParams = ["t"] } ] ) ] }
+                                  Inner = ArithFetch (Some (LVIdent "s"),
+                                                      LVIdent "serving",
+                                                      Direct) } ] } )
+          PAAxiom {Conditions = {Pre = [CSetView {VName = "holdLock"
+                                                  VParams = [] } ]
+                                 Post = [] }
+                   Inner = ArithFetch (None,
+                                       LVIdent "serving",Increment) } ]
+     DefViews =
+      [ {CViews = []
+         CZ3 = ctx.MkGe (ctx.MkIntConst "ticket",
+                         ctx.MkIntConst "serving") }
+        {CViews = [ {VName = "holdTick"
+                     VParams = ["t"] } ]
+         CZ3 = ctx.MkGt (ctx.MkIntConst "ticket",
+                         ctx.MkIntConst "t") }
+        {CViews = [ {VName = "holdLock"
+                     VParams = [] } ]
+         CZ3 = ctx.MkGt (ctx.MkIntConst "ticket",
+                         ctx.MkIntConst "serving") }
+        {CViews = [ {VName = "holdLock"
+                     VParams = [] }
+                    {VName = "holdTick"
+                     VParams = ["t"] } ]
+         CZ3 = ctx.MkNot (ctx.MkEq (ctx.MkIntConst "serving",
+                                    ctx.MkIntConst "t")) }
+        {CViews = [ {VName = "holdTick"
+                     VParams = ["t"] }
+                    {VName = "holdTick"
+                     VParams = ["t"] } ]
+         CZ3 = ctx.MkFalse () }
+        {CViews = [ {VName = "holdLock"
+                     VParams = [] }
+                    {VName = "holdLock"
+                     VParams = [] } ]
+         CZ3 = ctx.MkFalse () } ] }
