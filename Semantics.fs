@@ -170,20 +170,12 @@ let makeArithFetch model dest src mode =
     (* We have to use Some and List.collect to ensure that the term
      * for dest is only included if there actually _is_ a dest.
      *)
-    let terms = [// If dest exists, create dest!after = src!before.
-                 Option.map (makeRel model srcE) destE
-                 // Create src!after = F(src!before), where F is
-                 // defined by the fetch mode.
-                 makeFetchUpdate model srcE mode |> Some]
-                |> List.choose id
-
-    // The variables whose post-states are bound are src, and, if
-    // present, dest.
-    let vars = [Option.map flattenLV dest
-                Some <| flattenLV src]
-               |> List.choose id
-
-    (terms, new Set<string> (vars))
+    [// If dest exists, create dest!after = src!before.
+     Option.map (makeRel model srcE) destE
+     // Create src!after = F(src!before), where F is
+     // defined by the fetch mode.
+     makeFetchUpdate model srcE mode |> Some]
+    |> List.choose id
 
 /// Emits a Boolean fetch.
 let makeBoolFetch model dest src =
@@ -195,10 +187,8 @@ let makeBoolFetch model dest src =
     let destE = mkBoolLV ctx dest
     let srcE = mkBoolLV ctx src
 
-    ( [makeRel model srcE destE
-       makeNoChange model srcE],
-      new Set<string> ( [flattenLV dest
-                         flattenLV src] ))
+    [makeRel model srcE destE
+     makeNoChange model srcE]
 
 /// Emits Z3 corresponding to a prim.
 /// The result is a pair of the Z3 emission, and the set of names of
@@ -209,19 +199,15 @@ let emitPrim model prim =
     | ArithFetch (dest, src, mode) -> makeArithFetch model dest src mode
     | BoolFetch (dest, src) -> makeBoolFetch model dest src
     | ArithCAS (dest, test, set) ->
-        (makeCAS model
-                 (mkIntLV ctx dest :> Expr)
-                 (mkIntLV ctx test :> Expr)
-                 set,
-         new Set<string> ( [ flattenLV dest
-                             flattenLV test ] ))
+        makeCAS model
+                (mkIntLV ctx dest :> Expr)
+                (mkIntLV ctx test :> Expr)
+                set
     | BoolCAS (dest, test, set) ->
-        (makeCAS model
-                 (mkBoolLV ctx dest :> Expr)
-                 (mkBoolLV ctx test :> Expr)
-                 set,
-         new Set<string> ( [ flattenLV dest
-                             flattenLV test ] ))
+        makeCAS model
+                (mkBoolLV ctx dest :> Expr)
+                (mkBoolLV ctx test :> Expr)
+                set
     | ArithLocalSet (dest, srcE) ->
         (* By the meta-theory, this and BoolLocalSet can be modelled
          * similarly to atomic fetches.
@@ -230,16 +216,13 @@ let emitPrim model prim =
          *)
         let ctx = model.Context
         let destE = mkIntLV ctx dest
-        ( [makeRel model srcE destE],
-          new Set<string> ( [ flattenLV dest ] ))
+        [makeRel model srcE destE]
     | BoolLocalSet (dest, srcE) ->
         let ctx = model.Context
         let destE = mkBoolLV ctx dest
-        ( [makeRel model srcE destE],
-          new Set<string> ( [ flattenLV dest ] ))
+        [makeRel model srcE destE]
     | PrimId ->
-        ( [ctx.MkTrue ()], Set.empty)
+        [ctx.MkTrue ()]
     | PrimAssume (assumption) ->
         // Assumes always only refer to the pre-state.
-        ( [subAllInModel model envVarToBefore (assumption :> Expr) :?> BoolExpr],
-          Set.empty)
+        [subAllInModel model envVarToBefore (assumption :> Expr) :?> BoolExpr]
