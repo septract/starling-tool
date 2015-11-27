@@ -226,3 +226,19 @@ let emitPrim model prim =
     | PrimAssume (assumption) ->
         // Assumes always only refer to the pre-state.
         [subAllInModel model envVarToBefore (assumption :> Expr) :?> BoolExpr]
+
+/// Generates a frame for a given expression.
+/// The frame is a relation a!after = a!before for every a not mentioned in the expression.
+let frame model expr =
+    let afts = aftersNotInExpr model expr
+    let vars = Seq.append (Map.toSeq model.Globals)
+                          (Map.toSeq model.Locals)
+
+    // TODO(CaptainHayashi): this is fairly inefficient.
+    vars
+    |> Seq.map (snd >> eraseVar)
+       // ^ Get a sequence of all untyped variable records...
+    |> Seq.filter (fun v -> Set.contains v.VarPostExpr afts)
+       // ^ ... then find the ones that are not bound after the expr...
+    |> Seq.map (fun v -> makeNoChange model v.VarExpr)
+       // ^ ... then prepare v!after = v!before records for them.
