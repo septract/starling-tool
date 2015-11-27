@@ -242,3 +242,23 @@ let frame model expr =
        // ^ ... then find the ones that are not bound after the expr...
     |> Seq.map (fun v -> makeNoChange model v.VarExpr)
        // ^ ... then prepare v!after = v!before records for them.
+
+/// Translate a Prim to an expression completely characterising it.
+/// This is the combination of the Prim's action (via emitPrim) and
+/// a set of framing terms forcing unbound variables to remain constant
+/// (through frame).
+let semanticsOf model prim =
+    let ctx = model.Context
+    let actions = emitPrim model prim
+
+    // Temporarily build an And so we can check it with frame.
+    // TODO(CaptainHayashi): eliminate this round-trip?
+    let actionsAnd = actions |> List.toArray
+    let aframe = frame model (ctx.MkAnd actionsAnd)
+
+    let toAnd = actions
+                |> Seq.ofList
+                |> Seq.append aframe
+                |> Seq.toArray
+
+    ctx.MkAnd toAnd
