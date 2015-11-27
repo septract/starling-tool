@@ -11,6 +11,18 @@ open Starling.Modeller
 // Atomic emitters
 //
 
+/// Erases the type information in a Var.
+let eraseVar tv =
+    match tv with
+    | IntVar iv -> { VarExpr = iv.VarExpr :> Expr
+                     VarPreExpr = iv.VarPreExpr :> Expr
+                     VarPostExpr = iv.VarPostExpr :> Expr
+                     VarFrameExpr = iv.VarFrameExpr :> Expr }
+    | BoolVar bv -> { VarExpr = bv.VarExpr :> Expr
+                      VarPreExpr = bv.VarPreExpr :> Expr
+                      VarPostExpr = bv.VarPostExpr :> Expr
+                      VarFrameExpr = bv.VarFrameExpr :> Expr }
+
 /// Returns all of the exprs in es that are contained inside the expression e.
 let rec exprsInExpr es (e: Expr): Set<Expr> =
     // Is this expression the same as any expressions in es?
@@ -26,7 +38,7 @@ let rec exprsInExpr es (e: Expr): Set<Expr> =
 let aftersOfEnv map =
     map
     |> Map.toSeq
-    |> Seq.map (snd >> fun v -> v.VarPostExpr)
+    |> Seq.map (snd >> eraseVar >> fun v -> v.VarPostExpr)
     |> Set.ofSeq
 
 /// Extracts all the post-state variables in the model.
@@ -38,29 +50,27 @@ let aftersInModel model =
 /// For a given expression, finds all the bound post-state variables.
 let aftersInExpr model = exprsInExpr (aftersInModel model)
 
+/// For a given expression, finds all the unbound post-state variables.
+let aftersNotInExpr model expr =
+    aftersInModel model - aftersInExpr model expr
+
+/// Substitutes a different version of a variable in an expression.
+/// Returns the expression unchanged if the requested variable does not
+/// exist.
+let envVarTo sel env (expr: #Expr) var =
+    lookupVar env var
+    |> either (fst >> eraseVar >> fun v -> expr.Substitute (v.VarExpr, sel v))
+              (fun _ -> expr :> Expr)
+
 /// Substitutes the before version of a variable in an expression.
 /// Returns the expression unchanged if the requested variable does not
 /// exist.
-let envVarToBefore env (expr: #Expr) var =
-    lookupVar env var
-    |> either (function
-               | (IntVar iv, _) -> expr.Substitute (iv.VarExpr :> Expr,
-                                                    iv.VarPreExpr :> Expr)
-               | (BoolVar iv, _) -> expr.Substitute (iv.VarExpr :> Expr,
-                                                     iv.VarPreExpr :> Expr))
-              (fun _ -> expr :> Expr)
+let envVarToBefore = envVarTo (fun v -> v.VarPreExpr)
 
 /// Substitutes the after version of a variable in an expression.
 /// Returns the expression unchanged if the requested variable does not
 /// exist.
-let envVarToAfter env (expr: #Expr) var =
-    lookupVar env var
-    |> either (function
-               | (IntVar iv, _) -> expr.Substitute (iv.VarExpr :> Expr,
-                                                    iv.VarPostExpr :> Expr)
-               | (BoolVar iv, _) -> expr.Substitute (iv.VarExpr :> Expr,
-                                                     iv.VarPostExpr :> Expr))
-              (fun _ -> expr :> Expr)
+let envVarToAfter = envVarTo (fun v -> v.VarPostExpr)
 
 /// Performs the given substitution for all variables in the
 /// given sequence.
