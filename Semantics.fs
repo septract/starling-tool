@@ -123,10 +123,10 @@ let makeCAS model destE testE setE =
     let failSem = mkAnd2 ctx (succDest, succTest)
     let failure = ctx.MkImplies (failCond, failSem)
 
-    ctx.MkAnd [|success
-                failure
-                // This models set!after = set!before.
-                makeNoChange model setE|]
+    [success
+     failure
+     // This models set!after = set!before.
+     makeNoChange model setE]
 
 /// Emits an arithmetic fetch.
 let makeArithFetch model dest src mode =
@@ -147,7 +147,6 @@ let makeArithFetch model dest src mode =
                  // defined by the fetch mode.
                  makeFetchUpdate model srcE mode |> Some]
                 |> List.choose id
-                |> List.toArray
 
     // The variables whose post-states are bound are src, and, if
     // present, dest.
@@ -155,7 +154,7 @@ let makeArithFetch model dest src mode =
                 Some <| flattenLV src]
                |> List.choose id
 
-    (ctx.MkAnd terms, new Set<string> (vars))
+    (terms, new Set<string> (vars))
 
 /// Emits a Boolean fetch.
 let makeBoolFetch model dest src =
@@ -167,10 +166,10 @@ let makeBoolFetch model dest src =
     let destE = mkBoolLV ctx dest
     let srcE = mkBoolLV ctx src
 
-    ( ctx.MkAnd [|makeRel model srcE destE
-                  makeNoChange model srcE|],
-      new Set<string> ( [ flattenLV dest
-                          flattenLV src ] ))
+    ( [makeRel model srcE destE
+       makeNoChange model srcE],
+      new Set<string> ( [flattenLV dest
+                         flattenLV src] ))
 
 /// Emits Z3 corresponding to a prim.
 /// The result is a pair of the Z3 emission, and the set of names of
@@ -202,16 +201,16 @@ let emitPrim model prim =
          *)
         let ctx = model.Context
         let destE = mkIntLV ctx dest
-        (makeRel model srcE destE,
-         new Set<string> ( [ flattenLV dest ] ))
+        ( [makeRel model srcE destE],
+          new Set<string> ( [ flattenLV dest ] ))
     | BoolLocalSet (dest, srcE) ->
         let ctx = model.Context
         let destE = mkBoolLV ctx dest
-        (makeRel model srcE destE,
-         new Set<string> ( [ flattenLV dest ] ))
+        ( [makeRel model srcE destE],
+          new Set<string> ( [ flattenLV dest ] ))
     | PrimId ->
-        (ctx.MkTrue (), Set.empty)
+        ( [ctx.MkTrue ()], Set.empty)
     | PrimAssume (assumption) ->
         // Assumes always only refer to the pre-state.
-        (subAllInModel model envVarToBefore (assumption :> Expr) :?> BoolExpr,
-         Set.empty)
+        ( [subAllInModel model envVarToBefore (assumption :> Expr) :?> BoolExpr],
+          Set.empty)
