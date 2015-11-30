@@ -5,6 +5,7 @@ open System
 open FParsec
 open Chessie.ErrorHandling
 
+open Starling.Var
 open Starling.AST
 
 // Manually re-overload some FParsec operators Chessie overloaded.

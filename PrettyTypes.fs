@@ -52,7 +52,7 @@ let rec printLevel level cmd =
                       + lnIndent level
     | Separator ->
         "----" + lnIndent level
-    | String s -> s
+    | String s -> s.Replace ("\n", lnIndent level)
     | Surround (left, (VSep (cmds, _) as mid), right) ->
         printLevel level left
         + lnIndent level

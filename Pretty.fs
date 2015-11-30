@@ -2,11 +2,13 @@ module Starling.Pretty.Misc
 
 open Microsoft
 open Starling
+open Starling.Var
 open Starling.AST
 open Starling.Collator
 open Starling.Model
 open Starling.Modeller
 open Starling.Errors.Modeller
+open Starling.Errors.Var
 open Starling.Pretty.AST
 open Starling.Pretty.Types
 
@@ -35,28 +37,38 @@ let printViewError ve =
     | VEUnsupported (view, reason) ->
         "view '" + printView view + "' not supported: " + reason
 
+/// Pretty-prints variable conversion errors.
+let printVarMapError ve =
+    match ve with
+    | VMEDuplicate vn -> "variable '" + vn + "' is defined multiple times"
+    | VMENotFound vn -> "variable '" + vn + "' not in environment"
+
+/// Pretty-prints viewdef conversion errors.
+let printViewDefError ve =
+    match ve with
+    | VDENoSuchView name ->
+        "no view prototype for " + name
+    | VDEBadParamCount (name, expected, actual) ->
+        let exps = sprintf "%d" expected
+        let acts = sprintf "%d" actual
+        "view '" + name + "' expects " + exps
+                        + "params, but is given " + acts
+    | VDEBadVars vme ->
+        "view variable inconsistency: " + printVarMapError vme
+    | VDEGlobalVarConflict vme ->
+        "view variables conflict with globals: " + printVarMapError vme
+
 /// Pretty-prints constraint conversion errors.
 let printConstraintError ce =
     match ce with
-    | CEView ve -> printViewError ve
+    | CEView ve -> printViewDefError ve
     | CEExpr ee -> printExprError ee
-
-/// Pretty-prints variable conversion errors.
-let printVarError ve =
-    match ve with
-    | VEDuplicate vn -> "variable '" + vn + "' is defined multiple times"
-
-/// Pretty-prints lookup errors.
-let printLookupError le =
-    match le with
-    | LENotFound s -> "variable " + s + " referenced but not declared"
-    | LEBadLValue l -> "FIXME: " + printLValue l + " is not a variable and is unsupported"
 
 /// Pretty-prints axiom errors.
 let printAxiomError ae =
     match ae with
-    | AEBadGlobal le -> "error resolving global: " + printLookupError le
-    | AEBadLocal le -> "error resolving local: " + printLookupError le
+    | AEBadGlobal le -> "error resolving global: " + printVarMapError le
+    | AEBadLocal le -> "error resolving local: " + printVarMapError le
     | AEBadExpr ee -> "bad expression in axiom: " + printExprError ee
     | AEBadView ve -> "bad view in axiom: " + printViewError ve
     | AETypeMismatch (expected, badvar, got) ->
@@ -81,7 +93,7 @@ let printViewProtoError vpe =
 let printModelError ce =
     match ce with
     | MEConstraint ce -> printConstraintError ce
-    | MEVar ve -> printVarError ve
+    | MEVar ve -> printVarMapError ve
     | MEAxiom ae -> printAxiomError ae
     | MEVProto vpe -> printViewProtoError vpe
 
@@ -214,7 +226,10 @@ let printFlatAxiom = printHoare printCondViewList printPrim
 let printFullAxiom = printHoare printGuarViewList printPrim
 
 /// Pretty-prints a semantically translated axiom.
-let printSemAxiom (ax: SemAxiom) = printHoare printGuarViewList printZ3Exp ax
+let printSemAxiom (ax: SemAxiom) =
+    printHoare printGuarViewList
+               (printZ3Exp >> Indent >> Seq.singleton >> Seq.toList >> vsep)
+               ax
 
 /// Pretty-prints a part-axiom at the given indent level.
 let rec printPartAxiom axiom =

@@ -3,6 +3,7 @@ module Starling.Tests.Parser
 open Fuchu
 open FParsec
 open Starling
+open Starling.Var
 open Starling.AST
 
 /// Assertion that parsing `concrete` with parser `pp` gets the AST `ast`.

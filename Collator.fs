@@ -3,6 +3,7 @@
 module Starling.Collator
 
 open Starling.AST
+open Starling.Var
 
 /// A script whose items have been partitioned by type.
 type CollatedScript =

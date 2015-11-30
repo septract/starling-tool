@@ -4,6 +4,7 @@ open Chessie.ErrorHandling  // ok
 open Fuchu                  // general test framework
 open Microsoft.Z3           // anything involving ctx
 open Starling
+open Starling.Var
 open Starling.AST
 open Starling.Model
 open Starling.Tests.Studies
@@ -51,14 +52,14 @@ let testModelVarListNoDuplicates ctx =
     testList "Test modelling of variables forbids duplicates"
         [ testCase "Forbid duplicate with same type"
           <| fun _ -> Assert.Equal ("bool foo; bool foo -> error",
-                                    fail <| Starling.Errors.Modeller.VEDuplicate "foo",
-                                    Starling.Modeller.modelVarList ctx [ (Bool, "foo")
-                                                                         (Bool, "foo") ])
+                                    fail <| Starling.Errors.Var.VMEDuplicate "foo",
+                                    Starling.Var.makeVarMap ctx [ (Bool, "foo")
+                                                                  (Bool, "foo") ])
           testCase "Forbid duplicate with different type"
           <| fun _ -> Assert.Equal ("bool foo; int foo -> error",
-                                    fail <| Starling.Errors.Modeller.VEDuplicate "foo",
-                                    Starling.Modeller.modelVarList ctx [ (Bool, "foo")
-                                                                         (Int, "foo") ])
+                                    fail <| Starling.Errors.Var.VMEDuplicate "foo",
+                                    Starling.Var.makeVarMap ctx [ (Bool, "foo")
+                                                                  (Int, "foo") ])
         ]
 
 let testModelVars ctx =

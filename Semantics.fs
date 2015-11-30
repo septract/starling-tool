@@ -3,6 +3,7 @@ module Starling.Semantics
 
 open Microsoft.Z3
 open Chessie.ErrorHandling
+open Starling.Var
 open Starling.AST
 open Starling.Model
 open Starling.Modeller
@@ -10,18 +11,6 @@ open Starling.Modeller
 //
 // Atomic emitters
 //
-
-/// Erases the type information in a Var.
-let eraseVar tv =
-    match tv with
-    | IntVar iv -> { VarExpr = iv.VarExpr :> Expr
-                     VarPreExpr = iv.VarPreExpr :> Expr
-                     VarPostExpr = iv.VarPostExpr :> Expr
-                     VarFrameExpr = iv.VarFrameExpr :> Expr }
-    | BoolVar bv -> { VarExpr = bv.VarExpr :> Expr
-                      VarPreExpr = bv.VarPreExpr :> Expr
-                      VarPostExpr = bv.VarPostExpr :> Expr
-                      VarFrameExpr = bv.VarFrameExpr :> Expr }
 
 /// Returns all of the exprs in es that are contained inside the expression e.
 let rec exprsInExpr es (e: Expr): Set<Expr> =

@@ -5,6 +5,7 @@ open Microsoft.Z3
 
 open Chessie.ErrorHandling
 
+open Starling.Var
 open Starling.AST
 open Starling.Collator
 open Starling.Model
@@ -13,43 +14,13 @@ open Starling.Errors.Modeller
 /// Tries to flatten a view definition AST into a multiset.
 let rec viewDefToSet vast =
     match vast with
-    | DFunc (s, pars) -> ok [ { VName = s; VParams = pars } ]
-    | DUnit -> ok []
+    | DFunc (s, pars) -> [ { VName = s; VParams = pars } ]
+    | DUnit -> []
     | DJoin (l, r) -> joinViewDefs l r
 /// Merges two sides of a view monoid in the AST into one multiset.
 and joinViewDefs l r =
-    lift2 (fun l r -> List.concat [ l; r ])
-          (viewDefToSet l)
-          (viewDefToSet r)
-
-/// Flattens a LV to a string.
-let rec flattenLV v =
-    // TODO(CaptainHayashi): this is completely wrong, but we don't
-    // have a semantics for it yet.
-    match v with
-    | LVIdent s -> s
-    //| LVPtr vv -> "*" + flattenLV vv
-
-/// Creates a reference to a Boolean lvalue.
-/// This does NOT check to see if the lvalue exists!
-let mkBoolLV (ctx: Context) lv =
-    (* TODO(CaptainHayashi): when we support pointers, this will
-     *                       need totally changing.
-     *)
-    lv
-    |> flattenLV
-    |> ctx.MkBoolConst
-
-/// Creates a reference to an integer lvalue.
-/// This does NOT check to see if the lvalue exists!
-let mkIntLV (ctx: Context) lv =
-    (* TODO(CaptainHayashi): when we support pointers, this will
-     *                       need totally changing.
-     *)
-    lv
-    |> flattenLV
-    |> ctx.MkIntConst
-
+     List.concat [viewDefToSet l
+                  viewDefToSet r]
 
 /// Makes an And out of a pair of two expressions.
 let mkAnd2 (ctx: Context) (l, r) = ctx.MkAnd [| l; r |]
@@ -101,10 +72,51 @@ and arithExprToZ3 (ctx: Context) expr =
     | SubExp (l, r) -> chainArithExprs ctx (mkSub2 ctx) (l, r)
     | _ -> fail <| EEBadAST (expr, "cannot be an arithmetic expression")
 
+/// Merges a list of prototype and definition parameters into one environment,
+/// binding the types from the former to the names from the latter.
+let funcViewEnvMerge ctx ppars dpars =
+    List.map2
+        (fun (ty, _) name -> (name, makeVar ctx ty name))
+        ppars
+        dpars
+    |> Map.ofList
+
+/// Produces the environment created by interpreting the functional view with
+/// name name and params dpars, using the view prototype map vpm.
+let envOfFuncViewDef ctx vpm name dpars =
+    // Does this functional view name a proper view?
+    match Map.tryFind name vpm with
+    | Some ppars ->
+        // Does it have the correct number of parameters?
+        let ldpars = List.length dpars
+        let lppars = List.length ppars
+        if ldpars <> lppars
+        then fail <| VDEBadParamCount (name, lppars, ldpars)
+        else ok <| funcViewEnvMerge ctx ppars dpars
+    | None -> fail <| VDENoSuchView name
+
+     
+
+/// Produces the environment created by interpreting the viewdef vd using the
+/// view prototype map vpm.
+let rec envOfViewDef ctx vpm vd =
+    match vd with
+    | DUnit -> ok Map.empty
+    | DFunc (v, pars) -> envOfFuncViewDef ctx vpm v pars
+    | DJoin (l, r) -> trial {let! lE = envOfViewDef ctx vpm l
+                             let! rE = envOfViewDef ctx vpm r
+                             return! combineMaps lE rE |> mapMessages VDEBadVars}
+
+/// Produces the variable environment for the constraint c.
+let envOfConstraint model c =
+    envOfViewDef model.Context model.VProtos c.CView
+    |> bind (combineMaps model.Globals >> mapMessages VDEGlobalVarConflict)
+
 /// Converts a single constraint to Z3.
 let modelConstraint model c =
     let ctx = model.Context
-    trial { let! v = mapMessages CEView (viewDefToSet c.CView)
+    trial { let! e = mapMessages CEView (envOfConstraint model c)
+            let v = viewDefToSet c.CView
             let! c = mapMessages CEExpr (boolExprToZ3 ctx c.CExpression)
             return { CViews = v; CZ3 = c }}
 
@@ -112,45 +124,6 @@ let modelConstraint model c =
 /// Model.Constraint.
 let modelConstraints model cs =
     List.map (modelConstraint model) cs.CConstraints |> collect
-
-//
-// Name rewrites
-//
-
-/// Rewrites the name of a constant to its pre-state form.
-let rewritePre name = name + "!before"
-
-/// Rewrites the name of a constant to its post-state form.
-let rewritePost name = name + "!after"
-
-/// Rewrites the name of a constant to its frame form.
-let rewriteFrame name = name + "!r"
-
-
-/// Converts a variable name and type to a Var.
-let makeVar (ctx : Context) ty (name : string) =
-    match ty with
-    | Int ->
-        IntVar { VarExpr = ctx.MkIntConst name
-                 VarPreExpr = ctx.MkIntConst (rewritePre name)
-                 VarPostExpr = ctx.MkIntConst (rewritePost name)
-                 VarFrameExpr = ctx.MkIntConst (rewriteFrame name) }
-    | Bool ->
-        BoolVar { VarExpr = ctx.MkBoolConst name
-                  VarPreExpr = ctx.MkBoolConst (rewritePre name)
-                  VarPostExpr = ctx.MkBoolConst (rewritePost name)
-                  VarFrameExpr = ctx.MkBoolConst (rewriteFrame name) }
-
-/// Converts a AST variable list to Var record lists.
-let modelVarList (ctx : Context) lst =
-    let names = List.map snd lst
-    match (findDuplicates names) with
-    | [] -> ok <| List.foldBack
-                    (fun (ty, name) (map: VarMap) ->
-                         map.Add (name, makeVar ctx ty name))
-                    lst
-                    Map.empty
-    | ds -> Bad <| List.map VEDuplicate ds
 
 //
 // View applications
@@ -188,22 +161,6 @@ let makeConditionPair ctx preAst postAst =
 //
 // Axioms
 //
-
-/// Retrieves the type of a Var.
-let varType var =
-    match var with
-    | IntVar _ -> Int
-    | BoolVar _ -> Bool
-
-/// Looks up a variable record in an environment.
-let lookupVar env lvalue =
-    match lvalue with
-    | LVIdent s -> Map.tryFind s env |> failIfNone (LENotFound s)
-    //| _ -> LEBadLValue lvalue |> fail
-
-/// Looks up a variable's type in an environment.
-let lookupVarType env lvalue =
-    lookupVar env lvalue |> lift varType
 
 /// Lifts a Prim to an partially resolved axiom list.
 let primToAxiom cpair prim = { Conditions = cpair
@@ -432,8 +389,8 @@ let modelViewProtos protos =
 let modelWith ctx collated =
     trial {
         let! vprotos = mapMessages MEVProto (modelViewProtos collated.CVProtos)
-        let! globals = mapMessages MEVar (modelVarList ctx collated.CGlobals)
-        let! locals = mapMessages MEVar (modelVarList ctx collated.CLocals)
+        let! globals = mapMessages MEVar (makeVarMap ctx collated.CGlobals)
+        let! locals = mapMessages MEVar (makeVarMap ctx collated.CLocals)
 
         let imod = { Context = ctx
                      Globals = globals

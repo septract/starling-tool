@@ -6,7 +6,7 @@ open Microsoft
 type ViewDef =
     // TODO(CaptainHayashi): rename to ViewDef.
     { VDName: string
-      VDParams: (AST.Type * string) list }
+      VDParams: (Var.Type * string) list }
 
 
 /// A 'flattened' (multiset-representation) view.
@@ -32,18 +32,6 @@ type Constraint =
     { CViews: View list
       CZ3: Z3.BoolExpr }
 
-/// A typed inner record of a variable.
-type TVar<'E when 'E :> Z3.Expr> =
-    { VarExpr: 'E
-      VarPreExpr: 'E
-      VarPostExpr: 'E
-      VarFrameExpr: 'E }
-
-/// A record of a variable in the program model.
-type Var =
-    | IntVar of TVar<Z3.IntExpr>
-    | BoolVar of TVar<Z3.BoolExpr>
-
 /// A pair of conditions.
 type ConditionPair<'v> =
     { Pre: 'v 
@@ -51,12 +39,12 @@ type ConditionPair<'v> =
 
 /// A modelled primitive command.
 type Prim =
-    | ArithFetch of dest: AST.LValue option * src: AST.LValue * mode: AST.FetchMode
-    | BoolFetch of dest: AST.LValue * src: AST.LValue
-    | ArithCAS of dest: AST.LValue * test: AST.LValue * set: Z3.ArithExpr
-    | BoolCAS of dest: AST.LValue * test: AST.LValue * set: Z3.BoolExpr
-    | ArithLocalSet of dest: AST.LValue * src: Z3.ArithExpr
-    | BoolLocalSet of dest: AST.LValue * src: Z3.BoolExpr
+    | ArithFetch of dest: Var.LValue option * src: Var.LValue * mode: AST.FetchMode
+    | BoolFetch of dest: Var.LValue * src: Var.LValue
+    | ArithCAS of dest: Var.LValue * test: Var.LValue * set: Z3.ArithExpr
+    | BoolCAS of dest: Var.LValue * test: Var.LValue * set: Z3.BoolExpr
+    | ArithLocalSet of dest: Var.LValue * src: Z3.ArithExpr
+    | BoolLocalSet of dest: Var.LValue * src: Z3.BoolExpr
     | PrimId
     | PrimAssume of Z3.BoolExpr
 
@@ -95,38 +83,35 @@ let cpairOfPartAxiom pa =
     | PAITE (outer = o) -> o
 
 /// A parameterised model of a Starling program.
-type Model<'g, 'l, 'a, 'c> =
+type Model<'a, 'c> =
     { Context: Z3.Context
 
-      Globals: 'g
-      Locals:  'l
+      Globals: Var.VarMap
+      Locals:  Var.VarMap
       Axioms:  'a
-      VProtos: Map<string, (AST.Type * string) list>
+      VProtos: Map<string, (Var.Type * string) list>
 
       // This corresponds to the function D.
       DefViews: 'c }
 
-/// A variable map
-type VarMap = Map<string, Var>
-
 /// A partly-resolved-axiom model of a Starling program.
-type PartModel = Model<VarMap, VarMap, PartAxiom list, Constraint list>
+type PartModel = Model<PartAxiom list, Constraint list>
 
 /// A flattened model of a Starling program.
-type FlatModel = Model<VarMap, VarMap, FlatAxiom list, Constraint list>
+type FlatModel = Model<FlatAxiom list, Constraint list>
 
 /// A full model of a Starling program.
-type FullModel = Model<VarMap, VarMap, FullAxiom list, Constraint list>
+type FullModel = Model<FullAxiom list, Constraint list>
 
 /// A semantically translated model of a Starling program.
-type SemModel = Model<VarMap, VarMap, SemAxiom list, Constraint list>
+type SemModel = Model<SemAxiom list, Constraint list>
 
 /// Disposes the Z3 context inside a Model.
 let disposeZ3 model = model.Context.Dispose ()
 
 /// Creates a new model that is the input model with a different axiom set.
 /// The axiom set may be of a different type.
-let withAxioms (axioms: 'y) (model: Model<'g, 'l, 'x, 'c>): Model<'g, 'l, 'y, 'c> =
+let withAxioms (axioms: 'y) (model: Model<'x, 'c>): Model<'y, 'c> =
     { Context = model.Context
       Globals = model.Globals
       Locals = model.Locals

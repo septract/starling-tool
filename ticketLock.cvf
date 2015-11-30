@@ -1,14 +1,14 @@
 ﻿view holdTick(int t);
 view holdLock();
 
-constraint emp                       => ticket >= serving;
-constraint holdTick(t)               => ticket > t;
-constraint holdLock()                => ticket > serving;
-constraint holdLock()  * holdTick(t) => serving != t;
+constraint emp                      => ticket >= serving;
+constraint holdTick(t)              => ticket > t;
+constraint holdLock()               => ticket > serving;
+constraint holdLock() * holdTick(t) => serving != t;
 
 // These combinations cannot hold:
-constraint holdTick(t) * holdTick(t) => false;
-constraint holdLock()  * holdLock()  => false;
+constraint holdTick(ta) * holdTick(tb) => ta != tb;
+constraint holdLock()   * holdLock()   => false;
 
 // Variables.
 global int ticket;

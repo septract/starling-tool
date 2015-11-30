@@ -1,18 +1,12 @@
 ﻿module Starling.AST
 
-/// An lvalue.
-/// This is given a separate type in case we add to it later.
-type LValue =
-    | LVIdent of string
-    //| LVPtr of LValue
-
 /// An untyped, raw expression.
 /// These currently cover all languages, but this may change later.
 type Expression =
     | TrueExp                            // true
     | FalseExp                           // false
     | IntExp of int64                    // 42
-    | LVExp of LValue                    // foobaz
+    | LVExp of Var.LValue                // foobaz
     | MulExp of Expression * Expression  // a * b
     | DivExp of Expression * Expression  // a / b
     | AddExp of Expression * Expression  // a + b
@@ -34,21 +28,16 @@ type FetchMode =
 
 /// An atomic action.
 type AtomicAction =
-    | CompareAndSwap of LValue * LValue * Expression  // <CAS(a, b, c)>
-    | Fetch of LValue * LValue * FetchMode            // <a = b??>
-    | Postfix of LValue * FetchMode                   // <a++> or <a-->
-    | Id                                              // <id>
-    | Assume of Expression                            // <assume(e)
-
-/// A variable type.
-type Type =
-    | Int   // int
-    | Bool  // bool
+    | CompareAndSwap of Var.LValue * Var.LValue * Expression  // <CAS(a, b, c)>
+    | Fetch of Var.LValue * Var.LValue * FetchMode  // <a = b??>
+    | Postfix of Var.LValue * FetchMode  // <a++> or <a-->
+    | Id  // <id>
+    | Assume of Expression  // <assume(e)
 
 /// A view prototype.
 type ViewProto =
     { VPName: string
-      VPPars: (Type * string) list }
+      VPPars: (Var.Type * string) list }
 
 /// A view definition.
 type ViewDef =
@@ -71,7 +60,7 @@ type Command =
     | While of Expression * Block       // while (e) { b }
     | DoWhile of Block * Expression     // do { b } while (e)
     | Blocks of Block list              // { a } || { b } || { c }
-    | Assign of LValue * Expression     // a = b;
+    | Assign of Var.LValue * Expression  // a = b;
 
 /// A combination of a command and its postcondition view.
 and ViewedCommand =
@@ -97,8 +86,8 @@ type Method =
 
 /// A top-level item in a Starling script.
 type ScriptItem =
-    | SGlobal of Type * string   // global int name;
-    | SLocal of Type * string    // local int name;
-    | SMethod of Method          // method main(argv, argc) { ... }
-    | SViewProto of ViewProto    // view name(int arg);
+    | SGlobal of Var.Type * string  // global int name;
+    | SLocal of Var.Type * string  // local int name;
+    | SMethod of Method  // method main(argv, argc) { ... }
+    | SViewProto of ViewProto  // view name(int arg);
     | SConstraint of Constraint  // constraint emp => true

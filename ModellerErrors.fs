@@ -2,6 +2,7 @@
 module Starling.Errors.Modeller
 
 open Starling
+open Starling.Errors.Var
 
 // TODO(CaptainHayashi): more consistent constructor names
 
@@ -18,29 +19,29 @@ type ViewError =
     | VEBadExpr of AST.View * ExprError
     | VEUnsupported of AST.View * reason: string
 
+/// Represents an error when converting a view definition.
+type ViewDefError =
+      // A viewdef referred to a view with no known name.
+    | VDENoSuchView of name: string
+      // A viewdef referred to a view with the wrong number of params.
+    | VDEBadParamCount of name: string * expected: int * actual: int
+      // A viewdef used variables in incorrect ways, eg by duplicating.
+    | VDEBadVars of VarMapError
+      // A viewdef conflicted with the global variables.
+    | VDEGlobalVarConflict of VarMapError
+
 /// Represents an error when converting a constraint.
 type ConstraintError =
-    | CEView of ViewError
+    | CEView of ViewDefError
     | CEExpr of ExprError
-
-/// Represents an error when converting a variable list.
-type VarError =
-    | VEDuplicate of string
-
-/// Type of errors found when looking up variables.
-type LookupError =
-    | LENotFound of string
-    // TODO(CaptainHayashi): this error exists because we don't implement
-    //                       pointers.
-    | LEBadLValue of AST.LValue
 
 /// Type of errors found when generating axioms.
 type AxiomError =
-    | AEBadGlobal of LookupError
-    | AEBadLocal of LookupError
+    | AEBadGlobal of VarMapError
+    | AEBadLocal of VarMapError
     | AEBadExpr of ExprError
     | AEBadView of ViewError
-    | AETypeMismatch of expected: AST.Type * badvar: AST.LValue * got: AST.Type
+    | AETypeMismatch of expected: Var.Type * badvar: Var.LValue * got: Var.Type
     | AEUnsupportedAtomic of atom: AST.AtomicAction * reason: string
     | AEUnsupportedCommand of cmd: AST.Command * reason: string
 
@@ -48,5 +49,5 @@ type AxiomError =
 type ModelError =
     | MEVProto of ViewProtoError
     | MEConstraint of ConstraintError
-    | MEVar of VarError
     | MEAxiom of AxiomError
+    | MEVar of VarMapError

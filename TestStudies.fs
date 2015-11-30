@@ -2,6 +2,7 @@
 module Starling.Tests.Studies
 
 open Starling
+open Starling.Var
 open Starling.AST
 open Starling.Model
 open Starling.Collator
@@ -11,12 +12,12 @@ let ticketLock = """
 view holdTick(int t);
 view holdLock();
 
-constraint emp                       => ticket >= serving;
-constraint holdTick(t)               => ticket > t;
-constraint holdLock()                => ticket > serving;
-constraint holdLock()  * holdTick(t) => serving != t;
-constraint holdTick(t) * holdTick(t) => false;
-constraint holdLock()  * holdLock()  => false;
+constraint emp                         => ticket >= serving;
+constraint holdTick(t)                 => ticket > t;
+constraint holdLock()                  => ticket > serving;
+constraint holdLock()   * holdTick(t)  => serving != t;
+constraint holdTick(ta) * holdTick(tb) => ta != tb;
+constraint holdLock()   * holdLock()   => false;
 
 global int ticket;
 global int serving;
@@ -101,9 +102,10 @@ let ticketLockParsed =
                                    DFunc ("holdTick", ["t"]))
                     CExpression = NeqExp (LVExp (LVIdent "serving"),
                                           LVExp (LVIdent "t")) }
-      SConstraint { CView = DJoin (DFunc ("holdTick", ["t"]),
-                                   DFunc ("holdTick", ["t"]))
-                    CExpression = FalseExp }
+      SConstraint { CView = DJoin (DFunc ("holdTick", ["ta"]),
+                                   DFunc ("holdTick", ["tb"]))
+                    CExpression = NeqExp (LVExp (LVIdent "ta"),
+                                          LVExp (LVIdent "tb")) }
       SConstraint { CView = DJoin (DFunc ("holdLock", []),
                                    DFunc ("holdLock", []))
                     CExpression = FalseExp }
@@ -145,9 +147,10 @@ let ticketLockCollated =
             CExpression = NeqExp (LVExp (LVIdent "serving"),
                                   LVExp (LVIdent "t")) }
           // constraint holdLock() * holdLock() => false;
-          { CView = DJoin (DFunc ("holdTick", ["t"]),
-                           DFunc ("holdTick", ["t"]))
-            CExpression = FalseExp }
+          { CView = DJoin (DFunc ("holdTick", ["ta"]),
+                           DFunc ("holdTick", ["tb"]))
+            CExpression = NeqExp (LVExp (LVIdent "ta"),
+                                  LVExp (LVIdent "tb")) }
           { CView = DJoin (DFunc ("holdLock", []),
                            DFunc ("holdLock", []))
             CExpression = FalseExp } ]
@@ -242,10 +245,11 @@ let ticketLockModel ctx =
          CZ3 = ctx.MkNot (ctx.MkEq (ctx.MkIntConst "serving",
                                     ctx.MkIntConst "t")) }
         {CViews = [ {VName = "holdTick"
-                     VParams = ["t"] }
+                     VParams = ["ta"] }
                     {VName = "holdTick"
-                     VParams = ["t"] } ]
-         CZ3 = ctx.MkFalse () }
+                     VParams = ["tb"] } ]
+         CZ3 = ctx.MkNot (ctx.MkEq (ctx.MkIntConst "ta",
+                                    ctx.MkIntConst "tb")) }
         {CViews = [ {VName = "holdLock"
                      VParams = [] }
                     {VName = "holdLock"
