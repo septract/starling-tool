@@ -159,6 +159,9 @@ let ticketLockCollated =
 /// Takes an existing Z3 context.
 let ticketLockModel ctx =
     {Context = ctx
+     VProtos =
+         Map.ofList [ ("holdTick", [ (Int, "t") ] )
+                      ("holdLock", [] ) ]
      Globals =
          Map.ofList [ ("serving",
                        IntVar {VarExpr = ctx.MkIntConst "serving"

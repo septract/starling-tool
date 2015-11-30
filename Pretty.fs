@@ -247,12 +247,20 @@ let printModelConstraint c =
     keyMap [ ("View", printModelViews (c.CViews))
              ("Z3", c.CZ3.ToString () |> String) ]
 
+/// Pretty-prints a model view prototype.
+let printModelViewProto (vn, vps) =
+    // TODO(CaptainHayashi): this is a bit of a cop-out!
+    printViewProto { VPName = vn
+                     VPPars = vps } |> String
+
 /// Pretty-prints a model given an axiom printer.
 let printModel axpp model =
     headed "Model"
            [ headed "Globals" <| List.map printModelVar (Map.toList model.Globals)
              Separator
              headed "Locals" <| List.map printModelVar (Map.toList model.Locals)
+             Separator
+             headed "Views" <| List.map printModelViewProto (Map.toList model.VProtos)
              Separator
              headed "Constraints" <| List.map printModelConstraint model.DefViews
              Separator

@@ -6,7 +6,7 @@ open Microsoft
 type ViewDef =
     // TODO(CaptainHayashi): rename to ViewDef.
     { VDName: string
-      VDParams: (string * AST.Type) list }
+      VDParams: (AST.Type * string) list }
 
 
 /// A 'flattened' (multiset-representation) view.
@@ -101,6 +101,7 @@ type Model<'g, 'l, 'a, 'c> =
       Globals: 'g
       Locals:  'l
       Axioms:  'a
+      VProtos: Map<string, (AST.Type * string) list>
 
       // This corresponds to the function D.
       DefViews: 'c }
@@ -129,6 +130,7 @@ let withAxioms (axioms: 'y) (model: Model<'g, 'l, 'x, 'c>): Model<'g, 'l, 'y, 'c
     { Context = model.Context
       Globals = model.Globals
       Locals = model.Locals
+      VProtos = model.VProtos
       DefViews = model.DefViews
       Axioms = axioms }
 

@@ -102,15 +102,16 @@ and arithExprToZ3 (ctx: Context) expr =
     | _ -> fail <| EEBadAST (expr, "cannot be an arithmetic expression")
 
 /// Converts a single constraint to Z3.
-let modelConstraint ctx vprotos c =
+let modelConstraint model c =
+    let ctx = model.Context
     trial { let! v = mapMessages CEView (viewDefToSet c.CView)
             let! c = mapMessages CEExpr (boolExprToZ3 ctx c.CExpression)
             return { CViews = v; CZ3 = c }}
 
 /// Extracts the view constraints from a CollatedScript, turning each into a
 /// Model.Constraint.
-let modelConstraints ctx vprotos cs =
-    List.map (modelConstraint ctx vprotos) cs.CConstraints |> collect
+let modelConstraints model cs =
+    List.map (modelConstraint model) cs.CConstraints |> collect
 
 //
 // Name rewrites
@@ -433,12 +434,21 @@ let modelWith ctx collated =
         let! vprotos = mapMessages MEVProto (modelViewProtos collated.CVProtos)
         let! globals = mapMessages MEVar (modelVarList ctx collated.CGlobals)
         let! locals = mapMessages MEVar (modelVarList ctx collated.CLocals)
+
+        let imod = { Context = ctx
+                     Globals = globals
+                     Locals = locals
+                     VProtos = vprotos
+                     DefViews = ()
+                     Axioms = () }
+
         // TODO(CaptainHayashi): checking of constraints against locals and globals
-        let! constraints = mapMessages MEConstraint (modelConstraints ctx vprotos collated)
+        let! constraints = mapMessages MEConstraint (modelConstraints imod collated)
 
         let pmod = { Context = ctx
                      Globals = globals
                      Locals = locals
+                     VProtos = vprotos
                      DefViews = constraints
                      Axioms = () }
 
