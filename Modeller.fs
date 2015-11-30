@@ -112,13 +112,6 @@ let modelConstraint ctx c =
 let modelConstraints ctx cs =
     List.map (modelConstraint ctx) cs.CConstraints |> collect
 
-/// Tries to find duplicate entries in a list.
-/// Returns a list of the duplicates found.
-let findDuplicates =
-    List.groupBy id >> List.choose (function
-                                    | ( _, [] ) | ( _, [_] ) -> None
-                                    | ( x, _ ) -> Some x)
-
 //
 // Name rewrites
 //

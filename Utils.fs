@@ -45,6 +45,14 @@ let concatMap f xs =
     // for source and copyright information.
     List.foldBack (fun x b -> List.foldBack cons (f x) b) xs []
 
+/// Tries to find duplicate entries in a list.
+/// Returns a list of the duplicates found.
+let findDuplicates lst =
+    lst
+    |> List.groupBy id
+    |> List.choose (function
+                    | ( _, [] ) | ( _, [_] ) -> None
+                    | ( x, _ ) -> Some x)
 
 //
 // Chessie-related functions.
