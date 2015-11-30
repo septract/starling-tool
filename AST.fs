@@ -1,5 +1,20 @@
 ﻿module Starling.AST
 
+/// A Boolean operator.
+type Bop =
+    | Mul  // a * b
+    | Div  // a / b
+    | Add  // a + b
+    | Sub  // a - b
+    | Gt  // a > b
+    | Ge  // a >= b
+    | Le  // a < b
+    | Lt  // a <= b
+    | Eq  // a == b
+    | Neq  // a != b
+    | And  // a && b
+    | Or  // a || b
+
 /// An untyped, raw expression.
 /// These currently cover all languages, but this may change later.
 type Expression =
@@ -7,18 +22,7 @@ type Expression =
     | FalseExp                           // false
     | IntExp of int64                    // 42
     | LVExp of Var.LValue                // foobaz
-    | MulExp of Expression * Expression  // a * b
-    | DivExp of Expression * Expression  // a / b
-    | AddExp of Expression * Expression  // a + b
-    | SubExp of Expression * Expression  // a - b
-    | GtExp of Expression * Expression   // a > b
-    | GeExp of Expression * Expression   // a >= b
-    | LeExp of Expression * Expression   // a < b
-    | LtExp of Expression * Expression   // a <= b
-    | EqExp of Expression * Expression   // a == b
-    | NeqExp of Expression * Expression  // a != b
-    | AndExp of Expression * Expression  // a && b
-    | OrExp of Expression * Expression   // a || b
+    | BopExp of Bop * Expression * Expression  // a BOP b
 
 /// A mode for the Fetch atomic action.
 type FetchMode =

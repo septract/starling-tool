@@ -11,6 +11,36 @@ open Starling.Collator
 open Starling.Model
 open Starling.Errors.Modeller
 
+let (|ArithOp|BoolOp|) bop =
+    match bop with
+    | Mul -> ArithOp
+    | Div -> ArithOp
+    | Add -> ArithOp
+    | Sub -> ArithOp
+    | Gt -> BoolOp
+    | Ge -> BoolOp
+    | Le -> BoolOp
+    | Lt -> BoolOp
+    | Eq -> BoolOp
+    | Neq -> BoolOp
+    | And -> BoolOp
+    | Or -> BoolOp
+
+let (|ArithIn|BoolIn|AnyIn|) bop =
+    match bop with
+    | Mul -> ArithIn
+    | Div -> ArithIn
+    | Add -> ArithIn
+    | Sub -> ArithIn
+    | Gt -> ArithIn
+    | Ge -> ArithIn
+    | Le -> ArithIn
+    | Lt -> ArithIn
+    | Eq -> AnyIn
+    | Neq -> AnyIn
+    | And -> BoolIn
+    | Or -> BoolIn
+
 /// Tries to flatten a view definition AST into a multiset.
 let rec viewDefToSet vast =
     match vast with
@@ -34,42 +64,67 @@ let mkSub2 (ctx: Context) (l, r) = ctx.MkSub [| l; r |]
 let mkMul2 (ctx: Context) (l, r) = ctx.MkMul [| l; r |]
 
 /// Converts a pair of arith-exps to Z3, then chains f onto them.
-let rec chainArithExprs (ctx : Context)
+let rec chainArithExprs (model: Model<'a, 'b>)
     (f: (ArithExpr * ArithExpr) -> 'a)
     (pair: (AST.Expression * AST.Expression))
       : Result<'a, ExprError> =
-    pairBindMap (arithExprToZ3 ctx) f pair
+    pairBindMap (arithExprToZ3 model) f pair
 
 /// Converts a pair of bool-exps to Z3, then chains f onto them.
-and chainBoolExprs ctx f = pairBindMap (boolExprToZ3 ctx) f
+and chainBoolExprs model f = pairBindMap (boolExprToZ3 model) f
 
 /// Converts a Starling Boolean expression to a Z3 predicate using
 /// the given Z3 context.
-and boolExprToZ3 (ctx: Context) expr =
+and boolExprToZ3 model expr =
+    let ctx = model.Context
     match expr with
     | TrueExp -> ctx.MkTrue () |> ok
     | FalseExp -> ctx.MkFalse () |> ok
     | LVExp v -> ctx.MkBoolConst ( flattenLV v ) |> ok
-    | GtExp (l, r) -> chainArithExprs ctx (ctx.MkGt) (l, r)
-    | GeExp (l, r) -> chainArithExprs ctx (ctx.MkGe) (l, r)
-    | LeExp (l, r) -> chainArithExprs ctx (ctx.MkLe) (l, r)
-    | LtExp (l, r) -> chainArithExprs ctx (ctx.MkLt) (l, r)
-    | EqExp (l, r) -> chainBoolExprs ctx (ctx.MkEq) (l, r)
-    | NeqExp (l, r) -> chainBoolExprs ctx (ctx.MkEq >> ctx.MkNot) (l, r)
-    | AndExp (l, r) -> chainBoolExprs ctx (mkAnd2 ctx) (l, r)
-    | OrExp (l, r) -> chainBoolExprs ctx (mkOr2 ctx) (l, r)
+    | BopExp (BoolOp as op, l, r) ->
+        match op with
+            | ArithIn as o ->
+                trial {let! lA = arithExprToZ3 model l
+                       let! rA = arithExprToZ3 model r
+                       return (match o with
+                               | Gt -> ctx.MkGt
+                               | Ge -> ctx.MkGe
+                               | Le -> ctx.MkLe
+                               | Lt -> ctx.MkLt
+                               | _  -> failwith "unreachable") (lA, rA) }
+            | BoolIn as o ->
+                trial {let! lB = boolExprToZ3 model l
+                       let! rB = boolExprToZ3 model r
+                       return (match o with
+                               | And -> mkAnd2 ctx
+                               | Or -> mkOr2 ctx
+                               | _  -> failwith "unreachable") (lB, rB) }
+            | AnyIn as o ->
+                // TODO(CaptainHayashi): don't infer bool here.
+                trial {let! lE = boolExprToZ3 model l
+                       let! rE = boolExprToZ3 model r
+                       return (match o with
+                               | Eq -> ctx.MkEq
+                               | Neq -> (ctx.MkEq >> ctx.MkNot)
+                               | _  -> failwith "unreachable") (lE, rE) }
     | _ -> fail <| EEBadAST (expr, "cannot be a Boolean expression")
 
 /// Converts a Starling arithmetic expression ot a Z3 predicate using
 /// the given Z3 context.
-and arithExprToZ3 (ctx: Context) expr =
+and arithExprToZ3 model expr =
+    let ctx = model.Context
     match expr with
     | IntExp i -> ((ctx.MkInt i) :> ArithExpr ) |> ok
     | LVExp v -> ((ctx.MkIntConst (flattenLV v)) :> ArithExpr) |> ok
-    | MulExp (l, r) -> chainArithExprs ctx (mkMul2 ctx) (l, r)
-    | DivExp (l, r) -> chainArithExprs ctx (ctx.MkDiv) (l, r)
-    | AddExp (l, r) -> chainArithExprs ctx (mkAdd2 ctx) (l, r)
-    | SubExp (l, r) -> chainArithExprs ctx (mkSub2 ctx) (l, r)
+    | BopExp (ArithOp & op, l, r) ->
+        trial { let! lA = arithExprToZ3 model l
+                let! rA = arithExprToZ3 model r
+                return (match op with
+                        | Mul -> mkMul2 ctx
+                        | Div -> ctx.MkDiv
+                        | Add -> mkAdd2 ctx
+                        | Sub -> mkSub2 ctx
+                        | _  -> failwith "unreachable") (lA, rA) }
     | _ -> fail <| EEBadAST (expr, "cannot be an arithmetic expression")
 
 /// Merges a list of prototype and definition parameters into one environment,
@@ -117,7 +172,7 @@ let modelConstraint model c =
     let ctx = model.Context
     trial { let! e = mapMessages CEView (envOfConstraint model c)
             let v = viewDefToSet c.CView
-            let! c = mapMessages CEExpr (boolExprToZ3 ctx c.CExpression)
+            let! c = mapMessages CEExpr (boolExprToZ3 model c.CExpression)
             return { CViews = v; CZ3 = c }}
 
 /// Extracts the view constraints from a CollatedScript, turning each into a
@@ -180,12 +235,12 @@ let lookupGlobalType pmod lvalue =
 /// Converts a Boolean expression to z3 within the given axiom context.
 /// Returns a Chessie result; failures have AEBadExpr messages.
 let axiomBoolExprToZ3 pmod expr =
-    boolExprToZ3 pmod.Context expr |> mapMessages AEBadExpr
+    boolExprToZ3 pmod expr |> mapMessages AEBadExpr
 
 /// Converts an arithmetic expression to z3 within the given axiom context.
 /// Returns a Chessie result; failures have AEBadExpr messages.
 let axiomArithExprToZ3 pmod expr =
-    arithExprToZ3 pmod.Context expr |> mapMessages AEBadExpr
+    arithExprToZ3 pmod expr |> mapMessages AEBadExpr
 
 /// Converts an atomic action to a Prim.
 let rec modelPrimOnAtomic pmod atom =
@@ -306,7 +361,7 @@ and modelAxiomOnCommand pmod cpair cmd =
 /// Converts a precondition and postcondition to a condition pair, using
 /// the given model and returning errors as AxiomErrors.
 and makeAxiomConditionPair pmod pre post =
-    makeConditionPair pmod.Context pre post
+    makeConditionPair pmod pre post
     |> mapMessages AEBadView
 
 /// Converts a block to a Conditioned list of partially resolved axioms.
@@ -391,10 +446,12 @@ let modelWith ctx collated =
         let! vprotos = mapMessages MEVProto (modelViewProtos collated.CVProtos)
         let! globals = mapMessages MEVar (makeVarMap ctx collated.CGlobals)
         let! locals = mapMessages MEVar (makeVarMap ctx collated.CLocals)
+        let! allvars = mapMessages MEVar (combineMaps locals globals)
 
         let imod = { Context = ctx
                      Globals = globals
                      Locals = locals
+                     AllVars = allvars
                      VProtos = vprotos
                      DefViews = ()
                      Axioms = () }
@@ -405,6 +462,7 @@ let modelWith ctx collated =
         let pmod = { Context = ctx
                      Globals = globals
                      Locals = locals
+                     AllVars = allvars
                      VProtos = vprotos
                      DefViews = constraints
                      Axioms = () }

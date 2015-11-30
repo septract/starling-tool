@@ -12,17 +12,19 @@ open Starling.Tests.Studies
 /// Assertion that converting the arithmetic expression `expr` to Z3
 /// yields the given AST.
 let assertZ3ArithExpr ctx expr z3 =
+    let model = ticketLockModel ctx
     Assert.Equal (Starling.Pretty.AST.printExpression expr
                    + " -Z3-> " + z3.ToString (),
-                  Starling.Modeller.arithExprToZ3 ctx expr,
+                  Starling.Modeller.arithExprToZ3 model expr,
                   ok z3)
 
 /// Assertion that converting the Boolean expression `expr` to Z3
 /// yields the given AST.
 let assertZ3BoolExpr ctx expr z3 =
+    let model = ticketLockModel ctx
     Assert.Equal (Starling.Pretty.AST.printExpression expr
                    + " -Z3-> " + z3.ToString (),
-                  Starling.Modeller.boolExprToZ3 ctx expr,
+                  Starling.Modeller.boolExprToZ3 model expr,
                   ok z3)
 
 let testExprToZ3 ctx =
@@ -31,7 +33,9 @@ let testExprToZ3 ctx =
             testCase "Test arithmetic-only expressions" <|
                 fun _ ->
                     assertZ3ArithExpr ctx
-                                      (AddExp (MulExp (IntExp 1L,
+                                      (BopExp (Add,
+                                               BopExp (Mul,
+                                                       IntExp 1L,
                                                        IntExp 2L),
                                                IntExp 3L))
                                       (ctx.MkAdd [| ctx.MkMul [| ctx.MkInt 1 :> ArithExpr
@@ -41,9 +45,11 @@ let testExprToZ3 ctx =
             testCase "Test Boolean-only expressions" <|
                 fun _ ->
                     assertZ3BoolExpr ctx
-                                     (AndExp (OrExp (TrueExp,
-                                                     TrueExp),
-                                             FalseExp))
+                                     (BopExp (And,
+                                              BopExp (Or,
+                                                      TrueExp,
+                                                      TrueExp),
+                                              FalseExp))
                                      (ctx.MkAnd [| ctx.MkOr [| ctx.MkTrue ()
                                                                ctx.MkTrue () |]
                                                    ctx.MkFalse () |]) ]]

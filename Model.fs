@@ -87,7 +87,8 @@ type Model<'a, 'c> =
     { Context: Z3.Context
 
       Globals: Var.VarMap
-      Locals:  Var.VarMap
+      Locals: Var.VarMap
+      AllVars: Var.VarMap
       Axioms:  'a
       VProtos: Map<string, (Var.Type * string) list>
 
@@ -115,6 +116,7 @@ let withAxioms (axioms: 'y) (model: Model<'x, 'c>): Model<'y, 'c> =
     { Context = model.Context
       Globals = model.Globals
       Locals = model.Locals
+      AllVars = model.AllVars
       VProtos = model.VProtos
       DefViews = model.DefViews
       Axioms = axioms }

@@ -61,13 +61,15 @@ let ticketLockLockMethodAST =
                                      [ { Command = Atomic (Fetch (LVIdent "s",
                                                                   LVIdent "serving",
                                                                   Direct))
-                                         Post = IfView (EqExp (LVExp (LVIdent "s"),
-                                                               LVExp (LVIdent "t")),
+                                         Post = IfView (BopExp (Eq,
+                                                                LVExp (LVIdent "s"),
+                                                                LVExp (LVIdent "t")),
                                                         Func ("holdLock", []),
                                                         Func ("holdTick", [LVExp (LVIdent "t")])) } ]
                                },
-                               EqExp (LVExp (LVIdent "s"),
-                                      LVExp (LVIdent "t")))
+                               BopExp (Eq,
+                                       LVExp (LVIdent "s"),
+                                       LVExp (LVIdent "t")))
 
                     Post = Func ("holdLock", [])
                   }
@@ -90,21 +92,26 @@ let ticketLockParsed =
     [ SViewProto { VPName = "holdTick" ; VPPars = [ (Int, "t") ] }
       SViewProto { VPName = "holdLock" ; VPPars = [] }
       SConstraint { CView = DUnit
-                    CExpression = GeExp (LVExp (LVIdent "ticket"),
-                                         LVExp (LVIdent "serving")) }
+                    CExpression = BopExp (Ge,
+                                          LVExp (LVIdent "ticket"),
+                                          LVExp (LVIdent "serving")) }
       SConstraint { CView = DFunc ("holdTick", ["t"])
-                    CExpression = GtExp (LVExp (LVIdent "ticket"),
-                                         LVExp (LVIdent "t")) }
+                    CExpression = BopExp (Gt,
+                                          LVExp (LVIdent "ticket"),
+                                          LVExp (LVIdent "t")) }
       SConstraint { CView = DFunc ("holdLock", [])
-                    CExpression = GtExp (LVExp (LVIdent "ticket"),
-                                         LVExp (LVIdent "serving")) }
+                    CExpression = BopExp (Gt,
+                                          LVExp (LVIdent "ticket"),
+                                          LVExp (LVIdent "serving")) }
       SConstraint { CView = DJoin (DFunc ("holdLock", []),
                                    DFunc ("holdTick", ["t"]))
-                    CExpression = NeqExp (LVExp (LVIdent "serving"),
+                    CExpression = BopExp (Neq,
+                                          LVExp (LVIdent "serving"),
                                           LVExp (LVIdent "t")) }
       SConstraint { CView = DJoin (DFunc ("holdTick", ["ta"]),
                                    DFunc ("holdTick", ["tb"]))
-                    CExpression = NeqExp (LVExp (LVIdent "ta"),
+                    CExpression = BopExp (Neq,
+                                          LVExp (LVIdent "ta"),
                                           LVExp (LVIdent "tb")) }
       SConstraint { CView = DJoin (DFunc ("holdLock", []),
                                    DFunc ("holdLock", []))
@@ -131,25 +138,30 @@ let ticketLockCollated =
       CConstraints =
         [ // constraint emp => ticket >= serving;
           { CView = DUnit
-            CExpression = GeExp (LVExp (LVIdent "ticket"),
-                                 LVExp (LVIdent "serving")) }
+            CExpression = BopExp (Ge,
+                                  LVExp (LVIdent "ticket"),
+                                  LVExp (LVIdent "serving")) }
           // constraint holdTick(t) => ticket > t;
           { CView = DFunc ("holdTick", ["t"])
-            CExpression = GtExp (LVExp (LVIdent "ticket"),
-                                 LVExp (LVIdent "t")) }
+            CExpression = BopExp (Gt,
+                                  LVExp (LVIdent "ticket"),
+                                  LVExp (LVIdent "t")) }
           // constraint holdLock() => ticket > serving;
           { CView = DFunc ("holdLock", [])
-            CExpression = GtExp (LVExp (LVIdent "ticket"),
-                                 LVExp (LVIdent "serving")) }
+            CExpression = BopExp (Gt,
+                                  LVExp (LVIdent "ticket"),
+                                  LVExp (LVIdent "serving")) }
           // constraint holdLock() * holdTick(t) => serving != t;
           { CView = DJoin (DFunc ("holdLock", []),
                            DFunc ("holdTick", ["t"]))
-            CExpression = NeqExp (LVExp (LVIdent "serving"),
+            CExpression = BopExp (Neq,
+                                  LVExp (LVIdent "serving"),
                                   LVExp (LVIdent "t")) }
           // constraint holdLock() * holdLock() => false;
           { CView = DJoin (DFunc ("holdTick", ["ta"]),
                            DFunc ("holdTick", ["tb"]))
-            CExpression = NeqExp (LVExp (LVIdent "ta"),
+            CExpression = BopExp (Neq,
+                                  LVExp (LVIdent "ta"),
                                   LVExp (LVIdent "tb")) }
           { CView = DJoin (DFunc ("holdLock", []),
                            DFunc ("holdLock", []))
@@ -187,6 +199,28 @@ let ticketLockModel ctx =
                                VarPreExpr = ctx.MkIntConst "t!before"
                                VarPostExpr = ctx.MkIntConst "t!after"
                                VarFrameExpr = ctx.MkIntConst "t!r"} ) ]
+     AllVars =
+         Map.ofList [ ("s",
+                       IntVar {VarExpr = ctx.MkIntConst "s"
+                               VarPreExpr = ctx.MkIntConst "s!before"
+                               VarPostExpr = ctx.MkIntConst "s!after"
+                               VarFrameExpr = ctx.MkIntConst "s!r"} )
+                      ("t",
+                       IntVar {VarExpr = ctx.MkIntConst "t"
+                               VarPreExpr = ctx.MkIntConst "t!before"
+                               VarPostExpr = ctx.MkIntConst "t!after"
+                               VarFrameExpr = ctx.MkIntConst "t!r"} )
+                      ("serving",
+                       IntVar {VarExpr = ctx.MkIntConst "serving"
+                               VarPreExpr = ctx.MkIntConst "serving!before"
+                               VarPostExpr = ctx.MkIntConst "serving!after"
+                               VarFrameExpr = ctx.MkIntConst "serving!r"} )
+                      ("ticket",
+                       IntVar {VarExpr = ctx.MkIntConst "ticket"
+                               VarPreExpr = ctx.MkIntConst "ticket!before"
+                               VarPostExpr = ctx.MkIntConst "ticket!after"
+                               VarFrameExpr = ctx.MkIntConst "ticket!r"} ) ]
+
      Axioms =
          [PAAxiom {Conditions = {Pre = [CSetView {VName = "holdLock"
                                                   VParams = []} ]

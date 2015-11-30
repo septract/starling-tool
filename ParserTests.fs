@@ -45,17 +45,37 @@ let testExpressionPrecedence =
     testList "Test that parsing expressions yields correct precedence" [
         testCase "1 + 2 * 3 -> 1 + (2 * 3)" <|
             fun _ -> assertParseExpr "1 + 2 * 3"
-                                     (AddExp (IntExp 1L, MulExp (IntExp 2L, IntExp 3L)))
+                                     (BopExp (Add,
+                                              IntExp 1L,
+                                              BopExp (Mul,
+                                                      IntExp 2L,
+                                                      IntExp 3L)))
         testCase "(1 + 2) * 3 -> (1 + 2) * 3" <|
             fun _ -> assertParseExpr "(1 + 2) * 3"
-                                     (MulExp (AddExp (IntExp 1L, IntExp 2L), IntExp 3L))
-        testCase "1 + 2 < 3 * 4 && true || 5 / 6 > 7 - 8 -> ((1 + 2) < (3 * 4) && true) || ((5 / 6) > (7 - 8))" <|
+                                     (BopExp (Mul,
+                                              BopExp (Add,
+                                                      IntExp 1L,
+                                                      IntExp 2L),
+                                              IntExp 3L))
+        testCase "1 + 2 < 3 * 4 && true || 5 / 6 > 7 - 8 - > ((1 +  2) < (3 * 4) && true) || ((5 / 6) > (7 - 8))" <|
             fun _ -> assertParseExpr "1 + 2 < 3 * 4 && true || 5 / 6 > 7 - 8"
-                                     (OrExp (AndExp (LtExp (AddExp (IntExp 1L, IntExp 2L),
-                                                            MulExp (IntExp 3L, IntExp 4L)),
-                                                    TrueExp),
-                                             GtExp (DivExp (IntExp 5L, IntExp 6L),
-                                                    SubExp (IntExp 7L, IntExp 8L)))) ]
+                                     (BopExp (Or,
+                                              BopExp (And,
+                                                      BopExp (Lt,
+                                                              BopExp (Add,
+                                                                      IntExp 1L,
+                                                                      IntExp 2L),
+                                                              BopExp (Mul,
+                                                                      IntExp 3L,
+                                                                      IntExp 4L)),
+                                                      TrueExp),
+                                              BopExp (Gt,
+                                                      BopExp (Div,
+                                                              IntExp 5L,
+                                                              IntExp 6L),
+                                                      BopExp (Sub,
+                                                              IntExp 7L,
+                                                              IntExp 8L)))) ]
 
 let testAtomicFetch =
     testList "Test that atomic fetch actions are correctly parsed"

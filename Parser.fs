@@ -100,44 +100,44 @@ let parsePrimaryExpression =
 let parseBinaryExpressionLevel nextLevel expList =
     chainl1 (nextLevel .>> ws)
             (choice
-                (List.map (fun (op, fn) -> (pstring op .>> ws >>% curry fn)) expList)
+                (List.map (fun (ops, op) -> (pstring ops .>> ws >>% curry3 BopExp op)) expList)
             )
 
 /// Parser for multiplicative expressions.
 let parseMultiplicativeExpression =
     parseBinaryExpressionLevel parsePrimaryExpression
-        [ ("*", MulExp)
-          ("/", DivExp) ]
+        [ ("*", Mul)
+          ("/", Div) ]
 
 /// Parser for additive expressions.
 let parseAdditiveExpression =
     parseBinaryExpressionLevel parseMultiplicativeExpression
-        [ ("+", AddExp)
-          ("-", SubExp) ]
+        [ ("+", Add)
+          ("-", Sub) ]
 
 /// Parser for relational expressions.
 let parseRelationalExpression =
     parseBinaryExpressionLevel parseAdditiveExpression
-        [ (">=", GeExp)
-          ("<=", LeExp)
-          (">" , GtExp)
-          ("<" , LtExp) ]
+        [ (">=", Ge)
+          ("<=", Le)
+          (">" , Gt)
+          ("<" , Lt) ]
 
 /// Parser for equality expressions.
 let parseEqualityExpression =
     parseBinaryExpressionLevel parseRelationalExpression
-        [ ("==", EqExp)
-          ("!=", NeqExp) ]
+        [ ("==", Eq)
+          ("!=", Neq) ]
 
 /// Parser for logical AND expressions.
 let parseAndExpression =
     parseBinaryExpressionLevel parseEqualityExpression
-        [ ("&&", AndExp) ]
+        [ ("&&", And) ]
 
 /// Parser for logical OR expressions.
 let parseOrExpression =
     parseBinaryExpressionLevel parseAndExpression
-        [ ("||", OrExp ) ]
+        [ ("||", Or) ]
 
 do parseExpressionRef := parseOrExpression
 
