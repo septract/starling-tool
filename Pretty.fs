@@ -1,5 +1,6 @@
 module Starling.Pretty.Misc
 
+open Microsoft
 open Starling
 open Starling.AST
 open Starling.Collator
@@ -87,7 +88,7 @@ let printModelViews vs =
     squared (HSep (List.map printModelView vs, String ","))
 
 /// Pretty-prints Z3 expressions
-let printZ3Exp expr = String (expr.ToString ())
+let printZ3Exp (expr: #Z3.Expr) = String (expr.ToString ())
 
 /// Pretty-prints TVars.
 let printTVar tvar =
@@ -129,7 +130,7 @@ and printCondViewList cvs =
 
 /// Pretty-prints a set of conjoined expressions.
 let printExprSet exps =
-    HSep (Set.toList exps |> List.map (fun e -> e.ToString () |> String), String "&")
+    HSep (Set.toList exps |> List.map printZ3Exp, String "&")
 
 /// Pretty-prints a guarded view.
 let printGuarView gv =
@@ -168,17 +169,17 @@ let printFetchPrim ty dest src mode =
 /// Pretty-prints a CAS prim.
 let printCASPrim ty dest src set =
     hsep [ String ("cas<" + ty + ">")
-           parened (HSep ( [ String (printLValue dest)
-                             String (printLValue src)
-                             String (set.ToString ()) ],
+           parened (HSep ( [String (printLValue dest)
+                            String (printLValue src)
+                            printZ3Exp set],
                            String ",")) ]
 
 /// Pretty-prints a local-set prim.
 let printLocalPrim ty dest src =
     hsep [ String ("lset<" + ty + ">")
-           parened (hsep [ String (printLValue dest)
-                           String "="
-                           String (src.ToString ()) ] ) ]
+           parened (hsep [String (printLValue dest)
+                          String "="
+                          printZ3Exp src] ) ]
 
 /// Pretty-prints a prim.
 let printPrim prim =
@@ -191,18 +192,21 @@ let printPrim prim =
     | BoolLocalSet (dest, src) -> printLocalPrim "bool" dest src
     | PrimId -> String "id"
     | PrimAssume expr -> hsep [ String "assume"
-                                braced (String (expr.ToString ())) ]
+                                braced (printZ3Exp expr) ]
 
-/// Pretty-prints a generic axiom.
-let printAxiom pcond axiom = printInConditionPair pcond
-                                                  axiom.Conditions
-                                                  (angled (printPrim axiom.Inner))
-
-/// Pretty-prints a model axiom.
-let printFlatAxiom = printAxiom printCondViewList
+/// Pretty-prints a Hoare triple
+let printHoare pcond pinner axiom = printInConditionPair pcond
+                                                         axiom.Conditions
+                                                         (angled (pinner axiom.Inner))
 
 /// Pretty-prints a model axiom.
-let printFullAxiom = printAxiom printGuarViewList
+let printFlatAxiom = printHoare printCondViewList printPrim
+
+/// Pretty-prints a model axiom.
+let printFullAxiom = printHoare printGuarViewList printPrim
+
+/// Pretty-prints a semantically translated axiom.
+let printSemAxiom (ax: SemAxiom) = printHoare printGuarViewList printZ3Exp ax
 
 /// Pretty-prints a part-axiom at the given indent level.
 let rec printPartAxiom axiom =
@@ -252,5 +256,8 @@ let printPartModel = printModel printPartAxiom
 /// Pretty-prints a model with flattened but not fully resolved axioms.
 let printFlatModel = printModel printFlatAxiom
 
-/// Pretty-prints a model with flattened but not fully resolved axioms.
+/// Pretty-prints a model with fully resolved axioms.
 let printFullModel = printModel printFullAxiom
+
+/// Pretty-prints a model with semantically translated axioms.
+let printSemModel = printModel printSemAxiom

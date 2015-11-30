@@ -36,6 +36,9 @@ type Options = {
     [<Option('e',
              HelpText = "Stop at expanding and output the expanded model.")>]
     expand: bool;
+    [<Option('s',
+             HelpText = "Stop at semantic translation and output the translated model.")>]
+    semantics: bool;
     [<Value(0,
             MetaName = "input",
             HelpText = "The file to load (omit, or supply -, for standard input).")>]
@@ -89,6 +92,7 @@ type OutputType =
     | OutputTModel
     | OutputTFlatten
     | OutputTExpand
+    | OutputTSemantics
 
 /// The output from a Starling run.
 type Output =
@@ -97,6 +101,7 @@ type Output =
     | OutputModel of Starling.Model.PartModel
     | OutputFlatten of Starling.Model.FlatModel
     | OutputExpand of Starling.Model.FullModel
+    | OutputSemantics of Starling.Model.SemModel
 
 let printOutput out =
     match out with
@@ -105,6 +110,7 @@ let printOutput out =
     | OutputModel m -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printPartModel m)
     | OutputFlatten f -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printFlatModel f)
     | OutputExpand e -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printFullModel e)
+    | OutputSemantics e -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printSemModel e)
 
 (*
     Starling pipeline (here defined in reverse):
@@ -114,7 +120,8 @@ let printOutput out =
     3) Make model from AST, with ‘partially resolved’ (structured) axioms;
     4) Flatten model to produce flattened axioms;
     5) Expand conditionals in axioms into guarded axioms;
-    6) Run proof on model.
+    6) Expand primitives in axioms into Z3 relations;
+    7) Run proof on model.
 
     The Starling pipeline can be halted at the end of any of these
     stages, producing the various Output types above (in addition to
@@ -122,12 +129,21 @@ let printOutput out =
 *)
 
 /// Runs the model expander and further Starling processes.
+let runStarlingSemantics modelR otype =
+    let semanticsR = lift Starling.Semantics.translate modelR
+
+    match otype with
+    | OutputTSemantics -> lift OutputSemantics semanticsR
+    | _ -> fail ( SEOther "this should be unreachable!" )
+
+
+/// Runs the model expander and further Starling processes.
 let runStarlingExpand modelR otype =
     let expandR = lift Starling.Expander.expand modelR
 
     match otype with
     | OutputTExpand -> lift OutputExpand expandR
-    | _ -> fail ( SEOther "this should be unreachable!" )
+    | _ -> runStarlingSemantics expandR otype
 
 
 /// Runs the model flattener and further Starling processes.
@@ -175,12 +191,13 @@ let runStarling file otype =
 let otypeFromOpts opts =
     // We stop at the earliest chosen stopping point,
     // and default to the latest if no option has been given.
-    match (opts.parse, opts.collate, opts.model, opts.flatten, opts.expand) with
-        | ( true, _, _, _, _ ) -> OutputTParse
-        | ( false, true, _, _ , _) -> OutputTCollation
-        | ( false, false, true , _, _) -> OutputTModel
-        | ( false, false, false , true, _) -> OutputTFlatten
-        | _ -> OutputTExpand
+    match (opts.parse, opts.collate, opts.model, opts.flatten, opts.expand, opts.semantics) with
+        | ( true, _, _, _, _, _ ) -> OutputTParse
+        | ( false, true, _, _ , _, _) -> OutputTCollation
+        | ( false, false, true, _, _, _) -> OutputTModel
+        | ( false, false, false, true, _, _) -> OutputTFlatten
+        | ( false, false, false, false, true, _) -> OutputTExpand
+        | _ -> OutputTSemantics
 
 /// Runs Starling and outputs the results.
 let starlingMain opts =

@@ -262,3 +262,14 @@ let semanticsOf model prim =
                 |> Seq.toArray
 
     ctx.MkAnd toAnd
+
+/// Translates a model axiom into an axiom over a semantic expression.
+let translateAxiom model axiom =
+    { Conditions = axiom.Conditions
+      Inner = semanticsOf model axiom.Inner }
+
+/// Translate a model's axioms to axioms over semantic expressions.
+let translateAxioms model = List.map (translateAxiom model) model.Axioms
+
+/// Translate a model over Prims to a model over semantic expressions.
+let translate model = withAxioms (translateAxioms model) model

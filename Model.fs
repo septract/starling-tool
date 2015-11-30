@@ -62,13 +62,17 @@ type Hoare<'c, 'i> =
 type PartConditionPair = ConditionPair<CondView list>
 type PartHoare<'i> = Hoare<CondView list, 'i>
 
-/// A flat axiom, containing a possibly-conditional Hoare triple on a single
+/// A flat axiom, containing a possibly-conditional Hoare triple on an
 /// atomic action.
 type FlatAxiom = PartHoare<Prim>
 
-/// A fully rsolved axiom, containing an unconditional Hoare triple on multiple
-/// atomic actions.
+/// A fully resolved axiom, containing a guarded Hoare triple on an
+/// atomic action.
 type FullAxiom = Hoare<GuarView list, Prim>
+
+/// A semantically translated axiom, carrying a Z3 Boolean expression as
+/// a command.
+type SemAxiom = Hoare<GuarView list, Z3.BoolExpr>
 
 /// A partially resolved axiom.
 type PartAxiom =
@@ -105,6 +109,9 @@ type FlatModel = Model<VarMap, VarMap, FlatAxiom list, Constraint list>
 
 /// A full model of a Starling program.
 type FullModel = Model<VarMap, VarMap, FullAxiom list, Constraint list>
+
+/// A semantically translated model of a Starling program.
+type SemModel = Model<VarMap, VarMap, SemAxiom list, Constraint list>
 
 /// Disposes the Z3 context inside a Model.
 let disposeZ3 model = model.Context.Dispose ()
