@@ -4,7 +4,7 @@
 /// This is given a separate type in case we add to it later.
 type LValue =
     | LVIdent of string
-    | LVPtr of LValue
+    //| LVPtr of LValue
 
 /// An untyped, raw expression.
 /// These currently cover all languages, but this may change later.

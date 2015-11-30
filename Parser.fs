@@ -81,8 +81,9 @@ let parseExpression, parseExpressionRef = createParserForwardedToRef<Expression,
 /// Parser for lvalues.
 let parseLValue, parseLValueRef = createParserForwardedToRef<LValue, unit> ()
 do parseLValueRef :=
-    (pstring "*" >>. ws >>. parseLValue |>> LVPtr)
-    <|> (parseIdentifier |>> LVIdent)
+    //(pstring "*" >>. ws >>. parseLValue |>> LVPtr)
+    //<|>
+    (parseIdentifier |>> LVIdent)
 
 /// Parser for primary expressions.
 let parsePrimaryExpression =

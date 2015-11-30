@@ -28,7 +28,7 @@ let rec flattenLV v =
     // have a semantics for it yet.
     match v with
     | LVIdent s -> s
-    | LVPtr vv -> "*" + flattenLV vv
+    //| LVPtr vv -> "*" + flattenLV vv
 
 /// Creates a reference to a Boolean lvalue.
 /// This does NOT check to see if the lvalue exists!
@@ -205,7 +205,7 @@ let varType var =
 let lookupVar env lvalue =
     match lvalue with
     | LVIdent s -> Map.tryFind s env |> failIfNone (LENotFound s)
-    | _ -> LEBadLValue lvalue |> fail
+    //| _ -> LEBadLValue lvalue |> fail
 
 /// Looks up a variable's type in an environment.
 let lookupVarType env lvalue =

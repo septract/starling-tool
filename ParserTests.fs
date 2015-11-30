@@ -20,6 +20,7 @@ let assertParseExpr expr ast =
                 expr
                 ast
 
+(*
 let testLValueIndirection =
     testList "Test that LValue indirection syntax works" [
         testCase "'foo' -> 0 indirections" <|
@@ -37,6 +38,7 @@ let testLValueIndirection =
                                  "'**foo' -> 2 indirections"
                                  "**foo"
                                  (LVPtr (LVPtr (LVIdent "foo"))) ]
+*)
 
 let testExpressionPrecedence =
     testList "Test that parsing expressions yields correct precedence" [
@@ -97,8 +99,8 @@ let testTicketedLock =
 [<Tests>]
 let testParser =
     testList "Test the parser" [
-        testList "Test parsing of lvalues" [
-            testLValueIndirection ]
+        //testList "Test parsing of lvalues" [
+        //    testLValueIndirection ]
         testList "Test parsing of expressions" [
             testExpressionPrecedence ]
         testList "Test parsing of atomics" [
