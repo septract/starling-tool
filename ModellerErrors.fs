@@ -9,6 +9,10 @@ open Starling
 type ExprError =
     | EEBadAST of ast: AST.Expression * reason: string
 
+/// Represents an error when converting a view prototype.
+type ViewProtoError =
+    | VPEDuplicateParam of AST.ViewProto * param: string
+
 /// Represents an error when converting a view.
 type ViewError =
     | VEBadExpr of AST.View * ExprError
@@ -42,6 +46,7 @@ type AxiomError =
 
 /// Represents an error when converting a model.
 type ModelError =
+    | MEVProto of ViewProtoError
     | MEConstraint of ConstraintError
     | MEVar of VarError
     | MEAxiom of AxiomError

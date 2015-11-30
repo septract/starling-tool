@@ -70,12 +70,20 @@ let printAxiomError ae =
         "cannot use " + printCommand 0 cmd
                       + " in an axiom: " + reason
 
+/// Pretty-prints view prototype conversion errors
+let printViewProtoError vpe =
+    match vpe with
+    | VPEDuplicateParam (vp, param) ->
+        "view proto " + printViewProto vp
+                      + " has duplicate param " + param
+
 /// Pretty-prints model conversion errors.
 let printModelError ce =
     match ce with
     | MEConstraint ce -> printConstraintError ce
     | MEVar ve -> printVarError ve
     | MEAxiom ae -> printAxiomError ae
+    | MEVProto vpe -> printViewProtoError vpe
 
 /// Pretty-prints a flat view.
 let printModelView v =

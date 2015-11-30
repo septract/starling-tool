@@ -406,9 +406,31 @@ let modelAxioms pmod methods =
     |> collect
     |> lift List.concat
 
+/// Checks a view prototype to see if it contains duplicate parameters.
+let checkViewProtoDuplicates proto =
+    let names = List.map snd proto.VPPars
+    match (findDuplicates names) with
+    | [] -> ok proto
+    | ds -> Bad <| List.map (fun d -> VPEDuplicateParam (proto, d)) ds
+
+/// Checks a view prototype and converts it to an associative pair.
+let modelViewProto proto =
+    proto
+    |> checkViewProtoDuplicates
+    |> lift (fun pro -> (pro.VPName, pro.VPPars))
+
+/// Checks view prototypes and converts them to map form.
+let modelViewProtos protos =
+    protos
+    |> Seq.ofList
+    |> Seq.map modelViewProto
+    |> collect
+    |> lift Map.ofSeq
+
 /// Converts a collated script to a model with the given context.
 let modelWith ctx collated =
     trial {
+        let! vprotos = mapMessages MEVProto (modelViewProtos collated.CVProtos)
         let! globals = mapMessages MEVar (modelVarList ctx collated.CGlobals)
         let! locals = mapMessages MEVar (modelVarList ctx collated.CLocals)
         // TODO(CaptainHayashi): checking of constraints against locals and globals
