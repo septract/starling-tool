@@ -2,6 +2,13 @@ module Starling.Model
 
 open Microsoft
 
+/// A 'flattened' (multiset-representation) view definition.
+type ViewDef =
+    // TODO(CaptainHayashi): rename to ViewDef.
+    { VDName: string
+      VDParams: (string * AST.Type) list }
+
+
 /// A 'flattened' (multiset-representation) view.
 type View =
     // TODO(CaptainHayashi): rename to ViewDef.
