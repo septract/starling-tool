@@ -259,7 +259,7 @@ let rec modelView model vast =
                                              |> collect
                                return [CSetView {VName = s
                                                  VParams = pnames} ] }
-    | IfView (e, l, r) -> trial {let! ez3 = boolExprToZ3 model model.AllVars e |> mapMessages ((curry VEBadExpr) vast)
+    | IfView (e, l, r) -> trial {let! ez3 = boolExprToZ3 model model.Locals e |> mapMessages ((curry VEBadExpr) vast)
                                  let! lvs = modelView model l
                                  let! rvs = modelView model r
                                  return [CITEView (ez3, lvs, rvs) ] }
@@ -300,12 +300,12 @@ let lookupGlobalType model lvalue =
 /// Converts a Boolean expression to z3 within the given axiom context.
 /// Returns a Chessie result; failures have AEBadExpr messages.
 let axiomBoolExprToZ3 model expr =
-    boolExprToZ3 model model.AllVars expr |> mapMessages AEBadExpr
+    boolExprToZ3 model model.Locals expr |> mapMessages AEBadExpr
 
 /// Converts an arithmetic expression to z3 within the given axiom context.
 /// Returns a Chessie result; failures have AEBadExpr messages.
 let axiomArithExprToZ3 model expr =
-    arithExprToZ3 model model.AllVars expr |> mapMessages AEBadExpr
+    arithExprToZ3 model model.Locals expr |> mapMessages AEBadExpr
 
 /// Converts an atomic action to a Prim.
 let rec modelPrimOnAtomic model atom =
