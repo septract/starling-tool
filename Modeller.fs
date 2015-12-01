@@ -63,19 +63,9 @@ let mkSub2 (ctx: Context) (l, r) = ctx.MkSub [| l; r |]
 /// Makes a Mul out of a pair of two expressions.
 let mkMul2 (ctx: Context) (l, r) = ctx.MkMul [| l; r |]
 
-/// Converts a pair of arith-exps to Z3, then chains f onto them.
-let rec chainArithExprs (model: Model<'a, 'b>)
-    (f: (ArithExpr * ArithExpr) -> 'a)
-    (pair: (AST.Expression * AST.Expression))
-      : Result<'a, ExprError> =
-    pairBindMap (arithExprToZ3 model) f pair
-
-/// Converts a pair of bool-exps to Z3, then chains f onto them.
-and chainBoolExprs model f = pairBindMap (boolExprToZ3 model) f
-
 /// Converts a Starling Boolean expression to a Z3 predicate using
 /// the given Z3 context.
-and boolExprToZ3 model expr =
+let rec boolExprToZ3 model env expr =
     let ctx = model.Context
     match expr with
     | TrueExp -> ctx.MkTrue () |> ok
@@ -84,8 +74,8 @@ and boolExprToZ3 model expr =
     | BopExp (BoolOp as op, l, r) ->
         match op with
             | ArithIn as o ->
-                trial {let! lA = arithExprToZ3 model l
-                       let! rA = arithExprToZ3 model r
+                trial {let! lA = arithExprToZ3 model env l
+                       let! rA = arithExprToZ3 model env r
                        return (match o with
                                | Gt -> ctx.MkGt
                                | Ge -> ctx.MkGe
@@ -93,16 +83,16 @@ and boolExprToZ3 model expr =
                                | Lt -> ctx.MkLt
                                | _  -> failwith "unreachable") (lA, rA) }
             | BoolIn as o ->
-                trial {let! lB = boolExprToZ3 model l
-                       let! rB = boolExprToZ3 model r
+                trial {let! lB = boolExprToZ3 model env l
+                       let! rB = boolExprToZ3 model env r
                        return (match o with
                                | And -> mkAnd2 ctx
                                | Or -> mkOr2 ctx
                                | _  -> failwith "unreachable") (lB, rB) }
             | AnyIn as o ->
                 // TODO(CaptainHayashi): don't infer bool here.
-                trial {let! lE = boolExprToZ3 model l
-                       let! rE = boolExprToZ3 model r
+                trial {let! lE = boolExprToZ3 model env l
+                       let! rE = boolExprToZ3 model env r
                        return (match o with
                                | Eq -> ctx.MkEq
                                | Neq -> (ctx.MkEq >> ctx.MkNot)
@@ -111,14 +101,14 @@ and boolExprToZ3 model expr =
 
 /// Converts a Starling arithmetic expression ot a Z3 predicate using
 /// the given Z3 context.
-and arithExprToZ3 model expr =
+and arithExprToZ3 model env expr =
     let ctx = model.Context
     match expr with
     | IntExp i -> ((ctx.MkInt i) :> ArithExpr ) |> ok
     | LVExp v -> ((ctx.MkIntConst (flattenLV v)) :> ArithExpr) |> ok
     | BopExp (ArithOp & op, l, r) ->
-        trial { let! lA = arithExprToZ3 model l
-                let! rA = arithExprToZ3 model r
+        trial { let! lA = arithExprToZ3 model env l
+                let! rA = arithExprToZ3 model env r
                 return (match op with
                         | Mul -> mkMul2 ctx
                         | Div -> ctx.MkDiv
@@ -172,7 +162,7 @@ let modelConstraint model c =
     let ctx = model.Context
     trial {let! e = mapMessages CEView (envOfConstraint model c)
            let v = viewDefToSet c.CView
-           let! c = mapMessages CEExpr (boolExprToZ3 model c.CExpression)
+           let! c = mapMessages CEExpr (boolExprToZ3 model e c.CExpression)
            return {CViews = v
                    CZ3 = c}}
 
@@ -186,7 +176,7 @@ let modelConstraints model cs =
 //
 
 /// Tries to flatten a view AST into a multiset.
-let rec modelView ctx vast =
+let rec modelView model vast =
     match vast with
     | Func (s, pars) -> trial {let! pnames = List.map (function
                                                        | LVExp (LVIdent s) -> ok s
@@ -195,24 +185,24 @@ let rec modelView ctx vast =
                                              |> collect
                                return [CSetView {VName = s
                                                  VParams = pnames} ] }
-    | IfView (e, l, r) -> trial {let! ez3 = boolExprToZ3 ctx e |> mapMessages ((curry VEBadExpr) vast)
-                                 let! lvs = modelView ctx l
-                                 let! rvs = modelView ctx r
+    | IfView (e, l, r) -> trial {let! ez3 = boolExprToZ3 model model.AllVars e |> mapMessages ((curry VEBadExpr) vast)
+                                 let! lvs = modelView model l
+                                 let! rvs = modelView model r
                                  return [CITEView (ez3, lvs, rvs) ] }
     | Unit -> ok []
-    | Join (l, r) -> joinViews ctx l r
+    | Join (l, r) -> joinViews model l r
 /// Merges two sides of a view monoid in the AST into one multiset.
-and joinViews ctx l r =
+and joinViews model l r =
     lift2 (List.append)
-          (modelView ctx l)
-          (modelView ctx r)
+          (modelView model l)
+          (modelView model r)
 /// Converts a pair of AST views into a ConditionPair.
 /// The pair is enclosed in a Chessie result.
-let makeConditionPair ctx preAst postAst =
+let makeConditionPair model preAst postAst =
     lift2 (fun pre post -> {Pre = pre
                             Post = post} )
-          (modelView ctx preAst)
-          (modelView ctx postAst)
+          (modelView model preAst)
+          (modelView model postAst)
 
 //
 // Axioms
@@ -225,26 +215,26 @@ let primToAxiom cpair prim = {Conditions = cpair
 
 /// Tries to look up the type of a local variable in an axiom context.
 /// Returns a Chessie result; failures have AEBadLocal messages.
-let lookupLocalType pmod lvalue =
-    lookupVarType pmod.Locals lvalue |> mapMessages AEBadLocal
+let lookupLocalType model lvalue =
+    lookupVarType model.Locals lvalue |> mapMessages AEBadLocal
 
 /// Tries to look up the type of a global variable in an axiom context.
 /// Returns a Chessie result; failures have AEBadGlobal messages.
-let lookupGlobalType pmod lvalue =
-    lookupVarType pmod.Globals lvalue |> mapMessages AEBadGlobal
+let lookupGlobalType model lvalue =
+    lookupVarType model.Globals lvalue |> mapMessages AEBadGlobal
 
 /// Converts a Boolean expression to z3 within the given axiom context.
 /// Returns a Chessie result; failures have AEBadExpr messages.
-let axiomBoolExprToZ3 pmod expr =
-    boolExprToZ3 pmod expr |> mapMessages AEBadExpr
+let axiomBoolExprToZ3 model expr =
+    boolExprToZ3 model model.AllVars expr |> mapMessages AEBadExpr
 
 /// Converts an arithmetic expression to z3 within the given axiom context.
 /// Returns a Chessie result; failures have AEBadExpr messages.
-let axiomArithExprToZ3 pmod expr =
-    arithExprToZ3 pmod expr |> mapMessages AEBadExpr
+let axiomArithExprToZ3 model expr =
+    arithExprToZ3 model model.AllVars expr |> mapMessages AEBadExpr
 
 /// Converts an atomic action to a Prim.
-let rec modelPrimOnAtomic pmod atom =
+let rec modelPrimOnAtomic model atom =
     match atom with
     | CompareAndSwap (dest, test, set) ->
         (* In a CAS, the destination must be GLOBAL;
@@ -253,16 +243,16 @@ let rec modelPrimOnAtomic pmod atom =
          * dest, test, and set must agree on type.
          * The type of dest and test influences how we interpret set.
          *)
-        trial {let! dtype = lookupGlobalType pmod dest
-               let! ttype = lookupLocalType pmod test
+        trial {let! dtype = lookupGlobalType model dest
+               let! ttype = lookupLocalType model test
 
                match dtype, ttype with
                | Bool, Bool ->
-                   let! setz3 = axiomBoolExprToZ3 pmod set
+                   let! setz3 = axiomBoolExprToZ3 model set
                    // TODO(CaptainHayashi): test locality of c
                    return BoolCAS (dest, test, setz3)
                | Int, Int ->
-                   let! setz3 = axiomArithExprToZ3 pmod set
+                   let! setz3 = axiomArithExprToZ3 model set
                    // TODO(CaptainHayashi): test locality of c
                    return ArithCAS (dest, test, setz3)
                | _ ->
@@ -275,8 +265,8 @@ let rec modelPrimOnAtomic pmod atom =
          *             and the fetch mode can be any valid fetch mode.
          * dest and src must agree on type.
          *)
-        trial {let! dtype = lookupLocalType pmod dest
-               let! stype = lookupGlobalType pmod src
+        trial {let! dtype = lookupLocalType model dest
+               let! stype = lookupGlobalType model src
 
                match dtype, stype, mode with
                | Int, Int, _ -> return ArithFetch (Some dest, src, mode)
@@ -290,7 +280,7 @@ let rec modelPrimOnAtomic pmod atom =
          * Thus, the source must be GLOBAL.
          * We don't allow the Direct fetch mode, as it is useless.
          *)
-        trial {let! stype = lookupGlobalType pmod operand
+        trial {let! stype = lookupGlobalType model operand
 
                match mode, stype with
                | Direct, _ -> return! fail <| AEUnsupportedAtomic (atom, "<var>; has no effect; use <id>; or ; for no-ops")
@@ -298,75 +288,75 @@ let rec modelPrimOnAtomic pmod atom =
                | Decrement, Bool -> return! fail <| AEUnsupportedAtomic (atom, "cannot decrement a Boolean global")
                | _, Int -> return ArithFetch (None, operand, mode) }
     | Id -> ok PrimId
-    | Assume e -> axiomBoolExprToZ3 pmod e |> lift PrimAssume
+    | Assume e -> axiomBoolExprToZ3 model e |> lift PrimAssume
 
 /// Converts a local variable assignment to a Prim.
-and modelPrimOnAssign pmod l e =
+and modelPrimOnAssign model l e =
     (* We model assignments as ArithLocalSet or BoolLocalSet, depending on the
      * type of l, which _must_ be in the locals set..
      * We thus also have to make sure that e is the correct type.
      *)
-    trial {let! ltype = lookupLocalType pmod l
+    trial {let! ltype = lookupLocalType model l
            match ltype with
            | Bool ->
-               let! ez3 = axiomBoolExprToZ3 pmod e
+               let! ez3 = axiomBoolExprToZ3 model e
                return BoolLocalSet (l, ez3)
            | Int ->
-               let! ez3 = axiomArithExprToZ3 pmod e
+               let! ez3 = axiomArithExprToZ3 model e
                return ArithLocalSet (l, ez3) }
 
 /// Creates a partially resolved axiom for an if-then-else.
-and modelAxiomOnITE pmod outcond i t f =
+and modelAxiomOnITE model outcond i t f =
     (* An ITE is not fully resolved yet.  We:
      * 0) Convert the if-statement into a Z3 expression;
      * 1) Place the ITE in the axioms pile;
      * 2) Merge in the axioms from the ‘then’ block;
      * 3) Merge in the axioms from the ‘else’ block.
      *)
-    trial {let! iz3 = axiomBoolExprToZ3 pmod i
+    trial {let! iz3 = axiomBoolExprToZ3 model i
            (* We need to calculate the recursive axioms first, because we
             * need the inner cpairs for each to store the ITE placeholder.
             *)
-           let! taxioms = modelAxiomsOnBlock pmod t
-           let! faxioms = modelAxiomsOnBlock pmod f
+           let! taxioms = modelAxiomsOnBlock model t
+           let! faxioms = modelAxiomsOnBlock model f
 
            return PAITE (iz3, outcond, taxioms, faxioms) }
 
 /// Converts a while or do-while to a partially-resolved axiom.
 /// Which is being modelled is determined by the isDo parameter.
 /// The list is enclosed in a Chessie result.
-and modelAxiomOnWhile isDo pmod cpair e b =
+and modelAxiomOnWhile isDo model cpair e b =
     (* A while is also not fully resolved.
      * Similarly, we convert the condition, recursively find the axioms,
      * inject a placeholder, and add in the recursive axioms.
      *)
-    trial {let! ez3 = axiomBoolExprToZ3 pmod e
-           let! baxioms = modelAxiomsOnBlock pmod b
+    trial {let! ez3 = axiomBoolExprToZ3 model e
+           let! baxioms = modelAxiomsOnBlock model b
 
            return PAWhile (isDo, ez3, cpair, baxioms) }
 
 /// Converts a command and its precondition and postcondition to a
 /// list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
-and modelAxiomOnCommand pmod cpair cmd =
+and modelAxiomOnCommand model cpair cmd =
     match cmd with
-    | Atomic a -> modelPrimOnAtomic pmod a |> lift (primToAxiom cpair)
-    | Assign (l, e) -> modelPrimOnAssign pmod l e |> lift (primToAxiom cpair)
-    | Skip -> modelPrimOnAtomic pmod Id |> lift (primToAxiom cpair)
-    | If (i, t, e) -> modelAxiomOnITE pmod cpair i t e
-    | While (e, b) -> modelAxiomOnWhile false pmod cpair e b
-    | DoWhile (b, e) -> modelAxiomOnWhile true pmod cpair e b
+    | Atomic a -> modelPrimOnAtomic model a |> lift (primToAxiom cpair)
+    | Assign (l, e) -> modelPrimOnAssign model l e |> lift (primToAxiom cpair)
+    | Skip -> modelPrimOnAtomic model Id |> lift (primToAxiom cpair)
+    | If (i, t, e) -> modelAxiomOnITE model cpair i t e
+    | While (e, b) -> modelAxiomOnWhile false model cpair e b
+    | DoWhile (b, e) -> modelAxiomOnWhile true model cpair e b
     | c -> fail <| AEUnsupportedCommand (c, "TODO: implement")
 
 /// Converts a precondition and postcondition to a condition pair, using
 /// the given model and returning errors as AxiomErrors.
-and makeAxiomConditionPair pmod pre post =
-    makeConditionPair pmod pre post
+and makeAxiomConditionPair model pre post =
+    makeConditionPair model pre post
     |> mapMessages AEBadView
 
 /// Converts a block to a Conditioned list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
-and modelAxiomsOnBlock pmod block =
+and modelAxiomsOnBlock model block =
     (* We flip through every entry in the block, extracting its postcondition
      * and block.  At the same time, we hold onto the postcondition of the
      * _last_ entry (or the block precondition if we're at the first entry).
@@ -389,8 +379,8 @@ and modelAxiomsOnBlock pmod block =
                                // If our last axiomatisation failed, this will
                                // cause failure here.
                                let! axioms = axiomsR
-                               let! cpair = makeAxiomConditionPair pmod pre post
-                               let! axiom = modelAxiomOnCommand pmod cpair cmd
+                               let! cpair = makeAxiomConditionPair model pre post
+                               let! axiom = modelAxiomOnCommand model cpair cmd
                                return axiom :: axioms } ))
             block.Contents
             (block.Pre, ok [])
@@ -400,22 +390,22 @@ and modelAxiomsOnBlock pmod block =
      * pair derived from the precondition and postcondition of the block.
      *)
     trial {let! xs = axioms
-           let! cpair = makeAxiomConditionPair pmod block.Pre bpost
+           let! cpair = makeAxiomConditionPair model block.Pre bpost
            return {Conditions = cpair
                    Inner = xs}}
 
 /// Converts a method to a list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
-let modelAxiomsOnMethod pmod meth =
+let modelAxiomsOnMethod model meth =
     // TODO(CaptainHayashi): method parameters
-    modelAxiomsOnBlock pmod meth.Body
+    modelAxiomsOnBlock model meth.Body
     |> lift (fun c -> c.Inner)
 
 /// Converts a list of methods to a list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
-let modelAxioms pmod methods =
+let modelAxioms model methods =
     // TODO(CaptainHayashi): method parameters
-    List.map (modelAxiomsOnMethod pmod) methods
+    List.map (modelAxiomsOnMethod model) methods
     |> collect
     |> lift List.concat
 
