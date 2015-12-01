@@ -21,12 +21,27 @@ let printCollatedScript cs =
             VSep (List.map (printMethod >> String) cs.CMethods, Separator) ],
           Separator)
 
+/// Pretty-prints variable conversion errors.
+let printVarMapError ve =
+    match ve with
+    | VMEDuplicate vn -> "variable '" + vn + "' is defined multiple times"
+    | VMENotFound vn -> "variable '" + vn + "' not in environment"
+
 /// Pretty-prints expression conversion errors.
 let printExprError ee =
     match ee with
     | EEBadAST (ast, reason) ->
         "cannot convert " + printExpression ast
                           + " to Z3: " + reason
+    | EEVar (ast, vme) ->
+        "bad variable usage in " + printExpression ast
+                                 + ": " + printVarMapError vme
+    | EEVarNotBoolean lv ->
+        "lvalue '" + printLValue lv
+                   + "' is not a suitable type for its use in a boolean expression"
+    | EEVarNotArith lv ->
+        "lvalue '" + printLValue lv
+                   + "' is not a suitable type for use in an arithmetic expression"
 
 /// Pretty-prints view conversion errors.
 let printViewError ve =
@@ -36,12 +51,6 @@ let printViewError ve =
                       + "': " + printExprError ee
     | VEUnsupported (view, reason) ->
         "view '" + printView view + "' not supported: " + reason
-
-/// Pretty-prints variable conversion errors.
-let printVarMapError ve =
-    match ve with
-    | VMEDuplicate vn -> "variable '" + vn + "' is defined multiple times"
-    | VMENotFound vn -> "variable '" + vn + "' not in environment"
 
 /// Pretty-prints viewdef conversion errors.
 let printViewDefError ve =

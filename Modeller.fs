@@ -11,6 +11,13 @@ open Starling.Collator
 open Starling.Model
 open Starling.Errors.Modeller
 
+
+(*
+ * Expression classification
+ *)
+
+/// Active pattern classifying bops as to whether they create
+/// arithmetic or Boolean expressions
 let (|ArithOp|BoolOp|) bop =
     match bop with
     | Mul -> ArithOp
@@ -26,6 +33,8 @@ let (|ArithOp|BoolOp|) bop =
     | And -> BoolOp
     | Or -> BoolOp
 
+/// Active pattern classifying bops as to whether they take in
+/// arithmetic, Boolean, or indeterminate operands.
 let (|ArithIn|BoolIn|AnyIn|) bop =
     match bop with
     | Mul -> ArithIn
@@ -41,16 +50,20 @@ let (|ArithIn|BoolIn|AnyIn|) bop =
     | And -> BoolIn
     | Or -> BoolIn
 
-/// Tries to flatten a view definition AST into a multiset.
-let rec viewDefToSet vast =
-    match vast with
-    | DFunc (s, pars) -> [ { VName = s; VParams = pars } ]
-    | DUnit -> []
-    | DJoin (l, r) -> joinViewDefs l r
-/// Merges two sides of a view monoid in the AST into one multiset.
-and joinViewDefs l r =
-     List.concat [viewDefToSet l
-                  viewDefToSet r]
+/// Active pattern classifying expressions as to whether they are
+/// arithmetic, Boolean, or indeterminate.
+let (|BoolExp|ArithExp|AnyExp|) expr =
+    match expr with
+    | LVExp _ -> AnyExp
+    | IntExp _ -> ArithExp
+    | TrueExp | FalseExp -> BoolExp
+    | BopExp (BoolOp, _, _) -> BoolExp
+    | BopExp (ArithOp, _, _) -> ArithExp
+
+
+(*
+ * Expression translation
+ *)
 
 /// Makes an And out of a pair of two expressions.
 let mkAnd2 (ctx: Context) (l, r) = ctx.MkAnd [| l; r |]
@@ -63,14 +76,46 @@ let mkSub2 (ctx: Context) (l, r) = ctx.MkSub [| l; r |]
 /// Makes a Mul out of a pair of two expressions.
 let mkMul2 (ctx: Context) (l, r) = ctx.MkMul [| l; r |]
 
+/// Converts a Starling expression of ambiguous type to a Z3 predicate using
+/// the given partial model and environment.
+let rec anyExprToZ3 model env expr =
+    let ctx = model.Context
+    match expr with
+    (* First, if we have a variable, the type of expression is
+     * determined by the type of the variable.
+     *)
+    | LVExp v ->
+        (* Look-up the variable to ensure it a) exists and b) is of a
+         * Boolean type.
+         *)
+        trial {let! vt = lookupVarType env v
+                         |> mapMessages ((curry EEVar) expr)
+               match vt with
+               | Bool -> return (mkBoolLV ctx v) :> Expr
+               | Int -> return (mkIntLV ctx v) :> Expr}
+    (* We can use the active patterns above to figure out whether we
+     * need to treat this expression as arithmetic or Boolean.
+     *)
+    | ArithExp -> arithExprToZ3 model env expr |> lift (fun e -> e :> Expr)
+    | BoolExp -> boolExprToZ3 model env expr |> lift (fun e -> e :> Expr)
+    | _ -> failwith "unreachable"
+
 /// Converts a Starling Boolean expression to a Z3 predicate using
-/// the given Z3 context.
-let rec boolExprToZ3 model env expr =
+/// the given partial model and environment.
+and boolExprToZ3 model env expr =
     let ctx = model.Context
     match expr with
     | TrueExp -> ctx.MkTrue () |> ok
     | FalseExp -> ctx.MkFalse () |> ok
-    | LVExp v -> ctx.MkBoolConst ( flattenLV v ) |> ok
+    | LVExp v ->
+        (* Look-up the variable to ensure it a) exists and b) is of a
+         * Boolean type.
+         *)
+        trial {let! vt = lookupVarType env v
+                         |> mapMessages ((curry EEVar) expr)
+               match vt with
+               | Bool -> return (mkBoolLV ctx v)
+               | _ -> return! (fail <| EEVarNotBoolean v) }
     | BopExp (BoolOp as op, l, r) ->
         match op with
             | ArithIn as o ->
@@ -91,8 +136,8 @@ let rec boolExprToZ3 model env expr =
                                | _  -> failwith "unreachable") (lB, rB) }
             | AnyIn as o ->
                 // TODO(CaptainHayashi): don't infer bool here.
-                trial {let! lE = boolExprToZ3 model env l
-                       let! rE = boolExprToZ3 model env r
+                trial {let! lE = anyExprToZ3 model env l
+                       let! rE = anyExprToZ3 model env r
                        return (match o with
                                | Eq -> ctx.MkEq
                                | Neq -> (ctx.MkEq >> ctx.MkNot)
@@ -105,17 +150,46 @@ and arithExprToZ3 model env expr =
     let ctx = model.Context
     match expr with
     | IntExp i -> ((ctx.MkInt i) :> ArithExpr ) |> ok
-    | LVExp v -> ((ctx.MkIntConst (flattenLV v)) :> ArithExpr) |> ok
-    | BopExp (ArithOp & op, l, r) ->
-        trial { let! lA = arithExprToZ3 model env l
-                let! rA = arithExprToZ3 model env r
-                return (match op with
-                        | Mul -> mkMul2 ctx
-                        | Div -> ctx.MkDiv
-                        | Add -> mkAdd2 ctx
-                        | Sub -> mkSub2 ctx
-                        | _  -> failwith "unreachable") (lA, rA) }
+    | LVExp v ->
+        (* Look-up the variable to ensure it a) exists and b) is of an
+         * arithmetic type.
+         *)
+        trial {let! vt = lookupVarType env v
+                         |> mapMessages ((curry EEVar) expr)
+               match vt with
+               | Int -> return (mkIntLV ctx v) :> ArithExpr
+               | _ -> return! (fail <| EEVarNotArith v) }
+    | BopExp (ArithOp as op, l, r) ->
+        trial {let! lA = arithExprToZ3 model env l
+               let! rA = arithExprToZ3 model env r
+               return (match op with
+                       | Mul -> mkMul2 ctx
+                       | Div -> ctx.MkDiv
+                       | Add -> mkAdd2 ctx
+                       | Sub -> mkSub2 ctx
+                       | _  -> failwith "unreachable") (lA, rA) }
     | _ -> fail <| EEBadAST (expr, "cannot be an arithmetic expression")
+
+
+(*
+ * View definitions
+ *)
+
+/// Tries to flatten a view definition AST into a multiset.
+let rec viewDefToSet vast =
+    match vast with
+    | DFunc (s, pars) -> [ { VName = s; VParams = pars } ]
+    | DUnit -> []
+    | DJoin (l, r) -> joinViewDefs l r
+/// Merges two sides of a view monoid in the AST into one multiset.
+and joinViewDefs l r =
+     List.concat [viewDefToSet l
+                  viewDefToSet r]
+
+
+(*
+ * Views
+ *)
 
 /// Merges a list of prototype and definition parameters into one environment,
 /// binding the types from the former to the names from the latter.

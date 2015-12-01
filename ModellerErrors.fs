@@ -9,6 +9,9 @@ open Starling.Errors.Var
 /// Represents an error when converting an expression.
 type ExprError =
     | EEBadAST of ast: AST.Expression * reason: string
+    | EEVar of ast: AST.Expression * err: VarMapError
+    | EEVarNotBoolean of var: Var.LValue
+    | EEVarNotArith of var: Var.LValue
 
 /// Represents an error when converting a view prototype.
 type ViewProtoError =
