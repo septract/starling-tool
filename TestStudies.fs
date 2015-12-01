@@ -199,28 +199,6 @@ let ticketLockModel ctx =
                                VarPreExpr = ctx.MkIntConst "t!before"
                                VarPostExpr = ctx.MkIntConst "t!after"
                                VarFrameExpr = ctx.MkIntConst "t!r"} ) ]
-     AllVars =
-         Map.ofList [ ("s",
-                       IntVar {VarExpr = ctx.MkIntConst "s"
-                               VarPreExpr = ctx.MkIntConst "s!before"
-                               VarPostExpr = ctx.MkIntConst "s!after"
-                               VarFrameExpr = ctx.MkIntConst "s!r"} )
-                      ("t",
-                       IntVar {VarExpr = ctx.MkIntConst "t"
-                               VarPreExpr = ctx.MkIntConst "t!before"
-                               VarPostExpr = ctx.MkIntConst "t!after"
-                               VarFrameExpr = ctx.MkIntConst "t!r"} )
-                      ("serving",
-                       IntVar {VarExpr = ctx.MkIntConst "serving"
-                               VarPreExpr = ctx.MkIntConst "serving!before"
-                               VarPostExpr = ctx.MkIntConst "serving!after"
-                               VarFrameExpr = ctx.MkIntConst "serving!r"} )
-                      ("ticket",
-                       IntVar {VarExpr = ctx.MkIntConst "ticket"
-                               VarPreExpr = ctx.MkIntConst "ticket!before"
-                               VarPostExpr = ctx.MkIntConst "ticket!after"
-                               VarFrameExpr = ctx.MkIntConst "ticket!r"} ) ]
-
      Axioms =
          [PAAxiom {Conditions = {Pre = [CSetView {VName = "holdLock"
                                                   VParams = []} ]

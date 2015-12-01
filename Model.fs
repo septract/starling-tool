@@ -88,8 +88,7 @@ type Model<'a, 'c> =
 
       Globals: Var.VarMap
       Locals: Var.VarMap
-      AllVars: Var.VarMap
-      Axioms:  'a
+      Axioms: 'a
       VProtos: Map<string, (Var.Type * string) list>
 
       // This corresponds to the function D.
@@ -113,11 +112,10 @@ let disposeZ3 model = model.Context.Dispose ()
 /// Creates a new model that is the input model with a different axiom set.
 /// The axiom set may be of a different type.
 let withAxioms (axioms: 'y) (model: Model<'x, 'c>): Model<'y, 'c> =
-    { Context = model.Context
-      Globals = model.Globals
-      Locals = model.Locals
-      AllVars = model.AllVars
-      VProtos = model.VProtos
-      DefViews = model.DefViews
-      Axioms = axioms }
+    {Context = model.Context
+     Globals = model.Globals
+     Locals = model.Locals
+     VProtos = model.VProtos
+     DefViews = model.DefViews
+     Axioms = axioms}
 

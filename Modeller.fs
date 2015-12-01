@@ -509,12 +509,10 @@ let modelWith ctx collated =
     trial {let! vprotos = mapMessages MEVProto (modelViewProtos collated.CVProtos)
            let! globals = mapMessages MEVar (makeVarMap ctx collated.CGlobals)
            let! locals = mapMessages MEVar (makeVarMap ctx collated.CLocals)
-           let! allvars = mapMessages MEVar (combineMaps locals globals)
 
            let imod = {Context = ctx
                        Globals = globals
                        Locals = locals
-                       AllVars = allvars
                        VProtos = vprotos
                        DefViews = ()
                        Axioms = () }
@@ -525,7 +523,6 @@ let modelWith ctx collated =
            let pmod = {Context = ctx
                        Globals = globals
                        Locals = locals
-                       AllVars = allvars
                        VProtos = vprotos
                        DefViews = constraints
                        Axioms = () }

@@ -15,7 +15,7 @@ let assertZ3ArithExpr ctx expr z3 =
     let model = ticketLockModel ctx
     Assert.Equal (Starling.Pretty.AST.printExpression expr
                    + " -Z3-> " + z3.ToString (),
-                  Starling.Modeller.arithExprToZ3 model model.AllVars expr,
+                  Starling.Modeller.arithExprToZ3 model model.Locals expr,
                   ok z3)
 
 /// Assertion that converting the Boolean expression `expr` to Z3
@@ -24,7 +24,7 @@ let assertZ3BoolExpr ctx expr z3 =
     let model = ticketLockModel ctx
     Assert.Equal (Starling.Pretty.AST.printExpression expr
                    + " -Z3-> " + z3.ToString (),
-                  Starling.Modeller.boolExprToZ3 model model.AllVars expr,
+                  Starling.Modeller.boolExprToZ3 model model.Locals expr,
                   ok z3)
 
 let testExprToZ3 ctx =
