@@ -112,9 +112,24 @@ let printModelView v =
     hsep [ String v.VName
            parened (HSep (List.map String v.VParams, String ",")) ]
 
+/// Pretty-prints a type-name parameter.
+let printParam (ty, name) =
+    hsep [String <| printType ty
+          String name]
+
+/// Pretty-prints a flat view def.
+let printModelViewDef v =
+    // TODO(CaptainHayashi): sort pretty-printing out so this can move
+    hsep [ String v.VDName
+           parened (HSep (List.map printParam v.VDParams, String ",")) ]
+
 /// Pretty-prints a multiset of views.
 let printModelViews vs =
     squared (HSep (List.map printModelView vs, String ","))
+
+/// Pretty-prints a multiset of viewdefs.
+let printModelViewDefs vs =
+    squared (HSep (List.map printModelViewDef vs, String ","))
 
 /// Pretty-prints Z3 expressions
 let printZ3Exp (expr: #Z3.Expr) = String (expr.ToString ())
@@ -268,7 +283,7 @@ let rec printPartAxiom axiom =
 
 /// Pretty-prints a model constraint.
 let printModelConstraint c =
-    keyMap [ ("View", printModelViews (c.CViews))
+    keyMap [ ("View", printModelViewDefs c.CViews)
              ("Z3", c.CZ3.ToString () |> String) ]
 
 /// Pretty-prints a model view prototype.

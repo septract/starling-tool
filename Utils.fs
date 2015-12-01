@@ -70,3 +70,9 @@ let mapMessages f =
     either (fun pair -> Ok (fst pair, List.map f (snd pair)))
            (fun msgs -> List.map f msgs |> Bad)
 
+/// Like fold, but constantly binds the given function over a Chessie result.
+/// The initial state is wrapped in 'ok'.
+let seqBind f initialS xs =
+    Seq.fold (fun s x -> bind (f x) s)
+             (ok initialS)
+             xs

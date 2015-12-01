@@ -191,18 +191,17 @@ and joinViewDefs l r =
  * Views
  *)
 
-/// Merges a list of prototype and definition parameters into one environment,
+/// Merges a list of prototype and definition parameters into one list,
 /// binding the types from the former to the names from the latter.
-let funcViewEnvMerge ctx ppars dpars =
+let funcViewParMerge ppars dpars =
     List.map2
-        (fun (ty, _) name -> (name, makeVar ctx ty name))
+        (fun (ty, _) name -> (ty, name))
         ppars
         dpars
-    |> Map.ofList
 
 /// Produces the environment created by interpreting the functional view with
 /// name name and params dpars, using the view prototype map vpm.
-let envOfFuncViewDef ctx vpm name dpars =
+let modelFuncViewDef ctx vpm name dpars =
     // Does this functional view name a proper view?
     match Map.tryFind name vpm with
     | Some ppars ->
@@ -211,32 +210,42 @@ let envOfFuncViewDef ctx vpm name dpars =
         let lppars = List.length ppars
         if ldpars <> lppars
         then fail <| VDEBadParamCount (name, lppars, ldpars)
-        else ok <| funcViewEnvMerge ctx ppars dpars
+        else ok <| [ {VDName = name
+                      VDParams = funcViewParMerge ppars dpars} ]
     | None -> fail <| VDENoSuchView name
 
-     
+/// Tries to convert a view def into its model (multiset) form.
+let rec modelViewDef model vd =
+    let ctx = model.Context
+    let vpm = model.VProtos
 
-/// Produces the environment created by interpreting the viewdef vd using the
-/// view prototype map vpm.
-let rec envOfViewDef ctx vpm vd =
     match vd with
-    | DUnit -> ok Map.empty
-    | DFunc (v, pars) -> envOfFuncViewDef ctx vpm v pars
-    | DJoin (l, r) -> trial {let! lE = envOfViewDef ctx vpm l
-                             let! rE = envOfViewDef ctx vpm r
-                             return! combineMaps lE rE |> mapMessages VDEBadVars}
+    | DUnit -> ok []
+    | DFunc (v, pars) -> modelFuncViewDef ctx vpm v pars
+    | DJoin (l, r) -> trial {let! lM = modelViewDef model l
+                             let! rM = modelViewDef model r
+                             return List.append lM rM}
 
-/// Produces the variable environment for the constraint c.
-let envOfConstraint model c =
-    envOfViewDef model.Context model.VProtos c.CView
+/// Produces the environment created by interpreting the viewdef vds using the
+/// view prototype map vpm.
+let rec envOfViewDef ctx vds =
+    vds
+    |> Seq.ofList
+    |> Seq.map (fun vd -> makeVarMap ctx vd.VDParams)
+    |> seqBind (fun xR s -> bind (combineMaps s) xR) Map.empty
+    |> mapMessages VDEBadVars
+
+/// Produces the variable environment for the constraint whose viewdef is v.
+let envOfConstraint model v =
+    envOfViewDef model.Context v
     |> bind (combineMaps model.Globals >> mapMessages VDEGlobalVarConflict)
 
 /// Converts a single constraint to Z3.
 let modelConstraint model c =
     let ctx = model.Context
-    trial {let! e = mapMessages CEView (envOfConstraint model c)
-           let v = viewDefToSet c.CView
-           let! c = mapMessages CEExpr (boolExprToZ3 model e c.CExpression)
+    trial {let! v = modelViewDef model c.CView |> mapMessages CEView
+           let! e = envOfConstraint model v |> mapMessages CEView
+           let! c = boolExprToZ3 model e c.CExpression |> mapMessages CEExpr 
            return {CViews = v
                    CZ3 = c}}
 

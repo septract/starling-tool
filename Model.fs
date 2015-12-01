@@ -29,7 +29,7 @@ type GuarView =
 
 /// A constraint, containing a multiset of views and a Z3 predicate.
 type Constraint =
-    { CViews: View list
+    { CViews: ViewDef list
       CZ3: Z3.BoolExpr }
 
 /// A pair of conditions.

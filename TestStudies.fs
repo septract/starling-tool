@@ -242,28 +242,28 @@ let ticketLockModel ctx =
       [ {CViews = []
          CZ3 = ctx.MkGe (ctx.MkIntConst "ticket",
                          ctx.MkIntConst "serving") }
-        {CViews = [ {VName = "holdTick"
-                     VParams = ["t"] } ]
+        {CViews = [ {VDName = "holdTick"
+                     VDParams = [(Int, "t")] } ]
          CZ3 = ctx.MkGt (ctx.MkIntConst "ticket",
                          ctx.MkIntConst "t") }
-        {CViews = [ {VName = "holdLock"
-                     VParams = [] } ]
+        {CViews = [ {VDName = "holdLock"
+                     VDParams = [] } ]
          CZ3 = ctx.MkGt (ctx.MkIntConst "ticket",
                          ctx.MkIntConst "serving") }
-        {CViews = [ {VName = "holdLock"
-                     VParams = [] }
-                    {VName = "holdTick"
-                     VParams = ["t"] } ]
+        {CViews = [ {VDName = "holdLock"
+                     VDParams = [] }
+                    {VDName = "holdTick"
+                     VDParams = [(Int, "t")] } ]
          CZ3 = ctx.MkNot (ctx.MkEq (ctx.MkIntConst "serving",
                                     ctx.MkIntConst "t")) }
-        {CViews = [ {VName = "holdTick"
-                     VParams = ["ta"] }
-                    {VName = "holdTick"
-                     VParams = ["tb"] } ]
+        {CViews = [ {VDName = "holdTick"
+                     VDParams = [(Int, "ta")] }
+                    {VDName = "holdTick"
+                     VDParams = [(Int, "tb")] } ]
          CZ3 = ctx.MkNot (ctx.MkEq (ctx.MkIntConst "ta",
                                     ctx.MkIntConst "tb")) }
-        {CViews = [ {VName = "holdLock"
-                     VParams = [] }
-                    {VName = "holdLock"
-                     VParams = [] } ]
+        {CViews = [ {VDName = "holdLock"
+                     VDParams = [] }
+                    {VDName = "holdLock"
+                     VDParams = [] } ]
          CZ3 = ctx.MkFalse () } ] }
