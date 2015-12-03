@@ -28,9 +28,6 @@ let cons a b = a :: b
 /// Maps a function f through a set, and concatenates the resulting
 /// list of lists into one set.
 let unionMap f xs =
-    // Adapted from the GHC base implementation,
-    // see http://hackage.haskell.org/package/base-4.8.1.0/docs/src/Data.Foldable.html
-    // for source and copyright information.
     xs
     |> Set.toSeq
     |> Seq.map f
