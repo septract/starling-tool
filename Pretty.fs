@@ -106,22 +106,24 @@ let printModelError ce =
     | MEAxiom ae -> printAxiomError ae
     | MEVProto vpe -> printViewProtoError vpe
 
-/// Pretty-prints a flat view.
-let printModelView v =
-    // TODO(CaptainHayashi): sort pretty-printing out so this can move
+/// Pretty-prints a singular generic view.
+let printGenView ppars v =
     hsep [ String v.VName
-           parened (HSep (List.map String v.VParams, String ",")) ]
+           parened (HSep (List.map ppars v.VParams, String ",")) ]
+
+/// Pretty-prints Z3 expressions.
+let printZ3Exp (expr: #Z3.Expr) = String (expr.ToString ())
+
+/// Pretty-prints a singular view assertion.
+let printModelView = printGenView printZ3Exp
 
 /// Pretty-prints a type-name parameter.
 let printParam (ty, name) =
     hsep [String <| printType ty
           String name]
 
-/// Pretty-prints a flat view def.
-let printModelViewDef v =
-    // TODO(CaptainHayashi): sort pretty-printing out so this can move
-    hsep [ String v.VName
-           parened (HSep (List.map printParam v.VParams, String ",")) ]
+/// Pretty-prints a singular view definition.
+let printModelViewDef = printGenView printParam
 
 /// Pretty-prints a multiset of views.
 let printModelViews vs =
@@ -130,9 +132,6 @@ let printModelViews vs =
 /// Pretty-prints a multiset of viewdefs.
 let printModelViewDefs vs =
     squared (HSep (List.map printModelViewDef vs, String ","))
-
-/// Pretty-prints Z3 expressions
-let printZ3Exp (expr: #Z3.Expr) = String (expr.ToString ())
 
 /// Pretty-prints TVars.
 let printTVar tvar =

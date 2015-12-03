@@ -11,11 +11,8 @@ type GenView<'a> =
 /// A view definition, whose parameters are type-string pairs.
 type ViewDef = GenView<Var.Type * string>
 
-/// A view, whose parameters are strings.
-type View = GenView<string>
-
-/// A translated-down view, whose parameters are expressions.
-type Z3View = GenView<Z3.Expr>
+/// A view, whose parameters are expressions.
+type View = GenView<Z3.Expr>
 
 /// A conditional (flat or if-then-else) view.
 type CondView =
@@ -39,7 +36,7 @@ type Constraint = GenConstraint<Var.Type * string>
 
 /// A constraint as used in framed axioms, set over ViewDefs with Z3 expression
 /// parameters.
-type Z3Constraint = GenConstraint<Z3View>
+type Z3Constraint = GenConstraint<Z3.Expr>
 
 /// A pair of conditions.
 type ConditionPair<'v> =

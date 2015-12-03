@@ -203,7 +203,7 @@ let ticketLockModel ctx =
          [PAAxiom {Conditions = {Pre = [CSetView {VName = "holdLock"
                                                   VParams = []} ]
                                  Post = [CSetView {VName = "holdTick";
-                                                   VParams = ["t"]} ] }
+                                                   VParams = [ctx.MkIntConst "t"]} ] }
                    Inner = ArithFetch (Some (LVIdent "t"),
                                        LVIdent "ticket",
                                        Increment) }
@@ -214,22 +214,22 @@ let ticketLockModel ctx =
                     Post = [CSetView {VName = "holdLock"
                                       VParams = [] } ] },
                    {Conditions = {Pre = [CSetView {VName = "holdTick"
-                                                   VParams = ["t"] } ]
+                                                   VParams = [ctx.MkIntConst "t"] } ]
                                   Post = [CITEView (ctx.MkEq (ctx.MkIntConst "s",
                                                               ctx.MkIntConst "t"),
                                                     [CSetView {VName = "holdLock"
                                                                VParams = [] } ],
                                                     [CSetView {VName = "holdTick"
-                                                               VParams = ["t"] } ] ) ] }
+                                                               VParams = [ctx.MkIntConst "t"] } ] ) ] }
                     Inner =
                         [PAAxiom {Conditions = {Pre = [CSetView {VName = "holdTick"
-                                                                 VParams = ["t"] } ]
+                                                                 VParams = [ctx.MkIntConst "t"] } ]
                                                 Post = [CITEView (ctx.MkEq (ctx.MkIntConst "s",
                                                                             ctx.MkIntConst "t"),
                                                                   [CSetView {VName = "holdLock"
                                                                              VParams = [] } ],
                                                                   [CSetView {VName = "holdTick"
-                                                                             VParams = ["t"] } ] ) ] }
+                                                                             VParams = [ctx.MkIntConst "t"] } ] ) ] }
                                   Inner = ArithFetch (Some (LVIdent "s"),
                                                       LVIdent "serving",
                                                       Direct) } ] } )

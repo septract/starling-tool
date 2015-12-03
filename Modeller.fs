@@ -261,13 +261,12 @@ let modelConstraints model cs =
 /// Tries to flatten a view AST into a multiset.
 let rec modelView model vast =
     match vast with
-    | Func (s, pars) -> trial {let! pnames = List.map (function
-                                                       | LVExp (LVIdent s) -> ok s
-                                                       | _ -> VEUnsupported (vast, "arbitrary expressions not yet allowed here") |> fail)
-                                                      pars
-                                             |> collect
+    | Func (s, pars) -> trial {let! pexps = pars
+                                            |> List.map (anyExprToZ3 model model.Locals
+                                                         >> mapMessages (curry VEBadExpr vast))
+                                            |> collect
                                return [CSetView {VName = s
-                                                 VParams = pnames} ] }
+                                                 VParams = pexps} ] }
     | IfView (e, l, r) -> trial {let! ez3 = boolExprToZ3 model model.Locals e |> mapMessages ((curry VEBadExpr) vast)
                                  let! lvs = modelView model l
                                  let! rvs = modelView model r
