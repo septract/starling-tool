@@ -120,8 +120,8 @@ let printParam (ty, name) =
 /// Pretty-prints a flat view def.
 let printModelViewDef v =
     // TODO(CaptainHayashi): sort pretty-printing out so this can move
-    hsep [ String v.VDName
-           parened (HSep (List.map printParam v.VDParams, String ",")) ]
+    hsep [ String v.VName
+           parened (HSep (List.map printParam v.VParams, String ",")) ]
 
 /// Pretty-prints a multiset of views.
 let printModelViews vs =

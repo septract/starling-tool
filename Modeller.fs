@@ -210,8 +210,8 @@ let modelFuncViewDef ctx vpm name dpars =
         let lppars = List.length ppars
         if ldpars <> lppars
         then fail <| VDEBadParamCount (name, lppars, ldpars)
-        else ok <| [ {VDName = name
-                      VDParams = funcViewParMerge ppars dpars} ]
+        else ok <| [ {VName = name
+                      VParams = funcViewParMerge ppars dpars} ]
     | None -> fail <| VDENoSuchView name
 
 /// Tries to convert a view def into its model (multiset) form.
@@ -231,7 +231,7 @@ let rec modelViewDef model vd =
 let rec envOfViewDef ctx vds =
     vds
     |> Seq.ofList
-    |> Seq.map (fun vd -> makeVarMap ctx vd.VDParams)
+    |> Seq.map (fun vd -> makeVarMap ctx vd.VParams)
     |> seqBind (fun xR s -> bind (combineMaps s) xR) Map.empty
     |> mapMessages VDEBadVars
 

@@ -2,18 +2,20 @@ module Starling.Model
 
 open Microsoft
 
-/// A 'flattened' (multiset-representation) view definition.
-type ViewDef =
-    // TODO(CaptainHayashi): rename to ViewDef.
-    { VDName: string
-      VDParams: (Var.Type * string) list }
-
-
-/// A 'flattened' (multiset-representation) view.
-type View =
+/// A 'generic' view, parameterised over its parameter type.
+type GenView<'a> =
     // TODO(CaptainHayashi): rename to ViewDef.
     { VName: string
-      VParams: string list }
+      VParams: 'a list }
+
+/// A view definition, whose parameters are type-string pairs.
+type ViewDef = GenView<Var.Type * string>
+
+/// A view, whose parameters are strings.
+type View = GenView<string>
+
+/// A translated-down view, whose parameters are expressions.
+type Z3View = GenView<Z3.Expr>
 
 /// A conditional (flat or if-then-else) view.
 type CondView =
@@ -28,9 +30,16 @@ type GuarView =
       GView: View }
 
 /// A constraint, containing a multiset of views and a Z3 predicate.
-type Constraint =
-    { CViews: ViewDef list
+type GenConstraint<'a> =
+    { CViews: GenView<'a> list
       CZ3: Z3.BoolExpr }
+
+/// A model constraint, set over ViewDefs with type-string parameters.
+type Constraint = GenConstraint<Var.Type * string>
+
+/// A constraint as used in framed axioms, set over ViewDefs with Z3 expression
+/// parameters.
+type Z3Constraint = GenConstraint<Z3View>
 
 /// A pair of conditions.
 type ConditionPair<'v> =
