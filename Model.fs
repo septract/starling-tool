@@ -75,6 +75,11 @@ type FullAxiom = Hoare<GuarView list, Prim>
 /// a command.
 type SemAxiom = Hoare<GuarView list, Z3.BoolExpr>
 
+/// An axiom combined with a frame.
+type FramedAxiom =
+    {Axiom: SemAxiom
+     Frame: GuarView list}
+
 /// A partially resolved axiom.
 type PartAxiom =
     | PAAxiom of FlatAxiom

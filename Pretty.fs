@@ -315,3 +315,17 @@ let printFullModel = printModel printFullAxiom
 
 /// Pretty-prints a model with semantically translated axioms.
 let printSemModel = printModel printSemAxiom
+
+/// Pretty-prints a framed axiom.
+let printFramedAxiom ax =
+    vsep [curry Header "Axiom" <| Indent (printSemAxiom ax.Axiom)
+          curry Header "Frame" <| Indent (printGuarViewList ax.Frame) ]
+
+/// Pretty-prints a list of framed axioms.
+let printFramedAxioms axs =
+    axs
+    |> Seq.ofList
+    |> Seq.mapi (fun i ax -> Header (sprintf "%d" (i + 1),
+                                     Indent (printFramedAxiom ax)))
+    |> Seq.toList
+    |> vsep
