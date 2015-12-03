@@ -15,8 +15,8 @@ let testResolvingCondViews ctx =
             fun _ ->
                 Assert.Equal
                     ("[| foo(bar), bar(baz) |] = <| ([], foo(bar)), ([], bar(baz)) |>",
-                     [ {GCond = Set.empty ; GView = {VName = "foo" ; VParams = [ctx.MkIntConst "bar"] }}
-                       {GCond = Set.empty ; GView = {VName = "bar" ; VParams = [ctx.MkIntConst "baz"] }} ],
+                     [ {GCond = ctx.MkTrue () ; GView = {VName = "foo" ; VParams = [ctx.MkIntConst "bar"] }}
+                       {GCond = ctx.MkTrue () ; GView = {VName = "bar" ; VParams = [ctx.MkIntConst "baz"] }} ],
                      resolveCondViews
                          ctx
                          [CSetView {VName = "foo" ; VParams = [ctx.MkIntConst "bar"] }
@@ -25,8 +25,8 @@ let testResolvingCondViews ctx =
             fun _ ->
                 Assert.Equal
                     ("[| if s then foo(bar) else bar(baz) |] = <| (s, foo(bar)) (not s, bar(baz)) |>",
-                     [ {GCond = new Set<BoolExpr> ( [ctx.MkBoolConst "s"] ) ; GView = {VName = "foo" ; VParams = [ctx.MkIntConst "bar"] }}
-                       {GCond = new Set<BoolExpr> ( [ctx.MkNot (ctx.MkBoolConst "s") ] ) ; GView = {VName = "bar" ; VParams = [ctx.MkIntConst "baz"] }} ],
+                     [ {GCond = ctx.MkBoolConst "s" ; GView = {VName = "foo" ; VParams = [ctx.MkIntConst "bar"] }}
+                       {GCond = ctx.MkNot (ctx.MkBoolConst "s") ; GView = {VName = "bar" ; VParams = [ctx.MkIntConst "baz"] }} ],
                      resolveCondViews
                          ctx
                          [CITEView ((ctx.MkBoolConst "s"),
@@ -37,11 +37,11 @@ let testResolvingCondViews ctx =
                 Assert.Equal
                     ("[| if s then (if t then (foo(bar), bar(baz)) else fizz(buzz)), in(out) else ding(dong) |] = "
                      + "<| (s && t, foo(bar), bar(baz)) (s && not t, fizz(buzz)) (s, in(out)) (not s, ding(dong)) |>",
-                     [ {GCond = new Set<BoolExpr> ( [ctx.MkBoolConst "t" ; ctx.MkBoolConst "s"] ) ; GView = {VName = "foo" ; VParams = [ctx.MkIntConst "bar"] }}
-                       {GCond = new Set<BoolExpr> ( [ctx.MkBoolConst "t" ; ctx.MkBoolConst "s"] ) ; GView = {VName = "bar" ; VParams = [ctx.MkIntConst "baz"] }}
-                       {GCond = new Set<BoolExpr> ( [ctx.MkNot (ctx.MkBoolConst "t") ; ctx.MkBoolConst "s"] ) ; GView = {VName = "fizz" ; VParams = [ctx.MkIntConst "buzz"] }}
-                       {GCond = new Set<BoolExpr> ( [ctx.MkBoolConst "s"] ) ; GView = {VName = "in" ; VParams = [ctx.MkIntConst "out"] }}
-                       {GCond = new Set<BoolExpr> ( [ctx.MkNot (ctx.MkBoolConst "s") ] ) ; GView = {VName = "ding" ; VParams = [ctx.MkIntConst "dong"] }} ],
+                     [ {GCond = ctx.MkAnd [|ctx.MkBoolConst "s" ; ctx.MkBoolConst "t"|] ; GView = {VName = "foo" ; VParams = [ctx.MkIntConst "bar"] }}
+                       {GCond = ctx.MkAnd [|ctx.MkBoolConst "s" ; ctx.MkBoolConst "t"|] ; GView = {VName = "bar" ; VParams = [ctx.MkIntConst "baz"] }}
+                       {GCond = ctx.MkAnd [|ctx.MkBoolConst "s" ; ctx.MkNot (ctx.MkBoolConst "t")|] ; GView = {VName = "fizz" ; VParams = [ctx.MkIntConst "buzz"] }}
+                       {GCond = ctx.MkBoolConst "s" ; GView = {VName = "in" ; VParams = [ctx.MkIntConst "out"] }}
+                       {GCond = ctx.MkNot (ctx.MkBoolConst "s") ; GView = {VName = "ding" ; VParams = [ctx.MkIntConst "dong"] }} ],
                      resolveCondViews
                          ctx
                          [CITEView (ctx.MkBoolConst "s",

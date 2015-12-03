@@ -23,7 +23,7 @@ type CondView =
 
 /// A guarded view.
 type GuarView =
-    { GCond: Set<Z3.BoolExpr>
+    { GCond: Z3.BoolExpr
       GView: View }
 
 /// A constraint, containing a multiset of views and a Z3 predicate.
@@ -80,6 +80,12 @@ type FramedAxiom =
     {Axiom: SemAxiom
      Frame: GuarView list}
 
+/// An unreified term.
+type Term =
+    {TPre: GuarView list
+     TAction: Z3.BoolExpr
+     TPost: GuarView list}
+    
 /// A partially resolved axiom.
 type PartAxiom =
     | PAAxiom of FlatAxiom

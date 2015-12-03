@@ -171,15 +171,11 @@ and printCondViewList cvs =
               " |]"
               (HSep (List.map printCondView cvs, String ";"))
 
-/// Pretty-prints a set of conjoined expressions.
-let printExprSet exps =
-    HSep (Set.toList exps |> List.map printZ3Exp, String "&")
-
 /// Pretty-prints a guarded view.
 let printGuarView gv =
     ssurround "("
               ")"
-              (HSep ([ printExprSet gv.GCond
+              (HSep ([ printZ3Exp gv.GCond
                        printModelView gv.GView
                      ], String ","))
 
