@@ -252,10 +252,42 @@ let semanticsOf model prim =
 
     ctx.MkAnd toAnd
 
+/// Substitutes all of the variables in a View using the given
+/// substitution.
+let subView sub model v =
+    {v with VParams = List.map (subAllInModel model sub) v.VParams}
+
+/// Substitutes all of the variables in a GuarView using the given substitution.
+let subGuarView sub model gv =
+    {GCond = Set.map (fun e -> (e :> Expr)
+                               |> subAllInModel model sub
+                               :?> BoolExpr)
+                      gv.GCond
+     GView = subView sub model gv.GView}
+              
+
+/// Substitutes all of the variables in a condition using the given substitution.
+/// In this case, a condition is a list of GuarViews.
+let subCondition sub model =
+    List.map (subGuarView sub model)
+
+/// Renames the variables in a condition to before/after states.
+let renameCondition model cond =
+    (* Preconditions are in terms of global befores and local befores.
+     * Postconditions are in terms of global befores, but local _afters_.
+     *
+     * Since we don't see any global values until we reify, and we've
+     * already checked during modelling that we don't have any, we can
+     * just perform a full substitution using the substitution rule for
+     * locals.
+     *)
+    {Pre = subCondition envVarToBefore model cond.Pre
+     Post = subCondition envVarToAfter model cond.Post}
+
 /// Translates a model axiom into an axiom over a semantic expression.
 let translateAxiom model axiom =
-    { Conditions = axiom.Conditions
-      Inner = semanticsOf model axiom.Inner }
+    {Conditions = renameCondition model axiom.Conditions
+     Inner = semanticsOf model axiom.Inner}
 
 /// Translate a model's axioms to axioms over semantic expressions.
 let translateAxioms model = List.map (translateAxiom model) model.Axioms
