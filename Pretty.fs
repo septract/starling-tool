@@ -317,11 +317,23 @@ let printFramedAxiom ax =
     vsep [curry Header "Axiom" <| Indent (printSemAxiom ax.Axiom)
           curry Header "Frame" <| Indent (printGuarViewList ax.Frame) ]
 
+/// Pretty-prints a list by headering each by its number.
+let printNumHeaderedList pp =
+    Seq.ofList
+    >> Seq.mapi (fun i x -> Header (sprintf "%d" (i + 1),
+                                    Indent (pp x)))
+    >> Seq.toList
+    >> vsep
+
 /// Pretty-prints a list of framed axioms.
-let printFramedAxioms axs =
-    axs
-    |> Seq.ofList
-    |> Seq.mapi (fun i ax -> Header (sprintf "%d" (i + 1),
-                                     Indent (printFramedAxiom ax)))
-    |> Seq.toList
-    |> vsep
+let printFramedAxioms = printNumHeaderedList printFramedAxiom
+
+/// Pretty-prints an unreified term.
+let printTerm tm =
+    vsep [curry Header "Action" <| Indent (printZ3Exp tm.TAction)
+          curry Header "Pre" <| Indent (printGuarViewList tm.TPre)
+          curry Header "Post" <| Indent (printGuarViewList tm.TPost) ]
+
+/// Pretty-prints a list of terms.
+let printTerms = printNumHeaderedList printTerm
+

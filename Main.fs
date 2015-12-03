@@ -42,6 +42,10 @@ type Options = {
     [<Option('F',
              HelpText = "Stop at framing and output the framed axioms.")>]
     frame: bool;
+    [<Option('T',
+             HelpText = "Stop at term generation and output the unreified terms.")>]
+    termgen: bool;
+
     [<Value(0,
             MetaName = "input",
             HelpText = "The file to load (omit, or supply -, for standard input).")>]
@@ -97,6 +101,7 @@ type OutputType =
     | OutputTExpand
     | OutputTSemantics
     | OutputTFrame
+    | OutputTTermGen
 
 /// The output from a Starling run.
 type Output =
@@ -107,6 +112,7 @@ type Output =
     | OutputExpand of Starling.Model.FullModel
     | OutputSemantics of Starling.Model.SemModel
     | OutputFrame of Starling.Model.FramedAxiom list
+    | OutputTermGen of Starling.Model.Term list
 
 let printOutput out =
     match out with
@@ -117,6 +123,7 @@ let printOutput out =
     | OutputExpand e -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printFullModel e)
     | OutputSemantics e -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printSemModel e)
     | OutputFrame f -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printFramedAxioms f)
+    | OutputTermGen t -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printTerms t)
 
 (*
     Starling pipeline (here defined in reverse):
@@ -135,13 +142,22 @@ let printOutput out =
 *)
 
 
+/// Runs the term generator and further Starling processes.
+let runStarlingTermGen semanticsR frameR otype =
+    let termGenR = lift2 Starling.TermGen.termGen semanticsR frameR
+
+    match otype with
+    | OutputTTermGen -> lift OutputTermGen termGenR
+    | _ -> fail ( SEOther "this should be unreachable!" )
+
+
 /// Runs the framed axiom generator and further Starling processes.
 let runStarlingFrame semanticsR otype =
     let frameR = lift Starling.Framer.frame semanticsR
 
     match otype with
     | OutputTFrame -> lift OutputFrame frameR
-    | _ -> fail ( SEOther "this should be unreachable!" )
+    | _ -> runStarlingTermGen semanticsR frameR otype
 
 
 /// Runs the model expander and further Starling processes.
@@ -207,14 +223,22 @@ let runStarling file otype =
 let otypeFromOpts opts =
     // We stop at the earliest chosen stopping point,
     // and default to the latest if no option has been given.
-    match (opts.parse, opts.collate, opts.model, opts.flatten, opts.expand, opts.semantics, opts.frame) with
-        | ( true, _, _, _, _, _, _) -> OutputTParse
-        | ( false, true, _, _ , _, _, _) -> OutputTCollation
-        | ( false, false, true, _, _, _, _) -> OutputTModel
-        | ( false, false, false, true, _, _, _) -> OutputTFlatten
-        | ( false, false, false, false, true, _, _) -> OutputTExpand
-        | ( false, false, false, false, false, true, _) -> OutputTSemantics
-        | _ -> OutputTFrame
+    match (opts.parse,
+           opts.collate,
+           opts.model,
+           opts.flatten,
+           opts.expand,
+           opts.semantics,
+           opts.frame,
+           opts.termgen) with
+        | ( true, _, _, _, _, _, _, _) -> OutputTParse
+        | ( false, true, _, _ , _, _, _, _) -> OutputTCollation
+        | ( false, false, true, _, _, _, _, _) -> OutputTModel
+        | ( false, false, false, true, _, _, _, _) -> OutputTFlatten
+        | ( false, false, false, false, true, _, _, _) -> OutputTExpand
+        | ( false, false, false, false, false, true, _, _) -> OutputTSemantics
+        | ( false, false, false, false, false, false, true, _) -> OutputTFrame
+        | _ -> OutputTTermGen
 
 /// Runs Starling and outputs the results.
 let starlingMain opts =
