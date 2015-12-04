@@ -9,7 +9,7 @@ open Starling.Model
 let instantiateParam model (ty, name) =
     let ctx = model.Context
     ctx.MkFreshConst
-        (name + "!frame!",
+        (name + "!frame",
          match ty with
          | Int -> ctx.IntSort :> Z3.Sort
          | Bool -> ctx.BoolSort :> Z3.Sort)
