@@ -5,6 +5,7 @@ open System
 open CommandLine
 open CommandLine.Text
 
+open Microsoft
 open Fuchu
 
 // This is down here to force Chessie's fail to override FParsec's.
@@ -45,7 +46,12 @@ type Options = {
     [<Option('T',
              HelpText = "Stop at term generation and output the unreified terms.")>]
     termgen: bool;
-
+    [<Option('r',
+             HelpText = "Stop at term reification and output the reified terms.")>]
+    reify: bool;
+    [<Option('z',
+             HelpText = "Output the Z3 query instead of checking it.")>]
+    z3: bool;
     [<Value(0,
             MetaName = "input",
             HelpText = "The file to load (omit, or supply -, for standard input).")>]
@@ -102,6 +108,9 @@ type OutputType =
     | OutputTSemantics
     | OutputTFrame
     | OutputTTermGen
+    | OutputTReify
+    | OutputTZ3
+    | OutputTSat
 
 /// The output from a Starling run.
 type Output =
@@ -113,6 +122,9 @@ type Output =
     | OutputSemantics of Starling.Model.SemModel
     | OutputFrame of Starling.Model.FramedAxiom list
     | OutputTermGen of Starling.Model.Term list
+    | OutputReify of Starling.Model.ReTerm list
+    | OutputZ3 of Z3.BoolExpr
+    | OutputSat of Z3.Status
 
 let printOutput out =
     match out with
@@ -124,6 +136,11 @@ let printOutput out =
     | OutputSemantics e -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printSemModel e)
     | OutputFrame f -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printFramedAxioms f)
     | OutputTermGen t -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printTerms t)
+    | OutputReify t -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printReTerms t)
+    | OutputZ3 z -> z.ToString ()
+    | OutputSat Z3.Status.SATISFIABLE -> "satisfiable (not proven)"
+    | OutputSat Z3.Status.UNSATISFIABLE -> "unsatisfiable (proven)"
+    | OutputSat _ -> "unknown"
 
 (*
     Starling pipeline (here defined in reverse):
@@ -141,6 +158,28 @@ let printOutput out =
     just dumping the AST directly).
 *)
 
+/// Runs Starling, either outputting or checking the Z3 term.
+let runStarlingZ3 semanticsR reifyR otype =
+    let z3R = lift2 Starling.Reifier.combineTerms semanticsR reifyR
+
+    match otype with
+    | OutputTZ3 -> lift OutputZ3 z3R
+    | OutputTSat -> lift2 (fun m z ->
+                              let ctx = m.Context
+                              let solver = ctx.MkSimpleSolver ()
+                              solver.Assert [|z|]
+                              OutputSat <| solver.Check [||])
+                          semanticsR
+                          z3R
+    | _ -> fail ( SEOther "this should be unreachable!" )
+
+/// Runs the reifier and further Starling processes.
+let runStarlingReify semanticsR termGenR otype =
+    let reifyR = lift2 Starling.Reifier.reify semanticsR termGenR
+
+    match otype with
+    | OutputTReify -> lift OutputReify reifyR
+    | _ -> runStarlingZ3 semanticsR reifyR otype
 
 /// Runs the term generator and further Starling processes.
 let runStarlingTermGen semanticsR frameR otype =
@@ -148,8 +187,7 @@ let runStarlingTermGen semanticsR frameR otype =
 
     match otype with
     | OutputTTermGen -> lift OutputTermGen termGenR
-    | _ -> fail ( SEOther "this should be unreachable!" )
-
+    | _ -> runStarlingReify semanticsR termGenR otype
 
 /// Runs the framed axiom generator and further Starling processes.
 let runStarlingFrame semanticsR otype =
@@ -159,7 +197,6 @@ let runStarlingFrame semanticsR otype =
     | OutputTFrame -> lift OutputFrame frameR
     | _ -> runStarlingTermGen semanticsR frameR otype
 
-
 /// Runs the model expander and further Starling processes.
 let runStarlingSemantics modelR otype =
     let semanticsR = lift Starling.Semantics.translate modelR
@@ -168,7 +205,6 @@ let runStarlingSemantics modelR otype =
     | OutputTSemantics -> lift OutputSemantics semanticsR
     | _ -> runStarlingFrame semanticsR otype
 
-
 /// Runs the model expander and further Starling processes.
 let runStarlingExpand modelR otype =
     let expandR = lift Starling.Expander.expand modelR
@@ -176,7 +212,6 @@ let runStarlingExpand modelR otype =
     match otype with
     | OutputTExpand -> lift OutputExpand expandR
     | _ -> runStarlingSemantics expandR otype
-
 
 /// Runs the model flattener and further Starling processes.
 let runStarlingFlatten modelR otype =
@@ -223,22 +258,21 @@ let runStarling file otype =
 let otypeFromOpts opts =
     // We stop at the earliest chosen stopping point,
     // and default to the latest if no option has been given.
-    match (opts.parse,
-           opts.collate,
-           opts.model,
-           opts.flatten,
-           opts.expand,
-           opts.semantics,
-           opts.frame,
-           opts.termgen) with
-        | ( true, _, _, _, _, _, _, _) -> OutputTParse
-        | ( false, true, _, _ , _, _, _, _) -> OutputTCollation
-        | ( false, false, true, _, _, _, _, _) -> OutputTModel
-        | ( false, false, false, true, _, _, _, _) -> OutputTFlatten
-        | ( false, false, false, false, true, _, _, _) -> OutputTExpand
-        | ( false, false, false, false, false, true, _, _) -> OutputTSemantics
-        | ( false, false, false, false, false, false, true, _) -> OutputTFrame
-        | _ -> OutputTTermGen
+    let ot =
+        [(opts.parse, OutputTParse)
+         (opts.collate, OutputTCollation)
+         (opts.model, OutputTModel)
+         (opts.flatten, OutputTFlatten)
+         (opts.expand, OutputTExpand)
+         (opts.semantics, OutputTSemantics)
+         (opts.frame, OutputTFrame)
+         (opts.termgen, OutputTTermGen)
+         (opts.reify, OutputTReify)
+         (opts.z3, OutputTZ3)]
+        |> List.tryFind fst
+    match ot with
+    | Some (_, o) -> o
+    | None -> OutputTSat
 
 /// Runs Starling and outputs the results.
 let starlingMain opts =

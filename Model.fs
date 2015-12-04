@@ -80,12 +80,18 @@ type FramedAxiom =
     {Axiom: SemAxiom
      Frame: GuarView list}
 
-/// An unreified term.
-type Term =
-    {TPre: GuarView list
+/// A generic term.
+type GenTerm<'p> =
+    {TPre: 'p
      TAction: Z3.BoolExpr
-     TPost: GuarView list}
+     TPost: 'p}
+
+/// An unreified term.
+type Term = GenTerm<GuarView list>
     
+/// A reified term.
+type ReTerm = GenTerm<Z3.BoolExpr>
+
 /// A partially resolved axiom.
 type PartAxiom =
     | PAAxiom of FlatAxiom

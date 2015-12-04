@@ -328,12 +328,21 @@ let printNumHeaderedList pp =
 /// Pretty-prints a list of framed axioms.
 let printFramedAxioms = printNumHeaderedList printFramedAxiom
 
-/// Pretty-prints an unreified term.
-let printTerm tm =
+/// Pretty-prints a generic term.
+let printGenTerm pv tm =
     vsep [curry Header "Action" <| Indent (printZ3Exp tm.TAction)
-          curry Header "Pre" <| Indent (printGuarViewList tm.TPre)
-          curry Header "Post" <| Indent (printGuarViewList tm.TPost) ]
+          curry Header "Pre" <| Indent (pv tm.TPre)
+          curry Header "Post" <| Indent (pv tm.TPost) ]
+
+/// Pretty-prints an unreified term.
+let printTerm = printGenTerm printGuarViewList
 
 /// Pretty-prints a list of terms.
 let printTerms = printNumHeaderedList printTerm
+
+/// Pretty-prints a reified term.
+let printReTerm: ReTerm -> Command = printGenTerm printZ3Exp
+
+/// Pretty-prints a list of reified terms.
+let printReTerms = printNumHeaderedList printReTerm
 

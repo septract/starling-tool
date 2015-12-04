@@ -5,14 +5,16 @@ open Microsoft
 open Starling.Var
 open Starling.Model
 
+/// Converts a Starling type to a Z3 sort.
+let typeToSort (ctx: Z3.Context) ty =
+    match ty with
+    | Int -> ctx.IntSort :> Z3.Sort
+    | Bool -> ctx.BoolSort :> Z3.Sort
+
 /// Instantiates a view parameter.
 let instantiateParam model (ty, name) =
     let ctx = model.Context
-    ctx.MkFreshConst
-        (name + "!frame",
-         match ty with
-         | Int -> ctx.IntSort :> Z3.Sort
-         | Bool -> ctx.BoolSort :> Z3.Sort)
+    ctx.MkFreshConst (name + "!frame", typeToSort ctx ty)
 
 /// Instantiates a defining view into a view expression.
 let instantiateFrame model dvs =

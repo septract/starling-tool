@@ -53,6 +53,7 @@
     <Compile Include="Semantics.fs" />
     <Compile Include="Framer.fs" />
     <Compile Include="TermGen.fs" />
+    <Compile Include="Reifier.fs" />
     <Compile Include="Pretty.fs" />
     <Compile Include="TestStudies.fs" />
     <Compile Include="PrettyTests.fs" />
