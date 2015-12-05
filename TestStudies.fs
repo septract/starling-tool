@@ -200,8 +200,7 @@ let ticketLockModel ctx =
                                VarPostExpr = ctx.MkIntConst "t!after"
                                VarFrameExpr = ctx.MkIntConst "t!r"} ) ]
      Axioms =
-         [PAAxiom {Conditions = {Pre = [CSetView {VName = "holdLock"
-                                                  VParams = []} ]
+         [PAAxiom {Conditions = {Pre = []
                                  Post = [CSetView {VName = "holdTick";
                                                    VParams = [ctx.MkIntConst "t"]} ] }
                    Inner = ArithFetch (Some (LVIdent "t"),
@@ -210,7 +209,8 @@ let ticketLockModel ctx =
           PAWhile (true,
                    ctx.MkEq (ctx.MkIntConst "s",
                              ctx.MkIntConst "t"),
-                   {Pre = []
+                   {Pre = [CSetView {VName = "holdTick"
+                                     VParams = [ctx.MkIntConst "t"] } ]
                     Post = [CSetView {VName = "holdLock"
                                       VParams = [] } ] },
                    {Conditions = {Pre = [CSetView {VName = "holdTick"
