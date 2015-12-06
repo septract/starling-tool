@@ -7,6 +7,7 @@ open Starling
 open Starling.Var
 open Starling.AST
 open Starling.Model
+open Starling.Modeller
 open Starling.Tests.Studies
 
 /// Assertion that converting the arithmetic expression `expr` to Z3
@@ -15,7 +16,7 @@ let assertZ3ArithExpr ctx expr z3 =
     let model = ticketLockModel ctx
     Assert.Equal (Starling.Pretty.AST.printExpression expr
                    + " -Z3-> " + z3.ToString (),
-                  Starling.Modeller.arithExprToZ3 model model.Locals expr,
+                  arithExprToZ3 model model.Locals expr,
                   ok z3)
 
 /// Assertion that converting the Boolean expression `expr` to Z3
@@ -24,7 +25,7 @@ let assertZ3BoolExpr ctx expr z3 =
     let model = ticketLockModel ctx
     Assert.Equal (Starling.Pretty.AST.printExpression expr
                    + " -Z3-> " + z3.ToString (),
-                  Starling.Modeller.boolExprToZ3 model model.Locals expr,
+                  boolExprToZ3 model model.Locals expr,
                   ok z3)
 
 let testExprToZ3 ctx =
@@ -77,6 +78,47 @@ let modelToComparable =
     // TODO(CaptainHayashi): this is pretty drastic...
     Starling.Pretty.Misc.printPartModel >> Starling.Pretty.Types.print
     
+let testModelPrimOnAtomic (ctx: Context) =
+    testCase "test modelPrimOnAtomic with ticketed lock example" <|
+        fun _ -> Assert.Equal ("modelPrimOnAtomic with <t = ticket++>",
+                               ok (ArithFetch (Some (LVIdent "t"),
+                                               LVIdent "ticket",
+                                               Increment)),
+                               (modelPrimOnAtomic (ticketLockModel ctx)
+                                                  (Fetch (LVIdent "t",
+                                                          LVIdent "ticket",
+                                                          Increment))))
+
+let testModelAxiomOnCommand (ctx: Context) =
+    testCase "test modelAxiomOnCommand with ticketed lock example" <|
+        fun _ ->
+            Assert.Equal
+                ("modelAxiomOnCommand with {emp} <t = ticket++> {holdLock()}",
+                 ok (PAAxiom {Conditions = {Pre = []
+                                            Post = [CSetView {VName = "holdTick";
+                                                              VParams = [ctx.MkIntConst "t"]} ] }
+                              Inner = ArithFetch (Some (LVIdent "t"),
+                                                  LVIdent "ticket",
+                                                  Increment) } ),
+                 (modelAxiomOnCommand (ticketLockModel ctx)
+                                      {Pre = []
+                                       Post = [CSetView {VName = "holdTick"
+                                                         VParams = [ctx.MkIntConst "t"]} ] }
+
+                                      (Atomic (Fetch (LVIdent "t",
+                                                      LVIdent "ticket",
+                                                      Increment)))))
+
+let testMakeAxiomConditionPair (ctx: Context) =
+    testCase "Test makeAxiomConditionPair with ticketed lock example" <|
+        fun _ -> Assert.Equal ("makeAxiomConditionPair emp holdTick(t)",
+                               ok ( {Pre = []
+                                     Post = [CSetView {VName = "holdTick"
+                                                       VParams = [ctx.MkIntConst "t"] } ] } ),
+                               makeAxiomConditionPair (ticketLockModel ctx)
+                                                      (Unit)
+                                                      (Func ("holdTick", [LVExp (LVIdent "t") ] )))
+
 
 let testTicketedLock ctx =
     testCase "Test that the ticketed lock produces the correct model" <|
@@ -84,7 +126,7 @@ let testTicketedLock ctx =
         Assert.Equal
             ("ticketed lock collation -> ticketed lock model",
              ticketLockModel ctx |> ok |> lift modelToComparable,
-             Starling.Modeller.modelWith ctx ticketLockCollated |> lift modelToComparable)
+             modelWith ctx ticketLockCollated |> lift modelToComparable)
 
 [<Tests>]
 let testModeller =
@@ -92,6 +134,8 @@ let testModeller =
     let t = testList "Test the modeller"
                      [ testExprToZ3 ctx
                        testModelVars ctx
+                       testModelPrimOnAtomic ctx
+                       testMakeAxiomConditionPair ctx
                        testList "Test modelling of case studies"
                                 [ testTicketedLock ctx ]]
     ctx.Dispose ()

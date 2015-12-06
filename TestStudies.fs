@@ -1,6 +1,7 @@
 /// Case studies for unit testing.
 module Starling.Tests.Studies
 
+open Microsoft
 open Starling
 open Starling.Var
 open Starling.AST
@@ -170,6 +171,48 @@ let ticketLockCollated =
           [ ticketLockLockMethodAST
             ticketLockUnlockMethodAST ] }
 
+/// The axioms of the ticketed lock.
+let ticketLockAxioms (ctx: Z3.Context) =
+     [PAAxiom {Conditions = {Pre = []
+                             Post = [CSetView {VName = "holdTick";
+                                               VParams = [ctx.MkIntConst "t"]} ] }
+               Inner = ArithFetch (Some (LVIdent "t"),
+                                   LVIdent "ticket",
+                                   Increment) }
+      PAWhile (true,
+               ctx.MkEq (ctx.MkIntConst "s",
+                         ctx.MkIntConst "t"),
+               {Pre = [CSetView {VName = "holdTick"
+                                 VParams = [ctx.MkIntConst "t"] } ]
+                Post = [CSetView {VName = "holdLock"
+                                  VParams = [] } ] },
+               {Conditions = {Pre = [CSetView {VName = "holdTick"
+                                               VParams = [ctx.MkIntConst "t"] } ]
+                              Post = [CITEView (ctx.MkEq (ctx.MkIntConst "s",
+                                                          ctx.MkIntConst "t"),
+                                                [CSetView {VName = "holdLock"
+                                                           VParams = [] } ],
+                                                [CSetView {VName = "holdTick"
+                                                           VParams = [ctx.MkIntConst "t"] } ] ) ] }
+                Inner =
+                    [PAAxiom {Conditions = {Pre = [CSetView {VName = "holdTick"
+                                                             VParams = [ctx.MkIntConst "t"] } ]
+                                            Post = [CITEView (ctx.MkEq (ctx.MkIntConst "s",
+                                                                        ctx.MkIntConst "t"),
+                                                              [CSetView {VName = "holdLock"
+                                                                         VParams = [] } ],
+                                                              [CSetView {VName = "holdTick"
+                                                                         VParams = [ctx.MkIntConst "t"] } ] ) ] }
+                              Inner = ArithFetch (Some (LVIdent "s"),
+                                                  LVIdent "serving",
+                                                  Direct) } ] } )
+      PAAxiom {Conditions = {Pre = [CSetView {VName = "holdLock"
+                                              VParams = [] } ]
+                             Post = [] }
+               Inner = ArithFetch (None,
+                                   LVIdent "serving",Increment) } ]
+
+
 /// The model of a ticketed lock method.
 /// Takes an existing Z3 context.
 let ticketLockModel ctx =
@@ -199,45 +242,7 @@ let ticketLockModel ctx =
                                VarPreExpr = ctx.MkIntConst "t!before"
                                VarPostExpr = ctx.MkIntConst "t!after"
                                VarFrameExpr = ctx.MkIntConst "t!r"} ) ]
-     Axioms =
-         [PAAxiom {Conditions = {Pre = []
-                                 Post = [CSetView {VName = "holdTick";
-                                                   VParams = [ctx.MkIntConst "t"]} ] }
-                   Inner = ArithFetch (Some (LVIdent "t"),
-                                       LVIdent "ticket",
-                                       Increment) }
-          PAWhile (true,
-                   ctx.MkEq (ctx.MkIntConst "s",
-                             ctx.MkIntConst "t"),
-                   {Pre = [CSetView {VName = "holdTick"
-                                     VParams = [ctx.MkIntConst "t"] } ]
-                    Post = [CSetView {VName = "holdLock"
-                                      VParams = [] } ] },
-                   {Conditions = {Pre = [CSetView {VName = "holdTick"
-                                                   VParams = [ctx.MkIntConst "t"] } ]
-                                  Post = [CITEView (ctx.MkEq (ctx.MkIntConst "s",
-                                                              ctx.MkIntConst "t"),
-                                                    [CSetView {VName = "holdLock"
-                                                               VParams = [] } ],
-                                                    [CSetView {VName = "holdTick"
-                                                               VParams = [ctx.MkIntConst "t"] } ] ) ] }
-                    Inner =
-                        [PAAxiom {Conditions = {Pre = [CSetView {VName = "holdTick"
-                                                                 VParams = [ctx.MkIntConst "t"] } ]
-                                                Post = [CITEView (ctx.MkEq (ctx.MkIntConst "s",
-                                                                            ctx.MkIntConst "t"),
-                                                                  [CSetView {VName = "holdLock"
-                                                                             VParams = [] } ],
-                                                                  [CSetView {VName = "holdTick"
-                                                                             VParams = [ctx.MkIntConst "t"] } ] ) ] }
-                                  Inner = ArithFetch (Some (LVIdent "s"),
-                                                      LVIdent "serving",
-                                                      Direct) } ] } )
-          PAAxiom {Conditions = {Pre = [CSetView {VName = "holdLock"
-                                                  VParams = [] } ]
-                                 Post = [] }
-                   Inner = ArithFetch (None,
-                                       LVIdent "serving",Increment) } ]
+     Axioms = ticketLockAxioms ctx
      DefViews =
       [ {CViews = []
          CZ3 = ctx.MkGe (ctx.MkIntConst "ticket",

@@ -9,7 +9,7 @@ open Microsoft
 let termGenSeptractStep model (rdone, qstep) rnext =
     let ctx = model.Context
 
-    (* This is based on Matt Parkinson2s schema:
+    (* This is based on Matt Parkinson's schema:
      * [rdone * rnext@(B1, p xbar) * rrest] *- qstep@(B2, p xbar2)
      * = rdone2@[rdone * rnext2@(B1 && !(B2 && xbar = xbar2), p xbar)]
      *   * (rrest *- qstep2@(B2 && !(B1 && xbar = xbar2), p xbar2))

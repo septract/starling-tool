@@ -50,7 +50,7 @@ type Options = {
              HelpText = "Stop at term reification and output the reified terms.")>]
     reify: bool;
     [<Option('z',
-             HelpText = "Output the Z3 query instead of checking it.")>]
+             HelpText = "Output the Z3 queries instead of checking them.")>]
     z3: bool;
     [<Value(0,
             MetaName = "input",
@@ -123,8 +123,8 @@ type Output =
     | OutputFrame of Starling.Model.FramedAxiom list
     | OutputTermGen of Starling.Model.Term list
     | OutputReify of Starling.Model.ReTerm list
-    | OutputZ3 of Z3.BoolExpr
-    | OutputSat of Z3.Status
+    | OutputZ3 of Z3.BoolExpr list
+    | OutputSat of Z3.Status list
 
 let printOutput out =
     match out with
@@ -137,10 +137,8 @@ let printOutput out =
     | OutputFrame f -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printFramedAxioms f)
     | OutputTermGen t -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printTerms t)
     | OutputReify t -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printReTerms t)
-    | OutputZ3 z -> z.ToString ()
-    | OutputSat Z3.Status.SATISFIABLE -> "satisfiable (not proven)"
-    | OutputSat Z3.Status.UNSATISFIABLE -> "unsatisfiable (proven)"
-    | OutputSat _ -> "unknown"
+    | OutputZ3 z -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printZ3Exps z)
+    | OutputSat s -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printSats s)
 
 (*
     Starling pipeline (here defined in reverse):
@@ -164,13 +162,18 @@ let runStarlingZ3 semanticsR reifyR otype =
 
     match otype with
     | OutputTZ3 -> lift OutputZ3 z3R
-    | OutputTSat -> lift2 (fun m z ->
-                              let ctx = m.Context
-                              let solver = ctx.MkSimpleSolver ()
-                              solver.Assert [|z|]
-                              OutputSat <| solver.Check [||])
-                          semanticsR
-                          z3R
+    | OutputTSat ->
+        lift2
+            (fun m zs ->
+                zs
+                |> List.map (fun z ->
+                                let ctx = m.Context
+                                let solver = ctx.MkSimpleSolver ()
+                                solver.Assert [|z|]
+                                solver.Check [||])
+                |> OutputSat)
+            semanticsR
+            z3R
     | _ -> fail ( SEOther "this should be unreachable!" )
 
 /// Runs the reifier and further Starling processes.

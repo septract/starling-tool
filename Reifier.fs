@@ -151,20 +151,14 @@ let reifyTerm model term =
 let reify model = List.map (reifyTerm model)
 
 /// Combines the components of a reified term.
-let combineTerm (ctx: Z3.Context) reterm =
+let combineTerm model reterm =
+    let ctx = model.Context
     ctx.MkAnd [|reterm.TPre
                 reterm.TAction
                 ctx.MkNot (reterm.TPost)|]
 
-/// Combines reified terms.
-let combineTerms model reterms =
-    let ctx = model.Context
-
-    (* We're going for unsatisfiability, so the correct conjunction here
-     * is OR: 'either this one fails, OR this one fails, OR...'
-     *)
-    ctx.MkOr (reterms |> List.map (combineTerm ctx) |> List.toArray)
-    
+/// Combines reified terms into a list of Z3 terms.
+let combineTerms model = List.map (combineTerm model)
 
 /// Reifies and combines terms into a Z3 query.
 let reifyZ3 model = reify model >> combineTerms model

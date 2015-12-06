@@ -346,3 +346,16 @@ let printReTerm: ReTerm -> Command = printGenTerm printZ3Exp
 /// Pretty-prints a list of reified terms.
 let printReTerms = printNumHeaderedList printReTerm
 
+/// Pretty-prints a list of Z3 expressions.
+let printZ3Exps : Z3.BoolExpr list -> Command = printNumHeaderedList printZ3Exp
+
+/// Pretty-prints a satisfiability result.
+let printSat sat =
+    match sat with
+    | Z3.Status.SATISFIABLE -> "satisfiable (not proven)"
+    | Z3.Status.UNSATISFIABLE -> "unsatisfiable (proven)"
+    | _ -> "unknown"
+    |> String
+
+/// Pretty-prints a list of satisfiability results.
+let printSats = printNumHeaderedList printSat

@@ -453,19 +453,23 @@ and modelAxiomsOnBlock model block =
      * failure.
      *)
     let bpost, axioms =
-        List.foldBack
-            (fun vcom state ->
+        (* Currently, we fold forwards and then reverse the axioms list.  This
+         * is because backwards folding means that we're stepping through the
+         * commands in the wrong order, meaning that the precondition of the
+         * next command is NOT the postcondition of the current.
+         *)
+         List.fold
+            (fun (pre, axiomsR) vcom ->
                  let cmd = vcom.Command
                  let post = vcom.Post
-                 (post, trial {let pre, axiomsR = state
-                               // If our last axiomatisation failed, this will
+                 (post, trial {// If our last axiomatisation failed, this will
                                // cause failure here.
                                let! axioms = axiomsR
                                let! cpair = makeAxiomConditionPair model pre post
                                let! axiom = modelAxiomOnCommand model cpair cmd
                                return axiom :: axioms } ))
-            block.Contents
             (block.Pre, ok [])
+            block.Contents
 
     (* At the end of the above, we either have a list of axioms or an
      * error.  If we have the former, surround the axioms with the condition
@@ -474,7 +478,7 @@ and modelAxiomsOnBlock model block =
     trial {let! xs = axioms
            let! cpair = makeAxiomConditionPair model block.Pre bpost
            return {Conditions = cpair
-                   Inner = xs}}
+                   Inner = List.rev xs}}
 
 /// Converts a method to a list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
