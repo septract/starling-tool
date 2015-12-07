@@ -28,7 +28,7 @@ let rec flatWhile model expr outer inner precom =
 
     // [|P3|] assume ¬C [|P4|]
     let p3p4 = {Conditions = {Pre = p3
-                              Post = p2}
+                              Post = p4}
                 Inner = PrimAssume (model.Context.MkNot expr) }
 
     p1p2 :: p3p2 :: p3p4 :: flatAxioms model inner.Inner
