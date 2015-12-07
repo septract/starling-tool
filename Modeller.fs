@@ -18,38 +18,22 @@ open Starling.Errors.Modeller
  *)
 
 /// Active pattern classifying bops as to whether they create
-/// arithmetic or Boolean expressions
+/// arithmetic or Boolean expressions.
 let (|ArithOp|BoolOp|) bop =
     match bop with
-    | Mul -> ArithOp
-    | Div -> ArithOp
-    | Add -> ArithOp
-    | Sub -> ArithOp
-    | Gt -> BoolOp
-    | Ge -> BoolOp
-    | Le -> BoolOp
-    | Lt -> BoolOp
-    | Eq -> BoolOp
-    | Neq -> BoolOp
-    | And -> BoolOp
-    | Or -> BoolOp
+    | Mul | Div | Add | Sub -> ArithOp
+    | Gt | Ge | Le | Lt -> BoolOp
+    | Eq | Neq -> BoolOp
+    | And | Or -> BoolOp
 
 /// Active pattern classifying bops as to whether they take in
 /// arithmetic, Boolean, or indeterminate operands.
 let (|ArithIn|BoolIn|AnyIn|) bop =
     match bop with
-    | Mul -> ArithIn
-    | Div -> ArithIn
-    | Add -> ArithIn
-    | Sub -> ArithIn
-    | Gt -> ArithIn
-    | Ge -> ArithIn
-    | Le -> ArithIn
-    | Lt -> ArithIn
-    | Eq -> AnyIn
-    | Neq -> AnyIn
-    | And -> BoolIn
-    | Or -> BoolIn
+    | Mul | Div | Add | Sub -> ArithIn
+    | Gt | Ge | Le | Lt -> ArithIn
+    | Eq | Neq -> AnyIn
+    | And | Or -> BoolIn
 
 /// Active pattern classifying expressions as to whether they are
 /// arithmetic, Boolean, or indeterminate.
@@ -555,7 +539,7 @@ let checkViewProtoDuplicates proto =
     let names = List.map snd proto.VPPars
     match (findDuplicates names) with
     | [] -> ok proto
-    | ds -> Bad <| List.map (fun d -> VPEDuplicateParam (proto, d)) ds
+    | ds -> List.map (fun d -> VPEDuplicateParam (proto, d)) ds |> Bad
 
 /// Checks a view prototype and converts it to an associative pair.
 let modelViewProto proto =
@@ -573,10 +557,16 @@ let modelViewProtos protos =
 
 /// Converts a collated script to a model with the given context.
 let modelWith ctx collated =
-    trial {let! vprotos = mapMessages MEVProto (modelViewProtos collated.CVProtos)
-           let! globals = mapMessages MEVar (makeVarMap ctx collated.CGlobals)
-           let! locals = mapMessages MEVar (makeVarMap ctx collated.CLocals)
+    trial {let! vprotos = modelViewProtos collated.CVProtos |> mapMessages MEVProto 
+           // Make variable maps out of the global and local variable definitions.
+           let! globals = makeVarMap ctx collated.CGlobals
+                          |> mapMessages MEVar
+           let! locals = makeVarMap ctx collated.CLocals
+                         |> mapMessages MEVar
 
+           (* We use a 'partial' model, with no defining views or
+            * axioms, in the creation of the constraints.
+            *)
            let imod = {Context = ctx
                        Globals = globals
                        Locals = locals
@@ -584,21 +574,23 @@ let modelWith ctx collated =
                        DefViews = ()
                        Axioms = () }
 
-           // TODO(CaptainHayashi): checking of constraints against locals and globals
-           let! constraints = mapMessages MEConstraint (modelConstraints imod collated)
+           let! constraints = modelConstraints imod collated
+                              |> mapMessages MEConstraint
 
+           (* Now add in the constraints.  This is a different type from
+            * imod, so it isn't convenient to use mutation or
+            * {imod with...}.  For now, we create an entirely new model.
+            *)
            let pmod = {Context = ctx
                        Globals = globals
                        Locals = locals
                        VProtos = vprotos
                        DefViews = constraints
                        Axioms = () }
-
-           let! axioms = mapMessages MEAxiom (modelAxioms pmod collated.CMethods)
-           // TODO(CaptainHayashi): axioms, etc.
+           let! axioms = modelAxioms pmod collated.CMethods
+                         |>mapMessages MEAxiom
 
            return (withAxioms axioms pmod) }
 
 /// Converts a collated script to a model.
 let model = modelWith (new Context ())
-    
