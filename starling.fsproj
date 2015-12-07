@@ -38,6 +38,7 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Utils.fs" />
+    <Compile Include="Z3.fs" />
     <Compile Include="PrettyTypes.fs" />
     <Compile Include="VarErrors.fs" />
     <Compile Include="Var.fs" />

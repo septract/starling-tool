@@ -5,6 +5,7 @@ open Microsoft.Z3
 
 open Chessie.ErrorHandling
 
+open Starling.Z3
 open Starling.Var
 open Starling.AST
 open Starling.Collator
@@ -64,17 +65,6 @@ let (|BoolExp|ArithExp|AnyExp|) expr =
 (*
  * Expression translation
  *)
-
-/// Makes an And out of a pair of two expressions.
-let mkAnd2 (ctx: Context) (l, r) = ctx.MkAnd [| l; r |]
-/// Makes an Or out of a pair of two expressions.
-let mkOr2 (ctx: Context) (l, r) = ctx.MkOr [| l; r |]
-/// Makes an Add out of a pair of two expressions.
-let mkAdd2 (ctx: Context) (l, r) = ctx.MkAdd [| l; r |]
-/// Makes a Sub out of a pair of two expressions.
-let mkSub2 (ctx: Context) (l, r) = ctx.MkSub [| l; r |]
-/// Makes a Mul out of a pair of two expressions.
-let mkMul2 (ctx: Context) (l, r) = ctx.MkMul [| l; r |]
 
 /// Converts a Starling expression of ambiguous type to a Z3 predicate using
 /// the given partial model and environment.

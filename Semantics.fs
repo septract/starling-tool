@@ -3,6 +3,7 @@ module Starling.Semantics
 
 open Microsoft.Z3
 open Chessie.ErrorHandling
+open Starling.Z3
 open Starling.Var
 open Starling.AST
 open Starling.Model
