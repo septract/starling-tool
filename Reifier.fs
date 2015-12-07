@@ -101,8 +101,8 @@ let reifySingle model view =
 
     (* If the single reification is literally 'true', we would be
      * constructing the condition (guars => true), which is a tautology.
-     * Similarly, if our guard expresion is literally 'false', it can
-     * never be fired, and is a contradiction.
+     * Similarly, if our guard expression is literally 'false', it can
+     * never be fired, and is also a tautology.
      *)
     if vrs.IsTrue
     then ctx.MkTrue ()
@@ -110,7 +110,7 @@ let reifySingle model view =
         let gr = ctx.MkAnd (Array.ofList guars)
         let grs = gr.Simplify () :?> Z3.BoolExpr
         if grs.IsFalse
-        then ctx.MkFalse ()
+        then ctx.MkTrue ()
             else ctx.MkImplies (grs, vrs)
 
 /// Produces the power-multiset of a multiset (list).
