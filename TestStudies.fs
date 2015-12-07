@@ -33,7 +33,7 @@ method lock() {
       {| holdTick(t) |}
         <s = serving>;
       {| if s == t then holdLock else holdTick(t) |}
-    } while (s == t)
+    } while (s != t)
   {| holdLock |}
 }
 
@@ -68,7 +68,7 @@ let ticketLockLockMethodAST =
                                                         Func ("holdLock", []),
                                                         Func ("holdTick", [LVExp (LVIdent "t")])) } ]
                                },
-                               BopExp (Eq,
+                               BopExp (Neq,
                                        LVExp (LVIdent "s"),
                                        LVExp (LVIdent "t")))
 
@@ -180,8 +180,8 @@ let ticketLockAxioms (ctx: Z3.Context) =
                                    LVIdent "ticket",
                                    Increment) }
       PAWhile (true,
-               ctx.MkEq (ctx.MkIntConst "s",
-                         ctx.MkIntConst "t"),
+               ctx.MkNot (ctx.MkEq (ctx.MkIntConst "s",
+                                     ctx.MkIntConst "t")),
                {Pre = [CSetView {VName = "holdTick"
                                  VParams = [ctx.MkIntConst "t"] } ]
                 Post = [CSetView {VName = "holdLock"
