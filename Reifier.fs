@@ -10,16 +10,6 @@ open Starling.Semantics
 /// Converts a GuarView to a tuple.
 let tupleOfGuarView gv = (gv.GCond, gv.GView)
 
-/// Builds a map of names to occurrences in a view list.
-let namesInView (vset: GenView<_> list) =
-    List.fold
-        (fun mp view ->
-            match Map.tryFind view.VName mp with
-            | Some x -> Map.add view.VName (x + 1) mp
-            | None   -> Map.add view.VName 1 mp)
-        Map.empty
-        vset
-
 /// Tries to look up a multiset View in the defining views.
 let findDefOfView model uview =
     (* We look up view-defs based on count of views and names of each
@@ -30,7 +20,13 @@ let findDefOfView model uview =
      *)
     List.tryFind
         (fun vd ->
-            namesInView uview = namesInView vd.CViews)
+            (* Do these two views have the same number of terms?
+             * If not, using forall2 is an error.
+             *)
+            List.length vd.CViews = List.length uview
+            && List.forall2 (fun d s -> d.VName = s.VName)
+                            vd.CViews
+                            uview)
         model.DefViews
 
 /// Produces a map of substitutions that transform the parameters of a
@@ -78,8 +74,10 @@ let reifyUnguarded model uview =
     // This corresponds to D^ in the theory.
     let ctx = model.Context
 
-    match findDefOfView model uview with
-    | Some vdef -> instantiateDef ctx uview vdef 
+    let uv = List.sort uview
+
+    match findDefOfView model uv with
+    | Some vdef -> instantiateDef ctx uv vdef
     | None -> ctx.MkTrue ()
 
 /// Reifies a single GuarView.

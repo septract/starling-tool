@@ -246,7 +246,7 @@ let modelConstraint model c =
     trial {let! v = modelViewDef model c.CView |> mapMessages CEView
            let! e = envOfConstraint model v |> mapMessages CEView
            let! c = boolExprToZ3 model e c.CExpression |> mapMessages CEExpr 
-           return {CViews = v
+           return {CViews = List.sort v
                    CZ3 = c}}
 
 /// Extracts the view constraints from a CollatedScript, turning each into a
