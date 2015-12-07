@@ -7,11 +7,11 @@ open Chessie.ErrorHandling
 
 open Starling.Z3
 open Starling.Var
+open Starling.Errors.Var
 open Starling.AST
 open Starling.Collator
 open Starling.Model
 open Starling.Errors.Modeller
-
 
 (*
  * Expression classification
@@ -61,7 +61,6 @@ let (|BoolExp|ArithExp|AnyExp|) expr =
     | BopExp (BoolOp, _, _) -> BoolExp
     | BopExp (ArithOp, _, _) -> ArithExp
 
-
 (*
  * Expression translation
  *)
@@ -78,11 +77,11 @@ let rec anyExprToZ3 model env expr =
         (* Look-up the variable to ensure it a) exists and b) is of a
          * Boolean type.
          *)
-        trial {let! vt = lookupVarType env v
+        trial {let! vt = lookupVar env v
                          |> mapMessages ((curry EEVar) expr)
                match vt with
-               | Bool -> return (mkBoolLV ctx v) :> Expr
-               | Int -> return (mkIntLV ctx v) :> Expr}
+               | BoolVar _ -> return (mkBoolLV ctx v) :> Expr
+               | IntVar _ -> return (mkIntLV ctx v) :> Expr}
     (* We can use the active patterns above to figure out whether we
      * need to treat this expression as arithmetic or Boolean.
      *)
@@ -101,10 +100,10 @@ and boolExprToZ3 model env expr =
         (* Look-up the variable to ensure it a) exists and b) is of a
          * Boolean type.
          *)
-        trial {let! vt = lookupVarType env v
+        trial {let! vt = lookupVar env v
                          |> mapMessages ((curry EEVar) expr)
                match vt with
-               | Bool -> return (mkBoolLV ctx v)
+               | BoolVar _ -> return (mkBoolLV ctx v)
                | _ -> return! (fail <| EEVarNotBoolean v) }
     | BopExp (BoolOp as op, l, r) ->
         match op with
@@ -144,10 +143,10 @@ and arithExprToZ3 model env expr =
         (* Look-up the variable to ensure it a) exists and b) is of an
          * arithmetic type.
          *)
-        trial {let! vt = lookupVarType env v
+        trial {let! vt = lookupVar env v
                          |> mapMessages ((curry EEVar) expr)
                match vt with
-               | Int -> return (mkIntLV ctx v) :> ArithExpr
+               | IntVar _ -> return (mkIntLV ctx v) :> ArithExpr
                | _ -> return! (fail <| EEVarNotArith v) }
     | BopExp (ArithOp as op, l, r) ->
         trial {let! lA = arithExprToZ3 model env l
@@ -285,15 +284,25 @@ let primToAxiom cpair prim = {Conditions = cpair
                               Inner = prim}
                              |> PAAxiom
 
+let (|GlobalVar|_|) model (lvalue: Var.LValue) =
+    tryLookupVar model.Globals lvalue
+
+let (|LocalVar|_|) model (lvalue: Var.LValue) =
+    tryLookupVar model.Locals lvalue
+
 /// Tries to look up the type of a local variable in an axiom context.
 /// Returns a Chessie result; failures have AEBadLocal messages.
 let lookupLocalType model lvalue =
-    lookupVarType model.Locals lvalue |> mapMessages AEBadLocal
+    match lvalue with
+    | LocalVar model v -> varType v |> ok
+    | _ -> VMENotFound (flattenLV lvalue) |> AEBadLocal |> fail
 
 /// Tries to look up the type of a global variable in an axiom context.
 /// Returns a Chessie result; failures have AEBadGlobal messages.
 let lookupGlobalType model lvalue =
-    lookupVarType model.Globals lvalue |> mapMessages AEBadGlobal
+    match lvalue with
+    | GlobalVar model v -> varType v |> ok
+    | _ -> VMENotFound (flattenLV lvalue) |> AEBadLocal |> fail
 
 /// Converts a Boolean expression to z3 within the given axiom context.
 /// Returns a Chessie result; failures have AEBadExpr messages.
@@ -304,6 +313,64 @@ let axiomBoolExprToZ3 model expr =
 /// Returns a Chessie result; failures have AEBadExpr messages.
 let axiomArithExprToZ3 model expr =
     arithExprToZ3 model model.Locals expr |> mapMessages AEBadExpr
+
+/// Converts a Boolean load to a Prim.
+let modelPrimOnBoolLoad model atom dest src mode =
+    (* In a Boolean load, the destination must be LOCAL and Boolean;
+     *                    the source must be a GLOBAL Boolean lvalue;
+     *                    and the fetch mode must be Direct.
+     *)
+    match src with
+    | LVExp s ->
+        trial {let! stype = lookupGlobalType model s
+
+               match stype, mode with
+               | Bool, Direct -> return BoolLoad (dest, s)
+               | Bool, Increment -> return! fail <| AEUnsupportedAtomic (atom, "cannot increment a Boolean global")
+               | Bool, Decrement -> return! fail <| AEUnsupportedAtomic (atom, "cannot decrement a Boolean global")
+               | _ -> return! fail <| AETypeMismatch (Bool, s, stype) }
+    | _ -> fail <| AEUnsupportedAtomic (atom, "loads must have a lvalue source")
+
+/// Converts an integer load to a Prim.
+let modelPrimOnIntLoad model atom dest src mode =
+    (* In a Boolean load, the destination must be LOCAL and Boolean;
+     *                    the source must be a GLOBAL arithmetic lvalue;
+     *                    and the fetch mode is unconstrained.
+     *)
+    match src with
+    | LVExp s ->
+        trial {let! stype = lookupGlobalType model s
+
+               match stype, mode with
+               | Int, _ -> return IntLoad (Some dest, s, mode)
+               | _ -> return! fail <| AETypeMismatch (Int, s, stype) }
+    | _ -> fail <| AEUnsupportedAtomic (atom, "loads must have a lvalue source")
+
+/// Converts a Boolean store to a Prim.
+let modelPrimOnBoolStore model atom dest src mode =
+    (* In a Boolean store, the destination must be GLOBAL and Boolean;
+     *                     the source must be LOCAL and Boolean;
+     *                     and the fetch mode must be Direct.
+     *)
+    trial {let! sxp = axiomBoolExprToZ3 model src
+
+           match mode with
+           | Direct -> return BoolStore (dest, sxp)
+           | Increment -> return! fail <| AEUnsupportedAtomic (atom, "cannot increment an expression")
+           | Decrement -> return! fail <| AEUnsupportedAtomic (atom, "cannot decrement an expression") }
+
+/// Converts an integral store to a Prim.
+let modelPrimOnIntStore model atom dest src mode =
+    (* In an integral store, the destination must be GLOBAL and integral;
+     *                       the source must be LOCAL and integral;
+     *                       and the fetch mode must be Direct.
+     *)
+    trial {let! sxp = axiomArithExprToZ3 model src
+
+           match mode with
+           | Direct -> return IntStore (dest, sxp)
+           | Increment -> return! fail <| AEUnsupportedAtomic (atom, "cannot increment an expression")
+           | Decrement -> return! fail <| AEUnsupportedAtomic (atom, "cannot decrement an expression") }
 
 /// Converts an atomic action to a Prim.
 let rec modelPrimOnAtomic model atom =
@@ -326,27 +393,25 @@ let rec modelPrimOnAtomic model atom =
                | Int, Int ->
                    let! setz3 = axiomArithExprToZ3 model set
                    // TODO(CaptainHayashi): test locality of c
-                   return ArithCAS (dest, test, setz3)
+                   return IntCAS (dest, test, setz3)
                | _ ->
                    // Oops, we have a type error.
                    // Arbitrarily single out test as the cause of it.
                    return! fail <| AETypeMismatch (dtype, test, ttype) }
     | Fetch (dest, src, mode) ->
-        (* In a fetch, the destination must be LOCAL;
-         *             the source must be GLOBAL;
-         *             and the fetch mode can be any valid fetch mode.
-         * dest and src must agree on type.
+        (* First, determine whether we have a fetch from global to local
+         * (a load), or a fetch from local to global (a store).
+         * Also figure out whether we have a Boolean or arithmetic
+         * version.
+         * We figure this out by looking at dest.
          *)
-        trial {let! dtype = lookupLocalType model dest
-               let! stype = lookupGlobalType model src
-
-               match dtype, stype, mode with
-               | Int, Int, _ -> return ArithFetch (Some dest, src, mode)
-               // For Booleans we cannot have a fetch mode other than Direct.
-               | Bool, Bool, Direct -> return BoolFetch (dest, src)
-               | Bool, Bool, Increment -> return! fail <| AEUnsupportedAtomic (atom, "cannot increment a Boolean global")
-               | Bool, Bool, Decrement -> return! fail <| AEUnsupportedAtomic (atom, "cannot decrement a Boolean global")
-               | _ -> return! fail <| AETypeMismatch (dtype, src, stype) }
+        match dest with
+        | GlobalVar model (IntVar _) -> modelPrimOnIntStore model atom dest src mode
+        | GlobalVar model (BoolVar _) -> modelPrimOnBoolStore model atom dest src mode
+        | LocalVar model (IntVar _) -> modelPrimOnIntLoad model atom dest src mode
+        | LocalVar model (BoolVar _) -> modelPrimOnBoolLoad model atom dest src mode
+        // TODO(CaptainHayashi): incorrect error here.
+        | _ -> fail <| AEBadGlobal (VMENotFound (flattenLV dest))
     | Postfix (operand, mode) ->
         (* A Postfix is basically a Fetch with no destination, at this point.
          * Thus, the source must be GLOBAL.
@@ -358,13 +423,13 @@ let rec modelPrimOnAtomic model atom =
                | Direct, _ -> return! fail <| AEUnsupportedAtomic (atom, "<var>; has no effect; use <id>; or ; for no-ops")
                | Increment, Bool -> return! fail <| AEUnsupportedAtomic (atom, "cannot increment a Boolean global")
                | Decrement, Bool -> return! fail <| AEUnsupportedAtomic (atom, "cannot decrement a Boolean global")
-               | _, Int -> return ArithFetch (None, operand, mode) }
+               | _, Int -> return IntLoad (None, operand, mode) }
     | Id -> ok PrimId
     | Assume e -> axiomBoolExprToZ3 model e |> lift PrimAssume
 
 /// Converts a local variable assignment to a Prim.
 and modelPrimOnAssign model l e =
-    (* We model assignments as ArithLocalSet or BoolLocalSet, depending on the
+    (* We model assignments as IntLocalSet or BoolLocalSet, depending on the
      * type of l, which _must_ be in the locals set..
      * We thus also have to make sure that e is the correct type.
      *)
@@ -375,7 +440,7 @@ and modelPrimOnAssign model l e =
                return BoolLocalSet (l, ez3)
            | Int ->
                let! ez3 = axiomArithExprToZ3 model e
-               return ArithLocalSet (l, ez3) }
+               return IntLocalSet (l, ez3) }
 
 /// Creates a partially resolved axiom for an if-then-else.
 and modelAxiomOnITE model outcond i t f =

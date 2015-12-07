@@ -33,7 +33,7 @@ type FetchMode =
 /// An atomic action.
 type AtomicAction =
     | CompareAndSwap of Var.LValue * Var.LValue * Expression  // <CAS(a, b, c)>
-    | Fetch of Var.LValue * Var.LValue * FetchMode  // <a = b??>
+    | Fetch of Var.LValue * Expression * FetchMode  // <a = b??>
     | Postfix of Var.LValue * FetchMode  // <a++> or <a-->
     | Id  // <id>
     | Assume of Expression  // <assume(e)

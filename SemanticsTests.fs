@@ -104,9 +104,9 @@ let testSemanticsOf (ctx: Context) =
                                                             ctx.MkAdd [|ctx.MkIntConst "serving!before" :> ArithExpr
                                                                         ctx.MkInt 1 :> ArithExpr|] ) |],
                                       semanticsOf (ticketLockModel ctx)
-                                                  (ArithFetch (None,
-                                                               LVIdent "serving",
-                                                               Increment))) ]
+                                                  (IntLoad (None,
+                                                            LVIdent "serving",
+                                                            Increment))) ]
 
 [<Tests>]
 let testSemantics =

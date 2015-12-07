@@ -74,7 +74,7 @@ let printFetchMode m =
 let printAtomicAction atom =
     match atom with
     | CompareAndSwap (l, f, t) -> "CAS(" + printLValue l + ", " + printLValue f + ", " + printExpression t
-    | Fetch (l, r, m) -> printLValue l + " = " + printLValue r + printFetchMode m
+    | Fetch (l, r, m) -> printLValue l + " = " + printExpression r + printFetchMode m
     | Postfix (l, m) -> printLValue l + printFetchMode m
     | Id -> "id"
     | Assume e -> "assume(" + printExpression e + ")"

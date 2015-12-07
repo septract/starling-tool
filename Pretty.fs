@@ -197,13 +197,21 @@ let printOption pp ov =
     | None -> String "(none)"
     | Some v -> pp v
 
-/// Pretty-prints a fetch prim.
-let printFetchPrim ty dest src mode =
-    hsep [ String ("fetch<" + ty + ">")
+/// Pretty-prints a load prim.
+let printLoadPrim ty dest src mode =
+    hsep [ String ("load<" + ty + ">")
            parened (hsep [ printOption (printLValue >> String) dest
                            String "="
                            String (printLValue src)
                            String (printFetchMode mode) ] ) ]
+
+/// Pretty-prints a store prim.
+let printStorePrim ty dest src =
+    hsep [ String ("store<" + ty + ">")
+           parened (hsep [ String (printLValue dest)
+                           String "="
+                           printZ3Exp src ] ) ]
+
 
 /// Pretty-prints a CAS prim.
 let printCASPrim ty dest src set =
@@ -223,11 +231,13 @@ let printLocalPrim ty dest src =
 /// Pretty-prints a prim.
 let printPrim prim =
     match prim with
-    | ArithFetch (dest, src, mode) -> printFetchPrim "arith" dest src mode
-    | BoolFetch (dest, src) -> printFetchPrim "bool" (Some dest) src Direct
-    | ArithCAS (dest, src, set) -> printCASPrim "arith" dest src set
+    | IntLoad (dest, src, mode) -> printLoadPrim "arith" dest src mode
+    | BoolLoad (dest, src) -> printLoadPrim "bool" (Some dest) src Direct
+    | IntStore (dest, src) -> printStorePrim "arith" dest src
+    | BoolStore (dest, src) -> printStorePrim "bool" dest src
+    | IntCAS (dest, src, set) -> printCASPrim "arith" dest src set
     | BoolCAS (dest, src, set) -> printCASPrim "bool" dest src set
-    | ArithLocalSet (dest, src) -> printLocalPrim "arith" dest src
+    | IntLocalSet (dest, src) -> printLocalPrim "arith" dest src
     | BoolLocalSet (dest, src) -> printLocalPrim "bool" dest src
     | PrimId -> String "id"
     | PrimAssume expr -> hsep [ String "assume"

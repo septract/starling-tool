@@ -149,14 +149,16 @@ let combineMaps (a: VarMap) (b: VarMap) =
         (ok a)
         b
 
-/// Looks up a variable record in a variable map.
-/// Failures are in terms of VarMapError.
-let lookupVar env lvalue =
+/// Tries to look up a variable record in a variable map.
+/// Failures are in terms of Some/None.
+let tryLookupVar env lvalue =
     match lvalue with
-    | LVIdent s -> Map.tryFind s env |> failIfNone (VMENotFound s)
+    | LVIdent s -> Map.tryFind s env
     //| _ -> LEBadLValue lvalue |> fail
 
-/// Looks up a variable's type in a variable map.
+/// Looks up a variable record in a variable map.
 /// Failures are in terms of VarMapError.
-let lookupVarType env lvalue =
-    lookupVar env lvalue |> lift varType
+let lookupVar env s =
+    s
+    |> tryLookupVar env
+    |> failIfNone (VMENotFound (flattenLV s))

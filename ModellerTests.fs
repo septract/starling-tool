@@ -81,12 +81,12 @@ let modelToComparable =
 let testModelPrimOnAtomic (ctx: Context) =
     testCase "test modelPrimOnAtomic with ticketed lock example" <|
         fun _ -> Assert.Equal ("modelPrimOnAtomic with <t = ticket++>",
-                               ok (ArithFetch (Some (LVIdent "t"),
-                                               LVIdent "ticket",
-                                               Increment)),
+                               ok (IntLoad (Some (LVIdent "t"),
+                                           LVIdent "ticket",
+                                           Increment)),
                                (modelPrimOnAtomic (ticketLockModel ctx)
                                                   (Fetch (LVIdent "t",
-                                                          LVIdent "ticket",
+                                                          LVExp (LVIdent "ticket"),
                                                           Increment))))
 
 let testModelAxiomOnCommand (ctx: Context) =
@@ -97,16 +97,16 @@ let testModelAxiomOnCommand (ctx: Context) =
                  ok (PAAxiom {Conditions = {Pre = []
                                             Post = [CSetView {VName = "holdTick";
                                                               VParams = [ctx.MkIntConst "t"]} ] }
-                              Inner = ArithFetch (Some (LVIdent "t"),
-                                                  LVIdent "ticket",
-                                                  Increment) } ),
+                              Inner = IntLoad (Some (LVIdent "t"),
+                                              LVIdent "ticket",
+                                              Increment) } ),
                  (modelAxiomOnCommand (ticketLockModel ctx)
                                       {Pre = []
                                        Post = [CSetView {VName = "holdTick"
                                                          VParams = [ctx.MkIntConst "t"]} ] }
 
                                       (Atomic (Fetch (LVIdent "t",
-                                                      LVIdent "ticket",
+                                                      LVExp (LVIdent "ticket"),
                                                       Increment)))))
 
 let testMakeAxiomConditionPair (ctx: Context) =

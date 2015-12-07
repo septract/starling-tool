@@ -45,11 +45,13 @@ type ConditionPair<'v> =
 
 /// A modelled primitive command.
 type Prim =
-    | ArithFetch of dest: Var.LValue option * src: Var.LValue * mode: AST.FetchMode
-    | BoolFetch of dest: Var.LValue * src: Var.LValue
-    | ArithCAS of dest: Var.LValue * test: Var.LValue * set: Z3.ArithExpr
+    | IntLoad of dest: Var.LValue option * src: Var.LValue * mode: AST.FetchMode
+    | BoolLoad of dest: Var.LValue * src: Var.LValue
+    | IntStore of dest: Var.LValue * src: Z3.ArithExpr
+    | BoolStore of dest: Var.LValue * src: Z3.BoolExpr
+    | IntCAS of dest: Var.LValue * test: Var.LValue * set: Z3.ArithExpr
     | BoolCAS of dest: Var.LValue * test: Var.LValue * set: Z3.BoolExpr
-    | ArithLocalSet of dest: Var.LValue * src: Z3.ArithExpr
+    | IntLocalSet of dest: Var.LValue * src: Z3.ArithExpr
     | BoolLocalSet of dest: Var.LValue * src: Z3.BoolExpr
     | PrimId
     | PrimAssume of Z3.BoolExpr

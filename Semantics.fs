@@ -126,7 +126,7 @@ let makeCAS model destE testE setE =
      * Each case is in the form (cond => destAfter ^ testAfter).
      * We start with the success case.
      *)
-    let succCond = ctx.MkEq (destEB, setEB)
+    let succCond = ctx.MkEq (destEB, testEB)
     // In a success, we have destE!after = setE!before;
     let succDest = makeRel model setE destE
     // and test!after = test!before.
@@ -139,7 +139,7 @@ let makeCAS model destE testE setE =
     let failDest = makeRel model destE testE
     // and dest!after = dest!before.
     let failTest = makeNoChange model destE
-    let failSem = mkAnd2 ctx (succDest, succTest)
+    let failSem = mkAnd2 ctx (failDest, failTest)
     let failure = ctx.MkImplies (failCond, failSem)
 
     [success
@@ -148,7 +148,7 @@ let makeCAS model destE testE setE =
      makeNoChange model setE]
 
 /// Emits an arithmetic fetch.
-let makeArithFetch model dest src mode =
+let makeIntLoad model dest src mode =
     let ctx = model.Context
 
     (* Convert the lvalues to constants.
@@ -168,7 +168,7 @@ let makeArithFetch model dest src mode =
     |> List.choose id
 
 /// Emits a Boolean fetch.
-let makeBoolFetch model dest src =
+let makeBoolLoad model dest src =
     let ctx = model.Context
 
     (* As above, but with different types, no modes other than
@@ -180,15 +180,32 @@ let makeBoolFetch model dest src =
     [makeRel model srcE destE
      makeNoChange model srcE]
 
+/// Emits an integral store.
+let makeIntStore model dest srcE =
+    let ctx = model.Context
+
+    // We don't emit a makeNoChange for src, because src is an expression.
+    let destE = mkIntLV ctx dest
+    [makeRel model srcE destE]
+
+/// Emits a Boolean store.
+let makeBoolStore model dest srcE =
+    let ctx = model.Context
+
+    let destE = mkBoolLV ctx dest
+    [makeRel model srcE destE]
+
 /// Emits Z3 corresponding to a prim.
 /// The result is a pair of the Z3 emission, and the set of names of
 /// variables whose post-states are bound by the semantics.
 let emitPrim model prim =
     let ctx = model.Context
     match prim with
-    | ArithFetch (dest, src, mode) -> makeArithFetch model dest src mode
-    | BoolFetch (dest, src) -> makeBoolFetch model dest src
-    | ArithCAS (dest, test, set) ->
+    | IntLoad (dest, src, mode) -> makeIntLoad model dest src mode
+    | BoolLoad (dest, src) -> makeBoolLoad model dest src
+    | IntStore (dest, src) -> makeIntStore model dest src
+    | BoolStore (dest, src) -> makeBoolStore model dest src
+    | IntCAS (dest, test, set) ->
         makeCAS model
                 (mkIntLV ctx dest :> Expr)
                 (mkIntLV ctx test :> Expr)
@@ -198,7 +215,7 @@ let emitPrim model prim =
                 (mkBoolLV ctx dest :> Expr)
                 (mkBoolLV ctx test :> Expr)
                 set
-    | ArithLocalSet (dest, srcE) ->
+    | IntLocalSet (dest, srcE) ->
         (* By the meta-theory, this and BoolLocalSet can be modelled
          * similarly to atomic fetches.
          * However, src is an expression, and (currently) cannot modify

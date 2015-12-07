@@ -52,7 +52,7 @@ let ticketLockLockMethodAST =
           { Pre = Unit
             Contents =
                 [ { Command = Atomic (Fetch (LVIdent "t",
-                                             LVIdent "ticket",
+                                             LVExp (LVIdent "ticket"),
                                              Increment))
                     Post = Func ("holdTick", [LVExp (LVIdent "t")])
                   }
@@ -60,7 +60,7 @@ let ticketLockLockMethodAST =
                       DoWhile ({ Pre = Func ("holdTick", [LVExp (LVIdent "t")])
                                  Contents =
                                      [ { Command = Atomic (Fetch (LVIdent "s",
-                                                                  LVIdent "serving",
+                                                                  LVExp (LVIdent "serving"),
                                                                   Direct))
                                          Post = IfView (BopExp (Eq,
                                                                 LVExp (LVIdent "s"),
@@ -176,9 +176,9 @@ let ticketLockAxioms (ctx: Z3.Context) =
      [PAAxiom {Conditions = {Pre = []
                              Post = [CSetView {VName = "holdTick";
                                                VParams = [ctx.MkIntConst "t"]} ] }
-               Inner = ArithFetch (Some (LVIdent "t"),
-                                   LVIdent "ticket",
-                                   Increment) }
+               Inner = IntLoad (Some (LVIdent "t"),
+                                LVIdent "ticket",
+                                Increment) }
       PAWhile (true,
                ctx.MkNot (ctx.MkEq (ctx.MkIntConst "s",
                                      ctx.MkIntConst "t")),
@@ -203,14 +203,15 @@ let ticketLockAxioms (ctx: Z3.Context) =
                                                                          VParams = [] } ],
                                                               [CSetView {VName = "holdTick"
                                                                          VParams = [ctx.MkIntConst "t"] } ] ) ] }
-                              Inner = ArithFetch (Some (LVIdent "s"),
-                                                  LVIdent "serving",
-                                                  Direct) } ] } )
+                              Inner = IntLoad (Some (LVIdent "s"),
+                                               LVIdent "serving",
+                                               Direct) } ] } )
       PAAxiom {Conditions = {Pre = [CSetView {VName = "holdLock"
                                               VParams = [] } ]
                              Post = [] }
-               Inner = ArithFetch (None,
-                                   LVIdent "serving",Increment) } ]
+               Inner = IntLoad (None,
+                                LVIdent "serving",
+                                Increment) } ]
 
 
 /// The model of a ticketed lock method.

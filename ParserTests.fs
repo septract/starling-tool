@@ -93,17 +93,17 @@ let testAtomicFetch =
                    fun _ -> assertParse Parser.parseAtomic
                                         "foo = bar"
                                         "foo = bar"
-                                        (Fetch (LVIdent "foo", LVIdent "bar", Direct))
+                                        (Fetch (LVIdent "foo", LVExp (LVIdent "bar"), Direct))
                testCase "foo = bar++" <|
                    fun _ -> assertParse Parser.parseAtomic
                                         "foo = bar++"
                                         "foo = bar++"
-                                        (Fetch (LVIdent "foo", LVIdent "bar", Increment))
+                                        (Fetch (LVIdent "foo", LVExp (LVIdent "bar"), Increment))
                testCase "foo = bar--" <|
                    fun _ -> assertParse Parser.parseAtomic
                                         "foo = bar--"
                                         "foo = bar--"
-                                        (Fetch (LVIdent "foo", LVIdent "bar", Decrement))
+                                        (Fetch (LVIdent "foo", LVExp (LVIdent "bar"), Decrement))
                testCase "CAS(foo, bar, 2)" <|
                    fun _ -> assertParse Parser.parseAtomic
                                         "CAS(foo, bar, 2)"

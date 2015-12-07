@@ -1,0 +1,29 @@
+/* Herlihy/Shavit-style compare and swap lock. */
+
+view False();
+view holdLock();
+
+global bool lock;
+local bool test;
+
+constraint False() => false;
+constraint holdLock() => lock == true;
+constraint holdLock() * holdLock() => false;
+
+method lock() {
+  {| emp |}
+    do {
+      {| emp |}
+        test = false;
+      {| if test == false then emp else False() |}
+        <CAS(lock, test, true)>;
+      {| if test == false then holdLock() else emp |}
+    } while (test == true)
+  {| holdLock() |}
+}
+
+method unlock() {
+  {| holdLock() |}
+  <lock = (false)>;
+  {| emp |}
+}

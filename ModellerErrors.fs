@@ -44,7 +44,7 @@ type AxiomError =
     | AEBadLocal of VarMapError
     | AEBadExpr of ExprError
     | AEBadView of ViewError
-    | AETypeMismatch of expected: Var.Type * badvar: Var.LValue * got: Var.Type
+    | AETypeMismatch of expected: Var.Type * bad: Var.LValue * got: Var.Type
     | AEUnsupportedAtomic of atom: AST.AtomicAction * reason: string
     | AEUnsupportedCommand of cmd: AST.Command * reason: string
 

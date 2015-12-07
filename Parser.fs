@@ -161,10 +161,17 @@ let parseFetchSigil =
     choice [ pstring "++" .>> ws >>% Increment
              pstring "--" .>> ws >>% Decrement ] <|>% Direct
 
+/// Parser for fetch sources.
+let parseFetchSrc =
+    // We can't parse general expressions here, because they
+    // eat the > at the end of the atomic and the sigil!
+    (parseLValue |>> LVExp)
+    <|> inParens parseExpression
+
 /// Parser for fetch right-hand-sides.
 /// This parser SOMETIMES parses whitespace afterwards.
 let parseFetch fetcher =
-    pipe2ws parseLValue
+    pipe2ws parseFetchSrc
             parseFetchSigil
             (fun fetchee sigil -> Fetch (fetcher, fetchee, sigil))
 
