@@ -125,13 +125,15 @@ let printParam (ty, name) =
 /// Pretty-prints a singular view definition.
 let printModelViewDef = printGenView printParam
 
+/// Pretty-prints a view list.
+let printViewList pview vl =
+    (HSep (List.map pview vl, String ";"))
+
 /// Pretty-prints a multiset of views.
-let printModelViewList vs =
-    squared (HSep (List.map printModelView vs, String ","))
+let printModelViewList = printViewList printModelView
 
 /// Pretty-prints a multiset of viewdefs.
-let printModelViewDefs vs =
-    squared (HSep (List.map printModelViewDef vs, String ","))
+let printModelViewDefs = printViewList printModelViewDef >> squared
 
 /// Pretty-prints TVars.
 let printTVar tvar =
@@ -152,10 +154,6 @@ let printModelVar nvar =
               | BoolVar tv -> hsep [ String "bool"
                                      printTVar tv ] ) ],
            String ":")
-
-/// Pretty-prints a view list.
-let printViewList pview vl =
-    (HSep (List.map pview vl, String ";"))
 
 /// Pretty-prints a conditional view.
 let rec printCondView cv =
