@@ -60,6 +60,7 @@
     <Compile Include="Framer.fs" />
     <Compile Include="TermGen.fs" />
     <Compile Include="Reifier.fs" />
+    <Compile Include="ReifierZ3.fs" />
     <Compile Include="Pretty.fs" />
     <Compile Include="TestStudies.fs" />
     <Compile Include="PrettyTests.fs" />

@@ -4,6 +4,7 @@ module Starling.Tests.Reifier
 open Starling.Var
 open Starling.Model
 open Starling.Reifier
+open Starling.ReifierZ3
 open Starling.Tests.Studies
 
 open Microsoft

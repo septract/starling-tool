@@ -126,7 +126,7 @@ let printParam (ty, name) =
 let printModelViewDef = printGenView printParam
 
 /// Pretty-prints a multiset of views.
-let printModelViews vs =
+let printModelViewList vs =
     squared (HSep (List.map printModelView vs, String ","))
 
 /// Pretty-prints a multiset of viewdefs.
@@ -153,6 +153,10 @@ let printModelVar nvar =
                                      printTVar tv ] ) ],
            String ":")
 
+/// Pretty-prints a view list.
+let printViewList pview vl =
+    (HSep (List.map pview vl, String ";"))
+
 /// Pretty-prints a conditional view.
 let rec printCondView cv =
     match cv with
@@ -164,26 +168,30 @@ let rec printCondView cv =
                String "else"
                printCondViewList e ]
     | CSetView v -> printModelView v
-
 /// Pretty-prints a list of cond-views.
-and printCondViewList cvs =
-    ssurround "[| "
-              " |]"
-              (HSep (List.map printCondView cvs, String ";"))
+and printCondViewList =
+    printViewList printCondView >> ssurround "[| " " |]"
+
+/// Pretty-prints a guarded item.
+let printGuarded pitem g =
+    (HSep ( [printZ3Exp g.GCond
+             pitem g.GItem], String "|"))
 
 /// Pretty-prints a guarded view.
-let printGuarView gv =
-    ssurround "("
-              ")"
-              (HSep ([ printZ3Exp gv.GCond
-                       printModelView gv.GView
-                     ], String ","))
+let printGuarView =
+    printGuarded printModelView >> ssurround "(" ")"
 
 /// Pretty-prints a list of guar-views.
-let printGuarViewList cvs =
-    ssurround "<| "
-              " |>"
-              (HSep (List.map printGuarView cvs, String ";"))
+let printGuarViewList =
+    printViewList printGuarView >> ssurround "<| " " |>"
+
+/// Pretty-prints a reified view.
+let printReView =
+    printGuarded printModelViewList >> ssurround "((" " ))"
+
+/// Pretty-prints a reified view.
+let printReViewList =
+    printViewList printReView >> ssurround "(| " " |)"
 
 /// Pretty-prints something wrapped in a general condition pair.
 let printInConditionPair pcond cpair inner =
@@ -359,10 +367,17 @@ let printTerm = printGenTerm printGuarViewList
 let printTerms = printNumHeaderedList printTerm
 
 /// Pretty-prints a reified term.
-let printReTerm: ReTerm -> Command = printGenTerm printZ3Exp
+let printReTerm: ReTerm -> Command =
+    printGenTerm printReViewList
 
 /// Pretty-prints a list of reified terms.
 let printReTerms = printNumHeaderedList printReTerm
+
+/// Pretty-prints a Z3-reified term.
+let printZTerm: ZTerm -> Command = printGenTerm printZ3Exp
+
+/// Pretty-prints a list of Z3-reified terms.
+let printZTerms = printNumHeaderedList printZTerm
 
 /// Pretty-prints a list of Z3 expressions.
 let printZ3Exps : Z3.BoolExpr list -> Command = printNumHeaderedList printZ3Exp

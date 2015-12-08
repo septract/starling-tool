@@ -19,15 +19,15 @@ let termGenSeptractStep model (rdone, qstep) rnext =
      *
      * Our return value is (rdone2, qstep2).
      *)
-    let rname = rnext.GView.VName
-    let qname = qstep.GView.VName
+    let rname = rnext.GItem.VName
+    let qname = qstep.GItem.VName
 
     if rname = qname
     then
         let b1 = rnext.GCond
         let b2 = qstep.GCond
-        let xbar = rnext.GView.VParams
-        let xbar2 = qstep.GView.VParams
+        let xbar = rnext.GItem.VParams
+        let xbar2 = qstep.GItem.VParams
 
         // xbar = xbar'
         let xbarEq =

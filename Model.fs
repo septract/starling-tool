@@ -21,10 +21,16 @@ type CondView =
     // TODO(CaptainHayashi): expand to all expressions.
     | CSetView of View
 
+/// A guarded item.
+type Guarded<'a> =
+    {GCond: Z3.BoolExpr
+     GItem: 'a}
+
 /// A guarded view.
-type GuarView =
-    { GCond: Z3.BoolExpr
-      GView: View }
+type GuarView = Guarded<View>
+
+/// A reified view.
+type ReView = Guarded<View list>
 
 /// A constraint, containing a multiset of views and a Z3 predicate.
 type GenConstraint<'a> =
@@ -86,7 +92,10 @@ type FramedAxiom =
 type Term = Hoare<GuarView list, Z3.BoolExpr>
     
 /// A reified term.
-type ReTerm = Hoare<Z3.BoolExpr, Z3.BoolExpr>
+type ReTerm = Hoare<ReView list, Z3.BoolExpr>
+
+/// A Z3-reified term.
+type ZTerm = Hoare<Z3.BoolExpr, Z3.BoolExpr>
 
 /// A partially resolved axiom.
 type PartAxiom =

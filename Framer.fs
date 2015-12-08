@@ -20,7 +20,7 @@ let instantiateParam model (ty, name) =
 let instantiateFrame model dvs =
     dvs
     |> List.map (fun dv -> {GCond = model.Context.MkTrue ()
-                            GView = {VName = dv.VName
+                            GItem = {VName = dv.VName
                                      VParams = List.map (instantiateParam model) dv.VParams}} )
 
 /// Converts an axiom into a list of framed axioms, by combining it with the

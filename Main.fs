@@ -49,6 +49,9 @@ type Options = {
     [<Option('r',
              HelpText = "Stop at term reification and output the reified terms.")>]
     reify: bool;
+    [<Option('R',
+             HelpText = "Stop at term Z3 reification and output the reified terms.")>]
+    reifyZ3: bool;
     [<Option('z',
              HelpText = "Output the Z3 queries instead of checking them.")>]
     z3: bool;
@@ -109,6 +112,7 @@ type OutputType =
     | OutputTFrame
     | OutputTTermGen
     | OutputTReify
+    | OutputTReifyZ3
     | OutputTZ3
     | OutputTSat
 
@@ -124,6 +128,7 @@ type Output =
     | OutputFrame of Starling.Model.FramedAxiom list
     | OutputTermGen of Starling.Model.Term list
     | OutputReify of Starling.Model.ReTerm list
+    | OutputReifyZ3 of Starling.Model.ZTerm list
     | OutputZ3 of Z3.BoolExpr list
     | OutputSat of Z3.Status list
 
@@ -138,6 +143,7 @@ let printOutput out =
     | OutputFrame f -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printFramedAxioms f)
     | OutputTermGen t -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printTerms t)
     | OutputReify t -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printReTerms t)
+    | OutputReifyZ3 t -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printZTerms t)
     | OutputZ3 z -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printZ3Exps z)
     | OutputSat s -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printSats s)
 
@@ -159,7 +165,7 @@ let printOutput out =
 
 /// Runs Starling, either outputting or checking the Z3 term.
 let runStarlingZ3 semanticsR reifyR otype =
-    let z3R = lift2 Starling.Reifier.combineTerms semanticsR reifyR
+    let z3R = lift2 Starling.ReifierZ3.combineTerms semanticsR reifyR
 
     match otype with
     | OutputTZ3 -> lift OutputZ3 z3R
@@ -177,13 +183,21 @@ let runStarlingZ3 semanticsR reifyR otype =
             z3R
     | _ -> fail ( SEOther "this should be unreachable!" )
 
+/// Runs the Z3 reifier and further Starling processes.
+let runStarlingReifyZ3 semanticsR reifyR otype =
+    let reifyZ3R = lift2 Starling.ReifierZ3.reifyZ3 semanticsR reifyR
+
+    match otype with
+    | OutputTReifyZ3 -> lift OutputReifyZ3 reifyZ3R
+    | _ -> runStarlingZ3 semanticsR reifyZ3R otype
+
 /// Runs the reifier and further Starling processes.
 let runStarlingReify semanticsR termGenR otype =
     let reifyR = lift2 Starling.Reifier.reify semanticsR termGenR
 
     match otype with
     | OutputTReify -> lift OutputReify reifyR
-    | _ -> runStarlingZ3 semanticsR reifyR otype
+    | _ -> runStarlingReifyZ3 semanticsR reifyR otype
 
 /// Runs the term generator and further Starling processes.
 let runStarlingTermGen semanticsR frameR otype =
@@ -272,6 +286,7 @@ let otypeFromOpts opts =
          (opts.frame, OutputTFrame)
          (opts.termgen, OutputTTermGen)
          (opts.reify, OutputTReify)
+         (opts.reifyZ3, OutputTReifyZ3)
          (opts.z3, OutputTZ3)]
         |> List.tryFind fst
     match ot with

@@ -16,7 +16,7 @@ let powerset set =
 let rec resolveCondViewIn (suffix: Set<BoolExpr>) (ctx: Context) cv =
     match cv with
     | CSetView v -> [ {GCond = suffix |> Set.toArray |> mkAnd ctx
-                       GView = v} ]
+                       GItem = v} ]
     | CITEView (expr, tviews, fviews) ->
         List.concat [ resolveCondViewsIn (suffix.Add expr) ctx tviews
                       resolveCondViewsIn (suffix.Add (ctx.MkNot expr)) ctx fviews ]
