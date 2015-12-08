@@ -72,9 +72,9 @@ let termGenPre model fax =
 
 /// Generates a term from a framed axiom.
 let termGenAxiom model fax =
-    {TPre = termGenPre model fax
-     TAction = fax.Axiom.Inner
-     TPost = fax.Frame}
+    {Conditions = {Pre = termGenPre model fax
+                   Post = fax.Frame}
+     Inner = fax.Axiom.Inner}
 
 /// Generates a list of terms from a list of framed axioms.
 let termGen (model: SemModel) = List.map (termGenAxiom model)

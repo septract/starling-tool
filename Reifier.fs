@@ -128,17 +128,17 @@ let reifyView model vapp =
 /// Reifies all of the views in a term.
 let reifyTerm model term =
     (* This is also where we perform our final variable substitution,
-     * converting all global variables to their pre-state in TPre, and
-     * post-state in TPost.
+     * converting all global variables to their pre-state in Pre, and
+     * post-state in Post.
      *)
-    let tpre = reifyView model term.TPre
-    let tpost = reifyView model term.TPost
+    let tpre = reifyView model term.Conditions.Pre
+    let tpost = reifyView model term.Conditions.Post
 
-    {TPre = subAllInEnv model.Globals envVarToBefore (tpre :> Z3.Expr)
-            :?> Z3.BoolExpr
-     TAction = term.TAction
-     TPost = subAllInEnv model.Globals envVarToAfter (tpost :> Z3.Expr)
-             :?> Z3.BoolExpr}
+    {Conditions = {Pre = subAllInEnv model.Globals envVarToBefore (tpre :> Z3.Expr)
+                         :?> Z3.BoolExpr
+                   Post = subAllInEnv model.Globals envVarToAfter (tpost :> Z3.Expr)
+                          :?> Z3.BoolExpr}
+     Inner = term.Inner}
 
 /// Reifies all of the terms in a term list.
 let reify model = List.map (reifyTerm model)
@@ -146,9 +146,9 @@ let reify model = List.map (reifyTerm model)
 /// Combines the components of a reified term.
 let combineTerm model reterm =
     let ctx = model.Context
-    ctx.MkAnd [|reterm.TPre
-                reterm.TAction
-                ctx.MkNot (reterm.TPost)|]
+    ctx.MkAnd [|reterm.Conditions.Pre
+                reterm.Inner
+                ctx.MkNot (reterm.Conditions.Post)|]
 
 /// Combines reified terms into a list of Z3 terms.
 let combineTerms model = List.map (combineTerm model)

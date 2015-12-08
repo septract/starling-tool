@@ -339,10 +339,10 @@ let printNumHeaderedList pp =
 let printFramedAxioms = printNumHeaderedList printFramedAxiom
 
 /// Pretty-prints a generic term.
-let printGenTerm pv tm =
-    vsep [curry Header "Action" <| Indent (printZ3Exp tm.TAction)
-          curry Header "Pre" <| Indent (pv tm.TPre)
-          curry Header "Post" <| Indent (pv tm.TPost) ]
+let printGenTerm pv (tm: Hoare<'a, Z3.BoolExpr>) =
+    vsep [curry Header "Action" <| Indent (printZ3Exp tm.Inner)
+          curry Header "Pre" <| Indent (pv tm.Conditions.Pre)
+          curry Header "Post" <| Indent (pv tm.Conditions.Post) ]
 
 /// Pretty-prints an unreified term.
 let printTerm = printGenTerm printGuarViewList

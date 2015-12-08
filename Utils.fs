@@ -7,8 +7,14 @@ module Starling.Utils
 
 open Chessie.ErrorHandling
 
-/// Passes fst through f, and snd through s.
-let pairMap f s p = (f (fst p), s (snd p))
+/// Applies f and g to x and returns (f x, g x).
+let splitThrough f g x = (f x, g x)
+
+/// Given f and x, returns (x, f x).
+let inAndOut f = splitThrough id f
+
+/// Passes fst through f, and snd through g.
+let pairMap f g = splitThrough (fst >> f) (snd >> g)
 
 /// Converts a pairwise function to a function of two arguments.
 let curry f a b = f (a, b)
@@ -32,7 +38,6 @@ let unionMap f xs =
     |> Set.toSeq
     |> Seq.map f
     |> Set.unionMany
-
 
 /// Maps a function f through a list, and concatenates the resulting
 /// list of lists into one list.
