@@ -75,10 +75,9 @@ let testModelVars ctx =
         [ testModelVarListNoDuplicates ctx ]
 
 /// Converts a model to some form that is accurately comparable.
-let modelToComparable =
-    // TODO(CaptainHayashi): this is pretty drastic...
-    Starling.Pretty.Misc.printPartModel >> Starling.Pretty.Types.print
-    
+let modelToComparable model =
+    (model.Globals, model.Locals, model.Axioms, model.VProtos, model.DefViews)
+
 let testModelPrimOnAtomic (ctx: Context) =
     testCase "test modelPrimOnAtomic with ticketed lock example" <|
         fun _ -> Assert.Equal ("modelPrimOnAtomic with <t = ticket++>",

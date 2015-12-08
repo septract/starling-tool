@@ -113,6 +113,7 @@ type OutputType =
     | OutputTSat
 
 /// The output from a Starling run.
+[<NoComparison>]
 type Output =
     | OutputParse of Starling.AST.ScriptItem list
     | OutputCollation of Starling.Collator.CollatedScript

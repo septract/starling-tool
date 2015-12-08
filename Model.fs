@@ -108,6 +108,7 @@ let cpairOfPartAxiom pa =
     | PAITE (outer = o) -> o
 
 /// A parameterised model of a Starling program.
+[<NoComparison>]
 type Model<'a, 'c> =
     { Context: Z3.Context
 
