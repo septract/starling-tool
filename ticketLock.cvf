@@ -1,20 +1,11 @@
-﻿view holdTick(int t);
-view holdLock();
+/*
+ * Linux-style ticketed lock.
+ */
 
-constraint emp                      => ticket >= serving;
-constraint holdTick(t)              => ticket > t;
-constraint holdLock()               => ticket > serving;
-constraint holdLock() * holdTick(t) => serving != t;
-
-// These combinations cannot hold:
-constraint holdTick(ta) * holdTick(tb) => ta != tb;
-constraint holdLock()   * holdLock()   => false;
-
-// Variables.
-global int ticket;
-global int serving;
-local int t;
-local int s;
+global int ticket;  // The next ticket to hand out.
+global int serving; // The current ticket holding the lock.
+local int t;  // The thread's current ticket.
+local int s;  // The thread's current view of serving.
 
 /*
  * Locks the ticket lock.
@@ -26,9 +17,9 @@ method lock() {
     do {
       {| holdTick(t) |}
         <s = serving>;
-      {| if s == t then holdLock else holdTick(t) |}
+      {| if s == t then holdLock() else holdTick(t) |}
     } while (s != t)
-  {| holdLock |}
+  {| holdLock() |}
 }
 
 /*
@@ -39,3 +30,18 @@ method unlock() {
     <serving++>;
   {| emp |}
 }
+
+view holdTick(int t);
+view holdLock();
+
+// Invariant
+constraint emp                         => ticket >= serving;
+
+// Predicate definitions
+constraint holdTick(t)                 => ticket > t;
+constraint holdLock()                  => ticket != serving;
+
+// Interactions
+constraint holdLock()   * holdTick(t)  => serving != t;
+constraint holdTick(ta) * holdTick(tb) => ta != tb;
+constraint holdLock()   * holdLock()   => false;

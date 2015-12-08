@@ -1,7 +1,6 @@
-view count(int t);
-
-constraint count(ta) * count(tb) => counter == ta + tb;
-constraint count(ta) * count(tb) * count(tc) => false;
+/*
+ * Owicki-style parallel counter increment.
+ */
 
 global int counter;
 local int t;
@@ -19,3 +18,10 @@ method multiIncrement() {
   } while (t != 10)
   {| count(10) |}
 }
+
+
+view count(int t);
+
+// We can also constrain count(t) => counter >= t, but need not.
+constraint count(ta) * count(tb) => counter == ta + tb;
+constraint count(ta) * count(tb) * count(tc) => false;
