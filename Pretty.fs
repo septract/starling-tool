@@ -14,7 +14,7 @@ open Starling.Pretty.Types
 
 /// Pretty-prints a collated script.
 let printCollatedScript cs =
-    VSep ([ vsep <| List.map (printViewProto >> String) cs.CVProtos
+    VSep ( [vsep <| List.map (printViewProto >> String) cs.CVProtos
             vsep <| List.map (uncurry (printScriptVar "global") >> String) cs.CGlobals
             vsep <| List.map (uncurry (printScriptVar "local") >> String) cs.CLocals
             vsep <| List.map (printConstraint >> String) cs.CConstraints
