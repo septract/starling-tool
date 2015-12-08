@@ -45,15 +45,16 @@ let testExprToZ3 ctx =
         testList "Test translation of Boolean expressions" [
             testCase "Test Boolean-only expressions" <|
                 fun _ ->
+                    (* We simplify obviously-true/false expressions down.
+                     * This is one of them.
+                     *)
                     assertZ3BoolExpr ctx
                                      (BopExp (And,
                                               BopExp (Or,
                                                       TrueExp,
                                                       TrueExp),
                                               FalseExp))
-                                     (ctx.MkAnd [| ctx.MkOr [| ctx.MkTrue ()
-                                                               ctx.MkTrue () |]
-                                                   ctx.MkFalse () |]) ]]
+                                     (ctx.MkFalse ()) ] ]
 
 let testModelVarListNoDuplicates ctx =
     testList "Test modelling of variables forbids duplicates"
