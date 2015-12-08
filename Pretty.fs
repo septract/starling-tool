@@ -335,6 +335,14 @@ let printNumHeaderedList pp =
     >> Seq.toList
     >> vsep
 
+/// Pretty-prints a list by preceding each by its number.
+let printNumPrecList pp =
+    Seq.ofList
+    >> Seq.mapi (fun i x -> hsep [sprintf "%d" (i + 1) |> String
+                                  pp x] )
+    >> Seq.toList
+    >> vsep
+
 /// Pretty-prints a list of framed axioms.
 let printFramedAxioms = printNumHeaderedList printFramedAxiom
 
@@ -362,10 +370,10 @@ let printZ3Exps : Z3.BoolExpr list -> Command = printNumHeaderedList printZ3Exp
 /// Pretty-prints a satisfiability result.
 let printSat sat =
     match sat with
-    | Z3.Status.SATISFIABLE -> "satisfiable (not proven)"
-    | Z3.Status.UNSATISFIABLE -> "unsatisfiable (proven)"
+    | Z3.Status.SATISFIABLE -> "fail"
+    | Z3.Status.UNSATISFIABLE -> "success"
     | _ -> "unknown"
     |> String
 
 /// Pretty-prints a list of satisfiability results.
-let printSats = printNumHeaderedList printSat
+let printSats = printNumPrecList printSat
