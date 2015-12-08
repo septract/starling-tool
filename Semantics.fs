@@ -102,9 +102,9 @@ let makeFetchUpdate model (expr: ArithExpr) mode =
                   // 'expr' -> expr!after = expr!before.
                   | Direct -> exprB
                   // 'expr++' -> expr!after = expr!before + 1.
-                  | Increment -> mkAdd2 ctx (exprB, ctx.MkInt 1 :> ArithExpr)
+                  | Increment -> mkAdd2 ctx exprB (mkAInt ctx 1)
                   // 'expr--' -> expr!after = expr!before - 1.
-                  | Decrement -> mkSub2 ctx (exprB, ctx.MkInt 1 :> ArithExpr)
+                  | Decrement -> mkSub2 ctx exprB (mkAInt ctx 1)
     ctx.MkEq (exprA, exprMod)
 
 /// Emits Z3 corresponding to a compare-and-swap.
@@ -126,21 +126,21 @@ let makeCAS model destE testE setE =
      * Each case is in the form (cond => destAfter ^ testAfter).
      * We start with the success case.
      *)
-    let succCond = ctx.MkEq (destEB, testEB)
+    let succCond = mkEq ctx destEB testEB
     // In a success, we have destE!after = setE!before;
     let succDest = makeRel model setE destE
     // and test!after = test!before.
     let succTest = makeNoChange model testE
-    let succSem = mkAnd2 ctx (succDest, succTest)
-    let success = ctx.MkImplies (succCond, succSem)
+    let succSem = mkAnd2 ctx succDest succTest
+    let success = mkImplies ctx succCond succSem
 
     let failCond = ctx.MkNot succCond
     // In a failure, we have testE!after = destE!before;
     let failDest = makeRel model destE testE
     // and dest!after = dest!before.
     let failTest = makeNoChange model destE
-    let failSem = mkAnd2 ctx (failDest, failTest)
-    let failure = ctx.MkImplies (failCond, failSem)
+    let failSem = mkAnd2 ctx failDest failTest
+    let failure = mkImplies ctx failCond failSem
 
     [success
      failure
@@ -261,7 +261,7 @@ let semanticsOf model prim =
     // Temporarily build an And so we can check it with frame.
     // TODO(CaptainHayashi): eliminate this round-trip?
     let actionsAnd = actions |> List.toArray
-    let aframe = frame model (ctx.MkAnd actionsAnd)
+    let aframe = frame model (mkAnd ctx actionsAnd)
 
     let toAnd = actions
                 |> Seq.ofList

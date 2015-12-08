@@ -1,5 +1,6 @@
 module Starling.Expander
 
+open Starling.Z3
 open Starling.Model
 open Starling.Utils
 open Microsoft.Z3
@@ -9,20 +10,12 @@ let powerset set =
     // TODO(CaptainHayashi): relocate to where this is used, or delete if not.
     Set.fold (fun ps s -> ps + Set.map (fun p -> s + p) ps) (new Set<Set<BoolExpr>> ( [Set.empty] )) set
 
-/// Conjoins a set of Boolean expressions.
-/// Returns true for the empty set, and x for the singleton set {x}.
-let conjoin (ctx: Context) suffix =
-    match Set.toArray suffix with
-    | [||] -> ctx.MkTrue ()
-    | [| x |] -> x
-    | xs -> ctx.MkAnd (xs)
-
 /// Converts a view from conditional to guarded form.
 /// This takes the Z3 context, and the set of all conditions forming the
 /// suffix of any guards generated from this view.
 let rec resolveCondViewIn (suffix: Set<BoolExpr>) (ctx: Context) cv =
     match cv with
-    | CSetView v -> [ {GCond = conjoin ctx suffix
+    | CSetView v -> [ {GCond = suffix |> Set.toArray |> mkAnd ctx
                        GView = v} ]
     | CITEView (expr, tviews, fviews) ->
         List.concat [ resolveCondViewsIn (suffix.Add expr) ctx tviews

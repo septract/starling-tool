@@ -95,26 +95,26 @@ and boolExprToZ3 model env expr =
                 trial {let! lA = arithExprToZ3 model env l
                        let! rA = arithExprToZ3 model env r
                        return (match o with
-                               | Gt -> ctx.MkGt
-                               | Ge -> ctx.MkGe
-                               | Le -> ctx.MkLe
-                               | Lt -> ctx.MkLt
-                               | _  -> failwith "unreachable") (lA, rA) }
+                               | Gt -> mkGt
+                               | Ge -> mkGe
+                               | Le -> mkLe
+                               | Lt -> mkLt
+                               | _  -> failwith "unreachable") ctx lA rA }
             | BoolIn as o ->
                 trial {let! lB = boolExprToZ3 model env l
                        let! rB = boolExprToZ3 model env r
                        return (match o with
-                               | And -> mkAnd2 ctx
-                               | Or -> mkOr2 ctx
-                               | _  -> failwith "unreachable") (lB, rB) }
+                               | And -> mkAnd2
+                               | Or -> mkOr2
+                               | _  -> failwith "unreachable") ctx lB rB }
             | AnyIn as o ->
                 // TODO(CaptainHayashi): don't infer bool here.
                 trial {let! lE = anyExprToZ3 model env l
                        let! rE = anyExprToZ3 model env r
                        return (match o with
-                               | Eq -> ctx.MkEq
-                               | Neq -> (ctx.MkEq >> ctx.MkNot)
-                               | _  -> failwith "unreachable") (lE, rE) }
+                               | Eq -> mkEq
+                               | Neq -> mkNeq
+                               | _  -> failwith "unreachable") ctx lE rE }
     | _ -> fail <| EEBadAST (expr, "cannot be a Boolean expression")
 
 /// Converts a Starling arithmetic expression ot a Z3 predicate using
@@ -136,11 +136,11 @@ and arithExprToZ3 model env expr =
         trial {let! lA = arithExprToZ3 model env l
                let! rA = arithExprToZ3 model env r
                return (match op with
-                       | Mul -> mkMul2 ctx
-                       | Div -> ctx.MkDiv
-                       | Add -> mkAdd2 ctx
-                       | Sub -> mkSub2 ctx
-                       | _  -> failwith "unreachable") (lA, rA) }
+                       | Mul -> mkMul2
+                       | Div -> mkDiv
+                       | Add -> mkAdd2
+                       | Sub -> mkSub2
+                       | _  -> failwith "unreachable") ctx lA rA }
     | _ -> fail <| EEBadAST (expr, "cannot be an arithmetic expression")
 
 

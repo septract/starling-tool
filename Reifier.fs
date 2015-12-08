@@ -3,6 +3,7 @@ module Starling.Reifier
 
 open Microsoft
 
+open Starling.Z3
 open Starling.Model
 open Starling.Framer
 open Starling.Semantics
@@ -99,19 +100,9 @@ let reifySingle model view =
     let vr = reifyUnguarded model views
     let vrs = vr.Simplify () :?> Z3.BoolExpr
 
-    (* If the single reification is literally 'true', we would be
-     * constructing the condition (guars => true), which is a tautology.
-     * Similarly, if our guard expression is literally 'false', it can
-     * never be fired, and is also a tautology.
-     *)
-    if vrs.IsTrue
-    then ctx.MkTrue ()
-    else
-        let gr = ctx.MkAnd (Array.ofList guars)
-        let grs = gr.Simplify () :?> Z3.BoolExpr
-        if grs.IsFalse
-        then ctx.MkTrue ()
-            else ctx.MkImplies (grs, vrs)
+    let gr = ctx.MkAnd (Array.ofList guars)
+    let grs = gr.Simplify () :?> Z3.BoolExpr
+    mkImplies ctx grs vrs
 
 /// Produces the power-multiset of a multiset (list).
 let powermultiset ms =
