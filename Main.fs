@@ -1,7 +1,6 @@
 open Starling
 open Starling.Model
 
-open System
 open CommandLine
 open CommandLine.Text
 
@@ -70,36 +69,38 @@ type StarlingError =
 /// Pretty-prints a Starling error.
 let printStarlingError err =
     match err with
-        | SEParse e -> e
-        | SEModel e -> Starling.Pretty.Misc.printModelError e
-        | SEOther e -> e
+        | SEParse e -> Starling.Pretty.Types.String e
+        | SEModel e -> Starling.Pretty.Errors.printModelError e
+        | SEOther e -> Starling.Pretty.Types.String e
 
 /// Pretty-prints a list of error or warning strings, with the given
 /// header.
 let printWarns header ws =
-    header + ":\n  " + String.concat "\n  " ws
+    Starling.Pretty.Types.Header
+        (header,
+         ws |> List.map Starling.Pretty.Types.Indent
+            |> Starling.Pretty.Types.vsep)
 
 /// Pretty-prints a Chessie result, given printers for the successful
 /// case and failure messages.
 let printResult pOk pBad =
-    either ( pairMap pOk pBad >> (
-                fun okbad ->
-                    // Only show warnings if there actually were some.
-                    match okbad with
-                        | ( ok, [] ) -> ok
-                        | ( ok, ws ) -> ok + "\n\n" + printWarns "Warnings" ws
-            )
-           )
-           ( pBad >> (
-                fun bad -> printWarns "Errors" bad
-            )
-           )
+    either (pairMap pOk pBad
+                // Only show warnings if there actually were some.
+            >> function
+               | ( ok, [] ) -> ok
+               | ( ok, ws ) ->
+                   Starling.Pretty.Types.vsep
+                       [ok
+                        Starling.Pretty.Types.VSkip
+                        Starling.Pretty.Types.Separator
+                        Starling.Pretty.Types.VSkip
+                        printWarns "Warnings" ws] )
+           (pBad >> printWarns "Errors")
 
-(*
-    Starling can output the results of various stages in its pipeline;
-    the OutputType and Output types provide framework for the user to
-    decide in which stage it halts.
-*)
+(* Starling can output the results of various stages in its pipeline;
+ * the OutputType and Output types provide framework for the user to
+ * decide in which stage it halts.
+ *)
 
 /// Set of possible outputs Starling can provide.
 type OutputType =
@@ -134,18 +135,20 @@ type Output =
 
 let printOutput out =
     match out with
+    // TODO(CaptainHayashi): commandify AST printing.
     | OutputParse s -> Starling.Pretty.AST.printScript s
-    | OutputCollation c -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printCollatedScript c)
-    | OutputModel m -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printPartModel m)
-    | OutputFlatten f -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printFlatModel f)
-    | OutputExpand e -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printFullModel e)
-    | OutputSemantics e -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printSemModel e)
-    | OutputFrame f -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printFramedAxioms f)
-    | OutputTermGen t -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printTerms t)
-    | OutputReify t -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printReTerms t)
-    | OutputReifyZ3 t -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printZTerms t)
-    | OutputZ3 z -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printZ3Exps z)
-    | OutputSat s -> Starling.Pretty.Types.print (Starling.Pretty.Misc.printSats s)
+                       |> Starling.Pretty.Types.String
+    | OutputCollation c -> Starling.Pretty.Misc.printCollatedScript c
+    | OutputModel m -> Starling.Pretty.Misc.printPartModel m
+    | OutputFlatten f -> Starling.Pretty.Misc.printFlatModel f
+    | OutputExpand e -> Starling.Pretty.Misc.printFullModel e
+    | OutputSemantics e -> Starling.Pretty.Misc.printSemModel e
+    | OutputFrame f -> Starling.Pretty.Misc.printFramedAxioms f
+    | OutputTermGen t -> Starling.Pretty.Misc.printTerms t
+    | OutputReify t -> Starling.Pretty.Misc.printReTerms t
+    | OutputReifyZ3 t -> Starling.Pretty.Misc.printZTerms t
+    | OutputZ3 z -> Starling.Pretty.Misc.printZ3Exps z
+    | OutputSat s -> Starling.Pretty.Misc.printSats s
 
 (*
     Starling pipeline (here defined in reverse):
@@ -301,11 +304,13 @@ let starlingMain opts =
 
     let starlingR = runStarling input otype
 
-    let pfn = if human then printOutput else fun a -> sprintf "%A" a
+    let pfn = if human
+              then printOutput
+              else (sprintf "%A" >> Starling.Pretty.Types.String)
 
-    printfn "%s" <| printResult pfn
-                                ( List.map printStarlingError )
-                                starlingR
+    printResult pfn ( List.map printStarlingError ) starlingR
+    |> Starling.Pretty.Types.print
+    |> printfn "%s"
 
     0
 

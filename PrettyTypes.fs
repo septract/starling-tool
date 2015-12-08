@@ -10,15 +10,19 @@ type Command =
     | String of string
     | Surround of left: Command * mid: Command * right: Command
     | Indent of Command
+    | VSkip
     | VSep of cmds: Command list * separator: Command
     | HSep of cmds: Command list * separator: Command
     | Nop
+
+let fmt fstr xs = System.String.Format (fstr, Seq.toArray xs) |> String
 
 let vsep xs = VSep (xs, Nop)
 let hsep xs = HSep (xs, Nop)
 let hsepStr s c = HSep (c, String s)
 let commaSep = hsepStr ","
 let semiSep = hsepStr ";"
+let colonSep = hsepStr ":"
 
 let equals = String "="
 let equality a b = hsep [a
@@ -28,7 +32,7 @@ let equality a b = hsep [a
 let ivsep = vsep >> Indent
 
 let headed name cmds =
-    VSep (cmds, Nop)
+    vsep cmds
     |> Indent
     |> (curry Header) name
 
@@ -58,8 +62,8 @@ let rec printLevel level cmd =
     | Header (heading, incmd) ->
         heading + ":" + lnIndent level + printLevel level incmd
                       + lnIndent level
-    | Separator ->
-        "----" + lnIndent level
+    | Separator -> "----"
+    | VSkip -> lnIndent level
     | String s -> s.Replace ("\n", lnIndent level)
     | Surround (left, (VSep (cmds, _) as mid), right) ->
         printLevel level left

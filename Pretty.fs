@@ -7,8 +7,6 @@ open Starling.AST
 open Starling.Collator
 open Starling.Model
 open Starling.Modeller
-open Starling.Errors.Modeller
-open Starling.Errors.Var
 open Starling.Pretty.AST
 open Starling.Pretty.Types
 
@@ -18,93 +16,8 @@ let printCollatedScript cs =
             vsep <| List.map (uncurry (printScriptVar "global") >> String) cs.CGlobals
             vsep <| List.map (uncurry (printScriptVar "local") >> String) cs.CLocals
             vsep <| List.map (printConstraint >> String) cs.CConstraints
-            VSep (List.map (printMethod >> String) cs.CMethods, Separator) ],
-          Separator)
-
-/// Pretty-prints variable conversion errors.
-let printVarMapError ve =
-    match ve with
-    | VMEDuplicate vn -> "variable '" + vn + "' is defined multiple times"
-    | VMENotFound vn -> "variable '" + vn + "' not in environment"
-
-/// Pretty-prints expression conversion errors.
-let printExprError ee =
-    match ee with
-    | EEBadAST (ast, reason) ->
-        "cannot convert " + printExpression ast
-                          + " to Z3: " + reason
-    | EEVar (ast, vme) ->
-        "bad variable usage in " + printExpression ast
-                                 + ": " + printVarMapError vme
-    | EEVarNotBoolean lv ->
-        "lvalue '" + printLValue lv
-                   + "' is not a suitable type for its use in a boolean expression"
-    | EEVarNotArith lv ->
-        "lvalue '" + printLValue lv
-                   + "' is not a suitable type for use in an arithmetic expression"
-
-/// Pretty-prints view conversion errors.
-let printViewError ve =
-    match ve with
-    | VEBadExpr (view, ee) ->
-        "bad expression in '" + printView view
-                      + "': " + printExprError ee
-    | VEUnsupported (view, reason) ->
-        "view '" + printView view + "' not supported: " + reason
-
-/// Pretty-prints viewdef conversion errors.
-let printViewDefError ve =
-    match ve with
-    | VDENoSuchView name ->
-        "no view prototype for " + name
-    | VDEBadParamCount (name, expected, actual) ->
-        let exps = sprintf "%d" expected
-        let acts = sprintf "%d" actual
-        "view '" + name + "' expects " + exps
-                        + "params, but is given " + acts
-    | VDEBadVars vme ->
-        "view variable inconsistency: " + printVarMapError vme
-    | VDEGlobalVarConflict vme ->
-        "view variables conflict with globals: " + printVarMapError vme
-
-/// Pretty-prints constraint conversion errors.
-let printConstraintError ce =
-    match ce with
-    | CEView ve -> printViewDefError ve
-    | CEExpr ee -> printExprError ee
-
-/// Pretty-prints axiom errors.
-let printAxiomError ae =
-    match ae with
-    | AEBadGlobal le -> "error resolving global: " + printVarMapError le
-    | AEBadLocal le -> "error resolving local: " + printVarMapError le
-    | AEBadExpr ee -> "bad expression in axiom: " + printExprError ee
-    | AEBadView ve -> "bad view in axiom: " + printViewError ve
-    | AETypeMismatch (expected, badvar, got) ->
-        "type error: " + printLValue badvar
-                       + " is of type " + printType got
-                       + ", but should be of type " + printType expected
-    | AEUnsupportedAtomic (atom, reason) ->
-        "cannot use " + printAtomicAction atom
-                      + " in an axiom: " + reason
-    | AEUnsupportedCommand (cmd, reason) ->
-        "cannot use " + printCommand 0 cmd
-                      + " in an axiom: " + reason
-
-/// Pretty-prints view prototype conversion errors
-let printViewProtoError vpe =
-    match vpe with
-    | VPEDuplicateParam (vp, param) ->
-        "view proto " + printViewProto vp
-                      + " has duplicate param " + param
-
-/// Pretty-prints model conversion errors.
-let printModelError ce =
-    match ce with
-    | MEConstraint ce -> printConstraintError ce
-    | MEVar ve -> printVarMapError ve
-    | MEAxiom ae -> printAxiomError ae
-    | MEVProto vpe -> printViewProtoError vpe
+            VSep (List.map (printMethod >> String) cs.CMethods, VSkip) ],
+           (vsep [VSkip ; Separator; Nop] ))
 
 /// Pretty-prints a singular generic view.
 let printGenView ppars v =
@@ -180,7 +93,7 @@ let printGuarView =
 
 /// Pretty-prints a list of guar-views.
 let printGuarViewList =
-    printViewList printGuarView >> ssurround "<| " " |>"
+    printViewList printGuarView >> ssurround "<|" "|>"
 
 /// Pretty-prints a reified view.
 let printReView =
@@ -188,13 +101,13 @@ let printReView =
 
 /// Pretty-prints a reified view.
 let printReViewList =
-    printViewList printReView >> ssurround "(| " " |)"
+    printViewList printReView >> ssurround "(|" "|)"
 
 /// Pretty-prints something wrapped in a general condition pair.
 let printInConditionPair pcond cpair inner =
-    Surround (hsep [ pcond cpair.Pre ; Nop ],
+    Surround (pcond cpair.Pre,
               inner,
-              hsep [ Nop ; pcond cpair.Post ])
+              pcond cpair.Post)
 
 /// Lifts a pretty-printer to optional values.
 let printOption pp ov =
@@ -266,26 +179,26 @@ let rec printPartAxiom axiom =
     match axiom with
     | PAAxiom ax -> printFlatAxiom ax
     | PAWhile (isDo, expr, outer, inner) ->
-        vsep [ hsep [ String "begin"
-                      String (if isDo then "do-while" else "while")
-                      String (expr.ToString ()) ]
-               printInConditionPair printCondViewList
-                                    outer
-                                    (vsep [ String "begin block"
-                                            ivsep <| List.map printPartAxiom inner.Inner
-                                            String "end block" ] )
-               String "end" ]
+        vsep [hsep [String "begin"
+                    String (if isDo then "do-while" else "while")
+                    String (expr.ToString ()) ]
+              printInConditionPair printCondViewList
+                                   outer
+                                   (vsep [String "begin block"
+                                          ivsep <| List.map printPartAxiom inner.Inner
+                                          String "end block"] )
+              String "end" ]
     | PAITE (expr, outer, inTrue, inFalse) ->
-        vsep [ hsep [ String "begin if"
-                      String (expr.ToString ()) ]
-               printInConditionPair printCondViewList
-                                    outer
-                                    (vsep [ String "begin true"
-                                            ivsep <| List.map printPartAxiom inTrue.Inner
-                                            String "end true; begin false"
-                                            ivsep <| List.map printPartAxiom inFalse.Inner
-                                            String "end false" ] )
-               String "end" ]
+        vsep [hsep [String "begin if"
+                    String (expr.ToString ()) ]
+              printInConditionPair printCondViewList
+                                   outer
+                                   (vsep [String "begin true"
+                                          ivsep <| List.map printPartAxiom inTrue.Inner
+                                          String "end true; begin false"
+                                          ivsep <| List.map printPartAxiom inFalse.Inner
+                                          String "end false"] )
+              String "end" ]
 
 /// Pretty-prints a model constraint.
 let printModelConstraint c =
@@ -300,16 +213,14 @@ let printModelViewProto (vn, vps) =
 
 /// Pretty-prints a model given an axiom printer.
 let printModel axpp model =
-    headed "Model"
-           [ headed "Globals" <| List.map printModelVar (Map.toList model.Globals)
-             Separator
-             headed "Locals" <| List.map printModelVar (Map.toList model.Locals)
-             Separator
-             headed "Views" <| List.map printModelViewProto (Map.toList model.VProtos)
-             Separator
-             headed "Constraints" <| List.map printModelConstraint model.DefViews
-             Separator
-             headed "Axioms" <| List.map axpp model.Axioms ]
+    Header("Model",
+           Indent <|
+           VSep ( [headed "Globals" <| List.map printModelVar (Map.toList model.Globals)
+                   headed "Locals" <| List.map printModelVar (Map.toList model.Locals)
+                   headed "Views" <| List.map printModelViewProto (Map.toList model.VProtos)
+                   headed "Constraints" <| List.map printModelConstraint model.DefViews
+                   headed "Axioms" <| List.map axpp model.Axioms ],
+                  vsep [Nop ; Separator; Nop] ))
 
 /// Pretty-prints a model with partially resolved axioms.
 let printPartModel = printModel printPartAxiom
