@@ -58,6 +58,12 @@ let mkOr2 (ctx: Z3.Context) l r =
 let mkNeq (ctx: Z3.Context) l r =
     ctx.MkNot (ctx.MkEq (l, r))
 
+let mkNot (ctx: Z3.Context) x =
+    match x with
+    | ZFalse -> ctx.MkTrue ()
+    | ZTrue -> ctx.MkFalse ()
+    | _ -> ctx.MkNot x
+
 /// Makes an implication from a pair of two expressions.
 let mkImplies (ctx: Z3.Context) l r =
     (* l => r <-> ¬l v r.
@@ -66,6 +72,7 @@ let mkImplies (ctx: Z3.Context) l r =
      *)
     match l, r with
     | (ZFalse, _) | (_, ZTrue) -> ctx.MkTrue ()
+    | (x, ZFalse) -> mkNot ctx x
     | (ZTrue, x) -> x
     | _ -> ctx.MkImplies (l, r)
 
@@ -90,7 +97,3 @@ let mkLe (ctx: Z3.Context) = curry ctx.MkLe
 let mkEq (ctx: Z3.Context) = curry ctx.MkEq
 /// Curried wrapper over MkDiv.
 let mkDiv (ctx: Z3.Context) = curry ctx.MkDiv
-
-
-/// Wrapper over MkNot.
-let mkNot (ctx: Z3.Context) = ctx.MkNot
