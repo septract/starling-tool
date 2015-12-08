@@ -80,7 +80,7 @@ let rec printCondView cv =
     | CSetView v -> printModelView v
 /// Pretty-prints a list of cond-views.
 and printCondViewList =
-    printViewList printCondView >> ssurround "[| " " |]"
+    printViewList printCondView >> ssurround "[| " "|]"
 
 /// Pretty-prints a guarded item.
 let printGuarded pitem g =
@@ -97,7 +97,7 @@ let printGuarViewList =
 
 /// Pretty-prints a reified view.
 let printReView =
-    printGuarded printModelViewList >> ssurround "((" " ))"
+    printGuarded printModelViewList >> ssurround "((" "))"
 
 /// Pretty-prints a reified view.
 let printReViewList =
