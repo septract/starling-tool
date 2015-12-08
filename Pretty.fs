@@ -108,8 +108,8 @@ let printModelError ce =
 
 /// Pretty-prints a singular generic view.
 let printGenView ppars v =
-    hsep [ String v.VName
-           parened (HSep (List.map ppars v.VParams, String ",")) ]
+    hsep [v.VName |> String
+          v.VParams |> List.map ppars |> commaSep |> parened]
 
 /// Pretty-prints Z3 expressions.
 let printZ3Exp (expr: #Z3.Expr) = String (expr.ToString ())
@@ -119,15 +119,14 @@ let printModelView = printGenView printZ3Exp
 
 /// Pretty-prints a type-name parameter.
 let printParam (ty, name) =
-    hsep [String <| printType ty
-          String name]
+    hsep [ty |> printType |> String
+          name |> String]
 
 /// Pretty-prints a singular view definition.
 let printModelViewDef = printGenView printParam
 
 /// Pretty-prints a view list.
-let printViewList pview vl =
-    (HSep (List.map pview vl, String ";"))
+let printViewList pview = List.map pview >> semiSep
 
 /// Pretty-prints a multiset of views.
 let printModelViewList = printViewList printModelView
@@ -139,10 +138,10 @@ let printModelViewDefs = printViewList printModelViewDef >> squared
 let printTVar tvar =
     ssurround "(Z3:"
               ")"
-              (HSep ( [ printZ3Exp tvar.VarExpr
-                        printZ3Exp tvar.VarPreExpr
-                        printZ3Exp tvar.VarPostExpr
-                        printZ3Exp tvar.VarFrameExpr ], String ","))
+              (commaSep [printZ3Exp tvar.VarExpr
+                         printZ3Exp tvar.VarPreExpr
+                         printZ3Exp tvar.VarPostExpr
+                         printZ3Exp tvar.VarFrameExpr] )
 
 /// Pretty-prints model variables.
 let printModelVar nvar =
@@ -206,33 +205,29 @@ let printOption pp ov =
 /// Pretty-prints a load prim.
 let printLoadPrim ty dest src mode =
     hsep [ String ("load<" + ty + ">")
-           parened (hsep [ printOption (printLValue >> String) dest
-                           String "="
-                           String (printLValue src)
-                           String (printFetchMode mode) ] ) ]
+           parened (equality (printOption (printLValue >> String) dest)
+                             (hsep [src |> printLValue |> String
+                                    mode |> printFetchMode |> String] )) ]
 
 /// Pretty-prints a store prim.
 let printStorePrim ty dest src =
     hsep [ String ("store<" + ty + ">")
-           parened (hsep [ String (printLValue dest)
-                           String "="
-                           printZ3Exp src ] ) ]
+           parened (equality (dest |> printLValue |> String)
+                             (src |> printZ3Exp)) ]
 
 
 /// Pretty-prints a CAS prim.
 let printCASPrim ty dest src set =
     hsep [ String ("cas<" + ty + ">")
-           parened (HSep ( [String (printLValue dest)
-                            String (printLValue src)
-                            printZ3Exp set],
-                           String ",")) ]
+           parened (commaSep [dest |> printLValue |> String
+                              src |> printLValue |> String
+                              set |> printZ3Exp] ) ]
 
 /// Pretty-prints a local-set prim.
 let printLocalPrim ty dest src =
     hsep [ String ("lset<" + ty + ">")
-           parened (hsep [String (printLValue dest)
-                          String "="
-                          printZ3Exp src] ) ]
+           parened (equality (dest |> printLValue |> String)
+                             (src |> printZ3Exp)) ]
 
 /// Pretty-prints a prim.
 let printPrim prim =

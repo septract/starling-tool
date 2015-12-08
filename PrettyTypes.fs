@@ -16,6 +16,14 @@ type Command =
 
 let vsep xs = VSep (xs, Nop)
 let hsep xs = HSep (xs, Nop)
+let hsepStr s c = HSep (c, String s)
+let commaSep = hsepStr ","
+let semiSep = hsepStr ";"
+
+let equals = String "="
+let equality a b = hsep [a
+                         String "="
+                         b]
 
 let ivsep = vsep >> Indent
 
