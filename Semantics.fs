@@ -279,7 +279,7 @@ let subView sub model v =
 let subGuarView sub model gv =
     {GCond = subAllInModel model sub (gv.GCond :> Expr) :?> BoolExpr
      GView = subView sub model gv.GView}
-              
+
 
 /// Substitutes all of the variables in a condition using the given substitution.
 /// In this case, a condition is a list of GuarViews.

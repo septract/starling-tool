@@ -35,7 +35,7 @@ let findDefOfView model uview =
 let generateParamSubs (ctx: Z3.Context)
                       (dview: ViewDef list)
                       (uview: View list): (Z3.Expr * Z3.Expr) list =
-    List.fold2 
+    List.fold2
         (* For every matching line in the view and viewdef, run
          * through the parameters creating substitution pairs.
          *)
@@ -116,7 +116,7 @@ let powermultiset ms =
                                        if cnd <> 0
                                        then Some ms.[j]
                                        else None)) }
-    
+
 
 /// Reifies an entire view application.
 let reifyView model vapp =

@@ -588,7 +588,7 @@ let modelWith ctx collated =
                        DefViews = constraints
                        Axioms = () }
            let! axioms = modelAxioms pmod collated.CMethods
-                         |>mapMessages MEAxiom
+                         |> mapMessages MEAxiom
 
            return (withAxioms axioms pmod) }
 
