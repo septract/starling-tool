@@ -71,6 +71,8 @@
     <Compile Include="Main.fs" />
     <None Include="packages.config" />
     <None Include="ticketLock.cvf" />
+    <None Include="spinLock.cvf" />
+    <None Include="multicounter.cvf" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="mscorlib" />
