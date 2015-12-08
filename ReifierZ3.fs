@@ -84,10 +84,8 @@ let reifyZSingle model view =
     mkImplies ctx view.GCond (reifyZUnguarded model view.GItem)
 
 /// Z3-reifies an entire view application.
-let reifyZView model vapp =
-    model.Context.MkAnd (vapp
-                         |> List.map (reifyZSingle model)
-                         |> List.toArray)
+let reifyZView model =
+    List.map (reifyZSingle model) >> mkAnd model.Context
 
 /// Z3-reifies all of the views in a term.
 let reifyZTerm model term =
@@ -109,10 +107,10 @@ let reifyZ3 model = List.map (reifyZTerm model)
 
 /// Combines the components of a reified term.
 let combineTerm model reterm =
-    let ctx = model.Context
-    ctx.MkAnd [|reterm.Conditions.Pre
-                reterm.Inner
-                ctx.MkNot (reterm.Conditions.Post)|]
+    mkAnd model.Context
+          [reterm.Conditions.Pre
+           reterm.Inner
+           mkNot model.Context (reterm.Conditions.Post) ]
 
 /// Combines reified terms into a list of Z3 terms.
 let combineTerms model = List.map (combineTerm model)

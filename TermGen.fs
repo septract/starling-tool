@@ -2,8 +2,10 @@
 /// axioms.
 module Starling.TermGen
 
-open Starling.Model
 open Microsoft
+
+open Starling.Model
+open Starling.Z3
 
 /// Performs one step of a septraction of a GuarView.
 let termGenSeptractStep model (rdone, qstep) rnext =
@@ -31,15 +33,15 @@ let termGenSeptractStep model (rdone, qstep) rnext =
 
         // xbar = xbar'
         let xbarEq =
-            ctx.MkAnd (Array.ofList <| List.map2 (curry ctx.MkEq) xbar xbar2)
+            List.map2 (curry ctx.MkEq) xbar xbar2 |> mkAnd ctx
             
 
         // B1 && !(B2 && xbar = xbar2)
-        let rcond = ctx.MkAnd [|b1 ; ctx.MkNot (ctx.MkAnd [|b2 ; xbarEq|] ) |]
+        let rcond = mkAnd ctx [b1 ; mkNot ctx (mkAnd ctx [b2 ; xbarEq] ) ]
         let rnext2 = { rnext with GCond = rcond.Simplify () :?> Z3.BoolExpr }
 
         // B2 && !(B1 && xbar = xbar2)
-        let qcond = ctx.MkAnd [|b2 ; ctx.MkNot (ctx.MkAnd [|b1 ; xbarEq|] ) |]
+        let qcond = mkAnd ctx [b2 ; mkNot ctx (mkAnd ctx [b1 ; xbarEq] ) ]
         let qstep2 = { qstep with GCond = qcond }
 
         (rnext2::rdone, qstep2)

@@ -28,7 +28,7 @@ let reifySingle model view =
         |> List.unzip
 
     // Then, separately add them into a ReView.
-    {GCond = ctx.MkAnd (Array.ofList guars)
+    {GCond = mkAnd ctx guars
      GItem = views}
 
 /// Produces the power-multiset of a multiset (list).

@@ -20,19 +20,27 @@ let mkAInt (ctx: Z3.Context) (k: int) = ctx.MkInt k :> Z3.ArithExpr
 
 /// Slightly optimised version of ctx.MkAnd.
 /// Returns true for the empty array, and x for the singleton set {x}.
-let mkAnd (ctx: Z3.Context) conjuncts =
-    match conjuncts with
-    | [||] -> ctx.MkTrue ()
-    | [| x |] -> x
-    | xs -> ctx.MkAnd (xs)
+let mkAnd (ctx: Z3.Context) (conjuncts: Z3.BoolExpr seq) =
+    if Seq.exists (fun (x: Z3.BoolExpr) -> x.IsFalse) conjuncts
+    then ctx.MkFalse ()
+    else
+        let cs = conjuncts |> Seq.filter (fun (x: Z3.BoolExpr) -> not x.IsTrue) |> Array.ofSeq
+        match cs with
+        | [||] -> ctx.MkTrue ()
+        | [| x |] -> x
+        | xs -> ctx.MkAnd (xs)
 
 /// Slightly optimised version of ctx.MkOr.
 /// Returns false for the empty set, and x for the singleton set {x}.
-let mkOr (ctx: Z3.Context) disjuncts =
-    match disjuncts with
-    | [||] -> ctx.MkFalse ()
-    | [| x |] -> x
-    | xs -> ctx.MkOr (xs)
+let mkOr (ctx: Z3.Context) (disjuncts: Z3.BoolExpr seq) =
+    if Seq.exists (fun (x: Z3.BoolExpr) -> x.IsTrue) disjuncts
+    then ctx.MkTrue ()
+    else
+        let ds = disjuncts |> Seq.filter (fun (x: Z3.BoolExpr) -> not x.IsFalse) |> Array.ofSeq
+        match ds with
+        | [||] -> ctx.MkFalse ()
+        | [| x |] -> x
+        | xs -> ctx.MkOr (xs)
 
 /// Makes an And from a pair of two expressions.
 let mkAnd2 (ctx: Z3.Context) l r =
@@ -58,6 +66,7 @@ let mkImplies (ctx: Z3.Context) l r =
      *)
     match l, r with
     | (ZFalse, _) | (_, ZTrue) -> ctx.MkTrue ()
+    | (ZTrue, x) -> x
     | _ -> ctx.MkImplies (l, r)
 
 /// Makes an Add out of a pair of two expressions.
@@ -81,3 +90,7 @@ let mkLe (ctx: Z3.Context) = curry ctx.MkLe
 let mkEq (ctx: Z3.Context) = curry ctx.MkEq
 /// Curried wrapper over MkDiv.
 let mkDiv (ctx: Z3.Context) = curry ctx.MkDiv
+
+
+/// Wrapper over MkNot.
+let mkNot (ctx: Z3.Context) = ctx.MkNot

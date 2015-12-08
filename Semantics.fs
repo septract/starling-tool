@@ -83,13 +83,13 @@ let subAllInModel model sub expr =
 let makeRel model before after =
     let beforeB = subAllInModel model envVarToBefore before
     let afterA = subAllInModel model envVarToAfter after
-    model.Context.MkEq (afterA, beforeB)
+    mkEq model.Context afterA beforeB
 
 /// Given e, returns e!after = e!before.
 let makeNoChange model expr =
     let exprA = subAllInModel model envVarToAfter expr
     let exprB = subAllInModel model envVarToBefore expr
-    model.Context.MkEq (exprA, exprB)
+    mkEq model.Context exprA exprB
 
 /// Given some ArithExpr over a lvalue, return the relation for the
 /// operation identified by the given fetch mode on that lvalue.
@@ -105,7 +105,7 @@ let makeFetchUpdate model (expr: ArithExpr) mode =
                   | Increment -> mkAdd2 ctx exprB (mkAInt ctx 1)
                   // 'expr--' -> expr!after = expr!before - 1.
                   | Decrement -> mkSub2 ctx exprB (mkAInt ctx 1)
-    ctx.MkEq (exprA, exprMod)
+    mkEq ctx exprA exprMod
 
 /// Emits Z3 corresponding to a compare-and-swap.
 let makeCAS model destE testE setE =
@@ -134,7 +134,7 @@ let makeCAS model destE testE setE =
     let succSem = mkAnd2 ctx succDest succTest
     let success = mkImplies ctx succCond succSem
 
-    let failCond = ctx.MkNot succCond
+    let failCond = mkNot ctx succCond
     // In a failure, we have testE!after = destE!before;
     let failDest = makeRel model destE testE
     // and dest!after = dest!before.
@@ -263,12 +263,10 @@ let semanticsOf model prim =
     let actionsAnd = actions |> List.toArray
     let aframe = frame model (mkAnd ctx actionsAnd)
 
-    let toAnd = actions
-                |> Seq.ofList
-                |> Seq.append aframe
-                |> Seq.toArray
-
-    ctx.MkAnd toAnd
+    actions
+    |> Seq.ofList
+    |> Seq.append aframe
+    |> mkAnd ctx
 
 /// Substitutes all of the variables in a View using the given
 /// substitution.
