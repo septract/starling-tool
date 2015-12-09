@@ -84,12 +84,16 @@ and printCondViewList =
 
 /// Pretty-prints a guarded item.
 let printGuarded pitem g =
-    (HSep ( [printZ3Exp g.GCond
-             pitem g.GItem], String "|"))
+    if g.GCond.IsTrue then 
+        pitem g.GItem
+    else 
+        ssurround "(" ")" 
+          (HSep ( [printZ3Exp g.GCond
+                   pitem g.GItem], String "|"))
 
 /// Pretty-prints a guarded view.
 let printGuarView =
-    printGuarded printModelView >> ssurround "(" ")"
+    printGuarded printModelView
 
 /// Pretty-prints a list of guar-views.
 let printGuarViewList =
