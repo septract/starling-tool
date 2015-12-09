@@ -14,7 +14,7 @@
     <OutputPath>bin\Debug</OutputPath>
     <ErrorReport>prompt</ErrorReport>
     <Externalconsole>true</Externalconsole>
-    <StartArguments>ticketLock.cvf</StartArguments>
+    <StartArguments>Examples\ticketLock.cvf</StartArguments>
     <StartWorkingDirectory>..\..</StartWorkingDirectory>
     <WarningLevel>5</WarningLevel>
     <PlatformTarget>x86</PlatformTarget>
@@ -72,9 +72,9 @@
     <Compile Include="ReifierTests.fs" />
     <Compile Include="Main.fs" />
     <None Include="packages.config" />
-    <None Include="ticketLock.cvf" />
-    <None Include="spinLock.cvf" />
-    <None Include="multicounter.cvf" />
+    <None Include="Examples\ticketLock.cvf" />
+    <None Include="Examples\spinLock.cvf" />
+    <None Include="Examples\multicounter.cvf" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="mscorlib" />
