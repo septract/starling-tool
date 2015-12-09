@@ -1,0 +1,2 @@
+// This should be a bogus constraint
+constraint if 2 + 2 == 5 then NineteenEightyFour else AnimalFarm => false;
