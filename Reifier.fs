@@ -42,7 +42,10 @@ let powermultiset ms =
                                        let cnd: int = i &&& (1 <<< j)
                                        if cnd <> 0
                                        then Some ms.[j]
-                                       else None)) }
+                                       else None)) |> List.ofSeq}
+                                       
+    |> Set.ofSeq
+
 
 
 /// Reifies an entire view application.
@@ -55,7 +58,7 @@ let reifyView model vapp =
 /// Reifies all of the views in a term.
 let reifyTerm model term =
     let tpre = reifyView model term.Conditions.Pre
-    let tpost = reifyView model term.Conditions.Post
+    let tpost = [reifySingle model term.Conditions.Post]
 
     {Conditions = {Pre = tpre
                    Post = tpost}
