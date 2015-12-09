@@ -482,15 +482,18 @@ let parseScript =
 /// Opens the file with the given name, parses it, and returns the AST.
 /// The AST is given inside a Chessie result.
 let parseFile name =
-    // If - or no name was given, parse from the console.
-    let stream, streamName =
-        match name with
-        | Some("-") -> (Console.OpenStandardInput (), "(stdin)")
-        | None -> (Console.OpenStandardInput (), "(stdin)")
-        | Some(nam) -> (IO.File.OpenRead(nam) :> IO.Stream, nam)
+    try 
+        // If - or no name was given, parse from the console.
+        let stream, streamName =
+            match name with
+            | Some("-") -> (Console.OpenStandardInput (), "(stdin)")
+            | None -> (Console.OpenStandardInput (), "(stdin)")
+            | Some(nam) -> (IO.File.OpenRead(nam) :> IO.Stream, nam)
 
-    let pres = runParserOnStream parseScript () streamName stream Text.Encoding.UTF8
-    match pres with
-    | Success (result, _, _) -> ok result
-    | Failure (errorMsg, _, _) -> fail errorMsg
-
+        let pres = runParserOnStream parseScript () streamName stream Text.Encoding.UTF8
+        match pres with
+        | Success (result, _, _) -> ok result
+        | Failure (errorMsg, _, _) -> fail errorMsg   
+    with 
+    | :? System.IO.FileNotFoundException  -> fail ("File not found: " + Option.get name)
+ 
