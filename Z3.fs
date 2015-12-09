@@ -26,6 +26,7 @@ let mkAnd (ctx: Z3.Context) (conjuncts: Z3.BoolExpr seq) =
     else
         let cs = conjuncts |> Seq.filter (fun (x: Z3.BoolExpr) -> not x.IsTrue) |> Array.ofSeq
         match cs with
+        // True is the zero of and.
         | [||] -> ctx.MkTrue ()
         | [| x |] -> x
         | xs -> ctx.MkAnd (xs)
@@ -38,21 +39,16 @@ let mkOr (ctx: Z3.Context) (disjuncts: Z3.BoolExpr seq) =
     else
         let ds = disjuncts |> Seq.filter (fun (x: Z3.BoolExpr) -> not x.IsFalse) |> Array.ofSeq
         match ds with
+        // False is the zero of or.
         | [||] -> ctx.MkFalse ()
         | [| x |] -> x
         | xs -> ctx.MkOr (xs)
 
 /// Makes an And from a pair of two expressions.
-let mkAnd2 (ctx: Z3.Context) l r =
-    match l, r with
-    | (ZFalse, _) | (_, ZFalse) -> ctx.MkFalse ()
-    | _ -> ctx.MkAnd [| l; r |]
+let mkAnd2 (ctx: Z3.Context) l r = mkAnd ctx [l ; r]
 
 /// Makes an Or from a pair of two expressions.
-let mkOr2 (ctx: Z3.Context) l r =
-    match l, r with
-    | (ZTrue, _) | (_, ZTrue) -> ctx.MkTrue ()
-    | _ -> ctx.MkOr [| l; r |]
+let mkOr2 (ctx: Z3.Context) l r = mkOr ctx [l ; r]
 
 /// Makes not-equals.
 let mkNeq (ctx: Z3.Context) l r =
@@ -60,6 +56,7 @@ let mkNeq (ctx: Z3.Context) l r =
 
 let mkNot (ctx: Z3.Context) x =
     match x with
+    // Simplify obviously false or true exprs to their negation.
     | ZFalse -> ctx.MkTrue ()
     | ZTrue -> ctx.MkFalse ()
     | _ -> ctx.MkNot x
@@ -68,7 +65,8 @@ let mkNot (ctx: Z3.Context) x =
 let mkImplies (ctx: Z3.Context) l r =
     (* l => r <-> ¬l v r.
      * This implies (excuse the pun) that l false or r true will
-     * make the expression a tautology.
+     * make the expression a tautology;
+     * similarly, l true yields r, and r false yields ¬l.
      *)
     match l, r with
     | (ZFalse, _) | (_, ZTrue) -> ctx.MkTrue ()
