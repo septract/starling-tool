@@ -1,5 +1,6 @@
 module Starling.Expander
 
+open Starling.Collections
 open Starling.Z3
 open Starling.Model
 open Starling.Utils
@@ -18,13 +19,18 @@ let rec resolveCondViewIn (suffix: Set<BoolExpr>) (ctx: Context) cv =
     | CSetView v -> [ {GCond = suffix |> Set.toArray |> mkAnd ctx
                        GItem = v} ]
     | CITEView (expr, tviews, fviews) ->
-        List.concat [ resolveCondViewsIn (suffix.Add expr) ctx tviews
-                      resolveCondViewsIn (suffix.Add (ctx.MkNot expr)) ctx fviews ]
+        List.concat [ resolveCondViewsIn (suffix.Add expr) ctx (Multiset.toList tviews)
+                      resolveCondViewsIn (suffix.Add (ctx.MkNot expr)) ctx (Multiset.toList fviews) ]
 /// Resolves a list of views, given a set of conditions held true.
-and resolveCondViewsIn suffix ctx = concatMap (resolveCondViewIn suffix ctx)
+and resolveCondViewsIn suffix ctx =
+    concatMap (resolveCondViewIn suffix ctx)
 
-/// Resolves a full condition-view list into a guarded-view multiset.
-let resolveCondViews ctx = resolveCondViewsIn Set.empty ctx
+/// Resolves a full condition-view multiset into a guarded-view multiset.
+let resolveCondViews ctx =
+    // TODO(CaptainHayashi): woefully inefficient.
+    Multiset.toList
+    >> resolveCondViewsIn Set.empty ctx
+    >> Multiset.ofList
 
 /// Expands a condition pair.
 let expandCondPair ctx cpair =

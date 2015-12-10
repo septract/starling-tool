@@ -4,6 +4,7 @@ module Starling.Reifier
 
 open Microsoft
 
+open Starling.Collections
 open Starling.Z3
 open Starling.Model
 open Starling.Framer
@@ -24,41 +25,29 @@ let reifySingle model view =
     // First, pull the guards and views out of the view.
     let guars, views =
         view
-        |> List.map tupleOfGuarView
+        |> Multiset.map tupleOfGuarView
+        |> Multiset.toList
         |> List.unzip
 
     // Then, separately add them into a ReView.
     {GCond = mkAnd ctx guars
-     GItem = views}
-
-/// Produces the power-multiset of a multiset (list).
-let powermultiset ms =
-    (* Solve the problem using Boolean arithmetic on the index of the
-     * powerset item.
-     *)
-    seq {for i in 0 .. (1 <<< List.length ms) - 1 do
-             yield (seq {0 .. (List.length ms) - 1}
-                    |> Seq.choose (fun j ->
-                                       let cnd: int = i &&& (1 <<< j)
-                                       if cnd <> 0
-                                       then Some ms.[j]
-                                       else None)) |> List.ofSeq}
-                                       
-    |> Set.ofSeq
-
-
+     GItem = Multiset.ofList views}
 
 /// Reifies an entire view application.
 let reifyView model vapp =
     vapp
-    |> powermultiset
-    |> Seq.map (List.ofSeq >> reifySingle model)
-    |> Seq.toList
+    |> Multiset.power
+    |> Seq.map (reifySingle model)
+    |> Multiset.ofSeq
 
 /// Reifies all of the views in a term.
-let reifyTerm model term =
+let reifyTerm model (term: Term): ReTerm =
     let tpre = reifyView model term.Conditions.Pre
-    let tpost = [reifySingle model term.Conditions.Post]
+
+    (* We need only calculate D(r), not |_r_|, so don't perform the
+     * powersetting of the postcondition.
+     *)
+    let tpost = reifySingle model term.Conditions.Post |> Multiset.singleton
 
     {Conditions = {Pre = tpre
                    Post = tpost}

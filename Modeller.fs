@@ -6,6 +6,7 @@ open Microsoft.Z3
 open Chessie.ErrorHandling
 
 open Starling.Z3
+open Starling.Collections
 open Starling.Var
 open Starling.Errors.Var
 open Starling.AST
@@ -219,7 +220,7 @@ let modelConstraint model c =
     trial {let! v = modelViewDef model c.CView |> mapMessages CEView
            let! e = envOfConstraint model v |> mapMessages CEView
            let! c = boolExprToZ3 model e c.CExpression |> mapMessages CEExpr 
-           return {CViews = List.sort v
+           return {CViews = Multiset.ofSeq v
                    CZ3 = c}}
 
 /// Extracts the view constraints from a CollatedScript, turning each into a
@@ -239,16 +240,17 @@ let rec modelView model vast =
                                                          >> mapMessages (curry VEBadExpr vast))
                                             |> collect
                                return [CSetView {VName = s
-                                                 VParams = pexps} ] }
+                                                 VParams = pexps} ]
+                                      |> Multiset.ofList}
     | IfView (e, l, r) -> trial {let! ez3 = boolExprToZ3 model model.Locals e |> mapMessages ((curry VEBadExpr) vast)
                                  let! lvs = modelView model l
                                  let! rvs = modelView model r
-                                 return [CITEView (ez3, lvs, rvs) ] }
-    | Unit -> ok []
+                                 return (CITEView (ez3, lvs, rvs) |> Multiset.singleton) }
+    | Unit -> Multiset.empty () |> ok
     | Join (l, r) -> joinViews model l r
 /// Merges two sides of a view monoid in the AST into one multiset.
 and joinViews model l r =
-    lift2 (List.append)
+    lift2 (Multiset.append)
           (modelView model l)
           (modelView model r)
 /// Converts a pair of AST views into a ConditionPair.

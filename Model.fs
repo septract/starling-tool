@@ -1,6 +1,7 @@
 module Starling.Model
 
 open Microsoft
+open Starling.Collections
 
 /// A 'generic' view, parameterised over its parameter type.
 type GenView<'a> =
@@ -17,7 +18,7 @@ type View = GenView<Z3.Expr>
 /// A conditional (flat or if-then-else) view.
 type CondView =
     // TODO(CaptainHayashi): rename to View.
-    | CITEView of Z3.BoolExpr * CondView list * CondView list
+    | CITEView of Z3.BoolExpr * Multiset<CondView> * Multiset<CondView>
     // TODO(CaptainHayashi): expand to all expressions.
     | CSetView of View
 
@@ -30,12 +31,12 @@ type Guarded<'a> =
 type GuarView = Guarded<View>
 
 /// A reified view.
-type ReView = Guarded<View list>
+type ReView = Guarded<Multiset<View>>
 
 /// A constraint, containing a multiset of views and a Z3 predicate.
 type GenConstraint<'a> =
-    { CViews: GenView<'a> list
-      CZ3: Z3.BoolExpr }
+    {CViews: Multiset<GenView<'a>>
+     CZ3: Z3.BoolExpr}
 
 /// A model constraint, set over ViewDefs with type-string parameters.
 type Constraint = GenConstraint<Var.Type * string>
@@ -68,8 +69,8 @@ type Hoare<'c, 'i> =
     { Conditions: ConditionPair<'c>
       Inner: 'i }
 
-type PartConditionPair = ConditionPair<CondView list>
-type PartHoare<'i> = Hoare<CondView list, 'i>
+type PartConditionPair = ConditionPair<Multiset<CondView>>
+type PartHoare<'i> = Hoare<Multiset<CondView>, 'i>
 
 /// A flat axiom, containing a possibly-conditional Hoare triple on an
 /// atomic action.
@@ -77,22 +78,22 @@ type FlatAxiom = PartHoare<Prim>
 
 /// A fully resolved axiom, containing a guarded Hoare triple on an
 /// atomic action.
-type FullAxiom = Hoare<GuarView list, Prim>
+type FullAxiom = Hoare<Multiset<GuarView>, Prim>
 
 /// A semantically translated axiom, carrying a Z3 Boolean expression as
 /// a command.
-type SemAxiom = Hoare<GuarView list, Z3.BoolExpr>
+type SemAxiom = Hoare<Multiset<GuarView>, Z3.BoolExpr>
 
 /// An axiom combined with a frame.
 type FramedAxiom =
     {Axiom: SemAxiom
-     Frame: GuarView list}
+     Frame: Multiset<GuarView>}
 
 /// An unreified term.
-type Term = Hoare<GuarView list, Z3.BoolExpr>
+type Term = Hoare<Multiset<GuarView>, Z3.BoolExpr>
     
 /// A reified term.
-type ReTerm = Hoare<ReView list, Z3.BoolExpr>
+type ReTerm = Hoare<Multiset<ReView>, Z3.BoolExpr>
 
 /// A Z3-reified term.
 type ZTerm = Hoare<Z3.BoolExpr, Z3.BoolExpr>

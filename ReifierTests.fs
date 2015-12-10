@@ -1,6 +1,7 @@
 /// Tests for the reifier.
 module Starling.Tests.Reifier
 
+open Starling.Collections
 open Starling.Var
 open Starling.Model
 open Starling.Reifier
@@ -20,14 +21,15 @@ let testFindDefOfView ctx =
                  let model = ticketLockModel ctx
                  Assert.Equal
                     ("viewdef of [holdTick(t) * holdLock()] <> [holdLock() * holdTick(t)]",
-                     Some {CViews = [ {VName = "holdLock"
-                                       VParams = [] }
-                                      {VName = "holdTick"
-                                       VParams = [(Int, "t")] } ]
+                     Some {CViews = Multiset.ofList
+                                        [ {VName = "holdLock"
+                                           VParams = [] }
+                                          {VName = "holdTick"
+                                           VParams = [(Int, "t")] } ]
                            CZ3 = ctx.MkNot (ctx.MkEq (ctx.MkIntConst "serving",
                                                       ctx.MkIntConst "t")) },
                      findDefOfView model
-                                   (List.sort 
+                                   (Multiset.ofList
                                         [ {VName = "holdTick"
                                            VParams = [ctx.MkIntConst "t"] }
                                           {VName = "holdLock"

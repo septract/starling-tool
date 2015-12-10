@@ -2,6 +2,7 @@
 module Starling.Framer
 
 open Microsoft
+open Starling.Collections
 open Starling.Var
 open Starling.Model
 
@@ -19,9 +20,9 @@ let instantiateParam model (ty, name) =
 /// Instantiates a defining view into a view expression.
 let instantiateFrame model dvs =
     dvs
-    |> List.map (fun dv -> {GCond = model.Context.MkTrue ()
-                            GItem = {VName = dv.VName
-                                     VParams = List.map (instantiateParam model) dv.VParams}} )
+    |> Multiset.map (fun dv -> {GCond = model.Context.MkTrue ()
+                                GItem = {VName = dv.VName
+                                         VParams = List.map (instantiateParam model) dv.VParams}} )
 
 /// Converts an axiom into a list of framed axioms, by combining it with the
 /// defining views of a model.

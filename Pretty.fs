@@ -2,6 +2,7 @@ module Starling.Pretty.Misc
 
 open Microsoft
 open Starling
+open Starling.Collections
 open Starling.Var
 open Starling.AST
 open Starling.Collator
@@ -39,7 +40,7 @@ let printParam (ty, name) =
 let printModelViewDef = printGenView printParam
 
 /// Pretty-prints a view list.
-let printViewList pview = List.map pview >> semiSep
+let printViewList pview = Multiset.toList >> List.map pview >> semiSep
 
 /// Pretty-prints a multiset of views.
 let printModelViewList = printViewList printModelView

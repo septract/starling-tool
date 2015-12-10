@@ -3,6 +3,7 @@ module Starling.Semantics
 
 open Microsoft.Z3
 open Chessie.ErrorHandling
+open Starling.Collections
 open Starling.Z3
 open Starling.Var
 open Starling.AST
@@ -282,7 +283,7 @@ let subGuarView sub model gv =
 /// Substitutes all of the variables in a condition using the given substitution.
 /// In this case, a condition is a list of GuarViews.
 let subCondition sub model =
-    List.map (subGuarView sub model)
+    Multiset.map (subGuarView sub model)
 
 /// Renames the variables in a condition to before/after states.
 let renameCondition model cond =

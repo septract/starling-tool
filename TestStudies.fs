@@ -3,6 +3,7 @@ module Starling.Tests.Studies
 
 open Microsoft
 open Starling
+open Starling.Collections
 open Starling.Var
 open Starling.AST
 open Starling.Model
@@ -173,42 +174,54 @@ let ticketLockCollated =
 
 /// The axioms of the ticketed lock.
 let ticketLockAxioms (ctx: Z3.Context) =
-     [PAAxiom {Conditions = {Pre = []
-                             Post = [CSetView {VName = "holdTick";
-                                               VParams = [ctx.MkIntConst "t"]} ] }
+     [PAAxiom {Conditions = {Pre = Multiset.empty ()
+                             Post = Multiset.ofList
+                                        [CSetView {VName = "holdTick";
+                                                   VParams = [ctx.MkIntConst "t"]} ] }
                Inner = IntLoad (Some (LVIdent "t"),
                                 LVIdent "ticket",
                                 Increment) }
       PAWhile (true,
                ctx.MkNot (ctx.MkEq (ctx.MkIntConst "s",
                                      ctx.MkIntConst "t")),
-               {Pre = [CSetView {VName = "holdTick"
-                                 VParams = [ctx.MkIntConst "t"] } ]
-                Post = [CSetView {VName = "holdLock"
-                                  VParams = [] } ] },
-               {Conditions = {Pre = [CSetView {VName = "holdTick"
-                                               VParams = [ctx.MkIntConst "t"] } ]
-                              Post = [CITEView (ctx.MkEq (ctx.MkIntConst "s",
-                                                          ctx.MkIntConst "t"),
-                                                [CSetView {VName = "holdLock"
-                                                           VParams = [] } ],
-                                                [CSetView {VName = "holdTick"
-                                                           VParams = [ctx.MkIntConst "t"] } ] ) ] }
+               {Pre = Multiset.ofList
+                          [CSetView {VName = "holdTick"
+                                     VParams = [ctx.MkIntConst "t"] } ]
+                Post = Multiset.ofList
+                           [CSetView {VName = "holdLock"
+                                      VParams = [] } ] },
+               {Conditions = {Pre = Multiset.ofList
+                                        [CSetView {VName = "holdTick"
+                                                   VParams = [ctx.MkIntConst "t"] } ]
+                              Post = Multiset.ofList
+                                         [CITEView (ctx.MkEq (ctx.MkIntConst "s",
+                                                              ctx.MkIntConst "t"),
+                                                    Multiset.ofList
+                                                        [CSetView {VName = "holdLock"
+                                                                   VParams = [] } ],
+                                                    Multiset.ofList
+                                                        [CSetView {VName = "holdTick"
+                                                                   VParams = [ctx.MkIntConst "t"] } ] ) ] }
                 Inner =
-                    [PAAxiom {Conditions = {Pre = [CSetView {VName = "holdTick"
-                                                             VParams = [ctx.MkIntConst "t"] } ]
-                                            Post = [CITEView (ctx.MkEq (ctx.MkIntConst "s",
-                                                                        ctx.MkIntConst "t"),
-                                                              [CSetView {VName = "holdLock"
-                                                                         VParams = [] } ],
-                                                              [CSetView {VName = "holdTick"
-                                                                         VParams = [ctx.MkIntConst "t"] } ] ) ] }
+                    [PAAxiom {Conditions = {Pre = Multiset.ofList
+                                                      [CSetView {VName = "holdTick"
+                                                                 VParams = [ctx.MkIntConst "t"] } ]
+                                            Post = Multiset.ofList
+                                                       [CITEView (ctx.MkEq (ctx.MkIntConst "s",
+                                                                            ctx.MkIntConst "t"),
+                                                                  Multiset.ofList
+                                                                      [CSetView {VName = "holdLock"
+                                                                                 VParams = [] } ],
+                                                                  Multiset.ofList
+                                                                      [CSetView {VName = "holdTick"
+                                                                                 VParams = [ctx.MkIntConst "t"] } ] ) ] }
                               Inner = IntLoad (Some (LVIdent "s"),
                                                LVIdent "serving",
                                                Direct) } ] } )
-      PAAxiom {Conditions = {Pre = [CSetView {VName = "holdLock"
-                                              VParams = [] } ]
-                             Post = [] }
+      PAAxiom {Conditions = {Pre = Multiset.ofList
+                                       [CSetView {VName = "holdLock"
+                                                  VParams = [] } ]
+                             Post = Multiset.empty () }
                Inner = IntLoad (None,
                                 LVIdent "serving",
                                 Increment) } ]
@@ -245,31 +258,31 @@ let ticketLockModel ctx =
                                VarFrameExpr = ctx.MkIntConst "t!r"} ) ]
      Axioms = ticketLockAxioms ctx
      DefViews =
-      [ {CViews = []
+      [ {CViews = Multiset.empty ()
          CZ3 = ctx.MkGe (ctx.MkIntConst "ticket",
                          ctx.MkIntConst "serving") }
-        {CViews = [ {VName = "holdTick"
-                     VParams = [(Int, "t")] } ]
+        {CViews = Multiset.ofList [ {VName = "holdTick"
+                                     VParams = [(Int, "t")] } ]
          CZ3 = ctx.MkGt (ctx.MkIntConst "ticket",
                          ctx.MkIntConst "t") }
-        {CViews = [ {VName = "holdLock"
-                     VParams = [] } ]
+        {CViews = Multiset.ofList [ {VName = "holdLock"
+                                     VParams = [] } ]
          CZ3 = ctx.MkGt (ctx.MkIntConst "ticket",
                          ctx.MkIntConst "serving") }
-        {CViews = [ {VName = "holdLock"
-                     VParams = [] }
-                    {VName = "holdTick"
-                     VParams = [(Int, "t")] } ]
+        {CViews = Multiset.ofList [ {VName = "holdLock"
+                                     VParams = [] }
+                                    {VName = "holdTick"
+                                     VParams = [(Int, "t")] } ]
          CZ3 = ctx.MkNot (ctx.MkEq (ctx.MkIntConst "serving",
                                     ctx.MkIntConst "t")) }
-        {CViews = [ {VName = "holdTick"
-                     VParams = [(Int, "ta")] }
-                    {VName = "holdTick"
-                     VParams = [(Int, "tb")] } ]
+        {CViews = Multiset.ofList [ {VName = "holdTick"
+                                     VParams = [(Int, "ta")] }
+                                    {VName = "holdTick"
+                                     VParams = [(Int, "tb")] } ]
          CZ3 = ctx.MkNot (ctx.MkEq (ctx.MkIntConst "ta",
                                     ctx.MkIntConst "tb")) }
-        {CViews = [ {VName = "holdLock"
-                     VParams = [] }
-                    {VName = "holdLock"
-                     VParams = [] } ]
+        {CViews = Multiset.ofList [ {VName = "holdLock"
+                                     VParams = [] }
+                                    {VName = "holdLock"
+                                     VParams = [] } ]
          CZ3 = ctx.MkFalse () } ] }

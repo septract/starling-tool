@@ -4,6 +4,7 @@ module Starling.TermGen
 
 open Microsoft
 
+open Starling.Collections
 open Starling.Model
 open Starling.Z3
 
@@ -69,8 +70,15 @@ let termGenPre model fax =
      * *- is trickier because we have guarded axioms, and is thus left
      * to termGenSeptract.
      *)
-    List.append (fax.Axiom.Conditions.Pre)
-                (termGenSeptract model fax.Frame fax.Axiom.Conditions.Post)
+    // TODO(CaptainHayashi): don't call this septract
+    // TODO(CaptainHayashi): use something better than lists.
+    let pre = fax.Axiom.Conditions.Pre |> Multiset.toList
+    let post = fax.Axiom.Conditions.Post |> Multiset.toList
+    let frame = fax.Frame |> Multiset.toList
+
+    List.append pre
+                (termGenSeptract model frame post)
+    |> Multiset.ofList
 
 /// Generates a term from a framed axiom.
 let termGenAxiom model fax =

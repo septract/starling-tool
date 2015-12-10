@@ -4,13 +4,17 @@ module Starling.ReifierZ3
 
 open Microsoft
 
+open Starling.Collections
 open Starling.Z3
 open Starling.Model
 open Starling.Framer
 open Starling.Semantics
 
 /// Tries to look up a multiset View in the defining views.
-let findDefOfView model uview =
+let findDefOfView model uviewm =
+    // Why we do this is explained later.
+    let uview = Multiset.toList uviewm
+
     (* We look up view-defs based on count of views and names of each
      * view in the def.  
      *
@@ -18,21 +22,33 @@ let findDefOfView model uview =
      * errors in the view or its definition earlier.
      *)
     List.tryFind
-        (fun vd ->
+        (fun vdm ->
+            (* We need to do list operations on the multiset contents,
+             * so convert both sides to a (sorted) list.  We rely on the
+             * sortedness to make the next step sound.
+             *)
+            let vd = Multiset.toList vdm.CViews
+
             (* Do these two views have the same number of terms?
              * If not, using forall2 is an error.
              *)
-            List.length vd.CViews = List.length uview
+            List.length vd = List.length uview
             && List.forall2 (fun d s -> d.VName = s.VName)
-                            vd.CViews
+                            vd
                             uview)
         model.DefViews
 
 /// Produces a map of substitutions that transform the parameters of a
 /// vdef into the arguments of its usage.
 let generateParamSubs (ctx: Z3.Context)
-                      (dview: ViewDef list)
-                      (uview: View list): (Z3.Expr * Z3.Expr) list =
+                      (dviewm: Multiset<ViewDef>)
+                      (uviewm: Multiset<View>): (Z3.Expr * Z3.Expr) list =
+    (* Performing list operations on the multiset contents *should* be
+     * sound, because both sides will appear in the same order.
+     *)
+    let dview = Multiset.toList dviewm
+    let uview = Multiset.toList uviewm
+
     List.fold2
         (* For every matching line in the view and viewdef, run
          * through the parameters creating substitution pairs.
@@ -73,10 +89,8 @@ let reifyZUnguarded model uview =
     // This corresponds to D^ in the theory.
     let ctx = model.Context
 
-    let uv = List.sort uview
-
-    match findDefOfView model uv with
-    | Some vdef -> instantiateDef ctx uv vdef
+    match findDefOfView model uview with
+    | Some vdef -> instantiateDef ctx uview vdef
     | None -> ctx.MkTrue ()
 
 let reifyZSingle model view =
@@ -85,7 +99,9 @@ let reifyZSingle model view =
 
 /// Z3-reifies an entire view application.
 let reifyZView model =
-    List.map (reifyZSingle model) >> mkAnd model.Context
+    Multiset.toSeq
+    >> Seq.map (reifyZSingle model)
+    >> mkAnd model.Context
 
 /// Z3-reifies all of the views in a term.
 let reifyZTerm model term =

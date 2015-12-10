@@ -3,7 +3,10 @@ module Starling.Tests.Modeller
 open Chessie.ErrorHandling  // ok
 open Fuchu                  // general test framework
 open Microsoft.Z3           // anything involving ctx
+
+
 open Starling
+open Starling.Collections
 open Starling.Var
 open Starling.AST
 open Starling.Model
@@ -94,16 +97,16 @@ let testModelAxiomOnCommand (ctx: Context) =
         fun _ ->
             Assert.Equal
                 ("modelAxiomOnCommand with {emp} <t = ticket++> {holdLock()}",
-                 ok (PAAxiom {Conditions = {Pre = []
-                                            Post = [CSetView {VName = "holdTick";
-                                                              VParams = [ctx.MkIntConst "t"]} ] }
+                 ok (PAAxiom {Conditions = {Pre = Multiset.empty ()
+                                            Post = Multiset.ofList [CSetView {VName = "holdTick";
+                                                                              VParams = [ctx.MkIntConst "t"]} ] }
                               Inner = IntLoad (Some (LVIdent "t"),
                                               LVIdent "ticket",
                                               Increment) } ),
                  (modelAxiomOnCommand (ticketLockModel ctx)
-                                      {Pre = []
-                                       Post = [CSetView {VName = "holdTick"
-                                                         VParams = [ctx.MkIntConst "t"]} ] }
+                                      {Pre = Multiset.empty ()
+                                       Post = Multiset.ofList [CSetView {VName = "holdTick"
+                                                                         VParams = [ctx.MkIntConst "t"]} ] }
 
                                       (Atomic (Fetch (LVIdent "t",
                                                       LVExp (LVIdent "ticket"),
@@ -112,9 +115,9 @@ let testModelAxiomOnCommand (ctx: Context) =
 let testMakeAxiomConditionPair (ctx: Context) =
     testCase "Test makeAxiomConditionPair with ticketed lock example" <|
         fun _ -> Assert.Equal ("makeAxiomConditionPair emp holdTick(t)",
-                               ok ( {Pre = []
-                                     Post = [CSetView {VName = "holdTick"
-                                                       VParams = [ctx.MkIntConst "t"] } ] } ),
+                               ok ( {Pre = Multiset.empty ()
+                                     Post = Multiset.ofList [CSetView {VName = "holdTick"
+                                                                       VParams = [ctx.MkIntConst "t"] } ] } ),
                                makeAxiomConditionPair (ticketLockModel ctx)
                                                       (Unit)
                                                       (Func ("holdTick", [LVExp (LVIdent "t") ] )))
