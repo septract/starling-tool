@@ -14,7 +14,7 @@
     <OutputPath>bin\Debug</OutputPath>
     <ErrorReport>prompt</ErrorReport>
     <Externalconsole>true</Externalconsole>
-    <StartArguments>Examples\ticketLock.cvf</StartArguments>
+    <StartArguments>-h  Examples\Pass\ticketLock.cvf</StartArguments>
     <StartWorkingDirectory>..\..</StartWorkingDirectory>
     <WarningLevel>5</WarningLevel>
     <PlatformTarget>x86</PlatformTarget>
@@ -72,9 +72,18 @@
     <Compile Include="ReifierTests.fs" />
     <Compile Include="Main.fs" />
     <None Include="packages.config" />
-    <None Include="Examples\ticketLock.cvf" />
-    <None Include="Examples\spinLock.cvf" />
-    <None Include="Examples\multicounter.cvf" />
+    <None Include="Examples\Pass\ticketLock.cvf" />
+    <None Include="Examples\Pass\spinLock.cvf" />
+    <None Include="Examples\Pass\multicounter.cvf" />
+    <None Include="Examples\WIP\dekker.cvf" />
+    <None Include="Examples\WIP\duplicateVars.cvf" />
+    <None Include="Examples\WIP\errors.cvf" />
+    <None Include="Examples\WIP\filterLock.cvf" />
+    <None Include="Examples\WIP\peterson.cvf" />
+    <None Include="Examples\WIP\sppool.cvf" />
+    <None Include="Examples\WIP\tests.cvf" />
+    <None Include="Examples\Fail\ticketLockBad.cvf"/>
+    <None Include="Examples\Fail\ticketLockBad2.cvf"/>
   </ItemGroup>
   <ItemGroup>
     <Reference Include="mscorlib" />
