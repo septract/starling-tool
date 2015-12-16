@@ -43,7 +43,7 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Collections.fs" />
     <Compile Include="Utils.fs" />
-    <Compile Include="Z3.fs" />
+    <Compile Include="Z3Utils.fs" />
     <Compile Include="PrettyTypes.fs" />
     <Compile Include="VarErrors.fs" />
     <Compile Include="Var.fs" />
@@ -60,7 +60,7 @@
     <Compile Include="Framer.fs" />
     <Compile Include="TermGen.fs" />
     <Compile Include="Reifier.fs" />
-    <Compile Include="ReifierZ3.fs" />
+    <Compile Include="Z3Reifier.fs" />
     <Compile Include="Pretty.fs" />
     <Compile Include="PrettyErrors.fs" />
     <Compile Include="TestStudies.fs" />

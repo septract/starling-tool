@@ -1,18 +1,22 @@
-﻿module Starling.Modeller
+﻿module Starling.Lang.Modeller
 
 open System
 open Microsoft.Z3
 
 open Chessie.ErrorHandling
 
+open Starling
+
 open Starling.Z3
 open Starling.Collections
 open Starling.Var
-open Starling.Errors.Var
-open Starling.AST
-open Starling.Collator
 open Starling.Model
-open Starling.Errors.Modeller
+
+open Starling.Errors.Var
+open Starling.Errors.Lang.Modeller
+
+open Starling.Lang.AST
+open Starling.Lang.Collator
 
 (*
  * Expression classification

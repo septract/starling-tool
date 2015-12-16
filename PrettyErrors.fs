@@ -1,11 +1,11 @@
 /// Pretty-printing for error messages.
 module Starling.Pretty.Errors
 
-open Starling.Errors.Modeller
+open Starling.Errors.Lang.Modeller
 open Starling.Errors.Var
 open Starling.Pretty.Types
 open Starling.Pretty.Misc
-open Starling.Pretty.AST
+open Starling.Pretty.Lang.AST
 
 /// Pretty-prints variable conversion errors.
 let printVarMapError ve =

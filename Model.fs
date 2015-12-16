@@ -52,7 +52,7 @@ type ConditionPair<'v> =
 
 /// A modelled primitive command.
 type Prim =
-    | IntLoad of dest: Var.LValue option * src: Var.LValue * mode: AST.FetchMode
+    | IntLoad of dest: Var.LValue option * src: Var.LValue * mode: Var.FetchMode
     | BoolLoad of dest: Var.LValue * src: Var.LValue
     | IntStore of dest: Var.LValue * src: Z3.ArithExpr
     | BoolStore of dest: Var.LValue * src: Z3.BoolExpr

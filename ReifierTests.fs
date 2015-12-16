@@ -5,7 +5,7 @@ open Starling.Collections
 open Starling.Var
 open Starling.Model
 open Starling.Reifier
-open Starling.ReifierZ3
+open Starling.Z3.Reifier
 open Starling.Tests.Studies
 
 open Microsoft

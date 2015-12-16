@@ -63,7 +63,7 @@ type Options = {
 /// Errors occurring during the operation of Starling.
 type StarlingError =
     | SEParse of string
-    | SEModel of Starling.Errors.Modeller.ModelError
+    | SEModel of Starling.Errors.Lang.Modeller.ModelError
     | SEOther of string
 
 /// Pretty-prints a Starling error.
@@ -120,8 +120,8 @@ type OutputType =
 /// The output from a Starling run.
 [<NoComparison>]
 type Output =
-    | OutputParse of Starling.AST.ScriptItem list
-    | OutputCollation of Starling.Collator.CollatedScript
+    | OutputParse of Starling.Lang.AST.ScriptItem list
+    | OutputCollation of Starling.Lang.Collator.CollatedScript
     | OutputModel of Starling.Model.PartModel
     | OutputFlatten of Starling.Model.FlatModel
     | OutputExpand of Starling.Model.FullModel
@@ -136,7 +136,7 @@ type Output =
 let printOutput out =
     match out with
     // TODO(CaptainHayashi): commandify AST printing.
-    | OutputParse s -> Starling.Pretty.AST.printScript s
+    | OutputParse s -> Starling.Pretty.Lang.AST.printScript s
                        |> Starling.Pretty.Types.String
     | OutputCollation c -> Starling.Pretty.Misc.printCollatedScript c
     | OutputModel m -> Starling.Pretty.Misc.printPartModel m
@@ -168,7 +168,7 @@ let printOutput out =
 
 /// Runs Starling, either outputting or checking the Z3 term.
 let runStarlingZ3 semanticsR reifyR otype =
-    let z3R = lift2 Starling.ReifierZ3.combineTerms semanticsR reifyR
+    let z3R = lift2 Starling.Z3.Reifier.combineTerms semanticsR reifyR
 
     match otype with
     | OutputTZ3 -> lift OutputZ3 z3R
@@ -188,7 +188,7 @@ let runStarlingZ3 semanticsR reifyR otype =
 
 /// Runs the Z3 reifier and further Starling processes.
 let runStarlingReifyZ3 semanticsR reifyR otype =
-    let reifyZ3R = lift2 Starling.ReifierZ3.reifyZ3 semanticsR reifyR
+    let reifyZ3R = lift2 Starling.Z3.Reifier.reifyZ3 semanticsR reifyR
 
     match otype with
     | OutputTReifyZ3 -> lift OutputReifyZ3 reifyZ3R
@@ -245,7 +245,7 @@ let runStarlingFlatten modelR otype =
 /// Runs the model generator and further Starling processes.
 let runStarlingModel collatedR otype =
     // Convert the errors from ModelError to StarlingError.
-    let modelR = bind ( Starling.Modeller.model >> mapMessages SEModel ) collatedR
+    let modelR = bind ( Starling.Lang.Modeller.model >> mapMessages SEModel ) collatedR
 
     let om =
         match otype with
@@ -259,7 +259,7 @@ let runStarlingModel collatedR otype =
 /// Runs the collation and further Starling processes.
 let runStarlingCollate scriptR otype =
     // Collation cannot fail, so lift instead of bind.
-    let collatedR = lift Starling.Collator.collate scriptR
+    let collatedR = lift Starling.Lang.Collator.collate scriptR
 
     match otype with
     | OutputTCollation -> lift OutputCollation collatedR
@@ -267,7 +267,7 @@ let runStarlingCollate scriptR otype =
 
 /// Runs Starling on the given file script.
 let runStarling file otype =
-    let scriptPR = Starling.Parser.parseFile file
+    let scriptPR = Starling.Lang.Parser.parseFile file
     // Convert the errors from string to StarlingError.
     let scriptR  = mapMessages SEParse scriptPR
 

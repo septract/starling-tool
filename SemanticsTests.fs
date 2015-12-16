@@ -4,9 +4,11 @@ open Fuchu
 open Microsoft.Z3
 
 open Starling.Var
-open Starling.AST
 open Starling.Model
 open Starling.Semantics
+
+open Starling.Lang.AST
+
 open Starling.Tests.Studies
 
 /// A nonsensical expression to test semantic rewrites.

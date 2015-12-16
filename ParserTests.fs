@@ -1,10 +1,15 @@
-module Starling.Tests.Parser
+module Starling.Tests.Lang.Parser
 
 open Fuchu
 open FParsec
+
 open Starling
 open Starling.Var
-open Starling.AST
+
+open Starling.Lang.AST
+open Starling.Lang.Parser
+
+open Starling.Pretty.Lang.AST
 
 /// Assertion that parsing `concrete` with parser `pp` gets the AST `ast`.
 let assertParse pp msg concrete ast =
@@ -16,8 +21,8 @@ let assertParse pp msg concrete ast =
 
 /// Assertion that parsing expression `expr` with parser `pp` gets the AST `ast`.
 let assertParseExpr expr ast =
-    assertParse Parser.parseExpression
-                (expr + " -> " + Pretty.AST.printExpression ast)
+    assertParse parseExpression
+                (expr + " -> " + printExpression ast)
                 expr
                 ast
 
@@ -80,39 +85,39 @@ let testExpressionPrecedence =
 let testAtomicFetch =
     testList "Test that atomic fetch actions are correctly parsed"
              [ testCase "foo++" <|
-                   fun _ -> assertParse Parser.parseAtomic
+                   fun _ -> assertParse parseAtomic
                                         "foo++"
                                         "foo++"
                                         (Postfix (LVIdent "foo", Increment))
                testCase "foo--" <|
-                   fun _ -> assertParse Parser.parseAtomic
+                   fun _ -> assertParse parseAtomic
                                         "foo--"
                                         "foo--"
                                         (Postfix (LVIdent "foo", Decrement))
                testCase "foo = bar" <|
-                   fun _ -> assertParse Parser.parseAtomic
+                   fun _ -> assertParse parseAtomic
                                         "foo = bar"
                                         "foo = bar"
                                         (Fetch (LVIdent "foo", LVExp (LVIdent "bar"), Direct))
                testCase "foo = bar++" <|
-                   fun _ -> assertParse Parser.parseAtomic
+                   fun _ -> assertParse parseAtomic
                                         "foo = bar++"
                                         "foo = bar++"
                                         (Fetch (LVIdent "foo", LVExp (LVIdent "bar"), Increment))
                testCase "foo = bar--" <|
-                   fun _ -> assertParse Parser.parseAtomic
+                   fun _ -> assertParse parseAtomic
                                         "foo = bar--"
                                         "foo = bar--"
                                         (Fetch (LVIdent "foo", LVExp (LVIdent "bar"), Decrement))
                testCase "CAS(foo, bar, 2)" <|
-                   fun _ -> assertParse Parser.parseAtomic
+                   fun _ -> assertParse parseAtomic
                                         "CAS(foo, bar, 2)"
                                         "CAS(foo, bar, 2)"
                                         (CompareAndSwap (LVIdent "foo", LVIdent "bar", IntExp 2L)) ]
 
 let testTicketedLock =
     testCase "Parse the ticketed lock" <|
-        fun _ -> assertParse Parser.parseScript
+        fun _ -> assertParse parseScript
                              Starling.Tests.Studies.ticketLock
                              Starling.Tests.Studies.ticketLock
                              Starling.Tests.Studies.ticketLockParsed

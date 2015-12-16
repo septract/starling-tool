@@ -4,11 +4,11 @@ open Microsoft
 open Starling
 open Starling.Collections
 open Starling.Var
-open Starling.AST
-open Starling.Collator
+open Starling.Lang.AST
+open Starling.Lang.Collator
 open Starling.Model
-open Starling.Modeller
-open Starling.Pretty.AST
+open Starling.Lang.Modeller
+open Starling.Pretty.Lang.AST
 open Starling.Pretty.Types
 
 /// Pretty-prints a collated script.

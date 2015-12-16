@@ -1,11 +1,10 @@
 /// The part of the Starling process that finishes the reification
 /// towards Z3 predicates.
-module Starling.ReifierZ3
+module Starling.Z3.Reifier
 
 open Microsoft
 
 open Starling.Collections
-open Starling.Z3
 open Starling.Model
 open Starling.Framer
 open Starling.Semantics

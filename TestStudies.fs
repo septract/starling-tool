@@ -5,9 +5,10 @@ open Microsoft
 open Starling
 open Starling.Collections
 open Starling.Var
-open Starling.AST
 open Starling.Model
-open Starling.Collator
+
+open Starling.Lang.AST
+open Starling.Lang.Collator
 
 /// The raw form of the ticketed lock.
 let ticketLock = """

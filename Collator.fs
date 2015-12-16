@@ -1,9 +1,9 @@
 /// The stage of the Starling pipeline that assembles an AST into a
 /// series of ordered definitions.
-module Starling.Collator
+module Starling.Lang.Collator
 
-open Starling.AST
 open Starling.Var
+open Starling.Lang.AST
 
 /// A script whose items have been partitioned by type.
 type CollatedScript =

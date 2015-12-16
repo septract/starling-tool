@@ -1,7 +1,8 @@
 /// Types for Chessie error messages reported by the modeller.
-module Starling.Errors.Modeller
+module Starling.Errors.Lang.Modeller
 
 open Starling
+open Starling.Lang
 open Starling.Errors.Var
 
 // TODO(CaptainHayashi): more consistent constructor names

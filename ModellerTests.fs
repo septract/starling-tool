@@ -8,17 +8,20 @@ open Microsoft.Z3           // anything involving ctx
 open Starling
 open Starling.Collections
 open Starling.Var
-open Starling.AST
 open Starling.Model
-open Starling.Modeller
+
+open Starling.Lang.AST
+open Starling.Lang.Modeller
+
 open Starling.Tests.Studies
+
+open Starling.Pretty.Lang.AST
 
 /// Assertion that converting the arithmetic expression `expr` to Z3
 /// yields the given AST.
 let assertZ3ArithExpr ctx expr z3 =
     let model = ticketLockModel ctx
-    Assert.Equal (Starling.Pretty.AST.printExpression expr
-                   + " -Z3-> " + z3.ToString (),
+    Assert.Equal (printExpression expr + " -Z3-> " + z3.ToString (),
                   ok z3,
                   arithExprToZ3 model model.Locals expr)
 
@@ -26,8 +29,7 @@ let assertZ3ArithExpr ctx expr z3 =
 /// yields the given AST.
 let assertZ3BoolExpr ctx expr z3 =
     let model = ticketLockModel ctx
-    Assert.Equal (Starling.Pretty.AST.printExpression expr
-                   + " -Z3-> " + z3.ToString (),
+    Assert.Equal (printExpression expr + " -Z3-> " + z3.ToString (),
                   ok z3,
                   boolExprToZ3 model model.Locals expr)
 

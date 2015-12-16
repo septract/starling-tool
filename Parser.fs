@@ -1,12 +1,14 @@
-﻿module Starling.Parser
+﻿/// Parser for the Starling language.
+module Starling.Lang.Parser
 
 open System
 
 open FParsec
 open Chessie.ErrorHandling
 
+open Starling
 open Starling.Var
-open Starling.AST
+open Starling.Lang.AST
 
 // Manually re-overload some FParsec operators Chessie overloaded.
 let (>>=) = FParsec.Primitives.(>>=)

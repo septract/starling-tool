@@ -1,7 +1,9 @@
 /// Convenience wrappers for Z3.
-module Starling.Z3
+[<AutoOpen>]
+module Starling.Z3.Utils
 
 open Microsoft
+open Starling.Utils
 
 /// Active pattern for matching on true, false, and undefined.
 /// This pattern is sound but likely not complete.

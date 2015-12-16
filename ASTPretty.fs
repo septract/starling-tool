@@ -1,7 +1,7 @@
-module Starling.Pretty.AST
+module Starling.Pretty.Lang.AST
 
-open Starling.AST
 open Starling.Var
+open Starling.Lang.AST
 open Starling.Pretty.Types
 
 /// Pretty-prints lvalues.

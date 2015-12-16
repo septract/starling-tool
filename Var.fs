@@ -162,3 +162,14 @@ let lookupVar env s =
     s
     |> tryLookupVar env
     |> failIfNone (VMENotFound (flattenLV s))
+
+
+(*
+ * Fetch modes
+ *)
+
+/// A mode for the Fetch atomic action.
+type FetchMode =
+    | Direct     // <a = b>
+    | Increment  // <a = b++>
+    | Decrement  // <a = b-->

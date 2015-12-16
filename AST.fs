@@ -1,4 +1,6 @@
-﻿module Starling.AST
+﻿module Starling.Lang.AST
+
+open Starling
 
 /// A Boolean operator.
 type Bop =
@@ -24,17 +26,11 @@ type Expression =
     | LVExp of Var.LValue                // foobaz
     | BopExp of Bop * Expression * Expression  // a BOP b
 
-/// A mode for the Fetch atomic action.
-type FetchMode =
-    | Direct     // <a = b>
-    | Increment  // <a = b++>
-    | Decrement  // <a = b-->
-
 /// An atomic action.
 type AtomicAction =
     | CompareAndSwap of Var.LValue * Var.LValue * Expression  // <CAS(a, b, c)>
-    | Fetch of Var.LValue * Expression * FetchMode  // <a = b??>
-    | Postfix of Var.LValue * FetchMode  // <a++> or <a-->
+    | Fetch of Var.LValue * Expression * Var.FetchMode  // <a = b??>
+    | Postfix of Var.LValue * Var.FetchMode  // <a++> or <a-->
     | Id  // <id>
     | Assume of Expression  // <assume(e)
 

@@ -6,9 +6,8 @@ open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Z3
 open Starling.Var
-open Starling.AST
 open Starling.Model
-open Starling.Modeller
+open Starling.Lang.Modeller
 
 //
 // Atomic emitters

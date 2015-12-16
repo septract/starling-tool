@@ -2,7 +2,8 @@ module Starling.Tests.Pretty
 
 open Fuchu
 open Starling
-open Starling.AST
+open Starling.Lang.AST
+open Starling.Pretty.Lang.AST
 
 [<Tests>]
 let testPretty =
@@ -14,8 +15,8 @@ let testPretty =
                 fun _ ->
                     Assert.Equal ("((1 + 2) * 3)",
                                   "((1 + 2) * 3)",
-                                  Pretty.AST.printExpression (BopExp (Mul,
-                                                                      BopExp (Add,
-                                                                              IntExp 1L,
-                                                                              IntExp 2L),
-                                                                      IntExp 3L))) ]]
+                                  printExpression (BopExp (Mul,
+                                                           BopExp (Add,
+                                                                   IntExp 1L,
+                                                                   IntExp 2L),
+                                                           IntExp 3L))) ]]
