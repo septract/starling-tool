@@ -5,7 +5,6 @@ open Microsoft.Z3
 open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Z3
-open Starling.Expr
 open Starling.Var
 open Starling.Model
 open Starling.Lang.Modeller
@@ -16,22 +15,22 @@ open Starling.Lang.Modeller
 
 /// Makes the relation after!after = before!before.
 let makeRel model before after = 
-    let beforeB = subAllInModel model envVarToBefore before
-    let afterA = subAllInModel model envVarToAfter after
+    let beforeB = Expr.subAllInModel model Expr.envVarToBefore before
+    let afterA = Expr.subAllInModel model Expr.envVarToAfter after
     mkEq model.Context afterA beforeB
 
 /// Given e, returns e!after = e!before.
 let makeNoChange model expr = 
-    let exprA = subAllInModel model envVarToAfter expr
-    let exprB = subAllInModel model envVarToBefore expr
+    let exprA = Expr.subAllInModel model Expr.envVarToAfter expr
+    let exprB = Expr.subAllInModel model Expr.envVarToBefore expr
     mkEq model.Context exprA exprB
 
 /// Given some ArithExpr over a lvalue, return the relation for the
 /// operation identified by the given fetch mode on that lvalue.
 let makeFetchUpdate model (expr : ArithExpr) mode = 
     let ctx = model.Context
-    let exprB = (subAllInModel model envVarToBefore (expr :> Expr)) :?> ArithExpr
-    let exprA = (subAllInModel model envVarToAfter (expr :> Expr)) :?> ArithExpr
+    let exprB = (Expr.subAllInModel model Expr.envVarToBefore (expr :> Expr)) :?> ArithExpr
+    let exprA = (Expr.subAllInModel model Expr.envVarToAfter (expr :> Expr)) :?> ArithExpr
     
     let exprMod = 
         match mode with
@@ -53,9 +52,9 @@ let makeCAS model destE testE setE =
      *)
 
     // Make the before-case versions of dest and test.
-    let destEB = (subAllInModel model envVarToBefore destE)
-    let testEB = (subAllInModel model envVarToBefore testE)
-    let setEB = (subAllInModel model envVarToBefore setE)
+    let destEB = (Expr.subAllInModel model Expr.envVarToBefore destE)
+    let testEB = (Expr.subAllInModel model Expr.envVarToBefore testE)
+    let setEB = (Expr.subAllInModel model Expr.envVarToBefore setE)
     (* Now we make the cases.
      * Each case is in the form (cond => destAfter ^ testAfter).
      * We start with the success case.
@@ -148,12 +147,12 @@ let emitPrim model prim =
         [ makeRel model srcE destE ]
     | PrimId -> [ ctx.MkTrue() ]
     | PrimAssume(assumption) -> [ // Assumes always only refer to the pre-state.
-                                  subAllInModel model envVarToBefore (assumption :> Expr) :?> BoolExpr ]
+                                  Expr.subAllInModel model Expr.envVarToBefore (assumption :> Expr) :?> BoolExpr ]
 
 /// Generates a frame for a given expression.
 /// The frame is a relation a!after = a!before for every a not mentioned in the expression.
 let frame model expr = 
-    let afts = aftersNotInExpr model expr
+    let afts = Expr.aftersNotInExpr model expr
     let vars = Seq.append (Map.toSeq model.Globals) (Map.toSeq model.Locals)
     // TODO(CaptainHayashi): this is fairly inefficient.
     vars
@@ -182,11 +181,11 @@ let semanticsOf model prim =
 
 /// Substitutes all of the variables in a View using the given
 /// substitution.
-let subView sub model v = { v with Params = List.map (subAllInModel model sub) v.Params }
+let subView sub model v = { v with Params = List.map (Expr.subAllInModel model sub) v.Params }
 
 /// Substitutes all of the variables in a GuarView using the given substitution.
 let subGuarView sub model {Cond = c; Item = i} = 
-    { Cond = subAllInModel model sub (c :> Expr) :?> BoolExpr
+    { Cond = Expr.subAllInModel model sub (c :> Expr) :?> BoolExpr
       Item = subView sub model i }
 
 /// Substitutes all of the variables in a condition using the given substitution.
@@ -203,8 +202,8 @@ let renameCondition model cond =
        * just perform a full substitution using the substitution rule for
        * locals.
        *)
-      Pre = subCondition envVarToBefore model cond.Pre
-      Post = subCondition envVarToAfter model cond.Post }
+      Pre = subCondition Expr.envVarToBefore model cond.Pre
+      Post = subCondition Expr.envVarToAfter model cond.Post }
 
 /// Translates a model axiom into an axiom over a semantic expression.
 let translateAxiom model axiom = 

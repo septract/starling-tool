@@ -2,9 +2,9 @@ module Starling.Tests.Semantics
 
 open Fuchu
 open Microsoft.Z3
+open Starling
 open Starling.Var
 open Starling.Model
-open Starling.Expr
 open Starling.Semantics
 open Starling.Lang.AST
 open Starling.Tests.Studies
@@ -22,14 +22,14 @@ let testExpr (ctx : Context) =
 let testExprsInExpr ctx = 
     testList "test exprsInExpr" 
         [ testCase "exprsInExpr with no exprs" 
-          <| fun _ -> Assert.Equal("exprsInExpr <> testExpr = <>", Set.empty, exprsInExpr Set.empty (testExpr ctx))
+          <| fun _ -> Assert.Equal("exprsInExpr <> testExpr = <>", Set.empty, Expr.exprsInExpr Set.empty (testExpr ctx))
           testCase "exprsInExpr with exprs" <| fun _ -> 
               Assert.Equal("exprsInExpr <serving!after ticket!after s!after> testExpr = <serving!after ticket!after>", 
                            new Set<Expr>([ ctx.MkIntConst "serving!after"
                                            ctx.MkIntConst "ticket!after" ]), 
-                           exprsInExpr (Set<Expr>([ ctx.MkIntConst "serving!after"
-                                                    ctx.MkIntConst "ticket!after"
-                                                    ctx.MkIntConst "s!after" ])) (testExpr ctx)) ]
+                           Expr.exprsInExpr (Set<Expr>([ ctx.MkIntConst "serving!after"
+                                                         ctx.MkIntConst "ticket!after"
+                                                         ctx.MkIntConst "s!after" ])) (testExpr ctx)) ]
 
 let testAftersInModel (ctx : Context) = 
     testList "test aftersInModel" 
@@ -38,7 +38,7 @@ let testAftersInModel (ctx : Context) =
                            new Set<Expr>([ ctx.MkIntConst "s!after"
                                            ctx.MkIntConst "t!after"
                                            ctx.MkIntConst "serving!after"
-                                           ctx.MkIntConst "ticket!after" ]), aftersInModel (ticketLockModel ctx)) ]
+                                           ctx.MkIntConst "ticket!after" ]), Expr.aftersInModel (ticketLockModel ctx)) ]
 
 let testAftersInExpr (ctx : Context) = 
     testList "test aftersInExpr" 
@@ -47,7 +47,7 @@ let testAftersInExpr (ctx : Context) =
               Assert.Equal
                   ("aftersInExpr testExpr = <serving!after ticket!after>", 
                    new Set<Expr>([ ctx.MkIntConst "serving!after"
-                                   ctx.MkIntConst "ticket!after" ]), aftersInExpr (ticketLockModel ctx) (testExpr ctx)) ]
+                                   ctx.MkIntConst "ticket!after" ]), Expr.aftersInExpr (ticketLockModel ctx) (testExpr ctx)) ]
 
 let testAftersNotInExpr (ctx : Context) = 
     testList "test aftersNotInExpr" 
@@ -56,7 +56,7 @@ let testAftersNotInExpr (ctx : Context) =
               Assert.Equal
                   ("aftersNotInExpr testExpr = <s!after t!after>", 
                    new Set<Expr>([ ctx.MkIntConst "s!after"
-                                   ctx.MkIntConst "t!after" ]), aftersNotInExpr (ticketLockModel ctx) (testExpr ctx)) ]
+                                   ctx.MkIntConst "t!after" ]), Expr.aftersNotInExpr (ticketLockModel ctx) (testExpr ctx)) ]
 
 let testFrame (ctx : Context) = 
     testList "test frame" 

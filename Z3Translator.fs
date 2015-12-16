@@ -2,8 +2,8 @@
 module Starling.Z3.Translator
 
 open Microsoft
+open Starling
 open Starling.Collections
-open Starling.Expr
 open Starling.Model
 open Starling.Framer
 open Starling.Semantics
@@ -89,8 +89,8 @@ let reifyZTerm model term =
     let tpre = reifyZView model term.Conditions.Pre
     let tpost = reifyZView model term.Conditions.Post
     { Conditions = 
-          { Pre = subAllInEnv model.Globals envVarToBefore (tpre :> Z3.Expr) :?> Z3.BoolExpr
-            Post = subAllInEnv model.Globals envVarToAfter (tpost :> Z3.Expr) :?> Z3.BoolExpr }
+          { Pre = Expr.subAllInEnv model.Globals Expr.envVarToBefore (tpre :> Z3.Expr) :?> Z3.BoolExpr
+            Post = Expr.subAllInEnv model.Globals Expr.envVarToAfter (tpost :> Z3.Expr) :?> Z3.BoolExpr }
       Inner = term.Inner }
 
 /// Reifies all of the terms in a term list.
