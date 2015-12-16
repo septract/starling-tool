@@ -1,0 +1,85 @@
+/*
+ * Starling encoding of the Dodds/Haas/Kirsch SP pool (POPL '15).
+ *
+ * TODO:
+ *   - constraints
+ *   - view outlines
+ *   - proper return values?
+ *   - field accesses
+ */
+
+method init(top) {
+  {| todo |}
+
+    sentinel_element = 0;
+      {| todo |}
+    sentinel_taken = true;
+      {| todo |}
+    sentinel_next = sentinel;
+      {| todo |}
+
+    <top = sentinel>;
+
+  {| todo |}
+}
+
+method push(top, element) {
+  {| todo |}
+
+    newNode_element = element;
+      {| todo |}
+    newNode_taken = false;
+      {| todo |}
+
+    newNode_next = top;
+      {| todo |}
+
+    <top = newNode>;
+      {| todo |}
+
+    _ret = newNode;
+
+  {| todo |}
+}
+
+method pop() {
+    oldTop = top;
+    node = oldTop;
+
+    while (node_taken) {
+        if (node.next == node) {
+            _ret_1 = 0;
+            _ret_2 = 0; // empty
+        }
+
+        node = node.next;
+    }
+
+    old = false;
+    <CAS(node_taken, old, true)>;
+    if (old == false) {
+        //backComp(oldTop, node); // defined later
+fwdComp(node);
+return <node.element, SUCCESS>;
+}
+return <NULL, CONTENDED>;
+}
+
+method pop(top, element) {
+  {| todo |}
+
+    newNode_element = element;
+      {| todo |}
+    newNode_taken = false;
+      {| todo |}
+
+    newNode_next = top;
+      {| todo |}
+
+    <top = newNode>;
+      {| todo |}
+
+    _ret = newNode;
+
+  {| todo |}
+}

@@ -1,0 +1,28 @@
+/*
+ * Two-processLinux-style ticketed lock.
+ */
+
+/*
+ * Locks the ticket lock.
+ */
+method lock() {
+  {| emp |}
+  {| holdLock() |}
+}
+
+/*
+ * Unlocks the ticket lock.
+ */
+method unlock() {
+  {| holdLock() |}
+  {| emp |}
+}
+
+view holdTick(int t);
+view holdLock();
+
+// Invariant
+
+// Predicate definitions
+
+// Interactions

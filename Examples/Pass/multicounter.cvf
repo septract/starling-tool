@@ -1,0 +1,27 @@
+/*
+ * Owicki-style parallel counter increment.
+ */
+
+global int counter;
+local int t;
+
+method multiIncrement() {
+  {| count(0) |}
+  t = 0;
+  {| count(t) |}
+  do {
+    {| count(t) |}
+       t=t+1;
+    {| count(t-1) |}
+       <counter++>; 
+    {| count(t) |}
+  } while (t != 10)
+  {| count(10) |}
+}
+
+
+view count(int t);
+
+// We can also constrain count(t) => counter >= t, but need not.
+constraint count(ta) * count(tb) => counter == ta + tb;
+constraint count(ta) * count(tb) * count(tc) => false;

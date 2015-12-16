@@ -1,0 +1,63 @@
+/*
+ * Two-process Dekker's algorithm in Starling.
+ * UNFINISHED
+ */
+
+view AReady();
+view AHasLock();
+
+view BReady();
+view BHasLock();
+
+global bool a_want;
+global bool b_want;
+
+global bool a_turn; /* True if A's turn; false if B's turn. */
+
+local bool other_wants;
+
+constraint AReady() => a_want;
+constraint BReady() => b_want;
+
+constraint AHasLock() => a_turn == true;
+constraint BHasLock() => a_turn == false;
+
+constraint AHasLock() * BHasLock() => false;
+
+method ALock() {
+  {| emp |}
+    <a_want = (true)>
+  {| AReady() |}
+    do {
+      {| AReady() |}
+        other_wants = b_want;
+      {| AReady() * if want then BReady() else emp |}
+        if want {
+          {| AReady() * BReady() |}
+          <a_want = (false)>;
+          {| BReady() |}
+
+        } else {
+          {| AReady() |}
+          ;
+          {| AReady() |}
+        }
+   wants_to_enter[0] ← true
+   while wants_to_enter[1] {
+      if turn ≠ 0 {
+         wants_to_enter[0] ← false
+         while turn ≠ 0 {
+           // busy wait
+         }
+         wants_to_enter[0] ← true
+      }
+   }
+}
+
+method AUnlock() {
+  {| AHasLock() * AReady() |}
+    <a_turn = (false)>;
+  {| AReady() |}
+    <a_want = (false)>;
+  {| emp |}
+}

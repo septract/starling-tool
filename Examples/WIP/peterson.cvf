@@ -1,0 +1,56 @@
+/*
+ * Peterson lock.
+ */
+
+global bool aFlag;
+global bool bFlag;
+global bool aTurn;
+
+local bool oFlag;
+local bool oTurn;
+
+/*
+ * Locks the Peterson lock from A's side.
+ */
+method lockA() {
+  {| emp |}
+    <aFlag = (true)>;
+  {| aHoldFlag() |}
+    <aTurn = (false)>;
+  {| aHoldFlag() |}
+    do {
+      {| aHoldFlag() |}
+        <oFlag = aFlag>;
+      {| aHoldFlag() * if oFlag then aHoldFlag() else bHoldFlag() |}
+	<oTurn = aTurn>;
+      {| aHoldFlag() * if oTurn && oFlag then aHoldLock() else aHoldFlag() |}
+    } while ((oFlag == false) && (oTurn == false))
+  {| aHoldLock() |}
+}
+
+/*
+ * Unlocks the Peterson lock from A's side.
+ */
+method unlockA() {
+  {| aHoldLock() |}
+  <aFlag = (false)>;
+  {| emp |}
+}
+
+view aHoldLock();
+view bHoldLock();
+view aHoldFlag();
+view bHoldFlag();
+
+// Invariant
+
+// Predicate definitions
+constraint aHoldLock() => aFlag && aTurn;
+constraint bHoldLock() => bFlag && (aTurn == false);
+constraint aHoldFlag() => aFlag;
+constraint bHoldFlag() => bFlag;
+
+// Interactions
+constraint aHoldFlag() * aHoldFlag() => false;
+constraint bHoldFlag() * bHoldFlag() => false;
+constraint aHoldLock() * bHoldLock() => false;

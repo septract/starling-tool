@@ -1,67 +1,324 @@
 open Starling
+open Starling.Model
 
-open System
 open CommandLine
 open CommandLine.Text
 
+open Microsoft
 open Fuchu
-open FParsec // TODO: push fparsec references out of Main.
-open Microsoft.Z3 // TODO: this too.
+
+// This is down here to force Chessie's fail to override FParsec's.
+open Chessie.ErrorHandling
 
 type Options = {
     [<Option('t',
              HelpText = "Ignore input and run regression tests.")>]
     test: bool;
+    [<Option('h',
+             HelpText = "If stopped at an intermediate stage, print the result for human consumption.")>]
+    human: bool;
+
+    // The following are supposed to be mutually exclusive, but as the
+    // V2 API of CommandLine is somewhat unclear, they are currently
+    // inclusive and the exclusivity is bodged earlier.
     [<Option('p',
-             HelpText = "Pretty-prints the input instead of attempting to verify it.")>]
-    pprint: bool;
+             HelpText = "Stop at parsing and output what Starling parsed.")>]
+    parse: bool;
+    [<Option('c',
+             HelpText = "Stop at collating and output the collated script.")>]
+    collate: bool;
+    [<Option('m',
+             HelpText = "Stop at modelling and output the model.")>]
+    model: bool;
+    [<Option('f',
+             HelpText = "Stop at modelling and output the flattened model.")>]
+    flatten: bool;
+    [<Option('e',
+             HelpText = "Stop at expanding and output the expanded model.")>]
+    expand: bool;
+    [<Option('s',
+             HelpText = "Stop at semantic translation and output the translated model.")>]
+    semantics: bool;
+    [<Option('F',
+             HelpText = "Stop at framing and output the framed axioms.")>]
+    frame: bool;
+    [<Option('T',
+             HelpText = "Stop at term generation and output the unreified terms.")>]
+    termgen: bool;
+    [<Option('r',
+             HelpText = "Stop at term reification and output the reified terms.")>]
+    reify: bool;
+    [<Option('R',
+             HelpText = "Stop at term Z3 reification and output the reified terms.")>]
+    reifyZ3: bool;
+    [<Option('z',
+             HelpText = "Output the Z3 queries instead of checking them.")>]
+    z3: bool;
     [<Value(0,
             MetaName = "input",
             HelpText = "The file to load (omit, or supply -, for standard input).")>]
     input: string option;
 }
 
-/// Pretty-prints a Z3 conversion result.
-let printCR cr =
-    // TODO(CaptainHayashi): does this belong in the Z3 module?
-    match cr with
-        | Starling.Z3.Bool  b -> b.ToString ()
-        | Starling.Z3.Arith a -> a.ToString ()
-        | Starling.Z3.Fail  e -> "ERROR: " + e
+/// Errors occurring during the operation of Starling.
+type StarlingError =
+    | SEParse of string
+    | SEModel of Starling.Errors.Lang.Modeller.ModelError
+    | SEOther of string
 
-/// Runs Starling on the given parsed script.
-let runStarlingOnScript result =
-    // TODO(CaptainHayashi): eventually this will run the actual prover
-    printfn "AST: \n%A" result
-    printfn "---"
-    printfn "Constraints: \n"
-    let ctx = new Context ()
-    List.iter (
-        fun vc ->
-            printfn "  View: %s" <| Starling.Pretty.printView ( fst vc )
-            printfn "    Z3: %s" <| printCR ( snd vc )
-    ) <| Starling.Z3.scriptViewConstraintsZ3 ctx result
-    printfn "---"
+/// Pretty-prints a Starling error.
+let printStarlingError err =
+    match err with
+        | SEParse e -> Starling.Pretty.Types.String e
+        | SEModel e -> Starling.Pretty.Errors.printModelError e
+        | SEOther e -> Starling.Pretty.Types.String e
 
-let parseFile name pprint =
-    let (stream, streamName) =
-        match name with
-            | Some("-") -> (Console.OpenStandardInput(),        "(stdin)")
-            | None      -> (Console.OpenStandardInput(),        "(stdin)")
-            | Some(nam) -> (IO.File.OpenRead(nam) :> IO.Stream, nam      )
-    let pres = runParserOnStream Starling.Parser.parseScript () streamName stream Text.Encoding.UTF8
-    match pres with
-        | Success(result, _, _)   -> if pprint
-                                     then printfn "%s" ( Starling.Pretty.printScript result )
-                                     else runStarlingOnScript result
-        | Failure(errorMsg, _, _) -> printfn "Failure: %s" errorMsg
+/// Pretty-prints a list of error or warning strings, with the given
+/// header.
+let printWarns header ws =
+    Starling.Pretty.Types.Header
+        (header,
+         ws |> List.map Starling.Pretty.Types.Indent
+            |> Starling.Pretty.Types.vsep)
+
+/// Pretty-prints a Chessie result, given printers for the successful
+/// case and failure messages.
+let printResult pOk pBad =
+    either (pairMap pOk pBad
+                // Only show warnings if there actually were some.
+            >> function
+               | ( ok, [] ) -> ok
+               | ( ok, ws ) ->
+                   Starling.Pretty.Types.vsep
+                       [ok
+                        Starling.Pretty.Types.VSkip
+                        Starling.Pretty.Types.Separator
+                        Starling.Pretty.Types.VSkip
+                        printWarns "Warnings" ws] )
+           (pBad >> printWarns "Errors")
+
+(* Starling can output the results of various stages in its pipeline;
+ * the OutputType and Output types provide framework for the user to
+ * decide in which stage it halts.
+ *)
+
+/// Set of possible outputs Starling can provide.
+type OutputType =
+    | OutputTParse
+    | OutputTCollation
+    | OutputTModel
+    | OutputTFlatten
+    | OutputTExpand
+    | OutputTSemantics
+    | OutputTFrame
+    | OutputTTermGen
+    | OutputTReify
+    | OutputTReifyZ3
+    | OutputTZ3
+    | OutputTSat
+
+/// The output from a Starling run.
+[<NoComparison>]
+type Output =
+    | OutputParse of Starling.Lang.AST.ScriptItem list
+    | OutputCollation of Starling.Lang.Collator.CollatedScript
+    | OutputModel of Starling.Model.PartModel
+    | OutputFlatten of Starling.Model.FlatModel
+    | OutputExpand of Starling.Model.FullModel
+    | OutputSemantics of Starling.Model.SemModel
+    | OutputFrame of Starling.Model.FramedAxiom list
+    | OutputTermGen of Starling.Model.Term list
+    | OutputReify of Starling.Model.ReTerm list
+    | OutputReifyZ3 of Starling.Model.ZTerm list
+    | OutputZ3 of Z3.BoolExpr list
+    | OutputSat of Z3.Status list
+
+let printOutput out =
+    match out with
+    // TODO(CaptainHayashi): commandify AST printing.
+    | OutputParse s -> Starling.Pretty.Lang.AST.printScript s
+                       |> Starling.Pretty.Types.String
+    | OutputCollation c -> Starling.Pretty.Misc.printCollatedScript c
+    | OutputModel m -> Starling.Pretty.Misc.printPartModel m
+    | OutputFlatten f -> Starling.Pretty.Misc.printFlatModel f
+    | OutputExpand e -> Starling.Pretty.Misc.printFullModel e
+    | OutputSemantics e -> Starling.Pretty.Misc.printSemModel e
+    | OutputFrame f -> Starling.Pretty.Misc.printFramedAxioms f
+    | OutputTermGen t -> Starling.Pretty.Misc.printTerms t
+    | OutputReify t -> Starling.Pretty.Misc.printReTerms t
+    | OutputReifyZ3 t -> Starling.Pretty.Misc.printZTerms t
+    | OutputZ3 z -> Starling.Pretty.Misc.printZ3Exps z
+    | OutputSat s -> Starling.Pretty.Misc.printSats s
+
+(*
+    Starling pipeline (here defined in reverse):
+
+    1) Parse AST;
+    2) Collate AST into buckets of variable, constraint, method defs;
+    3) Make model from AST, with ‘partially resolved’ (structured) axioms;
+    4) Flatten model to produce flattened axioms;
+    5) Expand conditionals in axioms into guarded axioms;
+    6) Expand primitives in axioms into Z3 relations;
+    7) Run proof on model.
+
+    The Starling pipeline can be halted at the end of any of these
+    stages, producing the various Output types above (in addition to
+    just dumping the AST directly).
+*)
+
+/// Runs Starling, either outputting or checking the Z3 term.
+let runStarlingZ3 semanticsR reifyR otype =
+    let z3R = lift2 Starling.Z3.Reifier.combineTerms semanticsR reifyR
+
+    match otype with
+    | OutputTZ3 -> lift OutputZ3 z3R
+    | OutputTSat ->
+        lift2
+            (fun m zs ->
+                zs
+                |> List.map (fun z ->
+                                let ctx = m.Context
+                                let solver = ctx.MkSimpleSolver ()
+                                solver.Assert [|z|]
+                                solver.Check [||])
+                |> OutputSat)
+            semanticsR
+            z3R
+    | _ -> fail ( SEOther "this should be unreachable!" )
+
+/// Runs the Z3 reifier and further Starling processes.
+let runStarlingReifyZ3 semanticsR reifyR otype =
+    let reifyZ3R = lift2 Starling.Z3.Reifier.reifyZ3 semanticsR reifyR
+
+    match otype with
+    | OutputTReifyZ3 -> lift OutputReifyZ3 reifyZ3R
+    | _ -> runStarlingZ3 semanticsR reifyZ3R otype
+
+/// Runs the reifier and further Starling processes.
+let runStarlingReify semanticsR termGenR otype =
+    let reifyR = lift2 Starling.Reifier.reify semanticsR termGenR
+
+    match otype with
+    | OutputTReify -> lift OutputReify reifyR
+    | _ -> runStarlingReifyZ3 semanticsR reifyR otype
+
+/// Runs the term generator and further Starling processes.
+let runStarlingTermGen semanticsR frameR otype =
+    let termGenR = lift2 Starling.TermGen.termGen semanticsR frameR
+
+    match otype with
+    | OutputTTermGen -> lift OutputTermGen termGenR
+    | _ -> runStarlingReify semanticsR termGenR otype
+
+/// Runs the framed axiom generator and further Starling processes.
+let runStarlingFrame semanticsR otype =
+    let frameR = lift Starling.Framer.frame semanticsR
+
+    match otype with
+    | OutputTFrame -> lift OutputFrame frameR
+    | _ -> runStarlingTermGen semanticsR frameR otype
+
+/// Runs the model expander and further Starling processes.
+let runStarlingSemantics modelR otype =
+    let semanticsR = lift Starling.Semantics.translate modelR
+
+    match otype with
+    | OutputTSemantics -> lift OutputSemantics semanticsR
+    | _ -> runStarlingFrame semanticsR otype
+
+/// Runs the model expander and further Starling processes.
+let runStarlingExpand modelR otype =
+    let expandR = lift Starling.Expander.expand modelR
+
+    match otype with
+    | OutputTExpand -> lift OutputExpand expandR
+    | _ -> runStarlingSemantics expandR otype
+
+/// Runs the model flattener and further Starling processes.
+let runStarlingFlatten modelR otype =
+    let flattenR = lift Starling.Flattener.flatten modelR
+
+    match otype with
+    | OutputTFlatten -> lift OutputFlatten flattenR
+    | _ -> runStarlingExpand flattenR otype
+
+/// Runs the model generator and further Starling processes.
+let runStarlingModel collatedR otype =
+    // Convert the errors from ModelError to StarlingError.
+    let modelR = bind ( Starling.Lang.Modeller.model >> mapMessages SEModel ) collatedR
+
+    let om =
+        match otype with
+        | OutputTModel -> lift OutputModel modelR
+        | _            -> runStarlingFlatten modelR otype
+
+    // This stage has the responsibility for disposing of the Z3 context.
+    ignore (lift Starling.Model.disposeZ3 modelR)
+    om
+
+/// Runs the collation and further Starling processes.
+let runStarlingCollate scriptR otype =
+    // Collation cannot fail, so lift instead of bind.
+    let collatedR = lift Starling.Lang.Collator.collate scriptR
+
+    match otype with
+    | OutputTCollation -> lift OutputCollation collatedR
+    | _                -> runStarlingModel collatedR otype
+
+/// Runs Starling on the given file script.
+let runStarling file otype =
+    let scriptPR = Starling.Lang.Parser.parseFile file
+    // Convert the errors from string to StarlingError.
+    let scriptR  = mapMessages SEParse scriptPR
+
+    match otype with
+        | OutputTParse -> lift OutputParse scriptR
+        | _            -> runStarlingCollate scriptR otype
+
+/// Deduces the output type from the options.
+let otypeFromOpts opts =
+    // We stop at the earliest chosen stopping point,
+    // and default to the latest if no option has been given.
+    let ot =
+        [(opts.parse, OutputTParse)
+         (opts.collate, OutputTCollation)
+         (opts.model, OutputTModel)
+         (opts.flatten, OutputTFlatten)
+         (opts.expand, OutputTExpand)
+         (opts.semantics, OutputTSemantics)
+         (opts.frame, OutputTFrame)
+         (opts.termgen, OutputTTermGen)
+         (opts.reify, OutputTReify)
+         (opts.reifyZ3, OutputTReifyZ3)
+         (opts.z3, OutputTZ3)]
+        |> List.tryFind fst
+    match ot with
+    | Some (_, o) -> o
+    | None -> OutputTSat
+
+/// Runs Starling and outputs the results.
+let starlingMain opts =
+    let input = opts.input
+    let human = opts.human
+    let otype = otypeFromOpts opts
+
+    let starlingR = runStarling input otype
+
+    let pfn = if human
+              then printOutput
+              else (sprintf "%A" >> Starling.Pretty.Types.String)
+
+    printResult pfn ( List.map printStarlingError ) starlingR
+    |> Starling.Pretty.Types.print
+    |> printfn "%s"
 
     0
+
 
 let mainWithOptions opts argv =
     if opts.test
     then defaultMainThisAssembly argv
-    else parseFile opts.input opts.pprint
+    else starlingMain opts
 
 [<EntryPoint>]
 let main argv =
