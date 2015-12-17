@@ -1,0 +1,12 @@
+/* A bad increment */
+
+local int x; 
+view False(); 
+
+method badInc() { 
+  {| if x==0 then emp else False() |} 
+    x = x+1;  
+  {| if x==2 then emp else False() |} 
+} 
+
+constraint False() => false; 

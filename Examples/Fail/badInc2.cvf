@@ -1,0 +1,12 @@
+// another bad increment
+
+view isTrue(bool b); 
+local int x; 
+
+method badInc() { 
+  {| isTrue(x==0) |} 
+    x = x+1;  
+  {| isTrue(x==2) |} 
+} 
+
+constraint isTrue(b) => b; 
