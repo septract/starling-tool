@@ -30,8 +30,8 @@ module Multiset =
      *)
 
     /// Converts a multiset to a sorted list.
-    let toList ms =
-        match ms with
+    let toList =
+        function
         | MSet xs -> xs
 
     /// Converts a multiset to a sorted seq.

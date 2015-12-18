@@ -8,14 +8,14 @@ open Starling.Pretty.Misc
 open Starling.Pretty.Lang.AST
 
 /// Pretty-prints variable conversion errors.
-let printVarMapError ve =
-    match ve with
+let printVarMapError =
+    function
     | VMEDuplicate vn -> fmt "variable '{0}' is defined multiple times" [vn]
     | VMENotFound vn -> fmt "variable '{0}' not in environment" [vn]
 
 /// Pretty-prints expression conversion errors.
-let printExprError ee =
-    match ee with
+let printExprError =
+    function
     | EEBadAST (ast, reason) ->
         colonSep [fmt "cannot convert {0} to Z3" [ast |> printExpression]
                   reason |> String]
@@ -30,8 +30,8 @@ let printExprError ee =
             [printLValue lv |> String]
 
 /// Pretty-prints view conversion errors.
-let printViewError ve =
-    match ve with
+let printViewError =
+    function
     | VEBadExpr (view, ee) ->
         colonSep [fmt "bad expression in '{0}'" [printView view]
                   printExprError ee]
@@ -40,17 +40,15 @@ let printViewError ve =
                   reason |> String]
 
 /// Pretty-prints viewdef conversion errors.
-let printViewDefError ve =
-    match ve with
+let printViewDefError =
+    function
     | VDENoSuchView name ->
         fmt "no view prototype for '{0}'" [name]
     | VDEBadParamCount (name, expected, actual) ->
-        let exps = sprintf "%d" expected
-        let acts = sprintf "%d" actual
         fmt "view '{0}' expects '{1}' params, but was given '{2}'"
             [name
-             exps
-             acts]
+             expected
+             actual]
     | VDEBadVars vme ->
         colonSep ["view variable inconsistency" |> String
                   printVarMapError vme]
@@ -59,14 +57,14 @@ let printViewDefError ve =
                   printVarMapError vme]
 
 /// Pretty-prints constraint conversion errors.
-let printConstraintError ce =
-    match ce with
+let printConstraintError =
+    function
     | CEView ve -> printViewDefError ve
     | CEExpr ee -> printExprError ee
 
 /// Pretty-prints axiom errors.
-let printAxiomError ae =
-    match ae with
+let printAxiomError =
+    function
     | AEBadGlobal le ->
         colonSep ["error resolving global" |> String
                   printVarMapError le]
@@ -94,16 +92,16 @@ let printAxiomError ae =
                   reason |> String]
 
 /// Pretty-prints view prototype conversion errors
-let printViewProtoError vpe =
-    match vpe with
+let printViewProtoError =
+    function
     | VPEDuplicateParam (vp, param) ->
         fmt "view proto '{0} has duplicate param {1}"
             [printViewProto vp
              param]
 
 /// Pretty-prints model conversion errors.
-let printModelError ce =
-    match ce with
+let printModelError =
+    function
     | MEConstraint ce -> printConstraintError ce
     | MEVar ve -> printVarMapError ve
     | MEAxiom ae -> printAxiomError ae

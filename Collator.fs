@@ -7,19 +7,19 @@ open Starling.Lang.AST
 
 /// A script whose items have been partitioned by type.
 type CollatedScript =
-    { CGlobals: (Type * string) list
-      CLocals: (Type * string) list
-      CVProtos: ViewProto list
-      CConstraints: Constraint list
-      CMethods: Method list }
+    {CGlobals: (Type * string) list
+     CLocals: (Type * string) list
+     CVProtos: ViewProto list
+     CConstraints: Constraint list
+     CMethods: Method list}
 
 /// The empty collated script.
 let empty =
-    { CConstraints = []
-      CMethods = []
-      CVProtos = []
-      CGlobals = []
-      CLocals = [] }
+    {CConstraints = []
+     CMethods = []
+     CVProtos = []
+     CGlobals = []
+     CLocals = []}
 
 /// Files a script item into the appropriate bin in a
 /// CollatedScript.

@@ -24,31 +24,28 @@ open Starling.Lang.Collator
 
 /// Active pattern classifying bops as to whether they create
 /// arithmetic or Boolean expressions.
-let (|ArithOp|BoolOp|) bop =
-    match bop with
-    | Mul | Div | Add | Sub -> ArithOp
-    | Gt | Ge | Le | Lt -> BoolOp
-    | Eq | Neq -> BoolOp
-    | And | Or -> BoolOp
+let (|ArithOp|BoolOp|) =
+    function | Mul | Div | Add | Sub -> ArithOp
+             | Gt | Ge | Le | Lt -> BoolOp
+             | Eq | Neq -> BoolOp
+             | And | Or -> BoolOp
 
 /// Active pattern classifying bops as to whether they take in
 /// arithmetic, Boolean, or indeterminate operands.
-let (|ArithIn|BoolIn|AnyIn|) bop =
-    match bop with
-    | Mul | Div | Add | Sub -> ArithIn
-    | Gt | Ge | Le | Lt -> ArithIn
-    | Eq | Neq -> AnyIn
-    | And | Or -> BoolIn
+let (|ArithIn|BoolIn|AnyIn|) =
+    function | Mul | Div | Add | Sub -> ArithIn
+             | Gt | Ge | Le | Lt -> ArithIn
+             | Eq | Neq -> AnyIn
+             | And | Or -> BoolIn
 
 /// Active pattern classifying expressions as to whether they are
 /// arithmetic, Boolean, or indeterminate.
-let (|BoolExp|ArithExp|AnyExp|) expr =
-    match expr with
-    | LVExp _ -> AnyExp
-    | IntExp _ -> ArithExp
-    | TrueExp | FalseExp -> BoolExp
-    | BopExp (BoolOp, _, _) -> BoolExp
-    | BopExp (ArithOp, _, _) -> ArithExp
+let (|BoolExp|ArithExp|AnyExp|) =
+    function | LVExp _ -> AnyExp
+             | IntExp _ -> ArithExp
+             | TrueExp | FalseExp -> BoolExp
+             | BopExp (BoolOp, _, _) -> BoolExp
+             | BopExp (ArithOp, _, _) -> ArithExp
 
 (*
  * Expression translation
@@ -154,15 +151,14 @@ and arithExprToZ3 model env expr =
  *)
 
 /// Tries to flatten a view definition AST into a multiset.
-let rec viewDefToSet vast =
-    match vast with
-    | DFunc (s, pars) -> [ { VName = s; VParams = pars } ]
-    | DUnit -> []
-    | DJoin (l, r) -> joinViewDefs l r
+let rec viewDefToSet =
+    function | DFunc (s, pars) -> [ {VName = s ; VParams = pars} ]
+             | DUnit -> []
+             | DJoin (l, r) -> joinViewDefs l r
 /// Merges two sides of a view monoid in the AST into one multiset.
 and joinViewDefs l r =
-     List.concat [viewDefToSet l
-                  viewDefToSet r]
+     List.append (viewDefToSet l)
+                 (viewDefToSet r)
 
 
 (*
@@ -206,17 +202,16 @@ let rec modelViewDef model vd =
 
 /// Produces the environment created by interpreting the viewdef vds using the
 /// view prototype map vpm.
-let rec envOfViewDef ctx vds =
-    vds
-    |> Seq.ofList
-    |> Seq.map (fun vd -> makeVarMap ctx vd.VParams)
-    |> seqBind (fun xR s -> bind (combineMaps s) xR) Map.empty
-    |> mapMessages VDEBadVars
+let rec envOfViewDef ctx =
+    Seq.ofList
+    >> Seq.map (fun vd -> makeVarMap ctx vd.VParams)
+    >> seqBind (fun xR s -> bind (combineMaps s) xR) Map.empty
+    >> mapMessages VDEBadVars
 
 /// Produces the variable environment for the constraint whose viewdef is v.
-let envOfConstraint model v =
-    envOfViewDef model.Context v
-    |> bind (combineMaps model.Globals >> mapMessages VDEGlobalVarConflict)
+let envOfConstraint model =
+    envOfViewDef model.Context
+    >> bind (combineMaps model.Globals >> mapMessages VDEGlobalVarConflict)
 
 /// Converts a single constraint to Z3.
 let modelConstraint model c =
@@ -229,8 +224,8 @@ let modelConstraint model c =
 
 /// Extracts the view constraints from a CollatedScript, turning each into a
 /// Model.Constraint.
-let modelConstraints model cs =
-    List.map (modelConstraint model) cs.CConstraints |> collect
+let modelConstraints model {CConstraints = cs} =
+    cs |> List.map (modelConstraint model) |> collect
 
 //
 // View applications
@@ -465,8 +460,8 @@ and modelAxiomOnWhile isDo model cpair e b =
 /// Converts a command and its precondition and postcondition to a
 /// list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
-and modelAxiomOnCommand model cpair cmd =
-    match cmd with
+and modelAxiomOnCommand model cpair =
+    function
     | Atomic a -> modelPrimOnAtomic model a |> lift (primToAxiom cpair)
     | Assign (l, e) -> modelPrimOnAssign model l e |> lift (primToAxiom cpair)
     | Skip -> modelPrimOnAtomic model Id |> lift (primToAxiom cpair)
@@ -527,9 +522,10 @@ and modelAxiomsOnBlock model block =
 
 /// Converts a method to a list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
-let modelAxiomsOnMethod model meth =
+let modelAxiomsOnMethod model {Body = b} =
     // TODO(CaptainHayashi): method parameters
-    modelAxiomsOnBlock model meth.Body
+    b
+    |> modelAxiomsOnBlock model
     |> lift (fun c -> c.Inner)
 
 /// Converts a list of methods to a list of partially resolved axioms.
@@ -542,10 +538,11 @@ let modelAxioms model methods =
 
 /// Checks a view prototype to see if it contains duplicate parameters.
 let checkViewProtoDuplicates proto =
-    let names = List.map snd proto.VPPars
-    match (findDuplicates names) with
-    | [] -> ok proto
-    | ds -> List.map (fun d -> VPEDuplicateParam (proto, d)) ds |> Bad
+    proto.VPPars
+    |> List.map snd
+    |> findDuplicates
+    |> function | [] -> ok proto
+                | ds -> List.map (fun d -> VPEDuplicateParam (proto, d)) ds |> Bad
 
 /// Checks a view prototype and converts it to an associative pair.
 let modelViewProto proto =

@@ -6,8 +6,8 @@ open Starling.Collections
 /// A 'generic' view, parameterised over its parameter type.
 type GenView<'a> =
     // TODO(CaptainHayashi): rename to ViewDef.
-    { VName: string
-      VParams: 'a list }
+    {VName: string
+     VParams: 'a list}
 
 /// A view definition, whose parameters are type-string pairs.
 type ViewDef = GenView<Var.Type * string>
@@ -47,8 +47,8 @@ type Z3Constraint = GenConstraint<Z3.Expr>
 
 /// A pair of conditions.
 type ConditionPair<'v> =
-    { Pre: 'v 
-      Post: 'v }
+    {Pre: 'v 
+     Post: 'v}
 
 /// A modelled primitive command.
 type Prim =
@@ -66,8 +66,8 @@ type Prim =
 /// A general Hoare triple, consisting of precondition, inner item, and
 /// postcondition.
 type Hoare<'c, 'i> =
-    { Conditions: ConditionPair<'c>
-      Inner: 'i }
+    {Conditions: ConditionPair<'c>
+     Inner: 'i}
 
 type PartConditionPair = ConditionPair<Multiset<CondView>>
 type PartHoare<'i> = Hoare<Multiset<CondView>, 'i>
@@ -114,15 +114,15 @@ let cpairOfPartAxiom pa =
 /// A parameterised model of a Starling program.
 [<NoComparison>]
 type Model<'a, 'c> =
-    { Context: Z3.Context
+    {Context: Z3.Context
 
-      Globals: Var.VarMap
-      Locals: Var.VarMap
-      Axioms: 'a
-      VProtos: Map<string, (Var.Type * string) list>
+     Globals: Var.VarMap
+     Locals: Var.VarMap
+     Axioms: 'a
+     VProtos: Map<string, (Var.Type * string) list>
 
-      // This corresponds to the function D.
-      DefViews: 'c }
+     // This corresponds to the function D.
+     DefViews: 'c}
 
 /// A partly-resolved-axiom model of a Starling program.
 type PartModel = Model<PartAxiom list, Constraint list>

@@ -15,8 +15,6 @@ let tupleOfGuarView gv = (gv.GCond, gv.GItem)
 
 /// Reifies a single GuarView-list into a ReView.
 let reifySingle model view =
-    let ctx = model.Context
-
     (* This corresponds to Dlift in the theory.
      * Our end goal is the term (implies (and guars...) vrs),
      * where vrs is defined below.
@@ -30,15 +28,14 @@ let reifySingle model view =
         |> List.unzip
 
     // Then, separately add them into a ReView.
-    {GCond = mkAnd ctx guars
+    {GCond = mkAnd model.Context guars
      GItem = Multiset.ofList views}
 
 /// Reifies an entire view application.
-let reifyView model vapp =
-    vapp
-    |> Multiset.power
-    |> Seq.map (reifySingle model)
-    |> Multiset.ofSeq
+let reifyView model =
+    Multiset.power
+    >> Seq.map (reifySingle model)
+    >> Multiset.ofSeq
 
 /// Reifies all of the views in a term.
 let reifyTerm model (term: Term): ReTerm =

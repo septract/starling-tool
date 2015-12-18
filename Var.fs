@@ -18,11 +18,10 @@ type LValue =
     //| LVPtr of LValue
 
 /// Flattens a LV to a string.
-let rec flattenLV v =
+let rec flattenLV =
     // TODO(CaptainHayashi): this is completely wrong, but we don't
     // have a semantics for it yet.
-    match v with
-    | LVIdent s -> s
+    function | LVIdent s -> s
     //| LVPtr vv -> "*" + flattenLV vv
 
 /// Creates a reference to a Boolean lvalue.
@@ -124,14 +123,16 @@ type VarMap = Map<string, Var>
 
 /// Makes a variable map from a list of type-name pairs.
 let makeVarMap (ctx : Z3.Context) lst =
-    let names = List.map snd lst
-    match (findDuplicates names) with
-    | [] -> ok <| List.foldBack
-                    (fun (ty, name) (map: VarMap) ->
-                         map.Add (name, makeVar ctx ty name))
-                    lst
-                    Map.empty
-    | ds -> Bad <| List.map VMEDuplicate ds
+    lst
+    |> List.map snd  // Extract all names from the list.
+    |> findDuplicates
+    |> function | [] -> List.foldBack
+                           (fun (ty, name) (map: VarMap) ->
+                               map.Add (name, makeVar ctx ty name))
+                           lst
+                           Map.empty
+                        |> ok
+                | ds -> List.map VMEDuplicate ds |> Bad
 
 /// Tries to combine two variable maps.
 /// Fails if the environments are not disjoint.
@@ -151,8 +152,8 @@ let combineMaps (a: VarMap) (b: VarMap) =
 
 /// Tries to look up a variable record in a variable map.
 /// Failures are in terms of Some/None.
-let tryLookupVar env lvalue =
-    match lvalue with
+let tryLookupVar env =
+    function
     | LVIdent s -> Map.tryFind s env
     //| _ -> LEBadLValue lvalue |> fail
 

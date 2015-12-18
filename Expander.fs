@@ -6,16 +6,11 @@ open Starling.Model
 open Starling.Utils
 open Microsoft.Z3
 
-/// Calculates the powerset of a set.
-let powerset set =
-    // TODO(CaptainHayashi): relocate to where this is used, or delete if not.
-    Set.fold (fun ps s -> ps + Set.map (fun p -> s + p) ps) (new Set<Set<BoolExpr>> ( [Set.empty] )) set
-
 /// Converts a view from conditional to guarded form.
 /// This takes the Z3 context, and the set of all conditions forming the
 /// suffix of any guards generated from this view.
-let rec resolveCondViewIn (suffix: Set<BoolExpr>) (ctx: Context) cv =
-    match cv with
+let rec resolveCondViewIn (suffix: Set<BoolExpr>) (ctx: Context) =
+    function
     | CSetView v -> [ {GCond = suffix |> Set.toArray |> mkAnd ctx
                        GItem = v} ]
     | CITEView (expr, tviews, fviews) ->
@@ -33,17 +28,17 @@ let resolveCondViews ctx =
     >> Multiset.ofList
 
 /// Expands a condition pair.
-let expandCondPair ctx cpair =
-    { Pre = resolveCondViews ctx cpair.Pre
-      Post = resolveCondViews ctx cpair.Post }
+let expandCondPair ctx {Pre = pre ; Post = post} =
+    {Pre = resolveCondViews ctx pre
+     Post = resolveCondViews ctx post}
 
 /// Expands an axiom.
-let expandAxiom ctx axiom =
-    { Conditions = expandCondPair ctx axiom.Conditions
-      Inner = axiom.Inner }
+let expandAxiom ctx {Conditions = cs; Inner = i} =
+    {Conditions = expandCondPair ctx cs
+     Inner = i}
 
 /// Expands a list of axioms.
-let expandAxioms ctx axioms = List.map (expandAxiom ctx) axioms
+let expandAxioms ctx = List.map (expandAxiom ctx)
 
 /// Expands an entire model.
 let expand (model: FlatModel) = withAxioms (expandAxioms model.Context model.Axioms) model

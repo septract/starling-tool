@@ -386,20 +386,20 @@ let parseSkip
 
 /// Parser for simple commands (atomics, skips, and bracketed commands).
 do parseCommandRef :=
-    choice [ parseSkip
-             // ^- `;'
-             parseAtomicCommand
-             // ^- < <atomic> > ;
-             parseIf
-             // ^- if ( <expression> ) <block> <block>
-             parseDoWhile
-             // ^- do <block> while ( <expression> )
-             parseWhile
-             // ^- while ( <expression> ) <block>
-             parseParSet
-             // ^- <par-set>
-             parseAssign ]
-             // ^- <lvalue> = <expression>
+    choice [parseSkip
+            // ^- `;'
+            parseAtomicCommand
+            // ^- < <atomic> > ;
+            parseIf
+            // ^- if ( <expression> ) <block> <block>
+            parseDoWhile
+            // ^- do <block> while ( <expression> )
+            parseWhile
+            // ^- while ( <expression> ) <block>
+            parseParSet
+            // ^- <par-set>
+            parseAssign]
+            // ^- <lvalue> = <expression>
 
 
 //
@@ -439,7 +439,7 @@ let parseConstraint =
                 // ^- <view> ...
                 (pstring "=>" >>. ws >>. parseExpression .>> ws .>> pstring ";")
                 // ^-        ... => <expression> ;
-                (fun v ex -> { CView = v; CExpression = ex })
+                (fun v ex -> {CView = v ; CExpression = ex} )
 
 /// Parses a single method, excluding leading or trailing whitespace.
 let parseMethod =
@@ -451,7 +451,7 @@ let parseMethod =
                 // ^-              ... <arg-list> ...
                 parseBlock
                 // ^-                             ... <block>
-                (fun n ps b -> { Name = n; Params = ps; Body = b })
+                (fun n ps b -> {Name = n ; Params = ps ; Body = b} )
 
 /// Parses a variable with the given initial keyword.
 let parseVar kw = pstring kw >>. ws
@@ -465,17 +465,17 @@ let parseVar kw = pstring kw >>. ws
 let parseScript =
     // TODO(CaptainHayashi): parse things that aren't methods:
     //   axioms definitions, etc
-    ws >>. manyTill ( choice [ parseMethod |>> SMethod
-                               // ^- method <identifier> <arg-list> <block>
-                               parseConstraint |>> SConstraint
-                               // ^- constraint <view> => <expression> ;
-                               parseViewProto |>> SViewProto
-                               // ^- view <identifier> ;
-                               //  | view <identifier> <view-proto-param-list> ;
-                               parseVar "global" |>> SGlobal
-                               // ^- global <type> <identifier> ;
-                               parseVar "local" |>> SLocal ] ) eof
-                               // ^- local <type> <identifier> ;
+    ws >>. manyTill (choice [parseMethod |>> SMethod
+                             // ^- method <identifier> <arg-list> <block>
+                             parseConstraint |>> SConstraint
+                             // ^- constraint <view> => <expression> ;
+                             parseViewProto |>> SViewProto
+                             // ^- view <identifier> ;
+                             //  | view <identifier> <view-proto-param-list> ;
+                             parseVar "global" |>> SGlobal
+                             // ^- global <type> <identifier> ;
+                             parseVar "local" |>> SLocal] ) eof
+                             // ^- local <type> <identifier> ;
 
 //
 // Frontend
@@ -488,14 +488,11 @@ let parseFile name =
         // If - or no name was given, parse from the console.
         let stream, streamName =
             match name with
-            | Some("-") -> (Console.OpenStandardInput (), "(stdin)")
-            | None -> (Console.OpenStandardInput (), "(stdin)")
+            | None | Some("-") -> (Console.OpenStandardInput (), "(stdin)")
             | Some(nam) -> (IO.File.OpenRead(nam) :> IO.Stream, nam)
 
-        let pres = runParserOnStream parseScript () streamName stream Text.Encoding.UTF8
-        match pres with
-        | Success (result, _, _) -> ok result
-        | Failure (errorMsg, _, _) -> fail errorMsg   
+        runParserOnStream parseScript () streamName stream Text.Encoding.UTF8
+        |> function | Success (result, _, _) -> ok result
+                    | Failure (errorMsg, _, _) -> fail errorMsg   
     with 
     | :? System.IO.FileNotFoundException  -> fail ("File not found: " + Option.get name)
- 

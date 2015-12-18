@@ -58,26 +58,24 @@ let printTVar tvar =
                          printZ3Exp tvar.VarFrameExpr] )
 
 /// Pretty-prints model variables.
-let printModelVar nvar =
-    let name, var = nvar
-    HSep ( [ String name
-             (match var with
-              | IntVar tv -> hsep [ String "int"
-                                    printTVar tv ]
-              | BoolVar tv -> hsep [ String "bool"
-                                     printTVar tv ] ) ],
-           String ":")
+let printModelVar (name, var) =
+    colonSep [String name
+              (match var with
+               | IntVar tv -> hsep [String "int"
+                                    printTVar tv]
+               | BoolVar tv -> hsep [String "bool"
+                                     printTVar tv] ) ]
 
 /// Pretty-prints a conditional view.
-let rec printCondView cv =
-    match cv with
+let rec printCondView =
+    function
     | CITEView (i, t, e) ->
-        hsep [ String "if"
-               printZ3Exp i
-               String "then"
-               printCondViewList t
-               String "else"
-               printCondViewList e ]
+        hsep [String "if"
+              printZ3Exp i
+              String "then"
+              printCondViewList t
+              String "else"
+              printCondViewList e]
     | CSetView v -> printModelView v
 /// Pretty-prints a list of cond-views.
 and printCondViewList =
@@ -88,7 +86,7 @@ let printGuarded pitem g =
     if g.GCond.IsTrue then 
         pitem g.GItem
     else 
-        ssurround "(" ")" 
+        parened
           (HSep ( [printZ3Exp g.GCond
                    pitem g.GItem], String "|"))
 
@@ -115,41 +113,40 @@ let printInConditionPair pcond cpair inner =
               pcond cpair.Post)
 
 /// Lifts a pretty-printer to optional values.
-let printOption pp ov =
-    match ov with
-    | None -> String "(none)"
-    | Some v -> pp v
+let printOption pp =
+    function | None -> String "(none)"
+             | Some v -> pp v
 
 /// Pretty-prints a load prim.
 let printLoadPrim ty dest src mode =
-    hsep [ String ("load<" + ty + ">")
-           parened (equality (printOption (printLValue >> String) dest)
-                             (hsep [src |> printLValue |> String
-                                    mode |> printFetchMode |> String] )) ]
+    hsep [String ("load<" + ty + ">")
+          parened (equality (printOption (printLValue >> String) dest)
+                            (hsep [src |> printLValue |> String
+                                   mode |> printFetchMode |> String] )) ]
 
 /// Pretty-prints a store prim.
 let printStorePrim ty dest src =
-    hsep [ String ("store<" + ty + ">")
-           parened (equality (dest |> printLValue |> String)
-                             (src |> printZ3Exp)) ]
+    hsep [String ("store<" + ty + ">")
+          parened (equality (dest |> printLValue |> String)
+                            (src |> printZ3Exp)) ]
 
 
 /// Pretty-prints a CAS prim.
 let printCASPrim ty dest src set =
-    hsep [ String ("cas<" + ty + ">")
-           parened (commaSep [dest |> printLValue |> String
-                              src |> printLValue |> String
-                              set |> printZ3Exp] ) ]
+    hsep [String ("cas<" + ty + ">")
+          parened (commaSep [dest |> printLValue |> String
+                             src |> printLValue |> String
+                             set |> printZ3Exp] ) ]
 
 /// Pretty-prints a local-set prim.
 let printLocalPrim ty dest src =
-    hsep [ String ("lset<" + ty + ">")
-           parened (equality (dest |> printLValue |> String)
-                             (src |> printZ3Exp)) ]
+    hsep [String ("lset<" + ty + ">")
+          parened (equality (dest |> printLValue |> String)
+                            (src |> printZ3Exp)) ]
 
 /// Pretty-prints a prim.
-let printPrim prim =
-    match prim with
+let printPrim =
+    function
     | IntLoad (dest, src, mode) -> printLoadPrim "arith" dest src mode
     | BoolLoad (dest, src) -> printLoadPrim "bool" (Some dest) src Direct
     | IntStore (dest, src) -> printStorePrim "arith" dest src
@@ -163,9 +160,10 @@ let printPrim prim =
                                 braced (printZ3Exp expr) ]
 
 /// Pretty-prints a Hoare triple
-let printHoare pcond pinner axiom = printInConditionPair pcond
-                                                         axiom.Conditions
-                                                         (angled (pinner axiom.Inner))
+let printHoare pCond pInner {Conditions = cond ; Inner = inner} =
+    printInConditionPair pCond
+                         cond
+                         (angled (pInner inner))
 
 /// Pretty-prints a model axiom.
 let printFlatAxiom = printHoare printCondViewList printPrim
@@ -180,8 +178,8 @@ let printSemAxiom (ax: SemAxiom) =
                ax
 
 /// Pretty-prints a part-axiom at the given indent level.
-let rec printPartAxiom axiom =
-    match axiom with
+let rec printPartAxiom =
+    function
     | PAAxiom ax -> printFlatAxiom ax
     | PAWhile (isDo, expr, outer, inner) ->
         vsep [hsep [String "begin"
@@ -206,15 +204,15 @@ let rec printPartAxiom axiom =
               String "end" ]
 
 /// Pretty-prints a model constraint.
-let printModelConstraint c =
-    keyMap [ ("View", printModelViewDefs c.CViews)
-             ("Z3", c.CZ3.ToString () |> String) ]
+let printModelConstraint {CViews = vs ; CZ3 = z} =
+    keyMap [("View", printModelViewDefs vs)
+            ("Z3", z.ToString () |> String) ]
 
 /// Pretty-prints a model view prototype.
 let printModelViewProto (vn, vps) =
     // TODO(CaptainHayashi): this is a bit of a cop-out!
-    printViewProto { VPName = vn
-                     VPPars = vps } |> String
+    printViewProto {VPName = vn
+                    VPPars = vps} |> String
 
 /// Pretty-prints a model given an axiom printer.
 let printModel axpp model =
@@ -292,12 +290,11 @@ let printZTerms = printNumHeaderedList printZTerm
 let printZ3Exps : Z3.BoolExpr list -> Command = printNumHeaderedList printZ3Exp
 
 /// Pretty-prints a satisfiability result.
-let printSat sat =
-    match sat with
-    | Z3.Status.SATISFIABLE -> "fail"
-    | Z3.Status.UNSATISFIABLE -> "success"
-    | _ -> "unknown"
-    |> String
+let printSat =
+    function | Z3.Status.SATISFIABLE -> "fail"
+             | Z3.Status.UNSATISFIABLE -> "success"
+             | _ -> "unknown"
+    >> String
 
 /// Pretty-prints a list of satisfiability results.
 let printSats = printNumPrecList printSat

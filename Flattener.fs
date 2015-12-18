@@ -71,13 +71,12 @@ and flatITE model expr outer inTrue inFalse =
                   falses ]
 
 /// Flattens a part axiom into a list of flattened axioms.
-and flatAxiom model axiom =
-    match axiom with
-    | PAAxiom ax -> [ax]  // These are already flat axioms.
-    | PAWhile (isDo, expr, outer, inner) ->
-        flatWhile model expr outer inner (if isDo then PrimId else PrimAssume expr)
-    | PAITE (expr, outer, inTrue, inFalse) ->
-        flatITE model expr outer inTrue inFalse
+and flatAxiom model =
+    function | PAAxiom ax -> [ax]  // These are already flat axioms.
+             | PAWhile (isDo, expr, outer, inner) ->
+                   flatWhile model expr outer inner (if isDo then PrimId else PrimAssume expr)
+             | PAITE (expr, outer, inTrue, inFalse) ->
+                   flatITE model expr outer inTrue inFalse
 
 /// Flattens a list of part axioms into a list of flattened axioms.
 and flatAxioms model = concatMap (flatAxiom model)

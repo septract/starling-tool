@@ -57,8 +57,8 @@ let indent level = new string (' ', level * 4)
 /// Enters a new line at the given indent level.
 let lnIndent level = "\n" + indent level
 
-let rec printLevel level cmd =
-    match cmd with
+let rec printLevel level =
+    function
     | Header (heading, incmd) ->
         heading + ":" + lnIndent level + printLevel level incmd
                       + lnIndent level

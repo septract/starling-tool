@@ -7,10 +7,9 @@ open Starling.Var
 open Starling.Model
 
 /// Converts a Starling type to a Z3 sort.
-let typeToSort (ctx: Z3.Context) ty =
-    match ty with
-    | Int -> ctx.IntSort :> Z3.Sort
-    | Bool -> ctx.BoolSort :> Z3.Sort
+let typeToSort (ctx: Z3.Context) =
+    function | Int -> ctx.IntSort :> Z3.Sort
+             | Bool -> ctx.BoolSort :> Z3.Sort
 
 /// Instantiates a view parameter.
 let instantiateParam model (ty, name) =
@@ -20,15 +19,16 @@ let instantiateParam model (ty, name) =
 /// Instantiates a defining view into a view expression.
 let instantiateFrame model dvs =
     dvs
-    |> Multiset.map (fun dv -> {GCond = model.Context.MkTrue ()
-                                GItem = {VName = dv.VName
-                                         VParams = List.map (instantiateParam model) dv.VParams}} )
+    |> Multiset.map (fun {VName = n ; VParams = ps } ->
+                         {GCond = model.Context.MkTrue ()
+                          GItem = {VName = n
+                                   VParams = List.map (instantiateParam model) ps }} )
 
 /// Converts an axiom into a list of framed axioms, by combining it with the
 /// defining views of a model.
 let frameAxiom model axiom =
-    List.map (fun dv -> {Axiom = axiom
-                         Frame = instantiateFrame model dv.CViews})
+    List.map (fun {CViews = vs} -> {Axiom = axiom
+                                    Frame = instantiateFrame model vs} )
              model.DefViews
     
 

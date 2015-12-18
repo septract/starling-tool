@@ -67,8 +67,8 @@ type StarlingError =
     | SEOther of string
 
 /// Pretty-prints a Starling error.
-let printStarlingError err =
-    match err with
+let printStarlingError =
+    function
         | SEParse e -> Starling.Pretty.Types.String e
         | SEModel e -> Starling.Pretty.Errors.printModelError e
         | SEOther e -> Starling.Pretty.Types.String e
@@ -133,8 +133,8 @@ type Output =
     | OutputZ3 of Z3.BoolExpr list
     | OutputSat of Z3.Status list
 
-let printOutput out =
-    match out with
+let printOutput =
+    function
     // TODO(CaptainHayashi): commandify AST printing.
     | OutputParse s -> Starling.Pretty.Lang.AST.printScript s
                        |> Starling.Pretty.Types.String
@@ -272,29 +272,27 @@ let runStarling file otype =
     let scriptR  = mapMessages SEParse scriptPR
 
     match otype with
-        | OutputTParse -> lift OutputParse scriptR
-        | _            -> runStarlingCollate scriptR otype
+    | OutputTParse -> lift OutputParse scriptR
+    | _            -> runStarlingCollate scriptR otype
 
 /// Deduces the output type from the options.
 let otypeFromOpts opts =
     // We stop at the earliest chosen stopping point,
     // and default to the latest if no option has been given.
-    let ot =
-        [(opts.parse, OutputTParse)
-         (opts.collate, OutputTCollation)
-         (opts.model, OutputTModel)
-         (opts.flatten, OutputTFlatten)
-         (opts.expand, OutputTExpand)
-         (opts.semantics, OutputTSemantics)
-         (opts.frame, OutputTFrame)
-         (opts.termgen, OutputTTermGen)
-         (opts.reify, OutputTReify)
-         (opts.reifyZ3, OutputTReifyZ3)
-         (opts.z3, OutputTZ3)]
-        |> List.tryFind fst
-    match ot with
-    | Some (_, o) -> o
-    | None -> OutputTSat
+    [(opts.parse, OutputTParse)
+     (opts.collate, OutputTCollation)
+     (opts.model, OutputTModel)
+     (opts.flatten, OutputTFlatten)
+     (opts.expand, OutputTExpand)
+     (opts.semantics, OutputTSemantics)
+     (opts.frame, OutputTFrame)
+     (opts.termgen, OutputTTermGen)
+     (opts.reify, OutputTReify)
+     (opts.reifyZ3, OutputTReifyZ3)
+     (opts.z3, OutputTZ3)]
+    |> List.tryFind fst
+    |> function | Some (_, o) -> o
+                | None -> OutputTSat
 
 /// Runs Starling and outputs the results.
 let starlingMain opts =
@@ -322,10 +320,9 @@ let mainWithOptions opts argv =
 
 [<EntryPoint>]
 let main argv =
-    let result = CommandLine.Parser.Default.ParseArguments<Options>(argv)
-    match result with
-        | :? Parsed<Options> as parsed -> mainWithOptions parsed.Value argv
-        | :? NotParsed<Options> as notParsed -> printfn "failure: %A" notParsed.Errors
-                                                2
-        | _ -> printfn "parse result of unknown type"
-               3
+    match CommandLine.Parser.Default.ParseArguments<Options> argv with
+    | :? Parsed<Options> as parsed -> mainWithOptions parsed.Value argv
+    | :? NotParsed<Options> as notParsed -> printfn "failure: %A" notParsed.Errors
+                                            2
+    | _ -> printfn "parse result of unknown type"
+           3

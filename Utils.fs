@@ -23,7 +23,7 @@ let curry f a b = f (a, b)
 let curry3 f a b c = f (a, b, c)
 
 /// Converts a function of two arguments to a pairwise function.
-let uncurry f ab = f (fst ab) (snd ab)
+let uncurry f (a, b) = f a b
 
 /// Constructs a pair from left to right.
 let mkPair x y = (x, y)
@@ -33,18 +33,18 @@ let cons a b = a :: b
 
 /// Maps a function f through a set, and concatenates the resulting
 /// list of lists into one set.
-let unionMap f xs =
-    xs
-    |> Set.toSeq
-    |> Seq.map f
-    |> Set.unionMany
+let unionMap f =
+    Set.toSeq
+    >> Seq.map f
+    >> Set.unionMany
 
 /// Maps a function f through a list, and concatenates the resulting
 /// list of lists into one list.
 let concatMap f xs =
-    // Adapted from the GHC base implementation,
-    // see http://hackage.haskell.org/package/base-4.8.1.0/docs/src/Data.Foldable.html
-    // for source and copyright information.
+    (* Adapted from the GHC base implementation,
+     * see http://hackage.haskell.org/package/base-4.8.1.0/docs/src/Data.Foldable.html
+     * for source and copyright information.
+     *)
     List.foldBack (fun x b -> List.foldBack cons (f x) b) xs []
 
 /// Tries to find duplicate entries in a list.
@@ -56,25 +56,17 @@ let findDuplicates lst =
                     | ( _, [] ) | ( _, [_] ) -> None
                     | ( x, _ ) -> Some x)
 
-//
-// Chessie-related functions.
-//
-
-/// If both sides of a pair are ok, return f applied to them.
-/// Else, return the errors.
-let pairBindMap f g lr =
-    trial { let! l = f (fst lr)
-            let! r = f (snd lr)
-            return g (l, r) }
+(*
+ * Chessie-related functions.
+ *)
 
 /// Maps f over e's messages.
 let mapMessages f =
-    either (fun pair -> Ok (fst pair, List.map f (snd pair)))
+    either (fun (v, msgs) -> Ok (v, List.map f msgs))
            (fun msgs -> List.map f msgs |> Bad)
 
 /// Like fold, but constantly binds the given function over a Chessie result.
 /// The initial state is wrapped in 'ok'.
-let seqBind f initialS xs =
+let seqBind f initialS =
     Seq.fold (fun s x -> bind (f x) s)
              (ok initialS)
-             xs

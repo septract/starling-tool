@@ -26,12 +26,12 @@ let mkAnd (ctx: Z3.Context) (conjuncts: Z3.BoolExpr seq) =
     if Seq.exists (fun (x: Z3.BoolExpr) -> x.IsFalse) conjuncts
     then ctx.MkFalse ()
     else
-        let cs = conjuncts |> Seq.filter (fun (x: Z3.BoolExpr) -> not x.IsTrue) |> Array.ofSeq
-        match cs with
-        // True is the zero of and.
-        | [||] -> ctx.MkTrue ()
-        | [| x |] -> x
-        | xs -> ctx.MkAnd (xs)
+        conjuncts
+        |> Seq.filter (fun (x: Z3.BoolExpr) -> not x.IsTrue)
+        |> Array.ofSeq
+        |> function | [||] -> ctx.MkTrue ()  // True is the zero of and.
+                    | [| x |] -> x
+                    | xs -> ctx.MkAnd (xs)
 
 /// Slightly optimised version of ctx.MkOr.
 /// Returns false for the empty set, and x for the singleton set {x}.
@@ -39,12 +39,12 @@ let mkOr (ctx: Z3.Context) (disjuncts: Z3.BoolExpr seq) =
     if Seq.exists (fun (x: Z3.BoolExpr) -> x.IsTrue) disjuncts
     then ctx.MkTrue ()
     else
-        let ds = disjuncts |> Seq.filter (fun (x: Z3.BoolExpr) -> not x.IsFalse) |> Array.ofSeq
-        match ds with
-        // False is the zero of or.
-        | [||] -> ctx.MkFalse ()
-        | [| x |] -> x
-        | xs -> ctx.MkOr (xs)
+        disjuncts
+        |> Seq.filter (fun (x: Z3.BoolExpr) -> not x.IsFalse)
+        |> Array.ofSeq
+        |> function | [||] -> ctx.MkFalse ()  // False is the zero of or.
+                    | [| x |] -> x
+                    | xs -> ctx.MkOr (xs)
 
 /// Makes an And from a pair of two expressions.
 let mkAnd2 (ctx: Z3.Context) l r = mkAnd ctx [l ; r]
@@ -56,12 +56,12 @@ let mkOr2 (ctx: Z3.Context) l r = mkOr ctx [l ; r]
 let mkNeq (ctx: Z3.Context) l r =
     ctx.MkNot (ctx.MkEq (l, r))
 
-let mkNot (ctx: Z3.Context) x =
-    match x with
+let mkNot (ctx: Z3.Context) =
+    function
     // Simplify obviously false or true exprs to their negation.
     | ZFalse -> ctx.MkTrue ()
     | ZTrue -> ctx.MkFalse ()
-    | _ -> ctx.MkNot x
+    | x -> ctx.MkNot x
 
 /// Makes an implication from a pair of two expressions.
 let mkImplies (ctx: Z3.Context) l r =
