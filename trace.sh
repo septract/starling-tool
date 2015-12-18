@@ -4,6 +4,7 @@
 # (frame, termgen, reify, Z3 reify).
 
 STARLING="./bin/Debug/starling.exe"
+SED=${SED:-"sed"}
 
 if [ $# != 2 ];
 then
@@ -16,13 +17,14 @@ fi
 #
 # Theory: select everything between $2: and the next numeric heading.
 # Then, delete the numeric headings.
-PATTERN="/^$2:/,/^[0-9][0-9]*:/ {/^[0-9][0-9]*:/d; p}"
+SELECT_PATTERN="/^$2:/,/^[0-9][0-9]*:/p"
+DELETE_PATTERN="/^[0-9][0-9]*:/d"
 
 echo "Framer:"
-mono $STARLING -hF $1 | sed -n "$PATTERN"
+mono $STARLING -hF $1 | $SED -n "$SELECT_PATTERN" | $SED "$DELETE_PATTERN"
 echo "TermGen:"
-mono $STARLING -hT $1 | sed -n "$PATTERN"
+mono $STARLING -hT $1 | $SED -n "$SELECT_PATTERN" | $SED "$DELETE_PATTERN"
 echo "Reify:"
-mono $STARLING -hr $1 | sed -n "$PATTERN"
+mono $STARLING -hr $1 | $SED -n "$SELECT_PATTERN" | $SED "$DELETE_PATTERN"
 echo "Z3:"
-mono $STARLING -hR $1 | sed -n "$PATTERN"
+mono $STARLING -hR $1 | $SED -n "$SELECT_PATTERN" | $SED "$DELETE_PATTERN"
