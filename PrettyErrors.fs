@@ -35,9 +35,6 @@ let printViewError =
     | VEBadExpr (view, ee) ->
         colonSep [fmt "bad expression in '{0}'" [printView view]
                   printExprError ee]
-    | VEUnsupported (view, reason) ->
-        colonSep [fmt "view '{0}' not supported" [printView view]
-                  reason |> String]
 
 /// Pretty-prints viewdef conversion errors.
 let printViewDefError =
