@@ -18,11 +18,11 @@ type Command =
 let fmt fstr xs = System.String.Format (fstr, Seq.toArray xs) |> String
 
 let vsep xs = VSep (xs, Nop)
-let hsep xs = HSep (xs, Nop)
 let hsepStr s c = HSep (c, String s)
-let commaSep = hsepStr ","
-let semiSep = hsepStr ";"
-let colonSep = hsepStr ":"
+let hsep = hsepStr " "
+let commaSep = hsepStr ", "
+let semiSep = hsepStr "; "
+let colonSep = hsepStr ": "
 
 let equals = String "="
 let equality a b = hsep [a
@@ -81,7 +81,7 @@ let rec printLevel level cmd =
         |> String.concat (printLevel level separator + lnIndent level)
     | HSep (cmds, separator) ->
         List.map (printLevel level) cmds
-        |> String.concat (printLevel level separator + " ")
+        |> String.concat (printLevel level separator)
     | Nop -> ""
 
 let print = printLevel 0
