@@ -365,7 +365,10 @@ let parseWhile =
 
 /// Parser for do (expr) while block.
 let parseDoWhile =
-    pstring "do" >>. ws >>. parseBlock .>>. (ws >>. parseWhileLeg) |>> DoWhile
+    pstring "do" >>. ws
+                 >>. parseBlock
+                 .>>. (ws >>. parseWhileLeg .>> ws .>> pstring ";")
+                 |>> DoWhile
 
 /// Parser for if (expr) block else block.
 let parseIf =

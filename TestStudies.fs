@@ -35,7 +35,7 @@ method lock() {
       {| holdTick(t) |}
         <s = serving>;
       {| if s == t then holdLock else holdTick(t) |}
-    } while (s != t)
+    } while (s != t);
   {| holdLock |}
 }
 

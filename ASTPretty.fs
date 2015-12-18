@@ -78,7 +78,7 @@ let rec printCommand level =
              | Skip -> ";"
              | If (c, t, f) -> "if (" + printExpression c + ") " + printBlock level t + " " + printBlock level f
              | While (c, b) -> "while (" + printExpression c + ") " + printBlock level b
-             | DoWhile (b, c) -> "do " + printBlock level b + " while (" + printExpression c + ")"
+             | DoWhile (b, c) -> "do " + printBlock level b + " while (" + printExpression c + ");"
              | Blocks bs -> List.map (printBlock level) bs |> String.concat " || "
              | Assign (l, r) -> printLValue l + " = " + printExpression r + ";"
 /// Pretty-prints viewed commands with the given indent level (in spaces).
