@@ -64,7 +64,7 @@ let rec anyExprToZ3 model env expr =
          * Boolean type.
          *)
         trial {let! vt = lookupVar env v
-                         |> mapMessages ((curry EEVar) expr)
+                         |> mapMessages ((curry EEVar) v)
                match vt with
                | BoolVar _ -> return (mkBoolLV ctx v) :> Expr
                | IntVar _ -> return (mkIntLV ctx v) :> Expr}
@@ -87,7 +87,7 @@ and boolExprToZ3 model env expr =
          * Boolean type.
          *)
         trial {let! vt = lookupVar env v
-                         |> mapMessages ((curry EEVar) expr)
+                         |> mapMessages ((curry EEVar) v)
                match vt with
                | BoolVar _ -> return (mkBoolLV ctx v)
                | _ -> return! (fail <| EEVarNotBoolean v) }
@@ -117,7 +117,7 @@ and boolExprToZ3 model env expr =
                                | Eq -> mkEq
                                | Neq -> mkNeq
                                | _  -> failwith "unreachable") ctx lE rE }
-    | _ -> fail <| EEBadAST (expr, "cannot be a Boolean expression")
+    | _ -> fail <| EEBadAST "cannot be a Boolean expression"
 
 /// Converts a Starling arithmetic expression ot a Z3 predicate using
 /// the given Z3 context.
@@ -130,7 +130,7 @@ and arithExprToZ3 model env expr =
          * arithmetic type.
          *)
         trial {let! vt = lookupVar env v
-                         |> mapMessages ((curry EEVar) expr)
+                         |> mapMessages ((curry EEVar) v)
                match vt with
                | IntVar _ -> return (mkIntLV ctx v) :> ArithExpr
                | _ -> return! (fail <| EEVarNotArith v) }
@@ -143,7 +143,7 @@ and arithExprToZ3 model env expr =
                        | Add -> mkAdd2
                        | Sub -> mkSub2
                        | _  -> failwith "unreachable") ctx lA rA }
-    | _ -> fail <| EEBadAST (expr, "cannot be an arithmetic expression")
+    | _ -> fail <| EEBadAST "cannot be an arithmetic expression"
 
 
 (*
@@ -206,7 +206,7 @@ let rec envOfViewDef ctx =
     Seq.ofList
     >> Seq.map (fun vd -> makeVarMap ctx vd.VParams)
     >> seqBind (fun xR s -> bind (combineMaps s) xR) Map.empty
-    >> mapMessages VDEBadVars
+    >> mapMessages VDEBadVars 
 
 /// Produces the variable environment for the constraint whose viewdef is v.
 let envOfConstraint model =
@@ -214,13 +214,14 @@ let envOfConstraint model =
     >> bind (combineMaps model.Globals >> mapMessages VDEGlobalVarConflict)
 
 /// Converts a single constraint to Z3.
-let modelConstraint model c =
+let modelConstraint model {CView = av ; CExpression = ae} =
     let ctx = model.Context
-    trial {let! v = modelViewDef model c.CView |> mapMessages CEView
-           let! e = envOfConstraint model v |> mapMessages CEView
-           let! c = boolExprToZ3 model e c.CExpression |> mapMessages CEExpr 
+    trial {let! v = modelViewDef model av |> mapMessages (curry CEView av)
+           let! e = envOfConstraint model v |> mapMessages (curry CEView av)
+           let! c = boolExprToZ3 model e ae |> mapMessages (curry CEExpr ae)
            return {CViews = Multiset.ofSeq v
                    CZ3 = c}}
+    |> mapMessages (curry MEConstraint av)
 
 /// Extracts the view constraints from a CollatedScript, turning each into a
 /// Model.Constraint.
@@ -235,13 +236,14 @@ let modelConstraints model {CConstraints = cs} =
 let rec modelView model vast =
     match vast with
     | Func (s, pars) -> trial {let! pexps = pars
-                                            |> List.map (anyExprToZ3 model model.Locals
-                                                         >> mapMessages (curry VEBadExpr vast))
+                                            |> List.map (fun e ->
+                                                             e |> anyExprToZ3 model model.Locals
+                                                               |> mapMessages (curry VEBadExpr e))
                                             |> collect
                                return [CSetView {VName = s
                                                  VParams = pexps} ]
                                       |> Multiset.ofList}
-    | IfView (e, l, r) -> trial {let! ez3 = boolExprToZ3 model model.Locals e |> mapMessages ((curry VEBadExpr) vast)
+    | IfView (e, l, r) -> trial {let! ez3 = boolExprToZ3 model model.Locals e |> mapMessages (curry VEBadExpr e)
                                  let! lvs = modelView model l
                                  let! rvs = modelView model r
                                  return (CITEView (ez3, lvs, rvs) |> Multiset.singleton) }
@@ -252,13 +254,6 @@ and joinViews model l r =
     lift2 (Multiset.append)
           (modelView model l)
           (modelView model r)
-/// Converts a pair of AST views into a ConditionPair.
-/// The pair is enclosed in a Chessie result.
-let makeConditionPair model preAst postAst =
-    lift2 (fun pre post -> {Pre = pre
-                            Post = post} )
-          (modelView model preAst)
-          (modelView model postAst)
 
 //
 // Axioms
@@ -277,27 +272,27 @@ let (|LocalVar|_|) model (lvalue: Var.LValue) =
 
 /// Tries to look up the type of a local variable in an axiom context.
 /// Returns a Chessie result; failures have AEBadLocal messages.
-let lookupLocalType model lvalue =
-    match lvalue with
+let lookupLocalType model =
+    function
     | LocalVar model v -> varType v |> ok
-    | _ -> VMENotFound (flattenLV lvalue) |> AEBadLocal |> fail
+    | lv -> lv |> flattenLV |> VMENotFound |> curry AEBadLocal lv |> fail
 
 /// Tries to look up the type of a global variable in an axiom context.
 /// Returns a Chessie result; failures have AEBadGlobal messages.
-let lookupGlobalType model lvalue =
-    match lvalue with
+let lookupGlobalType model =
+    function
     | GlobalVar model v -> varType v |> ok
-    | _ -> VMENotFound (flattenLV lvalue) |> AEBadLocal |> fail
+    | lv -> lv |> flattenLV |> VMENotFound |> curry AEBadGlobal lv |> fail
 
 /// Converts a Boolean expression to z3 within the given axiom context.
 /// Returns a Chessie result; failures have AEBadExpr messages.
 let axiomBoolExprToZ3 model expr =
-    boolExprToZ3 model model.Locals expr |> mapMessages AEBadExpr
+    boolExprToZ3 model model.Locals expr |> mapMessages (curry AEBadExpr expr)
 
 /// Converts an arithmetic expression to z3 within the given axiom context.
 /// Returns a Chessie result; failures have AEBadExpr messages.
 let axiomArithExprToZ3 model expr =
-    arithExprToZ3 model model.Locals expr |> mapMessages AEBadExpr
+    arithExprToZ3 model model.Locals expr |> mapMessages (curry AEBadExpr expr)
 
 /// Converts a Boolean load to a Prim.
 let modelPrimOnBoolLoad model atom dest src mode =
@@ -357,6 +352,14 @@ let modelPrimOnIntStore model atom dest src mode =
            | Increment -> return! fail <| AEUnsupportedAtomic (atom, "cannot increment an expression")
            | Decrement -> return! fail <| AEUnsupportedAtomic (atom, "cannot decrement an expression") }
 
+/// Converts a precondition and postcondition to a condition pair, using
+/// the given model and returning errors as AxiomErrors.
+let makeAxiomConditionPair model preAst postAst =
+    lift2 (fun pre post -> {Pre = pre
+                            Post = post} )
+          (modelView model preAst |> mapMessages (curry AEBadView preAst))
+          (modelView model postAst |> mapMessages (curry AEBadView postAst))
+
 /// Converts an atomic action to a Prim.
 let rec modelPrimOnAtomic model atom =
     match atom with
@@ -396,7 +399,7 @@ let rec modelPrimOnAtomic model atom =
         | LocalVar model (IntVar _) -> modelPrimOnIntLoad model atom dest src mode
         | LocalVar model (BoolVar _) -> modelPrimOnBoolLoad model atom dest src mode
         // TODO(CaptainHayashi): incorrect error here.
-        | _ -> fail <| AEBadGlobal (VMENotFound (flattenLV dest))
+        | lv -> fail <| AEBadGlobal (lv, VMENotFound (flattenLV dest))
     | Postfix (operand, mode) ->
         (* A Postfix is basically a Fetch with no destination, at this point.
          * Thus, the source must be GLOBAL.
@@ -470,12 +473,6 @@ and modelAxiomOnCommand model cpair =
     | DoWhile (b, e) -> modelAxiomOnWhile true model cpair e b
     | c -> fail <| AEUnsupportedCommand (c, "TODO: implement")
 
-/// Converts a precondition and postcondition to a condition pair, using
-/// the given model and returning errors as AxiomErrors.
-and makeAxiomConditionPair model pre post =
-    makeConditionPair model pre post
-    |> mapMessages AEBadView
-
 /// Converts a block to a Conditioned list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
 and modelAxiomsOnBlock model block =
@@ -522,11 +519,12 @@ and modelAxiomsOnBlock model block =
 
 /// Converts a method to a list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
-let modelAxiomsOnMethod model {Body = b} =
+let modelAxiomsOnMethod model {Name = m ; Body = b} =
     // TODO(CaptainHayashi): method parameters
     b
     |> modelAxiomsOnBlock model
     |> lift (fun c -> c.Inner)
+    |> mapMessages (curry MEAxiom m)
 
 /// Converts a list of methods to a list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
@@ -549,6 +547,7 @@ let modelViewProto proto =
     proto
     |> checkViewProtoDuplicates
     |> lift (fun pro -> (pro.VPName, pro.VPPars))
+    |> mapMessages (curry MEVProto proto)
 
 /// Checks view prototypes and converts them to map form.
 let modelViewProtos protos =
@@ -560,7 +559,7 @@ let modelViewProtos protos =
 
 /// Converts a collated script to a model with the given context.
 let modelWith ctx collated =
-    trial {let! vprotos = modelViewProtos collated.CVProtos |> mapMessages MEVProto 
+    trial {let! vprotos = modelViewProtos collated.CVProtos
            // Make variable maps out of the global and local variable definitions.
            let! globals = makeVarMap ctx collated.CGlobals
                           |> mapMessages MEVar
@@ -578,7 +577,6 @@ let modelWith ctx collated =
                        Axioms = () }
 
            let! constraints = modelConstraints imod collated
-                              |> mapMessages MEConstraint
 
            (* Now add in the constraints.  This is a different type from
             * imod, so it isn't convenient to use mutation or
@@ -591,7 +589,6 @@ let modelWith ctx collated =
                        DefViews = constraints
                        Axioms = () }
            let! axioms = modelAxioms pmod collated.CMethods
-                         |> mapMessages MEAxiom
 
            return (withAxioms axioms pmod) }
 

@@ -7,6 +7,11 @@ open Starling.Pretty.Types
 open Starling.Pretty.Misc
 open Starling.Pretty.Lang.AST
 
+/// Formats an error that is wrapping another error.
+let wrapped wholeDesc whole err =
+    headed (sprintf "In %s '%s'" wholeDesc whole)
+           [err]
+
 /// Pretty-prints variable conversion errors.
 let printVarMapError =
     function
@@ -16,12 +21,13 @@ let printVarMapError =
 /// Pretty-prints expression conversion errors.
 let printExprError =
     function
-    | EEBadAST (ast, reason) ->
-        colonSep [fmt "cannot convert {0} to Z3" [ast |> printExpression]
+    | EEBadAST (reason) ->
+        colonSep ["cannot convert view to Z3" |> String
                   reason |> String]
-    | EEVar (ast, vme) ->
-        colonSep [fmt "bad variable usage in {0}" [ast |> printExpression]
-                  printVarMapError vme]
+    | EEVar (var, err) ->
+        wrapped "variable"
+                (var |> printLValue)
+                (err |> printVarMapError)
     | EEVarNotBoolean lv ->
         fmt "lvalue '{0}' is not a suitable type for use in a boolean expression"
             [printLValue lv |> String]
@@ -32,9 +38,10 @@ let printExprError =
 /// Pretty-prints view conversion errors.
 let printViewError =
     function
-    | VEBadExpr (view, ee) ->
-        colonSep [fmt "bad expression in '{0}'" [printView view]
-                  printExprError ee]
+    | VEBadExpr (expr, err) ->
+        wrapped "expression"
+                (expr |> printExpression)
+                (err |> printExprError)
 
 /// Pretty-prints viewdef conversion errors.
 let printViewDefError =
@@ -46,34 +53,44 @@ let printViewDefError =
             [name
              expected
              actual]
-    | VDEBadVars vme ->
-        colonSep ["view variable inconsistency" |> String
-                  printVarMapError vme]
-    | VDEGlobalVarConflict vme ->
-        colonSep ["view variables conflict with globals" |> String
-                  printVarMapError vme]
+    | VDEBadVars err ->
+        colonSep ["invalid variable usage" |> String
+                  err |> printVarMapError]
+    | VDEGlobalVarConflict err ->
+        colonSep ["parameters conflict with global variables" |> String
+                  err |> printVarMapError]
 
 /// Pretty-prints constraint conversion errors.
 let printConstraintError =
     function
-    | CEView ve -> printViewDefError ve
-    | CEExpr ee -> printExprError ee
+    | CEView (vdef, err) ->
+        wrapped "view definition"
+                (vdef |> printViewDef)
+                (err |> printViewDefError)
+    | CEExpr (expr, err) ->
+        wrapped "expression"
+                (expr |> printExpression)
+                (err |> printExprError)
 
 /// Pretty-prints axiom errors.
 let printAxiomError =
     function
-    | AEBadGlobal le ->
-        colonSep ["error resolving global" |> String
-                  printVarMapError le]
-    | AEBadLocal le ->
-        colonSep ["error resolving local" |> String
-                  printVarMapError le]
-    | AEBadExpr ee ->
-        colonSep ["bad expression in axiom" |> String
-                  printExprError ee]
-    | AEBadView ve ->
-        colonSep ["bad view in axiom" |> String
-                  printViewError ve]
+    | AEBadGlobal (var, err) ->
+        wrapped "global variable"
+                (var |> printLValue)
+                (err |> printVarMapError)
+    | AEBadLocal (var, err) ->
+        wrapped "local variable"
+                (var |> printLValue)
+                (err |> printVarMapError)
+    | AEBadExpr (expr, err) ->
+        wrapped "expression"
+                (expr |> printExpression)
+                (err |> printExprError)
+    | AEBadView (view, err) ->
+        wrapped "view"
+                (view |> printView)
+                (err |> printViewError)
     | AETypeMismatch (expected, badvar, got) ->
         fmt "lvalue '{0}' is of type {1}, but should be a {2}"
             [printLValue badvar |> String
@@ -99,7 +116,18 @@ let printViewProtoError =
 /// Pretty-prints model conversion errors.
 let printModelError =
     function
-    | MEConstraint ce -> printConstraintError ce
-    | MEVar ve -> printVarMapError ve
-    | MEAxiom ae -> printAxiomError ae
-    | MEVProto vpe -> printViewProtoError vpe
+    | MEConstraint (constr, err) ->
+        wrapped "constraint"
+                (constr |> printViewDef)
+                (err |> printConstraintError)
+    | MEVar err ->
+        colonSep ["invalid variable declarations" |> String
+                  err |> printVarMapError]
+    | MEAxiom (methname, err) ->
+        wrapped "method"
+                methname
+                (err |> printAxiomError)
+    | MEVProto (vproto, err) ->
+        wrapped "view prototype"
+                (vproto |> printViewProto)
+                (err |> printViewProtoError)

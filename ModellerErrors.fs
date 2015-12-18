@@ -9,9 +9,9 @@ open Starling.Errors.Var
 /// Represents an error when converting an expression.
 type ExprError = 
     /// Some unclassified error occurred with the AST.
-    | EEBadAST of ast : AST.Expression * reason : string
+    | EEBadAST of reason : string
     /// A variable usage in the expression produced a `VarMapError`.
-    | EEVar of ast : AST.Expression * err : VarMapError
+    | EEVar of var : Var.LValue * err : VarMapError
     /// A non-Boolean variable was found in a Boolean position.
     | EEVarNotBoolean of var : Var.LValue
     /// A non-arithmetic variable was found in an arithmetic position.
@@ -25,7 +25,7 @@ type ViewProtoError =
 /// Represents an error when converting a view.
 type ViewError = 
     /// An expression in the view generated an `ExprError`.
-    | VEBadExpr of AST.View * ExprError
+    | VEBadExpr of expr : AST.Expression * err : ExprError
 
 /// Represents an error when converting a view definition.
 type ViewDefError = 
@@ -34,27 +34,27 @@ type ViewDefError =
     /// A viewdef referred to a view with the wrong number of params.
     | VDEBadParamCount of name : string * expected : int * actual : int
     /// A viewdef used variables in incorrect ways, eg by duplicating.
-    | VDEBadVars of VarMapError
+    | VDEBadVars of err : VarMapError
     /// A viewdef conflicted with the global variables.
-    | VDEGlobalVarConflict of VarMapError
+    | VDEGlobalVarConflict of err : VarMapError
 
 /// Represents an error when converting a constraint.
 type ConstraintError = 
     /// The view definition in the constraint generated a `ViewDefError`.
-    | CEView of ViewDefError
+    | CEView of vdef : AST.ViewDef * err : ViewDefError
     /// The expression in the constraint generated an `ExprError`.
-    | CEExpr of ExprError
+    | CEExpr of expr : AST.Expression * err : ExprError
 
 /// Type of errors found when generating axioms.
 type AxiomError = 
     /// The axiom uses a variable in global position incorrectly.
-    | AEBadGlobal of VarMapError
+    | AEBadGlobal of var : Var.LValue * err : VarMapError
     /// The axiom uses a variable in local position incorrectly.
-    | AEBadLocal of VarMapError
+    | AEBadLocal of var : Var.LValue * err : VarMapError
     /// The axiom uses an expression incorrectly.
-    | AEBadExpr of ExprError
+    | AEBadExpr of expr : AST.Expression * err : ExprError
     /// The axiom uses a view incorrectly.
-    | AEBadView of ViewError
+    | AEBadView of view : AST.View * err : ViewError
     /// The axiom has a type mismatch in lvalue `bad`.
     | AETypeMismatch of expected : Var.Type * bad : Var.LValue * got : Var.Type
     /// The axiom uses a semantically invalid atomic action.
@@ -65,10 +65,10 @@ type AxiomError =
 /// Represents an error when converting a model.
 type ModelError = 
     /// A view prototype in the program generated a `ViewProtoError`.
-    | MEVProto of ViewProtoError
+    | MEVProto of proto : AST.ViewProto * err : ViewProtoError
     /// A constraint in the program generated a `ConstraintError`.
-    | MEConstraint of ConstraintError
+    | MEConstraint of constr : AST.ViewDef * err : ConstraintError
     /// An axiom in the program generated an `AxiomError`.
-    | MEAxiom of AxiomError
+    | MEAxiom of methname : string * err : AxiomError
     /// A variable in the program generated a `VarMapError`.
-    | MEVar of VarMapError
+    | MEVar of err : VarMapError
