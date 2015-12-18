@@ -22,6 +22,6 @@ method multiIncrement() {
 
 view count(int t);
 
-// We can also constrain count(t) => counter >= t, but need not.
-constraint count(ta) * count(tb) => counter == ta + tb;
-constraint count(ta) * count(tb) * count(tc) => false;
+// We can also constrain count(t) -> counter >= t, but need not.
+constraint count(ta) * count(tb) -> counter == ta + tb;
+constraint count(ta) * count(tb) * count(tc) -> false;

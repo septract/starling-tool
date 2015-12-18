@@ -55,7 +55,7 @@ let printViewLine vl = "{| " + printView vl + " |}"
 
 /// Pretty-prints constraints.
 let printConstraint {CView = v; CExpression = e} =
-    "constraint " + printViewDef v + " => " + printExpression e + ";"
+    "constraint " + printViewDef v + " - " + printExpression e + ";"
 
 /// Pretty-prints fetch modes.
 let printFetchMode =

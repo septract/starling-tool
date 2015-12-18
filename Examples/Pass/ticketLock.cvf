@@ -35,13 +35,13 @@ view holdTick(int t);
 view holdLock();
 
 // Invariant
-constraint emp                         => ticket >= serving;
+constraint emp                         -> ticket >= serving;
 
 // Predicate definitions
-constraint holdTick(t)                 => ticket > t;
-constraint holdLock()                  => ticket != serving;
+constraint holdTick(t)                 -> ticket > t;
+constraint holdLock()                  -> ticket != serving;
 
 // Interactions
-constraint holdLock()   * holdTick(t)  => serving != t;
-constraint holdTick(ta) * holdTick(tb) => ta != tb;
-constraint holdLock()   * holdLock()   => false;
+constraint holdLock()   * holdTick(t)  -> serving != t;
+constraint holdTick(ta) * holdTick(tb) -> ta != tb;
+constraint holdLock()   * holdLock()   -> false;

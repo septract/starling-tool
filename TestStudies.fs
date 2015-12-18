@@ -15,12 +15,12 @@ let ticketLock = """
 view holdTick(int t);
 view holdLock();
 
-constraint emp                         => ticket >= serving;
-constraint holdTick(t)                 => ticket > t;
-constraint holdLock()                  => ticket > serving;
-constraint holdLock()   * holdTick(t)  => serving != t;
-constraint holdTick(ta) * holdTick(tb) => ta != tb;
-constraint holdLock()   * holdLock()   => false;
+constraint emp                         -> ticket >= serving;
+constraint holdTick(t)                 -> ticket > t;
+constraint holdLock()                  -> ticket > serving;
+constraint holdLock()   * holdTick(t)  -> serving != t;
+constraint holdTick(ta) * holdTick(tb) -> ta != tb;
+constraint holdLock()   * holdLock()   -> false;
 
 global int ticket;
 global int serving;

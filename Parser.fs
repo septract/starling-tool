@@ -440,8 +440,8 @@ let parseConstraint =
     // ^- constraint ..
         pipe2ws parseViewDef
                 // ^- <view> ...
-                (pstring "=>" >>. ws >>. parseExpression .>> ws .>> pstring ";")
-                // ^-        ... => <expression> ;
+                (pstring "->" >>. ws >>. parseExpression .>> ws .>> pstring ";")
+                // ^-        ... -> <expression> ;
                 (fun v ex -> {CView = v ; CExpression = ex} )
 
 /// Parses a single method, excluding leading or trailing whitespace.
