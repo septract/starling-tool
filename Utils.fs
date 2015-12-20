@@ -33,14 +33,14 @@ let cons a b = a :: b
 
 /// Maps a function f through a set, and concatenates the resulting
 /// list of lists into one set.
-let unionMap f =
+let unionMap f = 
     Set.toSeq
     >> Seq.map f
     >> Set.unionMany
 
 /// Maps a function f through a list, and concatenates the resulting
 /// list of lists into one list.
-let concatMap f xs =
+let concatMap f xs = 
     (* Adapted from the GHC base implementation,
      * see http://hackage.haskell.org/package/base-4.8.1.0/docs/src/Data.Foldable.html
      * for source and copyright information.
@@ -49,24 +49,20 @@ let concatMap f xs =
 
 /// Tries to find duplicate entries in a list.
 /// Returns a list of the duplicates found.
-let findDuplicates lst =
+let findDuplicates lst = 
     lst
     |> List.groupBy id
-    |> List.choose (function
-                    | ( _, [] ) | ( _, [_] ) -> None
-                    | ( x, _ ) -> Some x)
+    |> List.choose (function 
+           | (_, []) | (_, [ _ ]) -> None
+           | (x, _) -> Some x)
 
 (*
  * Chessie-related functions.
  *)
 
 /// Maps f over e's messages.
-let mapMessages f =
-    either (fun (v, msgs) -> Ok (v, List.map f msgs))
-           (fun msgs -> List.map f msgs |> Bad)
+let mapMessages f = either (fun (v, msgs) -> Ok(v, List.map f msgs)) (fun msgs -> List.map f msgs |> Bad)
 
 /// Like fold, but constantly binds the given function over a Chessie result.
 /// The initial state is wrapped in 'ok'.
-let seqBind f initialS =
-    Seq.fold (fun s x -> bind (f x) s)
-             (ok initialS)
+let seqBind f initialS = Seq.fold (fun s x -> bind (f x) s) (ok initialS)

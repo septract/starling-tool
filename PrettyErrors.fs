@@ -8,126 +8,79 @@ open Starling.Pretty.Misc
 open Starling.Pretty.Lang.AST
 
 /// Formats an error that is wrapping another error.
-let wrapped wholeDesc whole err =
-    headed (sprintf "In %s '%s'" wholeDesc whole)
-           [err]
+let wrapped wholeDesc whole err = headed (sprintf "In %s '%s'" wholeDesc whole) [ err ]
 
 /// Pretty-prints variable conversion errors.
-let printVarMapError =
-    function
-    | VMEDuplicate vn -> fmt "variable '{0}' is defined multiple times" [vn]
-    | VMENotFound vn -> fmt "variable '{0}' not in environment" [vn]
+let printVarMapError = 
+    function 
+    | VMEDuplicate vn -> fmt "variable '{0}' is defined multiple times" [ vn ]
+    | VMENotFound vn -> fmt "variable '{0}' not in environment" [ vn ]
 
 /// Pretty-prints expression conversion errors.
-let printExprError =
-    function
-    | EEBadAST (reason) ->
-        colonSep ["cannot convert view to Z3" |> String
-                  reason |> String]
-    | EEVar (var, err) ->
-        wrapped "variable"
-                (var |> printLValue)
-                (err |> printVarMapError)
-    | EEVarNotBoolean lv ->
-        fmt "lvalue '{0}' is not a suitable type for use in a boolean expression"
-            [printLValue lv |> String]
-    | EEVarNotArith lv ->
-        fmt "lvalue '{0}' is not a suitable type for use in an arithmetic expression"
-            [printLValue lv |> String]
+let printExprError = 
+    function 
+    | EEBadAST(reason) -> 
+        colonSep [ "cannot convert view to Z3" |> String
+                   reason |> String ]
+    | EEVar(var, err) -> wrapped "variable" (var |> printLValue) (err |> printVarMapError)
+    | EEVarNotBoolean lv -> 
+        fmt "lvalue '{0}' is not a suitable type for use in a boolean expression" [ printLValue lv |> String ]
+    | EEVarNotArith lv -> 
+        fmt "lvalue '{0}' is not a suitable type for use in an arithmetic expression" [ printLValue lv |> String ]
 
 /// Pretty-prints view conversion errors.
-let printViewError =
-    function
-    | VEBadExpr (expr, err) ->
-        wrapped "expression"
-                (expr |> printExpression)
-                (err |> printExprError)
+let printViewError = function 
+    | VEBadExpr(expr, err) -> wrapped "expression" (expr |> printExpression) (err |> printExprError)
 
 /// Pretty-prints viewdef conversion errors.
-let printViewDefError =
-    function
-    | VDENoSuchView name ->
-        fmt "no view prototype for '{0}'" [name]
-    | VDEBadParamCount (name, expected, actual) ->
-        fmt "view '{0}' expects '{1}' params, but was given '{2}'"
-            [name
-             expected
-             actual]
-    | VDEBadVars err ->
-        colonSep ["invalid variable usage" |> String
-                  err |> printVarMapError]
-    | VDEGlobalVarConflict err ->
-        colonSep ["parameters conflict with global variables" |> String
-                  err |> printVarMapError]
+let printViewDefError = 
+    function 
+    | VDENoSuchView name -> fmt "no view prototype for '{0}'" [ name ]
+    | VDEBadParamCount(name, expected, actual) -> 
+        fmt "view '{0}' expects '{1}' params, but was given '{2}'" [ name; expected; actual ]
+    | VDEBadVars err -> 
+        colonSep [ "invalid variable usage" |> String
+                   err |> printVarMapError ]
+    | VDEGlobalVarConflict err -> 
+        colonSep [ "parameters conflict with global variables" |> String
+                   err |> printVarMapError ]
 
 /// Pretty-prints constraint conversion errors.
-let printConstraintError =
-    function
-    | CEView (vdef, err) ->
-        wrapped "view definition"
-                (vdef |> printViewDef)
-                (err |> printViewDefError)
-    | CEExpr (expr, err) ->
-        wrapped "expression"
-                (expr |> printExpression)
-                (err |> printExprError)
+let printConstraintError = 
+    function 
+    | CEView(vdef, err) -> wrapped "view definition" (vdef |> printViewDef) (err |> printViewDefError)
+    | CEExpr(expr, err) -> wrapped "expression" (expr |> printExpression) (err |> printExprError)
 
 /// Pretty-prints axiom errors.
-let printAxiomError =
-    function
-    | AEBadGlobal (var, err) ->
-        wrapped "global variable"
-                (var |> printLValue)
-                (err |> printVarMapError)
-    | AEBadLocal (var, err) ->
-        wrapped "local variable"
-                (var |> printLValue)
-                (err |> printVarMapError)
-    | AEBadExpr (expr, err) ->
-        wrapped "expression"
-                (expr |> printExpression)
-                (err |> printExprError)
-    | AEBadView (view, err) ->
-        wrapped "view"
-                (view |> printView)
-                (err |> printViewError)
-    | AETypeMismatch (expected, badvar, got) ->
-        fmt "lvalue '{0}' is of type {1}, but should be a {2}"
-            [printLValue badvar |> String
-             printType got |> String
-             printType expected |> String]
-    | AEUnsupportedAtomic (atom, reason) ->
-        colonSep [fmt "cannot use {0} in an axiom: "
-                      [printAtomicAction atom]
-                  reason |> String]
-    | AEUnsupportedCommand (cmd, reason) ->
-        colonSep [fmt "cannot use {0} in an axiom: "
-                      [printCommand 0 cmd]
-                  reason |> String]
+let printAxiomError = 
+    function 
+    | AEBadGlobal(var, err) -> wrapped "global variable" (var |> printLValue) (err |> printVarMapError)
+    | AEBadLocal(var, err) -> wrapped "local variable" (var |> printLValue) (err |> printVarMapError)
+    | AEBadExpr(expr, err) -> wrapped "expression" (expr |> printExpression) (err |> printExprError)
+    | AEBadView(view, err) -> wrapped "view" (view |> printView) (err |> printViewError)
+    | AETypeMismatch(expected, badvar, got) -> 
+        fmt "lvalue '{0}' is of type {1}, but should be a {2}" [ printLValue badvar |> String
+                                                                 printType got |> String
+                                                                 printType expected |> String ]
+    | AEUnsupportedAtomic(atom, reason) -> 
+        colonSep [ fmt "cannot use {0} in an axiom: " [ printAtomicAction atom ]
+                   reason |> String ]
+    | AEUnsupportedCommand(cmd, reason) -> 
+        colonSep [ fmt "cannot use {0} in an axiom: " [ printCommand 0 cmd ]
+                   reason |> String ]
 
 /// Pretty-prints view prototype conversion errors
-let printViewProtoError =
-    function
-    | VPEDuplicateParam (vp, param) ->
-        fmt "view proto '{0} has duplicate param {1}"
-            [printViewProto vp
-             param]
+let printViewProtoError = function 
+    | VPEDuplicateParam(vp, param) -> 
+        fmt "view proto '{0} has duplicate param {1}" [ printViewProto vp
+                                                        param ]
 
 /// Pretty-prints model conversion errors.
-let printModelError =
-    function
-    | MEConstraint (constr, err) ->
-        wrapped "constraint"
-                (constr |> printViewDef)
-                (err |> printConstraintError)
-    | MEVar err ->
-        colonSep ["invalid variable declarations" |> String
-                  err |> printVarMapError]
-    | MEAxiom (methname, err) ->
-        wrapped "method"
-                methname
-                (err |> printAxiomError)
-    | MEVProto (vproto, err) ->
-        wrapped "view prototype"
-                (vproto |> printViewProto)
-                (err |> printViewProtoError)
+let printModelError = 
+    function 
+    | MEConstraint(constr, err) -> wrapped "constraint" (constr |> printViewDef) (err |> printConstraintError)
+    | MEVar err -> 
+        colonSep [ "invalid variable declarations" |> String
+                   err |> printVarMapError ]
+    | MEAxiom(methname, err) -> wrapped "method" methname (err |> printAxiomError)
+    | MEVProto(vproto, err) -> wrapped "view prototype" (vproto |> printViewProto) (err |> printViewProtoError)

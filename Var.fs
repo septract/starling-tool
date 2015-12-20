@@ -13,20 +13,19 @@ open Starling.Errors.Var
 
 /// An lvalue.
 /// This is given a separate type in case we add to it later.
-type LValue =
+type LValue = 
     | LVIdent of string
-    //| LVPtr of LValue
 
 /// Flattens a LV to a string.
-let rec flattenLV =
+let rec flattenLV = 
     // TODO(CaptainHayashi): this is completely wrong, but we don't
     // have a semantics for it yet.
-    function | LVIdent s -> s
-    //| LVPtr vv -> "*" + flattenLV vv
+    function 
+    | LVIdent s -> s
 
 /// Creates a reference to a Boolean lvalue.
 /// This does NOT check to see if the lvalue exists!
-let mkBoolLV (ctx: Z3.Context) lv =
+let mkBoolLV (ctx : Z3.Context) lv = 
     (* TODO(CaptainHayashi): when we support pointers, this will
      *                       need totally changing.
      *)
@@ -36,7 +35,7 @@ let mkBoolLV (ctx: Z3.Context) lv =
 
 /// Creates a reference to an integer lvalue.
 /// This does NOT check to see if the lvalue exists!
-let mkIntLV (ctx: Z3.Context) lv =
+let mkIntLV (ctx : Z3.Context) lv = 
     (* TODO(CaptainHayashi): when we support pointers, this will
      *                       need totally changing.
      *)
@@ -44,16 +43,14 @@ let mkIntLV (ctx: Z3.Context) lv =
     |> flattenLV
     |> ctx.MkIntConst
 
-
 (*
  * Types
  *)
 
 /// A variable type.
-type Type =
+type Type = 
     | Int
     | Bool
-
 
 (*
  * Name rewrites
@@ -68,109 +65,98 @@ let rewritePost name = name + "!after"
 /// Rewrites the name of a constant to its frame form.
 let rewriteFrame name = name + "!r"
 
-
 (*
  * Variable records
  *)
 
 /// A typed inner record of a variable.
-type TVar<'E when 'E :> Z3.Expr> =
-    { VarExpr: 'E
-      VarPreExpr: 'E
-      VarPostExpr: 'E
-      VarFrameExpr: 'E }
+type TVar<'E when 'E :> Z3.Expr> = 
+    { VarExpr : 'E
+      VarPreExpr : 'E
+      VarPostExpr : 'E
+      VarFrameExpr : 'E }
 
 /// A record of a variable in the program model.
-type Var =
+type Var = 
     | IntVar of TVar<Z3.IntExpr>
     | BoolVar of TVar<Z3.BoolExpr>
 
 /// Retrieves the type of a Var.
-let varType var =
+let varType var = 
     match var with
     | IntVar _ -> Int
     | BoolVar _ -> Bool
 
 /// Erases the type information in a Var.
-let eraseVar tv =
+let eraseVar tv = 
     match tv with
-    | IntVar iv -> { VarExpr = iv.VarExpr :> Z3.Expr
-                     VarPreExpr = iv.VarPreExpr :> Z3.Expr
-                     VarPostExpr = iv.VarPostExpr :> Z3.Expr
-                     VarFrameExpr = iv.VarFrameExpr :> Z3.Expr }
-    | BoolVar bv -> { VarExpr = bv.VarExpr :> Z3.Expr
-                      VarPreExpr = bv.VarPreExpr :> Z3.Expr
-                      VarPostExpr = bv.VarPostExpr :> Z3.Expr
-                      VarFrameExpr = bv.VarFrameExpr :> Z3.Expr }
-
+    | IntVar iv -> 
+        { VarExpr = iv.VarExpr :> Z3.Expr
+          VarPreExpr = iv.VarPreExpr :> Z3.Expr
+          VarPostExpr = iv.VarPostExpr :> Z3.Expr
+          VarFrameExpr = iv.VarFrameExpr :> Z3.Expr }
+    | BoolVar bv -> 
+        { VarExpr = bv.VarExpr :> Z3.Expr
+          VarPreExpr = bv.VarPreExpr :> Z3.Expr
+          VarPostExpr = bv.VarPostExpr :> Z3.Expr
+          VarFrameExpr = bv.VarFrameExpr :> Z3.Expr }
 
 /// Converts a variable name and type to a Var.
-let makeVar (ctx : Z3.Context) ty (name : string) =
+let makeVar (ctx : Z3.Context) ty (name : string) = 
     match ty with
-    | Int ->
+    | Int -> 
         IntVar { VarExpr = ctx.MkIntConst name
-                 VarPreExpr = ctx.MkIntConst (rewritePre name)
-                 VarPostExpr = ctx.MkIntConst (rewritePost name)
-                 VarFrameExpr = ctx.MkIntConst (rewriteFrame name) }
-    | Bool ->
+                 VarPreExpr = ctx.MkIntConst(rewritePre name)
+                 VarPostExpr = ctx.MkIntConst(rewritePost name)
+                 VarFrameExpr = ctx.MkIntConst(rewriteFrame name) }
+    | Bool -> 
         BoolVar { VarExpr = ctx.MkBoolConst name
-                  VarPreExpr = ctx.MkBoolConst (rewritePre name)
-                  VarPostExpr = ctx.MkBoolConst (rewritePost name)
-                  VarFrameExpr = ctx.MkBoolConst (rewriteFrame name) }
+                  VarPreExpr = ctx.MkBoolConst(rewritePre name)
+                  VarPostExpr = ctx.MkBoolConst(rewritePost name)
+                  VarFrameExpr = ctx.MkBoolConst(rewriteFrame name) }
 
 /// A variable map.
 type VarMap = Map<string, Var>
 
 /// Makes a variable map from a list of type-name pairs.
-let makeVarMap (ctx : Z3.Context) lst =
+let makeVarMap (ctx : Z3.Context) lst = 
     lst
-    |> List.map snd  // Extract all names from the list.
+    |> List.map snd // Extract all names from the list.
     |> findDuplicates
-    |> function | [] -> List.foldBack
-                           (fun (ty, name) (map: VarMap) ->
-                               map.Add (name, makeVar ctx ty name))
-                           lst
-                           Map.empty
-                        |> ok
-                | ds -> List.map VMEDuplicate ds |> Bad
+    |> function 
+    | [] -> List.foldBack (fun (ty, name) (map : VarMap) -> map.Add(name, makeVar ctx ty name)) lst Map.empty |> ok
+    | ds -> List.map VMEDuplicate ds |> Bad
 
 /// Tries to combine two variable maps.
 /// Fails if the environments are not disjoint.
 /// Failures are in terms of VarMapError.
-let combineMaps (a: VarMap) (b: VarMap) =
-    Map.fold
-        (fun (sR: Result<VarMap, VarMapError>) name var ->
-            trial {
-                let! s = sR
-
-                if s.ContainsKey name
-                then return! (fail (VMEDuplicate name))
-                else return (s.Add (name, var))
-            } )
-        (ok a)
-        b
+let combineMaps (a : VarMap) (b : VarMap) = 
+    Map.fold (fun (sR : Result<VarMap, VarMapError>) name var -> 
+        trial { 
+            let! s = sR
+            if s.ContainsKey name then return! (fail (VMEDuplicate name))
+            else return (s.Add(name, var))
+        }) (ok a) b
 
 /// Tries to look up a variable record in a variable map.
 /// Failures are in terms of Some/None.
-let tryLookupVar env =
-    function
+let tryLookupVar env = function 
     | LVIdent s -> Map.tryFind s env
-    //| _ -> LEBadLValue lvalue |> fail
 
+//| _ -> LEBadLValue lvalue |> fail
 /// Looks up a variable record in a variable map.
 /// Failures are in terms of VarMapError.
-let lookupVar env s =
+let lookupVar env s = 
     s
     |> tryLookupVar env
-    |> failIfNone (VMENotFound (flattenLV s))
-
+    |> failIfNone (VMENotFound(flattenLV s))
 
 (*
  * Fetch modes
  *)
 
 /// A mode for the Fetch atomic action.
-type FetchMode =
-    | Direct     // <a = b>
-    | Increment  // <a = b++>
-    | Decrement  // <a = b-->
+type FetchMode = 
+    | Direct // <a = b>
+    | Increment // <a = b++>
+    | Decrement // <a = b-->
