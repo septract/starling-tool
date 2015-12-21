@@ -217,46 +217,72 @@ let mkMul2 l r = AMul [ l; r ]
  * Substitutions
  *)
 
-/// Marks all variables in the given environment with the given marking
-/// functions / pre-states for the given Boolean expression.
-let rec boolMarkVarsInEnv marker vset =
+/// Type for substitution function tables.
+[<NoComparison>]
+[<NoEquality>]
+type SubFun =
+    {ASub: Const -> ArithExpr
+     BSub: Const -> BoolExpr}
+
+/// Substitutes all variables with the given substitution function set
+/// for the given Boolean expression.
+let rec boolSubVarsInEnv vfun =
     function 
-    | BConst (Unmarked s) when Set.contains s vset -> BConst (marker s)
-    | BConst x -> BConst x
+    | BConst x -> vfun.BSub x
     | BTrue -> BTrue
     | BFalse -> BFalse
-    | BAnd xs -> BAnd (List.map (boolMarkVarsInEnv marker vset) xs)
-    | BOr xs -> BAnd (List.map (boolMarkVarsInEnv marker vset) xs)
-    | BImplies (x, y) -> BImplies (boolMarkVarsInEnv marker vset x,
-                                   boolMarkVarsInEnv marker vset y)
-    | BEq (x, y) -> BEq (markVarsInEnv marker vset x,
-                         markVarsInEnv marker vset y)
-    | BGt (x, y) -> BGt (arithMarkVarsInEnv marker vset x,
-                         arithMarkVarsInEnv marker vset y)
-    | BGe (x, y) -> BGe (arithMarkVarsInEnv marker vset x,
-                         arithMarkVarsInEnv marker vset y)
-    | BLe (x, y) -> BLe (arithMarkVarsInEnv marker vset x,
-                         arithMarkVarsInEnv marker vset y)
-    | BLt (x, y) -> BLt (arithMarkVarsInEnv marker vset x,
-                         arithMarkVarsInEnv marker vset y)
-    | BNot x -> BNot (boolMarkVarsInEnv marker vset x)
+    | BAnd xs -> BAnd (List.map (boolSubVarsInEnv vfun) xs)
+    | BOr xs -> BAnd (List.map (boolSubVarsInEnv vfun) xs)
+    | BImplies (x, y) -> BImplies (boolSubVarsInEnv vfun x,
+                                   boolSubVarsInEnv vfun y)
+    | BEq (x, y) -> BEq (subVarsInEnv vfun x,
+                         subVarsInEnv vfun y)
+    | BGt (x, y) -> BGt (arithSubVarsInEnv vfun x,
+                         arithSubVarsInEnv vfun y)
+    | BGe (x, y) -> BGe (arithSubVarsInEnv vfun x,
+                         arithSubVarsInEnv vfun y)
+    | BLe (x, y) -> BLe (arithSubVarsInEnv vfun x,
+                         arithSubVarsInEnv vfun y)
+    | BLt (x, y) -> BLt (arithSubVarsInEnv vfun x,
+                         arithSubVarsInEnv vfun y)
+    | BNot x -> BNot (boolSubVarsInEnv vfun x)
 
-/// Marks all variables in the given vsetironment with the given marking
-/// functions / pre-states for the given arithmetic expression.
-and arithMarkVarsInEnv marker vset =
+/// Substitutes all variables with the given substitution function
+/// for the given arithmetic expression.
+and arithSubVarsInEnv vfun =
     function 
-    | AConst (Unmarked s) when Set.contains s vset -> AConst (marker s)
-    | AConst x -> AConst x
+    | AConst x -> vfun.ASub x
     | AInt i -> AInt i
-    | AAdd xs -> AAdd (List.map (arithMarkVarsInEnv marker vset) xs)
-    | ASub xs -> AAdd (List.map (arithMarkVarsInEnv marker vset) xs)
-    | AMul xs -> AAdd (List.map (arithMarkVarsInEnv marker vset) xs)
-    | ADiv (x, y) -> ADiv (arithMarkVarsInEnv marker vset x,
-                           arithMarkVarsInEnv marker vset y)
+    | AAdd xs -> AAdd (List.map (arithSubVarsInEnv vfun) xs)
+    | ASub xs -> AAdd (List.map (arithSubVarsInEnv vfun) xs)
+    | AMul xs -> AAdd (List.map (arithSubVarsInEnv vfun) xs)
+    | ADiv (x, y) -> ADiv (arithSubVarsInEnv vfun x,
+                           arithSubVarsInEnv vfun y)
+
+/// Substitutes all variables with the given substitution function for the
+/// given expression.
+and subVarsInEnv vfun =
+    function
+    | AExpr a -> arithSubVarsInEnv vfun a |> AExpr
+    | BExpr b -> boolSubVarsInEnv vfun b |> BExpr
+
+(*
+ * Variable marking (special case of variable substitution)
+ *)
+
+/// Lifts a marking function to a substitution function table.
+let liftMarker marker vset =
+    let gfun = function | Unmarked s when Set.contains s vset -> marker s
+                        | x -> x
+    {ASub = (gfun >> AConst)
+     BSub = (gfun >> BConst)}
+
+/// Marks all variables in the given environment with the given marking
+/// functions / pre-states for the given Boolean expression.
+let boolMarkVarsInEnv marker vset =
+    boolSubVarsInEnv (liftMarker marker vset)
 
 /// Marks all variables in the given set with the given marking
 /// functions / pre-states for the given arbitrary expression.
-and markVarsInEnv marker vset =
-    function
-    | AExpr a -> arithMarkVarsInEnv marker vset a |> AExpr
-    | BExpr b -> boolMarkVarsInEnv marker vset b |> BExpr
+let markVarsInEnv marker vset =
+    subVarsInEnv (liftMarker marker vset)
