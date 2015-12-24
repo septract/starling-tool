@@ -16,13 +16,21 @@ open Starling.Pretty.Lang.AST
 /// yields the given AST.
 let assertZ3ArithExpr ctx expr z3 = 
     let model = ticketLockModel ctx
-    Assert.Equal(printExpression expr + " -Z3-> " + z3.ToString(), ok z3, arithExprToZ3 model model.Locals expr)
+    Assert.Equal(Pretty.Types.hsep
+                     [printExpression expr
+                      "-Z3->" |> Pretty.Types.String
+                      z3.ToString() |> Pretty.Types.String]
+                 |> Pretty.Types.print, ok z3, arithExprToZ3 model model.Locals expr)
 
 /// Assertion that converting the Boolean expression `expr` to Z3
 /// yields the given AST.
 let assertZ3BoolExpr ctx expr z3 = 
     let model = ticketLockModel ctx
-    Assert.Equal(printExpression expr + " -Z3-> " + z3.ToString(), ok z3, boolExprToZ3 model model.Locals expr)
+    Assert.Equal(Pretty.Types.hsep
+                     [printExpression expr
+                      "-Z3->" |> Pretty.Types.String
+                      z3.ToString() |> Pretty.Types.String]
+                 |> Pretty.Types.print, ok z3, boolExprToZ3 model model.Locals expr)
 
 let testExprToZ3 ctx = 
     testList "Test translation of expressions" 

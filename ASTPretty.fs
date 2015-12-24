@@ -6,7 +6,7 @@ open Starling.Pretty.Types
 
 /// Pretty-prints lvalues.
 let rec printLValue = function 
-    | LVIdent i -> i
+    | LVIdent i -> String i
 
 /// Pretty-prints Boolean operations.
 let printBop = 
@@ -23,91 +23,154 @@ let printBop =
     | Neq -> "!="
     | And -> "&&"
     | Or -> "||"
+    >> String
 
 /// Pretty-prints expressions.
 /// This is not guaranteed to produce an optimal expression.
 let rec printExpression = 
     function 
-    | TrueExp -> "true"
-    | FalseExp -> "false"
-    | IntExp i -> i.ToString()
+    | TrueExp -> String "true"
+    | FalseExp -> String "false"
+    | IntExp i -> i.ToString() |> String
     | LVExp x -> printLValue x
-    | BopExp(op, a, b) -> "(" + printExpression a + " " + printBop op + " " + printExpression b + ")"
-
-/// Pretty-prints argument lists.
-let printArgList argp ss = "(" + String.concat ", " (List.map argp ss) + ")"
+    | BopExp(op, a, b) -> 
+        hsep [ printExpression a
+               printBop op
+               printExpression b ]
+        |> parened
 
 /// Pretty-prints views.
 let rec printView = 
     function 
-    | Func(vv, xs) -> vv + printArgList printExpression xs
-    | Unit -> "emp"
-    | Join(l, r) -> printView l + " * " + printView r
-    | IfView(e, l, r) -> "if " + printExpression e + " then " + printView l + " else " + printView r
+    | Func(vv, xs) -> func vv (List.map printExpression xs)
+    | Unit -> String "emp"
+    | Join(l, r) -> binop "*" (printView l) (printView r)
+    | IfView(e, l, r) -> 
+        hsep [ String "if"
+               printExpression e
+               String "then"
+               printView l
+               String "else"
+               printView r ]
 
 /// Pretty-prints view definitions.
 let rec printViewDef = 
     function 
-    | DFunc(vv, xs) -> vv + printArgList id xs
-    | DUnit -> "emp"
-    | DJoin(l, r) -> printViewDef l + " * " + printViewDef r
+    | DFunc(vv, xs) -> func vv (List.map String xs)
+    | DUnit -> String "emp"
+    | DJoin(l, r) -> binop "*" (printViewDef l) (printViewDef r)
 
 /// Pretty-prints view lines.
-let printViewLine vl = "{| " + printView vl + " |}"
+let printViewLine vl = 
+    vl
+    |> printView
+    |> ssurround "{|" "|}"
 
 /// Pretty-prints constraints.
-let printConstraint { CView = v; CExpression = e } = "constraint " + printViewDef v + " - " + printExpression e + ";"
+let printConstraint { CView = v; CExpression = e } = 
+    hsep [ String "constraint"
+           printViewDef v
+           String "->"
+           printExpression e ]
+    |> withSemi
 
 /// Pretty-prints fetch modes.
 let printFetchMode = 
     function 
-    | Direct -> ""
-    | Increment -> "++"
-    | Decrement -> "--"
+    | Direct -> Nop
+    | Increment -> String "++"
+    | Decrement -> String "--"
 
 /// Pretty-prints atomic actions.
 let printAtomicAction = 
     function 
-    | CompareAndSwap(l, f, t) -> "CAS(" + printLValue l + ", " + printLValue f + ", " + printExpression t
-    | Fetch(l, r, m) -> printLValue l + " = " + printExpression r + printFetchMode m
-    | Postfix(l, m) -> printLValue l + printFetchMode m
-    | Id -> "id"
-    | Assume e -> "assume(" + printExpression e + ")"
+    | CompareAndSwap(l, f, t) -> 
+        func "CAS" [ printLValue l
+                     printLValue f
+                     printExpression t ]
+    | Fetch(l, r, m) -> 
+        equality (printLValue l) (hjoin [ printExpression r
+                                          printFetchMode m ])
+    | Postfix(l, m) -> 
+        hjoin [ printLValue l
+                printFetchMode m ]
+    | Id -> String "id"
+    | Assume e -> func "assume" [ printExpression e ]
 
 /// Pretty-prints commands with the given indent level (in spaces).
-let rec printCommand level = 
+let rec printCommand = 
     function 
-    | Atomic a -> "<" + printAtomicAction a + ">;"
-    | Skip -> ";"
-    | If(c, t, f) -> "if (" + printExpression c + ") " + printBlock level t + " " + printBlock level f
-    | While(c, b) -> "while (" + printExpression c + ") " + printBlock level b
-    | DoWhile(b, c) -> "do " + printBlock level b + " while (" + printExpression c + ");"
-    | Blocks bs -> List.map (printBlock level) bs |> String.concat " || "
-    | Assign(l, r) -> printLValue l + " = " + printExpression r + ";"
+    | Atomic a -> 
+        a
+        |> printAtomicAction
+        |> angled
+    | Skip -> Nop |> withSemi
+    | If(c, t, f) -> 
+        hsep [ "if" |> String
+               c
+               |> printExpression
+               |> parened
+               t |> printBlock
+               f |> printBlock ]
+    | While(c, b) -> 
+        hsep [ "while" |> String
+               c
+               |> printExpression
+               |> parened
+               b |> printBlock ]
+    | DoWhile(b, c) -> 
+        hsep [ "do" |> String
+               b |> printBlock
+               "while" |> String
+               c
+               |> printExpression
+               |> parened ]
+        |> withSemi
+    | Blocks bs -> 
+        bs
+        |> List.map printBlock
+        |> hsepStr "||"
+    | Assign(l, r) -> binop "=" (printLValue l) (printExpression r) |> withSemi
 
 /// Pretty-prints viewed commands with the given indent level (in spaces).
-and printViewedCommand level { Command = c; Post = p } = printCommand level c + lnIndent level + printViewLine p
+and printViewedCommand { Command = c; Post = p } = 
+    vsep [ printCommand c
+           printViewLine p ]
 
 /// Pretty-prints blocks with the given indent level (in spaces).
-and printBlock level { Pre = p; Contents = c } = 
-    "{" + lnIndent (level + 1) + printViewLine p + lnIndent (level + 1) 
-    + (List.map (printViewedCommand (level + 1)) c |> String.concat (lnIndent (level + 1))) + lnIndent level + "}"
+and printBlock { Pre = p; Contents = c } = 
+    vsep ((p
+           |> printViewLine
+           |> Indent)
+          :: List.map (printViewedCommand >> Indent) c)
+    |> braced
 
 /// Pretty-prints methods.
-let printMethod { Name = n; Params = ps; Body = b } = "method " + n + " " + printArgList id ps + " " + printBlock 0 b
+let printMethod { Name = n; Params = ps; Body = b } = 
+    hsep [ "method" |> String
+           func n (List.map String ps)
+           b |> printBlock ]
 
 /// Pretty-prints a variable type.
 let printType = 
     function 
-    | Int -> "int"
-    | Bool -> "bool"
+    | Int -> "int" |> String
+    | Bool -> "bool" |> String
 
 /// Pretty-prints a view prototype.
-let printViewProto { VPName = n; VPPars = ps } = "view " + n + printArgList (function 
-                                                                   | (t, v) -> printType t + " " + v) ps + ";"
+let printViewProto { VPName = n; VPPars = ps } = 
+    hsep [ "view" |> String
+           func n (List.map (fun (t, v) -> 
+                       hsep [ t |> printType
+                              v |> String ]) ps) ]
+    |> withSemi
 
 /// Pretty-prints a script variable of the given class.
-let printScriptVar cls t v = cls + " " + printType t + " " + v + ";"
+let printScriptVar cls t v = 
+    hsep [ String cls
+           printType t
+           String v ]
+    |> withSemi
 
 /// Pretty-prints script lines.
 let printScriptLine = 
@@ -119,4 +182,4 @@ let printScriptLine =
     | SConstraint c -> printConstraint c
 
 /// Pretty-prints scripts.
-let printScript = List.map printScriptLine >> String.concat "\n\n"
+let printScript = List.map printScriptLine >> fun ls -> VSep(ls, vsep [ Nop; Nop ])

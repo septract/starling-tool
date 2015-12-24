@@ -7,6 +7,7 @@ open Starling.Var
 open Starling.Lang.AST
 open Starling.Lang.Parser
 open Starling.Pretty.Lang.AST
+open Starling.Pretty.Types
 
 /// Assertion that parsing `concrete` with parser `pp` gets the AST `ast`.
 let assertParse pp msg concrete ast = 
@@ -16,7 +17,7 @@ let assertParse pp msg concrete ast =
                  | Failure _ -> None)
 
 /// Assertion that parsing expression `expr` with parser `pp` gets the AST `ast`.
-let assertParseExpr expr ast = assertParse parseExpression (expr + " -> " + printExpression ast) expr ast
+let assertParseExpr expr ast = assertParse parseExpression (expr + " -> " + (ast |> printExpression |> print)) expr ast
 
 (*
 let testLValueIndirection =

@@ -45,7 +45,7 @@ type Error =
 /// Pretty-prints a response.
 let printResponse = 
     function 
-    | Response.Parse s -> Pretty.Lang.AST.printScript s |> Pretty.Types.String
+    | Response.Parse s -> Pretty.Lang.AST.printScript s
     | Response.Collate c -> Pretty.Misc.printCollatedScript c
     | Response.Model m -> Pretty.Misc.printPartModel m
 

@@ -8,7 +8,7 @@ open Starling.Pretty.Misc
 open Starling.Pretty.Lang.AST
 
 /// Formats an error that is wrapping another error.
-let wrapped wholeDesc whole err = headed (sprintf "In %s '%s'" wholeDesc whole) [ err ]
+let wrapped wholeDesc whole err = headed (sprintf "In %s '%s'" wholeDesc (print whole)) [ err ]
 
 /// Pretty-prints variable conversion errors.
 let printVarMapError = 
@@ -24,9 +24,9 @@ let printExprError =
                    reason |> String ]
     | EEVar(var, err) -> wrapped "variable" (var |> printLValue) (err |> printVarMapError)
     | EEVarNotBoolean lv -> 
-        fmt "lvalue '{0}' is not a suitable type for use in a boolean expression" [ printLValue lv |> String ]
+        fmt "lvalue '{0}' is not a suitable type for use in a boolean expression" [ printLValue lv ]
     | EEVarNotArith lv -> 
-        fmt "lvalue '{0}' is not a suitable type for use in an arithmetic expression" [ printLValue lv |> String ]
+        fmt "lvalue '{0}' is not a suitable type for use in an arithmetic expression" [ printLValue lv ]
 
 /// Pretty-prints view conversion errors.
 let printViewError = function 
@@ -59,14 +59,14 @@ let printAxiomError =
     | AEBadExpr(expr, err) -> wrapped "expression" (expr |> printExpression) (err |> printExprError)
     | AEBadView(view, err) -> wrapped "view" (view |> printView) (err |> printViewError)
     | AETypeMismatch(expected, badvar, got) -> 
-        fmt "lvalue '{0}' is of type {1}, but should be a {2}" [ printLValue badvar |> String
-                                                                 printType got |> String
-                                                                 printType expected |> String ]
+        fmt "lvalue '{0}' is of type {1}, but should be a {2}" [ printLValue badvar
+                                                                 printType got
+                                                                 printType expected ]
     | AEUnsupportedAtomic(atom, reason) -> 
         colonSep [ fmt "cannot use {0} in an axiom: " [ printAtomicAction atom ]
                    reason |> String ]
     | AEUnsupportedCommand(cmd, reason) -> 
-        colonSep [ fmt "cannot use {0} in an axiom: " [ printCommand 0 cmd ]
+        colonSep [ fmt "cannot use {0} in an axiom: " [ printCommand cmd ]
                    reason |> String ]
 
 /// Pretty-prints view prototype conversion errors
@@ -82,5 +82,5 @@ let printModelError =
     | MEVar err -> 
         colonSep [ "invalid variable declarations" |> String
                    err |> printVarMapError ]
-    | MEAxiom(methname, err) -> wrapped "method" methname (err |> printAxiomError)
+    | MEAxiom(methname, err) -> wrapped "method" (methname |> String) (err |> printAxiomError)
     | MEVProto(vproto, err) -> wrapped "view prototype" (vproto |> printViewProto) (err |> printViewProtoError)

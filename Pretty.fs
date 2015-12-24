@@ -13,11 +13,11 @@ open Starling.Pretty.Types
 
 /// Pretty-prints a collated script.
 let printCollatedScript cs = 
-    VSep([ vsep <| List.map (printViewProto >> String) cs.CVProtos
-           vsep <| List.map (uncurry (printScriptVar "global") >> String) cs.CGlobals
-           vsep <| List.map (uncurry (printScriptVar "local") >> String) cs.CLocals
-           vsep <| List.map (printConstraint >> String) cs.CConstraints
-           VSep(List.map (printMethod >> String) cs.CMethods, VSkip) ], (vsep [ VSkip; Separator; Nop ]))
+    VSep([ vsep <| List.map printViewProto cs.CVProtos
+           vsep <| List.map (uncurry (printScriptVar "global")) cs.CGlobals
+           vsep <| List.map (uncurry (printScriptVar "local")) cs.CLocals
+           vsep <| List.map printConstraint cs.CConstraints
+           VSep(List.map printMethod cs.CMethods, VSkip) ], (vsep [ VSkip; Separator; Nop ]))
 
 /// Pretty-prints a singular generic view.
 let printGenView ppars v = 
@@ -35,9 +35,7 @@ let printModelView = printGenView printZ3Exp
 
 /// Pretty-prints a type-name parameter.
 let printParam (ty, name) = 
-    hsep [ ty
-           |> printType
-           |> String
+    hsep [ ty |> printType
            name |> String ]
 
 /// Pretty-prints a singular view definition.
@@ -119,37 +117,25 @@ let printOption pp =
 /// Pretty-prints a load prim.
 let printLoadPrim ty dest src mode = 
     hsep [ String("load<" + ty + ">")
-           parened (equality (printOption (printLValue >> String) dest) (hsep [ src
-                                                                                |> printLValue
-                                                                                |> String
-                                                                                mode
-                                                                                |> printFetchMode
-                                                                                |> String ])) ]
+           parened (equality (printOption printLValue dest) (hsep [ src |> printLValue
+                                                                    mode |> printFetchMode ])) ]
 
 /// Pretty-prints a store prim.
 let printStorePrim ty dest src = 
     hsep [ String("store<" + ty + ">")
-           parened (equality (dest
-                              |> printLValue
-                              |> String) (src |> printZ3Exp)) ]
+           parened (equality (dest |> printLValue) (src |> printZ3Exp)) ]
 
 /// Pretty-prints a CAS prim.
 let printCASPrim ty dest src set = 
     hsep [ String("cas<" + ty + ">")
-           parened (commaSep [ dest
-                               |> printLValue
-                               |> String
-                               src
-                               |> printLValue
-                               |> String
+           parened (commaSep [ dest |> printLValue
+                               src |> printLValue
                                set |> printZ3Exp ]) ]
 
 /// Pretty-prints a local-set prim.
 let printLocalPrim ty dest src = 
     hsep [ String("lset<" + ty + ">")
-           parened (equality (dest
-                              |> printLValue
-                              |> String) (src |> printZ3Exp)) ]
+           parened (equality (dest |> printLValue) (src |> printZ3Exp)) ]
 
 /// Pretty-prints a prim.
 let printPrim = 
@@ -218,7 +204,6 @@ let printModelViewProto (vn, vps) =
     // TODO(CaptainHayashi): this is a bit of a cop-out!
     printViewProto { VPName = vn
                      VPPars = vps }
-    |> String
 
 /// Pretty-prints a model given an axiom printer.
 let printModel axpp model = 

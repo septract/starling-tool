@@ -17,16 +17,31 @@ type Command =
 let fmt fstr xs = System.String.Format(fstr, Seq.toArray xs) |> String
 let vsep xs = VSep(xs, Nop)
 let hsepStr s c = HSep(c, String s)
+
+/// Horizontally joins a list of commands with no separator.
+let hjoin c = HSep(c, Nop)
+/// Horizontally separates a list of commands with a space separator.
 let hsep = hsepStr " "
+/// Horizontally separates a list of commands with commas.
 let commaSep = hsepStr ", "
+/// Horizontally separates a list of commands with semicolons.
 let semiSep = hsepStr "; "
+/// Horizontally separates a list of commands with colons.
 let colonSep = hsepStr ": "
+
+/// Appends a semicolon to a command.
+let withSemi a = hjoin [a; String ";"]
+
+/// The string '=' as a command.
 let equals = String "="
 
-let equality a b = 
+/// A binary operation a o b, where o is a String..
+let binop o a b =
     hsep [ a
-           String "="
+           String o
            b ]
+
+let equality = binop "="
 
 let ivsep = vsep >> Indent
 
@@ -37,8 +52,8 @@ let headed name cmds =
 
 let keyMap = 
     List.map (fun (k, v) -> 
-        HSep([ String k
-               v ], (String ":")))
+        colonSep [ String k
+                   v ])
     >> vsep
 
 let ssurround left right mid = Surround((String left), mid, (String right))
@@ -46,6 +61,9 @@ let braced = ssurround "{" "}"
 let angled = ssurround "<" ">"
 let parened = ssurround "(" ")"
 let squared = ssurround "[" "]"
+
+/// Pretty-prints a function f(xs1, xs2, ...xsn)
+let func f xs = hjoin [String f; commaSep xs |> parened]
 
 /// Creates a string of spaces up to the given indent level.
 let indent level = new string(' ', level * 4)

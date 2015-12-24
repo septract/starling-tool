@@ -13,4 +13,5 @@ let testPretty =
                 <| fun _ -> 
                     Assert.Equal
                         ("((1 + 2) * 3)", "((1 + 2) * 3)", 
-                         printExpression (BopExp(Mul, BopExp(Add, IntExp 1L, IntExp 2L), IntExp 3L))) ] ]
+                         printExpression (BopExp(Mul, BopExp(Add, IntExp 1L, IntExp 2L), IntExp 3L))
+                         |> Pretty.Types.print) ] ]
