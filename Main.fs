@@ -93,14 +93,12 @@ type Options =
       input : string option }
 
 type StarlingError = 
-    | SEParse of string
-    | SEModel of Starling.Errors.Lang.Modeller.ModelError
+    | SEFrontend of Lang.Frontend.Error
     | SEOther of string
 
 let printStarlingError = 
     function 
-    | SEParse e -> Starling.Pretty.Types.String e
-    | SEModel e -> Starling.Pretty.Errors.printModelError e
+    | SEFrontend e -> Lang.Frontend.printError e
     | SEOther e -> Starling.Pretty.Types.String e
 
 let printWarns header ws = 
@@ -120,9 +118,7 @@ let printResult pOk pBad =
                                              printWarns "Warnings" ws ]) (pBad >> printWarns "Errors")
 
 type OutputType = 
-    | OutputTParse
-    | OutputTCollation
-    | OutputTModel
+    | OutputTFrontend of Lang.Frontend.Request
     | OutputTFlatten
     | OutputTExpand
     | OutputTSemantics
@@ -135,9 +131,7 @@ type OutputType =
 
 [<NoComparison>]
 type Output = 
-    | OutputParse of Starling.Lang.AST.ScriptItem list
-    | OutputCollation of Starling.Lang.Collator.CollatedScript
-    | OutputModel of Starling.Model.PartModel
+    | OutputFrontend of Lang.Frontend.Response
     | OutputFlatten of Starling.Model.FlatModel
     | OutputExpand of Starling.Model.FullModel
     | OutputSemantics of Starling.Model.SemModel
@@ -150,9 +144,7 @@ type Output =
 
 let printOutput = 
     function 
-    | OutputParse s -> Starling.Pretty.Lang.AST.printScript s |> Starling.Pretty.Types.String
-    | OutputCollation c -> Starling.Pretty.Misc.printCollatedScript c
-    | OutputModel m -> Starling.Pretty.Misc.printPartModel m
+    | OutputFrontend f -> Lang.Frontend.printResponse f
     | OutputFlatten f -> Starling.Pretty.Misc.printFlatModel f
     | OutputExpand e -> Starling.Pretty.Misc.printFullModel e
     | OutputSemantics e -> Starling.Pretty.Misc.printSemModel e
@@ -220,33 +212,24 @@ let runStarlingFlatten modelR otype =
     | OutputTFlatten -> lift OutputFlatten flattenR
     | _ -> runStarlingExpand flattenR otype
 
-let runStarlingModel collatedR otype = 
-    let modelR = bind (Starling.Lang.Modeller.model >> mapMessages SEModel) collatedR
-    
-    let om = 
-        match otype with
-        | OutputTModel -> lift OutputModel modelR
-        | _ -> runStarlingFlatten modelR otype
-    ignore (lift Starling.Model.disposeZ3 modelR)
-    om
-
-let runStarlingCollate scriptR otype = 
-    let collatedR = lift Starling.Lang.Collator.collate scriptR
-    match otype with
-    | OutputTCollation -> lift OutputCollation collatedR
-    | _ -> runStarlingModel collatedR otype
-
 let runStarling file otype = 
-    let scriptPR = Starling.Lang.Parser.parseFile file
-    let scriptR = mapMessages SEParse scriptPR
-    match otype with
-    | OutputTParse -> lift OutputParse scriptR
-    | _ -> runStarlingCollate scriptR otype
+    let frq = 
+        match otype with
+        | OutputTFrontend f -> f
+        | _ -> Lang.Frontend.Request.Model
+    Lang.Frontend.run frq file
+    |> mapMessages StarlingError.SEFrontend
+    |> match otype with
+       | OutputTFrontend _ -> lift OutputFrontend
+       | x -> 
+           bind (function 
+               | Lang.Frontend.Response.Model m -> runStarlingFlatten (ok m) x
+               | v -> SEOther "internal error: bad frontend response" |> fail)
 
 let otypeFromOpts opts = 
-    [ (opts.parse, OutputTParse)
-      (opts.collate, OutputTCollation)
-      (opts.model, OutputTModel)
+    [ (opts.parse, OutputTFrontend Lang.Frontend.Request.Parse)
+      (opts.collate, OutputTFrontend Lang.Frontend.Request.Collate)
+      (opts.model, OutputTFrontend Lang.Frontend.Request.Model)
       (opts.flatten, OutputTFlatten)
       (opts.expand, OutputTExpand)
       (opts.semantics, OutputTSemantics)
