@@ -1,6 +1,5 @@
-/// The part of the Starling process that finishes the reification
-/// towards Z3 predicates.
-module Starling.Z3.Reifier
+/// The part of the Z3 backend that translates terms to Z3.
+module Starling.Z3.Translator
 
 open Microsoft
 open Starling.Collections

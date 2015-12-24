@@ -125,9 +125,7 @@ type OutputType =
     | OutputTFrame
     | OutputTTermGen
     | OutputTReify
-    | OutputTReifyZ3
-    | OutputTZ3
-    | OutputTSat
+    | OutputTZ3 of Z3.Backend.Request
 
 [<NoComparison>]
 type Output = 
@@ -138,9 +136,7 @@ type Output =
     | OutputFrame of Starling.Model.FramedAxiom list
     | OutputTermGen of Starling.Model.Term list
     | OutputReify of Starling.Model.ReTerm list
-    | OutputReifyZ3 of Starling.Model.ZTerm list
-    | OutputZ3 of Z3.BoolExpr list
-    | OutputSat of Z3.Status list
+    | OutputZ3 of Z3.Backend.Response
 
 let printOutput = 
     function 
@@ -151,36 +147,18 @@ let printOutput =
     | OutputFrame f -> Starling.Pretty.Misc.printFramedAxioms f
     | OutputTermGen t -> Starling.Pretty.Misc.printTerms t
     | OutputReify t -> Starling.Pretty.Misc.printReTerms t
-    | OutputReifyZ3 t -> Starling.Pretty.Misc.printZTerms t
-    | OutputZ3 z -> Starling.Pretty.Misc.printZ3Exps z
-    | OutputSat s -> Starling.Pretty.Misc.printSats s
+    | OutputZ3 z -> Z3.Backend.printResponse z
 
-let runStarlingZ3 semanticsR reifyR otype = 
-    let z3R = lift2 Starling.Z3.Reifier.combineTerms semanticsR reifyR
-    match otype with
-    | OutputTZ3 -> lift OutputZ3 z3R
-    | OutputTSat -> 
-        lift2 (fun m zs -> 
-            zs
-            |> List.map (fun z -> 
-                   let ctx = m.Context
-                   let solver = ctx.MkSimpleSolver()
-                   solver.Assert [| z |]
-                   solver.Check [||])
-            |> OutputSat) semanticsR z3R
+let runStarlingZ3 semanticsR reifyR = 
+    function 
+    | OutputTZ3 r -> lift2 (fun sr rr -> Starling.Z3.Backend.run sr r rr |> OutputZ3) semanticsR reifyR
     | _ -> fail (SEOther "this should be unreachable!")
-
-let runStarlingReifyZ3 semanticsR reifyR otype = 
-    let reifyZ3R = lift2 Starling.Z3.Reifier.reifyZ3 semanticsR reifyR
-    match otype with
-    | OutputTReifyZ3 -> lift OutputReifyZ3 reifyZ3R
-    | _ -> runStarlingZ3 semanticsR reifyZ3R otype
 
 let runStarlingReify semanticsR termGenR otype = 
     let reifyR = lift2 Starling.Reifier.reify semanticsR termGenR
     match otype with
     | OutputTReify -> lift OutputReify reifyR
-    | _ -> runStarlingReifyZ3 semanticsR reifyR otype
+    | _ -> runStarlingZ3 semanticsR reifyR otype
 
 let runStarlingTermGen semanticsR frameR otype = 
     let termGenR = lift2 Starling.TermGen.termGen semanticsR frameR
@@ -236,12 +214,12 @@ let otypeFromOpts opts =
       (opts.frame, OutputTFrame)
       (opts.termgen, OutputTTermGen)
       (opts.reify, OutputTReify)
-      (opts.reifyZ3, OutputTReifyZ3)
-      (opts.z3, OutputTZ3) ]
+      (opts.reifyZ3, OutputTZ3 Z3.Backend.Request.Translate)
+      (opts.z3, OutputTZ3 Z3.Backend.Request.Combine) ]
     |> List.tryFind fst
     |> function 
     | Some(_, o) -> o
-    | None -> OutputTSat
+    | None -> OutputTZ3 Z3.Backend.Request.Sat
 
 let starlingMain opts = 
     let input = opts.input

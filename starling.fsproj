@@ -60,8 +60,10 @@
     <Compile Include="Framer.fs" />
     <Compile Include="TermGen.fs" />
     <Compile Include="Reifier.fs" />
-    <Compile Include="Z3Reifier.fs" />
+    <Compile Include="Z3Translator.fs" />
+    <Compile Include="Z3Run.fs" />
     <Compile Include="Pretty.fs" />
+    <Compile Include="Z3Backend.fs" />
     <Compile Include="PrettyErrors.fs" />
     <Compile Include="TestStudies.fs" />
     <Compile Include="PrettyTests.fs" />
