@@ -21,10 +21,17 @@ let (>>=) = FParsec.Primitives.(>>=)
 // Whitespace.
 //   TODO(CaptainHayashi): is some of this redundant?
 
+/// Parser for skipping line comments.
+let lcom = skipString "//" .>> skipRestOfLine true
+
+/// Parser for skipping block comments.
+let bcom = skipString "/*" .>> skipManyTill anyChar (pstring "*/")
+
+/// Parser for skipping comments.
+let com = (lcom <|> bcom) <?> "comment" 
+
 /// Parser for skipping zero or more whitespace characters.
-let ws = many (choice [ skipString "//" .>> skipRestOfLine true
-                        skipString "/*" .>> skipManyTill anyChar (pstring "*/")
-                        spaces1 ] )
+let ws = many (com <|> spaces1)
 
 /// As pipe2, but with automatic whitespace parsing after each parser.
 let pipe2ws x y f = pipe2 (x .>> ws) (y .>> ws) f
@@ -52,9 +59,9 @@ let inViewBraces p = inBrackets "{|" "|}" p
 let inAngles p = inBrackets "<" ">" p
 
 
-//
-// Forwards.
-//
+(*
+ * Forwards.
+ *)
 
 // These parsers are recursively defined, so we must set up
 // forwarding stubs to them before we can proceed with the
@@ -77,9 +84,9 @@ let parseExpression, parseExpressionRef = createParserForwardedToRef<Expression,
 // BNF, except in reverse, bottom-up order.
 
 
-//
-// Expressions.
-//
+(*
+ * Expressions.
+ *)
 
 /// Parser for lvalues.
 let parseLValue, parseLValueRef = createParserForwardedToRef<LValue, unit> ()
@@ -144,9 +151,9 @@ let parseOrExpression =
 do parseExpressionRef := parseOrExpression
 
 
-//
-// Atomic actions.
-//
+(*
+ * Atomic actions.
+ *)
 
 /// Parser for compare-and-swaps.
 /// This parser DOES NOT parse whitespace afterwards.
@@ -158,10 +165,9 @@ let parseCAS =
                           (curry3 CompareAndSwap))
 
 /// Parser for fetch sigils.
-/// This parser SOMETIMES parses whitespace afterwards.
 let parseFetchSigil =
-    choice [ pstring "++" .>> ws >>% Increment
-             pstring "--" .>> ws >>% Decrement ] <|>% Direct
+    choice [ pstring "++" >>% Increment
+             pstring "--" >>% Decrement ] <|>% Direct
 
 /// Parser for fetch sources.
 let parseFetchSrc =
@@ -171,20 +177,19 @@ let parseFetchSrc =
     <|> inParens parseExpression
 
 /// Parser for fetch right-hand-sides.
-/// This parser SOMETIMES parses whitespace afterwards.
 let parseFetch fetcher =
     pipe2ws parseFetchSrc
             parseFetchSigil
             (fun fetchee sigil -> Fetch (fetcher, fetchee, sigil))
 
 /// Parser for fetch actions.
-/// This parser SOMETIMES parses whitespace afterwards.
 let parseFetchOrPostfix =
     parseLValue
     .>> ws
-    >>= (fun id -> choice [ stringReturn "++" (Postfix (id, Increment))
-                            stringReturn "--" (Postfix (id, Decrement))
-                            pstring "=" >>. ws >>. parseFetch id ])
+    .>>. parseFetchSigil
+    >>= function
+        | (x, Direct) -> ws >>. pstring "=" >>. ws >>. parseFetch x
+        | p -> Postfix p |> preturn
 
 /// Parser for assume actions.
 let parseAssume =
@@ -198,9 +203,9 @@ let parseAtomic =
              parseFetchOrPostfix ]
 
 
-//
-// Parameters and lists.
-//
+(*
+ * Parameters and lists.
+ *)
 
 /// Parses a comma-delimited parameter list.
 /// Each parameter is parsed by argp.
@@ -220,8 +225,10 @@ let parseParamList argp =
     // ^- ()
     //  | ( <params> )
 
-//
-// View-likes (views and view definitions).
+
+(*
+ * View-likes (views and view definitions).
+ *)
 
 /// Parses a view-like thing, with the given basic parser and
 /// joining constructor.
@@ -236,9 +243,7 @@ let parseViewLike basic join =
 /// view using `ctor`, substituting in an empty list if none exists.
 /// view in `Apply` if the optional argument list exists.
 let addViewArgs ctor vname x =
-    match x with
-    | Some args -> ctor (vname, args)
-    | None -> ctor (vname, [])
+    ctor (vname, withDefault [] x)
 
 /// Parses a possible argument list for an application of a parametric view.
 let parseFuncLike argp = ws >>. opt (parseParamList argp) .>> ws
@@ -249,9 +254,9 @@ let wrapFuncLike parser ctor argp =
     pipe2 parser (parseFuncLike argp) (addViewArgs ctor)
 
 
-//
-// Types.
-//
+(*
+ * Types.
+ *)
 
 /// Parses a type identifier.
 let parseType = stringReturn "int" Int <|> stringReturn "bool" Bool;
@@ -260,9 +265,10 @@ let parseType = stringReturn "int" Int <|> stringReturn "bool" Bool;
 let parseTypedParam = parseType .>> ws .>>. parseIdentifier
                       //^ <type> <identifier>
 
-//
-// Views.
-//
+
+(*
+ * Views.
+ *)
 
 /// Parses a conditional view.
 let parseIfView =
@@ -299,9 +305,9 @@ let parseViewLine = inViewBraces parseView
                     // ^- {| <view> |}
 
 
-//
-// View definitions.
-//
+(*
+ * View definitions.
+ *)
 
 /// Parses a functional view definition.
 let parseDFuncView = wrapFuncLike parseIdentifier DFunc parseIdentifier
@@ -322,24 +328,20 @@ let parseBasicViewDef =
 do parseViewDefRef := parseViewLike parseBasicViewDef DJoin
 
 
-//
-// View prototypes.
-//
+(*
+ * View prototypes.
+ *)
 
 /// Parses a view prototype.
-let parseViewProto =
-    pstring "view"
-    >>. ws
-    >>. wrapFuncLike parseIdentifier
-                     (fun (n, p) -> { VPName = n
-                                      VPPars = p } )
-                     parseTypedParam
-    .>> ws .>> pstring ";" .>> ws
+let parseViewProto = 
+    pstring "view" >>. ws >>. wrapFuncLike parseIdentifier (fun (n, p) -> 
+                                  { VPName = n
+                                    VPPars = p }) parseTypedParam .>> ws .>> pstring ";" .>> ws
 
 
-//
-// Commands.
-//
+(*
+ * Commands.
+ *)
 
 /// Parser for assignments.
 let parseAssign =
@@ -384,13 +386,13 @@ let parseAtomicCommand =
 /// Parser for `skip` commands.
 /// Skip is inserted when we're in command position, but see a semicolon.
 let parseSkip
-    = stringReturn ";" Skip .>> ws
+    = stringReturn ";" Skip
     // ^- ;
 
 /// Parser for simple commands (atomics, skips, and bracketed commands).
 do parseCommandRef :=
     choice [parseSkip
-            // ^- `;'
+            // ^- ;
             parseAtomicCommand
             // ^- < <atomic> > ;
             parseIf
@@ -405,9 +407,9 @@ do parseCommandRef :=
             // ^- <lvalue> = <expression>
 
 
-//
-// Blocks.
-//
+(*
+ * Blocks.
+ *)
 
 /// Parser for lists of semicolon-delimited, postconditioned
 /// commands.
@@ -430,9 +432,9 @@ do parseBlockRef :=
                (fun p c -> { Pre = p; Contents = c })
 
 
-//
-// Top-level definitions.
-//
+(*
+ * Top-level definitions.
+ *)
 
 /// Parses a constraint.
 let parseConstraint =
@@ -461,7 +463,7 @@ let parseVar kw = pstring kw >>. ws
                   // ^- global     ...
                              >>. parseTypedParam
                              // ^- ... <type> <identifier> ...
-                             .>> pstring ";" .>> ws
+                             .>> pstring ";"
                              // ^-                         ... ;
 
 /// Parses a script of zero or more methods, including leading and trailing whitespace.
@@ -477,12 +479,12 @@ let parseScript =
                              //  | view <identifier> <view-proto-param-list> ;
                              parseVar "global" |>> SGlobal
                              // ^- global <type> <identifier> ;
-                             parseVar "local" |>> SLocal] ) eof
+                             parseVar "local" |>> SLocal] .>> ws ) eof
                              // ^- local <type> <identifier> ;
 
-//
-// Frontend
-//
+(*
+ * Frontend
+ *)
 
 /// Opens the file with the given name, parses it, and returns the AST.
 /// The AST is given inside a Chessie result.
