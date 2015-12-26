@@ -67,55 +67,10 @@ type Options =
       test : bool
       [<Option('h', HelpText = "If stopped at an intermediate stage, print the result for human consumption.")>]
       human : bool
-      [<Option('p', HelpText = "Stop at parsing and output what Starling parsed.")>]
-      parse : bool
-      [<Option('c', HelpText = "Stop at collating and output the collated script.")>]
-      collate : bool
-      [<Option('m', HelpText = "Stop at modelling and output the model.")>]
-      model : bool
-      [<Option('f', HelpText = "Stop at modelling and output the flattened model.")>]
-      flatten : bool
-      [<Option('e', HelpText = "Stop at expanding and output the expanded model.")>]
-      expand : bool
-      [<Option('s', HelpText = "Stop at semantic translation and output the translated model.")>]
-      semantics : bool
-      [<Option('F', HelpText = "Stop at framing and output the framed axioms.")>]
-      frame : bool
-      [<Option('T', HelpText = "Stop at term generation and output the unreified terms.")>]
-      termgen : bool
-      [<Option('r', HelpText = "Stop at term reification and output the reified terms.")>]
-      reify : bool
-      [<Option('R', HelpText = "Stop at term Z3 reification and output the reified terms.")>]
-      reifyZ3 : bool
-      [<Option('z', HelpText = "Output the Z3 queries instead of checking them.")>]
-      z3 : bool
+      [<Option('s', HelpText = "The stage at which Starling should stop and output.")>]
+      stage : string option
       [<Value(0, MetaName = "input", HelpText = "The file to load (omit, or supply -, for standard input).")>]
       input : string option }
-
-type StarlingError = 
-    | SEFrontend of Lang.Frontend.Error
-    | SEOther of string
-
-let printStarlingError = 
-    function 
-    | SEFrontend e -> Lang.Frontend.printError e
-    | SEOther e -> Starling.Pretty.Types.String e
-
-let printWarns header ws = 
-    Starling.Pretty.Types.Header(header, 
-                                 ws
-                                 |> List.map Starling.Pretty.Types.Indent
-                                 |> Starling.Pretty.Types.vsep)
-
-let printResult pOk pBad = 
-    either (pairMap pOk pBad >> function 
-            | (ok, []) -> ok
-            | (ok, ws) -> 
-                Starling.Pretty.Types.vsep [ ok
-                                             Starling.Pretty.Types.VSkip
-                                             Starling.Pretty.Types.Separator
-                                             Starling.Pretty.Types.VSkip
-                                             printWarns "Warnings" ws ]) (pBad >> printWarns "Errors")
 
 type OutputType = 
     | OutputTFrontend of Lang.Frontend.Request
@@ -148,6 +103,53 @@ let printOutput =
     | OutputTermGen t -> Starling.Pretty.Misc.printTerms t
     | OutputReify t -> Starling.Pretty.Misc.printReTerms t
     | OutputZ3 z -> Z3.Backend.printResponse z
+
+let outputTypeMap =
+    Map.ofList
+        [ ("parse", OutputTFrontend Lang.Frontend.Request.Parse)
+          ("collate", OutputTFrontend Lang.Frontend.Request.Collate)
+          ("model", OutputTFrontend Lang.Frontend.Request.Model)
+          ("flatten", OutputTFlatten)
+          ("expand", OutputTExpand)
+          ("semantics", OutputTSemantics)
+          ("frame", OutputTFrame)
+          ("termgen", OutputTTermGen)
+          ("reify", OutputTReify)
+          ("reifyZ3", OutputTZ3 Z3.Backend.Request.Translate)
+          ("z3", OutputTZ3 Z3.Backend.Request.Combine)
+          ("sat", OutputTZ3 Z3.Backend.Request.Sat) ]
+
+type StarlingError = 
+    | SEFrontend of Lang.Frontend.Error
+    | BadStage
+    | SEOther of string
+
+let printStarlingError = 
+    function 
+    | SEFrontend e -> Lang.Frontend.printError e
+    | BadStage -> Pretty.Types.colonSep [ Pretty.Types.String "Bad stage"
+                                          Pretty.Types.String "try"
+                                          outputTypeMap
+                                          |> Map.toSeq
+                                          |> Seq.map (fst >> Pretty.Types.String)
+                                          |> Pretty.Types.commaSep ]
+    | SEOther e -> Pretty.Types.String e
+
+let printWarns header ws = 
+    Starling.Pretty.Types.Header(header, 
+                                 ws
+                                 |> List.map Pretty.Types.Indent
+                                 |> Pretty.Types.vsep)
+
+let printResult pOk pBad = 
+    either (pairMap pOk pBad >> function 
+            | (ok, []) -> ok
+            | (ok, ws) -> 
+                Starling.Pretty.Types.vsep [ ok
+                                             Starling.Pretty.Types.VSkip
+                                             Starling.Pretty.Types.Separator
+                                             Starling.Pretty.Types.VSkip
+                                             printWarns "Warnings" ws ]) (pBad >> printWarns "Errors")
 
 let runStarlingZ3 semanticsR reifyR = 
     function 
@@ -204,28 +206,16 @@ let runStarling file otype =
                | Lang.Frontend.Response.Model m -> runStarlingFlatten (ok m) x
                | v -> SEOther "internal error: bad frontend response" |> fail)
 
-let otypeFromOpts opts = 
-    [ (opts.parse, OutputTFrontend Lang.Frontend.Request.Parse)
-      (opts.collate, OutputTFrontend Lang.Frontend.Request.Collate)
-      (opts.model, OutputTFrontend Lang.Frontend.Request.Model)
-      (opts.flatten, OutputTFlatten)
-      (opts.expand, OutputTExpand)
-      (opts.semantics, OutputTSemantics)
-      (opts.frame, OutputTFrame)
-      (opts.termgen, OutputTTermGen)
-      (opts.reify, OutputTReify)
-      (opts.reifyZ3, OutputTZ3 Z3.Backend.Request.Translate)
-      (opts.z3, OutputTZ3 Z3.Backend.Request.Combine) ]
-    |> List.tryFind fst
-    |> function 
-    | Some(_, o) -> o
-    | None -> OutputTZ3 Z3.Backend.Request.Sat
+let otypeFromStage ostage = 
+    Map.tryFind (withDefault "sat" ostage) outputTypeMap
 
 let starlingMain opts = 
     let input = opts.input
     let human = opts.human
-    let otype = otypeFromOpts opts
-    let starlingR = runStarling input otype
+    let starlingR =
+        match (otypeFromStage opts.stage) with
+        | Some otype -> runStarling input otype
+        | None -> fail StarlingError.BadStage
     
     let pfn = 
         if human then printOutput
