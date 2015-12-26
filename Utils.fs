@@ -31,6 +31,12 @@ let mkPair x y = (x, y)
 /// List cons (::) as a two-argument function.
 let cons a b = a :: b
 
+/// Returns `a` if the input is `Some a`, or `d` otherwise.
+let withDefault d =
+    function
+    | Some a -> a
+    | None -> d
+
 /// Maps a function f through a set, and concatenates the resulting
 /// list of lists into one set.
 let unionMap f = 
