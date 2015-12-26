@@ -3,6 +3,7 @@ module Starling.Pretty.Types
 open Starling.Utils
 
 /// Type of pretty-printer commands.
+[<NoComparison>]
 type Command = 
     | Header of heading : string * Command
     | Separator
@@ -10,8 +11,8 @@ type Command =
     | Surround of left : Command * mid : Command * right : Command
     | Indent of Command
     | VSkip
-    | VSep of cmds : Command list * separator : Command
-    | HSep of cmds : Command list * separator : Command
+    | VSep of cmds : Command seq * separator : Command
+    | HSep of cmds : Command seq * separator : Command
     | Nop
 
 let fmt fstr xs = System.String.Format(fstr, Seq.toArray xs) |> String
@@ -21,13 +22,13 @@ let hsepStr s c = HSep(c, String s)
 /// Horizontally joins a list of commands with no separator.
 let hjoin c = HSep(c, Nop)
 /// Horizontally separates a list of commands with a space separator.
-let hsep = hsepStr " "
+let hsep c = hsepStr " " c
 /// Horizontally separates a list of commands with commas.
-let commaSep = hsepStr ", "
+let commaSep c = hsepStr ", " c
 /// Horizontally separates a list of commands with semicolons.
-let semiSep = hsepStr "; "
+let semiSep c = hsepStr "; " c
 /// Horizontally separates a list of commands with colons.
-let colonSep = hsepStr ": "
+let colonSep c = hsepStr ": " c
 
 /// Appends a semicolon to a command.
 let withSemi a = hjoin [a; String ";"]
@@ -43,12 +44,10 @@ let binop o a b =
 
 let equality = binop "="
 
-let ivsep = vsep >> Indent
+let ivsep c = c |> vsep |> Indent
 
 let headed name cmds = 
-    vsep cmds
-    |> Indent
-    |> (curry Header) name
+    ivsep cmds |> (curry Header) name
 
 let keyMap = 
     List.map (fun (k, v) -> 
@@ -82,8 +81,8 @@ let rec printLevel level =
     | Surround(left, mid, right) -> printLevel level left + printLevel level mid + printLevel level right
     | Indent incmd -> indent 1 + printLevel (level + 1) incmd
     | VSep(cmds, separator) -> 
-        List.map (printLevel level) cmds |> String.concat (printLevel level separator + lnIndent level)
-    | HSep(cmds, separator) -> List.map (printLevel level) cmds |> String.concat (printLevel level separator)
+        Seq.map (printLevel level) cmds |> String.concat (printLevel level separator + lnIndent level)
+    | HSep(cmds, separator) -> Seq.map (printLevel level) cmds |> String.concat (printLevel level separator)
     | Nop -> ""
 
 let print = printLevel 0
