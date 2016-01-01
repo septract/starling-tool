@@ -1,6 +1,6 @@
 module Starling.Tests.Lang.Parser
 
-open Fuchu
+open NUnit.Framework
 open FParsec
 open Starling
 open Starling.Var
@@ -9,87 +9,71 @@ open Starling.Lang.Parser
 open Starling.Pretty.Lang.AST
 open Starling.Pretty.Types
 
-/// Assertion that parsing `concrete` with parser `pp` gets the AST `ast`.
-let assertParse pp msg concrete ast = 
-    Assert.Equal(msg, Some ast, 
-                 match (run pp concrete) with
-                 | Success(result, _, _) -> Some result
-                 | Failure _ -> None)
-
-/// Assertion that parsing expression `expr` with parser `pp` gets the AST `ast`.
-let assertParseExpr expr ast = assertParse parseExpression (expr + " -> " + (ast |> printExpression |> print)) expr ast
-
-(*
-let testLValueIndirection =
-    testList "Test that LValue indirection syntax works" [
-        testCase "'foo' -> 0 indirections" <|
-            fun _ -> assertParse Parser.parseLValue
-                                 "'foo' -> 0 indirections"
-                                 "foo"
-                                 (LVIdent "foo")
-        testCase "'*foo' -> 1 indirection" <|
-            fun _ -> assertParse Parser.parseLValue
-                                 "'*foo' -> 1 indirection"
-                                 "*foo"
-                                 (LVPtr (LVIdent "foo"))
-        testCase "'**foo' -> 2 indirections" <|
-            fun _ -> assertParse Parser.parseLValue
-                                 "'**foo' -> 2 indirections"
-                                 "**foo"
-                                 (LVPtr (LVPtr (LVIdent "foo"))) ]
-*)
-
-let testExpressionPrecedence = 
-    testList "Test that parsing expressions yields correct precedence" 
-        [ testCase "1 + 2 * 3 -> 1 + (2 * 3)" 
-          <| fun _ -> assertParseExpr "1 + 2 * 3" (BopExp(Add, IntExp 1L, BopExp(Mul, IntExp 2L, IntExp 3L)))
-          
-          testCase "(1 + 2) * 3 -> (1 + 2) * 3" 
-          <| fun _ -> assertParseExpr "(1 + 2) * 3" (BopExp(Mul, BopExp(Add, IntExp 1L, IntExp 2L), IntExp 3L))
-          
-          testCase "1 + 2 < 3 * 4 && true || 5 / 6 > 7 - 8 - > ((1 +  2) < (3 * 4) && true) || ((5 / 6) > (7 - 8))" 
-          <| fun _ -> 
-              assertParseExpr "1 + 2 < 3 * 4 && true || 5 / 6 > 7 - 8" 
-                  (BopExp
-                       (Or, 
-                        BopExp
-                            (And, BopExp(Lt, BopExp(Add, IntExp 1L, IntExp 2L), BopExp(Mul, IntExp 3L, IntExp 4L)), 
-                             TrueExp), BopExp(Gt, BopExp(Div, IntExp 5L, IntExp 6L), BopExp(Sub, IntExp 7L, IntExp 8L)))) ]
-
-let testAtomicFetch = 
-    testList "Test that atomic fetch actions are correctly parsed" 
-        [ testCase "foo++" <| fun _ -> assertParse parseAtomic "foo++" "foo++" (Postfix(LVIdent "foo", Increment))
-          testCase "foo--" <| fun _ -> assertParse parseAtomic "foo--" "foo--" (Postfix(LVIdent "foo", Decrement))
-          
-          testCase "foo = bar" 
-          <| fun _ -> 
-              assertParse parseAtomic "foo = bar" "foo = bar" (Fetch(LVIdent "foo", LVExp(LVIdent "bar"), Direct))
-          
-          testCase "foo = bar++" 
-          <| fun _ -> 
-              assertParse parseAtomic "foo = bar++" "foo = bar++" 
-                  (Fetch(LVIdent "foo", LVExp(LVIdent "bar"), Increment))
-          
-          testCase "foo = bar--" 
-          <| fun _ -> 
-              assertParse parseAtomic "foo = bar--" "foo = bar--" 
-                  (Fetch(LVIdent "foo", LVExp(LVIdent "bar"), Decrement))
-          
-          testCase "CAS(foo, bar, 2)" 
-          <| fun _ -> 
-              assertParse parseAtomic "CAS(foo, bar, 2)" "CAS(foo, bar, 2)" 
-                  (CompareAndSwap(LVIdent "foo", LVIdent "bar", IntExp 2L)) ]
-
-let testTicketedLock = 
-    testCase "Parse the ticketed lock" 
-    <| fun _ -> 
-        assertParse parseScript Starling.Tests.Studies.ticketLock Starling.Tests.Studies.ticketLock 
-            Starling.Tests.Studies.ticketLockParsed
-
-[<Tests>]
-let testParser = 
-    testList "Test the parser" [ //testList "Test parsing of lvalues" [
-                                 //    testLValueIndirection ]
-                                 testList "Test parsing of expressions" [ testExpressionPrecedence ]
-                                 testList "Test parsing of atomics" [ testAtomicFetch ]
-                                 testList "Test parsing of case studies" [ testTicketedLock ] ]
+/// Tests for the parser.
+type ParserTests() = 
+    
+    /// Helper method for building parser tests.
+    /// Adapts to Some/None.
+    static member ParseResultToOptional a = 
+        match a with
+        | Success(result, _, _) -> Some result
+        | Failure _ -> None
+    
+    /// Test cases for testing the expression parser.
+    static member ExpressionParses = 
+        seq { 
+            yield (new TestCaseData("1 + 2 * 3"))
+                .Returns(Some(BopExp(Add, IntExp 1L, BopExp(Mul, IntExp 2L, IntExp 3L))))
+            yield (new TestCaseData("(1 + 2) * 3"))
+                .Returns(Some(BopExp(Mul, BopExp(Add, IntExp 1L, IntExp 2L), IntExp 3L)))
+            yield (new TestCaseData("1 + 2 < 3 * 4 && true || 5 / 6 > 7 - 8"))
+                .Returns(Some
+                             ((BopExp
+                                   (Or, 
+                                    BopExp
+                                        (And, 
+                                         BopExp
+                                             (Lt, BopExp(Add, IntExp 1L, IntExp 2L), BopExp(Mul, IntExp 3L, IntExp 4L)), 
+                                         TrueExp), 
+                                    BopExp(Gt, BopExp(Div, IntExp 5L, IntExp 6L), BopExp(Sub, IntExp 7L, IntExp 8L))))))
+        }
+    
+    [<TestCaseSource("ExpressionParses")>]
+    /// Tests whether the expression parser works correctly.
+    member x.``the expression parser parses test case expressions correctly`` expr = 
+        expr
+        |> run parseExpression
+        |> ParserTests.ParseResultToOptional
+    
+    /// Test cases for testing the atomic parser.
+    static member AtomicParses = 
+        seq { 
+            yield (new TestCaseData("foo++")).Returns(Some(Postfix(LVIdent "foo", Increment)))
+            yield (new TestCaseData("foo--")).Returns(Some(Postfix(LVIdent "foo", Decrement)))
+            yield (new TestCaseData("foo = bar")).Returns(Some(Fetch(LVIdent "foo", LVExp(LVIdent "bar"), Direct)))
+            yield (new TestCaseData("foo = bar++")).Returns(Some(Fetch(LVIdent "foo", LVExp(LVIdent "bar"), Increment)))
+            yield (new TestCaseData("foo = bar--")).Returns(Some(Fetch(LVIdent "foo", LVExp(LVIdent "bar"), Decrement)))
+            yield (new TestCaseData("CAS(foo, bar, 2)"))
+                .Returns(Some(CompareAndSwap(LVIdent "foo", LVIdent "bar", IntExp 2L)))
+        }
+    
+    [<TestCaseSource("AtomicParses")>]
+    /// Tests whether the expression parser works correctly.
+    member x.``the atomics parser parses test case atomics correctly`` expr = 
+        expr
+        |> run parseAtomic
+        |> ParserTests.ParseResultToOptional
+    
+    /// Test cases for testing the full parser.
+    static member ScriptParses = 
+        seq 
+            { 
+            yield (new TestCaseData(Starling.Tests.Studies.ticketLock))
+                .Returns(Some(Starling.Tests.Studies.ticketLockParsed)).SetName("parse the ticketed lock") }
+    
+    [<TestCaseSource("ScriptParses")>]
+    /// Tests whether the script parser works correctly.
+    member x.``the script parser parses full case studies correctly`` expr = 
+        expr
+        |> run parseScript
+        |> ParserTests.ParseResultToOptional
