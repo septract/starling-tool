@@ -13,8 +13,8 @@ let wrapped wholeDesc whole err = headed (sprintf "In %s '%s'" wholeDesc (print 
 /// Pretty-prints variable conversion errors.
 let printVarMapError = 
     function 
-    | VMEDuplicate vn -> fmt "variable '{0}' is defined multiple times" [ vn ]
-    | VMENotFound vn -> fmt "variable '{0}' not in environment" [ vn ]
+    | Duplicate vn -> fmt "variable '{0}' is defined multiple times" [ vn ]
+    | NotFound vn -> fmt "variable '{0}' not in environment" [ vn ]
 
 /// Pretty-prints expression conversion errors.
 let printExprError = 

@@ -20,13 +20,13 @@ let termGenSeptractStep model (rdone, qstep) rnext =
      *
      * Our return value is (rdone2, qstep2).
      *)
-    let rname = rnext.GItem.VName
-    let qname = qstep.GItem.VName
+    let rname = rnext.Item.VName
+    let qname = qstep.Item.VName
     if rname = qname then 
-        let b1 = rnext.GCond
-        let b2 = qstep.GCond
-        let xbar = rnext.GItem.VParams
-        let xbar2 = qstep.GItem.VParams
+        let b1 = rnext.Cond
+        let b2 = qstep.Cond
+        let xbar = rnext.Item.VParams
+        let xbar2 = qstep.Item.VParams
         // xbar = xbar'
         let xbarEq = List.map2 (curry ctx.MkEq) xbar xbar2 |> mkAnd ctx
         
@@ -35,14 +35,14 @@ let termGenSeptractStep model (rdone, qstep) rnext =
             mkAnd ctx [ b1
                         mkNot ctx (mkAnd ctx [ b2; xbarEq ]) ]
         
-        let rnext2 = { rnext with GCond = rcond.Simplify() :?> Z3.BoolExpr }
+        let rnext2 = { rnext with Cond = rcond.Simplify() :?> Z3.BoolExpr }
         
         // B2 && !(B1 && xbar = xbar2)
         let qcond = 
             mkAnd ctx [ b2
                         mkNot ctx (mkAnd ctx [ b1; xbarEq ]) ]
         
-        let qstep2 = { qstep with GCond = qcond }
+        let qstep2 = { qstep with Cond = qcond }
         (rnext2 :: rdone, qstep2)
     else (rnext :: rdone, qstep)
 

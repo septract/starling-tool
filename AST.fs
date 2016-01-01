@@ -20,11 +20,11 @@ type Bop =
 /// An untyped, raw expression.
 /// These currently cover all languages, but this may change later.
 type Expression = 
-    | TrueExp // true
-    | FalseExp // false
-    | IntExp of int64 // 42
-    | LVExp of Var.LValue // foobaz
-    | BopExp of Bop * Expression * Expression // a BOP b
+    | True // true
+    | False // false
+    | Int of int64 // 42
+    | LV of Var.LValue // foobaz
+    | Bop of Bop * Expression * Expression // a BOP b
 
 /// An atomic action.
 type AtomicAction = 
@@ -36,14 +36,14 @@ type AtomicAction =
 
 /// A view prototype.
 type ViewProto = 
-    { VPName : string
-      VPPars : (Var.Type * string) list }
+    { Name : string
+      Params : (Var.Type * string) list }
 
 /// A view definition.
 type ViewDef = 
-    | DUnit
-    | DJoin of ViewDef * ViewDef
-    | DFunc of string * pars : string list
+    | Unit
+    | Join of ViewDef * ViewDef
+    | Func of string * pars : string list
 
 /// A view expression.
 type View = 
@@ -86,8 +86,8 @@ type Method =
 
 /// A top-level item in a Starling script.
 type ScriptItem = 
-    | SGlobal of Var.Type * string // global int name;
-    | SLocal of Var.Type * string // local int name;
-    | SMethod of Method // method main(argv, argc) { ... }
-    | SViewProto of ViewProto // view name(int arg);
-    | SConstraint of Constraint // constraint emp => true
+    | Global of Var.Type * string // global int name;
+    | Local of Var.Type * string // local int name;
+    | Method of Method // method main(argv, argc) { ... }
+    | ViewProto of ViewProto // view name(int arg);
+    | Constraint of Constraint // constraint emp => true

@@ -12,12 +12,12 @@ open Starling.Pretty.Lang.AST
 open Starling.Pretty.Types
 
 /// Pretty-prints a collated script.
-let printCollatedScript cs = 
-    VSep([ vsep <| List.map printViewProto cs.CVProtos
-           vsep <| List.map (uncurry (printScriptVar "global")) cs.CGlobals
-           vsep <| List.map (uncurry (printScriptVar "local")) cs.CLocals
-           vsep <| List.map printConstraint cs.CConstraints
-           VSep(List.map printMethod cs.CMethods, VSkip) ], (vsep [ VSkip; Separator; Nop ]))
+let printCollatedScript (cs: CollatedScript) = 
+    VSep([ vsep <| List.map printViewProto cs.VProtos
+           vsep <| List.map (uncurry (printScriptVar "global")) cs.Globals
+           vsep <| List.map (uncurry (printScriptVar "local")) cs.Locals
+           vsep <| List.map printConstraint cs.Constraints
+           VSep(List.map printMethod cs.Methods, VSkip) ], (vsep [ VSkip; Separator; Nop ]))
 
 /// Pretty-prints a singular generic view.
 let printGenView ppars v = 
@@ -55,43 +55,43 @@ let printModelViewDefs = printViewList printModelViewDef >> squared
 
 /// Pretty-prints TVars.
 let printTVar tvar = 
-    ssurround "(Z3:" ")" (commaSep [ printZ3Exp tvar.VarExpr
-                                     printZ3Exp tvar.VarPreExpr
-                                     printZ3Exp tvar.VarPostExpr
-                                     printZ3Exp tvar.VarFrameExpr ])
+    ssurround "(Z3:" ")" (commaSep [ printZ3Exp tvar.Expr
+                                     printZ3Exp tvar.PreExpr
+                                     printZ3Exp tvar.PostExpr
+                                     printZ3Exp tvar.FrameExpr ])
 
 /// Pretty-prints model variables.
 let printModelVar (name, var) = 
     colonSep [ String name
                (match var with
-                | IntVar tv -> 
+                | Var.Int tv -> 
                     hsep [ String "int"
                            printTVar tv ]
-                | BoolVar tv -> 
+                | Var.Bool tv -> 
                     hsep [ String "bool"
                            printTVar tv ]) ]
 
 /// Pretty-prints a conditional view.
 let rec printCondView = 
     function 
-    | CITEView(i, t, e) -> 
+    | ITE(i, t, e) -> 
         hsep [ String "if"
                printZ3Exp i
                String "then"
                printCondViewList t
                String "else"
                printCondViewList e ]
-    | CSetView v -> printModelView v
+    | Func v -> printModelView v
 
 /// Pretty-prints a list of cond-views.
 and printCondViewList = printViewList printCondView >> ssurround "[| " "|]"
 
 /// Pretty-prints a guarded item.
-let printGuarded pitem g = 
-    if g.GCond.IsTrue then pitem g.GItem
+let printGuarded pitem {Cond = c; Item = i} = 
+    if c.IsTrue then pitem i
     else 
-        parened (HSep([ printZ3Exp g.GCond
-                        pitem g.GItem ], String "|"))
+        parened (HSep([ printZ3Exp c
+                        pitem i ], String "|"))
 
 /// Pretty-prints a guarded view.
 let printGuarView = printGuarded printModelView
@@ -202,8 +202,8 @@ let printModelConstraint { CViews = vs; CZ3 = z } =
 /// Pretty-prints a model view prototype.
 let printModelViewProto (vn, vps) = 
     // TODO(CaptainHayashi): this is a bit of a cop-out!
-    printViewProto { VPName = vn
-                     VPPars = vps }
+    printViewProto { ViewProto.Name = vn
+                     Params = vps }
 
 /// Pretty-prints a model given an axiom printer.
 let printModel axpp model = 

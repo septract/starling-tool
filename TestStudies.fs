@@ -52,18 +52,18 @@ let ticketLockLockMethodAST =
       Body = 
           { Pre = Unit
             Contents = 
-                [ { Command = Atomic(Fetch(LVIdent "t", LVExp(LVIdent "ticket"), Increment))
-                    Post = Func("holdTick", [ LVExp(LVIdent "t") ]) }
+                [ { Command = Atomic(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment))
+                    Post = Func("holdTick", [ LV(LVIdent "t") ]) }
                   { Command = 
                         DoWhile
-                            ({ Pre = Func("holdTick", [ LVExp(LVIdent "t") ])
+                            ({ Pre = Func("holdTick", [ LV(LVIdent "t") ])
                                Contents = 
-                                   [ { Command = Atomic(Fetch(LVIdent "s", LVExp(LVIdent "serving"), Direct))
+                                   [ { Command = Atomic(Fetch(LVIdent "s", LV(LVIdent "serving"), Direct))
                                        Post = 
                                            IfView
-                                               (BopExp(Eq, LVExp(LVIdent "s"), LVExp(LVIdent "t")), Func("holdLock", []), 
-                                                Func("holdTick", [ LVExp(LVIdent "t") ])) } ] }, 
-                             BopExp(Neq, LVExp(LVIdent "s"), LVExp(LVIdent "t")))
+                                               (Bop(Eq, LV(LVIdent "s"), LV(LVIdent "t")), Func("holdLock", []), 
+                                                Func("holdTick", [ LV(LVIdent "t") ])) } ] }, 
+                             Bop(Neq, LV(LVIdent "s"), LV(LVIdent "t")))
                     Post = Func("holdLock", []) } ] } }
 
 /// The correct parsing of the ticketed lock's unlock method.
@@ -78,106 +78,106 @@ let ticketLockUnlockMethodAST =
 
 /// The parsed form of the ticketed lock.
 let ticketLockParsed = 
-    [ SViewProto { VPName = "holdTick"
-                   VPPars = [ (Int, "t") ] }
-      SViewProto { VPName = "holdLock"
-                   VPPars = [] }
-      SConstraint { CView = DUnit
-                    CExpression = BopExp(Ge, LVExp(LVIdent "ticket"), LVExp(LVIdent "serving")) }
-      SConstraint { CView = DFunc("holdTick", [ "t" ])
-                    CExpression = BopExp(Gt, LVExp(LVIdent "ticket"), LVExp(LVIdent "t")) }
-      SConstraint { CView = DFunc("holdLock", [])
-                    CExpression = BopExp(Gt, LVExp(LVIdent "ticket"), LVExp(LVIdent "serving")) }
-      SConstraint { CView = DJoin(DFunc("holdLock", []), DFunc("holdTick", [ "t" ]))
-                    CExpression = BopExp(Neq, LVExp(LVIdent "serving"), LVExp(LVIdent "t")) }
-      SConstraint { CView = DJoin(DFunc("holdTick", [ "ta" ]), DFunc("holdTick", [ "tb" ]))
-                    CExpression = BopExp(Neq, LVExp(LVIdent "ta"), LVExp(LVIdent "tb")) }
-      SConstraint { CView = DJoin(DFunc("holdLock", []), DFunc("holdLock", []))
-                    CExpression = FalseExp }
-      SGlobal(Int, "ticket")
-      SGlobal(Int, "serving")
-      SLocal(Int, "t")
-      SLocal(Int, "s")
-      SMethod ticketLockLockMethodAST
-      SMethod ticketLockUnlockMethodAST ]
+    [ ViewProto { Name = "holdTick"
+                  Params = [ (Type.Int, "t") ] }
+      ViewProto { Name = "holdLock"
+                  Params = [] }
+      Constraint { CView = ViewDef.Unit
+                   CExpression = Bop(Ge, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
+      Constraint { CView = ViewDef.Func("holdTick", [ "t" ])
+                   CExpression = Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "t")) }
+      Constraint { CView = ViewDef.Func("holdLock", [])
+                   CExpression = Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
+      Constraint { CView = ViewDef.Join(ViewDef.Func("holdLock", []), ViewDef.Func("holdTick", [ "t" ]))
+                   CExpression = Bop(Neq, LV(LVIdent "serving"), LV(LVIdent "t")) }
+      Constraint { CView = ViewDef.Join(ViewDef.Func("holdTick", [ "ta" ]), ViewDef.Func("holdTick", [ "tb" ]))
+                   CExpression = Bop(Neq, LV(LVIdent "ta"), LV(LVIdent "tb")) }
+      Constraint { CView = ViewDef.Join(ViewDef.Func("holdLock", []), ViewDef.Func("holdLock", []))
+                   CExpression = False }
+      Global(Type.Int, "ticket")
+      Global(Type.Int, "serving")
+      Local(Type.Int, "t")
+      Local(Type.Int, "s")
+      Method ticketLockLockMethodAST
+      Method ticketLockUnlockMethodAST ]
 
 /// The collated form of the ticketed lock.
 let ticketLockCollated = 
-    { CGlobals = 
-          [ (Int, "ticket")
-            (Int, "serving") ]
-      CLocals = 
-          [ (Int, "t")
-            (Int, "s") ]
-      CVProtos = 
-          [ { VPName = "holdTick"
-              VPPars = [ (Int, "t") ] }
-            { VPName = "holdLock"
-              VPPars = [] } ]
-      CConstraints = 
+    { CollatedScript.Globals = 
+          [ (Type.Int, "ticket")
+            (Type.Int, "serving") ]
+      Locals = 
+          [ (Type.Int, "t")
+            (Type.Int, "s") ]
+      VProtos = 
+          [ { Name = "holdTick"
+              Params = [ (Type.Int, "t") ] }
+            { Name = "holdLock"
+              Params = [] } ]
+      Constraints = 
           [ { // constraint emp => ticket >= serving;
-              CView = DUnit
-              CExpression = BopExp(Ge, LVExp(LVIdent "ticket"), LVExp(LVIdent "serving")) }
+              CView = ViewDef.Unit
+              CExpression = Bop(Ge, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
             { // constraint holdTick(t) => ticket > t;
-              CView = DFunc("holdTick", [ "t" ])
-              CExpression = BopExp(Gt, LVExp(LVIdent "ticket"), LVExp(LVIdent "t")) }
+              CView = ViewDef.Func("holdTick", [ "t" ])
+              CExpression = Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "t")) }
             { // constraint holdLock() => ticket > serving;
-              CView = DFunc("holdLock", [])
-              CExpression = BopExp(Gt, LVExp(LVIdent "ticket"), LVExp(LVIdent "serving")) }
+              CView = ViewDef.Func("holdLock", [])
+              CExpression = Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
             { // constraint holdLock() * holdTick(t) => serving != t;
-              CView = DJoin(DFunc("holdLock", []), DFunc("holdTick", [ "t" ]))
-              CExpression = BopExp(Neq, LVExp(LVIdent "serving"), LVExp(LVIdent "t")) }
+              CView = ViewDef.Join(ViewDef.Func("holdLock", []), ViewDef.Func("holdTick", [ "t" ]))
+              CExpression = Bop(Neq, LV(LVIdent "serving"), LV(LVIdent "t")) }
             { // constraint holdLock() * holdLock() => false;
-              CView = DJoin(DFunc("holdTick", [ "ta" ]), DFunc("holdTick", [ "tb" ]))
-              CExpression = BopExp(Neq, LVExp(LVIdent "ta"), LVExp(LVIdent "tb")) }
-            { CView = DJoin(DFunc("holdLock", []), DFunc("holdLock", []))
-              CExpression = FalseExp } ]
-      CMethods = [ ticketLockLockMethodAST; ticketLockUnlockMethodAST ] }
+              CView = ViewDef.Join(ViewDef.Func("holdTick", [ "ta" ]), ViewDef.Func("holdTick", [ "tb" ]))
+              CExpression = Bop(Neq, LV(LVIdent "ta"), LV(LVIdent "tb")) }
+            { CView = ViewDef.Join(ViewDef.Func("holdLock", []), ViewDef.Func("holdLock", []))
+              CExpression = False } ]
+      Methods = [ ticketLockLockMethodAST; ticketLockUnlockMethodAST ] }
 
 /// The axioms of the ticketed lock.
 let ticketLockAxioms (ctx : Z3.Context) = 
     [ PAAxiom { Conditions = 
                     { Pre = Multiset.empty()
                       Post = 
-                          Multiset.ofList [ CSetView { VName = "holdTick"
-                                                       VParams = [ ctx.MkIntConst "t" ] } ] }
+                          Multiset.ofList [ CondView.Func { VName = "holdTick"
+                                                            VParams = [ ctx.MkIntConst "t" ] } ] }
                 Inner = IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment) }
       PAWhile(true, ctx.MkNot(ctx.MkEq(ctx.MkIntConst "s", ctx.MkIntConst "t")), 
               { Pre = 
-                    Multiset.ofList [ CSetView { VName = "holdTick"
-                                                 VParams = [ ctx.MkIntConst "t" ] } ]
+                    Multiset.ofList [ CondView.Func { VName = "holdTick"
+                                                      VParams = [ ctx.MkIntConst "t" ] } ]
                 Post = 
-                    Multiset.ofList [ CSetView { VName = "holdLock"
-                                                 VParams = [] } ] }, 
+                    Multiset.ofList [ CondView.Func { VName = "holdLock"
+                                                      VParams = [] } ] }, 
               { Conditions = 
                     { Pre = 
-                          Multiset.ofList [ CSetView { VName = "holdTick"
-                                                       VParams = [ ctx.MkIntConst "t" ] } ]
+                          Multiset.ofList [ CondView.Func { VName = "holdTick"
+                                                            VParams = [ ctx.MkIntConst "t" ] } ]
                       Post = 
                           Multiset.ofList 
-                              [ CITEView(ctx.MkEq(ctx.MkIntConst "s", ctx.MkIntConst "t"), 
-                                         Multiset.ofList [ CSetView { VName = "holdLock"
-                                                                      VParams = [] } ], 
-                                         Multiset.ofList [ CSetView { VName = "holdTick"
-                                                                      VParams = [ ctx.MkIntConst "t" ] } ]) ] }
+                              [ ITE(ctx.MkEq(ctx.MkIntConst "s", ctx.MkIntConst "t"), 
+                                         Multiset.ofList [ CondView.Func { VName = "holdLock"
+                                                                           VParams = [] } ], 
+                                         Multiset.ofList [ CondView.Func { VName = "holdTick"
+                                                                           VParams = [ ctx.MkIntConst "t" ] } ]) ] }
                 Inner = 
                     [ PAAxiom { Conditions = 
                                     { Pre = 
-                                          Multiset.ofList [ CSetView { VName = "holdTick"
-                                                                       VParams = [ ctx.MkIntConst "t" ] } ]
+                                          Multiset.ofList [ CondView.Func { VName = "holdTick"
+                                                                            VParams = [ ctx.MkIntConst "t" ] } ]
                                       Post = 
                                           Multiset.ofList 
-                                              [ CITEView
+                                              [ ITE
                                                     (ctx.MkEq(ctx.MkIntConst "s", ctx.MkIntConst "t"), 
-                                                     Multiset.ofList [ CSetView { VName = "holdLock"
-                                                                                  VParams = [] } ], 
-                                                     Multiset.ofList [ CSetView { VName = "holdTick"
-                                                                                  VParams = [ ctx.MkIntConst "t" ] } ]) ] }
+                                                     Multiset.ofList [ CondView.Func { VName = "holdLock"
+                                                                                       VParams = [] } ], 
+                                                     Multiset.ofList [ CondView.Func { VName = "holdTick"
+                                                                                       VParams = [ ctx.MkIntConst "t" ] } ]) ] }
                                 Inner = IntLoad(Some(LVIdent "s"), LVIdent "serving", Direct) } ] })
       PAAxiom { Conditions = 
                     { Pre = 
-                          Multiset.ofList [ CSetView { VName = "holdLock"
-                                                       VParams = [] } ]
+                          Multiset.ofList [ CondView.Func { VName = "holdLock"
+                                                            VParams = [] } ]
                       Post = Multiset.empty() }
                 Inner = IntLoad(None, LVIdent "serving", Increment) } ]
 
@@ -186,37 +186,21 @@ let ticketLockAxioms (ctx : Z3.Context) =
 let ticketLockModel ctx = 
     { Context = ctx
       VProtos = 
-          Map.ofList [ ("holdTick", [ (Int, "t") ])
+          Map.ofList [ ("holdTick", [ (Type.Int, "t") ])
                        ("holdLock", []) ]
       Globals = 
-          Map.ofList [ ("serving", 
-                        IntVar { VarExpr = ctx.MkIntConst "serving"
-                                 VarPreExpr = ctx.MkIntConst "serving!before"
-                                 VarPostExpr = ctx.MkIntConst "serving!after"
-                                 VarFrameExpr = ctx.MkIntConst "serving!r" })
-                       ("ticket", 
-                        IntVar { VarExpr = ctx.MkIntConst "ticket"
-                                 VarPreExpr = ctx.MkIntConst "ticket!before"
-                                 VarPostExpr = ctx.MkIntConst "ticket!after"
-                                 VarFrameExpr = ctx.MkIntConst "ticket!r" }) ]
+          Map.ofList [ ("serving", makeVar ctx Type.Int "serving")
+                       ("ticket", makeVar ctx Type.Int "ticket") ]
       Locals = 
-          Map.ofList [ ("s", 
-                        IntVar { VarExpr = ctx.MkIntConst "s"
-                                 VarPreExpr = ctx.MkIntConst "s!before"
-                                 VarPostExpr = ctx.MkIntConst "s!after"
-                                 VarFrameExpr = ctx.MkIntConst "s!r" })
-                       ("t", 
-                        IntVar { VarExpr = ctx.MkIntConst "t"
-                                 VarPreExpr = ctx.MkIntConst "t!before"
-                                 VarPostExpr = ctx.MkIntConst "t!after"
-                                 VarFrameExpr = ctx.MkIntConst "t!r" }) ]
+          Map.ofList [ ("s", makeVar ctx Type.Int "s")
+                       ("t", makeVar ctx Type.Int "t") ]
       Axioms = ticketLockAxioms ctx
       DefViews = 
           [ { CViews = Multiset.empty()
               CZ3 = ctx.MkGe(ctx.MkIntConst "ticket", ctx.MkIntConst "serving") }
             { CViews = 
                   Multiset.ofList [ { VName = "holdTick"
-                                      VParams = [ (Int, "t") ] } ]
+                                      VParams = [ (Type.Int, "t") ] } ]
               CZ3 = ctx.MkGt(ctx.MkIntConst "ticket", ctx.MkIntConst "t") }
             { CViews = 
                   Multiset.ofList [ { VName = "holdLock"
@@ -226,13 +210,13 @@ let ticketLockModel ctx =
                   Multiset.ofList [ { VName = "holdLock"
                                       VParams = [] }
                                     { VName = "holdTick"
-                                      VParams = [ (Int, "t") ] } ]
+                                      VParams = [ (Type.Int, "t") ] } ]
               CZ3 = ctx.MkNot(ctx.MkEq(ctx.MkIntConst "serving", ctx.MkIntConst "t")) }
             { CViews = 
                   Multiset.ofList [ { VName = "holdTick"
-                                      VParams = [ (Int, "ta") ] }
+                                      VParams = [ (Type.Int, "ta") ] }
                                     { VName = "holdTick"
-                                      VParams = [ (Int, "tb") ] } ]
+                                      VParams = [ (Type.Int, "tb") ] } ]
               CZ3 = ctx.MkNot(ctx.MkEq(ctx.MkIntConst "ta", ctx.MkIntConst "tb")) }
             { CViews = 
                   Multiset.ofList [ { VName = "holdLock"

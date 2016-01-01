@@ -159,9 +159,9 @@ let frame model expr =
     vars
     |> Seq.map (snd >> eraseVar)
     // ^ Get a sequence of all untyped variable records...
-    |> Seq.filter (fun v -> Set.contains v.VarPostExpr afts)
+    |> Seq.filter (fun v -> Set.contains v.PostExpr afts)
     // ^ ... then find the ones that are not bound after the expr...
-    |> Seq.map (fun v -> makeNoChange model v.VarExpr)
+    |> Seq.map (fun v -> makeNoChange model v.Expr)
 
 // ^ ... then prepare v!after = v!before records for them.
 /// Translate a Prim to an expression completely characterising it.
@@ -185,9 +185,9 @@ let semanticsOf model prim =
 let subView sub model v = { v with VParams = List.map (subAllInModel model sub) v.VParams }
 
 /// Substitutes all of the variables in a GuarView using the given substitution.
-let subGuarView sub model gv = 
-    { GCond = subAllInModel model sub (gv.GCond :> Expr) :?> BoolExpr
-      GItem = subView sub model gv.GItem }
+let subGuarView sub model {Cond = c; Item = i} = 
+    { Cond = subAllInModel model sub (c :> Expr) :?> BoolExpr
+      Item = subView sub model i }
 
 /// Substitutes all of the variables in a condition using the given substitution.
 /// In this case, a condition is a list of GuarViews.

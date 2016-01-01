@@ -24,7 +24,7 @@ type ReifierTests() =
                                  VParams = [ ctx.MkIntConst "t" :> Z3.Expr ] } ]))).Returns(Some(Multiset.ofList [ { VName = "holdLock"
                                                                                                                      VParams = [] }
                                                                                                                    { VName = "holdTick"
-                                                                                                                     VParams = [ (Int, "t") ] } ]))
+                                                                                                                     VParams = [ (Type.Int, "t") ] } ]))
             // Reversed order
             yield (new TestCaseData(fun (ctx : Z3.Context) -> 
             (Multiset.ofList [ { VName = "holdTick"
@@ -33,7 +33,7 @@ type ReifierTests() =
                                  VParams = [] } ]))).Returns(Some(Multiset.ofList [ { VName = "holdLock"
                                                                                       VParams = [] }
                                                                                     { VName = "holdTick"
-                                                                                      VParams = [ (Int, "t") ] } ]))
+                                                                                      VParams = [ (Type.Int, "t") ] } ]))
         }
     
     [<TestCaseSource("FindDefOfViewCases")>]

@@ -29,11 +29,11 @@ let printBop =
 /// This is not guaranteed to produce an optimal expression.
 let rec printExpression = 
     function 
-    | TrueExp -> String "true"
-    | FalseExp -> String "false"
-    | IntExp i -> i.ToString() |> String
-    | LVExp x -> printLValue x
-    | BopExp(op, a, b) -> 
+    | True -> String "true"
+    | False -> String "false"
+    | Int i -> i.ToString() |> String
+    | LV x -> printLValue x
+    | Bop(op, a, b) -> 
         hsep [ printExpression a
                printBop op
                printExpression b ]
@@ -56,9 +56,9 @@ let rec printView =
 /// Pretty-prints view definitions.
 let rec printViewDef = 
     function 
-    | DFunc(vv, xs) -> func vv (List.map String xs)
-    | DUnit -> String "emp"
-    | DJoin(l, r) -> binop "*" (printViewDef l) (printViewDef r)
+    | ViewDef.Func(vv, xs) -> func vv (List.map String xs)
+    | ViewDef.Unit -> String "emp"
+    | ViewDef.Join(l, r) -> binop "*" (printViewDef l) (printViewDef r)
 
 /// Pretty-prints view lines.
 let printViewLine vl = 
@@ -154,11 +154,11 @@ let printMethod { Name = n; Params = ps; Body = b } =
 /// Pretty-prints a variable type.
 let printType = 
     function 
-    | Int -> "int" |> String
-    | Bool -> "bool" |> String
+    | Type.Int -> "int" |> String
+    | Type.Bool -> "bool" |> String
 
 /// Pretty-prints a view prototype.
-let printViewProto { VPName = n; VPPars = ps } = 
+let printViewProto { ViewProto.Name = n; Params = ps } = 
     hsep [ "view" |> String
            func n (List.map (fun (t, v) -> 
                        hsep [ t |> printType
@@ -175,11 +175,11 @@ let printScriptVar cls t v =
 /// Pretty-prints script lines.
 let printScriptLine = 
     function 
-    | SGlobal(t, v) -> printScriptVar "global" t v
-    | SLocal(t, v) -> printScriptVar "local" t v
-    | SMethod m -> printMethod m
-    | SViewProto v -> printViewProto v
-    | SConstraint c -> printConstraint c
+    | Global(t, v) -> printScriptVar "global" t v
+    | Local(t, v) -> printScriptVar "local" t v
+    | Method m -> printMethod m
+    | ViewProto v -> printViewProto v
+    | Constraint c -> printConstraint c
 
 /// Pretty-prints scripts.
 let printScript = List.map printScriptLine >> fun ls -> VSep(ls, vsep [ Nop; Nop ])

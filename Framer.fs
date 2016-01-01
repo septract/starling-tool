@@ -9,8 +9,8 @@ open Starling.Model
 /// Converts a Starling type to a Z3 sort.
 let typeToSort (ctx : Z3.Context) = 
     function 
-    | Int -> ctx.IntSort :> Z3.Sort
-    | Bool -> ctx.BoolSort :> Z3.Sort
+    | Type.Int -> ctx.IntSort :> Z3.Sort
+    | Type.Bool -> ctx.BoolSort :> Z3.Sort
 
 /// Instantiates a view parameter.
 let instantiateParam model (ty, name) = 
@@ -20,8 +20,8 @@ let instantiateParam model (ty, name) =
 /// Instantiates a defining view into a view expression.
 let instantiateFrame model dvs = 
     dvs |> Multiset.map (fun { VName = n; VParams = ps } -> 
-               { GCond = model.Context.MkTrue()
-                 GItem = 
+               { Cond = model.Context.MkTrue()
+                 Item = 
                      { VName = n
                        VParams = List.map (instantiateParam model) ps } })
 

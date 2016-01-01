@@ -97,10 +97,10 @@ do parseLValueRef :=
 
 /// Parser for primary expressions.
 let parsePrimaryExpression =
-    choice [ pstring "true" >>% TrueExp
-             pstring "false" >>% FalseExp
-             pint64 |>> IntExp
-             parseLValue |>> LVExp
+    choice [ pstring "true" >>% True
+             pstring "false" >>% False
+             pint64 |>> Int
+             parseLValue |>> LV
              inParens parseExpression ] .>> ws
 
 /// Generic parser for tiers of binary expressions.
@@ -109,7 +109,7 @@ let parsePrimaryExpression =
 let parseBinaryExpressionLevel nextLevel expList =
     chainl1 (nextLevel .>> ws)
             (choice
-                (List.map (fun (ops, op) -> (pstring ops .>> ws >>% curry3 BopExp op)) expList)
+                (List.map (fun (ops, op) -> (pstring ops .>> ws >>% curry3 Bop op)) expList)
             )
 
 /// Parser for multiplicative expressions.
@@ -173,7 +173,7 @@ let parseFetchSigil =
 let parseFetchSrc =
     // We can't parse general expressions here, because they
     // eat the > at the end of the atomic and the sigil!
-    (parseLValue |>> LVExp)
+    (parseLValue |>> LV)
     <|> inParens parseExpression
 
 /// Parser for fetch right-hand-sides.
@@ -259,7 +259,7 @@ let wrapFuncLike parser ctor argp =
  *)
 
 /// Parses a type identifier.
-let parseType = stringReturn "int" Int <|> stringReturn "bool" Bool;
+let parseType = stringReturn "int" Type.Int <|> stringReturn "bool" Type.Bool;
 
 /// Parses a pair of type identifier and parameter name.
 let parseTypedParam = parseType .>> ws .>>. parseIdentifier
@@ -310,10 +310,10 @@ let parseViewLine = inViewBraces parseView
  *)
 
 /// Parses a functional view definition.
-let parseDFuncView = wrapFuncLike parseIdentifier DFunc parseIdentifier
+let parseDFuncView = wrapFuncLike parseIdentifier ViewDef.Func parseIdentifier
 
 /// Parses the unit view definition.
-let parseDUnit = stringReturn "emp" DUnit
+let parseDUnit = stringReturn "emp" ViewDef.Unit
 
 /// Parses a `basic` view definition (unit, if, named, or bracketed).
 let parseBasicViewDef =
@@ -325,7 +325,7 @@ let parseBasicViewDef =
              inParens parseViewDef ]
              // ( <view> )
 
-do parseViewDefRef := parseViewLike parseBasicViewDef DJoin
+do parseViewDefRef := parseViewLike parseBasicViewDef ViewDef.Join
 
 
 (*
@@ -335,8 +335,8 @@ do parseViewDefRef := parseViewLike parseBasicViewDef DJoin
 /// Parses a view prototype.
 let parseViewProto = 
     pstring "view" >>. ws >>. wrapFuncLike parseIdentifier (fun (n, p) -> 
-                                  { VPName = n
-                                    VPPars = p }) parseTypedParam .>> ws .>> pstring ";" .>> ws
+                                  { ViewProto.Name = n
+                                    Params = p }) parseTypedParam .>> ws .>> pstring ";" .>> ws
 
 
 (*
@@ -470,16 +470,16 @@ let parseVar kw = pstring kw >>. ws
 let parseScript =
     // TODO(CaptainHayashi): parse things that aren't methods:
     //   axioms definitions, etc
-    ws >>. manyTill (choice [parseMethod |>> SMethod
+    ws >>. manyTill (choice [parseMethod |>> Method
                              // ^- method <identifier> <arg-list> <block>
-                             parseConstraint |>> SConstraint
+                             parseConstraint |>> Constraint
                              // ^- constraint <view> => <expression> ;
-                             parseViewProto |>> SViewProto
+                             parseViewProto |>> ViewProto
                              // ^- view <identifier> ;
                              //  | view <identifier> <view-proto-param-list> ;
-                             parseVar "global" |>> SGlobal
+                             parseVar "global" |>> Global
                              // ^- global <type> <identifier> ;
-                             parseVar "local" |>> SLocal] .>> ws ) eof
+                             parseVar "local" |>> Local] .>> ws ) eof
                              // ^- local <type> <identifier> ;
 
 (*

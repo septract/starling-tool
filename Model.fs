@@ -17,15 +17,13 @@ type View = GenView<Z3.Expr>
 
 /// A conditional (flat or if-then-else) view.
 type CondView = 
-    // TODO(CaptainHayashi): rename to View.
-    | CITEView of Z3.BoolExpr * Multiset<CondView> * Multiset<CondView>
-    // TODO(CaptainHayashi): expand to all expressions.
-    | CSetView of View
+    | ITE of Z3.BoolExpr * Multiset<CondView> * Multiset<CondView>
+    | Func of View
 
 /// A guarded item.
 type Guarded<'a> = 
-    { GCond : Z3.BoolExpr
-      GItem : 'a }
+    { Cond : Z3.BoolExpr
+      Item : 'a }
 
 /// A guarded view.
 type GuarView = Guarded<View>

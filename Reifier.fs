@@ -10,7 +10,7 @@ open Starling.Framer
 open Starling.Semantics
 
 /// Converts a GuarView to a tuple.
-let tupleOfGuarView gv = (gv.GCond, gv.GItem)
+let tupleOfGuarView {Cond = c; Item = i} = (c, i)
 
 /// Reifies a single GuarView-list into a ReView.
 let reifySingle model view = 
@@ -26,8 +26,8 @@ let reifySingle model view =
         |> Multiset.toList
         |> List.unzip
     { // Then, separately add them into a ReView.
-      GCond = mkAnd model.Context guars
-      GItem = Multiset.ofList views }
+      Cond = mkAnd model.Context guars
+      Item = Multiset.ofList views }
 
 /// Reifies an entire view application.
 let reifyView model = 

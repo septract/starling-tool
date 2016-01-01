@@ -70,9 +70,9 @@ let reifyZUnguarded model uview =
     | Some vdef -> instantiateDef ctx uview vdef
     | None -> ctx.MkTrue()
 
-let reifyZSingle model view = 
+let reifyZSingle model {Cond = c; Item = i} = 
     let ctx = model.Context
-    mkImplies ctx view.GCond (reifyZUnguarded model view.GItem)
+    mkImplies ctx c (reifyZUnguarded model i)
 
 /// Z3-reifies an entire view application.
 let reifyZView model = 

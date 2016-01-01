@@ -26,7 +26,7 @@ let aftersOfEnv map =
     |> Map.toSeq
     |> Seq.map (snd
                 >> eraseVar
-                >> fun v -> v.VarPostExpr)
+                >> fun v -> v.PostExpr)
     |> Set.ofSeq
 
 /// Extracts all the post-state variables in the model.
@@ -47,17 +47,17 @@ let aftersNotInExpr model expr = aftersInModel model - aftersInExpr model expr
 let envVarTo sel env (expr : #Expr) var = 
     lookupVar env var |> either (fst
                                  >> eraseVar
-                                 >> fun v -> expr.Substitute(v.VarExpr, sel v)) (fun _ -> expr :> Expr)
+                                 >> fun v -> expr.Substitute(v.Expr, sel v)) (fun _ -> expr :> Expr)
 
 /// Substitutes the before version of a variable in an expression.
 /// Returns the expression unchanged if the requested variable does not
 /// exist.
-let envVarToBefore e = envVarTo (fun v -> v.VarPreExpr) e
+let envVarToBefore e = envVarTo (fun v -> v.PreExpr) e
 
 /// Substitutes the after version of a variable in an expression.
 /// Returns the expression unchanged if the requested variable does not
 /// exist.
-let envVarToAfter e = envVarTo (fun v -> v.VarPostExpr) e
+let envVarToAfter e = envVarTo (fun v -> v.PostExpr) e
 
 /// Performs the given substitution for all variables in the
 /// given sequence.

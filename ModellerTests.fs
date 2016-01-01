@@ -37,7 +37,7 @@ let testExprToZ3 ctx =
         [ testList "Test translation of arithmetic expressions" 
               [ testCase "Test arithmetic-only expressions" 
                 <| fun _ -> 
-                    assertZ3ArithExpr ctx (BopExp(Add, BopExp(Mul, IntExp 1L, IntExp 2L), IntExp 3L)) 
+                    assertZ3ArithExpr ctx (Bop(Add, Bop(Mul, Int 1L, Int 2L), Int 3L)) 
                         (ctx.MkAdd [| ctx.MkMul [| ctx.MkInt 1 :> ArithExpr
                                                    ctx.MkInt 2 :> ArithExpr |]
                                       ctx.MkInt 3 :> ArithExpr |]) ]
@@ -47,18 +47,18 @@ let testExprToZ3 ctx =
                     (* We simplify obviously-true/false expressions down.
                      * This is one of them.
                      *)
-                    assertZ3BoolExpr ctx (BopExp(And, BopExp(Or, TrueExp, TrueExp), FalseExp)) (ctx.MkFalse()) ] ]
+                    assertZ3BoolExpr ctx (Bop(And, Bop(Or, True, True), False)) (ctx.MkFalse()) ] ]
 
 let testModelVarListNoDuplicates ctx = 
     testList "Test modelling of variables forbids duplicates" 
         [ testCase "Forbid duplicate with same type" <| fun _ -> 
-              Assert.Equal("bool foo; bool foo -> error", fail <| Starling.Errors.Var.VMEDuplicate "foo", 
-                           Starling.Var.makeVarMap ctx [ (Bool, "foo")
-                                                         (Bool, "foo") ])
+              Assert.Equal("bool foo; bool foo -> error", fail <| Starling.Errors.Var.Duplicate "foo", 
+                           Starling.Var.makeVarMap ctx [ (Type.Bool, "foo")
+                                                         (Type.Bool, "foo") ])
           testCase "Forbid duplicate with different type" <| fun _ -> 
-              Assert.Equal("bool foo; int foo -> error", fail <| Starling.Errors.Var.VMEDuplicate "foo", 
-                           Starling.Var.makeVarMap ctx [ (Bool, "foo")
-                                                         (Int, "foo") ]) ]
+              Assert.Equal("bool foo; int foo -> error", fail <| Starling.Errors.Var.Duplicate "foo", 
+                           Starling.Var.makeVarMap ctx [ (Type.Bool, "foo")
+                                                         (Type.Int, "foo") ]) ]
 
 let testModelVars ctx = testList "Test modelling of variables" [ testModelVarListNoDuplicates ctx ]
 
@@ -70,7 +70,7 @@ let testModelPrimOnAtomic (ctx : Context) =
     <| fun _ -> 
         Assert.Equal
             ("modelPrimOnAtomic with <t = ticket++>", ok (IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment)), 
-             (modelPrimOnAtomic (ticketLockModel ctx) (Fetch(LVIdent "t", LVExp(LVIdent "ticket"), Increment))))
+             (modelPrimOnAtomic (ticketLockModel ctx) (Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment))))
 
 let testModelAxiomOnCommand (ctx : Context) = 
     testCase "test modelAxiomOnCommand with ticketed lock example" 
@@ -80,15 +80,15 @@ let testModelAxiomOnCommand (ctx : Context) =
              ok (PAAxiom { Conditions = 
                                { Pre = Multiset.empty()
                                  Post = 
-                                     Multiset.ofList [ CSetView { VName = "holdTick"
-                                                                  VParams = [ ctx.MkIntConst "t" ] } ] }
+                                     Multiset.ofList [ CondView.Func { VName = "holdTick"
+                                                                       VParams = [ ctx.MkIntConst "t" ] } ] }
                            Inner = IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment) }), 
              (modelAxiomOnCommand (ticketLockModel ctx) 
                   { Pre = Multiset.empty()
                     Post = 
-                        Multiset.ofList [ CSetView { VName = "holdTick"
-                                                     VParams = [ ctx.MkIntConst "t" ] } ] } 
-                  (Atomic(Fetch(LVIdent "t", LVExp(LVIdent "ticket"), Increment)))))
+                        Multiset.ofList [ CondView.Func { VName = "holdTick"
+                                                          VParams = [ ctx.MkIntConst "t" ] } ] } 
+                  (Atomic(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment)))))
 
 let testMakeAxiomConditionPair (ctx : Context) = 
     testCase "Test makeAxiomConditionPair with ticketed lock example" 
@@ -97,9 +97,9 @@ let testMakeAxiomConditionPair (ctx : Context) =
             ("makeAxiomConditionPair emp holdTick(t)", 
              ok ({ Pre = Multiset.empty()
                    Post = 
-                       Multiset.ofList [ CSetView { VName = "holdTick"
-                                                    VParams = [ ctx.MkIntConst "t" ] } ] }), 
-             makeAxiomConditionPair (ticketLockModel ctx) (Unit) (Func("holdTick", [ LVExp(LVIdent "t") ])))
+                       Multiset.ofList [ CondView.Func { VName = "holdTick"
+                                                         VParams = [ ctx.MkIntConst "t" ] } ] }), 
+             makeAxiomConditionPair (ticketLockModel ctx) (Unit) (View.Func("holdTick", [ LV(LVIdent "t") ])))
 
 let testTicketedLock ctx = 
     testCase "Test that the ticketed lock produces the correct model" <| fun _ -> 

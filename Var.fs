@@ -71,49 +71,49 @@ let rewriteFrame name = name + "!r"
 
 /// A typed inner record of a variable.
 type TVar<'E when 'E :> Z3.Expr> = 
-    { VarExpr : 'E
-      VarPreExpr : 'E
-      VarPostExpr : 'E
-      VarFrameExpr : 'E }
+    { Expr : 'E
+      PreExpr : 'E
+      PostExpr : 'E
+      FrameExpr : 'E }
 
 /// A record of a variable in the program model.
 type Var = 
-    | IntVar of TVar<Z3.IntExpr>
-    | BoolVar of TVar<Z3.BoolExpr>
+    | Int of TVar<Z3.IntExpr>
+    | Bool of TVar<Z3.BoolExpr>
 
 /// Retrieves the type of a Var.
 let varType var = 
     match var with
-    | IntVar _ -> Int
-    | BoolVar _ -> Bool
+    | Var.Int _ -> Type.Int
+    | Var.Bool _ -> Type.Bool
 
 /// Erases the type information in a Var.
 let eraseVar tv = 
     match tv with
-    | IntVar iv -> 
-        { VarExpr = iv.VarExpr :> Z3.Expr
-          VarPreExpr = iv.VarPreExpr :> Z3.Expr
-          VarPostExpr = iv.VarPostExpr :> Z3.Expr
-          VarFrameExpr = iv.VarFrameExpr :> Z3.Expr }
-    | BoolVar bv -> 
-        { VarExpr = bv.VarExpr :> Z3.Expr
-          VarPreExpr = bv.VarPreExpr :> Z3.Expr
-          VarPostExpr = bv.VarPostExpr :> Z3.Expr
-          VarFrameExpr = bv.VarFrameExpr :> Z3.Expr }
+    | Int iv -> 
+        { Expr = iv.Expr :> Z3.Expr
+          PreExpr = iv.PreExpr :> Z3.Expr
+          PostExpr = iv.PostExpr :> Z3.Expr
+          FrameExpr = iv.FrameExpr :> Z3.Expr }
+    | Bool bv -> 
+        { Expr = bv.Expr :> Z3.Expr
+          PreExpr = bv.PreExpr :> Z3.Expr
+          PostExpr = bv.PostExpr :> Z3.Expr
+          FrameExpr = bv.FrameExpr :> Z3.Expr }
 
 /// Converts a variable name and type to a Var.
 let makeVar (ctx : Z3.Context) ty (name : string) = 
     match ty with
-    | Int -> 
-        IntVar { VarExpr = ctx.MkIntConst name
-                 VarPreExpr = ctx.MkIntConst(rewritePre name)
-                 VarPostExpr = ctx.MkIntConst(rewritePost name)
-                 VarFrameExpr = ctx.MkIntConst(rewriteFrame name) }
-    | Bool -> 
-        BoolVar { VarExpr = ctx.MkBoolConst name
-                  VarPreExpr = ctx.MkBoolConst(rewritePre name)
-                  VarPostExpr = ctx.MkBoolConst(rewritePost name)
-                  VarFrameExpr = ctx.MkBoolConst(rewriteFrame name) }
+    | Type.Int -> 
+        Var.Int { Expr = ctx.MkIntConst name
+                  PreExpr = ctx.MkIntConst(rewritePre name)
+                  PostExpr = ctx.MkIntConst(rewritePost name)
+                  FrameExpr = ctx.MkIntConst(rewriteFrame name) }
+    | Type.Bool -> 
+        Var.Bool { Expr = ctx.MkBoolConst name
+                   PreExpr = ctx.MkBoolConst(rewritePre name)
+                   PostExpr = ctx.MkBoolConst(rewritePost name)
+                   FrameExpr = ctx.MkBoolConst(rewriteFrame name) }
 
 /// A variable map.
 type VarMap = Map<string, Var>
@@ -125,7 +125,7 @@ let makeVarMap (ctx : Z3.Context) lst =
     |> findDuplicates
     |> function 
     | [] -> List.foldBack (fun (ty, name) (map : VarMap) -> map.Add(name, makeVar ctx ty name)) lst Map.empty |> ok
-    | ds -> List.map VMEDuplicate ds |> Bad
+    | ds -> List.map Duplicate ds |> Bad
 
 /// Tries to combine two variable maps.
 /// Fails if the environments are not disjoint.
@@ -134,7 +134,7 @@ let combineMaps (a : VarMap) (b : VarMap) =
     Map.fold (fun (sR : Result<VarMap, VarMapError>) name var -> 
         trial { 
             let! s = sR
-            if s.ContainsKey name then return! (fail (VMEDuplicate name))
+            if s.ContainsKey name then return! (fail (Duplicate name))
             else return (s.Add(name, var))
         }) (ok a) b
 
@@ -149,7 +149,7 @@ let tryLookupVar env = function
 let lookupVar env s = 
     s
     |> tryLookupVar env
-    |> failIfNone (VMENotFound(flattenLV s))
+    |> failIfNone (NotFound(flattenLV s))
 
 (*
  * Fetch modes

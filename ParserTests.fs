@@ -23,19 +23,19 @@ type ParserTests() =
     static member ExpressionParses = 
         seq { 
             yield (new TestCaseData("1 + 2 * 3"))
-                .Returns(Some(BopExp(Add, IntExp 1L, BopExp(Mul, IntExp 2L, IntExp 3L))))
+                .Returns(Some(Bop(Add, Int 1L, Bop(Mul, Int 2L, Int 3L))))
             yield (new TestCaseData("(1 + 2) * 3"))
-                .Returns(Some(BopExp(Mul, BopExp(Add, IntExp 1L, IntExp 2L), IntExp 3L)))
+                .Returns(Some(Bop(Mul, Bop(Add, Int 1L, Int 2L), Int 3L)))
             yield (new TestCaseData("1 + 2 < 3 * 4 && true || 5 / 6 > 7 - 8"))
                 .Returns(Some
-                             ((BopExp
+                             ((Bop
                                    (Or, 
-                                    BopExp
+                                    Bop
                                         (And, 
-                                         BopExp
-                                             (Lt, BopExp(Add, IntExp 1L, IntExp 2L), BopExp(Mul, IntExp 3L, IntExp 4L)), 
-                                         TrueExp), 
-                                    BopExp(Gt, BopExp(Div, IntExp 5L, IntExp 6L), BopExp(Sub, IntExp 7L, IntExp 8L))))))
+                                         Bop
+                                             (Lt, Bop(Add, Int 1L, Int 2L), Bop(Mul, Int 3L, Int 4L)), 
+                                         True), 
+                                    Bop(Gt, Bop(Div, Int 5L, Int 6L), Bop(Sub, Int 7L, Int 8L))))))
         }
     
     [<TestCaseSource("ExpressionParses")>]
@@ -50,11 +50,11 @@ type ParserTests() =
         seq { 
             yield (new TestCaseData("foo++")).Returns(Some(Postfix(LVIdent "foo", Increment)))
             yield (new TestCaseData("foo--")).Returns(Some(Postfix(LVIdent "foo", Decrement)))
-            yield (new TestCaseData("foo = bar")).Returns(Some(Fetch(LVIdent "foo", LVExp(LVIdent "bar"), Direct)))
-            yield (new TestCaseData("foo = bar++")).Returns(Some(Fetch(LVIdent "foo", LVExp(LVIdent "bar"), Increment)))
-            yield (new TestCaseData("foo = bar--")).Returns(Some(Fetch(LVIdent "foo", LVExp(LVIdent "bar"), Decrement)))
+            yield (new TestCaseData("foo = bar")).Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Direct)))
+            yield (new TestCaseData("foo = bar++")).Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Increment)))
+            yield (new TestCaseData("foo = bar--")).Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Decrement)))
             yield (new TestCaseData("CAS(foo, bar, 2)"))
-                .Returns(Some(CompareAndSwap(LVIdent "foo", LVIdent "bar", IntExp 2L)))
+                .Returns(Some(CompareAndSwap(LVIdent "foo", LVIdent "bar", Int 2L)))
         }
     
     [<TestCaseSource("AtomicParses")>]

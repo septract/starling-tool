@@ -13,9 +13,9 @@ type PrettyTests() =
     /// Test cases for printExpression.
     static member Exprs = 
         seq { 
-            yield (new TestCaseData(IntExp 5L)).Returns("5").SetName("print expression 5")
-            yield (new TestCaseData(BopExp(Div, IntExp 6L, LVExp (LVIdent "bar")))).Returns("(6 / bar)").SetName("print expression 6 / bar")
-            yield (new TestCaseData(BopExp(Mul, BopExp(Add, IntExp 1L, IntExp 2L), IntExp 3L))).Returns("((1 + 2) * 3)").SetName("print expression (1 + 2) * 3")
+            yield (new TestCaseData(Int 5L)).Returns("5").SetName("print expression 5")
+            yield (new TestCaseData(Bop(Div, Int 6L, LV (LVIdent "bar")))).Returns("(6 / bar)").SetName("print expression 6 / bar")
+            yield (new TestCaseData(Bop(Mul, Bop(Add, Int 1L, Int 2L), Int 3L))).Returns("((1 + 2) * 3)").SetName("print expression (1 + 2) * 3")
         }
     
     [<TestCaseSource("Exprs")>]

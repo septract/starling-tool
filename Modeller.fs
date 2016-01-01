@@ -39,11 +39,11 @@ let (|ArithIn|BoolIn|AnyIn|) =
 /// arithmetic, Boolean, or indeterminate.
 let (|BoolExp|ArithExp|AnyExp|) = 
     function 
-    | LVExp _ -> AnyExp
-    | IntExp _ -> ArithExp
-    | TrueExp | FalseExp -> BoolExp
-    | BopExp(BoolOp, _, _) -> BoolExp
-    | BopExp(ArithOp, _, _) -> ArithExp
+    | LV _ -> AnyExp
+    | Int _ -> ArithExp
+    | True | False -> BoolExp
+    | Bop(BoolOp, _, _) -> BoolExp
+    | Bop(ArithOp, _, _) -> ArithExp
 
 (*
  * Expression translation
@@ -57,15 +57,15 @@ let rec anyExprToZ3 model env expr =
     (* First, if we have a variable, the type of expression is
      * determined by the type of the variable.
      *)
-    | LVExp v -> 
+    | LV v -> 
         (* Look-up the variable to ensure it a) exists and b) is of a
          * Boolean type.
          *)
         trial { 
             let! vt = lookupVar env v |> mapMessages ((curry Var) v)
             match vt with
-            | BoolVar _ -> return (mkBoolLV ctx v) :> Expr
-            | IntVar _ -> return (mkIntLV ctx v) :> Expr
+            | Var.Bool _ -> return (mkBoolLV ctx v) :> Expr
+            | Var.Int _ -> return (mkIntLV ctx v) :> Expr
         }
     (* We can use the active patterns above to figure out whether we
      * need to treat this expression as arithmetic or Boolean.
@@ -79,19 +79,19 @@ let rec anyExprToZ3 model env expr =
 and boolExprToZ3 model env expr = 
     let ctx = model.Context
     match expr with
-    | TrueExp -> ctx.MkTrue() |> ok
-    | FalseExp -> ctx.MkFalse() |> ok
-    | LVExp v -> 
+    | True -> ctx.MkTrue() |> ok
+    | False -> ctx.MkFalse() |> ok
+    | LV v -> 
         (* Look-up the variable to ensure it a) exists and b) is of a
          * Boolean type.
          *)
         trial { 
             let! vt = lookupVar env v |> mapMessages ((curry Var) v)
             match vt with
-            | BoolVar _ -> return (mkBoolLV ctx v)
+            | Var.Bool _ -> return (mkBoolLV ctx v)
             | _ -> return! (fail <| VarNotBoolean v)
         }
-    | BopExp(BoolOp as op, l, r) -> 
+    | Bop(BoolOp as op, l, r) -> 
         match op with
         | ArithIn as o -> 
             trial { 
@@ -130,18 +130,18 @@ and boolExprToZ3 model env expr =
 and arithExprToZ3 model env expr = 
     let ctx = model.Context
     match expr with
-    | IntExp i -> ((ctx.MkInt i) :> ArithExpr) |> ok
-    | LVExp v -> 
+    | Int i -> ((ctx.MkInt i) :> ArithExpr) |> ok
+    | LV v -> 
         (* Look-up the variable to ensure it a) exists and b) is of an
          * arithmetic type.
          *)
         trial { 
             let! vt = lookupVar env v |> mapMessages ((curry Var) v)
             match vt with
-            | IntVar _ -> return (mkIntLV ctx v) :> ArithExpr
+            | Var.Int _ -> return (mkIntLV ctx v) :> ArithExpr
             | _ -> return! (fail <| VarNotArith v)
         }
-    | BopExp(ArithOp as op, l, r) -> 
+    | Bop(ArithOp as op, l, r) -> 
         trial { 
             let! lA = arithExprToZ3 model env l
             let! rA = arithExprToZ3 model env r
@@ -161,11 +161,11 @@ and arithExprToZ3 model env expr =
 /// Tries to flatten a view definition AST into a multiset.
 let rec viewDefToSet = 
     function 
-    | DFunc(s, pars) -> 
+    | ViewDef.Func(s, pars) -> 
         [ { VName = s
             VParams = pars } ]
-    | DUnit -> []
-    | DJoin(l, r) -> joinViewDefs l r
+    | ViewDef.Unit -> []
+    | ViewDef.Join(l, r) -> joinViewDefs l r
 
 /// Merges two sides of a view monoid in the AST into one multiset.
 and joinViewDefs l r = List.append (viewDefToSet l) (viewDefToSet r)
@@ -198,11 +198,11 @@ let rec modelViewDef model vd =
     let ctx = model.Context
     let vpm = model.VProtos
     match vd with
-    | DUnit -> ok []
-    | DFunc(v, pars) -> modelFuncViewDef ctx vpm v pars
-    | DJoin(l, r) -> trial { let! lM = modelViewDef model l
-                             let! rM = modelViewDef model r
-                             return List.append lM rM }
+    | ViewDef.Unit -> ok []
+    | ViewDef.Func(v, pars) -> modelFuncViewDef ctx vpm v pars
+    | ViewDef.Join(l, r) -> trial { let! lM = modelViewDef model l
+                                    let! rM = modelViewDef model r
+                                    return List.append lM rM }
 
 /// Produces the environment created by interpreting the viewdef vds using the
 /// view prototype map vpm.
@@ -230,7 +230,7 @@ let modelConstraint model { CView = av; CExpression = ae } =
 
 /// Extracts the view constraints from a CollatedScript, turning each into a
 /// Model.Constraint.
-let modelConstraints model { CConstraints = cs } = 
+let modelConstraints model { Constraints = cs } = 
     cs
     |> List.map (modelConstraint model)
     |> collect
@@ -249,14 +249,14 @@ let rec modelView model vast =
                                 |> anyExprToZ3 model model.Locals
                                 |> mapMessages (curry VEBadExpr e))
                          |> collect
-            return [ CSetView { VName = s
-                                VParams = pexps } ]
+            return [ CondView.Func { VName = s
+                                     VParams = pexps } ]
                    |> Multiset.ofList
         }
     | IfView(e, l, r) -> trial { let! ez3 = boolExprToZ3 model model.Locals e |> mapMessages (curry VEBadExpr e)
                                  let! lvs = modelView model l
                                  let! rvs = modelView model r
-                                 return (CITEView(ez3, lvs, rvs) |> Multiset.singleton) }
+                                 return (ITE(ez3, lvs, rvs) |> Multiset.singleton) }
     | Unit -> Multiset.empty() |> ok
     | Join(l, r) -> joinViews model l r
 
@@ -272,8 +272,8 @@ let primToAxiom cpair prim =
       Inner = prim }
     |> PAAxiom
 
-let (|GlobalVar|_|) model (lvalue : Var.LValue) = tryLookupVar model.Globals lvalue
-let (|LocalVar|_|) model (lvalue : Var.LValue) = tryLookupVar model.Locals lvalue
+let (|GlobalVar|_|) {Model.Globals = gs} (lvalue : Var.LValue) = tryLookupVar gs lvalue
+let (|LocalVar|_|) {Model.Locals = ls} (lvalue : Var.LValue) = tryLookupVar ls lvalue
 
 /// Tries to look up the type of a local variable in an axiom context.
 /// Returns a Chessie result; failures have AEBadLocal messages.
@@ -283,7 +283,7 @@ let lookupLocalType model =
     | lv -> 
         lv
         |> flattenLV
-        |> VMENotFound
+        |> NotFound
         |> curry AEBadLocal lv
         |> fail
 
@@ -295,7 +295,7 @@ let lookupGlobalType model =
     | lv -> 
         lv
         |> flattenLV
-        |> VMENotFound
+        |> NotFound
         |> curry AEBadGlobal lv
         |> fail
 
@@ -314,14 +314,14 @@ let modelPrimOnBoolLoad model atom dest src mode =
      *                    and the fetch mode must be Direct.
      *)
     match src with
-    | LVExp s -> 
+    | LV s -> 
         trial { 
             let! stype = lookupGlobalType model s
             match stype, mode with
-            | Bool, Direct -> return BoolLoad(dest, s)
-            | Bool, Increment -> return! fail <| AEUnsupportedAtomic(atom, "cannot increment a Boolean global")
-            | Bool, Decrement -> return! fail <| AEUnsupportedAtomic(atom, "cannot decrement a Boolean global")
-            | _ -> return! fail <| AETypeMismatch(Bool, s, stype)
+            | Type.Bool, Direct -> return BoolLoad(dest, s)
+            | Type.Bool, Increment -> return! fail <| AEUnsupportedAtomic(atom, "cannot increment a Boolean global")
+            | Type.Bool, Decrement -> return! fail <| AEUnsupportedAtomic(atom, "cannot decrement a Boolean global")
+            | _ -> return! fail <| AETypeMismatch(Type.Bool, s, stype)
         }
     | _ -> fail <| AEUnsupportedAtomic(atom, "loads must have a lvalue source")
 
@@ -332,12 +332,12 @@ let modelPrimOnIntLoad model atom dest src mode =
      *                    and the fetch mode is unconstrained.
      *)
     match src with
-    | LVExp s -> 
+    | LV s -> 
         trial { 
             let! stype = lookupGlobalType model s
             match stype, mode with
-            | Int, _ -> return IntLoad(Some dest, s, mode)
-            | _ -> return! fail <| AETypeMismatch(Int, s, stype)
+            | Type.Int, _ -> return IntLoad(Some dest, s, mode)
+            | _ -> return! fail <| AETypeMismatch(Type.Int, s, stype)
         }
     | _ -> fail <| AEUnsupportedAtomic(atom, "loads must have a lvalue source")
 
@@ -391,12 +391,12 @@ let rec modelPrimOnAtomic model atom =
             let! dtype = lookupGlobalType model dest
             let! ttype = lookupLocalType model test
             match dtype, ttype with
-            | Bool, Bool -> let! setz3 = axiomBoolExprToZ3 model set
-                            // TODO(CaptainHayashi): test locality of c
-                            return BoolCAS(dest, test, setz3)
-            | Int, Int -> let! setz3 = axiomArithExprToZ3 model set
-                          // TODO(CaptainHayashi): test locality of c
-                          return IntCAS(dest, test, setz3)
+            | Type.Bool, Type.Bool -> let! setz3 = axiomBoolExprToZ3 model set
+                                      // TODO(CaptainHayashi): test locality of c
+                                      return BoolCAS(dest, test, setz3)
+            | Type.Int, Type.Int -> let! setz3 = axiomArithExprToZ3 model set
+                                    // TODO(CaptainHayashi): test locality of c
+                                    return IntCAS(dest, test, setz3)
             | _ -> 
                 // Oops, we have a type error.
                 // Arbitrarily single out test as the cause of it.
@@ -410,12 +410,12 @@ let rec modelPrimOnAtomic model atom =
          * We figure this out by looking at dest.
          *)
         match dest with
-        | GlobalVar model (IntVar _) -> modelPrimOnIntStore model atom dest src mode
-        | GlobalVar model (BoolVar _) -> modelPrimOnBoolStore model atom dest src mode
-        | LocalVar model (IntVar _) -> modelPrimOnIntLoad model atom dest src mode
-        | LocalVar model (BoolVar _) -> modelPrimOnBoolLoad model atom dest src mode
+        | GlobalVar model (Var.Int _) -> modelPrimOnIntStore model atom dest src mode
+        | GlobalVar model (Var.Bool _) -> modelPrimOnBoolStore model atom dest src mode
+        | LocalVar model (Var.Int _) -> modelPrimOnIntLoad model atom dest src mode
+        | LocalVar model (Var.Bool _) -> modelPrimOnBoolLoad model atom dest src mode
         // TODO(CaptainHayashi): incorrect error here.
-        | lv -> fail <| AEBadGlobal(lv, VMENotFound(flattenLV dest))
+        | lv -> fail <| AEBadGlobal(lv, NotFound(flattenLV dest))
     | Postfix(operand, mode) -> 
         (* A Postfix is basically a Fetch with no destination, at this point.
          * Thus, the source must be GLOBAL.
@@ -425,9 +425,9 @@ let rec modelPrimOnAtomic model atom =
             let! stype = lookupGlobalType model operand
             match mode, stype with
             | Direct, _ -> return! fail <| AEUnsupportedAtomic(atom, "<var>; has no effect; use <id>; or ; for no-ops")
-            | Increment, Bool -> return! fail <| AEUnsupportedAtomic(atom, "cannot increment a Boolean global")
-            | Decrement, Bool -> return! fail <| AEUnsupportedAtomic(atom, "cannot decrement a Boolean global")
-            | _, Int -> return IntLoad(None, operand, mode)
+            | Increment, Type.Bool -> return! fail <| AEUnsupportedAtomic(atom, "cannot increment a Boolean global")
+            | Decrement, Type.Bool -> return! fail <| AEUnsupportedAtomic(atom, "cannot decrement a Boolean global")
+            | _, Type.Int -> return IntLoad(None, operand, mode)
         }
     | Id -> ok PrimId
     | Assume e -> axiomBoolExprToZ3 model e |> lift PrimAssume
@@ -441,10 +441,10 @@ and modelPrimOnAssign model l e =
     trial { 
         let! ltype = lookupLocalType model l
         match ltype with
-        | Bool -> let! ez3 = axiomBoolExprToZ3 model e
-                  return BoolLocalSet(l, ez3)
-        | Int -> let! ez3 = axiomArithExprToZ3 model e
-                 return IntLocalSet(l, ez3)
+        | Type.Bool -> let! ez3 = axiomBoolExprToZ3 model e
+                       return BoolLocalSet(l, ez3)
+        | Type.Int -> let! ez3 = axiomArithExprToZ3 model e
+                      return IntLocalSet(l, ez3)
     }
 
 /// Creates a partially resolved axiom for an if-then-else.
@@ -548,8 +548,8 @@ let modelAxioms model methods =
     |> lift List.concat
 
 /// Checks a view prototype to see if it contains duplicate parameters.
-let checkViewProtoDuplicates proto = 
-    proto.VPPars
+let checkViewProtoDuplicates (proto : ViewProto) = 
+    proto.Params
     |> List.map snd
     |> findDuplicates
     |> function 
@@ -560,7 +560,7 @@ let checkViewProtoDuplicates proto =
 let modelViewProto proto = 
     proto
     |> checkViewProtoDuplicates
-    |> lift (fun pro -> (pro.VPName, pro.VPPars))
+    |> lift (fun pro -> (pro.Name, pro.Params))
     |> mapMessages (curry MEVProto proto)
 
 /// Checks view prototypes and converts them to map form.
@@ -574,10 +574,10 @@ let modelViewProtos protos =
 /// Converts a collated script to a model with the given context.
 let modelWith ctx collated = 
     trial { 
-        let! vprotos = modelViewProtos collated.CVProtos
+        let! vprotos = modelViewProtos collated.VProtos
         // Make variable maps out of the global and local variable definitions.
-        let! globals = makeVarMap ctx collated.CGlobals |> mapMessages MEVar
-        let! locals = makeVarMap ctx collated.CLocals |> mapMessages MEVar
+        let! globals = makeVarMap ctx collated.Globals |> mapMessages MEVar
+        let! locals = makeVarMap ctx collated.Locals |> mapMessages MEVar
         (* We use a 'partial' model, with no defining views or
             * axioms, in the creation of the constraints.
             *)
@@ -600,7 +600,7 @@ let modelWith ctx collated =
               VProtos = vprotos
               DefViews = constraints
               Axioms = () }
-        let! axioms = modelAxioms pmod collated.CMethods
+        let! axioms = modelAxioms pmod collated.Methods
         return (withAxioms axioms pmod)
     }
 

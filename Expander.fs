@@ -11,13 +11,13 @@ open Microsoft.Z3
 /// suffix of any guards generated from this view.
 let rec resolveCondViewIn (suffix : Set<BoolExpr>) (ctx : Context) = 
     function 
-    | CSetView v -> 
-        [ { GCond = 
+    | Func v -> 
+        [ { Cond = 
                 suffix
                 |> Set.toArray
                 |> mkAnd ctx
-            GItem = v } ]
-    | CITEView(expr, tviews, fviews) -> 
+            Item = v } ]
+    | ITE(expr, tviews, fviews) -> 
         List.concat [ resolveCondViewsIn (suffix.Add expr) ctx (Multiset.toList tviews)
                       resolveCondViewsIn (suffix.Add(ctx.MkNot expr)) ctx (Multiset.toList fviews) ]
 
