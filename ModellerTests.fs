@@ -99,7 +99,7 @@ let testMakeAxiomConditionPair (ctx : Context) =
                    Post = 
                        Multiset.ofList [ CondView.Func { VName = "holdTick"
                                                          VParams = [ ctx.MkIntConst "t" ] } ] }), 
-             makeAxiomConditionPair (ticketLockModel ctx) (Unit) (View.Func("holdTick", [ LV(LVIdent "t") ])))
+             makeAxiomConditionPair (ticketLockModel ctx) (Unit) (View.Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]}))
 
 let testTicketedLock ctx = 
     testCase "Test that the ticketed lock produces the correct model" <| fun _ -> 

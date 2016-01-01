@@ -225,6 +225,9 @@ let parseParamList argp =
     // ^- ()
     //  | ( <params> )
 
+/// Parses a Func given the argument parser argp.
+let parseFunc argp =
+    pipe2ws parseIdentifier (parseParamList argp) (fun f xs -> {Name = f; Params = xs})
 
 (*
  * View-likes (views and view definitions).
@@ -238,21 +241,6 @@ let parseViewLike basic join =
             //  | <basic-view> ...
             (stringReturn "*" (curry join) .>> ws)
             //                 ... * <view>
-
-/// Takes a view name and optional argument list, and creates the
-/// view using `ctor`, substituting in an empty list if none exists.
-/// view in `Apply` if the optional argument list exists.
-let addViewArgs ctor vname x =
-    ctor (vname, withDefault [] x)
-
-/// Parses a possible argument list for an application of a parametric view.
-let parseFuncLike argp = ws >>. opt (parseParamList argp) .>> ws
-
-/// Takes a view parser and tries to parse an argument list after it.
-/// Wraps the parsed command in `Apply` if an argument list exists.
-let wrapFuncLike parser ctor argp =
-    pipe2 parser (parseFuncLike argp) (addViewArgs ctor)
-
 
 (*
  * Types.
@@ -281,7 +269,7 @@ let parseIfView =
             (curry3 IfView)
 
 /// Parses a functional view.
-let parseFuncView = wrapFuncLike parseIdentifier Func parseExpression
+let parseFuncView = parseFunc parseExpression |>> View.Func
 
 /// Parses the unit view (`emp`, for our purposes).
 let parseUnit = stringReturn "emp" Unit
@@ -310,7 +298,7 @@ let parseViewLine = inViewBraces parseView
  *)
 
 /// Parses a functional view definition.
-let parseDFuncView = wrapFuncLike parseIdentifier ViewDef.Func parseIdentifier
+let parseDFuncView = parseFunc parseIdentifier |>> ViewDef.Func
 
 /// Parses the unit view definition.
 let parseDUnit = stringReturn "emp" ViewDef.Unit
@@ -334,9 +322,7 @@ do parseViewDefRef := parseViewLike parseBasicViewDef ViewDef.Join
 
 /// Parses a view prototype.
 let parseViewProto = 
-    pstring "view" >>. ws >>. wrapFuncLike parseIdentifier (fun (n, p) -> 
-                                  { ViewProto.Name = n
-                                    Params = p }) parseTypedParam .>> ws .>> pstring ";" .>> ws
+    pstring "view" >>. ws >>. parseFunc parseTypedParam .>> ws .>> pstring ";" .>> ws
 
 
 (*
@@ -450,13 +436,11 @@ let parseConstraint =
 let parseMethod =
     pstring "method" >>. ws >>.
     // ^- method ...
-        pipe3ws parseIdentifier
-                // ^- <identifier> ...
-                (parseParamList parseIdentifier)
-                // ^-              ... <arg-list> ...
+        pipe2ws (parseFunc parseIdentifier)
+                // ^- <identifier> <arg-list> ...
                 parseBlock
                 // ^-                             ... <block>
-                (fun n ps b -> {Name = n ; Params = ps ; Body = b} )
+                (fun s b -> {Signature = s ; Body = b} )
 
 /// Parses a variable with the given initial keyword.
 let parseVar kw = pstring kw >>. ws

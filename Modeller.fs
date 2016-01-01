@@ -161,7 +161,7 @@ and arithExprToZ3 model env expr =
 /// Tries to flatten a view definition AST into a multiset.
 let rec viewDefToSet = 
     function 
-    | ViewDef.Func(s, pars) -> 
+    | ViewDef.Func {Name = s; Params = pars} -> 
         [ { VName = s
             VParams = pars } ]
     | ViewDef.Unit -> []
@@ -199,7 +199,7 @@ let rec modelViewDef model vd =
     let vpm = model.VProtos
     match vd with
     | ViewDef.Unit -> ok []
-    | ViewDef.Func(v, pars) -> modelFuncViewDef ctx vpm v pars
+    | ViewDef.Func {Name = v; Params = pars} -> modelFuncViewDef ctx vpm v pars
     | ViewDef.Join(l, r) -> trial { let! lM = modelViewDef model l
                                     let! rM = modelViewDef model r
                                     return List.append lM rM }
@@ -241,7 +241,7 @@ let modelConstraints model { Constraints = cs } =
 /// Tries to flatten a view AST into a multiset.
 let rec modelView model vast = 
     match vast with
-    | Func(s, pars) -> 
+    | Func {Name = s; Params = pars} -> 
         trial { 
             let! pexps = pars
                          |> List.map (fun e -> 
@@ -532,7 +532,7 @@ and modelAxiomsOnBlock model block =
 
 /// Converts a method to a list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
-let modelAxiomsOnMethod model { Name = m; Body = b } = 
+let modelAxiomsOnMethod model { Signature = {Name = m}; Body = b } = 
     // TODO(CaptainHayashi): method parameters
     b
     |> modelAxiomsOnBlock model

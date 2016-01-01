@@ -39,10 +39,13 @@ let rec printExpression =
                printExpression b ]
         |> parened
 
+/// Pretty-prints Funcs using pxs to print parameters.
+let printFunc pxs { Name = f; Params = xs } = func f (Seq.map pxs xs)
+
 /// Pretty-prints views.
 let rec printView = 
     function 
-    | Func(vv, xs) -> func vv (List.map printExpression xs)
+    | Func f -> printFunc printExpression f
     | Unit -> String "emp"
     | Join(l, r) -> binop "*" (printView l) (printView r)
     | IfView(e, l, r) -> 
@@ -56,7 +59,7 @@ let rec printView =
 /// Pretty-prints view definitions.
 let rec printViewDef = 
     function 
-    | ViewDef.Func(vv, xs) -> func vv (List.map String xs)
+    | ViewDef.Func f -> printFunc String f
     | ViewDef.Unit -> String "emp"
     | ViewDef.Join(l, r) -> binop "*" (printViewDef l) (printViewDef r)
 
@@ -146,9 +149,9 @@ and printBlock { Pre = p; Contents = c } =
     |> braced
 
 /// Pretty-prints methods.
-let printMethod { Name = n; Params = ps; Body = b } = 
+let printMethod { Signature = s; Body = b } = 
     hsep [ "method" |> String
-           func n (List.map String ps)
+           printFunc String s
            b |> printBlock ]
 
 /// Pretty-prints a variable type.

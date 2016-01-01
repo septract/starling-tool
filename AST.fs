@@ -26,6 +26,11 @@ type Expression =
     | LV of Var.LValue // foobaz
     | Bop of Bop * Expression * Expression // a BOP b
 
+/// A function-like construct.
+type Func<'a> =
+    { Name: string
+      Params: 'a list }
+
 /// An atomic action.
 type AtomicAction = 
     | CompareAndSwap of Var.LValue * Var.LValue * Expression // <CAS(a, b, c)>
@@ -35,21 +40,19 @@ type AtomicAction =
     | Assume of Expression // <assume(e)
 
 /// A view prototype.
-type ViewProto = 
-    { Name : string
-      Params : (Var.Type * string) list }
+type ViewProto = Func<(Var.Type * string)>
 
 /// A view definition.
 type ViewDef = 
     | Unit
     | Join of ViewDef * ViewDef
-    | Func of string * pars : string list
+    | Func of Func<string>
 
 /// A view expression.
 type View = 
     | Unit
     | Join of View * View
-    | Func of string * args : Expression list
+    | Func of Func<Expression>
     | IfView of Expression * View * View
 
 /// A statement in the command language.
@@ -80,8 +83,7 @@ type Constraint =
 
 /// A method.
 type Method = 
-    { Name : string // main ...
-      Params : string list // ... (argv, argc) ...
+    { Signature : Func<string> // main (argv, argc) ...
       Body : Block } // ... { ... }
 
 /// A top-level item in a Starling script.

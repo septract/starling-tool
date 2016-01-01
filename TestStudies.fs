@@ -33,9 +33,9 @@ method lock() {
     do {
       {| holdTick(t) |}
         <s = serving>;
-      {| if s == t then holdLock else holdTick(t) |}
+      {| if s == t then holdLock() else holdTick(t) |}
     } while (s != t);
-  {| holdLock |}
+  {| holdLock() |}
 }
 
 method unlock() {
@@ -47,31 +47,29 @@ method unlock() {
 
 /// The correct parsing of the ticketed lock's lock method.
 let ticketLockLockMethodAST = 
-    { Name = "lock"
-      Params = []
+    { Signature = {Name = "lock"; Params = []}
       Body = 
           { Pre = Unit
             Contents = 
                 [ { Command = Atomic(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment))
-                    Post = Func("holdTick", [ LV(LVIdent "t") ]) }
+                    Post = Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]} }
                   { Command = 
                         DoWhile
-                            ({ Pre = Func("holdTick", [ LV(LVIdent "t") ])
+                            ({ Pre = Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]}
                                Contents = 
                                    [ { Command = Atomic(Fetch(LVIdent "s", LV(LVIdent "serving"), Direct))
                                        Post = 
                                            IfView
-                                               (Bop(Eq, LV(LVIdent "s"), LV(LVIdent "t")), Func("holdLock", []), 
-                                                Func("holdTick", [ LV(LVIdent "t") ])) } ] }, 
+                                               (Bop(Eq, LV(LVIdent "s"), LV(LVIdent "t")), Func {Name = "holdLock"; Params = []}, 
+                                                Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]}) } ] }, 
                              Bop(Neq, LV(LVIdent "s"), LV(LVIdent "t")))
-                    Post = Func("holdLock", []) } ] } }
+                    Post = Func { Name = "holdLock"; Params = []} } ] } }
 
 /// The correct parsing of the ticketed lock's unlock method.
 let ticketLockUnlockMethodAST = 
-    { Name = "unlock"
-      Params = []
+    { Signature = {Name = "unlock"; Params = []}
       Body = 
-          { Pre = Func("holdLock", [])
+          { Pre = Func {Name = "holdLock"; Params = []}
             Contents = 
                 [ { Command = Atomic(Postfix(LVIdent "serving", Increment))
                     Post = Unit } ] } }
@@ -84,15 +82,15 @@ let ticketLockParsed =
                   Params = [] }
       Constraint { CView = ViewDef.Unit
                    CExpression = Bop(Ge, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
-      Constraint { CView = ViewDef.Func("holdTick", [ "t" ])
+      Constraint { CView = ViewDef.Func {Name = "holdTick"; Params = [ "t" ]}
                    CExpression = Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "t")) }
-      Constraint { CView = ViewDef.Func("holdLock", [])
+      Constraint { CView = ViewDef.Func {Name = "holdLock"; Params = []}
                    CExpression = Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
-      Constraint { CView = ViewDef.Join(ViewDef.Func("holdLock", []), ViewDef.Func("holdTick", [ "t" ]))
+      Constraint { CView = ViewDef.Join(ViewDef.Func {Name = "holdLock"; Params = []}, ViewDef.Func {Name = "holdTick"; Params = [ "t" ]})
                    CExpression = Bop(Neq, LV(LVIdent "serving"), LV(LVIdent "t")) }
-      Constraint { CView = ViewDef.Join(ViewDef.Func("holdTick", [ "ta" ]), ViewDef.Func("holdTick", [ "tb" ]))
+      Constraint { CView = ViewDef.Join(ViewDef.Func {Name = "holdTick"; Params = [ "ta" ]}, ViewDef.Func { Name = "holdTick"; Params = [ "tb" ]})
                    CExpression = Bop(Neq, LV(LVIdent "ta"), LV(LVIdent "tb")) }
-      Constraint { CView = ViewDef.Join(ViewDef.Func("holdLock", []), ViewDef.Func("holdLock", []))
+      Constraint { CView = ViewDef.Join(ViewDef.Func {Name = "holdLock"; Params = []}, ViewDef.Func { Name = "holdLock"; Params = []})
                    CExpression = False }
       Global(Type.Int, "ticket")
       Global(Type.Int, "serving")
@@ -119,18 +117,18 @@ let ticketLockCollated =
               CView = ViewDef.Unit
               CExpression = Bop(Ge, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
             { // constraint holdTick(t) => ticket > t;
-              CView = ViewDef.Func("holdTick", [ "t" ])
+              CView = ViewDef.Func {Name = "holdTick"; Params = [ "t" ]}
               CExpression = Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "t")) }
             { // constraint holdLock() => ticket > serving;
-              CView = ViewDef.Func("holdLock", [])
+              CView = ViewDef.Func {Name = "holdLock"; Params = []}
               CExpression = Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
             { // constraint holdLock() * holdTick(t) => serving != t;
-              CView = ViewDef.Join(ViewDef.Func("holdLock", []), ViewDef.Func("holdTick", [ "t" ]))
+              CView = ViewDef.Join(ViewDef.Func {Name = "holdLock"; Params = []}, ViewDef.Func {Name = "holdTick"; Params = [ "t" ]})
               CExpression = Bop(Neq, LV(LVIdent "serving"), LV(LVIdent "t")) }
             { // constraint holdLock() * holdLock() => false;
-              CView = ViewDef.Join(ViewDef.Func("holdTick", [ "ta" ]), ViewDef.Func("holdTick", [ "tb" ]))
+              CView = ViewDef.Join(ViewDef.Func {Name = "holdTick"; Params = [ "ta" ]}, ViewDef.Func {Name = "holdTick"; Params = [ "tb" ]})
               CExpression = Bop(Neq, LV(LVIdent "ta"), LV(LVIdent "tb")) }
-            { CView = ViewDef.Join(ViewDef.Func("holdLock", []), ViewDef.Func("holdLock", []))
+            { CView = ViewDef.Join(ViewDef.Func {Name = "holdLock"; Params = []}, ViewDef.Func {Name = "holdLock"; Params = []})
               CExpression = False } ]
       Methods = [ ticketLockLockMethodAST; ticketLockUnlockMethodAST ] }
 
