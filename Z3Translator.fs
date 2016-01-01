@@ -20,13 +20,13 @@ let findDefOfView model uviewm =
      *)
     List.tryFind (fun vdm -> 
         (* We need to do list operations on the multiset contents,
-             * so convert both sides to a (sorted) list.  We rely on the
-             * sortedness to make the next step sound.
-             *)
+         * so convert both sides to a (sorted) list.  We rely on the
+         * sortedness to make the next step sound.
+         *)
         let vd = Multiset.toList vdm.CViews
         (* Do these two views have the same number of terms?
-             * If not, using forall2 is an error.
-             *)
+         * If not, using forall2 is an error.
+         *)
         List.length vd = List.length uview && List.forall2 (fun d s -> d.VName = s.VName) vd uview) model.DefViews
 
 /// Produces a map of substitutions that transform the parameters of a
@@ -47,8 +47,8 @@ let generateParamSubs (ctx : Z3.Context) (dviewm : Multiset<ViewDef>) (uviewm : 
 
 /// Produces the reification of an unguarded view with regards to a
 /// given view definition.
+/// This corresponds to D in the theory.
 let instantiateDef ctx uview vdef = 
-    // This corresponds to D in the theory.
     (* First, we figure out the mapping from viewdef parameters to
      * actual view expressions.
      *)
@@ -63,8 +63,8 @@ let instantiateDef ctx uview vdef =
         vdef.CZ3 vsubs
 
 /// Produces the reification of an unguarded view multiset.
+/// This corresponds to D^ in the theory.
 let reifyZUnguarded model uview = 
-    // This corresponds to D^ in the theory.
     let ctx = model.Context
     match findDefOfView model uview with
     | Some vdef -> instantiateDef ctx uview vdef
