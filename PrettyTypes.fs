@@ -1,5 +1,6 @@
 module Starling.Pretty.Types
 
+open Starling.Collections
 open Starling.Utils
 
 /// Type of pretty-printer commands.
@@ -86,3 +87,6 @@ let rec printLevel level =
     | Nop -> ""
 
 let print = printLevel 0
+
+/// Pretty-prints Funcs using pxs to print parameters.
+let printFunc pxs { Name = f; Params = xs } = func f (Seq.map pxs xs)

@@ -1,5 +1,6 @@
 module Starling.Pretty.Lang.AST
 
+open Starling.Collections
 open Starling.Var
 open Starling.Lang.AST
 open Starling.Pretty.Types
@@ -38,9 +39,6 @@ let rec printExpression =
                printBop op
                printExpression b ]
         |> parened
-
-/// Pretty-prints Funcs using pxs to print parameters.
-let printFunc pxs { Name = f; Params = xs } = func f (Seq.map pxs xs)
 
 /// Pretty-prints views.
 let rec printView = 

@@ -80,14 +80,14 @@ let testModelAxiomOnCommand (ctx : Context) =
              ok (PAAxiom { Conditions = 
                                { Pre = Multiset.empty()
                                  Post = 
-                                     Multiset.ofList [ CondView.Func { VName = "holdTick"
-                                                                       VParams = [ ctx.MkIntConst "t" ] } ] }
+                                     Multiset.ofList [ CondView.Func { Name = "holdTick"
+                                                                       Params = [ ctx.MkIntConst "t" ] } ] }
                            Inner = IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment) }), 
              (modelAxiomOnCommand (ticketLockModel ctx) 
                   { Pre = Multiset.empty()
                     Post = 
-                        Multiset.ofList [ CondView.Func { VName = "holdTick"
-                                                          VParams = [ ctx.MkIntConst "t" ] } ] } 
+                        Multiset.ofList [ CondView.Func { Name = "holdTick"
+                                                          Params = [ ctx.MkIntConst "t" ] } ] } 
                   (Atomic(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment)))))
 
 let testMakeAxiomConditionPair (ctx : Context) = 
@@ -97,8 +97,8 @@ let testMakeAxiomConditionPair (ctx : Context) =
             ("makeAxiomConditionPair emp holdTick(t)", 
              ok ({ Pre = Multiset.empty()
                    Post = 
-                       Multiset.ofList [ CondView.Func { VName = "holdTick"
-                                                         VParams = [ ctx.MkIntConst "t" ] } ] }), 
+                       Multiset.ofList [ CondView.Func { Name = "holdTick"
+                                                         Params = [ ctx.MkIntConst "t" ] } ] }), 
              makeAxiomConditionPair (ticketLockModel ctx) (Unit) (View.Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]}))
 
 let testTicketedLock ctx = 

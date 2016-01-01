@@ -20,13 +20,13 @@ let termGenSeptractStep model (rdone, qstep) rnext =
      *
      * Our return value is (rdone2, qstep2).
      *)
-    let rname = rnext.Item.VName
-    let qname = qstep.Item.VName
+    let rname = rnext.Item.Name
+    let qname = qstep.Item.Name
     if rname = qname then 
         let b1 = rnext.Cond
         let b2 = qstep.Cond
-        let xbar = rnext.Item.VParams
-        let xbar2 = qstep.Item.VParams
+        let xbar = rnext.Item.Params
+        let xbar2 = qstep.Item.Params
         // xbar = xbar'
         let xbarEq = List.map2 (curry ctx.MkEq) xbar xbar2 |> mkAnd ctx
         

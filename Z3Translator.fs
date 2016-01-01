@@ -27,7 +27,7 @@ let findDefOfView model uviewm =
         (* Do these two views have the same number of terms?
          * If not, using forall2 is an error.
          *)
-        List.length vd = List.length uview && List.forall2 (fun d s -> d.VName = s.VName) vd uview) model.DefViews
+        List.length vd = List.length uview && List.forall2 (fun d s -> d.Name = s.Name) vd uview) model.DefViews
 
 /// Produces a map of substitutions that transform the parameters of a
 /// vdef into the arguments of its usage.
@@ -43,7 +43,7 @@ let generateParamSubs (ctx : Z3.Context) (dviewm : Multiset<ViewDef>) (uviewm : 
          *)
          fun subs dv uv -> 
         List.fold2 (fun s (ty, name : string) up -> (ctx.MkConst(name, typeToSort ctx ty), up :> Z3.Expr) :: s) subs 
-            dv.VParams uv.VParams) [] dview uview
+            dv.Params uv.Params) [] dview uview
 
 /// Produces the reification of an unguarded view with regards to a
 /// given view definition.

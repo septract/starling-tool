@@ -161,9 +161,7 @@ and arithExprToZ3 model env expr =
 /// Tries to flatten a view definition AST into a multiset.
 let rec viewDefToSet = 
     function 
-    | ViewDef.Func {Name = s; Params = pars} -> 
-        [ { VName = s
-            VParams = pars } ]
+    | ViewDef.Func f -> [f]
     | ViewDef.Unit -> []
     | ViewDef.Join(l, r) -> joinViewDefs l r
 
@@ -189,8 +187,8 @@ let modelFuncViewDef ctx vpm name dpars =
         let lppars = List.length ppars
         if ldpars <> lppars then fail <| VDEBadParamCount(name, lppars, ldpars)
         else 
-            ok <| [ { VName = name
-                      VParams = funcViewParMerge ppars dpars } ]
+            ok <| [ { Name = name
+                      Params = funcViewParMerge ppars dpars } ]
     | None -> fail <| VDENoSuchView name
 
 /// Tries to convert a view def into its model (multiset) form.
@@ -208,7 +206,7 @@ let rec modelViewDef model vd =
 /// view prototype map vpm.
 let rec envOfViewDef ctx = 
     Seq.ofList
-    >> Seq.map (fun vd -> makeVarMap ctx vd.VParams)
+    >> Seq.map (fun {Params = ps} -> makeVarMap ctx ps)
     >> seqBind (fun xR s -> bind (combineMaps s) xR) Map.empty
     >> mapMessages VDEBadVars
 
@@ -249,8 +247,8 @@ let rec modelView model vast =
                                 |> anyExprToZ3 model model.Locals
                                 |> mapMessages (curry VEBadExpr e))
                          |> collect
-            return [ CondView.Func { VName = s
-                                     VParams = pexps } ]
+            return [ CondView.Func { Name = s
+                                     Params = pexps } ]
                    |> Multiset.ofList
         }
     | IfView(e, l, r) -> trial { let! ez3 = boolExprToZ3 model model.Locals e |> mapMessages (curry VEBadExpr e)

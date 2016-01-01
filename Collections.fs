@@ -1,6 +1,11 @@
 /// Collections used in Starling.
 module Starling.Collections
 
+/// A function-like construct.
+type Func<'a> =
+    { Name: string
+      Params: 'a list }
+
 /// A multiset, or ordered list.
 type Multiset<'a> = 
     | MSet of 'a list

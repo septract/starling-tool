@@ -18,22 +18,22 @@ type ReifierTests() =
         seq {
             // Correct order 
             yield (new TestCaseData(fun (ctx : Z3.Context) -> 
-            (Multiset.ofList [ { VName = "holdLock"
-                                 VParams = [] }
-                               { VName = "holdTick"
-                                 VParams = [ ctx.MkIntConst "t" :> Z3.Expr ] } ]))).Returns(Some(Multiset.ofList [ { VName = "holdLock"
-                                                                                                                     VParams = [] }
-                                                                                                                   { VName = "holdTick"
-                                                                                                                     VParams = [ (Type.Int, "t") ] } ]))
+            (Multiset.ofList [ { Name = "holdLock"
+                                 Params = [] }
+                               { Name = "holdTick"
+                                 Params = [ ctx.MkIntConst "t" :> Z3.Expr ] } ]))).Returns(Some(Multiset.ofList [ { Name = "holdLock"
+                                                                                                                    Params = [] }
+                                                                                                                  { Name = "holdTick"
+                                                                                                                    Params = [ (Type.Int, "t") ] } ]))
             // Reversed order
             yield (new TestCaseData(fun (ctx : Z3.Context) -> 
-            (Multiset.ofList [ { VName = "holdTick"
-                                 VParams = [ ctx.MkIntConst "t" :> Z3.Expr ] }
-                               { VName = "holdLock"
-                                 VParams = [] } ]))).Returns(Some(Multiset.ofList [ { VName = "holdLock"
-                                                                                      VParams = [] }
-                                                                                    { VName = "holdTick"
-                                                                                      VParams = [ (Type.Int, "t") ] } ]))
+            (Multiset.ofList [ { Name = "holdTick"
+                                 Params = [ ctx.MkIntConst "t" :> Z3.Expr ] }
+                               { Name = "holdLock"
+                                 Params = [] } ]))).Returns(Some(Multiset.ofList [ { Name = "holdLock"
+                                                                                     Params = [] }
+                                                                                   { Name = "holdTick"
+                                                                                     Params = [ (Type.Int, "t") ] } ]))
         }
     
     [<TestCaseSource("FindDefOfViewCases")>]

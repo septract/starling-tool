@@ -19,19 +19,11 @@ let printCollatedScript (cs: CollatedScript) =
            vsep <| List.map printConstraint cs.Constraints
            VSep(List.map printMethod cs.Methods, VSkip) ], (vsep [ VSkip; Separator; Nop ]))
 
-/// Pretty-prints a singular generic view.
-let printGenView ppars v = 
-    hsep [ v.VName |> String
-           v.VParams
-           |> List.map ppars
-           |> commaSep
-           |> parened ]
-
 /// Pretty-prints Z3 expressions.
 let printZ3Exp (expr : #Z3.Expr) = String(expr.ToString())
 
 /// Pretty-prints a singular view assertion.
-let printModelView = printGenView printZ3Exp
+let printModelView = printFunc printZ3Exp
 
 /// Pretty-prints a type-name parameter.
 let printParam (ty, name) = 
@@ -39,7 +31,7 @@ let printParam (ty, name) =
            name |> String ]
 
 /// Pretty-prints a singular view definition.
-let printModelViewDef = printGenView printParam
+let printModelViewDef = printFunc printParam
 
 /// Pretty-prints a view list.
 let printViewList pview = 

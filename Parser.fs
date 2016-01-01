@@ -7,6 +7,7 @@ open FParsec
 open Chessie.ErrorHandling
 
 open Starling
+open Starling.Collections
 open Starling.Var
 open Starling.Lang.AST
 

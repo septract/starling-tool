@@ -182,7 +182,7 @@ let semanticsOf model prim =
 
 /// Substitutes all of the variables in a View using the given
 /// substitution.
-let subView sub model v = { v with VParams = List.map (subAllInModel model sub) v.VParams }
+let subView sub model v = { v with Params = List.map (subAllInModel model sub) v.Params }
 
 /// Substitutes all of the variables in a GuarView using the given substitution.
 let subGuarView sub model {Cond = c; Item = i} = 

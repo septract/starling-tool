@@ -4,10 +4,7 @@ open Microsoft
 open Starling.Collections
 
 /// A 'generic' view, parameterised over its parameter type.
-type GenView<'a> = 
-    { // TODO(CaptainHayashi): rename to ViewDef.
-      VName : string
-      VParams : 'a list }
+type GenView<'a> = Func<'a>
 
 /// A view definition, whose parameters are type-string pairs.
 type ViewDef = GenView<Var.Type * string>

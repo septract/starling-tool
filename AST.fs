@@ -1,6 +1,7 @@
 ﻿module Starling.Lang.AST
 
 open Starling
+open Starling.Collections
 
 /// A Boolean operator.
 type Bop = 
@@ -25,11 +26,6 @@ type Expression =
     | Int of int64 // 42
     | LV of Var.LValue // foobaz
     | Bop of Bop * Expression * Expression // a BOP b
-
-/// A function-like construct.
-type Func<'a> =
-    { Name: string
-      Params: 'a list }
 
 /// An atomic action.
 type AtomicAction = 
