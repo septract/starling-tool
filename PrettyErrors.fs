@@ -19,14 +19,15 @@ let printVarMapError =
 /// Pretty-prints expression conversion errors.
 let printExprError = 
     function 
-    | EEBadAST(reason) -> 
-        colonSep [ "cannot convert view to Z3" |> String
-                   reason |> String ]
-    | EEVar(var, err) -> wrapped "variable" (var |> printLValue) (err |> printVarMapError)
-    | EEVarNotBoolean lv -> 
-        fmt "lvalue '{0}' is not a suitable type for use in a boolean expression" [ printLValue lv ]
-    | EEVarNotArith lv -> 
+    | ExprNotBoolean ->
+        "expression is not suitable for use in a Boolean position" |> String
+    | VarNotBoolean lv -> 
+        fmt "lvalue '{0}' is not a suitable type for use in a Boolean expression" [ printLValue lv ]
+    | ExprNotArith ->
+        "expression is not suitable for use in an arithmetic position" |> String
+    | VarNotArith lv -> 
         fmt "lvalue '{0}' is not a suitable type for use in an arithmetic expression" [ printLValue lv ]
+    | Var(var, err) -> wrapped "variable" (var |> printLValue) (err |> printVarMapError)
 
 /// Pretty-prints view conversion errors.
 let printViewError = function 

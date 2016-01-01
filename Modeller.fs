@@ -62,7 +62,7 @@ let rec anyExprToZ3 model env expr =
          * Boolean type.
          *)
         trial { 
-            let! vt = lookupVar env v |> mapMessages ((curry EEVar) v)
+            let! vt = lookupVar env v |> mapMessages ((curry Var) v)
             match vt with
             | BoolVar _ -> return (mkBoolLV ctx v) :> Expr
             | IntVar _ -> return (mkIntLV ctx v) :> Expr
@@ -86,10 +86,10 @@ and boolExprToZ3 model env expr =
          * Boolean type.
          *)
         trial { 
-            let! vt = lookupVar env v |> mapMessages ((curry EEVar) v)
+            let! vt = lookupVar env v |> mapMessages ((curry Var) v)
             match vt with
             | BoolVar _ -> return (mkBoolLV ctx v)
-            | _ -> return! (fail <| EEVarNotBoolean v)
+            | _ -> return! (fail <| VarNotBoolean v)
         }
     | BopExp(BoolOp as op, l, r) -> 
         match op with
@@ -123,7 +123,7 @@ and boolExprToZ3 model env expr =
                         | Neq -> mkNeq
                         | _ -> failwith "unreachable") ctx lE rE
             }
-    | _ -> fail <| EEBadAST "cannot be a Boolean expression"
+    | _ -> fail <| ExprNotBoolean
 
 /// Converts a Starling arithmetic expression ot a Z3 predicate using
 /// the given Z3 context.
@@ -136,10 +136,10 @@ and arithExprToZ3 model env expr =
          * arithmetic type.
          *)
         trial { 
-            let! vt = lookupVar env v |> mapMessages ((curry EEVar) v)
+            let! vt = lookupVar env v |> mapMessages ((curry Var) v)
             match vt with
             | IntVar _ -> return (mkIntLV ctx v) :> ArithExpr
-            | _ -> return! (fail <| EEVarNotArith v)
+            | _ -> return! (fail <| VarNotArith v)
         }
     | BopExp(ArithOp as op, l, r) -> 
         trial { 
@@ -152,7 +152,7 @@ and arithExprToZ3 model env expr =
                     | Sub -> mkSub2
                     | _ -> failwith "unreachable") ctx lA rA
         }
-    | _ -> fail <| EEBadAST "cannot be an arithmetic expression"
+    | _ -> fail <| ExprNotArith
 
 (*
  * View definitions

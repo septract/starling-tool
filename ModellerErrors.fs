@@ -8,14 +8,16 @@ open Starling.Errors.Var
 // TODO(CaptainHayashi): more consistent constructor names
 /// Represents an error when converting an expression.
 type ExprError = 
-    /// Some unclassified error occurred with the AST.
-    | EEBadAST of reason : string
-    /// A variable usage in the expression produced a `VarMapError`.
-    | EEVar of var : Var.LValue * err : VarMapError
+    /// A non-Boolean expression was found in a Boolean position.
+    | ExprNotBoolean
     /// A non-Boolean variable was found in a Boolean position.
-    | EEVarNotBoolean of var : Var.LValue
+    | VarNotBoolean of var : Var.LValue
+    /// A non-arithmetic expression was found in an arithmetic position.
+    | ExprNotArith
     /// A non-arithmetic variable was found in an arithmetic position.
-    | EEVarNotArith of var : Var.LValue
+    | VarNotArith of var : Var.LValue
+    /// A variable usage in the expression produced a `VarMapError`.
+    | Var of var : Var.LValue * err : VarMapError
 
 /// Represents an error when converting a view prototype.
 type ViewProtoError = 
