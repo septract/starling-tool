@@ -51,6 +51,7 @@
     <Compile Include="ASTPretty.fs" />
     <Compile Include="Collator.fs" />
     <Compile Include="Model.fs" />
+    <Compile Include="Expr.fs" />
     <Compile Include="ModellerErrors.fs" />
     <Compile Include="Modeller.fs" />
     <Compile Include="Flattener.fs" />

@@ -4,9 +4,13 @@ open Fuchu
 open Microsoft.Z3
 open Starling.Var
 open Starling.Model
+open Starling.Expr
 open Starling.Semantics
 open Starling.Lang.AST
 open Starling.Tests.Studies
+
+// TODO(CaptainHayashi): some of these tests pertain to Expr, not Semantics.
+// They are here for historical reasons.
 
 /// A nonsensical expression to test semantic rewrites.
 let testExpr (ctx : Context) = 

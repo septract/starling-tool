@@ -3,6 +3,7 @@ module Starling.Z3.Translator
 
 open Microsoft
 open Starling.Collections
+open Starling.Expr
 open Starling.Model
 open Starling.Framer
 open Starling.Semantics
