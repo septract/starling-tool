@@ -72,68 +72,68 @@ type Options =
       [<Value(0, MetaName = "input", HelpText = "The file to load (omit, or supply -, for standard input).")>]
       input : string option }
 
-type OutputType = 
-    | OutputTFrontend of Lang.Frontend.Request
-    | OutputTFlatten
-    | OutputTExpand
-    | OutputTSemantics
-    | OutputTFrame
-    | OutputTTermGen
-    | OutputTReify
-    | OutputTZ3 of Z3.Backend.Request
+type Request = 
+    | Frontend of Lang.Frontend.Request
+    | Flatten
+    | Expand
+    | Semantics
+    | Frame
+    | TermGen
+    | Reify
+    | Z3 of Z3.Backend.Request
 
 [<NoComparison>]
-type Output = 
-    | OutputFrontend of Lang.Frontend.Response
-    | OutputFlatten of Starling.Model.FlatModel
-    | OutputExpand of Starling.Model.FullModel
-    | OutputSemantics of Starling.Model.SemModel
-    | OutputFrame of Starling.Model.FramedAxiom list
-    | OutputTermGen of Starling.Model.Term list
-    | OutputReify of Starling.Model.ReTerm list
-    | OutputZ3 of Z3.Backend.Response
+type Response = 
+    | Frontend of Lang.Frontend.Response
+    | Flatten of Starling.Model.FlatModel
+    | Expand of Starling.Model.FullModel
+    | Semantics of Starling.Model.SemModel
+    | Frame of Starling.Model.FramedAxiom list
+    | TermGen of Starling.Model.Term list
+    | Reify of Starling.Model.ReTerm list
+    | Z3 of Z3.Backend.Response
 
-let printOutput = 
+let printResponse = 
     function 
-    | OutputFrontend f -> Lang.Frontend.printResponse f
-    | OutputFlatten f -> Starling.Pretty.Misc.printFlatModel f
-    | OutputExpand e -> Starling.Pretty.Misc.printFullModel e
-    | OutputSemantics e -> Starling.Pretty.Misc.printSemModel e
-    | OutputFrame f -> Starling.Pretty.Misc.printFramedAxioms f
-    | OutputTermGen t -> Starling.Pretty.Misc.printTerms t
-    | OutputReify t -> Starling.Pretty.Misc.printReTerms t
-    | OutputZ3 z -> Z3.Backend.printResponse z
+    | Frontend f -> Lang.Frontend.printResponse f
+    | Flatten f -> Starling.Pretty.Misc.printFlatModel f
+    | Expand e -> Starling.Pretty.Misc.printFullModel e
+    | Semantics e -> Starling.Pretty.Misc.printSemModel e
+    | Frame f -> Starling.Pretty.Misc.printFramedAxioms f
+    | TermGen t -> Starling.Pretty.Misc.printTerms t
+    | Reify t -> Starling.Pretty.Misc.printReTerms t
+    | Z3 z -> Z3.Backend.printResponse z
 
-let outputTypeMap =
+let requestMap =
     Map.ofList
-        [ ("parse", OutputTFrontend Lang.Frontend.Request.Parse)
-          ("collate", OutputTFrontend Lang.Frontend.Request.Collate)
-          ("model", OutputTFrontend Lang.Frontend.Request.Model)
-          ("flatten", OutputTFlatten)
-          ("expand", OutputTExpand)
-          ("semantics", OutputTSemantics)
-          ("frame", OutputTFrame)
-          ("termgen", OutputTTermGen)
-          ("reify", OutputTReify)
-          ("reifyZ3", OutputTZ3 Z3.Backend.Request.Translate)
-          ("z3", OutputTZ3 Z3.Backend.Request.Combine)
-          ("sat", OutputTZ3 Z3.Backend.Request.Sat) ]
+        [ ("parse", Request.Frontend Lang.Frontend.Request.Parse)
+          ("collate", Request.Frontend Lang.Frontend.Request.Collate)
+          ("model", Request.Frontend Lang.Frontend.Request.Model)
+          ("flatten", Request.Flatten)
+          ("expand", Request.Expand)
+          ("semantics", Request.Semantics)
+          ("frame", Request.Frame)
+          ("termgen", Request.TermGen)
+          ("reify", Request.Reify)
+          ("reifyZ3", Request.Z3 Z3.Backend.Request.Translate)
+          ("z3", Request.Z3 Z3.Backend.Request.Combine)
+          ("sat", Request.Z3 Z3.Backend.Request.Sat) ]
 
 type StarlingError = 
-    | SEFrontend of Lang.Frontend.Error
+    | Frontend of Lang.Frontend.Error
     | BadStage
-    | SEOther of string
+    | Other of string
 
 let printStarlingError = 
     function 
-    | SEFrontend e -> Lang.Frontend.printError e
+    | Frontend e -> Lang.Frontend.printError e
     | BadStage -> Pretty.Types.colonSep [ Pretty.Types.String "Bad stage"
                                           Pretty.Types.String "try"
-                                          outputTypeMap
+                                          requestMap
                                           |> Map.toSeq
                                           |> Seq.map (fst >> Pretty.Types.String)
                                           |> Pretty.Types.commaSep ]
-    | SEOther e -> Pretty.Types.String e
+    | Other e -> Pretty.Types.String e
 
 let printWarns header ws = 
     Starling.Pretty.Types.Header(header, 
@@ -153,72 +153,72 @@ let printResult pOk pBad =
 
 let runStarlingZ3 semanticsR reifyR = 
     function 
-    | OutputTZ3 r -> lift2 (fun sr rr -> Starling.Z3.Backend.run sr r rr |> OutputZ3) semanticsR reifyR
-    | _ -> fail (SEOther "this should be unreachable!")
+    | Request.Z3 r -> lift2 (fun sr rr -> Starling.Z3.Backend.run sr r rr |> Response.Z3) semanticsR reifyR
+    | _ -> fail (Other "this should be unreachable!")
 
-let runStarlingReify semanticsR termGenR otype = 
+let runStarlingReify semanticsR termGenR req = 
     let reifyR = lift2 Starling.Reifier.reify semanticsR termGenR
-    match otype with
-    | OutputTReify -> lift OutputReify reifyR
-    | _ -> runStarlingZ3 semanticsR reifyR otype
+    match req with
+    | Request.Reify -> lift Response.Reify reifyR
+    | _ -> runStarlingZ3 semanticsR reifyR req
 
-let runStarlingTermGen semanticsR frameR otype = 
+let runStarlingTermGen semanticsR frameR req = 
     let termGenR = lift2 Starling.TermGen.termGen semanticsR frameR
-    match otype with
-    | OutputTTermGen -> lift OutputTermGen termGenR
-    | _ -> runStarlingReify semanticsR termGenR otype
+    match req with
+    | Request.TermGen -> lift Response.TermGen termGenR
+    | _ -> runStarlingReify semanticsR termGenR req
 
-let runStarlingFrame semanticsR otype = 
+let runStarlingFrame semanticsR req = 
     let frameR = lift Starling.Framer.frame semanticsR
-    match otype with
-    | OutputTFrame -> lift OutputFrame frameR
-    | _ -> runStarlingTermGen semanticsR frameR otype
+    match req with
+    | Request.Frame -> lift Response.Frame frameR
+    | _ -> runStarlingTermGen semanticsR frameR req
 
-let runStarlingSemantics modelR otype = 
+let runStarlingSemantics modelR req = 
     let semanticsR = lift Starling.Semantics.translate modelR
-    match otype with
-    | OutputTSemantics -> lift OutputSemantics semanticsR
-    | _ -> runStarlingFrame semanticsR otype
+    match req with
+    | Request.Semantics -> lift Response.Semantics semanticsR
+    | _ -> runStarlingFrame semanticsR req
 
-let runStarlingExpand modelR otype = 
+let runStarlingExpand modelR req = 
     let expandR = lift Starling.Expander.expand modelR
-    match otype with
-    | OutputTExpand -> lift OutputExpand expandR
-    | _ -> runStarlingSemantics expandR otype
+    match req with
+    | Request.Expand -> lift Response.Expand expandR
+    | _ -> runStarlingSemantics expandR req
 
-let runStarlingFlatten modelR otype = 
+let runStarlingFlatten modelR req = 
     let flattenR = lift Starling.Flattener.flatten modelR
-    match otype with
-    | OutputTFlatten -> lift OutputFlatten flattenR
-    | _ -> runStarlingExpand flattenR otype
+    match req with
+    | Request.Flatten -> lift Response.Flatten flattenR
+    | _ -> runStarlingExpand flattenR req
 
-let runStarling file otype = 
+let runStarling file req = 
     let frq = 
-        match otype with
-        | OutputTFrontend f -> f
+        match req with
+        | Request.Frontend f -> f
         | _ -> Lang.Frontend.Request.Model
     Lang.Frontend.run frq file
-    |> mapMessages StarlingError.SEFrontend
-    |> match otype with
-       | OutputTFrontend _ -> lift OutputFrontend
+    |> mapMessages StarlingError.Frontend
+    |> match req with
+       | Request.Frontend _ -> lift Response.Frontend
        | x -> 
            bind (function 
                | Lang.Frontend.Response.Model m -> runStarlingFlatten (ok m) x
-               | v -> SEOther "internal error: bad frontend response" |> fail)
+               | v -> Other "internal error: bad frontend response" |> fail)
 
-let otypeFromStage ostage = 
-    Map.tryFind (withDefault "sat" ostage) outputTypeMap
+let requestFromStage ostage = 
+    Map.tryFind (withDefault "sat" ostage) requestMap
 
 let starlingMain opts = 
     let input = opts.input
     let human = opts.human
     let starlingR =
-        match (otypeFromStage opts.stage) with
+        match (requestFromStage opts.stage) with
         | Some otype -> runStarling input otype
         | None -> fail StarlingError.BadStage
     
     let pfn = 
-        if human then printOutput
+        if human then printResponse
         else (sprintf "%A" >> Starling.Pretty.Types.String)
     printResult pfn (List.map printStarlingError) starlingR
     |> Starling.Pretty.Types.print
