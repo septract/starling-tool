@@ -13,6 +13,9 @@ let splitThrough f g x = (f x, g x)
 /// Given f and x, returns (x, f x).
 let inAndOut f = splitThrough id f
 
+/// Given f and (x, y), returns (x, f x y).
+let inAndOut2 f (x, y) = (x, f x y)
+
 /// Passes fst through f, and snd through g.
 let pairMap f g = splitThrough (fst >> f) (snd >> g)
 
