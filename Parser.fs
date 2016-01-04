@@ -26,13 +26,13 @@ let (>>=) = FParsec.Primitives.(>>=)
 let lcom = skipString "//" .>> skipRestOfLine true
 
 /// Parser for skipping block comments.
-let bcom = skipString "/*" .>> skipManyTill anyChar (pstring "*/")
+let bcom = skipString "/*" .>> skipManyTill anyChar (skipString "*/")
 
 /// Parser for skipping comments.
 let com = (lcom <|> bcom) <?> "comment" 
 
 /// Parser for skipping zero or more whitespace characters.
-let ws = many (com <|> spaces1)
+let ws = skipMany (com <|> spaces1)
 
 /// As pipe2, but with automatic whitespace parsing after each parser.
 let pipe2ws x y f = pipe2 (x .>> ws) (y .>> ws) f
