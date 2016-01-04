@@ -26,7 +26,8 @@ let (>>=) = FParsec.Primitives.(>>=)
 let lcom = skipString "//" .>> skipRestOfLine true
 
 /// Parser for skipping block comments.
-let bcom = skipString "/*" .>> skipManyTill anyChar (skipString "*/")
+let bcom, bcomImpl = createParserForwardedToRef()
+do bcomImpl := skipString "/*" .>> skipManyTill (bcom <|> skipAnyChar) (skipString "*/")
 
 /// Parser for skipping comments.
 let com = (lcom <|> bcom) <?> "comment" 
