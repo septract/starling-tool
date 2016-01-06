@@ -232,7 +232,7 @@ let rec boolSubVarsInEnv vfun =
     | BTrue -> BTrue
     | BFalse -> BFalse
     | BAnd xs -> BAnd (List.map (boolSubVarsInEnv vfun) xs)
-    | BOr xs -> BAnd (List.map (boolSubVarsInEnv vfun) xs)
+    | BOr xs -> BOr (List.map (boolSubVarsInEnv vfun) xs)
     | BImplies (x, y) -> BImplies (boolSubVarsInEnv vfun x,
                                    boolSubVarsInEnv vfun y)
     | BEq (x, y) -> BEq (subVarsInEnv vfun x,
@@ -254,8 +254,8 @@ and arithSubVarsInEnv vfun =
     | AConst x -> vfun.ASub x
     | AInt i -> AInt i
     | AAdd xs -> AAdd (List.map (arithSubVarsInEnv vfun) xs)
-    | ASub xs -> AAdd (List.map (arithSubVarsInEnv vfun) xs)
-    | AMul xs -> AAdd (List.map (arithSubVarsInEnv vfun) xs)
+    | ASub xs -> ASub (List.map (arithSubVarsInEnv vfun) xs)
+    | AMul xs -> AMul (List.map (arithSubVarsInEnv vfun) xs)
     | ADiv (x, y) -> ADiv (arithSubVarsInEnv vfun x,
                            arithSubVarsInEnv vfun y)
 
@@ -276,6 +276,11 @@ let liftMarker marker vset =
                         | x -> x
     {ASub = (gfun >> AConst)
      BSub = (gfun >> BConst)}
+
+/// Marks all variables in the given environment with the given marking
+/// functions / pre-states for the given arithmetic expression.
+let arithMarkVarsInEnv marker vset =
+    arithSubVarsInEnv (liftMarker marker vset)
 
 /// Marks all variables in the given environment with the given marking
 /// functions / pre-states for the given Boolean expression.
