@@ -31,4 +31,4 @@ type ExprTests() =
     [<TestCaseSource("ArithConstantPostStates")>]
     /// Tests whether rewriting constants in arithmetic expressions to post-state works.
     member x.``constants in arithmetic expressions can be rewritten to post-state`` expr = 
-        arithMarkVarsInEnv After (Set.ofList ["target1"; "target2"]) expr
+        arithMarkVars After (Set.ofList ["target1"; "target2"]) expr

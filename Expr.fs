@@ -226,45 +226,45 @@ type SubFun =
 
 /// Substitutes all variables with the given substitution function set
 /// for the given Boolean expression.
-let rec boolSubVarsInEnv vfun =
+let rec boolSubVars vfun =
     function 
     | BConst x -> vfun.BSub x
     | BTrue -> BTrue
     | BFalse -> BFalse
-    | BAnd xs -> BAnd (List.map (boolSubVarsInEnv vfun) xs)
-    | BOr xs -> BOr (List.map (boolSubVarsInEnv vfun) xs)
-    | BImplies (x, y) -> BImplies (boolSubVarsInEnv vfun x,
-                                   boolSubVarsInEnv vfun y)
-    | BEq (x, y) -> BEq (subVarsInEnv vfun x,
-                         subVarsInEnv vfun y)
-    | BGt (x, y) -> BGt (arithSubVarsInEnv vfun x,
-                         arithSubVarsInEnv vfun y)
-    | BGe (x, y) -> BGe (arithSubVarsInEnv vfun x,
-                         arithSubVarsInEnv vfun y)
-    | BLe (x, y) -> BLe (arithSubVarsInEnv vfun x,
-                         arithSubVarsInEnv vfun y)
-    | BLt (x, y) -> BLt (arithSubVarsInEnv vfun x,
-                         arithSubVarsInEnv vfun y)
-    | BNot x -> BNot (boolSubVarsInEnv vfun x)
+    | BAnd xs -> BAnd (List.map (boolSubVars vfun) xs)
+    | BOr xs -> BOr (List.map (boolSubVars vfun) xs)
+    | BImplies (x, y) -> BImplies (boolSubVars vfun x,
+                                   boolSubVars vfun y)
+    | BEq (x, y) -> BEq (subVars vfun x,
+                         subVars vfun y)
+    | BGt (x, y) -> BGt (arithSubVars vfun x,
+                         arithSubVars vfun y)
+    | BGe (x, y) -> BGe (arithSubVars vfun x,
+                         arithSubVars vfun y)
+    | BLe (x, y) -> BLe (arithSubVars vfun x,
+                         arithSubVars vfun y)
+    | BLt (x, y) -> BLt (arithSubVars vfun x,
+                         arithSubVars vfun y)
+    | BNot x -> BNot (boolSubVars vfun x)
 
 /// Substitutes all variables with the given substitution function
 /// for the given arithmetic expression.
-and arithSubVarsInEnv vfun =
+and arithSubVars vfun =
     function 
     | AConst x -> vfun.ASub x
     | AInt i -> AInt i
-    | AAdd xs -> AAdd (List.map (arithSubVarsInEnv vfun) xs)
-    | ASub xs -> ASub (List.map (arithSubVarsInEnv vfun) xs)
-    | AMul xs -> AMul (List.map (arithSubVarsInEnv vfun) xs)
-    | ADiv (x, y) -> ADiv (arithSubVarsInEnv vfun x,
-                           arithSubVarsInEnv vfun y)
+    | AAdd xs -> AAdd (List.map (arithSubVars vfun) xs)
+    | ASub xs -> ASub (List.map (arithSubVars vfun) xs)
+    | AMul xs -> AMul (List.map (arithSubVars vfun) xs)
+    | ADiv (x, y) -> ADiv (arithSubVars vfun x,
+                           arithSubVars vfun y)
 
 /// Substitutes all variables with the given substitution function for the
 /// given expression.
-and subVarsInEnv vfun =
+and subVars vfun =
     function
-    | AExpr a -> arithSubVarsInEnv vfun a |> AExpr
-    | BExpr b -> boolSubVarsInEnv vfun b |> BExpr
+    | AExpr a -> arithSubVars vfun a |> AExpr
+    | BExpr b -> boolSubVars vfun b |> BExpr
 
 (*
  * Variable marking (special case of variable substitution)
@@ -279,15 +279,15 @@ let liftMarker marker vset =
 
 /// Marks all variables in the given environment with the given marking
 /// functions / pre-states for the given arithmetic expression.
-let arithMarkVarsInEnv marker vset =
-    arithSubVarsInEnv (liftMarker marker vset)
+let arithMarkVars marker vset =
+    arithSubVars (liftMarker marker vset)
 
 /// Marks all variables in the given environment with the given marking
 /// functions / pre-states for the given Boolean expression.
-let boolMarkVarsInEnv marker vset =
-    boolSubVarsInEnv (liftMarker marker vset)
+let boolMarkVars marker vset =
+    boolSubVars (liftMarker marker vset)
 
 /// Marks all variables in the given set with the given marking
 /// functions / pre-states for the given arbitrary expression.
-let markVarsInEnv marker vset =
-    subVarsInEnv (liftMarker marker vset)
+let markVars marker vset =
+    subVars (liftMarker marker vset)
