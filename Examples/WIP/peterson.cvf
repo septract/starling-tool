@@ -24,7 +24,7 @@ method lockA() {
       {| aHoldFlag() * if oFlag then aHoldFlag() else bHoldFlag() |}
 	<oTurn = aTurn>;
       {| aHoldFlag() * if oTurn && oFlag then aHoldLock() else aHoldFlag() |}
-    } while ((oFlag == false) && (oTurn == false))
+    } while ((oFlag == false) && (oTurn == false));
   {| aHoldLock() |}
 }
 
@@ -45,12 +45,12 @@ view bHoldFlag();
 // Invariant
 
 // Predicate definitions
-constraint aHoldLock() => aFlag && aTurn;
-constraint bHoldLock() => bFlag && (aTurn == false);
-constraint aHoldFlag() => aFlag;
-constraint bHoldFlag() => bFlag;
+constraint aHoldLock() -> aFlag && aTurn;
+constraint bHoldLock() -> bFlag && (aTurn == false);
+constraint aHoldFlag() -> aFlag;
+constraint bHoldFlag() -> bFlag;
 
 // Interactions
-constraint aHoldFlag() * aHoldFlag() => false;
-constraint bHoldFlag() * bHoldFlag() => false;
-constraint aHoldLock() * bHoldLock() => false;
+constraint aHoldFlag() * aHoldFlag() -> false;
+constraint bHoldFlag() * bHoldFlag() -> false;
+constraint aHoldLock() * bHoldLock() -> false;
