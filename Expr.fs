@@ -6,6 +6,7 @@ open Microsoft  // TODO(CaptainHayashi): temporary
 open Starling.Var
 open Starling.Model
 open Starling.Utils
+open System.Numerics
 
 (*
  * Temporary Z3 work
@@ -89,7 +90,7 @@ type Const =
     | Unmarked of string
     | Before of string
     | After of string
-    | Frame of string * int
+    | Frame of bigint * string
 
 /// An expression of arbitrary type.
 type Expr =
@@ -291,3 +292,24 @@ let boolMarkVars marker vset =
 /// functions / pre-states for the given arbitrary expression.
 let markVars marker vset =
     subVars (liftMarker marker vset)
+
+(*
+ * Fresh variable generation
+ *)
+
+/// Type for fresh variable generators.
+type FreshGen = bigint ref
+
+/// Creates a new fresh generator.
+let freshGen = ref 0I
+
+/// Takes a fresh number out of the generator.
+/// This method is NOT thread-safe.
+let getFresh fg =
+    let result = !fg
+    fg := !fg + 1I
+    result
+
+/// Given a fresh generator, yields a function promoting a string to a frame
+/// variable.
+let frame fg = fg |> getFresh |> curry Frame

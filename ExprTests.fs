@@ -5,7 +5,25 @@ open Starling.Expr
 
 /// Tests for the expression types and functions.
 type ExprTests() = 
-    /// Test cases for testing constant post-state rewriting
+    /// Test cases for testing frame rewriting.
+    static member FrameConstants =
+        seq {
+            yield (new TestCaseData(["foo"; "foo"; "foo"]))
+                .Returns([Frame (0I, "foo")
+                          Frame (1I, "foo")
+                          Frame (2I, "foo")])
+            yield (new TestCaseData(["foo"; "bar"; "baz"]))
+                .Returns([Frame (0I, "foo")
+                          Frame (1I, "bar")
+                          Frame (2I, "baz")])
+        }
+
+    /// Tests that the frame name generator works fine.
+    member x.``frame generation uses fresh variables properly`` xs = 
+        let fg = freshGen
+        List.map (frame fg) xs
+
+    /// Test cases for testing constant post-state rewriting.
     static member ArithConstantPostStates = 
         seq { 
             yield (new TestCaseData(AConst (Unmarked "target1")))

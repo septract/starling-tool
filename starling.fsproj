@@ -99,6 +99,7 @@
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Numerics" />
     <Reference Include="Chessie">
       <HintPath>packages\Chessie.0.2.2\lib\net40\Chessie.dll</HintPath>
     </Reference>
