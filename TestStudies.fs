@@ -180,45 +180,43 @@ let ticketLockAxioms (ctx : Z3.Context) =
                 Inner = IntLoad(None, LVIdent "serving", Increment) } ]
 
 /// The model of a ticketed lock method.
-/// Takes an existing Z3 context.
-let ticketLockModel ctx = 
-    { Context = ctx
-      VProtos = 
+let ticketLockModel = 
+    { VProtos = 
           Map.ofList [ ("holdTick", [ (Type.Int, "t") ])
                        ("holdLock", []) ]
       Globals = 
-          Map.ofList [ ("serving", makeVar ctx Type.Int "serving")
-                       ("ticket", makeVar ctx Type.Int "ticket") ]
+          Map.ofList [ ("serving", Int)
+                       ("ticket", Int) ]
       Locals = 
-          Map.ofList [ ("s", makeVar ctx Type.Int "s")
-                       ("t", makeVar ctx Type.Int "t") ]
-      Axioms = ticketLockAxioms ctx
+          Map.ofList [ ("s", Int)
+                       ("t", Int) ]
+      Axioms = ticketLockAxioms
       DefViews = 
           [ { CViews = Multiset.empty()
-              CZ3 = ctx.MkGe(ctx.MkIntConst "ticket", ctx.MkIntConst "serving") }
+              CExpr = ctx.MkGe(ctx.MkIntConst "ticket", ctx.MkIntConst "serving") }
             { CViews = 
                   Multiset.ofList [ { Name = "holdTick"
                                       Params = [ (Type.Int, "t") ] } ]
-              CZ3 = ctx.MkGt(ctx.MkIntConst "ticket", ctx.MkIntConst "t") }
+              CExpr = ctx.MkGt(ctx.MkIntConst "ticket", ctx.MkIntConst "t") }
             { CViews = 
                   Multiset.ofList [ { Name = "holdLock"
                                       Params = [] } ]
-              CZ3 = ctx.MkGt(ctx.MkIntConst "ticket", ctx.MkIntConst "serving") }
+              CExpr = ctx.MkGt(ctx.MkIntConst "ticket", ctx.MkIntConst "serving") }
             { CViews = 
                   Multiset.ofList [ { Name = "holdLock"
                                       Params = [] }
                                     { Name = "holdTick"
                                       Params = [ (Type.Int, "t") ] } ]
-              CZ3 = ctx.MkNot(ctx.MkEq(ctx.MkIntConst "serving", ctx.MkIntConst "t")) }
+              CExpr = ctx.MkNot(ctx.MkEq(ctx.MkIntConst "serving", ctx.MkIntConst "t")) }
             { CViews = 
                   Multiset.ofList [ { Name = "holdTick"
                                       Params = [ (Type.Int, "ta") ] }
                                     { Name = "holdTick"
                                       Params = [ (Type.Int, "tb") ] } ]
-              CZ3 = ctx.MkNot(ctx.MkEq(ctx.MkIntConst "ta", ctx.MkIntConst "tb")) }
+              CExpr = ctx.MkNot(ctx.MkEq(ctx.MkIntConst "ta", ctx.MkIntConst "tb")) }
             { CViews = 
                   Multiset.ofList [ { Name = "holdLock"
                                       Params = [] }
                                     { Name = "holdLock"
                                       Params = [] } ]
-              CZ3 = ctx.MkFalse() } ] }
+              CExpr = BFalse } ] }

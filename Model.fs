@@ -1,7 +1,7 @@
 module Starling.Model
 
-open Microsoft
 open Starling.Collections
+open Starling.Expr
 
 /// A 'generic' view, parameterised over its parameter type.
 type GenView<'a> = Func<'a>
@@ -10,16 +10,16 @@ type GenView<'a> = Func<'a>
 type ViewDef = GenView<Var.Type * string>
 
 /// A view, whose parameters are expressions.
-type View = GenView<Z3.Expr>
+type View = GenView<Expr>
 
 /// A conditional (flat or if-then-else) view.
 type CondView = 
-    | ITE of Z3.BoolExpr * Multiset<CondView> * Multiset<CondView>
+    | ITE of BoolExpr * Multiset<CondView> * Multiset<CondView>
     | Func of View
 
 /// A guarded item.
 type Guarded<'a> = 
-    { Cond : Z3.BoolExpr
+    { Cond : BoolExpr
       Item : 'a }
 
 /// A guarded view.
@@ -31,14 +31,14 @@ type ReView = Guarded<Multiset<View>>
 /// A constraint, containing a multiset of views and a Z3 predicate.
 type GenConstraint<'a> = 
     { CViews : Multiset<GenView<'a>>
-      CZ3 : Z3.BoolExpr }
+      CExpr : BoolExpr }
 
 /// A model constraint, set over ViewDefs with type-string parameters.
 type Constraint = GenConstraint<Var.Type * string>
 
-/// A constraint as used in framed axioms, set over ViewDefs with Z3 expression
+/// A constraint as used in framed axioms, set over ViewDefs with expression
 /// parameters.
-type Z3Constraint = GenConstraint<Z3.Expr>
+type ExprConstraint = GenConstraint<Expr>
 
 /// A pair of conditions.
 type ConditionPair<'v> = 
@@ -49,14 +49,14 @@ type ConditionPair<'v> =
 type Prim = 
     | IntLoad of dest : Var.LValue option * src : Var.LValue * mode : Var.FetchMode
     | BoolLoad of dest : Var.LValue * src : Var.LValue
-    | IntStore of dest : Var.LValue * src : Z3.ArithExpr
-    | BoolStore of dest : Var.LValue * src : Z3.BoolExpr
-    | IntCAS of dest : Var.LValue * test : Var.LValue * set : Z3.ArithExpr
-    | BoolCAS of dest : Var.LValue * test : Var.LValue * set : Z3.BoolExpr
-    | IntLocalSet of dest : Var.LValue * src : Z3.ArithExpr
-    | BoolLocalSet of dest : Var.LValue * src : Z3.BoolExpr
+    | IntStore of dest : Var.LValue * src : ArithExpr
+    | BoolStore of dest : Var.LValue * src : BoolExpr
+    | IntCAS of dest : Var.LValue * test : Var.LValue * set : ArithExpr
+    | BoolCAS of dest : Var.LValue * test : Var.LValue * set : BoolExpr
+    | IntLocalSet of dest : Var.LValue * src : ArithExpr
+    | BoolLocalSet of dest : Var.LValue * src : BoolExpr
     | PrimId
-    | PrimAssume of Z3.BoolExpr
+    | PrimAssume of BoolExpr
 
 /// A general Hoare triple, consisting of precondition, inner item, and
 /// postcondition.
@@ -78,7 +78,7 @@ type FullAxiom = Hoare<Multiset<GuarView>, Prim>
 
 /// A semantically translated axiom, carrying a Z3 Boolean expression as
 /// a command.
-type SemAxiom = Hoare<Multiset<GuarView>, Z3.BoolExpr>
+type SemAxiom = Hoare<Multiset<GuarView>, BoolExpr>
 
 /// An axiom combined with a frame.
 type FramedAxiom = 
@@ -86,19 +86,19 @@ type FramedAxiom =
       Frame : Multiset<GuarView> }
 
 /// An unreified term.
-type Term = Hoare<Multiset<GuarView>, Z3.BoolExpr>
+type Term = Hoare<Multiset<GuarView>, BoolExpr>
 
 /// A reified term.
-type ReTerm = Hoare<Multiset<ReView>, Z3.BoolExpr>
+type ReTerm = Hoare<Multiset<ReView>, BoolExpr>
 
 /// A Z3-reified term.
-type ZTerm = Hoare<Z3.BoolExpr, Z3.BoolExpr>
+type ZTerm = Hoare<BoolExpr, BoolExpr>
 
 /// A partially resolved axiom.
 type PartAxiom = 
     | PAAxiom of FlatAxiom
-    | PAWhile of isDo : bool * expr : Z3.BoolExpr * outer : PartConditionPair * inner : PartHoare<PartAxiom list>
-    | PAITE of expr : Z3.BoolExpr * outer : PartConditionPair * inTrue : PartHoare<PartAxiom list> * inFalse : PartHoare<PartAxiom list>
+    | PAWhile of isDo : bool * expr : BoolExpr * outer : PartConditionPair * inner : PartHoare<PartAxiom list>
+    | PAITE of expr : BoolExpr * outer : PartConditionPair * inTrue : PartHoare<PartAxiom list> * inFalse : PartHoare<PartAxiom list>
 
 /// Extracts the outer condition pair of a part-axiom.
 let cpairOfPartAxiom = 
@@ -110,8 +110,7 @@ let cpairOfPartAxiom =
 /// A parameterised model of a Starling program.
 [<NoComparison>]
 type Model<'a, 'c> = 
-    { Context : Z3.Context
-      Globals : Var.VarMap
+    { Globals : Var.VarMap
       Locals : Var.VarMap
       Axioms : 'a
       VProtos : Map<string, (Var.Type * string) list>
@@ -130,14 +129,10 @@ type FullModel = Model<FullAxiom list, Constraint list>
 /// A semantically translated model of a Starling program.
 type SemModel = Model<SemAxiom list, Constraint list>
 
-/// Disposes the Z3 context inside a Model.
-let disposeZ3 model = model.Context.Dispose()
-
 /// Creates a new model that is the input model with a different axiom set.
 /// The axiom set may be of a different type.
 let withAxioms (axioms : 'y) (model : Model<'x, 'c>) : Model<'y, 'c> = 
-    { Context = model.Context
-      Globals = model.Globals
+    { Globals = model.Globals
       Locals = model.Locals
       VProtos = model.VProtos
       DefViews = model.DefViews

@@ -2,14 +2,12 @@
 /// axioms.
 module Starling.TermGen
 
-open Microsoft
+open Starling.Expr
 open Starling.Collections
 open Starling.Model
-open Starling.Z3
 
 /// Performs one step of a septraction of a GuarView.
-let termGenSeptractStep model (rdone, qstep) rnext = 
-    let ctx = model.Context
+let termGenSeptractStep (rdone, qstep) rnext = 
     (* This is based on Matt Parkinson's schema:
      * [rdone * rnext@(B1, p xbar) * rrest] *- qstep@(B2, p xbar2)
      * = rdone2@[rdone * rnext2@(B1 && !(B2 && xbar = xbar2), p xbar)]
@@ -28,19 +26,19 @@ let termGenSeptractStep model (rdone, qstep) rnext =
         let xbar = rnext.Item.Params
         let xbar2 = qstep.Item.Params
         // xbar = xbar'
-        let xbarEq = List.map2 (curry ctx.MkEq) xbar xbar2 |> mkAnd ctx
+        let xbarEq = List.map2 mkEq xbar xbar2 |> mkAnd 
         
         // B1 && !(B2 && xbar = xbar2)
         let rcond = 
-            mkAnd ctx [ b1
-                        mkNot ctx (mkAnd ctx [ b2; xbarEq ]) ]
+            mkAnd [ b1
+                    mkNot (mkAnd [ b2; xbarEq ]) ]
         
-        let rnext2 = { rnext with Cond = rcond.Simplify() :?> Z3.BoolExpr }
+        let rnext2 = { rnext with Cond = rcond }
         
         // B2 && !(B1 && xbar = xbar2)
         let qcond = 
-            mkAnd ctx [ b2
-                        mkNot ctx (mkAnd ctx [ b1; xbarEq ]) ]
+            mkAnd [ b2
+                    mkNot (mkAnd [ b1; xbarEq ]) ]
         
         let qstep2 = { qstep with Cond = qcond }
         (rnext2 :: rdone, qstep2)
@@ -48,17 +46,17 @@ let termGenSeptractStep model (rdone, qstep) rnext =
 
 /// Performs septraction of the single GuarView q from the GuarView
 /// multiset r, returning r *- q.
-let termGenSeptractView model r q = List.fold (termGenSeptractStep model) ([], q) r |> fst
+let termGenSeptractView r q = List.fold termGenSeptractStep ([], q) r |> fst
 
 /// Generates the septraction part of the weakest precondition.
-let termGenSeptract model r q = 
+let termGenSeptract r q = 
     (* We iterate on septraction of each item in q:
      * A *- (B * C) = (A *- B) *- C
      *)
-    List.fold (termGenSeptractView model) r q
+    List.fold termGenSeptractView r q
 
 /// Generates a (weakest) precondition from a framed axiom.
-let termGenPre model fax = 
+let termGenPre fax = 
     (* Theoretically speaking, this is crunching an axiom {P} C {Q} and
      * frame view R into (P * (R *- Q)).
      * Remember that * is multiset union.
@@ -70,14 +68,14 @@ let termGenPre model fax =
     let pre = fax.Axiom.Conditions.Pre |> Multiset.toList
     let post = fax.Axiom.Conditions.Post |> Multiset.toList
     let frame = fax.Frame |> Multiset.toList
-    List.append pre (termGenSeptract model frame post) |> Multiset.ofList
+    List.append pre (termGenSeptract frame post) |> Multiset.ofList
 
 /// Generates a term from a framed axiom.
-let termGenAxiom model fax = 
+let termGenAxiom fax = 
     { Conditions = 
-          { Pre = termGenPre model fax
+          { Pre = termGenPre fax
             Post = fax.Frame }
       Inner = fax.Axiom.Inner }
 
 /// Generates a list of terms from a list of framed axioms.
-let termGen (model : SemModel) = List.map (termGenAxiom model)
+let termGen ts = List.map termGenAxiom ts

@@ -7,6 +7,9 @@ module Starling.Utils
 
 open Chessie.ErrorHandling
 
+/// A predicate that always returns true.
+let always _ = true
+
 /// Applies f and g to x and returns (f x, g x).
 let splitThrough f g x = (f x, g x)
 

@@ -1,6 +1,7 @@
 module Starling.Flattener
 
 open Chessie.ErrorHandling
+open Starling.Expr
 open Starling.Model
 
 /// Flattens a [do-]while loop into a list of flat axioms.
@@ -35,7 +36,7 @@ let rec flatWhile model expr outer inner precom =
         { Conditions = 
               { Pre = p3
                 Post = p4 }
-          Inner = PrimAssume(model.Context.MkNot expr) }
+          Inner = PrimAssume(mkNot expr) }
     
     p1p2 :: p3p2 :: p3p4 :: flatAxioms model inner.Inner
 
@@ -70,7 +71,7 @@ and flatITE model expr outer inTrue inFalse =
         { Conditions = 
               { Pre = p1
                 Post = p4 }
-          Inner = PrimAssume(model.Context.MkNot expr) }
+          Inner = PrimAssume(mkNot expr) }
     
     // [|P5|] id [|P6|]
     let p5p6 = 

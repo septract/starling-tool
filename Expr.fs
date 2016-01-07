@@ -2,85 +2,9 @@
 module Starling.Expr
 
 open Chessie.ErrorHandling
-open Microsoft  // TODO(CaptainHayashi): temporary
-open Starling.Var
-open Starling.Model
 open Starling.Utils
+open Starling.Var
 open System.Numerics
-
-(*
- * Temporary Z3 work
- *)
-
-/// Returns all of the exprs in es that are contained inside the expression e.
-let rec exprsInExpr es (e : Z3.Expr) : Set<Z3.Expr> = 
-    // Is this expression the same as any expressions in es?
-    let self = es |> Set.filter e.Equals
-    
-    // Are any of the expressions inside e the same?
-    let inner = 
-        e.Args
-        |> Set.ofArray
-        |> unionMap (exprsInExpr es)
-    self + inner
-
-/// Extracts the post-states of the given environment.
-let aftersOfEnv map = 
-    map
-    |> Map.toSeq
-    |> Seq.map (snd
-                >> eraseVar
-                >> fun v -> v.PostExpr)
-    |> Set.ofSeq
-
-/// Extracts all the post-state variables in the model.
-let aftersInModel model = 
-    let g = aftersOfEnv model.Globals
-    let l = aftersOfEnv model.Locals
-    g + l
-
-/// For a given expression, finds all the bound post-state variables.
-let aftersInExpr model = exprsInExpr (aftersInModel model)
-
-/// For a given expression, finds all the unbound post-state variables.
-let aftersNotInExpr model expr = aftersInModel model - aftersInExpr model expr
-
-/// Substitutes a different version of a variable in an expression.
-/// Returns the expression unchanged if the requested variable does not
-/// exist.
-let envVarTo sel env (expr : #Z3.Expr) var = 
-    lookupVar env var |> either (fst
-                                 >> eraseVar
-                                 >> fun v -> expr.Substitute(v.Expr, sel v)) (fun _ -> expr :> Z3.Expr)
-
-/// Substitutes the before version of a variable in an expression.
-/// Returns the expression unchanged if the requested variable does not
-/// exist.
-let envVarToBefore e = envVarTo (fun v -> v.PreExpr) e
-
-/// Substitutes the after version of a variable in an expression.
-/// Returns the expression unchanged if the requested variable does not
-/// exist.
-let envVarToAfter e = envVarTo (fun v -> v.PostExpr) e
-
-/// Performs the given substitution for all variables in the
-/// given sequence.
-let subAllInSeq env sq sub expr = Seq.fold (sub env) expr sq
-
-/// Performs the given substitution for all variables in the
-/// environment.
-let subAllInEnv env = 
-    // TODO(CaptainHayashi): the conversion to LVIdent is indicative of
-    // the lack of pointer support, and needs to go when we add it.
-    subAllInSeq env (env
-                     |> Map.toSeq
-                     |> Seq.map (fst >> LVIdent))
-
-/// Performs the given substitution for all variables in the model.
-let subAllInModel model sub expr = 
-    expr
-    |> subAllInEnv model.Globals sub
-    |> subAllInEnv model.Locals sub
 
 (*
  * Expression types
@@ -136,6 +60,36 @@ let isFalse =
 (*
  * Expression constructors
  *)
+
+/// Creates a reference to a Boolean lvalue.
+/// This does NOT check to see if the lvalue exists!
+let mkBoolLV lv = 
+    (* TODO(CaptainHayashi): when we support pointers, this will
+     *                       need totally changing.
+     *)
+    lv
+    |> flattenLV
+    |> Unmarked
+    |> BConst
+
+/// Creates a reference to an integer lvalue.
+/// This does NOT check to see if the lvalue exists!
+let mkIntLV lv = 
+    (* TODO(CaptainHayashi): when we support pointers, this will
+     *                       need totally changing.
+     *)
+    lv
+    |> flattenLV
+    |> Unmarked
+    |> AConst
+
+/// Converts a type-name pair to an expression.
+let mkVarExp (ty, name) =
+    name
+    |> Unmarked
+    |> match ty with
+       | Int -> AConst >> AExpr
+       | Bool -> BConst >> BExpr
 
 (* The following are just curried versions of the usual constructors. *)
 
@@ -271,27 +225,30 @@ and subVars vfun =
  * Variable marking (special case of variable substitution)
  *)
 
+/// Lifts a variable set to a marking predicate.
+let inSet st var = Set.contains var st
+
 /// Lifts a marking function to a substitution function table.
-let liftMarker marker vset =
-    let gfun = function | Unmarked s when Set.contains s vset -> marker s
+let liftMarker marker vpred =
+    let gfun = function | Unmarked s when vpred s -> marker s
                         | x -> x
     {ASub = (gfun >> AConst)
      BSub = (gfun >> BConst)}
 
 /// Marks all variables in the given environment with the given marking
 /// functions / pre-states for the given arithmetic expression.
-let arithMarkVars marker vset =
-    arithSubVars (liftMarker marker vset)
+let arithMarkVars marker vpred =
+    arithSubVars (liftMarker marker vpred)
 
 /// Marks all variables in the given environment with the given marking
 /// functions / pre-states for the given Boolean expression.
-let boolMarkVars marker vset =
-    boolSubVars (liftMarker marker vset)
+let boolMarkVars marker vpred =
+    boolSubVars (liftMarker marker vpred)
 
 /// Marks all variables in the given set with the given marking
 /// functions / pre-states for the given arbitrary expression.
-let markVars marker vset =
-    subVars (liftMarker marker vset)
+let markVars marker vpred =
+    subVars (liftMarker marker vpred)
 
 (*
  * Fresh variable generation
@@ -301,7 +258,7 @@ let markVars marker vset =
 type FreshGen = bigint ref
 
 /// Creates a new fresh generator.
-let freshGen = ref 0I
+let freshGen () = ref 0I
 
 /// Takes a fresh number out of the generator.
 /// This method is NOT thread-safe.
@@ -313,3 +270,39 @@ let getFresh fg =
 /// Given a fresh generator, yields a function promoting a string to a frame
 /// variable.
 let frame fg = fg |> getFresh |> curry Frame
+
+(*
+ * Expression probing
+ *)
+
+/// Returns a set of all variables used in this expression,
+let rec varsInArith =
+    function
+    | AConst c -> Set.singleton c
+    | AInt _ -> Set.empty
+    | AAdd xs -> xs |> Seq.map varsInArith |> Set.unionMany
+    | ASub xs -> xs |> Seq.map varsInArith |> Set.unionMany
+    | AMul xs -> xs |> Seq.map varsInArith |> Set.unionMany
+    | ADiv (x, y) -> Set.union (varsInArith x) (varsInArith y)
+
+/// A Boolean expression.
+and varsInBool =
+    function
+    | BConst c -> Set.singleton c
+    | BTrue -> Set.empty
+    | BFalse -> Set.empty
+    | BAnd xs -> xs |> Seq.map varsInBool |> Set.unionMany
+    | BOr xs -> xs |> Seq.map varsInBool |> Set.unionMany
+    | BImplies (x, y) -> Set.union (varsIn x) (varsIn y)
+    | BEq (x, y) -> Set.union (varsIn x) (varsIn y)
+    | BGt (x, y) -> Set.union (varsInArith x) (varsInArith y)
+    | BGe (x, y) -> Set.union (varsInArith x) (varsInArith y)
+    | BLe (x, y) -> Set.union (varsInArith x) (varsInArith y)
+    | BLt (x, y) -> Set.union (varsInArith x) (varsInArith y)
+    | BNot x -> varsInBool x
+
+/// Returns a set of all variables used in this expression.
+and varsIn =
+    function
+    | AExpr a -> varsInArith a
+    | BExpr b -> varsInBool b

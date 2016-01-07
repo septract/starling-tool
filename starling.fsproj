@@ -47,11 +47,11 @@
     <Compile Include="PrettyTypes.fs" />
     <Compile Include="VarErrors.fs" />
     <Compile Include="Var.fs" />
+    <Compile Include="Expr.fs" />
     <Compile Include="AST.fs" />
     <Compile Include="ASTPretty.fs" />
     <Compile Include="Collator.fs" />
     <Compile Include="Model.fs" />
-    <Compile Include="Expr.fs" />
     <Compile Include="ExprTests.fs" />
     <Compile Include="ModellerErrors.fs" />
     <Compile Include="Modeller.fs" />

@@ -2,9 +2,8 @@
 /// (in theory) part of reification.
 module Starling.Reifier
 
-open Microsoft
 open Starling.Collections
-open Starling.Z3
+open Starling.Expr
 open Starling.Model
 open Starling.Framer
 open Starling.Semantics
@@ -13,7 +12,7 @@ open Starling.Semantics
 let tupleOfGuarView {Cond = c; Item = i} = (c, i)
 
 /// Reifies a single GuarView-list into a ReView.
-let reifySingle model view = 
+let reifySingle view = 
     (* This corresponds to Dlift in the theory.
      * Our end goal is the term (implies (and guars...) vrs),
      * where vrs is defined below.
@@ -26,26 +25,27 @@ let reifySingle model view =
         |> Multiset.toList
         |> List.unzip
     { // Then, separately add them into a ReView.
-      Cond = mkAnd model.Context guars
+      Cond = mkAnd guars
       Item = Multiset.ofList views }
 
 /// Reifies an entire view application.
-let reifyView model = 
-    Multiset.power
-    >> Seq.map (reifySingle model)
-    >> Multiset.ofSeq
+let reifyView vap = 
+    vap
+    |> Multiset.power
+    |> Seq.map reifySingle
+    |> Multiset.ofSeq
 
 /// Reifies all of the views in a term.
-let reifyTerm model (term : Term) : ReTerm = 
-    let tpre = reifyView model term.Conditions.Pre
+let reifyTerm (term : Term) : ReTerm = 
+    let tpre = reifyView term.Conditions.Pre
     (* We need only calculate D(r), not |_r_|, so don't perform the
      * powersetting of the postcondition.
      *)
-    let tpost = reifySingle model term.Conditions.Post |> Multiset.singleton
+    let tpost = reifySingle term.Conditions.Post |> Multiset.singleton
     { Conditions = 
           { Pre = tpre
             Post = tpost }
       Inner = term.Inner }
 
 /// Reifies all of the terms in a term list.
-let reify model = List.map (reifyTerm model)
+let reify ts = List.map reifyTerm ts

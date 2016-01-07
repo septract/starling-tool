@@ -64,43 +64,41 @@ let instantiateDef ctx uview vdef =
 
 /// Produces the reification of an unguarded view multiset.
 /// This corresponds to D^ in the theory.
-let reifyZUnguarded model uview = 
-    let ctx = model.Context
+let reifyZUnguarded ctx uview = 
     match findDefOfView model uview with
     | Some vdef -> instantiateDef ctx uview vdef
     | None -> ctx.MkTrue()
 
-let reifyZSingle model {Cond = c; Item = i} = 
-    let ctx = model.Context
+let reifyZSingle ctx {Cond = c; Item = i} = 
     mkImplies ctx c (reifyZUnguarded model i)
 
 /// Z3-reifies an entire view application.
-let reifyZView model = 
+let reifyZView ctx = 
     Multiset.toSeq
-    >> Seq.map (reifyZSingle model)
-    >> mkAnd model.Context
+    >> Seq.map (reifyZSingle ctx)
+    >> mkAnd ctx
 
 /// Z3-reifies all of the views in a term.
-let reifyZTerm model term = 
+let reifyZTerm ctx term = 
     (* This is also where we perform our final variable substitution,
      * converting all global variables to their pre-state in Pre, and
      * post-state in Post.
      *)
-    let tpre = reifyZView model term.Conditions.Pre
-    let tpost = reifyZView model term.Conditions.Post
+    let tpre = reifyZView ctx term.Conditions.Pre
+    let tpost = reifyZView ctx term.Conditions.Post
     { Conditions = 
           { Pre = Expr.subAllInEnv model.Globals Expr.envVarToBefore (tpre :> Z3.Expr) :?> Z3.BoolExpr
             Post = Expr.subAllInEnv model.Globals Expr.envVarToAfter (tpost :> Z3.Expr) :?> Z3.BoolExpr }
       Inner = term.Inner }
 
 /// Reifies all of the terms in a term list.
-let reifyZ3 model = List.map (reifyZTerm model)
+let reifyZ3 ctx = List.map (reifyZTerm ctx)
 
 /// Combines the components of a reified term.
-let combineTerm model reterm = 
-    mkAnd model.Context [ reterm.Conditions.Pre
-                          reterm.Inner
-                          mkNot model.Context (reterm.Conditions.Post) ]
+let combineTerm ctx reterm = 
+    mkAnd ctx [ reterm.Conditions.Pre
+                reterm.Inner
+                mkNot ctx (reterm.Conditions.Post) ]
 
 /// Combines reified terms into a list of Z3 terms.
-let combineTerms model = List.map (combineTerm model)
+let combineTerms ctx = List.map (combineTerm ctx)

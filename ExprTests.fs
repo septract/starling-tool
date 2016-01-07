@@ -20,7 +20,7 @@ type ExprTests() =
 
     /// Tests that the frame name generator works fine.
     member x.``frame generation uses fresh variables properly`` xs = 
-        let fg = freshGen
+        let fg = freshGen ()
         List.map (frame fg) xs
 
     /// Test cases for testing constant post-state rewriting.
@@ -49,4 +49,4 @@ type ExprTests() =
     [<TestCaseSource("ArithConstantPostStates")>]
     /// Tests whether rewriting constants in arithmetic expressions to post-state works.
     member x.``constants in arithmetic expressions can be rewritten to post-state`` expr = 
-        arithMarkVars After (Set.ofList ["target1"; "target2"]) expr
+        arithMarkVars After (Set.ofList ["target1"; "target2"] |> inSet) expr

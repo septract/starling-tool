@@ -1,36 +1,34 @@
 /// The part of the Starling process that generates framed axioms.
 module Starling.Framer
 
-open Microsoft
 open Starling.Collections
+open Starling.Expr
 open Starling.Var
 open Starling.Model
 
-/// Converts a Starling type to a Z3 sort.
-let typeToSort (ctx : Z3.Context) = 
-    function 
-    | Type.Int -> ctx.IntSort :> Z3.Sort
-    | Type.Bool -> ctx.BoolSort :> Z3.Sort
-
 /// Instantiates a view parameter.
-let instantiateParam model (ty, name) = 
-    let ctx = model.Context
-    ctx.MkFreshConst(name + "!frame", typeToSort ctx ty)
+let instantiateParam fg (ty, name) = 
+    frame fg name
+    |> match ty with
+       | Bool -> BConst >> BExpr
+       | Int -> AConst >> AExpr
 
 /// Instantiates a defining view into a view expression.
-let instantiateFrame model dvs = 
+let instantiateFrame fg dvs = 
     dvs |> Multiset.map (fun { Name = n; Params = ps } -> 
-               { Cond = model.Context.MkTrue()
+               { Cond = BTrue
                  Item = 
                      { Name = n
-                       Params = List.map (instantiateParam model) ps } })
+                       Params = List.map (instantiateParam fg) ps } })
 
 /// Converts an axiom into a list of framed axioms, by combining it with the
 /// defining views of a model.
-let frameAxiom model axiom = 
+let frameAxiom ds fg axiom = 
     List.map (fun { CViews = vs } -> 
         { Axiom = axiom
-          Frame = instantiateFrame model vs }) model.DefViews
+          Frame = instantiateFrame fg vs }) ds
 
 /// Converts a model into a set of framed axioms.
-let frame model = concatMap (frameAxiom model) model.Axioms
+let frame {DefViews = ds; Axioms = xs} =
+    // We use a fresh variable generator to ensure every frame variable is unique.
+    concatMap (frameAxiom ds (freshGen ())) xs
