@@ -105,7 +105,6 @@ let cpairOfPartAxiom =
     | PAITE(outer = c) -> c
 
 /// A parameterised model of a Starling program.
-[<NoComparison>]
 type Model<'a, 'c> = 
     { Globals : Var.VarMap
       Locals : Var.VarMap

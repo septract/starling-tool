@@ -30,14 +30,14 @@ type ModellerTests() =
                     Bop(Add, Bop(Mul, Int 1L, Int 2L), Int 3L)
                 )
             ).Returns(
-                ok <| AAdd [ AMul [ AInt 1L ; AInt 2L ] ; AInt 3L ]
+                Some <| AAdd [ AMul [ AInt 1L ; AInt 2L ] ; AInt 3L ]
             ).SetName("model (1 * 2) + 3")
         }
 
     /// Tests whether the arithmetic expression modeller works.
     [<TestCaseSource("ArithmeticExprs")>]
     member x.``test the arithmetic expression modeller`` ast =
-        modelArithExpr ModellerTests.Env ast
+        modelArithExpr ModellerTests.Env ast |> okOption
 
     /// Boolean expression modelling tests.
     /// These all use the ticketed lock model.
@@ -48,7 +48,7 @@ type ModellerTests() =
                     Bop(And, Bop(Or, True, True), False)
                 )
             ).Returns(
-                ok (BFalse)
+                Some BFalse
             ).SetName("model and simplify (true || true) && false")
         }
 
@@ -56,10 +56,10 @@ type ModellerTests() =
     /// Tests whether the arithmetic expression modeller works.
     [<TestCaseSource("BooleanExprs")>]
     member x.``test the Boolean expression modeller`` ast =
-        modelBoolExpr ModellerTests.Env ast
+        ast |> modelBoolExpr ModellerTests.Env |> okOption
 
-    /// Tests for modelling variable lists.
-    static member VarLists =
+    /// Tests for modelling bad variable lists.
+    static member BadVarLists =
         seq {
             yield (
                 new TestCaseData(
@@ -67,7 +67,7 @@ type ModellerTests() =
                       (Type.Bool, "foo") ]
                 )
             ).Returns(
-                fail <| Starling.Errors.Var.Duplicate "foo"
+                Some <| [Starling.Errors.Var.Duplicate "foo"]
             ).SetName(
                 "disallow var lists with duplicates of same type"
             )
@@ -77,24 +77,31 @@ type ModellerTests() =
                       (Type.Bool, "bar") ]
                 )
             ).Returns(
-                fail <| Starling.Errors.Var.Duplicate "bar" 
+                Some <| [Starling.Errors.Var.Duplicate "bar"] 
             ).SetName(
                 "disallow var lists with duplicates of different type"
             )
+        }
+
+    /// Tests for modelling valid variable lists.
+    static member VarLists =
+        seq {
             yield (
                 new TestCaseData(
                     [ (Type.Int, "baz")
                       (Type.Bool, "emp") ]
                 )
             ).Returns(
-                ok <| Map.ofList [ ("baz", Type.Int) ; ("emp", Type.Bool) ]
+                Some <| Map.ofList [ ("baz", Type.Int) ; ("emp", Type.Bool) ]
             ).SetName(
                 "allow var lists with no types"
             )
+            let emp : (Type * string) list = []
+            let empm : VarMap = Map.empty
             yield (
-                new TestCaseData([])
+                new TestCaseData(emp)
             ).Returns(
-                ok <| Map.empty
+                Some <| empm
             ).SetName(
                 "allow empty var lists"
             )
@@ -102,8 +109,13 @@ type ModellerTests() =
 
     /// Tests the creation of var lists.
     [<TestCaseSource("VarLists")>]
-    member x.``var lists are checked correctly during mapping`` vl =
-        makeVarMap vl
+    member x.``valid var lists are accepted during mapping`` vl =
+        makeVarMap vl |> okOption
+
+    /// Tests the creation of var lists.
+    [<TestCaseSource("BadVarLists")>]
+    member x.``invalid var lists are rejected during mapping`` vl =
+        makeVarMap vl |> failOption
 
     /// Tests for the atomic primitive modeller.
     /// These use the ticketed lock model.
@@ -114,7 +126,7 @@ type ModellerTests() =
                     Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment)
                 )
             ).Returns(
-                ok <| IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment) 
+                Some <| IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment) 
             ).SetName(
                 "model a valid integer load as a prim"
             )
@@ -123,7 +135,7 @@ type ModellerTests() =
     /// Tests the atomic primitive modeller using the ticketed lock.
     [<TestCaseSource("AtomicPrims")>]
     member x.``atomic actions are modelled correctly as prims`` a =
-        modelPrimOnAtomic ticketLockModel a
+        modelPrimOnAtomic ticketLockModel a |> okOption
 
     /// Tests for the command axiom modeller.
     /// These use the ticketed lock model.
@@ -131,19 +143,19 @@ type ModellerTests() =
         seq {
             yield (
                 new TestCaseData(
-                    ( { Pre = Multiset.empty()
-                        Post = 
-                            Multiset.ofList [ CondView.Func { Name = "holdTick"
-                                                              Params = [ AExpr (AConst (Unmarked "t")) ] } ] },
-                      Atomic(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment)))
+                    { Pre = Multiset.empty()
+                      Post = 
+                          Multiset.ofList [ CondView.Func { Name = "holdTick"
+                                                            Params = [ AExpr (AConst (Unmarked "t")) ] } ] },
+                    Atomic(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment))
                 )
             ).Returns(
-                ok <| (PAAxiom { Conditions = 
-                                    { Pre = Multiset.empty()
-                                      Post = 
-                                          Multiset.ofList [ CondView.Func { Name = "holdTick"
-                                                                            Params = [ AExpr (AConst (Unmarked "t")) ] } ] }
-                                 Inner = IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment) }) 
+                Some <| (PAAxiom { Conditions = 
+                                      { Pre = Multiset.empty()
+                                        Post = 
+                                            Multiset.ofList [ CondView.Func { Name = "holdTick"
+                                                                              Params = [ AExpr (AConst (Unmarked "t")) ] } ] }
+                                   Inner = IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment) }) 
             ).SetName(
                 "model a valid integer load command as an axiom"
             )
@@ -152,7 +164,7 @@ type ModellerTests() =
     /// Tests the command modeller using the ticketed lock.
     [<TestCaseSource("CommandAxioms")>]
     member x.``commands are modelled correctly as axioms`` (cpair, c) =
-        modelAxiomOnCommand ticketLockModel cpair c
+        modelAxiomOnCommand ticketLockModel cpair c |> okOption
 
     /// Full case studies to model.
     static member Models =
@@ -160,7 +172,7 @@ type ModellerTests() =
             yield (
                 new TestCaseData(ticketLockCollated)
             ).Returns(
-                ok <| ticketLockModel
+                Some ticketLockModel
             ).SetName(
                 "model the ticketed lock"
             )
@@ -169,4 +181,4 @@ type ModellerTests() =
     /// Tests the whole modelling process.
     [<TestCaseSource("Models")>]
     member x.``case studies are modelled correctly`` col =
-        model col
+        model col |> okOption

@@ -75,6 +75,18 @@ let findDuplicates lst =
  * Chessie-related functions.
  *)
 
+/// Converts a Result into an option with Some x if the result was Ok x _.
+let okOption =
+    function
+    | Ok (x, _) -> Some x
+    | _ -> None
+
+/// Converts a Result into an option with Some x if the result was Fail x _.
+let failOption =
+    function
+    | Fail xs -> Some xs
+    | _ -> None
+
 /// Maps f over e's messages.
 let mapMessages f = either (fun (v, msgs) -> Ok(v, List.map f msgs)) (fun msgs -> List.map f msgs |> Bad)
 

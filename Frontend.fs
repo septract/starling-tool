@@ -18,7 +18,6 @@ type Request =
     | Model
 
 /// Type of responses from the Starling frontend.
-[<NoComparison>]
 type Response =
     /// Output of the parsing step only. 
     | Parse of AST.ScriptItem list
