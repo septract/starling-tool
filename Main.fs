@@ -6,15 +6,12 @@ open Starling.Model
 open CommandLine
 open CommandLine.Text
 open Microsoft
-open Fuchu
 // This is down here to force Chessie's fail to override FParsec's.
 open Chessie.ErrorHandling
 
 /// Command-line flags used in the Starling executable.
 type Options = 
-    { [<Option('t', HelpText = "Ignore input and run regression tests.")>]
-      test : bool
-      [<Option('h', HelpText = "If stopped at an intermediate stage, print the result for human consumption.")>]
+    { [<Option('h', HelpText = "If stopped at an intermediate stage, print the result for human consumption.")>]
       human : bool
       [<Option('s', HelpText = "The stage at which Starling should stop and output.")>]
       stage : string option
@@ -229,7 +226,7 @@ let runStarling =
         >> lift Response.Z3
 
 /// Runs Starling with the given options, and outputs the results.
-let starlingMain opts = 
+let mainWithOptions opts = 
     let input = opts.input
     let human = opts.human
     
@@ -247,16 +244,10 @@ let starlingMain opts =
     |> printfn "%s"
     0
 
-/// Wrapper to allow Fuchu to work.
-/// TODO(CaptainHayashi): remove when we migrate from Fuchu.
-let mainWithOptions opts argv = 
-    if opts.test then defaultMainThisAssembly argv
-    else starlingMain opts
-
 [<EntryPoint>]
 let main argv = 
     match CommandLine.Parser.Default.ParseArguments<Options> argv with
-    | :? Parsed<Options> as parsed -> mainWithOptions parsed.Value argv
+    | :? Parsed<Options> as parsed -> mainWithOptions parsed.Value
     | :? NotParsed<Options> as notParsed -> 
         printfn "failure: %A" notParsed.Errors
         2
