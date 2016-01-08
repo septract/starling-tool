@@ -8,6 +8,8 @@ open Starling.Lang.AST
 open Starling.Lang.Collator
 open Starling.Model
 open Starling.Lang.Modeller
+open Starling.Z3.Utils
+open Starling.Pretty.Expr
 open Starling.Pretty.Lang.AST
 open Starling.Pretty.Types
 
@@ -23,7 +25,7 @@ let printCollatedScript (cs: CollatedScript) =
 let printZ3Exp (expr : #Z3.Expr) = String(expr.ToString())
 
 /// Pretty-prints a singular view assertion.
-let printModelView = printFunc printZ3Exp
+let printModelView = printFunc printExpr
 
 /// Pretty-prints a type-name parameter.
 let printParam (ty, name) = 
@@ -45,30 +47,18 @@ let printModelViewList = printViewList printModelView
 /// Pretty-prints a multiset of viewdefs.
 let printModelViewDefs = printViewList printModelViewDef >> squared
 
-/// Pretty-prints TVars.
-let printTVar tvar = 
-    ssurround "(Z3:" ")" (commaSep [ printZ3Exp tvar.Expr
-                                     printZ3Exp tvar.PreExpr
-                                     printZ3Exp tvar.PostExpr
-                                     printZ3Exp tvar.FrameExpr ])
 
 /// Pretty-prints model variables.
-let printModelVar (name, var) = 
+let printModelVar (name, ty) = 
     colonSep [ String name
-               (match var with
-                | Var.Int tv -> 
-                    hsep [ String "int"
-                           printTVar tv ]
-                | Var.Bool tv -> 
-                    hsep [ String "bool"
-                           printTVar tv ]) ]
+               printType ty ]
 
 /// Pretty-prints a conditional view.
 let rec printCondView = 
     function 
     | ITE(i, t, e) -> 
         hsep [ String "if"
-               printZ3Exp i
+               printBoolExpr i
                String "then"
                printCondViewList t
                String "else"
@@ -80,9 +70,9 @@ and printCondViewList = printViewList printCondView >> ssurround "[| " "|]"
 
 /// Pretty-prints a guarded item.
 let printGuarded pitem {Cond = c; Item = i} = 
-    if c.IsTrue then pitem i
+    if Expr.isTrue c then pitem i
     else 
-        parened (HSep([ printZ3Exp c
+        parened (HSep([ printBoolExpr c
                         pitem i ], String "|"))
 
 /// Pretty-prints a guarded view.
@@ -94,7 +84,7 @@ let printGuarViewList = printViewList printGuarView >> ssurround "<|" "|>"
 /// Pretty-prints a reified view.
 let printReView = printGuarded printModelViewList >> ssurround "((" "))"
 
-/// Pretty-prints a reified view.
+/// Pretty-prints a reified view list.
 let printReViewList = printViewList printReView >> ssurround "(|" "|)"
 
 /// Pretty-prints something wrapped in a general condition pair.
@@ -115,35 +105,35 @@ let printLoadPrim ty dest src mode =
 /// Pretty-prints a store prim.
 let printStorePrim ty dest src = 
     hsep [ String("store<" + ty + ">")
-           parened (equality (dest |> printLValue) (src |> printZ3Exp)) ]
+           parened (equality (dest |> printLValue) (src |> printExpr)) ]
 
 /// Pretty-prints a CAS prim.
 let printCASPrim ty dest src set = 
     hsep [ String("cas<" + ty + ">")
            parened (commaSep [ dest |> printLValue
                                src |> printLValue
-                               set |> printZ3Exp ]) ]
+                               set |> printExpr ]) ]
 
 /// Pretty-prints a local-set prim.
 let printLocalPrim ty dest src = 
     hsep [ String("lset<" + ty + ">")
-           parened (equality (dest |> printLValue) (src |> printZ3Exp)) ]
+           parened (equality (dest |> printLValue) (src |> printExpr)) ]
 
 /// Pretty-prints a prim.
 let printPrim = 
     function 
     | IntLoad(dest, src, mode) -> printLoadPrim "arith" dest src mode
     | BoolLoad(dest, src) -> printLoadPrim "bool" (Some dest) src Direct
-    | IntStore(dest, src) -> printStorePrim "arith" dest src
-    | BoolStore(dest, src) -> printStorePrim "bool" dest src
-    | IntCAS(dest, src, set) -> printCASPrim "arith" dest src set
-    | BoolCAS(dest, src, set) -> printCASPrim "bool" dest src set
-    | IntLocalSet(dest, src) -> printLocalPrim "arith" dest src
-    | BoolLocalSet(dest, src) -> printLocalPrim "bool" dest src
+    | IntStore(dest, src) -> printStorePrim "arith" dest (Expr.AExpr src)
+    | BoolStore(dest, src) -> printStorePrim "bool" dest (Expr.BExpr src)
+    | IntCAS(dest, src, set) -> printCASPrim "arith" dest src (Expr.AExpr set)
+    | BoolCAS(dest, src, set) -> printCASPrim "bool" dest src (Expr.BExpr set)
+    | IntLocalSet(dest, src) -> printLocalPrim "arith" dest (Expr.AExpr src)
+    | BoolLocalSet(dest, src) -> printLocalPrim "bool" dest (Expr.BExpr src)
     | PrimId -> String "id"
     | PrimAssume expr -> 
         hsep [ String "assume"
-               braced (printZ3Exp expr) ]
+               braced (printBoolExpr expr) ]
 
 /// Pretty-prints a Hoare triple
 let printHoare pCond pInner { Conditions = cond; Inner = inner } = 
@@ -157,7 +147,7 @@ let printFullAxiom = printHoare printGuarViewList printPrim
 
 /// Pretty-prints a semantically translated axiom.
 let printSemAxiom (ax : SemAxiom) = 
-    printHoare printGuarViewList (printZ3Exp
+    printHoare printGuarViewList (printBoolExpr
                                   >> Indent
                                   >> Seq.singleton
                                   >> Seq.toList
@@ -187,9 +177,9 @@ let rec printPartAxiom =
                String "end" ]
 
 /// Pretty-prints a model constraint.
-let printModelConstraint { CViews = vs; CZ3 = z } = 
+let printModelConstraint { CViews = vs; CExpr = e } = 
     keyMap [ ("View", printModelViewDefs vs)
-             ("Z3", z.ToString() |> String) ]
+             ("Expr", printBoolExpr e) ]
 
 /// Pretty-prints a model view prototype.
 let printModelViewProto (vn, vps) = 
@@ -243,25 +233,25 @@ let printNumPrecList pp =
 let printFramedAxioms = printNumHeaderedList printFramedAxiom
 
 /// Pretty-prints a generic term.
-let printGenTerm pv (tm : Hoare<'a, Z3.BoolExpr>) = 
-    vsep [ curry Header "Action" <| Indent(printZ3Exp tm.Inner)
+let printGenTerm pv pi tm = 
+    vsep [ curry Header "Action" <| Indent(pi tm.Inner)
            curry Header "Pre" <| Indent(pv tm.Conditions.Pre)
            curry Header "Post" <| Indent(pv tm.Conditions.Post) ]
 
 /// Pretty-prints an unreified term.
-let printTerm = printGenTerm printGuarViewList
+let printTerm = printGenTerm printGuarViewList printBoolExpr
 
 /// Pretty-prints a list of terms.
 let printTerms = printNumHeaderedList printTerm
 
 /// Pretty-prints a reified term.
-let printReTerm : ReTerm -> Command = printGenTerm printReViewList
+let printReTerm : ReTerm -> Command = printGenTerm printReViewList printBoolExpr
 
 /// Pretty-prints a list of reified terms.
 let printReTerms = printNumHeaderedList printReTerm
 
 /// Pretty-prints a Z3-reified term.
-let printZTerm : ZTerm -> Command = printGenTerm printZ3Exp
+let printZTerm : ZTerm -> Command = printGenTerm printZ3Exp printZ3Exp
 
 /// Pretty-prints a list of Z3-reified terms.
 let printZTerms = printNumHeaderedList printZTerm

@@ -37,6 +37,9 @@ let mkPair x y = (x, y)
 /// List cons (::) as a two-argument function.
 let cons a b = a :: b
 
+/// Puts a onto the top of a sequence b.
+let scons a = Seq.append (Seq.singleton a)
+
 /// Returns `a` if the input is `Some a`, or `d` otherwise.
 let withDefault d =
     function

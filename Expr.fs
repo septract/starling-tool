@@ -57,6 +57,14 @@ let isFalse =
     function | BFalse -> true
              | _ -> false
 
+/// Converts a Starling constant into a string.
+let constToString =
+    function
+    | Unmarked s -> s
+    | Before s -> sprintf "%s!before" s
+    | After s -> sprintf "%s!after" s
+    | Frame (i, s) -> sprintf "%s!frame!%A" s i
+
 (*
  * Expression constructors
  *)
@@ -293,7 +301,7 @@ and varsInBool =
     | BFalse -> Set.empty
     | BAnd xs -> xs |> Seq.map varsInBool |> Set.unionMany
     | BOr xs -> xs |> Seq.map varsInBool |> Set.unionMany
-    | BImplies (x, y) -> Set.union (varsIn x) (varsIn y)
+    | BImplies (x, y) -> Set.union (varsInBool x) (varsInBool y)
     | BEq (x, y) -> Set.union (varsIn x) (varsIn y)
     | BGt (x, y) -> Set.union (varsInArith x) (varsInArith y)
     | BGe (x, y) -> Set.union (varsInArith x) (varsInArith y)

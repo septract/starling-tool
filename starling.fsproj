@@ -43,11 +43,11 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Collections.fs" />
     <Compile Include="Utils.fs" />
-    <Compile Include="Z3Utils.fs" />
     <Compile Include="PrettyTypes.fs" />
     <Compile Include="VarErrors.fs" />
     <Compile Include="Var.fs" />
     <Compile Include="Expr.fs" />
+    <Compile Include="ExprPretty.fs" />
     <Compile Include="AST.fs" />
     <Compile Include="ASTPretty.fs" />
     <Compile Include="Collator.fs" />
@@ -62,6 +62,7 @@
     <Compile Include="Framer.fs" />
     <Compile Include="TermGen.fs" />
     <Compile Include="Reifier.fs" />
+    <Compile Include="Z3Utils.fs" />
     <Compile Include="Z3Translator.fs" />
     <Compile Include="Z3Run.fs" />
     <Compile Include="Pretty.fs" />

@@ -1,6 +1,7 @@
 ﻿/// The Z3 backend driver.
 module Starling.Z3.Backend
 
+open Microsoft
 open Chessie.ErrorHandling
 open Starling
 
@@ -21,7 +22,7 @@ type Request =
 [<NoComparison>]
 type Response =
     /// Output of the term translation step only.
-    | Translate of Starling.Model.ZTerm list
+    | Translate of ZTerm list
     /// Output of the final Z3 terms only.
     | Combine of Microsoft.Z3.BoolExpr list
     /// Output of satisfiability reports for the Z3 terms.
@@ -58,14 +59,19 @@ let translate = Translator.reifyZ3
 /// Shorthand for the collation stage of the frontend pipeline.
 let combine = Translator.combineTerms
 /// Shorthand for the modelling stage of the frontend pipeline.
-let sat m = Run.run m
+let sat = Run.run
+
+/// Runs the Starling Z3 backend with the given context.
+let runCtx ctx model =
+    function
+    | Request.Translate -> translate ctx model >> Response.Translate
+    | Request.Combine -> translate ctx model >> combine ctx >> Response.Combine
+    | Request.Sat -> translate ctx model >> combine ctx >> sat ctx >> Response.Sat
 
 /// Runs the Starling Z3 backend.
 /// Takes three arguments: the first is the Z3 model; the second is the
 /// `Response` telling the backend what to output; and the third is the list of
 /// reified terms to process with Z3.
-let run model =
-    function
-    | Request.Translate -> translate model >> Response.Translate
-    | Request.Combine -> translate model >> combine model >> Response.Combine
-    | Request.Sat -> translate model >> combine model >> sat model >> Response.Sat
+let run model resp ts =
+    use ctx = new Z3.Context()
+    runCtx ctx model resp ts

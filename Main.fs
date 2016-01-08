@@ -143,13 +143,13 @@ let z3 rq = lift (fun (mdl, terms) -> Starling.Z3.Backend.run mdl rq terms)
 /// Shorthand for the reify stage.
 let reify = 
     Starling.Reifier.reify
-    |> inAndOut2
+    |> pairMap id
     |> lift
 
 /// Shorthand for the term generation stage.
 let termGen = 
     Starling.TermGen.termGen
-    |> inAndOut2
+    |> pairMap id
     |> lift
 
 /// Shorthand for the framing stage.

@@ -3,44 +3,50 @@ module Starling.Tests.Reifier
 
 open NUnit.Framework
 open Starling.Collections
+open Starling.Expr
 open Starling.Var
 open Starling.Model
-open Starling.Reifier
 open Starling.Z3.Translator
 open Starling.Tests.Studies
-open Microsoft
 
 /// Tests for the reifier.
 type ReifierTests() = 
     
     /// Test cases for findDefOfView.
     static member FindDefOfViewCases = 
+        // TODO(CaptainHayashi): this isn't part of the reifier anymore...
         seq {
-            // Correct order 
-            yield (new TestCaseData(fun (ctx : Z3.Context) -> 
-            (Multiset.ofList [ { Name = "holdLock"
-                                 Params = [] }
-                               { Name = "holdTick"
-                                 Params = [ ctx.MkIntConst "t" :> Z3.Expr ] } ]))).Returns(Some(Multiset.ofList [ { Name = "holdLock"
-                                                                                                                    Params = [] }
-                                                                                                                  { Name = "holdTick"
-                                                                                                                    Params = [ (Type.Int, "t") ] } ]))
-            // Reversed order
-            yield (new TestCaseData(fun (ctx : Z3.Context) -> 
-            (Multiset.ofList [ { Name = "holdTick"
-                                 Params = [ ctx.MkIntConst "t" :> Z3.Expr ] }
-                               { Name = "holdLock"
-                                 Params = [] } ]))).Returns(Some(Multiset.ofList [ { Name = "holdLock"
-                                                                                     Params = [] }
-                                                                                   { Name = "holdTick"
-                                                                                     Params = [ (Type.Int, "t") ] } ]))
+            yield (
+                new TestCaseData(
+                    Multiset.ofList [ { Name = "holdLock"
+                                        Params = [] }
+                                      { Name = "holdTick"
+                                        Params = [ AExpr (AConst (Unmarked "t")) ] } ]
+                )
+            ).Returns(
+                Some(Multiset.ofList [ { Name = "holdLock"
+                                         Params = [] }
+                                       { Name = "holdTick"
+                                         Params = [ (Type.Int, "t") ] } ])
+            ).SetName("Find definition of view in the same order")
+            yield (
+                new TestCaseData(
+                    Multiset.ofList [ { Name = "holdTick"
+                                        Params = [ AExpr (AConst (Unmarked "t")) ] }
+                                      { Name = "holdLock"
+                                        Params = [] } ]
+                )
+            ).Returns(
+                Some(Multiset.ofList [ { Name = "holdLock"
+                                         Params = [] }
+                                       { Name = "holdTick"
+                                         Params = [ (Type.Int, "t") ] } ])
+            ).SetName("Find definition of view in a reversed order")
         }
     
     [<TestCaseSource("FindDefOfViewCases")>]
     /// Tests whether findDefOfView behaves correctly.
-    member x.``findDefOfView finds view defs correctly on the ticketed lock`` (vdf : Z3.Context -> Multiset<View>) = 
-        use ctx = new Z3.Context()
-        let view = vdf ctx
+    member x.``findDefOfView finds view defs correctly on the ticketed lock`` view = 
         view
-        |> findDefOfView (ticketLockModel ctx)
+        |> findDefOfView ticketLockModel.DefViews
         |> Option.map (fun x -> x.CViews)

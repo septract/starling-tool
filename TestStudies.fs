@@ -1,9 +1,9 @@
 /// Case studies for unit testing.
 module Starling.Tests.Studies
 
-open Microsoft
 open Starling
 open Starling.Collections
+open Starling.Expr
 open Starling.Var
 open Starling.Model
 open Starling.Lang.AST
@@ -133,44 +133,44 @@ let ticketLockCollated =
       Methods = [ ticketLockLockMethodAST; ticketLockUnlockMethodAST ] }
 
 /// The axioms of the ticketed lock.
-let ticketLockAxioms (ctx : Z3.Context) = 
+let ticketLockAxioms = 
     [ PAAxiom { Conditions = 
                     { Pre = Multiset.empty()
                       Post = 
                           Multiset.ofList [ CondView.Func { Name = "holdTick"
-                                                            Params = [ ctx.MkIntConst "t" ] } ] }
+                                                            Params = [ AExpr (AConst (Unmarked "t")) ] } ] }
                 Inner = IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment) }
-      PAWhile(true, ctx.MkNot(ctx.MkEq(ctx.MkIntConst "s", ctx.MkIntConst "t")), 
+      PAWhile(true, BNot(BEq(AExpr (AConst (Unmarked "s")), AExpr (AConst (Unmarked "t")))), 
               { Pre = 
                     Multiset.ofList [ CondView.Func { Name = "holdTick"
-                                                      Params = [ ctx.MkIntConst "t" ] } ]
+                                                      Params = [ AExpr (AConst (Unmarked "t")) ] } ]
                 Post = 
                     Multiset.ofList [ CondView.Func { Name = "holdLock"
                                                       Params = [] } ] }, 
               { Conditions = 
                     { Pre = 
                           Multiset.ofList [ CondView.Func { Name = "holdTick"
-                                                            Params = [ ctx.MkIntConst "t" ] } ]
+                                                            Params = [ AExpr (AConst (Unmarked "t")) ] } ]
                       Post = 
                           Multiset.ofList 
-                              [ ITE(ctx.MkEq(ctx.MkIntConst "s", ctx.MkIntConst "t"), 
+                              [ ITE(BEq(AExpr (AConst (Unmarked "s")), AExpr (AConst (Unmarked "t"))), 
                                          Multiset.ofList [ CondView.Func { Name = "holdLock"
                                                                            Params = [] } ], 
                                          Multiset.ofList [ CondView.Func { Name = "holdTick"
-                                                                           Params = [ ctx.MkIntConst "t" ] } ]) ] }
+                                                                           Params = [ AExpr (AConst (Unmarked "t")) ] } ]) ] }
                 Inner = 
                     [ PAAxiom { Conditions = 
                                     { Pre = 
                                           Multiset.ofList [ CondView.Func { Name = "holdTick"
-                                                                            Params = [ ctx.MkIntConst "t" ] } ]
+                                                                            Params = [ AExpr (AConst (Unmarked "t")) ] } ]
                                       Post = 
                                           Multiset.ofList 
                                               [ ITE
-                                                    (ctx.MkEq(ctx.MkIntConst "s", ctx.MkIntConst "t"), 
+                                                    (BEq(AExpr (AConst (Unmarked "s")), AExpr (AConst (Unmarked "t"))), 
                                                      Multiset.ofList [ CondView.Func { Name = "holdLock"
                                                                                        Params = [] } ], 
                                                      Multiset.ofList [ CondView.Func { Name = "holdTick"
-                                                                                       Params = [ ctx.MkIntConst "t" ] } ]) ] }
+                                                                                       Params = [ AExpr (AConst (Unmarked "t")) ] } ]) ] }
                                 Inner = IntLoad(Some(LVIdent "s"), LVIdent "serving", Direct) } ] })
       PAAxiom { Conditions = 
                     { Pre = 
@@ -185,35 +185,35 @@ let ticketLockModel =
           Map.ofList [ ("holdTick", [ (Type.Int, "t") ])
                        ("holdLock", []) ]
       Globals = 
-          Map.ofList [ ("serving", Int)
-                       ("ticket", Int) ]
+          Map.ofList [ ("serving", Type.Int)
+                       ("ticket", Type.Int) ]
       Locals = 
-          Map.ofList [ ("s", Int)
-                       ("t", Int) ]
+          Map.ofList [ ("s", Type.Int)
+                       ("t", Type.Int) ]
       Axioms = ticketLockAxioms
       DefViews = 
           [ { CViews = Multiset.empty()
-              CExpr = ctx.MkGe(ctx.MkIntConst "ticket", ctx.MkIntConst "serving") }
+              CExpr = BGe(AConst (Unmarked "ticket"), AConst (Unmarked "serving")) }
             { CViews = 
                   Multiset.ofList [ { Name = "holdTick"
                                       Params = [ (Type.Int, "t") ] } ]
-              CExpr = ctx.MkGt(ctx.MkIntConst "ticket", ctx.MkIntConst "t") }
+              CExpr = BGt(AConst (Unmarked "ticket"), AConst (Unmarked "t")) }
             { CViews = 
                   Multiset.ofList [ { Name = "holdLock"
                                       Params = [] } ]
-              CExpr = ctx.MkGt(ctx.MkIntConst "ticket", ctx.MkIntConst "serving") }
+              CExpr = BGt(AConst (Unmarked "ticket"), AConst (Unmarked "serving")) }
             { CViews = 
                   Multiset.ofList [ { Name = "holdLock"
                                       Params = [] }
                                     { Name = "holdTick"
                                       Params = [ (Type.Int, "t") ] } ]
-              CExpr = ctx.MkNot(ctx.MkEq(ctx.MkIntConst "serving", ctx.MkIntConst "t")) }
+              CExpr = BNot(BEq(AExpr (AConst (Unmarked "serving")), AExpr (AConst (Unmarked "t")))) }
             { CViews = 
                   Multiset.ofList [ { Name = "holdTick"
                                       Params = [ (Type.Int, "ta") ] }
                                     { Name = "holdTick"
                                       Params = [ (Type.Int, "tb") ] } ]
-              CExpr = ctx.MkNot(ctx.MkEq(ctx.MkIntConst "ta", ctx.MkIntConst "tb")) }
+              CExpr = BNot(BEq(AExpr (AConst (Unmarked "ta")), AExpr (AConst (Unmarked "tb")))) }
             { CViews = 
                   Multiset.ofList [ { Name = "holdLock"
                                       Params = [] }

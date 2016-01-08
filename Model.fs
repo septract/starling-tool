@@ -91,9 +91,6 @@ type Term = Hoare<Multiset<GuarView>, BoolExpr>
 /// A reified term.
 type ReTerm = Hoare<Multiset<ReView>, BoolExpr>
 
-/// A Z3-reified term.
-type ZTerm = Hoare<BoolExpr, BoolExpr>
-
 /// A partially resolved axiom.
 type PartAxiom = 
     | PAAxiom of FlatAxiom
