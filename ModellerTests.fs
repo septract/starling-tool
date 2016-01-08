@@ -24,15 +24,15 @@ type ModellerTests() =
 
     /// Arithmetic expression modelling tests.
     static member ArithmeticExprs =
-        seq {
-            yield (
+        [
+            (
                 new TestCaseData(
                     Bop(Add, Bop(Mul, Int 1L, Int 2L), Int 3L)
                 )
             ).Returns(
                 Some <| AAdd [ AMul [ AInt 1L ; AInt 2L ] ; AInt 3L ]
             ).SetName("model (1 * 2) + 3")
-        }
+        ]
 
     /// Tests whether the arithmetic expression modeller works.
     [<TestCaseSource("ArithmeticExprs")>]
@@ -42,15 +42,15 @@ type ModellerTests() =
     /// Boolean expression modelling tests.
     /// These all use the ticketed lock model.
     static member BooleanExprs =
-        seq {
-            yield (
+        [
+            (
                 new TestCaseData(
                     Bop(And, Bop(Or, True, True), False)
                 )
             ).Returns(
                 Some BFalse
             ).SetName("model and simplify (true || true) && false")
-        }
+        ]
 
 
     /// Tests whether the arithmetic expression modeller works.
@@ -60,8 +60,8 @@ type ModellerTests() =
 
     /// Tests for modelling bad variable lists.
     static member BadVarLists =
-        seq {
-            yield (
+        [
+            (
                 new TestCaseData(
                     [ (Type.Bool, "foo")
                       (Type.Bool, "foo") ]
@@ -71,7 +71,7 @@ type ModellerTests() =
             ).SetName(
                 "disallow var lists with duplicates of same type"
             )
-            yield (
+            (
                 new TestCaseData(
                     [ (Type.Int, "bar")
                       (Type.Bool, "bar") ]
@@ -81,12 +81,14 @@ type ModellerTests() =
             ).SetName(
                 "disallow var lists with duplicates of different type"
             )
-        }
+        ]
 
     /// Tests for modelling valid variable lists.
     static member VarLists =
-        seq {
-            yield (
+        let emp : (Type * string) list = []
+        let empm : VarMap = Map.empty
+        [
+            (
                 new TestCaseData(
                     [ (Type.Int, "baz")
                       (Type.Bool, "emp") ]
@@ -96,16 +98,15 @@ type ModellerTests() =
             ).SetName(
                 "allow var lists with no types"
             )
-            let emp : (Type * string) list = []
-            let empm : VarMap = Map.empty
-            yield (
+
+            (
                 new TestCaseData(emp)
             ).Returns(
                 Some <| empm
             ).SetName(
                 "allow empty var lists"
             )
-        }
+        ]
 
     /// Tests the creation of var lists.
     [<TestCaseSource("VarLists")>]
@@ -120,8 +121,8 @@ type ModellerTests() =
     /// Tests for the atomic primitive modeller.
     /// These use the ticketed lock model.
     static member AtomicPrims =
-        seq {
-            yield (
+        [
+            (
                 new TestCaseData(
                     Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment)
                 )
@@ -130,7 +131,7 @@ type ModellerTests() =
             ).SetName(
                 "model a valid integer load as a prim"
             )
-        }
+        ]
 
     /// Tests the atomic primitive modeller using the ticketed lock.
     [<TestCaseSource("AtomicPrims")>]
@@ -140,8 +141,8 @@ type ModellerTests() =
     /// Tests for the command axiom modeller.
     /// These use the ticketed lock model.
     static member CommandAxioms =
-        seq {
-            yield (
+        [
+            (
                 new TestCaseData(
                     { Pre = Multiset.empty()
                       Post = 
@@ -159,7 +160,7 @@ type ModellerTests() =
             ).SetName(
                 "model a valid integer load command as an axiom"
             )
-        }
+        ]
 
     /// Tests the command modeller using the ticketed lock.
     [<TestCaseSource("CommandAxioms")>]
@@ -168,15 +169,15 @@ type ModellerTests() =
 
     /// Full case studies to model.
     static member Models =
-        seq {
-            yield (
+        [
+            (
                 new TestCaseData(ticketLockCollated)
             ).Returns(
                 Some ticketLockModel
             ).SetName(
                 "model the ticketed lock"
             )
-        }
+        ]
 
     /// Tests the whole modelling process.
     [<TestCaseSource("Models")>]

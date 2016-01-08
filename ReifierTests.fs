@@ -15,8 +15,7 @@ type ReifierTests() =
     /// Test cases for findDefOfView.
     static member FindDefOfViewCases = 
         // TODO(CaptainHayashi): this isn't part of the reifier anymore...
-        seq {
-            yield (
+        [   (
                 new TestCaseData(
                     Multiset.ofList [ { Name = "holdLock"
                                         Params = [] }
@@ -29,7 +28,7 @@ type ReifierTests() =
                                        { Name = "holdTick"
                                          Params = [ (Type.Int, "t") ] } ])
             ).SetName("Find definition of view in the same order")
-            yield (
+            (
                 new TestCaseData(
                     Multiset.ofList [ { Name = "holdTick"
                                         Params = [ AExpr (AConst (Unmarked "t")) ] }
@@ -42,7 +41,7 @@ type ReifierTests() =
                                        { Name = "holdTick"
                                          Params = [ (Type.Int, "t") ] } ])
             ).SetName("Find definition of view in a reversed order")
-        }
+        ]
     
     [<TestCaseSource("FindDefOfViewCases")>]
     /// Tests whether findDefOfView behaves correctly.

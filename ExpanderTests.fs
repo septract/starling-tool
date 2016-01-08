@@ -10,15 +10,15 @@ open Starling.Model
 type ExpanderTests() =
     /// Test cases for converting CondViews to GuarViews
     static member CondViews =
-        seq {
-            let msec : Multiset<CondView> = Multiset.empty()
-            let mseg : Multiset<GuarView> = Multiset.empty()
-            yield (
+        let msec : Multiset<CondView> = Multiset.empty()
+        let mseg : Multiset<GuarView> = Multiset.empty()
+        [
+            (
                 new TestCaseData(msec)
             ).Returns(
                 mseg
             ).SetName("Convert the empty CondView to the empty GuarView")
-            yield (
+            (
                 new TestCaseData(
                     Multiset.ofList [ Func { Name = "foo"
                                              Params = [ AExpr (AConst (Unmarked "bar")) ] }
@@ -35,7 +35,7 @@ type ExpanderTests() =
                                         { Name = "bar"
                                           Params = [ AExpr (AConst (Unmarked "baz")) ] }} ]
             ).SetName("Convert a flat CondView-list to a GuarView-list with no guards")
-            yield (
+            (
                 new TestCaseData (
                     Multiset.ofList 
                         [ ITE((BConst (Unmarked "s")), 
@@ -54,7 +54,7 @@ type ExpanderTests() =
                                         { Name = "bar"
                                           Params = [ AExpr (AConst (Unmarked "baz")) ] } } ]
             ).SetName("Convert a singly-nested CondView-list to a GuarView-list with unit guards")
-            yield (
+            (
                 new TestCaseData (
                    Multiset.ofList 
                        [ ITE(BConst (Unmarked "s"), 
@@ -97,7 +97,7 @@ type ExpanderTests() =
                                         { Name = "ding"
                                           Params = [ AExpr (AConst (Unmarked "dong")) ] } } ]
             ).SetName("Convert a complex-nested CondView-list to a GuarView-list with complex guards")
-        }
+        ]
 
     // Test conversion of CondViews into GuarViews.
     [<TestCaseSource("CondViews")>]

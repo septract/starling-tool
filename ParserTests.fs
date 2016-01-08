@@ -21,12 +21,12 @@ type ParserTests() =
     
     /// Test cases for testing the expression parser.
     static member ExpressionParses = 
-        seq { 
-            yield (new TestCaseData("1 + 2 * 3"))
+        [
+            (new TestCaseData("1 + 2 * 3"))
                 .Returns(Some(Bop(Add, Int 1L, Bop(Mul, Int 2L, Int 3L))))
-            yield (new TestCaseData("(1 + 2) * 3"))
+            (new TestCaseData("(1 + 2) * 3"))
                 .Returns(Some(Bop(Mul, Bop(Add, Int 1L, Int 2L), Int 3L)))
-            yield (new TestCaseData("1 + 2 < 3 * 4 && true || 5 / 6 > 7 - 8"))
+            (new TestCaseData("1 + 2 < 3 * 4 && true || 5 / 6 > 7 - 8"))
                 .Returns(Some
                              ((Bop
                                    (Or, 
@@ -36,7 +36,7 @@ type ParserTests() =
                                              (Lt, Bop(Add, Int 1L, Int 2L), Bop(Mul, Int 3L, Int 4L)), 
                                          True), 
                                     Bop(Gt, Bop(Div, Int 5L, Int 6L), Bop(Sub, Int 7L, Int 8L))))))
-        }
+        ]
     
     [<TestCaseSource("ExpressionParses")>]
     /// Tests whether the expression parser works correctly.
@@ -47,15 +47,15 @@ type ParserTests() =
     
     /// Test cases for testing the atomic parser.
     static member AtomicParses = 
-        seq { 
-            yield (new TestCaseData("foo++")).Returns(Some(Postfix(LVIdent "foo", Increment)))
-            yield (new TestCaseData("foo--")).Returns(Some(Postfix(LVIdent "foo", Decrement)))
-            yield (new TestCaseData("foo = bar")).Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Direct)))
-            yield (new TestCaseData("foo = bar++")).Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Increment)))
-            yield (new TestCaseData("foo = bar--")).Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Decrement)))
-            yield (new TestCaseData("CAS(foo, bar, 2)"))
+        [
+            (new TestCaseData("foo++")).Returns(Some(Postfix(LVIdent "foo", Increment)))
+            (new TestCaseData("foo--")).Returns(Some(Postfix(LVIdent "foo", Decrement)))
+            (new TestCaseData("foo = bar")).Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Direct)))
+            (new TestCaseData("foo = bar++")).Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Increment)))
+            (new TestCaseData("foo = bar--")).Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Decrement)))
+            (new TestCaseData("CAS(foo, bar, 2)"))
                 .Returns(Some(CompareAndSwap(LVIdent "foo", LVIdent "bar", Int 2L)))
-        }
+        ]
     
     [<TestCaseSource("AtomicParses")>]
     /// Tests whether the expression parser works correctly.

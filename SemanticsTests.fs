@@ -13,8 +13,8 @@ open Starling.Tests.Studies
 type SemanticsTests() =
     // Test cases for the expression framer.
     static member FrameExprs =
-        seq {
-            yield (
+        [
+            (
                 new TestCaseData(
                     BTrue 
                 )
@@ -24,7 +24,7 @@ type SemanticsTests() =
                  BEq(AExpr (AConst (After "s")), AExpr (AConst (Before "s")))
                  BEq(AExpr (AConst (After "t")), AExpr (AConst (Before "t"))) ]
             ).SetName("Frame id using the ticketed lock model")
-            yield (
+            (
                 new TestCaseData(
                     BAnd [ BGt(AConst (After "ticket"), AConst (Before "ticket"))
                            BLe(AConst (After "serving"), AConst (Before "serving"))
@@ -35,7 +35,7 @@ type SemanticsTests() =
                [ BEq(AExpr (AConst (After "s")), AExpr (AConst (Before "s")))
                  BEq(AExpr (AConst (After "t")), AExpr (AConst (Before "t"))) ]
             ).SetName("Frame a simple command expression using the ticketed lock model")
-        }
+        ]
 
     // Test framing of expressions.
     [<TestCaseSource("FrameExprs")>]
@@ -46,8 +46,8 @@ type SemanticsTests() =
     static member Commands =
         // Annoyingly, order of terms seems to matter here.
         // TODO(CaptainHayashi): weaken this test?
-        seq {
-            yield (
+        [
+            (
                 new TestCaseData (
                     PrimAssume(BEq(AExpr (AConst (Unmarked "s")), AExpr (AConst (Unmarked "t"))))
                 )
@@ -58,7 +58,7 @@ type SemanticsTests() =
                        BEq(AExpr (AConst (After "t")), AExpr (AConst (Before "t")))
                        BEq(AExpr (AConst (Before "s")), AExpr (AConst (Before "t"))) ] 
             ).SetName("semanticsOf with assume(s == t) and ticketed lock model")
-            yield (
+            (
                 new TestCaseData (
                    IntLoad(None, LVIdent "serving", Increment)
                 )
@@ -70,7 +70,7 @@ type SemanticsTests() =
                           AExpr (AAdd [ AConst (Before "serving")
                                         AInt 1L ])) ] 
             ).SetName("semanticsOf with serving++ and ticketed lock model")
-        }
+        ]
 
     // Test semantic reification of commands.
     [<TestCaseSource("Commands")>]
