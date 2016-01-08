@@ -15,8 +15,8 @@ open Starling.Lang.Modeller
 /// Makes the generic relation after!after = before!before.
 let makeRel before after = 
     // We mark all variables in each expression, hence always.
-    mkEq (markVars Before always before)
-         (markVars After always after)
+    mkEq (markVars After always after)
+         (markVars Before always before)
 
 /// Given some ArithExpr over a lvalue, return the relation for the
 /// operation identified by the given fetch mode on that lvalue.
