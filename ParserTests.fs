@@ -21,22 +21,16 @@ type ParserTests() =
     
     /// Test cases for testing the expression parser.
     static member ExpressionParses = 
-        [
-            (new TestCaseData("1 + 2 * 3"))
-                .Returns(Some(Bop(Add, Int 1L, Bop(Mul, Int 2L, Int 3L))))
-            (new TestCaseData("(1 + 2) * 3"))
-                .Returns(Some(Bop(Mul, Bop(Add, Int 1L, Int 2L), Int 3L)))
-            (new TestCaseData("1 + 2 < 3 * 4 && true || 5 / 6 > 7 - 8"))
-                .Returns(Some
-                             ((Bop
-                                   (Or, 
-                                    Bop
-                                        (And, 
-                                         Bop
-                                             (Lt, Bop(Add, Int 1L, Int 2L), Bop(Mul, Int 3L, Int 4L)), 
-                                         True), 
-                                    Bop(Gt, Bop(Div, Int 5L, Int 6L), Bop(Sub, Int 7L, Int 8L))))))
-        ]
+        [ TestCaseData("1 + 2 * 3").Returns(Some(Bop(Add, Int 1L, Bop(Mul, Int 2L, Int 3L))))
+          
+          TestCaseData("(1 + 2) * 3").Returns(Some(Bop(Mul, Bop(Add, Int 1L, Int 2L), Int 3L)))
+          
+          TestCaseData("1 + 2 < 3 * 4 && true || 5 / 6 > 7 - 8")
+              .Returns(Some
+                           ((Bop
+                                 (Or, Bop(And, Bop(Lt, Bop(Add, Int 1L, Int 2L), Bop(Mul, Int 3L, Int 4L)), True), 
+                                  Bop(Gt, Bop(Div, Int 5L, Int 6L), Bop(Sub, Int 7L, Int 8L)))))) ]
+        |> List.map (fun d -> d.SetName(sprintf "Parse %A" d.OriginalArguments.[0]))
     
     [<TestCaseSource("ExpressionParses")>]
     /// Tests whether the expression parser works correctly.
@@ -47,16 +41,14 @@ type ParserTests() =
     
     /// Test cases for testing the atomic parser.
     static member AtomicParses = 
-        [
-            (new TestCaseData("foo++")).Returns(Some(Postfix(LVIdent "foo", Increment)))
-            (new TestCaseData("foo--")).Returns(Some(Postfix(LVIdent "foo", Decrement)))
-            (new TestCaseData("foo = bar")).Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Direct)))
-            (new TestCaseData("foo = bar++")).Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Increment)))
-            (new TestCaseData("foo = bar--")).Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Decrement)))
-            (new TestCaseData("CAS(foo, bar, 2)"))
-                .Returns(Some(CompareAndSwap(LVIdent "foo", LVIdent "bar", Int 2L)))
-        ]
-    
+        [ TestCaseData("foo++").Returns(Some(Postfix(LVIdent "foo", Increment)))
+          TestCaseData("foo--").Returns(Some(Postfix(LVIdent "foo", Decrement)))
+          TestCaseData("foo = bar").Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Direct)))
+          TestCaseData("foo = bar++").Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Increment)))
+          TestCaseData("foo = bar--").Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Decrement)))
+          TestCaseData("CAS(foo, bar, 2)").Returns(Some(CompareAndSwap(LVIdent "foo", LVIdent "bar", Int 2L))) ]
+        |> List.map (fun d -> d.SetName(sprintf "Parse %A" d.OriginalArguments.[0]))
+
     [<TestCaseSource("AtomicParses")>]
     /// Tests whether the expression parser works correctly.
     member x.``the atomics parser parses test case atomics correctly`` expr = 
@@ -66,10 +58,8 @@ type ParserTests() =
     
     /// Test cases for testing the full parser.
     static member ScriptParses = 
-        seq 
-            { 
-            yield (new TestCaseData(Starling.Tests.Studies.ticketLock))
-                .Returns(Some(Starling.Tests.Studies.ticketLockParsed)).SetName("parse the ticketed lock") }
+        [ TestCaseData(Starling.Tests.Studies.ticketLock).Returns(Some(Starling.Tests.Studies.ticketLockParsed))
+            .SetName("Parse the ticketed lock") ]
     
     [<TestCaseSource("ScriptParses")>]
     /// Tests whether the script parser works correctly.

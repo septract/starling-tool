@@ -28,22 +28,22 @@ type ExprTests() =
         seq { 
             yield (new TestCaseData(AConst (Unmarked "target1")))
                 .Returns(AConst (After "target1"))
-                .SetName("rewrite single target constant to post-state")
+                .SetName("Rewrite single target constant to post-state")
             yield (new TestCaseData(AConst (Unmarked "notTarget")))
                 .Returns(AConst (Unmarked "notTarget"))
-                .SetName("rewrite single non-target constant to post-state")
+                .SetName("Rewrite single non-target constant to post-state")
             yield (new TestCaseData(AAdd [AInt 4L; AConst (Unmarked "target1")]))
                 .Returns(AAdd [AInt 4L; AConst (After "target1")])
-                .SetName("rewrite expression with one target constant to post-state")
+                .SetName("Rewrite expression with one target constant to post-state")
             yield (new TestCaseData(ASub [AConst (Unmarked "target1"); AConst (Unmarked "target2")]))
                 .Returns(ASub [AConst (After "target1"); AConst (After "target2")])
-                .SetName("rewrite expression with two target constants to post-state")
+                .SetName("Rewrite expression with two target constants to post-state")
             yield (new TestCaseData(ADiv (AInt 6L, AInt 0L)))
                 .Returns(ADiv (AInt 6L, AInt 0L))
-                .SetName("rewrite expression with no constants to post-state")
+                .SetName("Rewrite expression with no constants to post-state")
             yield (new TestCaseData(AMul [AConst (Unmarked "foo"); AConst (Unmarked "bar")]))
                 .Returns(AMul [AConst (Unmarked "foo"); AConst (Unmarked "bar")])
-                .SetName("rewrite expression with two non-target constants to post-state")
+                .SetName("Rewrite expression with two non-target constants to post-state")
         }
     
     [<TestCaseSource("ArithConstantPostStates")>]
