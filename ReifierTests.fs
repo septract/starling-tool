@@ -6,7 +6,7 @@ open Starling.Collections
 open Starling.Expr
 open Starling.Var
 open Starling.Model
-open Starling.Z3.Translator
+open Starling.Reifier
 open Starling.Tests.Studies
 
 /// Tests for the reifier.

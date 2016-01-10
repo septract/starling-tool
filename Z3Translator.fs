@@ -7,7 +7,7 @@ open Starling
 open Starling.Collections
 open Starling.Expr
 open Starling.Model
-open Starling.Framer
+open Starling.Reifier
 open Starling.Errors.Z3.Translator
 
 /// Converts a Starling arithmetic expression to a Z3 ArithExpr.
@@ -41,27 +41,6 @@ and exprToZ3 (ctx: Z3.Context) =
     function
     | BExpr b -> boolToZ3 ctx b :> Z3.Expr
     | AExpr a -> arithToZ3 ctx a :> Z3.Expr
-
-/// Tries to look up a multiset View in the defining views dvs.
-let findDefOfView dvs uviewm =
-    // Why we do this is explained later.
-    let uview = Multiset.toList uviewm
-    (* We look up view-defs based on count of views and names of each
-     * view in the def.
-     *
-     * Of course, this depends on us having ensured that there are no
-     * errors in the view or its definition earlier.
-     *)
-    List.tryFind (fun {CViews = vdm} ->
-        (* We need to do list operations on the multiset contents,
-         * so convert both sides to a (sorted) list.  We rely on the
-         * sortedness to make the next step sound.
-         *)
-        let vd = Multiset.toList vdm
-        (* Do these two views have the same number of terms?
-         * If not, using forall2 is an error.
-         *)
-        List.length vd = List.length uview && List.forall2 (fun d s -> d.Name = s.Name) vd uview) dvs
 
 /// Generates a param substitution sequence for one func in a view.
 /// The arguments are the defining func and view func respectively.
