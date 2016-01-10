@@ -58,13 +58,13 @@ type ParserTests() =
     /// Test cases for testing the constraint parser.
     static member ConstraintParses = 
         [ TestCaseData("constraint emp -> true;").Returns(Some { CView = ViewDef.Unit
-                                                                 CExpression = True })
+                                                                 CExpression = Some True })
           
           TestCaseData("constraint Func(a, b) -> c > a + b;")
               .Returns(Some { CView = 
                                   ViewDef.Func { Name = "Func"
                                                  Params = [ "a"; "b" ] }
-                              CExpression = Bop(Gt, LV(LVIdent "c"), Bop(Add, LV(LVIdent "a"), LV(LVIdent "b"))) }) ]
+                              CExpression = Some <| Bop(Gt, LV(LVIdent "c"), Bop(Add, LV(LVIdent "a"), LV(LVIdent "b"))) }) ]
         |> List.map (fun d -> d.SetName(sprintf "Parse %A" d.OriginalArguments.[0]))
     
     [<TestCaseSource("ConstraintParses")>]

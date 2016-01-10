@@ -208,13 +208,15 @@ let rec envOfViewDef vds =
 let envOfConstraint {Model.Globals = globals}= 
     envOfViewDef >> bind (combineMaps globals >> mapMessages VDEGlobalVarConflict)
 
-/// Converts a single constraint to Z3.
+/// Converts a single constraint to its model form.
 let modelConstraint model { CView = av; CExpression = ae } = 
     trial { 
         let {Model.VProtos = vps} = model
         let! v = modelViewDef vps av |> mapMessages (curry CEView av)
         let! e = envOfConstraint model v |> mapMessages (curry CEView av)
-        let! c = modelBoolExpr e ae |> mapMessages (curry CEExpr ae)
+        let! c = match ae with
+                 | Some dae -> modelBoolExpr e dae |> lift Some |> mapMessages (curry CEExpr dae)
+                 | _ -> ok None
         return { CViews = Multiset.ofSeq v
                  CExpr = c }
     }

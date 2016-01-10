@@ -1,6 +1,7 @@
 module Starling.Pretty.Lang.AST
 
 open Starling.Collections
+open Starling.Utils
 open Starling.Var
 open Starling.Lang.AST
 open Starling.Pretty.Types
@@ -72,7 +73,7 @@ let printConstraint { CView = v; CExpression = e } =
     hsep [ String "constraint"
            printViewDef v
            String "->"
-           printExpression e ]
+           e |> Option.map printExpression |> withDefault (String "?") ]
     |> withSemi
 
 /// Pretty-prints fetch modes.

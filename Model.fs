@@ -28,10 +28,10 @@ type GuarView = Guarded<View>
 /// A reified view.
 type ReView = Guarded<Multiset<View>>
 
-/// A constraint, containing a multiset of views and a Z3 predicate.
+/// A constraint, containing a multiset of views and a potential predicate.
 type GenConstraint<'a> = 
     { CViews : Multiset<GenView<'a>>
-      CExpr : BoolExpr }
+      CExpr : BoolExpr option }
 
 /// A model constraint, set over ViewDefs with type-string parameters.
 type Constraint = GenConstraint<Var.Type * string>

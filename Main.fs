@@ -92,6 +92,8 @@ let printResponse =
 type Error = 
     /// An error occurred in the frontend.
     | Frontend of Lang.Frontend.Error
+    /// An error occurred in the Z3 backend.
+    | Z3 of Z3.Backend.Error
     /// A stage was requested using the -s flag that does not exist.
     | BadStage
     /// A miscellaneous (internal) error has occurred.
@@ -101,6 +103,7 @@ type Error =
 let printError = 
     function 
     | Frontend e -> Lang.Frontend.printError e
+    | Z3 e -> Z3.Backend.printError e
     | BadStage -> 
         Pretty.Types.colonSep [ Pretty.Types.String "Bad stage"
                                 Pretty.Types.String "try"
@@ -135,7 +138,7 @@ let printResult pOk pBad =
  *)
 
 /// Shorthand for the Z3 stage.
-let z3 rq = lift (fun (mdl, terms) -> Starling.Z3.Backend.run mdl rq terms)
+let z3 rq = bind (fun (mdl, terms) -> Starling.Z3.Backend.run mdl rq terms |> mapMessages Error.Z3)
 
 /// Shorthand for the reify stage.
 let reify = 

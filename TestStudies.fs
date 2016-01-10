@@ -81,17 +81,17 @@ let ticketLockParsed =
       ViewProto { Name = "holdLock"
                   Params = [] }
       Constraint { CView = ViewDef.Unit
-                   CExpression = Bop(Ge, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
+                   CExpression = Some <| Bop(Ge, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
       Constraint { CView = ViewDef.Func {Name = "holdTick"; Params = [ "t" ]}
-                   CExpression = Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "t")) }
+                   CExpression = Some <| Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "t")) }
       Constraint { CView = ViewDef.Func {Name = "holdLock"; Params = []}
-                   CExpression = Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
+                   CExpression = Some <| Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
       Constraint { CView = ViewDef.Join(ViewDef.Func {Name = "holdLock"; Params = []}, ViewDef.Func {Name = "holdTick"; Params = [ "t" ]})
-                   CExpression = Bop(Neq, LV(LVIdent "serving"), LV(LVIdent "t")) }
+                   CExpression = Some <| Bop(Neq, LV(LVIdent "serving"), LV(LVIdent "t")) }
       Constraint { CView = ViewDef.Join(ViewDef.Func {Name = "holdTick"; Params = [ "ta" ]}, ViewDef.Func { Name = "holdTick"; Params = [ "tb" ]})
-                   CExpression = Bop(Neq, LV(LVIdent "ta"), LV(LVIdent "tb")) }
+                   CExpression = Some <| Bop(Neq, LV(LVIdent "ta"), LV(LVIdent "tb")) }
       Constraint { CView = ViewDef.Join(ViewDef.Func {Name = "holdLock"; Params = []}, ViewDef.Func { Name = "holdLock"; Params = []})
-                   CExpression = False }
+                   CExpression = Some <| False }
       Global(Type.Int, "ticket")
       Global(Type.Int, "serving")
       Local(Type.Int, "t")
@@ -115,21 +115,21 @@ let ticketLockCollated =
       Constraints = 
           [ { // constraint emp => ticket >= serving;
               CView = ViewDef.Unit
-              CExpression = Bop(Ge, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
+              CExpression = Some <| Bop(Ge, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
             { // constraint holdTick(t) => ticket > t;
               CView = ViewDef.Func {Name = "holdTick"; Params = [ "t" ]}
-              CExpression = Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "t")) }
+              CExpression = Some <| Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "t")) }
             { // constraint holdLock() => ticket > serving;
               CView = ViewDef.Func {Name = "holdLock"; Params = []}
-              CExpression = Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
+              CExpression = Some <| Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
             { // constraint holdLock() * holdTick(t) => serving != t;
               CView = ViewDef.Join(ViewDef.Func {Name = "holdLock"; Params = []}, ViewDef.Func {Name = "holdTick"; Params = [ "t" ]})
-              CExpression = Bop(Neq, LV(LVIdent "serving"), LV(LVIdent "t")) }
+              CExpression = Some <| Bop(Neq, LV(LVIdent "serving"), LV(LVIdent "t")) }
             { // constraint holdLock() * holdLock() => false;
               CView = ViewDef.Join(ViewDef.Func {Name = "holdTick"; Params = [ "ta" ]}, ViewDef.Func {Name = "holdTick"; Params = [ "tb" ]})
-              CExpression = Bop(Neq, LV(LVIdent "ta"), LV(LVIdent "tb")) }
+              CExpression = Some <| Bop(Neq, LV(LVIdent "ta"), LV(LVIdent "tb")) }
             { CView = ViewDef.Join(ViewDef.Func {Name = "holdLock"; Params = []}, ViewDef.Func {Name = "holdLock"; Params = []})
-              CExpression = False } ]
+              CExpression = Some <| False } ]
       Methods = [ ticketLockLockMethodAST; ticketLockUnlockMethodAST ] }
 
 /// The axioms of the ticketed lock.
@@ -193,30 +193,30 @@ let ticketLockModel =
       Axioms = ticketLockAxioms
       DefViews = 
           [ { CViews = Multiset.empty()
-              CExpr = BGe(AConst (Unmarked "ticket"), AConst (Unmarked "serving")) }
+              CExpr = Some <| BGe(AConst (Unmarked "ticket"), AConst (Unmarked "serving")) }
             { CViews = 
                   Multiset.ofList [ { Name = "holdTick"
                                       Params = [ (Type.Int, "t") ] } ]
-              CExpr = BGt(AConst (Unmarked "ticket"), AConst (Unmarked "t")) }
+              CExpr = Some <| BGt(AConst (Unmarked "ticket"), AConst (Unmarked "t")) }
             { CViews = 
                   Multiset.ofList [ { Name = "holdLock"
                                       Params = [] } ]
-              CExpr = BGt(AConst (Unmarked "ticket"), AConst (Unmarked "serving")) }
+              CExpr = Some <| BGt(AConst (Unmarked "ticket"), AConst (Unmarked "serving")) }
             { CViews = 
                   Multiset.ofList [ { Name = "holdLock"
                                       Params = [] }
                                     { Name = "holdTick"
                                       Params = [ (Type.Int, "t") ] } ]
-              CExpr = BNot(BEq(AExpr (AConst (Unmarked "serving")), AExpr (AConst (Unmarked "t")))) }
+              CExpr = Some <| BNot(BEq(AExpr (AConst (Unmarked "serving")), AExpr (AConst (Unmarked "t")))) }
             { CViews = 
                   Multiset.ofList [ { Name = "holdTick"
                                       Params = [ (Type.Int, "ta") ] }
                                     { Name = "holdTick"
                                       Params = [ (Type.Int, "tb") ] } ]
-              CExpr = BNot(BEq(AExpr (AConst (Unmarked "ta")), AExpr (AConst (Unmarked "tb")))) }
+              CExpr = Some <| BNot(BEq(AExpr (AConst (Unmarked "ta")), AExpr (AConst (Unmarked "tb")))) }
             { CViews = 
                   Multiset.ofList [ { Name = "holdLock"
                                       Params = [] }
                                     { Name = "holdLock"
                                       Params = [] } ]
-              CExpr = BFalse } ] }
+              CExpr = Some <| BFalse } ] }

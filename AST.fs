@@ -72,10 +72,10 @@ and Block =
       // Post-condition is that in the last Seq.
       Contents : ViewedCommand list }
 
-/// A constraint, binding a view to an expression.
+/// A constraint, binding a view to an optional expression.
 type Constraint = 
     { CView : ViewDef
-      CExpression : Expression }
+      CExpression : Expression option }
 
 /// A method.
 type Method = 

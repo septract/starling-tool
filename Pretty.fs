@@ -179,7 +179,7 @@ let rec printPartAxiom =
 /// Pretty-prints a model constraint.
 let printModelConstraint { CViews = vs; CExpr = e } = 
     keyMap [ ("View", printModelViewDefs vs)
-             ("Expr", printBoolExpr e) ]
+             ("Expr", withDefault (String "?") (Option.map printBoolExpr e)) ]
 
 /// Pretty-prints a model view prototype.
 let printModelViewProto (vn, vps) = 

@@ -432,7 +432,7 @@ let parseConstraint =
                 // ^- <view> ...
                 (pstring "->" >>. ws >>. parseExpression .>> ws .>> pstring ";")
                 // ^-        ... -> <expression> ;
-                (fun v ex -> {CView = v ; CExpression = ex} )
+                (fun v ex -> {CView = v ; CExpression = Some ex} )
 
 /// Parses a single method, excluding leading or trailing whitespace.
 let parseMethod =
