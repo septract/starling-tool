@@ -30,7 +30,7 @@ let bcom, bcomImpl = createParserForwardedToRef()
 do bcomImpl := skipString "/*" .>> skipManyTill (bcom <|> skipAnyChar) (skipString "*/")
 
 /// Parser for skipping comments.
-let com = (lcom <|> bcom) <?> "comment" 
+let com = (lcom <|> bcom) <?> "comment"
 
 /// Parser for skipping zero or more whitespace characters.
 let ws = skipMany (com <|> spaces1)
@@ -323,7 +323,7 @@ do parseViewDefRef := parseViewLike parseBasicViewDef ViewDef.Join
  *)
 
 /// Parses a view prototype.
-let parseViewProto = 
+let parseViewProto =
     pstring "view" >>. ws >>. parseFunc parseTypedParam .>> ws .>> pstring ";" .>> ws
 
 
@@ -424,15 +424,21 @@ do parseBlockRef :=
  * Top-level definitions.
  *)
 
+/// Parses a constraint right-hand side.
+let parseConstraintRhs =
+    (stringReturn "?" None) <|> (parseExpression |>> Some)
+    // ^ ?
+    // ^ <expression>
+
 /// Parses a constraint.
 let parseConstraint =
     pstring "constraint" >>. ws >>.
     // ^- constraint ..
         pipe2ws parseViewDef
                 // ^- <view> ...
-                (pstring "->" >>. ws >>. parseExpression .>> ws .>> pstring ";")
-                // ^-        ... -> <expression> ;
-                (fun v ex -> {CView = v ; CExpression = Some ex} )
+                (pstring "->" >>. ws >>. parseConstraintRhs .>> ws .>> pstring ";")
+                // ^-        ... -> <constraint-rhs> ;
+                (fun v ex -> {CView = v ; CExpression = ex} )
 
 /// Parses a single method, excluding leading or trailing whitespace.
 let parseMethod =
@@ -475,7 +481,7 @@ let parseScript =
 /// Opens the file with the given name, parses it, and returns the AST.
 /// The AST is given inside a Chessie result.
 let parseFile name =
-    try 
+    try
         // If - or no name was given, parse from the console.
         let stream, streamName =
             match name with
@@ -484,6 +490,6 @@ let parseFile name =
 
         runParserOnStream parseScript () streamName stream Text.Encoding.UTF8
         |> function | Success (result, _, _) -> ok result
-                    | Failure (errorMsg, _, _) -> fail errorMsg   
-    with 
+                    | Failure (errorMsg, _, _) -> fail errorMsg
+    with
     | :? System.IO.FileNotFoundException  -> fail ("File not found: " + Option.get name)
