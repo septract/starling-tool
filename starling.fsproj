@@ -79,6 +79,7 @@
     <Compile Include="ReifierTests.fs" />
     <Compile Include="Frontend.fs" />
     <Compile Include="Main.fs" />
+    <None Include="Examples\PassHSF\ticketLockIndefinite.cvf" />
     <None Include="packages.config" />
     <None Include="Examples\Pass\ticketLockNoIf.cvf" />
     <None Include="Examples\Pass\ticketLock.cvf" />

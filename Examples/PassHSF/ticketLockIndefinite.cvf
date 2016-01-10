@@ -1,0 +1,47 @@
+/*
+ * Linux-style ticketed lock with some constraints left indefinite.
+ */
+
+global int ticket;  // The next ticket to hand out.
+global int serving; // The current ticket holding the lock.
+local int t;  // The thread's current ticket.
+local int s;  // The thread's current view of serving.
+
+/*
+ * Locks the ticket lock.
+ */
+method lock() {
+  {| emp |}
+    <t = ticket++>;
+  {| holdTick(t) |}
+    do {
+      {| holdTick(t) |}
+        <s = serving>;
+      {| if s == t then holdLock() else holdTick(t) |}
+    } while (s != t);
+  {| holdLock() |}
+}
+
+/*
+ * Unlocks the ticket lock.
+ */
+method unlock() {
+  {| holdLock() |}
+    <serving++>;
+  {| emp |}
+}
+
+view holdTick(int t);
+view holdLock();
+
+// Invariant
+constraint emp                         -> ?;
+
+// Predicate definitions
+constraint holdTick(t)                 -> ?;
+constraint holdLock()                  -> ?;
+
+// Interactions
+constraint holdLock()   * holdTick(t)  -> ?;
+constraint holdTick(ta) * holdTick(tb) -> ?;
+constraint holdLock()   * holdLock()   -> false;
