@@ -16,7 +16,43 @@ type Command =
     | HSep of cmds : Command seq * separator : Command
     | Nop
 
-let fmt fstr xs = System.String.Format(fstr, Seq.toArray xs) |> String
+(*
+ * Print driver
+ *)
+
+/// Creates a string of spaces up to the given indent level.
+let indent level = new string(' ', level * 4)
+
+/// Enters a new line at the given indent level.
+let lnIndent level = "\n" + indent level
+
+let rec printLevel level = 
+    function 
+    | Header(heading, incmd) -> heading + ":" + lnIndent level + printLevel level incmd + lnIndent level
+    | Separator -> "----"
+    | VSkip -> lnIndent level
+    | String s -> s.Replace("\n", lnIndent level)
+    | Surround(left, (VSep(cmds, _) as mid), right) -> 
+        printLevel level left + lnIndent level + printLevel level mid + lnIndent level + printLevel level right
+    | Surround(left, mid, right) -> printLevel level left + printLevel level mid + printLevel level right
+    | Indent incmd -> indent 1 + printLevel (level + 1) incmd
+    | VSep(cmds, separator) -> 
+        Seq.map (printLevel level) cmds |> String.concat (printLevel level separator + lnIndent level)
+    | HSep(cmds, separator) -> Seq.map (printLevel level) cmds |> String.concat (printLevel level separator)
+    | Nop -> ""
+
+let print = printLevel 0
+
+(*
+ * Shortcuts
+ *)
+
+let fmt fstr xs =
+    (* This weird casting dance is how we tell Format to use the obj[] overload.
+     * Otherwise, it might try to print xss as if it's one argument!
+     *)
+    let xss : obj[] = xs |> Seq.map (print >> fun x -> x :> obj) |> Seq.toArray
+    System.String.Format(fstr, xss) |> String
 let vsep xs = VSep(xs, Nop)
 let hsepStr s c = HSep(c, String s)
 
@@ -64,29 +100,6 @@ let squared = ssurround "[" "]"
 
 /// Pretty-prints a function f(xs1, xs2, ...xsn)
 let func f xs = hjoin [String f; commaSep xs |> parened]
-
-/// Creates a string of spaces up to the given indent level.
-let indent level = new string(' ', level * 4)
-
-/// Enters a new line at the given indent level.
-let lnIndent level = "\n" + indent level
-
-let rec printLevel level = 
-    function 
-    | Header(heading, incmd) -> heading + ":" + lnIndent level + printLevel level incmd + lnIndent level
-    | Separator -> "----"
-    | VSkip -> lnIndent level
-    | String s -> s.Replace("\n", lnIndent level)
-    | Surround(left, (VSep(cmds, _) as mid), right) -> 
-        printLevel level left + lnIndent level + printLevel level mid + lnIndent level + printLevel level right
-    | Surround(left, mid, right) -> printLevel level left + printLevel level mid + printLevel level right
-    | Indent incmd -> indent 1 + printLevel (level + 1) incmd
-    | VSep(cmds, separator) -> 
-        Seq.map (printLevel level) cmds |> String.concat (printLevel level separator + lnIndent level)
-    | HSep(cmds, separator) -> Seq.map (printLevel level) cmds |> String.concat (printLevel level separator)
-    | Nop -> ""
-
-let print = printLevel 0
 
 /// Pretty-prints Funcs using pxs to print parameters.
 let printFunc pxs { Name = f; Params = xs } = func f (Seq.map pxs xs)

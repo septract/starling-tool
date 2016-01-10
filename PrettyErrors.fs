@@ -14,8 +14,8 @@ let wrapped wholeDesc whole err = headed (sprintf "In %s '%s'" wholeDesc (print 
 /// Pretty-prints variable conversion errors.
 let printVarMapError =
     function
-    | Duplicate vn -> fmt "variable '{0}' is defined multiple times" [ vn ]
-    | NotFound vn -> fmt "variable '{0}' not in environment" [ vn ]
+    | Duplicate vn -> fmt "variable '{0}' is defined multiple times" [ String vn ]
+    | NotFound vn -> fmt "variable '{0}' not in environment" [ String vn ]
 
 /// Pretty-prints expression conversion errors.
 let printExprError =
@@ -37,9 +37,11 @@ let printViewError = function
 /// Pretty-prints viewdef conversion errors.
 let printViewDefError =
     function
-    | VDENoSuchView name -> fmt "no view prototype for '{0}'" [ name ]
+    | VDENoSuchView name -> fmt "no view prototype for '{0}'" [ String name ]
     | VDEBadParamCount(name, expected, actual) ->
-        fmt "view '{0}' expects '{1}' params, but was given '{2}'" [ name; expected; actual ]
+        fmt "view '{0}' expects {1} params, but was given {2}" [ name |> String
+                                                                 expected |> sprintf "%d" |> String
+                                                                 actual |> sprintf "%d" |> String ]
     | VDEBadVars err ->
         colonSep [ "invalid variable usage" |> String
                    err |> printVarMapError ]
@@ -75,7 +77,7 @@ let printAxiomError =
 let printViewProtoError = function
     | VPEDuplicateParam(vp, param) ->
         fmt "view proto '{0} has duplicate param {1}" [ printViewProto vp
-                                                        param ]
+                                                        String param ]
 
 /// Pretty-prints model conversion errors.
 let printModelError =
