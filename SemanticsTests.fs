@@ -14,18 +14,17 @@ type SemanticsTests() =
     
     // Test cases for the expression framer.
     static member FrameExprs = 
-        [ TestCaseData(BTrue).Returns([ BEq(AExpr(AConst(After "serving")), AExpr(AConst(Before "serving")))
-                                        BEq(AExpr(AConst(After "ticket")), AExpr(AConst(Before "ticket")))
-                                        BEq(AExpr(AConst(After "s")), AExpr(AConst(Before "s")))
-                                        BEq(AExpr(AConst(After "t")), AExpr(AConst(Before "t"))) ])
+        [ TestCaseData(BTrue).Returns([ aEq (aAfter "serving") (aBefore "serving")
+                                        aEq (aAfter "ticket") (aBefore "ticket")
+                                        aEq (aAfter "s") (aBefore "s")
+                                        aEq (aAfter "t") (aBefore "t") ])
               .SetName("Frame id using the ticketed lock model")
           
-          TestCaseData(BAnd [ BGt(AConst(After "ticket"), AConst(Before "ticket"))
-                              BLe(AConst(After "serving"), AConst(Before "serving"))
-                              BConst(Unmarked "frozzle")
-                              BEq(AExpr(AConst(Before "s")), AExpr(AConst(Before "t"))) ])
-              .Returns([ BEq(AExpr(AConst(After "s")), AExpr(AConst(Before "s")))
-                         BEq(AExpr(AConst(After "t")), AExpr(AConst(Before "t"))) ])
+          TestCaseData(BAnd [ BGt(aAfter "ticket", aBefore "ticket")
+                              BLe(aAfter "serving", aBefore "serving")
+                              bUnmarked "frozzle"
+                              aEq (aBefore "s") (aBefore "t") ]).Returns([ aEq (aAfter "s") (aBefore "s")
+                                                                           aEq (aAfter "t") (aBefore "t") ])
               .SetName("Frame a simple command expression using the ticketed lock model") ]
     
     // Test framing of expressions.
@@ -36,30 +35,20 @@ type SemanticsTests() =
     static member Commands = 
         [ // Annoyingly, order of terms seems to matter here.
           // TODO(CaptainHayashi): weaken this test?
-          TestCaseData(PrimAssume(BEq(AExpr(AConst(Unmarked "s")), AExpr(AConst(Unmarked "t")))))
-              .Returns(BAnd [ BEq(AExpr(AConst(After "serving")), AExpr(AConst(Before "serving")))
-                              BEq(AExpr(AConst(After "ticket")), AExpr(AConst(Before "ticket")))
-                              BEq(AExpr(AConst(After "s")), AExpr(AConst(Before "s")))
-                              BEq(AExpr(AConst(After "t")), AExpr(AConst(Before "t")))
-                              BEq(AExpr(AConst(Before "s")), AExpr(AConst(Before "t"))) ])
+          TestCaseData(PrimAssume(aEq (aUnmarked "s") (aUnmarked "t")))
+              .Returns(BAnd [ aEq (aAfter "serving") (aBefore "serving")
+                              aEq (aAfter "ticket") (aBefore "ticket")
+                              aEq (aAfter "s") (aBefore "s")
+                              aEq (aAfter "t") (aBefore "t")
+                              aEq (aBefore "s") (aBefore "t") ])
               .SetName("Semantically translate <assume(s == t)> using the ticketed lock model")
           
-          TestCaseData(IntLoad(None, LVIdent "serving", Increment)).Returns(BAnd [ BEq
-                                                                                       (AExpr(AConst(After "ticket")), 
-                                                                                        AExpr(AConst(Before "ticket")))
-                                                                                   
-                                                                                   BEq
-                                                                                       (AExpr(AConst(After "s")), 
-                                                                                        AExpr(AConst(Before "s")))
-                                                                                   
-                                                                                   BEq
-                                                                                       (AExpr(AConst(After "t")), 
-                                                                                        AExpr(AConst(Before "t")))
-                                                                                   BEq(AExpr(AConst(After "serving")), 
-                                                                                       AExpr(AAdd [ AConst
-                                                                                                        (Before 
-                                                                                                             "serving")
-                                                                                                    AInt 1L ])) ])
+          TestCaseData(IntLoad(None, LVIdent "serving", Increment))
+              .Returns(BAnd [ aEq (aAfter "ticket") (aBefore "ticket")
+                              aEq (aAfter "s") (aBefore "s")
+                              aEq (aAfter "t") (aBefore "t")
+                              aEq (aAfter "serving") (AAdd [ aBefore "serving"
+                                                             AInt 1L ]) ])
               .SetName("Semantically translate <serving++> using the ticketed lock model") ]
     
     // Test semantic reification of commands.

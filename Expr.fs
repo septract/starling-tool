@@ -69,6 +69,25 @@ let constToString =
  * Expression constructors
  *)
 
+/// Creates an unmarked arithmetic constant.
+let aUnmarked c = c |> Unmarked |> AConst
+
+/// Creates an after-marked arithmetic constant.
+let aAfter c = c |> After |> AConst
+
+/// Creates a before-marked arithmetic constant.
+let aBefore c = c |> Before |> AConst
+
+/// Creates an unmarked Boolean constant.
+let bUnmarked c = c |> Unmarked |> BConst
+
+/// Creates an after-marked Boolean constant.
+let bAfter c = c |> After |> BConst
+
+/// Creates a before-marked Boolean constant.
+let bBefore c = c |> Before |> BConst
+
+
 /// Creates a reference to a Boolean lvalue.
 /// This does NOT check to see if the lvalue exists!
 let mkBoolLV lv = 
@@ -109,8 +128,16 @@ let mkGe = curry BGe
 let mkLt = curry BLt
 /// Curried wrapper over BLe.
 let mkLe = curry BLe
+
 /// Curried wrapper over BEq.
 let mkEq = curry BEq
+
+/// Makes an arithmetic equality.
+let aEq = curry (pairMap AExpr AExpr >> BEq)
+
+/// Makes a Boolean equality.
+let bEq = curry (pairMap BExpr BExpr >> BEq)
+
 /// Curried wrapper over ADiv.
 let mkDiv = curry ADiv
 
