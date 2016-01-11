@@ -4,12 +4,14 @@ module Starling.Tests.Horn
 
 open NUnit.Framework
 open Starling.Collections
+open Starling.Var
 open Starling.Utils
 open Starling.Expr
 open Starling.Model
 open Starling.Horn
 open Starling.HSF
 open Starling.Errors.Horn
+open Starling.Tests.Studies
 
 /// Tests for Starling.Horn and Starling.HSF.
 type HornTests() =
@@ -58,10 +60,30 @@ type HornTests() =
         [ TestCaseData(ms [ {Name = "foo"; Params = []}
                             {Name = "bar_baz"; Params = []} ])
             .Returns("v_bar__baz_foo")  // Remember, multisets sort!
-            .SetName("Encode HSF name of view 'foo() * bar_baz() as v_bar__baz_foo'") ]
+            .SetName("Encode HSF name of view 'foo() * bar_baz()' as 'v_bar__baz_foo'") ]
 
     /// Tests the Horn emitter on bad clauses.
     [<TestCaseSource("ViewPredNamings")>]
     member x.``the HSF predicate name generator generates names correctly`` v =
         predNameOfMultiset v
+
+    /// Test cases for the viewdef variable extractor.
+    /// These all use the ticketed lock model.
+    static member ViewDefVars =
+        let ms : ViewDef list -> Multiset<ViewDef> = Multiset.ofList
+        [ TestCaseData(
+            { CViews = 
+                  ms [ { Name = "holdLock"
+                         Params = [] }
+                       { Name = "holdTick"
+                         Params = [ (Type.Int, "t") ] } ]
+              CExpr = Some <| BNot(aEq (aUnmarked "serving") (aUnmarked "t")) }
+
+          ).Returns(Set.ofList ["t"; "ticket"; "serving"])
+           .SetName("List HSF params of ticketed lock view 'holdLock() * holdTick(t)' as t, ticket, and serving") ]
+
+    /// Tests the Horn emitter on bad clauses.
+    [<TestCaseSource("ViewDefVars")>]
+    member x.``the HSF viewdef parameter generates correctly using the ticketed lock model`` v =
+        varsInConstraint v (ticketLockModel.Globals |> Map.toSeq |> Seq.map fst |> Set.ofSeq)
 

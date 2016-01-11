@@ -329,7 +329,7 @@ let frame fg = fg |> getFresh |> curry Frame
  * Expression probing
  *)
 
-/// Returns a set of all variables used in this expression,
+/// Returns a set of all variables used in an arithmetic expression.
 let rec varsInArith =
     function
     | AConst c -> Set.singleton c
@@ -339,7 +339,7 @@ let rec varsInArith =
     | AMul xs -> xs |> Seq.map varsInArith |> Set.unionMany
     | ADiv (x, y) -> Set.union (varsInArith x) (varsInArith y)
 
-/// A Boolean expression.
+/// Returns a set of all variables used in a Boolean expression.
 and varsInBool =
     function
     | BConst c -> Set.singleton c
@@ -355,7 +355,7 @@ and varsInBool =
     | BLt (x, y) -> Set.union (varsInArith x) (varsInArith y)
     | BNot x -> varsInBool x
 
-/// Returns a set of all variables used in this expression.
+/// Returns a set of all variables used in an expression.
 and varsIn =
     function
     | AExpr a -> varsInArith a
