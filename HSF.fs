@@ -30,12 +30,14 @@ let predNameOfMultiset ms =
  * View def construction
  *)
 
-/// Returns the set of all variable names bound in a viewdef multiset.
-let varsInMultiset : Multiset<ViewDef> -> Set<string> =
+/// Returns the list of all variable names bound in a viewdef multiset.
+/// These are guaranteed to be in multiset element order first, and in
+/// view definition order per inner func. 
+let varsInMultiset : Multiset<ViewDef> -> string list =
     Multiset.toSeq
     >> Seq.map (fun v -> Seq.map snd v.Params)
     >> Seq.concat
-    >> Set.ofSeq
+    >> List.ofSeq
 
 /// Checks to ensure all params in a viewdef multiset are arithmetic.
 let ensureAllArith : Multiset<ViewDef> -> Result<Multiset<ViewDef>, Error> =
@@ -50,11 +52,33 @@ let ensureAllArith : Multiset<ViewDef> -> Result<Multiset<ViewDef>, Error> =
     >> collect
     >> lift Multiset.ofSeq
 
-/// Constructs the left-hand side of a constraint in HSF.
+/// Converts a top-level BoolExpr to a HSF literal.
+let topLevelExpr =
+    function
+    | BEq (AExpr x, AExpr y) -> ok <| Eq (x, y)
+    | BNot (BEq (AExpr x, AExpr y)) -> ok <| Neq (x, y)
+    | BGt (x, y) -> ok <| Gt (x, y)
+    | BGe (x, y) -> ok <| Ge (x, y)
+    | BLe (x, y) -> ok <| Le (x, y)
+    | BLt (x, y) -> ok <| Lt (x, y)
+    | x -> fail <| UnsupportedExpr (BExpr x)
+    
+
+/// Constructs the right-hand side of a constraint in HSF.
 /// The set of active globals should be passed as env.
-let headOfConstraint env { CViews = vs } =
+let bodyOfConstraint env vs =
     vs
     |> ensureAllArith
     |> lift (fun avs -> Pred { Name = predNameOfMultiset avs 
-                               Params = Set.union env (varsInMultiset avs) |> Set.toList |> List.map aUnmarked })
+                               Params = avs |> varsInMultiset |> List.append (Set.toList env) |> List.map aUnmarked })
 
+/// Constructs a full constraint in HSF.
+/// The set of active globals should be passed as env.
+/// Some is returned if the constraint is definite; None otherwise.
+let hsfConstraint env {CViews = vs; CExpr = ex} =
+    Option.map
+        (fun dex ->
+         lift2 (fun hd bd -> {Head = hd ; Body = [bd]})
+               (topLevelExpr dex)
+               (bodyOfConstraint env vs))
+        ex

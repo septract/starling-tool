@@ -73,20 +73,16 @@ type HornTests() =
     static member ViewDefHeads =
         let ms : ViewDef list -> Multiset<ViewDef> = Multiset.ofList
         [ TestCaseData(
-            { CViews = 
-                  ms [ { Name = "holdLock"
-                         Params = [] }
-                       { Name = "holdTick"
-                         Params = [ (Type.Int, "t") ] } ]
-              CExpr = Some <| BNot(aEq (aUnmarked "serving") (aUnmarked "t")) }
-
+            ms [ { Name = "holdLock"
+                   Params = [] }
+                 { Name = "holdTick"
+                   Params = [ (Type.Int, "t") ] } ]
           ).Returns(Some <| Pred {Name = "v_holdLock_holdTick"
-                                  Params = [aUnmarked "serving" ; aUnmarked "t" ; aUnmarked "ticket"]})
-           .SetName("List HSF params of ticketed lock view 'holdLock() * holdTick(t)' as t, ticket, and serving") ]
+                                  Params = [aUnmarked "serving" ; aUnmarked "ticket" ; aUnmarked "t"]})
+           .SetName("List HSF params of ticketed lock view 'holdLock() * holdTick(t)' as serving, ticket, and t") ]
 
     /// Tests the viewdef LHS translator.
     [<TestCaseSource("ViewDefHeads")>]
-    member x.``the HSF viewdef translator works correctly using the ticketed lock model`` v =
-        headOfConstraint (ticketLockModel.Globals |> Map.toSeq |> Seq.map fst |> Set.ofSeq) v
-        |> okOption
+    member x.``the HSF viewdef LHS translator works correctly using the ticketed lock model`` v =
+        v |> bodyOfConstraint (ticketLockModel.Globals |> Map.toSeq |> Seq.map fst |> Set.ofSeq) |> okOption
 
