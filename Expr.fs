@@ -45,6 +45,25 @@ and BoolExpr =
     | BLt of ArithExpr * ArithExpr
     | BNot of BoolExpr
 
+/// Categorises arithmetic expressions into simple or compound.
+let (|SimpleArith|CompoundArith|) =
+    function
+    | AConst _ | AInt _ -> SimpleArith
+    | _ -> CompoundArith
+
+/// Categorises Boolean expressions into simple or compound.
+let (|SimpleBool|CompoundBool|) =
+    function
+    | BConst _ | BTrue | BFalse -> SimpleBool
+    | _ -> CompoundBool
+
+/// Categorises expressions into simple or compound.
+let (|SimpleExpr|CompoundExpr|) =
+    function
+    | BExpr (SimpleBool) -> SimpleExpr
+    | AExpr (SimpleArith) -> SimpleExpr
+    | _ -> CompoundExpr
+
 /// Returns true if the expression is definitely true.
 /// This is sound, but not complete.
 let isTrue =
