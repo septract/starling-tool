@@ -1,8 +1,12 @@
-./Examples/Fail/ticketLockBad.cvf: 28 29 
+./Examples/Fail/badInc2.cvf: 
+./Examples/Fail/badInc.cvf: 
 ./Examples/Fail/ticketLockBad2.cvf: 1 3 31 
+./Examples/Fail/ticketLockBad.cvf: 28 29 
+./Examples/PassHSF/ticketLockIndefinite.cvf: 
 ./Examples/Pass/multicounter.cvf: 
 ./Examples/Pass/spinLock.cvf: 
 ./Examples/Pass/ticketLock.cvf: 
+./Examples/Pass/ticketLockNoIf.cvf: 
 ./Examples/WIP/dekker.cvf: 
 ./Examples/WIP/duplicateVars.cvf: 
 ./Examples/WIP/errors.cvf: 
