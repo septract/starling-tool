@@ -62,14 +62,15 @@ type HornTests() =
             .Returns("v_bar__baz_foo")  // Remember, multisets sort!
             .SetName("Encode HSF name of view 'foo() * bar_baz()' as 'v_bar__baz_foo'") ]
 
-    /// Tests the Horn emitter on bad clauses.
+    /// Tests the view predicate name generator.
     [<TestCaseSource("ViewPredNamings")>]
     member x.``the HSF predicate name generator generates names correctly`` v =
-        predNameOfMultiset v
+        let pn : Multiset<View> -> string = predNameOfMultiset
+        pn v
 
     /// Test cases for the viewdef variable extractor.
     /// These all use the ticketed lock model.
-    static member ViewDefVars =
+    static member ViewDefHeads =
         let ms : ViewDef list -> Multiset<ViewDef> = Multiset.ofList
         [ TestCaseData(
             { CViews = 
@@ -79,11 +80,13 @@ type HornTests() =
                          Params = [ (Type.Int, "t") ] } ]
               CExpr = Some <| BNot(aEq (aUnmarked "serving") (aUnmarked "t")) }
 
-          ).Returns(Set.ofList ["t"; "ticket"; "serving"])
+          ).Returns(Some <| Pred {Name = "v_holdLock_holdTick"
+                                  Params = [aUnmarked "serving" ; aUnmarked "t" ; aUnmarked "ticket"]})
            .SetName("List HSF params of ticketed lock view 'holdLock() * holdTick(t)' as t, ticket, and serving") ]
 
-    /// Tests the Horn emitter on bad clauses.
-    [<TestCaseSource("ViewDefVars")>]
-    member x.``the HSF viewdef parameter generates correctly using the ticketed lock model`` v =
-        varsInConstraint v (ticketLockModel.Globals |> Map.toSeq |> Seq.map fst |> Set.ofSeq)
+    /// Tests the viewdef LHS translator.
+    [<TestCaseSource("ViewDefHeads")>]
+    member x.``the HSF viewdef translator works correctly using the ticketed lock model`` v =
+        headOfConstraint (ticketLockModel.Globals |> Map.toSeq |> Seq.map fst |> Set.ofSeq) v
+        |> okOption
 
