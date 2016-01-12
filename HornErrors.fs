@@ -8,6 +8,8 @@ open Starling.Expr
 type Error = 
     /// A viewdef has a non-arithmetic param.
     | NonArithParam of Type * string
+    /// A model has a non-arithmetic variable.
+    | NonArithVar of Type * string
     /// The expression given is not supported in the given position.
     | UnsupportedExpr of Expr
     /// The expression given is compound, but empty.

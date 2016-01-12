@@ -89,11 +89,36 @@ let hsfConstraint env { CViews = vs; CExpr = ex } =
             { Head = hd
               Body = [ bd ] }) (topLevelExpr dex) (bodyOfConstraint env vs)) ex
 
-/// Constructs a set of constraints for all definite viewdefs in a model.
-let hsfModelViewDefs { Globals = env; DefViews = vds } =
-    let gs = env |> Map.toSeq |> Seq.map fst |> Set.ofSeq
+/// Constructs a set of Horn clauses for all definite viewdefs in a model.
+let hsfModelViewDefs { Globals = gs; DefViews = vds } =
+    let env = gs |> Map.toSeq |> Seq.map fst |> Set.ofSeq
 
     vds
-    |> Seq.choose (hsfConstraint gs)
+    |> Seq.choose (hsfConstraint env)
+    |> collect
+    |> lift Set.ofSeq
+
+/// Constructs a Horn clause for initialising an integer variable.
+/// Returns an error if the variable is not an integer.
+/// Returns no clause if the variable is not initialised.
+/// Takes the environment of active global variables.
+let hsfVariable env (name, ty) =
+    // TODO(CaptainHayashi): actually get these initialisations from
+    // somewhere instead of assuming everything to be 0L.
+    match ty with
+    | Type.Int -> lift (fun hd -> { Head = hd
+                                    Body = [Eq (aUnmarked name, AInt 0L)] } )
+                       (bodyOfConstraint env (Multiset.empty ()))
+                  |> Some
+    | _ -> NonArithVar (ty, name) |> fail |> Some
+
+/// Constructs a set of Horn clauses for initialising all integer variables.
+/// Returns an error if it detects a non-integer variable.
+let hsfModelVariables {Globals = gs} =
+    let env = gs |> Map.toSeq |> Seq.map fst |> Set.ofSeq
+
+    gs
+    |> Map.toSeq
+    |> Seq.choose (hsfVariable env)
     |> collect
     |> lift Set.ofSeq

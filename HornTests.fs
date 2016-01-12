@@ -128,5 +128,24 @@ type HornTests() =
     /// Tests the model viewdef translator.
     [<TestCaseSource("ViewDefModels")>]
     member x.``the HSF model viewdef translator works correctly using various models`` (mdl: PartModel) =
-        let flax = mdl |> hsfModelViewDefs
-        flax |> okOption
+        mdl |> hsfModelViewDefs |> okOption
+
+    /// Test cases for the variable Horn clause modeller.
+    /// These are in the form of models whose viewdefs are to be modelled.
+    static member VariableModels =
+      [ TestCaseData(ticketLockModel)
+          .Returns(
+              Set.ofList
+                  [ { Head = Pred { Name = "v"
+                                    Params = [ aUnmarked "serving"; aUnmarked "ticket" ] }
+                      Body = [ Eq (aUnmarked "serving", AInt 0L) ] }
+                    { Head = Pred { Name = "v"
+                                    Params = [ aUnmarked "serving"; aUnmarked "ticket" ] }
+                      Body = [ Eq (aUnmarked "ticket", AInt 0L) ] } ]
+              |> Some
+          ).SetName("Model the ticketed lock's variable initialisations as Horn clauses") ]
+
+    /// Tests the model viewdef translator.
+    [<TestCaseSource("VariableModels")>]
+    member x.``the HSF model variable initialiser works correctly using various models`` (mdl: PartModel) =
+        mdl |> hsfModelVariables |> okOption
