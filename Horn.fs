@@ -14,6 +14,8 @@ open Starling.Errors.Horn
 type Literal = 
     /// A predicate.
     | Pred of Func<ArithExpr>
+    | And of Literal list
+    | Or of Literal list
     | True
     | False
     | ITE of Literal * Literal * Literal
@@ -78,6 +80,17 @@ let rec emitLiteral =
         |> Seq.map emitArith
         |> collect
         |> lift (String.concat ", " >> sprintf "%s(%s)" n)
+    | And xs ->
+        xs
+        |> Seq.map emitLiteral
+        |> collect
+        |> lift (String.concat "; " >> sprintf "(%s)")
+    | Or xs ->
+        xs
+        |> Seq.map emitLiteral
+        |> collect
+        |> lift (String.concat ", " >> sprintf "(%s)")
+
     | ITE (i, t, e) ->
         trial {
             let! il = emitLiteral i

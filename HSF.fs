@@ -30,9 +30,11 @@ let predNameOfMultiset ms =
  *)
 
 /// Converts a BoolExpr to a HSF literal.
-let boolExpr =
+let rec boolExpr =
     function
     // TODO(CaptainHayashi): are these allowed?
+    | BAnd xs -> List.map boolExpr xs |> collect |> lift And
+    | BOr xs -> List.map boolExpr xs |> collect |> lift Or
     | BTrue -> ok <| True
     | BFalse -> ok <| False
     | BEq(AExpr x, AExpr y) -> ok <| Eq(x, y)
@@ -190,8 +192,8 @@ let hsfTerm env {Conditions = {Pre = ps ; Post = qs} ; Inner = sem} =
     |> Seq.map (fun q -> bind (hsfConditionSingle env q) body) 
     |> collect
 
-/// Constructs a set of Horn clauses for all axioms in a model.
-let hsfModelAxioms { Globals = gs; Axioms = xs } =
+/// Constructs a set of Horn clauses for all terms associated with a model.
+let hsfModelAxioms { Globals = gs } xs =
     let env = gs |> Map.toSeq |> Seq.map fst |> Set.ofSeq
 
     xs
@@ -200,10 +202,10 @@ let hsfModelAxioms { Globals = gs; Axioms = xs } =
     |> lift Seq.concat
 
 /// Constructs a HSF script for a model.
-let hsfModel mdl =
+let hsfModel mdl terms =
     trial {
         let! vs = hsfModelVariables mdl |> lift Set.toSeq
         let! ds = hsfModelViewDefs mdl |> lift Set.toSeq
-        let! xs = hsfModelAxioms mdl
+        let! xs = hsfModelAxioms mdl terms
         return Seq.concat [vs; ds; xs] |> List.ofSeq
     }

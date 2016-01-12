@@ -36,6 +36,8 @@ type Request =
     | Reify
     /// Run the Z3 backend, with the given request.
     | Z3 of Z3.Backend.Request
+    /// Run the HSF backend (experimental).
+    | HSF
 
 /// Map of -s stage names to Request items.
 let requestMap = 
@@ -50,7 +52,8 @@ let requestMap =
                  ("reify", Request.Reify)
                  ("reifyZ3", Request.Z3 Z3.Backend.Request.Translate)
                  ("z3", Request.Z3 Z3.Backend.Request.Combine)
-                 ("sat", Request.Z3 Z3.Backend.Request.Sat) ]
+                 ("sat", Request.Z3 Z3.Backend.Request.Sat)
+                 ("hsf", Request.HSF) ]
 
 /// Converts an optional -s stage name to a request item.
 /// If none is given, the latest stage is selected.
@@ -75,6 +78,8 @@ type Response =
     | Reify of Starling.Model.ReTerm list
     /// The result of Z3 backend processing.
     | Z3 of Z3.Backend.Response
+    /// The result of HSF processing.
+    | HSF of string
 
 /// Pretty-prints a response.
 let printResponse = 
@@ -87,6 +92,7 @@ let printResponse =
     | TermGen t -> Starling.Pretty.Misc.printTerms t
     | Reify t -> Starling.Pretty.Misc.printReTerms t
     | Z3 z -> Z3.Backend.printResponse z
+    | HSF hs -> Starling.Pretty.Types.String hs
 
 /// A top-level program error.
 type Error = 
@@ -94,6 +100,8 @@ type Error =
     | Frontend of Lang.Frontend.Error
     /// An error occurred in the Z3 backend.
     | Z3 of Z3.Backend.Error
+    /// An error occurred in the HSF backend.
+    | HSF of Errors.Horn.Error
     /// A stage was requested using the -s flag that does not exist.
     | BadStage
     /// A miscellaneous (internal) error has occurred.
@@ -104,6 +112,7 @@ let printError =
     function 
     | Frontend e -> Lang.Frontend.printError e
     | Z3 e -> Z3.Backend.printError e
+    | HSF e -> Starling.Pretty.Errors.printHornError e
     | BadStage -> 
         Pretty.Types.colonSep [ Pretty.Types.String "Bad stage"
                                 Pretty.Types.String "try"
@@ -136,6 +145,8 @@ let printResult pOk pBad =
 (* TODO(CaptainHayashi): make the last few stages take only a model input.
  * That way, we don't need all the lifting and inAndOut2ing.
  *)
+
+let hsf = bind (uncurry Starling.HSF.hsfModel >> mapMessages Error.HSF)
 
 /// Shorthand for the Z3 stage.
 let z3 rq = bind (fun (mdl, terms) -> Starling.Z3.Backend.run mdl rq terms |> mapMessages Error.Z3)
@@ -227,6 +238,18 @@ let runStarling =
         >> reify
         >> z3 rq
         >> lift Response.Z3
+    | Request.HSF ->
+        model
+        >> flatten
+        >> expand
+        >> semantics
+        >> frame
+        >> termGen
+        >> reify
+        >> hsf
+        >> bind (List.map Starling.Horn.emit >> collect >> mapMessages Error.HSF)
+        >> lift (String.concat "\n")
+        >> lift Response.HSF
 
 /// Runs Starling with the given options, and outputs the results.
 let mainWithOptions opts = 
