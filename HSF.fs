@@ -117,26 +117,24 @@ let hsfModelViewDefs { Globals = gs; DefViews = vds } =
 /// Returns an error if the variable is not an integer.
 /// Returns no clause if the variable is not initialised.
 /// Takes the environment of active global variables.
-let hsfVariable env (name, ty) =
-    // TODO(CaptainHayashi): actually get these initialisations from
-    // somewhere instead of assuming everything to be 0L.
-    match ty with
-    | Type.Int -> lift (fun hd -> { Head = hd
-                                    Body = [Eq (aUnmarked name, AInt 0L)] } )
-                       (bodyOfConstraint env (Multiset.empty ()))
-                  |> Some
-    | _ -> NonArithVar (ty, name) |> fail |> Some
-
-/// Constructs a set of Horn clauses for initialising all integer variables.
-/// Returns an error if it detects a non-integer variable.
 let hsfModelVariables {Globals = gs} =
     let env = gs |> Map.toSeq |> Seq.map fst |> Set.ofSeq
+    
+    let vpreds =
+        gs
+        |> Map.toSeq
+        |> Seq.choose
+            (fun (name, ty) ->
+             // TODO(CaptainHayashi): actually get these initialisations from
+             // somewhere instead of assuming everything to be 0L.
+             match ty with
+             | Type.Int -> Eq (aUnmarked name, AInt 0L) |> ok |> Some
+             | _ -> NonArithVar (ty, name) |> fail |> Some)
+        |> collect
 
-    gs
-    |> Map.toSeq
-    |> Seq.choose (hsfVariable env)
-    |> collect
-    |> lift Set.ofSeq
+    lift2 (fun hd vp -> { Head = hd; Body = vp } )
+          (bodyOfConstraint env (Multiset.empty ()))
+          vpreds
 
 (*
  * Terms
@@ -211,7 +209,7 @@ let hsfModelAxioms { Globals = gs } xs =
 /// Constructs a HSF script for a model.
 let hsfModel mdl terms =
     trial {
-        let! vs = hsfModelVariables mdl |> lift Set.toSeq
+        let! vs = hsfModelVariables mdl |> lift Seq.singleton
         let! ds = hsfModelViewDefs mdl |> lift Set.toSeq
         let! xs = hsfModelAxioms mdl terms
         return Seq.concat [vs; ds; xs] |> List.ofSeq
