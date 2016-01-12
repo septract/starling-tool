@@ -56,23 +56,26 @@ type ModellerTests() =
                          (Type.Bool, "bar") ]).Returns(Some <| [ Starling.Errors.Var.Duplicate "bar" ])
               .SetName("disallow var lists with duplicates of different type") ]
 
+
+    /// Tests the creation of var lists.
+    [<TestCaseSource("BadVarLists")>]
+    member x.``invalid var lists are rejected during mapping`` vl = makeVarMap vl |> failOption
+
     /// Tests for modelling valid variable lists.
     static member VarLists =
         let emp : (Type * string) list = []
         let empm : VarMap = Map.empty
         [ TestCaseData([ (Type.Int, "baz")
-                         (Type.Bool, "emp") ]).Returns(Some <| Map.ofList [ ("baz", Type.Int)
-                                                                            ("emp", Type.Bool) ])
-              .SetName("allow var lists with no types")
+                         (Type.Bool, "emp") ])
+              .Returns(Some <| Map.ofList [ ("baz", Type.Int)
+                                            ("emp", Type.Bool) ])
+              .SetName("allow var lists with no duplicate variables")
           TestCaseData(emp).Returns(Some <| empm).SetName("allow empty var lists") ]
 
     /// Tests the creation of var lists.
     [<TestCaseSource("VarLists")>]
-    member x.``valid var lists are accepted during mapping`` vl = makeVarMap vl |> okOption
-
-    /// Tests the creation of var lists.
-    [<TestCaseSource("BadVarLists")>]
-    member x.``invalid var lists are rejected during mapping`` vl = makeVarMap vl |> failOption
+    member x.``valid var lists are accepted during mapping`` (vl: (Type * string) list) =
+        makeVarMap vl |> okOption
 
     /// Tests for the atomic primitive modeller.
     /// These use the ticketed lock model.
@@ -113,3 +116,4 @@ type ModellerTests() =
     /// Tests the whole modelling process.
     [<TestCaseSource("Models")>]
     member x.``case studies are modelled correctly`` col = model col |> okOption
+    
