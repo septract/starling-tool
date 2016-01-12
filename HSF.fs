@@ -7,6 +7,7 @@ open Starling.Utils
 open Starling.Var
 open Starling.Expr
 open Starling.Model
+open Starling.Reifier
 open Starling.Horn
 open Starling.Errors.Horn
 
@@ -140,8 +141,6 @@ let hsfModelVariables {Globals = gs} =
  * Terms
  *)
 
-/// Converts a condition pair to a pair of 
-
 /// Converts a top-level Boolean expression to a list of Horn literals.
 let topLevelExpr =
     // The main difference here is that we model conjunctions directly as a
@@ -161,18 +160,23 @@ let ite i t e =
     | _ -> ITE(i,t,e)
 
 /// Constructs a Horn literal for a guarded view multiset.
-let hsfGuarMultiset env marker { Cond = c; Item = ms } =
-    lift2 (fun cR msR -> ite cR msR True)
-          (boolExpr c)
-          (predOfMultiset env (marker >> ok) tryArithExpr ms)
+let hsfGuarMultiset dvs env marker { Cond = c; Item = ms } =
+    // We check the defining views here, because anything not in the
+    // defining views is to be held true.
+    match (findDefOfView dvs ms) with
+        | Some _ ->
+            lift2 (fun cR msR -> ite cR msR True)
+                  (boolExpr c)
+                  (predOfMultiset env (marker >> ok) tryArithExpr ms)
+        | None -> ok True
 
 /// Constructs the body for a set of condition pair Horn clauses,
-/// given the preconditions and semantics clause.
-let hsfConditionBody env ps sem =
+/// given the defining views, preconditions and semantics clause.
+let hsfConditionBody dvs env ps sem =
     let psH =
         ps
         |> Multiset.toSeq
-        |> Seq.map (hsfGuarMultiset env aBefore)
+        |> Seq.map (hsfGuarMultiset dvs env aBefore)
         |> collect
         |> lift List.ofSeq
 
@@ -182,27 +186,27 @@ let hsfConditionBody env ps sem =
 
 /// Constructs a single Horn clause given its body, postcondition, and
 /// command semantics, as well as a globals environment.
-let hsfConditionSingle env q body =
+let hsfConditionSingle dvs env q body =
     lift (fun qH -> { Head = qH ; Body = body })
-         (hsfGuarMultiset env aAfter q)
+         (hsfGuarMultiset dvs env aAfter q)
 
 /// Constructs a series of Horn clauses for a term.
 /// Takes the environment of active global variables.
-let hsfTerm env {Conditions = {Pre = ps ; Post = qs} ; Inner = sem} =
-    let body = hsfConditionBody env ps sem
+let hsfTerm dvs env {Conditions = {Pre = ps ; Post = qs} ; Inner = sem} =
+    let body = hsfConditionBody dvs env ps sem
 
     // Each postcondition generates a new clause.
     qs
     |> Multiset.toSeq
-    |> Seq.map (fun q -> bind (hsfConditionSingle env q) body) 
+    |> Seq.map (fun q -> bind (hsfConditionSingle dvs env q) body) 
     |> collect
 
 /// Constructs a set of Horn clauses for all terms associated with a model.
-let hsfModelAxioms { Globals = gs } xs =
+let hsfModelAxioms { Globals = gs; DefViews = dvs } xs =
     let env = gs |> Map.toSeq |> Seq.map fst |> Set.ofSeq
 
     xs
-    |> Seq.map (hsfTerm env)
+    |> Seq.map (hsfTerm dvs env)
     |> collect
     |> lift Seq.concat
 
