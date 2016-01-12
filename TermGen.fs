@@ -27,21 +27,24 @@ let termGenSeptractStep (rdone, qstep) rnext =
         let xbar2 = qstep.Item.Params
         // xbar = xbar'
         let xbarEq = List.map2 mkEq xbar xbar2 |> mkAnd 
-        
-        // B1 && !(B2 && xbar = xbar2)
-        let rcond = 
-            mkAnd [ b1
-                    mkNot (mkAnd [ b2; xbarEq ]) ]
-        
-        let rnext2 = { rnext with Cond = rcond }
-        
+
         // B2 && !(B1 && xbar = xbar2)
         let qcond = 
             mkAnd [ b2
                     mkNot (mkAnd [ b1; xbarEq ]) ]
         
         let qstep2 = { qstep with Cond = qcond }
-        (rnext2 :: rdone, qstep2)
+        
+        // B1 && !(B2 && xbar = xbar2)
+        let rcond = 
+            mkAnd [ b1
+                    mkNot (mkAnd [ b2; xbarEq ]) ]
+        
+        if isFalse rcond then 
+            (rdone, qstep2)
+        else
+            let rnext2 = { rnext with Cond = rcond }
+            (rnext2 :: rdone, qstep2)
     else (rnext :: rdone, qstep)
 
 /// Performs septraction of the single GuarView q from the GuarView
