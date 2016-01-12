@@ -26,35 +26,11 @@ let predNameOfMultiset ms =
     |> String.concat "_"
 
 (*
- * View def construction
+ * Expression generation
  *)
 
-/// Returns the list of all variable names bound in a viewdef multiset.
-/// These are guaranteed to be in multiset element order first, and in
-/// view definition order per inner func.
-let varsInMultiset : Multiset<ViewDef> -> string list =
-    Multiset.toSeq
-    >> Seq.map (fun v -> Seq.map snd v.Params)
-    >> Seq.concat
-    >> List.ofSeq
-
-/// Checks to ensure all params in a viewdef multiset are arithmetic.
-let ensureAllArith : Multiset<ViewDef> -> Result<Multiset<ViewDef>, Error> =
-    Multiset.toSeq
-    >> Seq.map (fun { Name = n; Params = ps } ->
-           ps
-           |> Seq.map (function
-                  | (Type.Int, _) as x -> ok x
-                  | x -> fail <| NonArithParam x)
-           |> collect
-           |> lift (fun aps ->
-                  { Name = n
-                    Params = aps }))
-    >> collect
-    >> lift Multiset.ofSeq
-
-/// Converts a top-level BoolExpr to a HSF literal.
-let topLevelExpr =
+/// Converts a BoolExpr to a HSF literal.
+let boolExpr =
     function
     // TODO(CaptainHayashi): are these allowed?
     | BTrue -> ok <| True
@@ -67,18 +43,51 @@ let topLevelExpr =
     | BLt(x, y) -> ok <| Lt(x, y)
     | x -> fail <| UnsupportedExpr(BExpr x)
 
+/// Extracts an ArithExpr from an Expr, if it is indeed arithmetic.
+/// Fails with UnsupportedExpr if the expresson is Boolean.
+let tryArithExpr =
+    function
+    | AExpr x -> x |> ok
+    | e -> e |> UnsupportedExpr |> fail
+
+(*
+ * View def construction
+ *)
+
+/// Extracts a sequence all of the parameters in a multiset in order.
+let paramsInMultiset ms =
+    ms
+    |> Multiset.toSeq
+    |> Seq.map (fun v -> v.Params)
+    |> Seq.concat
+
+/// Ensures a param in a viewdef multiset is arithmetic.
+let ensureArith =
+   function
+   | (Type.Int, x) -> ok (aUnmarked x)
+   | x -> fail <| NonArithParam x
+
+(*
+ * View definitions
+ *)
+
+/// Constructs a pred from a multiset, given a set of active globals,
+/// some transformer for the globals to expressions, and some transformer
+/// from the parameters to expressions.
+let predOfMultiset env envT parT ms =
+    lift2 (fun envR parR ->
+           Pred { Name = predNameOfMultiset ms
+                  Params = List.append envR parR })
+          (env |> Set.toSeq |> Seq.map envT |> collect)
+          (ms |> paramsInMultiset |> Seq.map parT |> collect)
+
 /// Constructs the right-hand side of a constraint in HSF.
 /// The set of active globals should be passed as env.
 let bodyOfConstraint env vs =
-    vs
-    |> ensureAllArith
-    |> lift (fun avs ->
-           Pred { Name = predNameOfMultiset avs
-                  Params =
-                      avs
-                      |> varsInMultiset
-                      |> List.append (Set.toList env)
-                      |> List.map aUnmarked })
+    predOfMultiset env
+                   (aUnmarked >> ok)
+                   (ensureArith)
+                   vs
 
 /// Constructs a full constraint in HSF.
 /// The set of active globals should be passed as env.
@@ -87,7 +96,7 @@ let hsfConstraint env { CViews = vs; CExpr = ex } =
     Option.map (fun dex ->
         lift2 (fun hd bd ->
             { Head = hd
-              Body = [ bd ] }) (topLevelExpr dex) (bodyOfConstraint env vs)) ex
+              Body = [ bd ] }) (boolExpr dex) (bodyOfConstraint env vs)) ex
 
 /// Constructs a set of Horn clauses for all definite viewdefs in a model.
 let hsfModelViewDefs { Globals = gs; DefViews = vds } =
@@ -97,6 +106,10 @@ let hsfModelViewDefs { Globals = gs; DefViews = vds } =
     |> Seq.choose (hsfConstraint env)
     |> collect
     |> lift Set.ofSeq
+
+(*
+ * Variables
+ *)
 
 /// Constructs a Horn clause for initialising an integer variable.
 /// Returns an error if the variable is not an integer.
@@ -122,3 +135,75 @@ let hsfModelVariables {Globals = gs} =
     |> Seq.choose (hsfVariable env)
     |> collect
     |> lift Set.ofSeq
+
+(*
+ * Terms
+ *)
+
+/// Converts a condition pair to a pair of 
+
+/// Converts a top-level Boolean expression to a list of Horn literals.
+let topLevelExpr =
+    // The main difference here is that we model conjunctions directly as a
+    // Horn literal list.
+    function
+    | BAnd xs -> Seq.ofList xs
+    | x -> Seq.singleton x
+    >> Seq.map boolExpr
+    >> collect
+    >> lift List.ofSeq
+
+/// Constructs a Horn literal for a guarded view multiset.
+let hsfGuarMultiset env marker { Cond = c; Item = ms } =
+    lift2 (fun cR msR -> ITE (cR, msR, True))
+          (boolExpr c)
+          (predOfMultiset env (marker >> ok) tryArithExpr ms)
+
+/// Constructs the body for a set of condition pair Horn clauses,
+/// given the preconditions and semantics clause.
+let hsfConditionBody env ps sem =
+    let psH =
+        ps
+        |> Multiset.toSeq
+        |> Seq.map (hsfGuarMultiset env aBefore)
+        |> collect
+        |> lift List.ofSeq
+
+    let semH = topLevelExpr sem
+
+    lift2 List.append psH semH
+
+/// Constructs a single Horn clause given its body, postcondition, and
+/// command semantics, as well as a globals environment.
+let hsfConditionSingle env q body =
+    lift (fun qH -> { Head = qH ; Body = body })
+         (hsfGuarMultiset env aAfter q)
+
+/// Constructs a series of Horn clauses for a term.
+/// Takes the environment of active global variables.
+let hsfTerm env {Conditions = {Pre = ps ; Post = qs} ; Inner = sem} =
+    let body = hsfConditionBody env ps sem
+
+    // Each postcondition generates a new clause.
+    qs
+    |> Multiset.toSeq
+    |> Seq.map (fun q -> bind (hsfConditionSingle env q) body) 
+    |> collect
+
+/// Constructs a set of Horn clauses for all axioms in a model.
+let hsfModelAxioms { Globals = gs; Axioms = xs } =
+    let env = gs |> Map.toSeq |> Seq.map fst |> Set.ofSeq
+
+    xs
+    |> Seq.map (hsfTerm env)
+    |> collect
+    |> lift Seq.concat
+
+/// Constructs a HSF script for a model.
+let hsfModel mdl =
+    trial {
+        let! vs = hsfModelVariables mdl |> lift Set.toSeq
+        let! ds = hsfModelViewDefs mdl |> lift Set.toSeq
+        let! xs = hsfModelAxioms mdl
+        return Seq.concat [vs; ds; xs] |> List.ofSeq
+    }

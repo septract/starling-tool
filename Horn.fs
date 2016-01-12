@@ -16,6 +16,7 @@ type Literal =
     | Pred of Func<ArithExpr>
     | True
     | False
+    | ITE of Literal * Literal * Literal
     | Eq of ArithExpr * ArithExpr
     | Neq of ArithExpr * ArithExpr
     | Gt of ArithExpr * ArithExpr
@@ -70,13 +71,20 @@ let rec emitArith =
 and emitBop op x y = lift2 (fun xe ye -> String.concat " " [ xe; op; ye ]) (emitArith x) (emitArith y)
 
 /// Emits a Horn literal.
-let emitLiteral = 
+let rec emitLiteral = 
     function 
     | Pred { Name = n; Params = ps } -> 
         ps
         |> Seq.map emitArith
         |> collect
         |> lift (String.concat ", " >> sprintf "%s(%s)" n)
+    | ITE (i, t, e) ->
+        trial {
+            let! il = emitLiteral i
+            let! tl = emitLiteral t
+            let! el = emitLiteral e
+            return sprintf "(%s -> %s ; %s)" il tl el
+        }
     | True -> ok "true"
     | False -> ok "false"
     | Eq(x, y) -> emitBop "=" x y

@@ -192,11 +192,18 @@ let mkAnd2 l r = mkAnd [l ; r]
 /// Makes an Or from a pair of two expressions.
 let mkOr2 l r = mkOr [l ; r]
 
-let mkNot =
+/// Symbolically inverts a Boolean expression.
+let rec mkNot =
     // Simplify obviously false or true exprs to their negation.
     function | BTrue -> BFalse
              | BFalse -> BTrue
              | BNot x -> x
+             | BGt (x, y) -> BLe (x, y)
+             | BGe (x, y) -> BLt (x, y)
+             | BLe (x, y) -> BGt (x, y)
+             | BLt (x, y) -> BGe (x, y)
+             | BAnd xs -> BOr (List.map mkNot xs)
+             | BOr xs -> BAnd (List.map mkNot xs) 
              | x -> BNot x
 
 /// Makes not-equals.
