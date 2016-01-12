@@ -248,7 +248,7 @@ let runStarling =
         >> reify
         >> hsf
         >> bind (List.map Starling.Horn.emit >> collect >> mapMessages Error.HSF)
-        >> lift (String.concat "\n")
+        >> lift (String.concat "\n\n")
         >> lift Response.HSF
 
 /// Runs Starling with the given options, and outputs the results.

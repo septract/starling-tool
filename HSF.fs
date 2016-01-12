@@ -155,9 +155,16 @@ let topLevelExpr =
     >> collect
     >> lift List.ofSeq
 
+/// Generates an if-then-else, collapsing automatically in the case of true or false.
+let ite i t e =
+    match i with
+    | True -> t
+    | False -> e
+    | _ -> ITE(i,t,e)
+
 /// Constructs a Horn literal for a guarded view multiset.
 let hsfGuarMultiset env marker { Cond = c; Item = ms } =
-    lift2 (fun cR msR -> ITE (cR, msR, True))
+    lift2 (fun cR msR -> ite cR msR True)
           (boolExpr c)
           (predOfMultiset env (marker >> ok) tryArithExpr ms)
 
