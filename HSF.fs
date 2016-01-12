@@ -30,6 +30,14 @@ let predNameOfMultiset ms =
  * Expression generation
  *)
 
+/// Checks whether an ArithExpr is useable by HSF.
+let checkArith =
+    function
+    | AAdd [] -> EmptyCompoundExpr "addition" |> fail
+    | ASub [] -> EmptyCompoundExpr "subtraction" |> fail
+    | AMul [] -> EmptyCompoundExpr "multiplication" |> fail
+    | x -> ok x
+
 /// Converts a BoolExpr to a HSF literal.
 let rec boolExpr =
     function
@@ -38,12 +46,12 @@ let rec boolExpr =
     | BOr xs -> List.map boolExpr xs |> collect |> lift Or
     | BTrue -> ok <| True
     | BFalse -> ok <| False
-    | BEq(AExpr x, AExpr y) -> ok <| Eq(x, y)
-    | BNot(BEq(AExpr x, AExpr y)) -> ok <| Neq(x, y)
-    | BGt(x, y) -> ok <| Gt(x, y)
-    | BGe(x, y) -> ok <| Ge(x, y)
-    | BLe(x, y) -> ok <| Le(x, y)
-    | BLt(x, y) -> ok <| Lt(x, y)
+    | BEq(AExpr x, AExpr y) -> lift2 (curry Eq) (checkArith x) (checkArith y)
+    | BNot(BEq(AExpr x, AExpr y)) -> lift2 (curry Neq) (checkArith x) (checkArith y)
+    | BGt(x, y) -> lift2 (curry Gt) (checkArith x) (checkArith y)
+    | BGe(x, y) -> lift2 (curry Ge) (checkArith x) (checkArith y)
+    | BLe(x, y) -> lift2 (curry Le) (checkArith x) (checkArith y)
+    | BLt(x, y) -> lift2 (curry Lt) (checkArith x) (checkArith y)
     | x -> fail <| UnsupportedExpr(BExpr x)
 
 /// Extracts an ArithExpr from an Expr, if it is indeed arithmetic.

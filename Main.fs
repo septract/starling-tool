@@ -79,7 +79,7 @@ type Response =
     /// The result of Z3 backend processing.
     | Z3 of Z3.Backend.Response
     /// The result of HSF processing.
-    | HSF of string
+    | HSF of Horn.Horn list
 
 /// Pretty-prints a response.
 let printResponse = 
@@ -92,7 +92,7 @@ let printResponse =
     | TermGen t -> Starling.Pretty.Misc.printTerms t
     | Reify t -> Starling.Pretty.Misc.printReTerms t
     | Z3 z -> Z3.Backend.printResponse z
-    | HSF hs -> Starling.Pretty.Types.String hs
+    | HSF h -> Starling.Pretty.Horn.printHorns h
 
 /// A top-level program error.
 type Error = 
@@ -247,8 +247,6 @@ let runStarling =
         >> termGen
         >> reify
         >> hsf
-        >> bind (List.map Starling.Horn.emit >> collect >> mapMessages Error.HSF)
-        >> lift (String.concat "\n\n")
         >> lift Response.HSF
 
 /// Runs Starling with the given options, and outputs the results.
