@@ -80,5 +80,5 @@ let termGenAxiom fax =
             Post = fax.Frame }
       Inner = fax.Axiom.Inner }
 
-/// Generates a list of terms from a list of framed axioms.
-let termGen ts = List.map termGenAxiom ts
+/// Converts a model's framed axioms to terms.
+let termGen m = mapAxioms termGenAxiom m

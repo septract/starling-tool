@@ -210,7 +210,7 @@ let hsfTerm dvs env {Conditions = {Pre = ps ; Post = qs} ; Inner = sem} =
     |> collect
 
 /// Constructs a set of Horn clauses for all terms associated with a model.
-let hsfModelAxioms { Globals = gs; DefViews = dvs } xs =
+let hsfModelAxioms { Globals = gs; DefViews = dvs; Axioms = xs } =
     let env = gs |> Map.toSeq |> Seq.map fst |> Set.ofSeq
 
     xs
@@ -219,10 +219,10 @@ let hsfModelAxioms { Globals = gs; DefViews = dvs } xs =
     |> lift Seq.concat
 
 /// Constructs a HSF script for a model.
-let hsfModel mdl terms =
+let hsfModel mdl =
     trial {
         let! vs = hsfModelVariables mdl |> lift Seq.singleton
         let! ds = hsfModelViewDefs mdl |> lift Set.toSeq
-        let! xs = hsfModelAxioms mdl terms
+        let! xs = hsfModelAxioms mdl
         return Seq.concat [vs; ds; xs] |> List.ofSeq
     }

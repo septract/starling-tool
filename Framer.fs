@@ -29,6 +29,9 @@ let frameAxiom ds fg axiom =
           Frame = instantiateFrame fg vs }) ds
 
 /// Converts a model into a set of framed axioms.
-let frame {DefViews = ds; Axioms = xs} =
+let frameAxioms {DefViews = ds; Axioms = xs} =
     // We use a fresh variable generator to ensure every frame variable is unique.
     concatMap (frameAxiom ds (freshGen ())) xs
+
+/// Converts a model into one over framed axioms.
+let frame mdl = withAxioms (frameAxioms mdl) mdl

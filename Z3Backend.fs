@@ -4,6 +4,7 @@ module Starling.Z3.Backend
 open Microsoft
 open Chessie.ErrorHandling
 open Starling
+open Starling.Model
 open Starling.Utils
 
 (*
@@ -23,9 +24,9 @@ type Request =
 [<NoComparison>]
 type Response =
     /// Output of the term translation step only.
-    | Translate of ZTerm list
+    | Translate of Model<ZTerm list, Constraint list>
     /// Output of the final Z3 terms only.
-    | Combine of Microsoft.Z3.BoolExpr list
+    | Combine of Model<Microsoft.Z3.BoolExpr list, Constraint list>
     /// Output of satisfiability reports for the Z3 terms.
     | Sat of Microsoft.Z3.Status list
 
@@ -45,8 +46,8 @@ type Error =
 /// Pretty-prints a response.
 let printResponse =
     function
-    | Response.Translate t -> Starling.Pretty.Misc.printZTerms t
-    | Response.Combine z -> Starling.Pretty.Misc.printZ3Exps z
+    | Response.Translate {Axioms = t} -> Starling.Pretty.Misc.printZTerms t
+    | Response.Combine {Axioms = z} -> Starling.Pretty.Misc.printZ3Exps z
     | Response.Sat s -> Starling.Pretty.Misc.printSats s
 
 /// Pretty-prints an error.
@@ -59,23 +60,18 @@ let printError =
  *)
 
 /// Shorthand for the parser stage of the frontend pipeline.
-let translate ctx model = Translator.reifyZ3 ctx model >> mapMessages Error.Translator
+let translate ctx = Translator.reifyZ3 ctx >> mapMessages Error.Translator
 /// Shorthand for the collation stage of the frontend pipeline.
 let combine = Translator.combineTerms >> lift
 /// Shorthand for the modelling stage of the frontend pipeline.
 let sat = Run.run >> lift
 
-/// Runs the Starling Z3 backend with the given context.
-let runCtx ctx model =
-    function
-    | Request.Translate -> translate ctx model >> lift Response.Translate
-    | Request.Combine -> translate ctx model >> combine ctx >> lift Response.Combine
-    | Request.Sat -> translate ctx model >> combine ctx >> sat ctx >> lift Response.Sat
-
 /// Runs the Starling Z3 backend.
-/// Takes three arguments: the first is the Z3 model; the second is the
-/// `Response` telling the backend what to output; and the third is the list of
-/// reified terms to process with Z3.
-let run model resp ts =
+/// Takes two arguments: the first is the `Response` telling the backend what
+/// to output; the second is the reified model to process with Z3.
+let run resp =
     use ctx = new Z3.Context()
-    runCtx ctx model resp ts
+    match resp with
+    | Request.Translate -> translate ctx >> lift Response.Translate
+    | Request.Combine -> translate ctx >> combine ctx >> lift Response.Combine
+    | Request.Sat -> translate ctx >> combine ctx >> sat ctx >> lift Response.Sat

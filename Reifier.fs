@@ -68,5 +68,5 @@ let reifyTerm (term : Term) : ReTerm =
             Post = tpost }
       Inner = term.Inner }
 
-/// Reifies all of the terms in a term list.
-let reify ts = List.map reifyTerm ts
+/// Reifies all of the terms in a model's axiom list.
+let reify m = mapAxioms reifyTerm m

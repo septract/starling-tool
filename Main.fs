@@ -65,17 +65,17 @@ type Response =
     /// The result of frontend processing.
     | Frontend of Lang.Frontend.Response
     /// The result of structure flattening.
-    | Flatten of Starling.Model.FlatModel
+    | Flatten of Model<FlatAxiom list, Constraint list>
     /// The result of conditional expansion.
-    | Expand of Starling.Model.FullModel
+    | Expand of Model<FullAxiom list, Constraint list>
     /// The result of semantic expansion.
-    | Semantics of Starling.Model.SemModel
+    | Semantics of Model<SemAxiom list, Constraint list>
     /// The result of frame-axiom-pair generation.
-    | Frame of Starling.Model.FramedAxiom list
+    | Frame of Model<FramedAxiom list, Constraint list>
     /// The result of term generation.
-    | TermGen of Starling.Model.Term list
+    | TermGen of Model<Term list, Constraint list>
     /// The result of view reification.
-    | Reify of Starling.Model.ReTerm list
+    | Reify of Model<ReTerm list, Constraint list>
     /// The result of Z3 backend processing.
     | Z3 of Z3.Backend.Response
     /// The result of HSF processing.
@@ -88,9 +88,9 @@ let printResponse =
     | Flatten f -> Starling.Pretty.Misc.printFlatModel f
     | Expand e -> Starling.Pretty.Misc.printFullModel e
     | Semantics e -> Starling.Pretty.Misc.printSemModel e
-    | Frame f -> Starling.Pretty.Misc.printFramedAxioms f
-    | TermGen t -> Starling.Pretty.Misc.printTerms t
-    | Reify t -> Starling.Pretty.Misc.printReTerms t
+    | Frame {Axioms = f} -> Starling.Pretty.Misc.printFramedAxioms f
+    | TermGen {Axioms = t} -> Starling.Pretty.Misc.printTerms t
+    | Reify {Axioms = t} -> Starling.Pretty.Misc.printReTerms t
     | Z3 z -> Z3.Backend.printResponse z
     | HSF h -> Starling.Pretty.Horn.printHorns h
 
@@ -142,29 +142,19 @@ let printResult pOk pBad =
                                              Starling.Pretty.Types.VSkip
                                              printWarns "Warnings" ws ]) (pBad >> printWarns "Errors")
 
-(* TODO(CaptainHayashi): make the last few stages take only a model input.
- * That way, we don't need all the lifting and inAndOut2ing.
- *)
-
-let hsf = bind (uncurry Starling.HSF.hsfModel >> mapMessages Error.HSF)
+let hsf = bind (Starling.HSF.hsfModel >> mapMessages Error.HSF)
 
 /// Shorthand for the Z3 stage.
-let z3 rq = bind (fun (mdl, terms) -> Starling.Z3.Backend.run mdl rq terms |> mapMessages Error.Z3)
+let z3 rq = bind (Starling.Z3.Backend.run rq >> mapMessages Error.Z3)
 
 /// Shorthand for the reify stage.
-let reify = 
-    Starling.Reifier.reify
-    |> pairMap id
-    |> lift
+let reify = lift Starling.Reifier.reify
 
 /// Shorthand for the term generation stage.
-let termGen = 
-    Starling.TermGen.termGen
-    |> pairMap id
-    |> lift
+let termGen = lift Starling.TermGen.termGen
 
 /// Shorthand for the framing stage.
-let frame = lift (fun semantics -> (semantics, Starling.Framer.frame semantics))
+let frame = lift Starling.Framer.frame
 
 /// Shorthand for the semantics stage.
 let semantics = lift Starling.Semantics.translate
@@ -210,7 +200,7 @@ let runStarling =
         >> expand
         >> semantics
         >> frame
-        >> lift (snd >> Response.Frame)
+        >> lift Response.Frame
     | Request.TermGen -> 
         model
         >> flatten
@@ -218,7 +208,7 @@ let runStarling =
         >> semantics
         >> frame
         >> termGen
-        >> lift (snd >> Response.TermGen)
+        >> lift Response.TermGen
     | Request.Reify -> 
         model
         >> flatten
@@ -227,7 +217,7 @@ let runStarling =
         >> frame
         >> termGen
         >> reify
-        >> lift (snd >> Response.Reify)
+        >> lift Response.Reify
     | Request.Z3 rq -> 
         model
         >> flatten

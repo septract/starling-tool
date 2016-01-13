@@ -1,5 +1,6 @@
 module Starling.Model
 
+open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Expr
 
@@ -125,11 +126,23 @@ type FullModel = Model<FullAxiom list, Constraint list>
 /// A semantically translated model of a Starling program.
 type SemModel = Model<SemAxiom list, Constraint list>
 
+/// Returns the axioms of a model.
+let axioms {Axioms = xs} = xs
+
 /// Creates a new model that is the input model with a different axiom set.
 /// The axiom set may be of a different type.
-let withAxioms (axioms : 'y) (model : Model<'x, 'c>) : Model<'y, 'c> = 
+let withAxioms (xs : 'y) (model : Model<'x, 'c>) : Model<'y, 'c> = 
     { Globals = model.Globals
       Locals = model.Locals
       VProtos = model.VProtos
       DefViews = model.DefViews
-      Axioms = axioms }
+      Axioms = xs }
+
+/// Maps a pure function f over the axioms of a model.
+let mapAxioms (f : 'x -> 'y) (model : Model<'x list, 'c>) : Model<'y list, 'c> =
+    withAxioms (model |> axioms |> List.map f) model
+
+/// Maps a failing function f over the axioms of a model.
+let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x list, 'c>) : Result<Model<'y list, 'c>, 'e> =
+    lift (fun x -> withAxioms x model)
+         (model |> axioms |> List.map f |> collect)

@@ -151,7 +151,7 @@ let reifyZTerm ctx model term =
           (reifyZView ctx model After term.Conditions.Post)
 
 /// Reifies all of the terms in a term list.
-let reifyZ3 ctx model = Seq.map (reifyZTerm ctx model) >> collect
+let reifyZ3 ctx model = tryMapAxioms (reifyZTerm ctx model) model
 
 /// Combines the components of a reified term.
 let combineTerm (ctx: Z3.Context) reterm =
@@ -160,4 +160,4 @@ let combineTerm (ctx: Z3.Context) reterm =
                  ctx.MkNot reterm.Conditions.Post |]
 
 /// Combines reified terms into a list of Z3 terms.
-let combineTerms ctx = List.map (combineTerm ctx)
+let combineTerms ctx = mapAxioms (combineTerm ctx)

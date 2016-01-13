@@ -10,5 +10,5 @@ let runTerm (ctx: Z3.Context) term =
     solver.Assert [| term |]
     solver.Check [||]
 
-/// Runs Z3 on a list of terms, given the context in `model`.
-let run ctx = List.map (runTerm ctx)
+/// Runs Z3 on a model.
+let run ctx {Axioms = ts} = List.map (runTerm ctx) ts
