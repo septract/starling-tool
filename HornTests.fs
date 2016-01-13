@@ -15,6 +15,15 @@ open Starling.Tests.Studies
 
 /// Tests for Starling.Horn and Starling.HSF.
 type HornTests() =
+    /// Test cases for the multiset predicate renamer.
+    static member ViewPredNamings =
+        let ms : View list -> Multiset<View> = Multiset.ofList
+        [ TestCaseData(ms [ { Name = "foo"
+                              Params = [] }
+                            { Name = "bar_baz"
+                              Params = [] } ]).Returns("v_bar__baz_foo") // Remember, multisets sort!
+            .SetName("Encode HSF name of view 'foo() * bar_baz()' as 'v_bar__baz_foo'") ]
+
     /// Tests the view predicate name generator.
     [<TestCaseSource("ViewPredNamings")>]
     member x.``the HSF predicate name generator generates names correctly`` v =
@@ -83,13 +92,10 @@ type HornTests() =
     static member VariableModels =
       [ TestCaseData(ticketLockModel)
           .Returns(
-              Set.ofList
-                  [ { Head = Pred { Name = "v"
-                                    Params = [ aUnmarked "serving"; aUnmarked "ticket" ] }
-                      Body = [ Eq (aUnmarked "serving", AInt 0L) ] }
-                    { Head = Pred { Name = "v"
-                                    Params = [ aUnmarked "serving"; aUnmarked "ticket" ] }
-                      Body = [ Eq (aUnmarked "ticket", AInt 0L) ] } ]
+                  { Head = Pred { Name = "v"
+                                  Params = [ aUnmarked "serving"; aUnmarked "ticket" ] }
+                    Body = [ Eq (aUnmarked "serving", AInt 0L)
+                             Eq (aUnmarked "ticket", AInt 0L) ] }
               |> Some
           ).SetName("Model the ticketed lock's variable initialisations as Horn clauses") ]
 
