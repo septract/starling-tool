@@ -85,8 +85,9 @@
     <Compile Include="HornTests.fs" />
     <Compile Include="Main.fs" />
     <None Include="packages.config" />
-    <None Include="Examples\Pass\ticketLockNoIf.cvf" />
     <None Include="Examples\Pass\ticketLock.cvf" />
+    <None Include="Examples\Pass\ticketLockNoIf.cvf" />
+    <None Include="Examples\Pass\ticketLockNonAtomicRelease.cvf" />
     <None Include="Examples\Pass\spinLock.cvf" />
     <None Include="Examples\Pass\multicounter.cvf" />
     <None Include="Examples\PassHSF\ticketLockIndefinite.cvf" />
