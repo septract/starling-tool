@@ -49,12 +49,12 @@ let rec printLiteral =
     | And xs ->
         xs
         |> Seq.map printLiteral
-        |> semiSep
+        |> commaSep
         |> parened
     | Or xs ->
         xs
         |> Seq.map printLiteral
-        |> commaSep
+        |> semiSep
         |> parened
 
     | ITE (i, t, e) ->
