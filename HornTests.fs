@@ -82,7 +82,7 @@ type HornTests() =
 
     /// Tests the model viewdef translator.
     [<TestCaseSource("ViewDefModels")>]
-    member x.``the HSF model viewdef translator works correctly using various models`` (mdl: PartModel) =
+    member x.``the HSF model viewdef translator works correctly using various models`` (mdl: Model<PartAxiom>) =
         mdl |> hsfModelViewDefs |> okOption
 
     /// Test cases for the variable Horn clause modeller.
@@ -99,5 +99,5 @@ type HornTests() =
 
     /// Tests the model viewdef translator.
     [<TestCaseSource("VariableModels")>]
-    member x.``the HSF model variable initialiser works correctly using various models`` (mdl: PartModel) =
+    member x.``the HSF model variable initialiser works correctly using various models`` (mdl: Model<PartAxiom>) =
         mdl |> hsfModelVariables |> okOption

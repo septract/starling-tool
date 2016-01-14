@@ -3,6 +3,7 @@ module Starling.Lang.Frontend
 
 open Chessie.ErrorHandling
 open Starling
+open Starling.Model
 
 (*
  * Request and response types
@@ -24,7 +25,7 @@ type Response =
     /// Output of the parsing and collation steps.
     | Collate of Collator.CollatedScript
     /// Output of the parsing, collation, and modelling steps.
-    | Model of Starling.Model.PartModel
+    | Model of Model<PartAxiom>
 
 (*
  * Error types

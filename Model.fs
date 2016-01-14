@@ -106,32 +106,20 @@ let cpairOfPartAxiom =
     | PAITE(outer = c) -> c
 
 /// A parameterised model of a Starling program.
-type Model<'a, 'c> = 
+type Model<'a> = 
     { Globals : Var.VarMap
       Locals : Var.VarMap
-      Axioms : 'a
+      Axioms : 'a list
       VProtos : Map<string, (Var.Type * string) list>
       // This corresponds to the function D.
-      DefViews : 'c }
-
-/// A partly-resolved-axiom model of a Starling program.
-type PartModel = Model<PartAxiom list, Constraint list>
-
-/// A flattened model of a Starling program.
-type FlatModel = Model<FlatAxiom list, Constraint list>
-
-/// A full model of a Starling program.
-type FullModel = Model<FullAxiom list, Constraint list>
-
-/// A semantically translated model of a Starling program.
-type SemModel = Model<SemAxiom list, Constraint list>
+      DefViews : Constraint list }
 
 /// Returns the axioms of a model.
 let axioms {Axioms = xs} = xs
 
 /// Creates a new model that is the input model with a different axiom set.
 /// The axiom set may be of a different type.
-let withAxioms (xs : 'y) (model : Model<'x, 'c>) : Model<'y, 'c> = 
+let withAxioms (xs : 'y list) (model : Model<'x>) : Model<'y> = 
     { Globals = model.Globals
       Locals = model.Locals
       VProtos = model.VProtos
@@ -139,10 +127,10 @@ let withAxioms (xs : 'y) (model : Model<'x, 'c>) : Model<'y, 'c> =
       Axioms = xs }
 
 /// Maps a pure function f over the axioms of a model.
-let mapAxioms (f : 'x -> 'y) (model : Model<'x list, 'c>) : Model<'y list, 'c> =
+let mapAxioms (f : 'x -> 'y) (model : Model<'x>) : Model<'y> =
     withAxioms (model |> axioms |> List.map f) model
 
 /// Maps a failing function f over the axioms of a model.
-let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x list, 'c>) : Result<Model<'y list, 'c>, 'e> =
+let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x>) : Result<Model<'y>, 'e> =
     lift (fun x -> withAxioms x model)
          (model |> axioms |> List.map f |> collect)

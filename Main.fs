@@ -62,17 +62,17 @@ type Response =
     /// The result of frontend processing.
     | Frontend of Lang.Frontend.Response
     /// The result of structure flattening.
-    | Flatten of Model<FlatAxiom list, Constraint list>
+    | Flatten of Model<FlatAxiom>
     /// The result of conditional expansion.
-    | Expand of Model<FullAxiom list, Constraint list>
+    | Expand of Model<FullAxiom>
     /// The result of semantic expansion.
-    | Semantics of Model<SemAxiom list, Constraint list>
+    | Semantics of Model<SemAxiom>
     /// The result of frame-axiom-pair generation.
-    | Frame of Model<FramedAxiom list, Constraint list>
+    | Frame of Model<FramedAxiom>
     /// The result of term generation.
-    | TermGen of Model<Term list, Constraint list>
+    | TermGen of Model<Term>
     /// The result of view reification.
-    | Reify of Model<ReTerm list, Constraint list>
+    | Reify of Model<ReTerm>
     /// The result of Z3 backend processing.
     | Z3 of Z3.Backend.Response
     /// The result of HSF processing.

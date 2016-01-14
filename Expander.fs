@@ -41,4 +41,4 @@ let expandAxiom { Conditions = cs; Inner = i } =
       Inner = i }
 
 /// Expands an entire model.
-let expand (model : FlatModel) = withAxioms (List.map expandAxiom model.Axioms) model
+let expand : Model<FlatAxiom> -> Model<FullAxiom> = mapAxioms expandAxiom
