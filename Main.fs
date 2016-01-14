@@ -4,9 +4,6 @@ module Main
 open Starling
 open Starling.Model
 open CommandLine
-open CommandLine.Text
-open Microsoft
-// This is down here to force Chessie's fail to override FParsec's.
 open Chessie.ErrorHandling
 
 /// Command-line flags used in the Starling executable.

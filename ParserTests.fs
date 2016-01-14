@@ -6,8 +6,6 @@ open Starling
 open Starling.Var
 open Starling.Lang.AST
 open Starling.Lang.Parser
-open Starling.Pretty.Lang.AST
-open Starling.Pretty.Types
 
 /// Tests for the parser.
 type ParserTests() =

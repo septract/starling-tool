@@ -160,7 +160,7 @@ let printType =
     | Type.Bool -> "bool" |> String
 
 /// Pretty-prints a view prototype.
-let printViewProto { ViewProto.Name = n; Params = ps } = 
+let printViewProto { Name = n; Params = ps } = 
     hsep [ "view" |> String
            func n (List.map (fun (t, v) -> 
                        hsep [ t |> printType

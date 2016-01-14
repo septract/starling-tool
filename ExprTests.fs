@@ -7,16 +7,15 @@ open Starling.Expr
 type ExprTests() =
     /// Test cases for testing frame rewriting.
     static member FrameConstants =
-        seq {
-            yield (new TestCaseData(["foo"; "foo"; "foo"]))
+        [ TestCaseData(["foo"; "foo"; "foo"])
                 .Returns([Frame (0I, "foo")
                           Frame (1I, "foo")
                           Frame (2I, "foo")])
-            yield (new TestCaseData(["foo"; "bar"; "baz"]))
+          TestCaseData(["foo"; "bar"; "baz"])
                 .Returns([Frame (0I, "foo")
                           Frame (1I, "bar")
                           Frame (2I, "baz")])
-        }
+        ]
 
     /// Tests that the frame name generator works fine.
     member x.``frame generation uses fresh variables properly`` xs =

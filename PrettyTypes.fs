@@ -32,7 +32,7 @@ let rec printLevel level =
     | Separator -> "----"
     | VSkip -> lnIndent level
     | String s -> s.Replace("\n", lnIndent level)
-    | Surround(left, (VSep(cmds, _) as mid), right) -> 
+    | Surround(left, (VSep(_, _) as mid), right) -> 
         printLevel level left + lnIndent level + printLevel level mid + lnIndent level + printLevel level right
     | Surround(left, mid, right) -> printLevel level left + printLevel level mid + printLevel level right
     | Indent incmd -> indent 1 + printLevel (level + 1) incmd
@@ -102,4 +102,4 @@ let squared = ssurround "[" "]"
 let func f xs = hjoin [String f; commaSep xs |> parened]
 
 /// Pretty-prints Funcs using pxs to print parameters.
-let printFunc pxs { Name = f; Params = xs } = func f (Seq.map pxs xs)
+let printFunc pxs { Starling.Collections.Func.Name = f; Params = xs } = func f (Seq.map pxs xs)

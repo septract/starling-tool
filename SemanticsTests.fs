@@ -6,7 +6,6 @@ open Starling.Expr
 open Starling.Var
 open Starling.Model
 open Starling.Semantics
-open Starling.Lang.AST
 open Starling.Tests.Studies
 
 /// Tests for the semantic transformer.

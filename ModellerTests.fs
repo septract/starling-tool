@@ -1,7 +1,6 @@
 module Starling.Tests.Modeller
 
 open NUnit.Framework
-open Chessie.ErrorHandling // ok
 open Starling
 open Starling.Collections
 open Starling.Expr
@@ -10,7 +9,6 @@ open Starling.Model
 open Starling.Lang.AST
 open Starling.Lang.Modeller
 open Starling.Tests.Studies
-open Starling.Pretty.Lang.AST
 
 /// Tests for the modeller.
 type ModellerTests() =

@@ -1,12 +1,10 @@
 /// Module containing the semantic definitions of commands.
 module Starling.Semantics
 
-open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Expr
 open Starling.Var
 open Starling.Model
-open Starling.Lang.Modeller
 
 //
 // Atomic emitters
@@ -45,7 +43,7 @@ let makeCAS destE testE setE =
     // Make the before-case versions of dest and test.
     let destEB = (markVars Before always destE)
     let testEB = (markVars Before always testE)
-    let setEB = (markVars Before always setE)
+
     (* Now we make the cases.
      * Each case is in the form (cond => destAfter ^ testAfter).
      * We start with the success case.
@@ -143,7 +141,7 @@ let frame model expr =
     // Then, for all of the variables in the model, choose those not in evars, and make frame expressions for them.
     Seq.append (Map.toSeq model.Globals) (Map.toSeq model.Locals)
     // TODO(CaptainHayashi): this is fairly inefficient.
-    |> Seq.filter (fun (name, ty) -> not (Set.contains name evars))
+    |> Seq.filter (fun (name, _) -> not (Set.contains name evars))
     |> Seq.map ((fun (name, ty) -> mkVarExp (ty, name)) >> (fun v -> makeRel v v))
     // ^ ... then prepare v!after = v!before records for them.
 

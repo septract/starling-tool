@@ -1,6 +1,5 @@
 ﻿module Starling.Lang.Modeller
 
-open System
 open Chessie.ErrorHandling
 open Starling
 open Starling.Collections

@@ -1,10 +1,8 @@
 /// Utilities for working with expressions.
 module Starling.Expr
 
-open Chessie.ErrorHandling
 open Starling.Utils
 open Starling.Var
-open System.Numerics
 
 (*
  * Expression types

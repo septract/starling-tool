@@ -1,10 +1,8 @@
 /// Types for HSF/qarmc-style Horn clause scripts.
 module Starling.Horn
 
-open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Expr
-open Starling.Errors.Horn
 
 /// A literal in a Datalog-style Horn clause.
 /// We model Datalog terms as Starling expressions, refusing those

@@ -7,7 +7,6 @@ open Starling.Var
 open Starling.Lang.AST
 open Starling.Lang.Collator
 open Starling.Model
-open Starling.Lang.Modeller
 open Starling.Z3.Utils
 open Starling.Pretty.Expr
 open Starling.Pretty.Lang.AST

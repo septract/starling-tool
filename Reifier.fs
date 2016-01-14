@@ -5,8 +5,6 @@ module Starling.Reifier
 open Starling.Collections
 open Starling.Expr
 open Starling.Model
-open Starling.Framer
-open Starling.Semantics
 
 /// Tries to look up a multiset View in the defining views dvs.
 let findDefOfView dvs uviewm =

@@ -73,7 +73,7 @@ let paramSubFun vsubs =
         | Unmarked p as up ->
             match (Map.tryFind p vsubs) with
             | Some (AExpr e) -> e
-            | Some e -> failwith "param substitution type error"
+            | Some _ -> failwith "param substitution type error"
             | None -> AConst up
         | q -> AConst q
      BSub =
@@ -81,7 +81,7 @@ let paramSubFun vsubs =
         | Unmarked p as up ->
             match (Map.tryFind p vsubs) with
             | Some (BExpr e) -> e
-            | Some e -> failwith "param substitution type error"
+            | Some _ -> failwith "param substitution type error"
             | None -> BConst up
         | q -> BConst q
     }

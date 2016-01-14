@@ -1,6 +1,5 @@
 module Starling.Flattener
 
-open Chessie.ErrorHandling
 open Starling.Expr
 open Starling.Model
 

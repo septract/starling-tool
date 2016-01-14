@@ -1,7 +1,6 @@
 /// Tests for Starling.Horn and Starling.HSF.
 module Starling.Tests.Horn
 
-open Chessie.ErrorHandling
 open NUnit.Framework
 open Starling.Collections
 open Starling.Var
@@ -10,7 +9,6 @@ open Starling.Expr
 open Starling.Model
 open Starling.Horn
 open Starling.HSF
-open Starling.Errors.Horn
 open Starling.Tests.Studies
 
 /// Tests for Starling.Horn and Starling.HSF.

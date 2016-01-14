@@ -102,10 +102,12 @@ let printHornError =
     function
     | NonArithParam (ty, name) ->
         fmt "parameter '{0}' is of type {1}: HSF only permits integers here"
-            [ String name ]
+            [ String name
+              printType ty ]
     | NonArithVar (ty, name) ->
         fmt "variable '{0}' is of type {1}: HSF only permits integers here"
-            [ String name ]
+            [ String name
+              printType ty ]
     | UnsupportedExpr expr ->
         fmt "expression '{0}' is not supported in the HSF backend"
             [ printExpr expr ]
