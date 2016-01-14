@@ -204,15 +204,14 @@ let rec envOfViewDef vds =
     |> mapMessages VDEBadVars
 
 /// Produces the variable environment for the constraint whose viewdef is v.
-let envOfConstraint {Model.Globals = globals}= 
+let envOfConstraint globals =
     envOfViewDef >> bind (combineMaps globals >> mapMessages VDEGlobalVarConflict)
 
 /// Converts a single constraint to its model form.
-let modelConstraint model { CView = av; CExpression = ae } = 
+let modelConstraint globals vprotos { CView = av; CExpression = ae } = 
     trial { 
-        let {Model.VProtos = vps} = model
-        let! v = modelViewDef vps av |> mapMessages (curry CEView av)
-        let! e = envOfConstraint model v |> mapMessages (curry CEView av)
+        let! v = modelViewDef vprotos av |> mapMessages (curry CEView av)
+        let! e = envOfConstraint globals v |> mapMessages (curry CEView av)
         let! c = match ae with
                  | Some dae -> modelBoolExpr e dae |> lift Some |> mapMessages (curry CEExpr dae)
                  | _ -> ok None
@@ -223,9 +222,9 @@ let modelConstraint model { CView = av; CExpression = ae } =
 
 /// Extracts the view constraints from a CollatedScript, turning each into a
 /// Model.Constraint.
-let modelConstraints model { Constraints = cs } = 
+let modelConstraints globals vprotos { Constraints = cs } = 
     cs
-    |> List.map (modelConstraint model)
+    |> List.map (modelConstraint globals vprotos)
     |> collect
 
 //
@@ -264,43 +263,23 @@ let primToAxiom cpair prim =
       Inner = prim }
     |> PAAxiom
 
-let (|GlobalVar|_|) {Model.Globals = gs} (lvalue : Var.LValue) = tryLookupVar gs lvalue
-let (|LocalVar|_|) {Model.Locals = ls} (lvalue : Var.LValue) = tryLookupVar ls lvalue
+let (|GlobalVar|_|) gs _ (lvalue : Var.LValue) = tryLookupVar gs lvalue
+let (|LocalVar|_|) _ ls (lvalue : Var.LValue) = tryLookupVar ls lvalue
 
-/// Tries to look up the type of a local variable in an axiom context.
-/// Returns a Chessie result; failures have AEBadLocal messages.
-let lookupLocalType model = 
-    function 
-    | LocalVar model ty -> ok ty
-    | lv -> 
-        lv
-        |> flattenLV
-        |> NotFound
-        |> curry AEBadLocal lv
-        |> fail
-
-/// Tries to look up the type of a global variable in an axiom context.
+/// Tries to look up the type of a variable in an environment.
 /// Returns a Chessie result; failures have AEBadGlobal messages.
-let lookupGlobalType model = 
-    function 
-    | GlobalVar model ty -> ok ty
-    | lv -> 
-        lv
+let lookupType env var = 
+    match (tryLookupVar env var) with
+    | Some ty -> ok ty
+    | _ ->
+        var
         |> flattenLV
         |> NotFound
-        |> curry AEBadGlobal lv
+        |> curry AEBadGlobal var
         |> fail
-
-/// Converts a Boolean expression to z3 within the given axiom context.
-/// Returns a Chessie result; failures have AEBadExpr messages.
-let axiomModelBoolExpr {Model.Locals = env} expr = modelBoolExpr env expr |> mapMessages (curry AEBadExpr expr)
-
-/// Converts an arithmetic expression to z3 within the given axiom context.
-/// Returns a Chessie result; failures have AEBadExpr messages.
-let axiomModelArithExpr {Model.Locals = env} expr = modelArithExpr env expr |> mapMessages (curry AEBadExpr expr)
 
 /// Converts a Boolean load to a Prim.
-let modelPrimOnBoolLoad model atom dest src mode = 
+let modelPrimOnBoolLoad globals atom dest src mode = 
     (* In a Boolean load, the destination must be LOCAL and Boolean;
      *                    the source must be a GLOBAL Boolean lvalue;
      *                    and the fetch mode must be Direct.
@@ -308,7 +287,7 @@ let modelPrimOnBoolLoad model atom dest src mode =
     match src with
     | LV s -> 
         trial { 
-            let! stype = lookupGlobalType model s
+            let! stype = lookupType globals s
             match stype, mode with
             | Type.Bool, Direct -> return BoolLoad(dest, s)
             | Type.Bool, Increment -> return! fail <| AEUnsupportedAtomic(atom, "cannot increment a Boolean global")
@@ -318,7 +297,7 @@ let modelPrimOnBoolLoad model atom dest src mode =
     | _ -> fail <| AEUnsupportedAtomic(atom, "loads must have a lvalue source")
 
 /// Converts an integer load to a Prim.
-let modelPrimOnIntLoad model atom dest src mode = 
+let modelPrimOnIntLoad globals atom dest src mode = 
     (* In a Boolean load, the destination must be LOCAL and Boolean;
      *                    the source must be a GLOBAL arithmetic lvalue;
      *                    and the fetch mode is unconstrained.
@@ -326,7 +305,7 @@ let modelPrimOnIntLoad model atom dest src mode =
     match src with
     | LV s -> 
         trial { 
-            let! stype = lookupGlobalType model s
+            let! stype = lookupType globals s
             match stype, mode with
             | Type.Int, _ -> return IntLoad(Some dest, s, mode)
             | _ -> return! fail <| AETypeMismatch(Type.Int, s, stype)
@@ -334,13 +313,13 @@ let modelPrimOnIntLoad model atom dest src mode =
     | _ -> fail <| AEUnsupportedAtomic(atom, "loads must have a lvalue source")
 
 /// Converts a Boolean store to a Prim.
-let modelPrimOnBoolStore model atom dest src mode = 
+let modelPrimOnBoolStore locals atom dest src mode = 
     (* In a Boolean store, the destination must be GLOBAL and Boolean;
      *                     the source must be LOCAL and Boolean;
      *                     and the fetch mode must be Direct.
      *)
     trial { 
-        let! sxp = axiomModelBoolExpr model src
+        let! sxp = modelBoolExpr locals src |> mapMessages (curry AEBadExpr src)
         match mode with
         | Direct -> return BoolStore(dest, sxp)
         | Increment -> return! fail <| AEUnsupportedAtomic(atom, "cannot increment an expression")
@@ -348,13 +327,13 @@ let modelPrimOnBoolStore model atom dest src mode =
     }
 
 /// Converts an integral store to a Prim.
-let modelPrimOnIntStore model atom dest src mode = 
+let modelPrimOnIntStore locals atom dest src mode = 
     (* In an integral store, the destination must be GLOBAL and integral;
      *                       the source must be LOCAL and integral;
      *                       and the fetch mode must be Direct.
      *)
     trial { 
-        let! sxp = axiomModelArithExpr model src
+        let! sxp = modelArithExpr locals src |> mapMessages (curry AEBadExpr src)
         match mode with
         | Direct -> return IntStore(dest, sxp)
         | Increment -> return! fail <| AEUnsupportedAtomic(atom, "cannot increment an expression")
@@ -370,7 +349,7 @@ let makeAxiomConditionPair env preAst postAst =
         (modelView env postAst |> mapMessages (curry AEBadView postAst))
 
 /// Converts an atomic action to a Prim.
-let rec modelPrimOnAtomic model atom = 
+let rec modelPrimOnAtomic gs ls atom = 
     match atom with
     | CompareAndSwap(dest, test, set) -> 
         (* In a CAS, the destination must be GLOBAL;
@@ -380,15 +359,15 @@ let rec modelPrimOnAtomic model atom =
          * The type of dest and test influences how we interpret set.
          *)
         trial { 
-            let! dtype = lookupGlobalType model dest
-            let! ttype = lookupLocalType model test
+            let! dtype = lookupType gs dest
+            let! ttype = lookupType ls test
             match dtype, ttype with
-            | Type.Bool, Type.Bool -> let! setz3 = axiomModelBoolExpr model set
-                                      // TODO(CaptainHayashi): test locality of c
-                                      return BoolCAS(dest, test, setz3)
-            | Type.Int, Type.Int -> let! setz3 = axiomModelArithExpr model set
-                                    // TODO(CaptainHayashi): test locality of c
-                                    return IntCAS(dest, test, setz3)
+            | Type.Bool, Type.Bool ->
+                let! setE = modelBoolExpr ls set |> mapMessages (curry AEBadExpr set)
+                return BoolCAS(dest, test, setE)
+            | Type.Int, Type.Int ->
+                let! setE = modelArithExpr ls set |> mapMessages (curry AEBadExpr set)
+                return IntCAS(dest, test, setE)
             | _ -> 
                 // Oops, we have a type error.
                 // Arbitrarily single out test as the cause of it.
@@ -402,10 +381,10 @@ let rec modelPrimOnAtomic model atom =
          * We figure this out by looking at dest.
          *)
         match dest with
-        | GlobalVar model (Var.Int _) -> modelPrimOnIntStore model atom dest src mode
-        | GlobalVar model (Var.Bool _) -> modelPrimOnBoolStore model atom dest src mode
-        | LocalVar model (Var.Int _) -> modelPrimOnIntLoad model atom dest src mode
-        | LocalVar model (Var.Bool _) -> modelPrimOnBoolLoad model atom dest src mode
+        | GlobalVar gs ls (Var.Int _) -> modelPrimOnIntStore ls atom dest src mode
+        | GlobalVar gs ls (Var.Bool _) -> modelPrimOnBoolStore ls atom dest src mode
+        | LocalVar gs ls (Var.Int _) -> modelPrimOnIntLoad gs atom dest src mode
+        | LocalVar gs ls (Var.Bool _) -> modelPrimOnBoolLoad gs atom dest src mode
         // TODO(CaptainHayashi): incorrect error here.
         | lv -> fail <| AEBadGlobal(lv, NotFound(flattenLV dest))
     | Postfix(operand, mode) -> 
@@ -414,7 +393,7 @@ let rec modelPrimOnAtomic model atom =
          * We don't allow the Direct fetch mode, as it is useless.
          *)
         trial { 
-            let! stype = lookupGlobalType model operand
+            let! stype = lookupType gs operand
             match mode, stype with
             | Direct, _ -> return! fail <| AEUnsupportedAtomic(atom, "<var>; has no effect; use <id>; or ; for no-ops")
             | Increment, Type.Bool -> return! fail <| AEUnsupportedAtomic(atom, "cannot increment a Boolean global")
@@ -422,68 +401,67 @@ let rec modelPrimOnAtomic model atom =
             | _, Type.Int -> return IntLoad(None, operand, mode)
         }
     | Id -> ok PrimId
-    | Assume e -> axiomModelBoolExpr model e |> lift PrimAssume
-
+    | Assume e ->
+        modelBoolExpr ls e |> mapMessages (curry AEBadExpr e) |> lift PrimAssume
 /// Converts a local variable assignment to a Prim.
-and modelPrimOnAssign model l e = 
+and modelPrimOnAssign locals l e = 
     (* We model assignments as IntLocalSet or BoolLocalSet, depending on the
      * type of l, which _must_ be in the locals set..
      * We thus also have to make sure that e is the correct type.
      *)
     trial { 
-        let! ltype = lookupLocalType model l
+        let! ltype = lookupType locals l
         match ltype with
-        | Type.Bool -> let! ez3 = axiomModelBoolExpr model e
+        | Type.Bool -> let! ez3 = modelBoolExpr locals e |> mapMessages (curry AEBadExpr e)
                        return BoolLocalSet(l, ez3)
-        | Type.Int -> let! ez3 = axiomModelArithExpr model e
+        | Type.Int -> let! ez3 = modelArithExpr locals e |> mapMessages (curry AEBadExpr e)
                       return IntLocalSet(l, ez3)
     }
 
 /// Creates a partially resolved axiom for an if-then-else.
-and modelAxiomOnITE model outcond i t f = 
+and modelAxiomOnITE gs ls outcond i t f = 
     (* An ITE is not fully resolved yet.  We:
      * 0) Convert the if-statement into a Z3 expression;
      * 1) Place the ITE in the axioms pile;
      * 2) Merge in the axioms from the ‘then’ block;
      * 3) Merge in the axioms from the ‘else’ block.
      *)
-    trial { let! iz3 = axiomModelBoolExpr model i
+    trial { let! iz3 = modelBoolExpr ls i |> mapMessages (curry AEBadExpr i)
             (* We need to calculate the recursive axioms first, because we
             * need the inner cpairs for each to store the ITE placeholder.
             *)
-            let! taxioms = modelAxiomsOnBlock model t
-            let! faxioms = modelAxiomsOnBlock model f
+            let! taxioms = modelAxiomsOnBlock gs ls t
+            let! faxioms = modelAxiomsOnBlock gs ls f
             return PAITE(iz3, outcond, taxioms, faxioms) }
 
 /// Converts a while or do-while to a partially-resolved axiom.
 /// Which is being modelled is determined by the isDo parameter.
 /// The list is enclosed in a Chessie result.
-and modelAxiomOnWhile isDo model cpair e b = 
+and modelAxiomOnWhile isDo gs ls cpair e b = 
     (* A while is also not fully resolved.
      * Similarly, we convert the condition, recursively find the axioms,
      * inject a placeholder, and add in the recursive axioms.
      *)
-    trial { let! ez3 = axiomModelBoolExpr model e
-            let! baxioms = modelAxiomsOnBlock model b
-            return PAWhile(isDo, ez3, cpair, baxioms) }
+    lift2 (fun eE bAxioms -> PAWhile(isDo, eE, cpair, bAxioms))
+          (modelBoolExpr ls e |> mapMessages (curry AEBadExpr e))
+          (modelAxiomsOnBlock gs ls b)
 
 /// Converts a command and its precondition and postcondition to a
 /// list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
-and modelAxiomOnCommand model cpair = 
+and modelAxiomOnCommand gs ls cpair = 
     function 
-    | Atomic a -> modelPrimOnAtomic model a |> lift (primToAxiom cpair)
-    | Assign(l, e) -> modelPrimOnAssign model l e |> lift (primToAxiom cpair)
-    | Skip -> modelPrimOnAtomic model Id |> lift (primToAxiom cpair)
-    | If(i, t, e) -> modelAxiomOnITE model cpair i t e
-    | While(e, b) -> modelAxiomOnWhile false model cpair e b
-    | DoWhile(b, e) -> modelAxiomOnWhile true model cpair e b
+    | Atomic a -> modelPrimOnAtomic gs ls a |> lift (primToAxiom cpair)
+    | Assign(l, e) -> modelPrimOnAssign ls l e |> lift (primToAxiom cpair)
+    | Skip -> modelPrimOnAtomic gs ls Id |> lift (primToAxiom cpair)
+    | If(i, t, e) -> modelAxiomOnITE gs ls cpair i t e
+    | While(e, b) -> modelAxiomOnWhile false gs ls cpair e b
+    | DoWhile(b, e) -> modelAxiomOnWhile true gs ls cpair e b
     | c -> fail <| AEUnsupportedCommand(c, "TODO: implement")
 
 /// Converts a block to a Conditioned list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
-and modelAxiomsOnBlock model block = 
-    let {Model.Locals = ls} = model
+and modelAxiomsOnBlock gs ls {Pre = bPre; Contents = bContents} = 
     (* We flip through every entry in the block, extracting its postcondition
      * and block.  At the same time, we hold onto the postcondition of the
      * _last_ entry (or the block precondition if we're at the first entry).
@@ -510,33 +488,30 @@ and modelAxiomsOnBlock model block =
                        // cause failure here.
                        let! axioms = axiomsR
                        let! cpair = makeAxiomConditionPair ls pre post
-                       let! axiom = modelAxiomOnCommand model cpair cmd
-                       return axiom :: axioms })) (block.Pre, ok []) block.Contents
+                       let! axiom = modelAxiomOnCommand gs ls cpair cmd
+                       return axiom :: axioms })) (bPre, ok []) bContents
     (* At the end of the above, we either have a list of axioms or an
      * error.  If we have the former, surround the axioms with the condition
      * pair derived from the precondition and postcondition of the block.
      *)
-    trial { 
-        let! xs = axioms
-        let! cpair = makeAxiomConditionPair ls block.Pre bpost
-        return { Conditions = cpair
-                 Inner = List.rev xs }
-    }
+    lift2 (fun cpair xs -> { Conditions = cpair; Inner = List.rev xs })
+          (makeAxiomConditionPair ls bPre bpost)
+          axioms
 
 /// Converts a method to a list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
-let modelAxiomsOnMethod model { Signature = {Name = m}; Body = b } = 
+let modelAxiomsOnMethod gs ls { Signature = {Name = m}; Body = b } = 
     // TODO(CaptainHayashi): method parameters
     b
-    |> modelAxiomsOnBlock model
+    |> modelAxiomsOnBlock gs ls
     |> lift (fun c -> c.Inner)
     |> mapMessages (curry MEAxiom m)
 
 /// Converts a list of methods to a list of partially resolved axioms.
 /// The list is enclosed in a Chessie result.
-let modelAxioms model methods = 
+let modelAxioms gs ls methods = 
     // TODO(CaptainHayashi): method parameters
-    List.map (modelAxiomsOnMethod model) methods
+    List.map (modelAxiomsOnMethod gs ls) methods
     |> collect
     |> lift List.concat
 
@@ -571,26 +546,12 @@ let model collated =
         // Make variable maps out of the global and local variable definitions.
         let! globals = makeVarMap collated.Globals |> mapMessages MEVar
         let! locals = makeVarMap collated.Locals |> mapMessages MEVar
-        (* We use a 'partial' model, with no defining views or
-            * axioms, in the creation of the constraints.
-            *)
-        let imod = 
-            { Globals = globals
-              Locals = locals
-              VProtos = vprotos
-              DefViews = ()
-              Axioms = () }
-        let! constraints = modelConstraints imod collated
-        (* Now add in the constraints.  This is a different type from
-         * imod, so it isn't convenient to use mutation or
-         * {imod with...}.  For now, we create an entirely new model.
-         *)
-        let pmod = 
+        let! constraints = modelConstraints globals vprotos collated
+        let! axioms = modelAxioms globals locals collated.Methods
+        return
             { Globals = globals
               Locals = locals
               VProtos = vprotos
               DefViews = constraints
-              Axioms = () }
-        let! axioms = modelAxioms pmod collated.Methods
-        return (withAxioms axioms pmod)
+              Axioms = axioms }
     }

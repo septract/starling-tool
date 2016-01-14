@@ -84,7 +84,7 @@ type ModellerTests() =
 
     /// Tests the atomic primitive modeller using the ticketed lock.
     [<TestCaseSource("AtomicPrims")>]
-    member x.``atomic actions are modelled correctly as prims`` a = modelPrimOnAtomic ticketLockModel a |> okOption
+    member x.``atomic actions are modelled correctly as prims`` a = modelPrimOnAtomic ticketLockModel.Globals ticketLockModel.Locals a |> okOption
 
     /// Tests for the command axiom modeller.
     /// These use the ticketed lock model.
@@ -105,7 +105,7 @@ type ModellerTests() =
     /// Tests the command modeller using the ticketed lock.
     [<TestCaseSource("CommandAxioms")>]
     member x.``commands are modelled correctly as axioms`` (cpair, c) =
-        modelAxiomOnCommand ticketLockModel cpair c |> okOption
+        modelAxiomOnCommand ticketLockModel.Globals ticketLockModel.Locals cpair c |> okOption
 
     /// Full case studies to model.
     static member Models =
