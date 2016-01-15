@@ -173,10 +173,10 @@ let hsfGuarMultiset dvs env marker { Cond = c; Item = ms } =
     // defining views is to be held true.
     match (findDefOfView dvs ms) with
         | Some _ ->
-            lift2 (fun cR msR -> ite cR msR True)
-                  (boolExpr c)
-                  (predOfMultiset env (marker >> ok) tryArithExpr ms)
-        | None -> ok True
+            Some (lift2 (fun cR msR -> ite cR msR True)
+                    (boolExpr c)
+                    (predOfMultiset env (marker >> ok) tryArithExpr ms))
+        | None -> None
 
 /// Constructs the body for a set of condition pair Horn clauses,
 /// given the defining views, preconditions and semantics clause.
@@ -184,7 +184,7 @@ let hsfConditionBody dvs env ps sem =
     let psH =
         ps
         |> Multiset.toSeq
-        |> Seq.map (hsfGuarMultiset dvs env aBefore)
+        |> Seq.choose (hsfGuarMultiset dvs env aBefore)
         |> collect
         |> lift List.ofSeq
 
@@ -196,7 +196,7 @@ let hsfConditionBody dvs env ps sem =
 /// command semantics, as well as a globals environment.
 let hsfConditionSingle dvs env q body =
     lift (fun qH -> { Head = qH ; Body = body })
-         (hsfGuarMultiset dvs env aAfter q)
+         (Option.get (hsfGuarMultiset dvs env aAfter q))
 
 /// Constructs a series of Horn clauses for a term.
 /// Takes the environment of active global variables.
