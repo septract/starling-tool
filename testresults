@@ -14,3 +14,4 @@
 ./Examples/WIP/peterson.cvf: 5 8 40 47 50 52 
 ./Examples/WIP/sppool.cvf: 
 ./Examples/WIP/tests.cvf: 
+./Examples/Pass/ticketLockNonAtomicRelease.cvf:
