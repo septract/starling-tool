@@ -31,6 +31,8 @@ type Request =
     | TermGen
     /// Stop at view reification.
     | Reify
+    /// Stop at term optimisation.
+    | Optimise
     /// Run the Z3 backend, with the given request.
     | Z3 of Z3.Backend.Request
     /// Run the HSF backend (experimental).
@@ -47,6 +49,7 @@ let requestMap =
                  ("frame", Request.Frame)
                  ("termgen", Request.TermGen)
                  ("reify", Request.Reify)
+                 ("optimise", Request.Optimise)
                  ("reifyZ3", Request.Z3 Z3.Backend.Request.Translate)
                  ("z3", Request.Z3 Z3.Backend.Request.Combine)
                  ("sat", Request.Z3 Z3.Backend.Request.Sat)
@@ -73,6 +76,8 @@ type Response =
     | TermGen of Model<Term>
     /// The result of view reification.
     | Reify of Model<ReTerm>
+    /// The result of term optimisation.
+    | Optimise of Model<ReTerm>
     /// The result of Z3 backend processing.
     | Z3 of Z3.Backend.Response
     /// The result of HSF processing.
@@ -88,6 +93,7 @@ let printResponse =
     | Frame {Axioms = f} -> Starling.Pretty.Misc.printFramedAxioms f
     | TermGen {Axioms = t} -> Starling.Pretty.Misc.printTerms t
     | Reify {Axioms = t} -> Starling.Pretty.Misc.printReTerms t
+    | Optimise {Axioms = t} -> Starling.Pretty.Misc.printReTerms t
     | Z3 z -> Z3.Backend.printResponse z
     | HSF h -> Starling.Pretty.Horn.printHorns h
 
@@ -143,6 +149,9 @@ let hsf = bind (Starling.HSF.hsfModel >> mapMessages Error.HSF)
 
 /// Shorthand for the Z3 stage.
 let z3 rq = bind (Starling.Z3.Backend.run rq >> mapMessages Error.Z3)
+
+/// Shorthand for the optimise stage.
+let optimise = lift Starling.Optimiser.optimise
 
 /// Shorthand for the reify stage.
 let reify = lift Starling.Reifier.reify
@@ -215,6 +224,16 @@ let runStarling =
         >> termGen
         >> reify
         >> lift Response.Reify
+    | Request.Optimise -> 
+        model
+        >> flatten
+        >> expand
+        >> semantics
+        >> frame
+        >> termGen
+        >> reify
+        >> optimise
+        >> lift Response.Reify
     | Request.Z3 rq -> 
         model
         >> flatten
@@ -223,6 +242,7 @@ let runStarling =
         >> frame
         >> termGen
         >> reify
+        >> optimise
         >> z3 rq
         >> lift Response.Z3
     | Request.HSF ->
@@ -233,6 +253,7 @@ let runStarling =
         >> frame
         >> termGen
         >> reify
+        >> optimise
         >> hsf
         >> lift Response.HSF
 
