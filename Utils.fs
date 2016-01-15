@@ -7,6 +7,14 @@ module Starling.Utils
 
 open Chessie.ErrorHandling
 
+/// Converts a list to an option that is Some iff it has exactly one item.
+let onlyOne s =
+    s
+    |> List.ofSeq
+    |> function
+       | [x] -> Some x
+       | _ -> None
+
 /// A predicate that always returns true.
 let always _ = true
 

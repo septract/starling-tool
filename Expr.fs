@@ -43,25 +43,6 @@ and BoolExpr =
     | BLt of ArithExpr * ArithExpr
     | BNot of BoolExpr
 
-/// Categorises arithmetic expressions into simple or compound.
-let (|SimpleArith|CompoundArith|) =
-    function
-    | AConst _ | AInt _ -> SimpleArith
-    | _ -> CompoundArith
-
-/// Categorises Boolean expressions into simple or compound.
-let (|SimpleBool|CompoundBool|) =
-    function
-    | BConst _ | BTrue | BFalse -> SimpleBool
-    | _ -> CompoundBool
-
-/// Categorises expressions into simple or compound.
-let (|SimpleExpr|CompoundExpr|) =
-    function
-    | BExpr (SimpleBool) -> SimpleExpr
-    | AExpr (SimpleArith) -> SimpleExpr
-    | _ -> CompoundExpr
-
 /// Returns true if the expression is definitely true.
 /// This is sound, but not complete.
 let isTrue =
@@ -287,12 +268,17 @@ and subVars vfun =
 /// Lifts a variable set to a marking predicate.
 let inSet st var = Set.contains var st
 
+/// Converts some function from constants to strings to a substitution function
+/// table.
+let toSubFun f =
+    {ASub = f >> AConst
+     BSub = f >> BConst}
+
 /// Lifts a marking function to a substitution function table.
 let liftMarker marker vpred =
     let gfun = function | Unmarked s when vpred s -> marker s
                         | x -> x
-    {ASub = (gfun >> AConst)
-     BSub = (gfun >> BConst)}
+    toSubFun gfun
 
 /// Marks all variables in the given environment with the given marking
 /// functions / pre-states for the given arithmetic expression.
@@ -400,3 +386,11 @@ let (|BBEq|_|) =
     function
     | BEq (BExpr x, BExpr y) -> Some (x, y)
     | _ -> None
+
+/// Partial pattern that matches a Boolean expression in terms of exactly one /
+/// constant.
+let rec (|ConstantBoolFunction|_|) = varsInBool >> onlyOne
+
+/// Partial pattern that matches a Boolean expression in terms of exactly one /
+/// constant.
+let rec (|ConstantArithFunction|_|) = varsInArith >> onlyOne
