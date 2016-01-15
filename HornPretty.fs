@@ -14,10 +14,10 @@ let printConst =
 
 /// Decides whether to put brackets over the expression emission x,
 /// given its expression as the second argument.
-let maybeBracket x = 
-    function 
-    | SimpleExpr -> x
-    | CompoundExpr -> parened x
+let maybeBracket xe x = 
+    match xe with 
+    | SimpleArith -> x
+    | CompoundArith -> parened x
 
 /// Emits an arithmetic expression in Datalog syntax.
 let rec printArith = 
@@ -40,7 +40,11 @@ let rec printArith =
     | AMul(x :: y :: xs) -> printArith (AMul((AMul [ x; y ]) :: xs))
     | ADiv(x, y) -> printBop "/" x y
 
-and printBop op x y = binop op (printArith x) (printArith y)
+and printBop op x y =
+    binop
+        op
+        (x |> printArith |> maybeBracket x)
+        (y |> printArith |> maybeBracket y)
 
 /// Emits a Horn literal.
 let rec printLiteral = 
