@@ -15,6 +15,9 @@ let onlyOne s =
        | [x] -> Some x
        | _ -> None
 
+/// Reverses a pair.
+let flipPair (x, y) = (y, x)
+
 /// A predicate that always returns true.
 let always _ = true
 

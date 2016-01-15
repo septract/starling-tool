@@ -31,6 +31,8 @@ type Request =
     | TermGen
     /// Stop at view reification.
     | Reify
+    /// Stop at global addition.
+    | GlobalAdd
     /// Stop at term optimisation.
     | Optimise
     /// Run the Z3 backend, with the given request.
@@ -49,6 +51,7 @@ let requestMap =
                  ("frame", Request.Frame)
                  ("termgen", Request.TermGen)
                  ("reify", Request.Reify)
+                 ("globalAdd", Request.GlobalAdd)
                  ("optimise", Request.Optimise)
                  ("reifyZ3", Request.Z3 Z3.Backend.Request.Translate)
                  ("z3", Request.Z3 Z3.Backend.Request.Combine)
@@ -76,6 +79,8 @@ type Response =
     | TermGen of Model<Term>
     /// The result of view reification.
     | Reify of Model<ReTerm>
+    /// The result of global addition.
+    | GlobalAdd of Model<ReTerm>
     /// The result of term optimisation.
     | Optimise of Model<ReTerm>
     /// The result of Z3 backend processing.
@@ -93,6 +98,7 @@ let printResponse =
     | Frame {Axioms = f} -> Starling.Pretty.Misc.printFramedAxioms f
     | TermGen {Axioms = t} -> Starling.Pretty.Misc.printTerms t
     | Reify {Axioms = t} -> Starling.Pretty.Misc.printReTerms t
+    | GlobalAdd {Axioms = t} -> Starling.Pretty.Misc.printReTerms t
     | Optimise {Axioms = t} -> Starling.Pretty.Misc.printReTerms t
     | Z3 z -> Z3.Backend.printResponse z
     | HSF h -> Starling.Pretty.Horn.printHorns h
@@ -145,6 +151,7 @@ let printResult pOk pBad =
                                              Starling.Pretty.Types.VSkip
                                              printWarns "Warnings" ws ]) (pBad >> printWarns "Errors")
 
+/// Shorthand for the HSF stage.
 let hsf = bind (Starling.HSF.hsfModel >> mapMessages Error.HSF)
 
 /// Shorthand for the Z3 stage.
@@ -152,6 +159,9 @@ let z3 rq = bind (Starling.Z3.Backend.run rq >> mapMessages Error.Z3)
 
 /// Shorthand for the optimise stage.
 let optimise = lift Starling.Optimiser.optimise
+
+/// Shorthand for the global-add stage.
+let globalAdd = lift Starling.GlobalAdder.globalAdd
 
 /// Shorthand for the reify stage.
 let reify = lift Starling.Reifier.reify
@@ -224,6 +234,16 @@ let runStarling =
         >> termGen
         >> reify
         >> lift Response.Reify
+    | Request.GlobalAdd -> 
+        model
+        >> flatten
+        >> expand
+        >> semantics
+        >> frame
+        >> termGen
+        >> reify
+        >> globalAdd
+        >> lift Response.GlobalAdd
     | Request.Optimise -> 
         model
         >> flatten

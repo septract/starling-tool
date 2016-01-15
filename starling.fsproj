@@ -63,6 +63,7 @@
     <Compile Include="Framer.fs" />
     <Compile Include="TermGen.fs" />
     <Compile Include="Reifier.fs" />
+    <Compile Include="GlobalAdder.fs" />
     <Compile Include="Optimiser.fs" />
     <Compile Include="Z3Utils.fs" />
     <Compile Include="Z3TranslatorErrors.fs" />
