@@ -8,6 +8,7 @@ open Starling.Collections
 open Starling.Expr
 open Starling.Model
 open Starling.Reifier
+open Starling.Optimiser
 open Starling.Errors.Z3.Translator
 
 /// Converts a Starling arithmetic expression to a Z3 ArithExpr.
@@ -89,7 +90,7 @@ let paramSubFun vsubs =
 /// Produces the reification of an unguarded view with regards to a
 /// given view definition.
 /// This corresponds to D in the theory.
-let instantiateDef ctx model marker uview {CViews = vs; CExpr = e} =
+let instantiateDef model marker uview {CViews = vs; CExpr = e} =
     // Make sure our view expression is actually definite.
     match e with
     | Some ee ->
@@ -113,44 +114,63 @@ let instantiateDef ctx model marker uview {CViews = vs; CExpr = e} =
          * and marker.
          *)
         |> boolMarkVars marker (inSet globals)
-        (* Finally, convert to Z3. *)
-        |> boolToZ3 ctx
         |> ok
     | _ -> IndefiniteConstraint vs |> fail
 
 /// Produces the reification of an unguarded view multiset.
 /// This corresponds to D^ in the theory.
-let reifyZUnguarded ctx model marker uview =
+let reifyZUnguarded model marker uview =
     match findDefOfView model.DefViews uview with
-    | Some vdef -> instantiateDef ctx model marker uview vdef
-    | None -> ctx.MkTrue() |> ok
+    | Some vdef -> instantiateDef model marker uview vdef
+    | None -> ok BTrue
 
-let reifyZSingle (ctx: Z3.Context) model marker {Cond = c; Item = i} =
-    reifyZUnguarded ctx model marker i
-    |> lift (fun zv -> ctx.MkImplies(boolToZ3 ctx c, zv))
+let reifyZSingle model marker {Cond = c; Item = i} =
+    reifyZUnguarded model marker i
+    |> lift (curry BImplies c)
 
-/// Z3-reifies an entire view application over the given defining views.
+/// Instantiates an entire view application over the given defining views.
 /// Marks the globals in the resulting expression with the given marker.
-let reifyZView (ctx: Z3.Context) model marker =
+let reifyZView model marker =
     Multiset.toSeq
-    >> Seq.map (reifyZSingle ctx model marker)
+    >> Seq.map (reifyZSingle model marker)
     >> collect
-    >> lift Seq.toArray
-    >> lift (fun xs -> ctx.MkAnd xs)
+    >> lift Seq.toList
+    >> lift BAnd
+
+/// Instantiates all of the views in a term over the given model.
+/// Also performs after-elimination, to echo the eliminateAfters optimisation in
+/// Optimiser.fs.
+let instantiateZTerm model term =
+    // TODO(CaptainHayashi): find a better solution to this
+    let sub = afterSubs (term.Inner |> findArithAfters |> Map.ofList)
+                        (term.Inner |> findBoolAfters |> Map.ofList)
+
+    lift2 (fun pre post ->
+           { Conditions = { Pre = boolSubVars sub pre; Post = boolSubVars sub post }
+             Inner = boolSubVars sub term.Inner })
+          (reifyZView model Before term.Conditions.Pre)
+          (reifyZView model After term.Conditions.Post)
 
 /// Z3-reifies all of the views in a term over the given defining model.
 let reifyZTerm ctx model term =
     (* This is also where we perform our final variable substitution,
      * converting all global variables to their pre-state in Pre, and
      * post-state in Post.
+     *
+     * Because of the after/before optimisation pass earlier, we have to be
+     * careful when we introduce new expressions and ensure we do
+     * after-elimination on those too.  So, what we do is expand the terms
+     * first, then re-optimise, then reify to Z3.
+     *
+     * TODO(CaptainHayashi): find a way of making optimisation details not leak
+     * out here.
      *)
-    lift2 (fun pre post ->
-           { Conditions = { Pre = pre; Post = post }
-             Inner = boolToZ3 ctx term.Inner })
-          (reifyZView ctx model Before term.Conditions.Pre)
-          (reifyZView ctx model After term.Conditions.Post)
+    lift (fun { Conditions = { Pre = pre; Post = post }; Inner = inner} ->
+              { Conditions = { Pre = boolToZ3 ctx pre; Post = boolToZ3 ctx post }
+                Inner = boolToZ3 ctx term.Inner })
+         (instantiateZTerm model term)
 
-/// Reifies all of the terms in a term list.
+    /// Reifies all of the terms in a term list.
 let reifyZ3 ctx model = tryMapAxioms (reifyZTerm ctx model) model
 
 /// Combines the components of a reified term.
