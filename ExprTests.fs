@@ -5,6 +5,31 @@ open Starling.Expr
 
 /// Tests for the expression types and functions.
 type ExprTests() =
+    /// Test cases for testing simple/compound arithmetic classification.
+    static member ArithSimpleCompound =
+        [ TestCaseData(AInt 1L)
+            .Returns(false)
+            .SetName("Classify '1' as simple")
+          TestCaseData(AAdd [AInt 1L; AInt 2L])
+            .Returns(true)
+            .SetName("Classify '1+2' as compound")
+          TestCaseData(ASub [AAdd [AInt 1L; AInt 2L]; AInt 3L])
+            .Returns(true)
+            .SetName("Classify '(1+2)-3' as compound")
+          TestCaseData(aBefore "foo")
+            .Returns(false)
+            .SetName("Classify 'foo!before' as simple")
+          TestCaseData(AMul [aBefore "foo"; aAfter "bar"])
+            .Returns(true)
+            .SetName("Classify 'foo!before * bar!after' as compound") ]
+
+    /// Tests whether the simple/compound arithmetic patterns work correctly
+    [<TestCaseSource("ArithSimpleCompound")>]
+    member x.``SimpleArith and CompoundArith classify properly`` e =
+        match e with
+        | SimpleArith -> false
+        | CompoundArith -> true
+
     /// Test cases for testing frame rewriting.
     static member FrameConstants =
         [ TestCaseData(["foo"; "foo"; "foo"])
