@@ -14,9 +14,15 @@ open Starling.Var
 let addGlobalsToFunc gs f =
     {f with Params = List.append gs f.Params}
 
-/// Adds the globals in gs to the argument list of a view.
-let addGlobalsToView gs =
-    Multiset.map (addGlobalsToFunc gs)
+/// Adds the globals in gs to a defining view's multiset.
+let addGlobalsToView gs view =
+    view
+    |> Multiset.toList
+    |> function
+        // Replace emp with an actual func definition.
+        | [] -> [addGlobalsToFunc gs {Name = "emp"; Params = []}]
+        | xs -> List.map (addGlobalsToFunc gs) xs
+    |> Multiset.ofList
 
 /// Adds the globals in gs to the argument list of a guarded view.
 let addGlobalsToGuarded gs a =
@@ -36,10 +42,6 @@ let addGlobalsToTerm gs { Conditions = { Pre = p ; Post = q } ; Inner = r } =
 (*
  * View definitions
  *)
-
-/// Adds the globals in gs to a defining view's multiset.
-let addGlobalsToCViews gs =
-    Multiset.map (addGlobalsToFunc gs) 
 
 /// Adds the globals in gs to a defining view.
 let addGlobalsToConstraint gs con =

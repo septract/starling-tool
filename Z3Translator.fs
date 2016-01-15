@@ -90,7 +90,7 @@ let paramSubFun vsubs =
 /// Produces the reification of an unguarded view with regards to a
 /// given view definition.
 /// This corresponds to D in the theory.
-let instantiateDef model marker uview {CViews = vs; CExpr = e} =
+let instantiateDef model uview {CViews = vs; CExpr = e} =
     // Make sure our view expression is actually definite.
     match e with
     | Some ee ->
@@ -99,57 +99,45 @@ let instantiateDef model marker uview {CViews = vs; CExpr = e} =
          *)
         let vsubs = generateParamSubs vs uview
 
-        // And the list of globals:
-        let globals = model.Globals |> Map.toSeq |> Seq.map fst |> Set.ofSeq
-
         ee
-        (* We now do two substitution runs on the expression.
-         * First, we find all the changed parameters and substitute their
+        (* We find all the changed parameters and substitute their
          * expansions.  We assume accidental capturing is impossible due to
          * disjointness checks on viewdefs vs. local variables, and freshness on
          * frame instantiations.
+         *
+         * Note that the global-add stage means that the expansions include the
+         * global variables, so we need not treat them specially.
          *)
         |> boolSubVars (paramSubFun vsubs)
-        (* Then, we perform the global pre-or-post-state translation using model
-         * and marker.
-         *)
-        |> boolMarkVars marker (inSet globals)
         |> ok
     | _ -> IndefiniteConstraint vs |> fail
 
 /// Produces the reification of an unguarded view multiset.
 /// This corresponds to D^ in the theory.
-let reifyZUnguarded model marker uview =
+let reifyZUnguarded model uview =
     match findDefOfView model.DefViews uview with
-    | Some vdef -> instantiateDef model marker uview vdef
+    | Some vdef -> instantiateDef model uview vdef
     | None -> ok BTrue
 
-let reifyZSingle model marker {Cond = c; Item = i} =
-    reifyZUnguarded model marker i
+let reifyZSingle model {Cond = c; Item = i} =
+    reifyZUnguarded model i
     |> lift (curry BImplies c)
 
 /// Instantiates an entire view application over the given defining views.
-/// Marks the globals in the resulting expression with the given marker.
-let reifyZView model marker =
+let reifyZView model =
     Multiset.toSeq
-    >> Seq.map (reifyZSingle model marker)
+    >> Seq.map (reifyZSingle model )
     >> collect
     >> lift Seq.toList
     >> lift BAnd
 
 /// Instantiates all of the views in a term over the given model.
-/// Also performs after-elimination, to echo the eliminateAfters optimisation in
-/// Optimiser.fs.
 let instantiateZTerm model term =
-    // TODO(CaptainHayashi): find a better solution to this
-    let sub = afterSubs (term.Inner |> findArithAfters |> Map.ofList)
-                        (term.Inner |> findBoolAfters |> Map.ofList)
-
     lift2 (fun pre post ->
-           { Conditions = { Pre = boolSubVars sub pre; Post = boolSubVars sub post }
-             Inner = boolSubVars sub term.Inner })
-          (reifyZView model Before term.Conditions.Pre)
-          (reifyZView model After term.Conditions.Post)
+           { Conditions = { Pre = pre; Post = post }
+             Inner = term.Inner })
+          (reifyZView model term.Conditions.Pre)
+          (reifyZView model term.Conditions.Post)
 
 /// Z3-reifies all of the views in a term over the given defining model.
 let reifyZTerm ctx model term =

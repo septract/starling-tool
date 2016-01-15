@@ -89,4 +89,19 @@ type OptimiserTests() =
     member x.``Discovery of Boolean before-after pairs should operate correctly`` b =
         b |> findBoolAfters |> Map.ofList
 
+    /// Test cases for substituting afters in a func.
+    static member AfterFuncs = 
+        [ TestCaseData({ Name = "foo"
+                         Params = [ AExpr (aAfter "serving")
+                                    BExpr (bAfter "flag") ] })
+            .Returns({ Name = "foo"
+                       Params = [ AExpr (AAdd [aBefore "serving"; AInt 1L])
+                                  BExpr (BNot (bBefore "flag")) ] })
+            .SetName("Substitute afters in a func with all-after parameters") ]
+
+    /// Test substitution of afters in funcs.
+    [<TestCaseSource("AfterFuncs")>]
+    member x.``Afters in the params of funcs should be substituted correctly`` f =
+        let sub = afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs
+        f |> subAftersInFunc sub
 

@@ -98,7 +98,7 @@ let printResponse =
     | Frame {Axioms = f} -> Starling.Pretty.Misc.printFramedAxioms f
     | TermGen {Axioms = t} -> Starling.Pretty.Misc.printTerms t
     | Reify {Axioms = t} -> Starling.Pretty.Misc.printReTerms t
-    | GlobalAdd {Axioms = t} -> Starling.Pretty.Misc.printReTerms t
+    | GlobalAdd m -> Starling.Pretty.Misc.printModel Starling.Pretty.Misc.printReTerm m
     | Optimise {Axioms = t} -> Starling.Pretty.Misc.printReTerms t
     | Z3 z -> Z3.Backend.printResponse z
     | HSF h -> Starling.Pretty.Horn.printHorns h
@@ -252,6 +252,7 @@ let runStarling =
         >> frame
         >> termGen
         >> reify
+        >> globalAdd
         >> optimise
         >> lift Response.Reify
     | Request.Z3 rq -> 
@@ -262,6 +263,7 @@ let runStarling =
         >> frame
         >> termGen
         >> reify
+        >> globalAdd
         >> optimise
         >> z3 rq
         >> lift Response.Z3
@@ -274,6 +276,7 @@ let runStarling =
         >> termGen
         >> reify
         >> optimise
+        >> globalAdd
         >> hsf
         >> lift Response.HSF
 
