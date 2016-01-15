@@ -66,11 +66,32 @@ let tryArithExpr =
  *)
 
 /// Extracts a sequence all of the parameters in a multiset in order.
-let paramsInMultiset ms =
-    ms
-    |> Multiset.toSeq
-    |> Seq.map (fun v -> v.Params)
-    |> Seq.concat
+/// Takes the number of globals, as added to each multiset func by GlobalAdd, to
+/// remove for each item past the first.
+let paramsInMultiset nglobals ms =
+    (* Why is this sound?
+     * Because GlobalAdd always adds in the globals list at the front of each
+     * multiset, and it will contain all of the globals in env.  Thus, if the
+     * env is n items, the first n parameters are surplus to requirements.
+     *
+     * TODO(CaptainHayashi): find a more elegant solution to the problem of
+     * collating the global parameters on views.
+     *)
+    let mseq = ms |> Multiset.toSeq
+
+    let globals =
+        mseq
+        |> Seq.truncate 1
+        |> Seq.map (fun v -> v.Params |> Seq.take nglobals)
+        |> Seq.concat
+
+    let rest =
+        mseq
+        |> Seq.map (fun v -> v.Params |> Seq.skip nglobals)
+        |> Seq.concat
+
+    Seq.append globals rest
+
 
 /// Ensures a param in a viewdef multiset is arithmetic.
 let ensureArith =
@@ -83,22 +104,16 @@ let ensureArith =
  *)
 
 /// Constructs a pred from a multiset, given a set of active globals,
-/// some transformer for the globals to expressions, and some transformer
-/// from the parameters to expressions.
-let predOfMultiset env envT parT ms =
-    lift2 (fun envR parR ->
-           Pred { Name = predNameOfMultiset ms
-                  Params = List.append envR parR })
-          (env |> Set.toSeq |> Seq.map envT |> collect)
-          (ms |> paramsInMultiset |> Seq.map parT |> collect)
+/// and some transformer from the parameters to expressions.
+let predOfMultiset env parT ms =
+    lift (fun parR ->
+          Pred { Name = predNameOfMultiset ms; Params = parR })
+         (ms |> paramsInMultiset (Set.count env) |> Seq.map parT |> collect)
 
 /// Constructs the right-hand side of a constraint in HSF.
 /// The set of active globals should be passed as env.
 let bodyOfConstraint env vs =
-    predOfMultiset env
-                   (aUnmarked >> ok)
-                   (ensureArith)
-                   vs
+    predOfMultiset env ensureArith vs
 
 /// Constructs a full constraint in HSF.
 /// The set of active globals should be passed as env.
@@ -128,22 +143,32 @@ let hsfModelViewDefs { Globals = gs; DefViews = vds } =
 /// Takes the environment of active global variables.
 let hsfModelVariables {Globals = gs} =
     let env = gs |> Map.toSeq |> Seq.map fst |> Set.ofSeq
-    
-    let vpreds =
+
+    let vpars =
         gs
         |> Map.toSeq
-        |> Seq.choose
+        |> Seq.map
             (fun (name, ty) ->
-             // TODO(CaptainHayashi): actually get these initialisations from
-             // somewhere instead of assuming everything to be 0L.
              match ty with
-             | Type.Int -> Eq (aUnmarked name, AInt 0L) |> ok |> Some
-             | _ -> NonArithVar (ty, name) |> fail |> Some)
+             | Type.Int -> aUnmarked name |> ok
+             | _ -> NonArithVar (ty, name) |> fail)
         |> collect
 
-    lift2 (fun hd vp -> { Head = hd; Body = vp } )
-          (bodyOfConstraint env (Multiset.empty ()))
-          vpreds
+    let head = 
+        bind
+            (fun vp -> predOfMultiset
+                           env
+                           ok
+                           (Multiset.singleton { Name = "emp"; Params = vp }))
+            vpars
+
+
+    // TODO(CaptainHayashi): actually get these initialisations from
+    // somewhere instead of assuming everything to be 0L.
+    lift2 (fun hd vp -> { Head = hd
+                          Body = List.map (fun n -> Eq (n, AInt 0L)) vp })
+          head
+          vpars
 
 (*
  * Terms
@@ -175,7 +200,7 @@ let hsfGuarMultiset dvs env marker { Cond = c; Item = ms } =
         | Some _ ->
             Some (lift2 (fun cR msR -> ite cR msR True)
                     (boolExpr c)
-                    (predOfMultiset env (marker >> ok) tryArithExpr ms))
+                    (predOfMultiset env tryArithExpr ms))
         | None -> None
 
 /// Constructs the body for a set of condition pair Horn clauses,

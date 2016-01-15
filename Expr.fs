@@ -55,6 +55,14 @@ let isFalse =
     function | BFalse -> true
              | _ -> false
 
+/// Extracts the name from a Starling constant.
+let stripMark =
+    function
+    | Unmarked s -> s
+    | Before s -> s
+    | After s -> s
+    | Frame (i, s) -> s
+
 /// Converts a Starling constant into a string.
 let constToString =
     function

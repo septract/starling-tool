@@ -275,8 +275,8 @@ let runStarling =
         >> frame
         >> termGen
         >> reify
-        >> optimise
         >> globalAdd
+        >> optimise
         >> hsf
         >> lift Response.HSF
 
