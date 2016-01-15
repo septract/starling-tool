@@ -365,3 +365,38 @@ and varsIn =
     function
     | AExpr a -> varsInArith a
     | BExpr b -> varsInBool b
+
+(*
+ * Active patterns
+ *)
+
+/// Categorises arithmetic expressions into simple or compound.
+let (|SimpleArith|CompoundArith|) =
+    function
+    | AConst _ | AInt _ -> SimpleArith
+    | _ -> CompoundArith
+
+/// Categorises Boolean expressions into simple or compound.
+let (|SimpleBool|CompoundBool|) =
+    function
+    | BConst _ | BTrue | BFalse -> SimpleBool
+    | _ -> CompoundBool
+
+/// Categorises expressions into simple or compound.
+let (|SimpleExpr|CompoundExpr|) =
+    function
+    | BExpr (SimpleBool) -> SimpleExpr
+    | AExpr (SimpleArith) -> SimpleExpr
+    | _ -> CompoundExpr
+
+/// Partial pattern that matches a Boolean equality on arithmetic expressions.
+let (|BAEq|_|) =
+    function
+    | BEq (AExpr x, AExpr y) -> Some (x, y)
+    | _ -> None
+
+/// Partial pattern that matches a Boolean equality on Boolean expressions.
+let (|BBEq|_|) =
+    function
+    | BEq (BExpr x, BExpr y) -> Some (x, y)
+    | _ -> None
