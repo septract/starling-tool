@@ -65,6 +65,40 @@ let eliminateAfters { WPre = p ; Goal = q ; Cmd = r } =
       Cmd = boolSubVars sub r }
 
 (*
+ * Guard reduction
+ *)
+
+/// Return all known facts inside a conjunctive Boolean expression.
+let rec facts =
+    function
+    | BAnd xs -> concatMap facts xs
+    | x -> [x]
+
+/// Reduce a Boolean expression, given some known facts.
+let rec reduce fs =
+    function 
+    | x when Set.contains x fs -> BTrue
+    | x when Set.contains (mkNot x) fs -> BFalse
+    | BAnd xs -> mkAnd (List.map (reduce fs) xs)
+    | BOr xs -> mkOr (List.map (reduce fs) xs)
+    | BBEq (x, y) -> mkEq (reduce fs x |> BExpr) (reduce fs y |> BExpr)
+    | BNot x -> mkNot (reduce fs x)
+    | x -> x
+
+/// Reduce a guard, given some known facts.
+let reduceGuarded fs {Cond = c; Item = i} =
+    {Cond = reduce fs c; Item = i} 
+
+/// Reduce a GView, given some known facts.
+let reduceGView fs =
+    Multiset.map (reduceGuarded fs)
+
+/// Reduce the guards in a Term.
+let guardReduce {Cmd = c; WPre = w; Goal = g} =
+    let fs = c |> facts |> Set.ofList
+    {Cmd = c; WPre = reduceGView fs w; Goal = g}
+
+(*
  * Frontend
  *)
 
@@ -73,6 +107,7 @@ let eliminateAfters { WPre = p ; Goal = q ; Cmd = r } =
 let optimiseTerm =
     // TODO(CaptainHayashi): add optimising passes.
     eliminateAfters
+    >> guardReduce
 
 /// Optimises a model's terms.
 let optimise : Model<STerm<GView, VFunc>, DFunc> -> Model<STerm<GView, VFunc>, DFunc> =
