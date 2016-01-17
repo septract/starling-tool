@@ -208,16 +208,17 @@ let ite i t e =
     | False -> e
     | _ -> ITE(i,t,e)
 
-/// Constructs a Horn literal for a guarded view multiset.
-let hsfGuarMultiset dvs env { Cond = c; Item = ms } =
+/// Constructs a Horn literal for a View.
+let hsfView dvs env ms =
     // We check the defining views here, because anything not in the
     // defining views is to be held true.
-    match (findDefOfView dvs ms) with
-        | Some _ ->
-            Some (lift2 (fun cR msR -> ite cR msR True)
-                    (boolExpr c)
-                    (predOfMultiset env tryArithExpr ms))
-        | None -> None
+    findDefOfView dvs ms
+    |> Option.map (fun _ -> predOfMultiset env tryArithExpr ms)
+
+/// Constructs a Horn literal for a GView.
+let hsfGView dvs env { Cond = c; Item = ms } =
+    hsfView dvs env ms
+    |> Option.map (lift2 (fun cR msR -> ite cR msR True) (boolExpr c))
 
 /// Constructs the body for a set of condition pair Horn clauses,
 /// given the defining views, preconditions and semantics clause.
@@ -225,7 +226,7 @@ let hsfConditionBody dvs env ps sem =
     let psH =
         ps
         |> Multiset.toSeq
-        |> Seq.choose (hsfGuarMultiset dvs env)
+        |> Seq.choose (hsfGView dvs env)
         |> collect
         |> lift List.ofSeq
 
@@ -237,30 +238,24 @@ let hsfConditionBody dvs env ps sem =
 /// command semantics, as well as a globals environment.
 let hsfConditionSingle dvs env q body =
     lift (fun qH -> { Head = qH ; Body = body })
-         (Option.get (hsfGuarMultiset dvs env q))
+         (Option.get (hsfView dvs env q))
 
 /// Constructs a series of Horn clauses for a term.
 /// Takes the environment of active global variables.
 let hsfTerm dvs env {Cmd = c; WPre = w ; Goal = g} =
     let body = hsfConditionBody dvs env w c
-
-    // Each goal generates a new clause.
-    g
-    |> Multiset.toSeq
-    |> Seq.map (fun q -> bind (hsfConditionSingle dvs env q) body) 
-    |> collect
+    bind (hsfConditionSingle dvs env g) body
 
 /// Constructs a set of Horn clauses for all terms associated with a model.
 let hsfModelTerms gs dvs =
     Seq.map (hsfTerm dvs gs)
     >> collect
-    >> lift Seq.concat
 
 /// Constructs a HSF script for a model.
 let hsfModel { Globals = gs; ViewDefs = dvs; Axioms = xs } =
     trial {
-        let! vs = gs |> hsfModelVariables |> lift Seq.singleton
-        let! ds = hsfModelViewDefs gs dvs |> lift Set.toSeq
+        let! vs = gs |> hsfModelVariables
+        let! ds = hsfModelViewDefs gs dvs |> lift Set.toList
         let! xs = hsfModelTerms gs dvs xs
-        return Seq.concat [vs; ds; xs] |> List.ofSeq
+        return vs :: List.append ds xs
     }

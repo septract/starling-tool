@@ -126,17 +126,17 @@ let reifyZSingle model {Cond = c; Item = i} =
 /// Instantiates an entire view application over the given defining views.
 let reifyZView model =
     Multiset.toSeq
-    >> Seq.map (reifyZSingle model )
+    >> Seq.map (reifyZSingle model)
     >> collect
     >> lift Seq.toList
     >> lift BAnd
 
 /// Instantiates all of the views in a term over the given model.
 let instantiateZTerm model =
-    tryMapTerm ok (reifyZView model) (reifyZView model)
+    tryMapTerm ok (reifyZView model) (reifyZUnguarded model)
 
 /// Z3-reifies all of the views in a term over the given defining model.
-let reifyZTerm ctx model : STerm<ViewSet> -> Result<ZTerm, Error> =
+let reifyZTerm ctx model : STerm<ViewSet, View> -> Result<ZTerm, Error> =
     instantiateZTerm model
     >> lift (mapTerm (boolToZ3 ctx) (boolToZ3 ctx) (boolToZ3 ctx))
 

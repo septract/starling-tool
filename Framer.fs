@@ -16,10 +16,8 @@ let instantiateParam fg (ty, name) =
 /// Instantiates a defining view into a view expression.
 let instantiateFrame fg dvs = 
     dvs |> Multiset.map (fun { Name = n; Params = ps } -> 
-               { Cond = BTrue
-                 Item = 
-                     { Name = n
-                       Params = List.map (instantiateParam fg) ps } })
+               { Name = n
+                 Params = List.map (instantiateParam fg) ps })
 
 /// Converts an axiom into a list of framed axioms, by combining it with the
 /// defining views of a model.

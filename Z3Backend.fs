@@ -47,7 +47,7 @@ type Error =
 /// Pretty-prints a response.
 let printResponse =
     function
-    | Response.Translate {Axioms = t} -> printNumHeaderedList (printTerm printZ3Exp printZ3Exp) t
+    | Response.Translate {Axioms = t} -> printNumHeaderedList (printTerm printZ3Exp printZ3Exp printZ3Exp) t
     | Response.Combine {Axioms = z} -> printNumHeaderedList printZ3Exp z
     | Response.Sat s -> Starling.Pretty.Misc.printSats s
 

@@ -180,7 +180,7 @@ type FramedAxiom =
     { /// The axiom to be checked for soundness under Frame.
       Axiom : SAxiom<GView>
       /// The view to be preserved by Axiom.
-      Frame : GView }
+      Frame : View }
 
 
 (*
@@ -195,17 +195,17 @@ type FramedAxiom =
 ///   semantics: Axioms are literal Hoare triples {P}C{Q}, whereas Terms are
 ///   some form of the actual Views axiom soundness check we intend to prove.
 /// </remarks>
-type Term<'cmd, 'view> =
+type Term<'cmd, 'wpre, 'goal> =
     { /// The command relation of the Term.
       Cmd : 'cmd
       /// The weakest precondition of the Term.
-      WPre : 'view
+      WPre : 'wpre
       /// The intended goal of the Term, ie the frame to preserve.
-      Goal : 'view
+      Goal : 'goal
     }
 
 /// A term over semantic-relation commands.
-type STerm<'view> = Term<BoolExpr, 'view>
+type STerm<'wpre, 'goal> = Term<BoolExpr, 'wpre, 'goal>
 
 
 /// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,

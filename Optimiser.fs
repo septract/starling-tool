@@ -23,10 +23,6 @@ let subAftersInGuarded sub {Cond = c; Item = ms} =
     {Cond = boolSubVars sub c
      Item = subAftersInView sub ms}
 
-/// Substitutes afters in a view assertion.
-let subAftersInAssertion sub =
-    Multiset.map (subAftersInGuarded sub)
-
 /// Finds all instances of the pattern `x!after = f(x!before)` in a Boolean
 /// expression that is either an equality or conjunction, and where x is arithmetic.
 let rec findArithAfters =
@@ -65,8 +61,8 @@ let eliminateAfters { WPre = p ; Goal = q ; Cmd = r } =
     let sub = afterSubs (r |> findArithAfters |> Map.ofList)
                         (r |> findBoolAfters |> Map.ofList)
                   
-    { WPre = subAftersInAssertion sub p
-      Goal = subAftersInAssertion sub q
+    { WPre = Multiset.map (subAftersInGuarded sub) p
+      Goal = subAftersInView sub q
       (* This step will create a tautology f(x!before) = f(x!before).
        * We assume we can eliminate it later.
        *)
@@ -83,5 +79,5 @@ let optimiseTerm =
     eliminateAfters
 
 /// Optimises a model's terms.
-let optimise : Model<STerm<ViewSet>> -> Model<STerm<ViewSet>> =
+let optimise : Model<STerm<ViewSet, View>> -> Model<STerm<ViewSet, View>> =
     mapAxioms optimiseTerm

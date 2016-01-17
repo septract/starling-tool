@@ -243,7 +243,7 @@ let rec printPartAxiom =
 /// Pretty-prints a framed axiom.
 let printFramedAxiom {Axiom = a; Frame = f} = 
     vsep [ curry Header "Axiom" <| Indent(printSAxiom printGView a)
-           curry Header "Frame" <| Indent(printGView f) ]
+           curry Header "Frame" <| Indent(printView f) ]
 
 
 (*
@@ -251,13 +251,13 @@ let printFramedAxiom {Axiom = a; Frame = f} =
  *)
 
 /// Pretty-prints a term, given printers for its commands and views.
-let printTerm pCmd pView {Cmd = c; WPre = w; Goal = g} = 
+let printTerm pCmd pWPre pGoal {Cmd = c; WPre = w; Goal = g} = 
     vsep [ curry Header "Command" <| Indent(pCmd c)
-           curry Header "W/Prec" <| Indent(pView w)
-           curry Header "Goal" <| Indent(pView g) ]
+           curry Header "W/Prec" <| Indent(pWPre w)
+           curry Header "Goal" <| Indent(pGoal g) ]
 
 /// Pretty-prints an STerm.
-let printSTerm pView = printTerm printBoolExpr pView
+let printSTerm pWPre pGoal = printTerm printBoolExpr pWPre pGoal
 
 (*
  * Models

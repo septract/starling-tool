@@ -57,11 +57,10 @@ let reifyView vap =
 /// Reifies all of the views in a term.
 let reifyTerm = 
     (* For the goal, we need only calculate D(r), not |_r_|.
-     * This means we need only convert the view, and need not
-     * build the powerset, of the goal.
+     * This means we need not do anything with the goal.
      *)
-    mapTerm id reifyView (reifySingle >> Multiset.singleton)
+    mapTerm id reifyView id
 
 /// Reifies all of the terms in a model's axiom list.
-let reify : Model<STerm<GView>> -> Model<STerm<ViewSet>> =
+let reify : Model<STerm<GView, View>> -> Model<STerm<ViewSet, View>> =
     mapAxioms reifyTerm
