@@ -11,8 +11,8 @@ open Starling.Pretty.Misc
 
 /// Command-line flags used in the Starling executable.
 type Options = 
-    { [<Option('h', HelpText = "If stopped at an intermediate stage, print the result for human consumption.")>]
-      human : bool
+    { [<Option('r', HelpText = "Dump results in raw format instead of pretty-printing.")>]
+      raw : bool
       [<Option('s', HelpText = "The stage at which Starling should stop and output.")>]
       stage : string option
       [<Value(0, MetaName = "input", HelpText = "The file to load (omit, or supply -, for standard input).")>]
@@ -286,7 +286,7 @@ let runStarling =
 /// Runs Starling with the given options, and outputs the results.
 let mainWithOptions opts = 
     let input = opts.input
-    let human = opts.human
+    let raw = opts.raw
     
     let starlingR = 
         match (requestFromStage opts.stage) with
@@ -294,9 +294,8 @@ let mainWithOptions opts =
         | None -> fail Error.BadStage
     
     let pfn = 
-        if human then printResponse
-        else (sprintf "%A" >> Starling.Pretty.Types.String)
-    
+        if raw then (sprintf "%A" >> Starling.Pretty.Types.String)
+               else printResponse   
     printResult pfn (List.map printError) starlingR
     |> Starling.Pretty.Types.print
     |> printfn "%s"
