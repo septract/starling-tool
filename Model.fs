@@ -1,3 +1,6 @@
+/// <summary>
+///   Module of model types and functions.
+/// </summary>
 module Starling.Model
 
 open Chessie.ErrorHandling
@@ -82,7 +85,7 @@ type CView = Multiset<CFunc>
 /// <summary>
 ///   A guarded view.
 /// </summary>
-/// </remarks>
+/// <remarks>
 ///   These are the most common form of view in Starling internally,
 ///   although theoretically speaking they are equivalent to Views
 ///   with the guards lifting to proof case splits.

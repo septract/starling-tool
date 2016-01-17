@@ -5,16 +5,33 @@ VisualStudioVersion = 14.0.24720.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "starling", "starling.fsproj", "{FB248950-5C1B-4AE6-B7AE-E167C623D60F}"
 EndProject
+Project("{7CF6DF6D-3B04-46F8-A40B-537D21BCA0B4}") = "starling-doc", "starling-doc\starling-doc.shfbproj", "{5B82D5AB-E14A-4D05-BB88-A49D57095862}"
+	ProjectSection(ProjectDependencies) = postProject
+		{FB248950-5C1B-4AE6-B7AE-E167C623D60F} = {FB248950-5C1B-4AE6-B7AE-E167C623D60F}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
 		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FB248950-5C1B-4AE6-B7AE-E167C623D60F}.Debug|Any CPU.ActiveCfg = Debug|x86
 		{FB248950-5C1B-4AE6-B7AE-E167C623D60F}.Debug|x86.ActiveCfg = Debug|x86
 		{FB248950-5C1B-4AE6-B7AE-E167C623D60F}.Debug|x86.Build.0 = Debug|x86
+		{FB248950-5C1B-4AE6-B7AE-E167C623D60F}.Release|Any CPU.ActiveCfg = Release|x86
 		{FB248950-5C1B-4AE6-B7AE-E167C623D60F}.Release|x86.ActiveCfg = Release|x86
 		{FB248950-5C1B-4AE6-B7AE-E167C623D60F}.Release|x86.Build.0 = Release|x86
+		{5B82D5AB-E14A-4D05-BB88-A49D57095862}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5B82D5AB-E14A-4D05-BB88-A49D57095862}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5B82D5AB-E14A-4D05-BB88-A49D57095862}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{5B82D5AB-E14A-4D05-BB88-A49D57095862}.Debug|x86.Build.0 = Debug|Any CPU
+		{5B82D5AB-E14A-4D05-BB88-A49D57095862}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5B82D5AB-E14A-4D05-BB88-A49D57095862}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5B82D5AB-E14A-4D05-BB88-A49D57095862}.Release|x86.ActiveCfg = Release|Any CPU
+		{5B82D5AB-E14A-4D05-BB88-A49D57095862}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

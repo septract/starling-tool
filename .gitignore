@@ -3,3 +3,5 @@
 /packages
 /.vs
 *.suo
+*.log
+/starling-doc/Help

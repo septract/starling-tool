@@ -1,21 +1,45 @@
 /// Collections used in Starling.
 module Starling.Collections
 
-/// A function-like construct.
-type Func<'a> =
-    { Name: string
-      Params: 'a list }
+/// <summary>
+///   A function-like construct.
+/// </summary>
+/// <remarks>
+///   <para>
+///     A Func is a combination of a string name and list of parameters.
+///     It generically represents any pattern <c>Name(p1, p2, .., pn)</c>
+///     in Starling.
+///   </para>
+///   <para>
+///     Examples of Func uses in Starling include function signatures and
+///     calls, components of <see cref="T:Starling.Model">views</see>, and
+///     Horn clause predicates.
+///   </para>
+/// </remarks>
+/// <typeparam name="param">The type of parameters in the Func.</typeparam>
+type Func<'param> = 
+    { /// The name of a Func.
+      Name : string
+      /// The parameters of a Func.
+      Params : 'param list }
 
-/// A multiset, or ordered list.
-type Multiset<'a> = 
-    | MSet of 'a list
+/// <summary>
+///   A multiset, or ordered list.
+/// </summary>
+/// <typeparam name="item">The type of items in the Multiset.</typeparam>
+type Multiset<'item> = 
+    | MSet of 'item list
 
+/// <summary>
+///   Operations on multisets.
+/// </summary>
+/// <seealso cref="T:Starling.Collections.Multiset`1" />
 module Multiset = 
     (*
      * Construction
      *)
 
-    /// Creates a new empty multiset.
+    /// Creates a new, empty multiset.
     let empty() = MSet []
     
     /// Creates a new singleton multiset.
@@ -58,13 +82,36 @@ module Multiset =
      * Operations
      *)
 
-    /// Appends two multisets.
+    /// <summary>
+    ///   Appends two multisets.
+    /// </summary>
+    /// <remarks>
+    ///   Since multisets are ordered, the resulting multiset may not
+    ///   necessarily be <c>xs</c> followed by <c>ys</c>.
+    /// </remarks>
+    ///
+    /// <param name="xs">The first multiset to append.</param>
+    /// <param name="ys">The second multiset to append.</param>
+    ///
+    /// <returns>
+    ///   The result of appending <c>xs</c> to <c>ys</c>.
+    /// </returns>
     let append xs ys = 
-        /// TODO(CaptainHayashi): a more efficient algorithm for this.
+        // TODO(CaptainHayashi): a more efficient algorithm for this.
         Seq.append (toSeq xs) (toSeq ys) |> ofSeq
     
-    /// Maps over a multiset.
-    /// Since multisets are ordered, mapping can change the position of items.
+    /// <summary>
+    ///   Maps <c>f</c> over a multiset.
+    /// </summary>
+    /// <remarks>
+    ///   Since multisets are ordered, mapping can change the position of items.
+    /// </remarks>
+    ///
+    /// <param name="f">The function to map over the multiset.</param>
+    ///
+    /// <returns>
+    ///   The result of mapping <c>f</c> over the multiset.
+    /// </returns>
     let map f = 
         // TODO(CaptainHayashi): quite inefficient, but not sure how
         // else to do this correctly.

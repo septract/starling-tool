@@ -19,6 +19,7 @@
     <WarningLevel>5</WarningLevel>
     <PlatformTarget>x86</PlatformTarget>
     <Optimize>false</Optimize>
+    <DocumentationFile>bin\Debug\starling.XML</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
     <OutputPath>bin\Release</OutputPath>
@@ -87,8 +88,6 @@
     <Compile Include="OptimiserTests.fs" />
     <Compile Include="HornTests.fs" />
     <Compile Include="Main.fs" />
-    <None Include="Examples\Fail\badInc.cvf" />
-    <None Include="Examples\Fail\badInc2.cvf" />
     <None Include="packages.config" />
     <None Include="Examples\Pass\ticketLock.cvf" />
     <None Include="Examples\Pass\ticketLockNoIf.cvf" />
@@ -103,6 +102,8 @@
     <None Include="Examples\WIP\peterson.cvf" />
     <None Include="Examples\WIP\sppool.cvf" />
     <None Include="Examples\WIP\tests.cvf" />
+    <None Include="Examples\Fail\badInc.cvf" />
+    <None Include="Examples\Fail\badInc2.cvf" />
     <None Include="Examples\Fail\ticketLockBad.cvf" />
     <None Include="Examples\Fail\ticketLockBad2.cvf" />
   </ItemGroup>
