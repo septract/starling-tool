@@ -1,4 +1,4 @@
-module Starling.Flattener
+module Starling.Destructurer
 
 open Starling.Expr
 open Starling.Model
@@ -67,5 +67,5 @@ and flatAxiom model =
 /// Flattens a list of part axioms into a list of flattened axioms.
 and flatAxioms model = concatMap (flatAxiom model)
 
-/// Flattens a model, changing its axioms from part axioms to flat axioms.
-let flatten model = withAxioms (flatAxioms model model.Axioms) model
+/// Flattens a model's axioms, removing control-flow structure.
+let destructure model = withAxioms (flatAxioms model model.Axioms) model
