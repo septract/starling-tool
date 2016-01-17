@@ -109,8 +109,8 @@ type ViewSet = Multiset<Guarded<View>>
 ///   The semantics of a ViewDef is that, if Def is present, then the
 ///   view View is satisfied if, and only if, Def holds.
 /// </remarks>
-type ViewDef =
-    { View : DView
+type ViewDef<'view> =
+    { View : 'view
       Def : BoolExpr option }
 
 
@@ -230,29 +230,29 @@ let tryMapTerm fC fW fG {Cmd = c; WPre = w; Goal = g} =
  *)
 
 /// A parameterised model of a Starling program.
-type Model<'a> = 
+type Model<'axiom, 'dview> = 
     { Globals : Var.VarMap
       Locals : Var.VarMap
-      Axioms : 'a list
+      Axioms : 'axiom list
       // This corresponds to the function D.
-      ViewDefs : ViewDef list }
+      ViewDefs : ViewDef<'dview> list }
 
 /// Returns the axioms of a model.
 let axioms {Axioms = xs} = xs
 
 /// Creates a new model that is the input model with a different axiom set.
 /// The axiom set may be of a different type.
-let withAxioms (xs : 'y list) (model : Model<'x>) : Model<'y> = 
+let withAxioms (xs : 'y list) (model : Model<'x, 'dview>) : Model<'y, 'dview> = 
     { Globals = model.Globals
       Locals = model.Locals
       ViewDefs = model.ViewDefs
       Axioms = xs }
 
 /// Maps a pure function f over the axioms of a model.
-let mapAxioms (f : 'x -> 'y) (model : Model<'x>) : Model<'y> =
+let mapAxioms (f : 'x -> 'y) (model : Model<'x, 'dview>) : Model<'y, 'dview> =
     withAxioms (model |> axioms |> List.map f) model
 
 /// Maps a failing function f over the axioms of a model.
-let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x>) : Result<Model<'y>, 'e> =
+let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x, 'dview>) : Result<Model<'y, 'dview>, 'e> =
     lift (fun x -> withAxioms x model)
          (model |> axioms |> List.map f |> collect)

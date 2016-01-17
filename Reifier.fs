@@ -62,5 +62,5 @@ let reifyTerm =
     mapTerm id reifyView id
 
 /// Reifies all of the terms in a model's axiom list.
-let reify : Model<STerm<GView, View>> -> Model<STerm<ViewSet, View>> =
+let reify : Model<STerm<GView, View>, DView> -> Model<STerm<ViewSet, View>, DView> =
     mapAxioms reifyTerm
