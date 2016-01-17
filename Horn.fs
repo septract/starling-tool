@@ -139,7 +139,7 @@ let predOfMultiset gs parT ms =
 /// Constructs a full constraint in HSF.
 /// The map of active globals should be passed as gs.
 /// Some is returned if the constraint is definite; None otherwise.
-let hsfConstraint gs { CViews = vs; CExpr = ex } =
+let hsfViewDef gs { View = vs; Def = ex } =
     Option.map (fun dex ->
         lift2 (fun hd bd ->
             { Head = hd
@@ -147,7 +147,7 @@ let hsfConstraint gs { CViews = vs; CExpr = ex } =
 
 /// Constructs a set of Horn clauses for all definite viewdefs in a model.
 let hsfModelViewDefs gs =
-    Seq.choose (hsfConstraint gs)
+    Seq.choose (hsfViewDef gs)
     >> collect
     >> lift Set.ofSeq
 
@@ -241,26 +241,26 @@ let hsfConditionSingle dvs env q body =
 
 /// Constructs a series of Horn clauses for a term.
 /// Takes the environment of active global variables.
-let hsfTerm dvs env {Conditions = {Pre = ps ; Post = qs} ; Inner = sem} =
-    let body = hsfConditionBody dvs env ps sem
+let hsfTerm dvs env {Cmd = c; WPre = w ; Goal = g} =
+    let body = hsfConditionBody dvs env w c
 
-    // Each postcondition generates a new clause.
-    qs
+    // Each goal generates a new clause.
+    g
     |> Multiset.toSeq
     |> Seq.map (fun q -> bind (hsfConditionSingle dvs env q) body) 
     |> collect
 
 /// Constructs a set of Horn clauses for all terms associated with a model.
-let hsfModelAxioms gs dvs =
+let hsfModelTerms gs dvs =
     Seq.map (hsfTerm dvs gs)
     >> collect
     >> lift Seq.concat
 
 /// Constructs a HSF script for a model.
-let hsfModel { Globals = gs; DefViews = dvs; Axioms = xs } =
+let hsfModel { Globals = gs; ViewDefs = dvs; Axioms = xs } =
     trial {
         let! vs = gs |> hsfModelVariables |> lift Seq.singleton
         let! ds = hsfModelViewDefs gs dvs |> lift Set.toSeq
-        let! xs = hsfModelAxioms gs dvs xs
+        let! xs = hsfModelTerms gs dvs xs
         return Seq.concat [vs; ds; xs] |> List.ofSeq
     }

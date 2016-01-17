@@ -61,16 +61,16 @@ let afterSubs asubs bsubs =
 /// Eliminates bound before/after pairs in the term.
 /// If x!after = f(x!before) in the action, we replace x!after with f(x!before)
 /// in the precondition and postcondition.
-let eliminateAfters { Conditions = { Pre = p ; Post = q } ; Inner = r } =
+let eliminateAfters { WPre = p ; Goal = q ; Cmd = r } =
     let sub = afterSubs (r |> findArithAfters |> Map.ofList)
                         (r |> findBoolAfters |> Map.ofList)
                   
-    { Conditions = { Pre = subAftersInAssertion sub p
-                     Post = subAftersInAssertion sub q }
+    { WPre = subAftersInAssertion sub p
+      Goal = subAftersInAssertion sub q
       (* This step will create a tautology f(x!before) = f(x!before).
        * We assume we can eliminate it later.
        *)
-      Inner = boolSubVars sub r }
+      Cmd = boolSubVars sub r }
 
 (*
  * Frontend
@@ -78,10 +78,10 @@ let eliminateAfters { Conditions = { Pre = p ; Post = q } ; Inner = r } =
 
 /// Optimises a term individually.
 /// (Or, it will, when finished.)
-let optimiseTerm : ReTerm -> ReTerm = 
+let optimiseTerm =
     // TODO(CaptainHayashi): add optimising passes.
     eliminateAfters
 
 /// Optimises a model's terms.
-let optimise : Model<ReTerm> -> Model<ReTerm> =
+let optimise : Model<STerm<ViewSet>> -> Model<STerm<ViewSet>> =
     mapAxioms optimiseTerm

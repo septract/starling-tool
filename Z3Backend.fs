@@ -6,6 +6,7 @@ open Chessie.ErrorHandling
 open Starling
 open Starling.Model
 open Starling.Utils
+open Starling.Pretty.Misc
 
 (*
  * Request and response types
@@ -46,8 +47,8 @@ type Error =
 /// Pretty-prints a response.
 let printResponse =
     function
-    | Response.Translate {Axioms = t} -> Starling.Pretty.Misc.printZTerms t
-    | Response.Combine {Axioms = z} -> Starling.Pretty.Misc.printZ3Exps z
+    | Response.Translate {Axioms = t} -> printNumHeaderedList (printTerm printZ3Exp printZ3Exp) t
+    | Response.Combine {Axioms = z} -> printNumHeaderedList printZ3Exp z
     | Response.Sat s -> Starling.Pretty.Misc.printSats s
 
 /// Pretty-prints an error.

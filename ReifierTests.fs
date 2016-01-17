@@ -47,5 +47,5 @@ type ReifierTests() =
     /// Tests whether findDefOfView behaves correctly.
     member x.``findDefOfView finds view defs correctly on the ticketed lock`` view =
         view
-        |> findDefOfView ticketLockModel.DefViews
-        |> Option.map (fun x -> x.CViews)
+        |> findDefOfView ticketLockModel.ViewDefs
+        |> Option.map (fun x -> x.View)

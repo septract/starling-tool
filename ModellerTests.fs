@@ -91,15 +91,15 @@ type ModellerTests() =
     static member CommandAxioms =
         [ TestCaseData({ Pre = Multiset.empty()
                          Post =
-                             Multiset.ofList [ CondView.Func { Name = "holdTick"
-                                                               Params = [ AExpr(aUnmarked "t") ] } ] }, Atomic(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment)))
-            .Returns(Some <| (PAAxiom { Conditions =
+                             Multiset.ofList [ CFunc.Func { Name = "holdTick"
+                                                            Params = [ AExpr(aUnmarked "t") ] } ] }, Atomic(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment)))
+            .Returns(Some <| (PAAxiom { Conds =
                                             { Pre = Multiset.empty()
                                               Post =
                                                   Multiset.ofList
-                                                      [ CondView.Func { Name = "holdTick"
-                                                                        Params = [ AExpr(aUnmarked "t") ] } ] }
-                                        Inner = IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment) }))
+                                                      [ CFunc.Func { Name = "holdTick"
+                                                                     Params = [ AExpr(aUnmarked "t") ] } ] }
+                                        Cmd = IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment) }))
             .SetName("model a valid integer load command as an axiom") ]
 
     /// Tests the command modeller using the ticketed lock.

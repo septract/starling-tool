@@ -170,9 +170,9 @@ and joinViewDefs l r = List.append (viewDefToSet l) (viewDefToSet r)
 /// binding the types from the former to the names from the latter.
 let funcViewParMerge ppars dpars = List.map2 (fun (ty, _) name -> (ty, name)) ppars dpars
 
-/// Produces the environment created by interpreting the functional view with
+/// Produces the environment created by interpreting the DFunc with
 /// name name and params dpars, using the view prototype map vpm.
-let modelFuncViewDef protos name dpars = 
+let modelDFunc protos name dpars = 
     // Does this functional view name a proper view?
     match Map.tryFind name protos with
     | Some ppars -> 
@@ -186,17 +186,17 @@ let modelFuncViewDef protos name dpars =
     | None -> fail <| VDENoSuchView name
 
 /// Tries to convert a view def into its model (multiset) form.
-let rec modelViewDef protos vd = 
+let rec modelDView protos vd = 
     match vd with
     | ViewDef.Unit -> ok []
-    | ViewDef.Func {Name = v; Params = pars} -> modelFuncViewDef protos v pars
-    | ViewDef.Join(l, r) -> trial { let! lM = modelViewDef protos l
-                                    let! rM = modelViewDef protos r
+    | ViewDef.Func {Name = v; Params = pars} -> modelDFunc protos v pars
+    | ViewDef.Join(l, r) -> trial { let! lM = modelDView protos l
+                                    let! rM = modelDView protos r
                                     return List.append lM rM }
 
 /// Produces the environment created by interpreting the viewdef vds using the
 /// view prototype map vpm.
-let rec envOfViewDef vds = 
+let rec localEnvOfViewDef vds = 
     vds
     |> Seq.ofList
     |> Seq.map (fun {Params = ps} -> makeVarMap ps)
@@ -204,27 +204,27 @@ let rec envOfViewDef vds =
     |> mapMessages VDEBadVars
 
 /// Produces the variable environment for the constraint whose viewdef is v.
-let envOfConstraint globals =
-    envOfViewDef >> bind (combineMaps globals >> mapMessages VDEGlobalVarConflict)
+let envOfViewDef globals =
+    localEnvOfViewDef >> bind (combineMaps globals >> mapMessages VDEGlobalVarConflict)
 
 /// Converts a single constraint to its model form.
-let modelConstraint globals vprotos { CView = av; CExpression = ae } = 
+let modelViewDef globals vprotos { CView = av; CExpression = ae } = 
     trial { 
-        let! v = modelViewDef vprotos av |> mapMessages (curry CEView av)
-        let! e = envOfConstraint globals v |> mapMessages (curry CEView av)
+        let! v = modelDView vprotos av |> mapMessages (curry CEView av)
+        let! e = envOfViewDef globals v |> mapMessages (curry CEView av)
         let! c = match ae with
                  | Some dae -> modelBoolExpr e dae |> lift Some |> mapMessages (curry CEExpr dae)
                  | _ -> ok None
-        return { CViews = Multiset.ofSeq v
-                 CExpr = c }
+        return { View = Multiset.ofSeq v
+                 Def = c }
     }
     |> mapMessages (curry MEConstraint av)
 
-/// Extracts the view constraints from a CollatedScript, turning each into a
-/// Model.Constraint.
-let modelConstraints globals vprotos { Constraints = cs } = 
+/// Extracts the view definitions from a CollatedScript, turning each into a
+/// ViewDef.
+let modelViewDefs globals vprotos { Constraints = cs } = 
     cs
-    |> List.map (modelConstraint globals vprotos)
+    |> List.map (modelViewDef globals vprotos)
     |> collect
 
 //
@@ -243,8 +243,8 @@ let rec modelView env =
                                 |> modelExpr env
                                 |> mapMessages (curry VEBadExpr e))
                          |> collect
-            return [ CondView.Func { Name = s
-                                     Params = pexps } ]
+            return [ CFunc.Func { Name = s
+                                  Params = pexps } ]
                    |> Multiset.ofList
         }
     | IfView(e, l, r) -> trial { let! ez3 = modelBoolExpr env e |> mapMessages (curry VEBadExpr e)
@@ -259,8 +259,8 @@ let rec modelView env =
 //
 /// Lifts a Prim to an partially resolved axiom list.
 let primToAxiom cpair prim = 
-    { Conditions = cpair
-      Inner = prim }
+    { Conds = cpair
+      Cmd = prim }
     |> PAAxiom
 
 let (|GlobalVar|_|) gs _ (lvalue : Var.LValue) = tryLookupVar gs lvalue
@@ -342,7 +342,7 @@ let modelPrimOnIntStore locals atom dest src mode =
 
 /// Converts a precondition and postcondition to a condition pair, using
 /// the given variable environment and returning errors as AxiomErrors.
-let makeAxiomConditionPair env preAst postAst = 
+let makeAxiomConds env preAst postAst = 
     lift2 (fun pre post -> 
         { Pre = pre
           Post = post }) (modelView env preAst |> mapMessages (curry AEBadView preAst)) 
@@ -487,15 +487,15 @@ and modelAxiomsOnBlock gs ls {Pre = bPre; Contents = bContents} =
             (post, trial { // If our last axiomatisation failed, this will
                        // cause failure here.
                        let! axioms = axiomsR
-                       let! cpair = makeAxiomConditionPair ls pre post
+                       let! cpair = makeAxiomConds ls pre post
                        let! axiom = modelAxiomOnCommand gs ls cpair cmd
                        return axiom :: axioms })) (bPre, ok []) bContents
     (* At the end of the above, we either have a list of axioms or an
      * error.  If we have the former, surround the axioms with the condition
      * pair derived from the precondition and postcondition of the block.
      *)
-    lift2 (fun cpair xs -> { Conditions = cpair; Inner = List.rev xs })
-          (makeAxiomConditionPair ls bPre bpost)
+    lift2 (fun cpair xs -> { Conds = cpair; Cmd = List.rev xs })
+          (makeAxiomConds ls bPre bpost)
           axioms
 
 /// Converts a method to a list of partially resolved axioms.
@@ -504,7 +504,7 @@ let modelAxiomsOnMethod gs ls { Signature = {Name = m}; Body = b } =
     // TODO(CaptainHayashi): method parameters
     b
     |> modelAxiomsOnBlock gs ls
-    |> lift (fun c -> c.Inner)
+    |> lift (fun c -> c.Cmd)
     |> mapMessages (curry MEAxiom m)
 
 /// Converts a list of methods to a list of partially resolved axioms.
@@ -546,12 +546,11 @@ let model collated =
         // Make variable maps out of the global and local variable definitions.
         let! globals = makeVarMap collated.Globals |> mapMessages MEVar
         let! locals = makeVarMap collated.Locals |> mapMessages MEVar
-        let! constraints = modelConstraints globals vprotos collated
+        let! constraints = modelViewDefs globals vprotos collated
         let! axioms = modelAxioms globals locals collated.Methods
         return
             { Globals = globals
               Locals = locals
-              VProtos = vprotos
-              DefViews = constraints
+              ViewDefs = constraints
               Axioms = axioms }
     }

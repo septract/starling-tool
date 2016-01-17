@@ -16,7 +16,7 @@ let findDefOfView dvs uviewm =
      * Of course, this depends on us having ensured that there are no
      * errors in the view or its definition earlier.
      *)
-    List.tryFind (fun {CViews = vdm} ->
+    List.tryFind (fun {View = vdm} ->
         (* We need to do list operations on the multiset contents,
          * so convert both sides to a (sorted) list.  We rely on the
          * sortedness to make the next step sound.
@@ -55,16 +55,13 @@ let reifyView vap =
     |> Multiset.ofSeq
 
 /// Reifies all of the views in a term.
-let reifyTerm (term : Term) : ReTerm = 
-    let tpre = reifyView term.Conditions.Pre
-    (* We need only calculate D(r), not |_r_|, so don't perform the
-     * powersetting of the postcondition.
+let reifyTerm = 
+    (* For the goal, we need only calculate D(r), not |_r_|.
+     * This means we need only convert the view, and need not
+     * build the powerset, of the goal.
      *)
-    let tpost = reifySingle term.Conditions.Post |> Multiset.singleton
-    { Conditions = 
-          { Pre = tpre
-            Post = tpost }
-      Inner = term.Inner }
+    mapTerm id reifyView (reifySingle >> Multiset.singleton)
 
 /// Reifies all of the terms in a model's axiom list.
-let reify m = mapAxioms reifyTerm m
+let reify : Model<STerm<GView>> -> Model<STerm<ViewSet>> =
+    mapAxioms reifyTerm

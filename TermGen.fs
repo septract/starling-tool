@@ -68,17 +68,16 @@ let termGenPre fax =
      *)
     // TODO(CaptainHayashi): don't call this septract
     // TODO(CaptainHayashi): use something better than lists.
-    let pre = fax.Axiom.Conditions.Pre |> Multiset.toList
-    let post = fax.Axiom.Conditions.Post |> Multiset.toList
+    let pre = fax.Axiom.Conds.Pre |> Multiset.toList
+    let post = fax.Axiom.Conds.Post |> Multiset.toList
     let frame = fax.Frame |> Multiset.toList
     List.append pre (termGenSeptract frame post) |> Multiset.ofList
 
 /// Generates a term from a framed axiom.
 let termGenAxiom fax = 
-    { Conditions = 
-          { Pre = termGenPre fax
-            Post = fax.Frame }
-      Inner = fax.Axiom.Inner }
+    { WPre = termGenPre fax
+      Goal = fax.Frame
+      Cmd = fax.Axiom.Cmd }
 
 /// Converts a model's framed axioms to terms.
-let termGen m = mapAxioms termGenAxiom m
+let termGen : Model<FramedAxiom> -> Model<STerm<GView>> = mapAxioms termGenAxiom

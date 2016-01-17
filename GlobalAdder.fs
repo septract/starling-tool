@@ -33,26 +33,25 @@ let addGlobalsToAssertion gs =
     Multiset.map (addGlobalsToGuarded gs)
 
 /// Adds the globals in gs to the argument list of the assertions in a term.
-let addGlobalsToTerm gs { Conditions = { Pre = p ; Post = q } ; Inner = r } =
-    { Conditions = { Pre = addGlobalsToAssertion (gs Before) p
-                     Post = addGlobalsToAssertion (gs After) q }
-      Inner = r
-    }
+let addGlobalsToTerm gs =
+    mapTerm id
+            (addGlobalsToAssertion (gs Before))
+            (addGlobalsToAssertion (gs After))
 
 (*
  * View definitions
  *)
 
 /// Adds the globals in gs to a defining view.
-let addGlobalsToConstraint gs con =
-    { con with CViews = addGlobalsToView gs con.CViews }
+let addGlobalsToViewDef gs vdf =
+    { vdf with View = addGlobalsToView gs vdf.View }
 
 (*
  * Whole models
  *)
 
 /// Adds globals to the arguments of all views in a model.
-let globalAdd (mdl: Model<ReTerm>) =
+let globalAdd (mdl: Model<STerm<ViewSet>>) =
     /// Build a function making a list of global arguments, for view assertions.
     let gargs marker = 
         mdl.Globals
@@ -74,4 +73,4 @@ let globalAdd (mdl: Model<ReTerm>) =
         |> List.ofSeq
 
     {mdl with Axioms = List.map (addGlobalsToTerm gargs) mdl.Axioms
-              DefViews = List.map (addGlobalsToConstraint gpars) mdl.DefViews}
+              ViewDefs = List.map (addGlobalsToViewDef gpars) mdl.ViewDefs}

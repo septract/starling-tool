@@ -50,17 +50,17 @@ let generateFuncParamSub {Params = dpars} {Params = vpars} =
 
 /// Produces a map of substitutions that transform the parameters of a
 /// vdef into the arguments of its usage.
-let generateParamSubs (dviewm : Multiset<ViewDef>) (uviewm : Multiset<View>) =
+let generateParamSubs (dview : DView) (uview : View) =
     (* Performing list operations on the multiset contents *should* be
      * sound, because both sides will appear in the same order.
      *)
-    let dview = Multiset.toList dviewm
-    let uview = Multiset.toList uviewm
+    let dfuncs = Multiset.toList dview
+    let ufuncs = Multiset.toList uview
 
     (* For every matching line in the view and viewdef, run
      * through the parameters creating substitution pairs.
      *)
-    Seq.map2 generateFuncParamSub dview uview
+    Seq.map2 generateFuncParamSub dfuncs ufuncs
     |> Seq.concat
     |> Map.ofSeq
 
@@ -90,7 +90,7 @@ let paramSubFun vsubs =
 /// Produces the reification of an unguarded view with regards to a
 /// given view definition.
 /// This corresponds to D in the theory.
-let instantiateDef model uview {CViews = vs; CExpr = e} =
+let instantiateDef model uview {View = vs; Def = e} =
     // Make sure our view expression is actually definite.
     match e with
     | Some ee ->
@@ -115,7 +115,7 @@ let instantiateDef model uview {CViews = vs; CExpr = e} =
 /// Produces the reification of an unguarded view multiset.
 /// This corresponds to D^ in the theory.
 let reifyZUnguarded model uview =
-    match findDefOfView model.DefViews uview with
+    match findDefOfView model.ViewDefs uview with
     | Some vdef -> instantiateDef model uview vdef
     | None -> ok BTrue
 
@@ -132,40 +132,22 @@ let reifyZView model =
     >> lift BAnd
 
 /// Instantiates all of the views in a term over the given model.
-let instantiateZTerm model term =
-    lift2 (fun pre post ->
-           { Conditions = { Pre = pre; Post = post }
-             Inner = term.Inner })
-          (reifyZView model term.Conditions.Pre)
-          (reifyZView model term.Conditions.Post)
+let instantiateZTerm model =
+    tryMapTerm ok (reifyZView model) (reifyZView model)
 
 /// Z3-reifies all of the views in a term over the given defining model.
-let reifyZTerm ctx model term =
-    (* This is also where we perform our final variable substitution,
-     * converting all global variables to their pre-state in Pre, and
-     * post-state in Post.
-     *
-     * Because of the after/before optimisation pass earlier, we have to be
-     * careful when we introduce new expressions and ensure we do
-     * after-elimination on those too.  So, what we do is expand the terms
-     * first, then re-optimise, then reify to Z3.
-     *
-     * TODO(CaptainHayashi): find a way of making optimisation details not leak
-     * out here.
-     *)
-    lift (fun { Conditions = { Pre = pre; Post = post }; Inner = inner} ->
-              { Conditions = { Pre = boolToZ3 ctx pre; Post = boolToZ3 ctx post }
-                Inner = boolToZ3 ctx term.Inner })
-         (instantiateZTerm model term)
+let reifyZTerm ctx model : STerm<ViewSet> -> Result<ZTerm, Error> =
+    instantiateZTerm model
+    >> lift (mapTerm (boolToZ3 ctx) (boolToZ3 ctx) (boolToZ3 ctx))
 
     /// Reifies all of the terms in a term list.
-let reifyZ3 ctx model = tryMapAxioms (reifyZTerm ctx model) model
+let reifyZ3 ctx model : Result<Model<ZTerm>, Error> =
+    tryMapAxioms (reifyZTerm ctx model) model
 
 /// Combines the components of a reified term.
-let combineTerm (ctx: Z3.Context) reterm =
-    ctx.MkAnd [| reterm.Conditions.Pre
-                 reterm.Inner
-                 ctx.MkNot reterm.Conditions.Post |]
+let combineTerm (ctx: Z3.Context) {Cmd = c; WPre = w; Goal = g} =
+    /// This is effectively asking Z3 to refute (c ^ w => g).
+    ctx.MkAnd [| c; w; ctx.MkNot g |]
 
 /// Combines reified terms into a list of Z3 terms.
 let combineTerms ctx = mapAxioms (combineTerm ctx)

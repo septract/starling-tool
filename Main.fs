@@ -6,6 +6,9 @@ open Starling.Model
 open CommandLine
 open Chessie.ErrorHandling
 
+open Starling.Pretty.Types
+open Starling.Pretty.Misc
+
 /// Command-line flags used in the Starling executable.
 type Options = 
     { [<Option('h', HelpText = "If stopped at an intermediate stage, print the result for human consumption.")>]
@@ -68,21 +71,21 @@ type Response =
     /// The result of frontend processing.
     | Frontend of Lang.Frontend.Response
     /// The result of structure flattening.
-    | Flatten of Model<FlatAxiom>
+    | Flatten of Model<PAxiom<CView>>
     /// The result of conditional expansion.
-    | Expand of Model<FullAxiom>
+    | Expand of Model<PAxiom<GView>>
     /// The result of semantic expansion.
-    | Semantics of Model<SemAxiom>
+    | Semantics of Model<SAxiom<GView>>
     /// The result of frame-axiom-pair generation.
     | Frame of Model<FramedAxiom>
     /// The result of term generation.
-    | TermGen of Model<Term>
-    /// The result of view reification.
-    | Reify of Model<ReTerm>
+    | TermGen of Model<STerm<GView>>
+    /// The result of term reification.
+    | Reify of Model<STerm<ViewSet>>
     /// The result of global addition.
-    | GlobalAdd of Model<ReTerm>
+    | GlobalAdd of Model<STerm<ViewSet>>
     /// The result of term optimisation.
-    | Optimise of Model<ReTerm>
+    | Optimise of Model<STerm<ViewSet>>
     /// The result of Z3 backend processing.
     | Z3 of Z3.Backend.Response
     /// The result of HSF processing.
@@ -92,14 +95,14 @@ type Response =
 let printResponse = 
     function 
     | Frontend f -> Lang.Frontend.printResponse f
-    | Flatten f -> Starling.Pretty.Misc.printFlatModel f
-    | Expand e -> Starling.Pretty.Misc.printFullModel e
-    | Semantics e -> Starling.Pretty.Misc.printSemModel e
-    | Frame {Axioms = f} -> Starling.Pretty.Misc.printFramedAxioms f
-    | TermGen {Axioms = t} -> Starling.Pretty.Misc.printTerms t
-    | Reify {Axioms = t} -> Starling.Pretty.Misc.printReTerms t
-    | GlobalAdd m -> Starling.Pretty.Misc.printModel Starling.Pretty.Misc.printReTerm m
-    | Optimise {Axioms = t} -> Starling.Pretty.Misc.printReTerms t
+    | Flatten f -> printModel (printPAxiom printCView) f
+    | Expand e -> printModel (printPAxiom printGView) e
+    | Semantics e -> printModel (printSAxiom printGView) e
+    | Frame {Axioms = f} -> printNumHeaderedList printFramedAxiom f
+    | TermGen {Axioms = t} -> printNumHeaderedList (printSTerm printGView) t
+    | Reify {Axioms = t} -> printNumHeaderedList (printSTerm printViewSet) t
+    | GlobalAdd m -> printModel (printSTerm printViewSet) m
+    | Optimise {Axioms = t} -> printNumHeaderedList (printSTerm printViewSet) t
     | Z3 z -> Z3.Backend.printResponse z
     | HSF h -> Starling.Pretty.Horn.printHorns h
 

@@ -11,8 +11,8 @@ type ExpanderTests() =
     
     /// Test cases for converting CondViews to GuarViews
     static member CondViews = 
-        let msec : Multiset<CondView> = Multiset.empty()
-        let mseg : Multiset<GuarView> = Multiset.empty()
+        let msec : CView = Multiset.empty()
+        let mseg : GView = Multiset.empty()
         [ TestCaseData(msec).Returns(mseg).SetName("Convert the empty CondView to the empty GuarView")
           
           TestCaseData(Multiset.ofList [ Func { Name = "foo"

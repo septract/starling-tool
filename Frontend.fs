@@ -4,6 +4,7 @@ module Starling.Lang.Frontend
 open Chessie.ErrorHandling
 open Starling
 open Starling.Model
+open Starling.Pretty.Misc
 
 (*
  * Request and response types
@@ -46,8 +47,8 @@ type Error =
 let printResponse = 
     function 
     | Response.Parse s -> Pretty.Lang.AST.printScript s
-    | Response.Collate c -> Pretty.Misc.printCollatedScript c
-    | Response.Model m -> Pretty.Misc.printPartModel m
+    | Response.Collate c -> printCollatedScript c
+    | Response.Model m -> printModel printPartAxiom m
 
 /// Pretty-prints an error.
 let printError =

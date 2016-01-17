@@ -187,8 +187,8 @@ let renameCondition cond =
 
 /// Translates a model axiom into an axiom over a semantic expression.
 let translateAxiom model axiom = 
-    { Conditions = renameCondition axiom.Conditions
-      Inner = semanticsOf model axiom.Inner }
+    { Conds = renameCondition axiom.Conds
+      Cmd = semanticsOf model axiom.Cmd }
 
 /// Translate a model's axioms to axioms over semantic expressions.
 let translateAxioms model = List.map (translateAxiom model) model.Axioms
