@@ -79,13 +79,13 @@ type Response =
     /// The result of frame-axiom-pair generation.
     | Frame of Model<FramedAxiom>
     /// The result of term generation.
-    | TermGen of Model<STerm<GView>>
+    | TermGen of Model<STerm<GView, View>>
     /// The result of term reification.
-    | Reify of Model<STerm<ViewSet>>
+    | Reify of Model<STerm<ViewSet, View>>
     /// The result of global addition.
-    | GlobalAdd of Model<STerm<ViewSet>>
+    | GlobalAdd of Model<STerm<ViewSet, View>>
     /// The result of term optimisation.
-    | Optimise of Model<STerm<ViewSet>>
+    | Optimise of Model<STerm<ViewSet, View>>
     /// The result of Z3 backend processing.
     | Z3 of Z3.Backend.Response
     /// The result of HSF processing.
@@ -99,10 +99,10 @@ let printResponse =
     | Expand e -> printModel (printPAxiom printGView) e
     | Semantics e -> printModel (printSAxiom printGView) e
     | Frame {Axioms = f} -> printNumHeaderedList printFramedAxiom f
-    | TermGen {Axioms = t} -> printNumHeaderedList (printSTerm printGView) t
-    | Reify {Axioms = t} -> printNumHeaderedList (printSTerm printViewSet) t
-    | GlobalAdd m -> printModel (printSTerm printViewSet) m
-    | Optimise {Axioms = t} -> printNumHeaderedList (printSTerm printViewSet) t
+    | TermGen {Axioms = t} -> printNumHeaderedList (printSTerm printGView printView) t
+    | Reify {Axioms = t} -> printNumHeaderedList (printSTerm printViewSet printView) t
+    | GlobalAdd m -> printModel (printSTerm printViewSet printView) m
+    | Optimise {Axioms = t} -> printNumHeaderedList (printSTerm printViewSet printView) t
     | Z3 z -> Z3.Backend.printResponse z
     | HSF h -> Starling.Pretty.Horn.printHorns h
 

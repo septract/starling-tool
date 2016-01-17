@@ -29,14 +29,14 @@ let addGlobalsToGuarded gs a =
     {a with Item = addGlobalsToView gs a.Item}
 
 /// Adds the globals in gs to the argument lists of a view assertion.
-let addGlobalsToAssertion gs =
+let addGlobalsToViewSet gs =
     Multiset.map (addGlobalsToGuarded gs)
 
 /// Adds the globals in gs to the argument list of the assertions in a term.
 let addGlobalsToTerm gs =
     mapTerm id
-            (addGlobalsToAssertion (gs Before))
-            (addGlobalsToAssertion (gs After))
+            (addGlobalsToViewSet (gs Before))
+            (addGlobalsToView (gs After))
 
 (*
  * View definitions
@@ -51,7 +51,7 @@ let addGlobalsToViewDef gs vdf =
  *)
 
 /// Adds globals to the arguments of all views in a model.
-let globalAdd (mdl: Model<STerm<ViewSet>>) =
+let globalAdd (mdl: Model<STerm<ViewSet, View>>) =
     /// Build a function making a list of global arguments, for view assertions.
     let gargs marker = 
         mdl.Globals

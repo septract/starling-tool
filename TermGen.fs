@@ -47,16 +47,22 @@ let termGenSeptractStep (rdone, qstep) rnext =
             (rnext2 :: rdone, qstep2)
     else (rnext :: rdone, qstep)
 
-/// Performs septraction of the single GuarView q from the GuarView
+/// Performs septraction of the single GView q from the GView
 /// multiset r, returning r *- q.
 let termGenSeptractView r q = List.fold termGenSeptractStep ([], q) r |> fst
+
+/// Guards a frame view with true.
+let guard r = { Cond = BTrue; Item = r }
 
 /// Generates the septraction part of the weakest precondition.
 let termGenSeptract r q = 
     (* We iterate on septraction of each item in q:
-     * A *- (B * C) = (A *- B) *- C
+     * A *- (B * C) = (A *- B) *- 
+     *
+     * Since r is unguarded at the start of the septraction, we lift it
+     * to the guarded view (true|r).
      *)
-    List.fold termGenSeptractView r q
+    List.fold termGenSeptractView (List.map guard r) q
 
 /// Generates a (weakest) precondition from a framed axiom.
 let termGenPre fax = 
@@ -80,4 +86,4 @@ let termGenAxiom fax =
       Cmd = fax.Axiom.Cmd }
 
 /// Converts a model's framed axioms to terms.
-let termGen : Model<FramedAxiom> -> Model<STerm<GView>> = mapAxioms termGenAxiom
+let termGen : Model<FramedAxiom> -> Model<STerm<GView, View>> = mapAxioms termGenAxiom
