@@ -79,5 +79,5 @@ let optimiseTerm =
     eliminateAfters
 
 /// Optimises a model's terms.
-let optimise : Model<STerm<ViewSet, View>> -> Model<STerm<ViewSet, View>> =
+let optimise : Model<STerm<ViewSet, View>, DView> -> Model<STerm<ViewSet, View>, DView> =
     mapAxioms optimiseTerm

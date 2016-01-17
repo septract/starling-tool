@@ -143,8 +143,8 @@ let printInConds pcond cpair inner = Surround(pcond cpair.Pre, inner, pcond cpai
  *)
 
 /// Pretty-prints a model constraint.
-let printViewDef { View = vs; Def = e } = 
-    keyMap [ ("View", printDView vs)
+let printViewDef pView { View = vs; Def = e } = 
+    keyMap [ ("View", pView vs)
              ("Def", withDefault (String "?") (Option.map printBoolExpr e)) ]
 
 (*
@@ -263,10 +263,10 @@ let printSTerm pWPre pGoal = printTerm printBoolExpr pWPre pGoal
  * Models
  *)
 
-/// Pretty-prints a model given an axiom printer.
-let printModel pAxiom model = 
+/// Pretty-prints a model given axiom and defining-view printers.
+let printModel pAxiom pDView model = 
     Header("Model", 
            Indent <| VSep([ headed "Globals" <| List.map printModelVar (Map.toList model.Globals)
                             headed "Locals" <| List.map printModelVar (Map.toList model.Locals)
-                            headed "ViewDefs" <| List.map printViewDef model.ViewDefs
+                            headed "ViewDefs" <| List.map (printViewDef pDView) model.ViewDefs
                             headed "Axioms" <| List.map pAxiom model.Axioms ], vsep [ Nop; Separator; Nop ]))

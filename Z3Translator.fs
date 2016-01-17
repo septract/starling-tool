@@ -141,7 +141,7 @@ let reifyZTerm ctx model : STerm<ViewSet, View> -> Result<ZTerm, Error> =
     >> lift (mapTerm (boolToZ3 ctx) (boolToZ3 ctx) (boolToZ3 ctx))
 
     /// Reifies all of the terms in a term list.
-let reifyZ3 ctx model : Result<Model<ZTerm>, Error> =
+let reifyZ3 ctx model : Result<Model<ZTerm, DView>, Error> =
     tryMapAxioms (reifyZTerm ctx model) model
 
 /// Combines the components of a reified term.

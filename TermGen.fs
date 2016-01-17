@@ -86,4 +86,4 @@ let termGenAxiom fax =
       Cmd = fax.Axiom.Cmd }
 
 /// Converts a model's framed axioms to terms.
-let termGen : Model<FramedAxiom> -> Model<STerm<GView, View>> = mapAxioms termGenAxiom
+let termGen : Model<FramedAxiom, DView> -> Model<STerm<GView, View>, DView> = mapAxioms termGenAxiom

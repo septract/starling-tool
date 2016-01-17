@@ -26,7 +26,7 @@ type Response =
     /// Output of the parsing and collation steps.
     | Collate of Collator.CollatedScript
     /// Output of the parsing, collation, and modelling steps.
-    | Model of Model<PartAxiom>
+    | Model of Model<PartAxiom, DView>
 
 (*
  * Error types
@@ -48,7 +48,7 @@ let printResponse =
     function 
     | Response.Parse s -> Pretty.Lang.AST.printScript s
     | Response.Collate c -> printCollatedScript c
-    | Response.Model m -> printModel printPartAxiom m
+    | Response.Model m -> printModel printPartAxiom printDView m
 
 /// Pretty-prints an error.
 let printError =

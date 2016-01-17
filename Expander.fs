@@ -41,4 +41,4 @@ let expandAxiom { Conds = cs; Cmd = i } =
       Cmd = i }
 
 /// Expands an entire model.
-let expand : Model<PAxiom<CView>> -> Model<PAxiom<GView>> = mapAxioms expandAxiom
+let expand : Model<PAxiom<CView>, DView> -> Model<PAxiom<GView>, DView> = mapAxioms expandAxiom

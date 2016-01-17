@@ -71,21 +71,21 @@ type Response =
     /// The result of frontend processing.
     | Frontend of Lang.Frontend.Response
     /// The result of destructuring.
-    | Destructure of Model<PAxiom<CView>>
+    | Destructure of Model<PAxiom<CView>, DView>
     /// The result of conditional expansion.
-    | Expand of Model<PAxiom<GView>>
+    | Expand of Model<PAxiom<GView>, DView>
     /// The result of semantic expansion.
-    | Semantics of Model<SAxiom<GView>>
+    | Semantics of Model<SAxiom<GView>, DView>
     /// The result of frame-axiom-pair generation.
-    | Frame of Model<FramedAxiom>
+    | Frame of Model<FramedAxiom, DView>
     /// The result of term generation.
-    | TermGen of Model<STerm<GView, View>>
+    | TermGen of Model<STerm<GView, View>, DView>
     /// The result of term reification.
-    | Reify of Model<STerm<ViewSet, View>>
+    | Reify of Model<STerm<ViewSet, View>, DView>
     /// The result of term flattening.
-    | Flatten of Model<STerm<ViewSet, View>>
+    | Flatten of Model<STerm<ViewSet, View>, DView>
     /// The result of term optimisation.
-    | Optimise of Model<STerm<ViewSet, View>>
+    | Optimise of Model<STerm<ViewSet, View>, DView>
     /// The result of Z3 backend processing.
     | Z3 of Z3.Backend.Response
     /// The result of HSF processing.
@@ -95,13 +95,13 @@ type Response =
 let printResponse = 
     function 
     | Frontend f -> Lang.Frontend.printResponse f
-    | Destructure f -> printModel (printPAxiom printCView) f
-    | Expand e -> printModel (printPAxiom printGView) e
-    | Semantics e -> printModel (printSAxiom printGView) e
+    | Destructure f -> printModel (printPAxiom printCView) printDView f
+    | Expand e -> printModel (printPAxiom printGView) printDView  e
+    | Semantics e -> printModel (printSAxiom printGView) printDView  e
     | Frame {Axioms = f} -> printNumHeaderedList printFramedAxiom f
     | TermGen {Axioms = t} -> printNumHeaderedList (printSTerm printGView printView) t
     | Reify {Axioms = t} -> printNumHeaderedList (printSTerm printViewSet printView) t
-    | Flatten m -> printModel (printSTerm printViewSet printView) m
+    | Flatten m -> printModel (printSTerm printViewSet printView) printDView m
     | Optimise {Axioms = t} -> printNumHeaderedList (printSTerm printViewSet printView) t
     | Z3 z -> Z3.Backend.printResponse z
     | HSF h -> Starling.Pretty.Horn.printHorns h
