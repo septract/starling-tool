@@ -23,7 +23,7 @@ type Request =
     /// Run the language frontend only, with the given request.
     | Frontend of Lang.Frontend.Request
     /// Stop at structure flattening.
-    | Flatten
+    | Destructure
     /// Stop at conditional expansion.
     | Expand
     /// Stop at semantic transformation.
@@ -48,7 +48,7 @@ let requestMap =
     Map.ofList [ ("parse", Request.Frontend Lang.Frontend.Request.Parse)
                  ("collate", Request.Frontend Lang.Frontend.Request.Collate)
                  ("model", Request.Frontend Lang.Frontend.Request.Model)
-                 ("flatten", Request.Flatten)
+                 ("destructure", Request.Destructure)
                  ("expand", Request.Expand)
                  ("semantics", Request.Semantics)
                  ("frame", Request.Frame)
@@ -70,8 +70,8 @@ let requestFromStage ostage = Map.tryFind (withDefault "sat" ostage) requestMap
 type Response = 
     /// The result of frontend processing.
     | Frontend of Lang.Frontend.Response
-    /// The result of structure flattening.
-    | Flatten of Model<PAxiom<CView>>
+    /// The result of destructuring.
+    | Destructure of Model<PAxiom<CView>>
     /// The result of conditional expansion.
     | Expand of Model<PAxiom<GView>>
     /// The result of semantic expansion.
@@ -95,7 +95,7 @@ type Response =
 let printResponse = 
     function 
     | Frontend f -> Lang.Frontend.printResponse f
-    | Flatten f -> printModel (printPAxiom printCView) f
+    | Destructure f -> printModel (printPAxiom printCView) f
     | Expand e -> printModel (printPAxiom printGView) e
     | Semantics e -> printModel (printSAxiom printGView) e
     | Frame {Axioms = f} -> printNumHeaderedList printFramedAxiom f
@@ -181,8 +181,8 @@ let semantics = lift Starling.Semantics.translate
 /// Shorthand for the expand stage.
 let expand = lift Starling.Expander.expand
 
-/// Shorthand for the flatten stage.
-let flatten = lift Starling.Flattener.flatten
+/// Shorthand for the destructure stage.
+let destructure = lift Starling.Destructurer.destructure
 
 /// Shorthand for the frontend stage.
 let frontend rq = Lang.Frontend.run rq >> mapMessages Error.Frontend
@@ -198,31 +198,31 @@ let model =
 let runStarling = 
     function 
     | Request.Frontend rq -> frontend rq >> lift Response.Frontend
-    | Request.Flatten -> 
+    | Request.Destructure -> 
         model
-        >> flatten
-        >> lift Response.Flatten
+        >> destructure
+        >> lift Response.Destructure
     | Request.Expand -> 
         model
-        >> flatten
+        >> destructure
         >> expand
         >> lift Response.Expand
     | Request.Semantics -> 
         model
-        >> flatten
+        >> destructure
         >> expand
         >> semantics
         >> lift Response.Semantics
     | Request.Frame -> 
         model
-        >> flatten
+        >> destructure
         >> expand
         >> semantics
         >> frame
         >> lift Response.Frame
     | Request.TermGen -> 
         model
-        >> flatten
+        >> destructure
         >> expand
         >> semantics
         >> frame
@@ -230,7 +230,7 @@ let runStarling =
         >> lift Response.TermGen
     | Request.Reify -> 
         model
-        >> flatten
+        >> destructure
         >> expand
         >> semantics
         >> frame
@@ -239,7 +239,7 @@ let runStarling =
         >> lift Response.Reify
     | Request.GlobalAdd -> 
         model
-        >> flatten
+        >> destructure
         >> expand
         >> semantics
         >> frame
@@ -249,7 +249,7 @@ let runStarling =
         >> lift Response.GlobalAdd
     | Request.Optimise -> 
         model
-        >> flatten
+        >> destructure
         >> expand
         >> semantics
         >> frame
@@ -260,7 +260,7 @@ let runStarling =
         >> lift Response.Reify
     | Request.Z3 rq -> 
         model
-        >> flatten
+        >> destructure
         >> expand
         >> semantics
         >> frame
@@ -272,7 +272,7 @@ let runStarling =
         >> lift Response.Z3
     | Request.HSF ->
         model
-        >> flatten
+        >> destructure
         >> expand
         >> semantics
         >> frame

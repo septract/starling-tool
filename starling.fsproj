@@ -56,7 +56,7 @@
     <Compile Include="ExprTests.fs" />
     <Compile Include="ModellerErrors.fs" />
     <Compile Include="Modeller.fs" />
-    <Compile Include="Flattener.fs" />
+    <Compile Include="Destructurer.fs" />
     <Compile Include="Expander.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="Semantics.fs" />
