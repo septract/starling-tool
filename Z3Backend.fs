@@ -25,9 +25,9 @@ type Request =
 [<NoComparison>]
 type Response =
     /// Output of the term translation step only.
-    | Translate of Model<ZTerm, DView>
+    | Translate of Model<ZTerm, DFunc>
     /// Output of the final Z3 terms only.
-    | Combine of Model<Microsoft.Z3.BoolExpr, DView>
+    | Combine of Model<Microsoft.Z3.BoolExpr, DFunc>
     /// Output of satisfiability reports for the Z3 terms.
     | Sat of Microsoft.Z3.Status list
 

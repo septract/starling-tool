@@ -43,25 +43,13 @@ and exprToZ3 (ctx: Z3.Context) =
     | BExpr b -> boolToZ3 ctx b :> Z3.Expr
     | AExpr a -> arithToZ3 ctx a :> Z3.Expr
 
-/// Generates a param substitution sequence for one func in a view.
-/// The arguments are the defining func and view func respectively.
-let generateFuncParamSub {Params = dpars} {Params = vpars} =
-    Seq.map2 (fun (_, name) up -> name, up) dpars vpars
-
 /// Produces a map of substitutions that transform the parameters of a
 /// vdef into the arguments of its usage.
-let generateParamSubs (dview : DView) (uview : View) =
-    (* Performing list operations on the multiset contents *should* be
-     * sound, because both sides will appear in the same order.
-     *)
-    let dfuncs = Multiset.toList dview
-    let ufuncs = Multiset.toList uview
-
+let generateParamSubs {Params = dpars} {Params = vpars} =
     (* For every matching line in the view and viewdef, run
      * through the parameters creating substitution pairs.
      *)
-    Seq.map2 generateFuncParamSub dfuncs ufuncs
-    |> Seq.concat
+    Seq.map2 (fun (_, name) up -> name, up) dpars vpars
     |> Map.ofSeq
 
 /// Produces a variable substitution function table given a map of parameter
@@ -90,14 +78,14 @@ let paramSubFun vsubs =
 /// Produces the reification of an unguarded view with regards to a
 /// given view definition.
 /// This corresponds to D in the theory.
-let instantiateDef model uview {View = vs; Def = e} =
+let instantiateDef model ufunc {View = vs; Def = e} =
     // Make sure our view expression is actually definite.
     match e with
     | Some ee ->
         (* First, we figure out the mapping from viewdef parameters to
          * actual view expressions.
          *)
-        let vsubs = generateParamSubs vs uview
+        let vsubs = generateParamSubs vs ufunc
 
         ee
         (* We find all the changed parameters and substitute their
@@ -112,11 +100,11 @@ let instantiateDef model uview {View = vs; Def = e} =
         |> ok
     | _ -> IndefiniteConstraint vs |> fail
 
-/// Produces the reification of an unguarded view multiset.
+/// Produces the reification of an unguarded func.
 /// This corresponds to D^ in the theory.
-let reifyZUnguarded model uview =
-    match findDefOfView model.ViewDefs uview with
-    | Some vdef -> instantiateDef model uview vdef
+let reifyZUnguarded model func =
+    match List.tryFind (fun {View = {Name = n}} -> n = func.Name) model with
+    | Some vdef -> instantiateDef model func vdef
     | None -> ok BTrue
 
 let reifyZSingle model {Cond = c; Item = i} =
@@ -132,17 +120,17 @@ let reifyZView model =
     >> lift BAnd
 
 /// Instantiates all of the views in a term over the given model.
-let instantiateZTerm model =
-    tryMapTerm ok (reifyZView model) (reifyZUnguarded model)
+let instantiateZTerm vdefs =
+    tryMapTerm ok (reifyZView vdefs) (reifyZUnguarded vdefs)
 
 /// Z3-reifies all of the views in a term over the given defining model.
-let reifyZTerm ctx model : STerm<ViewSet, View> -> Result<ZTerm, Error> =
-    instantiateZTerm model
+let reifyZTerm ctx vdefs : STerm<GView, VFunc> -> Result<ZTerm, Error> =
+    instantiateZTerm vdefs
     >> lift (mapTerm (boolToZ3 ctx) (boolToZ3 ctx) (boolToZ3 ctx))
 
     /// Reifies all of the terms in a term list.
-let reifyZ3 ctx model : Result<Model<ZTerm, DView>, Error> =
-    tryMapAxioms (reifyZTerm ctx model) model
+let reifyZ3 ctx model : Result<Model<ZTerm, DFunc>, Error> =
+    tryMapAxioms (reifyZTerm ctx (model.ViewDefs)) model
 
 /// Combines the components of a reified term.
 let combineTerm (ctx: Z3.Context) {Cmd = c; WPre = w; Goal = g} =

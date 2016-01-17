@@ -37,20 +37,6 @@ type Horn =
       /// The body of a Horn clause.
       Body : Literal list }
 
-(*
- * Predicate renaming
- *)
-
-/// Generates a predicate name for a view func.
-let predNameOfFunc { Name = n } = n.Replace("_", "__")
-
-/// Generates a predicate name for a view multiset.
-let predNameOfMultiset ms =
-    ms
-    |> Multiset.toSeq
-    |> Seq.map predNameOfFunc
-    |> scons "v"
-    |> String.concat "_"
 
 (*
  * Expression generation
@@ -80,6 +66,10 @@ let rec boolExpr =
     | BLt(x, y) -> lift2 (curry Lt) (checkArith x) (checkArith y)
     | x -> fail <| UnsupportedExpr(BExpr x)
 
+(*
+ * Func sanitisation
+ *)
+
 /// Extracts an ArithExpr from an Expr, if it is indeed arithmetic.
 /// Fails with UnsupportedExpr if the expresson is Boolean.
 let tryArithExpr =
@@ -87,54 +77,20 @@ let tryArithExpr =
     | AExpr x -> x |> ok
     | e -> e |> UnsupportedExpr |> fail
 
-(*
- * View def construction
- *)
-
-/// Extracts a sequence all of the parameters in a multiset in order.
-/// Takes the number of globals, as added to each multiset func by GlobalAdd, to
-/// remove for each item past the first.
-let paramsInMultiset nglobals ms =
-    (* Why is this sound?
-     * Because GlobalAdd always adds in the globals list at the front of each
-     * multiset, and it will contain all of the globals in env.  Thus, if the
-     * env is n items, the first n parameters are surplus to requirements.
-     *
-     * TODO(CaptainHayashi): find a more elegant solution to the problem of
-     * collating the global parameters on views.
-     *)
-    let mseq = ms |> Multiset.toSeq
-
-    let globals =
-        mseq
-        |> Seq.truncate 1
-        |> Seq.map (fun v -> v.Params |> Seq.take nglobals)
-        |> Seq.concat
-
-    let rest =
-        mseq
-        |> Seq.map (fun v -> v.Params |> Seq.skip nglobals)
-        |> Seq.concat
-
-    Seq.append globals rest
-
-
 /// Ensures a param in a viewdef multiset is arithmetic.
 let ensureArith =
    function
    | (Type.Int, x) -> ok (aUnmarked x)
    | x -> fail <| NonArithParam x
 
+/// Constructs a pred from a Func, given a set of active globals,
+/// and some validator on the parameters.
+let predOfFunc gs parT { Name = n; Params = pars } =
+    lift (fun parR -> Pred { Name = n; Params = parR })
+         (pars |> Seq.map parT |> collect)
 (*
  * View definitions
  *)
-
-/// Constructs a pred from a multiset, given a set of active globals,
-/// and some transformer from the parameters to expressions.
-let predOfMultiset gs parT ms =
-    lift (fun parR ->
-          Pred { Name = predNameOfMultiset ms; Params = parR })
-         (ms |> paramsInMultiset (gs |> Map.toSeq |> Seq.length) |> Seq.map parT |> collect)
 
 /// Constructs a full constraint in HSF.
 /// The map of active globals should be passed as gs.
@@ -143,7 +99,7 @@ let hsfViewDef gs { View = vs; Def = ex } =
     Option.map (fun dex ->
         lift2 (fun hd bd ->
             { Head = hd
-              Body = [ bd ] }) (boolExpr dex) (predOfMultiset gs ensureArith vs)) ex
+              Body = [ bd ] }) (boolExpr dex) (predOfFunc gs ensureArith vs)) ex
 
 /// Constructs a set of Horn clauses for all definite viewdefs in a model.
 let hsfModelViewDefs gs =
@@ -172,10 +128,10 @@ let hsfModelVariables gs =
 
     let head = 
         bind
-            (fun vp -> predOfMultiset
+            (fun vp -> predOfFunc
                            gs
                            ok
-                           (Multiset.singleton { Name = "emp"; Params = vp }))
+                           { Name = "emp"; Params = vp })
             vpars
 
 
@@ -208,16 +164,17 @@ let ite i t e =
     | False -> e
     | _ -> ITE(i,t,e)
 
-/// Constructs a Horn literal for a View.
-let hsfView dvs env ms =
+/// Constructs a Horn literal for a Func.
+let hsfFunc dvs env func =
     // We check the defining views here, because anything not in the
     // defining views is to be held true.
-    findDefOfView dvs ms
-    |> Option.map (fun _ -> predOfMultiset env tryArithExpr ms)
+    // Now that we're at the func level, finding the view is easy!
+    List.tryFind (fun {View = {Name = n}} -> n = func.Name) dvs
+    |> Option.map (fun _ -> predOfFunc env tryArithExpr func)
 
-/// Constructs a Horn literal for a GView.
-let hsfGView dvs env { Cond = c; Item = ms } =
-    hsfView dvs env ms
+/// Constructs a Horn literal for a GFunc.
+let hsfGFunc dvs env { Cond = c; Item = ms } =
+    hsfFunc dvs env ms
     |> Option.map (lift2 (fun cR msR -> ite cR msR True) (boolExpr c))
 
 /// Constructs the body for a set of condition pair Horn clauses,
@@ -226,7 +183,7 @@ let hsfConditionBody dvs env ps sem =
     let psH =
         ps
         |> Multiset.toSeq
-        |> Seq.choose (hsfGView dvs env)
+        |> Seq.choose (hsfGFunc dvs env)
         |> collect
         |> lift List.ofSeq
 
@@ -238,7 +195,7 @@ let hsfConditionBody dvs env ps sem =
 /// command semantics, as well as a globals environment.
 let hsfConditionSingle dvs env q body =
     lift (fun qH -> { Head = qH ; Body = body })
-         (Option.get (hsfView dvs env q))
+         (Option.get (hsfFunc dvs env q))
 
 /// Constructs a series of Horn clauses for a term.
 /// Takes the environment of active global variables.

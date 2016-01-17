@@ -6,27 +6,42 @@ open Starling.Expr
 open Starling.Model
 open Starling.Var
 
+
+(*
+ * View-to-func flattening.
+ *)
+
+/// Extracts a sequence of all of the parameters in a view in order.
+let paramsOfView ms =
+    ms
+    |> Multiset.toSeq
+    |> Seq.map (fun v -> v.Params)
+    |> Seq.concat
+
+/// Constructs a (hopefully) unique name for a func encompassing a view.
+let funcNameOfView ms =
+    ms
+    |> Multiset.toSeq
+    // These two steps are to ensure we don't capture an existing name.
+    |> Seq.map (fun { Name = n } -> n.Replace("_", "__"))
+    |> scons "v"
+    |> String.concat "_"
+    |> (fun s -> if s = "v" then "emp" else s)
+
+/// Constructs a Func from a View, given a set of active globals in the
+/// appropriate format for appending into the func's parameter list.
+/// and some transformer from the parameters to expressions.
+let funcOfView globals view =
+    { Name = view |> funcNameOfView
+      Params = view |> paramsOfView |> Seq.append globals |> List.ofSeq }
+
 (*
  * View usages
  *)
 
-/// Adds the globals in gs to the argument list of a func.
-let addGlobalsToFunc gs f =
-    {f with Params = List.append gs f.Params}
-
-/// Adds the globals in gs to a defining view's multiset.
-let addGlobalsToView gs view =
-    view
-    |> Multiset.toList
-    |> function
-        // Replace emp with an actual func definition.
-        | [] -> [addGlobalsToFunc gs {Name = "emp"; Params = []}]
-        | xs -> List.map (addGlobalsToFunc gs) xs
-    |> Multiset.ofList
-
 /// Adds the globals in gs to the argument list of a guarded view.
-let addGlobalsToGuarded gs a =
-    {a with Item = addGlobalsToView gs a.Item}
+let addGlobalsToGuarded gs {Cond = c; Item = i} =
+    { Cond = c; Item = funcOfView gs i }
 
 /// Adds the globals in gs to the argument lists of a view assertion.
 let addGlobalsToViewSet gs =
@@ -36,15 +51,16 @@ let addGlobalsToViewSet gs =
 let addGlobalsToTerm gs =
     mapTerm id
             (addGlobalsToViewSet (gs Before))
-            (addGlobalsToView (gs After))
+            (funcOfView (gs After))
 
 (*
  * View definitions
  *)
 
 /// Adds the globals in gs to a defining view.
-let addGlobalsToViewDef gs vdf =
-    { vdf with View = addGlobalsToView gs vdf.View }
+let addGlobalsToViewDef gs {View = v; Def = d} =
+    { View = funcOfView gs v; Def = d }
+
 
 (*
  * Whole models
@@ -72,5 +88,7 @@ let flatten (mdl: Model<STerm<ViewSet, View>, DView>) =
         |> Seq.map flipPair
         |> List.ofSeq
 
-    {mdl with Axioms = List.map (addGlobalsToTerm gargs) mdl.Axioms
-              ViewDefs = List.map (addGlobalsToViewDef gpars) mdl.ViewDefs}
+    {Globals = mdl.Globals
+     Locals = mdl.Locals
+     Axioms = List.map (addGlobalsToTerm gargs) mdl.Axioms
+     ViewDefs = List.map (addGlobalsToViewDef gpars) mdl.ViewDefs}
