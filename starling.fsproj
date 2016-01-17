@@ -76,7 +76,6 @@
     <Compile Include="PrettyErrors.fs" />
     <Compile Include="Frontend.fs" />
     <Compile Include="Z3Backend.fs" />
-    <Compile Include="HSF.fs" />
     <Compile Include="TestStudies.fs" />
     <Compile Include="PrettyTests.fs" />
     <Compile Include="ParserTests.fs" />
