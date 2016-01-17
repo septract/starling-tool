@@ -152,7 +152,7 @@ let printResult pOk pBad =
                                              printWarns "Warnings" ws ]) (pBad >> printWarns "Errors")
 
 /// Shorthand for the HSF stage.
-let hsf = bind (Starling.HSF.hsfModel >> mapMessages Error.HSF)
+let hsf = bind (Starling.Horn.hsfModel >> mapMessages Error.HSF)
 
 /// Shorthand for the Z3 stage.
 let z3 rq = bind (Starling.Z3.Backend.run rq >> mapMessages Error.Z3)

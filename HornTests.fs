@@ -8,7 +8,6 @@ open Starling.Utils
 open Starling.Expr
 open Starling.Model
 open Starling.Horn
-open Starling.HSF
 open Starling.Tests.Studies
 
 /// Tests for Starling.Horn and Starling.HSF.
