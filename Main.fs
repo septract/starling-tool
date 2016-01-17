@@ -34,8 +34,8 @@ type Request =
     | TermGen
     /// Stop at view reification.
     | Reify
-    /// Stop at global addition.
-    | GlobalAdd
+    /// Stop at term flattening.
+    | Flatten
     /// Stop at term optimisation.
     | Optimise
     /// Run the Z3 backend, with the given request.
@@ -54,7 +54,7 @@ let requestMap =
                  ("frame", Request.Frame)
                  ("termgen", Request.TermGen)
                  ("reify", Request.Reify)
-                 ("globalAdd", Request.GlobalAdd)
+                 ("flatten", Request.Flatten)
                  ("optimise", Request.Optimise)
                  ("reifyZ3", Request.Z3 Z3.Backend.Request.Translate)
                  ("z3", Request.Z3 Z3.Backend.Request.Combine)
@@ -82,8 +82,8 @@ type Response =
     | TermGen of Model<STerm<GView, View>>
     /// The result of term reification.
     | Reify of Model<STerm<ViewSet, View>>
-    /// The result of global addition.
-    | GlobalAdd of Model<STerm<ViewSet, View>>
+    /// The result of term flattening.
+    | Flatten of Model<STerm<ViewSet, View>>
     /// The result of term optimisation.
     | Optimise of Model<STerm<ViewSet, View>>
     /// The result of Z3 backend processing.
@@ -101,7 +101,7 @@ let printResponse =
     | Frame {Axioms = f} -> printNumHeaderedList printFramedAxiom f
     | TermGen {Axioms = t} -> printNumHeaderedList (printSTerm printGView printView) t
     | Reify {Axioms = t} -> printNumHeaderedList (printSTerm printViewSet printView) t
-    | GlobalAdd m -> printModel (printSTerm printViewSet printView) m
+    | Flatten m -> printModel (printSTerm printViewSet printView) m
     | Optimise {Axioms = t} -> printNumHeaderedList (printSTerm printViewSet printView) t
     | Z3 z -> Z3.Backend.printResponse z
     | HSF h -> Starling.Pretty.Horn.printHorns h
@@ -163,8 +163,8 @@ let z3 rq = bind (Starling.Z3.Backend.run rq >> mapMessages Error.Z3)
 /// Shorthand for the optimise stage.
 let optimise = lift Starling.Optimiser.optimise
 
-/// Shorthand for the global-add stage.
-let globalAdd = lift Starling.GlobalAdder.globalAdd
+/// Shorthand for the flattening stage.
+let flatten = lift Starling.Flattener.flatten
 
 /// Shorthand for the reify stage.
 let reify = lift Starling.Reifier.reify
@@ -237,7 +237,7 @@ let runStarling =
         >> termGen
         >> reify
         >> lift Response.Reify
-    | Request.GlobalAdd -> 
+    | Request.Flatten -> 
         model
         >> destructure
         >> expand
@@ -245,8 +245,8 @@ let runStarling =
         >> frame
         >> termGen
         >> reify
-        >> globalAdd
-        >> lift Response.GlobalAdd
+        >> flatten
+        >> lift Response.Flatten
     | Request.Optimise -> 
         model
         >> destructure
@@ -255,7 +255,7 @@ let runStarling =
         >> frame
         >> termGen
         >> reify
-        >> globalAdd
+        >> flatten
         >> optimise
         >> lift Response.Reify
     | Request.Z3 rq -> 
@@ -266,7 +266,7 @@ let runStarling =
         >> frame
         >> termGen
         >> reify
-        >> globalAdd
+        >> flatten
         >> optimise
         >> z3 rq
         >> lift Response.Z3
@@ -278,7 +278,7 @@ let runStarling =
         >> frame
         >> termGen
         >> reify
-        >> globalAdd
+        >> flatten
         >> optimise
         >> hsf
         >> lift Response.HSF
