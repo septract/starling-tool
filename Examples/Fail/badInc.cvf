@@ -9,4 +9,4 @@ method badInc() {
   {| if x==2 then emp else False() |} 
 } 
 
-constraint False() => false; 
+constraint False() -> false; 
