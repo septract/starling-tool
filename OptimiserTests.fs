@@ -49,7 +49,7 @@ type OptimiserTests() =
                              BOr [bAfter "flag"; bAfter "pole"]])
             .Returns(BAnd [ BGt ((AAdd [aBefore "serving"; AInt 1L]), aAfter "t")
                             BOr [BNot (bBefore "flag"); bAfter "pole" ]])
-            .SetName("Remove Boolean afters only if they are in the environment")
+            .SetName("Remove afters of both types simultaneously")
           TestCaseData(BNot (BImplies (bAfter "flag", BGt (aAfter "serving", aAfter "t"))))
             .Returns(BNot (BImplies (BNot (bBefore "flag"),
                                      BGt (AAdd [aBefore "serving"; AInt 1L],

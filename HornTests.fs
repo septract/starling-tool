@@ -13,6 +13,10 @@ open Starling.Tests.Studies
 
 /// Tests for Starling.Horn and Starling.HSF.
 type HornTests() =
+    /// The globals environment used in the tests.
+    static member Globals =
+        Map.ofList [ ("serving", Type.Int) ; ("ticket", Type.Int) ]
+
     /// Test cases for the multiset predicate renamer.
     static member ViewPredNamings =
         let ms : View list -> Multiset<View> = Multiset.ofList
@@ -33,9 +37,12 @@ type HornTests() =
     static member ViewDefHeads =
         let ms : ViewDef list -> Multiset<ViewDef> = Multiset.ofList
         [ TestCaseData(ms [ { Name = "holdLock"
-                              Params = [] }
+                              Params = [ (Type.Int, "serving")
+                                         (Type.Int, "ticket") ] }
                             { Name = "holdTick"
-                              Params = [ (Type.Int, "t") ] } ]).Returns(Some <| Pred { Name = "v_holdLock_holdTick"
+                              Params = [ (Type.Int, "serving")
+                                         (Type.Int, "ticket")
+                                         (Type.Int, "t") ] } ]).Returns(Some <| Pred { Name = "v_holdLock_holdTick"
                                                                                        Params =
                                                                                            [ aUnmarked "serving"
                                                                                              aUnmarked "ticket"
@@ -46,20 +53,60 @@ type HornTests() =
     [<TestCaseSource("ViewDefHeads")>]
     member x.``the HSF viewdef LHS translator works correctly using the ticketed lock model`` v =
         v
-        |> bodyOfConstraint (ticketLockModel.Globals
-                             |> Map.toSeq
-                             |> Seq.map fst
-                             |> Set.ofSeq)
+        |> predOfMultiset ticketLockModel.Globals ensureArith
         |> okOption
 
     /// Test cases for the viewdef Horn clause modeller.
     /// These are in the form of models whose viewdefs are to be modelled.
     static member ViewDefModels =
-      [ TestCaseData(ticketLockModel)
+      [ TestCaseData(
+          [ { CViews =
+                  Multiset.ofList [ { Name = "emp"
+                                      Params = [ (Type.Int, "serving")
+                                                 (Type.Int, "ticket") ] } ]
+              CExpr = Some <| BGe(aUnmarked "ticket", aUnmarked "serving") }
+            { CViews = 
+                  Multiset.ofList [ { Name = "holdTick"
+                                      Params = [ (Type.Int, "serving")
+                                                 (Type.Int, "ticket")
+                                                 (Type.Int, "t") ] } ]
+              CExpr = Some <| BGt(aUnmarked "ticket", aUnmarked "t") }
+            { CViews = 
+                  Multiset.ofList [ { Name = "holdLock"
+                                      Params = [ (Type.Int, "serving")
+                                                 (Type.Int, "ticket") ] } ]
+              CExpr = Some <| BGt(aUnmarked "ticket", aUnmarked "serving") }
+            { CViews = 
+                  Multiset.ofList [ { Name = "holdLock"
+                                      Params = [ (Type.Int, "serving")
+                                                 (Type.Int, "ticket") ] }
+                                    { Name = "holdTick"
+                                      Params = [ (Type.Int, "serving")
+                                                 (Type.Int, "ticket")
+                                                 (Type.Int, "t") ] } ]
+              CExpr = Some <| BNot(aEq (aUnmarked "serving") (aUnmarked "t")) }
+            { CViews = 
+                  Multiset.ofList [ { Name = "holdTick"
+                                      Params = [ (Type.Int, "serving")
+                                                 (Type.Int, "ticket")
+                                                 (Type.Int, "ta") ] }
+                                    { Name = "holdTick"
+                                      Params = [ (Type.Int, "serving")
+                                                 (Type.Int, "ticket")
+                                                 (Type.Int, "tb") ] } ]
+              CExpr = Some <| BNot(aEq (aUnmarked "ta") (aUnmarked "tb")) }
+            { CViews = 
+                  Multiset.ofList [ { Name = "holdLock"
+                                      Params = [ (Type.Int, "serving")
+                                                 (Type.Int, "ticket") ] }
+                                    { Name = "holdLock"
+                                      Params = [ (Type.Int, "serving")
+                                                 (Type.Int, "ticket") ] } ]
+              CExpr = Some <| BFalse } ] )
           .Returns(
               Set.ofList
                   [ { Head = Ge (aUnmarked "ticket", aUnmarked "serving")
-                      Body = [ Pred { Name = "v"
+                      Body = [ Pred { Name = "v_emp"
                                       Params = [ aUnmarked "serving"; aUnmarked "ticket" ] } ] }
                     { Head = Gt (aUnmarked "ticket", aUnmarked "t")
                       Body = [ Pred { Name = "v_holdTick"
@@ -82,15 +129,16 @@ type HornTests() =
 
     /// Tests the model viewdef translator.
     [<TestCaseSource("ViewDefModels")>]
-    member x.``the HSF model viewdef translator works correctly using various models`` (mdl: Model<PartAxiom>) =
-        mdl |> hsfModelViewDefs |> okOption
+    member x.``the HSF model viewdef translator works correctly using various models`` dvs =
+        let y = hsfModelViewDefs HornTests.Globals dvs
+        y |> okOption
 
     /// Test cases for the variable Horn clause modeller.
     /// These are in the form of models whose viewdefs are to be modelled.
     static member VariableModels =
-      [ TestCaseData(ticketLockModel)
+      [ TestCaseData(HornTests.Globals)
           .Returns(
-                  { Head = Pred { Name = "v"
+                  { Head = Pred { Name = "v_emp"
                                   Params = [ aUnmarked "serving"; aUnmarked "ticket" ] }
                     Body = [ Eq (aUnmarked "serving", AInt 0L)
                              Eq (aUnmarked "ticket", AInt 0L) ] }
@@ -99,5 +147,5 @@ type HornTests() =
 
     /// Tests the model viewdef translator.
     [<TestCaseSource("VariableModels")>]
-    member x.``the HSF model variable initialiser works correctly using various models`` (mdl: Model<PartAxiom>) =
-        mdl |> hsfModelVariables |> okOption
+    member x.``the HSF variable initialiser works correctly using various variable maps`` (gs: VarMap) =
+        gs |> hsfModelVariables |> okOption
