@@ -1,5 +1,5 @@
-/// Part of the Starling tool that turns global variables into view parameters.
-module Starling.GlobalAdder
+/// Part of the Starling tool that flattens terms, adding in globals.
+module Starling.Flattener
 
 open Starling.Collections
 open Starling.Expr
@@ -51,7 +51,7 @@ let addGlobalsToViewDef gs vdf =
  *)
 
 /// Adds globals to the arguments of all views in a model.
-let globalAdd (mdl: Model<STerm<ViewSet, View>>) =
+let flatten (mdl: Model<STerm<ViewSet, View>>) =
     /// Build a function making a list of global arguments, for view assertions.
     let gargs marker = 
         mdl.Globals
