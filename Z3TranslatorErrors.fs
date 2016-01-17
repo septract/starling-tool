@@ -7,4 +7,4 @@ open Starling.Model
 type Error =
     /// The translator was given an indefinite constraint.
     /// The Z3 backend cannot handle indefinite constraints.
-    | IndefiniteConstraint of viewdef: DView
+    | IndefiniteConstraint of viewdef: DFunc

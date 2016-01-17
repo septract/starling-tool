@@ -83,9 +83,9 @@ type Response =
     /// The result of term reification.
     | Reify of Model<STerm<ViewSet, View>, DView>
     /// The result of term flattening.
-    | Flatten of Model<STerm<ViewSet, View>, DView>
+    | Flatten of Model<STerm<GView, VFunc>, DFunc>
     /// The result of term optimisation.
-    | Optimise of Model<STerm<ViewSet, View>, DView>
+    | Optimise of Model<STerm<GView, VFunc>, DFunc>
     /// The result of Z3 backend processing.
     | Z3 of Z3.Backend.Response
     /// The result of HSF processing.
@@ -101,8 +101,8 @@ let printResponse =
     | Frame {Axioms = f} -> printNumHeaderedList printFramedAxiom f
     | TermGen {Axioms = t} -> printNumHeaderedList (printSTerm printGView printView) t
     | Reify {Axioms = t} -> printNumHeaderedList (printSTerm printViewSet printView) t
-    | Flatten m -> printModel (printSTerm printViewSet printView) printDView m
-    | Optimise {Axioms = t} -> printNumHeaderedList (printSTerm printViewSet printView) t
+    | Flatten m -> printModel (printSTerm printGView printVFunc) printDFunc m
+    | Optimise {Axioms = t} -> printNumHeaderedList (printSTerm printGView printVFunc) t
     | Z3 z -> Z3.Backend.printResponse z
     | HSF h -> Starling.Pretty.Horn.printHorns h
 
@@ -257,7 +257,7 @@ let runStarling =
         >> reify
         >> flatten
         >> optimise
-        >> lift Response.Reify
+        >> lift Response.Optimise
     | Request.Z3 rq -> 
         model
         >> destructure

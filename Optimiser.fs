@@ -14,14 +14,10 @@ open Starling.Model
 let subAftersInFunc sub func =
     {func with Params = List.map (subVars sub) func.Params}
 
-/// Substitutes afters in a view multiset.
-let subAftersInView sub =
-    Multiset.map (subAftersInFunc sub)
-
 /// Substitutes afters in a guarded view.
 let subAftersInGuarded sub {Cond = c; Item = ms} =
     {Cond = boolSubVars sub c
-     Item = subAftersInView sub ms}
+     Item = subAftersInFunc sub ms}
 
 /// Finds all instances of the pattern `x!after = f(x!before)` in a Boolean
 /// expression that is either an equality or conjunction, and where x is arithmetic.
@@ -62,7 +58,7 @@ let eliminateAfters { WPre = p ; Goal = q ; Cmd = r } =
                         (r |> findBoolAfters |> Map.ofList)
                   
     { WPre = Multiset.map (subAftersInGuarded sub) p
-      Goal = subAftersInView sub q
+      Goal = subAftersInFunc sub q
       (* This step will create a tautology f(x!before) = f(x!before).
        * We assume we can eliminate it later.
        *)
@@ -79,5 +75,5 @@ let optimiseTerm =
     eliminateAfters
 
 /// Optimises a model's terms.
-let optimise : Model<STerm<ViewSet, View>, DView> -> Model<STerm<ViewSet, View>, DView> =
+let optimise : Model<STerm<GView, VFunc>, DFunc> -> Model<STerm<GView, VFunc>, DFunc> =
     mapAxioms optimiseTerm
