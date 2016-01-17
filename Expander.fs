@@ -36,9 +36,9 @@ let expandCondPair { Pre = pre; Post = post } =
       Post = resolveCondViews post }
 
 /// Expands an axiom.
-let expandAxiom { Conditions = cs; Inner = i } = 
-    { Conditions = expandCondPair cs
-      Inner = i }
+let expandAxiom { Conds = cs; Cmd = i } = 
+    { Conds = expandCondPair cs
+      Cmd = i }
 
 /// Expands an entire model.
-let expand : Model<FlatAxiom> -> Model<FullAxiom> = mapAxioms expandAxiom
+let expand : Model<PAxiom<CView>> -> Model<PAxiom<GView>> = mapAxioms expandAxiom

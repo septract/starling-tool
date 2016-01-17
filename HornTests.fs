@@ -18,7 +18,7 @@ type HornTests() =
 
     /// Test cases for the multiset predicate renamer.
     static member ViewPredNamings =
-        let ms : View list -> Multiset<View> = Multiset.ofList
+        let ms : VFunc list -> View = Multiset.ofList
         [ TestCaseData(ms [ { Name = "foo"
                               Params = [] }
                             { Name = "bar_baz"
@@ -28,13 +28,13 @@ type HornTests() =
     /// Tests the view predicate name generator.
     [<TestCaseSource("ViewPredNamings")>]
     member x.``the HSF predicate name generator generates names correctly`` v =
-        let pn : Multiset<View> -> string = predNameOfMultiset
+        let pn : View -> string = predNameOfMultiset
         pn v
 
     /// Test cases for the viewdef variable extractor.
     /// These all use the ticketed lock model.
     static member ViewDefHeads =
-        let ms : ViewDef list -> Multiset<ViewDef> = Multiset.ofList
+        let ms : DFunc list -> DView = Multiset.ofList
         [ TestCaseData(ms [ { Name = "holdLock"
                               Params = [ (Type.Int, "serving")
                                          (Type.Int, "ticket") ] }
@@ -59,23 +59,23 @@ type HornTests() =
     /// These are in the form of models whose viewdefs are to be modelled.
     static member ViewDefModels =
       [ TestCaseData(
-          [ { CViews =
+          [ { View =
                   Multiset.ofList [ { Name = "emp"
                                       Params = [ (Type.Int, "serving")
                                                  (Type.Int, "ticket") ] } ]
-              CExpr = Some <| BGe(aUnmarked "ticket", aUnmarked "serving") }
-            { CViews = 
+              Def = Some <| BGe(aUnmarked "ticket", aUnmarked "serving") }
+            { View = 
                   Multiset.ofList [ { Name = "holdTick"
                                       Params = [ (Type.Int, "serving")
                                                  (Type.Int, "ticket")
                                                  (Type.Int, "t") ] } ]
-              CExpr = Some <| BGt(aUnmarked "ticket", aUnmarked "t") }
-            { CViews = 
+              Def = Some <| BGt(aUnmarked "ticket", aUnmarked "t") }
+            { View = 
                   Multiset.ofList [ { Name = "holdLock"
                                       Params = [ (Type.Int, "serving")
                                                  (Type.Int, "ticket") ] } ]
-              CExpr = Some <| BGt(aUnmarked "ticket", aUnmarked "serving") }
-            { CViews = 
+              Def = Some <| BGt(aUnmarked "ticket", aUnmarked "serving") }
+            { View = 
                   Multiset.ofList [ { Name = "holdLock"
                                       Params = [ (Type.Int, "serving")
                                                  (Type.Int, "ticket") ] }
@@ -83,8 +83,8 @@ type HornTests() =
                                       Params = [ (Type.Int, "serving")
                                                  (Type.Int, "ticket")
                                                  (Type.Int, "t") ] } ]
-              CExpr = Some <| BNot(aEq (aUnmarked "serving") (aUnmarked "t")) }
-            { CViews = 
+              Def = Some <| BNot(aEq (aUnmarked "serving") (aUnmarked "t")) }
+            { View = 
                   Multiset.ofList [ { Name = "holdTick"
                                       Params = [ (Type.Int, "serving")
                                                  (Type.Int, "ticket")
@@ -93,15 +93,15 @@ type HornTests() =
                                       Params = [ (Type.Int, "serving")
                                                  (Type.Int, "ticket")
                                                  (Type.Int, "tb") ] } ]
-              CExpr = Some <| BNot(aEq (aUnmarked "ta") (aUnmarked "tb")) }
-            { CViews = 
+              Def = Some <| BNot(aEq (aUnmarked "ta") (aUnmarked "tb")) }
+            { View = 
                   Multiset.ofList [ { Name = "holdLock"
                                       Params = [ (Type.Int, "serving")
                                                  (Type.Int, "ticket") ] }
                                     { Name = "holdLock"
                                       Params = [ (Type.Int, "serving")
                                                  (Type.Int, "ticket") ] } ]
-              CExpr = Some <| BFalse } ] )
+              Def = Some <| BFalse } ] )
           .Returns(
               Set.ofList
                   [ { Head = Ge (aUnmarked "ticket", aUnmarked "serving")

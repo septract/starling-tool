@@ -11,33 +11,21 @@ let rec flatWhile model expr outer inner precom =
      * Translating [|P1|] do { [|P2|] [|P3|] } while (C) [|P4|].
      *)
     let p1 = outer.Pre
-    let p2 = inner.Conditions.Pre
-    let p3 = inner.Conditions.Post
+    let p2 = inner.Conds.Pre
+    let p3 = inner.Conds.Post
     let p4 = outer.Post
     
     // For do-while loops: [|P1|} id {|P2|}
     // For while loops: [|P1|} assume C {|P2|}
-    let p1p2 = 
-        { Conditions = 
-              { Pre = p1
-                Post = p2 }
-          Inner = precom }
+    let p1p2 = axiom p1 precom p2
     
     // [|P3|] assume C [|P2|]
-    let p3p2 = 
-        { Conditions = 
-              { Pre = p3
-                Post = p2 }
-          Inner = PrimAssume expr }
+    let p3p2 = axiom p3 (PrimAssume expr) p2
     
     // [|P3|] assume ¬C [|P4|]
-    let p3p4 = 
-        { Conditions = 
-              { Pre = p3
-                Post = p4 }
-          Inner = PrimAssume(mkNot expr) }
+    let p3p4 = axiom p3 (PrimAssume(mkNot expr)) p4
     
-    p1p2 :: p3p2 :: p3p4 :: flatAxioms model inner.Inner
+    p1p2 :: p3p2 :: p3p4 :: flatAxioms model inner.Cmd
 
 /// Flattens an if-then-else loop into a list of flattened axioms.
 and flatITE model expr outer inTrue inFalse = 
@@ -45,42 +33,26 @@ and flatITE model expr outer inTrue inFalse =
      * Translating [|P1|] if (C) { [|P2|] [|P3|] } else { [|P4|] [|P5|] } [|P6|].
      *)
     let p1 = outer.Pre
-    let p2 = inTrue.Conditions.Pre
-    let p3 = inTrue.Conditions.Post
-    let p4 = inFalse.Conditions.Pre
-    let p5 = inFalse.Conditions.Post
+    let p2 = inTrue.Conds.Pre
+    let p3 = inTrue.Conds.Post
+    let p4 = inFalse.Conds.Pre
+    let p5 = inFalse.Conds.Post
     let p6 = outer.Post
     
     // [|P1|} assume C {|P2|}
-    let p1p2 = 
-        { Conditions = 
-              { Pre = p1
-                Post = p2 }
-          Inner = PrimAssume expr }
+    let p1p2 = axiom p1 (PrimAssume expr) p2
     
     // [|P3|] id [|P6|]
-    let p3p6 = 
-        { Conditions = 
-              { Pre = p3
-                Post = p6 }
-          Inner = PrimId }
+    let p3p6 = axiom p3 PrimId p6
     
     // [|P1|] assume ~C [|P4|]
-    let p1p4 = 
-        { Conditions = 
-              { Pre = p1
-                Post = p4 }
-          Inner = PrimAssume(mkNot expr) }
+    let p1p4 = axiom p1 (PrimAssume(mkNot expr)) p4
     
     // [|P5|] id [|P6|]
-    let p5p6 = 
-        { Conditions = 
-              { Pre = p5
-                Post = p6 }
-          Inner = PrimId }
+    let p5p6 = axiom p5 PrimId p6
     
-    let trues = p1p2 :: p3p6 :: flatAxioms model inTrue.Inner
-    let falses = p1p4 :: p5p6 :: flatAxioms model inFalse.Inner
+    let trues = p1p2 :: p3p6 :: flatAxioms model inTrue.Cmd
+    let falses = p1p4 :: p5p6 :: flatAxioms model inFalse.Cmd
     List.concat [ trues; falses ]
 
 /// Flattens a part axiom into a list of flattened axioms.
