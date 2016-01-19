@@ -37,6 +37,12 @@ NuGet, and the native Z3 library for your platform.
 
 NuGet should be able to restore the rest of the prerequisites.
 
+## People
+
+* [Matthew Windsor](https://www-users.cs.york.ac.uk/~mbw500/)
+* [Mike Dodds](https://www-users.cs.york.ac.uk/~miked/)
+* [Matthew Parkinson](http://research.microsoft.com/en-us/people/mattpark/) 
+
 ## Licence
 
 MIT; see `LICENSE`.
