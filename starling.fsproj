@@ -18,6 +18,7 @@
     <StartWorkingDirectory>..\..</StartWorkingDirectory>
     <WarningLevel>5</WarningLevel>
     <PlatformTarget>x86</PlatformTarget>
+    <Optimize>false</Optimize>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
     <OutputPath>bin\Release</OutputPath>
@@ -43,14 +44,16 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Collections.fs" />
     <Compile Include="Utils.fs" />
-    <Compile Include="Z3Utils.fs" />
     <Compile Include="PrettyTypes.fs" />
     <Compile Include="VarErrors.fs" />
     <Compile Include="Var.fs" />
+    <Compile Include="Expr.fs" />
+    <Compile Include="ExprPretty.fs" />
     <Compile Include="AST.fs" />
     <Compile Include="ASTPretty.fs" />
     <Compile Include="Collator.fs" />
     <Compile Include="Model.fs" />
+    <Compile Include="ExprTests.fs" />
     <Compile Include="ModellerErrors.fs" />
     <Compile Include="Modeller.fs" />
     <Compile Include="Flattener.fs" />
@@ -60,9 +63,18 @@
     <Compile Include="Framer.fs" />
     <Compile Include="TermGen.fs" />
     <Compile Include="Reifier.fs" />
-    <Compile Include="Z3Reifier.fs" />
+    <Compile Include="Z3Utils.fs" />
+    <Compile Include="Z3TranslatorErrors.fs" />
+    <Compile Include="Z3Translator.fs" />
+    <Compile Include="Z3Run.fs" />
+    <Compile Include="HornErrors.fs" />
+    <Compile Include="Horn.fs" />
+    <Compile Include="HornPretty.fs" />
     <Compile Include="Pretty.fs" />
     <Compile Include="PrettyErrors.fs" />
+    <Compile Include="Frontend.fs" />
+    <Compile Include="Z3Backend.fs" />
+    <Compile Include="HSF.fs" />
     <Compile Include="TestStudies.fs" />
     <Compile Include="PrettyTests.fs" />
     <Compile Include="ParserTests.fs" />
@@ -70,11 +82,15 @@
     <Compile Include="ExpanderTests.fs" />
     <Compile Include="SemanticsTests.fs" />
     <Compile Include="ReifierTests.fs" />
+    <Compile Include="HornTests.fs" />
     <Compile Include="Main.fs" />
     <None Include="packages.config" />
     <None Include="Examples\Pass\ticketLock.cvf" />
+    <None Include="Examples\Pass\ticketLockNoIf.cvf" />
+    <None Include="Examples\Pass\ticketLockNonAtomicRelease.cvf" />
     <None Include="Examples\Pass\spinLock.cvf" />
     <None Include="Examples\Pass\multicounter.cvf" />
+    <None Include="Examples\PassHSF\ticketLockIndefinite.cvf" />
     <None Include="Examples\WIP\dekker.cvf" />
     <None Include="Examples\WIP\duplicateVars.cvf" />
     <None Include="Examples\WIP\errors.cvf" />
@@ -82,13 +98,18 @@
     <None Include="Examples\WIP\peterson.cvf" />
     <None Include="Examples\WIP\sppool.cvf" />
     <None Include="Examples\WIP\tests.cvf" />
-    <None Include="Examples\Fail\ticketLockBad.cvf"/>
-    <None Include="Examples\Fail\ticketLockBad2.cvf"/>
+    <None Include="Examples\Fail\ticketLockBad.cvf" />
+    <None Include="Examples\Fail\ticketLockBad2.cvf" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="mscorlib" />
+    <Reference Include="nunit.framework">
+      <HintPath>packages\NUnit.3.0.1\lib\net40\nunit.framework.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Numerics" />
     <Reference Include="Chessie">
       <HintPath>packages\Chessie.0.2.2\lib\net40\Chessie.dll</HintPath>
     </Reference>
@@ -106,9 +127,6 @@
     </Reference>
     <Reference Include="FSharp.Core">
       <HintPath>packages\FSharp.Core.4.0.0.1\lib\net40\FSharp.Core.dll</HintPath>
-    </Reference>
-    <Reference Include="Fuchu">
-      <HintPath>packages\Fuchu.1.0.1.0\lib\Fuchu.dll</HintPath>
     </Reference>
   </ItemGroup>
 </Project>

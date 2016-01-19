@@ -1,147 +1,117 @@
 module Starling.Tests.Modeller
 
-open Chessie.ErrorHandling  // ok
-open Fuchu                  // general test framework
-open Microsoft.Z3           // anything involving ctx
-
-
+open NUnit.Framework
 open Starling
 open Starling.Collections
+open Starling.Expr
 open Starling.Var
 open Starling.Model
-
 open Starling.Lang.AST
 open Starling.Lang.Modeller
-
 open Starling.Tests.Studies
 
-open Starling.Pretty.Lang.AST
+/// Tests for the modeller.
+type ModellerTests() =
 
-/// Assertion that converting the arithmetic expression `expr` to Z3
-/// yields the given AST.
-let assertZ3ArithExpr ctx expr z3 =
-    let model = ticketLockModel ctx
-    Assert.Equal (printExpression expr + " -Z3-> " + z3.ToString (),
-                  ok z3,
-                  arithExprToZ3 model model.Locals expr)
+    /// Sample environment used in expression modelling tests.
+    static member Env =
+        Map.ofList [ ("foo", Type.Int)
+                     ("bar", Type.Int)
+                     ("baz", Type.Bool)
+                     ("emp", Type.Bool) ]
 
-/// Assertion that converting the Boolean expression `expr` to Z3
-/// yields the given AST.
-let assertZ3BoolExpr ctx expr z3 =
-    let model = ticketLockModel ctx
-    Assert.Equal (printExpression expr + " -Z3-> " + z3.ToString (),
-                  ok z3,
-                  boolExprToZ3 model model.Locals expr)
+    /// Arithmetic expression modelling tests.
+    static member ArithmeticExprs =
+        [ TestCaseData(Bop(Add, Bop(Mul, Int 1L, Int 2L), Int 3L)).Returns(Some <| AAdd [ AMul [ AInt 1L
+                                                                                                 AInt 2L ]
+                                                                                          AInt 3L ])
+            .SetName("model (1 * 2) + 3") ]
 
-let testExprToZ3 ctx =
-    testList "Test translation of expressions" [
-        testList "Test translation of arithmetic expressions" [
-            testCase "Test arithmetic-only expressions" <|
-                fun _ ->
-                    assertZ3ArithExpr ctx
-                                      (BopExp (Add,
-                                               BopExp (Mul,
-                                                       IntExp 1L,
-                                                       IntExp 2L),
-                                               IntExp 3L))
-                                      (ctx.MkAdd [| ctx.MkMul [| ctx.MkInt 1 :> ArithExpr
-                                                                 ctx.MkInt 2 :> ArithExpr |]
-                                                    ctx.MkInt 3 :> ArithExpr |]) ]
-        testList "Test translation of Boolean expressions" [
-            testCase "Test Boolean-only expressions" <|
-                fun _ ->
-                    (* We simplify obviously-true/false expressions down.
-                     * This is one of them.
-                     *)
-                    assertZ3BoolExpr ctx
-                                     (BopExp (And,
-                                              BopExp (Or,
-                                                      TrueExp,
-                                                      TrueExp),
-                                              FalseExp))
-                                     (ctx.MkFalse ()) ] ]
+    /// Tests whether the arithmetic expression modeller works.
+    [<TestCaseSource("ArithmeticExprs")>]
+    member x.``test the arithmetic expression modeller`` ast = modelArithExpr ModellerTests.Env ast |> okOption
 
-let testModelVarListNoDuplicates ctx =
-    testList "Test modelling of variables forbids duplicates"
-        [ testCase "Forbid duplicate with same type"
-          <| fun _ -> Assert.Equal ("bool foo; bool foo -> error",
-                                    fail <| Starling.Errors.Var.VMEDuplicate "foo",
-                                    Starling.Var.makeVarMap ctx [ (Bool, "foo")
-                                                                  (Bool, "foo") ])
-          testCase "Forbid duplicate with different type"
-          <| fun _ -> Assert.Equal ("bool foo; int foo -> error",
-                                    fail <| Starling.Errors.Var.VMEDuplicate "foo",
-                                    Starling.Var.makeVarMap ctx [ (Bool, "foo")
-                                                                  (Int, "foo") ])
-        ]
+    /// Boolean expression modelling tests.
+    /// These all use the ticketed lock model.
+    static member BooleanExprs =
+        [ TestCaseData(Bop(And, Bop(Or, True, True), False)).Returns(Some BFalse)
+            .SetName("model and simplify (true || true) && false") ]
 
-let testModelVars ctx =
-    testList "Test modelling of variables"
-        [ testModelVarListNoDuplicates ctx ]
+    /// Tests whether the arithmetic expression modeller works.
+    [<TestCaseSource("BooleanExprs")>]
+    member x.``test the Boolean expression modeller`` ast =
+        ast
+        |> modelBoolExpr ModellerTests.Env
+        |> okOption
 
-/// Converts a model to some form that is accurately comparable.
-let modelToComparable model =
-    (model.Globals, model.Locals, model.Axioms, model.VProtos, model.DefViews)
+    /// Tests for modelling bad variable lists.
+    static member BadVarLists =
+        [ TestCaseData([ (Type.Bool, "foo")
+                         (Type.Bool, "foo") ]).Returns(Some <| [ Starling.Errors.Var.Duplicate "foo" ])
+              .SetName("disallow var lists with duplicates of same type")
 
-let testModelPrimOnAtomic (ctx: Context) =
-    testCase "test modelPrimOnAtomic with ticketed lock example" <|
-        fun _ -> Assert.Equal ("modelPrimOnAtomic with <t = ticket++>",
-                               ok (IntLoad (Some (LVIdent "t"),
-                                           LVIdent "ticket",
-                                           Increment)),
-                               (modelPrimOnAtomic (ticketLockModel ctx)
-                                                  (Fetch (LVIdent "t",
-                                                          LVExp (LVIdent "ticket"),
-                                                          Increment))))
-
-let testModelAxiomOnCommand (ctx: Context) =
-    testCase "test modelAxiomOnCommand with ticketed lock example" <|
-        fun _ ->
-            Assert.Equal
-                ("modelAxiomOnCommand with {emp} <t = ticket++> {holdLock()}",
-                 ok (PAAxiom {Conditions = {Pre = Multiset.empty ()
-                                            Post = Multiset.ofList [CSetView {VName = "holdTick";
-                                                                              VParams = [ctx.MkIntConst "t"]} ] }
-                              Inner = IntLoad (Some (LVIdent "t"),
-                                              LVIdent "ticket",
-                                              Increment) } ),
-                 (modelAxiomOnCommand (ticketLockModel ctx)
-                                      {Pre = Multiset.empty ()
-                                       Post = Multiset.ofList [CSetView {VName = "holdTick"
-                                                                         VParams = [ctx.MkIntConst "t"]} ] }
-
-                                      (Atomic (Fetch (LVIdent "t",
-                                                      LVExp (LVIdent "ticket"),
-                                                      Increment)))))
-
-let testMakeAxiomConditionPair (ctx: Context) =
-    testCase "Test makeAxiomConditionPair with ticketed lock example" <|
-        fun _ -> Assert.Equal ("makeAxiomConditionPair emp holdTick(t)",
-                               ok ( {Pre = Multiset.empty ()
-                                     Post = Multiset.ofList [CSetView {VName = "holdTick"
-                                                                       VParams = [ctx.MkIntConst "t"] } ] } ),
-                               makeAxiomConditionPair (ticketLockModel ctx)
-                                                      (Unit)
-                                                      (Func ("holdTick", [LVExp (LVIdent "t") ] )))
+          TestCaseData([ (Type.Int, "bar")
+                         (Type.Bool, "bar") ]).Returns(Some <| [ Starling.Errors.Var.Duplicate "bar" ])
+              .SetName("disallow var lists with duplicates of different type") ]
 
 
-let testTicketedLock ctx =
-    testCase "Test that the ticketed lock produces the correct model" <|
-    fun _ ->
-        Assert.Equal
-            ("ticketed lock collation -> ticketed lock model",
-             ticketLockModel ctx |> ok |> lift modelToComparable,
-             modelWith ctx ticketLockCollated |> lift modelToComparable)
+    /// Tests the creation of var lists.
+    [<TestCaseSource("BadVarLists")>]
+    member x.``invalid var lists are rejected during mapping`` vl = makeVarMap vl |> failOption
 
-[<Tests>]
-let testModeller =
-    let ctx = new Context ()
-    let t = testList "Test the modeller"
-                     [ testExprToZ3 ctx
-                       testModelVars ctx
-                       testModelPrimOnAtomic ctx
-                       testMakeAxiomConditionPair ctx
-                       testList "Test modelling of case studies"
-                                [ testTicketedLock ctx ]]
-    ctx.Dispose ()
-    t
+    /// Tests for modelling valid variable lists.
+    static member VarLists =
+        let emp : (Type * string) list = []
+        let empm : VarMap = Map.empty
+        [ TestCaseData([ (Type.Int, "baz")
+                         (Type.Bool, "emp") ])
+              .Returns(Some <| Map.ofList [ ("baz", Type.Int)
+                                            ("emp", Type.Bool) ])
+              .SetName("allow var lists with no duplicate variables")
+          TestCaseData(emp).Returns(Some <| empm).SetName("allow empty var lists") ]
+
+    /// Tests the creation of var lists.
+    [<TestCaseSource("VarLists")>]
+    member x.``valid var lists are accepted during mapping`` (vl: (Type * string) list) =
+        makeVarMap vl |> okOption
+
+    /// Tests for the atomic primitive modeller.
+    /// These use the ticketed lock model.
+    static member AtomicPrims =
+        [ TestCaseData(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment))
+            .Returns(Some <| IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment))
+            .SetName("model a valid integer load as a prim") ]
+
+    /// Tests the atomic primitive modeller using the ticketed lock.
+    [<TestCaseSource("AtomicPrims")>]
+    member x.``atomic actions are modelled correctly as prims`` a = modelPrimOnAtomic ticketLockModel.Globals ticketLockModel.Locals a |> okOption
+
+    /// Tests for the command axiom modeller.
+    /// These use the ticketed lock model.
+    static member CommandAxioms =
+        [ TestCaseData({ Pre = Multiset.empty()
+                         Post =
+                             Multiset.ofList [ CondView.Func { Name = "holdTick"
+                                                               Params = [ AExpr(aUnmarked "t") ] } ] }, Atomic(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment)))
+            .Returns(Some <| (PAAxiom { Conditions =
+                                            { Pre = Multiset.empty()
+                                              Post =
+                                                  Multiset.ofList
+                                                      [ CondView.Func { Name = "holdTick"
+                                                                        Params = [ AExpr(aUnmarked "t") ] } ] }
+                                        Inner = IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment) }))
+            .SetName("model a valid integer load command as an axiom") ]
+
+    /// Tests the command modeller using the ticketed lock.
+    [<TestCaseSource("CommandAxioms")>]
+    member x.``commands are modelled correctly as axioms`` (cpair, c) =
+        modelAxiomOnCommand ticketLockModel.Globals ticketLockModel.Locals cpair c |> okOption
+
+    /// Full case studies to model.
+    static member Models =
+        [ TestCaseData(ticketLockCollated).Returns(Some ticketLockModel).SetName("model the ticketed lock") ]
+
+    /// Tests the whole modelling process.
+    [<TestCaseSource("Models")>]
+    member x.``case studies are modelled correctly`` col = model col |> okOption
+    

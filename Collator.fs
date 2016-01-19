@@ -6,32 +6,32 @@ open Starling.Var
 open Starling.Lang.AST
 
 /// A script whose items have been partitioned by type.
-type CollatedScript =
-    { CGlobals: (Type * string) list
-      CLocals: (Type * string) list
-      CVProtos: ViewProto list
-      CConstraints: Constraint list
-      CMethods: Method list }
+type CollatedScript = 
+    { Globals : (Type * string) list
+      Locals : (Type * string) list
+      VProtos : ViewProto list
+      Constraints : Constraint list
+      Methods : Method list }
 
 /// The empty collated script.
-let empty =
-    { CConstraints = []
-      CMethods = []
-      CVProtos = []
-      CGlobals = []
-      CLocals = [] }
+let empty = 
+    { Constraints = []
+      Methods = []
+      VProtos = []
+      Globals = []
+      Locals = [] }
 
 /// Files a script item into the appropriate bin in a
 /// CollatedScript.
-let collateStep item collation =
+let collateStep item collation = 
     match item with
-    | SGlobal (v, t) -> { collation with CGlobals = (v, t) :: collation.CGlobals }
-    | SLocal (v, t) -> { collation with CLocals = (v, t) :: collation.CLocals }
-    | SViewProto v -> { collation with CVProtos = v :: collation.CVProtos }
-    | SMethod m -> { collation with CMethods = m :: collation.CMethods }
-    | SConstraint c -> { collation with CConstraints = c :: collation.CConstraints }
+    | Global(v, t) -> { collation with Globals = (v, t) :: collation.Globals }
+    | Local(v, t) -> { collation with Locals = (v, t) :: collation.Locals }
+    | ViewProto v -> { collation with VProtos = v :: collation.VProtos }
+    | Method m -> { collation with Methods = m :: collation.Methods }
+    | Constraint c -> { collation with Constraints = c :: collation.Constraints }
 
 /// Collates a script, grouping all like-typed ScriptItems together.
-let collate script =
+let collate script = 
     // We foldBack instead of fold to preserve the original order.
     List.foldBack collateStep script empty

@@ -13,35 +13,40 @@ local int s;  // The thread's current view of serving.
 method lock() {
   {| emp |}
     <t = ticket++>;
-  {| holdTick(t) |}
+  {| holdTickLock(t, false) |}
     do {
-      {| holdTick(t) |}
+      {| holdTickLock(t, false) |}
         <s = serving>;
-      {| if s == t then holdLock() else holdTick(t) |}
+      {| holdTickLock(t, s == t) |}
     } while (s != t);
-  {| holdLock() |}
+  {| holdTickLock(t, true) |}
 }
 
 /*
  * Unlocks the ticket lock.
  */
 method unlock() {
-  {| holdLock() |}
+  {| holdTickLock(t, true) |}
     <serving++>;
   {| emp |}
 }
 
-view holdTick(int t);
-view holdLock();
+view holdTickLock(int t, bool b);
 
 // Invariant
 constraint emp                         -> ticket >= serving;
 
 // Predicate definitions
-constraint holdTick(t)                 -> ticket > t;
-constraint holdLock()                  -> ticket != serving;
+constraint holdTickLock(t, b)          -> ticket > t && (b == false || ticket != serving);
 
 // Interactions
-constraint holdLock()   * holdTick(t)  -> serving != t;
-constraint holdTick(ta) * holdTick(tb) -> ta != tb;
-//constraint holdLock()   * holdLock()   -> false;
+constraint holdTickLock(ta,ba) * holdTickLock(tb,bb) -> ta != tb  && (ba == false || bb == false) 
+                                                           && (ba == false || serving != tb)
+							   && (bb == false || serving != ta);
+
+
+
+
+/* Comment
+   /* Nested Comment */
+ */

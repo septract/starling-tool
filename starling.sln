@@ -1,7 +1,9 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2012
-Project("{f2a71f9b-5d33-465a-a702-920d77279786}") = "starling", "starling.fsproj", "{FB248950-5C1B-4AE6-B7AE-E167C623D60F}"
+# Visual Studio 14
+VisualStudioVersion = 14.0.24720.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "starling", "starling.fsproj", "{FB248950-5C1B-4AE6-B7AE-E167C623D60F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -13,6 +15,9 @@ Global
 		{FB248950-5C1B-4AE6-B7AE-E167C623D60F}.Debug|x86.Build.0 = Debug|x86
 		{FB248950-5C1B-4AE6-B7AE-E167C623D60F}.Release|x86.ActiveCfg = Release|x86
 		{FB248950-5C1B-4AE6-B7AE-E167C623D60F}.Release|x86.Build.0 = Release|x86
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(MonoDevelopProperties) = preSolution
 		StartupItem = starling.fsproj

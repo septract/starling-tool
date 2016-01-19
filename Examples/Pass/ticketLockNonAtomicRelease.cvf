@@ -27,21 +27,29 @@ method lock() {
  */
 method unlock() {
   {| holdLock() |}
-    <serving++>;
+    <s = serving>;
+  {| relLock(s) |}
+    <serving = (s + 1)>;
   {| emp |}
 }
 
 view holdTick(int t);
 view holdLock();
+view relLock(int s);
 
 // Invariant
-constraint emp                         -> ticket != serving;
+constraint emp                         -> ticket >= serving;
 
 // Predicate definitions
 constraint holdTick(t)                 -> ticket > t;
 constraint holdLock()                  -> ticket != serving;
+constraint relLock(s)                   -> ticket != serving && serving == s;
 
 // Interactions
 constraint holdLock()   * holdTick(t)  -> serving != t;
+constraint relLock(s)   * holdTick(t)  -> serving != t;
 constraint holdTick(ta) * holdTick(tb) -> ta != tb;
 constraint holdLock()   * holdLock()   -> false;
+constraint relLock(s)   * holdLock()   -> false;
+constraint relLock(sa)   * relLock(sb)   -> false;
+
