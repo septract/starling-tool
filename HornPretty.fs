@@ -92,7 +92,8 @@ let printHorn =
                 [ String n
                   ps |> Seq.map String |> commaSep |> squared
                 ]
-                |> commaSep |> parened ]
+                |> commaSep |> parened
+                String "." ]
                            
 
 /// Emits a Horn clause list.

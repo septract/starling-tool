@@ -94,12 +94,17 @@ let predOfFunc gs parT { Name = n; Params = pars } =
  * View definitions
  *)
 
+/// Generates a query_naming clause for a viewdef.
+let queryNaming { Name = n; Params = ps } =
+    QueryNaming {Name = n; Params = ps |> List.map snd}
+
 /// Constructs a full constraint in HSF.
 /// The map of active globals should be passed as gs.
 /// Some is returned if the constraint is definite; None otherwise.
 let hsfViewDef gs { View = vs; Def = ex } =
     Option.map (fun dex ->
-        lift2 (fun hd bd -> Clause (hd, [bd]))
+        lift2 (fun hd bd -> [ queryNaming vs
+                              Clause (hd, [bd]) ])
               (boolExpr dex)
               (predOfFunc gs ensureArith vs)) ex
 
@@ -107,7 +112,7 @@ let hsfViewDef gs { View = vs; Def = ex } =
 let hsfModelViewDefs gs =
     Seq.choose (hsfViewDef gs)
     >> collect
-    >> lift Set.ofSeq
+    >> lift (List.concat >> Set.ofSeq)
 
 (*
  * Variables
