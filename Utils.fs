@@ -104,3 +104,14 @@ let mapMessages f = either (fun (v, msgs) -> Ok(v, List.map f msgs)) (fun msgs -
 /// Like fold, but constantly binds the given function over a Chessie result.
 /// The initial state is wrapped in 'ok'.
 let seqBind f initialS = Seq.fold (fun s x -> bind (f x) s) (ok initialS)
+
+
+/// Fold that can be terminated earlier by the step function f returning None.
+/// If Any step returns None, the whole fold returns None.
+let rec foldFastTerm  (f : 'State -> 'T -> 'State option)  (s : 'State) (l : 'T list) =  
+     match l with 
+     | []   -> Some s
+     | x::l -> 
+        match f s x with 
+        | Some s -> foldFastTerm f s l
+        | None -> None 

@@ -13,7 +13,7 @@ let rec resolveCondViewIn (suffix : Set<BoolExpr>) =
     | Func v -> 
         [ { Cond = 
                 suffix
-                |> Set.toArray
+                |> Set.toList
                 |> mkAnd
             Item = v } ]
     | ITE(expr, tviews, fviews) -> 

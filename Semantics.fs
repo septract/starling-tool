@@ -153,11 +153,9 @@ let semanticsOf model prim =
     let actions = emitPrim prim
     // Temporarily build an And so we can check it with frame.
     // TODO(CaptainHayashi): eliminate this round-trip?
-    let actionsAnd = actions |> List.toArray
-    let aframe = frame model (mkAnd actionsAnd)
+    let aframe = frame model (mkAnd actions)
     actions
-    |> Seq.ofList
-    |> Seq.append aframe
+    |> List.append (Seq.toList aframe)
     |> mkAnd 
 
 /// Marks all of the variables in a View using the given  marker.

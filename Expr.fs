@@ -55,66 +55,94 @@ let (|BBEq|_|) =
     | BEq (BExpr x, BExpr y) -> Some (x, y)
     | _ -> None
 
-
-
-/// Returns true if the expression is definitely true.
-/// This is sound, but not complete.
-let rec isTrue =
-    function
-    // True is always true.
-    | BTrue -> true
-    // If something is always false, its negation is always true.
-    | BNot (Contradiction) -> true
+/// Recursively simplify a formula
+let rec simp ax =
+    match ax with 
+    | BNot (x) -> 
+        match simp x with 
+        | BTrue      -> BFalse
+        | BFalse     -> BTrue
+        | BNot x     -> x
+        | BGt (x, y) -> BLe (x, y)
+        | BGe (x, y) -> BLt (x, y)
+        | BLe (x, y) -> BGt (x, y)
+        | BLt (x, y) -> BGe (x, y)
+        | BAnd xs    -> simp (BOr (List.map BNot xs))
+        | BOr xs     -> simp (BAnd (List.map BNot xs)) 
+        | y          -> BNot y
     // x = x is always true.
-    | BEq (x, y) when x = y -> true
+    | BEq (x, y) when x = y -> BTrue
     // As are x >= x, x <= x, and x => x.
-    | BGe (x, y) when x = y -> true
-    | BLe (x, y) when x = y -> true
-    | BImplies (_, Tautology) 
-    | BImplies (Contradiction, _) -> true 
-    // An or is always true if it contains one thing that is always true.
-    | BOr xs -> List.exists isTrue xs
+    | BGe (x, y) 
+    | BLe (x, y) when x = y -> BTrue
+    | BImplies (x, y) ->
+        match simp x, simp y with
+        | BFalse, _ 
+        | _, BTrue      -> BTrue
+        | BTrue, y      -> y
+        | x, y          -> BImplies(x,y)
+    | BOr xs -> 
+        match foldFastTerm  
+                (fun s x ->
+                  match simp x with 
+                  | BTrue  -> None
+                  | BFalse -> Some s     
+                  | y      -> Some (y :: s)
+                )
+                [] 
+                xs with 
+        | Some []  -> BFalse
+        | Some [x] -> x
+        | Some xs  -> BOr (List.rev xs)
+        | None     -> BTrue
     // An and is always true if everything in it is always true.
-    | BAnd xs -> List.forall isTrue xs
+    | BAnd xs -> 
+        match foldFastTerm  
+                (fun s x ->
+                  match simp x with 
+                  | BFalse -> None
+                  | BTrue  -> Some s     
+                  | y      -> Some (y :: s)
+                )
+                [] 
+                xs with 
+        | Some []  -> BTrue
+        | Some [x] -> x 
+        | Some xs  -> BAnd (List.rev xs)
+        | None     -> BFalse
     // An implication from a contradiction is always true.
-    | BImplies (Contradiction, _) -> true
     // A Boolean equality between two contradictions or tautologies is always true.
-    | BBEq (Tautology, Tautology)  -> true
-    | BBEq (Contradiction, Contradiction) -> true
-    // Otherwise, we cannot tell.
-    | _ -> false
+    | BBEq (x, y)  -> 
+        match simp x, simp y with
+        | BFalse, BFalse 
+        | BTrue, BTrue      -> BTrue
+        | BTrue, BFalse 
+        | BFalse, BTrue     -> BFalse   
+        | x, y              -> BEq(BExpr x, BExpr y)
+    | x -> x
+
 /// Returns true if the expression is definitely false.
 /// This is sound, but not complete.
-and isFalse =
+let isFalse =
+    simp >> 
     function
     // False is always false.
     | BFalse -> true
-    // If something is always true, its negation is always false.
-    | BNot (Tautology) -> true
-    // x > x is always false.
-    // (x != x is Not(x = x), which is caught above.)
-    | BGt (x, y) when x = y -> true
-    // As is x > x.
-    | BLt (x, y) when x = y -> true
-    // An and is always false if it contains one thing is always false.
-    | BAnd xs -> List.exists isFalse xs
-    // An or is always true if everything in it is always false.
-    | BOr xs -> List.forall isFalse xs
-    // An implication to a contradiction is always false.
-    | BImplies (Tautology, Contradiction) -> true
-    // A Boolean equality between a contradiction and a tautology is always false.
-    | BBEq (Contradiction, Tautology) -> true
-    | BBEq (Tautology, Contradiction) -> true
-    // Otherwise, we cannot tell.
-    | _ -> false
-
+    | _      -> false
+   
+let isTrue =
+    simp >> 
+    function
+    // False is always false.
+    | BTrue -> true
+    | _      -> false
+      
 /// Partial match on tautologies.
-and (|Tautology|NotTautology|) x =
-    if isTrue x then Tautology else NotTautology
-
-/// Partial match on contradictions.
-and (|Contradiction|NotContradiction|) x =
-    if isFalse x then Contradiction else NotContradiction
+let (|Tautology|Contradiction|Simplified|Unchanged|) x =
+    match simp x with 
+    | BTrue  -> Tautology 
+    | BFalse -> Contradiction
+    | sx     -> if x = sx then Unchanged else Simplified sx 
 
 /// Extracts the name from a Starling constant.
 let stripMark =
@@ -210,29 +238,11 @@ let mkDiv = curry ADiv
 
 /// Slightly optimised version of ctx.MkAnd.
 /// Returns true for the empty array, and x for the singleton set {x}.
-let mkAnd conjuncts =
-    if Seq.exists isFalse conjuncts
-    then BFalse
-    else
-        conjuncts
-        |> Seq.filter (isTrue >> not)  // True terms redundant in AND.
-        |> List.ofSeq
-        |> function | [] -> BTrue  // True is the zero of AND.
-                    | [x] -> x
-                    | xs -> BAnd xs
+let mkAnd = BAnd >> simp
 
 /// Slightly optimised version of ctx.MkOr.
 /// Returns false for the empty set, and x for the singleton set {x}.
-let mkOr disjuncts =
-    if Seq.exists isTrue disjuncts
-    then BTrue
-    else
-        disjuncts
-        |> Seq.filter (isFalse >> not)  // False terms redundant in OR.
-        |> List.ofSeq
-        |> function | [] -> BFalse  // False is the zero of OR.
-                    | [x] -> x
-                    | xs -> BOr xs
+let mkOr  = BOr >> simp
 
 /// Makes an And from a pair of two expressions.
 let mkAnd2 l r = mkAnd [l ; r]
@@ -241,34 +251,13 @@ let mkAnd2 l r = mkAnd [l ; r]
 let mkOr2 l r = mkOr [l ; r]
 
 /// Symbolically inverts a Boolean expression.
-let rec mkNot =
-    // Simplify obviously false or true exprs to their negation.
-    function | Tautology _ -> BFalse
-             | Contradiction _ -> BTrue
-             | BNot x -> x
-             | BGt (x, y) -> BLe (x, y)
-             | BGe (x, y) -> BLt (x, y)
-             | BLe (x, y) -> BGt (x, y)
-             | BLt (x, y) -> BGe (x, y)
-             | BAnd xs -> mkOr (List.map mkNot xs)
-             | BOr xs -> mkAnd (List.map mkNot xs) 
-             | x -> BNot x
+let mkNot = BNot >> simp
 
 /// Makes not-equals.
 let mkNeq l r = mkEq l r |> mkNot
 
 /// Makes an implication from a pair of two expressions.
-let mkImplies l r =
-    (* l => r <-> ¬l v r.
-     * This implies (excuse the pun) that l false or r true will
-     * make the expression a tautology;
-     * similarly, l true yields r, and r false yields ¬l.
-     *)
-    match l, r with
-    | (Contradiction _, _) | (_, Tautology _) -> BTrue
-    | (x, Contradiction _) -> mkNot x
-    | (Tautology _, x) -> x
-    | _ -> BImplies (l, r)
+let mkImplies l r = BImplies (l, r) |> simp
 
 /// Makes an Add out of a pair of two expressions.
 let mkAdd2 l r = AAdd [ l; r ]
@@ -451,13 +440,3 @@ let rec (|ConstantBoolFunction|_|) = varsInBool >> onlyOne
 /// Partial pattern that matches a Boolean expression in terms of exactly one /
 /// constant.
 let rec (|ConstantArithFunction|_|) = varsInArith >> onlyOne
-
-/// An active pattern that performs a round of simplification.
-let (|Identity|_|) old =
-    let nu =
-        match old with
-        | BAnd xs -> xs |> mkAnd
-        | BOr xs -> xs |> mkOr
-        | x -> x
-    // Did we actually do any simplification?
-    if nu = old then None else Some nu
