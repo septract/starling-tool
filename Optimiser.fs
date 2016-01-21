@@ -120,12 +120,12 @@ let tciCollapseExpr =
 let tciCollapseFunc {Name = n; Params = ps} =
     {Name = n; Params = List.map tciCollapseExpr ps}
 
-/// Performs tautology/contradiction/identity collapsing on a View.
-let tciCollapseView = Multiset.map tciCollapseFunc
+/// Performs tautology/contradiction/identity collapsing on a GFunc.
+let tciCollapseGFunc {Cond = c; Item = v} =
+    {Cond = tciCollapseBool c; Item = tciCollapseFunc v}
 
 /// Performs tautology/contradiction/identity collapsing on a GView.
-let tciCollapseGView {Cond = c; Item = v} =
-    {Cond = tciCollapseBool c; Item = tciCollapseView v}
+let tciCollapseGView = Multiset.map tciCollapseGFunc
 
 /// Performs tautology/contradiction/identity collapsing on a term.
 let tciCollapse {Cmd = c; WPre = w; Goal = g} =
@@ -143,6 +143,7 @@ let optimiseTerm =
     // TODO(CaptainHayashi): add optimising passes.
     eliminateAfters
     >> guardReduce
+    >> tciCollapse
 
 /// Optimises a model's terms.
 let optimise : Model<STerm<GView, VFunc>, DFunc> -> Model<STerm<GView, VFunc>, DFunc> =

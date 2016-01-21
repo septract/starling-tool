@@ -452,8 +452,11 @@ let rec (|ConstantBoolFunction|_|) = varsInBool >> onlyOne
 let rec (|ConstantArithFunction|_|) = varsInArith >> onlyOne
 
 /// An active pattern that performs a round of simplification.
-let (|Identity|_|) =
-    function
-    | BAnd xs -> xs |> mkAnd |> Some
-    | BOr xs -> xs |> mkOr |> Some
-    | _ -> None
+let (|Identity|_|) old =
+    let nu =
+        match old with
+        | BAnd xs -> xs |> mkAnd
+        | BOr xs -> xs |> mkOr
+        | x -> x
+    // Did we actually do any simplification?
+    if nu = old then None else Some nu
