@@ -14,7 +14,7 @@
     <OutputPath>bin\Debug</OutputPath>
     <ErrorReport>prompt</ErrorReport>
     <Externalconsole>true</Externalconsole>
-    <StartArguments>-h  Examples\Pass\ticketLock.cvf</StartArguments>
+    <StartArguments>Examples\Pass\ticketLock.cvf</StartArguments>
     <StartWorkingDirectory>..\..</StartWorkingDirectory>
     <WarningLevel>5</WarningLevel>
     <PlatformTarget>x86</PlatformTarget>
