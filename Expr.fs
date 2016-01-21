@@ -64,22 +64,23 @@ let rec isTrue =
     // True is always true.
     | BTrue -> true
     // If something is always false, its negation is always true.
-    | BNot (Contradiction _) -> true
+    | BNot (Contradiction) -> true
     // x = x is always true.
     | BEq (x, y) when x = y -> true
     // As are x >= x, x <= x, and x => x.
     | BGe (x, y) when x = y -> true
     | BLe (x, y) when x = y -> true
-    | BImplies (x, y) when x = y -> true
+    | BImplies (_, Tautology) 
+    | BImplies (Contradiction, _) -> true 
     // An or is always true if it contains one thing that is always true.
     | BOr xs -> List.exists isTrue xs
     // An and is always true if everything in it is always true.
     | BAnd xs -> List.forall isTrue xs
     // An implication from a contradiction is always true.
-    | BImplies (Contradiction _, _) -> true
+    | BImplies (Contradiction, _) -> true
     // A Boolean equality between two contradictions or tautologies is always true.
-    | BBEq (Tautology _, Tautology _) -> true
-    | BBEq (Contradiction _, Contradiction _) -> true
+    | BBEq (Tautology, Tautology)  -> true
+    | BBEq (Contradiction, Contradiction) -> true
     // Otherwise, we cannot tell.
     | _ -> false
 /// Returns true if the expression is definitely false.
@@ -89,7 +90,7 @@ and isFalse =
     // False is always false.
     | BFalse -> true
     // If something is always true, its negation is always false.
-    | BNot (Tautology _) -> true
+    | BNot (Tautology) -> true
     // x > x is always false.
     // (x != x is Not(x = x), which is caught above.)
     | BGt (x, y) when x = y -> true
@@ -100,20 +101,20 @@ and isFalse =
     // An or is always true if everything in it is always false.
     | BOr xs -> List.forall isFalse xs
     // An implication to a contradiction is always false.
-    | BImplies (_, Contradiction _) -> true
+    | BImplies (Tautology, Contradiction) -> true
     // A Boolean equality between a contradiction and a tautology is always false.
-    | BBEq (Contradiction _, Tautology _) -> true
-    | BBEq (Tautology _, Contradiction _) -> true
+    | BBEq (Contradiction, Tautology) -> true
+    | BBEq (Tautology, Contradiction) -> true
     // Otherwise, we cannot tell.
     | _ -> false
 
 /// Partial match on tautologies.
-and (|Tautology|_|) x =
-    if isTrue x then Some x else None
+and (|Tautology|NotTautology|) x =
+    if isTrue x then Tautology else NotTautology
 
 /// Partial match on contradictions.
-and (|Contradiction|_|) x =
-    if isFalse x then Some x else None
+and (|Contradiction|NotContradiction|) x =
+    if isFalse x then Contradiction else NotContradiction
 
 /// Extracts the name from a Starling constant.
 let stripMark =

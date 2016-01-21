@@ -105,8 +105,8 @@ let guardReduce {Cmd = c; WPre = w; Goal = g} =
 /// Performs tautology/contradiction/identity collapsing on a BoolExpr.
 let rec tciCollapseBool =
     function
-    | Tautology _ -> BTrue
-    | Contradiction _ -> BFalse
+    | Tautology -> BTrue
+    | Contradiction -> BFalse
     | Identity x -> tciCollapseBool x
     | x -> x
 
