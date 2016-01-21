@@ -6,6 +6,7 @@
 ./Examples/Pass/spinLock.cvf: 
 ./Examples/Pass/ticketLock.cvf: 
 ./Examples/Pass/ticketLockNoIf.cvf: 
+./Examples/Pass/ticketLockNoInvariant.cvf: 
 ./Examples/Pass/ticketLockNonAtomicRelease.cvf: 
 ./Examples/PassHSF/ticketLockIndefinite.cvf: 
 ./Examples/WIP/dekker.cvf: 
