@@ -102,15 +102,18 @@ let queryNaming { Name = n; Params = ps } =
 /// The map of active globals should be passed as gs.
 /// Some is returned if the constraint is definite; None otherwise.
 let hsfViewDef gs { View = vs; Def = ex } =
-    Option.map (fun dex ->
-        lift2 (fun hd bd -> [ queryNaming vs
-                              Clause (hd, [bd]) ])
-              (boolExpr dex)
-              (predOfFunc gs ensureArith vs)) ex
+    let clause =
+        Option.map (fun dex ->
+            lift2 (fun hd bd -> Clause (hd, [bd]))
+                  (boolExpr dex)
+                  (predOfFunc gs ensureArith vs)) ex
+    match clause with
+    | Some cl -> lift (fun c -> [ queryNaming vs; c ]) cl
+    | None -> ok [ queryNaming vs ]
 
 /// Constructs a set of Horn clauses for all definite viewdefs in a model.
 let hsfModelViewDefs gs =
-    Seq.choose (hsfViewDef gs)
+    Seq.map (hsfViewDef gs)
     >> collect
     >> lift (List.concat >> Set.ofSeq)
 
