@@ -15,6 +15,8 @@ type Options =
       raw : bool
       [<Option('s', HelpText = "The stage at which Starling should stop and output.")>]
       stage : string option
+      [<Option('O', HelpText = "Perform no optimisation stages.")>]
+      noOptimise : bool
       [<Value(0, MetaName = "input", HelpText = "The file to load (omit, or supply -, for standard input).")>]
       input : string option }
 
@@ -193,9 +195,12 @@ let model =
                                                 | Lang.Frontend.Response.Model m -> m |> ok
                                                 | _ -> Other "internal error: bad frontend response" |> fail)
 
-/// Given two arguments rq and file, runs the Starling request rq on the file named by file.
-/// file is optional: if missing, we read from stdin.
-let runStarling = 
+/// Runs the Starling request at argument 2 on the file named by argument 3.
+/// If missing, we read from stdin.
+/// Argument 1 turns optimisation on if true.
+let runStarling opt = 
+    let maybeOptimise = if opt then optimise else id
+
     function 
     | Request.Frontend rq -> frontend rq >> lift Response.Frontend
     | Request.Destructure -> 
@@ -256,7 +261,7 @@ let runStarling =
         >> termGen
         >> reify
         >> flatten
-        >> optimise
+        >> maybeOptimise
         >> lift Response.Optimise
     | Request.Z3 rq -> 
         model
@@ -267,7 +272,7 @@ let runStarling =
         >> termGen
         >> reify
         >> flatten
-        >> optimise
+        >> maybeOptimise
         >> z3 rq
         >> lift Response.Z3
     | Request.HSF ->
@@ -279,7 +284,7 @@ let runStarling =
         >> termGen
         >> reify
         >> flatten
-        >> optimise
+        >> maybeOptimise
         >> hsf
         >> lift Response.HSF
 
@@ -287,10 +292,11 @@ let runStarling =
 let mainWithOptions opts = 
     let input = opts.input
     let raw = opts.raw
+    let optimise = not opts.noOptimise
     
     let starlingR = 
         match (requestFromStage opts.stage) with
-        | Some otype -> runStarling otype input
+        | Some otype -> runStarling optimise otype input
         | None -> fail Error.BadStage
     
     let pfn = 
