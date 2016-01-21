@@ -42,18 +42,78 @@ and BoolExpr =
     | BLe of ArithExpr * ArithExpr
     | BLt of ArithExpr * ArithExpr
     | BNot of BoolExpr
+ 
+/// Partial pattern that matches a Boolean equality on arithmetic expressions.
+let (|BAEq|_|) =
+    function
+    | BEq (AExpr x, AExpr y) -> Some (x, y)
+    | _ -> None
+
+/// Partial pattern that matches a Boolean equality on Boolean expressions.
+let (|BBEq|_|) =
+    function
+    | BEq (BExpr x, BExpr y) -> Some (x, y)
+    | _ -> None
+
+
 
 /// Returns true if the expression is definitely true.
 /// This is sound, but not complete.
-let isTrue =
-    function | BTrue -> true
-             | _ -> false
-
+let rec isTrue =
+    function
+    // True is always true.
+    | BTrue -> true
+    // If something is always false, its negation is always true.
+    | BNot (Contradiction _) -> true
+    // x = x is always true.
+    | BEq (x, y) when x = y -> true
+    // As are x >= x, x <= x, and x => x.
+    | BGe (x, y) when x = y -> true
+    | BLe (x, y) when x = y -> true
+    | BImplies (x, y) when x = y -> true
+    // An or is always true if it contains one thing that is always true.
+    | BOr xs -> List.exists isTrue xs
+    // An and is always true if everything in it is always true.
+    | BAnd xs -> List.forall isTrue xs
+    // An implication from a contradiction is always true.
+    | BImplies (Contradiction _, _) -> true
+    // A Boolean equality between two contradictions or tautologies is always true.
+    | BBEq (Tautology _, Tautology _) -> true
+    | BBEq (Contradiction _, Contradiction _) -> true
+    // Otherwise, we cannot tell.
+    | _ -> false
 /// Returns true if the expression is definitely false.
 /// This is sound, but not complete.
-let isFalse =
-    function | BFalse -> true
-             | _ -> false
+and isFalse =
+    function
+    // False is always false.
+    | BFalse -> true
+    // If something is always true, its negation is always false.
+    | BNot (Tautology _) -> true
+    // x > x is always false.
+    // (x != x is Not(x = x), which is caught above.)
+    | BGt (x, y) when x = y -> true
+    // As is x > x.
+    | BLt (x, y) when x = y -> true
+    // An and is always false if it contains one thing is always false.
+    | BAnd xs -> List.exists isFalse xs
+    // An or is always true if everything in it is always false.
+    | BOr xs -> List.forall isFalse xs
+    // An implication to a contradiction is always false.
+    | BImplies (_, Contradiction _) -> true
+    // A Boolean equality between a contradiction and a tautology is always false.
+    | BBEq (Contradiction _, Tautology _) -> true
+    | BBEq (Tautology _, Contradiction _) -> true
+    // Otherwise, we cannot tell.
+    | _ -> false
+
+/// Partial match on tautologies.
+and (|Tautology|_|) x =
+    if isTrue x then Some x else None
+
+/// Partial match on contradictions.
+and (|Contradiction|_|) x =
+    if isFalse x then Some x else None
 
 /// Extracts the name from a Starling constant.
 let stripMark =
@@ -383,18 +443,6 @@ let (|SimpleExpr|CompoundExpr|) =
     | AExpr (SimpleArith) -> SimpleExpr
     | _ -> CompoundExpr
 
-/// Partial pattern that matches a Boolean equality on arithmetic expressions.
-let (|BAEq|_|) =
-    function
-    | BEq (AExpr x, AExpr y) -> Some (x, y)
-    | _ -> None
-
-/// Partial pattern that matches a Boolean equality on Boolean expressions.
-let (|BBEq|_|) =
-    function
-    | BEq (BExpr x, BExpr y) -> Some (x, y)
-    | _ -> None
-
 /// Partial pattern that matches a Boolean expression in terms of exactly one /
 /// constant.
 let rec (|ConstantBoolFunction|_|) = varsInBool >> onlyOne
@@ -402,3 +450,10 @@ let rec (|ConstantBoolFunction|_|) = varsInBool >> onlyOne
 /// Partial pattern that matches a Boolean expression in terms of exactly one /
 /// constant.
 let rec (|ConstantArithFunction|_|) = varsInArith >> onlyOne
+
+/// An active pattern that performs a round of simplification.
+let (|Identity|_|) =
+    function
+    | BAnd xs -> xs |> mkAnd |> Some
+    | BOr xs -> xs |> mkOr |> Some
+    | _ -> None

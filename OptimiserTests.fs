@@ -103,5 +103,30 @@ type OptimiserTests() =
     [<TestCaseSource("AfterFuncs")>]
     member x.``Afters in the params of funcs should be substituted correctly`` f =
         let sub = afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs
-        f |> subAftersInFunc sub
+        subAftersInFunc sub f
 
+    /// Test cases for tautology/contradiction collapsing.
+    static member ObviousBools =
+        [ TestCaseData(BNot BFalse)
+            .Returns(BTrue)
+            .SetName("Simplify !false as a tautology")
+          TestCaseData(BAnd [BTrue; BTrue; BNot BFalse; bEq BFalse BFalse])
+            .Returns(BTrue)
+            .SetName("Simplify true&&true&&!false&&false==false as a tautology")
+          TestCaseData(BImplies (BFalse, bEq BTrue BFalse))
+            .Returns(BTrue)
+            .SetName("Simplify false=>true==false as a tautology")
+          TestCaseData(BNot BTrue)
+            .Returns(BFalse)
+            .SetName("Simplify !true as a contradiction")
+          TestCaseData(BAnd [BTrue; BFalse; BNot BFalse; bEq BFalse BFalse])
+            .Returns(BFalse)
+            .SetName("Simplify true&&false&&!false&&false==false as a contradiction")
+          TestCaseData(BImplies (BTrue, bEq BTrue BFalse))
+            .Returns(BFalse)
+            .SetName("Simplify true=>true==false as a contradiction") ]
+
+     /// Test collapsing of tautologies and contradictions
+    [<TestCaseSource("ObviousBools")>]
+    member x.``Tautologies and contradictions should be collapsed properly`` b =
+        tciCollapseBool b

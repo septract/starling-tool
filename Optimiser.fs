@@ -99,6 +99,41 @@ let guardReduce {Cmd = c; WPre = w; Goal = g} =
     {Cmd = c; WPre = reduceGView fs w; Goal = g}
 
 (*
+ * Tautology, contradiction and identity collapsing
+ *)
+
+/// Performs tautology/contradiction/identity collapsing on a BoolExpr.
+let rec tciCollapseBool =
+    function
+    | Tautology _ -> BTrue
+    | Contradiction _ -> BFalse
+    | Identity x -> tciCollapseBool x
+    | x -> x
+
+/// Performs tautology/contradiction/identity collapsing on an Expr.
+let tciCollapseExpr =
+    function
+    | AExpr a -> a |> AExpr
+    | BExpr b -> b |> tciCollapseBool |> BExpr
+
+/// Performs tautology/contradiction/identity collapsing on a func.
+let tciCollapseFunc {Name = n; Params = ps} =
+    {Name = n; Params = List.map tciCollapseExpr ps}
+
+/// Performs tautology/contradiction/identity collapsing on a View.
+let tciCollapseView = Multiset.map tciCollapseFunc
+
+/// Performs tautology/contradiction/identity collapsing on a GView.
+let tciCollapseGView {Cond = c; Item = v} =
+    {Cond = tciCollapseBool c; Item = tciCollapseView v}
+
+/// Performs tautology/contradiction/identity collapsing on a term.
+let tciCollapse {Cmd = c; WPre = w; Goal = g} =
+    {Cmd = tciCollapseBool c
+     WPre = tciCollapseGView w
+     Goal = tciCollapseFunc g}
+
+(*
  * Frontend
  *)
 
