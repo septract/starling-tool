@@ -30,12 +30,14 @@ type Literal =
     | Le of ArithExpr * ArithExpr
     | Lt of ArithExpr * ArithExpr
 
-/// A Horn clause, in Datalog form.
+/// A Horn clause, in Datalog/HSF form.
 type Horn = 
-    { /// The head of a Horn clause.
-      Head : Literal
-      /// The body of a Horn clause.
-      Body : Literal list }
+    /// A normal Horn clause.
+    | Clause of head: Literal * body: (Literal list)
+    /// A comment.
+    | Comment of string
+    /// A query-naming call.
+    | QueryNaming of Func<string>
 
 
 (*
@@ -97,9 +99,9 @@ let predOfFunc gs parT { Name = n; Params = pars } =
 /// Some is returned if the constraint is definite; None otherwise.
 let hsfViewDef gs { View = vs; Def = ex } =
     Option.map (fun dex ->
-        lift2 (fun hd bd ->
-            { Head = hd
-              Body = [ bd ] }) (boolExpr dex) (predOfFunc gs ensureArith vs)) ex
+        lift2 (fun hd bd -> Clause (hd, [bd]))
+              (boolExpr dex)
+              (predOfFunc gs ensureArith vs)) ex
 
 /// Constructs a set of Horn clauses for all definite viewdefs in a model.
 let hsfModelViewDefs gs =
@@ -137,8 +139,8 @@ let hsfModelVariables gs =
 
     // TODO(CaptainHayashi): actually get these initialisations from
     // somewhere instead of assuming everything to be 0L.
-    lift2 (fun hd vp -> { Head = hd
-                          Body = List.map (fun n -> Eq (n, AInt 0L)) vp })
+    lift2 (fun hd vp -> Clause(hd,
+                               List.map (fun n -> Eq (n, AInt 0L)) vp ))
           head
           vpars
 
@@ -191,22 +193,20 @@ let hsfConditionBody dvs env ps sem =
 
     lift2 List.append psH semH
 
-/// Constructs a single Horn clause given its body, postcondition, and
-/// command semantics, as well as a globals environment.
-let hsfConditionSingle dvs env q body =
-    lift (fun qH -> { Head = qH ; Body = body })
-         (Option.get (hsfFunc dvs env q))
-
 /// Constructs a series of Horn clauses for a term.
 /// Takes the environment of active global variables.
-let hsfTerm dvs env {Cmd = c; WPre = w ; Goal = g} =
-    let body = hsfConditionBody dvs env w c
-    bind (hsfConditionSingle dvs env g) body
+let hsfTerm dvs env num {Cmd = c; WPre = w ; Goal = g} =
+    lift2 (fun head body ->
+           [ Comment (sprintf "term %d" num)
+             Clause (head, body) ])
+          (Option.get (hsfFunc dvs env g))
+          (hsfConditionBody dvs env w c)
 
 /// Constructs a set of Horn clauses for all terms associated with a model.
 let hsfModelTerms gs dvs =
-    Seq.map (hsfTerm dvs gs)
+    Seq.mapi (hsfTerm dvs gs)
     >> collect
+    >> lift List.concat
 
 /// Constructs a HSF script for a model.
 let hsfModel { Globals = gs; ViewDefs = dvs; Axioms = xs } =
