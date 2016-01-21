@@ -1,17 +1,17 @@
-./Examples/Fail/badInc2.cvf: 1
 ./Examples/Fail/badInc.cvf: 1
-./Examples/Fail/ticketLockBad2.cvf: 1 3 31 
-./Examples/Fail/ticketLockBad.cvf: 28 29 
-./Examples/PassHSF/ticketLockIndefinite.cvf: 
+./Examples/Fail/badInc2.cvf: 1
+./Examples/Fail/ticketLockBad.cvf: 28 29
+./Examples/Fail/ticketLockBad2.cvf: 1 3 31
 ./Examples/Pass/multicounter.cvf: 
 ./Examples/Pass/spinLock.cvf: 
 ./Examples/Pass/ticketLock.cvf: 
 ./Examples/Pass/ticketLockNoIf.cvf: 
+./Examples/Pass/ticketLockNonAtomicRelease.cvf: 
+./Examples/PassHSF/ticketLockIndefinite.cvf: 
 ./Examples/WIP/dekker.cvf: 
 ./Examples/WIP/duplicateVars.cvf: 
 ./Examples/WIP/errors.cvf: 
 ./Examples/WIP/filterLock.cvf: 
-./Examples/WIP/peterson.cvf: 5 8 40 47 50 52 
+./Examples/WIP/peterson.cvf: 5 8 40 47 50 52
 ./Examples/WIP/sppool.cvf: 
 ./Examples/WIP/tests.cvf: 
-./Examples/Pass/ticketLockNonAtomicRelease.cvf:
