@@ -137,13 +137,6 @@ let isTrue =
     | BTrue -> true
     | _      -> false
       
-/// Partial match on tautologies.
-let (|Tautology|Contradiction|Simplified|Unchanged|) x =
-    match simp x with 
-    | BTrue  -> Tautology 
-    | BFalse -> Contradiction
-    | sx     -> if x = sx then Unchanged else Simplified sx 
-
 /// Extracts the name from a Starling constant.
 let stripMark =
     function

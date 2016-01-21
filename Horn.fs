@@ -161,9 +161,9 @@ let topLevelExpr =
     // The main difference here is that we model conjunctions directly as a
     // Horn literal list.
     function
-    | BAnd xs -> xs |> Seq.filter (isTrue >> not)
-    | x -> Seq.singleton x
-    >> Seq.map boolExpr
+    | BAnd xs -> xs
+    | x -> [x]
+    >> List.map boolExpr
     >> collect
     >> lift List.ofSeq
 
