@@ -68,6 +68,12 @@ type HornTests() =
                     Clause(False,
                            [ Pred { Name = "v_holdLock_holdLock"
                                     Params = [ aUnmarked "serving"; aUnmarked "ticket"] } ] )
+                    QueryNaming {Name = "emp"; Params = ["serving"; "ticket"]}
+                    QueryNaming {Name = "v_holdTick"; Params = ["serving"; "ticket"; "t"]}
+                    QueryNaming {Name = "v_holdLock"; Params = ["serving"; "ticket"]}
+                    QueryNaming {Name = "v_holdLock_holdTick"; Params = ["serving"; "ticket"; "t"]}
+                    QueryNaming {Name = "v_holdTick_holdTick"; Params = ["serving"; "ticket"; "ta"; "tb"]}
+                    QueryNaming {Name = "v_holdLock_holdLock"; Params = ["serving"; "ticket"]}
                   ]
               |> Some
           ).SetName("Model the ticketed lock's viewdefs as Horn clauses") ]
