@@ -242,15 +242,15 @@ let mkOr2 l r = mkOr [l ; r]
 /// Symbolically inverts a Boolean expression.
 let rec mkNot =
     // Simplify obviously false or true exprs to their negation.
-    function | BTrue -> BFalse
-             | BFalse -> BTrue
+    function | Tautology _ -> BFalse
+             | Contradiction _ -> BTrue
              | BNot x -> x
              | BGt (x, y) -> BLe (x, y)
              | BGe (x, y) -> BLt (x, y)
              | BLe (x, y) -> BGt (x, y)
              | BLt (x, y) -> BGe (x, y)
-             | BAnd xs -> BOr (List.map mkNot xs)
-             | BOr xs -> BAnd (List.map mkNot xs) 
+             | BAnd xs -> mkOr (List.map mkNot xs)
+             | BOr xs -> mkAnd (List.map mkNot xs) 
              | x -> BNot x
 
 /// Makes not-equals.
@@ -264,9 +264,9 @@ let mkImplies l r =
      * similarly, l true yields r, and r false yields ¬l.
      *)
     match l, r with
-    | (BFalse, _) | (_, BTrue) -> BTrue
-    | (x, BFalse) -> mkNot x
-    | (BTrue, x) -> x
+    | (Contradiction _, _) | (_, Tautology _) -> BTrue
+    | (x, Contradiction _) -> mkNot x
+    | (Tautology _, x) -> x
     | _ -> BImplies (l, r)
 
 /// Makes an Add out of a pair of two expressions.

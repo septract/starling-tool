@@ -109,7 +109,7 @@ let reifyZUnguarded model func =
 
 let reifyZSingle model {Cond = c; Item = i} =
     reifyZUnguarded model i
-    |> lift (curry BImplies c)
+    |> lift (mkImplies c)
 
 /// Instantiates an entire view application over the given defining views.
 let reifyZView model =
@@ -117,7 +117,7 @@ let reifyZView model =
     >> Seq.map (reifyZSingle model)
     >> collect
     >> lift Seq.toList
-    >> lift BAnd
+    >> lift mkAnd
 
 /// Instantiates all of the views in a term over the given model.
 let instantiateZTerm vdefs =
@@ -134,7 +134,14 @@ let reifyZ3 ctx model : Result<Model<ZTerm, DFunc>, Error> =
 
 /// Combines the components of a reified term.
 let combineTerm (ctx: Z3.Context) {Cmd = c; WPre = w; Goal = g} =
-    /// This is effectively asking Z3 to refute (c ^ w => g).
+    (* This is effectively asking Z3 to refute (c ^ w => g).
+     *
+     * This arranges to:
+     *   - ¬(c^w => g) premise
+     *   - ¬(¬(c^w) v g) def. =>
+     *   - ((c^w) ^ ¬g) deMorgan
+     *   - (c^w^¬g) associativity.
+     *)
     ctx.MkAnd [| c; w; ctx.MkNot g |]
 
 /// Combines reified terms into a list of Z3 terms.
