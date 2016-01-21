@@ -50,24 +50,24 @@ type HornTests() =
               Def = Some <| BFalse } ] )
           .Returns(
               Set.ofList
-                  [ { Head = Ge (aUnmarked "ticket", aUnmarked "serving")
-                      Body = [ Pred { Name = "emp"
-                                      Params = [ aUnmarked "serving"; aUnmarked "ticket" ] } ] }
-                    { Head = Gt (aUnmarked "ticket", aUnmarked "t")
-                      Body = [ Pred { Name = "v_holdTick"
-                                      Params = [ aUnmarked "serving"; aUnmarked "ticket"; aUnmarked "t" ] } ] }
-                    { Head = Gt (aUnmarked "ticket", aUnmarked "serving")
-                      Body = [ Pred { Name = "v_holdLock"
-                                      Params = [ aUnmarked "serving"; aUnmarked "ticket" ] } ] }
-                    { Head = Neq (aUnmarked "serving", aUnmarked "t")
-                      Body = [ Pred { Name = "v_holdLock_holdTick"
-                                      Params = [ aUnmarked "serving"; aUnmarked "ticket"; aUnmarked "t" ] } ] }
-                    { Head = Neq (aUnmarked "ta", aUnmarked "tb")
-                      Body = [ Pred { Name = "v_holdTick_holdTick"
-                                      Params = [ aUnmarked "serving"; aUnmarked "ticket"; aUnmarked "ta"; aUnmarked "tb" ] } ] }
-                    { Head = False
-                      Body = [ Pred { Name = "v_holdLock_holdLock"
-                                      Params = [ aUnmarked "serving"; aUnmarked "ticket"] } ] }
+                  [ Clause(Ge (aUnmarked "ticket", aUnmarked "serving"),
+                           [ Pred { Name = "emp"
+                                    Params = [ aUnmarked "serving"; aUnmarked "ticket" ] } ] )
+                    Clause(Gt (aUnmarked "ticket", aUnmarked "t"),
+                           [ Pred { Name = "v_holdTick"
+                                    Params = [ aUnmarked "serving"; aUnmarked "ticket"; aUnmarked "t" ] } ] )
+                    Clause(Gt (aUnmarked "ticket", aUnmarked "serving"),
+                           [ Pred { Name = "v_holdLock"
+                                    Params = [ aUnmarked "serving"; aUnmarked "ticket" ] } ] )
+                    Clause(Neq (aUnmarked "serving", aUnmarked "t"),
+                           [ Pred { Name = "v_holdLock_holdTick"
+                                    Params = [ aUnmarked "serving"; aUnmarked "ticket"; aUnmarked "t" ] } ] )
+                    Clause(Neq (aUnmarked "ta", aUnmarked "tb"),
+                           [ Pred { Name = "v_holdTick_holdTick"
+                                    Params = [ aUnmarked "serving"; aUnmarked "ticket"; aUnmarked "ta"; aUnmarked "tb" ] } ] )
+                    Clause(False,
+                           [ Pred { Name = "v_holdLock_holdLock"
+                                    Params = [ aUnmarked "serving"; aUnmarked "ticket"] } ] )
                   ]
               |> Some
           ).SetName("Model the ticketed lock's viewdefs as Horn clauses") ]
@@ -83,10 +83,10 @@ type HornTests() =
     static member VariableModels =
       [ TestCaseData(HornTests.Globals)
           .Returns(
-                  { Head = Pred { Name = "emp"
-                                  Params = [ aUnmarked "serving"; aUnmarked "ticket" ] }
-                    Body = [ Eq (aUnmarked "serving", AInt 0L)
-                             Eq (aUnmarked "ticket", AInt 0L) ] }
+                  Clause (Pred { Name = "emp"
+                                 Params = [ aUnmarked "serving"; aUnmarked "ticket" ] },
+                          [ Eq (aUnmarked "serving", AInt 0L)
+                            Eq (aUnmarked "ticket", AInt 0L) ] )
               |> Some
           ).SetName("Model the ticketed lock's variable initialisations as Horn clauses") ]
 
