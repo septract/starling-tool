@@ -124,7 +124,23 @@ type OptimiserTests() =
             .SetName("Simplify true&&false&&!false&&false==false as a contradiction")
           TestCaseData(BImplies (BTrue, bEq BTrue BFalse))
             .Returns(BFalse)
-            .SetName("Simplify true=>true==false as a contradiction") ]
+            .SetName("Simplify true=>true==false as a contradiction") 
+          TestCaseData(BImplies ((bAfter "s"), BFalse))
+            .Returns(BNot (bAfter "s"))
+            .SetName("Simplify =>False into a Negation") 
+          TestCaseData(BImplies ((bAfter "s"), BTrue))
+            .Returns(BTrue)
+            .SetName("Simplify =>True into a True") 
+          TestCaseData(BImplies (BGt ((aAfter "s"), (aAfter "t")), BFalse))
+            .Returns(BLe ((aAfter "s"), (aAfter "t" )))
+            .SetName("Simplify =>False wrapped around a > into <=") 
+          TestCaseData(BImplies (BTrue, (bAfter "s")))
+            .Returns((bAfter "s"))
+            .SetName("Simplify True=>s into s") 
+          TestCaseData(BImplies (BFalse, (bAfter "s")))
+            .Returns(BTrue)
+            .SetName("Simplify False=>s into True") 
+            ]
 
      /// Test collapsing of tautologies and contradictions
     [<TestCaseSource("ObviousBools")>]

@@ -67,12 +67,14 @@ let rec simp ax =
         | BGe (x, y) -> BLt (x, y)
         | BLe (x, y) -> BGt (x, y)
         | BLt (x, y) -> BGe (x, y)
-        | BAnd xs    -> simp (BOr (List.map BNot xs))
-        | BOr xs     -> simp (BAnd (List.map BNot xs)) 
+        //Following, all come from DeMorgan 
+        | BAnd xs        -> simp (BOr (List.map BNot xs))
+        | BOr xs         -> simp (BAnd (List.map BNot xs)) 
+        | BImplies (x,y) -> simp (BAnd [x; BNot y]) 
         | y          -> BNot y
     // x = x is always true.
     | BEq (x, y) when x = y -> BTrue
-    // As are x >= x, x <= x, and x => x.
+    // As are x >= x, and x <= x.
     | BGe (x, y) 
     | BLe (x, y) when x = y -> BTrue
     | BImplies (x, y) ->
@@ -80,13 +82,15 @@ let rec simp ax =
         | BFalse, _ 
         | _, BTrue      -> BTrue
         | BTrue, y      -> y
+        | x, BFalse     -> simp (BNot x)
         | x, y          -> BImplies(x,y)
     | BOr xs -> 
         match foldFastTerm  
                 (fun s x ->
                   match simp x with 
                   | BTrue  -> None
-                  | BFalse -> Some s     
+                  | BFalse -> Some s   
+                  | BOr ys -> Some (ys @ s)  
                   | y      -> Some (y :: s)
                 )
                 [] 
@@ -100,9 +104,10 @@ let rec simp ax =
         match foldFastTerm  
                 (fun s x ->
                   match simp x with 
-                  | BFalse -> None
-                  | BTrue  -> Some s     
-                  | y      -> Some (y :: s)
+                  | BFalse  -> None
+                  | BTrue   -> Some s     
+                  | BAnd ys -> Some (ys @ s)
+                  | y       -> Some (y :: s)
                 )
                 [] 
                 xs with 
@@ -110,7 +115,6 @@ let rec simp ax =
         | Some [x] -> x 
         | Some xs  -> BAnd (List.rev xs)
         | None     -> BFalse
-    // An implication from a contradiction is always true.
     // A Boolean equality between two contradictions or tautologies is always true.
     | BBEq (x, y)  -> 
         match simp x, simp y with
