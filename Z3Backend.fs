@@ -73,6 +73,10 @@ let sat = Run.run >> lift
 let run resp =
     use ctx = new Z3.Context()
     match resp with
-    | Request.Translate -> translate ctx >> lift Response.Translate
+    | Request.Translate ->
+        //This is hear as previous version did the conversion in a different order. 
+        translate ctx >> 
+        lift (mapAxioms (mapTerm (Starling.Z3.Translator.boolToZ3 ctx) (Starling.Z3.Translator.boolToZ3 ctx) (Starling.Z3.Translator.boolToZ3 ctx)) )>>
+        lift Response.Translate
     | Request.Combine -> translate ctx >> combine ctx >> lift Response.Combine
     | Request.Sat -> translate ctx >> combine ctx >> sat ctx >> lift Response.Sat

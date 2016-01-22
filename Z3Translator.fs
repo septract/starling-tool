@@ -123,13 +123,12 @@ let reifyZView model =
 let instantiateZTerm vdefs =
     tryMapTerm ok (reifyZView vdefs) (reifyZUnguarded vdefs)
 
-/// Z3-reifies all of the views in a term over the given defining model.
-let reifyZTerm ctx vdefs : STerm<GView, VFunc> -> Result<ZTerm, Error> =
+/// Reifies all of the views in a term over the given defining model.
+let reifyZTerm ctx vdefs : STerm<GView, VFunc> -> Result<FTerm, Error> =
     instantiateZTerm vdefs
-    >> lift (mapTerm (boolToZ3 ctx) (boolToZ3 ctx) (boolToZ3 ctx))
 
-    /// Reifies all of the terms in a term list.
-let reifyZ3 ctx model : Result<Model<ZTerm, DFunc>, Error> =
+/// Reifies all of the terms in a term list.
+let reifyZ3 ctx model : Result<Model<FTerm, DFunc>, Error> =
     tryMapAxioms (reifyZTerm ctx (model.ViewDefs)) model
 
 /// Combines the components of a reified term.
@@ -142,7 +141,7 @@ let combineTerm (ctx: Z3.Context) {Cmd = c; WPre = w; Goal = g} =
      *   - ((c^w) ^ ¬g) deMorgan
      *   - (c^w^¬g) associativity.
      *)
-    ctx.MkAnd [| c; w; ctx.MkNot g |]
+    boolToZ3 ctx (mkAnd [c ; w; mkNot g] )
 
 /// Combines reified terms into a list of Z3 terms.
 let combineTerms ctx = mapAxioms (combineTerm ctx)
