@@ -210,6 +210,9 @@ type Term<'cmd, 'wpre, 'goal> =
 /// A term over semantic-relation commands.
 type STerm<'wpre, 'goal> = Term<BoolExpr, 'wpre, 'goal>
 
+/// A term using only internal boolean expressions.
+type FTerm = Term<BoolExpr,BoolExpr,BoolExpr>
+
 
 /// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
 /// and its Goal with fG.
