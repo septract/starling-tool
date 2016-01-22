@@ -2,12 +2,15 @@
 ./Examples/Fail/badInc2.cvf: 1
 ./Examples/Fail/ticketLockBad.cvf: 28 29
 ./Examples/Fail/ticketLockBad2.cvf: 1 3 31
+./Examples/Fail/ticketLockFlippedLoop.cvf: 14 17 21 22 24
 ./Examples/Pass/multicounter.cvf: 
+./Examples/PassHSF/ticketLockIndefiniteNonAtomicRelease.cvf: 
 ./Examples/Pass/spinLock.cvf: 
 ./Examples/Pass/ticketLock.cvf: 
 ./Examples/Pass/ticketLockNoIf.cvf: 
 ./Examples/Pass/ticketLockNoInvariant.cvf: 
 ./Examples/Pass/ticketLockNonAtomicRelease.cvf: 
+./Examples/Pass/ticketLockNonAtomicRelease2.cvf: 
 ./Examples/PassHSF/ticketLockIndefinite.cvf: 
 ./Examples/WIP/dekker.cvf: 
 ./Examples/WIP/duplicateVars.cvf: 
