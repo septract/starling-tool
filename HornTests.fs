@@ -68,6 +68,26 @@ type HornTests() =
                     Clause(False,
                            [ Pred { Name = "v_holdLock_holdLock"
                                     Params = [ aUnmarked "serving"; aUnmarked "ticket"] } ] )
+                    Clause(Pred { Name = "emp"
+                                  Params = [ aUnmarked "serving"; aUnmarked "ticket" ] },
+                           [ Ge (aUnmarked "ticket", aUnmarked "serving") ] )
+                    Clause(Pred { Name = "v_holdTick"
+                                  Params = [ aUnmarked "serving"; aUnmarked "ticket"; aUnmarked "t" ] },
+                           [ Gt (aUnmarked "ticket", aUnmarked "t") ] )
+                    Clause(Pred { Name = "v_holdLock"
+                                  Params = [ aUnmarked "serving"; aUnmarked "ticket" ] },
+                           [ Gt (aUnmarked "ticket", aUnmarked "serving") ] )
+                    Clause(Pred { Name = "v_holdLock_holdTick"
+                                  Params = [ aUnmarked "serving"; aUnmarked "ticket"; aUnmarked "t" ] },
+                           [ Neq (aUnmarked "serving", aUnmarked "t") ] )
+
+                    Clause(Pred { Name = "v_holdTick_holdTick"
+                                  Params = [ aUnmarked "serving"; aUnmarked "ticket"; aUnmarked "ta"; aUnmarked "tb" ] },
+                           [ Neq (aUnmarked "ta", aUnmarked "tb") ] )
+                    Clause(Pred { Name = "v_holdLock_holdLock"
+                                  Params = [ aUnmarked "serving"; aUnmarked "ticket"] },
+                           [ False ] )
+
                     QueryNaming {Name = "emp"; Params = ["serving"; "ticket"]}
                     QueryNaming {Name = "v_holdTick"; Params = ["serving"; "ticket"; "t"]}
                     QueryNaming {Name = "v_holdLock"; Params = ["serving"; "ticket"]}
