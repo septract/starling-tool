@@ -104,11 +104,11 @@ let queryNaming { Name = n; Params = ps } =
 let hsfViewDef gs { View = vs; Def = ex } =
     let clause =
         Option.map (fun dex ->
-            lift2 (fun hd bd -> Clause (hd, [bd]))
+            lift2 (fun hd bd -> [Clause (hd, [bd]); Clause (bd, [hd])])
                   (boolExpr dex)
                   (predOfFunc gs ensureArith vs)) ex
     match clause with
-    | Some cl -> lift (fun c -> [ queryNaming vs; c ]) cl
+    | Some cl -> lift (fun c -> queryNaming vs :: c) cl
     | None -> ok [ queryNaming vs ]
 
 /// Constructs a set of Horn clauses for all definite viewdefs in a model.
