@@ -136,14 +136,6 @@ let printError =
                                 |> Pretty.Types.commaSep ]
     | Other e -> Pretty.Types.String e
 
-/// Pretty-prints a list of error or warning strings, with the given
-/// header.
-let printWarns header ws = 
-    Starling.Pretty.Types.Header(header, 
-                                 ws
-                                 |> List.map Pretty.Types.Indent
-                                 |> Pretty.Types.vsep)
-
 /// Pretty-prints a Chessie result, given printers for the successful
 /// case and failure messages.
 let printResult pOk pBad = 
@@ -151,10 +143,10 @@ let printResult pOk pBad =
             | (ok, []) -> ok
             | (ok, ws) -> 
                 Starling.Pretty.Types.vsep [ ok
-                                             Starling.Pretty.Types.VSkip
-                                             Starling.Pretty.Types.Separator
-                                             Starling.Pretty.Types.VSkip
-                                             printWarns "Warnings" ws ]) (pBad >> printWarns "Errors")
+                                             VSkip
+                                             Separator
+                                             VSkip
+                                             headed "Warnings" ws ]) (pBad >> headed "Errors")
 
 /// Shorthand for the HSF stage.
 let hsf = bind (Starling.Horn.hsfModel >> mapMessages Error.HSF)

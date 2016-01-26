@@ -6,7 +6,6 @@ open Starling.Collections
 open Starling.Var
 open Starling.Lang.Collator
 open Starling.Model
-open Starling.Z3.Utils
 open Starling.Pretty.Expr
 open Starling.Pretty.Lang.AST
 open Starling.Pretty.Types
@@ -18,7 +17,7 @@ open Starling.Pretty.Types
 /// Pretty-prints a list by headering each by its number.
 let printNumHeaderedList pp = 
     Seq.ofList
-    >> Seq.mapi (fun i x -> Header(sprintf "%d" (i + 1), Indent(pp x)))
+    >> Seq.mapi (fun i x -> headed (sprintf "%d" (i + 1)) (x |> pp |> Seq.singleton))
     >> Seq.toList
     >> vsep
 
@@ -95,13 +94,13 @@ let printVFunc = printFunc printExpr
 /// Pretty-prints a CFunc.
 let rec printCFunc = 
     function 
-    | ITE(i, t, e) -> 
+    | CFunc.ITE(i, t, e) -> 
         hsep [ String "if"
                printBoolExpr i
                String "then"
-               t |> printMultiset printCFunc |> ssurround "[ " "]"
+               t |> printMultiset printCFunc |> ssurround "[" "]"
                String "else"
-               e |> printMultiset printCFunc |> ssurround "[ " "]" ]
+               e |> printMultiset printCFunc |> ssurround "[" "]" ]
     | Func v -> printVFunc v
 
 /// Pretty-prints a guarded view.
@@ -122,10 +121,11 @@ let printView = printMultiset printVFunc
 let printDView = printMultiset printDFunc >> squared
 
 /// Pretty-prints a CView.
-let printCView = printMultiset printCFunc >> ssurround "[| " "|]"
+let printCView = printMultiset printCFunc >> ssurround "[|" "|]"
 
 /// Pretty-prints a GView.
 let printGView = printMultiset printGFunc >> ssurround "<|" "|>"
+
 
 (*
  * View sets
@@ -133,9 +133,6 @@ let printGView = printMultiset printGFunc >> ssurround "<|" "|>"
 
 /// Pretty-prints a view set.
 let printViewSet = printMultiset (printGuarded printView >> ssurround "((" "))") >> ssurround "(|" "|)"
-
-/// Pretty-prints something wrapped in a general condition pair.
-let printInConds pcond cpair inner = Surround(pcond cpair.Pre, inner, pcond cpair.Post)
 
 
 (*
@@ -146,6 +143,7 @@ let printInConds pcond cpair inner = Surround(pcond cpair.Pre, inner, pcond cpai
 let printViewDef pView { View = vs; Def = e } = 
     keyMap [ ("View", pView vs)
              ("Def", withDefault (String "?") (Option.map printBoolExpr e)) ]
+
 
 (*
  * Prims
@@ -198,8 +196,8 @@ let printPrim =
 
 /// Pretty-prints an Axiom, given knowledge of how to print its views
 /// and command.
-let printAxiom pCmd pView { Conds = conds; Cmd = cmd } = 
-    printInConds pView conds (angled (pCmd cmd))
+let printAxiom pCmd pView { Pre = pre; Post = post; Cmd = cmd } = 
+    Surround(pre |> pView, cmd |> pCmd, post |> pView)
 
 /// Pretty-prints a PAxiom.
 let printPAxiom pView = printAxiom printPrim pView
@@ -212,29 +210,23 @@ let printSAxiom =
                 >> Seq.toList
                 >> vsep)
 
-/// Pretty-prints a part-axiom at the given indent level.
-let rec printPartAxiom = 
+/// Pretty-prints a part-cmd at the given indent level.
+let rec printPartCmd = 
     function 
-    | PAAxiom ax -> printPAxiom printCView ax
-    | PAWhile(isDo, expr, outer, inner) -> 
-        vsep [ hsep [ String "begin"
-                      String(if isDo then "do-while"
-                             else "while")
-                      String(expr.ToString()) ]
-               printInConds printCView outer (vsep [ String "begin block"
-                                                     ivsep <| List.map printPartAxiom inner.Cmd
-                                                     String "end block" ])
-               String "end" ]
-    | PAITE(expr, outer, inTrue, inFalse) -> 
-        vsep [ hsep [ String "begin if"
-                      String(expr.ToString()) ]
-               printInConds printCView outer (vsep [ String "begin true"
-                                                     ivsep <| List.map printPartAxiom inTrue.Cmd
-                                                     String "end true; begin false"
-                                                     ivsep <| List.map printPartAxiom inFalse.Cmd
-                                                     String "end false" ])
-               String "end" ]
-
+    | Prim prim -> printPrim prim
+    | While(isDo, expr, inner) -> 
+        cmdHeaded (hsep [ String(if isDo then "Do-while" else "While")
+                          (printBoolExpr expr) ])
+                  (printPartInner inner)
+    | ITE(expr, inTrue, inFalse) ->
+        cmdHeaded (hsep [String "begin if"
+                         (printBoolExpr expr) ])
+                  [headed "True" (printPartInner inTrue)
+                   headed "False" (printPartInner inFalse)]
+/// Prints the inner part of a part command. 
+and printPartInner =
+    printAxiom (List.map (printAxiom printPartCmd printCView) >> ivsep) printCView
+    >> Seq.singleton
 
 (*
  * Framed axioms
@@ -242,8 +234,8 @@ let rec printPartAxiom =
 
 /// Pretty-prints a framed axiom.
 let printFramedAxiom {Axiom = a; Frame = f} = 
-    vsep [ curry Header "Axiom" <| Indent(printSAxiom printGView a)
-           curry Header "Frame" <| Indent(printView f) ]
+    vsep [ headed "Axiom" (a |> printSAxiom printGView |> Seq.singleton)
+           headed "Frame" (f |> printView |> Seq.singleton) ]
 
 
 (*
@@ -252,9 +244,9 @@ let printFramedAxiom {Axiom = a; Frame = f} =
 
 /// Pretty-prints a term, given printers for its commands and views.
 let printTerm pCmd pWPre pGoal {Cmd = c; WPre = w; Goal = g} = 
-    vsep [ curry Header "Command" <| Indent(pCmd c)
-           curry Header "W/Prec" <| Indent(pWPre w)
-           curry Header "Goal" <| Indent(pGoal g) ]
+    vsep [ headed "Command" (c |> pCmd |> Seq.singleton)
+           headed "W/Prec" (w |> pWPre |> Seq.singleton)
+           headed "Goal" (g |> pGoal |> Seq.singleton) ]
 
 /// Pretty-prints an STerm.
 let printSTerm pWPre pGoal = printTerm printBoolExpr pWPre pGoal
@@ -265,8 +257,8 @@ let printSTerm pWPre pGoal = printTerm printBoolExpr pWPre pGoal
 
 /// Pretty-prints a model given axiom and defining-view printers.
 let printModel pAxiom pDView model = 
-    Header("Model", 
-           Indent <| VSep([ headed "Globals" <| List.map printModelVar (Map.toList model.Globals)
-                            headed "Locals" <| List.map printModelVar (Map.toList model.Locals)
-                            headed "ViewDefs" <| List.map (printViewDef pDView) model.ViewDefs
-                            headed "Axioms" <| List.map pAxiom model.Axioms ], vsep [ Nop; Separator; Nop ]))
+    headed "Model" 
+           [ headed "Globals" <| List.map printModelVar (Map.toList model.Globals)
+             headed "Locals" <| List.map printModelVar (Map.toList model.Locals)
+             headed "ViewDefs" <| List.map (printViewDef pDView) model.ViewDefs
+             headed "Axioms" <| List.map pAxiom model.Axioms ]

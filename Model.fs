@@ -139,20 +139,16 @@ type Prim =
  * Conds and axioms
  *)
 
-/// A pair of conditions.
-type Conds<'v> = 
-    { Pre : 'v
-      Post : 'v }
-
 /// A general Hoare triple, consisting of precondition, inner item, and
 /// postcondition.
-type Axiom<'c, 'i> = 
-    { Conds : Conds<'c>
-      Cmd : 'i }
+type Axiom<'view, 'command> = 
+    { Pre : 'view
+      Post : 'view
+      Cmd : 'command }
 
 /// Makes an axiom {p}c{q}.
 let axiom p c q =
-    { Conds = { Pre = p; Post = q }; Cmd = c }
+    { Pre = p; Post = q; Cmd = c }
 
 /// An axiom carrying a Prim as its command.
 type PAxiom<'a> = Axiom<'a, Prim>
@@ -160,18 +156,11 @@ type PAxiom<'a> = Axiom<'a, Prim>
 /// An axiom carrying a semantic relation as its command.
 type SAxiom<'a> = Axiom<'a, BoolExpr>
 
-/// A partially resolved axiom.
-type PartAxiom = 
-    | PAAxiom of PAxiom<CView>
-    | PAWhile of isDo : bool * expr : BoolExpr * outer : Conds<CView> * inner : Axiom<CView, PartAxiom list>
-    | PAITE of expr : BoolExpr * outer : Conds<CView> * inTrue : Axiom<CView, PartAxiom list> * inFalse : Axiom<CView, PartAxiom list>
-
-/// Extracts the outer condition pair of a part-axiom.
-let cpairOfPartAxiom = 
-    function 
-    | PAAxiom { Conds = c } -> c
-    | PAWhile(outer = c) -> c
-    | PAITE(outer = c) -> c
+/// A partially resolved axiom element.
+type PartCmd = 
+    | Prim of Prim
+    | While of isDo : bool * expr : BoolExpr * inner : Axiom<CView, Axiom<CView, PartCmd> list>
+    | ITE of expr : BoolExpr * inTrue : Axiom<CView, Axiom<CView, PartCmd> list> * inFalse : Axiom<CView, Axiom<CView, PartCmd> list>
 
 
 (*

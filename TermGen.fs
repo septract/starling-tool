@@ -74,8 +74,8 @@ let termGenPre fax =
      *)
     // TODO(CaptainHayashi): don't call this septract
     // TODO(CaptainHayashi): use something better than lists.
-    let pre = fax.Axiom.Conds.Pre |> Multiset.toList
-    let post = fax.Axiom.Conds.Post |> Multiset.toList
+    let pre = fax.Axiom.Pre |> Multiset.toList
+    let post = fax.Axiom.Post |> Multiset.toList
     let frame = fax.Frame |> Multiset.toList
     List.append pre (termGenSeptract frame post) |> Multiset.ofList
 
