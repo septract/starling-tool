@@ -2,12 +2,12 @@
  * Peterson lock.
  */
 
-global bool aFlag;
-global bool bFlag;
-global bool aTurn;
+shared bool aFlag;
+shared bool bFlag;
+shared bool aTurn;
 
-local bool oFlag;
-local bool oTurn;
+thread bool oFlag;
+thread bool oTurn;
 
 /*
  * Locks the Peterson lock from A's side.

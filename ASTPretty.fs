@@ -177,8 +177,8 @@ let printScriptVar cls t v =
 /// Pretty-prints script lines.
 let printScriptLine = 
     function 
-    | Global(t, v) -> printScriptVar "global" t v
-    | Local(t, v) -> printScriptVar "local" t v
+    | Global(t, v) -> printScriptVar "shared" t v
+    | Local(t, v) -> printScriptVar "thread" t v
     | Method m -> printMethod m
     | ViewProto v -> printViewProto v
     | Constraint c -> printConstraint c

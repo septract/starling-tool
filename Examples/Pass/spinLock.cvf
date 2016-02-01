@@ -2,8 +2,8 @@
  * Herlihy/Shavit-style compare and swap lock.
  */
 
-global bool lock;  // True iff the lock is taken.
-local bool test;  // Used when trying to take the lock.
+shared bool lock;  // True iff the lock is taken.
+thread bool test;  // Used when trying to take the lock.
 
 /*
  * Locks the CAS lock.

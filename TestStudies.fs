@@ -21,10 +21,10 @@ constraint holdLock()   * holdTick(t)  -> serving != t;
 constraint holdTick(ta) * holdTick(tb) -> ta != tb;
 constraint holdLock()   * holdLock()   -> false;
 
-global int ticket;
-global int serving;
-local int t;
-local int s;
+shared int ticket;
+shared int serving;
+thread int t;
+thread int s;
 
 method lock() {
   {| emp |}
