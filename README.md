@@ -37,6 +37,27 @@ NuGet, and the native Z3 library for your platform.
 
 NuGet should be able to restore the rest of the prerequisites.
 
+The helper scripts mentioned below require a POSIX environment:
+cygwin or MSYS should work on Windows.
+
+To use HSF, you will need a copy of `qarmc`.  An [outdated but
+useable version of `qarmc`](https://www7.in.tum.de/~popeea/research/synthesis/)
+is available.  Install it in your `PATH` to be able to use
+`starling-hsf.sh`.
+
+## Usage
+
+* To check a Starling file using Z3, use `./starling.sh -ssat /path/to/file`.
+* To investigate a failure (of the form `XX: fail` where `XX` is a number),
+  use `./trace.sh /path/to/file XX`.
+* To check a Starling file using HSF/qarmc, use `./starling-hsf.sh /path/to/file`.
+* To run the regression tests, use `./regress.sh`.
+
+## Editor support
+
+A very basic major mode (highlighting only) for GNU Emacs, based on `cc-mode`,
+is available in `syntax/starling-mode.el`.
+
 ## People
 
 * [Matthew Windsor](https://www-users.cs.york.ac.uk/~mbw500/)
