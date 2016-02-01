@@ -6,7 +6,7 @@ open Starling.Utils
 /// Type of pretty-printer commands.
 [<NoComparison>]
 type Command = 
-    | Header of heading : string * Command
+    | Header of heading : Command * Command
     | Separator
     | String of string
     | Surround of left : Command * mid : Command * right : Command
@@ -15,6 +15,13 @@ type Command =
     | VSep of cmds : Command seq * separator : Command
     | HSep of cmds : Command seq * separator : Command
     | Nop
+
+
+/// Determines whether a print construct is horizontal or vertical.
+let rec (|Horizontal|Vertical|) =
+    function
+    | (VSep(_, _) | VSkip | Separator | Header (_, _) | Surround (_, Vertical _, _) | Indent (Vertical _)) as a -> Vertical a
+    | a -> Horizontal a
 
 (*
  * Print driver
@@ -28,11 +35,11 @@ let lnIndent level = "\n" + indent level
 
 let rec printLevel level = 
     function 
-    | Header(heading, incmd) -> heading + ":" + lnIndent level + printLevel level incmd + lnIndent level
+    | Header(heading, incmd) -> printLevel level heading + ":" + lnIndent level + printLevel level incmd + lnIndent level
     | Separator -> "----"
     | VSkip -> lnIndent level
     | String s -> s.Replace("\n", lnIndent level)
-    | Surround(left, (VSep(_, _) as mid), right) -> 
+    | Surround(left, Vertical mid, right) -> 
         printLevel level left + lnIndent level + printLevel level mid + lnIndent level + printLevel level right
     | Surround(left, mid, right) -> printLevel level left + printLevel level mid + printLevel level right
     | Indent incmd -> indent 1 + printLevel (level + 1) incmd
@@ -83,8 +90,10 @@ let equality = binop "="
 
 let ivsep c = c |> vsep |> Indent
 
-let headed name cmds = 
-    ivsep cmds |> (curry Header) name
+let cmdHeaded header cmds =
+    ivsep cmds |> (curry Header) header
+
+let headed name = cmdHeaded (String name)
 
 let keyMap = 
     List.map (fun (k, v) -> 

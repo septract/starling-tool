@@ -16,20 +16,18 @@ let instantiateParam fg (ty, name) =
 /// Instantiates a defining view into a view expression.
 let instantiateFrame fg dvs = 
     dvs |> Multiset.map (fun { Name = n; Params = ps } -> 
-               { Cond = BTrue
-                 Item = 
-                     { Name = n
-                       Params = List.map (instantiateParam fg) ps } })
+               { Name = n
+                 Params = List.map (instantiateParam fg) ps })
 
 /// Converts an axiom into a list of framed axioms, by combining it with the
 /// defining views of a model.
 let frameAxiom ds fg axiom = 
-    List.map (fun { CViews = vs } -> 
+    List.map (fun { View = vs } -> 
         { Axiom = axiom
           Frame = instantiateFrame fg vs }) ds
 
 /// Converts a model into a set of framed axioms.
-let frameAxioms {DefViews = ds; Axioms = xs} =
+let frameAxioms {ViewDefs = ds; Axioms = xs} =
     // We use a fresh variable generator to ensure every frame variable is unique.
     concatMap (frameAxiom ds (freshGen ())) xs
 

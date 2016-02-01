@@ -95,7 +95,7 @@ let printModelError =
 let printZ3TranslatorError =
     function
     | IndefiniteConstraint vd ->
-        fmt "constraint of '{0}' is indefinite ('?'), and Z3 cannot use it" [ printModelViewDefs vd ]
+        fmt "constraint of '{0}' is indefinite ('?'), and Z3 cannot use it" [ printDFunc vd ]
 
 /// Pretty-prints HSF translation errors.
 let printHornError =

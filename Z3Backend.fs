@@ -6,6 +6,7 @@ open Chessie.ErrorHandling
 open Starling
 open Starling.Model
 open Starling.Utils
+open Starling.Pretty.Misc
 
 (*
  * Request and response types
@@ -24,9 +25,9 @@ type Request =
 [<NoComparison>]
 type Response =
     /// Output of the term translation step only.
-    | Translate of Model<ZTerm>
+    | Translate of Model<ZTerm, DFunc>
     /// Output of the final Z3 terms only.
-    | Combine of Model<Microsoft.Z3.BoolExpr>
+    | Combine of Model<Microsoft.Z3.BoolExpr, DFunc>
     /// Output of satisfiability reports for the Z3 terms.
     | Sat of Microsoft.Z3.Status list
 
@@ -46,8 +47,8 @@ type Error =
 /// Pretty-prints a response.
 let printResponse =
     function
-    | Response.Translate {Axioms = t} -> Starling.Pretty.Misc.printZTerms t
-    | Response.Combine {Axioms = z} -> Starling.Pretty.Misc.printZ3Exps z
+    | Response.Translate {Axioms = t} -> printNumHeaderedList (printTerm printZ3Exp printZ3Exp printZ3Exp) t
+    | Response.Combine {Axioms = z} -> printNumHeaderedList printZ3Exp z
     | Response.Sat s -> Starling.Pretty.Misc.printSats s
 
 /// Pretty-prints an error.
@@ -72,6 +73,10 @@ let sat = Run.run >> lift
 let run resp =
     use ctx = new Z3.Context()
     match resp with
-    | Request.Translate -> translate ctx >> lift Response.Translate
+    | Request.Translate ->
+        //This is hear as previous version did the conversion in a different order. 
+        translate ctx >> 
+        lift (mapAxioms (mapTerm (Starling.Z3.Translator.boolToZ3 ctx) (Starling.Z3.Translator.boolToZ3 ctx) (Starling.Z3.Translator.boolToZ3 ctx)) )>>
+        lift Response.Translate
     | Request.Combine -> translate ctx >> combine ctx >> lift Response.Combine
     | Request.Sat -> translate ctx >> combine ctx >> sat ctx >> lift Response.Sat

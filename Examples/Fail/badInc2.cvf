@@ -9,4 +9,4 @@ method badInc() {
   {| isTrue(x==2) |} 
 } 
 
-constraint isTrue(b) => b; 
+constraint isTrue(b) -> b; 

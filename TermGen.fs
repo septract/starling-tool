@@ -47,16 +47,22 @@ let termGenSeptractStep (rdone, qstep) rnext =
             (rnext2 :: rdone, qstep2)
     else (rnext :: rdone, qstep)
 
-/// Performs septraction of the single GuarView q from the GuarView
+/// Performs septraction of the single GView q from the GView
 /// multiset r, returning r *- q.
 let termGenSeptractView r q = List.fold termGenSeptractStep ([], q) r |> fst
+
+/// Guards a frame view with true.
+let guard r = { Cond = BTrue; Item = r }
 
 /// Generates the septraction part of the weakest precondition.
 let termGenSeptract r q = 
     (* We iterate on septraction of each item in q:
-     * A *- (B * C) = (A *- B) *- C
+     * A *- (B * C) = (A *- B) *- 
+     *
+     * Since r is unguarded at the start of the septraction, we lift it
+     * to the guarded view (true|r).
      *)
-    List.fold termGenSeptractView r q
+    List.fold termGenSeptractView (List.map guard r) q
 
 /// Generates a (weakest) precondition from a framed axiom.
 let termGenPre fax = 
@@ -68,17 +74,16 @@ let termGenPre fax =
      *)
     // TODO(CaptainHayashi): don't call this septract
     // TODO(CaptainHayashi): use something better than lists.
-    let pre = fax.Axiom.Conditions.Pre |> Multiset.toList
-    let post = fax.Axiom.Conditions.Post |> Multiset.toList
+    let pre = fax.Axiom.Pre |> Multiset.toList
+    let post = fax.Axiom.Post |> Multiset.toList
     let frame = fax.Frame |> Multiset.toList
     List.append pre (termGenSeptract frame post) |> Multiset.ofList
 
 /// Generates a term from a framed axiom.
 let termGenAxiom fax = 
-    { Conditions = 
-          { Pre = termGenPre fax
-            Post = fax.Frame }
-      Inner = fax.Axiom.Inner }
+    { WPre = termGenPre fax
+      Goal = fax.Frame
+      Cmd = fax.Axiom.Cmd }
 
 /// Converts a model's framed axioms to terms.
-let termGen m = mapAxioms termGenAxiom m
+let termGen : Model<FramedAxiom, DView> -> Model<STerm<GView, View>, DView> = mapAxioms termGenAxiom

@@ -1,50 +1,125 @@
+/// <summary>
+///   Module of model types and functions.
+/// </summary>
 module Starling.Model
 
 open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Expr
 
-/// A 'generic' view, parameterised over its parameter type.
-type GenView<'a> = Func<'a>
+(*
+ * Starling uses the following general terminology for model items.
+ * (Note that these terms differ from their CamelCasedAndPrefixed
+ * counterparts, whose meanings are given in their documentation comments.)
+ *
+ * func: a single term, usually Name(p1, p2, .., pn), in a view.
+ *
+ * view: an entire view expression, or multiset, of funcs.
+ *
+ * guarded: Starling represents case splits in its proof theory by
+ *          surrounding a view or func whose presence in the proof is
+ *          conditional with an expression true if or only if it is
+ *          present; such a view or func is 'guarded'.
+ *
+ * view-set: a multiset of guarded views.
+ *
+ * conds: a pair of view assertions.
+ * 
+ * axiom: a Hoare triple, containing a pair of conds, and some
+ *        representation of a command.
+ *
+ * prim: a structured representation of an axiom command.
+ *)
 
-/// A view definition, whose parameters are type-string pairs.
-type ViewDef = GenView<Var.Type * string>
 
-/// A view, whose parameters are expressions.
-type View = GenView<Expr>
-
-/// A conditional (flat or if-then-else) view.
-type CondView = 
-    | ITE of BoolExpr * Multiset<CondView> * Multiset<CondView>
-    | Func of View
+(*
+ * Guards
+ *)
 
 /// A guarded item.
+/// The semantics of a Guarded Item is that the Item is to be taken as present
+/// in its parent context (eg a View) if, and only if, Cond holds.
 type Guarded<'a> = 
     { Cond : BoolExpr
       Item : 'a }
 
-/// A guarded view.
-type GuarView = Guarded<View>
 
-/// A reified view.
-type ReView = Guarded<Multiset<View>>
+(*
+ * Funcs (other than Starling.Collections.Func)
+ *)
 
-/// A constraint, containing a multiset of views and a potential predicate.
-type GenConstraint<'a> = 
-    { CViews : Multiset<GenView<'a>>
-      CExpr : BoolExpr option }
+/// A func over expressions, used in view expressions.
+type VFunc = Func<Expr>
 
-/// A model constraint, set over ViewDefs with type-string parameters.
-type Constraint = GenConstraint<Var.Type * string>
+/// A view-definition func.
+type DFunc = Func<Var.Type * string>
 
-/// A constraint as used in framed axioms, set over ViewDefs with expression
-/// parameters.
-type ExprConstraint = GenConstraint<Expr>
+/// A conditional (flat or if-then-else) func.
+type CFunc = 
+    | ITE of BoolExpr * Multiset<CFunc> * Multiset<CFunc>
+    | Func of VFunc
 
-/// A pair of conditions.
-type ConditionPair<'v> = 
-    { Pre : 'v
-      Post : 'v }
+/// A guarded view func.
+type GFunc = Guarded<VFunc>
+
+
+(*
+ * Views
+ *)
+
+/// <summary>
+///   A basic view, as a multiset of VFuncs.
+/// </summary>
+/// <remarks>
+///   Though View is the canonical Concurrent Views Framework view,
+///   we actually seldom use it.
+/// </remarks>
+type View = Multiset<VFunc>
+
+/// A view definition.
+type DView = Multiset<DFunc>
+
+/// A conditional view, or multiset of CFuncs.
+type CView = Multiset<CFunc>
+
+/// <summary>
+///   A guarded view.
+/// </summary>
+/// <remarks>
+///   These are the most common form of view in Starling internally,
+///   although theoretically speaking they are equivalent to Views
+///   with the guards lifting to proof case splits.
+/// </remarks>
+type GView = Multiset<GFunc>
+
+
+(*
+ * View sets
+ *)
+
+/// A set of guarded views, as produced by reification.
+type ViewSet = Multiset<Guarded<View>>
+
+
+(*
+ * View definitions
+ *)
+
+/// <summary>
+///   A view definition.
+/// </summary>
+/// <remarks>
+///   The semantics of a ViewDef is that, if Def is present, then the
+///   view View is satisfied if, and only if, Def holds.
+/// </remarks>
+type ViewDef<'view> =
+    { View : 'view
+      Def : BoolExpr option }
+
+
+(*
+ * Prims
+ *)
 
 /// A modelled primitive command.
 type Prim = 
@@ -59,78 +134,120 @@ type Prim =
     | PrimId
     | PrimAssume of BoolExpr
 
+
+(*
+ * Conds and axioms
+ *)
+
 /// A general Hoare triple, consisting of precondition, inner item, and
 /// postcondition.
-type Hoare<'c, 'i> = 
-    { Conditions : ConditionPair<'c>
-      Inner : 'i }
+type Axiom<'view, 'command> = 
+    { Pre : 'view
+      Post : 'view
+      Cmd : 'command }
 
-type PartConditionPair = ConditionPair<Multiset<CondView>>
+/// Makes an axiom {p}c{q}.
+let axiom p c q =
+    { Pre = p; Post = q; Cmd = c }
 
-type PartHoare<'i> = Hoare<Multiset<CondView>, 'i>
+/// An axiom carrying a Prim as its command.
+type PAxiom<'a> = Axiom<'a, Prim>
 
-/// A flat axiom, containing a possibly-conditional Hoare triple on an
-/// atomic action.
-type FlatAxiom = PartHoare<Prim>
+/// An axiom carrying a semantic relation as its command.
+type SAxiom<'a> = Axiom<'a, BoolExpr>
 
-/// A fully resolved axiom, containing a guarded Hoare triple on an
-/// atomic action.
-type FullAxiom = Hoare<Multiset<GuarView>, Prim>
+/// A partially resolved axiom element.
+type PartCmd = 
+    | Prim of Prim
+    | While of isDo : bool * expr : BoolExpr * inner : Axiom<CView, Axiom<CView, PartCmd> list>
+    | ITE of expr : BoolExpr * inTrue : Axiom<CView, Axiom<CView, PartCmd> list> * inFalse : Axiom<CView, Axiom<CView, PartCmd> list>
 
-/// A semantically translated axiom, carrying a Z3 Boolean expression as
-/// a command.
-type SemAxiom = Hoare<Multiset<GuarView>, BoolExpr>
 
-/// An axiom combined with a frame.
+(*
+ * Framed axioms
+ *)
+
+/// An axiom combined with a framing guarded view.
 type FramedAxiom = 
-    { Axiom : SemAxiom
-      Frame : Multiset<GuarView> }
+    { /// The axiom to be checked for soundness under Frame.
+      Axiom : SAxiom<GView>
+      /// The view to be preserved by Axiom.
+      Frame : View }
 
-/// An unreified term.
-type Term = Hoare<Multiset<GuarView>, BoolExpr>
 
-/// A reified term.
-type ReTerm = Hoare<Multiset<ReView>, BoolExpr>
+(*
+ * Terms
+ *)
 
-/// A partially resolved axiom.
-type PartAxiom = 
-    | PAAxiom of FlatAxiom
-    | PAWhile of isDo : bool * expr : BoolExpr * outer : PartConditionPair * inner : PartHoare<PartAxiom list>
-    | PAITE of expr : BoolExpr * outer : PartConditionPair * inTrue : PartHoare<PartAxiom list> * inFalse : PartHoare<PartAxiom list>
+/// <summary>
+///   A term, containing a command relation, weakest precondition, and goal.
+/// </summary>
+/// <remarks>
+///   Though these are similar to Axioms, we keep them separate for reasons of
+///   semantics: Axioms are literal Hoare triples {P}C{Q}, whereas Terms are
+///   some form of the actual Views axiom soundness check we intend to prove.
+/// </remarks>
+type Term<'cmd, 'wpre, 'goal> =
+    { /// The command relation of the Term.
+      Cmd : 'cmd
+      /// The weakest precondition of the Term.
+      WPre : 'wpre
+      /// The intended goal of the Term, ie the frame to preserve.
+      Goal : 'goal
+    }
 
-/// Extracts the outer condition pair of a part-axiom.
-let cpairOfPartAxiom = 
-    function 
-    | PAAxiom { Conditions = c } -> c
-    | PAWhile(outer = c) -> c
-    | PAITE(outer = c) -> c
+/// A term over semantic-relation commands.
+type STerm<'wpre, 'goal> = Term<BoolExpr, 'wpre, 'goal>
+
+/// A term using only internal boolean expressions.
+type FTerm = Term<BoolExpr,BoolExpr,BoolExpr>
+
+
+/// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
+/// and its Goal with fG.
+let mapTerm fC fW fG {Cmd = c; WPre = w; Goal = g} =
+    {Cmd = fC c; WPre = fW w; Goal = fG g}
+
+/// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
+/// and its Goal with fG.
+/// fC, fW and fG must return Chessie results; liftMapTerm follows suit. 
+let tryMapTerm fC fW fG {Cmd = c; WPre = w; Goal = g} =
+    trial {
+        let! cR = fC c;
+        let! wR = fW w;
+        let! gR = fG g;
+        return {Cmd = cR; WPre = wR; Goal = gR}
+    }
+
+
+(*
+ * Models
+ *)
 
 /// A parameterised model of a Starling program.
-type Model<'a> = 
+type Model<'axiom, 'dview> = 
     { Globals : Var.VarMap
       Locals : Var.VarMap
-      Axioms : 'a list
-      VProtos : Map<string, (Var.Type * string) list>
+      Axioms : 'axiom list
       // This corresponds to the function D.
-      DefViews : Constraint list }
+      ViewDefs : ViewDef<'dview> list }
 
 /// Returns the axioms of a model.
 let axioms {Axioms = xs} = xs
 
 /// Creates a new model that is the input model with a different axiom set.
 /// The axiom set may be of a different type.
-let withAxioms (xs : 'y list) (model : Model<'x>) : Model<'y> = 
+let withAxioms (xs : 'y list) (model : Model<'x, 'dview>) : Model<'y, 'dview> = 
     { Globals = model.Globals
       Locals = model.Locals
-      VProtos = model.VProtos
-      DefViews = model.DefViews
+      ViewDefs = model.ViewDefs
       Axioms = xs }
 
 /// Maps a pure function f over the axioms of a model.
-let mapAxioms (f : 'x -> 'y) (model : Model<'x>) : Model<'y> =
+let mapAxioms (f : 'x -> 'y) (model : Model<'x, 'dview>) : Model<'y, 'dview> =
     withAxioms (model |> axioms |> List.map f) model
 
 /// Maps a failing function f over the axioms of a model.
-let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x>) : Result<Model<'y>, 'e> =
+let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x, 'dview>) : Result<Model<'y, 'dview>, 'e> =
     lift (fun x -> withAxioms x model)
          (model |> axioms |> List.map f |> collect)

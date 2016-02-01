@@ -134,89 +134,86 @@ let ticketLockCollated =
 
 /// The axioms of the ticketed lock.
 let ticketLockAxioms = 
-    [ PAAxiom { Conditions = 
-                    { Pre = Multiset.empty()
-                      Post = 
-                          Multiset.ofList [ CondView.Func { Name = "holdTick"
-                                                            Params = [ AExpr (AConst (Unmarked "t")) ] } ] }
-                Inner = IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment) }
-      PAWhile(true, BNot(BEq(AExpr (AConst (Unmarked "s")), AExpr (AConst (Unmarked "t")))), 
-              { Pre = 
-                    Multiset.ofList [ CondView.Func { Name = "holdTick"
-                                                      Params = [ AExpr (AConst (Unmarked "t")) ] } ]
-                Post = 
-                    Multiset.ofList [ CondView.Func { Name = "holdLock"
-                                                      Params = [] } ] }, 
-              { Conditions = 
-                    { Pre = 
-                          Multiset.ofList [ CondView.Func { Name = "holdTick"
-                                                            Params = [ AExpr (AConst (Unmarked "t")) ] } ]
-                      Post = 
-                          Multiset.ofList 
-                              [ ITE(BEq(AExpr (AConst (Unmarked "s")), AExpr (AConst (Unmarked "t"))), 
-                                         Multiset.ofList [ CondView.Func { Name = "holdLock"
-                                                                           Params = [] } ], 
-                                         Multiset.ofList [ CondView.Func { Name = "holdTick"
-                                                                           Params = [ AExpr (AConst (Unmarked "t")) ] } ]) ] }
-                Inner = 
-                    [ PAAxiom { Conditions = 
-                                    { Pre = 
-                                          Multiset.ofList [ CondView.Func { Name = "holdTick"
-                                                                            Params = [ AExpr (AConst (Unmarked "t")) ] } ]
+    [ { Pre = Multiset.empty()
+        Post = 
+           Multiset.ofList [ CFunc.Func { Name = "holdTick"
+                                          Params = [ AExpr (AConst (Unmarked "t")) ] } ]
+        Cmd = Prim (IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment)) }
+      { Pre = 
+           Multiset.ofList [ CFunc.Func { Name = "holdTick"
+                                          Params = [ AExpr (AConst (Unmarked "t")) ] } ]
+        Post = 
+           Multiset.ofList [ CFunc.Func { Name = "holdLock"
+                                          Params = [] } ]
+        Cmd = PartCmd.While(true, BNot(BEq(AExpr (AConst (Unmarked "s")), AExpr (AConst (Unmarked "t")))), 
+                            { Pre = 
+                                  Multiset.ofList [ CFunc.Func { Name = "holdTick"
+                                                                 Params = [ AExpr (AConst (Unmarked "t")) ] } ]
+                              Post = 
+                                  Multiset.ofList 
+                                      [ CFunc.ITE
+                                            (BEq(AExpr (AConst (Unmarked "s")), AExpr (AConst (Unmarked "t"))), 
+                                             Multiset.ofList [ CFunc.Func { Name = "holdLock"
+                                                                            Params = [] } ], 
+                                             Multiset.ofList [ CFunc.Func { Name = "holdTick"
+                                                                            Params = [ AExpr (AConst (Unmarked "t")) ] } ]) ]
+                              Cmd = 
+                                  [ { Pre = 
+                                          Multiset.ofList [ CFunc.Func { Name = "holdTick"
+                                                                         Params = [ AExpr (AConst (Unmarked "t")) ] } ]
                                       Post = 
                                           Multiset.ofList 
-                                              [ ITE
+                                              [ CFunc.ITE
                                                     (BEq(AExpr (AConst (Unmarked "s")), AExpr (AConst (Unmarked "t"))), 
-                                                     Multiset.ofList [ CondView.Func { Name = "holdLock"
-                                                                                       Params = [] } ], 
-                                                     Multiset.ofList [ CondView.Func { Name = "holdTick"
-                                                                                       Params = [ AExpr (AConst (Unmarked "t")) ] } ]) ] }
-                                Inner = IntLoad(Some(LVIdent "s"), LVIdent "serving", Direct) } ] })
-      PAAxiom { Conditions = 
-                    { Pre = 
-                          Multiset.ofList [ CondView.Func { Name = "holdLock"
-                                                            Params = [] } ]
-                      Post = Multiset.empty() }
-                Inner = IntLoad(None, LVIdent "serving", Increment) } ]
+                                                     Multiset.ofList [ CFunc.Func { Name = "holdLock"
+                                                                                    Params = [] } ], 
+                                                     Multiset.ofList [ CFunc.Func { Name = "holdTick"
+                                                                                    Params = [ AExpr (AConst (Unmarked "t")) ] } ]) ]
+                                      Cmd = Prim (IntLoad(Some(LVIdent "s"), LVIdent "serving", Direct)) } ] }) }
+      { Pre = 
+            Multiset.ofList [ CFunc.Func { Name = "holdLock"
+                                           Params = [] } ]
+        Post = Multiset.empty()
+        Cmd = Prim(IntLoad(None, LVIdent "serving", Increment)) } ]
+
+/// The view definitions of the ticketed lock model.
+let ticketLockViewDefs =
+    [ { View = Multiset.empty()
+        Def = Some <| BGe(aUnmarked "ticket", aUnmarked "serving") }
+      { View = 
+            Multiset.ofList [ { Name = "holdTick"
+                                Params = [ (Type.Int, "t") ] } ]
+        Def = Some <| BGt(aUnmarked "ticket", aUnmarked "t") }
+      { View = 
+            Multiset.ofList [ { Name = "holdLock"
+                                Params = [] } ]
+        Def = Some <| BGt(aUnmarked "ticket", aUnmarked "serving") }
+      { View = 
+            Multiset.ofList [ { Name = "holdLock"
+                                Params = [] }
+                              { Name = "holdTick"
+                                Params = [ (Type.Int, "t") ] } ]
+        Def = Some <| BNot(aEq (aUnmarked "serving") (aUnmarked "t")) }
+      { View = 
+            Multiset.ofList [ { Name = "holdTick"
+                                Params = [ (Type.Int, "ta") ] }
+                              { Name = "holdTick"
+                                Params = [ (Type.Int, "tb") ] } ]
+        Def = Some <| BNot(aEq (aUnmarked "ta") (aUnmarked "tb")) }
+      { View = 
+            Multiset.ofList [ { Name = "holdLock"
+                                Params = [] }
+                              { Name = "holdLock"
+                                Params = [] } ]
+        Def = Some <| BFalse } ]
 
 /// The model of a ticketed lock method.
 let ticketLockModel = 
-    { VProtos = 
-          Map.ofList [ ("holdTick", [ (Type.Int, "t") ])
-                       ("holdLock", []) ]
-      Globals = 
+    { Globals = 
           Map.ofList [ ("serving", Type.Int)
                        ("ticket", Type.Int) ]
       Locals = 
           Map.ofList [ ("s", Type.Int)
                        ("t", Type.Int) ]
       Axioms = ticketLockAxioms
-      DefViews = 
-          [ { CViews = Multiset.empty()
-              CExpr = Some <| BGe(AConst (Unmarked "ticket"), AConst (Unmarked "serving")) }
-            { CViews = 
-                  Multiset.ofList [ { Name = "holdTick"
-                                      Params = [ (Type.Int, "t") ] } ]
-              CExpr = Some <| BGt(AConst (Unmarked "ticket"), AConst (Unmarked "t")) }
-            { CViews = 
-                  Multiset.ofList [ { Name = "holdLock"
-                                      Params = [] } ]
-              CExpr = Some <| BGt(AConst (Unmarked "ticket"), AConst (Unmarked "serving")) }
-            { CViews = 
-                  Multiset.ofList [ { Name = "holdLock"
-                                      Params = [] }
-                                    { Name = "holdTick"
-                                      Params = [ (Type.Int, "t") ] } ]
-              CExpr = Some <| BNot(BEq(AExpr (AConst (Unmarked "serving")), AExpr (AConst (Unmarked "t")))) }
-            { CViews = 
-                  Multiset.ofList [ { Name = "holdTick"
-                                      Params = [ (Type.Int, "ta") ] }
-                                    { Name = "holdTick"
-                                      Params = [ (Type.Int, "tb") ] } ]
-              CExpr = Some <| BNot(BEq(AExpr (AConst (Unmarked "ta")), AExpr (AConst (Unmarked "tb")))) }
-            { CViews = 
-                  Multiset.ofList [ { Name = "holdLock"
-                                      Params = [] }
-                                    { Name = "holdLock"
-                                      Params = [] } ]
-              CExpr = Some <| BFalse } ] }
+      ViewDefs = ticketLockViewDefs }

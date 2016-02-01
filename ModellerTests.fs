@@ -89,23 +89,14 @@ type ModellerTests() =
     /// Tests for the command axiom modeller.
     /// These use the ticketed lock model.
     static member CommandAxioms =
-        [ TestCaseData({ Pre = Multiset.empty()
-                         Post =
-                             Multiset.ofList [ CondView.Func { Name = "holdTick"
-                                                               Params = [ AExpr(aUnmarked "t") ] } ] }, Atomic(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment)))
-            .Returns(Some <| (PAAxiom { Conditions =
-                                            { Pre = Multiset.empty()
-                                              Post =
-                                                  Multiset.ofList
-                                                      [ CondView.Func { Name = "holdTick"
-                                                                        Params = [ AExpr(aUnmarked "t") ] } ] }
-                                        Inner = IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment) }))
+        [ TestCaseData(Atomic(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment)))
+            .Returns(Some <| Prim (IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment)))
             .SetName("model a valid integer load command as an axiom") ]
 
     /// Tests the command modeller using the ticketed lock.
     [<TestCaseSource("CommandAxioms")>]
-    member x.``commands are modelled correctly as axioms`` (cpair, c) =
-        modelAxiomOnCommand ticketLockModel.Globals ticketLockModel.Locals cpair c |> okOption
+    member x.``commands are modelled correctly as part-commands`` c =
+        modelPartCmdOnCommand ticketLockModel.Globals ticketLockModel.Locals c |> okOption
 
     /// Full case studies to model.
     static member Models =

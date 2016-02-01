@@ -78,12 +78,23 @@ let rec printLiteral =
     | Lt(x, y) -> printBop "<" x y
 
 /// Emits a Horn clause.
-let printHorn { Head = hd; Body = bd } = 
-    vsep [ hsep [ printLiteral hd
-                  String ":-" ]
-           bd |> Seq.map printLiteral |> (fun x -> VSep (x, String ","))
-              |> Indent
-              |> (fun x -> hjoin [x; String "."] ) ]
+let printHorn =
+    function
+    | Clause (hd, bd) ->
+        vsep [ hsep [ printLiteral hd
+                      String ":-" ]
+               bd |> Seq.map printLiteral |> (fun x -> VSep (x, String ","))
+                  |> Indent
+                  |> (fun x -> hjoin [x; String "."] ) ]
+    | Comment str -> hsep [ String "%"; String str ]
+    | QueryNaming {Name = n; Params = ps} ->
+        hjoin [ String "query_naming"
+                [ String n
+                  ps |> Seq.map String |> commaSep |> squared
+                ]
+                |> commaSep |> parened
+                String "." ]
+                           
 
 /// Emits a Horn clause list.
 let printHorns hs = hs |> List.map printHorn |> vsep

@@ -153,11 +153,9 @@ let semanticsOf model prim =
     let actions = emitPrim prim
     // Temporarily build an And so we can check it with frame.
     // TODO(CaptainHayashi): eliminate this round-trip?
-    let actionsAnd = actions |> List.toArray
-    let aframe = frame model (mkAnd actionsAnd)
+    let aframe = frame model (mkAnd actions)
     actions
-    |> Seq.ofList
-    |> Seq.append aframe
+    |> List.append (Seq.toList aframe)
     |> mkAnd 
 
 /// Marks all of the variables in a View using the given  marker.
@@ -172,23 +170,19 @@ let markGuarView marker vpred {Cond = c; Item = i} =
 /// In this case, a condition is a list of GuarViews.
 let markCondition marker vpred = Multiset.map (markGuarView marker vpred)
 
-/// Renames the variables in a condition to before/after states.
-let renameCondition cond = 
-    { (* Preconditions are in terms of global befores and local befores.
-       * Postconditions are in terms of global befores, but local _afters_.
-       *
-       * Since we don't see any global values until we reify, and we've
-       * already checked during modelling that we don't have any, we can
-       * just perform a full substitution using the substitution rule for
-       * locals.
-       *)
-      Pre = markCondition Before always cond.Pre
-      Post = markCondition After always cond.Post }
-
 /// Translates a model axiom into an axiom over a semantic expression.
-let translateAxiom model axiom = 
-    { Conditions = renameCondition axiom.Conditions
-      Inner = semanticsOf model axiom.Inner }
+let translateAxiom model {Pre = pre; Post = post; Cmd = cmd} = 
+    (* Preconditions are in terms of global befores and local befores.
+     * Postconditions are in terms of global befores, but local _afters_.
+     *
+     * Since we don't see any global values until we reify, and we've
+     * already checked during modelling that we don't have any, we can
+     * just perform a full substitution using the substitution rule for
+     * locals.
+     *)
+    { Pre = markCondition Before always pre
+      Post = markCondition After always post 
+      Cmd = semanticsOf model cmd }
 
 /// Translate a model's axioms to axioms over semantic expressions.
 let translateAxioms model = List.map (translateAxiom model) model.Axioms

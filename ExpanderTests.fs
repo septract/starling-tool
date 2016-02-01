@@ -11,8 +11,8 @@ type ExpanderTests() =
     
     /// Test cases for converting CondViews to GuarViews
     static member CondViews = 
-        let msec : Multiset<CondView> = Multiset.empty()
-        let mseg : Multiset<GuarView> = Multiset.empty()
+        let msec : CView = Multiset.empty()
+        let mseg : GView = Multiset.empty()
         [ TestCaseData(msec).Returns(mseg).SetName("Convert the empty CondView to the empty GuarView")
           
           TestCaseData(Multiset.ofList [ Func { Name = "foo"
@@ -29,7 +29,7 @@ type ExpanderTests() =
                                                  Params = [ AExpr(AConst(Unmarked "baz")) ] } } ])
               .SetName("Convert a flat CondView-list to a GuarView-list with no guards")
           
-          TestCaseData(Multiset.ofList [ ITE((BConst(Unmarked "s")), 
+          TestCaseData(Multiset.ofList [ CFunc.ITE((BConst(Unmarked "s")), 
                                              Multiset.ofList [ Func { Name = "foo"
                                                                       Params = [ AExpr(AConst(Unmarked "bar")) ] } ], 
                                              Multiset.ofList [ Func { Name = "bar"
@@ -44,8 +44,8 @@ type ExpanderTests() =
                                                  Params = [ AExpr(AConst(Unmarked "baz")) ] } } ])
               .SetName("Convert a singly-nested CondView-list to a GuarView-list with unit guards")
           
-          TestCaseData(Multiset.ofList [ ITE(BConst(Unmarked "s"), 
-                                             Multiset.ofList [ ITE(BConst(Unmarked "t"), 
+          TestCaseData(Multiset.ofList [ CFunc.ITE(BConst(Unmarked "s"), 
+                                             Multiset.ofList [ CFunc.ITE(BConst(Unmarked "t"), 
                                                                    Multiset.ofList [ Func { Name = "foo"
                                                                                             Params = [ AExpr(AConst(Unmarked "bar")) ] }
                                                                                      Func { Name = "bar"

@@ -42,37 +42,112 @@ and BoolExpr =
     | BLe of ArithExpr * ArithExpr
     | BLt of ArithExpr * ArithExpr
     | BNot of BoolExpr
-
-/// Categorises arithmetic expressions into simple or compound.
-let (|SimpleArith|CompoundArith|) =
+ 
+/// Partial pattern that matches a Boolean equality on arithmetic expressions.
+let (|BAEq|_|) =
     function
-    | AConst _ | AInt _ -> SimpleArith
-    | _ -> CompoundArith
+    | BEq (AExpr x, AExpr y) -> Some (x, y)
+    | _ -> None
 
-/// Categorises Boolean expressions into simple or compound.
-let (|SimpleBool|CompoundBool|) =
+/// Partial pattern that matches a Boolean equality on Boolean expressions.
+let (|BBEq|_|) =
     function
-    | BConst _ | BTrue | BFalse -> SimpleBool
-    | _ -> CompoundBool
+    | BEq (BExpr x, BExpr y) -> Some (x, y)
+    | _ -> None
 
-/// Categorises expressions into simple or compound.
-let (|SimpleExpr|CompoundExpr|) =
-    function
-    | BExpr (SimpleBool) -> SimpleExpr
-    | AExpr (SimpleArith) -> SimpleExpr
-    | _ -> CompoundExpr
-
-/// Returns true if the expression is definitely true.
-/// This is sound, but not complete.
-let isTrue =
-    function | BTrue -> true
-             | _ -> false
+/// Recursively simplify a formula
+let rec simp ax =
+    match ax with 
+    | BNot (x) -> 
+        match simp x with 
+        | BTrue      -> BFalse
+        | BFalse     -> BTrue
+        | BNot x     -> x
+        | BGt (x, y) -> BLe (x, y)
+        | BGe (x, y) -> BLt (x, y)
+        | BLe (x, y) -> BGt (x, y)
+        | BLt (x, y) -> BGe (x, y)
+        //Following, all come from DeMorgan 
+        | BAnd xs        -> simp (BOr (List.map BNot xs))
+        | BOr xs         -> simp (BAnd (List.map BNot xs)) 
+        | BImplies (x,y) -> simp (BAnd [x; BNot y]) 
+        | y          -> BNot y
+    // x = x is always true.
+    | BEq (x, y) when x = y -> BTrue
+    // As are x >= x, and x <= x.
+    | BGe (x, y) 
+    | BLe (x, y) when x = y -> BTrue
+    | BImplies (x, y) ->
+        match simp x, simp y with
+        | BFalse, _ 
+        | _, BTrue      -> BTrue
+        | BTrue, y      -> y
+        | x, BFalse     -> simp (BNot x)
+        | x, y          -> BImplies(x,y)
+    | BOr xs -> 
+        match foldFastTerm  
+                (fun s x ->
+                  match simp x with 
+                  | BTrue  -> None
+                  | BFalse -> Some s   
+                  | BOr ys -> Some (ys @ s)  
+                  | y      -> Some (y :: s)
+                )
+                [] 
+                xs with 
+        | Some []  -> BFalse
+        | Some [x] -> x
+        | Some xs  -> BOr (List.rev xs)
+        | None     -> BTrue
+    // An and is always true if everything in it is always true.
+    | BAnd xs -> 
+        match foldFastTerm  
+                (fun s x ->
+                  match simp x with 
+                  | BFalse  -> None
+                  | BTrue   -> Some s     
+                  | BAnd ys -> Some (ys @ s)
+                  | y       -> Some (y :: s)
+                )
+                [] 
+                xs with 
+        | Some []  -> BTrue
+        | Some [x] -> x 
+        | Some xs  -> BAnd (List.rev xs)
+        | None     -> BFalse
+    // A Boolean equality between two contradictions or tautologies is always true.
+    | BBEq (x, y)  -> 
+        match simp x, simp y with
+        | BFalse, BFalse 
+        | BTrue, BTrue      -> BTrue
+        | BTrue, BFalse 
+        | BFalse, BTrue     -> BFalse   
+        | x, y              -> BEq(BExpr x, BExpr y)
+    | x -> x
 
 /// Returns true if the expression is definitely false.
 /// This is sound, but not complete.
 let isFalse =
-    function | BFalse -> true
-             | _ -> false
+    simp >> 
+    function
+    // False is always false.
+    | BFalse -> true
+    | _      -> false
+   
+let isTrue =
+    simp >> 
+    function
+    // False is always false.
+    | BTrue -> true
+    | _      -> false
+      
+/// Extracts the name from a Starling constant.
+let stripMark =
+    function
+    | Unmarked s -> s
+    | Before s -> s
+    | After s -> s
+    | Frame (i, s) -> s
 
 /// Converts a Starling constant into a string.
 let constToString =
@@ -160,29 +235,11 @@ let mkDiv = curry ADiv
 
 /// Slightly optimised version of ctx.MkAnd.
 /// Returns true for the empty array, and x for the singleton set {x}.
-let mkAnd conjuncts =
-    if Seq.exists isFalse conjuncts
-    then BFalse
-    else
-        conjuncts
-        |> Seq.filter (isTrue >> not)  // True terms redundant in AND.
-        |> List.ofSeq
-        |> function | [] -> BTrue  // True is the zero of AND.
-                    | [x] -> x
-                    | xs -> BAnd xs
+let mkAnd = BAnd >> simp
 
 /// Slightly optimised version of ctx.MkOr.
 /// Returns false for the empty set, and x for the singleton set {x}.
-let mkOr disjuncts =
-    if Seq.exists isTrue disjuncts
-    then BTrue
-    else
-        disjuncts
-        |> Seq.filter (isFalse >> not)  // False terms redundant in OR.
-        |> List.ofSeq
-        |> function | [] -> BFalse  // False is the zero of OR.
-                    | [x] -> x
-                    | xs -> BOr xs
+let mkOr  = BOr >> simp
 
 /// Makes an And from a pair of two expressions.
 let mkAnd2 l r = mkAnd [l ; r]
@@ -191,34 +248,13 @@ let mkAnd2 l r = mkAnd [l ; r]
 let mkOr2 l r = mkOr [l ; r]
 
 /// Symbolically inverts a Boolean expression.
-let rec mkNot =
-    // Simplify obviously false or true exprs to their negation.
-    function | BTrue -> BFalse
-             | BFalse -> BTrue
-             | BNot x -> x
-             | BGt (x, y) -> BLe (x, y)
-             | BGe (x, y) -> BLt (x, y)
-             | BLe (x, y) -> BGt (x, y)
-             | BLt (x, y) -> BGe (x, y)
-             | BAnd xs -> BOr (List.map mkNot xs)
-             | BOr xs -> BAnd (List.map mkNot xs) 
-             | x -> BNot x
+let mkNot = BNot >> simp
 
 /// Makes not-equals.
 let mkNeq l r = mkEq l r |> mkNot
 
 /// Makes an implication from a pair of two expressions.
-let mkImplies l r =
-    (* l => r <-> ¬l v r.
-     * This implies (excuse the pun) that l false or r true will
-     * make the expression a tautology;
-     * similarly, l true yields r, and r false yields ¬l.
-     *)
-    match l, r with
-    | (BFalse, _) | (_, BTrue) -> BTrue
-    | (x, BFalse) -> mkNot x
-    | (BTrue, x) -> x
-    | _ -> BImplies (l, r)
+let mkImplies l r = BImplies (l, r) |> simp
 
 /// Makes an Add out of a pair of two expressions.
 let mkAdd2 l r = AAdd [ l; r ]
@@ -287,12 +323,17 @@ and subVars vfun =
 /// Lifts a variable set to a marking predicate.
 let inSet st var = Set.contains var st
 
+/// Converts some function from constants to strings to a substitution function
+/// table.
+let toSubFun f =
+    {ASub = f >> AConst
+     BSub = f >> BConst}
+
 /// Lifts a marking function to a substitution function table.
 let liftMarker marker vpred =
     let gfun = function | Unmarked s when vpred s -> marker s
                         | x -> x
-    {ASub = (gfun >> AConst)
-     BSub = (gfun >> BConst)}
+    toSubFun gfun
 
 /// Marks all variables in the given environment with the given marking
 /// functions / pre-states for the given arithmetic expression.
@@ -365,3 +406,34 @@ and varsIn =
     function
     | AExpr a -> varsInArith a
     | BExpr b -> varsInBool b
+
+(*
+ * Active patterns
+ *)
+
+/// Categorises arithmetic expressions into simple or compound.
+let (|SimpleArith|CompoundArith|) =
+    function
+    | AConst _ | AInt _ -> SimpleArith
+    | _ -> CompoundArith
+
+/// Categorises Boolean expressions into simple or compound.
+let (|SimpleBool|CompoundBool|) =
+    function
+    | BConst _ | BTrue | BFalse -> SimpleBool
+    | _ -> CompoundBool
+
+/// Categorises expressions into simple or compound.
+let (|SimpleExpr|CompoundExpr|) =
+    function
+    | BExpr (SimpleBool) -> SimpleExpr
+    | AExpr (SimpleArith) -> SimpleExpr
+    | _ -> CompoundExpr
+
+/// Partial pattern that matches a Boolean expression in terms of exactly one /
+/// constant.
+let rec (|ConstantBoolFunction|_|) = varsInBool >> onlyOne
+
+/// Partial pattern that matches a Boolean expression in terms of exactly one /
+/// constant.
+let rec (|ConstantArithFunction|_|) = varsInArith >> onlyOne

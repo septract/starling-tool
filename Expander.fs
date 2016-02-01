@@ -13,10 +13,10 @@ let rec resolveCondViewIn (suffix : Set<BoolExpr>) =
     | Func v -> 
         [ { Cond = 
                 suffix
-                |> Set.toArray
+                |> Set.toList
                 |> mkAnd
             Item = v } ]
-    | ITE(expr, tviews, fviews) -> 
+    | CFunc.ITE(expr, tviews, fviews) -> 
         List.concat [ resolveCondViewsIn (suffix.Add expr) (Multiset.toList tviews)
                       resolveCondViewsIn (suffix.Add(mkNot expr)) (Multiset.toList fviews) ]
 
@@ -30,15 +30,11 @@ let resolveCondViews =
     >> resolveCondViewsIn Set.empty 
     >> Multiset.ofList
 
-/// Expands a condition pair.
-let expandCondPair { Pre = pre; Post = post } = 
-    { Pre = resolveCondViews pre
-      Post = resolveCondViews post }
-
 /// Expands an axiom.
-let expandAxiom { Conditions = cs; Inner = i } = 
-    { Conditions = expandCondPair cs
-      Inner = i }
+let expandAxiom { Pre = pre; Post = post; Cmd = i } = 
+    { Pre = resolveCondViews pre
+      Post = resolveCondViews post
+      Cmd = i }
 
 /// Expands an entire model.
-let expand : Model<FlatAxiom> -> Model<FullAxiom> = mapAxioms expandAxiom
+let expand : Model<PAxiom<CView>, DView> -> Model<PAxiom<GView>, DView> = mapAxioms expandAxiom
