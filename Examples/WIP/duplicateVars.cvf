@@ -1,2 +1,2 @@
-local int moo;
-local bool moo;
+thread int moo;
+thread bool moo;
