@@ -6,26 +6,33 @@ open Starling.Model
 /// Flattens a [do-]while loop into a list of flat axioms.
 /// The difference between the two loops is expressed by the command inside
 /// precom.
-let rec flatWhile model expr outerPre outerPost inner precom = 
-    (* While and do-while loops.
-     * Translating [|P1|] do { [|P2|] [|P3|] } while (C) [|P4|].
+let rec flatWhile model expr outerPre outerPost inner isDo = 
+    (* If isDo:
+     *   Translating [|P1|] do { [|P2|] [|P3|] } while (C) [|P4|].
+     * Else:
+     *   Translating [|P1|] while (C) { [|P2|] [|P3|] } [|P4|].
      *)
     let p1 = outerPre
     let p2 = inner.Pre
     let p3 = inner.Post
     let p4 = outerPost
     
-    // For do-while loops: [|P1|} id {|P2|}
-    // For while loops: [|P1|} assume C {|P2|}
-    let p1p2 = axiom p1 precom p2
+    // For do-while loops: [|P1|} id [|P2|]
+    // For while loops: [|P1|] assume C [|P2|]
+    let p1p2 = axiom p1 (if isDo then PrimId else PrimAssume expr) p2
     
     // [|P3|] assume C [|P2|]
     let p3p2 = axiom p3 (PrimAssume expr) p2
     
     // [|P3|] assume ¬C [|P4|]
     let p3p4 = axiom p3 (PrimAssume(mkNot expr)) p4
-    
-    p1p2 :: p3p2 :: p3p4 :: flatAxioms model inner.Cmd
+
+    let inPath = p1p2 :: p3p2 :: p3p4 :: flatAxioms model inner.Cmd
+
+    // For while loops, add path [|P1|] assume ¬C [|P4|] (not entering loop).
+    if isDo
+    then inPath
+    else (axiom p1 (PrimAssume(mkNot expr)) p4) :: inPath
 
 /// Flattens an if-then-else loop into a list of flattened axioms.
 and flatITE model expr outerPre outerPost inTrue inFalse = 
@@ -60,8 +67,7 @@ and flatAxiom model { Pre = pre; Post = post; Cmd = cmd } =
     match cmd with
     | Prim p -> [axiom pre p post]
     | While(isDo, expr, inner) -> 
-        flatWhile model expr pre post inner (if isDo then PrimId
-                                             else PrimAssume expr)
+        flatWhile model expr pre post inner isDo
     | ITE(expr, inTrue, inFalse) -> flatITE model expr pre post inTrue inFalse
 
 /// Flattens a list of part axioms into a list of flattened axioms.
