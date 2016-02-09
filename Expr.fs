@@ -271,22 +271,29 @@ let mkMul2 l r = AMul [ l; r ]
 [<NoComparison>]
 [<NoEquality>]
 type SubFun =
-    {ASub: Const -> ArithExpr
-     BSub: Const -> BoolExpr}
+    {ASub: ArithExpr -> ArithExpr
+     BSub: BoolExpr -> BoolExpr}
+
+/// Type for variable substitution function tables.
+[<NoComparison>]
+[<NoEquality>]
+type VSubFun =
+    {AVSub: Const -> ArithExpr
+     BVSub: Const -> BoolExpr}
 
 /// Substitutes all variables with the given substitution function set
 /// for the given Boolean expression.
 let rec boolSubVars vfun =
     function 
-    | BConst x -> vfun.BSub x
+    | BConst x -> vfun.BVSub x
     | BTrue -> BTrue
     | BFalse -> BFalse
     | BAnd xs -> BAnd (List.map (boolSubVars vfun) xs)
     | BOr xs -> BOr (List.map (boolSubVars vfun) xs)
     | BImplies (x, y) -> BImplies (boolSubVars vfun x,
                                    boolSubVars vfun y)
-    | BEq (x, y) -> BEq (subVars vfun x,
-                         subVars vfun y)
+    | BEq (x, y) -> BEq (subExpr (onVars vfun) x,
+                         subExpr (onVars vfun) y)
     | BGt (x, y) -> BGt (arithSubVars vfun x,
                          arithSubVars vfun y)
     | BGe (x, y) -> BGe (arithSubVars vfun x,
@@ -301,7 +308,7 @@ let rec boolSubVars vfun =
 /// for the given arithmetic expression.
 and arithSubVars vfun =
     function 
-    | AConst x -> vfun.ASub x
+    | AConst x -> vfun.AVSub x
     | AInt i -> AInt i
     | AAdd xs -> AAdd (List.map (arithSubVars vfun) xs)
     | ASub xs -> ASub (List.map (arithSubVars vfun) xs)
@@ -309,12 +316,20 @@ and arithSubVars vfun =
     | ADiv (x, y) -> ADiv (arithSubVars vfun x,
                            arithSubVars vfun y)
 
-/// Substitutes all variables with the given substitution function for the
-/// given expression.
-and subVars vfun =
+/// <summary>
+///   Creates a <c>SubFun</c> from a <c>VSubFun</c>.
+/// </summary>
+and onVars vsub =
+    { ASub = arithSubVars vsub
+      BSub = boolSubVars vsub }
+
+/// <summary>
+///   Runs the given <c>SubFun</c> on an <c>Expr</c>.
+/// </summary>
+and subExpr { ASub = fa; BSub = fb } =
     function
-    | AExpr a -> arithSubVars vfun a |> AExpr
-    | BExpr b -> boolSubVars vfun b |> BExpr
+    | AExpr a -> a |> fa |> AExpr
+    | BExpr b -> b |> fb |> BExpr
 
 (*
  * Variable marking (special case of variable substitution)
@@ -323,32 +338,31 @@ and subVars vfun =
 /// Lifts a variable set to a marking predicate.
 let inSet st var = Set.contains var st
 
-/// Converts some function from constants to strings to a substitution function
-/// table.
-let toSubFun f =
-    {ASub = f >> AConst
-     BSub = f >> BConst}
+/// Lifts a marking function to a variable substitution function table.
+let liftMarkerV marker vpred =
+    let gfun = function | Unmarked s when vpred s -> marker s
+                        | x -> x
+    {AVSub = gfun >> AConst
+     BVSub = gfun >> BConst}
 
 /// Lifts a marking function to a substitution function table.
 let liftMarker marker vpred =
-    let gfun = function | Unmarked s when vpred s -> marker s
-                        | x -> x
-    toSubFun gfun
+    onVars (liftMarkerV marker vpred)
 
 /// Marks all variables in the given environment with the given marking
 /// functions / pre-states for the given arithmetic expression.
 let arithMarkVars marker vpred =
-    arithSubVars (liftMarker marker vpred)
+    (liftMarker marker vpred).ASub
 
 /// Marks all variables in the given environment with the given marking
 /// functions / pre-states for the given Boolean expression.
 let boolMarkVars marker vpred =
-    boolSubVars (liftMarker marker vpred)
+    (liftMarker marker vpred).BSub
 
 /// Marks all variables in the given set with the given marking
 /// functions / pre-states for the given arbitrary expression.
 let markVars marker vpred =
-    subVars (liftMarker marker vpred)
+    subExpr (liftMarker marker vpred)
 
 (*
  * Fresh variable generation

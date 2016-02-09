@@ -10,15 +10,6 @@ open Starling.Model
  * After elimination
  *)
 
-/// Substitutes afters in a view func.
-let subAftersInFunc sub func =
-    {func with Params = List.map (subVars sub) func.Params}
-
-/// Substitutes afters in a guarded view.
-let subAftersInGuarded sub {Cond = c; Item = ms} =
-    {Cond = boolSubVars sub c
-     Item = subAftersInFunc sub ms}
-
 /// Finds all instances of the pattern `x!after = f(x!before)` in a Boolean
 /// expression that is either an equality or conjunction, and where x is arithmetic.
 let rec findArithAfters =
@@ -43,26 +34,26 @@ let rec findBoolAfters =
 
 /// Lifts a pair of before/after maps to a SubFun.
 let afterSubs asubs bsubs =
-    { ASub = function
-             | After a -> Map.tryFind a asubs |> withDefault (aAfter a)
-             | x -> AConst x
-      BSub = function
-             | After a -> Map.tryFind a bsubs |> withDefault (bAfter a)
-             | x -> BConst x }
+    { AVSub = function
+              | After a -> Map.tryFind a asubs |> withDefault (aAfter a)
+              | x -> AConst x
+      BVSub = function
+              | After a -> Map.tryFind a bsubs |> withDefault (bAfter a)
+              | x -> BConst x }
+    |> onVars
 
 /// Eliminates bound before/after pairs in the term.
 /// If x!after = f(x!before) in the action, we replace x!after with f(x!before)
 /// in the precondition and postcondition.
-let eliminateAfters { WPre = p ; Goal = q ; Cmd = r } =
-    let sub = afterSubs (r |> findArithAfters |> Map.ofList)
-                        (r |> findBoolAfters |> Map.ofList)
-                  
-    { WPre = Multiset.map (subAftersInGuarded sub) p
-      Goal = subAftersInFunc sub q
-      (* This step will create a tautology f(x!before) = f(x!before).
-       * We assume we can eliminate it later.
-       *)
-      Cmd = boolSubVars sub r }
+let eliminateAfters term =
+    let sub = afterSubs (term.Cmd |> findArithAfters |> Map.ofList)
+                        (term.Cmd |> findBoolAfters |> Map.ofList)
+
+    (* The substitution in term.Cmd will create a tautology
+     * f(x!before) = f(x!before).
+     * We assume we can eliminate it later.
+     *)
+    subExprInDTerm sub term
 
 (*
  * Guard reduction
@@ -99,34 +90,11 @@ let guardReduce {Cmd = c; WPre = w; Goal = g} =
     {Cmd = c; WPre = reduceGView fs w; Goal = g}
 
 (*
- * Tautology, contradiction and identity collapsing
+ * Boolean simplification
  *)
 
-/// Performs tautology/contradiction/identity collapsing on a BoolExpr.
-let rec tciCollapseBool = simp
-
-/// Performs tautology/contradiction/identity collapsing on an Expr.
-let tciCollapseExpr =
-    function
-    | AExpr a -> a |> AExpr
-    | BExpr b -> b |> tciCollapseBool |> BExpr
-
-/// Performs tautology/contradiction/identity collapsing on a func.
-let tciCollapseFunc {Name = n; Params = ps} =
-    {Name = n; Params = List.map tciCollapseExpr ps}
-
-/// Performs tautology/contradiction/identity collapsing on a GFunc.
-let tciCollapseGFunc {Cond = c; Item = v} =
-    {Cond = tciCollapseBool c; Item = tciCollapseFunc v}
-
-/// Performs tautology/contradiction/identity collapsing on a GView.
-let tciCollapseGView = Multiset.map tciCollapseGFunc
-
-/// Performs tautology/contradiction/identity collapsing on a term.
-let tciCollapse {Cmd = c; WPre = w; Goal = g} =
-    {Cmd = tciCollapseBool c
-     WPre = tciCollapseGView w
-     Goal = tciCollapseFunc g}
+/// Performs expression simplification on a term.
+let simpTerm = subExprInDTerm { ASub = id; BSub = simp }
 
 (*
  * Frontend
@@ -135,10 +103,9 @@ let tciCollapse {Cmd = c; WPre = w; Goal = g} =
 /// Optimises a term individually.
 /// (Or, it will, when finished.)
 let optimiseTerm =
-    // TODO(CaptainHayashi): add optimising passes.
     eliminateAfters
     >> guardReduce
-    >> tciCollapse
+    >> simpTerm
 
 /// Optimises a model's terms.
 let optimise : Model<STerm<GView, VFunc>, DFunc> -> Model<STerm<GView, VFunc>, DFunc> =

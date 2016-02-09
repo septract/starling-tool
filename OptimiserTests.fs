@@ -59,7 +59,7 @@ type OptimiserTests() =
     /// Test after-elimination of Booleans.
     [<TestCaseSource("AfterBools")>]
     member x.``After-elimination of Booleans should operate correctly`` b =
-        boolSubVars (afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs) b 
+        (afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs).BSub b 
 
     /// Test cases for discovering Boolean after-before pairs.
     static member BoolAfterDiscoveries =
@@ -103,9 +103,9 @@ type OptimiserTests() =
     [<TestCaseSource("AfterFuncs")>]
     member x.``Afters in the params of funcs should be substituted correctly`` f =
         let sub = afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs
-        subAftersInFunc sub f
+        subExprInVFunc sub f
 
-    /// Test cases for tautology/contradiction collapsing.
+    /// Test cases for simplification.
     static member ObviousBools =
         [ TestCaseData(BNot BFalse)
             .Returns(BTrue)
@@ -142,7 +142,7 @@ type OptimiserTests() =
             .SetName("Simplify False=>s into True") 
             ]
 
-     /// Test collapsing of tautologies and contradictions
+     /// Test Boolean simplification
     [<TestCaseSource("ObviousBools")>]
-    member x.``Tautologies and contradictions should be collapsed properly`` b =
-        tciCollapseBool b
+    member x.``Boolean expressions should be simplified properly`` b =
+        simp b

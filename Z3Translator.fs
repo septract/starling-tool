@@ -57,7 +57,7 @@ let generateParamSubs {Params = dpars} {Params = vpars} =
 let paramSubFun vsubs =
     // TODO(CaptainHayashi): make this type-safe.
     // TODO(CaptainHayashi): maybe have a separate Const leg for params.
-    {ASub =
+    {AVSub =
         function
         | Unmarked p as up ->
             match (Map.tryFind p vsubs) with
@@ -65,7 +65,7 @@ let paramSubFun vsubs =
             | Some _ -> failwith "param substitution type error"
             | None -> AConst up
         | q -> AConst q
-     BSub =
+     BVSub =
         function
         | Unmarked p as up ->
             match (Map.tryFind p vsubs) with

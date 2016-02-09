@@ -158,18 +158,6 @@ let semanticsOf model prim =
     |> List.append (Seq.toList aframe)
     |> mkAnd 
 
-/// Marks all of the variables in a View using the given  marker.
-let markView marker vpred v = { v with Params = List.map (markVars marker vpred) v.Params }
-
-/// Marks all of the variables in a GuarView using the given marker.
-let markGuarView marker vpred {Cond = c; Item = i} = 
-    { Cond = boolMarkVars marker vpred c
-      Item = markView marker vpred i }
-
-/// Marks all of the variables in a condition using the given marker.
-/// In this case, a condition is a list of GuarViews.
-let markCondition marker vpred = Multiset.map (markGuarView marker vpred)
-
 /// Translates a model axiom into an axiom over a semantic expression.
 let translateAxiom model {Pre = pre; Post = post; Cmd = cmd} = 
     (* Preconditions are in terms of global befores and local befores.
@@ -180,8 +168,8 @@ let translateAxiom model {Pre = pre; Post = post; Cmd = cmd} =
      * just perform a full substitution using the substitution rule for
      * locals.
      *)
-    { Pre = markCondition Before always pre
-      Post = markCondition After always post 
+    { Pre = subExprInGView (liftMarker Before always) pre
+      Post = subExprInGView (liftMarker After always) post 
       Cmd = semanticsOf model cmd }
 
 /// Translate a model's axioms to axioms over semantic expressions.
