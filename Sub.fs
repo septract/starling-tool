@@ -182,18 +182,3 @@ let liftMarkerV marker vpred =
 /// Lifts a marking function to a substitution function table.
 let liftMarker marker vpred =
     onVars (liftMarkerV marker vpred)
-
-/// Marks all variables in the given environment with the given marking
-/// functions / pre-states for the given arithmetic expression.
-let arithMarkVars marker vpred =
-    (liftMarker marker vpred).ASub
-
-/// Marks all variables in the given environment with the given marking
-/// functions / pre-states for the given Boolean expression.
-let boolMarkVars marker vpred =
-    (liftMarker marker vpred).BSub
-
-/// Marks all variables in the given set with the given marking
-/// functions / pre-states for the given arbitrary expression.
-let markVars marker vpred =
-    subExpr (liftMarker marker vpred)

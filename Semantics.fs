@@ -14,14 +14,14 @@ open Starling.Sub
 /// Makes the generic relation after!after = before!before.
 let makeRel before after = 
     // We mark all variables in each expression, hence always.
-    mkEq (markVars After always after)
-         (markVars Before always before)
+    mkEq (subExpr (liftMarker After always) after)
+         (subExpr (liftMarker Before always) before)
 
 /// Given some ArithExpr over a lvalue, return the relation for the
 /// operation identified by the given fetch mode on that lvalue.
 let makeFetchUpdate expr mode = 
-    let exprB = arithMarkVars Before always expr
-    let exprA = arithMarkVars After always expr
+    let exprB = (liftMarker Before always).ASub expr
+    let exprA = (liftMarker After always).ASub expr
     
     let exprMod = 
         match mode with
@@ -42,8 +42,8 @@ let makeCAS destE testE setE =
      *)
 
     // Make the before-case versions of dest and test.
-    let destEB = (markVars Before always destE)
-    let testEB = (markVars Before always testE)
+    let destEB = subExpr (liftMarker Before always) destE
+    let testEB = subExpr (liftMarker Before always) testE
 
     (* Now we make the cases.
      * Each case is in the form (cond => destAfter ^ testAfter).
@@ -126,7 +126,7 @@ let emitPrim =
         [ makeRel (srcE |> BExpr) (dest |> mkBoolLV |> BExpr) ]
     | PrimId -> [ BTrue ]
     | PrimAssume(assumption) -> [ // Assumes always only refer to the pre-state.
-                                  boolMarkVars Before always assumption ]
+                                  (liftMarker Before always).BSub assumption ]
 
 /// Generates a frame for a given expression.
 /// The frame is a relation a!after = a!before for every a not mentioned in the expression.
