@@ -4,6 +4,7 @@ open NUnit.Framework
 open Starling.Collections
 open Starling.Expr
 open Starling.Model
+open Starling.Sub
 open Starling.Optimiser
 
 /// Tests for the term optimiser.

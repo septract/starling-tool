@@ -5,6 +5,7 @@ open Starling.Collections
 open Starling.Expr
 open Starling.Var
 open Starling.Model
+open Starling.Sub
 
 //
 // Atomic emitters

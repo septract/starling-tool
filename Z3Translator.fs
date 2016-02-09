@@ -7,6 +7,7 @@ open Starling
 open Starling.Collections
 open Starling.Expr
 open Starling.Model
+open Starling.Sub
 open Starling.Reifier
 open Starling.Optimiser
 open Starling.Errors.Z3.Translator

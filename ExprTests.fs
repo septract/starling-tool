@@ -2,6 +2,7 @@ module Starling.Tests.Expr
 
 open NUnit.Framework
 open Starling.Expr
+open Starling.Sub
 
 /// Tests for the expression types and functions.
 type ExprTests() =

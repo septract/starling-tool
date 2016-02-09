@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -54,6 +54,7 @@
     <Compile Include="ASTPretty.fs" />
     <Compile Include="Collator.fs" />
     <Compile Include="Model.fs" />
+    <Compile Include="Sub.fs" />
     <Compile Include="ExprTests.fs" />
     <Compile Include="ModellerErrors.fs" />
     <Compile Include="Modeller.fs" />

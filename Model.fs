@@ -51,26 +51,6 @@ type Guarded<'a> =
 /// A func over expressions, used in view expressions.
 type VFunc = Func<Expr>
 
-/// <summary>
-///   Maps a <c>SubFun</c> over all expressions in a <c>VFunc</c>.
-/// </summary>
-/// <param name="sub">
-///   The <c>SubFun</c> to map over all expressions in the <c>VFunc</c>.
-/// </param>
-/// <param name="func">
-///   The <c>VFunc</c> over which whose expressions are to be mapped.
-/// </param>
-/// <returns>
-///   The <c>VFunc</c> resulting from the mapping.
-/// </returns>
-/// <remarks>
-///   <para>
-///     The expressions in a <c>VFunc</c> are its parameters.
-///   </para>
-/// </remarks>
-let subExprInVFunc sub func =
-    { func with Params = List.map (subExpr sub) func.Params }
-
 /// A view-definition func.
 type DFunc = Func<Var.Type * string>
 
@@ -79,28 +59,9 @@ type CFunc =
     | ITE of BoolExpr * Multiset<CFunc> * Multiset<CFunc>
     | Func of VFunc
 
-
 /// A guarded view func.
 type GFunc = Guarded<VFunc>
 
-/// <summary>
-///   Maps a <c>SubFun</c> over all expressions in a <c>GFunc</c>.
-/// </summary>
-/// <param name="_arg1">
-///   The <c>GFunc</c> over which whose expressions are to be mapped.
-/// </param>
-/// <returns>
-///   The <c>GFunc</c> resulting from the mapping.
-/// </returns>
-/// <remarks>
-///   <para>
-///     The expressions in a <c>GFunc</c> are the guard itself, and
-///     the expressions of the enclosed <c>VFunc</c>.
-///   </para>
-/// </remarks
-let subExprInGFunc sub {Cond = cond; Item = item} =
-    { Cond = sub.BSub cond
-      Item = subExprInVFunc sub item }
 
 (*
  * Views
@@ -132,25 +93,6 @@ type CView = Multiset<CFunc>
 /// </remarks>
 type GView = Multiset<GFunc>
 
-/// <summary>
-///   Maps a <c>SubFun</c> over all expressions in a <c>GView</c>.
-/// </summary>
-/// <param name="sub">
-///   The <c>SubFun</c> to map over all expressions in the <c>GView</c>.
-/// </param>
-/// <param name="_arg1">
-///   The <c>GView</c> over which whose expressions are to be mapped.
-/// </param>
-/// <returns>
-///   The <c>GView</c> resulting from the mapping.
-/// </returns>
-/// <remarks>
-///   <para>
-///     The expressions in a <c>GView</c> are those of its constituent
-///     <c>GFunc</c>s.
-///   </para>
-/// </remarks>
-let subExprInGView sub = Multiset.map (subExprInGFunc sub)
 
 (*
  * View sets
@@ -283,27 +225,6 @@ let tryMapTerm fC fW fG {Cmd = c; WPre = w; Goal = g} =
         return {Cmd = cR; WPre = wR; Goal = gR}
     }
 
-/// <summary>
-///   Maps a <c>SubFun</c> over all expressions in a <c>DTerm</c>.
-/// </summary>
-/// <param name="sub">
-///   The <c>SubFun</c> to map over all expressions in the <c>DTerm</c>.
-/// </param>
-/// <param name="_arg1">
-///   The <c>DTerm</c> over which whose expressions are to be mapped.
-/// </param>
-/// <returns>
-///   The <c>DTerm</c> resulting from the mapping.
-/// </returns>
-/// <remarks>
-///   <para>
-///     The expressions in a <c>DTerm</c> are those of its constituent
-///     command (<c>BoolExpr</c>), its weakest precondition
-///     (<c>GView</c>), and its goal (<c>VFunc</c>).
-///   </para>
-/// </remarks>
-let subExprInDTerm sub =
-    mapTerm (sub.BSub) (subExprInGView sub) (subExprInVFunc sub)
 
 (*
  * Models

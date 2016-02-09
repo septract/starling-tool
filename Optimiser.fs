@@ -5,6 +5,7 @@ open Starling.Collections
 open Starling.Expr
 open Starling.Utils
 open Starling.Model
+open Starling.Sub
 
 (*
  * After elimination
