@@ -12,7 +12,7 @@ let sexpr op pxs =
     Seq.map pxs
     >> scons (String op)
     >> hsep
-    >> braced
+    >> parened
 
 
 /// Pretty-prints an arithmetic expression.
