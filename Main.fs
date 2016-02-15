@@ -147,17 +147,27 @@ let printError =
                                 |> Pretty.Types.commaSep ]
     | Other e -> Pretty.Types.String e
 
+/// Prints an ok result to stdout.
+let printOk pOk pBad =
+    pairMap pOk pBad
+    >> function
+       | (ok, []) -> ok
+       | (ok, ws) -> Starling.Pretty.Types.vsep [ ok
+                                                  VSkip
+                                                  Separator
+                                                  VSkip
+                                                  headed "Warnings" ws ]
+    >> Starling.Pretty.Types.print
+    >> printfn "%s"
+
+/// Prints an err result to stderr.
+let printErr pBad =
+    pBad >> headed "Errors" >> Starling.Pretty.Types.print >> eprintfn "%s"
+
 /// Pretty-prints a Chessie result, given printers for the successful
 /// case and failure messages.
 let printResult pOk pBad = 
-    either (pairMap pOk pBad >> function 
-            | (ok, []) -> ok
-            | (ok, ws) -> 
-                Starling.Pretty.Types.vsep [ ok
-                                             VSkip
-                                             Separator
-                                             VSkip
-                                             headed "Warnings" ws ]) (pBad >> headed "Errors")
+    either (printOk pOk pBad) (printErr pBad)
 
 /// Shorthand for the HSF stage.
 let hsf = bind (Starling.Horn.hsfModel >> mapMessages Error.HSF)
@@ -304,8 +314,6 @@ let mainWithOptions opts =
         if opts.raw then (sprintf "%A" >> Starling.Pretty.Types.String)
                     else printResponse opts.showModel
     printResult pfn (List.map printError) starlingR
-    |> Starling.Pretty.Types.print
-    |> printfn "%s"
     0
 
 [<EntryPoint>]
@@ -313,7 +321,6 @@ let main argv =
     match CommandLine.Parser.Default.ParseArguments<Options> argv with
     | :? Parsed<Options> as parsed -> mainWithOptions parsed.Value
     | :? NotParsed<Options> as notParsed -> 
-        printfn "failure: %A" notParsed.Errors
         2
     | _ -> 
         printfn "parse result of unknown type"
