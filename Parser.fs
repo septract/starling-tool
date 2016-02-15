@@ -452,7 +452,7 @@ let parseMethod =
 
 /// Parses a variable with the given initial keyword.
 let parseVar kw = pstring kw >>. ws
-                  // ^- global     ...
+                  // ^- shared     ...
                              >>. parseTypedParam
                              // ^- ... <type> <identifier> ...
                              .>> pstring ";"
@@ -469,10 +469,10 @@ let parseScript =
                              parseViewProto |>> ViewProto
                              // ^- view <identifier> ;
                              //  | view <identifier> <view-proto-param-list> ;
-                             parseVar "global" |>> Global
-                             // ^- global <type> <identifier> ;
-                             parseVar "local" |>> Local] .>> ws ) eof
-                             // ^- local <type> <identifier> ;
+                             parseVar "shared" |>> Global
+                             // ^- shared <type> <identifier> ;
+                             parseVar "thread" |>> Local] .>> ws ) eof
+                             // ^- thread <type> <identifier> ;
 
 (*
  * Frontend

@@ -2,8 +2,8 @@
  * Owicki-style parallel counter increment.
  */
 
-global int counter;
-local int t;
+shared int counter;
+thread int t;
 
 method multiIncrement() {
   {| count(0) |}

@@ -1,6 +1,6 @@
 /* A bad increment */
 
-local int x; 
+thread int x; 
 view False(); 
 
 method badInc() { 

@@ -39,7 +39,7 @@ let printModelVar (name, ty) =
 /// Pretty-prints a collated script.
 let printCollatedScript (cs: CollatedScript) = 
     VSep([ vsep <| List.map printViewProto cs.VProtos
-           vsep <| List.map (uncurry (printScriptVar "global")) cs.Globals
+           vsep <| List.map (uncurry (printScriptVar "shared")) cs.Globals
            vsep <| List.map (uncurry (printScriptVar "local")) cs.Locals
            vsep <| List.map printConstraint cs.Constraints
            VSep(List.map printMethod cs.Methods, VSkip) ], (vsep [ VSkip; Separator; Nop ]))
@@ -258,7 +258,7 @@ let printSTerm pWPre pGoal = printTerm printBoolExpr pWPre pGoal
 /// Pretty-prints a model given axiom and defining-view printers.
 let printModel pAxiom pDView model = 
     headed "Model" 
-           [ headed "Globals" <| List.map printModelVar (Map.toList model.Globals)
-             headed "Locals" <| List.map printModelVar (Map.toList model.Locals)
+           [ headed "Shared variables" <| List.map printModelVar (Map.toList model.Globals)
+             headed "Thread variables" <| List.map printModelVar (Map.toList model.Locals)
              headed "ViewDefs" <| List.map (printViewDef pDView) model.ViewDefs
              headed "Axioms" <| List.map pAxiom model.Axioms ]

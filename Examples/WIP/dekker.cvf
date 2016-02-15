@@ -9,12 +9,12 @@ view AHasLock();
 view BReady();
 view BHasLock();
 
-global bool a_want;
-global bool b_want;
+shared bool a_want;
+shared bool b_want;
 
-global bool a_turn; /* True if A's turn; false if B's turn. */
+shared bool a_turn; /* True if A's turn; false if B's turn. */
 
-local bool other_wants;
+thread bool other_wants;
 
 constraint AReady() => a_want;
 constraint BReady() => b_want;
