@@ -15,6 +15,8 @@ type Options =
       raw : bool
       [<Option('s', HelpText = "The stage at which Starling should stop and output.")>]
       stage : string option
+      [<Option('m', HelpText = "Show full model in term-refinement stages.")>]
+      showModel: bool
       [<Option('O', HelpText = "Perform no optimisation stages.")>]
       noOptimise : bool
       [<Value(0, MetaName = "input", HelpText = "The file to load (omit, or supply -, for standard input).")>]
@@ -94,17 +96,26 @@ type Response =
     | HSF of Horn.Horn list
 
 /// Pretty-prints a response.
-let printResponse = 
+let printResponse showModel =
+    (* If a stage results in a model, and we pretty-print it, we
+     * either print the whole model or just the axioms, depending on
+     * the -m flag.
+     *)
+    let pmodel pA pD m =
+        if showModel
+        then printModel pA pD m
+        else printNumHeaderedList pA m.Axioms
+        
     function 
     | Frontend f -> Lang.Frontend.printResponse f
-    | Destructure f -> printModel (printPAxiom printCView) printDView f
-    | Expand e -> printModel (printPAxiom printGView) printDView  e
-    | Semantics e -> printModel (printSAxiom printGView) printDView  e
-    | Frame {Axioms = f} -> printNumHeaderedList printFramedAxiom f
-    | TermGen {Axioms = t} -> printNumHeaderedList (printSTerm printGView printView) t
-    | Reify {Axioms = t} -> printNumHeaderedList (printSTerm printViewSet printView) t
-    | Flatten m -> printModel (printSTerm printGView printVFunc) printDFunc m
-    | Optimise {Axioms = t} -> printNumHeaderedList (printSTerm printGView printVFunc) t
+    | Destructure m -> pmodel (printPAxiom printCView) printDView m
+    | Expand m -> pmodel (printPAxiom printGView) printDView m
+    | Semantics m -> pmodel (printSAxiom printGView) printDView m
+    | Frame m -> pmodel printFramedAxiom printDView m
+    | TermGen m -> pmodel (printSTerm printGView printView) printDView m
+    | Reify m -> pmodel (printSTerm printViewSet printView) printDView m
+    | Flatten m -> pmodel (printSTerm printGView printVFunc) printDFunc m
+    | Optimise m -> pmodel (printSTerm printGView printVFunc) printDFunc m
     | Z3 z -> Z3.Backend.printResponse z
     | HSF h -> Starling.Pretty.Horn.printHorns h
 
@@ -282,18 +293,16 @@ let runStarling opt =
 
 /// Runs Starling with the given options, and outputs the results.
 let mainWithOptions opts = 
-    let input = opts.input
-    let raw = opts.raw
     let optimise = not opts.noOptimise
     
     let starlingR = 
         match (requestFromStage opts.stage) with
-        | Some otype -> runStarling optimise otype input
+        | Some otype -> runStarling optimise otype opts.input
         | None -> fail Error.BadStage
     
     let pfn = 
-        if raw then (sprintf "%A" >> Starling.Pretty.Types.String)
-               else printResponse   
+        if opts.raw then (sprintf "%A" >> Starling.Pretty.Types.String)
+                    else printResponse opts.showModel
     printResult pfn (List.map printError) starlingR
     |> Starling.Pretty.Types.print
     |> printfn "%s"
