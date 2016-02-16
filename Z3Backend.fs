@@ -61,7 +61,7 @@ let printError =
  *)
 
 /// Shorthand for the parser stage of the frontend pipeline.
-let translate ctx = Translator.reifyZ3 ctx >> mapMessages Error.Translator
+let translate = Translator.interpret >> mapMessages Error.Translator
 /// Shorthand for the collation stage of the frontend pipeline.
 let combine = Translator.combineTerms >> lift
 /// Shorthand for the modelling stage of the frontend pipeline.
@@ -75,8 +75,8 @@ let run resp =
     match resp with
     | Request.Translate ->
         //This is hear as previous version did the conversion in a different order. 
-        translate ctx >> 
+        translate >> 
         lift (mapAxioms (mapTerm (Starling.Z3.Translator.boolToZ3 ctx) (Starling.Z3.Translator.boolToZ3 ctx) (Starling.Z3.Translator.boolToZ3 ctx)) )>>
         lift Response.Translate
-    | Request.Combine -> translate ctx >> combine ctx >> lift Response.Combine
-    | Request.Sat -> translate ctx >> combine ctx >> sat ctx >> lift Response.Sat
+    | Request.Combine -> translate >> combine ctx >> lift Response.Combine
+    | Request.Sat -> translate >> combine ctx >> sat ctx >> lift Response.Sat

@@ -42,10 +42,6 @@ type FuncTable =
 /// </summary>
 type Error =
     /// <summary>
-    ///   The func looked up is not in the given func list.
-    /// </summary>
-    | NoDef
-    /// <summary>
     ///   The func looked up has a parameter <c>param</c>, which
     ///   has been assigned to an argument of the incorrect type
     ///   <c>atype</c>.
@@ -62,51 +58,61 @@ type Error =
  *)
 
 /// <summary>
-///   Checks whether <c>func</c> and <c>def</c> agree on parameter
+///   Checks whether <c>func</c> and <c>_arg1</c> agree on parameter
 ///   count.
 /// </summary>
 /// <parameter name="func">
 ///   The func being looked up, the process of which this check is part.
 /// </parameter>
-/// <parameter name="def">
-///   A pair of <c>DFunc</c> and its defining <c>BoolExpr</c>.
+/// <parameter name="_arg1">
+///   An <c>Option</c>al pair of <c>DFunc</c> and its defining <c>BoolExpr</c>.
+///   The value <c>None</c> suggests that <c>func</c> has no definition,
+///   which can be ok (eg. if the <c>func</c> is a non-defining view).
 /// </parameter>
 /// <returns>
-///   A Chessie result, where the <c>ok</c> value is the pair of
+///   A Chessie result, where the <c>ok</c> value is the optional pair of
 ///   prototype func and definition, and the failure value is a
 ///   <c>Starling.Instantiate.Error</c>.
 /// </returns>
-let checkParamCount func def =
-    let fn = List.length func.Params
-    let dn = List.length (fst def).Params
-    if fn = dn then ok def else CountMismatch (fn, dn) |> fail
+let checkParamCount func =
+    function
+    | None -> ok None
+    | Some def ->    
+        let fn = List.length func.Params
+        let dn = List.length (fst def).Params
+        if fn = dn then ok (Some def) else CountMismatch (fn, dn) |> fail
 
 /// <summary>
-///   Checks whether <c>func</c> and <c>def</c> agree on parameter
+///   Checks whether <c>func</c> and <c>_arg1</c> agree on parameter
 ///   types.
 /// </summary>
 /// <parameter name="func">
 ///   The func being looked up, the process of which this check is part.
 /// </parameter>
-/// <parameter name="def">
-///   A pair of <c>DFunc</c> and its defining <c>BoolExpr</c>.
+/// <parameter name="_arg1">
+///   An <c>Option</c>al pair of <c>DFunc</c> and its defining <c>BoolExpr</c>.
+///   The value <c>None</c> suggests that <c>func</c> has no definition,
+///   which can be ok (eg. if the <c>func</c> is a non-defining view).
 /// </parameter>
 /// <returns>
-///   A Chessie result, where the <c>ok</c> value is the pair of
+///   A Chessie result, where the <c>ok</c> value is the optional pair of
 ///   prototype func and definition, and the failure value is a
 ///   <c>Starling.Instantiate.Error</c>.
 /// </returns>
-let checkParamTypes func def =
-    List.map2
-        (curry
-             (function
-              | (AExpr _, ((Bool, _) as param)) -> TypeMismatch (param, Int) |> fail
-              | (BExpr _, ((Int, _) as param)) -> TypeMismatch (param, Bool) |> fail
-              | _ -> ok ()))
-        func.Params
-        (fst def).Params
-    |> collect
-    |> lift (fun _ -> def)
+let checkParamTypes func =
+    function
+    | None -> ok None
+    | Some def ->
+        List.map2
+            (curry
+                 (function
+                  | (AExpr _, ((Bool, _) as param)) -> TypeMismatch (param, Int) |> fail
+                  | (BExpr _, ((Int, _) as param)) -> TypeMismatch (param, Bool) |> fail
+                  | _ -> ok ()))
+            func.Params
+            (fst def).Params
+        |> collect
+        |> lift (fun _ -> Some def)
 
 /// <summary>
 ///   Look up <c>func</c> in <c>_arg1</c>.
@@ -126,8 +132,7 @@ let checkParamTypes func def =
 let lookup func =
     // First, try to find a func whose name agrees with ours.
     List.tryFind (fun (dfunc, _) -> dfunc.Name = func.Name)
-    >> failIfNone NoDef
-    >> bind (checkParamCount func)
+    >> checkParamCount func
     >> bind (checkParamTypes func)
 
 /// <summary>
@@ -198,7 +203,7 @@ let substitute func dfunc expr =
 ///   instantiated.
 /// </parameter>
 /// <returns>
-///   The instantiation of <c>func</c> as a <c>BoolExpr</c>.
+///   The instantiation of <c>func</c> as an <c>Option</c>al <c>BoolExpr</c>.
 /// </returns>
 let instantiate func =
-    lookup func >> lift (uncurry (substitute func))
+    lookup func >> lift (Option.map (uncurry (substitute func)))

@@ -1,6 +1,7 @@
 /// Pretty-printing for error messages.
 module Starling.Pretty.Errors
 
+open Starling.Instantiate
 open Starling.Errors.Lang.Modeller
 open Starling.Errors.Horn
 open Starling.Errors.Var
@@ -69,10 +70,10 @@ let printAxiomError =
                                                                  printType got
                                                                  printType expected ]
     | AEUnsupportedAtomic(atom, reason) ->
-        colonSep [ fmt "cannot use {0} in an axiom: " [ printAtomicAction atom ]
+        colonSep [ fmt "cannot use {0} in an axiom" [ printAtomicAction atom ]
                    reason |> String ]
     | AEUnsupportedCommand(cmd, reason) ->
-        colonSep [ fmt "cannot use {0} in an axiom: " [ printCommand cmd ]
+        colonSep [ fmt "cannot use {0} in an axiom" [ printCommand cmd ]
                    reason |> String ]
 
 /// Pretty-prints view prototype conversion errors
@@ -91,11 +92,24 @@ let printModelError =
     | MEAxiom(methname, err) -> wrapped "method" (methname |> String) (err |> printAxiomError)
     | MEVProto(vproto, err) -> wrapped "view prototype" (vproto |> printViewProto) (err |> printViewProtoError)
 
+/// Pretty-prints instantiation errors.
+let printInstantiationError =
+    function
+    | TypeMismatch (par, atype) ->
+        fmt "parameter '{0}' conflicts with argument of type '{1}'"
+            [ printParam par; printType atype ]
+    | CountMismatch (fn, dn) ->
+        fmt "view usage has {0} parameter(s), but its definition has {1}"
+            [ fn |> sprintf "%d" |> String; dn |> sprintf "%d" |> String ]
+
 /// Pretty-prints Z3 translation errors.
 let printZ3TranslatorError =
     function
     | IndefiniteConstraint vd ->
         fmt "constraint of '{0}' is indefinite ('?'), and Z3 cannot use it" [ printDFunc vd ]
+    | InstantiationError (vfunc, err) ->
+        colonSep [ fmt "couldn't instantiate view '{0}'" [ printVFunc vfunc ]
+                   printInstantiationError err ]
 
 /// Pretty-prints HSF translation errors.
 let printHornError =

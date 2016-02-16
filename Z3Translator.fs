@@ -7,6 +7,7 @@ open Starling
 open Starling.Collections
 open Starling.Expr
 open Starling.Model
+open Starling.Instantiate
 open Starling.Sub
 open Starling.Reifier
 open Starling.Optimiser
@@ -44,93 +45,73 @@ and exprToZ3 (ctx: Z3.Context) =
     | BExpr b -> boolToZ3 ctx b :> Z3.Expr
     | AExpr a -> arithToZ3 ctx a :> Z3.Expr
 
-/// Produces a map of substitutions that transform the parameters of a
-/// vdef into the arguments of its usage.
-let generateParamSubs {Params = dpars} {Params = vpars} =
-    (* For every matching line in the view and viewdef, run
-     * through the parameters creating substitution pairs.
-     *)
-    Seq.map2 (fun (_, name) up -> name, up) dpars vpars
-    |> Map.ofSeq
-
-/// Produces a variable substitution function table given a map of parameter
-/// substitutions.
-let paramSubFun vsubs =
-    // TODO(CaptainHayashi): make this type-safe.
-    // TODO(CaptainHayashi): maybe have a separate Const leg for params.
-    {AVSub =
-        function
-        | Unmarked p as up ->
-            match (Map.tryFind p vsubs) with
-            | Some (AExpr e) -> e
-            | Some _ -> failwith "param substitution type error"
-            | None -> AConst up
-        | q -> AConst q
-     BVSub =
-        function
-        | Unmarked p as up ->
-            match (Map.tryFind p vsubs) with
-            | Some (BExpr e) -> e
-            | Some _ -> failwith "param substitution type error"
-            | None -> BConst up
-        | q -> BConst q
-    }
-
-/// Produces the reification of an unguarded view with regards to a
-/// given view definition.
-/// This corresponds to D in the theory.
-let instantiateDef model ufunc {View = vs; Def = e} =
-    // Make sure our view expression is actually definite.
-    match e with
-    | Some ee ->
-        (* First, we figure out the mapping from viewdef parameters to
-         * actual view expressions.
-         *)
-        let vsubs = generateParamSubs vs ufunc
-
-        ee
-        (* We find all the changed parameters and substitute their
-         * expansions.  We assume accidental capturing is impossible due to
-         * disjointness checks on viewdefs vs. local variables, and freshness on
-         * frame instantiations.
-         *
-         * Note that the global-add stage means that the expansions include the
-         * global variables, so we need not treat them specially.
-         *)
-        |> boolSubVars (paramSubFun vsubs)
-        |> ok
-    | _ -> IndefiniteConstraint vs |> fail
-
 /// Produces the reification of an unguarded func.
 /// This corresponds to D^ in the theory.
-let reifyZUnguarded model func =
-    match List.tryFind (fun {View = {Name = n}} -> n = func.Name) model with
-    | Some vdef -> instantiateDef model func vdef
-    | None -> ok BTrue
+let interpretVFunc ft func =
+    instantiate func ft
+    |> lift (withDefault BTrue)  // Undefined views go to True by metatheory
+    |> mapMessages (curry InstantiationError func)
 
-let reifyZSingle model {Cond = c; Item = i} =
-    reifyZUnguarded model i
+let interpretGFunc ft {Cond = c; Item = i} =
+    interpretVFunc ft i
     |> lift (mkImplies c)
 
-/// Instantiates an entire view application over the given defining views.
-let reifyZView model =
+/// Interprets an entire view application over the given functable.
+let interpretGView ft =
     Multiset.toSeq
-    >> Seq.map (reifyZSingle model)
+    >> Seq.map (interpretGFunc ft)
     >> collect
     >> lift Seq.toList
     >> lift mkAnd
 
-/// Instantiates all of the views in a term over the given model.
-let instantiateZTerm vdefs =
-    tryMapTerm ok (reifyZView vdefs) (reifyZUnguarded vdefs)
+/// Interprets all of the views in a term over the given functable.
+let interpretTerm ft : STerm<GView, VFunc> -> Result<FTerm, Error> =
+    tryMapTerm ok (interpretGView ft) (interpretVFunc ft)
 
-/// Reifies all of the views in a term over the given defining model.
-let reifyZTerm ctx vdefs : STerm<GView, VFunc> -> Result<FTerm, Error> =
-    instantiateZTerm vdefs
+/// <summary>
+///   Tries to make a <c>FuncTable</c> from <c>model</c>'s view definitions.
+/// </summary>
+/// <parameter name="model">
+///   The model whose <c>ViewDefs</c> are to be turned into a <c>FuncTable</c>.
+/// </parameter>
+/// <returns>
+///   A Chessie result, which, when ok, contains a <c>FuncTable</c> mapping
+///   each defining view in <c>model</c> to its <c>BoolExpr</c> meaning.
+/// <returns>
+/// <remarks>
+///   <para>
+///     This stage requires all views in <c>model.ViewDefs</c> to be definite,
+///     and will fail if any are not.
+///   </para>
+/// </remarks>
+let makeFuncTable model =
+    model.ViewDefs
+    |> Seq.map
+        (function
+         | { View = vs; Def = None } -> IndefiniteConstraint vs |> fail
+         | { View = vs; Def = Some s } -> (vs, s) |> ok)
+    |> collect
 
-/// Reifies all of the terms in a term list.
-let reifyZ3 ctx model : Result<Model<FTerm, DFunc>, Error> =
-    tryMapAxioms (reifyZTerm ctx (model.ViewDefs)) model
+/// <summary>
+///   Interprets all views in a model, converting them to <c>FTerm</c>s.
+/// </summary>
+/// <parameter name="model">
+///   The model whose views are to be interpreted.
+/// </parameter>
+/// <returns>
+///   A Chessie result, which, when ok, contains a <c>Model</c> equivalent to
+///   <c>model</c> except that each view is replaced with the <c>BoolExpr</c>
+///   interpretation of it from <c>model</c>'s <c>ViewDefs</c>.
+/// <returns>
+/// <remarks>
+///   <para>
+///     This stage requires all views in <c>model.ViewDefs</c> to be definite,
+///     and will fail if any are not.
+///   </para>
+/// </remarks>
+let interpret model : Result<Model<FTerm, DFunc>, Error> =
+    makeFuncTable model
+    |> bind (fun ft -> tryMapAxioms (interpretTerm ft) model)
 
 /// Combines the components of a reified term.
 let combineTerm (ctx: Z3.Context) {Cmd = c; WPre = w; Goal = g} =
