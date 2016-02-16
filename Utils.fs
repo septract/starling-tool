@@ -15,6 +15,9 @@ let onlyOne s =
        | [x] -> Some x
        | _ -> None
 
+/// Reverses a 2-argument function.
+let flip f x y = f y x
+
 /// Reverses a pair.
 let flipPair (x, y) = (y, x)
 

@@ -24,6 +24,20 @@ type Func<'param> =
       Params : 'param list }
 
 /// <summary>
+///   Creates a new <c>Func</c>.
+/// </summary>
+/// <parameter name="name">
+///   The name of the <c>Func</c>.
+/// </parameter>
+/// <parameter name="pars">
+///   The parameters of the <c>Func</c>, as a sequence.
+/// </parameter>
+/// <returns>
+///   A new <c>Func</c> with the given name and parameters.
+/// </returns>
+let func name pars = { Name = name; Params = List.ofSeq pars }
+
+/// <summary>
 ///   A multiset, or ordered list.
 /// </summary>
 /// <typeparam name="item">The type of items in the Multiset.</typeparam>

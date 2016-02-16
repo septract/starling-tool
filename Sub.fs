@@ -63,7 +63,7 @@ let subExprInVFunc sub func =
 ///     The expressions in a <c>GFunc</c> are the guard itself, and
 ///     the expressions of the enclosed <c>VFunc</c>.
 ///   </para>
-/// </remarks
+/// </remarks>
 let subExprInGFunc sub {Cond = cond; Item = item} =
     { Cond = sub.BSub cond
       Item = subExprInVFunc sub item }
