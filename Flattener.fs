@@ -91,4 +91,5 @@ let flatten (mdl: Model<STerm<ViewSet, View>, DView>) =
     {Globals = mdl.Globals
      Locals = mdl.Locals
      Axioms = List.map (addGlobalsToTerm gargs) mdl.Axioms
-     ViewDefs = List.map (addGlobalsToViewDef gpars) mdl.ViewDefs}
+     ViewDefs = List.map (addGlobalsToViewDef gpars) mdl.ViewDefs
+     Semantics = mdl.Semantics}

@@ -216,4 +216,5 @@ let ticketLockModel =
           Map.ofList [ ("s", Type.Int)
                        ("t", Type.Int) ]
       Axioms = ticketLockAxioms
-      ViewDefs = ticketLockViewDefs }
+      ViewDefs = ticketLockViewDefs
+      Semantics = Starling.Lang.Modeller.coreSemantics }

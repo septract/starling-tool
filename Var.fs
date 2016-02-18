@@ -80,3 +80,13 @@ type FetchMode =
     | Direct // <a = b>
     | Increment // <a = b++>
     | Decrement // <a = b-->
+
+(*
+ * Parameter functions
+ *)
+
+/// Constructs an integer param.
+let ipar x = (Type.Int, x)
+
+/// Constructs a Boolean param.
+let bpar x = (Type.Bool, x)

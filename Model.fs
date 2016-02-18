@@ -235,6 +235,10 @@ type Model<'axiom, 'dview> =
     { Globals : Var.VarMap
       Locals : Var.VarMap
       Axioms : 'axiom list
+      /// <summary>
+      ///   The semantic function for this model.
+      /// </summary>
+      Semantics : (DFunc * BoolExpr) list
       // This corresponds to the function D.
       ViewDefs : ViewDef<'dview> list }
 
@@ -247,6 +251,7 @@ let withAxioms (xs : 'y list) (model : Model<'x, 'dview>) : Model<'y, 'dview> =
     { Globals = model.Globals
       Locals = model.Locals
       ViewDefs = model.ViewDefs
+      Semantics = model.Semantics
       Axioms = xs }
 
 /// Maps a pure function f over the axioms of a model.

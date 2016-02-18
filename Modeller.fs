@@ -12,6 +12,102 @@ open Starling.Lang.AST
 open Starling.Lang.Collator
 
 (*
+ * Starling imperative language semantics
+ *)
+
+/// <summary>
+///   The core semantic function for the imperative language.
+/// </summary>
+/// <remarks>
+///   <para>
+///     The functions beginning with '!' have special syntax in the
+///     imperative language.
+///   </para>
+/// </remarks>
+let coreSemantics =
+    // TODO(CaptainHayashi): specify this in the language (standard library?).
+    // TODO(CaptainHayashi): generic functions?
+    // TODO(CaptainHayashi): add shared/local/expr qualifiers to parameters?
+    [ (*
+       * CAS
+       *)
+      
+      // Integer CAS
+      (func "ICAS" [ ipar "destB"; ipar "destA"
+                     ipar "testB"; ipar "testA"
+                     ipar "set" ],
+       mkAnd [ mkImplies (aEq (aUnmarked "destB") (aUnmarked "testB"))
+                         (mkAnd [ aEq (aUnmarked "destA") (aUnmarked "set")
+                                  aEq (aUnmarked "testA") (aUnmarked "testB") ] )
+               mkImplies (mkNot (aEq (aUnmarked "destB") (aUnmarked "testB")))
+                         (mkAnd [ aEq (aUnmarked "destA") (aUnmarked "destB")
+                                  aEq (aUnmarked "testA") (aUnmarked "destB") ] ) ] )
+      // Boolean CAS
+      (func "BCAS" [ bpar "destB"; bpar "destA"
+                     bpar "testB"; bpar "testA"
+                     bpar "set" ],
+       mkAnd [ mkImplies (bEq (bUnmarked "destB") (bUnmarked "testB"))
+                         (mkAnd [ bEq (bUnmarked "destA") (bUnmarked "set")
+                                  bEq (bUnmarked "testA") (bUnmarked "testB") ] )
+               mkImplies (mkNot (bEq (bUnmarked "destB") (bUnmarked "testB")))
+                         (mkAnd [ bEq (bUnmarked "destA") (bUnmarked "destB")
+                                  bEq (bUnmarked "testA") (bUnmarked "destB") ] ) ] )
+
+      (*
+       * Atomic load
+       *)
+      
+      // Integer load
+      (func "!ILoad" [ ipar "destB"; ipar "destA"
+                       ipar "srcB"; ipar "srcA" ],
+       mkAnd [ aEq (aUnmarked "destA") (aUnmarked "srcB")
+               aEq (aUnmarked "srcA") (aUnmarked "srcB") ] )
+      // Integer load-and-increment
+      (func "!ILoad++" [ ipar "destB"; ipar "destA"
+                         ipar "srcB"; ipar "srcA" ],
+       mkAnd [ aEq (aUnmarked "destA") (aUnmarked "srcB")
+               aEq (aUnmarked "srcA") (mkAdd2 (aUnmarked "srcB") (AInt 1L)) ] )
+      // Integer load-and-decrement
+      (func "!ILoad--" [ ipar "destB"; ipar "destA"
+                         ipar "srcB"; ipar "srcA" ],
+       mkAnd [ aEq (aUnmarked "destA") (aUnmarked "srcB")
+               aEq (aUnmarked "srcA") (mkSub2 (aUnmarked "srcB") (AInt 1L)) ] )
+      // Integer increment
+      (func "!I++" [ ipar "srcB"; ipar "srcA" ],
+       mkAnd [ aEq (aUnmarked "srcA") (mkAdd2 (aUnmarked "srcB") (AInt 1L)) ] )
+      // Integer decrement
+      (func "!I--" [ ipar "srcB"; ipar "srcA" ],
+       mkAnd [ aEq (aUnmarked "srcA") (mkSub2 (aUnmarked "srcB") (AInt 1L)) ] )
+      // Boolean load
+      (func "!BLoad" [ bpar "destB"; bpar "destA"
+                       bpar "srcB"; bpar "srcA" ],
+       mkAnd [ bEq (bUnmarked "destA") (bUnmarked "srcB")
+               bEq (bUnmarked "srcA") (bUnmarked "srcB") ] )
+
+      (*
+       * Atomic store
+       *)
+
+      // Integer store
+      (func "!IStore" [ ipar "destB"; ipar "destA"
+                        ipar "src" ],
+       aEq (aUnmarked "destA") (aUnmarked "src"))
+      // Boolean store
+      (func "!BStore" [ ipar "destB"; ipar "destA"
+                        ipar "src" ],
+       bEq (bUnmarked "destA") (bUnmarked "src"))
+
+      (*
+       * Assumptions
+      *)
+
+      // Identity
+      (func "Id" [], BTrue)
+      // Assume
+      (func "Assume" [ bpar "expr" ], bUnmarked "expr") ]
+
+
+(*
  * Expression classification
  *)
 
@@ -546,5 +642,6 @@ let model collated =
             { Globals = globals
               Locals = locals
               ViewDefs = constraints
+              Semantics = coreSemantics
               Axioms = axioms }
     }
