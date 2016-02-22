@@ -72,20 +72,7 @@ let semanticsOf model prim =
     lift2 mkAnd2 actions aframe
 
 /// Translates a model axiom into an axiom over a semantic expression.
-let translateAxiom model {Pre = pre; Post = post; Cmd = cmd} = 
-    (* Preconditions are in terms of global befores and local befores.
-     * Postconditions are in terms of global befores, but local _afters_.
-     *
-     * Since we don't see any global values until we reify, and we've
-     * already checked during modelling that we don't have any, we can
-     * just perform a full substitution using the substitution rule for
-     * locals.
-     *)
-    lift (fun scmd ->
-              { Pre = subExprInGView (liftMarker Before always) pre
-                Post = subExprInGView (liftMarker After always) post 
-                Cmd = scmd })
-         (semanticsOf model cmd)
+let translateAxiom model = tryMapTerm (semanticsOf model) ok ok
     
 /// Translate a model over Prims to a model over semantic expressions.
 let translate model = tryMapAxioms (translateAxiom model) model

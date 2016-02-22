@@ -4,6 +4,7 @@ module Starling.TermGen
 
 open Starling.Expr
 open Starling.Collections
+open Starling.Sub
 open Starling.Model
 
 /// Performs one step of a septraction of a GuarView.
@@ -71,11 +72,21 @@ let termGenPre fax =
      * Remember that * is multiset union.
      * *- is trickier because we have guarded axioms, and is thus left
      * to termGenSeptract.
+     *
+     * At this stage, we also rename all constants in pre to their pre-state,
+     * and those in post to their post-state.  This is sound because, at this
+     * stage, both sides only contain local variables.
      *)
     // TODO(CaptainHayashi): don't call this septract
-    // TODO(CaptainHayashi): use something better than lists.
-    let pre = fax.Axiom.Pre |> Multiset.toList
-    let post = fax.Axiom.Post |> Multiset.toList
+     // TODO(CaptainHayashi): use something better than lists.
+    let pre =
+        fax.Axiom.Pre
+        |> subExprInGView (liftMarker Before always)
+        |> Multiset.toList
+    let post = 
+        fax.Axiom.Post
+        |> subExprInGView (liftMarker After always)
+        |> Multiset.toList
     let frame = fax.Frame |> Multiset.toList
     List.append pre (termGenSeptract frame post) |> Multiset.ofList
 
@@ -86,4 +97,4 @@ let termGenAxiom fax =
       Cmd = fax.Axiom.Cmd }
 
 /// Converts a model's framed axioms to terms.
-let termGen : Model<FramedAxiom, DView> -> Model<STerm<GView, View>, DView> = mapAxioms termGenAxiom
+let termGen : Model<FramedAxiom, DView> -> Model<PTerm<GView, View>, DView> = mapAxioms termGenAxiom

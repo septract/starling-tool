@@ -30,8 +30,6 @@ type Request =
     | Destructure
     /// Stop at conditional expansion.
     | Expand
-    /// Stop at semantic transformation.
-    | Semantics
     /// Stop at frame-axiom-pair generation.
     | Frame
     /// Stop at term generation.
@@ -40,6 +38,8 @@ type Request =
     | Reify
     /// Stop at term flattening.
     | Flatten
+    /// Stop at semantic transformation.
+    | Semantics
     /// Stop at term optimisation.
     | Optimise
     /// Run the Z3 backend, with the given request.
@@ -54,11 +54,11 @@ let requestMap =
                  ("model", Request.Frontend Lang.Frontend.Request.Model)
                  ("destructure", Request.Destructure)
                  ("expand", Request.Expand)
-                 ("semantics", Request.Semantics)
                  ("frame", Request.Frame)
                  ("termgen", Request.TermGen)
                  ("reify", Request.Reify)
                  ("flatten", Request.Flatten)
+                 ("semantics", Request.Semantics)
                  ("optimise", Request.Optimise)
                  ("reifyZ3", Request.Z3 Z3.Backend.Request.Translate)
                  ("z3", Request.Z3 Z3.Backend.Request.Combine)
@@ -78,16 +78,16 @@ type Response =
     | Destructure of Model<PAxiom<CView>, DView>
     /// The result of conditional expansion.
     | Expand of Model<PAxiom<GView>, DView>
-    /// The result of semantic expansion.
-    | Semantics of Model<SAxiom<GView>, DView>
     /// The result of frame-axiom-pair generation.
     | Frame of Model<FramedAxiom, DView>
     /// The result of term generation.
-    | TermGen of Model<STerm<GView, View>, DView>
+    | TermGen of Model<PTerm<GView, View>, DView>
     /// The result of term reification.
-    | Reify of Model<STerm<ViewSet, View>, DView>
+    | Reify of Model<PTerm<ViewSet, View>, DView>
     /// The result of term flattening.
-    | Flatten of Model<STerm<GView, VFunc>, DFunc>
+    | Flatten of Model<PTerm<GView, VFunc>, DFunc>
+    /// The result of semantic expansion.
+    | Semantics of Model<STerm<GView, VFunc>, DFunc>
     /// The result of term optimisation.
     | Optimise of Model<STerm<GView, VFunc>, DFunc>
     /// The result of Z3 backend processing.
@@ -110,11 +110,11 @@ let printResponse showModel =
     | Frontend f -> Lang.Frontend.printResponse f
     | Destructure m -> pmodel (printPAxiom printCView) printDView m
     | Expand m -> pmodel (printPAxiom printGView) printDView m
-    | Semantics m -> pmodel (printSAxiom printGView) printDView m
     | Frame m -> pmodel printFramedAxiom printDView m
-    | TermGen m -> pmodel (printSTerm printGView printView) printDView m
-    | Reify m -> pmodel (printSTerm printViewSet printView) printDView m
-    | Flatten m -> pmodel (printSTerm printGView printVFunc) printDFunc m
+    | TermGen m -> pmodel (printPTerm printGView printView) printDView m
+    | Reify m -> pmodel (printPTerm printViewSet printView) printDView m
+    | Flatten m -> pmodel (printPTerm printGView printVFunc) printDFunc m
+    | Semantics m -> pmodel (printSTerm printGView printVFunc) printDFunc m
     | Optimise m -> pmodel (printSTerm printGView printVFunc) printDFunc m
     | Z3 z -> Z3.Backend.printResponse z
     | HSF h -> Starling.Pretty.Horn.printHorns h
@@ -228,24 +228,16 @@ let runStarling opt =
         >> destructure
         >> expand
         >> lift Response.Expand
-    | Request.Semantics -> 
-        model
-        >> destructure
-        >> expand
-        >> semantics
-        >> lift Response.Semantics
     | Request.Frame -> 
         model
         >> destructure
         >> expand
-        >> semantics
         >> frame
         >> lift Response.Frame
     | Request.TermGen -> 
         model
         >> destructure
         >> expand
-        >> semantics
         >> frame
         >> termGen
         >> lift Response.TermGen
@@ -253,7 +245,6 @@ let runStarling opt =
         model
         >> destructure
         >> expand
-        >> semantics
         >> frame
         >> termGen
         >> reify
@@ -262,32 +253,41 @@ let runStarling opt =
         model
         >> destructure
         >> expand
-        >> semantics
         >> frame
         >> termGen
         >> reify
         >> flatten
         >> lift Response.Flatten
-    | Request.Optimise -> 
+    | Request.Semantics -> 
         model
         >> destructure
         >> expand
-        >> semantics
         >> frame
         >> termGen
         >> reify
         >> flatten
+        >> semantics
+        >> lift Response.Semantics
+    | Request.Optimise -> 
+        model
+        >> destructure
+        >> expand
+        >> frame
+        >> termGen
+        >> reify
+        >> flatten
+        >> semantics
         >> maybeOptimise
         >> lift Response.Optimise
     | Request.Z3 rq -> 
         model
         >> destructure
         >> expand
-        >> semantics
         >> frame
         >> termGen
         >> reify
         >> flatten
+        >> semantics
         >> maybeOptimise
         >> z3 rq
         >> lift Response.Z3
@@ -295,11 +295,11 @@ let runStarling opt =
         model
         >> destructure
         >> expand
-        >> semantics
         >> frame
         >> termGen
         >> reify
         >> flatten
+        >> semantics
         >> maybeOptimise
         >> hsf
         >> lift Response.HSF

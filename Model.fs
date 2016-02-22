@@ -124,20 +124,17 @@ type ViewDef<'view> =
 
 /// A general Hoare triple, consisting of precondition, inner item, and
 /// postcondition.
-type Axiom<'view, 'command> = 
+type Axiom<'view, 'cmd> = 
     { Pre : 'view
       Post : 'view
-      Cmd : 'command }
+      Cmd : 'cmd }
+
+/// An axiom with a VFunc as its command.
+type PAxiom<'view> = Axiom<'view, VFunc>
 
 /// Makes an axiom {p}c{q}.
 let axiom p c q =
     { Pre = p; Post = q; Cmd = c }
-
-/// An axiom carrying a VFunc as its command.
-type PAxiom<'a> = Axiom<'a, VFunc>
-
-/// An axiom carrying a semantic relation as its command.
-type SAxiom<'a> = Axiom<'a, BoolExpr>
 
 /// A partially resolved axiom element.
 type PartCmd = 
@@ -153,7 +150,7 @@ type PartCmd =
 /// An axiom combined with a framing guarded view.
 type FramedAxiom = 
     { /// The axiom to be checked for soundness under Frame.
-      Axiom : SAxiom<GView>
+      Axiom : PAxiom<GView>
       /// The view to be preserved by Axiom.
       Frame : View }
 
@@ -178,6 +175,9 @@ type Term<'cmd, 'wpre, 'goal> =
       /// The intended goal of the Term, ie the frame to preserve.
       Goal : 'goal
     }
+
+/// A term over <c>VFunc</c>-encoded commands.
+type PTerm<'wpre, 'goal> = Term<VFunc, 'wpre, 'goal>
 
 /// A term over semantic-relation commands.
 type STerm<'wpre, 'goal> = Term<BoolExpr, 'wpre, 'goal>

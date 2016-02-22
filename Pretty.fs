@@ -181,14 +181,6 @@ let printAxiom pCmd pView { Pre = pre; Post = post; Cmd = cmd } =
 /// Pretty-prints a PAxiom.
 let printPAxiom pView = printAxiom printVFunc pView
 
-/// Pretty-prints a semantically translated axiom.
-let printSAxiom = 
-    printAxiom (printBoolExpr
-                >> Indent
-                >> Seq.singleton
-                >> Seq.toList
-                >> vsep)
-
 /// Pretty-prints a part-cmd at the given indent level.
 let rec printPartCmd = 
     function 
@@ -213,7 +205,7 @@ and printPartInner =
 
 /// Pretty-prints a framed axiom.
 let printFramedAxiom {Axiom = a; Frame = f} = 
-    vsep [ headed "Axiom" (a |> printSAxiom printGView |> Seq.singleton)
+    vsep [ headed "Axiom" (a |> printPAxiom printGView |> Seq.singleton)
            headed "Frame" (f |> printView |> Seq.singleton) ]
 
 
@@ -226,6 +218,9 @@ let printTerm pCmd pWPre pGoal {Cmd = c; WPre = w; Goal = g} =
     vsep [ headed "Command" (c |> pCmd |> Seq.singleton)
            headed "W/Prec" (w |> pWPre |> Seq.singleton)
            headed "Goal" (g |> pGoal |> Seq.singleton) ]
+
+/// Pretty-prints a PTerm.
+let printPTerm pWPre pGoal = printTerm printVFunc pWPre pGoal
 
 /// Pretty-prints an STerm.
 let printSTerm pWPre pGoal = printTerm printBoolExpr pWPre pGoal
