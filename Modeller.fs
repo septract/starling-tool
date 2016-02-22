@@ -10,6 +10,7 @@ open Starling.Errors.Var
 open Starling.Errors.Lang.Modeller
 open Starling.Lang.AST
 open Starling.Lang.Collator
+open Starling.Sub
 
 (*
  * Starling imperative language semantics
@@ -93,13 +94,26 @@ let coreSemantics =
                         ipar "src" ],
        aEq (aUnmarked "destA") (aUnmarked "src"))
       // Boolean store
-      (func "!BStore" [ ipar "destB"; ipar "destA"
-                        ipar "src" ],
+      (func "!BStore" [ bpar "destB"; bpar "destA"
+                        bpar "src" ],
+       bEq (bUnmarked "destA") (bUnmarked "src"))
+
+      (*
+       * Local set
+       *)
+       
+      // Integer local set
+      (func "!ILSet" [ ipar "destB"; ipar "destA"
+                       ipar "src" ],
+       aEq (aUnmarked "destA") (aUnmarked "src"))
+      // Boolean store
+      (func "!BLSet" [ bpar "destB"; bpar "destA"
+                       bpar "src" ],
        bEq (bUnmarked "destA") (bUnmarked "src"))
 
       (*
        * Assumptions
-      *)
+       *)
 
       // Identity
       (func "Id" [], BTrue)
@@ -380,7 +394,8 @@ let modelPrimOnBoolLoad globals atom dest src mode =
         trial { 
             let! stype = lookupType globals s
             match stype, mode with
-            | Type.Bool, Direct -> return BoolLoad(dest, s)
+            | Type.Int, _ -> return func "!BLoad" [ dest |> blBefore; dest |> blAfter
+                                                    s |> blBefore; s |> blAfter ]
             | Type.Bool, Increment -> return! fail <| AEUnsupportedAtomic(atom, "cannot increment a Boolean global")
             | Type.Bool, Decrement -> return! fail <| AEUnsupportedAtomic(atom, "cannot decrement a Boolean global")
             | _ -> return! fail <| AETypeMismatch(Type.Bool, s, stype)
@@ -389,7 +404,7 @@ let modelPrimOnBoolLoad globals atom dest src mode =
 
 /// Converts an integer load to a Prim.
 let modelPrimOnIntLoad globals atom dest src mode = 
-    (* In a Boolean load, the destination must be LOCAL and Boolean;
+    (* In an integer load, the destination must be LOCAL and integral;
      *                    the source must be a GLOBAL arithmetic lvalue;
      *                    and the fetch mode is unconstrained.
      *)
@@ -398,7 +413,12 @@ let modelPrimOnIntLoad globals atom dest src mode =
         trial { 
             let! stype = lookupType globals s
             match stype, mode with
-            | Type.Int, _ -> return IntLoad(Some dest, s, mode)
+            | Type.Int, Direct -> return func "!ILoad" [ dest |> ilBefore; dest |> ilAfter
+                                                         s |> ilBefore; s |> ilAfter ]
+            | Type.Int, Increment -> return func "!ILoad++" [ dest |> ilBefore; dest |> ilAfter
+                                                              s |> ilBefore; s |> ilAfter ]
+            | Type.Int, Decrement -> return func "!ILoad--" [ dest |> ilBefore; dest |> ilAfter
+                                                              s |> ilBefore; s |> ilAfter ]
             | _ -> return! fail <| AETypeMismatch(Type.Int, s, stype)
         }
     | _ -> fail <| AEUnsupportedAtomic(atom, "loads must have a lvalue source")
@@ -412,7 +432,8 @@ let modelPrimOnBoolStore locals atom dest src mode =
     trial { 
         let! sxp = modelBoolExpr locals src |> mapMessages (curry AEBadExpr src)
         match mode with
-        | Direct -> return BoolStore(dest, sxp)
+        | Direct -> return func "!BStore" [ dest |> blBefore; dest |> blAfter
+                                            sxp |> BExpr |> before ]
         | Increment -> return! fail <| AEUnsupportedAtomic(atom, "cannot increment an expression")
         | Decrement -> return! fail <| AEUnsupportedAtomic(atom, "cannot decrement an expression")
     }
@@ -426,7 +447,8 @@ let modelPrimOnIntStore locals atom dest src mode =
     trial { 
         let! sxp = modelArithExpr locals src |> mapMessages (curry AEBadExpr src)
         match mode with
-        | Direct -> return IntStore(dest, sxp)
+        | Direct -> return func "!IStore" [ dest |> ilBefore; dest |> ilAfter
+                                            sxp |> AExpr |> before ]
         | Increment -> return! fail <| AEUnsupportedAtomic(atom, "cannot increment an expression")
         | Decrement -> return! fail <| AEUnsupportedAtomic(atom, "cannot decrement an expression")
     }
@@ -454,10 +476,14 @@ let rec modelPrimOnAtomic gs ls atom =
             match dtype, ttype with
             | Type.Bool, Type.Bool ->
                 let! setE = modelBoolExpr ls set |> mapMessages (curry AEBadExpr set)
-                return BoolCAS(dest, test, setE)
+                return func "BCAS" [dest |> blBefore; dest |> blAfter
+                                    test |> blBefore; test |> blAfter
+                                    setE |> BExpr |> before]
             | Type.Int, Type.Int ->
                 let! setE = modelArithExpr ls set |> mapMessages (curry AEBadExpr set)
-                return IntCAS(dest, test, setE)
+                return func "ICAS" [dest |> ilBefore; dest |> ilAfter
+                                    test |> ilBefore; test |> ilAfter
+                                    setE |> AExpr |> before]
             | _ -> 
                 // Oops, we have a type error.
                 // Arbitrarily single out test as the cause of it.
@@ -484,15 +510,20 @@ let rec modelPrimOnAtomic gs ls atom =
          *)
         trial { 
             let! stype = lookupType gs operand
+            // TODO(CaptainHayashi): sort out lvalues...
+            let op = flattenLV operand
             match mode, stype with
             | Direct, _ -> return! fail <| AEUnsupportedAtomic(atom, "<var>; has no effect; use <id>; or ; for no-ops")
             | Increment, Type.Bool -> return! fail <| AEUnsupportedAtomic(atom, "cannot increment a Boolean global")
             | Decrement, Type.Bool -> return! fail <| AEUnsupportedAtomic(atom, "cannot decrement a Boolean global")
-            | _, Type.Int -> return IntLoad(None, operand, mode)
+            | Increment, Type.Int -> return func "!I++" [op |> aBefore |> AExpr; op |> aAfter |> AExpr]
+            | Decrement, Type.Int -> return func "!I--" [op |> aBefore |> AExpr; op |> aAfter |> AExpr]
         }
-    | Id -> ok PrimId
+    | Id -> ok (func "Id" [])
     | Assume e ->
-        modelBoolExpr ls e |> mapMessages (curry AEBadExpr e) |> lift PrimAssume
+        modelBoolExpr ls e
+        |> mapMessages (curry AEBadExpr e)
+        |> lift (BExpr >> Seq.singleton >> func "Assume")
 /// Converts a local variable assignment to a Prim.
 and modelPrimOnAssign locals l e = 
     (* We model assignments as IntLocalSet or BoolLocalSet, depending on the
@@ -502,16 +533,18 @@ and modelPrimOnAssign locals l e =
     trial { 
         let! ltype = lookupType locals l
         match ltype with
-        | Type.Bool -> let! ez3 = modelBoolExpr locals e |> mapMessages (curry AEBadExpr e)
-                       return BoolLocalSet(l, ez3)
-        | Type.Int -> let! ez3 = modelArithExpr locals e |> mapMessages (curry AEBadExpr e)
-                      return IntLocalSet(l, ez3)
+        | Type.Bool -> let! em = modelBoolExpr locals e |> mapMessages (curry AEBadExpr e)
+                       return func "!BLSet" [ l |> blBefore; l |> blAfter
+                                              em |> BExpr |> before ]
+        | Type.Int -> let! em = modelArithExpr locals e |> mapMessages (curry AEBadExpr e)
+                      return func "!ILSet" [ l |> ilBefore; l |> ilAfter
+                                             em |> AExpr |> before ]
     }
 
 /// Creates a partially resolved axiom for an if-then-else.
 and modelPartCmdOnITE gs ls i t f = 
     (* An ITE is not fully resolved yet.  We:
-     * 0) Convert the if-statement into a Z3 expression;
+     * 0) Convert the if-statement into a Starling expression;
      * 1) Place the ITE in the axioms pile;
      * 2) Merge in the axioms from the ‘then’ block;
      * 3) Merge in the axioms from the ‘else’ block.

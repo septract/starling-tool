@@ -1,132 +1,39 @@
-/// Module containing the semantic definitions of commands.
+/// <summary>
+///   Module containing the semantic instantiator.
+///
+///   <para>
+///     The semantic instantiator converts the commands in a model's
+///     axioms into Boolean expressions, by instantiating them in
+///     accordance with the model's semantic definitions.
+///   </para>
+///   <para>
+///     It also ensures variables not mentioned in a command's semantic
+///     definition are preserved in the resulting expression.
+///   </para>
+/// </summary>
 module Starling.Semantics
 
+open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Expr
 open Starling.Var
 open Starling.Model
 open Starling.Sub
+open Starling.Instantiate
 
-//
-// Atomic emitters
-//
+/// Type of errors relating to semantics instantiation.
+type Error =
+    /// There was an error instantiating a semantic definition.
+    | Instantiate of cmd: VFunc * error: Instantiate.Error
+    /// A command has a missing semantic definition.
+    | MissingDef of cmd: VFunc
 
-/// Makes the generic relation after!after = before!before.
-let makeRel before after = 
-    // We mark all variables in each expression, hence always.
-    mkEq (subExpr (liftMarker After always) after)
-         (subExpr (liftMarker Before always) before)
-
-/// Given some ArithExpr over a lvalue, return the relation for the
-/// operation identified by the given fetch mode on that lvalue.
-let makeFetchUpdate expr mode = 
-    let exprB = (liftMarker Before always).ASub expr
-    let exprA = (liftMarker After always).ASub expr
+/// Generates a framing relation for a given variable.
+let frameVar name ty =
+    let ve = mkVarExp(ty, name)
     
-    let exprMod = 
-        match mode with
-        // 'expr' -> expr!after = expr!before.
-        | Direct -> exprB
-        // 'expr++' -> expr!after = expr!before + 1.
-        | Increment -> mkAdd2 exprB (AInt 1L)
-        // 'expr--' -> expr!after = expr!before - 1.
-        | Decrement -> mkSub2 exprB (AInt 1L)
-    mkEq (AExpr exprA) (AExpr exprMod)
-
-/// Emits Z3 corresponding to a compare-and-swap.
-let makeCAS destE testE setE = 
-    (* Compare-and-swap gets its semantics in two steps:
-     * 1) Success--dest becomes set; test held.
-     * 2) Failure--test becomes dest; dest held.
-     * In both cases, set is not modified.
-     *)
-
-    // Make the before-case versions of dest and test.
-    let destEB = subExpr (liftMarker Before always) destE
-    let testEB = subExpr (liftMarker Before always) testE
-
-    (* Now we make the cases.
-     * Each case is in the form (cond => destAfter ^ testAfter).
-     * We start with the success case.
-     *)
-    let succCond = mkEq destEB testEB
-    // In a success, we have destE!after = setE!before;
-    let succDest = makeRel setE destE
-    // and test!after = test!before.
-    let succTest = makeRel testE testE
-    let succSem = mkAnd2 succDest succTest
-    let success = mkImplies succCond succSem
-    let failCond = mkNot succCond
-    // In a failure, we have testE!after = destE!before;
-    let failDest = makeRel destE testE
-    // and dest!after = dest!before.
-    let failTest = makeRel destE destE
-    let failSem = mkAnd2 failDest failTest
-    let failure = mkImplies failCond failSem
-    [ success
-      failure
-      // This models set!after = set!before.
-      makeRel setE setE ]
-
-/// Emits an arithmetic fetch.
-let makeIntLoad dest src mode = 
-    (* Convert the lvalues to constants.
-     * Note that a destination is optional.
-     *)
-    let destE = Option.map mkIntLV dest
-    let srcE = mkIntLV src
-    [ (* We have to use Some and List.collect to ensure that the term
-       * for dest is only included if there actually _is_ a dest.
-       *)
-      // If dest exists, create dest!after = src!before.
-      Option.map (AExpr >> makeRel (AExpr srcE)) destE
-      // Create src!after = F(src!before), where F is
-      // defined by the fetch mode.
-      makeFetchUpdate srcE mode |> Some ]
-    |> List.choose id
-
-/// Emits a Boolean fetch.
-let makeBoolLoad dest src = 
-    (* As above, but with different types, no modes other than
-     * Direct, and a mandatory dest.
-     *)
-    let destE = dest |> mkBoolLV |> BExpr
-    let srcE = src |> mkBoolLV |> BExpr
-    [ makeRel srcE destE
-      makeRel srcE srcE ]
-
-/// Emits an integral store.
-let makeIntStore dest srcE = 
-    // We don't emit a makeNoChange for src, because src is an expression.
-    let destE = dest |> mkIntLV |> AExpr
-    [ makeRel (AExpr srcE) destE ]
-
-/// Emits a Boolean store.
-let makeBoolStore dest srcE = 
-    let destE = dest |> mkBoolLV |> BExpr
-    [ makeRel (BExpr srcE) destE ]
-
-/// Emits an Expr corresponding to a prim.
-let emitPrim = 
-    function
-    | IntLoad(dest, src, mode) -> makeIntLoad dest src mode
-    | BoolLoad(dest, src) -> makeBoolLoad dest src
-    | IntStore(dest, src) -> makeIntStore dest src
-    | BoolStore(dest, src) -> makeBoolStore dest src
-    | IntCAS(dest, test, set) -> makeCAS (mkIntLV dest |> AExpr) (mkIntLV test |> AExpr) (set |> AExpr)
-    | BoolCAS(dest, test, set) -> makeCAS (mkBoolLV dest |> BExpr) (mkBoolLV test |> BExpr) (set |> BExpr)
-    | IntLocalSet(dest, srcE) -> 
-        (* By the meta-theory, this and BoolLocalSet can be modelled
-         * similarly to atomic fetches.
-         * However, src is an expression, and (currently) cannot modify
-         * dest, so we don't hold it invariant here.
-         *)
-        [ makeRel (srcE |> AExpr) (dest |> mkIntLV |> AExpr) ]
-    | BoolLocalSet(dest, srcE) -> 
-        [ makeRel (srcE |> BExpr) (dest |> mkBoolLV |> BExpr) ]
-    | PrimId -> [ BTrue ]
-    | PrimAssume(assumption) -> [ // Assumes always only refer to the pre-state.
-                                  (liftMarker Before always).BSub assumption ]
+    BEq(subExpr (liftMarker After always) ve,
+        subExpr (liftMarker Before always) ve)
 
 /// Generates a frame for a given expression.
 /// The frame is a relation a!after = a!before for every a not mentioned in the expression.
@@ -143,21 +50,26 @@ let frame model expr =
     Seq.append (Map.toSeq model.Globals) (Map.toSeq model.Locals)
     // TODO(CaptainHayashi): this is fairly inefficient.
     |> Seq.filter (fun (name, _) -> not (Set.contains name evars))
-    |> Seq.map ((fun (name, ty) -> mkVarExp (ty, name)) >> (fun v -> makeRel v v))
-    // ^ ... then prepare v!after = v!before records for them.
+    |> Seq.map (uncurry frameVar)
 
 /// Translate a Prim to an expression completely characterising it.
 /// This is the combination of the Prim's action (via emitPrim) and
 /// a set of framing terms forcing unbound variables to remain constant
 /// (through frame).
-let semanticsOf model prim = 
-    let actions = emitPrim prim
-    // Temporarily build an And so we can check it with frame.
-    // TODO(CaptainHayashi): eliminate this round-trip?
-    let aframe = frame model (mkAnd actions)
-    actions
-    |> List.append (Seq.toList aframe)
-    |> mkAnd 
+let semanticsOf model prim =
+    (* First, instantiate according to the semantics. 
+     * This can succeed but return None.  This means there is no
+     * entry (erroneous or otherwise) in the semantics for this prim.
+     * Since this is an error in this case, make it one.
+     *)
+    let actions =
+        instantiate prim model.Semantics
+        |> mapMessages (curry Instantiate prim)
+        |> bind (failIfNone (MissingDef prim))
+        
+    let aframe = lift (frame model >> List.ofSeq >> mkAnd) actions
+
+    lift2 mkAnd2 actions aframe
 
 /// Translates a model axiom into an axiom over a semantic expression.
 let translateAxiom model {Pre = pre; Post = post; Cmd = cmd} = 
@@ -169,12 +81,11 @@ let translateAxiom model {Pre = pre; Post = post; Cmd = cmd} =
      * just perform a full substitution using the substitution rule for
      * locals.
      *)
-    { Pre = subExprInGView (liftMarker Before always) pre
-      Post = subExprInGView (liftMarker After always) post 
-      Cmd = semanticsOf model cmd }
-
-/// Translate a model's axioms to axioms over semantic expressions.
-let translateAxioms model = List.map (translateAxiom model) model.Axioms
-
+    lift (fun scmd ->
+              { Pre = subExprInGView (liftMarker Before always) pre
+                Post = subExprInGView (liftMarker After always) post 
+                Cmd = scmd })
+         (semanticsOf model cmd)
+    
 /// Translate a model over Prims to a model over semantic expressions.
-let translate model = withAxioms (translateAxioms model) model
+let translate model = tryMapAxioms (translateAxiom model) model

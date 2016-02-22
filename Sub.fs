@@ -182,3 +182,26 @@ let liftMarkerV marker vpred =
 /// Lifts a marking function to a substitution function table.
 let liftMarker marker vpred =
     onVars (liftMarkerV marker vpred)
+
+
+(*
+ * Common substitutions
+ *)
+
+/// Converts an expression to its pre-state.
+let before = subExpr (liftMarker Before always)
+
+/// Converts an expression to its post-state.
+let after = subExpr (liftMarker After always)
+
+/// Creates a pre-state Boolean lvalue expression.
+let blBefore = mkBoolLV >> BExpr >> before
+
+/// Creates a post-state Boolean lvalue expression.
+let blAfter = mkBoolLV >> BExpr >> after
+
+/// Creates a pre-state integral lvalue expression.
+let ilBefore = mkIntLV >> AExpr >> before
+
+/// Creates a post-state integral lvalue expression.
+let ilAfter = mkIntLV >> AExpr >> after

@@ -138,7 +138,8 @@ let ticketLockAxioms =
         Post = 
            Multiset.ofList [ CFunc.Func { Name = "holdTick"
                                           Params = [ AExpr (AConst (Unmarked "t")) ] } ]
-        Cmd = Prim (IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment)) }
+        Cmd = Prim (func "!ILoad++" ["t" |> aBefore |> AExpr; "t" |> aAfter |> AExpr
+                                     "ticket" |> aBefore |> AExpr; "ticket" |> aAfter |> AExpr]) }
       { Pre = 
            Multiset.ofList [ CFunc.Func { Name = "holdTick"
                                           Params = [ AExpr (AConst (Unmarked "t")) ] } ]
@@ -169,12 +170,13 @@ let ticketLockAxioms =
                                                                                     Params = [] } ], 
                                                      Multiset.ofList [ CFunc.Func { Name = "holdTick"
                                                                                     Params = [ AExpr (AConst (Unmarked "t")) ] } ]) ]
-                                      Cmd = Prim (IntLoad(Some(LVIdent "s"), LVIdent "serving", Direct)) } ] }) }
+                                      Cmd = Prim (func "!ILoad" ["s" |> aBefore |> AExpr; "s" |> aAfter |> AExpr
+                                                                 "serving" |> aBefore |> AExpr; "serving" |> aAfter |> AExpr]) } ] }) }
       { Pre = 
             Multiset.ofList [ CFunc.Func { Name = "holdLock"
                                            Params = [] } ]
         Post = Multiset.empty()
-        Cmd = Prim(IntLoad(None, LVIdent "serving", Increment)) } ]
+        Cmd = Prim(func "!I++" ["serving" |> aBefore |> AExpr; "serving" |> aAfter |> AExpr]) } ]
 
 /// The view definitions of the ticketed lock model.
 let ticketLockViewDefs =

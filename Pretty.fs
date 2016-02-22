@@ -168,27 +168,6 @@ let printCASPrim ty dest src set =
                                src |> printLValue
                                set |> printExpr ]) ]
 
-/// Pretty-prints a local-set prim.
-let printLocalPrim ty dest src = 
-    hsep [ String("lset<" + ty + ">")
-           parened (equality (dest |> printLValue) (src |> printExpr)) ]
-
-/// Pretty-prints a prim.
-let printPrim = 
-    function 
-    | IntLoad(dest, src, mode) -> printLoadPrim "arith" dest src mode
-    | BoolLoad(dest, src) -> printLoadPrim "bool" (Some dest) src Direct
-    | IntStore(dest, src) -> printStorePrim "arith" dest (Expr.AExpr src)
-    | BoolStore(dest, src) -> printStorePrim "bool" dest (Expr.BExpr src)
-    | IntCAS(dest, src, set) -> printCASPrim "arith" dest src (Expr.AExpr set)
-    | BoolCAS(dest, src, set) -> printCASPrim "bool" dest src (Expr.BExpr set)
-    | IntLocalSet(dest, src) -> printLocalPrim "arith" dest (Expr.AExpr src)
-    | BoolLocalSet(dest, src) -> printLocalPrim "bool" dest (Expr.BExpr src)
-    | PrimId -> String "id"
-    | PrimAssume expr -> 
-        hsep [ String "assume"
-               braced (printBoolExpr expr) ]
-
 
 (*
  * Conds and axioms
@@ -200,7 +179,7 @@ let printAxiom pCmd pView { Pre = pre; Post = post; Cmd = cmd } =
     Surround(pre |> pView, cmd |> pCmd, post |> pView)
 
 /// Pretty-prints a PAxiom.
-let printPAxiom pView = printAxiom printPrim pView
+let printPAxiom pView = printAxiom printVFunc pView
 
 /// Pretty-prints a semantically translated axiom.
 let printSAxiom = 
@@ -213,7 +192,7 @@ let printSAxiom =
 /// Pretty-prints a part-cmd at the given indent level.
 let rec printPartCmd = 
     function 
-    | Prim prim -> printPrim prim
+    | Prim prim -> printVFunc prim
     | While(isDo, expr, inner) -> 
         cmdHeaded (hsep [ String(if isDo then "Do-while" else "While")
                           (printBoolExpr expr) ])

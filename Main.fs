@@ -123,6 +123,8 @@ let printResponse showModel =
 type Error = 
     /// An error occurred in the frontend.
     | Frontend of Lang.Frontend.Error
+    /// An error occurred in semantic translation.
+    | Semantics of Semantics.Error
     /// An error occurred in the Z3 backend.
     | Z3 of Z3.Backend.Error
     /// An error occurred in the HSF backend.
@@ -136,6 +138,7 @@ type Error =
 let printError = 
     function 
     | Frontend e -> Lang.Frontend.printError e
+    | Semantics e -> Starling.Pretty.Errors.printSemanticsError e
     | Z3 e -> Z3.Backend.printError e
     | HSF e -> Starling.Pretty.Errors.printHornError e
     | BadStage -> 
@@ -191,7 +194,7 @@ let termGen = lift Starling.TermGen.termGen
 let frame = lift Starling.Framer.frame
 
 /// Shorthand for the semantics stage.
-let semantics = lift Starling.Semantics.translate
+let semantics = bind (Starling.Semantics.translate >> mapMessages Error.Semantics)
 
 /// Shorthand for the expand stage.
 let expand = lift Starling.Expander.expand

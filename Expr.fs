@@ -179,7 +179,6 @@ let bAfter c = c |> After |> BConst
 /// Creates a before-marked Boolean constant.
 let bBefore c = c |> Before |> BConst
 
-
 /// Creates a reference to a Boolean lvalue.
 /// This does NOT check to see if the lvalue exists!
 let mkBoolLV lv = 

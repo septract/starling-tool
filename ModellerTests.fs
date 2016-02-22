@@ -79,7 +79,8 @@ type ModellerTests() =
     /// These use the ticketed lock model.
     static member AtomicPrims =
         [ TestCaseData(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment))
-            .Returns(Some <| IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment))
+            .Returns(Some <| func "!ILoad++" ["t" |> aBefore |> AExpr; "t" |> aAfter |> AExpr
+                                              "ticket" |> aBefore |> AExpr; "ticket" |> aAfter |> AExpr])
             .SetName("model a valid integer load as a prim") ]
 
     /// Tests the atomic primitive modeller using the ticketed lock.
@@ -90,7 +91,8 @@ type ModellerTests() =
     /// These use the ticketed lock model.
     static member CommandAxioms =
         [ TestCaseData(Atomic(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment)))
-            .Returns(Some <| Prim (IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment)))
+            .Returns(Some <| Prim (func "!ILoad++" ["t" |> aBefore |> AExpr; "t" |> aAfter |> AExpr
+                                                    "ticket" |> aBefore |> AExpr; "ticket" |> aAfter |> AExpr]))
             .SetName("model a valid integer load command as an axiom") ]
 
     /// Tests the command modeller using the ticketed lock.

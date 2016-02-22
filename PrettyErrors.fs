@@ -2,6 +2,7 @@
 module Starling.Pretty.Errors
 
 open Starling.Instantiate
+open Starling.Semantics
 open Starling.Errors.Lang.Modeller
 open Starling.Errors.Horn
 open Starling.Errors.Var
@@ -128,3 +129,14 @@ let printHornError =
     | EmptyCompoundExpr exptype ->
         fmt "found an empty '{0}' expression"
             [ String exptype ]
+
+/// Pretty-prints semantics errors.
+let printSemanticsError =
+    function
+    | Instantiate (cmd, error) ->
+      colonSep
+          [ fmt "couldn't instantiate command '{0}'" [ printVFunc cmd ]
+            printInstantiationError error ]
+    | MissingDef cmd ->
+        fmt "command '{0}' has no semantic definition"
+            [ printVFunc cmd ]

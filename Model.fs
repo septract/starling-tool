@@ -119,24 +119,6 @@ type ViewDef<'view> =
 
 
 (*
- * Prims
- *)
-
-/// A modelled primitive command.
-type Prim = 
-    | IntLoad of dest : Var.LValue option * src : Var.LValue * mode : Var.FetchMode
-    | BoolLoad of dest : Var.LValue * src : Var.LValue
-    | IntStore of dest : Var.LValue * src : ArithExpr
-    | BoolStore of dest : Var.LValue * src : BoolExpr
-    | IntCAS of dest : Var.LValue * test : Var.LValue * set : ArithExpr
-    | BoolCAS of dest : Var.LValue * test : Var.LValue * set : BoolExpr
-    | IntLocalSet of dest : Var.LValue * src : ArithExpr
-    | BoolLocalSet of dest : Var.LValue * src : BoolExpr
-    | PrimId
-    | PrimAssume of BoolExpr
-
-
-(*
  * Conds and axioms
  *)
 
@@ -151,15 +133,15 @@ type Axiom<'view, 'command> =
 let axiom p c q =
     { Pre = p; Post = q; Cmd = c }
 
-/// An axiom carrying a Prim as its command.
-type PAxiom<'a> = Axiom<'a, Prim>
+/// An axiom carrying a VFunc as its command.
+type PAxiom<'a> = Axiom<'a, VFunc>
 
 /// An axiom carrying a semantic relation as its command.
 type SAxiom<'a> = Axiom<'a, BoolExpr>
 
 /// A partially resolved axiom element.
 type PartCmd = 
-    | Prim of Prim
+    | Prim of VFunc
     | While of isDo : bool * expr : BoolExpr * inner : Axiom<CView, Axiom<CView, PartCmd> list>
     | ITE of expr : BoolExpr * inTrue : Axiom<CView, Axiom<CView, PartCmd> list> * inFalse : Axiom<CView, Axiom<CView, PartCmd> list>
 

@@ -2,6 +2,8 @@ module Starling.Tests.Semantics
 
 open NUnit.Framework
 open Starling
+open Starling.Collections
+open Starling.Utils
 open Starling.Expr
 open Starling.Var
 open Starling.Model
@@ -32,25 +34,28 @@ type SemanticsTests() =
     
     /// Test cases for full command semantic translation.
     static member Commands = 
-        [ // Annoyingly, order of terms seems to matter here.
-          // TODO(CaptainHayashi): weaken this test?
-          TestCaseData(PrimAssume(aEq (aUnmarked "s") (aUnmarked "t")))
-              .Returns(BAnd [ aEq (aAfter "serving") (aBefore "serving")
-                              aEq (aAfter "ticket") (aBefore "ticket")
-                              aEq (aAfter "s") (aBefore "s")
-                              aEq (aAfter "t") (aBefore "t")
-                              aEq (aBefore "s") (aBefore "t") ])
+        [ TestCaseData(func "Assume" [aEq (aBefore "s") (aBefore "t") |> BExpr])
+              .Returns(Some <| Set.ofList [ aEq (aAfter "serving") (aBefore "serving")
+                                            aEq (aAfter "ticket") (aBefore "ticket")
+                                            aEq (aAfter "s") (aBefore "s")
+                                            aEq (aAfter "t") (aBefore "t")
+                                            aEq (aBefore "s") (aBefore "t") ])
               .SetName("Semantically translate <assume(s == t)> using the ticketed lock model")
           
-          TestCaseData(IntLoad(None, LVIdent "serving", Increment))
-              .Returns(BAnd [ aEq (aAfter "ticket") (aBefore "ticket")
-                              aEq (aAfter "s") (aBefore "s")
-                              aEq (aAfter "t") (aBefore "t")
-                              aEq (aAfter "serving") (AAdd [ aBefore "serving"
-                                                             AInt 1L ]) ])
+          TestCaseData(func "!I++" ["serving" |> aBefore |> AExpr; "serving" |> aAfter |> AExpr])
+              .Returns(Some <| Set.ofList[ aEq (aAfter "ticket") (aBefore "ticket")
+                                           aEq (aAfter "s") (aBefore "s")
+                                           aEq (aAfter "t") (aBefore "t")
+                                           aEq (aAfter "serving") (AAdd [ aBefore "serving"
+                                                                          AInt 1L ]) ])
               .SetName("Semantically translate <serving++> using the ticketed lock model") ]
     
     // Test semantic reification of commands.
     [<TestCaseSource("Commands")>]
     member x.``Test semantic translation of commands using the ticketed lock model`` com = 
-        semanticsOf ticketLockModel com
+        com
+        |> semanticsOf ticketLockModel
+        |> okOption
+        |> Option.bind (function
+                        | BAnd xs -> xs |> Set.ofList |> Some
+                        | _ -> None) 

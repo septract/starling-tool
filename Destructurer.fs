@@ -1,6 +1,8 @@
 module Starling.Destructurer
 
+open Starling.Collections
 open Starling.Expr
+open Starling.Sub
 open Starling.Model
 
 /// Flattens a [do-]while loop into a list of flat axioms.
@@ -17,22 +19,26 @@ let rec flatWhile model expr outerPre outerPost inner isDo =
     let p3 = inner.Post
     let p4 = outerPost
     
+    let id = func "Id" []
+    let assumeC = func "Assume" [expr |> BExpr |> before]
+    let assumeNotC = func "Assume" [expr |> mkNot |> BExpr |> before]
+    
     // For do-while loops: [|P1|} id [|P2|]
     // For while loops: [|P1|] assume C [|P2|]
-    let p1p2 = axiom p1 (if isDo then PrimId else PrimAssume expr) p2
+    let p1p2 = axiom p1 (if isDo then id else assumeC) p2
     
     // [|P3|] assume C [|P2|]
-    let p3p2 = axiom p3 (PrimAssume expr) p2
+    let p3p2 = axiom p3 assumeC p2
     
     // [|P3|] assume ¬C [|P4|]
-    let p3p4 = axiom p3 (PrimAssume(mkNot expr)) p4
+    let p3p4 = axiom p3 assumeNotC p4
 
     let inPath = p1p2 :: p3p2 :: p3p4 :: flatAxioms model inner.Cmd
 
     // For while loops, add path [|P1|] assume ¬C [|P4|] (not entering loop).
     if isDo
     then inPath
-    else (axiom p1 (PrimAssume(mkNot expr)) p4) :: inPath
+    else (axiom p1 assumeNotC p4) :: inPath
 
 /// Flattens an if-then-else loop into a list of flattened axioms.
 and flatITE model expr outerPre outerPost inTrue inFalse = 
@@ -47,16 +53,16 @@ and flatITE model expr outerPre outerPost inTrue inFalse =
     let p6 = outerPost
     
     // [|P1|} assume C {|P2|}
-    let p1p2 = axiom p1 (PrimAssume expr) p2
+    let p1p2 = axiom p1 (func "Assume" [expr |> BExpr |> before]) p2
     
     // [|P3|] id [|P6|]
-    let p3p6 = axiom p3 PrimId p6
+    let p3p6 = axiom p3 (func "Id" []) p6
     
     // [|P1|] assume ~C [|P4|]
-    let p1p4 = axiom p1 (PrimAssume(mkNot expr)) p4
+    let p1p4 = axiom p1 (func "Assume" [expr |> mkNot |> BExpr |> before]) p4
     
     // [|P5|] id [|P6|]
-    let p5p6 = axiom p5 PrimId p6
+    let p5p6 = axiom p5 (func "Id" []) p6
     
     let trues = p1p2 :: p3p6 :: flatAxioms model inTrue.Cmd
     let falses = p1p4 :: p5p6 :: flatAxioms model inFalse.Cmd
