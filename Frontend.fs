@@ -8,7 +8,7 @@ open Starling.Pretty.Misc
 open Starling.Lang.Modeller
 open Starling.Lang.Parser
 open Starling.Lang.Destructurer
-open Starling.Lang.Expander
+open Starling.Lang.Guarder
 
 (*
  * Request and response types
@@ -22,11 +22,12 @@ type Request =
     | Collate
     /// Parse, collate, and model a Starling script; return `Response.Model`.
     | Model
-    /// Parse, collate, model and destructure a Starling script; return `Response.Destructure`.
+    /// Parse, collate, model, and guard a Starling script;
+    /// return `Response.Guard`.
+    | Guard
+    /// Parse, collate, model, guard, and destructure a Starling script;
+    /// return `Response.Destructure`.
     | Destructure
-    /// Parse, collate, model, destructure and expand a Starling script;
-    /// return `Response.Expand`.
-    | Expand
 
 /// Type of responses from the Starling frontend.
 type Response =
@@ -35,11 +36,11 @@ type Response =
     /// Output of the parsing and collation steps.
     | Collate of Collator.CollatedScript
     /// Output of the parsing, collation, and modelling steps.
-    | Model of Model<Axiom<CView, PartCmd>, DView>
-    /// Output of the parsing, collation, modelling and destructuring stages.
-    | Destructure of Model<PAxiom<CView>, DView>
-    /// Output of the parsing, collation, modelling, destructuring and expanding stages.
-    | Expand of Model<PAxiom<GView>, DView>
+    | Model of Model<Axiom<CView, PartCmd<CView>>, DView>
+    /// Output of the parsing, collation, modelling, and guarding stages.
+    | Guard of Model<Axiom<GView, PartCmd<GView>>, DView>
+    /// Output of the parsing, collation, modelling, guarding and destructuring stages.
+    | Destructure of Model<PAxiom<GView>, DView>
 
 (*
  * Error types
@@ -70,9 +71,9 @@ let printResponse showModel =
     function 
     | Response.Parse s -> Pretty.Lang.AST.printScript s
     | Response.Collate c -> printCollatedScript c
-    | Response.Model m -> pmodel (printAxiom printPartCmd printCView) printDView m
-    | Response.Destructure m -> pmodel (printPAxiom printCView) printDView m
-    | Response.Expand m -> pmodel (printPAxiom printGView) printDView m
+    | Response.Model m -> pmodel (printAxiom (printPartCmd printCView) printCView) printDView m
+    | Response.Guard m -> pmodel (printAxiom (printPartCmd printGView) printGView) printDView m
+    | Response.Destructure m -> pmodel (printPAxiom printGView) printDView m
 
 /// Pretty-prints an error.
 let printError =
@@ -90,11 +91,10 @@ let parse = Parser.parseFile >> mapMessages Error.Parse
 let collate = lift Collator.collate
 /// Shorthand for the modelling stage of the frontend pipeline.
 let model = bind (Modeller.model >> mapMessages Error.Model)
-/// Shorthand for the expand stage.
-let expand = lift Expander.expand
+/// Shorthand for the guard stage.
+let guard = lift Guarder.guard
 /// Shorthand for the destructure stage.
 let destructure = lift Destructurer.destructure
-
 
 /// Runs the Starling frontend.
 /// Takes two arguments: the first is the `Response` telling the frontend what
@@ -105,5 +105,5 @@ let run =
     | Request.Parse -> parse >> lift Response.Parse
     | Request.Collate -> parse >> collate >> lift Response.Collate
     | Request.Model -> parse >> collate >> model >> lift Response.Model
-    | Request.Destructure -> parse >> collate >> model >> destructure >> lift Response.Destructure
-    | Request.Expand -> parse >> collate >> model >> destructure >> expand >> lift Response.Expand
+    | Request.Guard -> parse >> collate >> model >> guard >> lift Response.Guard
+    | Request.Destructure -> parse >> collate >> model >> guard >> destructure >> lift Response.Destructure

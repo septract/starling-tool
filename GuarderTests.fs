@@ -1,20 +1,20 @@
-module Starling.Tests.Expander
+module Starling.Tests.Guarder
 
 open NUnit.Framework
 open Starling.Collections
 open Starling.Expr
 open Starling.Lang.Modeller
-open Starling.Lang.Expander
+open Starling.Lang.Guarder
 open Starling.Model
 
-/// Tests for the expander.
-type ExpanderTests() = 
+/// Tests for the view guarder.
+type GuarderTests() = 
     
     /// Test cases for converting CondViews to GuarViews
     static member CondViews = 
         let msec : CView = Multiset.empty()
         let mseg : GView = Multiset.empty()
-        [ TestCaseData(msec).Returns(mseg).SetName("Convert the empty CondView to the empty GuarView")
+        [ TestCaseData(msec).Returns(mseg).SetName("Convert the empty CView to the empty GView")
           
           TestCaseData(Multiset.ofList [ Func { Name = "foo"
                                                 Params = [ AExpr(AConst(Unmarked "bar")) ] }
@@ -85,6 +85,6 @@ type ExpanderTests() =
                                                  Params = [ AExpr(AConst(Unmarked "dong")) ] } } ])
               .SetName("Convert a complex-nested CondView-list to a GuarView-list with complex guards") ]
     
-    // Test conversion of CondViews into GuarViews.
+    // Test conversion of CViews into GViews.
     [<TestCaseSource("CondViews")>]
-    member x.``Test converting CondViews into GuarViews`` cv = resolveCondViews cv
+    member x.``Test converting CViews into GViews`` cv = guardCView cv

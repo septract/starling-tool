@@ -87,12 +87,17 @@ type ModellerTests() =
     [<TestCaseSource("AtomicPrims")>]
     member x.``atomic actions are modelled correctly as prims`` a = modelPrimOnAtomic ticketLockModel.Globals ticketLockModel.Locals a |> okOption
 
+    /// Constructs a Prim of the correct type to come out of a modeller.
+    static member mprim (vf : VFunc) : PartCmd<CView> = Prim vf
+
     /// Tests for the command axiom modeller.
     /// These use the ticketed lock model.
     static member CommandAxioms =
         [ TestCaseData(Atomic(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment)))
-            .Returns(Some <| Prim (func "!ILoad++" ["t" |> aBefore |> AExpr; "t" |> aAfter |> AExpr
-                                                    "ticket" |> aBefore |> AExpr; "ticket" |> aAfter |> AExpr]))
+            .Returns(ModellerTests.mprim
+                         (func "!ILoad++" ["t" |> aBefore |> AExpr; "t" |> aAfter |> AExpr
+                                           "ticket" |> aBefore |> AExpr; "ticket" |> aAfter |> AExpr])
+                     |> Some)
             .SetName("model a valid integer load command as an axiom") ]
 
     /// Tests the command modeller using the ticketed lock.

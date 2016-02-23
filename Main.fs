@@ -48,8 +48,8 @@ let requestMap =
     Map.ofList [ ("parse", Request.Frontend Lang.Frontend.Request.Parse)
                  ("collate", Request.Frontend Lang.Frontend.Request.Collate)
                  ("model", Request.Frontend Lang.Frontend.Request.Model)
+                 ("guard", Request.Frontend Lang.Frontend.Request.Guard)
                  ("destructure", Request.Frontend Lang.Frontend.Request.Destructure)
-                 ("expand", Request.Frontend Lang.Frontend.Request.Expand)
                  ("frame", Request.Frame)
                  ("termgen", Request.TermGen)
                  ("reify", Request.Reify)
@@ -191,9 +191,9 @@ let frontend rq = Lang.Frontend.run rq >> mapMessages Error.Frontend
 
 /// Shorthand for the full frontend stage.
 let model = 
-    frontend Lang.Frontend.Request.Expand
+    frontend Lang.Frontend.Request.Destructure
     >> bind (function 
-             | Lang.Frontend.Response.Expand m -> m |> ok
+             | Lang.Frontend.Response.Destructure m -> m |> ok
              | _ -> Other "internal error: bad frontend response" |> fail)
 
 /// Runs the Starling request at argument 2 on the file named by argument 3.

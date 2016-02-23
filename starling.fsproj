@@ -58,8 +58,8 @@
     <Compile Include="Instantiate.fs" />
     <Compile Include="ModellerErrors.fs" />
     <Compile Include="Modeller.fs" />
+    <Compile Include="Guarder.fs" />
     <Compile Include="Destructurer.fs" />
-    <Compile Include="Expander.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="Semantics.fs" />
     <Compile Include="Framer.fs" />
@@ -84,7 +84,7 @@
     <Compile Include="PrettyTests.fs" />
     <Compile Include="ParserTests.fs" />
     <Compile Include="ModellerTests.fs" />
-    <Compile Include="ExpanderTests.fs" />
+    <Compile Include="GuarderTests.fs" />
     <Compile Include="SemanticsTests.fs" />
     <Compile Include="ReifierTests.fs" />
     <Compile Include="FlattenerTests.fs" />

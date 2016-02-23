@@ -26,11 +26,16 @@ type CFunc =
 type CView = Multiset<CFunc>
 
 /// A partially resolved axiom element.
-type PartCmd = 
+type PartCmd<'view> = 
     | Prim of VFunc
-    | While of isDo : bool * expr : BoolExpr * inner : Axiom<CView, Axiom<CView, PartCmd> list>
-    | ITE of expr : BoolExpr * inTrue : Axiom<CView, Axiom<CView, PartCmd> list> * inFalse : Axiom<CView, Axiom<CView, PartCmd> list>
-
+    | While of
+        isDo : bool
+        * expr : BoolExpr
+        * inner : Axiom<'view, Axiom<'view, PartCmd<'view>> list>
+    | ITE of
+        expr : BoolExpr
+        * inTrue : Axiom<'view, Axiom<'view, PartCmd<'view>> list>
+        * inFalse : Axiom<'view, Axiom<'view, PartCmd<'view>> list>
 
 (*
  * Starling imperative language semantics

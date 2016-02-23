@@ -183,21 +183,21 @@ let printAxiom pCmd pView { Pre = pre; Post = post; Cmd = cmd } =
 let printPAxiom pView = printAxiom printVFunc pView
 
 /// Pretty-prints a part-cmd at the given indent level.
-let rec printPartCmd = 
+let rec printPartCmd pView = 
     function 
     | Prim prim -> printVFunc prim
     | While(isDo, expr, inner) -> 
         cmdHeaded (hsep [ String(if isDo then "Do-while" else "While")
                           (printBoolExpr expr) ])
-                  (printPartInner inner)
+                  (printPartInner pView inner)
     | ITE(expr, inTrue, inFalse) ->
         cmdHeaded (hsep [String "begin if"
                          (printBoolExpr expr) ])
-                  [headed "True" (printPartInner inTrue)
-                   headed "False" (printPartInner inFalse)]
+                  [headed "True" (printPartInner pView inTrue)
+                   headed "False" (printPartInner pView inFalse)]
 /// Prints the inner part of a part command. 
-and printPartInner =
-    printAxiom (List.map (printAxiom printPartCmd printCView) >> ivsep) printCView
+and printPartInner pView =
+    printAxiom (List.map (printAxiom (printPartCmd pView) pView) >> ivsep) pView
     >> Seq.singleton
 
 (*
