@@ -26,10 +26,6 @@ type Options =
 type Request = 
     /// Run the language frontend only, with the given request.
     | Frontend of Lang.Frontend.Request
-    /// Stop at structure flattening.
-    | Destructure
-    /// Stop at conditional expansion.
-    | Expand
     /// Stop at frame-axiom-pair generation.
     | Frame
     /// Stop at term generation.
@@ -52,8 +48,8 @@ let requestMap =
     Map.ofList [ ("parse", Request.Frontend Lang.Frontend.Request.Parse)
                  ("collate", Request.Frontend Lang.Frontend.Request.Collate)
                  ("model", Request.Frontend Lang.Frontend.Request.Model)
-                 ("destructure", Request.Destructure)
-                 ("expand", Request.Expand)
+                 ("destructure", Request.Frontend Lang.Frontend.Request.Destructure)
+                 ("expand", Request.Frontend Lang.Frontend.Request.Expand)
                  ("frame", Request.Frame)
                  ("termgen", Request.TermGen)
                  ("reify", Request.Reify)
@@ -74,10 +70,6 @@ let requestFromStage ostage = Map.tryFind (withDefault "sat" ostage) requestMap
 type Response = 
     /// The result of frontend processing.
     | Frontend of Lang.Frontend.Response
-    /// The result of destructuring.
-    | Destructure of Model<PAxiom<CView>, DView>
-    /// The result of conditional expansion.
-    | Expand of Model<PAxiom<GView>, DView>
     /// The result of frame-axiom-pair generation.
     | Frame of Model<FramedAxiom, DView>
     /// The result of term generation.
@@ -107,9 +99,7 @@ let printResponse showModel =
         else printNumHeaderedList pA m.Axioms
         
     function 
-    | Frontend f -> Lang.Frontend.printResponse f
-    | Destructure m -> pmodel (printPAxiom printCView) printDView m
-    | Expand m -> pmodel (printPAxiom printGView) printDView m
+    | Frontend f -> Lang.Frontend.printResponse showModel f
     | Frame m -> pmodel printFramedAxiom printDView m
     | TermGen m -> pmodel (printPTerm printGView printView) printDView m
     | Reify m -> pmodel (printPTerm printViewSet printView) printDView m
@@ -196,20 +186,15 @@ let frame = lift Starling.Framer.frame
 /// Shorthand for the semantics stage.
 let semantics = bind (Starling.Semantics.translate >> mapMessages Error.Semantics)
 
-/// Shorthand for the expand stage.
-let expand = lift Starling.Expander.expand
-
-/// Shorthand for the destructure stage.
-let destructure = lift Starling.Destructurer.destructure
-
 /// Shorthand for the frontend stage.
 let frontend rq = Lang.Frontend.run rq >> mapMessages Error.Frontend
 
 /// Shorthand for the full frontend stage.
 let model = 
-    frontend Lang.Frontend.Request.Model >> bind (function 
-                                                | Lang.Frontend.Response.Model m -> m |> ok
-                                                | _ -> Other "internal error: bad frontend response" |> fail)
+    frontend Lang.Frontend.Request.Expand
+    >> bind (function 
+             | Lang.Frontend.Response.Expand m -> m |> ok
+             | _ -> Other "internal error: bad frontend response" |> fail)
 
 /// Runs the Starling request at argument 2 on the file named by argument 3.
 /// If missing, we read from stdin.
@@ -219,40 +204,23 @@ let runStarling opt =
 
     function 
     | Request.Frontend rq -> frontend rq >> lift Response.Frontend
-    | Request.Destructure -> 
-        model
-        >> destructure
-        >> lift Response.Destructure
-    | Request.Expand -> 
-        model
-        >> destructure
-        >> expand
-        >> lift Response.Expand
     | Request.Frame -> 
         model
-        >> destructure
-        >> expand
         >> frame
         >> lift Response.Frame
     | Request.TermGen -> 
         model
-        >> destructure
-        >> expand
         >> frame
         >> termGen
         >> lift Response.TermGen
     | Request.Reify -> 
         model
-        >> destructure
-        >> expand
         >> frame
         >> termGen
         >> reify
         >> lift Response.Reify
     | Request.Flatten -> 
         model
-        >> destructure
-        >> expand
         >> frame
         >> termGen
         >> reify
@@ -260,8 +228,6 @@ let runStarling opt =
         >> lift Response.Flatten
     | Request.Semantics -> 
         model
-        >> destructure
-        >> expand
         >> frame
         >> termGen
         >> reify
@@ -270,8 +236,6 @@ let runStarling opt =
         >> lift Response.Semantics
     | Request.Optimise -> 
         model
-        >> destructure
-        >> expand
         >> frame
         >> termGen
         >> reify
@@ -281,8 +245,6 @@ let runStarling opt =
         >> lift Response.Optimise
     | Request.Z3 rq -> 
         model
-        >> destructure
-        >> expand
         >> frame
         >> termGen
         >> reify
@@ -293,8 +255,6 @@ let runStarling opt =
         >> lift Response.Z3
     | Request.HSF ->
         model
-        >> destructure
-        >> expand
         >> frame
         >> termGen
         >> reify

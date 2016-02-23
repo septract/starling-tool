@@ -44,10 +44,10 @@ let rec printExpression =
 /// Pretty-prints views.
 let rec printView = 
     function 
-    | Func f -> printFunc printExpression f
-    | Unit -> String "emp"
-    | Join(l, r) -> binop "*" (printView l) (printView r)
-    | IfView(e, l, r) -> 
+    | View.Func f -> printFunc printExpression f
+    | View.Unit -> String "emp"
+    | View.Join(l, r) -> binop "*" (printView l) (printView r)
+    | View.If(e, l, r) -> 
         hsep [ String "if"
                printExpression e
                String "then"

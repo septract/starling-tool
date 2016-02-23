@@ -3,7 +3,8 @@ module Starling.Tests.Expander
 open NUnit.Framework
 open Starling.Collections
 open Starling.Expr
-open Starling.Expander
+open Starling.Lang.Modeller
+open Starling.Lang.Expander
 open Starling.Model
 
 /// Tests for the expander.

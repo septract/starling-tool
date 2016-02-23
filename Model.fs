@@ -54,11 +54,6 @@ type VFunc = Func<Expr>
 /// A view-definition func.
 type DFunc = Func<Var.Type * string>
 
-/// A conditional (flat or if-then-else) func.
-type CFunc = 
-    | ITE of BoolExpr * Multiset<CFunc> * Multiset<CFunc>
-    | Func of VFunc
-
 /// A guarded view func.
 type GFunc = Guarded<VFunc>
 
@@ -78,10 +73,6 @@ type View = Multiset<VFunc>
 
 /// A view definition.
 type DView = Multiset<DFunc>
-
-/// A conditional view, or multiset of CFuncs.
-type CView = Multiset<CFunc>
-
 
 /// <summary>
 ///   A guarded view.
@@ -135,12 +126,6 @@ type PAxiom<'view> = Axiom<'view, VFunc>
 /// Makes an axiom {p}c{q}.
 let axiom p c q =
     { Pre = p; Post = q; Cmd = c }
-
-/// A partially resolved axiom element.
-type PartCmd = 
-    | Prim of VFunc
-    | While of isDo : bool * expr : BoolExpr * inner : Axiom<CView, Axiom<CView, PartCmd> list>
-    | ITE of expr : BoolExpr * inTrue : Axiom<CView, Axiom<CView, PartCmd> list> * inFalse : Axiom<CView, Axiom<CView, PartCmd> list>
 
 
 (*

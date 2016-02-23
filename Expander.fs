@@ -1,9 +1,10 @@
-module Starling.Expander
+module Starling.Lang.Expander
 
 open Starling.Collections
 open Starling.Expr
 open Starling.Model
 open Starling.Utils
+open Starling.Lang.Modeller
 
 /// Converts a view from conditional to guarded form.
 /// This takes the set of all conditions forming the suffix of any guards

@@ -49,7 +49,7 @@ type View =
     | Unit
     | Join of View * View
     | Func of Func<Expression>
-    | IfView of Expression * View * View
+    | If of Expression * View * View
 
 /// A statement in the command language.
 type Command = 

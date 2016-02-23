@@ -5,6 +5,10 @@ open Chessie.ErrorHandling
 open Starling
 open Starling.Model
 open Starling.Pretty.Misc
+open Starling.Lang.Modeller
+open Starling.Lang.Parser
+open Starling.Lang.Destructurer
+open Starling.Lang.Expander
 
 (*
  * Request and response types
@@ -12,12 +16,17 @@ open Starling.Pretty.Misc
 
 /// Type of requests to the Starling frontend.
 type Request = 
-    /// Only parse a Starling script; return `Output.Parse`.
+    /// Only parse a Starling script; return `Response.Parse`.
     | Parse
-    /// Parse and collate a Starling script; return `Output.Collation`.
+    /// Parse and collate a Starling script; return `Response.Collate`.
     | Collate
-    /// Parse, collate, and model a Starling script.
+    /// Parse, collate, and model a Starling script; return `Response.Model`.
     | Model
+    /// Parse, collate, model and destructure a Starling script; return `Response.Destructure`.
+    | Destructure
+    /// Parse, collate, model, destructure and expand a Starling script;
+    /// return `Response.Expand`.
+    | Expand
 
 /// Type of responses from the Starling frontend.
 type Response =
@@ -27,6 +36,10 @@ type Response =
     | Collate of Collator.CollatedScript
     /// Output of the parsing, collation, and modelling steps.
     | Model of Model<Axiom<CView, PartCmd>, DView>
+    /// Output of the parsing, collation, modelling and destructuring stages.
+    | Destructure of Model<PAxiom<CView>, DView>
+    /// Output of the parsing, collation, modelling, destructuring and expanding stages.
+    | Expand of Model<PAxiom<GView>, DView>
 
 (*
  * Error types
@@ -44,11 +57,22 @@ type Error =
  *)
 
 /// Pretty-prints a response.
-let printResponse = 
+let printResponse showModel =
+    (* See Main.fs for what this is doing.
+     * TODO(CaptainHayashi): work out a way to de-duplicate this while still
+     * appeasing F#'s type system.
+     *)
+    let pmodel pA pD m =
+        if showModel
+        then printModel pA pD m
+        else printNumHeaderedList pA m.Axioms
+    
     function 
     | Response.Parse s -> Pretty.Lang.AST.printScript s
     | Response.Collate c -> printCollatedScript c
-    | Response.Model m -> printModel (printAxiom printPartCmd printCView) printDView m
+    | Response.Model m -> pmodel (printAxiom printPartCmd printCView) printDView m
+    | Response.Destructure m -> pmodel (printPAxiom printCView) printDView m
+    | Response.Expand m -> pmodel (printPAxiom printGView) printDView m
 
 /// Pretty-prints an error.
 let printError =
@@ -65,7 +89,12 @@ let parse = Parser.parseFile >> mapMessages Error.Parse
 /// Shorthand for the collation stage of the frontend pipeline.
 let collate = lift Collator.collate
 /// Shorthand for the modelling stage of the frontend pipeline.
-let model = bind (Modeller.model >> mapMessages Error.Model) 
+let model = bind (Modeller.model >> mapMessages Error.Model)
+/// Shorthand for the expand stage.
+let expand = lift Expander.expand
+/// Shorthand for the destructure stage.
+let destructure = lift Destructurer.destructure
+
 
 /// Runs the Starling frontend.
 /// Takes two arguments: the first is the `Response` telling the frontend what
@@ -76,3 +105,5 @@ let run =
     | Request.Parse -> parse >> lift Response.Parse
     | Request.Collate -> parse >> collate >> lift Response.Collate
     | Request.Model -> parse >> collate >> model >> lift Response.Model
+    | Request.Destructure -> parse >> collate >> model >> destructure >> lift Response.Destructure
+    | Request.Expand -> parse >> collate >> model >> destructure >> expand >> lift Response.Expand

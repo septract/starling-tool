@@ -1,9 +1,11 @@
-module Starling.Destructurer
+module Starling.Lang.Destructurer
 
 open Starling.Collections
 open Starling.Expr
 open Starling.Sub
 open Starling.Model
+open Starling.Utils
+open Starling.Lang.Modeller
 
 /// Flattens a [do-]while loop into a list of flat axioms.
 /// The difference between the two loops is expressed by the command inside

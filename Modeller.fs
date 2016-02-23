@@ -12,6 +12,26 @@ open Starling.Lang.AST
 open Starling.Lang.Collator
 open Starling.Sub
 
+
+(*
+ * Conditional views.
+ *)
+
+/// A conditional (flat or if-then-else) func.
+type CFunc = 
+    | ITE of BoolExpr * Multiset<CFunc> * Multiset<CFunc>
+    | Func of VFunc
+
+/// A conditional view, or multiset of CFuncs.
+type CView = Multiset<CFunc>
+
+/// A partially resolved axiom element.
+type PartCmd = 
+    | Prim of VFunc
+    | While of isDo : bool * expr : BoolExpr * inner : Axiom<CView, Axiom<CView, PartCmd> list>
+    | ITE of expr : BoolExpr * inTrue : Axiom<CView, Axiom<CView, PartCmd> list> * inFalse : Axiom<CView, Axiom<CView, PartCmd> list>
+
+
 (*
  * Starling imperative language semantics
  *)
@@ -345,7 +365,7 @@ let modelViewDefs globals vprotos { Constraints = cs } =
 /// Takes an environment of local variables, and the AST itself.
 let rec modelView env = 
     function
-    | Func {Name = s; Params = pars} -> 
+    | View.Func {Name = s; Params = pars} -> 
         trial { 
             let! pexps = pars
                          |> List.map (fun e -> 
@@ -357,10 +377,10 @@ let rec modelView env =
                                   Params = pexps } ]
                    |> Multiset.ofList
         }
-    | IfView(e, l, r) -> trial { let! ez3 = modelBoolExpr env e |> mapMessages (curry VEBadExpr e)
-                                 let! lvs = modelView env l
-                                 let! rvs = modelView env r
-                                 return (CFunc.ITE(ez3, lvs, rvs) |> Multiset.singleton) }
+    | View.If(e, l, r) -> trial { let! ez3 = modelBoolExpr env e |> mapMessages (curry VEBadExpr e)
+                                  let! lvs = modelView env l
+                                  let! rvs = modelView env r
+                                  return (CFunc.ITE(ez3, lvs, rvs) |> Multiset.singleton) }
     | Unit -> Multiset.empty() |> ok
     | Join(l, r) -> lift2 (Multiset.append) (modelView env l) (modelView env r)
 
@@ -578,7 +598,7 @@ and modelPartCmdOnCommand gs ls =
     | Assign(l, e) -> modelPrimOnAssign ls l e |> lift Prim
     | Skip -> modelPrimOnAtomic gs ls Id |> lift Prim
     | If(i, t, e) -> modelPartCmdOnITE gs ls i t e
-    | While(e, b) -> modelPartCmdOnWhile false gs ls e b
+    | Command.While(e, b) -> modelPartCmdOnWhile false gs ls e b
     | DoWhile(b, e) -> modelPartCmdOnWhile true gs ls e b
     | c -> fail <| AEUnsupportedCommand(c, "TODO: implement")
 

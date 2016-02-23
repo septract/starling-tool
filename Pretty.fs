@@ -5,6 +5,7 @@ open Starling
 open Starling.Collections
 open Starling.Var
 open Starling.Lang.Collator
+open Starling.Lang.Modeller
 open Starling.Model
 open Starling.Pretty.Expr
 open Starling.Pretty.Lang.AST

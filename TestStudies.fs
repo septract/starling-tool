@@ -8,6 +8,7 @@ open Starling.Var
 open Starling.Model
 open Starling.Lang.AST
 open Starling.Lang.Collator
+open Starling.Lang.Modeller
 
 /// The raw form of the ticketed lock.
 let ticketLock = """
@@ -52,24 +53,24 @@ let ticketLockLockMethodAST =
           { Pre = Unit
             Contents = 
                 [ { Command = Atomic(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment))
-                    Post = Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]} }
+                    Post = View.Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]} }
                   { Command = 
                         DoWhile
-                            ({ Pre = Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]}
+                            ({ Pre = View.Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]}
                                Contents = 
                                    [ { Command = Atomic(Fetch(LVIdent "s", LV(LVIdent "serving"), Direct))
                                        Post = 
-                                           IfView
-                                               (Bop(Eq, LV(LVIdent "s"), LV(LVIdent "t")), Func {Name = "holdLock"; Params = []}, 
-                                                Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]}) } ] }, 
+                                           View.If
+                                               (Bop(Eq, LV(LVIdent "s"), LV(LVIdent "t")), View.Func {Name = "holdLock"; Params = []}, 
+                                                View.Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]}) } ] }, 
                              Bop(Neq, LV(LVIdent "s"), LV(LVIdent "t")))
-                    Post = Func { Name = "holdLock"; Params = []} } ] } }
+                    Post = View.Func { Name = "holdLock"; Params = []} } ] } }
 
 /// The correct parsing of the ticketed lock's unlock method.
 let ticketLockUnlockMethodAST = 
     { Signature = {Name = "unlock"; Params = []}
       Body = 
-          { Pre = Func {Name = "holdLock"; Params = []}
+          { Pre = View.Func {Name = "holdLock"; Params = []}
             Contents = 
                 [ { Command = Atomic(Postfix(LVIdent "serving", Increment))
                     Post = Unit } ] } }
