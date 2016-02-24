@@ -6,32 +6,40 @@
 ///         command.
 ///     </para>
 /// </summary>
-namespace Starling.CFG
+module Starling.CFG
 
+open Chessie.ErrorHandling
 open Starling.Model
+
+
+(*
+ * Types
+ *)
 
 /// <summary>
 ///     Type of edges in a control-flow graph.
 ///
 ///     <para>
-///         Each edge is stored as a multi-edge from a list of source nodes
-///         to a list of target nodes, where the lists represent parallel
-///         fan-in and fan-out respectively.
-///         The conjunction of all source views must entail the conjunction
-///         of all target views.
+///         Each edge is stored as an edge from a source node
+///         to a target node.
 ///     </para>
 /// </summary>
-type Edge =
+/// <typeparam name="node" />
+///     The type of node references in this edge: usually <c>int</c>
+///     (referencing nodes by index) or <c>Node</c> (containing node
+///     information inline).
+/// </typeparam>
+type Edge<'node> =
     {
         /// <summary>
-        ///     The list of parallel sources for this edge.
+        ///     The source for this edge.
         /// </summary>
-        From: int list
+        Source: 'node
 
         /// <summary>
-        ///     The list of parallel targets for this edge.
+        ///     The target for this edge.
         /// </summary>
-        To: int list
+        Target: 'node
 
         /// <summary>
         ///     The command, as a <c>VFunc</c>, to run on this edge.
@@ -52,5 +60,80 @@ type Graph =
         /// <summary>
         ///     Set of edges in the control-flow graph.
         /// </summary>
-        Edges: Edge list
+        Edges: Edge<int> list
     }
+
+/// <summary>
+///     Type of Chessie errors for CFG actions.
+/// </summary>
+type Error =
+    /// <summary>
+    ///     The given edge has an invalid node index.
+    /// </summary>
+    | EdgeOutOfBounds of Edge<int>
+
+
+(*
+ * Helper functions
+ *)
+
+/// <summary>
+///     Attempts to create a new <c>Graph</c>.
+/// </summary>
+/// <param name="nodes">
+///     The sequence of nodes in the graph.
+/// </param>
+/// <param name="edges">
+///     The sequence of edges in the graph.
+/// </param>
+/// <returns>
+///     A <c>Graph option</c>, which is <c>Some</c> if the edges are
+///     valid (reference indices in <paramref name="nodes" />, and
+///     <c>None</c> otherwise.)
+/// </returns>
+let graph nodes edges =
+    let nodesA = Seq.toArray nodes
+    let edgesL = Seq.toList edges
+    let l = Array.length nodesA
+
+    // Are any of the node indices out of bounds?
+    match (List.filter
+               (fun {Source = s; Target = t} ->
+                    s < 0 || s >= l || t < 0 || t >= l)
+               edgesL) with
+    | [] -> { Nodes = nodesA; Edges = edgesL } |> ok
+    | xs -> xs |> Seq.map EdgeOutOfBounds |> fail
+
+/// <summary>
+///     Folds <paramref name="f" /> over all edges in a graph.
+/// </summary>
+/// <typeparam name="state">
+///     The type of the state built by folding.
+/// </param>
+/// <param name="f">
+///     The function to fold over all graph edges, taking a source
+///     <c>View</c>, a <c>VFunc</c> representing a command, and a
+///     target <c>View</c>.  It should return a <c>'state</c>.
+/// </param>
+/// <param name="init">
+///     The initial state to send to <paramref name="f" />.
+/// </param>
+/// <param name="_arg1">
+///     The graph whose edges are to be folded over.
+/// </param>
+/// <returns>
+///     The result of folding <paramref name="f" /> over <paramref
+///     name="init" /> and the graph <paramref name="_arg1" />.
+///     This is wrapped in a Chessie result over <c>Error</c>.
+/// </returns>
+let fold f init { Nodes = nodes; Edges = edges } =
+    let l = Array.length nodes
+        
+    edges
+    |> Seq.map
+           (fun { Source = s; Target = t; Cmd = c } ->
+                if s < 0 || s >= l || t < 0 || t >= l
+                then { Source = s; Target = t; Cmd = c } |> EdgeOutOfBounds |> fail
+                else ok { Source = nodes.[s]; Target = nodes.[t]; Cmd = c })
+    |> collect
+    |> lift (Seq.fold f init)

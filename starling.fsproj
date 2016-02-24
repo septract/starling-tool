@@ -50,12 +50,13 @@
     <Compile Include="Var.fs" />
     <Compile Include="Expr.fs" />
     <Compile Include="ExprPretty.fs" />
+    <Compile Include="Model.fs" />
+    <Compile Include="CFG.fs" />
+    <Compile Include="Sub.fs" />
+    <Compile Include="Instantiate.fs" />
     <Compile Include="AST.fs" />
     <Compile Include="ASTPretty.fs" />
     <Compile Include="Collator.fs" />
-    <Compile Include="Model.fs" />
-    <Compile Include="Sub.fs" />
-    <Compile Include="Instantiate.fs" />
     <Compile Include="ModellerErrors.fs" />
     <Compile Include="Modeller.fs" />
     <Compile Include="Guarder.fs" />
