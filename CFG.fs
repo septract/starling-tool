@@ -55,7 +55,7 @@ type Graph =
         /// <summary>
         ///     Set of nodes in the control-flow graph.
         /// </summary>
-        Nodes: View[]
+        Nodes: Map<int, View>
 
         /// <summary>
         ///     Set of edges in the control-flow graph.
@@ -81,7 +81,7 @@ type Error =
 ///     Attempts to create a new <c>Graph</c>.
 /// </summary>
 /// <param name="nodes">
-///     The sequence of nodes in the graph.
+///     The map of nodes in the graph.
 /// </param>
 /// <param name="edges">
 ///     The sequence of edges in the graph.
@@ -92,16 +92,15 @@ type Error =
 ///     <c>None</c> otherwise.)
 /// </returns>
 let graph nodes edges =
-    let nodesA = Seq.toArray nodes
     let edgesL = Seq.toList edges
-    let l = Array.length nodesA
 
     // Are any of the node indices out of bounds?
     match (List.filter
                (fun {Source = s; Target = t} ->
-                    s < 0 || s >= l || t < 0 || t >= l)
+                    not (Map.containsKey s nodes &&
+                         Map.containsKey t nodes))     
                edgesL) with
-    | [] -> { Nodes = nodesA; Edges = edgesL } |> ok
+    | [] -> { Nodes = nodes; Edges = edgesL } |> ok
     | xs -> xs |> Seq.map EdgeOutOfBounds |> fail
 
 /// <summary>
@@ -127,13 +126,11 @@ let graph nodes edges =
 ///     This is wrapped in a Chessie result over <c>Error</c>.
 /// </returns>
 let fold f init { Nodes = nodes; Edges = edges } =
-    let l = Array.length nodes
-        
     edges
     |> Seq.map
            (fun { Source = s; Target = t; Cmd = c } ->
-                if s < 0 || s >= l || t < 0 || t >= l
-                then { Source = s; Target = t; Cmd = c } |> EdgeOutOfBounds |> fail
-                else ok { Source = nodes.[s]; Target = nodes.[t]; Cmd = c })
+                match (Map.tryFind s nodes, Map.tryFind t nodes) with
+                | Some sn, Some tn -> ok { Source = sn; Target = tn; Cmd = c }
+                | _ -> { Source = s; Target = t; Cmd = c } |> EdgeOutOfBounds |> fail)
     |> collect
     |> lift (Seq.fold f init)
