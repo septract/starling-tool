@@ -100,7 +100,7 @@ let printAtomicAction =
     | Assume e -> func "assume" [ printExpression e ]
 
 /// Pretty-prints commands with the given indent level (in spaces).
-let rec printCommand = 
+let rec printCommand pView = 
     function 
     | Atomic a -> 
         a
@@ -112,17 +112,17 @@ let rec printCommand =
                c
                |> printExpression
                |> parened
-               t |> printBlock
-               f |> printBlock ]
+               t |> printBlock pView (printCommand pView)
+               f |> printBlock pView (printCommand pView) ]
     | While(c, b) -> 
         hsep [ "while" |> String
                c
                |> printExpression
                |> parened
-               b |> printBlock ]
+               b |> printBlock pView (printCommand pView) ]
     | DoWhile(b, c) -> 
         hsep [ "do" |> String
-               b |> printBlock
+               b |> printBlock pView (printCommand pView)
                "while" |> String
                c
                |> printExpression
@@ -130,28 +130,28 @@ let rec printCommand =
         |> withSemi
     | Blocks bs -> 
         bs
-        |> List.map printBlock
+        |> List.map (printBlock pView (printCommand pView))
         |> hsepStr "||"
     | Assign(l, r) -> binop "=" (printLValue l) (printExpression r) |> withSemi
 
 /// Pretty-prints viewed commands with the given indent level (in spaces).
-and printViewedCommand { Command = c; Post = p } = 
-    vsep [ printCommand c
-           printViewLine p ]
+and printViewedCommand pView pCmd { Command = c; Post = p } = 
+    vsep [ pCmd c
+           pView p ]
 
 /// Pretty-prints blocks with the given indent level (in spaces).
-and printBlock { Pre = p; Contents = c } = 
+and printBlock pView pCmd { Pre = p; Contents = c } = 
     vsep ((p
-           |> printViewLine
+           |> pView
            |> Indent)
-          :: List.map (printViewedCommand >> Indent) c)
+          :: List.map (printViewedCommand pView pCmd >> Indent) c)
     |> braced
 
 /// Pretty-prints methods.
-let printMethod { Signature = s; Body = b } = 
+let printMethod pView pCmd { Signature = s; Body = b } = 
     hsep [ "method" |> String
            printFunc String s
-           b |> printBlock ]
+           printBlock pView pCmd b ]
 
 /// Pretty-prints a variable type.
 let printType = 
@@ -179,7 +179,7 @@ let printScriptLine =
     function 
     | Global(t, v) -> printScriptVar "shared" t v
     | Local(t, v) -> printScriptVar "thread" t v
-    | Method m -> printMethod m
+    | Method m -> printMethod printViewLine (printCommand printViewLine) m
     | ViewProto v -> printViewProto v
     | Constraint c -> printConstraint c
 

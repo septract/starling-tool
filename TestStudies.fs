@@ -6,6 +6,7 @@ open Starling.Collections
 open Starling.Expr
 open Starling.Var
 open Starling.Model
+open Starling.Axioms
 open Starling.Lang.AST
 open Starling.Lang.Collator
 open Starling.Lang.Modeller

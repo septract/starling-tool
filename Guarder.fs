@@ -4,6 +4,7 @@ open Starling.Collections
 open Starling.Expr
 open Starling.Model
 open Starling.Utils
+open Starling.Lang.AST
 open Starling.Lang.Modeller
 
 /// Converts a func from conditional to guarded form.
@@ -31,27 +32,28 @@ let guardCView : CView -> GView =
     >> guardCViewIn Set.empty 
     >> Multiset.ofList
 
-/// Converts the inner axiom in a structured leg to guarded views.
-let rec guardInnerAxiom {Pre = pre; Post = post; Cmd = cmd} =
+/// Converts a viewed command to guarded views.
+let rec guardViewedCommand { Command = command ; Post = post } =
+    { Command = guardPartCmd command ; Post = guardCView post }
+
+/// Converts a block to guarded views.
+and guardBlock {Pre = pre; Contents = contents} =
     { Pre = guardCView pre
-      Post = guardCView post
-      Cmd = List.map guardAxiom cmd }
+      Contents = List.map guardViewedCommand contents }
 
 /// Converts a PartCmd to guarded views.
 and guardPartCmd : PartCmd<CView> -> PartCmd<GView> =
     function
     | Prim p -> Prim p
     | While (isDo, expr, inner) ->
-        While (isDo, expr, guardInnerAxiom inner)
+        While (isDo, expr, guardBlock inner)
     | ITE (expr, inTrue, inFalse) ->
-        ITE (expr, guardInnerAxiom inTrue, guardInnerAxiom inFalse)
+        ITE (expr, guardBlock inTrue, guardBlock inFalse)
 
-/// Converts an axiom to guarded views.
-and guardAxiom { Pre = pre; Post = post; Cmd = cmd } = 
-    { Pre = guardCView pre
-      Post = guardCView post
-      Cmd = guardPartCmd cmd }
+/// Converts a method to guarded views.
+let guardMethod { Signature = signature; Body = body } = 
+    { Signature = signature; Body = guardBlock body }
 
 /// Converts an entire model to guarded views.
-let guard : Model<Axiom<CView, PartCmd<CView>>, DView> -> Model<Axiom<GView, PartCmd<GView>>, DView> =
-    mapAxioms guardAxiom
+let guard : Model<Method<CView, PartCmd<CView>>, DView> -> Model<Method<GView, PartCmd<GView>>, DView> =
+    mapAxioms guardMethod

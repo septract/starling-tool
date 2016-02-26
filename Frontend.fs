@@ -3,11 +3,13 @@ module Starling.Lang.Frontend
 
 open Chessie.ErrorHandling
 open Starling
+open Starling.CFG
 open Starling.Model
 open Starling.Pretty.Misc
+open Starling.Pretty.Lang.AST
 open Starling.Lang.Modeller
 open Starling.Lang.Parser
-open Starling.Lang.Destructurer
+open Starling.Lang.Grapher
 open Starling.Lang.Guarder
 
 (*
@@ -25,9 +27,9 @@ type Request =
     /// Parse, collate, model, and guard a Starling script;
     /// return `Response.Guard`.
     | Guard
-    /// Parse, collate, model, guard, and destructure a Starling script;
-    /// return `Response.Destructure`.
-    | Destructure
+    /// Parse, collate, model, guard, and graph a Starling script;
+    /// return `Response.Graph`.
+    | Graph
 
 /// Type of responses from the Starling frontend.
 type Response =
@@ -36,11 +38,11 @@ type Response =
     /// Output of the parsing and collation steps.
     | Collate of Collator.CollatedScript
     /// Output of the parsing, collation, and modelling steps.
-    | Model of Model<Axiom<CView, PartCmd<CView>>, DView>
+    | Model of Model<AST.Method<CView, AST.Command<CView>>, DView>
     /// Output of the parsing, collation, modelling, and guarding stages.
-    | Guard of Model<Axiom<GView, PartCmd<GView>>, DView>
+    | Guard of Model<AST.Method<GView, AST.Command<GView>>, DView>
     /// Output of the parsing, collation, modelling, guarding and destructuring stages.
-    | Destructure of Model<PAxiom<GView>, DView>
+    | Graph of Model<Graph, DView>
 
 (*
  * Error types
@@ -52,6 +54,8 @@ type Error =
     | Parse of string
     /// A modeller error occurred, given as a `ModelError`.
     | Model of Errors.Lang.Modeller.ModelError
+    /// A graph error occurred, given as a `CFG.Error`.
+    | Graph of CFG.Error
 
 (*
  * Pretty-printing
@@ -71,15 +75,16 @@ let printResponse showModel =
     function 
     | Response.Parse s -> Pretty.Lang.AST.printScript s
     | Response.Collate c -> printCollatedScript c
-    | Response.Model m -> pmodel (printAxiom (printPartCmd printCView) printCView) printDView m
-    | Response.Guard m -> pmodel (printAxiom (printPartCmd printGView) printGView) printDView m
-    | Response.Destructure m -> pmodel (printPAxiom printGView) printDView m
+    | Response.Model m -> pmodel (printMethod printCView (printPartCmd printCView)) printDView m
+    | Response.Guard m -> pmodel (printMethod printGView (printPartCmd printGView)) printDView m
+    | Response.Graph m -> pmodel printGraph printDView m
 
 /// Pretty-prints an error.
 let printError =
     function
     | Error.Parse e -> Pretty.Types.String e
     | Error.Model e -> Pretty.Errors.printModelError e
+    | Error.Graph e -> Pretty.Errors.printGraphError e
 
 (*
  * Driver functions
@@ -94,7 +99,7 @@ let model = bind (Modeller.model >> mapMessages Error.Model)
 /// Shorthand for the guard stage.
 let guard = lift Guarder.guard
 /// Shorthand for the destructure stage.
-let destructure = lift Destructurer.destructure
+let graph = lift Grapher.graph
 
 /// Runs the Starling frontend.
 /// Takes two arguments: the first is the `Response` telling the frontend what
@@ -106,4 +111,4 @@ let run =
     | Request.Collate -> parse >> collate >> lift Response.Collate
     | Request.Model -> parse >> collate >> model >> lift Response.Model
     | Request.Guard -> parse >> collate >> model >> guard >> lift Response.Guard
-    | Request.Destructure -> parse >> collate >> model >> guard >> destructure >> lift Response.Destructure
+    | Request.Graph -> parse >> collate >> model >> guard >> graph >> lift Response.Graph

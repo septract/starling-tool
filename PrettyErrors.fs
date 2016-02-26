@@ -1,6 +1,7 @@
 /// Pretty-printing for error messages.
 module Starling.Pretty.Errors
 
+open Starling.CFG
 open Starling.Instantiate
 open Starling.Semantics
 open Starling.Errors.Lang.Modeller
@@ -74,7 +75,7 @@ let printAxiomError =
         colonSep [ fmt "cannot use {0} in an axiom" [ printAtomicAction atom ]
                    reason |> String ]
     | AEUnsupportedCommand(cmd, reason) ->
-        colonSep [ fmt "cannot use {0} in an axiom" [ printCommand cmd ]
+        colonSep [ fmt "cannot use {0} in an axiom" [ printCommand printViewLine cmd ]
                    reason |> String ]
 
 /// Pretty-prints view prototype conversion errors
@@ -140,3 +141,15 @@ let printSemanticsError =
     | MissingDef cmd ->
         fmt "command '{0}' has no semantic definition"
             [ printVFunc cmd ]
+
+/// Pretty-prints CFG errors.
+let printGraphError =
+    function
+    | EdgeOutOfBounds edge ->
+        colonSep
+            [ String "edge out of bounds: "
+              printPAxiom (fun x -> String (x.ToString())) edge ]
+    | DuplicateNode node ->
+        colonSep
+            [ String "node duplicated: "
+              String (node.ToString()) ]

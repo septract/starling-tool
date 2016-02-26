@@ -7,6 +7,7 @@ open Starling.Var
 open Starling.Lang.Collator
 open Starling.Lang.Modeller
 open Starling.Model
+open Starling.Axiom
 open Starling.Pretty.Expr
 open Starling.Pretty.Lang.AST
 open Starling.Pretty.Types
@@ -43,7 +44,7 @@ let printCollatedScript (cs: CollatedScript) =
            vsep <| List.map (uncurry (printScriptVar "shared")) cs.Globals
            vsep <| List.map (uncurry (printScriptVar "local")) cs.Locals
            vsep <| List.map printConstraint cs.Constraints
-           VSep(List.map printMethod cs.Methods, VSkip) ], (vsep [ VSkip; Separator; Nop ]))
+           VSep(List.map (printMethod printViewLine (printCommand printViewLine)) cs.Methods, VSkip) ], (vsep [ VSkip; Separator; Nop ]))
 
 /// Pretty-prints Z3 expressions.
 let printZ3Exp (expr : #Z3.Expr) = String(expr.ToString())
@@ -183,22 +184,18 @@ let printAxiom pCmd pView { Pre = pre; Post = post; Cmd = cmd } =
 let printPAxiom pView = printAxiom printVFunc pView
 
 /// Pretty-prints a part-cmd at the given indent level.
-let rec printPartCmd pView = 
+let rec printPartCmd pView : PartCmd<'a> -> Command = 
     function 
     | Prim prim -> printVFunc prim
     | While(isDo, expr, inner) -> 
         cmdHeaded (hsep [ String(if isDo then "Do-while" else "While")
                           (printBoolExpr expr) ])
-                  (printPartInner pView inner)
+                  [printBlock pView (printPartCmd pView) inner]
     | ITE(expr, inTrue, inFalse) ->
         cmdHeaded (hsep [String "begin if"
                          (printBoolExpr expr) ])
-                  [headed "True" (printPartInner pView inTrue)
-                   headed "False" (printPartInner pView inFalse)]
-/// Prints the inner part of a part command. 
-and printPartInner pView =
-    printAxiom (List.map (printAxiom (printPartCmd pView) pView) >> ivsep) pView
-    >> Seq.singleton
+                  [headed "True" [printBlock pView (printPartCmd pView) inTrue]
+                   headed "False" [printBlock pView (printPartCmd pView) inFalse]]
 
 (*
  * Framed axioms

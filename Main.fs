@@ -3,6 +3,7 @@ module Main
 
 open Starling
 open Starling.Model
+open Starling.Axiom
 open CommandLine
 open Chessie.ErrorHandling
 
@@ -26,6 +27,8 @@ type Options =
 type Request = 
     /// Run the language frontend only, with the given request.
     | Frontend of Lang.Frontend.Request
+    /// Stop at graph axiomatisation.
+    | Axiomatise
     /// Stop at frame-axiom-pair generation.
     | Frame
     /// Stop at term generation.
@@ -49,7 +52,8 @@ let requestMap =
                  ("collate", Request.Frontend Lang.Frontend.Request.Collate)
                  ("model", Request.Frontend Lang.Frontend.Request.Model)
                  ("guard", Request.Frontend Lang.Frontend.Request.Guard)
-                 ("destructure", Request.Frontend Lang.Frontend.Request.Destructure)
+                 ("graph", Request.Frontend Lang.Frontend.Request.Graph)
+                 ("axiomatise", Request.Axiomatise)
                  ("frame", Request.Frame)
                  ("termgen", Request.TermGen)
                  ("reify", Request.Reify)
@@ -70,6 +74,8 @@ let requestFromStage ostage = Map.tryFind (withDefault "sat" ostage) requestMap
 type Response = 
     /// The result of frontend processing.
     | Frontend of Lang.Frontend.Response
+    /// Stop at graph axiomatisation.
+    | Axiomatise of Model<Axiom<GView, VFunc>, DView>
     /// The result of frame-axiom-pair generation.
     | Frame of Model<FramedAxiom, DView>
     /// The result of term generation.
@@ -100,6 +106,7 @@ let printResponse showModel =
         
     function 
     | Frontend f -> Lang.Frontend.printResponse showModel f
+    | Axiomatise m -> pmodel (printPAxiom printGView) printDView m
     | Frame m -> pmodel printFramedAxiom printDView m
     | TermGen m -> pmodel (printPTerm printGView printView) printDView m
     | Reify m -> pmodel (printPTerm printViewSet printView) printDView m
@@ -186,14 +193,17 @@ let frame = lift Starling.Framer.frame
 /// Shorthand for the semantics stage.
 let semantics = bind (Starling.Semantics.translate >> mapMessages Error.Semantics)
 
+/// Shorthand for the axiomatisation stage.
+let axiomatise = lift Starling.CFG.axiomatise
+
 /// Shorthand for the frontend stage.
 let frontend rq = Lang.Frontend.run rq >> mapMessages Error.Frontend
 
 /// Shorthand for the full frontend stage.
 let model = 
-    frontend Lang.Frontend.Request.Destructure
+    frontend Lang.Frontend.Request.Graph
     >> bind (function 
-             | Lang.Frontend.Response.Destructure m -> m |> ok
+             | Lang.Frontend.Response.Graph m -> m |> ok
              | _ -> Other "internal error: bad frontend response" |> fail)
 
 /// Runs the Starling request at argument 2 on the file named by argument 3.
@@ -204,23 +214,31 @@ let runStarling opt =
 
     function 
     | Request.Frontend rq -> frontend rq >> lift Response.Frontend
+    | Request.Axiomatise ->
+        model
+        >> axiomatise
+        >> lift Response.Axiomatise
     | Request.Frame -> 
         model
+        >> axiomatise
         >> frame
         >> lift Response.Frame
     | Request.TermGen -> 
         model
+        >> axiomatise
         >> frame
         >> termGen
         >> lift Response.TermGen
     | Request.Reify -> 
         model
+        >> axiomatise
         >> frame
         >> termGen
         >> reify
         >> lift Response.Reify
     | Request.Flatten -> 
         model
+        >> axiomatise
         >> frame
         >> termGen
         >> reify
@@ -228,6 +246,7 @@ let runStarling opt =
         >> lift Response.Flatten
     | Request.Semantics -> 
         model
+        >> axiomatise
         >> frame
         >> termGen
         >> reify
@@ -236,6 +255,7 @@ let runStarling opt =
         >> lift Response.Semantics
     | Request.Optimise -> 
         model
+        >> axiomatise
         >> frame
         >> termGen
         >> reify
@@ -245,6 +265,7 @@ let runStarling opt =
         >> lift Response.Optimise
     | Request.Z3 rq -> 
         model
+        >> axiomatise
         >> frame
         >> termGen
         >> reify
@@ -255,6 +276,7 @@ let runStarling opt =
         >> lift Response.Z3
     | Request.HSF ->
         model
+        >> axiomatise
         >> frame
         >> termGen
         >> reify

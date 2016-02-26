@@ -6,6 +6,7 @@ open Starling.Expr
 open Starling.Collections
 open Starling.Sub
 open Starling.Model
+open Starling.Axiom
 
 /// Performs one step of a septraction of a GuarView.
 let termGenSeptractStep (rdone, qstep) rnext = 

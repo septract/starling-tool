@@ -10,6 +10,7 @@ module Starling.CFG
 
 open Chessie.ErrorHandling
 open Starling.Model
+open Starling.Axiom
 
 
 (*
@@ -17,51 +18,35 @@ open Starling.Model
  *)
 
 /// <summary>
-///     Type of edges in a control-flow graph.
+///     Type synonym for graph edges.
 ///
 ///     <para>
-///         Each edge is stored as an edge from a source node
-///         to a target node.
+///         Graph edges are axioms, in that they directly correspond to
+///         Hoare triples.
 ///     </para>
 /// </summary>
-/// <typeparam name="node" />
-///     The type of node references in this edge: usually <c>int</c>
-///     (referencing nodes by index) or <c>Node</c> (containing node
-///     information inline).
-/// </typeparam>
-type Edge<'node> =
-    {
-        /// <summary>
-        ///     The source for this edge.
-        /// </summary>
-        Source: 'node
-
-        /// <summary>
-        ///     The target for this edge.
-        /// </summary>
-        Target: 'node
-
-        /// <summary>
-        ///     The command, as a <c>VFunc</c>, to run on this edge.
-        /// </summary>
-        Cmd: VFunc
-    }
+type Edge = Axiom<bigint, VFunc>
 
 /// <summary>
-///     The container for a control-flow graph.
+///     The container for a partial control-flow graph.
 /// </summary>
-type Graph =
+type Subgraph =
     {
         /// <summary>
         ///     Set of nodes in the control-flow graph.
         /// </summary>
-        Nodes: Map<int, View>
+        Nodes: Map<bigint, GView>
 
         /// <summary>
         ///     Set of edges in the control-flow graph.
         /// </summary>
-        Edges: Edge<int> list
+        Edges: Edge list
     }
+
+/// <summary>
+///     The summary for a standalone control-flow graph.
+/// </summary>
+type Graph = Graph of name: string * contents: Subgraph
 
 /// <summary>
 ///     Type of Chessie errors for CFG actions.
@@ -70,7 +55,11 @@ type Error =
     /// <summary>
     ///     The given edge has an invalid node index.
     /// </summary>
-    | EdgeOutOfBounds of Edge<int>
+    | EdgeOutOfBounds of Edge
+    /// <summary>
+    ///     The given node was duplicated when trying to merge graphs.
+    /// </summary>
+    | DuplicateNode of bigint
 
 
 (*
@@ -78,7 +67,24 @@ type Error =
  *)
 
 /// <summary>
-///     Attempts to create a new <c>Graph</c>.
+///     Creates a single <c>Edge</c>.
+/// </summary>
+/// <param name="source">
+///     The source view.
+/// </param>
+/// <param name="command">
+///     The command making up the edge.
+/// </param>
+/// <param name="target">
+///     The target view.
+/// </param>
+/// <returns>
+///     An <c>Edge</c> with the above properties.
+/// </returns>
+let edge = axiom
+
+/// <summary>
+///     Attempts to create a new <c>Graph</c> with no node checking.
 /// </summary>
 /// <param name="nodes">
 ///     The map of nodes in the graph.
@@ -87,50 +93,95 @@ type Error =
 ///     The sequence of edges in the graph.
 /// </param>
 /// <returns>
-///     A <c>Graph option</c>, which is <c>Some</c> if the edges are
-///     valid (reference indices in <paramref name="nodes" />, and
-///     <c>None</c> otherwise.)
+///     A <c>Graph</c>, wrapped in a Chessie result over <c>Error</c>.
+///     Currently, there are no possible errors.
 /// </returns>
-let graph nodes edges =
+let subgraph nodes edges =
     let edgesL = Seq.toList edges
-
-    // Are any of the node indices out of bounds?
-    match (List.filter
-               (fun {Source = s; Target = t} ->
-                    not (Map.containsKey s nodes &&
-                         Map.containsKey t nodes))     
-               edgesL) with
-    | [] -> { Nodes = nodes; Edges = edgesL } |> ok
-    | xs -> xs |> Seq.map EdgeOutOfBounds |> fail
+    { Nodes = nodes; Edges = edgesL } |> ok
 
 /// <summary>
-///     Folds <paramref name="f" /> over all edges in a graph.
+///     Checks that a subgraph is a standalone graph.
 /// </summary>
-/// <typeparam name="state">
-///     The type of the state built by folding.
+/// <param name="name">
+///     The name to give the standalone graph.
 /// </param>
-/// <param name="f">
-///     The function to fold over all graph edges, taking a source
-///     <c>View</c>, a <c>VFunc</c> representing a command, and a
-///     target <c>View</c>.  It should return a <c>'state</c>.
-/// </param>
-/// <param name="init">
-///     The initial state to send to <paramref name="f" />.
-/// </param>
-/// <param name="_arg1">
-///     The graph whose edges are to be folded over.
+/// <param name="sg">
+///     The subgraph to check.
 /// </param>
 /// <returns>
-///     The result of folding <paramref name="f" /> over <paramref
-///     name="init" /> and the graph <paramref name="_arg1" />.
+///     A <c>Graph</c>, wrapped in a Chessie result over <c>Error</c>.
+///     If the edges are valid (reference indices in <paramref
+///     name="nodes" />), then the result will be <c>ok</c>.
+/// </returns>
+let graph name sg =
+    // Are any of the node indices out of bounds?
+    match (List.filter
+               (fun {Pre = s; Post = t} ->
+                    not (Map.containsKey s sg.Nodes &&
+                         Map.containsKey t sg.Nodes))
+               sg.Edges) with
+    | [] -> Graph (name, sg) |> ok
+    | xs -> xs |> List.map EdgeOutOfBounds |> Bad
+
+/// <summary>
+///    Combines two subgraphs.
+/// </summary>
+/// <param name="_arg1">
+///    The first graph to combine.
+/// </param>
+/// <param name="_arg2"
+///    The second graph to combine.
+/// </param>
+/// <returns>
+///     A <c>Graph</c>, wrapped in a Chessie result over <c>Error</c>.
+///     If the two graphs do not contain duplicate
+///     nodes, then the result will be <c>ok</c>. 
+///     The graph will contain the nodes and edges from <paramref
+///     name="_arg1" /> and <paramref name="_arg2" />.
+/// </returns>
+let combine { Nodes = ans ; Edges = aes }    
+            { Nodes = bns; Edges = bes } =
+    match (keyDuplicates ans bns |> Seq.toList) with
+    | [] -> subgraph (mapAppend ans bns) (Seq.append aes bes)
+    | xs -> xs |> List.map DuplicateNode |> Bad
+
+/// <summary>
+///     Returns the axioms characterising a graph.
+/// </summary>
+/// <param name="_arg1">
+///     The graph whose axioms are to be given.
+/// </param>
+/// <returns>
+///     The edges of <paramref name="_arg1" />
 ///     This is wrapped in a Chessie result over <c>Error</c>.
 /// </returns>
-let fold f init { Nodes = nodes; Edges = edges } =
+let axiomatiseGraph (Graph (name, { Nodes = nodes; Edges = edges })) =
     edges
     |> Seq.map
-           (fun { Source = s; Target = t; Cmd = c } ->
+           (fun { Pre = s; Post = t; Cmd = c } ->
                 match (Map.tryFind s nodes, Map.tryFind t nodes) with
-                | Some sn, Some tn -> ok { Source = sn; Target = tn; Cmd = c }
-                | _ -> { Source = s; Target = t; Cmd = c } |> EdgeOutOfBounds |> fail)
+                | Some sn, Some tn -> ok { Pre = sn; Post = tn; Cmd = c }
+                | _ -> { Pre = s; Post = t; Cmd = c } |> EdgeOutOfBounds |> fail)
     |> collect
-    |> lift (Seq.fold f init)
+
+/// <summary>
+///     Converts the control-flow graphs <paramref name="graphs" /> into a
+///     list of axioms.
+///
+///     <para>
+///         Each axiom represents an edge in a control-flow graph.
+///     </para>
+/// </summary>
+/// <param name="graphs">
+///     The sequence of graphs to axiomatise.
+///     Such graphs typically represent one method.
+/// </param>
+/// <returns>
+///     A list of axioms characterising <paramref name="graph" />.
+/// </returns>
+let axiomatise graphs =
+    graphs
+    |> Seq.map axiomatiseGraph
+    |> collect
+    |> lift Seq.concat

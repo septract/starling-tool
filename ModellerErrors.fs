@@ -62,7 +62,7 @@ type AxiomError =
     /// The axiom uses a semantically invalid atomic action.
     | AEUnsupportedAtomic of atom : AST.AtomicAction * reason : string
     /// The axiom uses a semantically invalid command.
-    | AEUnsupportedCommand of cmd : AST.Command * reason : string
+    | AEUnsupportedCommand of cmd : AST.Command<AST.View> * reason : string
 
 /// Represents an error when converting a model.
 type ModelError = 

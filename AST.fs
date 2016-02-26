@@ -52,25 +52,36 @@ type View =
     | If of Expression * View * View
 
 /// A statement in the command language.
-type Command = 
-    | Atomic of AtomicAction // <a = b++>;
-    | Skip // ;
-    | If of Expression * Block * Block // if (e) { t } { f }
-    | While of Expression * Block // while (e) { b }
-    | DoWhile of Block * Expression // do { b } while (e)
-    | Blocks of Block list // { a } || { b } || { c }
+type Command<'view> = 
+    /// An atomic action.
+    | Atomic of AtomicAction
+    /// A no-op.
+    | Skip
+    /// An if-then-else statement.
+    | If of Expression
+          * Block<'view, Command<'view>>
+          * Block<'view, Command<'view>>
+    /// A while loop.
+    | While of Expression
+             * Block<'view, Command<'view>>
+    /// A do-while loop.
+    | DoWhile of Block<'view, Command<'view>>
+               * Expression // do { b } while (e)
+    /// A list of parallel-composed blocks.
+    | Blocks of Block<'view, Command<'view>> list
+    /// A local assignment.
     | Assign of Var.LValue * Expression // a = b;
 
 /// A combination of a command and its postcondition view.
-and ViewedCommand = 
-    { Command : Command // <a := b++;
-      Post : View } // {| a = b |}
+and ViewedCommand<'view, 'cmd> = 
+    { Command : 'cmd // <a := b++>;
+      Post : 'view } // {| a = b |}
 
 /// A block or method body.
-and Block = 
-    { Pre : View
+and Block<'view, 'cmd> = 
+    { Pre : 'view
       // Post-condition is that in the last Seq.
-      Contents : ViewedCommand list }
+      Contents : ViewedCommand<'view, 'cmd> list }
 
 /// A constraint, binding a view to an optional expression.
 type Constraint = 
@@ -78,14 +89,14 @@ type Constraint =
       CExpression : Expression option }
 
 /// A method.
-type Method = 
+type Method<'view, 'cmd> = 
     { Signature : Func<string> // main (argv, argc) ...
-      Body : Block } // ... { ... }
+      Body : Block<'view, 'cmd> } // ... { ... }
 
 /// A top-level item in a Starling script.
 type ScriptItem = 
     | Global of Var.Type * string // global int name;
     | Local of Var.Type * string // local int name;
-    | Method of Method // method main(argv, argc) { ... }
+    | Method of Method<View, Command<View>> // method main(argv, argc) { ... }
     | ViewProto of ViewProto // view name(int arg);
     | Constraint of Constraint // constraint emp => true

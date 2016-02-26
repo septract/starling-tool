@@ -74,9 +74,9 @@ let parseView, parseViewRef = createParserForwardedToRef<View, unit> ()
 /// Parser for view definitions.
 let parseViewDef, parseViewDefRef = createParserForwardedToRef<ViewDef, unit> ()
 /// Parser for commands.
-let parseCommand, parseCommandRef = createParserForwardedToRef<Command, unit> ()
+let parseCommand, parseCommandRef = createParserForwardedToRef<Command<View>, unit> ()
 /// Parser for blocks.
-let parseBlock, parseBlockRef = createParserForwardedToRef<Block, unit> ()
+let parseBlock, parseBlockRef = createParserForwardedToRef<Block<View, Command<View>>, unit> ()
 /// Parser for expressions.
 /// The expression parser is split into several chains as per
 /// preference rank.

@@ -43,9 +43,10 @@ let makeVarMap lst =
     lst
     |> List.map snd // Extract all names from the list.
     |> findDuplicates
-    |> function 
-    | [] -> lst |> Seq.ofList |> Seq.map (fun (ty, name) -> (name, ty)) |> Map.ofSeq |> ok
-    | ds -> List.map Duplicate ds |> Bad
+    |> Seq.toList
+    |> function
+       | [] -> lst |> Seq.ofList |> Seq.map (fun (ty, name) -> (name, ty)) |> Map.ofSeq |> ok
+       | ds -> List.map Duplicate ds |> Bad
 
 /// Tries to combine two variable maps.
 /// Fails if the environments are not disjoint.

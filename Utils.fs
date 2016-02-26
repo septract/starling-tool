@@ -76,14 +76,34 @@ let concatMap f xs =
      *)
     List.foldBack (fun x b -> List.foldBack cons (f x) b) xs []
 
+(*
+ * Map data structure
+ *)
+
 /// Tries to find duplicate entries in a list.
 /// Returns a list of the duplicates found.
 let findDuplicates lst = 
     lst
-    |> List.groupBy id
-    |> List.choose (function 
-           | (_, []) | (_, [ _ ]) -> None
-           | (x, _) -> Some x)
+    |> Seq.groupBy id
+    |> Seq.choose
+           // dupes now contains all of the appearances of x.
+           // If we can successfully take 2 appearances, it's a duplicate.
+           (function 
+            | (x, dupes) when dupes |> Seq.truncate 2 |> Seq.length = 2
+                -> Some x
+            | _ -> None)
+
+/// Returns the keys of a map as a sequence.
+let keys mp =
+    mp |> Map.toSeq |> Seq.map fst
+
+/// Returns the duplicate keys across two maps.
+let keyDuplicates a b =
+    findDuplicates (Seq.append (keys a) (keys b))
+
+/// Joins two maps together.
+let mapAppend a b =
+    Map.ofSeq (Seq.append (Map.toSeq a) (Map.toSeq b))
 
 (*
  * Chessie-related functions.

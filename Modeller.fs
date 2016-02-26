@@ -25,17 +25,21 @@ type CFunc =
 /// A conditional view, or multiset of CFuncs.
 type CView = Multiset<CFunc>
 
-/// A partially resolved axiom element.
+(*
+ * Control structures
+ *)
+
+/// A partially resolved command.
 type PartCmd<'view> = 
     | Prim of VFunc
     | While of
         isDo : bool
         * expr : BoolExpr
-        * inner : Axiom<'view, Axiom<'view, PartCmd<'view>> list>
+        * inner : Block<'view, PartCmd<'view>>
     | ITE of
         expr : BoolExpr
-        * inTrue : Axiom<'view, Axiom<'view, PartCmd<'view>> list>
-        * inFalse : Axiom<'view, Axiom<'view, PartCmd<'view>> list>
+        * inTrue : Block<'view, PartCmd<'view>>
+        * inFalse : Block<'view, PartCmd<'view>>
 
 (*
  * Starling imperative language semantics
@@ -409,7 +413,7 @@ let lookupType env var =
         |> fail
 
 /// Converts a Boolean load to a Prim.
-let modelPrimOnBoolLoad globals atom dest src mode = 
+let modelBoolLoad globals atom dest src mode = 
     (* In a Boolean load, the destination must be LOCAL and Boolean;
      *                    the source must be a GLOBAL Boolean lvalue;
      *                    and the fetch mode must be Direct.
@@ -428,7 +432,7 @@ let modelPrimOnBoolLoad globals atom dest src mode =
     | _ -> fail <| AEUnsupportedAtomic(atom, "loads must have a lvalue source")
 
 /// Converts an integer load to a Prim.
-let modelPrimOnIntLoad globals atom dest src mode = 
+let modelIntLoad globals atom dest src mode = 
     (* In an integer load, the destination must be LOCAL and integral;
      *                    the source must be a GLOBAL arithmetic lvalue;
      *                    and the fetch mode is unconstrained.
@@ -449,7 +453,7 @@ let modelPrimOnIntLoad globals atom dest src mode =
     | _ -> fail <| AEUnsupportedAtomic(atom, "loads must have a lvalue source")
 
 /// Converts a Boolean store to a Prim.
-let modelPrimOnBoolStore locals atom dest src mode = 
+let modelBoolStore locals atom dest src mode = 
     (* In a Boolean store, the destination must be GLOBAL and Boolean;
      *                     the source must be LOCAL and Boolean;
      *                     and the fetch mode must be Direct.
@@ -464,7 +468,7 @@ let modelPrimOnBoolStore locals atom dest src mode =
     }
 
 /// Converts an integral store to a Prim.
-let modelPrimOnIntStore locals atom dest src mode = 
+let modelIntStore locals atom dest src mode = 
     (* In an integral store, the destination must be GLOBAL and integral;
      *                       the source must be LOCAL and integral;
      *                       and the fetch mode must be Direct.
@@ -486,7 +490,7 @@ let makeAxiomConds env preAst postAst =
         (modelView env postAst |> mapMessages (curry AEBadView postAst))
 
 /// Converts an atomic action to a Prim.
-let rec modelPrimOnAtomic gs ls atom = 
+let rec modelAtomic gs ls atom = 
     match atom with
     | CompareAndSwap(dest, test, set) -> 
         (* In a CAS, the destination must be GLOBAL;
@@ -522,10 +526,10 @@ let rec modelPrimOnAtomic gs ls atom =
          * We figure this out by looking at dest.
          *)
         match dest with
-        | GlobalVar gs ls (Var.Int _) -> modelPrimOnIntStore ls atom dest src mode
-        | GlobalVar gs ls (Var.Bool _) -> modelPrimOnBoolStore ls atom dest src mode
-        | LocalVar gs ls (Var.Int _) -> modelPrimOnIntLoad gs atom dest src mode
-        | LocalVar gs ls (Var.Bool _) -> modelPrimOnBoolLoad gs atom dest src mode
+        | GlobalVar gs ls (Var.Int _) -> modelIntStore ls atom dest src mode
+        | GlobalVar gs ls (Var.Bool _) -> modelBoolStore ls atom dest src mode
+        | LocalVar gs ls (Var.Int _) -> modelIntLoad gs atom dest src mode
+        | LocalVar gs ls (Var.Bool _) -> modelBoolLoad gs atom dest src mode
         // TODO(CaptainHayashi): incorrect error here.
         | lv -> fail <| AEBadGlobal(lv, NotFound(flattenLV dest))
     | Postfix(operand, mode) -> 
@@ -550,7 +554,7 @@ let rec modelPrimOnAtomic gs ls atom =
         |> mapMessages (curry AEBadExpr e)
         |> lift (BExpr >> Seq.singleton >> func "Assume")
 /// Converts a local variable assignment to a Prim.
-and modelPrimOnAssign locals l e = 
+and modelAssign locals l e = 
     (* We model assignments as IntLocalSet or BoolLocalSet, depending on the
      * type of l, which _must_ be in the locals set..
      * We thus also have to make sure that e is the correct type.
@@ -567,110 +571,86 @@ and modelPrimOnAssign locals l e =
     }
 
 /// Creates a partially resolved axiom for an if-then-else.
-and modelPartCmdOnITE gs ls i t f = 
+and modelITE gs ls i t f = 
     (* An ITE is not fully resolved yet.  We:
      * 0) Convert the if-statement into a Starling expression;
      * 1) Place the ITE in the axioms pile;
      * 2) Merge in the axioms from the ‘then’ block;
      * 3) Merge in the axioms from the ‘else’ block.
      *)
-    trial { let! iz3 = modelBoolExpr ls i |> mapMessages (curry AEBadExpr i)
+    trial { let! iM = modelBoolExpr ls i |> mapMessages (curry AEBadExpr i)
             (* We need to calculate the recursive axioms first, because we
             * need the inner cpairs for each to store the ITE placeholder.
             *)
-            let! taxioms = modelAxiomsOnBlock gs ls t
-            let! faxioms = modelAxiomsOnBlock gs ls f
-            return ITE(iz3, taxioms, faxioms) }
+            let! tM = modelBlock gs ls t
+            let! fM = modelBlock gs ls f
+            return ITE(iM, tM, fM) }
 
-/// Converts a while or do-while to a partially-resolved axiom.
+/// Converts a while or do-while to a PartCmd.
 /// Which is being modelled is determined by the isDo parameter.
 /// The list is enclosed in a Chessie result.
-and modelPartCmdOnWhile isDo gs ls e b = 
+and modelWhile isDo gs ls e b = 
     (* A while is also not fully resolved.
      * Similarly, we convert the condition, recursively find the axioms,
      * inject a placeholder, and add in the recursive axioms.
      *)
-    lift2 (fun eE bAxioms -> PartCmd.While(isDo, eE, bAxioms))
+    lift2 (fun eM bM -> PartCmd.While(isDo, eM, bM))
           (modelBoolExpr ls e |> mapMessages (curry AEBadExpr e))
-          (modelAxiomsOnBlock gs ls b)
+          (modelBlock gs ls b)
 
-/// Converts a command and its precondition and postcondition to a
-/// list of partially resolved axioms.
+/// Converts a command to a PartCmd.
 /// The list is enclosed in a Chessie result.
-and modelPartCmdOnCommand gs ls = 
+and modelCommand gs ls = 
     function 
-    | Atomic a -> modelPrimOnAtomic gs ls a |> lift Prim
-    | Assign(l, e) -> modelPrimOnAssign ls l e |> lift Prim
-    | Skip -> modelPrimOnAtomic gs ls Id |> lift Prim
-    | If(i, t, e) -> modelPartCmdOnITE gs ls i t e
-    | Command.While(e, b) -> modelPartCmdOnWhile false gs ls e b
-    | DoWhile(b, e) -> modelPartCmdOnWhile true gs ls e b
+    | Atomic a -> modelAtomic gs ls a |> lift Prim
+    | Assign(l, e) -> modelAssign ls l e |> lift Prim
+    | Skip -> modelAtomic gs ls Id |> lift Prim
+    | If(i, t, e) -> modelITE gs ls i t e
+    | Command.While(e, b) -> modelWhile false gs ls e b
+    | DoWhile(b, e) -> modelWhile true gs ls e b
     | c -> fail <| AEUnsupportedCommand(c, "TODO: implement")
 
-/// Converts a block to a Conditioned list of partially resolved axioms.
-/// The list is enclosed in a Chessie result.
-and modelAxiomsOnBlock gs ls {Pre = bPre; Contents = bContents} = 
-    (* We flip through every entry in the block, extracting its postcondition
-     * and block.  At the same time, we hold onto the postcondition of the
-     * _last_ entry (or the block precondition if we're at the first entry).
-     *
-     * Because the previous postcondition is this entry's precondition, we can
-     * piece together the Hoare triple.  We also try to manipulate the command
-     * into its representation in the model.
-     * 
-     * Supposing all of these steps worked, we can place the finished axiom
-     * into the axioms list, and put the postcondition in place to serve as the
-     * precondition for the next line.  Otherwise, our axiom list turns into a
-     * failure.
-     *)
-    let bpost, axioms = 
-        (* Currently, we fold forwards and then reverse the axioms list.  This
-         * is because backwards folding means that we're stepping through the
-         * commands in the wrong order, meaning that the precondition of the
-         * next command is NOT the postcondition of the current.
-         *)
-        List.fold (fun (pre, axiomsR) vcom -> 
-            let cmd = vcom.Command
-            let post = vcom.Post
-            (post, trial { // If our last axiomatisation failed, this will
-                       // cause failure here.
-                       let! axioms = axiomsR
-                       let! (p, q) = makeAxiomConds ls pre post
-                       let! c = modelPartCmdOnCommand gs ls cmd
-                       return (axiom p c q) :: axioms })) (bPre, ok []) bContents
-    (* At the end of the above, we either have a list of axioms or an
-     * error.  If we have the former, surround the axioms with the condition
-     * pair derived from the precondition and postcondition of the block.
-     *)
-    lift2 (fun (pre, post) xs -> axiom pre (List.rev xs) post)
-          (makeAxiomConds ls bPre bpost)
-          axioms
+/// Converts the view and command in a ViewedCommand.
+and modelViewedCommand gs ls {Post = post; Command = command} =
+    lift2 (fun postM commandM -> {Post = postM; Command = commandM})
+          (post |> modelView ls |> mapMessages (curry AEBadView post))
+          (command |> modelCommand gs ls)
 
-/// Converts a method to a list of partially resolved axioms.
-/// The list is enclosed in a Chessie result.
-let modelAxiomsOnMethod gs ls { Signature = {Name = m}; Body = b } = 
+/// Converts the views and commands in a list of ViewedCommands.
+and modelViewedCommands gs ls =
+    Seq.map (modelViewedCommand gs ls) >> collect
+
+/// Converts the views and commands in a block.
+/// The converted block is enclosed in a Chessie result.
+and modelBlock gs ls {Pre = bPre; Contents = bContents} =
+    lift2 (fun bPreM bContentsM -> {Pre = bPreM; Contents = bContentsM})
+          (bPre |> modelView ls |> mapMessages (curry AEBadView bPre))
+          (bContents |> modelViewedCommands gs ls)
+
+/// Converts a method's views and commands.
+/// The converted method is enclosed in a Chessie result.
+let modelMethod gs ls { Signature = sg ; Body = b } = 
     // TODO(CaptainHayashi): method parameters
     b
-    |> modelAxiomsOnBlock gs ls
-    |> lift (fun c -> c.Cmd)
-    |> mapMessages (curry MEAxiom m)
+    |> modelBlock gs ls
+    |> lift (fun c -> { Signature = sg ; Body = c })
+    |> mapMessages (curry MEAxiom sg.Name)
 
-/// Converts a list of methods to a list of partially resolved axioms.
+/// Converts a list of methods.
 /// The list is enclosed in a Chessie result.
-let modelAxioms gs ls methods = 
+let modelMethods gs ls = 
     // TODO(CaptainHayashi): method parameters
-    List.map (modelAxiomsOnMethod gs ls) methods
-    |> collect
-    |> lift List.concat
+    List.map (modelMethod gs ls) >> collect
 
 /// Checks a view prototype to see if it contains duplicate parameters.
 let checkViewProtoDuplicates (proto : ViewProto) = 
     proto.Params
-    |> List.map snd
+    |> Seq.map snd
     |> findDuplicates
+    |> Seq.toList
     |> function 
-    | [] -> ok proto
-    | ds -> List.map (fun d -> VPEDuplicateParam(proto, d)) ds |> Bad
+       | [] -> ok proto
+       | ds -> List.map (fun d -> VPEDuplicateParam(proto, d)) ds |> Bad
 
 /// Checks a view prototype and converts it to an associative pair.
 let modelViewProto proto = 
@@ -688,14 +668,14 @@ let modelViewProtos protos =
     |> lift Map.ofSeq
 
 /// Converts a collated script to a model.
-let model collated = 
+let model collated : Result<Model<AST.Method<CView, PartCmd<CView>>, DView>, ModelError> = 
     trial { 
         let! vprotos = modelViewProtos collated.VProtos
         // Make variable maps out of the global and local variable definitions.
         let! globals = makeVarMap collated.Globals |> mapMessages MEVar
         let! locals = makeVarMap collated.Locals |> mapMessages MEVar
         let! constraints = modelViewDefs globals vprotos collated
-        let! axioms = modelAxioms globals locals collated.Methods
+        let! axioms = modelMethods globals locals collated.Methods
         return
             { Globals = globals
               Locals = locals

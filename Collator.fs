@@ -11,7 +11,7 @@ type CollatedScript =
       Locals : (Type * string) list
       VProtos : ViewProto list
       Constraints : Constraint list
-      Methods : Method list }
+      Methods : Method<View, Command<View>> list }
 
 /// The empty collated script.
 let empty = 
