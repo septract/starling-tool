@@ -7,6 +7,7 @@ open Starling.Axiom
 open CommandLine
 open Chessie.ErrorHandling
 
+open Starling.Model.Pretty
 open Starling.Pretty.Types
 open Starling.Pretty.Misc
 
@@ -120,6 +121,8 @@ let printResponse showModel =
 type Error = 
     /// An error occurred in the frontend.
     | Frontend of Lang.Frontend.Error
+    /// An error occured in axiomatisation.
+    | Axiomatise of CFG.Error
     /// An error occurred in semantic translation.
     | Semantics of Semantics.Error
     /// An error occurred in the Z3 backend.
@@ -135,6 +138,7 @@ type Error =
 let printError = 
     function 
     | Frontend e -> Lang.Frontend.printError e
+    | Axiomatise e -> Starling.Pretty.Errors.printGraphError e
     | Semantics e -> Starling.Pretty.Errors.printSemanticsError e
     | Z3 e -> Z3.Backend.printError e
     | HSF e -> Starling.Pretty.Errors.printHornError e
@@ -194,7 +198,7 @@ let frame = lift Starling.Framer.frame
 let semantics = bind (Starling.Semantics.translate >> mapMessages Error.Semantics)
 
 /// Shorthand for the axiomatisation stage.
-let axiomatise = lift Starling.CFG.axiomatise
+let axiomatise = bind (Starling.CFG.axiomatise >> mapMessages Error.Axiomatise)
 
 /// Shorthand for the frontend stage.
 let frontend rq = Lang.Frontend.run rq >> mapMessages Error.Frontend

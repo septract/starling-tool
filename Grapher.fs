@@ -210,16 +210,20 @@ and graphBlock fg {Pre = bPre; Contents = bContents} =
     let oQ, graphR = bContents |> List.fold (graphBlockStep fg) initState
 
     // Pull the whole set of returns into one Result.
-    lift (fun graph -> (oP, oQ, graph)) graphR
+    lift (fun gr -> (oP, oQ, gr)) graphR
 
 /// <summary>
 ///     Constructs a control-flow graph for a method.
 /// </summary>
-let graphMethod fs { Body = body } = graphBlock fs body
+let graphMethod fs { Signature = { Name = name }; Body = body } =
+    body
+    |> graphBlock fs
+    |> bind (fun (oP, oQ, gr) -> graph name gr)
 
 /// <summary>
 ///     Converts a model on method ASTs to one on method CFGs.
 /// </summary>
-let graph model =
+let graph (model : Model<AST.Method<GView, PartCmd<GView>>, DView>)
+          : Result<Model<Graph, DView>, Error> =
     let fs = freshGen ()
     tryMapAxioms (graphMethod fs) model

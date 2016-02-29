@@ -6,7 +6,7 @@ open Starling.Collections
 open Starling.Expr
 open Starling.Var
 open Starling.Model
-open Starling.Axioms
+open Starling.Axiom
 open Starling.Lang.AST
 open Starling.Lang.Collator
 open Starling.Lang.Modeller
@@ -135,7 +135,8 @@ let ticketLockCollated =
       Methods = [ ticketLockLockMethodAST; ticketLockUnlockMethodAST ] }
 
 /// The axioms of the ticketed lock.
-let ticketLockAxioms = 
+let ticketLockAxioms = []
+(*    
     [ { Pre = Multiset.empty()
         Post = 
            Multiset.ofList [ CFunc.Func { Name = "holdTick"
@@ -178,7 +179,7 @@ let ticketLockAxioms =
             Multiset.ofList [ CFunc.Func { Name = "holdLock"
                                            Params = [] } ]
         Post = Multiset.empty()
-        Cmd = Prim(func "!I++" ["serving" |> aBefore |> AExpr; "serving" |> aAfter |> AExpr]) } ]
+        Cmd = Prim(func "!I++" ["serving" |> aBefore |> AExpr; "serving" |> aAfter |> AExpr]) } ] *)
 
 /// The view definitions of the ticketed lock model.
 let ticketLockViewDefs =

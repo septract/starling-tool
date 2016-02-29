@@ -6,6 +6,9 @@ module Starling.Model
 open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Expr
+open Starling.Var.Pretty
+open Starling.Pretty.Expr
+open Starling.Pretty.Types
 
 (*
  * Starling uses the following general terminology for model items.
@@ -198,3 +201,50 @@ let mapAxioms (f : 'x -> 'y) (model : Model<'x, 'dview>) : Model<'y, 'dview> =
 let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x, 'dview>) : Result<Model<'y, 'dview>, 'e> =
     lift (fun x -> withAxioms x model)
          (model |> axioms |> List.map f |> collect)
+
+
+(*
+ * Pretty printers
+ *)
+
+module Pretty =
+    /// Pretty-prints a type-name parameter.
+    let printParam (ty, name) = 
+        hsep [ ty |> printType
+               name |> String ]
+
+    /// Pretty-prints a multiset given a printer for its contents.
+    let printMultiset pItem = 
+        Multiset.toList
+        >> List.map pItem
+        >> semiSep
+
+    /// Pretty-prints a guarded item.
+    let printGuarded pitem {Cond = c; Item = i} = 
+        // Don't bother showing the guard if it's always true.
+        if Expr.isTrue c then pitem i
+        else 
+            parened (HSep([ printBoolExpr c
+                            pitem i ], String "|"))
+
+    /// Pretty-prints a VFunc.
+    let printVFunc = printFunc printExpr
+
+    /// Pretty-prints a guarded view.
+    let printGFunc = printGuarded printVFunc
+
+    /// Pretty-prints a DFunc.
+    let printDFunc = printFunc printParam
+
+    /// Pretty-prints a View.
+    let printView = printMultiset printVFunc
+
+    /// Pretty-prints a DView.
+    let printDView = printMultiset printDFunc >> squared
+
+    /// Pretty-prints a GView.
+    let printGView = printMultiset printGFunc >> ssurround "<|" "|>"
+
+    /// Pretty-prints a view set.
+    let printViewSet = printMultiset (printGuarded printView >> ssurround "((" "))") >> ssurround "(|" "|)"
+

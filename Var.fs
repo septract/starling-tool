@@ -4,6 +4,7 @@ module Starling.Var
 open Chessie.ErrorHandling
 open Starling.Errors.Var
 
+
 (*
  * LValues
  *
@@ -22,6 +23,7 @@ let rec flattenLV =
     function 
     | LVIdent s -> s
 
+
 (*
  * Types
  *)
@@ -30,6 +32,7 @@ let rec flattenLV =
 type Type = 
     | Int
     | Bool
+
 
 (*
  * Variable records
@@ -72,6 +75,7 @@ let lookupVar env s =
     |> tryLookupVar env
     |> failIfNone (NotFound(flattenLV s))
 
+
 (*
  * Fetch modes
  *)
@@ -82,6 +86,7 @@ type FetchMode =
     | Increment // <a = b++>
     | Decrement // <a = b-->
 
+
 (*
  * Parameter functions
  *)
@@ -91,3 +96,16 @@ let ipar x = (Type.Int, x)
 
 /// Constructs a Boolean param.
 let bpar x = (Type.Bool, x)
+
+(*
+ * Pretty printers
+ *)
+
+module Pretty =
+    open Starling.Pretty.Types
+
+    /// Pretty-prints a variable type.
+    let printType = 
+        function 
+        | Type.Int -> "int" |> String
+        | Type.Bool -> "bool" |> String

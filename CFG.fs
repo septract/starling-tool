@@ -11,7 +11,8 @@ module Starling.CFG
 open Chessie.ErrorHandling
 open Starling.Model
 open Starling.Axiom
-
+open Starling.Pretty.Types
+open Starling.Model.Pretty
 
 (*
  * Types
@@ -46,7 +47,15 @@ type Subgraph =
 /// <summary>
 ///     The summary for a standalone control-flow graph.
 /// </summary>
-type Graph = Graph of name: string * contents: Subgraph
+type Graph =
+    { /// <summary>
+      ///     The name of the graph.
+      /// </summary>
+      Name: string
+      /// <summary>
+      ///     The contents of the graph.
+      /// </summary>
+      Contents: Subgraph }
 
 /// <summary>
 ///     Type of Chessie errors for CFG actions.
@@ -61,6 +70,81 @@ type Error =
     /// </summary>
     | DuplicateNode of bigint
 
+
+(*
+ * Pretty printers
+ *)
+
+module Pretty =
+    /// <summary>
+    ///     Prints a node.
+    /// </summary>
+    /// <param name="id">
+    ///     The unique ID of the node.
+    /// </param>
+    /// <param name="view">
+    ///     The <c>GView</c> contained in the node.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer <c>Command</c> representing the node.
+    /// </returns>
+    let printNode id view =
+        hsep [ sprintf "v%A" id |> String
+               squared (hsep [ String "label"
+                               String "="
+                               view |> printGView |> ssurround "\"" "\"" ])
+               String ";" ]
+
+    /// <summary>
+    ///     Prints an edge.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>Edge</c> to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer <c>Command</c> representing
+    ///     <paramref name="_arg1" />.
+    /// </returns>
+    let printEdge { Pre = s; Post = t; Cmd = vf } =
+        hsep [ s |> sprintf "V%A" |> String
+               String "->"
+               t |> sprintf "V%A" |> String
+               String ";"]
+
+    /// <summary>
+    ///     Prints a <c>Subgraph</c>.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The subgraph to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer <c>Command</c> that prints
+    ///     <paramref name="_arg1" />.
+    /// </returns>
+    let printSubgraph { Nodes = nodes ; Edges = edges } =
+        List.append
+            (nodes |> Map.toList |> List.map (uncurry printNode))
+            (edges |> List.map printEdge)
+        |> vsep
+
+    /// <summary>
+    ///     Prints a <c>Graph</c>.
+    ///
+    ///     <para>
+    ///         This pretty printer should create a dot-compatible digraph.
+    ///     </para>
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The graph to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer <c>Command</c> that prints
+    ///     <paramref name="_arg1" />.
+    /// </returns>
+    let printGraph { Name = name; Contents = sg } =
+        hsep [ String "digraph"
+               String name
+               sg |> printSubgraph |> braced ]
 
 (*
  * Helper functions
@@ -121,7 +205,7 @@ let graph name sg =
                     not (Map.containsKey s sg.Nodes &&
                          Map.containsKey t sg.Nodes))
                sg.Edges) with
-    | [] -> Graph (name, sg) |> ok
+    | [] -> { Name = name; Contents = sg } |> ok
     | xs -> xs |> List.map EdgeOutOfBounds |> Bad
 
 /// <summary>
@@ -156,7 +240,7 @@ let combine { Nodes = ans ; Edges = aes }
 ///     The edges of <paramref name="_arg1" />
 ///     This is wrapped in a Chessie result over <c>Error</c>.
 /// </returns>
-let axiomatiseGraph (Graph (name, { Nodes = nodes; Edges = edges })) =
+let axiomatiseGraph { Name = name; Contents = { Nodes = nodes; Edges = edges } } =
     edges
     |> Seq.map
            (fun { Pre = s; Post = t; Cmd = c } ->
@@ -166,8 +250,7 @@ let axiomatiseGraph (Graph (name, { Nodes = nodes; Edges = edges })) =
     |> collect
 
 /// <summary>
-///     Converts the control-flow graphs <paramref name="graphs" /> into a
-///     list of axioms.
+///     Converts a list of control-flow graphs into a list of axioms.
 ///
 ///     <para>
 ///         Each axiom represents an edge in a control-flow graph.
@@ -178,10 +261,30 @@ let axiomatiseGraph (Graph (name, { Nodes = nodes; Edges = edges })) =
 ///     Such graphs typically represent one method.
 /// </param>
 /// <returns>
-///     A list of axioms characterising <paramref name="graph" />.
+///     A list of axioms characterising <paramref name="graph" />,
+///     wrapped in a Chessie result.
 /// </returns>
-let axiomatise graphs =
+let axiomatiseGraphs (graphs: Graph seq)
+                     : Result<Axiom<GView, VFunc> seq, Error> =
     graphs
     |> Seq.map axiomatiseGraph
     |> collect
     |> lift Seq.concat
+
+/// <summary>
+///     Converts a CFG-based model into an axiom-based model.
+///
+///     <para>
+///         Each axiom represents an edge in a control-flow graph.
+///     </para>
+/// </summary>
+/// <param name="model">
+///     The model to axiomatise.
+/// </param>
+/// <returns>
+///     An axiom-based model equivalent to <paramref name="model" />,
+///     wrapped in a Chessie result.
+/// </returns>
+let axiomatise model =
+    lift (fun xs -> withAxioms (Seq.toList xs) model)
+         (axiomatiseGraphs model.Axioms)

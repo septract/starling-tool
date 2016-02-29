@@ -4,7 +4,9 @@ module Starling.Lang.Frontend
 open Chessie.ErrorHandling
 open Starling
 open Starling.CFG
+open Starling.CFG.Pretty
 open Starling.Model
+open Starling.Model.Pretty
 open Starling.Pretty.Misc
 open Starling.Pretty.Lang.AST
 open Starling.Lang.Modeller
@@ -38,9 +40,9 @@ type Response =
     /// Output of the parsing and collation steps.
     | Collate of Collator.CollatedScript
     /// Output of the parsing, collation, and modelling steps.
-    | Model of Model<AST.Method<CView, AST.Command<CView>>, DView>
+    | Model of Model<AST.Method<CView, PartCmd<CView>>, DView>
     /// Output of the parsing, collation, modelling, and guarding stages.
-    | Guard of Model<AST.Method<GView, AST.Command<GView>>, DView>
+    | Guard of Model<AST.Method<GView, PartCmd<GView>>, DView>
     /// Output of the parsing, collation, modelling, guarding and destructuring stages.
     | Graph of Model<Graph, DView>
 
@@ -98,8 +100,8 @@ let collate = lift Collator.collate
 let model = bind (Modeller.model >> mapMessages Error.Model)
 /// Shorthand for the guard stage.
 let guard = lift Guarder.guard
-/// Shorthand for the destructure stage.
-let graph = lift Grapher.graph
+/// Shorthand for the graphing stage.
+let graph = bind (Grapher.graph >> mapMessages Error.Graph)
 
 /// Runs the Starling frontend.
 /// Takes two arguments: the first is the `Response` telling the frontend what

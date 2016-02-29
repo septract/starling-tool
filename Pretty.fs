@@ -4,9 +4,11 @@ open Microsoft
 open Starling
 open Starling.Collections
 open Starling.Var
+open Starling.Var.Pretty
 open Starling.Lang.Collator
 open Starling.Lang.Modeller
 open Starling.Model
+open Starling.Model.Pretty
 open Starling.Axiom
 open Starling.Pretty.Expr
 open Starling.Pretty.Lang.AST
@@ -49,18 +51,6 @@ let printCollatedScript (cs: CollatedScript) =
 /// Pretty-prints Z3 expressions.
 let printZ3Exp (expr : #Z3.Expr) = String(expr.ToString())
 
-/// Pretty-prints a type-name parameter.
-let printParam (ty, name) = 
-    hsep [ ty |> printType
-           name |> String ]
-
-/// Pretty-prints a multiset given a printer for its contents.
-let printMultiset pItem = 
-    Multiset.toList
-    >> List.map pItem
-    >> semiSep
-
-
 /// Pretty-prints a satisfiability result.
 let printSat = 
     function 
@@ -74,24 +64,13 @@ let printSats = printNumPrecList printSat
 
 
 (*
- * Guards
+ * View definitions
  *)
 
-/// Pretty-prints a guarded item.
-let printGuarded pitem {Cond = c; Item = i} = 
-    // Don't bother showing the guard if it's always true.
-    if Expr.isTrue c then pitem i
-    else 
-        parened (HSep([ printBoolExpr c
-                        pitem i ], String "|"))
-
-
-(*
- * Funcs (except Func and CFunc)
- *)
-
-/// Pretty-prints a VFunc.
-let printVFunc = printFunc printExpr
+/// Pretty-prints a model constraint.
+let printViewDef pView { View = vs; Def = e } = 
+    keyMap [ ("View", pView vs)
+             ("Def", withDefault (String "?") (Option.map printBoolExpr e)) ]
 
 /// Pretty-prints a CFunc.
 let rec printCFunc = 
@@ -105,46 +84,8 @@ let rec printCFunc =
                e |> printMultiset printCFunc |> ssurround "[" "]" ]
     | Func v -> printVFunc v
 
-/// Pretty-prints a guarded view.
-let printGFunc = printGuarded printVFunc
-
-/// Pretty-prints a DFunc.
-let printDFunc = printFunc printParam
-
-
-(*
- * Views
- *)
-
-/// Pretty-prints a View.
-let printView = printMultiset printVFunc
-
-/// Pretty-prints a DView.
-let printDView = printMultiset printDFunc >> squared
-
-/// Pretty-prints a CView.
+        /// Pretty-prints a CView.
 let printCView = printMultiset printCFunc >> ssurround "[|" "|]"
-
-/// Pretty-prints a GView.
-let printGView = printMultiset printGFunc >> ssurround "<|" "|>"
-
-
-(*
- * View sets
- *)
-
-/// Pretty-prints a view set.
-let printViewSet = printMultiset (printGuarded printView >> ssurround "((" "))") >> ssurround "(|" "|)"
-
-
-(*
- * View definitions
- *)
-
-/// Pretty-prints a model constraint.
-let printViewDef pView { View = vs; Def = e } = 
-    keyMap [ ("View", pView vs)
-             ("Def", withDefault (String "?") (Option.map printBoolExpr e)) ]
 
 
 (*
@@ -181,10 +122,10 @@ let printAxiom pCmd pView { Pre = pre; Post = post; Cmd = cmd } =
     Surround(pre |> pView, cmd |> pCmd, post |> pView)
 
 /// Pretty-prints a PAxiom.
-let printPAxiom pView = printAxiom printVFunc pView
+let printPAxiom pView = printAxiom printVFunc pView    
 
 /// Pretty-prints a part-cmd at the given indent level.
-let rec printPartCmd pView : PartCmd<'a> -> Command = 
+let rec printPartCmd (pView : 'view -> Command) : PartCmd<'view> -> Command = 
     function 
     | Prim prim -> printVFunc prim
     | While(isDo, expr, inner) -> 
