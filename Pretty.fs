@@ -18,15 +18,6 @@ open Starling.Pretty.Types
  * To separate out
  *)
 
-
-/// Pretty-prints a collated script.
-let printCollatedScript (cs: CollatedScript) = 
-    VSep([ vsep <| List.map printViewProto cs.VProtos
-           vsep <| List.map (uncurry (printScriptVar "shared")) cs.Globals
-           vsep <| List.map (uncurry (printScriptVar "local")) cs.Locals
-           vsep <| List.map printConstraint cs.Constraints
-           VSep(List.map (printMethod printViewLine printCommand) cs.Methods, VSkip) ], (vsep [ VSkip; Separator; Nop ]))
-
 /// Pretty-prints Z3 expressions.
 let printZ3Exp (expr : #Z3.Expr) = String(expr.ToString())
 

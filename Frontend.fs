@@ -38,7 +38,7 @@ type Response =
     /// Output of the parsing step only. 
     | Parse of AST.ScriptItem list
     /// Output of the parsing and collation steps.
-    | Collate of Collator.CollatedScript
+    | Collate of Collator.Types.CollatedScript
     /// Output of the parsing, collation, and modelling steps.
     | Model of Model<AST.Method<CView, PartCmd<CView>>, DView>
     /// Output of the parsing, collation, modelling, and guarding stages.
@@ -67,7 +67,7 @@ type Error =
 let printResponse mview =
     function 
     | Response.Parse s -> Lang.AST.Pretty.printScript s
-    | Response.Collate c -> printCollatedScript c
+    | Response.Collate c -> Lang.Collator.Pretty.printCollatedScript c
     | Response.Model m ->
         printModelView
             mview
