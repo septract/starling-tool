@@ -100,6 +100,31 @@ let printAtomicAction =
     | Id -> String "id"
     | Assume e -> func "assume" [ printExpression e ]
 
+/// Pretty-prints viewed commands with the given indent level (in spaces).
+let printViewedCommand (pView : 'view -> Command)
+                       (pCmd : 'cmd -> Command)
+                       ({ Command = c; Post = p } : ViewedCommand<'view, 'cmd>) = 
+    vsep [ pCmd c
+           pView p ]
+
+/// Pretty-prints blocks with the given indent level (in spaces).
+let printBlock (pView : 'view -> Command)
+               (pCmd : 'cmd -> Command)
+               ({ Pre = p; Contents = c } : Block<'view, 'cmd>)
+               : Command = 
+    vsep ((p |> pView |> Indent)
+          :: List.map (printViewedCommand pView pCmd >> Indent) c)
+    |> braced
+
+/// Pretty-prints methods.
+let printMethod (pView : 'view -> Command)
+                (pCmd : 'cmd -> Command)
+                ({ Signature = s; Body = b } : Method<'view, 'cmd>)
+                : Command = 
+    hsep [ "method" |> String
+           printFunc String s
+           printBlock pView pCmd b ]
+
 /// Pretty-prints commands with the given indent level (in spaces).
 let rec printCommand =        
     function 
@@ -134,29 +159,6 @@ let rec printCommand =
         |> List.map (printBlock printViewLine printCommand)
         |> hsepStr "||"
     | Assign(l, r) -> binop "=" (printLValue l) (printExpression r) |> withSemi
-
-/// Pretty-prints viewed commands with the given indent level (in spaces).
-and printViewedCommand (pView: 'view -> Command) (pCmd: 'cmd -> Command) { Command = c; Post = p } = 
-    vsep [ pCmd c
-           pView p ]
-
-/// Pretty-prints blocks with the given indent level (in spaces).
-and printBlock (pView : 'view -> Command)
-               (pCmd : 'cmd -> Command)
-               ({ Pre = p; Contents = c } : Block<'view, 'cmd>)
-               : Command = 
-    vsep ((p |> pView |> Indent)
-          :: List.map (printViewedCommand pView pCmd >> Indent) c)
-    |> braced
-
-/// Pretty-prints methods.
-let printMethod (pView : 'view -> Command)
-                (pCmd : 'cmd -> Command)
-                ({ Signature = s; Body = b } : Method<'view, 'cmd>)
-                : Command = 
-    hsep [ "method" |> String
-           printFunc String s
-           printBlock pView pCmd b ]
 
 /// Pretty-prints a view prototype.
 let printViewProto { Name = n; Params = ps } = 

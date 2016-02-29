@@ -46,7 +46,7 @@ let printCollatedScript (cs: CollatedScript) =
            vsep <| List.map (uncurry (printScriptVar "shared")) cs.Globals
            vsep <| List.map (uncurry (printScriptVar "local")) cs.Locals
            vsep <| List.map printConstraint cs.Constraints
-           VSep(List.map (printMethod printViewLine (printCommand printViewLine)) cs.Methods, VSkip) ], (vsep [ VSkip; Separator; Nop ]))
+           VSep(List.map (printMethod printViewLine printCommand) cs.Methods, VSkip) ], (vsep [ VSkip; Separator; Nop ]))
 
 /// Pretty-prints Z3 expressions.
 let printZ3Exp (expr : #Z3.Expr) = String(expr.ToString())
@@ -145,7 +145,7 @@ let rec printPartCmd (pView : 'view -> Command) : PartCmd<'view> -> Command =
 /// Pretty-prints a framed axiom.
 let printFramedAxiom {Axiom = a; Frame = f} = 
     vsep [ headed "Axiom" (a |> printPAxiom printGView |> Seq.singleton)
-           headed "Frame" (f |> printView |> Seq.singleton) ]
+           headed "Frame" (f |> Model.Pretty.printView |> Seq.singleton) ]
 
 
 (*

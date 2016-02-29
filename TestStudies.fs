@@ -213,7 +213,7 @@ let ticketLockViewDefs =
         Def = Some <| BFalse } ]
 
 /// The model of a ticketed lock method.
-let ticketLockModel = 
+let ticketLockModel : Model<Method<CView, PartCmd<CView>>, DView> = 
     { Globals = 
           Map.ofList [ ("serving", Type.Int)
                        ("ticket", Type.Int) ]
