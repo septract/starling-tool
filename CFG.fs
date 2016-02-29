@@ -77,6 +77,22 @@ type Error =
 
 module Pretty =
     /// <summary>
+    ///     Prints a GraphViz label directive.
+    /// </summary>
+    /// <param name="labelCmd">
+    ///     The pretty-printer command to use as the label.
+    /// </param.
+    /// <returns>
+    ///     A pretty-printer command representing
+    ///     [label = "<paramref name="labelCmd" />"].
+    /// </returns>
+    let printLabel labelCmd =
+        [ String "label"
+          String "="
+          labelCmd |> ssurround "\"" "\"" ]
+        |> hsep |> squared
+    
+    /// <summary>
     ///     Prints a node.
     /// </summary>
     /// <param name="id">
@@ -89,10 +105,8 @@ module Pretty =
     ///     A pretty-printer <c>Command</c> representing the node.
     /// </returns>
     let printNode id view =
-        hsep [ sprintf "v%A" id |> String
-               squared (hsep [ String "label"
-                               String "="
-                               view |> printGView |> ssurround "\"" "\"" ])]
+        hsep [ id |> sprintf "v%A" |> String
+               view |> printGView |> printLabel ]
         |> withSemi
 
     /// <summary>
@@ -108,7 +122,8 @@ module Pretty =
     let printEdge { Pre = s; Post = t; Cmd = vf } =
         hsep [ s |> sprintf "v%A" |> String
                String "->"
-               t |> sprintf "v%A" |> String ]
+               t |> sprintf "v%A" |> String
+               vf |> printVFunc |> printLabel ]
         |> withSemi
 
     /// <summary>
