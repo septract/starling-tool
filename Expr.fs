@@ -121,7 +121,12 @@ let rec simp ax =
         | BFalse, BFalse 
         | BTrue, BTrue      -> BTrue
         | BTrue, BFalse 
-        | BFalse, BTrue     -> BFalse   
+        | BFalse, BTrue     -> BFalse
+        // A Boolean equality between something and True reduces to that something.
+        | x, BTrue          -> x
+        | BTrue, x          -> x
+        | x, BFalse         -> simp (BNot x)
+        | BFalse, x         -> simp (BNot x)
         | x, y              -> BEq(BExpr x, BExpr y)
     | x -> x
 

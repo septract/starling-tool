@@ -15,7 +15,7 @@ open Starling.Lang.Modeller
 open Starling.CFG
 
 let cId = func "Id" []
-let cAssume expr = func "Assume" [expr |> BExpr |> before]
+let cAssume expr = func "Assume" [simp expr |> BExpr |> before]
 let cAssumeNot = mkNot >> cAssume
 
 /// <summary>
