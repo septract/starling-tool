@@ -18,27 +18,6 @@ open Starling.Pretty.Types
  * To separate out
  *)
 
-/// Pretty-prints a list by headering each by its number.
-let printNumHeaderedList pp = 
-    Seq.ofList
-    >> Seq.mapi (fun i x -> headed (sprintf "%d" (i + 1)) (x |> pp |> Seq.singleton))
-    >> Seq.toList
-    >> vsep
-
-/// Pretty-prints a list by preceding each by its number.
-let printNumPrecList pp = 
-    Seq.ofList
-    >> Seq.mapi (fun i x -> 
-           hsep [ sprintf "%d" (i + 1) |> String
-                  pp x ])
-    >> Seq.toList
-    >> vsep
-
-/// Pretty-prints model variables.
-let printModelVar (name, ty) = 
-    colonSep [ String name
-               printType ty ]
-
 
 /// Pretty-prints a collated script.
 let printCollatedScript (cs: CollatedScript) = 
@@ -61,16 +40,6 @@ let printSat =
 
 /// Pretty-prints a list of satisfiability results.
 let printSats = printNumPrecList printSat
-
-
-(*
- * View definitions
- *)
-
-/// Pretty-prints a model constraint.
-let printViewDef pView { View = vs; Def = e } = 
-    keyMap [ ("View", pView vs)
-             ("Def", withDefault (String "?") (Option.map printBoolExpr e)) ]
 
 /// Pretty-prints a CFunc.
 let rec printCFunc = 
@@ -124,6 +93,11 @@ let printAxiom pCmd pView { Pre = pre; Post = post; Cmd = cmd } =
 /// Pretty-prints a PAxiom.
 let printPAxiom pView = printAxiom printVFunc pView    
 
+/// Pretty-prints a framed axiom.
+let printFramedAxiom {Axiom = a; Frame = f} = 
+    vsep [ headed "Axiom" (a |> printPAxiom printGView |> Seq.singleton)
+           headed "Frame" (f |> Model.Pretty.printView |> Seq.singleton) ]
+
 /// Pretty-prints a part-cmd at the given indent level.
 let rec printPartCmd (pView : 'view -> Command) : PartCmd<'view> -> Command = 
     function 
@@ -137,41 +111,3 @@ let rec printPartCmd (pView : 'view -> Command) : PartCmd<'view> -> Command =
                          (printBoolExpr expr) ])
                   [headed "True" [printBlock pView (printPartCmd pView) inTrue]
                    headed "False" [printBlock pView (printPartCmd pView) inFalse]]
-
-(*
- * Framed axioms
- *)
-
-/// Pretty-prints a framed axiom.
-let printFramedAxiom {Axiom = a; Frame = f} = 
-    vsep [ headed "Axiom" (a |> printPAxiom printGView |> Seq.singleton)
-           headed "Frame" (f |> Model.Pretty.printView |> Seq.singleton) ]
-
-
-(*
- * Terms
- *)
-
-/// Pretty-prints a term, given printers for its commands and views.
-let printTerm pCmd pWPre pGoal {Cmd = c; WPre = w; Goal = g} = 
-    vsep [ headed "Command" (c |> pCmd |> Seq.singleton)
-           headed "W/Prec" (w |> pWPre |> Seq.singleton)
-           headed "Goal" (g |> pGoal |> Seq.singleton) ]
-
-/// Pretty-prints a PTerm.
-let printPTerm pWPre pGoal = printTerm printVFunc pWPre pGoal
-
-/// Pretty-prints an STerm.
-let printSTerm pWPre pGoal = printTerm printBoolExpr pWPre pGoal
-
-(*
- * Models
- *)
-
-/// Pretty-prints a model given axiom and defining-view printers.
-let printModel pAxiom pDView model = 
-    headed "Model" 
-           [ headed "Shared variables" <| List.map printModelVar (Map.toList model.Globals)
-             headed "Thread variables" <| List.map printModelVar (Map.toList model.Locals)
-             headed "ViewDefs" <| List.map (printViewDef pDView) model.ViewDefs
-             headed "Axioms" <| List.map pAxiom model.Axioms ]

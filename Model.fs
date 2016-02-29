@@ -248,11 +248,79 @@ module Pretty =
     /// Pretty-prints a view set.
     let printViewSet = printMultiset (printGuarded printView >> ssurround "((" "))") >> ssurround "(|" "|)"
 
-    /// Type of model view.
+    /// Pretty-prints a term, given printers for its commands and views.
+    let printTerm pCmd pWPre pGoal {Cmd = c; WPre = w; Goal = g} = 
+        vsep [ headed "Command" (c |> pCmd |> Seq.singleton)
+               headed "W/Prec" (w |> pWPre |> Seq.singleton)
+               headed "Goal" (g |> pGoal |> Seq.singleton) ]
+
+    /// Pretty-prints a PTerm.
+    let printPTerm pWPre pGoal = printTerm printVFunc pWPre pGoal
+
+    /// Pretty-prints an STerm.
+    let printSTerm pWPre pGoal = printTerm printBoolExpr pWPre pGoal
+
+    /// Pretty-prints model variables.
+    let printModelVar (name, ty) = 
+        colonSep [ String name
+                   printType ty ]
+
+    /// Pretty-prints a model constraint.
+    let printViewDef pView { View = vs; Def = e } = 
+        keyMap [ ("View", pView vs)
+                 ("Def", withDefault (String "?") (Option.map printBoolExpr e)) ]
+
+    /// Pretty-prints a model given axiom and defining-view printers.
+    let printModel pAxiom pDView model = 
+        headed "Model" 
+            [ headed "Shared variables" <| List.map printModelVar (Map.toList model    .Globals)
+              headed "Thread variables" <| List.map printModelVar (Map.toList model    .Locals)
+              headed "ViewDefs" <| List.map (printViewDef pDView) model.ViewDefs
+              headed "Axioms" <| List.map pAxiom model.Axioms ]
+    
+    /// <summary>
+    ///     Enumerations of ways to view part or all of a <c>Model</c>.
+    /// </summary>
     type ModelView =
-        /// View the entire model.
+        /// <summary>
+        ///     View the entire model.
+        /// </summary>
         | Model
-        /// View the model's terms.
+        /// <summary>
+        ///     View the model's terms.
+        /// </summary>
         | Terms
-        /// View a specific term.
+        /// <summary>
+        ///     View a specific term.
+        /// </summary>
         | Term of int
+
+    /// <summary>
+    ///     Prints a model using the <c>ModelView</c> given.
+    /// </summary>
+    /// <param name="mview">
+    ///     The <c>ModelView</c> stating which part of the model should be
+    ///     printed.
+    /// </param>
+    /// <param name="pAxiom">
+    ///     The printer to use for model axioms.
+    /// </param>
+    /// <param name="pViewDef">
+    ///     The printer to use for view definitions.
+    /// </param>
+    /// <param name="model">
+    ///     The model to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command printing the part of
+    ///     <paramref name="model" /> specified by
+    ///     <paramref name="mView" />.
+    /// </returns>
+    let printModelView mView pAxiom pViewDef m =
+        match mView with
+        | ModelView.Model -> printModel pAxiom pViewDef m
+        | ModelView.Terms -> printNumHeaderedList pAxiom m.Axioms
+        | ModelView.Term i when 0 < i && i <= List.length m.Axioms ->
+            pAxiom m.Axioms.[i - 1]
+        | ModelView.Term i ->
+            sprintf "no term #%d" i |> String

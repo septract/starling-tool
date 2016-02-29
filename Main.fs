@@ -97,25 +97,50 @@ type Response =
     | HSF of Horn.Horn list
 
 /// Pretty-prints a response.
-let printResponse mview =
-    let pmodel pA pD m =
-        match mview with
-        | Model -> printModel pA pD m
-        | Terms -> printNumHeaderedList pA m.Axioms
-        | Term i when 0 < i && i <= List.length m.Axioms ->
-            pA m.Axioms.[i - 1]
-        | Term i -> sprintf "no term #%d" i |> String
-        
+let printResponse mview =        
     function 
     | Frontend f -> Lang.Frontend.printResponse mview f
-    | Axiomatise m -> pmodel (printPAxiom printGView) printDView m
-    | Frame m -> pmodel printFramedAxiom printDView m
-    | TermGen m -> pmodel (printPTerm printGView printView) printDView m
-    | Reify m -> pmodel (printPTerm printViewSet printView) printDView m
-    | Flatten m -> pmodel (printPTerm printGView printVFunc) printDFunc m
-    | Semantics m -> pmodel (printSTerm printGView printVFunc) printDFunc m
-    | Optimise m -> pmodel (printSTerm printGView printVFunc) printDFunc m
-    | Z3 z -> Z3.Backend.printResponse z
+    | Axiomatise m ->
+        printModelView
+            mview
+            (printPAxiom printGView)
+            printDView
+            m
+    | Frame m ->
+        printModelView
+            mview
+            printFramedAxiom printDView m
+    | TermGen m ->
+        printModelView
+            mview
+            (printPTerm printGView printView)
+            printDView
+            m
+    | Reify m ->
+        printModelView
+            mview
+            (printPTerm printViewSet printView)
+            printDView
+            m
+    | Flatten m ->
+        printModelView
+            mview
+            (printPTerm printGView printVFunc)
+            printDFunc
+            m
+    | Semantics m ->
+        printModelView
+            mview
+            (printSTerm printGView printVFunc)
+            printDFunc
+            m
+    | Optimise m ->
+        printModelView
+            mview
+            (printSTerm printGView printVFunc)
+            printDFunc
+            m
+    | Z3 z -> Z3.Backend.printResponse mview z
     | HSF h -> Starling.Pretty.Horn.printHorns h
 
 /// A top-level program error.

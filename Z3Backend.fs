@@ -5,6 +5,7 @@ open Microsoft
 open Chessie.ErrorHandling
 open Starling
 open Starling.Model
+open Starling.Model.Pretty
 open Starling.Utils
 open Starling.Pretty.Misc
 
@@ -45,10 +46,20 @@ type Error =
  *)
 
 /// Pretty-prints a response.
-let printResponse =
+let printResponse mview =
     function
-    | Response.Translate {Axioms = t} -> printNumHeaderedList (printTerm printZ3Exp printZ3Exp printZ3Exp) t
-    | Response.Combine {Axioms = z} -> printNumHeaderedList printZ3Exp z
+    | Response.Translate m ->
+        printModelView
+            mview
+            (printTerm printZ3Exp printZ3Exp printZ3Exp)
+            printDFunc
+            m
+    | Response.Combine m ->
+        printModelView
+            mview
+            printZ3Exp
+            printDFunc
+            m
     | Response.Sat s -> Starling.Pretty.Misc.printSats s
 
 /// Pretty-prints an error.

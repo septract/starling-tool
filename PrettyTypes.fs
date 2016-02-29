@@ -112,3 +112,19 @@ let func f xs = hjoin [String f; commaSep xs |> parened]
 
 /// Pretty-prints Funcs using pxs to print parameters.
 let printFunc pxs { Starling.Collections.Func.Name = f; Params = xs } = func f (Seq.map pxs xs)
+
+/// Pretty-prints a list by headering each by its number.
+let printNumHeaderedList pp = 
+    Seq.ofList
+    >> Seq.mapi (fun i x -> headed (sprintf "%d" (i + 1)) (x |> pp |> Seq.singleton))
+    >> Seq.toList
+    >> vsep
+
+/// Pretty-prints a list by preceding each by its number.
+let printNumPrecList pp = 
+    Seq.ofList
+    >> Seq.mapi (fun i x -> 
+           hsep [ sprintf "%d" (i + 1) |> String
+                  pp x ])
+    >> Seq.toList
+    >> vsep
