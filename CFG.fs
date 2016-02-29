@@ -92,8 +92,8 @@ module Pretty =
         hsep [ sprintf "v%A" id |> String
                squared (hsep [ String "label"
                                String "="
-                               view |> printGView |> ssurround "\"" "\"" ])
-               String ";" ]
+                               view |> printGView |> ssurround "\"" "\"" ])]
+        |> withSemi
 
     /// <summary>
     ///     Prints an edge.
@@ -108,8 +108,8 @@ module Pretty =
     let printEdge { Pre = s; Post = t; Cmd = vf } =
         hsep [ s |> sprintf "V%A" |> String
                String "->"
-               t |> sprintf "V%A" |> String
-               String ";"]
+               t |> sprintf "V%A" |> String ]
+        |> withSemi
 
     /// <summary>
     ///     Prints a <c>Subgraph</c>.
@@ -125,7 +125,7 @@ module Pretty =
         List.append
             (nodes |> Map.toList |> List.map (uncurry printNode))
             (edges |> List.map printEdge)
-        |> vsep
+        |> ivsep |> braced
 
     /// <summary>
     ///     Prints a <c>Graph</c>.
@@ -144,7 +144,7 @@ module Pretty =
     let printGraph { Name = name; Contents = sg } =
         hsep [ String "digraph"
                String name
-               sg |> printSubgraph |> braced ]
+               sg |> printSubgraph ]
 
 (*
  * Helper functions
