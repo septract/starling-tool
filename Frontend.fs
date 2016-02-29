@@ -8,7 +8,7 @@ open Starling.CFG.Pretty
 open Starling.Model
 open Starling.Model.Pretty
 open Starling.Pretty.Misc
-open Starling.Pretty.Lang.AST
+open Starling.Lang.AST.Pretty
 open Starling.Lang.Modeller
 open Starling.Lang.Parser
 open Starling.Lang.Grapher
@@ -66,7 +66,7 @@ type Error =
 /// Pretty-prints a response.
 let printResponse mview =
     function 
-    | Response.Parse s -> Pretty.Lang.AST.printScript s
+    | Response.Parse s -> Lang.AST.Pretty.printScript s
     | Response.Collate c -> printCollatedScript c
     | Response.Model m ->
         printModelView

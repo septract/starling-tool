@@ -11,7 +11,7 @@ open Starling.Model
 open Starling.Model.Pretty
 open Starling.Axiom
 open Starling.Pretty.Expr
-open Starling.Pretty.Lang.AST
+open Starling.Lang.AST.Pretty
 open Starling.Pretty.Types
 
 (*

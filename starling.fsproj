@@ -56,7 +56,6 @@
     <Compile Include="Sub.fs" />
     <Compile Include="Instantiate.fs" />
     <Compile Include="AST.fs" />
-    <Compile Include="ASTPretty.fs" />
     <Compile Include="Collator.fs" />
     <Compile Include="ModellerErrors.fs" />
     <Compile Include="Modeller.fs" />
