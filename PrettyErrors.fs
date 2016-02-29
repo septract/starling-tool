@@ -1,7 +1,6 @@
 /// Pretty-printing for error messages.
 module Starling.Pretty.Errors
 
-open Starling.CFG
 open Starling.Instantiate
 open Starling.Semantics
 open Starling.Errors.Lang.Modeller
@@ -143,15 +142,3 @@ let printSemanticsError =
     | MissingDef cmd ->
         fmt "command '{0}' has no semantic definition"
             [ printVFunc cmd ]
-
-/// Pretty-prints CFG errors.
-let printGraphError =
-    function
-    | EdgeOutOfBounds edge ->
-        colonSep
-            [ String "edge out of bounds: "
-              printPAxiom (fun x -> String (x.ToString())) edge ]
-    | DuplicateNode node ->
-        colonSep
-            [ String "node duplicated: "
-              String (node.ToString()) ]

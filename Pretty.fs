@@ -9,7 +9,6 @@ open Starling.Lang.Collator
 open Starling.Lang.Modeller
 open Starling.Model
 open Starling.Model.Pretty
-open Starling.Axiom
 open Starling.Pretty.Expr
 open Starling.Lang.AST.Pretty
 open Starling.Pretty.Types
@@ -76,18 +75,6 @@ let printCASPrim ty dest src set =
  * Conds and axioms
  *)
 
-/// Pretty-prints an Axiom, given knowledge of how to print its views
-/// and command.
-let printAxiom pCmd pView { Pre = pre; Post = post; Cmd = cmd } = 
-    Surround(pre |> pView, cmd |> pCmd, post |> pView)
-
-/// Pretty-prints a PAxiom.
-let printPAxiom pView = printAxiom printVFunc pView    
-
-/// Pretty-prints a framed axiom.
-let printFramedAxiom {Axiom = a; Frame = f} = 
-    vsep [ headed "Axiom" (a |> printPAxiom printGView |> Seq.singleton)
-           headed "Frame" (f |> Model.Pretty.printView |> Seq.singleton) ]
 
 /// Pretty-prints a part-cmd at the given indent level.
 let rec printPartCmd (pView : 'view -> Command) : PartCmd<'view> -> Command = 

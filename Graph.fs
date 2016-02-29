@@ -6,76 +6,83 @@
 ///         command.
 ///     </para>
 /// </summary>
-module Starling.CFG
+module Starling.Core.Graph
 
 open Chessie.ErrorHandling
+
+open Starling.Utils
 open Starling.Model
-open Starling.Axiom
-open Starling.Pretty.Types
-open Starling.Model.Pretty
+open Starling.Core.Axiom
 
-(*
- * Types
- *)
 
 /// <summary>
-///     Type synonym for graph edges.
-///
-///     <para>
-///         Graph edges are axioms, in that they directly correspond to
-///         Hoare triples.
-///     </para>
+///     Pretty printers for control-flow graphs.
 /// </summary>
-type Edge = Axiom<bigint, VFunc>
-
-/// <summary>
-///     The container for a partial control-flow graph.
-/// </summary>
-type Subgraph =
-    {
-        /// <summary>
-        ///     Set of nodes in the control-flow graph.
-        /// </summary>
-        Nodes: Map<bigint, GView>
-
-        /// <summary>
-        ///     Set of edges in the control-flow graph.
-        /// </summary>
-        Edges: Edge list
-    }
-
-/// <summary>
-///     The summary for a standalone control-flow graph.
-/// </summary>
-type Graph =
-    { /// <summary>
-      ///     The name of the graph.
-      /// </summary>
-      Name: string
-      /// <summary>
-      ///     The contents of the graph.
-      /// </summary>
-      Contents: Subgraph }
-
-/// <summary>
-///     Type of Chessie errors for CFG actions.
-/// </summary>
-type Error =
+[<AutoOpen>]
+module Types =
     /// <summary>
-    ///     The given edge has an invalid node index.
+    ///     Type synonym for graph edges.
+    ///
+    ///     <para>
+    ///         Graph edges are axioms, in that they directly correspond to
+    ///         Hoare triples.
+    ///     </para>
     /// </summary>
-    | EdgeOutOfBounds of Edge
+    type Edge = Axiom<bigint, VFunc>
+
     /// <summary>
-    ///     The given node was duplicated when trying to merge graphs.
+    ///     The container for a partial control-flow graph.
     /// </summary>
-    | DuplicateNode of bigint
+    type Subgraph =
+        {
+            /// <summary>
+            ///     Set of nodes in the control-flow graph.
+            /// </summary>
+            Nodes: Map<bigint, GView>
+    
+            /// <summary>
+            ///     Set of edges in the control-flow graph.
+            /// </summary>
+            Edges: Edge list
+        }
+
+    /// <summary>
+    ///     The summary for a standalone control-flow graph.
+    /// </summary>
+    type Graph =
+        { /// <summary>
+          ///     The name of the graph.
+          /// </summary>
+          Name: string
+          /// <summary>
+          ///     The contents of the graph.
+          /// </summary>
+          Contents: Subgraph }
+
+    /// <summary>
+    ///     Type of Chessie errors for CFG actions.
+    /// </summary>
+    type Error =
+        /// <summary>
+        ///     The given edge has an invalid node index.
+        /// </summary>
+        | EdgeOutOfBounds of Edge
+        /// <summary>
+        ///     The given node was duplicated when trying to merge graphs.
+        /// </summary>
+        | DuplicateNode of bigint
 
 
-(*
- * Pretty printers
- *)
-
+/// <summary>
+///     Pretty printers for control-flow graphs.
+/// </summary>
 module Pretty =
+    open Starling.Pretty.Types
+    
+    open Starling.Model.Pretty
+    open Starling.Core.Axiom.Pretty
+
+
     /// <summary>
     ///     Prints a GraphViz label directive.
     /// </summary>
@@ -161,9 +168,27 @@ module Pretty =
                String name
                sg |> printSubgraph ]
 
-(*
- * Helper functions
- *)
+    /// <summary>
+    ///     Pretty-prints graph construction errors.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The graph error to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command that prints
+    ///     <paramref name="_arg1" />.
+    /// </returns>
+    let printError =
+        function
+        | EdgeOutOfBounds edge ->
+            colonSep
+                [ String "edge out of bounds: "
+                  printPAxiom (fun x -> String (x.ToString())) edge ]
+        | DuplicateNode node ->
+            colonSep
+                [ String "node duplicated: "
+                  String (node.ToString()) ]
+
 
 /// <summary>
 ///     Creates a single <c>Edge</c>.

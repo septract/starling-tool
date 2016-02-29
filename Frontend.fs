@@ -3,8 +3,8 @@ module Starling.Lang.Frontend
 
 open Chessie.ErrorHandling
 open Starling
-open Starling.CFG
-open Starling.CFG.Pretty
+open Starling.Core.Graph
+open Starling.Core.Graph.Pretty
 open Starling.Model
 open Starling.Model.Pretty
 open Starling.Pretty.Misc
@@ -57,7 +57,7 @@ type Error =
     /// A modeller error occurred, given as a `ModelError`.
     | Model of Errors.Lang.Modeller.ModelError
     /// A graph error occurred, given as a `CFG.Error`.
-    | Graph of CFG.Error
+    | Graph of Starling.Core.Graph.Types.Error
 
 (*
  * Pretty-printing
@@ -92,7 +92,7 @@ let printError =
     function
     | Error.Parse e -> Pretty.Types.String e
     | Error.Model e -> Pretty.Errors.printModelError e
-    | Error.Graph e -> Pretty.Errors.printGraphError e
+    | Error.Graph e -> Starling.Core.Graph.Pretty.printError e
 
 (*
  * Driver functions

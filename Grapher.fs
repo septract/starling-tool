@@ -5,14 +5,16 @@
 module Starling.Lang.Grapher
 
 open Chessie.ErrorHandling
+
 open Starling.Collections
 open Starling.Expr
 open Starling.Sub
 open Starling.Model
+open Starling.Core.Graph
 open Starling.Utils
+
 open Starling.Lang.AST
 open Starling.Lang.Modeller
-open Starling.CFG
 
 let cId = func "Id" []
 let cAssume expr = func "Assume" [simp expr |> BExpr |> before]
