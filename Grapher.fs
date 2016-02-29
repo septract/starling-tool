@@ -182,7 +182,7 @@ and graphBlockStep fg (iP, oGraphR) {ViewedCommand.Command = cmd; Post = iQview}
          let! oGraph = oGraphR2
          return! combine iGraph oGraph }
      
-     (iQ, oGraphR2)
+     (iQ, oGraphR3)
 
 /// <summary>
 ///     Constructs a control-flow graph for a block.
