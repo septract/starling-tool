@@ -17,6 +17,8 @@ type Options =
       raw : bool
       [<Option('s', HelpText = "The stage at which Starling should stop and output.")>]
       stage : string option
+      [<Option('t', HelpText = "Show specific axiom or term in term-refinement stages.")>]
+      term : int option
       [<Option('m', HelpText = "Show full model in term-refinement stages.")>]
       showModel: bool
       [<Option('O', HelpText = "Perform no optimisation stages.")>]
@@ -95,18 +97,17 @@ type Response =
     | HSF of Horn.Horn list
 
 /// Pretty-prints a response.
-let printResponse showModel =
-    (* If a stage results in a model, and we pretty-print it, we
-     * either print the whole model or just the axioms, depending on
-     * the -m flag.
-     *)
+let printResponse mview =
     let pmodel pA pD m =
-        if showModel
-        then printModel pA pD m
-        else printNumHeaderedList pA m.Axioms
+        match mview with
+        | Model -> printModel pA pD m
+        | Terms -> printNumHeaderedList pA m.Axioms
+        | Term i when 0 < i && i <= List.length m.Axioms ->
+            pA m.Axioms.[i - 1]
+        | Term i -> sprintf "no term #%d" i |> String
         
     function 
-    | Frontend f -> Lang.Frontend.printResponse showModel f
+    | Frontend f -> Lang.Frontend.printResponse mview f
     | Axiomatise m -> pmodel (printPAxiom printGView) printDView m
     | Frame m -> pmodel printFramedAxiom printDView m
     | TermGen m -> pmodel (printPTerm printGView printView) printDView m
@@ -298,10 +299,16 @@ let mainWithOptions opts =
         match (requestFromStage opts.stage) with
         | Some otype -> runStarling optimise otype opts.input
         | None -> fail Error.BadStage
+
+    let mview =
+        match opts.term, opts.showModel with
+        | Some i, _ -> Term i
+        | None, false -> Terms
+        | _ -> Model
     
     let pfn = 
         if opts.raw then (sprintf "%A" >> Starling.Pretty.Types.String)
-                    else printResponse opts.showModel
+                    else printResponse mview
     printResult pfn (List.map printError) starlingR
     0
 

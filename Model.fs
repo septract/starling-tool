@@ -248,3 +248,11 @@ module Pretty =
     /// Pretty-prints a view set.
     let printViewSet = printMultiset (printGuarded printView >> ssurround "((" "))") >> ssurround "(|" "|)"
 
+    /// Type of model view.
+    type ModelView =
+        /// View the entire model.
+        | Model
+        /// View the model's terms.
+        | Terms
+        /// View a specific term.
+        | Term of int

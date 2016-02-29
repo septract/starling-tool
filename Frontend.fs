@@ -64,15 +64,18 @@ type Error =
  *)
 
 /// Pretty-prints a response.
-let printResponse showModel =
+let printResponse mview =
     (* See Main.fs for what this is doing.
      * TODO(CaptainHayashi): work out a way to de-duplicate this while still
      * appeasing F#'s type system.
      *)
     let pmodel pA pD m =
-        if showModel
-        then printModel pA pD m
-        else printNumHeaderedList pA m.Axioms
+        match mview with
+        | ModelView.Model -> printModel pA pD m
+        | Terms -> printNumHeaderedList pA m.Axioms
+        | Term i when 0 < i && i <= List.length m.Axioms ->
+            pA m.Axioms.[i - 1]
+        | Term i -> sprintf "no term #%d" i |> Pretty.Types.String
     
     function 
     | Response.Parse s -> Pretty.Lang.AST.printScript s
