@@ -106,9 +106,9 @@ module Pretty =
     ///     <paramref name="_arg1" />.
     /// </returns>
     let printEdge { Pre = s; Post = t; Cmd = vf } =
-        hsep [ s |> sprintf "V%A" |> String
+        hsep [ s |> sprintf "v%A" |> String
                String "->"
-               t |> sprintf "V%A" |> String ]
+               t |> sprintf "v%A" |> String ]
         |> withSemi
 
     /// <summary>
