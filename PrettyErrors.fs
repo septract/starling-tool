@@ -8,7 +8,7 @@ open Starling.Errors.Horn
 open Starling.Errors.Var
 open Starling.Errors.Z3.Translator
 open Starling.Var.Pretty
-open Starling.Model.Pretty
+open Starling.Core.Model.Pretty
 open Starling.Pretty.Expr
 open Starling.Pretty.Types
 open Starling.Pretty.Misc

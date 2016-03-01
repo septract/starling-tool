@@ -1,14 +1,15 @@
 /// <summary>
 ///   Module of model types and functions.
 /// </summary>
-module Starling.Model
+module Starling.Core.Model
 
 open Chessie.ErrorHandling
+
 open Starling.Collections
+open Starling.Utils
 open Starling.Expr
-open Starling.Var.Pretty
-open Starling.Pretty.Expr
-open Starling.Pretty.Types
+open Starling.Var
+
 
 (*
  * Starling uses the following general terminology for model items.
@@ -35,172 +36,134 @@ open Starling.Pretty.Types
  *)
 
 
-(*
- * Guards
- *)
-
-/// A guarded item.
-/// The semantics of a Guarded Item is that the Item is to be taken as present
-/// in its parent context (eg a View) if, and only if, Cond holds.
-type Guarded<'a> = 
-    { Cond : BoolExpr
-      Item : 'a }
-
-
-(*
- * Funcs (other than Starling.Collections.Func)
- *)
-
-/// A func over expressions, used in view expressions.
-type VFunc = Func<Expr>
-
-/// A view-definition func.
-type DFunc = Func<Var.Type * string>
-
-/// A guarded view func.
-type GFunc = Guarded<VFunc>
-
-
-(*
- * Views
- *)
-
 /// <summary>
-///   A basic view, as a multiset of VFuncs.
-/// </summary>
-/// <remarks>
-///   Though View is the canonical Concurrent Views Framework view,
-///   we actually seldom use it.
-/// </remarks>
-type View = Multiset<VFunc>
+///     Model types.
+/// </summary
+[<AutoOpen>]
+module Types =
+    (*
+     * Guards
+     *)
 
-/// A view definition.
-type DView = Multiset<DFunc>
+    /// A guarded item.
+    /// The semantics of a Guarded Item is that the Item is to be taken as present
+    /// in its parent context (eg a View) if, and only if, Cond holds.
+    type Guarded<'a> = 
+        { Cond : BoolExpr
+          Item : 'a }
 
-/// <summary>
-///   A guarded view.
-/// </summary>
-/// <remarks>
-///   These are the most common form of view in Starling internally,
-///   although theoretically speaking they are equivalent to Views
-///   with the guards lifting to proof case splits.
-/// </remarks>
-type GView = Multiset<GFunc>
+    (*
+     * Funcs (other than Starling.Collections.Func)
+     *)
 
+    /// A func over expressions, used in view expressions.
+    type VFunc = Func<Expr>
 
-(*
- * View sets
- *)
+    /// A view-definition func.
+    type DFunc = Func<Type * string>
 
-/// A set of guarded views, as produced by reification.
-type ViewSet = Multiset<Guarded<View>>
+    /// A guarded view func.
+    type GFunc = Guarded<VFunc>
 
+    (*
+     * Views
+     *)
 
-(*
- * View definitions
- *)
+    /// <summary>
+    ///   A basic view, as a multiset of VFuncs.
+    /// </summary>
+    /// <remarks>
+    ///   Though View is the canonical Concurrent Views Framework view,
+    ///   we actually seldom use it.
+    /// </remarks>
+    type View = Multiset<VFunc>
 
-/// <summary>
-///   A view definition.
-/// </summary>
-/// <remarks>
-///   The semantics of a ViewDef is that, if Def is present, then the
-///   view View is satisfied if, and only if, Def holds.
-/// </remarks>
-type ViewDef<'view> =
-    { View : 'view
-      Def : BoolExpr option }
+    /// A view definition.
+    type DView = Multiset<DFunc>
 
+    /// <summary>
+    ///   A guarded view.
+    /// </summary>
+    /// <remarks>
+    ///   These are the most common form of view in Starling internally,
+    ///   although theoretically speaking they are equivalent to Views
+    ///   with the guards lifting to proof case splits.
+    /// </remarks>
+    type GView = Multiset<GFunc>
 
-(*
- * Terms
- *)
+    (*
+     * View sets
+     *)
 
-/// <summary>
-///   A term, containing a command relation, weakest precondition, and goal.
-/// </summary>
-/// <remarks>
-///   Though these are similar to Axioms, we keep them separate for reasons of
-///   semantics: Axioms are literal Hoare triples {P}C{Q}, whereas Terms are
-///   some form of the actual Views axiom soundness check we intend to prove.
-/// </remarks>
-type Term<'cmd, 'wpre, 'goal> =
-    { /// The command relation of the Term.
-      Cmd : 'cmd
-      /// The weakest precondition of the Term.
-      WPre : 'wpre
-      /// The intended goal of the Term, ie the frame to preserve.
-      Goal : 'goal
-    }
+    /// A set of guarded views, as produced by reification.
+    type ViewSet = Multiset<Guarded<View>>
 
-/// A term over <c>VFunc</c>-encoded commands.
-type PTerm<'wpre, 'goal> = Term<VFunc, 'wpre, 'goal>
+    (*
+     * View definitions
+     *)
 
-/// A term over semantic-relation commands.
-type STerm<'wpre, 'goal> = Term<BoolExpr, 'wpre, 'goal>
+    /// <summary>
+    ///   A view definition.
+    /// </summary>
+    /// <remarks>
+    ///   The semantics of a ViewDef is that, if Def is present, then the
+    ///   view View is satisfied if, and only if, Def holds.
+    /// </remarks>
+    type ViewDef<'view> =
+        { View : 'view
+          Def : BoolExpr option }
 
-/// <summary>
-///   A 'Datalog-style' term of one goal <c>VFunc</c> and a
-///   weakest-precondition <c>GView</c>.
-/// </summary>
-type DTerm = STerm<GView, VFunc>
+    (*
+     * Terms
+     *)
 
-/// A term using only internal boolean expressions.
-type FTerm = STerm<BoolExpr, BoolExpr>
+    /// <summary>
+    ///   A term, containing a command relation, weakest precondition, and goal.
+    /// </summary>
+    /// <remarks>
+    ///   Though these are similar to Axioms, we keep them separate for reasons of
+    ///   semantics: Axioms are literal Hoare triples {P}C{Q}, whereas Terms are
+    ///   some form of the actual Views axiom soundness check we intend to prove.
+    /// </remarks>
+    type Term<'cmd, 'wpre, 'goal> =
+        { /// The command relation of the Term.
+          Cmd : 'cmd
+          /// The weakest precondition of the Term.
+          WPre : 'wpre
+          /// The intended goal of the Term, ie the frame to preserve.
+          Goal : 'goal
+        }
 
-/// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
-/// and its Goal with fG.
-let mapTerm fC fW fG {Cmd = c; WPre = w; Goal = g} =
-    {Cmd = fC c; WPre = fW w; Goal = fG g}
+    /// A term over <c>VFunc</c>-encoded commands.
+    type PTerm<'wpre, 'goal> = Term<VFunc, 'wpre, 'goal>
 
-/// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
-/// and its Goal with fG.
-/// fC, fW and fG must return Chessie results; liftMapTerm follows suit. 
-let tryMapTerm fC fW fG {Cmd = c; WPre = w; Goal = g} =
-    trial {
-        let! cR = fC c;
-        let! wR = fW w;
-        let! gR = fG g;
-        return {Cmd = cR; WPre = wR; Goal = gR}
-    }
+    /// A term over semantic-relation commands.
+    type STerm<'wpre, 'goal> = Term<BoolExpr, 'wpre, 'goal>
 
+    /// <summary>
+    ///   A 'Datalog-style' term of one goal <c>VFunc</c> and a
+    ///   weakest-precondition <c>GView</c>.
+    /// </summary>
+    type DTerm = STerm<GView, VFunc>
 
-(*
- * Models
- *)
+    /// A term using only internal boolean expressions.
+    type FTerm = STerm<BoolExpr, BoolExpr>
 
-/// A parameterised model of a Starling program.
-type Model<'axiom, 'dview> = 
-    { Globals : Var.VarMap
-      Locals : Var.VarMap
-      Axioms : 'axiom list
-      /// <summary>
-      ///   The semantic function for this model.
-      /// </summary>
-      Semantics : (DFunc * BoolExpr) list
-      // This corresponds to the function D.
-      ViewDefs : ViewDef<'dview> list }
+    (*
+     * Models
+     *)
 
-/// Returns the axioms of a model.
-let axioms {Axioms = xs} = xs
-
-/// Creates a new model that is the input model with a different axiom set.
-/// The axiom set may be of a different type.
-let withAxioms (xs : 'y list) (model : Model<'x, 'dview>) : Model<'y, 'dview> = 
-    { Globals = model.Globals
-      Locals = model.Locals
-      ViewDefs = model.ViewDefs
-      Semantics = model.Semantics
-      Axioms = xs }
-
-/// Maps a pure function f over the axioms of a model.
-let mapAxioms (f : 'x -> 'y) (model : Model<'x, 'dview>) : Model<'y, 'dview> =
-    withAxioms (model |> axioms |> List.map f) model
-
-/// Maps a failing function f over the axioms of a model.
-let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x, 'dview>) : Result<Model<'y, 'dview>, 'e> =
-    lift (fun x -> withAxioms x model)
-         (model |> axioms |> List.map f |> collect)
+    /// A parameterised model of a Starling program.
+    type Model<'axiom, 'dview> = 
+        { Globals : VarMap
+          Locals : VarMap
+          Axioms : 'axiom list
+          /// <summary>
+          ///   The semantic function for this model.
+          /// </summary>
+          Semantics : (DFunc * BoolExpr) list
+          // This corresponds to the function D.
+          ViewDefs : ViewDef<'dview> list }
 
 
 (*
@@ -208,6 +171,10 @@ let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x, 'dview>) : Result
  *)
 
 module Pretty =
+    open Starling.Var.Pretty
+    open Starling.Pretty.Expr
+    open Starling.Pretty.Types
+     
     /// Pretty-prints a type-name parameter.
     let printParam (ty, name) = 
         hsep [ ty |> printType
@@ -222,7 +189,7 @@ module Pretty =
     /// Pretty-prints a guarded item.
     let printGuarded pitem {Cond = c; Item = i} = 
         // Don't bother showing the guard if it's always true.
-        if Expr.isTrue c then pitem i
+        if isTrue c then pitem i
         else 
             parened (HSep([ printBoolExpr c
                             pitem i ], String "|"))
@@ -324,3 +291,41 @@ module Pretty =
             pAxiom m.Axioms.[i - 1]
         | ModelView.Term i ->
             sprintf "no term #%d" i |> String
+
+
+/// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
+/// and its Goal with fG.
+let mapTerm fC fW fG {Cmd = c; WPre = w; Goal = g} =
+    {Cmd = fC c; WPre = fW w; Goal = fG g}
+
+/// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
+/// and its Goal with fG.
+/// fC, fW and fG must return Chessie results; liftMapTerm follows suit. 
+let tryMapTerm fC fW fG {Cmd = c; WPre = w; Goal = g} =
+    trial {
+        let! cR = fC c;
+        let! wR = fW w;
+        let! gR = fG g;
+        return {Cmd = cR; WPre = wR; Goal = gR}
+    }
+
+/// Returns the axioms of a model.
+let axioms {Axioms = xs} = xs
+
+/// Creates a new model that is the input model with a different axiom set.
+/// The axiom set may be of a different type.
+let withAxioms (xs : 'y list) (model : Model<'x, 'dview>) : Model<'y, 'dview> = 
+    { Globals = model.Globals
+      Locals = model.Locals
+      ViewDefs = model.ViewDefs
+      Semantics = model.Semantics
+      Axioms = xs }
+
+/// Maps a pure function f over the axioms of a model.
+let mapAxioms (f : 'x -> 'y) (model : Model<'x, 'dview>) : Model<'y, 'dview> =
+    withAxioms (model |> axioms |> List.map f) model
+
+/// Maps a failing function f over the axioms of a model.
+let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x, 'dview>) : Result<Model<'y, 'dview>, 'e> =
+    lift (fun x -> withAxioms x model)
+         (model |> axioms |> List.map f |> collect)

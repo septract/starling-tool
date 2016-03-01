@@ -1,7 +1,7 @@
 /// Errors for the Z3 translator.
 module Starling.Errors.Z3.Translator
 
-open Starling.Model
+open Starling.Core.Model
 
 /// A Z3 translation error.
 type Error =

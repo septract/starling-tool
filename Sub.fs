@@ -2,8 +2,9 @@
 module Starling.Sub
 
 open Starling.Collections
+
 open Starling.Expr
-open Starling.Model
+open Starling.Core.Model
 
 (*
  * Basic substitution system

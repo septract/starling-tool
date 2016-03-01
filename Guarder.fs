@@ -2,7 +2,7 @@ module Starling.Lang.Guarder
 
 open Starling.Collections
 open Starling.Expr
-open Starling.Model
+open Starling.Core.Model
 open Starling.Utils
 open Starling.Lang.AST
 open Starling.Lang.Modeller

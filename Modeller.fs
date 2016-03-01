@@ -5,7 +5,7 @@ open Starling
 open Starling.Collections
 open Starling.Expr
 open Starling.Var
-open Starling.Model
+open Starling.Core.Model
 open Starling.Errors.Var
 open Starling.Errors.Lang.Modeller
 open Starling.Lang.AST

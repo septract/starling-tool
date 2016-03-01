@@ -1,5 +1,5 @@
 /// <summary>
-///     The <c>Axiom</c> type, and mappings from <c>Graph</c>s to <c>Axiom</cs>.
+///     The <c>Axiom</c> type, pretty printers, and related functions.
 ///
 ///     <para>
 ///         As in Views, <c>Axiom</c>s in Starling are triples (p, c, q),
@@ -10,7 +10,7 @@
 /// </summary>
 module Starling.Core.Axiom
 
-open Starling.Model
+open Starling.Core.Model
 
 
 /// <summary>
@@ -41,7 +41,7 @@ module Types =
 module Pretty =
     open Starling.Pretty.Types
 
-    open Starling.Model.Pretty
+    open Starling.Core.Model.Pretty
     
     /// Pretty-prints an Axiom, given knowledge of how to print its views
     /// and command.

@@ -4,8 +4,8 @@ module Starling.Z3.Backend
 open Microsoft
 open Chessie.ErrorHandling
 open Starling
-open Starling.Model
-open Starling.Model.Pretty
+open Starling.Core.Model
+open Starling.Core.Model.Pretty
 open Starling.Utils
 open Starling.Pretty.Misc
 

@@ -5,7 +5,7 @@ open NUnit.Framework
 open Starling.Collections
 open Starling.Expr
 open Starling.Var
-open Starling.Model
+open Starling.Core.Model
 open Starling.Reifier
 open Starling.Tests.Studies
 

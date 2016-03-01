@@ -1,14 +1,14 @@
 /// Main module for the Starling executable.
 module Main
 
-open Starling
-open Starling.Model
-open Starling.Core.Axiom
-open Starling.Core.Axiom.Pretty
 open CommandLine
 open Chessie.ErrorHandling
 
-open Starling.Model.Pretty
+open Starling
+open Starling.Core.Model
+open Starling.Core.Model.Pretty
+open Starling.Core.Axiom
+open Starling.Core.Axiom.Pretty
 open Starling.Pretty.Types
 open Starling.Pretty.Misc
 

@@ -3,7 +3,7 @@ module Starling.Tests.Optimiser
 open NUnit.Framework
 open Starling.Collections
 open Starling.Expr
-open Starling.Model
+open Starling.Core.Model
 open Starling.Sub
 open Starling.Optimiser
 

@@ -4,7 +4,7 @@ module Starling.Framer
 open Starling.Collections
 open Starling.Expr
 open Starling.Var
-open Starling.Model
+open Starling.Core.Model
 open Starling.Core.Axiom
 
 /// Instantiates a view parameter.

@@ -7,8 +7,8 @@ open Starling.Var
 open Starling.Var.Pretty
 open Starling.Lang.Collator
 open Starling.Lang.Modeller
-open Starling.Model
-open Starling.Model.Pretty
+open Starling.Core.Model
+open Starling.Core.Model.Pretty
 open Starling.Pretty.Expr
 open Starling.Lang.AST.Pretty
 open Starling.Pretty.Types

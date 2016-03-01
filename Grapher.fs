@@ -9,7 +9,7 @@ open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Expr
 open Starling.Sub
-open Starling.Model
+open Starling.Core.Model
 open Starling.Core.Graph
 open Starling.Utils
 

@@ -6,7 +6,7 @@ open Chessie.ErrorHandling
 open Starling
 open Starling.Collections
 open Starling.Expr
-open Starling.Model
+open Starling.Core.Model
 open Starling.Instantiate
 open Starling.Sub
 open Starling.Reifier

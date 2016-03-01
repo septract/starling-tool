@@ -5,8 +5,8 @@ open Chessie.ErrorHandling
 open Starling
 open Starling.Core.Graph
 open Starling.Core.Graph.Pretty
-open Starling.Model
-open Starling.Model.Pretty
+open Starling.Core.Model
+open Starling.Core.Model.Pretty
 open Starling.Pretty.Misc
 open Starling.Lang.AST.Pretty
 open Starling.Lang.Modeller

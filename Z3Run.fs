@@ -2,7 +2,7 @@
 module Starling.Z3.Run
 
 open Microsoft
-open Starling.Model
+open Starling.Core.Model
 
 /// Runs Z3 on a single term, given the context in `model`.
 let runTerm (ctx: Z3.Context) term =

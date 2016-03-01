@@ -11,7 +11,7 @@ module Starling.Core.Graph
 open Chessie.ErrorHandling
 
 open Starling.Utils
-open Starling.Model
+open Starling.Core.Model
 open Starling.Core.Axiom
 
 
@@ -79,7 +79,7 @@ module Types =
 module Pretty =
     open Starling.Pretty.Types
     
-    open Starling.Model.Pretty
+    open Starling.Core.Model.Pretty
     open Starling.Core.Axiom.Pretty
 
 

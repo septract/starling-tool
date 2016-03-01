@@ -17,7 +17,7 @@ open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Expr
 open Starling.Var
-open Starling.Model
+open Starling.Core.Model
 open Starling.Sub
 open Starling.Instantiate
 

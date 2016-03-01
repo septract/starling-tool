@@ -5,7 +5,7 @@ open Starling.Collections
 open Starling.Expr
 open Starling.Lang.Modeller
 open Starling.Lang.Guarder
-open Starling.Model
+open Starling.Core.Model
 
 /// Tests for the view guarder.
 type GuarderTests() = 
