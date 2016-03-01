@@ -13,33 +13,71 @@ open Starling.Lang.Collator
 open Starling.Sub
 
 
-(*
- * Conditional views.
- *)
+/// <summary>
+///     Types used only in the modeller and adjacent pipeline stages.
+/// </summary>
+[<AutoOpen>]
+module Types =
+    /// A conditional (flat or if-then-else) func.
+    type CFunc = 
+        | ITE of BoolExpr * Multiset<CFunc> * Multiset<CFunc>
+        | Func of VFunc
 
-/// A conditional (flat or if-then-else) func.
-type CFunc = 
-    | ITE of BoolExpr * Multiset<CFunc> * Multiset<CFunc>
-    | Func of VFunc
+    /// A conditional view, or multiset of CFuncs.
+    type CView = Multiset<CFunc>
 
-/// A conditional view, or multiset of CFuncs.
-type CView = Multiset<CFunc>
+    /// A partially resolved command.
+    type PartCmd<'view> = 
+        | Prim of VFunc
+        | While of
+            isDo : bool
+            * expr : BoolExpr
+            * inner : Block<'view, PartCmd<'view>>
+        | ITE of
+            expr : BoolExpr
+            * inTrue : Block<'view, PartCmd<'view>>
+            * inFalse : Block<'view, PartCmd<'view>>
 
-(*
- * Control structures
- *)
 
-/// A partially resolved command.
-type PartCmd<'view> = 
-    | Prim of VFunc
-    | While of
-        isDo : bool
-        * expr : BoolExpr
-        * inner : Block<'view, PartCmd<'view>>
-    | ITE of
-        expr : BoolExpr
-        * inTrue : Block<'view, PartCmd<'view>>
-        * inFalse : Block<'view, PartCmd<'view>>
+/// <summary>
+///     Pretty printers for the modeller types.
+/// </summary>
+module Pretty =
+    open Starling.Pretty.Types
+
+    open Starling.Lang.AST.Pretty
+    open Starling.Core.Model.Pretty
+    open Starling.Pretty.Expr
+
+    /// Pretty-prints a CFunc.
+    let rec printCFunc = 
+        function 
+        | CFunc.ITE(i, t, e) -> 
+            hsep [ String "if"
+                   printBoolExpr i
+                   String "then"
+                   t |> printMultiset printCFunc |> ssurround "[" "]"
+                   String "else"
+                   e |> printMultiset printCFunc |> ssurround "[" "]" ]
+        | Func v -> printVFunc v
+
+    /// Pretty-prints a CView.
+    let printCView = printMultiset printCFunc >> ssurround "[|" "|]"
+
+    /// Pretty-prints a part-cmd at the given indent level.
+    let rec printPartCmd (pView : 'view -> Command) : PartCmd<'view> -> Command = 
+        function 
+        | Prim prim -> printVFunc prim
+        | While(isDo, expr, inner) -> 
+            cmdHeaded (hsep [ String(if isDo then "Do-while" else "While")
+                              (printBoolExpr expr) ])
+                      [printBlock pView (printPartCmd pView) inner]
+        | ITE(expr, inTrue, inFalse) ->
+            cmdHeaded (hsep [String "begin if"
+                             (printBoolExpr expr) ])
+                      [headed "True" [printBlock pView (printPartCmd pView) inTrue]
+                       headed "False" [printBlock pView (printPartCmd pView) inFalse]]
+
 
 (*
  * Starling imperative language semantics

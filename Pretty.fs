@@ -31,21 +31,6 @@ let printSat =
 /// Pretty-prints a list of satisfiability results.
 let printSats = printNumPrecList printSat
 
-/// Pretty-prints a CFunc.
-let rec printCFunc = 
-    function 
-    | CFunc.ITE(i, t, e) -> 
-        hsep [ String "if"
-               printBoolExpr i
-               String "then"
-               t |> printMultiset printCFunc |> ssurround "[" "]"
-               String "else"
-               e |> printMultiset printCFunc |> ssurround "[" "]" ]
-    | Func v -> printVFunc v
-
-        /// Pretty-prints a CView.
-let printCView = printMultiset printCFunc >> ssurround "[|" "|]"
-
 
 (*
  * Prims
@@ -69,23 +54,3 @@ let printCASPrim ty dest src set =
            parened (commaSep [ dest |> printLValue
                                src |> printLValue
                                set |> printExpr ]) ]
-
-
-(*
- * Conds and axioms
- *)
-
-
-/// Pretty-prints a part-cmd at the given indent level.
-let rec printPartCmd (pView : 'view -> Command) : PartCmd<'view> -> Command = 
-    function 
-    | Prim prim -> printVFunc prim
-    | While(isDo, expr, inner) -> 
-        cmdHeaded (hsep [ String(if isDo then "Do-while" else "While")
-                          (printBoolExpr expr) ])
-                  [printBlock pView (printPartCmd pView) inner]
-    | ITE(expr, inTrue, inFalse) ->
-        cmdHeaded (hsep [String "begin if"
-                         (printBoolExpr expr) ])
-                  [headed "True" [printBlock pView (printPartCmd pView) inTrue]
-                   headed "False" [printBlock pView (printPartCmd pView) inFalse]]

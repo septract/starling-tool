@@ -10,6 +10,7 @@ open Starling.Core.Model.Pretty
 open Starling.Pretty.Misc
 open Starling.Lang.AST.Pretty
 open Starling.Lang.Modeller
+open Starling.Lang.Modeller.Pretty
 open Starling.Lang.Parser
 open Starling.Lang.Grapher
 open Starling.Lang.Guarder
