@@ -7,7 +7,6 @@ open Starling.Core.Graph
 open Starling.Core.Graph.Pretty
 open Starling.Core.Model
 open Starling.Core.Model.Pretty
-open Starling.Pretty.Misc
 open Starling.Lang.AST.Pretty
 open Starling.Lang.Modeller
 open Starling.Lang.Modeller.Pretty

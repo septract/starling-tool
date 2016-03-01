@@ -6,12 +6,10 @@ open Starling.Semantics
 open Starling.Errors.Lang.Modeller
 open Starling.Errors.Horn
 open Starling.Errors.Var
-open Starling.Errors.Z3.Translator
 open Starling.Var.Pretty
 open Starling.Core.Model.Pretty
 open Starling.Pretty.Expr
 open Starling.Pretty.Types
-open Starling.Pretty.Misc
 open Starling.Lang.AST.Pretty
 
 /// Formats an error that is wrapping another error.
@@ -104,15 +102,6 @@ let printInstantiationError =
     | CountMismatch (fn, dn) ->
         fmt "view usage has {0} parameter(s), but its definition has {1}"
             [ fn |> sprintf "%d" |> String; dn |> sprintf "%d" |> String ]
-
-/// Pretty-prints Z3 translation errors.
-let printZ3TranslatorError =
-    function
-    | IndefiniteConstraint vd ->
-        fmt "constraint of '{0}' is indefinite ('?'), and Z3 cannot use it" [ printDFunc vd ]
-    | InstantiationError (vfunc, err) ->
-        colonSep [ fmt "couldn't instantiate view '{0}'" [ printVFunc vfunc ]
-                   printInstantiationError err ]
 
 /// Pretty-prints HSF translation errors.
 let printHornError =

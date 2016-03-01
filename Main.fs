@@ -10,7 +10,7 @@ open Starling.Core.Model.Pretty
 open Starling.Core.Axiom
 open Starling.Core.Axiom.Pretty
 open Starling.Pretty.Types
-open Starling.Pretty.Misc
+
 
 /// Command-line flags used in the Starling executable.
 type Options = 
@@ -46,7 +46,7 @@ type Request =
     /// Stop at term optimisation.
     | Optimise
     /// Run the Z3 backend, with the given request.
-    | Z3 of Z3.Backend.Request
+    | Z3 of Backends.Z3.Types.Request
     /// Run the HSF backend (experimental).
     | HSF
 
@@ -64,9 +64,9 @@ let requestMap =
                  ("flatten", Request.Flatten)
                  ("semantics", Request.Semantics)
                  ("optimise", Request.Optimise)
-                 ("reifyZ3", Request.Z3 Z3.Backend.Request.Translate)
-                 ("z3", Request.Z3 Z3.Backend.Request.Combine)
-                 ("sat", Request.Z3 Z3.Backend.Request.Sat)
+                 ("reifyZ3", Request.Z3 Backends.Z3.Types.Request.Translate)
+                 ("z3", Request.Z3 Backends.Z3.Types.Request.Combine)
+                 ("sat", Request.Z3 Backends.Z3.Types.Request.Sat)
                  ("hsf", Request.HSF) ]
 
 /// Converts an optional -s stage name to a request item.
@@ -93,7 +93,7 @@ type Response =
     /// The result of term optimisation.
     | Optimise of Model<STerm<GView, VFunc>, DFunc>
     /// The result of Z3 backend processing.
-    | Z3 of Z3.Backend.Response
+    | Z3 of Backends.Z3.Types.Response
     /// The result of HSF processing.
     | HSF of Horn.Horn list
 
@@ -141,8 +141,8 @@ let printResponse mview =
             (printSTerm printGView printVFunc)
             printDFunc
             m
-    | Z3 z -> Z3.Backend.printResponse mview z
-    | HSF h -> Starling.Pretty.Horn.printHorns h
+    | Z3 z -> Backends.Z3.Pretty.printResponse mview z
+    | HSF h -> Pretty.Horn.printHorns h
 
 /// A top-level program error.
 type Error = 
@@ -153,7 +153,7 @@ type Error =
     /// An error occurred in semantic translation.
     | Semantics of Semantics.Error
     /// An error occurred in the Z3 backend.
-    | Z3 of Z3.Backend.Error
+    | Z3 of Backends.Z3.Types.Error
     /// An error occurred in the HSF backend.
     | HSF of Errors.Horn.Error
     /// A stage was requested using the -s flag that does not exist.
@@ -165,10 +165,10 @@ type Error =
 let printError = 
     function 
     | Frontend e -> Lang.Frontend.printError e
-    | Axiomatise e -> Starling.Core.Graph.Pretty.printError e
-    | Semantics e -> Starling.Pretty.Errors.printSemanticsError e
-    | Z3 e -> Z3.Backend.printError e
-    | HSF e -> Starling.Pretty.Errors.printHornError e
+    | Axiomatise e -> Core.Graph.Pretty.printError e
+    | Semantics e -> Pretty.Errors.printSemanticsError e
+    | Z3 e -> Backends.Z3.Pretty.printError e
+    | HSF e -> Pretty.Errors.printHornError e
     | BadStage -> 
         Pretty.Types.colonSep [ Pretty.Types.String "Bad stage"
                                 Pretty.Types.String "try"
@@ -204,7 +204,7 @@ let printResult pOk pBad =
 let hsf = bind (Starling.Horn.hsfModel >> mapMessages Error.HSF)
 
 /// Shorthand for the Z3 stage.
-let z3 rq = bind (Starling.Z3.Backend.run rq >> mapMessages Error.Z3)
+let z3 rq = bind (Backends.Z3.run rq >> mapMessages Error.Z3)
 
 /// Shorthand for the optimise stage.
 let optimise = lift Starling.Optimiser.optimise
