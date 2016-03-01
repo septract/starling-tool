@@ -111,10 +111,10 @@ type ModellerTests() =
         modelCommand ticketLockModel.Globals ticketLockModel.Locals c |> okOption
 
     /// Full case studies to model.
-    //static member Models =
-    //    [ TestCaseData(ticketLockCollated).Returns(Some ticketLockModel).SetName("model the ticketed lock") ]
+    static member Models =
+        [ TestCaseData(ticketLockCollated).Returns(Some ticketLockModel).SetName("model the ticketed lock") ]
 
     /// Tests the whole modelling process.
-    //[<TestCaseSource("Models")>]
-    //member x.``case studies are modelled correctly`` col = model col |> okOption
+    [<TestCaseSource("Models")>]
+    member x.``case studies are modelled correctly`` col = model col |> okOption
     

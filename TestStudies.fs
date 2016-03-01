@@ -134,52 +134,52 @@ let ticketLockCollated =
               CExpression = Some <| False } ]
       Methods = [ ticketLockLockMethodAST; ticketLockUnlockMethodAST ] }
 
+/// The holdLock view.
+let holdLock =
+    func "holdLock" [] |> Func |> Multiset.singleton
+
+/// The holdTick view.
+let holdTick =
+    func "holdTick" [AExpr (aUnmarked "t")] |> Func |> Multiset.singleton
+
 /// The axioms of the ticketed lock.
-let ticketLockAxioms = []
-(*    
-    [ { Pre = Multiset.empty()
-        Post = 
-           Multiset.ofList [ CFunc.Func { Name = "holdTick"
-                                          Params = [ AExpr (AConst (Unmarked "t")) ] } ]
-        Cmd = Prim (func "!ILoad++" ["t" |> aBefore |> AExpr; "t" |> aAfter |> AExpr
-                                     "ticket" |> aBefore |> AExpr; "ticket" |> aAfter |> AExpr]) }
-      { Pre = 
-           Multiset.ofList [ CFunc.Func { Name = "holdTick"
-                                          Params = [ AExpr (AConst (Unmarked "t")) ] } ]
-        Post = 
-           Multiset.ofList [ CFunc.Func { Name = "holdLock"
-                                          Params = [] } ]
-        Cmd = PartCmd.While(true, BNot(BEq(AExpr (AConst (Unmarked "s")), AExpr (AConst (Unmarked "t")))), 
-                            { Pre = 
-                                  Multiset.ofList [ CFunc.Func { Name = "holdTick"
-                                                                 Params = [ AExpr (AConst (Unmarked "t")) ] } ]
-                              Post = 
-                                  Multiset.ofList 
-                                      [ CFunc.ITE
-                                            (BEq(AExpr (AConst (Unmarked "s")), AExpr (AConst (Unmarked "t"))), 
-                                             Multiset.ofList [ CFunc.Func { Name = "holdLock"
-                                                                            Params = [] } ], 
-                                             Multiset.ofList [ CFunc.Func { Name = "holdTick"
-                                                                            Params = [ AExpr (AConst (Unmarked "t")) ] } ]) ]
-                              Cmd = 
-                                  [ { Pre = 
-                                          Multiset.ofList [ CFunc.Func { Name = "holdTick"
-                                                                         Params = [ AExpr (AConst (Unmarked "t")) ] } ]
-                                      Post = 
-                                          Multiset.ofList 
-                                              [ CFunc.ITE
-                                                    (BEq(AExpr (AConst (Unmarked "s")), AExpr (AConst (Unmarked "t"))), 
-                                                     Multiset.ofList [ CFunc.Func { Name = "holdLock"
-                                                                                    Params = [] } ], 
-                                                     Multiset.ofList [ CFunc.Func { Name = "holdTick"
-                                                                                    Params = [ AExpr (AConst (Unmarked "t")) ] } ]) ]
-                                      Cmd = Prim (func "!ILoad" ["s" |> aBefore |> AExpr; "s" |> aAfter |> AExpr
-                                                                 "serving" |> aBefore |> AExpr; "serving" |> aAfter |> AExpr]) } ] }) }
-      { Pre = 
-            Multiset.ofList [ CFunc.Func { Name = "holdLock"
-                                           Params = [] } ]
-        Post = Multiset.empty()
-        Cmd = Prim(func "!I++" ["serving" |> aBefore |> AExpr; "serving" |> aAfter |> AExpr]) } ] *)
+let ticketLockMethods = [
+    { Signature = func "lock" []
+      Body =
+          { Pre = Multiset.empty()
+            Contents =
+                [ { Command =
+                        func "!ILoad++"
+                             [ AExpr (aBefore "t"); AExpr (aAfter "t")
+                               AExpr (aBefore "ticket"); AExpr (aAfter "ticket") ]
+                        |> Prim
+                    Post = holdTick }
+                  { Command =
+                        While (isDo = true,
+                               expr = BNot (aEq (aUnmarked "s") (aUnmarked "t")),
+                               inner =
+                                   { Pre = holdTick
+                                     Contents =
+                                         [ { Command =
+                                                 func "!ILoad"
+                                                      [ AExpr (aBefore "s"); AExpr (aAfter "s")
+                                                        AExpr (aBefore "serving"); AExpr (aAfter "serving") ]
+                                                 |> Prim
+                                             Post =
+                                                 (aEq (aUnmarked "s") (aUnmarked "t"),
+                                                  holdLock,
+                                                  holdTick)
+                                                 |> CFunc.ITE
+                                                 |> Multiset.singleton } ] } )
+                    Post = holdLock } ] } }
+    { Signature = func "unlock" []
+      Body =
+          { Pre = holdLock
+            Contents =
+                [ { Command =
+                        func "!I++" [ AExpr (aBefore "serving"); AExpr (aAfter "serving") ]
+                        |> Prim
+                    Post = Multiset.empty() }]}}]
 
 /// The view definitions of the ticketed lock model.
 let ticketLockViewDefs =
@@ -220,6 +220,6 @@ let ticketLockModel : Model<Method<CView, PartCmd<CView>>, DView> =
       Locals = 
           Map.ofList [ ("s", Type.Int)
                        ("t", Type.Int) ]
-      Axioms = ticketLockAxioms
+      Axioms = ticketLockMethods
       ViewDefs = ticketLockViewDefs
       Semantics = Starling.Lang.Modeller.coreSemantics }
