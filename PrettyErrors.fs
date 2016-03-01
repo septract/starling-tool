@@ -4,7 +4,6 @@ module Starling.Pretty.Errors
 open Starling.Instantiate
 open Starling.Semantics
 open Starling.Errors.Lang.Modeller
-open Starling.Errors.Horn
 open Starling.Errors.Var
 open Starling.Var.Pretty
 open Starling.Core.Model.Pretty
@@ -103,23 +102,6 @@ let printInstantiationError =
         fmt "view usage has {0} parameter(s), but its definition has {1}"
             [ fn |> sprintf "%d" |> String; dn |> sprintf "%d" |> String ]
 
-/// Pretty-prints HSF translation errors.
-let printHornError =
-    function
-    | NonArithParam (ty, name) ->
-        fmt "parameter '{0}' is of type {1}: HSF only permits integers here"
-            [ String name
-              printType ty ]
-    | NonArithVar (ty, name) ->
-        fmt "variable '{0}' is of type {1}: HSF only permits integers here"
-            [ String name
-              printType ty ]
-    | UnsupportedExpr expr ->
-        fmt "expression '{0}' is not supported in the HSF backend"
-            [ printExpr expr ]
-    | EmptyCompoundExpr exptype ->
-        fmt "found an empty '{0}' expression"
-            [ String exptype ]
 
 /// Pretty-prints semantics errors.
 let printSemanticsError =

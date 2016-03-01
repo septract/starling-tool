@@ -68,9 +68,7 @@
     <Compile Include="Reifier.fs" />
     <Compile Include="Flattener.fs" />
     <Compile Include="Optimiser.fs" />
-    <Compile Include="HornErrors.fs" />
     <Compile Include="Horn.fs" />
-    <Compile Include="HornPretty.fs" />
     <Compile Include="PrettyErrors.fs" />
     <Compile Include="Frontend.fs" />
     <Compile Include="Z3.fs" />

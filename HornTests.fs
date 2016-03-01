@@ -1,5 +1,5 @@
-/// Tests for Starling.Horn and Starling.HSF.
-module Starling.Tests.Horn
+/// Tests for Starling.Backends.Horn and
+module Starling.Tests.Backends.Horn
 
 open NUnit.Framework
 open Starling.Collections
@@ -7,7 +7,7 @@ open Starling.Var
 open Starling.Utils
 open Starling.Expr
 open Starling.Core.Model
-open Starling.Horn
+open Starling.Backends.Horn
 open Starling.Tests.Studies
 
 /// Tests for Starling.Horn and Starling.HSF.

@@ -95,7 +95,7 @@ type Response =
     /// The result of Z3 backend processing.
     | Z3 of Backends.Z3.Types.Response
     /// The result of HSF processing.
-    | HSF of Horn.Horn list
+    | HSF of Backends.Horn.Types.Horn list
 
 /// Pretty-prints a response.
 let printResponse mview =        
@@ -142,7 +142,7 @@ let printResponse mview =
             printDFunc
             m
     | Z3 z -> Backends.Z3.Pretty.printResponse mview z
-    | HSF h -> Pretty.Horn.printHorns h
+    | HSF h -> Backends.Horn.Pretty.printHorns h
 
 /// A top-level program error.
 type Error = 
@@ -155,7 +155,7 @@ type Error =
     /// An error occurred in the Z3 backend.
     | Z3 of Backends.Z3.Types.Error
     /// An error occurred in the HSF backend.
-    | HSF of Errors.Horn.Error
+    | HSF of Backends.Horn.Types.Error
     /// A stage was requested using the -s flag that does not exist.
     | BadStage
     /// A miscellaneous (internal) error has occurred.
@@ -168,7 +168,7 @@ let printError =
     | Axiomatise e -> Core.Graph.Pretty.printError e
     | Semantics e -> Pretty.Errors.printSemanticsError e
     | Z3 e -> Backends.Z3.Pretty.printError e
-    | HSF e -> Pretty.Errors.printHornError e
+    | HSF e -> Backends.Horn.Pretty.printHornError e
     | BadStage -> 
         Pretty.Types.colonSep [ Pretty.Types.String "Bad stage"
                                 Pretty.Types.String "try"
@@ -201,7 +201,7 @@ let printResult pOk pBad =
     either (printOk pOk pBad) (printErr pBad)
 
 /// Shorthand for the HSF stage.
-let hsf = bind (Starling.Horn.hsfModel >> mapMessages Error.HSF)
+let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
 
 /// Shorthand for the Z3 stage.
 let z3 rq = bind (Backends.Z3.run rq >> mapMessages Error.Z3)
