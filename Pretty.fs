@@ -128,3 +128,7 @@ let printNumPrecList pp =
                   pp x ])
     >> Seq.toList
     >> vsep
+
+/// Formats an error that is wrapping another error.
+let wrapped wholeDesc whole err =
+    headed (sprintf "In %s '%s'" wholeDesc (print whole)) [ err ]
