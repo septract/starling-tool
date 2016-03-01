@@ -90,10 +90,15 @@ type ModellerTests() =
     /// Constructs a Prim of the correct type to come out of a modeller.
     static member mprim (vf : VFunc) : PartCmd<CView> = Prim vf
 
+    /// Constructs an atomic command of type Command<View>.
+    static member atom (ac : AtomicAction) : Command<View> = Atomic ac
+
     /// Tests for the command axiom modeller.
     /// These use the ticketed lock model.
     static member CommandAxioms =
-        [ TestCaseData(Atomic(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment)))
+        [ TestCaseData(ModellerTests.atom(Fetch(LVIdent "t",
+                                                LV(LVIdent "ticket"),
+                                                Increment)))
             .Returns(ModellerTests.mprim
                          (func "!ILoad++" ["t" |> aBefore |> AExpr; "t" |> aAfter |> AExpr
                                            "ticket" |> aBefore |> AExpr; "ticket" |> aAfter |> AExpr])
