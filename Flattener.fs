@@ -2,7 +2,7 @@
 module Starling.Flattener
 
 open Starling.Collections
-open Starling.Expr
+open Starling.Core.Expr
 open Starling.Core.Model
 open Starling.Core.Var
 

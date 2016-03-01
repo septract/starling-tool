@@ -151,7 +151,7 @@ type Error =
     /// An error occured in axiomatisation.
     | Axiomatise of Core.Graph.Types.Error
     /// An error occurred in semantic translation.
-    | Semantics of Semantics.Error
+    | Semantics of Semantics.Types.Error
     /// An error occurred in the Z3 backend.
     | Z3 of Backends.Z3.Types.Error
     /// An error occurred in the HSF backend.
@@ -166,7 +166,7 @@ let printError =
     function 
     | Frontend e -> Lang.Frontend.printError e
     | Axiomatise e -> Core.Graph.Pretty.printError e
-    | Semantics e -> Pretty.Errors.printSemanticsError e
+    | Semantics e -> Semantics.Pretty.printSemanticsError e
     | Z3 e -> Backends.Z3.Pretty.printError e
     | HSF e -> Backends.Horn.Pretty.printHornError e
     | BadStage -> 

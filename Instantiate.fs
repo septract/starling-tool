@@ -9,49 +9,70 @@
 ///     expression.
 ///   </para>
 ///   <para>
-///     This is the resposibility of <c>Starling.Instantiate</c>,
+///     This is the resposibility of <c>Starling.Core.Instantiate</c>,
 ///     which contains the function <c>instantiate</c> for this
 ///     purpose.
 ///   </para>
-module Starling.Instantiate
+module Starling.Core.Instantiate
 
 open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Utils
-open Starling.Expr
+open Starling.Core.Expr
 open Starling.Core.Model
 open Starling.Core.Var
-open Starling.Sub
+open Starling.Core.Sub
 
-
-(*
- * Types
- *)
 
 /// <summary>
-///   Type of func instantiation tables.
+///    Types used in func instantiation.
 /// </summary>
-type FuncTable =
-    // TODO(CaptainHayashi): this should probably be a map,
-    // but translating it to one seems non-trivial.
-    // Would need to define equality on funcs very loosely.
-    (DFunc * BoolExpr) list
+[<AutoOpen>]
+module Types =
+    /// <summary>
+    ///   Type of func instantiation tables.
+    /// </summary>
+    type FuncTable =
+        // TODO(CaptainHayashi): this should probably be a map,
+        // but translating it to one seems non-trivial.
+        // Would need to define equality on funcs very loosely.
+        (DFunc * BoolExpr) list
+
+    /// <summary>
+    ///   Type of Chessie errors arising from Instantiate.
+    /// </summary>
+    type Error =
+        /// <summary>
+        ///   The func looked up has a parameter <c>param</c>, which
+        ///   has been assigned to an argument of the incorrect type
+        ///   <c>atype</c>.
+        /// </summary>
+        | TypeMismatch of param: (Type * string) * atype: Type
+        /// <summary>
+        ///   The func looked up has <c>fn</c> arguments, but its
+        ///   definition has <c>dn</c> parameters.
+        /// </summary>
+        | CountMismatch of fn: int * dn: int
+
 
 /// <summary>
-///   Type of Chessie errors arising from Instantiate.
+///     Pretty printers used in func instantiation.
 /// </summary>
-type Error =
-    /// <summary>
-    ///   The func looked up has a parameter <c>param</c>, which
-    ///   has been assigned to an argument of the incorrect type
-    ///   <c>atype</c>.
-    /// </summary>
-    | TypeMismatch of param: (Type * string) * atype: Type
-    /// <summary>
-    ///   The func looked up has <c>fn</c> arguments, but its
-    ///   definition has <c>dn</c> parameters.
-    /// </summary>
-    | CountMismatch of fn: int * dn: int
+module Pretty =
+    open Starling.Core.Pretty
+    open Starling.Core.Model.Pretty
+    open Starling.Core.Var.Pretty
+    
+    /// Pretty-prints instantiation errors.
+    let printInstantiationError =
+        function
+        | TypeMismatch (par, atype) ->
+            fmt "parameter '{0}' conflicts with argument of type '{1}'"
+                [ printParam par; printType atype ]
+        | CountMismatch (fn, dn) ->
+            fmt "view usage has {0} parameter(s), but its definition has {1}"
+                [ fn |> sprintf "%d" |> String; dn |> sprintf "%d" |> String ]
+
 
 (*
  * Func lookup

@@ -2,11 +2,12 @@
 /// axioms.
 module Starling.TermGen
 
-open Starling.Expr
 open Starling.Collections
-open Starling.Sub
+open Starling.Core.Expr
+open Starling.Core.Sub
 open Starling.Core.Model
 open Starling.Core.Axiom
+
 
 /// Performs one step of a septraction of a GuarView.
 let termGenSeptractStep (rdone, qstep) rnext = 

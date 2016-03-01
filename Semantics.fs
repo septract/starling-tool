@@ -15,18 +15,45 @@ module Starling.Semantics
 
 open Chessie.ErrorHandling
 open Starling.Collections
-open Starling.Expr
+open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
-open Starling.Sub
-open Starling.Instantiate
+open Starling.Core.Sub
+open Starling.Core.Instantiate
 
-/// Type of errors relating to semantics instantiation.
-type Error =
-    /// There was an error instantiating a semantic definition.
-    | Instantiate of cmd: VFunc * error: Instantiate.Error
-    /// A command has a missing semantic definition.
-    | MissingDef of cmd: VFunc
+
+/// <summary>
+///     Types used in the Semantics stage.
+/// </summary>
+[<AutoOpen>]
+module Types =
+    /// Type of errors relating to semantics instantiation.
+    type Error =
+        /// There was an error instantiating a semantic definition.
+        | Instantiate of cmd: VFunc * error: Starling.Core.Instantiate.Types.Error
+        /// A command has a missing semantic definition.
+        | MissingDef of cmd: VFunc
+
+
+/// <summary>
+///     Pretty printers used in the Semantics stage.
+/// </summary>
+module Pretty =
+    open Starling.Core.Pretty
+    open Starling.Core.Model.Pretty
+    open Starling.Core.Instantiate.Pretty
+
+    /// Pretty-prints semantics errors.
+    let printSemanticsError =
+        function
+        | Instantiate (cmd, error) ->
+          colonSep
+              [ fmt "couldn't instantiate command '{0}'" [ printVFunc cmd ]
+                printInstantiationError error ]
+        | MissingDef cmd ->
+            fmt "command '{0}' has no semantic definition"
+                [ printVFunc cmd ]
+
 
 /// Generates a framing relation for a given variable.
 let frameVar name ty =

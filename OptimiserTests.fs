@@ -2,10 +2,11 @@ module Starling.Tests.Optimiser
 
 open NUnit.Framework
 open Starling.Collections
-open Starling.Expr
+open Starling.Core.Expr
 open Starling.Core.Model
-open Starling.Sub
+open Starling.Core.Sub
 open Starling.Optimiser
+
 
 /// Tests for the term optimiser.
 type OptimiserTests() = 

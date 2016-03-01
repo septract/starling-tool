@@ -4,7 +4,7 @@ open NUnit.Framework
 open Starling
 open Starling.Collections
 open Starling.Utils
-open Starling.Expr
+open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Semantics

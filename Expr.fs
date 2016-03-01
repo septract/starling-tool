@@ -1,47 +1,117 @@
-/// Utilities for working with expressions.
-module Starling.Expr
+/// <summary>
+///     Utilities and types for working with expressions.
+/// </summary>
+module Starling.Core.Expr
 
 open Starling.Utils
 open Starling.Core.Var
 
-(*
- * Expression types
- *)
 
-type Const =
-    | Unmarked of string
-    | Before of string
-    | After of string
-    | Frame of bigint * string
+/// <summary>
+///     Expression types.
+/// </summary>
+[<AutoOpen>]
+module Types =
+    type Const =
+        | Unmarked of string
+        | Before of string
+        | After of string
+        | Frame of bigint * string
 
-/// An expression of arbitrary type.
-type Expr =
-    | BExpr of BoolExpr
-    | AExpr of ArithExpr
+    /// An expression of arbitrary type.
+    type Expr =
+        | BExpr of BoolExpr
+        | AExpr of ArithExpr
 
-/// An arithmetic expression.
-and ArithExpr =
-    | AConst of Const
-    | AInt of int64
-    | AAdd of ArithExpr list
-    | ASub of ArithExpr list
-    | AMul of ArithExpr list
-    | ADiv of ArithExpr * ArithExpr
+    /// An arithmetic expression.
+    and ArithExpr =
+        | AConst of Const
+        | AInt of int64
+        | AAdd of ArithExpr list
+        | ASub of ArithExpr list
+        | AMul of ArithExpr list
+        | ADiv of ArithExpr * ArithExpr
 
-/// A Boolean expression.
-and BoolExpr =
-    | BConst of Const
-    | BTrue
-    | BFalse
-    | BAnd of BoolExpr list
-    | BOr of BoolExpr list
-    | BImplies of BoolExpr * BoolExpr
-    | BEq of Expr * Expr
-    | BGt of ArithExpr * ArithExpr
-    | BGe of ArithExpr * ArithExpr
-    | BLe of ArithExpr * ArithExpr
-    | BLt of ArithExpr * ArithExpr
-    | BNot of BoolExpr
+    /// A Boolean expression.
+    and BoolExpr =
+        | BConst of Const
+        | BTrue
+        | BFalse
+        | BAnd of BoolExpr list
+        | BOr of BoolExpr list
+        | BImplies of BoolExpr * BoolExpr
+        | BEq of Expr * Expr
+        | BGt of ArithExpr * ArithExpr
+        | BGe of ArithExpr * ArithExpr
+        | BLe of ArithExpr * ArithExpr
+        | BLt of ArithExpr * ArithExpr
+        | BNot of BoolExpr
+
+    /// Type for fresh variable generators.
+    type FreshGen = bigint ref
+
+
+// This is here as it is used by the pretty-printers.
+
+/// Converts a Starling constant into a string.
+let constToString =
+    function
+    | Unmarked s -> s
+    | Before s -> sprintf "%s!before" s
+    | After s -> sprintf "%s!after" s
+    | Frame (i, s) -> sprintf "%s!frame!%A" s i
+
+
+/// <summary>
+///     Pretty printers for expressions.
+///
+///     <para>
+///         These are deliberately made to look like the Z3 equivalent.
+///     </para>
+/// </summary>
+module Pretty =
+    open Starling.Core.Pretty
+
+    /// Creates an S-expression from an operator string, operand print function, and
+    /// sequence of operands.
+    let sexpr op pxs =
+        Seq.map pxs
+        >> scons (String op)
+        >> hsep
+        >> parened
+
+    /// Pretty-prints an arithmetic expression.
+    let rec printArithExpr =
+        function
+        | AConst c -> c |> constToString |> String
+        | AInt i -> i |> sprintf "%i" |> String
+        | AAdd xs -> sexpr "+" printArithExpr xs
+        | ASub xs -> sexpr "-" printArithExpr xs
+        | AMul xs -> sexpr "*" printArithExpr xs
+        | ADiv (x, y) -> sexpr "/" printArithExpr [x; y]
+
+    /// Pretty-prints a Boolean expression.
+    and printBoolExpr =
+        function
+        | BConst c -> c |> constToString |> String
+        | BTrue -> String "true"
+        | BFalse -> String "false"
+        | BAnd xs -> sexpr "and" printBoolExpr xs
+        | BOr xs -> sexpr "or" printBoolExpr xs
+        | BImplies (x, y) -> sexpr "=>" printBoolExpr [x; y]
+        | BEq (x, y) -> sexpr "=" printExpr [x; y]
+        | BGt (x, y) -> sexpr ">" printArithExpr [x; y]
+        | BGe (x, y) -> sexpr ">=" printArithExpr [x; y]
+        | BLe (x, y) -> sexpr "<=" printArithExpr [x; y]
+        | BLt (x, y) -> sexpr "<" printArithExpr [x; y]
+        | BNot x -> sexpr "not" printBoolExpr [x]
+
+    /// Pretty-prints an expression.
+    and printExpr =
+        function
+        | AExpr a -> printArithExpr a
+        | BExpr b -> printBoolExpr b
+        
  
 /// Partial pattern that matches a Boolean equality on arithmetic expressions.
 let (|BAEq|_|) =
@@ -154,14 +224,6 @@ let stripMark =
     | After s -> s
     | Frame (i, s) -> s
 
-/// Converts a Starling constant into a string.
-let constToString =
-    function
-    | Unmarked s -> s
-    | Before s -> sprintf "%s!before" s
-    | After s -> sprintf "%s!after" s
-    | Frame (i, s) -> sprintf "%s!frame!%A" s i
-
 (*
  * Expression constructors
  *)
@@ -271,9 +333,6 @@ let mkMul2 l r = AMul [ l; r ]
 (*
  * Fresh variable generation
  *)
-
-/// Type for fresh variable generators.
-type FreshGen = bigint ref
 
 /// Creates a new fresh generator.
 let freshGen () = ref 0I

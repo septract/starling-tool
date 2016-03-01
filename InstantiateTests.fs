@@ -2,11 +2,12 @@ module Starling.Tests.Instantiate
 
 open NUnit.Framework
 open Starling.Collections
-open Starling.Expr
+open Starling.Utils
+open Starling.Core.Expr
 open Starling.Core.Model
 open Starling.Core.Var
-open Starling.Utils
-open Starling.Instantiate
+open Starling.Core.Instantiate
+
 
 let vfunc : string -> Expr list -> VFunc = func
 let dfunc : string -> (Type * string) list -> DFunc = func

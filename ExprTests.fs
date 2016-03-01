@@ -1,8 +1,9 @@
-module Starling.Tests.Expr
+module Starling.Tests.Core.Expr
 
 open NUnit.Framework
-open Starling.Expr
-open Starling.Sub
+open Starling.Core.Expr
+open Starling.Core.Sub
+
 
 /// Tests for the expression types and functions.
 type ExprTests() =

@@ -3,9 +3,9 @@ module Starling.Tests.Backends.Horn
 
 open NUnit.Framework
 open Starling.Collections
-open Starling.Core.Var
 open Starling.Utils
-open Starling.Expr
+open Starling.Core.Var
+open Starling.Core.Expr
 open Starling.Core.Model
 open Starling.Backends.Horn
 open Starling.Tests.Studies

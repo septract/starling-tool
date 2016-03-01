@@ -1,9 +1,9 @@
 module Starling.Lang.Guarder
 
 open Starling.Collections
-open Starling.Expr
-open Starling.Core.Model
 open Starling.Utils
+open Starling.Core.Expr
+open Starling.Core.Model
 open Starling.Lang.AST
 open Starling.Lang.Modeller
 

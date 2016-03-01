@@ -55,9 +55,9 @@ type Error =
     /// A parse error occurred, details of which are enclosed in string form.
     | Parse of string
     /// A modeller error occurred, given as a `ModelError`.
-    | Model of Errors.Lang.Modeller.ModelError
+    | Model of Lang.Modeller.Types.ModelError
     /// A graph error occurred, given as a `CFG.Error`.
-    | Graph of Starling.Core.Graph.Types.Error
+    | Graph of Core.Graph.Types.Error
 
 (*
  * Pretty-printing
@@ -91,8 +91,8 @@ let printResponse mview =
 let printError =
     function
     | Error.Parse e -> Core.Pretty.String e
-    | Error.Model e -> Pretty.Errors.printModelError e
-    | Error.Graph e -> Starling.Core.Graph.Pretty.printError e
+    | Error.Model e -> Lang.Modeller.Pretty.printModelError e
+    | Error.Graph e -> Core.Graph.Pretty.printError e
 
 (*
  * Driver functions

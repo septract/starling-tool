@@ -3,7 +3,7 @@ module Starling.Tests.Reifier
 
 open NUnit.Framework
 open Starling.Collections
-open Starling.Expr
+open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Reifier

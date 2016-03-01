@@ -5,10 +5,10 @@ open Microsoft
 open Chessie.ErrorHandling
 open Starling
 open Starling.Collections
-open Starling.Expr
+open Starling.Core.Expr
 open Starling.Core.Model
-open Starling.Instantiate
-open Starling.Sub
+open Starling.Core.Instantiate
+open Starling.Core.Sub
 open Starling.Reifier
 open Starling.Optimiser
 
@@ -46,7 +46,8 @@ module Types =
         /// The Z3 backend cannot handle indefinite constraints.
         | IndefiniteConstraint of viewdef: DFunc
         /// Instantiation of a view failed.
-        | InstantiationError of view: VFunc * details: Starling.Instantiate.Error
+        | InstantiationError of view: VFunc
+                              * details: Starling.Core.Instantiate.Types.Error
 
 
 /// <summary>
@@ -54,9 +55,8 @@ module Types =
 /// </summary>
 module Pretty =            
     open Starling.Core.Pretty
-
-    open Starling.Pretty.Errors
     open Starling.Core.Model.Pretty
+    open Starling.Core.Instantiate.Pretty
 
     /// Pretty-prints Z3 expressions.
     let printZ3Exp (expr : #Z3.Expr) = String(expr.ToString())

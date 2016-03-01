@@ -1,21 +1,38 @@
-/// Functions for substituting expressions.
-module Starling.Sub
+/// <summary>
+///     Functions for substituting expressions.
+/// </summary>
+module Starling.Core.Sub
 
+open Starling.Utils
 open Starling.Collections
 
-open Starling.Expr
+open Starling.Core.Expr
 open Starling.Core.Model
+
+
+/// <summary>
+///     Types used in expression substitution.
+/// </summary>
+[<AutoOpen>]
+module Types =
+    /// Type for substitution function tables.
+    [<NoComparison>]
+    [<NoEquality>]
+    type SubFun =
+        {ASub: ArithExpr -> ArithExpr
+         BSub: BoolExpr -> BoolExpr}
+
+    /// Type for variable substitution function tables.
+    [<NoComparison>]
+    [<NoEquality>]
+    type VSubFun =
+        {AVSub: Const -> ArithExpr
+         BVSub: Const -> BoolExpr}
+
 
 (*
  * Basic substitution system
  *)
-
-/// Type for substitution function tables.
-[<NoComparison>]
-[<NoEquality>]
-type SubFun =
-    {ASub: ArithExpr -> ArithExpr
-     BSub: BoolExpr -> BoolExpr}
 
 /// <summary>
 ///   Runs the given <c>SubFun</c> on an <c>Expr</c>.
@@ -24,7 +41,6 @@ let subExpr { ASub = fa; BSub = fb } =
     function
     | AExpr a -> a |> fa |> AExpr
     | BExpr b -> b |> fb |> BExpr
-
 
 (*
  * Model element substitution functions
@@ -111,17 +127,9 @@ let subExprInGView sub = Multiset.map (subExprInGFunc sub)
 let subExprInDTerm sub =
     mapTerm (sub.BSub) (subExprInGView sub) (subExprInVFunc sub)
 
-
 (*
  * Variable substitution (special case of substitution)
  *)
-
-/// Type for variable substitution function tables.
-[<NoComparison>]
-[<NoEquality>]
-type VSubFun =
-    {AVSub: Const -> ArithExpr
-     BVSub: Const -> BoolExpr}
 
 /// Substitutes all variables with the given substitution function set
 /// for the given Boolean expression.

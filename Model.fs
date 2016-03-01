@@ -7,7 +7,7 @@ open Chessie.ErrorHandling
 
 open Starling.Collections
 open Starling.Utils
-open Starling.Expr
+open Starling.Core.Expr
 open Starling.Core.Var
 
 
@@ -166,14 +166,13 @@ module Types =
           ViewDefs : ViewDef<'dview> list }
 
 
-(*
- * Pretty printers
- *)
-
+/// <summary>
+///     Pretty printers for the model.
+/// </summary>
 module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Var.Pretty
-    open Starling.Pretty.Expr
+    open Starling.Core.Expr.Pretty
      
     /// Pretty-prints a type-name parameter.
     let printParam (ty, name) = 

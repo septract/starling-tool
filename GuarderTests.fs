@@ -2,10 +2,10 @@ module Starling.Tests.Guarder
 
 open NUnit.Framework
 open Starling.Collections
-open Starling.Expr
+open Starling.Core.Expr
+open Starling.Core.Model
 open Starling.Lang.Modeller
 open Starling.Lang.Guarder
-open Starling.Core.Model
 
 /// Tests for the view guarder.
 type GuarderTests() = 

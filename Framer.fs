@@ -2,7 +2,7 @@
 module Starling.Framer
 
 open Starling.Collections
-open Starling.Expr
+open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.Axiom

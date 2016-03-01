@@ -7,11 +7,11 @@ module Starling.Lang.Grapher
 open Chessie.ErrorHandling
 
 open Starling.Collections
-open Starling.Expr
-open Starling.Sub
+open Starling.Utils
+open Starling.Core.Expr
+open Starling.Core.Sub
 open Starling.Core.Model
 open Starling.Core.Graph
-open Starling.Utils
 
 open Starling.Lang.AST
 open Starling.Lang.Modeller

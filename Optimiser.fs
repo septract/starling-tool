@@ -2,10 +2,10 @@
 module Starling.Optimiser
 
 open Starling.Collections
-open Starling.Expr
 open Starling.Utils
+open Starling.Core.Expr
 open Starling.Core.Model
-open Starling.Sub
+open Starling.Core.Sub
 
 (*
  * After elimination
