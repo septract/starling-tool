@@ -3,7 +3,7 @@ module Starling.Tests.Flattener
 
 open NUnit.Framework
 open Starling.Collections
-open Starling.Var
+open Starling.Core.Var
 open Starling.Utils
 open Starling.Expr
 open Starling.Core.Model

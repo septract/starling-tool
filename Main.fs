@@ -5,12 +5,12 @@ open CommandLine
 open Chessie.ErrorHandling
 
 open Starling
+open Starling.Core.Pretty
+open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.Model.Pretty
 open Starling.Core.Axiom
 open Starling.Core.Axiom.Pretty
-open Starling.Pretty.Types
-
 
 /// Command-line flags used in the Starling executable.
 type Options = 
@@ -170,30 +170,30 @@ let printError =
     | Z3 e -> Backends.Z3.Pretty.printError e
     | HSF e -> Backends.Horn.Pretty.printHornError e
     | BadStage -> 
-        Pretty.Types.colonSep [ Pretty.Types.String "Bad stage"
-                                Pretty.Types.String "try"
-                                requestMap
-                                |> Map.toSeq
-                                |> Seq.map (fst >> Pretty.Types.String)
-                                |> Pretty.Types.commaSep ]
-    | Other e -> Pretty.Types.String e
+        colonSep [ String "Bad stage"
+                   String "try"
+                   requestMap
+                   |> Map.toSeq
+                   |> Seq.map (fst >> String)
+                   |> commaSep ]
+    | Other e -> String e
 
 /// Prints an ok result to stdout.
 let printOk pOk pBad =
     pairMap pOk pBad
     >> function
        | (ok, []) -> ok
-       | (ok, ws) -> Starling.Pretty.Types.vsep [ ok
-                                                  VSkip
-                                                  Separator
-                                                  VSkip
-                                                  headed "Warnings" ws ]
-    >> Starling.Pretty.Types.print
+       | (ok, ws) -> vsep [ ok
+                            VSkip
+                            Separator
+                            VSkip
+                            headed "Warnings" ws ]
+    >> print
     >> printfn "%s"
 
 /// Prints an err result to stderr.
 let printErr pBad =
-    pBad >> headed "Errors" >> Starling.Pretty.Types.print >> eprintfn "%s"
+    pBad >> headed "Errors" >> print >> eprintfn "%s"
 
 /// Pretty-prints a Chessie result, given printers for the successful
 /// case and failure messages.
@@ -333,7 +333,7 @@ let mainWithOptions opts =
         | _ -> Model
     
     let pfn = 
-        if opts.raw then (sprintf "%A" >> Starling.Pretty.Types.String)
+        if opts.raw then (sprintf "%A" >> String)
                     else printResponse mview
     printResult pfn (List.map printError) starlingR
     0

@@ -4,7 +4,7 @@ module Starling.Tests.Reifier
 open NUnit.Framework
 open Starling.Collections
 open Starling.Expr
-open Starling.Var
+open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Reifier
 open Starling.Tests.Studies

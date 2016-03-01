@@ -1,4 +1,4 @@
-module Starling.Pretty.Types
+module Starling.Core.Pretty
 
 open Starling.Collections
 open Starling.Utils

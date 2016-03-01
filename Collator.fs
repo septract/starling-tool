@@ -5,7 +5,7 @@
 module Starling.Lang.Collator
 
 open Starling.Utils
-open Starling.Var
+open Starling.Core.Var
 
 open Starling.Lang.AST
 
@@ -30,7 +30,7 @@ module Types =
 ///     Pretty printers for the collator stage.
 /// </summary>
 module Pretty =
-    open Starling.Pretty.Types
+    open Starling.Core.Pretty
     
     open Starling.Lang.AST.Pretty
     

@@ -77,7 +77,7 @@ module Types =
 ///     Pretty printers for control-flow graphs.
 /// </summary>
 module Pretty =
-    open Starling.Pretty.Types
+    open Starling.Core.Pretty
     
     open Starling.Core.Model.Pretty
     open Starling.Core.Axiom.Pretty

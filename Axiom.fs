@@ -39,7 +39,7 @@ module Types =
 ///     Pretty printers for axioms.
 /// </summary>
 module Pretty =
-    open Starling.Pretty.Types
+    open Starling.Core.Pretty
 
     open Starling.Core.Model.Pretty
     

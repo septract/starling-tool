@@ -45,8 +45,7 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Collections.fs" />
     <Compile Include="Utils.fs" />
-    <Compile Include="PrettyTypes.fs" />
-    <Compile Include="VarErrors.fs" />
+    <Compile Include="Pretty.fs" />
     <Compile Include="Var.fs" />
     <Compile Include="Expr.fs" />
     <Compile Include="ExprPretty.fs" />

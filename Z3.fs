@@ -53,7 +53,7 @@ module Types =
 ///     Pretty printers for the Z3 types.
 /// </summary>
 module Pretty =            
-    open Starling.Pretty.Types
+    open Starling.Core.Pretty
 
     open Starling.Pretty.Errors
     open Starling.Core.Model.Pretty

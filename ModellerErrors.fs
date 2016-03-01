@@ -2,8 +2,8 @@
 module Starling.Errors.Lang.Modeller
 
 open Starling
+open Starling.Core.Var.Types
 open Starling.Lang
-open Starling.Errors.Var
 
 // TODO(CaptainHayashi): more consistent constructor names
 /// Represents an error when converting an expression.
@@ -11,13 +11,13 @@ type ExprError =
     /// A non-Boolean expression was found in a Boolean position.
     | ExprNotBoolean
     /// A non-Boolean variable was found in a Boolean position.
-    | VarNotBoolean of var : Var.LValue
+    | VarNotBoolean of var : LValue
     /// A non-arithmetic expression was found in an arithmetic position.
     | ExprNotArith
     /// A non-arithmetic variable was found in an arithmetic position.
-    | VarNotArith of var : Var.LValue
+    | VarNotArith of var : LValue
     /// A variable usage in the expression produced a `VarMapError`.
-    | Var of var : Var.LValue * err : VarMapError
+    | Var of var : LValue * err : VarMapError
 
 /// Represents an error when converting a view prototype.
 type ViewProtoError = 
@@ -50,15 +50,15 @@ type ConstraintError =
 /// Type of errors found when generating axioms.
 type AxiomError = 
     /// The axiom uses a variable in global position incorrectly.
-    | AEBadGlobal of var : Var.LValue * err : VarMapError
+    | AEBadGlobal of var : LValue * err : VarMapError
     /// The axiom uses a variable in local position incorrectly.
-    | AEBadLocal of var : Var.LValue * err : VarMapError
+    | AEBadLocal of var : LValue * err : VarMapError
     /// The axiom uses an expression incorrectly.
     | AEBadExpr of expr : AST.Expression * err : ExprError
     /// The axiom uses a view incorrectly.
     | AEBadView of view : AST.View * err : ViewError
     /// The axiom has a type mismatch in lvalue `bad`.
-    | AETypeMismatch of expected : Var.Type * bad : Var.LValue * got : Var.Type
+    | AETypeMismatch of expected : Type * bad : LValue * got : Type
     /// The axiom uses a semantically invalid atomic action.
     | AEUnsupportedAtomic of atom : AST.AtomicAction * reason : string
     /// The axiom uses a semantically invalid command.

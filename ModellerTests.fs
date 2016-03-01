@@ -4,7 +4,7 @@ open NUnit.Framework
 open Starling
 open Starling.Collections
 open Starling.Expr
-open Starling.Var
+open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Lang.AST
 open Starling.Lang.Modeller
@@ -47,11 +47,11 @@ type ModellerTests() =
     /// Tests for modelling bad variable lists.
     static member BadVarLists =
         [ TestCaseData([ (Type.Bool, "foo")
-                         (Type.Bool, "foo") ]).Returns(Some <| [ Starling.Errors.Var.Duplicate "foo" ])
+                         (Type.Bool, "foo") ]).Returns(Some <| [ VarMapError.Duplicate "foo" ])
               .SetName("disallow var lists with duplicates of same type")
 
           TestCaseData([ (Type.Int, "bar")
-                         (Type.Bool, "bar") ]).Returns(Some <| [ Starling.Errors.Var.Duplicate "bar" ])
+                         (Type.Bool, "bar") ]).Returns(Some <| [ VarMapError.Duplicate "bar" ])
               .SetName("disallow var lists with duplicates of different type") ]
 
 

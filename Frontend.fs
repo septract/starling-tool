@@ -90,7 +90,7 @@ let printResponse mview =
 /// Pretty-prints an error.
 let printError =
     function
-    | Error.Parse e -> Pretty.Types.String e
+    | Error.Parse e -> Core.Pretty.String e
     | Error.Model e -> Pretty.Errors.printModelError e
     | Error.Graph e -> Starling.Core.Graph.Pretty.printError e
 

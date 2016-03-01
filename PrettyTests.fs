@@ -3,7 +3,7 @@ module Starling.Tests.Pretty
 
 open NUnit.Framework
 open Starling
-open Starling.Var
+open Starling.Core.Var
 open Starling.Lang.AST
 open Starling.Lang.AST.Pretty
 
@@ -23,4 +23,4 @@ type PrettyTests() =
     member x.``printExpression correctly prints expressions`` expr = 
         expr
         |> printExpression
-        |> Pretty.Types.print
+        |> Core.Pretty.print

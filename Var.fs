@@ -1,20 +1,61 @@
 /// Types and functions for variables and variable maps.
-module Starling.Var
+module Starling.Core.Var
 
 open Chessie.ErrorHandling
-open Starling.Errors.Var
+
+open Starling.Utils
 
 
-(*
- * LValues
- *
- * TODO(CaptainHayashi): add support for non-variable LValues.
- *)
+/// <summary>
+///     Types for variables and variable maps.
+/// </summary>
+[<AutoOpen>]
+module Types =
+    /// An lvalue.
+    /// This is given a separate type in case we add to it later.
+    type LValue = 
+        // TODO(CaptainHayashi): add support for non-variable LValues.
+        | LVIdent of string
 
-/// An lvalue.
-/// This is given a separate type in case we add to it later.
-type LValue = 
-    | LVIdent of string
+    /// A variable type.
+    type Type = 
+        | Int
+        | Bool
+
+    /// A variable map.
+    type VarMap = Map<string, Type>
+
+    /// A mode for the Fetch atomic action.
+    type FetchMode = 
+        | Direct // <a = b>
+        | Increment // <a = b++>
+        | Decrement // <a = b-->
+
+    /// Represents an error when building or converting a variable map.
+    type VarMapError = 
+        | Duplicate of name : string
+        // The variable was not found.
+        | NotFound of name : string
+
+
+/// <summary>
+///     Pretty printers for variables.
+/// </summary>
+module Pretty =
+    open Starling.Core.Pretty
+
+    /// Pretty-prints a variable type.
+    let printType = 
+        function 
+        | Type.Int -> "int" |> String
+        | Type.Bool -> "bool" |> String
+
+    /// Pretty-prints variable conversion errors.
+    let printVarMapError =
+        function
+        | Duplicate vn -> fmt "variable '{0}' is defined multiple times" [ String vn ]
+        | NotFound vn -> fmt "variable '{0}' not in environment" [ String vn ]
+
 
 /// Flattens a LV to a string.
 let rec flattenLV = 
@@ -22,24 +63,6 @@ let rec flattenLV =
     // have a semantics for it yet.
     function 
     | LVIdent s -> s
-
-
-(*
- * Types
- *)
-
-/// A variable type.
-type Type = 
-    | Int
-    | Bool
-
-
-(*
- * Variable records
- *)
-
-/// A variable map.
-type VarMap = Map<string, Type>
 
 /// Makes a variable map from a list of type-name pairs.
 let makeVarMap lst = 
@@ -67,25 +90,12 @@ let combineMaps (a : VarMap) (b : VarMap) =
 let tryLookupVar env = function 
     | LVIdent s -> Map.tryFind s env
 
-//| _ -> LEBadLValue lvalue |> fail
 /// Looks up a variable record in a variable map.
 /// Failures are in terms of VarMapError.
 let lookupVar env s = 
     s
     |> tryLookupVar env
     |> failIfNone (NotFound(flattenLV s))
-
-
-(*
- * Fetch modes
- *)
-
-/// A mode for the Fetch atomic action.
-type FetchMode = 
-    | Direct // <a = b>
-    | Increment // <a = b++>
-    | Decrement // <a = b-->
-
 
 (*
  * Parameter functions
@@ -96,16 +106,3 @@ let ipar x = (Type.Int, x)
 
 /// Constructs a Boolean param.
 let bpar x = (Type.Bool, x)
-
-(*
- * Pretty printers
- *)
-
-module Pretty =
-    open Starling.Pretty.Types
-
-    /// Pretty-prints a variable type.
-    let printType = 
-        function 
-        | Type.Int -> "int" |> String
-        | Type.Bool -> "bool" |> String

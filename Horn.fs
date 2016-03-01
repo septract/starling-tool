@@ -6,7 +6,7 @@ module Starling.Backends.Horn
 open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Utils
-open Starling.Var
+open Starling.Core.Var
 open Starling.Expr
 open Starling.Core.Model
 open Starling.Reifier
@@ -62,10 +62,10 @@ module Types =
 /// </summary>
 /// Pretty-prints HSF translation errors.
 module Pretty =
-    open Starling.Pretty.Types
+    open Starling.Core.Pretty
 
     open Starling.Pretty.Expr
-    open Starling.Var.Pretty
+    open Starling.Core.Var.Pretty
 
     /// Emits a constant, munged to work in Datalog.
     let printConst = 

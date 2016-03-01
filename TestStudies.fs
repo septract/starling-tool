@@ -4,7 +4,7 @@ module Starling.Tests.Studies
 open Starling
 open Starling.Collections
 open Starling.Expr
-open Starling.Var
+open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.Axiom
 open Starling.Lang.AST

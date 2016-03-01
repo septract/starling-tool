@@ -4,9 +4,8 @@ open Chessie.ErrorHandling
 open Starling
 open Starling.Collections
 open Starling.Expr
-open Starling.Var
+open Starling.Core.Var
 open Starling.Core.Model
-open Starling.Errors.Var
 open Starling.Errors.Lang.Modeller
 open Starling.Lang.AST
 open Starling.Lang.Collator
@@ -43,11 +42,10 @@ module Types =
 ///     Pretty printers for the modeller types.
 /// </summary>
 module Pretty =
-    open Starling.Pretty.Types
-
-    open Starling.Lang.AST.Pretty
+    open Starling.Core.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Pretty.Expr
+    open Starling.Lang.AST.Pretty
 
     /// Pretty-prints a CFunc.
     let rec printCFunc = 
@@ -238,8 +236,8 @@ let rec modelExpr env expr =
         trial { 
             let! vt = lookupVar env v |> mapMessages ((curry Var) v)
             match vt with
-            | Var.Bool _ -> return mkBoolLV v |> BExpr
-            | Var.Int _ -> return mkIntLV v |> AExpr
+            | Type.Bool -> return mkBoolLV v |> BExpr
+            | Type.Int -> return mkIntLV v |> AExpr
         }
     (* We can use the active patterns above to figure out whether we
      * need to treat this expression as arithmetic or Boolean.
@@ -261,7 +259,7 @@ and modelBoolExpr env expr =
         trial { 
             let! vt = lookupVar env v |> mapMessages ((curry Var) v)
             match vt with
-            | Var.Bool _ -> return (mkBoolLV v)
+            | Type.Bool -> return (mkBoolLV v)
             | _ -> return! (fail <| VarNotBoolean v)
         }
     | Bop(BoolOp as op, l, r) -> 
@@ -309,7 +307,7 @@ and modelArithExpr env expr =
         trial { 
             let! vt = lookupVar env v |> mapMessages ((curry Var) v)
             match vt with
-            | Var.Int _ -> return v |> mkIntLV
+            | Type.Int -> return v |> mkIntLV
             | _ -> return! (VarNotArith v |> fail)
         }
     | Bop(ArithOp as op, l, r) -> 
@@ -435,8 +433,8 @@ let rec modelView env =
 // Axioms
 //
 
-let (|GlobalVar|_|) gs _ (lvalue : Var.LValue) = tryLookupVar gs lvalue
-let (|LocalVar|_|) _ ls (lvalue : Var.LValue) = tryLookupVar ls lvalue
+let (|GlobalVar|_|) gs _ (lvalue : LValue) = tryLookupVar gs lvalue
+let (|LocalVar|_|) _ ls (lvalue : LValue) = tryLookupVar ls lvalue
 
 /// Tries to look up the type of a variable in an environment.
 /// Returns a Chessie result; failures have AEBadGlobal messages.
@@ -564,10 +562,10 @@ let rec modelAtomic gs ls atom =
          * We figure this out by looking at dest.
          *)
         match dest with
-        | GlobalVar gs ls (Var.Int _) -> modelIntStore ls atom dest src mode
-        | GlobalVar gs ls (Var.Bool _) -> modelBoolStore ls atom dest src mode
-        | LocalVar gs ls (Var.Int _) -> modelIntLoad gs atom dest src mode
-        | LocalVar gs ls (Var.Bool _) -> modelBoolLoad gs atom dest src mode
+        | GlobalVar gs ls Type.Int -> modelIntStore ls atom dest src mode
+        | GlobalVar gs ls Type.Bool -> modelBoolStore ls atom dest src mode
+        | LocalVar gs ls Type.Int -> modelIntLoad gs atom dest src mode
+        | LocalVar gs ls Type.Bool -> modelBoolLoad gs atom dest src mode
         // TODO(CaptainHayashi): incorrect error here.
         | lv -> fail <| AEBadGlobal(lv, NotFound(flattenLV dest))
     | Postfix(operand, mode) -> 

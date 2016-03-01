@@ -5,7 +5,7 @@ open Starling
 open Starling.Collections
 open Starling.Utils
 open Starling.Expr
-open Starling.Var
+open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Semantics
 open Starling.Tests.Studies

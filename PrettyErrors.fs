@@ -4,21 +4,14 @@ module Starling.Pretty.Errors
 open Starling.Instantiate
 open Starling.Semantics
 open Starling.Errors.Lang.Modeller
-open Starling.Errors.Var
-open Starling.Var.Pretty
+open Starling.Core.Pretty
+open Starling.Core.Var.Pretty
 open Starling.Core.Model.Pretty
 open Starling.Pretty.Expr
-open Starling.Pretty.Types
 open Starling.Lang.AST.Pretty
 
 /// Formats an error that is wrapping another error.
 let wrapped wholeDesc whole err = headed (sprintf "In %s '%s'" wholeDesc (print whole)) [ err ]
-
-/// Pretty-prints variable conversion errors.
-let printVarMapError =
-    function
-    | Duplicate vn -> fmt "variable '{0}' is defined multiple times" [ String vn ]
-    | NotFound vn -> fmt "variable '{0}' not in environment" [ String vn ]
 
 /// Pretty-prints expression conversion errors.
 let printExprError =

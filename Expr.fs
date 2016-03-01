@@ -2,7 +2,7 @@
 module Starling.Expr
 
 open Starling.Utils
-open Starling.Var
+open Starling.Core.Var
 
 (*
  * Expression types

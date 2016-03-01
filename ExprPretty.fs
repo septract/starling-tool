@@ -2,7 +2,7 @@
 /// Deliberately made to look like the Z3 pretty printer.
 module Starling.Pretty.Expr
 
-open Starling.Pretty.Types
+open Starling.Core.Pretty
 open Starling.Expr
 open Starling.Utils
 

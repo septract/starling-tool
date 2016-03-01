@@ -16,7 +16,7 @@ module Starling.Semantics
 open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Expr
-open Starling.Var
+open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Sub
 open Starling.Instantiate

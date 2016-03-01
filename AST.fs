@@ -2,6 +2,7 @@
 
 open Starling
 open Starling.Collections
+open Starling.Core.Var.Types
 
 /// A Boolean operator.
 type Bop = 
@@ -24,19 +25,19 @@ type Expression =
     | True // true
     | False // false
     | Int of int64 // 42
-    | LV of Var.LValue // foobaz
+    | LV of LValue // foobaz
     | Bop of Bop * Expression * Expression // a BOP b
 
 /// An atomic action.
 type AtomicAction = 
-    | CompareAndSwap of Var.LValue * Var.LValue * Expression // <CAS(a, b, c)>
-    | Fetch of Var.LValue * Expression * Var.FetchMode // <a = b??>
-    | Postfix of Var.LValue * Var.FetchMode // <a++> or <a-->
+    | CompareAndSwap of LValue * LValue * Expression // <CAS(a, b, c)>
+    | Fetch of LValue * Expression * FetchMode // <a = b??>
+    | Postfix of LValue * FetchMode // <a++> or <a-->
     | Id // <id>
     | Assume of Expression // <assume(e)
 
 /// A view prototype.
-type ViewProto = Func<(Var.Type * string)>
+type ViewProto = Func<(Type * string)>
 
 /// A view definition.
 type ViewDef = 
@@ -70,7 +71,7 @@ type Command<'view> =
     /// A list of parallel-composed blocks.
     | Blocks of Block<'view, Command<'view>> list
     /// A local assignment.
-    | Assign of Var.LValue * Expression // a = b;
+    | Assign of LValue * Expression // a = b;
 
 /// A combination of a command and its postcondition view.
 and ViewedCommand<'view, 'cmd> = 
@@ -95,8 +96,8 @@ type Method<'view, 'cmd> =
 
 /// A top-level item in a Starling script.
 type ScriptItem = 
-    | Global of Var.Type * string // global int name;
-    | Local of Var.Type * string // local int name;
+    | Global of Type * string // global int name;
+    | Local of Type * string // local int name;
     | Method of Method<View, Command<View>> // method main(argv, argc) { ... }
     | ViewProto of ViewProto // view name(int arg);
     | Constraint of Constraint // constraint emp => true
@@ -106,9 +107,8 @@ type ScriptItem =
  *)
 
 module Pretty =
-    open Starling.Var
-    open Starling.Var.Pretty
-    open Starling.Pretty.Types
+    open Starling.Core.Pretty
+    open Starling.Core.Var.Pretty
 
     /// Pretty-prints lvalues.
     let rec printLValue = function 

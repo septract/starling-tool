@@ -8,7 +8,7 @@ open Chessie.ErrorHandling
 
 open Starling
 open Starling.Collections
-open Starling.Var
+open Starling.Core.Var
 open Starling.Lang.AST
 
 // Manually re-overload some FParsec operators Chessie overloaded.
