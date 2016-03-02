@@ -288,16 +288,16 @@ let combine { Nodes = ans ; Edges = aes }
 ///     The graph whose axioms are to be given.
 /// </param>
 /// <returns>
-///     The edges of <paramref name="_arg1" />
+///     The edges of <paramref name="_arg1" />, as name-edge pairs.
 ///     This is wrapped in a Chessie result over <c>Error</c>.
 /// </returns>
 let axiomatiseGraph { Name = name; Contents = { Nodes = nodes; Edges = edges } } =
     edges
     |> Map.toList
     |> Seq.map
-           (fun (_, { Pre = s; Post = t; Cmd = c }) ->
+           (fun (name, { Pre = s; Post = t; Cmd = c }) ->
                 match (Map.tryFind s nodes, Map.tryFind t nodes) with
-                | Some sn, Some tn -> ok { Pre = sn; Post = tn; Cmd = c }
+                | Some sn, Some tn -> ok (name, { Pre = sn; Post = tn; Cmd = c })
                 | _ -> { Pre = s; Post = t; Cmd = c } |> EdgeOutOfBounds |> fail)
     |> collect
 
@@ -313,15 +313,17 @@ let axiomatiseGraph { Name = name; Contents = { Nodes = nodes; Edges = edges } }
 ///     Such graphs typically represent one method.
 /// </param>
 /// <returns>
-///     A list of axioms characterising <paramref name="graph" />,
+///     A map of axioms characterising <paramref name="graphs" />,
 ///     wrapped in a Chessie result.
 /// </returns>
-let axiomatiseGraphs (graphs: Graph seq)
-                     : Result<Axiom<GView, VFunc> seq, Error> =
+let axiomatiseGraphs graphs =
+    // The map key is redundant, as we already have it inside the
+    // graph iself.
     graphs
-    |> Seq.map axiomatiseGraph
+    |> Map.toSeq
+    |> Seq.map (snd >> axiomatiseGraph)
     |> collect
-    |> lift Seq.concat
+    |> lift (Seq.concat >> Map.ofSeq)
 
 /// <summary>
 ///     Converts a CFG-based model into an axiom-based model.
@@ -338,5 +340,5 @@ let axiomatiseGraphs (graphs: Graph seq)
 ///     wrapped in a Chessie result.
 /// </returns>
 let axiomatise model =
-    lift (fun xs -> withAxioms (Seq.toList xs) model)
+    lift (fun xs -> withAxioms xs model)
          (axiomatiseGraphs model.Axioms)

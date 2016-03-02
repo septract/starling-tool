@@ -157,7 +157,7 @@ module Types =
     type Model<'axiom, 'dview> = 
         { Globals : VarMap
           Locals : VarMap
-          Axioms : 'axiom list
+          Axioms : Map<string, 'axiom>
           /// <summary>
           ///   The semantic function for this model.
           /// </summary>
@@ -232,17 +232,24 @@ module Pretty =
                    printType ty ]
 
     /// Pretty-prints a model constraint.
-    let printViewDef pView { View = vs; Def = e } = 
-        keyMap [ ("View", pView vs)
-                 ("Def", withDefault (String "?") (Option.map printBoolExpr e)) ]
+    let printViewDef pView { View = vs; Def = e } =
+        printAssoc Inline
+            [ (String "View", pView vs)
+              (String "Def", withDefault (String "?") (Option.map printBoolExpr e)) ]
+
+    /// Pretty-prints the axiom map for a model.
+    let printModelAxioms pAxiom model =
+        printMap Indented String pAxiom model.Axioms
 
     /// Pretty-prints a model given axiom and defining-view printers.
     let printModel pAxiom pDView model = 
         headed "Model" 
-            [ headed "Shared variables" <| List.map printModelVar (Map.toList model    .Globals)
-              headed "Thread variables" <| List.map printModelVar (Map.toList model    .Locals)
+            [ headed "Shared variables" <|
+                  Seq.singleton (printMap Inline String printType model.Globals)
+              headed "Thread variables" <|
+                  Seq.singleton (printMap Inline String printType model.Locals)
               headed "ViewDefs" <| List.map (printViewDef pDView) model.ViewDefs
-              headed "Axioms" <| List.map pAxiom model.Axioms ]
+              headed "Axioms" <| Seq.singleton (printModelAxioms pAxiom model) ]
     
     /// <summary>
     ///     Enumerations of ways to view part or all of a <c>Model</c>.
@@ -259,7 +266,7 @@ module Pretty =
         /// <summary>
         ///     View a specific term.
         /// </summary>
-        | Term of int
+        | Term of string
 
     /// <summary>
     ///     Prints a model using the <c>ModelView</c> given.
@@ -285,11 +292,11 @@ module Pretty =
     let printModelView mView pAxiom pViewDef m =
         match mView with
         | ModelView.Model -> printModel pAxiom pViewDef m
-        | ModelView.Terms -> printNumHeaderedList pAxiom m.Axioms
-        | ModelView.Term i when 0 < i && i <= List.length m.Axioms ->
-            pAxiom m.Axioms.[i - 1]
-        | ModelView.Term i ->
-            sprintf "no term #%d" i |> String
+        | ModelView.Terms -> printModelAxioms pAxiom m
+        | ModelView.Term termstr ->
+            Map.tryFind termstr m.Axioms
+            |> Option.map pAxiom
+            |> withDefault (termstr |> sprintf "no term '%s'" |> String)
 
 
 /// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
@@ -313,7 +320,7 @@ let axioms {Axioms = xs} = xs
 
 /// Creates a new model that is the input model with a different axiom set.
 /// The axiom set may be of a different type.
-let withAxioms (xs : 'y list) (model : Model<'x, 'dview>) : Model<'y, 'dview> = 
+let withAxioms (xs : Map<string, 'y>) (model : Model<'x, 'dview>) : Model<'y, 'dview> = 
     { Globals = model.Globals
       Locals = model.Locals
       ViewDefs = model.ViewDefs
@@ -322,9 +329,14 @@ let withAxioms (xs : 'y list) (model : Model<'x, 'dview>) : Model<'y, 'dview> =
 
 /// Maps a pure function f over the axioms of a model.
 let mapAxioms (f : 'x -> 'y) (model : Model<'x, 'dview>) : Model<'y, 'dview> =
-    withAxioms (model |> axioms |> List.map f) model
+    withAxioms (model |> axioms |> Map.map (fun _ -> f)) model
 
 /// Maps a failing function f over the axioms of a model.
 let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x, 'dview>) : Result<Model<'y, 'dview>, 'e> =
     lift (fun x -> withAxioms x model)
-         (model |> axioms |> List.map f |> collect)
+         (model
+          |> axioms
+          |> Map.toSeq
+          |> Seq.map (fun (k, v) -> v |> f |> lift (mkPair k))
+          |> collect
+          |> lift Map.ofList)

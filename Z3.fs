@@ -38,7 +38,7 @@ module Types =
         /// Output of the final Z3 terms only.
         | Combine of Model<Microsoft.Z3.BoolExpr, DFunc>
         /// Output of satisfiability reports for the Z3 terms.
-        | Sat of Microsoft.Z3.Status list
+        | Sat of Map<string, Microsoft.Z3.Status>
 
     /// A Z3 translation error.
     type Error =
@@ -69,9 +69,6 @@ module Pretty =
         | _ -> "unknown"
         >> String
 
-    /// Pretty-prints a list of satisfiability results.
-    let printSats = printNumPrecList printSat
-
     /// Pretty-prints a response.
     let printResponse mview =
         function
@@ -87,7 +84,7 @@ module Pretty =
                 printZ3Exp
                 printDFunc
                 m
-        | Response.Sat s -> printSats s
+        | Response.Sat s -> printMap Inline String printSat s
 
     /// Pretty-prints Z3 translation errors.
     let printError =
@@ -225,13 +222,13 @@ module Translator =
 /// </summary>
 module Run =
     /// Runs Z3 on a single term, given the context in `model`.
-    let runTerm (ctx: Z3.Context) term =
+    let runTerm (ctx: Z3.Context) _ term =
         let solver = ctx.MkSimpleSolver()
         solver.Assert [| term |]
         solver.Check [||]
 
     /// Runs Z3 on a model.
-    let run ctx {Axioms = ts} = List.map (runTerm ctx) ts
+    let run ctx = axioms >> Map.map (runTerm ctx)
 
 
 /// Shorthand for the parser stage of the frontend pipeline.

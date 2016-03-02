@@ -19,7 +19,7 @@ type Options =
       [<Option('s', HelpText = "The stage at which Starling should stop and output.")>]
       stage : string option
       [<Option('t', HelpText = "Show specific axiom or term in term-refinement stages.")>]
-      term : int option
+      term : string option
       [<Option('m', HelpText = "Show full model in term-refinement stages.")>]
       showModel: bool
       [<Option('O', HelpText = "Perform no optimisation stages.")>]

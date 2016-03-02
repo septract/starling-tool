@@ -142,8 +142,8 @@ let holdLock =
 let holdTick =
     func "holdTick" [AExpr (aUnmarked "t")] |> Func |> Multiset.singleton
 
-/// The axioms of the ticketed lock.
-let ticketLockMethods = [
+/// The ticketed lock's lock method.
+let ticketLockLock =
     { Signature = func "lock" []
       Body =
           { Pre = Multiset.empty()
@@ -172,6 +172,9 @@ let ticketLockMethods = [
                                                  |> CFunc.ITE
                                                  |> Multiset.singleton } ] } )
                     Post = holdLock } ] } }
+
+/// The ticket lock's unlock method.
+let ticketLockUnlock =
     { Signature = func "unlock" []
       Body =
           { Pre = holdLock
@@ -179,7 +182,12 @@ let ticketLockMethods = [
                 [ { Command =
                         func "!I++" [ AExpr (aBefore "serving"); AExpr (aAfter "serving") ]
                         |> Prim
-                    Post = Multiset.empty() }]}}]
+                    Post = Multiset.empty() }]}}
+
+/// The methods of the ticketed lock.
+let ticketLockMethods =
+    [ ("lock", ticketLockLock)
+      ("unlock", ticketLockUnlock) ] |> Map.ofList
 
 /// The view definitions of the ticketed lock model.
 let ticketLockViewDefs =

@@ -95,12 +95,6 @@ let cmdHeaded header cmds =
 
 let headed name = cmdHeaded (String name)
 
-let keyMap = 
-    List.map (fun (k, v) -> 
-        colonSep [ String k
-                   v ])
-    >> vsep
-
 let ssurround left right mid = Surround((String left), mid, (String right))
 let braced = ssurround "{" "}"
 let angled = ssurround "<" ">"
@@ -113,21 +107,54 @@ let func f xs = hjoin [String f; commaSep xs |> parened]
 /// Pretty-prints Funcs using pxs to print parameters.
 let printFunc pxs { Starling.Collections.Func.Name = f; Params = xs } = func f (Seq.map pxs xs)
 
-/// Pretty-prints a list by headering each by its number.
-let printNumHeaderedList pp = 
-    Seq.ofList
-    >> Seq.mapi (fun i x -> headed (sprintf "%d" (i + 1)) (x |> pp |> Seq.singleton))
-    >> Seq.toList
+/// <summary>
+///    Whether to separate keys and values by colons, or by indentation.
+/// </summary>
+type MapSep =
+    | Inline
+    | Indented
+
+/// <summary>
+///     Pretty-prints an association list of Commands.
+/// </summary>
+/// <param name="mapSep">
+///     The <c>MapSep</c> to use when joining the key and value.
+/// </param>
+/// <param name="_arg1">
+///     An association list, as a sequence,to print using <paramref name="pK" />
+///     and <paramref name="pV" />.
+/// </param>
+/// <returns>
+///     A printer for the given association list.
+/// </returns>
+let printAssoc mapSep = 
+    Seq.map
+        (fun (k, v) ->
+             match mapSep with
+             | Inline -> colonSep [ k; v ]
+             | Indented -> cmdHeaded k [ v ])
     >> vsep
 
-/// Pretty-prints a list by preceding each by its number.
-let printNumPrecList pp = 
-    Seq.ofList
-    >> Seq.mapi (fun i x -> 
-           hsep [ sprintf "%d" (i + 1) |> String
-                  pp x ])
-    >> Seq.toList
-    >> vsep
+/// <summary>
+///     Pretty-prints a map, given printers for keys and values.
+/// </summary>
+/// <param name="mapSep">
+///     The <c>MapSep</c> to use when joining the key and value.
+/// </param>
+/// <param name="pK">
+///     A printer for keys.
+/// </param>
+/// <param name="pV">
+///     A printer for values.
+/// </param>
+/// <param name="_arg1">
+///     A map to print using <paramref name="pK" /> and <paramref name="pV" />.
+/// </param>
+/// <returns>
+///     A printer for the given map.
+/// </returns>
+let printMap mapSep pK pV =
+    Map.toSeq >> Seq.map (pairMap pK pV) >> printAssoc mapSep
 
 /// Formats an error that is wrapping another error.
 let wrapped wholeDesc whole err =

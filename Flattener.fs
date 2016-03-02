@@ -48,7 +48,7 @@ let addGlobalsToViewSet gs =
     Multiset.map (addGlobalsToGuarded gs)
 
 /// Adds the globals in gs to the argument list of the assertions in a term.
-let addGlobalsToTerm gs =
+let addGlobalsToTerm gs _ =
     mapTerm id
             (addGlobalsToViewSet (gs Before))
             (funcOfView (gs After))
@@ -90,6 +90,6 @@ let flatten (mdl: Model<PTerm<ViewSet, View>, DView>) =
 
     {Globals = mdl.Globals
      Locals = mdl.Locals
-     Axioms = List.map (addGlobalsToTerm gargs) mdl.Axioms
+     Axioms = Map.map (addGlobalsToTerm gargs) mdl.Axioms
      ViewDefs = List.map (addGlobalsToViewDef gpars) mdl.ViewDefs
      Semantics = mdl.Semantics}

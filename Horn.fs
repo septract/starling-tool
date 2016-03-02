@@ -340,16 +340,17 @@ let hsfConditionBody dvs env ps sem =
 
 /// Constructs a series of Horn clauses for a term.
 /// Takes the environment of active global variables.
-let hsfTerm dvs env num {Cmd = c; WPre = w ; Goal = g} =
+let hsfTerm dvs env (name, {Cmd = c; WPre = w ; Goal = g}) =
     lift2 (fun head body ->
-           [ Comment (sprintf "term %d" num)
+           [ Comment (sprintf "term %s" name)
              Clause (head, body) ])
           (Option.get (hsfFunc dvs env g))
           (hsfConditionBody dvs env w c)
 
 /// Constructs a set of Horn clauses for all terms associated with a model.
 let hsfModelTerms gs dvs =
-    Seq.mapi (hsfTerm dvs gs)
+    Map.toSeq
+    >> Seq.map (hsfTerm dvs gs)
     >> collect
     >> lift List.concat
 

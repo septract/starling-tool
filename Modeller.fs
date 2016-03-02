@@ -812,14 +812,14 @@ let modelMethod gs ls { Signature = sg ; Body = b } =
     // TODO(CaptainHayashi): method parameters
     b
     |> modelBlock gs ls
-    |> lift (fun c -> { Signature = sg ; Body = c })
+    |> lift (fun c -> (sg.Name, { Signature = sg ; Body = c }))
     |> mapMessages (curry MEAxiom sg.Name)
 
 /// Converts a list of methods.
-/// The list is enclosed in a Chessie result.
+/// The resulting map is enclosed in a Chessie result.
 let modelMethods gs ls = 
     // TODO(CaptainHayashi): method parameters
-    List.map (modelMethod gs ls) >> collect
+    Seq.map (modelMethod gs ls) >> collect >> lift Map.ofSeq
 
 /// Checks a view prototype to see if it contains duplicate parameters.
 let checkViewProtoDuplicates (proto : ViewProto) = 
