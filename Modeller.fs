@@ -602,8 +602,8 @@ let modelBoolLoad globals atom dest src mode =
         trial { 
             let! stype = lookupType globals s
             match stype, mode with
-            | Type.Int, _ -> return func "!BLoad" [ dest |> blBefore; dest |> blAfter
-                                                    s |> blBefore; s |> blAfter ]
+            | Type.Bool, Direct -> return func "!BLoad" [ dest |> blBefore; dest |> blAfter
+                                                          s |> blBefore; s |> blAfter ]
             | Type.Bool, Increment -> return! fail <| AEUnsupportedAtomic(atom, "cannot increment a Boolean global")
             | Type.Bool, Decrement -> return! fail <| AEUnsupportedAtomic(atom, "cannot decrement a Boolean global")
             | _ -> return! fail <| AETypeMismatch(Type.Bool, s, stype)
