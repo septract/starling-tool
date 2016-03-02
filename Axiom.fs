@@ -18,11 +18,25 @@ open Starling.Core.Model
 /// </summary>
 [<AutoOpen>]
 module Types =
-    /// A general Hoare triple, consisting of precondition, inner item, and
-    /// postcondition.
+    /// <summary>
+    ///     A general Hoare triple.
+    ///
+    ///     <para>
+    ///         An <c>Axiom</c> contains a precondition, inner command, and
+    ///         postcondition.
+    ///     </para>
     type Axiom<'view, 'cmd> = 
-        { Pre : 'view
+        { /// <summary>
+          ///     The precondition of the axiom.
+          /// </summary>
+          Pre : 'view
+          /// <summary>
+          ///     The postcondition of the axiom.
+          /// </summary>
           Post : 'view
+          /// <summary>
+          ///     The command of the axiom.
+          /// </summary>
           Cmd : 'cmd }
 
     /// An axiom with a VFunc as its command.

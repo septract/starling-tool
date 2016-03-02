@@ -2,19 +2,94 @@
 module Starling.Collections
 
 /// <summary>
-///   A function-like construct.
+///     A tagged item.
+/// </summary>
+/// <typeparam name="a">
+///     The type of the item being tagged.
+/// </typeparam>
+type Tagged<'a> =
+    { /// <summary>
+      ///     The tag, as a list of strings.
+      /// </summary>
+      Tag : string list
+
+      /// <summary>
+      ///     The tagged item.
+      /// </summary>
+      Item : 'a }
+
+/// <summary>
+///   Operations on tagged items.
+/// </summary>
+module Tagged =
+    /// <summary>
+    ///     Tags an item.
+    /// </summary>
+    /// <param name="tag">
+    ///     The tag to attach to <paramref name="item" />.
+    /// </param>
+    /// <param name="item">
+    ///     The item to tag.
+    /// </param>
+    /// <returns>
+    ///     The <c>Tagged</c> instance resulting from tagging
+    ///     <paramref name="item" /> with <paramref name="tag" />.
+    /// </returns>
+    let tag tag item = { Tag = tag ; Item = item }
+
+    /// <summary>
+    ///     Maps functions over the tag and item of a tagged item.
+    /// </summary>
+    /// <param name="f">
+    ///     The function to map over the tag.
+    /// </param>
+    /// <param name="g">
+    ///     The function to map over the item.
+    /// </param>
+    /// <param name="_arg1">
+    ///     The <c>Tagged</c> to map.
+    /// </param>
+    /// <returns>
+    ///     The <c>Tagged</c> instance resulting from mapping
+    ///     <paramref name="f" /> and <paramref name="g" /> over
+    ///     <paramref name="_arg1" />.
+    /// </returns>
+    let map f g { Tag = tag ; Item = item } =
+        { Tag = f tag ; Item = g item }
+
+    /// <summary>
+    ///     Converts a tagged sequence of items to a sequence of tagged items.
+    ///
+    ///     <para>
+    ///         Each item inherits the parent's tag, with a string
+    ///         representation of its index in the sequence prepended.
+    ///     </para>
+    /// </summary>
+    /// <param name="_arg1" />
+    ///     The tagged sequence of items to break up.
+    /// </param>
+    /// <returns>
+    ///     A sequence containing the items from <paramref name="_arg1" />
+    ///     individually tagged.
+    /// </returns>
+    let split { Tag = tag; Item = xs } =
+        Seq.mapi (fun i x -> { Tag = (sprintf "%d" i) :: tag ; Item = x })
+
+
+/// <summary>
+///     A function-like construct.
 /// </summary>
 /// <remarks>
-///   <para>
-///     A Func is a combination of a string name and list of parameters.
-///     It generically represents any pattern <c>Name(p1, p2, .., pn)</c>
-///     in Starling.
-///   </para>
-///   <para>
-///     Examples of Func uses in Starling include function signatures and
-///     calls, components of <see cref="T:Starling.Model">views</see>, and
-///     Horn clause predicates.
-///   </para>
+///     <para>
+///         A Func is a combination of a string name and list of parameters.
+///         It generically represents any pattern <c>Name(p1, p2, .., pn)</c>
+///         in Starling.
+///     </para>
+///     <para>
+///         Examples of Func uses in Starling include function signatures and
+///         calls, components of <see cref="T:Starling.Model">views</see>, and
+///         Horn clause predicates.
+///     </para>
 /// </remarks>
 /// <typeparam name="param">The type of parameters in the Func.</typeparam>
 type Func<'param> = 
