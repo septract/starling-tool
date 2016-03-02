@@ -1,0 +1,109 @@
+/*
+ * Peterson lock.
+ */
+
+shared int aFlag;
+shared int bFlag;
+shared int turn;
+
+thread int oFlag;
+thread int oTurn;
+
+/*
+ * Locks the Peterson lock from A's side.
+ */
+method lockA() {
+  {| emp |}
+    <aFlag = (1)>;
+  {| aHoldFlag() |}
+    <turn = (1)>; // liveness
+  {| aHoldFlag() |}
+    do {
+      {| aHoldFlag() |}
+        <oFlag = bFlag>;
+      {| aHoldFlag() * if (oFlag == 1) then emp else bNotHoldFlag() |}
+	<oTurn = turn>;
+      {| aHoldFlag() * if (oFlag == 1 && oTurn == 1) then emp else aHoldLock() |}
+    } while ((oFlag == 1) && (oTurn == 1));
+  {| aHoldLock() |}
+}
+
+/*
+ * Unlocks the Peterson lock from A's side.
+ */
+method unlockA() {
+  {| aHoldLock() |}
+  <aFlag = (1)>;
+  {| emp |}
+}
+
+/*
+ * Locks the Peterson lock from B's side.
+ */
+method lockB() {
+  {| emp |}
+    <bFlag = (1)>;
+  {| bHoldFlag() |}
+    <turn = (2)>;
+  {| bHoldFlag() |}
+    do {
+      {| bHoldFlag() |}
+        <oFlag = aFlag>;
+      {| bHoldFlag() * if (oFlag == 1) then emp else aNotHoldFlag() |}
+	<oTurn = turn>;
+      {| bHoldFlag() * if (oFlag == 1 && oTurn == 2) then emp else bHoldLock() |}
+    } while ((oFlag == 1) && (oTurn == 2));
+  {| bHoldLock() |}
+}
+
+/*
+ * Unlocks the Peterson lock from B's side.
+ */
+method unlockB() {
+  {| bHoldLock() |}
+  <bFlag = (1)>;
+  {| emp |}
+}
+
+view aHoldLock();
+view bHoldLock();
+view aHoldFlag();
+view bHoldFlag();
+view aNotHoldFlag();
+view bNotHoldFlag();
+
+// Invariant
+constraint emp -> ?;
+
+// Predicate definitions
+constraint aHoldLock() -> ?;
+constraint bHoldLock() -> ?;
+constraint aHoldFlag() -> ?;
+constraint bHoldFlag() -> ?;
+constraint aNotHoldFlag() -> ?;
+constraint bNotHoldFlag() -> ?;
+
+
+// Interactions
+constraint aHoldFlag() * bHoldLock() -> ?;
+constraint bHoldFlag() * aHoldLock() -> ?;
+constraint aHoldFlag() * aHoldLock() -> ?;
+constraint bHoldFlag() * bHoldLock() -> ?;
+
+constraint aHoldFlag() * aNotHoldFlag() -> false;
+constraint aHoldFlag() * bNotHoldFlag() -> ?;
+constraint bHoldFlag() * aNotHoldFlag() -> ?;
+constraint bHoldFlag() * bNotHoldFlag() -> false;
+
+constraint aHoldLock() * aNotHoldFlag() -> ?;
+constraint aHoldLock() * bNotHoldFlag() -> ?;
+constraint bHoldLock() * aNotHoldFlag() -> ?;
+constraint bHoldLock() * bNotHoldFlag() -> ?;
+
+constraint aNotHoldFlag() * bNotHoldFlag() -> false;
+
+constraint aHoldFlag() * aHoldFlag() -> false;
+constraint bHoldFlag() * bHoldFlag() -> false;
+constraint aHoldLock() * bHoldLock() -> false;
+constraint aHoldLock() * aHoldLock() -> false;
+constraint bHoldLock() * bHoldLock() -> false;
