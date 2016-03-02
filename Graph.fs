@@ -28,7 +28,7 @@ module Types =
     ///         Hoare triples.
     ///     </para>
     /// </summary>
-    type Edge = Axiom<bigint, VFunc>
+    type Edge = Axiom<string, VFunc>
 
     /// <summary>
     ///     The container for a partial control-flow graph.
@@ -38,12 +38,12 @@ module Types =
             /// <summary>
             ///     Set of nodes in the control-flow graph.
             /// </summary>
-            Nodes: Map<bigint, GView>
+            Nodes: Map<string, GView>
     
             /// <summary>
             ///     Set of edges in the control-flow graph.
             /// </summary>
-            Edges: Edge list
+            Edges: Map<string, Edge>
         }
 
     /// <summary>
@@ -70,7 +70,11 @@ module Types =
         /// <summary>
         ///     The given node was duplicated when trying to merge graphs.
         /// </summary>
-        | DuplicateNode of bigint
+        | DuplicateNode of id: string
+        /// <summary>
+        ///     The given edge was duplicated when trying to merge graphs.
+        /// </summary>
+        | DuplicateEdge of id: string
 
 
 /// <summary>
@@ -112,13 +116,17 @@ module Pretty =
     ///     A pretty-printer <c>Command</c> representing the node.
     /// </returns>
     let printNode id view =
-        hsep [ id |> sprintf "v%A" |> String
-               view |> printGView |> printLabel ]
+        hsep [ id |> String
+               [ id |> String
+                 view |> printGView ] |> colonSep |> printLabel ]
         |> withSemi
 
     /// <summary>
     ///     Prints an edge.
     /// </summary>
+    /// <param name="id">
+    ///     The unique ID of the node.
+    /// </param>
     /// <param name="_arg1">
     ///     The <c>Edge</c> to print.
     /// </param>
@@ -126,11 +134,12 @@ module Pretty =
     ///     A pretty-printer <c>Command</c> representing
     ///     <paramref name="_arg1" />.
     /// </returns>
-    let printEdge { Pre = s; Post = t; Cmd = vf } =
-        hsep [ s |> sprintf "v%A" |> String
+    let printEdge id { Pre = s; Post = t; Cmd = vf } =
+        hsep [ s |> String
                String "->"
-               t |> sprintf "v%A" |> String
-               vf |> printVFunc |> printLabel ]
+               t |> String
+               [ id |> String
+                 vf |> printVFunc ] |> colonSep |> printLabel ]
         |> withSemi
 
     /// <summary>
@@ -144,9 +153,9 @@ module Pretty =
     ///     <paramref name="_arg1" />.
     /// </returns>
     let printSubgraph { Nodes = nodes ; Edges = edges } =
-        List.append
-            (nodes |> Map.toList |> List.map (uncurry printNode))
-            (edges |> List.map printEdge)
+        Seq.append
+            (nodes |> Map.toSeq |> Seq.map (uncurry printNode))
+            (edges |> Map.toSeq |> Seq.map (uncurry printEdge))
         |> ivsep |> braced
 
     /// <summary>
@@ -185,21 +194,21 @@ module Pretty =
                 [ String "edge out of bounds: "
                   printPAxiom (fun x -> String (x.ToString())) edge ]
         | DuplicateNode node ->
-            colonSep
-                [ String "node duplicated: "
-                  String (node.ToString()) ]
+            colonSep [ String "node duplicated: "; String node ]
+        | DuplicateEdge edge ->
+            colonSep [ String "edge duplicated: "; String edge ]
 
 
 /// <summary>
 ///     Creates a single <c>Edge</c>.
 /// </summary>
-/// <param name="source">
+/// <param name="_arg1">
 ///     The source view.
 /// </param>
-/// <param name="command">
+/// <param name="_arg2">
 ///     The command making up the edge.
 /// </param>
-/// <param name="target">
+/// <param name="_arg3">
 ///     The target view.
 /// </param>
 /// <returns>
@@ -221,8 +230,7 @@ let edge = axiom
 ///     Currently, there are no possible errors.
 /// </returns>
 let subgraph nodes edges =
-    let edgesL = Seq.toList edges
-    { Nodes = nodes; Edges = edgesL } |> ok
+    { Nodes = nodes; Edges = edges } |> ok
 
 /// <summary>
 ///     Checks that a subgraph is a standalone graph.
@@ -240,13 +248,13 @@ let subgraph nodes edges =
 /// </returns>
 let graph name sg =
     // Are any of the node indices out of bounds?
-    match (List.filter
-               (fun {Pre = s; Post = t} ->
+    match (Map.filter
+               (fun _ {Pre = s; Post = t} ->
                     not (Map.containsKey s sg.Nodes &&
                          Map.containsKey t sg.Nodes))
-               sg.Edges) with
+               sg.Edges) |> Map.toList with
     | [] -> { Name = name; Contents = sg } |> ok
-    | xs -> xs |> List.map EdgeOutOfBounds |> Bad
+    | xs -> xs |> List.map (snd >> EdgeOutOfBounds) |> Bad
 
 /// <summary>
 ///    Combines two subgraphs.
@@ -266,9 +274,12 @@ let graph name sg =
 /// </returns>
 let combine { Nodes = ans ; Edges = aes }    
             { Nodes = bns; Edges = bes } =
-    match (keyDuplicates ans bns |> Seq.toList) with
-    | [] -> subgraph (mapAppend ans bns) (Seq.append aes bes)
-    | xs -> xs |> List.map DuplicateNode |> Bad
+    match (keyDuplicates ans bns |> Seq.toList,
+           keyDuplicates aes bes |> Seq.toList) with
+    | ([], []) -> subgraph (mapAppend ans bns) (mapAppend aes bes)
+    | (xs, ys) -> List.append (xs |> List.map DuplicateNode)
+                              (ys |> List.map DuplicateEdge)
+                  |> Bad
 
 /// <summary>
 ///     Returns the axioms characterising a graph.
@@ -282,8 +293,9 @@ let combine { Nodes = ans ; Edges = aes }
 /// </returns>
 let axiomatiseGraph { Name = name; Contents = { Nodes = nodes; Edges = edges } } =
     edges
+    |> Map.toList
     |> Seq.map
-           (fun { Pre = s; Post = t; Cmd = c } ->
+           (fun (_, { Pre = s; Post = t; Cmd = c }) ->
                 match (Map.tryFind s nodes, Map.tryFind t nodes) with
                 | Some sn, Some tn -> ok { Pre = sn; Post = tn; Cmd = c }
                 | _ -> { Pre = s; Post = t; Cmd = c } |> EdgeOutOfBounds |> fail)
