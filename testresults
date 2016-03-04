@@ -1,9 +1,11 @@
 ./Examples/Fail/badInc2.cvf: badInc_C0_0
 ./Examples/Fail/badInc.cvf: badInc_C0_0
+./Examples/Fail/petersonBadTurns.cvf: lockA_C1_15 lockA_C1_16 lockA_C1_17 lockA_C1_18 lockB_C1_11 lockB_C1_12 lockB_C1_13 lockB_C1_14
 ./Examples/Fail/ticketLockBad2.cvf: lock_C0_0 lock_C0_2 unlock_C0_0
 ./Examples/Fail/ticketLockBad.cvf: unlock_C0_2 unlock_C0_3
 ./Examples/Fail/ticketLockFlippedLoop.cvf: lock_C2_1 lock_C2_4 lock_C3_2 lock_C3_3 lock_C3_5
 ./Examples/Pass/multicounter.cvf: 
+./Examples/Pass/peterson.cvf: 
 ./Examples/Pass/spinLock.cvf: 
 ./Examples/Pass/ticketLock.cvf: 
 ./Examples/Pass/ticketLockNoIf.cvf: 
