@@ -99,6 +99,7 @@ type ScriptItem =
     | Global of Type * string // global int name;
     | Local of Type * string // local int name;
     | Method of Method<View, Command<View>> // method main(argv, argc) { ... }
+    | Search of int // search 0;
     | ViewProto of ViewProto // view name(int arg);
     | Constraint of Constraint // constraint emp => true
 
@@ -271,6 +272,11 @@ module Pretty =
                                   v |> String ]) ps) ]
         |> withSemi
 
+    /// Pretty-prints a search directive.
+    let printSearch i =
+        hsep [ String "search"
+               sprintf "%d" i |> String ]
+
     /// Pretty-prints a script variable of the given class.
     let printScriptVar cls t v = 
         hsep [ String cls
@@ -285,6 +291,7 @@ module Pretty =
         | Local(t, v) -> printScriptVar "thread" t v
         | Method m -> printMethod printViewLine printCommand m
         | ViewProto v -> printViewProto v
+        | Search i -> printSearch i
         | Constraint c -> printConstraint c
 
     /// Pretty-prints scripts.

@@ -21,6 +21,16 @@ module Types =
     type CollatedScript = 
         { Globals : (Type * string) list
           Locals : (Type * string) list
+          /// <summary>
+          ///     The search depth, defaulting to <c>None</c> (no search).
+          /// </summary>
+          /// <remarks>
+          ///     <para>
+          ///          No search is different from a search of depth 0:
+          ///          the latter includes the empty view.
+          ///     </para>
+          /// </remarks>
+          Search : int option
           VProtos : ViewProto list
           Constraints : Constraint list
           Methods : Method<View, Command<View>> list }
@@ -43,12 +53,21 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer command for printing <paramref name="cs" />.
     /// </returns>
-    let printCollatedScript (cs: CollatedScript) = 
-        VSep([ vsep <| List.map printViewProto cs.VProtos
-               vsep <| List.map (uncurry (printScriptVar "shared")) cs.Globals
-               vsep <| List.map (uncurry (printScriptVar "local")) cs.Locals
-               vsep <| List.map printConstraint cs.Constraints
-               VSep(List.map (printMethod printViewLine printCommand) cs.Methods, VSkip) ], (vsep [ VSkip; Separator; Nop ]))
+    let printCollatedScript (cs: CollatedScript) =
+        let definites = 
+            [ vsep <| Seq.map printViewProto cs.VProtos
+              vsep <| Seq.map (uncurry (printScriptVar "shared")) cs.Globals
+              vsep <| Seq.map (uncurry (printScriptVar "local")) cs.Locals
+              vsep <| Seq.map printConstraint cs.Constraints
+              VSep(List.map (printMethod printViewLine printCommand) cs.Methods, VSkip)]
+
+        // Add in search, but only if it actually exists.
+        let all =
+            match cs.Search with
+            | None -> definites
+            | Some s -> printSearch s :: definites
+            
+        VSep(all, (vsep [ VSkip; Separator; Nop ]))
 
 
 /// <summary>
@@ -57,6 +76,7 @@ module Pretty =
 let empty = 
     { Constraints = []
       Methods = []
+      Search = None
       VProtos = []
       Globals = []
       Locals = [] }
@@ -79,6 +99,7 @@ let collateStep item cs =
     | Global(v, t) -> { cs with Globals = (v, t) :: cs.Globals }
     | Local(v, t) -> { cs with Locals = (v, t) :: cs.Locals }
     | ViewProto v -> { cs with VProtos = v :: cs.VProtos }
+    | Search i -> { cs with Search = Some i }
     | Method m -> { cs with Methods = m :: cs.Methods }
     | Constraint c -> { cs with Constraints = c :: cs.Constraints }
 

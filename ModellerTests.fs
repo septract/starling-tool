@@ -10,6 +10,12 @@ open Starling.Lang.AST
 open Starling.Lang.Modeller
 open Starling.Tests.Studies
 
+/// Wrapper for search modeller tests.
+/// Mainly exists to persuade nUnit to use the correct types.
+type SearchViewDefEntry =
+    { Search : int option
+      InitDefs : ViewDef<DView> list }
+
 /// Tests for the modeller.
 type ModellerTests() =
 
@@ -109,6 +115,50 @@ type ModellerTests() =
     [<TestCaseSource("CommandAxioms")>]
     member x.``commands are modelled correctly as part-commands`` c =
         modelCommand ticketLockModel.Globals ticketLockModel.Locals c |> okOption
+
+
+    /// View prototypes for the ticketed lock modeller.
+    static member TicketLockProtos : Map<string, (Type * string) list> =
+        Map.ofList
+            [ ("holdLock", [])
+              ("holdTick", [(Type.Int, "t")]) ]
+
+    /// Type-constraining builder for viewdef sets.
+    static member viewDefSet (vs : ViewDef<DView> seq) : Set<ViewDef<DView>> =
+        Set.ofSeq vs
+
+    /// Tests for the search modeller.
+    /// These use TicketLockProtos.
+    static member SearchViewDefs =
+        [ TestCaseData({ Search = None; InitDefs = []})
+             .Returns(ModellerTests.viewDefSet [])
+             .SetName("Searching for no viewdefs does not change an empty viewdef set")
+          TestCaseData({ Search = None; InitDefs = ticketLockViewDefs })
+             .Returns(ModellerTests.viewDefSet ticketLockViewDefs)
+             .SetName("Searching for no viewdefs does not change a full viewdef set")
+          TestCaseData({ Search = Some 0; InitDefs = []})
+             .Returns(ModellerTests.viewDefSet
+                          [ { View = Multiset.empty ()
+                              Def = None }])
+             .SetName("Searching for size-0 viewdefs adds emp to an empty viewdef set")
+          TestCaseData({ Search = Some 0; InitDefs = ticketLockViewDefs })
+             .Returns(ModellerTests.viewDefSet ticketLockViewDefs)
+             .SetName("Searching for size-0 viewdefs does not change a full viewdef set")
+          TestCaseData({ Search = Some 1; InitDefs = [] })
+             .Returns(ModellerTests.viewDefSet
+                          [ { View = Multiset.empty ()
+                              Def = None }
+                            { View = Multiset.singleton (func "holdLock" [])
+                              Def = None }
+                            { View = Multiset.singleton (func "holdTick" [(Type.Int, "t0")])
+                              Def = None }])
+             .SetName("Searching for size-1 viewdefs yields viewdefs for emp and the view prototypes") ]
+             
+    /// Tests viewdef searches.
+    [<TestCaseSource("SearchViewDefs")>]
+    member x.``viewdef searches are carried out correctly`` svd =
+        addSearchDefs ModellerTests.TicketLockProtos svd.Search svd.InitDefs
+        |> Set.ofList
 
     /// Full case studies to model.
     static member Models =

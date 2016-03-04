@@ -458,6 +458,15 @@ let parseVar kw = pstring kw >>. ws
                              .>> pstring ";"
                              // ^-                         ... ;
 
+/// Parses a search directive.
+let parseSearch =
+    pstring "search" >>. ws
+    // ^- search
+                     >>. pint32
+                     // ^- ... <depth>
+                     .>> ws
+                     .>> pstring ";"
+
 /// Parses a script of zero or more methods, including leading and trailing whitespace.
 let parseScript =
     // TODO(CaptainHayashi): parse things that aren't methods:
@@ -469,6 +478,8 @@ let parseScript =
                              parseViewProto |>> ViewProto
                              // ^- view <identifier> ;
                              //  | view <identifier> <view-proto-param-list> ;
+                             parseSearch |>> Search
+                             // ^- search 0;
                              parseVar "shared" |>> Global
                              // ^- shared <type> <identifier> ;
                              parseVar "thread" |>> Local] .>> ws ) eof

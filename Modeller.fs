@@ -538,12 +538,119 @@ let modelViewDef globals vprotos { CView = av; CExpression = ae } =
     }
     |> mapMessages (curry MEConstraint av)
 
+/// <summary>
+///     Checks whether a <c>DView</c> can be found in a list of <c>ViewDef</c>s.
+/// </summary>
+/// <param name="viewdefs">
+///     The existing viewdef list.
+/// </param>
+/// <param name="dview">
+///     The <c>DView</c> to check.
+/// </param>
+/// <returns>
+///     <c>true</c> if the <c>DView</c> has been found in the <c>ViewDef</c>s.
+///     This is a weak equality based on view names: see the remarks.
+/// <remarks>
+///     <para>
+///         We perform no sanity checking here.  It is assumed that, if the
+///         view prototypes and defining views don't match, we will have
+///         caught them in the main defining view modeller.
+///     </para>
+/// </remarks>
+let inViewDefs viewdefs dview =
+    List.exists
+        (fun { View = viewdef } ->
+             if (Multiset.length viewdef = Multiset.length dview)
+             then
+                 List.forall2
+                     (fun vdfunc dfunc -> vdfunc.Name = dfunc.Name)
+                     (Multiset.toList viewdef)
+                     (Multiset.toList dview)
+             else false)
+        viewdefs
+
+/// <summary>
+///     Converts a <c>DView</c> to an indefinite <c>ViewDef</c>.
+///
+///     <para>
+///         This instantiates the <c>DView</c> with fresh parameter
+///         names, and sets its definition to <c>None</c>.
+///     </para>
+/// </summary>
+/// <param name="dview">
+///     The <c>DView</c> to convert.
+/// </param>
+/// <returns>
+///     An indefinite constraint over <paramref name="dview" />.
+/// </returns>
+let searchViewToConstraint =
+    (* To ensure likewise-named parameters in separate DFuncs don't clash,
+     * append fresh identifiers to all of them.
+     * We don't use the parameter names anyway, so this is ok.
+     *)
+    let fg = freshGen ()
+
+    // Rename the DFunc parameters to avoid clashes.
+    Multiset.map
+        (fun { Name = name; Params = ps } ->
+             let nps =
+                 List.map (fun (ty, str) ->
+                           (ty, sprintf "%s%A" str (getFresh fg)))
+                          ps
+             { Name = name; Params = nps })
+    // Attach an indefinite constrant.
+    >> fun dfunc -> { View = dfunc ; Def = None }
+
+/// <summary>
+///     Completes a viewdef list by generating indefinite constraints of size
+///     <paramref name="depth" />.
+/// </summary>
+/// <param name="vprotos">
+///     The map of view prototypes to use in the generated constraints.
+/// </param>
+/// <param name="depth">
+///     The maximum view size to represent in the viewdef list.
+///     A depth of 0 causes no new constraints to be generated.
+/// </param>
+/// <param name="viewdefs">
+///     The existing viewdef list.
+/// </param>
+/// <returns>
+///     If <paramref name="depth" /> is <c>None</c>, <paramref name="viewdefs" />.
+///     Else, <paramref name="viewdefs" /> extended with indefinite
+///     constraints for all views of size <paramref name="depth" />
+///     generated from the views at <paramref name="vprotos" />.
+/// </returns>
+let addSearchDefs vprotos depth viewdefs =
+    match depth with
+    | None -> viewdefs
+    | Some n ->
+        vprotos
+        // Convert the view prototype map back into a func list.
+        |> Map.toSeq
+        |> Seq.map (uncurry func)
+        // Then, generate the view that is the *-conjunction of all of the
+        // view protos.
+        |> Multiset.ofSeq
+        // Then, generate all views of size 0..|vprotos| from that view...
+        |> Multiset.power
+        // Then, filter the resulting set to views of size 0..depth...
+        |> Set.filter (fun ms -> Multiset.length ms <= n)
+        // Then, throw out any views that already exist in viewdefs...
+        |> Set.filter (inViewDefs viewdefs >> not)
+        // Finally, convert the view to a constraint.
+        |> Set.toList
+        |> List.map searchViewToConstraint
+        // And add the result to the original list.
+        |> List.append viewdefs
+
 /// Extracts the view definitions from a CollatedScript, turning each into a
 /// ViewDef.
-let modelViewDefs globals vprotos { Constraints = cs } = 
+let modelViewDefs globals vprotos { Search = s; Constraints = cs } = 
     cs
     |> List.map (modelViewDef globals vprotos)
     |> collect
+    |> lift (addSearchDefs vprotos s)
 
 //
 // View applications

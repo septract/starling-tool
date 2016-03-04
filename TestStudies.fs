@@ -109,6 +109,7 @@ let ticketLockCollated =
       Locals = 
           [ (Type.Int, "t")
             (Type.Int, "s") ]
+      Search = None
       VProtos = 
           [ { Name = "holdTick"
               Params = [ (Type.Int, "t") ] }
