@@ -376,12 +376,11 @@ let rec modelExpr env expr =
         (* Look-up the variable to ensure it a) exists and b) is of a
          * Boolean type.
          *)
-        trial { 
-            let! vt = lookupVar env v |> mapMessages ((curry Var) v)
-            match vt with
-            | Type.Bool -> return mkBoolLV v |> BExpr
-            | Type.Int -> return mkIntLV v |> AExpr
-        }
+        lookupVar env v
+        |> mapMessages ((curry Var) v)
+        |> lift (function
+                 | Type.Bool -> v |> mkBoolLV |> BExpr
+                 | Type.Int -> v |> mkIntLV |> AExpr)
     (* We can use the active patterns above to figure out whether we
      * need to treat this expression as arithmetic or Boolean.
      *)
@@ -399,44 +398,37 @@ and modelBoolExpr env expr =
         (* Look-up the variable to ensure it a) exists and b) is of a
          * Boolean type.
          *)
-        trial { 
-            let! vt = lookupVar env v |> mapMessages ((curry Var) v)
-            match vt with
-            | Type.Bool -> return (mkBoolLV v)
-            | _ -> return! (fail <| VarNotBoolean v)
-        }
+        lookupVar env v
+        |> mapMessages ((curry Var) v)
+        |> bind (function
+                 | Type.Bool -> v |> mkBoolLV |> ok
+                 | _ -> v |> VarNotBoolean |> fail)
     | Bop(BoolOp as op, l, r) -> 
         match op with
         | ArithIn as o -> 
-            trial { 
-                let! lA = modelArithExpr env l
-                let! rA = modelArithExpr env r
-                return (match o with
-                        | Gt -> mkGt
-                        | Ge -> mkGe
-                        | Le -> mkLe
-                        | Lt -> mkLt
-                        | _ -> failwith "unreachable") lA rA
-            }
-        | BoolIn as o -> 
-            trial { 
-                let! lB = modelBoolExpr env l
-                let! rB = modelBoolExpr env r
-                return (match o with
-                        | And -> mkAnd2
-                        | Or -> mkOr2
-                        | _ -> failwith "unreachable") lB rB
-            }
+            lift2 (match o with
+                   | Gt -> mkGt
+                   | Ge -> mkGe
+                   | Le -> mkLe
+                   | Lt -> mkLt
+                   | _ -> failwith "unreachable")
+                  (modelArithExpr env l)
+                  (modelArithExpr env r)
+        | BoolIn as o ->
+            lift2 (match o with
+                   | And -> mkAnd2
+                   | Or -> mkOr2
+                   | _ -> failwith "unreachable")
+                  (modelBoolExpr env l)
+                  (modelBoolExpr env r)
         | AnyIn as o -> 
-            trial { 
-                let! lE = modelExpr env l
-                let! rE = modelExpr env r
-                return (match o with
-                        | Eq -> mkEq
-                        | Neq -> mkNeq
-                        | _ -> failwith "unreachable") lE rE
-            }
-    | _ -> fail <| ExprNotBoolean
+            lift2 (match o with
+                   | Eq -> mkEq
+                   | Neq -> mkNeq
+                   | _ -> failwith "unreachable")
+                  (modelExpr env l)
+                  (modelExpr env r)
+    | _ -> fail ExprNotBoolean
 
 /// Converts a Starling arithmetic expression ot a Z3 predicate using
 /// the given Z3 context.
@@ -447,24 +439,21 @@ and modelArithExpr env expr =
         (* Look-up the variable to ensure it a) exists and b) is of an
          * arithmetic type.
          *)
-        trial { 
-            let! vt = lookupVar env v |> mapMessages ((curry Var) v)
-            match vt with
-            | Type.Int -> return v |> mkIntLV
-            | _ -> return! (VarNotArith v |> fail)
-        }
+        lookupVar env v
+        |> mapMessages ((curry Var) v)
+        |> bind (function
+                 | Type.Int -> v |> mkIntLV |> ok
+                 | _ -> v |> VarNotArith |> fail)
     | Bop(ArithOp as op, l, r) -> 
-        trial { 
-            let! lA = modelArithExpr env l
-            let! rA = modelArithExpr env r
-            return (match op with
-                    | Mul -> mkMul2
-                    | Div -> mkDiv
-                    | Add -> mkAdd2
-                    | Sub -> mkSub2
-                    | _ -> failwith "unreachable") lA rA
-        }
-    | _ -> fail <| ExprNotArith
+        lift2 (match op with
+               | Mul -> mkMul2
+               | Div -> mkDiv
+               | Add -> mkAdd2
+               | Sub -> mkSub2
+               | _ -> failwith "unreachable")
+              (modelArithExpr env l)
+              (modelArithExpr env r)
+    | _ -> fail ExprNotArith
 
 (*
  * View definitions
