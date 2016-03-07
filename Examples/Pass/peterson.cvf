@@ -18,22 +18,16 @@ thread bool oFlag;
 thread int oTurn;
 
 
-/*
- * Some of these views may be unnecessary, but I'm not sure.
- */
-
 // A
 view aFlagDown();       // A does not hold the lock and is not seeking it.
 view aFlagUp();         // A has put its flag up, but isn't waiting yet.
 view aWaiting();        // A is now waiting for the lock.
-view aOtherFlagDown();  // A has noticed that B's flag is down.
 view aHoldLock();       // A holds the lock.
 
 // B
 view bFlagDown();       // B does not hold the lock and is not seeking it.
 view bFlagUp();         // B has put its flag up, but isn't waiting yet.
 view bWaiting();        // B is now waiting for the lock.
-view bOtherFlagDown();  // B has noticed that A's flag is down.
 view bHoldLock();       // B holds the lock.
 
 
@@ -49,7 +43,7 @@ method lockA() {
     do {
       {| aWaiting() |}
         <oFlag = bFlag>;
-      {| if (oFlag) then aWaiting() else aOtherFlagDown() |}
+      {| if (oFlag) then aWaiting() else aHoldLock() |}
         <oTurn = turn>;
       {| if (oFlag && oTurn == 1) then aWaiting() else aHoldLock() |}
     } while (oFlag && (oTurn == 1));
@@ -77,7 +71,7 @@ method lockB() {
     do {
       {| bWaiting() |}
         <oFlag = aFlag>;
-      {| if (oFlag) then bWaiting() else bOtherFlagDown() |}
+      {| if (oFlag) then bWaiting() else bHoldLock() |}
         <oTurn = turn>;
       {| if (oFlag && oTurn == 2) then bWaiting() else bHoldLock() |}
     } while (oFlag && (oTurn == 2));
@@ -108,29 +102,19 @@ constraint emp -> (turn == 1 || turn == 2);
 constraint aFlagDown()      -> aFlag == false;
 constraint aFlagUp()        -> aFlag == true;
 constraint aWaiting()       -> aFlag == true;
-constraint aOtherFlagDown() -> aFlag == true;
 constraint aHoldLock()      -> aFlag == true;
 
 // B
 constraint bFlagDown()      -> bFlag == false;
 constraint bFlagUp()        -> bFlag == true;
 constraint bWaiting()       -> bFlag == true;
-constraint bOtherFlagDown() -> bFlag == true;
 constraint bHoldLock()      -> bFlag == true;
 
 
 /*
- * If we aren't waiting, but the other thread is, we have the turn.
+ * If we have the lock, and the other thread is waiting, we have the turn.
  *
- * For FlagDown and FlagUp, this is obvious: we haven't yet got around
- * to passing the turn back to the other thread yet.
- *
- * For OtherFlagDown, this is because, while waiting, we noticed the
- * other thread had its flag down.  If it is now waiting, then it must
- * have just started waiting since we saw that---which means it gave
- * us the turn.
- *
- * For HoldLock, we note that to get the lock we must have either seen
+ * We note that to get the lock we must have either seen
  * the other thread's flag down (see above), or we must have already
  * been given the turn.
  *
@@ -139,82 +123,41 @@ constraint bHoldLock()      -> bFlag == true;
  * to our turn, and nothing destabilises this except us starting to
  * wait too.
  */
-constraint aFlagDown()      * bWaiting() -> turn == 2;
-constraint aFlagUp()        * bWaiting() -> turn == 2;
-constraint aOtherFlagDown() * bWaiting() -> turn == 2;
-constraint aHoldLock()      * bWaiting() -> turn == 2;
-
-constraint bFlagDown()      * aWaiting() -> turn == 1;
-constraint bFlagUp()        * aWaiting() -> turn == 1;
-constraint bOtherFlagDown() * aWaiting() -> turn == 1;
-constraint bHoldLock()      * aWaiting() -> turn == 1;
+constraint aHoldLock() * bWaiting() -> turn == 2;
+constraint bHoldLock() * aWaiting() -> turn == 1;
 
 
 /*
  * We can't be in multiple states at the same time.
  *
- * It'd be nice if we didn't have to write all of these out...
+ * Unless exactly one of those states is flag-down.  This is probably implicit
+ * from the fact that flag-down and every other state disagree on what the
+ * flag is.
  */
 
 // A
 constraint aFlagDown() * aFlagDown() -> false;
-constraint aFlagDown() * aFlagUp() -> false;
-constraint aFlagDown() * aWaiting() -> false;
-constraint aFlagDown() * aOtherFlagDown() -> false;
-constraint aFlagDown() * aHoldLock() -> false;
 
 constraint aFlagUp() * aFlagUp() -> false;
 constraint aFlagUp() * aWaiting() -> false;
-constraint aFlagUp() * aOtherFlagDown() -> false;
 constraint aFlagUp() * aHoldLock() -> false;
 
 constraint aWaiting() * aWaiting() -> false;
-constraint aWaiting() * aOtherFlagDown() -> false;
 constraint aWaiting() * aHoldLock() -> false;
-
-constraint aOtherFlagDown() * aOtherFlagDown() -> false;
-constraint aOtherFlagDown() * aHoldLock() -> false;
 
 constraint aHoldLock() * aHoldLock() -> false;
 
 // B
 constraint bFlagDown() * bFlagDown() -> false;
-constraint bFlagDown() * bFlagUp() -> false;
-constraint bFlagDown() * bWaiting() -> false;
-constraint bFlagDown() * bOtherFlagDown() -> false;
-constraint bFlagDown() * bHoldLock() -> false;
 
 constraint bFlagUp() * bFlagUp() -> false;
 constraint bFlagUp() * bWaiting() -> false;
-constraint bFlagUp() * bOtherFlagDown() -> false;
 constraint bFlagUp() * bHoldLock() -> false;
 
 constraint bWaiting() * bWaiting() -> false;
-constraint bWaiting() * bOtherFlagDown() -> false;
 constraint bWaiting() * bHoldLock() -> false;
 
-constraint bOtherFlagDown() * bOtherFlagDown() -> false;
-constraint bOtherFlagDown() * bHoldLock() -> false;
-
 constraint bHoldLock() * bHoldLock() -> false;
-
-
-/*
- * If we see the other thread's flag down while waiting, we gain some
- * information about that other thread.
- */
-
-// We can't ever have two threads observing each other as having their
-// flag down.  This is because, to observe one thread's flag down,
-// we have to have our thread's flag up.
-constraint aOtherFlagDown() * bOtherFlagDown() -> false;
-constraint bOtherFlagDown() * aOtherFlagDown() -> false;
-
-// Also, if we've seen the other thread's flag down, then we know it
-// can't hold the lock: even if it puts its flag up, it will wait for
-// us.
-constraint aOtherFlagDown() * bHoldLock() -> false;
-constraint bOtherFlagDown() * aHoldLock() -> false;
 
 
 /*
