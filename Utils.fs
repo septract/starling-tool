@@ -109,6 +109,13 @@ let mapAppend a b =
  * Chessie-related functions.
  *)
 
+/// Extends lift to functions of 3 arguments.
+let lift3 f a b c =
+    trial { let! av = a
+            let! bv = b
+            let! cv = c
+            return f av bv cv }
+
 /// Converts a Result into an option with Some x if the result was Ok x _.
 let okOption =
     function

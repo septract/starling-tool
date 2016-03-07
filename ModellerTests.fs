@@ -18,6 +18,11 @@ type SearchViewDefEntry =
 
 /// Tests for the modeller.
 type ModellerTests() =
+    /// View prototypes for the ticketed lock modeller.
+    static member TicketLockProtos : Map<string, (Type * string) list> =
+        Map.ofList
+            [ ("holdLock", [])
+              ("holdTick", [(Type.Int, "t")]) ]
 
     /// Sample environment used in expression modelling tests.
     static member Env =
@@ -25,6 +30,54 @@ type ModellerTests() =
                      ("bar", Type.Int)
                      ("baz", Type.Bool)
                      ("emp", Type.Bool) ]
+
+    static member EmptyCView : unit -> CView = Multiset.empty
+
+    /// <summary>
+    ///     Test cases for checking view modelling on correct view exprs.
+    /// </summary>
+    static member ViewExprsGood =
+        [ TestCaseData(View.Unit)
+             .Returns(Some (ModellerTests.EmptyCView ()))
+             .SetName("Modelling the unit view returns the empty multiset")
+          TestCaseData(afunc "holdLock" [] |> View.Func)
+             .Returns(Some (Multiset.singleton (CFunc.Func (vfunc "holdLock" []))))
+             .SetName("Modelling a valid single view returns a singleton multiset")
+        ]
+
+    /// <summary>
+    ///     Tests view modelling on correct view exprs.
+    /// </summary>
+    [<TestCaseSource("ViewExprsGood")>]
+    member x.``View modelling on correct view expressions succeeds`` vex =
+        vex
+        |> modelCView ModellerTests.TicketLockProtos ModellerTests.Env
+        |> okOption
+
+
+    /// <summary>
+    ///     Test cases for checking view modelling on incorrect view exprs.
+    /// </summary>
+    static member ViewExprsBad =
+        [ TestCaseData(afunc "badfunc" [] |> View.Func)
+             .Returns(Some (NoSuchView "badfunc"))
+             .SetName("Modelling an unknown single view returns an error")
+          TestCaseData(afunc "holdTick" [] |> View.Func)
+             .Returns(Some (BadParamCount ("holdTick", 1, 0)))
+             .SetName("Modelling a single view with bad parameter count returns an error")
+          TestCaseData(afunc "holdTick" [Expression.True] |> View.Func)
+             .Returns(Some (BadParamType ("holdTick", "t", Type.Int, Type.Bool)))
+             .SetName("Modelling a single view with bad parameter type returns an error") ]
+
+    /// <summary>
+    ///     Tests view modelling on correct view exprs.
+    /// </summary>
+    [<TestCaseSource("ViewExprsBad")>]
+    member x.``View modelling on incorrect view expressions fails`` vex =
+        vex
+        |> modelCView ModellerTests.TicketLockProtos ModellerTests.Env
+        |> failOption
+
 
     /// Arithmetic expression modelling tests.
     static member ArithmeticExprs =
@@ -36,6 +89,7 @@ type ModellerTests() =
     /// Tests whether the arithmetic expression modeller works.
     [<TestCaseSource("ArithmeticExprs")>]
     member x.``test the arithmetic expression modeller`` ast = modelArithExpr ModellerTests.Env ast |> okOption
+
 
     /// Boolean expression modelling tests.
     /// These all use the ticketed lock model.
@@ -49,6 +103,7 @@ type ModellerTests() =
         ast
         |> modelBoolExpr ModellerTests.Env
         |> okOption
+
 
     /// Tests for modelling bad variable lists.
     static member BadVarLists =
@@ -81,6 +136,7 @@ type ModellerTests() =
     member x.``valid var lists are accepted during mapping`` (vl: (Type * string) list) =
         makeVarMap vl |> okOption
 
+
     /// Tests for the atomic primitive modeller.
     /// These use the ticketed lock model.
     static member AtomicPrims =
@@ -92,6 +148,7 @@ type ModellerTests() =
     /// Tests the atomic primitive modeller using the ticketed lock.
     [<TestCaseSource("AtomicPrims")>]
     member x.``atomic actions are modelled correctly as prims`` a = modelAtomic ticketLockModel.Globals ticketLockModel.Locals a |> okOption
+
 
     /// Constructs a Prim of the correct type to come out of a modeller.
     static member mprim (vf : VFunc) : PartCmd<CView> = Prim vf
@@ -114,14 +171,12 @@ type ModellerTests() =
     /// Tests the command modeller using the ticketed lock.
     [<TestCaseSource("CommandAxioms")>]
     member x.``commands are modelled correctly as part-commands`` c =
-        modelCommand ticketLockModel.Globals ticketLockModel.Locals c |> okOption
+        c
+        |> modelCommand ModellerTests.TicketLockProtos
+                        ticketLockModel.Globals
+                        ticketLockModel.Locals
+        |> okOption
 
-
-    /// View prototypes for the ticketed lock modeller.
-    static member TicketLockProtos : Map<string, (Type * string) list> =
-        Map.ofList
-            [ ("holdLock", [])
-              ("holdTick", [(Type.Int, "t")]) ]
 
     /// Type-constraining builder for viewdef sets.
     static member viewDefSet (vs : ViewDef<DView> seq) : Set<ViewDef<DView>> =

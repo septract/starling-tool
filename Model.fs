@@ -299,6 +299,34 @@ module Pretty =
             |> withDefault (termstr |> sprintf "no term '%s'" |> String)
 
 
+/// <summary>
+///     Type-constrained version of <c>func</c> for <c>DFunc</c>s.
+/// </summary>
+/// <parameter name="name">
+///   The name of the <c>DFunc</c>.
+/// </parameter>
+/// <parameter name="pars">
+///   The parameters of the <c>DFunc</c>, as a sequence.
+/// </parameter>
+/// <returns>
+///   A new <c>DFunc</c> with the given name and parameters.
+/// </returns>
+let dfunc name (pars : (Type * string) seq) : DFunc = func name pars
+
+/// <summary>
+///     Type-constrained version of <c>func</c> for <c>VFunc</c>s.
+/// </summary>
+/// <parameter name="name">
+///   The name of the <c>VFunc</c>.
+/// </parameter>
+/// <parameter name="pars">
+///   The parameters of the <c>VFunc</c>, as a sequence.
+/// </parameter>
+/// <returns>
+///   A new <c>VFunc</c> with the given name and parameters.
+/// </returns>
+let vfunc name (pars : Expr seq) : VFunc = func name pars
+            
 /// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
 /// and its Goal with fG.
 let mapTerm fC fW fG {Cmd = c; WPre = w; Goal = g} =

@@ -55,26 +55,25 @@ module Types =
         /// A parameter name was used more than once in the same view prototype.
         | VPEDuplicateParam of AST.ViewProto * param : string
 
-    /// Represents an error when converting a view.
+    /// Represents an error when converting a view or view def.
     type ViewError = 
         /// An expression in the view generated an `ExprError`.
-        | VEBadExpr of expr : AST.Expression * err : ExprError
-
-    /// Represents an error when converting a view definition.
-    type ViewDefError = 
-        /// A viewdef referred to a view with no known name.
-        | VDENoSuchView of name : string
-        /// A viewdef referred to a view with the wrong number of params.
-        | VDEBadParamCount of name : string * expected : int * actual : int
-        /// A viewdef used variables in incorrect ways, eg by duplicating.
-        | VDEBadVars of err : VarMapError
+        | BadExpr of expr : AST.Expression * err : ExprError
+        /// A view referred to a view with no known name.
+        | NoSuchView of name : string
+        /// A view referred to a view with the wrong number of params.
+        | BadParamCount of name : string * expected : int * actual : int
+        /// A view used the incorrect type for a parameter.
+        | BadParamType of name : string * param : string * expected : Type * actual : Type
+        /// A view used variables in incorrect ways, eg by duplicating.
+        | BadVars of err : VarMapError
         /// A viewdef conflicted with the global variables.
-        | VDEGlobalVarConflict of err : VarMapError
+        | GlobalVarConflict of err : VarMapError
 
     /// Represents an error when converting a constraint.
     type ConstraintError = 
-        /// The view definition in the constraint generated a `ViewDefError`.
-        | CEView of vdef : AST.ViewDef * err : ViewDefError
+        /// The view definition in the constraint generated a `ViewError`.
+        | CEView of vdef : AST.ViewDef * err : ViewError
         /// The expression in the constraint generated an `ExprError`.
         | CEExpr of expr : AST.Expression * err : ExprError
 
@@ -160,29 +159,32 @@ module Pretty =
         | Var(var, err) -> wrapped "variable" (var |> printLValue) (err |> printVarMapError)
 
     /// Pretty-prints view conversion errors.
-    let printViewError = function
-        | VEBadExpr(expr, err) -> wrapped "expression" (expr |> printExpression) (err |> printExprError)
-
-    /// Pretty-prints viewdef conversion errors.
-    let printViewDefError =
+    let printViewError =
         function
-        | VDENoSuchView name -> fmt "no view prototype for '{0}'" [ String name ]
-        | VDEBadParamCount(name, expected, actual) ->
+        | BadExpr(expr, err) -> wrapped "expression" (expr |> printExpression) (err |> printExprError)
+        | NoSuchView name -> fmt "no view prototype for '{0}'" [ String name ]
+        | BadParamCount(name, expected, actual) ->
             fmt "view '{0}' expects {1} params, but was given {2}"
                 [ name |> String
                   expected |> sprintf "%d" |> String
                   actual |> sprintf "%d" |> String ]
-        | VDEBadVars err ->
+        | BadVars err ->
             colonSep [ "invalid variable usage" |> String
                        err |> printVarMapError ]
-        | VDEGlobalVarConflict err ->
+        | BadParamType (name, param, expected, actual) ->
+            fmt "param '{0}' of view '{1}' is of type '{2}' but was given type '{3}'"
+                [ name |> String
+                  param |> String
+                  expected |> printType
+                  actual |> printType ]
+        | GlobalVarConflict err ->
             colonSep [ "parameters conflict with global variables" |> String
                        err |> printVarMapError ]
 
     /// Pretty-prints constraint conversion errors.
     let printConstraintError =
         function
-        | CEView(vdef, err) -> wrapped "view definition" (vdef |> printViewDef) (err |> printViewDefError)
+        | CEView(vdef, err) -> wrapped "view definition" (vdef |> printViewDef) (err |> printViewError)
         | CEExpr(expr, err) -> wrapped "expression" (expr |> printExpression) (err |> printExprError)
 
     /// Pretty-prints axiom errors.
@@ -486,11 +488,10 @@ let modelDFunc protos name dpars =
         // Does it have the correct number of parameters?
         let ldpars = List.length dpars
         let lppars = List.length ppars
-        if ldpars <> lppars then fail <| VDEBadParamCount(name, lppars, ldpars)
-        else 
-            ok <| [ { Name = name
-                      Params = funcViewParMerge ppars dpars } ]
-    | None -> fail <| VDENoSuchView name
+        if ldpars <> lppars
+        then BadParamCount(name, lppars, ldpars) |> fail
+        else [ dfunc name (funcViewParMerge ppars dpars) ] |> ok
+    | None -> fail <| NoSuchView name
 
 /// Tries to convert a view def into its model (multiset) form.
 let rec modelDView protos vd = 
@@ -508,11 +509,11 @@ let rec localEnvOfViewDef vds =
     |> Seq.ofList
     |> Seq.map (fun {Params = ps} -> makeVarMap ps)
     |> seqBind (fun xR s -> bind (combineMaps s) xR) Map.empty
-    |> mapMessages VDEBadVars
+    |> mapMessages BadVars
 
 /// Produces the variable environment for the constraint whose viewdef is v.
 let envOfViewDef globals =
-    localEnvOfViewDef >> bind (combineMaps globals >> mapMessages VDEGlobalVarConflict)
+    localEnvOfViewDef >> bind (combineMaps globals >> mapMessages GlobalVarConflict)
 
 /// Converts a single constraint to its model form.
 let modelViewDef globals vprotos { CView = av; CExpression = ae } = 
@@ -644,29 +645,34 @@ let modelViewDefs globals vprotos { Search = s; Constraints = cs } =
 //
 // View applications
 //
+       
+/// Models an AFunc as a CFunc.
+let modelCFunc protos env name vpars =
+    // TODO(CaptainHayashi): use protos
+    vpars
+    |> Seq.map (fun e -> 
+                e
+                |> modelExpr env
+                |> mapMessages (curry BadExpr e))
+    |> collect
+    |> lift (vfunc name >> CFunc.Func)
 
-/// Tries to flatten a view AST into a multiset.
+/// Tries to flatten a view AST into a CView.
 /// Takes an environment of local variables, and the AST itself.
-let rec modelView env = 
+let rec modelCView protos ls =
     function
-    | View.Func {Name = s; Params = pars} -> 
-        trial { 
-            let! pexps = pars
-                         |> List.map (fun e -> 
-                                e
-                                |> modelExpr env
-                                |> mapMessages (curry VEBadExpr e))
-                         |> collect
-            return [ CFunc.Func { Name = s
-                                  Params = pexps } ]
-                   |> Multiset.ofList
-        }
-    | View.If(e, l, r) -> trial { let! ez3 = modelBoolExpr env e |> mapMessages (curry VEBadExpr e)
-                                  let! lvs = modelView env l
-                                  let! rvs = modelView env r
-                                  return (CFunc.ITE(ez3, lvs, rvs) |> Multiset.singleton) }
+    | View.Func {Name = s; Params = pars} ->
+        modelCFunc protos ls s pars |> lift Multiset.singleton
+    | View.If(e, l, r) ->
+        lift3 (fun em lm rm -> CFunc.ITE(em, lm, rm) |> Multiset.singleton)
+              (e |> modelBoolExpr ls |> mapMessages (curry BadExpr e))
+              (modelCView protos ls l)
+              (modelCView protos ls r)
     | Unit -> Multiset.empty() |> ok
-    | Join(l, r) -> lift2 (Multiset.append) (modelView env l) (modelView env r)
+    | Join(l, r) ->
+        lift2 (Multiset.append)
+              (modelCView protos ls l)
+              (modelCView protos ls r)
 
 //
 // Axioms
@@ -757,13 +763,6 @@ let modelIntStore locals atom dest src mode =
         | Decrement -> return! fail <| AEUnsupportedAtomic(atom, "cannot decrement an expression")
     }
 
-/// Converts a precondition and postcondition to a pair of views,
-/// using the given variable environment and returning errors as AxiomErrors.
-let makeAxiomConds env preAst postAst = 
-    lift2 mkPair
-        (modelView env preAst |> mapMessages (curry AEBadView preAst)) 
-        (modelView env postAst |> mapMessages (curry AEBadView postAst))
-
 /// Converts an atomic action to a Prim.
 let rec modelAtomic gs ls atom = 
     match atom with
@@ -828,13 +827,14 @@ let rec modelAtomic gs ls atom =
         modelBoolExpr ls e
         |> mapMessages (curry AEBadExpr e)
         |> lift (BExpr >> Seq.singleton >> func "Assume")
+
 /// Converts a local variable assignment to a Prim.
 and modelAssign locals l e = 
-    (* We model assignments as IntLocalSet or BoolLocalSet, depending on the
+    (* We model assignments as !ILSet or !BLSet, depending on the
      * type of l, which _must_ be in the locals set..
      * We thus also have to make sure that e is the correct type.
      *)
-    trial { 
+    trial {
         let! ltype = lookupType locals l
         match ltype with
         | Type.Bool -> let! em = modelBoolExpr locals e |> mapMessages (curry AEBadExpr e)
@@ -846,76 +846,70 @@ and modelAssign locals l e =
     }
 
 /// Creates a partially resolved axiom for an if-then-else.
-and modelITE gs ls i t f = 
-    (* An ITE is not fully resolved yet.  We:
-     * 0) Convert the if-statement into a Starling expression;
-     * 1) Place the ITE in the axioms pile;
-     * 2) Merge in the axioms from the ‘then’ block;
-     * 3) Merge in the axioms from the ‘else’ block.
-     *)
+and modelITE protos gs ls i t f = 
     trial { let! iM = modelBoolExpr ls i |> mapMessages (curry AEBadExpr i)
             (* We need to calculate the recursive axioms first, because we
-            * need the inner cpairs for each to store the ITE placeholder.
-            *)
-            let! tM = modelBlock gs ls t
-            let! fM = modelBlock gs ls f
+             * need the inner cpairs for each to store the ITE placeholder.
+             *)
+            let! tM = modelBlock protos gs ls t
+            let! fM = modelBlock protos gs ls f
             return ITE(iM, tM, fM) }
 
 /// Converts a while or do-while to a PartCmd.
 /// Which is being modelled is determined by the isDo parameter.
 /// The list is enclosed in a Chessie result.
-and modelWhile isDo gs ls e b = 
+and modelWhile isDo protos gs ls e b = 
     (* A while is also not fully resolved.
      * Similarly, we convert the condition, recursively find the axioms,
      * inject a placeholder, and add in the recursive axioms.
      *)
     lift2 (fun eM bM -> PartCmd.While(isDo, eM, bM))
           (modelBoolExpr ls e |> mapMessages (curry AEBadExpr e))
-          (modelBlock gs ls b)
+          (modelBlock protos gs ls b)
 
 /// Converts a command to a PartCmd.
 /// The list is enclosed in a Chessie result.
-and modelCommand gs ls = 
+and modelCommand protos gs ls = 
     function 
     | Atomic a -> modelAtomic gs ls a |> lift Prim
     | Assign(l, e) -> modelAssign ls l e |> lift Prim
     | Skip -> modelAtomic gs ls Id |> lift Prim
-    | If(i, t, e) -> modelITE gs ls i t e
-    | Command.While(e, b) -> modelWhile false gs ls e b
-    | DoWhile(b, e) -> modelWhile true gs ls e b
+    | If(i, t, e) -> modelITE protos gs ls i t e
+    | Command.While(e, b) -> modelWhile false protos gs ls e b
+    | DoWhile(b, e) -> modelWhile true protos gs ls e b
     | c -> fail <| AEUnsupportedCommand(c, "TODO: implement")
 
 /// Converts the view and command in a ViewedCommand.
-and modelViewedCommand gs ls {Post = post; Command = command} =
+and modelViewedCommand protos gs ls {Post = post; Command = command} =
     lift2 (fun postM commandM -> {Post = postM; Command = commandM})
-          (post |> modelView ls |> mapMessages (curry AEBadView post))
-          (command |> modelCommand gs ls)
+          (post |> modelCView protos ls |> mapMessages (curry AEBadView post))
+          (command |> modelCommand protos gs ls)
 
 /// Converts the views and commands in a list of ViewedCommands.
-and modelViewedCommands gs ls =
-    Seq.map (modelViewedCommand gs ls) >> collect
+and modelViewedCommands protos gs ls =
+    Seq.map (modelViewedCommand protos gs ls) >> collect
 
 /// Converts the views and commands in a block.
 /// The converted block is enclosed in a Chessie result.
-and modelBlock gs ls {Pre = bPre; Contents = bContents} =
+and modelBlock protos gs ls {Pre = bPre; Contents = bContents} =
     lift2 (fun bPreM bContentsM -> {Pre = bPreM; Contents = bContentsM})
-          (bPre |> modelView ls |> mapMessages (curry AEBadView bPre))
-          (bContents |> modelViewedCommands gs ls)
+          (bPre |> modelCView protos ls |> mapMessages (curry AEBadView bPre))
+          (bContents |> modelViewedCommands protos gs ls)
 
 /// Converts a method's views and commands.
 /// The converted method is enclosed in a Chessie result.
-let modelMethod gs ls { Signature = sg ; Body = b } = 
+let modelMethod protos gs ls { Signature = sg ; Body = b } = 
     // TODO(CaptainHayashi): method parameters
     b
-    |> modelBlock gs ls
+    |> modelBlock protos gs ls
     |> lift (fun c -> (sg.Name, { Signature = sg ; Body = c }))
     |> mapMessages (curry MEAxiom sg.Name)
 
 /// Converts a list of methods.
 /// The resulting map is enclosed in a Chessie result.
-let modelMethods gs ls = 
+let modelMethods protos gs ls = 
     // TODO(CaptainHayashi): method parameters
-    Seq.map (modelMethod gs ls) >> collect >> lift Map.ofSeq
+    Seq.map (modelMethod protos gs ls) >> collect >> lift Map.ofSeq
 
 /// Checks a view prototype to see if it contains duplicate parameters.
 let checkViewProtoDuplicates (proto : ViewProto) = 
@@ -950,7 +944,7 @@ let model collated : Result<Model<AST.Method<CView, PartCmd<CView>>, DView>, Mod
         let! globals = makeVarMap collated.Globals |> mapMessages MEVar
         let! locals = makeVarMap collated.Locals |> mapMessages MEVar
         let! constraints = modelViewDefs globals vprotos collated
-        let! axioms = modelMethods globals locals collated.Methods
+        let! axioms = modelMethods vprotos globals locals collated.Methods
         return
             { Globals = globals
               Locals = locals

@@ -45,11 +45,14 @@ type ViewDef =
     | Join of ViewDef * ViewDef
     | Func of Func<string>
 
+/// An AST func.
+type AFunc = Func<Expression>
+
 /// A view expression.
 type View = 
     | Unit
     | Join of View * View
-    | Func of Func<Expression>
+    | Func of AFunc
     | If of Expression * View * View
 
 /// A statement in the command language.
@@ -296,3 +299,18 @@ module Pretty =
 
     /// Pretty-prints scripts.
     let printScript = List.map printScriptLine >> fun ls -> VSep(ls, vsep [ Nop; Nop ])
+
+
+/// <summary>
+///     Type-constrained version of <c>func</c> for <c>AFunc</c>s.
+/// </summary>
+/// <parameter name="name">
+///   The name of the <c>AFunc</c>.
+/// </parameter>
+/// <parameter name="pars">
+///   The parameters of the <c>AFunc</c>, as a sequence.
+/// </parameter>
+/// <returns>
+///   A new <c>AFunc</c> with the given name and parameters.
+/// </returns>
+let afunc name (pars : Expression list) : AFunc = func name pars
