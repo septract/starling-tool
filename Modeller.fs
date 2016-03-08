@@ -53,12 +53,12 @@ module Types =
     /// Represents an error when converting a view prototype.
     type ViewProtoError = 
         /// A parameter name was used more than once in the same view prototype.
-        | VPEDuplicateParam of AST.ViewProto * param : string
+        | VPEDuplicateParam of AST.Types.ViewProto * param : string
 
     /// Represents an error when converting a view or view def.
     type ViewError = 
         /// An expression in the view generated an `ExprError`.
-        | BadExpr of expr : AST.Expression * err : ExprError
+        | BadExpr of expr : AST.Types.Expression * err : ExprError
         /// A view referred to a view with no known name.
         | NoSuchView of name : string
         /// A view referred to a view with the wrong number of params.
@@ -73,9 +73,9 @@ module Types =
     /// Represents an error when converting a constraint.
     type ConstraintError = 
         /// The view definition in the constraint generated a `ViewError`.
-        | CEView of vdef : AST.ViewDef * err : ViewError
+        | CEView of vdef : AST.Types.ViewDef * err : ViewError
         /// The expression in the constraint generated an `ExprError`.
-        | CEExpr of expr : AST.Expression * err : ExprError
+        | CEExpr of expr : AST.Types.Expression * err : ExprError
 
     /// Type of errors found when generating axioms.
     type AxiomError = 
@@ -84,22 +84,22 @@ module Types =
         /// The axiom uses a variable in local position incorrectly.
         | AEBadLocal of var : LValue * err : VarMapError
         /// The axiom uses an expression incorrectly.
-        | AEBadExpr of expr : AST.Expression * err : ExprError
+        | AEBadExpr of expr : AST.Types.Expression * err : ExprError
         /// The axiom uses a view incorrectly.
-        | AEBadView of view : AST.View * err : ViewError
+        | AEBadView of view : AST.Types.View * err : ViewError
         /// The axiom has a type mismatch in lvalue `bad`.
         | AETypeMismatch of expected : Type * bad : LValue * got : Type
         /// The axiom uses a semantically invalid atomic action.
-        | AEUnsupportedAtomic of atom : AST.AtomicAction * reason : string
+        | AEUnsupportedAtomic of atom : AST.Types.AtomicAction * reason : string
         /// The axiom uses a semantically invalid command.
-        | AEUnsupportedCommand of cmd : AST.Command<AST.View> * reason : string
+        | AEUnsupportedCommand of cmd : AST.Types.Command<AST.Types.View> * reason : string
 
     /// Represents an error when converting a model.
     type ModelError = 
         /// A view prototype in the program generated a `ViewProtoError`.
-        | MEVProto of proto : AST.ViewProto * err : ViewProtoError
+        | MEVProto of proto : AST.Types.ViewProto * err : ViewProtoError
         /// A constraint in the program generated a `ConstraintError`.
-        | MEConstraint of constr : AST.ViewDef * err : ConstraintError
+        | MEConstraint of constr : AST.Types.ViewDef * err : ConstraintError
         /// An axiom in the program generated an `AxiomError`.
         | MEAxiom of methname : string * err : AxiomError
         /// A variable in the program generated a `VarMapError`.
@@ -329,39 +329,6 @@ let coreSemantics =
       (func "Id" [], BTrue)
       // Assume
       (func "Assume" [ bpar "expr" ], bUnmarked "expr") ]
-
-
-(*
- * Expression classification
- *)
-
-/// Active pattern classifying bops as to whether they create
-/// arithmetic or Boolean expressions.
-let (|ArithOp|BoolOp|) = 
-    function 
-    | Mul | Div | Add | Sub -> ArithOp
-    | Gt | Ge | Le | Lt -> BoolOp
-    | Eq | Neq -> BoolOp
-    | And | Or -> BoolOp
-
-/// Active pattern classifying bops as to whether they take in
-/// arithmetic, Boolean, or indeterminate operands.
-let (|ArithIn|BoolIn|AnyIn|) = 
-    function 
-    | Mul | Div | Add | Sub -> ArithIn
-    | Gt | Ge | Le | Lt -> ArithIn
-    | Eq | Neq -> AnyIn
-    | And | Or -> BoolIn
-
-/// Active pattern classifying expressions as to whether they are
-/// arithmetic, Boolean, or indeterminate.
-let (|BoolExp|ArithExp|AnyExp|) = 
-    function 
-    | LV _ -> AnyExp
-    | Int _ -> ArithExp
-    | True | False -> BoolExp
-    | Bop(BoolOp, _, _) -> BoolExp
-    | Bop(ArithOp, _, _) -> ArithExp
 
 (*
  * Expression translation
@@ -937,7 +904,7 @@ let modelViewProtos protos =
     |> lift Map.ofSeq
 
 /// Converts a collated script to a model.
-let model collated : Result<Model<AST.Method<CView, PartCmd<CView>>, DView>, ModelError> = 
+let model collated : Result<Model<AST.Types.Method<CView, PartCmd<CView>>, DView>, ModelError> = 
     trial { 
         let! vprotos = modelViewProtos collated.VProtos
         // Make variable maps out of the global and local variable definitions.

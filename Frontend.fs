@@ -36,13 +36,13 @@ type Request =
 /// Type of responses from the Starling frontend.
 type Response =
     /// Output of the parsing step only. 
-    | Parse of AST.ScriptItem list
+    | Parse of AST.Types.ScriptItem list
     /// Output of the parsing and collation steps.
     | Collate of Collator.Types.CollatedScript
     /// Output of the parsing, collation, and modelling steps.
-    | Model of Model<AST.Method<CView, PartCmd<CView>>, DView>
+    | Model of Model<AST.Types.Method<CView, PartCmd<CView>>, DView>
     /// Output of the parsing, collation, modelling, and guarding stages.
-    | Guard of Model<AST.Method<GView, PartCmd<GView>>, DView>
+    | Guard of Model<AST.Types.Method<GView, PartCmd<GView>>, DView>
     /// Output of the parsing, collation, modelling, guarding and destructuring stages.
     | Graph of Model<Graph, DView>
 

@@ -253,6 +253,6 @@ let graphMethod { Signature = { Name = name }; Body = body } =
 /// <summary>
 ///     Converts a model on method ASTs to one on method CFGs.
 /// </summary>
-let graph (model : Model<AST.Method<GView, PartCmd<GView>>, DView>)
+let graph (model : Model<AST.Types.Method<GView, PartCmd<GView>>, DView>)
           : Result<Model<Graph, DView>, Error> =
     tryMapAxioms graphMethod model
