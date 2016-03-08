@@ -94,7 +94,7 @@ module Pretty =
                 [ printDFunc vd ]
         | InstantiationError (vfunc, err) ->
             colonSep [ fmt "couldn't instantiate view '{0}'" [ printVFunc vfunc ]
-                       printInstantiationError err ]
+                       printError err ]
     
 
 /// <summary>
@@ -179,6 +179,7 @@ module Translator =
              | { View = vs; Def = None } -> IndefiniteConstraint vs |> fail
              | { View = vs; Def = Some s } -> (vs, s) |> ok)
         |> collect
+        |> lift Starling.Core.Instantiate.makeFuncTable
 
     /// <summary>
     ///   Interprets all views in a model, converting them to <c>FTerm</c>s.

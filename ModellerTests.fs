@@ -6,6 +6,7 @@ open Starling.Collections
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
+open Starling.Core.Instantiate
 open Starling.Lang.AST
 open Starling.Lang.Modeller
 open Starling.Tests.Studies
@@ -19,10 +20,10 @@ type SearchViewDefEntry =
 /// Tests for the modeller.
 type ModellerTests() =
     /// View prototypes for the ticketed lock modeller.
-    static member TicketLockProtos : Map<string, (Type * string) list> =
-        Map.ofList
-            [ ("holdLock", [])
-              ("holdTick", [(Type.Int, "t")]) ]
+    static member TicketLockProtos : FuncTable<unit> =
+        makeFuncTable
+            [ (func "holdLock" [], ())
+              (func "holdTick" [(Type.Int, "t")], ()) ]
 
     /// Sample environment used in expression modelling tests.
     static member Env =
@@ -60,13 +61,13 @@ type ModellerTests() =
     /// </summary>
     static member ViewExprsBad =
         [ TestCaseData(afunc "badfunc" [] |> View.Func)
-             .Returns(Some (NoSuchView "badfunc"))
+             .Returns(Some [NoSuchView "badfunc"])
              .SetName("Modelling an unknown single view returns an error")
           TestCaseData(afunc "holdTick" [] |> View.Func)
-             .Returns(Some (BadParamCount ("holdTick", 1, 0)))
+             .Returns(Some [LookupError ("holdTick", CountMismatch(0, 1))])
              .SetName("Modelling a single view with bad parameter count returns an error")
           TestCaseData(afunc "holdTick" [Expression.True] |> View.Func)
-             .Returns(Some (BadParamType ("holdTick", "t", Type.Int, Type.Bool)))
+             .Returns(Some [LookupError ("holdTick", TypeMismatch ((Type.Int, "t"), Type.Bool))])
              .SetName("Modelling a single view with bad parameter type returns an error") ]
 
     /// <summary>

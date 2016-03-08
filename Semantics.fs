@@ -49,7 +49,7 @@ module Pretty =
         | Instantiate (cmd, error) ->
           colonSep
               [ fmt "couldn't instantiate command '{0}'" [ printVFunc cmd ]
-                printInstantiationError error ]
+                Starling.Core.Instantiate.Pretty.printError error ]
         | MissingDef cmd ->
             fmt "command '{0}' has no semantic definition"
                 [ printVFunc cmd ]

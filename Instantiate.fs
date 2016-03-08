@@ -1,18 +1,22 @@
 /// <summary>
-///   Func instantiation.
+///     Func instantiation.
+///
+///     <para>
+///         Starling has multiple stages during which we need to look up a
+///         func in a list mapping funcs to Boolean expressions, and
+///         substitute func's arguments for the parameters in that Boolean
+///         expression.
+///     </para>
+///     <para>
+///         This is the resposibility of <c>Starling.Core.Instantiate</c>,
+///         which contains the function <c>instantiate</c> for this
+///         purpose.
+///      </para>
+///     <para>
+///         In addition, it contains more generic functions for looking
+///         up funcs in tables, which are useful throughout Starling.
+///     </para>
 /// </summary>
-/// <remarks>
-///   <para>
-///     Starling has multiple stages during which we need to look up a
-///     func in a list mapping funcs to Boolean expressions, and
-///     substitute func's arguments for the parameters in that Boolean
-///     expression.
-///   </para>
-///   <para>
-///     This is the resposibility of <c>Starling.Core.Instantiate</c>,
-///     which contains the function <c>instantiate</c> for this
-///     purpose.
-///   </para>
 module Starling.Core.Instantiate
 
 open Chessie.ErrorHandling
@@ -25,32 +29,36 @@ open Starling.Core.Sub
 
 
 /// <summary>
-///    Types used in func instantiation.
+///     Types used in func instantiation.
 /// </summary>
 [<AutoOpen>]
 module Types =
     /// <summary>
-    ///   Type of func instantiation tables.
+    ///     Type of func instantiation tables.
     /// </summary>
-    type FuncTable =
+    /// <typeparam name="defn">
+    ///     Type of definitions of <c>Func</c>s stored in the table.
+    ///     May be <c>unit</c>.
+    /// </typeparam>
+    type FuncTable<'defn> =
         // TODO(CaptainHayashi): this should probably be a map,
         // but translating it to one seems non-trivial.
         // Would need to define equality on funcs very loosely.
-        (DFunc * BoolExpr) list
+        (DFunc * 'defn) list
 
     /// <summary>
-    ///   Type of Chessie errors arising from Instantiate.
+    ///     Type of Chessie errors arising from Instantiate.
     /// </summary>
     type Error =
         /// <summary>
-        ///   The func looked up has a parameter <c>param</c>, which
-        ///   has been assigned to an argument of the incorrect type
-        ///   <c>atype</c>.
+        ///     The func looked up has a parameter <c>param</c>, which
+        ///     has been assigned to an argument of the incorrect type
+        ///     <c>atype</c>.
         /// </summary>
         | TypeMismatch of param: (Type * string) * atype: Type
         /// <summary>
-        ///   The func looked up has <c>fn</c> arguments, but its
-        ///   definition has <c>dn</c> parameters.
+        ///     The func looked up has <c>fn</c> arguments, but its
+        ///     definition has <c>dn</c> parameters.
         /// </summary>
         | CountMismatch of fn: int * dn: int
 
@@ -64,7 +72,7 @@ module Pretty =
     open Starling.Core.Var.Pretty
     
     /// Pretty-prints instantiation errors.
-    let printInstantiationError =
+    let printError =
         function
         | TypeMismatch (par, atype) ->
             fmt "parameter '{0}' conflicts with argument of type '{1}'"
@@ -72,6 +80,45 @@ module Pretty =
         | CountMismatch (fn, dn) ->
             fmt "view usage has {0} parameter(s), but its definition has {1}"
                 [ fn |> sprintf "%d" |> String; dn |> sprintf "%d" |> String ]
+
+
+(*
+ * Building FuncTables
+ *)
+
+/// <summary>
+///     Builds a <c>FuncTable</c> from a sequence of pairs of <c>Func</c>
+///     and definition.
+/// </summary>
+/// <param name="fseq">
+///     The sequence of (<c>Func</c>, <c>'defn</c>) pairs.
+/// </param>
+/// <typeparam name="defn">
+///     The type of <c>Func</c> definitions.  May be <c>unit</c>.
+/// </typeparam>
+/// <returns>
+///     A <c>FuncTable</c> allowing the <c>'defn</c>s of the given <c>Func</c>s
+///     to be looked up.
+/// </returns>
+let makeFuncTable fseq : FuncTable<'defn> =
+    // This function exists to smooth over any changes in FuncTable
+    // representation we make later (eg. to maps).
+    Seq.toList fseq
+
+/// <summary>
+///     Returns the <c>Func</c>s contained in a <c>FuncTable</c>.
+/// </summary>
+/// <param name="ftab">
+///     The <c>FuncTable</c> to break apart.
+/// </param>
+/// <typeparam name="defn">
+///     The type of <c>Func</c> definitions.  May be <c>unit</c>.
+/// </typeparam>
+/// <returns>
+///     A sequence of <c>Func</c>s contained in <paramref name="ftab" />.
+/// </returns>
+let funcsInTable (ftab : FuncTable<'defn>) =
+    Seq.map fst ftab
 
 
 (*
@@ -104,57 +151,58 @@ let checkParamCount func =
         if fn = dn then ok (Some def) else CountMismatch (fn, dn) |> fail
 
 /// <summary>
-///   Checks whether <c>func</c> and <c>_arg1</c> agree on parameter
-///   types.
+///     Look up <c>func</c> in <c>_arg1</c>.
+///
+///     <param>
+///         This checks that the use of <c>func</c> agrees on the number of
+///         parameters, but not necessarily types.  You will need to add
+///         type checking if needed.
+///     </param>
 /// </summary>
 /// <parameter name="func">
-///   The func being looked up, the process of which this check is part.
+///     The func to look up in <c>_arg1</c>.
 /// </parameter>
 /// <parameter name="_arg1">
-///   An <c>Option</c>al pair of <c>DFunc</c> and its defining <c>BoolExpr</c>.
-///   The value <c>None</c> suggests that <c>func</c> has no definition,
-///   which can be ok (eg. if the <c>func</c> is a non-defining view).
+///     An associative sequence mapping <c>Func</c>s to some definition.
 /// </parameter>
 /// <returns>
-///   A Chessie result, where the <c>ok</c> value is the optional pair of
-///   prototype func and definition, and the failure value is a
-///   <c>Starling.Instantiate.Error</c>.
-/// </returns>
-let checkParamTypes func =
-    function
-    | None -> ok None
-    | Some def ->
-        List.map2
-            (curry
-                 (function
-                  | (AExpr _, ((Bool, _) as param)) -> TypeMismatch (param, Int) |> fail
-                  | (BExpr _, ((Int, _) as param)) -> TypeMismatch (param, Bool) |> fail
-                  | _ -> ok ()))
-            func.Params
-            (fst def).Params
-        |> collect
-        |> lift (fun _ -> Some def)
-
-/// <summary>
-///   Look up <c>func</c> in <c>_arg1</c>.
-/// </summary>
-/// <parameter name="func">
-///   The func to look up in <c>_arg1</c>.
-/// </parameter>
-/// <parameter name="_arg1">
-///   The table of func-to-Boolean-expression mappings in which we are
-///   looking up <c>func</c>.
-/// </parameter>
-/// <returns>
-///   A Chessie result, where the <c>ok</c> value is the pair of
-///   prototype func and definition, and the failure value is a
-///   <c>Starling.Instantiate.Error</c>.
+///     A Chessie result, where the <c>ok</c> value is an <c>Option</c>
+///     containing the pair of
+///     prototype func and definition, and the failure value is a
+///     <c>Starling.Instantiate.Error</c>.  If the <c>ok</c> value is
+///     <c>None</c>, it means no (valid or otherwise) definition exists.
 /// </returns>
 let lookup func =
     // First, try to find a func whose name agrees with ours.
-    List.tryFind (fun (dfunc, _) -> dfunc.Name = func.Name)
+    Seq.tryFind (fun (dfunc, _) -> dfunc.Name = func.Name)
     >> checkParamCount func
-    >> bind (checkParamTypes func)
+
+/// <summary>
+///     Checks whether <c>func</c> and <c>_arg1</c> agree on parameter
+///     types.
+/// </summary>
+/// <parameter name="func">
+///     The func being looked up, the process of which this check is part.
+/// </parameter>
+/// <parameter name="def">
+///     The <c>DFunc</c> that <paramref name="func" /> has matched.
+/// </parameter>
+/// <returns>
+///     A Chessie result, where the <c>ok</c> value is
+///     <paramref name="func" />, and the failure value is a
+///     <c>Starling.Instantiate.Error</c>.
+/// </returns>
+let checkParamTypes func def =
+    List.map2
+        (curry
+             (function
+              | (AExpr _, ((Bool, _) as param)) -> TypeMismatch (param, Int) |> fail
+              | (BExpr _, ((Int, _) as param)) -> TypeMismatch (param, Bool) |> fail
+              | _ -> ok ()))
+        func.Params
+        def.Params
+    |> collect
+    |> lift (fun _ -> func)
 
 /// <summary>
 ///   Produces a <c>VSubFun</c> that substitutes the arguments of
@@ -227,4 +275,9 @@ let substitute func dfunc expr =
 ///   The instantiation of <c>func</c> as an <c>Option</c>al <c>BoolExpr</c>.
 /// </returns>
 let instantiate func =
-    lookup func >> lift (Option.map (uncurry (substitute func)))
+    lookup func
+    >> bind (function
+             | None -> ok None
+             | Some (def, snd) -> lift (fun _ -> Some (def, snd))
+                                       (checkParamTypes func def))
+    >> lift (Option.map (uncurry (substitute func)))

@@ -3,6 +3,7 @@
 open Chessie.ErrorHandling
 open Starling
 open Starling.Collections
+open Starling.Core
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
@@ -59,12 +60,10 @@ module Types =
     type ViewError = 
         /// An expression in the view generated an `ExprError`.
         | BadExpr of expr : AST.Types.Expression * err : ExprError
-        /// A view referred to a view with no known name.
+        /// A view was requested that does not exist.
         | NoSuchView of name : string
-        /// A view referred to a view with the wrong number of params.
-        | BadParamCount of name : string * expected : int * actual : int
-        /// A view used the incorrect type for a parameter.
-        | BadParamType of name : string * param : string * expected : Type * actual : Type
+        /// A view lookup failed.
+        | LookupError of name : string * err : Instantiate.Types.Error
         /// A view used variables in incorrect ways, eg by duplicating.
         | BadVars of err : VarMapError
         /// A viewdef conflicted with the global variables.
@@ -163,20 +162,10 @@ module Pretty =
         function
         | BadExpr(expr, err) -> wrapped "expression" (expr |> printExpression) (err |> printExprError)
         | NoSuchView name -> fmt "no view prototype for '{0}'" [ String name ]
-        | BadParamCount(name, expected, actual) ->
-            fmt "view '{0}' expects {1} params, but was given {2}"
-                [ name |> String
-                  expected |> sprintf "%d" |> String
-                  actual |> sprintf "%d" |> String ]
+        | LookupError(name, err) -> wrapped "lookup for view" (name |> String) (err |> Instantiate.Pretty.printError)
         | BadVars err ->
             colonSep [ "invalid variable usage" |> String
                        err |> printVarMapError ]
-        | BadParamType (name, param, expected, actual) ->
-            fmt "param '{0}' of view '{1}' is of type '{2}' but was given type '{3}'"
-                [ name |> String
-                  param |> String
-                  expected |> printType
-                  actual |> printType ]
         | GlobalVarConflict err ->
             colonSep [ "parameters conflict with global variables" |> String
                        err |> printVarMapError ]
@@ -446,25 +435,27 @@ and joinViewDefs l r = List.append (viewDefToSet l) (viewDefToSet r)
 /// binding the types from the former to the names from the latter.
 let funcViewParMerge ppars dpars = List.map2 (fun (ty, _) name -> (ty, name)) ppars dpars
 
-/// Produces the environment created by interpreting the DFunc with
-/// name name and params dpars, using the view prototype map vpm.
-let modelDFunc protos name dpars = 
-    // Does this functional view name a proper view?
-    match Map.tryFind name protos with
-    | Some ppars -> 
-        // Does it have the correct number of parameters?
-        let ldpars = List.length dpars
-        let lppars = List.length ppars
-        if ldpars <> lppars
-        then BadParamCount(name, lppars, ldpars) |> fail
-        else [ dfunc name (funcViewParMerge ppars dpars) ] |> ok
-    | None -> fail <| NoSuchView name
+/// Adapts Instantiate.lookup to the modeller's needs.
+let lookupFunc protos func =
+    protos
+    |> Instantiate.lookup func
+    |> mapMessages (curry LookupError func.Name)
+    |> bind (function
+             | Some (proto, ()) -> proto |> ok
+             | None -> func.Name |> NoSuchView |> fail)
+
+/// Models part of a view definition as a DFunc.
+let modelDFunc protos func =
+    func
+    |> lookupFunc protos
+    |> lift (fun proto ->
+                 [ dfunc func.Name (funcViewParMerge proto.Params func.Params) ])
 
 /// Tries to convert a view def into its model (multiset) form.
-let rec modelDView protos vd = 
-    match vd with
+let rec modelDView protos = 
+    function
     | ViewDef.Unit -> ok []
-    | ViewDef.Func {Name = v; Params = pars} -> modelDFunc protos v pars
+    | ViewDef.Func dfunc -> modelDFunc protos dfunc
     | ViewDef.Join(l, r) -> trial { let! lM = modelDView protos l
                                     let! rM = modelDView protos r
                                     return List.append lM rM }
@@ -583,9 +574,8 @@ let addSearchDefs vprotos depth viewdefs =
     | None -> viewdefs
     | Some n ->
         vprotos
-        // Convert the view prototype map back into a func list.
-        |> Map.toSeq
-        |> Seq.map (uncurry func)
+        // Convert the func-table back into a func list.
+        |> Instantiate.funcsInTable
         // Then, generate the view that is the *-conjunction of all of the
         // view protos.
         |> Multiset.ofSeq
@@ -614,22 +604,36 @@ let modelViewDefs globals vprotos { Search = s; Constraints = cs } =
 //
        
 /// Models an AFunc as a CFunc.
-let modelCFunc protos env name vpars =
-    // TODO(CaptainHayashi): use protos
-    vpars
-    |> Seq.map (fun e -> 
-                e
-                |> modelExpr env
-                |> mapMessages (curry BadExpr e))
-    |> collect
-    |> lift (vfunc name >> CFunc.Func)
+let modelCFunc protos env afunc =
+    // First, make sure this AFunc actually has a prototype
+    // and the correct number of parameters.
+    afunc
+    |> lookupFunc protos
+    |> bind (fun proto ->
+             // First, model the AFunc's parameters.
+             afunc.Params
+             |> Seq.map (fun e ->
+                             e
+                             |> modelExpr env
+                             |> mapMessages (curry BadExpr e))
+             |> collect
+             // Then, put them into a VFunc.
+             |> lift (vfunc afunc.Name)
+             // Now, we can use Instantiate's type checker to ensure
+             // the params in the VFunc are of the types mentioned
+             // in proto.
+             |> bind (fun vfunc ->
+                          Instantiate.checkParamTypes vfunc proto
+                          |> mapMessages (curry LookupError vfunc.Name)))
+    // Finally, lift to CFunc.
+    |> lift CFunc.Func
 
 /// Tries to flatten a view AST into a CView.
 /// Takes an environment of local variables, and the AST itself.
 let rec modelCView protos ls =
     function
-    | View.Func {Name = s; Params = pars} ->
-        modelCFunc protos ls s pars |> lift Multiset.singleton
+    | View.Func afunc ->
+        modelCFunc protos ls afunc |> lift Multiset.singleton
     | View.If(e, l, r) ->
         lift3 (fun em lm rm -> CFunc.ITE(em, lm, rm) |> Multiset.singleton)
               (e |> modelBoolExpr ls |> mapMessages (curry BadExpr e))
@@ -892,21 +896,22 @@ let checkViewProtoDuplicates (proto : ViewProto) =
 let modelViewProto proto = 
     proto
     |> checkViewProtoDuplicates
-    |> lift (fun pro -> (pro.Name, pro.Params))
+    |> lift (fun pro -> (func pro.Name pro.Params, ()))
     |> mapMessages (curry MEVProto proto)
 
-/// Checks view prototypes and converts them to map form.
+/// Checks view prototypes and converts them to func-table form.
 let modelViewProtos protos = 
     protos
     |> Seq.ofList
     |> Seq.map modelViewProto
     |> collect
-    |> lift Map.ofSeq
+    |> lift Instantiate.makeFuncTable
 
 /// Converts a collated script to a model.
 let model collated : Result<Model<AST.Types.Method<CView, PartCmd<CView>>, DView>, ModelError> = 
     trial { 
         let! vprotos = modelViewProtos collated.VProtos
+        
         // Make variable maps out of the global and local variable definitions.
         let! globals = makeVarMap collated.Globals |> mapMessages MEVar
         let! locals = makeVarMap collated.Locals |> mapMessages MEVar
