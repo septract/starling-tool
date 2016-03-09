@@ -16,7 +16,7 @@ module Types =
         | Unmarked of string
         | Before of string
         | After of string
-        | Frame of bigint * string
+        | Goal of bigint * string
 
     /// An expression of arbitrary type.
     type Expr =
@@ -59,7 +59,7 @@ let constToString =
     | Unmarked s -> s
     | Before s -> sprintf "%s!before" s
     | After s -> sprintf "%s!after" s
-    | Frame (i, s) -> sprintf "%s!frame!%A" s i
+    | Goal (i, s) -> sprintf "%s!goal!%A" s i
 
 
 /// <summary>
@@ -111,8 +111,8 @@ module Pretty =
         function
         | AExpr a -> printArithExpr a
         | BExpr b -> printBoolExpr b
-        
- 
+
+
 /// Partial pattern that matches a Boolean equality on arithmetic expressions.
 let (|BAEq|_|) =
     function
@@ -205,16 +205,14 @@ let rec simp ax =
 let isFalse =
     simp >> 
     function
-    // False is always false.
     | BFalse -> true
     | _      -> false
    
 let isTrue =
     simp >> 
     function
-    // False is always false.
     | BTrue -> true
-    | _      -> false
+    | _     -> false
       
 /// Extracts the name from a Starling constant.
 let stripMark =
@@ -222,7 +220,7 @@ let stripMark =
     | Unmarked s -> s
     | Before s -> s
     | After s -> s
-    | Frame (i, s) -> s
+    | Goal (i, s) -> s
 
 (*
  * Expression constructors
@@ -343,10 +341,6 @@ let getFresh fg =
     let result = !fg
     fg := !fg + 1I
     result
-
-/// Given a fresh generator, yields a function promoting a string to a frame
-/// variable.
-let frame fg = fg |> getFresh |> curry Frame
 
 (*
  * Expression probing

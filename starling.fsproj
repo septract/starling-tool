@@ -60,7 +60,6 @@
     <Compile Include="Grapher.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="Semantics.fs" />
-    <Compile Include="Framer.fs" />
     <Compile Include="TermGen.fs" />
     <Compile Include="Reifier.fs" />
     <Compile Include="Flattener.fs" />

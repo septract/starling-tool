@@ -33,8 +33,8 @@ type Request =
     | Frontend of Lang.Frontend.Request
     /// Stop at graph axiomatisation.
     | Axiomatise
-    /// Stop at frame-axiom-pair generation.
-    | Frame
+    /// Stop at goalAdd-axiom-pair generation.
+    | GoalAdd
     /// Stop at term generation.
     | TermGen
     /// Stop at view reification.
@@ -58,7 +58,7 @@ let requestMap =
                  ("guard", Request.Frontend Lang.Frontend.Request.Guard)
                  ("graph", Request.Frontend Lang.Frontend.Request.Graph)
                  ("axiomatise", Request.Axiomatise)
-                 ("frame", Request.Frame)
+                 ("goalAdd", Request.GoalAdd)
                  ("termgen", Request.TermGen)
                  ("reify", Request.Reify)
                  ("flatten", Request.Flatten)
@@ -80,8 +80,8 @@ type Response =
     | Frontend of Lang.Frontend.Response
     /// Stop at graph axiomatisation.
     | Axiomatise of Model<Axiom<GView, VFunc>, DView>
-    /// The result of frame-axiom-pair generation.
-    | Frame of Model<FramedAxiom, DView>
+    /// The result of goal-axiom-pair generation.
+    | GoalAdd of Model<GoalAxiom, DView>
     /// The result of term generation.
     | TermGen of Model<PTerm<GView, View>, DView>
     /// The result of term reification.
@@ -107,10 +107,10 @@ let printResponse mview =
             (printPAxiom printGView)
             printDView
             m
-    | Frame m ->
+    | GoalAdd m ->
         printModelView
             mview
-            printFramedAxiom printDView m
+            printGoalAxiom printDView m
     | TermGen m ->
         printModelView
             mview
@@ -218,14 +218,16 @@ let reify = lift Starling.Reifier.reify
 /// Shorthand for the term generation stage.
 let termGen = lift Starling.TermGen.termGen
 
-/// Shorthand for the framing stage.
-let frame = lift Starling.Framer.frame
+/// Shorthand for the goal adding stage.
+let goalAdd = lift Starling.Core.Axiom.goalAdd
 
 /// Shorthand for the semantics stage.
-let semantics = bind (Starling.Semantics.translate >> mapMessages Error.Semantics)
+let semantics = bind (Starling.Semantics.translate
+                >> mapMessages Error.Semantics)
 
 /// Shorthand for the axiomatisation stage.
-let axiomatise = bind (Starling.Core.Graph.axiomatise >> mapMessages Error.Axiomatise)
+let axiomatise = bind (Starling.Core.Graph.axiomatise
+                 >> mapMessages Error.Axiomatise)
 
 /// Shorthand for the frontend stage.
 let frontend rq = Lang.Frontend.run rq >> mapMessages Error.Frontend
@@ -249,28 +251,28 @@ let runStarling opt =
         model
         >> axiomatise
         >> lift Response.Axiomatise
-    | Request.Frame -> 
+    | Request.GoalAdd -> 
         model
         >> axiomatise
-        >> frame
-        >> lift Response.Frame
+        >> goalAdd
+        >> lift Response.GoalAdd
     | Request.TermGen -> 
         model
         >> axiomatise
-        >> frame
+        >> goalAdd
         >> termGen
         >> lift Response.TermGen
     | Request.Reify -> 
         model
         >> axiomatise
-        >> frame
+        >> goalAdd
         >> termGen
         >> reify
         >> lift Response.Reify
     | Request.Flatten -> 
         model
         >> axiomatise
-        >> frame
+        >> goalAdd
         >> termGen
         >> reify
         >> flatten
@@ -278,7 +280,7 @@ let runStarling opt =
     | Request.Semantics -> 
         model
         >> axiomatise
-        >> frame
+        >> goalAdd
         >> termGen
         >> reify
         >> flatten
@@ -287,7 +289,7 @@ let runStarling opt =
     | Request.Optimise -> 
         model
         >> axiomatise
-        >> frame
+        >> goalAdd
         >> termGen
         >> reify
         >> flatten
@@ -297,7 +299,7 @@ let runStarling opt =
     | Request.Z3 rq -> 
         model
         >> axiomatise
-        >> frame
+        >> goalAdd
         >> termGen
         >> reify
         >> flatten
@@ -308,7 +310,7 @@ let runStarling opt =
     | Request.HSF ->
         model
         >> axiomatise
-        >> frame
+        >> goalAdd
         >> termGen
         >> reify
         >> flatten
