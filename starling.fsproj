@@ -92,8 +92,9 @@
     <None Include="Examples\Pass\ticketLock.cvf" />
     <None Include="Examples\Pass\ticketLockNoIf.cvf" />
     <None Include="Examples\Pass\ticketLockNonAtomicRelease.cvf" />
-    <None Include="Examples\Pass\spinLock.cvf" />
+    <None Include="Examples\Pass\singleWriterMultiReaderLock.cvf" />
     <None Include="Examples\Pass\multicounter.cvf" />
+    <None Include="Examples\Pass\spinLock.cvf" />
     <None Include="Examples\PassHSF\ticketLockIndefinite.cvf" />
     <None Include="Examples\WIP\dekker.cvf" />
     <None Include="Examples\WIP\duplicateVars.cvf" />
