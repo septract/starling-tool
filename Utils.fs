@@ -62,14 +62,14 @@ let withDefault d =
 
 /// Maps a function f through a set, and concatenates the resulting
 /// list of lists into one set.
-let unionMap f = 
+let unionMap f =
     Set.toSeq
     >> Seq.map f
     >> Set.unionMany
 
 /// Maps a function f through a list, and concatenates the resulting
 /// list of lists into one list.
-let concatMap f xs = 
+let concatMap f xs =
     (* Adapted from the GHC base implementation,
      * see http://hackage.haskell.org/package/base-4.8.1.0/docs/src/Data.Foldable.html
      * for source and copyright information.
@@ -82,13 +82,13 @@ let concatMap f xs =
 
 /// Tries to find duplicate entries in a list.
 /// Returns a list of the duplicates found.
-let findDuplicates lst = 
+let findDuplicates lst =
     lst
     |> Seq.groupBy id
     |> Seq.choose
            // dupes now contains all of the appearances of x.
            // If we can successfully take 2 appearances, it's a duplicate.
-           (function 
+           (function
             | (x, dupes) when dupes |> Seq.truncate 2 |> Seq.length = 2
                 -> Some x
             | _ -> None)
@@ -139,9 +139,9 @@ let seqBind f initialS = Seq.fold (fun s x -> bind (f x) s) (ok initialS)
 /// Fold that can be terminated earlier by the step function f returning None.
 /// If Any step returns None, the whole fold returns None.
 let rec foldFastTerm  (f : 'State -> 'T -> 'State option)  (s : 'State) (l : 'T list) =  
-     match l with 
+     match l with
      | []   -> Some s
-     | x::l -> 
-        match f s x with 
+     | x::l ->
+        match f s x with
         | Some s -> foldFastTerm f s l
-        | None -> None 
+        | None -> None

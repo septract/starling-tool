@@ -70,7 +70,7 @@ module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Var.Pretty
-    
+
     /// Pretty-prints instantiation errors.
     let printError =
         function
@@ -126,26 +126,27 @@ let funcsInTable (ftab : FuncTable<'defn>) =
  *)
 
 /// <summary>
-///   Checks whether <c>func</c> and <c>_arg1</c> agree on parameter
-///   count.
+///     Checks whether <c>func</c> and <c>_arg1</c> agree on parameter
+///     count.
 /// </summary>
 /// <parameter name="func">
-///   The func being looked up, the process of which this check is part.
+///     The func being looked up, the process of which this check is part.
 /// </parameter>
 /// <parameter name="_arg1">
-///   An <c>Option</c>al pair of <c>DFunc</c> and its defining <c>BoolExpr</c>.
-///   The value <c>None</c> suggests that <c>func</c> has no definition,
-///   which can be ok (eg. if the <c>func</c> is a non-defining view).
+///     An <c>Option</c>al pair of <c>DFunc</c> and its defining
+///     <c>BoolExpr</c>.
+///     The value <c>None</c> suggests that <c>func</c> has no definition,
+///     which can be ok (eg. if the <c>func</c> is a non-defining view).
 /// </parameter>
 /// <returns>
-///   A Chessie result, where the <c>ok</c> value is the optional pair of
-///   prototype func and definition, and the failure value is a
-///   <c>Starling.Instantiate.Error</c>.
+///     A Chessie result, where the <c>ok</c> value is the optional pair of
+///     prototype func and definition, and the failure value is a
+///     <c>Starling.Instantiate.Error</c>.
 /// </returns>
 let checkParamCount func =
     function
     | None -> ok None
-    | Some def ->    
+    | Some def ->
         let fn = List.length func.Params
         let dn = List.length (fst def).Params
         if fn = dn then ok (Some def) else CountMismatch (fn, dn) |> fail
@@ -205,14 +206,14 @@ let checkParamTypes func def =
     |> lift (fun _ -> func)
 
 /// <summary>
-///   Produces a <c>VSubFun</c> that substitutes the arguments of
-///   <c>_arg1</c> for their parameters in <c>_arg1</c>.
+///     Produces a <c>VSubFun</c> that substitutes the arguments of
+///     <c>_arg1</c> for their parameters in <c>_arg1</c>.
 /// substitutions.
 let paramSubFun {Params = fpars} {Params = dpars} =
     let pmap =
         Seq.map2 (fun (_, name) up -> name, up) dpars fpars
         |> Map.ofSeq
-        
+
     // TODO(CaptainHayashi): make this type-safe.
     // TODO(CaptainHayashi): maybe have a separate Const leg for params.
     {AVSub =
@@ -234,45 +235,46 @@ let paramSubFun {Params = fpars} {Params = dpars} =
     }
 
 /// <summary>
-///   Given a func <c>func</c>, its prototype <c>dfunc</c>, and that
-///   prototype's Boolean interpretation <c>expr</c>, calculate the
-///   value of <c>expr</c> with the arguments of <c>func</c>
-///   substituted for the parameters of <c>dfunc</c>.
+///     Given a func <c>func</c>, its prototype <c>dfunc</c>, and that
+///     prototype's Boolean interpretation <c>expr</c>, calculate the
+///     value of <c>expr</c> with the arguments of <c>func</c>
+///     substituted for the parameters of <c>dfunc</c>.
 /// </summary>
 /// <parameter name="func">
-///   The <c>VFunc</c> whose arguments are to be substituted into
-///   <c>expr</c>.
+///     The <c>VFunc</c> whose arguments are to be substituted into
+///     <c>expr</c>.
 /// </parameter>
 /// <parameter name="dfunc">
-///   The <c>VFunc</c> whose parameters in <c>expr</c> are to be
-///   replaced.
+///     The <c>VFunc</c> whose parameters in <c>expr</c> are to be
+///     replaced.
 /// </parameter>
 /// <parameter name="expr">
-///   The <c>BoolExpr</c> in which each instance of a parameter from
-///   <c>dfunc</c> is to be replaced with its argument in
-///   <c>func</c>.
+///     The <c>BoolExpr</c> in which each instance of a parameter from
+///     <c>dfunc</c> is to be replaced with its argument in
+///     <c>func</c>.
 /// </parameter>
 /// <returns>
-///   <c>expr</c> with the substitutions above made.
+///     <c>expr</c> with the substitutions above made.
 /// </returns>
 let substitute func dfunc expr =
     paramSubFun func dfunc |> flip boolSubVars expr
 
 /// <summary>
-///   Look up <c>func</c> in <c>_arg1</c>, and instantiate the
-///   resulting Boolean expression, substituting <c>func.Params</c>
-///   for the parameters in the expression.
+///     Look up <c>func</c> in <c>_arg1</c>, and instantiate the
+///     resulting Boolean expression, substituting <c>func.Params</c>
+///     for the parameters in the expression.
 /// </summary>
 /// <parameter name="func">
-///   The <c>VFunc</c> whose arguments are to be substituted into
-///   its definition in <c>_arg1</c>.
+///     The <c>VFunc</c> whose arguments are to be substituted into
+///     its definition in <c>_arg1</c>.
 /// </parameter>
 /// <parameter name="_arg1">
-///   The <c>FuncTable</c> whose definition for <c>func</c> is to be
-///   instantiated.
+///     The <c>FuncTable</c> whose definition for <c>func</c> is to be
+///     instantiated.
 /// </parameter>
 /// <returns>
-///   The instantiation of <c>func</c> as an <c>Option</c>al <c>BoolExpr</c>.
+///     The instantiation of <c>func</c> as an <c>Option</c>al
+///     <c>BoolExpr</c>.
 /// </returns>
 let instantiate func =
     lookup func
