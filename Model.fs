@@ -28,7 +28,7 @@ open Starling.Core.Var
  * view-set: a multiset of guarded views.
  *
  * conds: a pair of view assertions.
- * 
+ *
  * axiom: a Hoare triple, containing a pair of conds, and some
  *        representation of a command.
  *
@@ -46,9 +46,9 @@ module Types =
      *)
 
     /// A guarded item.
-    /// The semantics of a Guarded Item is that the Item is to be taken as present
-    /// in its parent context (eg a View) if, and only if, Cond holds.
-    type Guarded<'a> = 
+    /// The semantics of a Guarded Item is that the Item is to be taken as
+    /// present in its parent context (eg a View) if, and only if, Cond holds.
+    type Guarded<'a> =
         { Cond : BoolExpr
           Item : 'a }
 
@@ -70,11 +70,11 @@ module Types =
      *)
 
     /// <summary>
-    ///   A basic view, as a multiset of VFuncs.
+    ///     A basic view, as a multiset of VFuncs.
     /// </summary>
     /// <remarks>
-    ///   Though View is the canonical Concurrent Views Framework view,
-    ///   we actually seldom use it.
+    ///     Though View is the canonical Concurrent Views Framework view,
+    ///     we actually seldom use it.
     /// </remarks>
     type View = Multiset<VFunc>
 
@@ -82,12 +82,12 @@ module Types =
     type DView = Multiset<DFunc>
 
     /// <summary>
-    ///   A guarded view.
+    ///     A guarded view.
     /// </summary>
     /// <remarks>
-    ///   These are the most common form of view in Starling internally,
-    ///   although theoretically speaking they are equivalent to Views
-    ///   with the guards lifting to proof case splits.
+    ///     These are the most common form of view in Starling internally,
+    ///     although theoretically speaking they are equivalent to Views
+    ///     with the guards lifting to proof case splits.
     /// </remarks>
     type GView = Multiset<GFunc>
 
@@ -103,11 +103,11 @@ module Types =
      *)
 
     /// <summary>
-    ///   A view definition.
+    ///     A view definition.
     /// </summary>
     /// <remarks>
-    ///   The semantics of a ViewDef is that, if Def is present, then the
-    ///   view View is satisfied if, and only if, Def holds.
+    ///     The semantics of a ViewDef is that, if Def is present, then the
+    ///     view View is satisfied if, and only if, Def holds.
     /// </remarks>
     type ViewDef<'view> =
         { View : 'view
@@ -118,12 +118,14 @@ module Types =
      *)
 
     /// <summary>
-    ///   A term, containing a command relation, weakest precondition, and goal.
+    ///     A term, containing a command relation, weakest precondition, and
+    ///     goal.
     /// </summary>
     /// <remarks>
-    ///   Though these are similar to Axioms, we keep them separate for reasons of
-    ///   semantics: Axioms are literal Hoare triples {P}C{Q}, whereas Terms are
-    ///   some form of the actual Views axiom soundness check we intend to prove.
+    ///     Though these are similar to Axioms, we keep them separate for
+    ///     reasons of semantics: Axioms are literal Hoare triples {P}C{Q},
+    ///     whereas Terms are some form of the actual Views axiom soundness
+    ///     check we intend to prove.
     /// </remarks>
     type Term<'cmd, 'wpre, 'goal> =
         { /// The command relation of the Term.
@@ -141,8 +143,8 @@ module Types =
     type STerm<'wpre, 'goal> = Term<BoolExpr, 'wpre, 'goal>
 
     /// <summary>
-    ///   A 'Datalog-style' term of one goal <c>VFunc</c> and a
-    ///   weakest-precondition <c>GView</c>.
+    ///     A 'Datalog-style' term of one goal <c>VFunc</c> and a
+    ///     weakest-precondition <c>GView</c>.
     /// </summary>
     type DTerm = STerm<GView, VFunc>
 
@@ -154,12 +156,12 @@ module Types =
      *)
 
     /// A parameterised model of a Starling program.
-    type Model<'axiom, 'dview> = 
+    type Model<'axiom, 'dview> =
         { Globals : VarMap
           Locals : VarMap
           Axioms : Map<string, 'axiom>
           /// <summary>
-          ///   The semantic function for this model.
+          ///     The semantic function for this model.
           /// </summary>
           Semantics : (DFunc * BoolExpr) list
           // This corresponds to the function D.
@@ -173,23 +175,23 @@ module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.Expr.Pretty
-     
+
     /// Pretty-prints a type-name parameter.
-    let printParam (ty, name) = 
+    let printParam (ty, name) =
         hsep [ ty |> printType
                name |> String ]
 
     /// Pretty-prints a multiset given a printer for its contents.
-    let printMultiset pItem = 
+    let printMultiset pItem =
         Multiset.toList
         >> List.map pItem
         >> semiSep
 
     /// Pretty-prints a guarded item.
-    let printGuarded pitem {Cond = c; Item = i} = 
+    let printGuarded pitem {Cond = c; Item = i} =
         // Don't bother showing the guard if it's always true.
         if isTrue c then pitem i
-        else 
+        else
             parened (HSep([ printBoolExpr c
                             pitem i ], String "|"))
 
@@ -212,7 +214,9 @@ module Pretty =
     let printGView = printMultiset printGFunc >> ssurround "<|" "|>"
 
     /// Pretty-prints a view set.
-    let printViewSet = printMultiset (printGuarded printView >> ssurround "((" "))") >> ssurround "(|" "|)"
+    let printViewSet =
+        printMultiset (printGuarded printView >> ssurround "((" "))")
+        >> ssurround "(|" "|)"
 
     /// Pretty-prints a term, given printers for its commands and views.
     let printTerm pCmd pWPre pGoal {Cmd = c; WPre = w; Goal = g} = 
@@ -227,7 +231,7 @@ module Pretty =
     let printSTerm pWPre pGoal = printTerm printBoolExpr pWPre pGoal
 
     /// Pretty-prints model variables.
-    let printModelVar (name, ty) = 
+    let printModelVar (name, ty) =
         colonSep [ String name
                    printType ty ]
 
@@ -235,22 +239,27 @@ module Pretty =
     let printViewDef pView { View = vs; Def = e } =
         printAssoc Inline
             [ (String "View", pView vs)
-              (String "Def", withDefault (String "?") (Option.map printBoolExpr e)) ]
+              (String "Def", withDefault (String "?")
+                                         (Option.map printBoolExpr e)) ]
 
     /// Pretty-prints the axiom map for a model.
     let printModelAxioms pAxiom model =
         printMap Indented String pAxiom model.Axioms
 
     /// Pretty-prints a model given axiom and defining-view printers.
-    let printModel pAxiom pDView model = 
-        headed "Model" 
+    let printModel pAxiom pDView model =
+        headed "Model"
             [ headed "Shared variables" <|
-                  Seq.singleton (printMap Inline String printType model.Globals)
+                  Seq.singleton
+                      (printMap Inline String printType model.Globals)
               headed "Thread variables" <|
-                  Seq.singleton (printMap Inline String printType model.Locals)
-              headed "ViewDefs" <| List.map (printViewDef pDView) model.ViewDefs
-              headed "Axioms" <| Seq.singleton (printModelAxioms pAxiom model) ]
-    
+                  Seq.singleton
+                      (printMap Inline String printType model.Locals)
+              headed "ViewDefs" <|
+                  List.map (printViewDef pDView) model.ViewDefs
+              headed "Axioms" <|
+                  Seq.singleton (printModelAxioms pAxiom model) ]
+
     /// <summary>
     ///     Enumerations of ways to view part or all of a <c>Model</c>.
     /// </summary>
@@ -303,13 +312,13 @@ module Pretty =
 ///     Type-constrained version of <c>func</c> for <c>DFunc</c>s.
 /// </summary>
 /// <parameter name="name">
-///   The name of the <c>DFunc</c>.
+///     The name of the <c>DFunc</c>.
 /// </parameter>
 /// <parameter name="pars">
-///   The parameters of the <c>DFunc</c>, as a sequence.
+///     The parameters of the <c>DFunc</c>, as a sequence.
 /// </parameter>
 /// <returns>
-///   A new <c>DFunc</c> with the given name and parameters.
+///     A new <c>DFunc</c> with the given name and parameters.
 /// </returns>
 let dfunc name (pars : (Type * string) seq) : DFunc = func name pars
 
@@ -317,16 +326,16 @@ let dfunc name (pars : (Type * string) seq) : DFunc = func name pars
 ///     Type-constrained version of <c>func</c> for <c>VFunc</c>s.
 /// </summary>
 /// <parameter name="name">
-///   The name of the <c>VFunc</c>.
+///     The name of the <c>VFunc</c>.
 /// </parameter>
 /// <parameter name="pars">
-///   The parameters of the <c>VFunc</c>, as a sequence.
+///     The parameters of the <c>VFunc</c>, as a sequence.
 /// </parameter>
 /// <returns>
-///   A new <c>VFunc</c> with the given name and parameters.
+///     A new <c>VFunc</c> with the given name and parameters.
 /// </returns>
 let vfunc name (pars : Expr seq) : VFunc = func name pars
-            
+
 /// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
 /// and its Goal with fG.
 let mapTerm fC fW fG {Cmd = c; WPre = w; Goal = g} =
@@ -334,7 +343,7 @@ let mapTerm fC fW fG {Cmd = c; WPre = w; Goal = g} =
 
 /// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
 /// and its Goal with fG.
-/// fC, fW and fG must return Chessie results; liftMapTerm follows suit. 
+/// fC, fW and fG must return Chessie results; liftMapTerm follows suit.
 let tryMapTerm fC fW fG {Cmd = c; WPre = w; Goal = g} =
     trial {
         let! cR = fC c;
@@ -348,7 +357,8 @@ let axioms {Axioms = xs} = xs
 
 /// Creates a new model that is the input model with a different axiom set.
 /// The axiom set may be of a different type.
-let withAxioms (xs : Map<string, 'y>) (model : Model<'x, 'dview>) : Model<'y, 'dview> = 
+let withAxioms (xs : Map<string, 'y>) (model : Model<'x, 'dview>)
+    : Model<'y, 'dview> =
     { Globals = model.Globals
       Locals = model.Locals
       ViewDefs = model.ViewDefs
@@ -360,7 +370,8 @@ let mapAxioms (f : 'x -> 'y) (model : Model<'x, 'dview>) : Model<'y, 'dview> =
     withAxioms (model |> axioms |> Map.map (fun _ -> f)) model
 
 /// Maps a failing function f over the axioms of a model.
-let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x, 'dview>) : Result<Model<'y, 'dview>, 'e> =
+let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x, 'dview>)
+    : Result<Model<'y, 'dview>, 'e> =
     lift (fun x -> withAxioms x model)
          (model
           |> axioms
