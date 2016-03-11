@@ -47,7 +47,7 @@ module Types =
         }
 
     /// <summary>
-    ///     The summary for a standalone control-flow graph.
+    ///     The type for a standalone control-flow graph.
     /// </summary>
     type Graph =
         { /// <summary>

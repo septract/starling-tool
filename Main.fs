@@ -176,7 +176,7 @@ let printResponse mview =
 type Error =
     /// An error occurred in the frontend.
     | Frontend of Lang.Frontend.Error
-    /// An error occured in axiomatisation.
+    /// An error occurred in axiomatisation.
     | Axiomatise of Core.Graph.Types.Error
     /// An error occurred in semantic translation.
     | Semantics of Semantics.Types.Error
