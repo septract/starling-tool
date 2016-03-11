@@ -20,7 +20,63 @@ open Starling.Core.Sub
 ///     Graph optimisation.
 /// </summary>
 module Graph =
+    open Starling.Core.Axiom
     open Starling.Core.Graph
+    
+    /// <summary>
+    ///     Unifies two given nodes in a subgraph if they are
+    ///     equivalent and connected, but only by 'Id' transitions.
+    ///
+    ///     <para>
+    ///         This assumes that 'Id' has the necessary semantics.
+    ///     </para>
+    /// </summary>
+    /// <param name="sg">
+    ///     The graph to unify (perhaps).
+    /// </param>
+    /// <param name="x">
+    ///     The first node to consider.
+    /// </param>
+    /// <param name="y">
+    ///     The second node to consider.
+    /// </param>
+    /// <returns>
+    ///     A subgraph equivalent to <paramref name="sg" />, but with
+    ///     <paramref name="x" /> and <paramref name="y" /> merged if they are
+    ///     equivalent and connected only by 'Id' edges.
+    /// </returns>
+    let removeIdStep sg x y =
+        (* First, find out what the views on both sides are, and if they are
+         * equal.
+         * This lets us check x and y are actually both still in the graph.
+         * Previous steps could have unified one or both of them away.
+         *)
+        match (Map.tryFind x sg.Nodes, Map.tryFind y sg.Nodes) with
+        | (Some xv, Some yv) when xv = yv ->
+            // Find the edges that map xv and yv.
+            let xyEdges =
+                Map.filter
+                    (fun _ { Edge.Pre = p ; Edge.Post = q } ->
+                         (p = x && q = y) || (p = y && q = x))
+                    sg.Edges
+
+            // Are all of the edges id?
+            let allId =
+                Map.forall
+                    (fun _ { Edge.Cmd = { Func.Name = n } } -> n = "Id")
+                    xyEdges
+
+            // If not, or the edge list is empty, leave the edges alone.
+            if Map.isEmpty xyEdges || not allId
+            then sg
+            else
+                // Delete the id nodes first, then unify the two nodes.
+                let toKeep ename _ = not (Map.containsKey ename xyEdges)
+
+                let sga =
+                    { sg with Edges = Map.filter toKeep sg.Edges }
+                unify sga x y
+        | _ -> sg
 
     /// <summary>
     ///     Merges equivalent nodes where they are connected, but only by 'Id'
@@ -38,8 +94,11 @@ module Graph =
     ///     equivalent nodes connected only by 'Id' merged.
     /// </returns>
     let removeIdTransitions { Name = name ; Contents = subgraph } =
-        // TODO(CaptainHayashi): do something here
-        graph name subgraph
+        subgraph
+        |> nodePairs
+        |> Seq.fold (fun sg -> uncurry (removeIdStep sg))
+           subgraph
+        |> graph name
 
     /// <summary>
     ///     Optimises a graph.
