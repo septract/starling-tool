@@ -3,7 +3,7 @@ module Starling.Tests.Lang.Parser
 open NUnit.Framework
 open FParsec
 open Starling
-open Starling.Var
+open Starling.Core.Var
 open Starling.Lang.AST
 open Starling.Lang.Parser
 

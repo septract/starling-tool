@@ -1,7 +1,10 @@
-module Starling.Tests.Expr
+module Starling.Tests.Core.Expr
 
 open NUnit.Framework
-open Starling.Expr
+open Starling.Core.Axiom
+open Starling.Core.Expr
+open Starling.Core.Sub
+
 
 /// Tests for the expression types and functions.
 type ExprTests() =
@@ -30,22 +33,27 @@ type ExprTests() =
         | SimpleArith -> false
         | CompoundArith -> true
 
-    /// Test cases for testing frame rewriting.
-    static member FrameConstants =
+    /// Test cases for testing goal rewriting.
+    static member GoalConstants =
         [ TestCaseData(["foo"; "foo"; "foo"])
-                .Returns([Frame (0I, "foo")
-                          Frame (1I, "foo")
-                          Frame (2I, "foo")])
+                .Returns([Goal (0I, "foo")
+                          Goal (1I, "foo")
+                          Goal (2I, "foo")])
           TestCaseData(["foo"; "bar"; "baz"])
-                .Returns([Frame (0I, "foo")
-                          Frame (1I, "bar")
-                          Frame (2I, "baz")])
+                .Returns([Goal (0I, "foo")
+                          Goal (1I, "bar")
+                          Goal (2I, "baz")])
         ]
 
     /// Tests that the frame name generator works fine.
-    member x.``frame generation uses fresh variables properly`` xs =
+    [<TestCaseSource("GoalConstants")>]
+    member x.``goal generation uses fresh variables properly`` xs =
+        // TODO(CaptainHayashi): move this to AxiomTests.
         let fg = freshGen ()
-        List.map (frame fg) xs
+
+        // The fun x boilerplate seems to be necessary.
+        // Otherwise, mutations to fg apparently don't propagate!
+        List.map (fun x -> goalVar fg x) xs
 
     /// Test cases for testing constant post-state rewriting.
     static member ArithConstantPostStates =
@@ -73,4 +81,4 @@ type ExprTests() =
     [<TestCaseSource("ArithConstantPostStates")>]
     /// Tests whether rewriting constants in arithmetic expressions to post-state works.
     member x.``constants in arithmetic expressions can be rewritten to post-state`` expr =
-        arithMarkVars After (Set.ofList ["target1"; "target2"] |> inSet) expr
+        (liftMarker After (Set.ofList ["target1"; "target2"] |> inSet)).ASub expr

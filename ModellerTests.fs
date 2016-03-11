@@ -3,15 +3,27 @@ module Starling.Tests.Modeller
 open NUnit.Framework
 open Starling
 open Starling.Collections
-open Starling.Expr
-open Starling.Var
-open Starling.Model
+open Starling.Core.Expr
+open Starling.Core.Var
+open Starling.Core.Model
+open Starling.Core.Instantiate
 open Starling.Lang.AST
 open Starling.Lang.Modeller
 open Starling.Tests.Studies
 
+/// Wrapper for search modeller tests.
+/// Mainly exists to persuade nUnit to use the correct types.
+type SearchViewDefEntry =
+    { Search : int option
+      InitDefs : ViewDef<DView> list }
+
 /// Tests for the modeller.
 type ModellerTests() =
+    /// View prototypes for the ticketed lock modeller.
+    static member TicketLockProtos : FuncTable<unit> =
+        makeFuncTable
+            [ (func "holdLock" [], ())
+              (func "holdTick" [(Type.Int, "t")], ()) ]
 
     /// Sample environment used in expression modelling tests.
     static member Env =
@@ -19,6 +31,54 @@ type ModellerTests() =
                      ("bar", Type.Int)
                      ("baz", Type.Bool)
                      ("emp", Type.Bool) ]
+
+    static member EmptyCView : unit -> CView = Multiset.empty
+
+    /// <summary>
+    ///     Test cases for checking view modelling on correct view exprs.
+    /// </summary>
+    static member ViewExprsGood =
+        [ TestCaseData(View.Unit)
+             .Returns(Some (ModellerTests.EmptyCView ()))
+             .SetName("Modelling the unit view returns the empty multiset")
+          TestCaseData(afunc "holdLock" [] |> View.Func)
+             .Returns(Some (Multiset.singleton (CFunc.Func (vfunc "holdLock" []))))
+             .SetName("Modelling a valid single view returns a singleton multiset")
+        ]
+
+    /// <summary>
+    ///     Tests view modelling on correct view exprs.
+    /// </summary>
+    [<TestCaseSource("ViewExprsGood")>]
+    member x.``View modelling on correct view expressions succeeds`` vex =
+        vex
+        |> modelCView ModellerTests.TicketLockProtos ModellerTests.Env
+        |> okOption
+
+
+    /// <summary>
+    ///     Test cases for checking view modelling on incorrect view exprs.
+    /// </summary>
+    static member ViewExprsBad =
+        [ TestCaseData(afunc "badfunc" [] |> View.Func)
+             .Returns(Some [NoSuchView "badfunc"])
+             .SetName("Modelling an unknown single view returns an error")
+          TestCaseData(afunc "holdTick" [] |> View.Func)
+             .Returns(Some [LookupError ("holdTick", CountMismatch(0, 1))])
+             .SetName("Modelling a single view with bad parameter count returns an error")
+          TestCaseData(afunc "holdTick" [Expression.True] |> View.Func)
+             .Returns(Some [LookupError ("holdTick", TypeMismatch ((Type.Int, "t"), Type.Bool))])
+             .SetName("Modelling a single view with bad parameter type returns an error") ]
+
+    /// <summary>
+    ///     Tests view modelling on correct view exprs.
+    /// </summary>
+    [<TestCaseSource("ViewExprsBad")>]
+    member x.``View modelling on incorrect view expressions fails`` vex =
+        vex
+        |> modelCView ModellerTests.TicketLockProtos ModellerTests.Env
+        |> failOption
+
 
     /// Arithmetic expression modelling tests.
     static member ArithmeticExprs =
@@ -30,6 +90,7 @@ type ModellerTests() =
     /// Tests whether the arithmetic expression modeller works.
     [<TestCaseSource("ArithmeticExprs")>]
     member x.``test the arithmetic expression modeller`` ast = modelArithExpr ModellerTests.Env ast |> okOption
+
 
     /// Boolean expression modelling tests.
     /// These all use the ticketed lock model.
@@ -44,14 +105,15 @@ type ModellerTests() =
         |> modelBoolExpr ModellerTests.Env
         |> okOption
 
+
     /// Tests for modelling bad variable lists.
     static member BadVarLists =
         [ TestCaseData([ (Type.Bool, "foo")
-                         (Type.Bool, "foo") ]).Returns(Some <| [ Starling.Errors.Var.Duplicate "foo" ])
+                         (Type.Bool, "foo") ]).Returns(Some <| [ VarMapError.Duplicate "foo" ])
               .SetName("disallow var lists with duplicates of same type")
 
           TestCaseData([ (Type.Int, "bar")
-                         (Type.Bool, "bar") ]).Returns(Some <| [ Starling.Errors.Var.Duplicate "bar" ])
+                         (Type.Bool, "bar") ]).Returns(Some <| [ VarMapError.Duplicate "bar" ])
               .SetName("disallow var lists with duplicates of different type") ]
 
 
@@ -75,28 +137,84 @@ type ModellerTests() =
     member x.``valid var lists are accepted during mapping`` (vl: (Type * string) list) =
         makeVarMap vl |> okOption
 
+
     /// Tests for the atomic primitive modeller.
     /// These use the ticketed lock model.
     static member AtomicPrims =
         [ TestCaseData(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment))
-            .Returns(Some <| IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment))
+            .Returns(Some <| func "!ILoad++" ["t" |> aBefore |> AExpr; "t" |> aAfter |> AExpr
+                                              "ticket" |> aBefore |> AExpr; "ticket" |> aAfter |> AExpr])
             .SetName("model a valid integer load as a prim") ]
 
     /// Tests the atomic primitive modeller using the ticketed lock.
     [<TestCaseSource("AtomicPrims")>]
-    member x.``atomic actions are modelled correctly as prims`` a = modelPrimOnAtomic ticketLockModel.Globals ticketLockModel.Locals a |> okOption
+    member x.``atomic actions are modelled correctly as prims`` a = modelAtomic ticketLockModel.Globals ticketLockModel.Locals a |> okOption
+
+
+    /// Constructs a Prim of the correct type to come out of a modeller.
+    static member mprim (vf : VFunc) : PartCmd<CView> = Prim vf
+
+    /// Constructs an atomic command of type Command<View>.
+    static member atom (ac : AtomicAction) : Command<View> = Atomic ac
 
     /// Tests for the command axiom modeller.
     /// These use the ticketed lock model.
     static member CommandAxioms =
-        [ TestCaseData(Atomic(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment)))
-            .Returns(Some <| Prim (IntLoad(Some(LVIdent "t"), LVIdent "ticket", Increment)))
+        [ TestCaseData(ModellerTests.atom(Fetch(LVIdent "t",
+                                                LV(LVIdent "ticket"),
+                                                Increment)))
+            .Returns(ModellerTests.mprim
+                         (func "!ILoad++" ["t" |> aBefore |> AExpr; "t" |> aAfter |> AExpr
+                                           "ticket" |> aBefore |> AExpr; "ticket" |> aAfter |> AExpr])
+                     |> Some)
             .SetName("model a valid integer load command as an axiom") ]
 
     /// Tests the command modeller using the ticketed lock.
     [<TestCaseSource("CommandAxioms")>]
     member x.``commands are modelled correctly as part-commands`` c =
-        modelPartCmdOnCommand ticketLockModel.Globals ticketLockModel.Locals c |> okOption
+        c
+        |> modelCommand ModellerTests.TicketLockProtos
+                        ticketLockModel.Globals
+                        ticketLockModel.Locals
+        |> okOption
+
+
+    /// Type-constraining builder for viewdef sets.
+    static member viewDefSet (vs : ViewDef<DView> seq) : Set<ViewDef<DView>> =
+        Set.ofSeq vs
+
+    /// Tests for the search modeller.
+    /// These use TicketLockProtos.
+    static member SearchViewDefs =
+        [ TestCaseData({ Search = None; InitDefs = []})
+             .Returns(ModellerTests.viewDefSet [])
+             .SetName("Searching for no viewdefs does not change an empty viewdef set")
+          TestCaseData({ Search = None; InitDefs = ticketLockViewDefs })
+             .Returns(ModellerTests.viewDefSet ticketLockViewDefs)
+             .SetName("Searching for no viewdefs does not change a full viewdef set")
+          TestCaseData({ Search = Some 0; InitDefs = []})
+             .Returns(ModellerTests.viewDefSet
+                          [ { View = Multiset.empty ()
+                              Def = None }])
+             .SetName("Searching for size-0 viewdefs adds emp to an empty viewdef set")
+          TestCaseData({ Search = Some 0; InitDefs = ticketLockViewDefs })
+             .Returns(ModellerTests.viewDefSet ticketLockViewDefs)
+             .SetName("Searching for size-0 viewdefs does not change a full viewdef set")
+          TestCaseData({ Search = Some 1; InitDefs = [] })
+             .Returns(ModellerTests.viewDefSet
+                          [ { View = Multiset.empty ()
+                              Def = None }
+                            { View = Multiset.singleton (func "holdLock" [])
+                              Def = None }
+                            { View = Multiset.singleton (func "holdTick" [(Type.Int, "t0")])
+                              Def = None }])
+             .SetName("Searching for size-1 viewdefs yields viewdefs for emp and the view prototypes") ]
+             
+    /// Tests viewdef searches.
+    [<TestCaseSource("SearchViewDefs")>]
+    member x.``viewdef searches are carried out correctly`` svd =
+        addSearchDefs ModellerTests.TicketLockProtos svd.Search svd.InitDefs
+        |> Set.ofList
 
     /// Full case studies to model.
     static member Models =

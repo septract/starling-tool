@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -45,43 +45,35 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Collections.fs" />
     <Compile Include="Utils.fs" />
-    <Compile Include="PrettyTypes.fs" />
-    <Compile Include="VarErrors.fs" />
+    <Compile Include="Pretty.fs" />
     <Compile Include="Var.fs" />
     <Compile Include="Expr.fs" />
-    <Compile Include="ExprPretty.fs" />
-    <Compile Include="AST.fs" />
-    <Compile Include="ASTPretty.fs" />
-    <Compile Include="Collator.fs" />
     <Compile Include="Model.fs" />
-    <Compile Include="ExprTests.fs" />
-    <Compile Include="ModellerErrors.fs" />
+    <Compile Include="Axiom.fs" />
+    <Compile Include="Graph.fs" />
+    <Compile Include="Sub.fs" />
+    <Compile Include="Instantiate.fs" />
+    <Compile Include="AST.fs" />
+    <Compile Include="Collator.fs" />
     <Compile Include="Modeller.fs" />
-    <Compile Include="Destructurer.fs" />
-    <Compile Include="Expander.fs" />
+    <Compile Include="Guarder.fs" />
+    <Compile Include="Grapher.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="Semantics.fs" />
-    <Compile Include="Framer.fs" />
     <Compile Include="TermGen.fs" />
     <Compile Include="Reifier.fs" />
     <Compile Include="Flattener.fs" />
     <Compile Include="Optimiser.fs" />
-    <Compile Include="Z3Utils.fs" />
-    <Compile Include="Z3TranslatorErrors.fs" />
-    <Compile Include="Z3Translator.fs" />
-    <Compile Include="Z3Run.fs" />
-    <Compile Include="HornErrors.fs" />
     <Compile Include="Horn.fs" />
-    <Compile Include="HornPretty.fs" />
-    <Compile Include="Pretty.fs" />
-    <Compile Include="PrettyErrors.fs" />
     <Compile Include="Frontend.fs" />
-    <Compile Include="Z3Backend.fs" />
+    <Compile Include="Z3.fs" />
     <Compile Include="TestStudies.fs" />
+    <Compile Include="ExprTests.fs" />
+    <Compile Include="InstantiateTests.fs" />
     <Compile Include="PrettyTests.fs" />
     <Compile Include="ParserTests.fs" />
     <Compile Include="ModellerTests.fs" />
-    <Compile Include="ExpanderTests.fs" />
+    <Compile Include="GuarderTests.fs" />
     <Compile Include="SemanticsTests.fs" />
     <Compile Include="ReifierTests.fs" />
     <Compile Include="FlattenerTests.fs" />

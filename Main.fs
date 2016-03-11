@@ -1,13 +1,16 @@
 /// Main module for the Starling executable.
 module Main
 
-open Starling
-open Starling.Model
 open CommandLine
 open Chessie.ErrorHandling
 
-open Starling.Pretty.Types
-open Starling.Pretty.Misc
+open Starling
+open Starling.Core.Pretty
+open Starling.Core.Var
+open Starling.Core.Model
+open Starling.Core.Model.Pretty
+open Starling.Core.Axiom
+open Starling.Core.Axiom.Pretty
 
 /// Command-line flags used in the Starling executable.
 type Options = 
@@ -15,6 +18,10 @@ type Options =
       raw : bool
       [<Option('s', HelpText = "The stage at which Starling should stop and output.")>]
       stage : string option
+      [<Option('t', HelpText = "Show specific axiom or term in term-refinement stages.")>]
+      term : string option
+      [<Option('m', HelpText = "Show full model in term-refinement stages.")>]
+      showModel: bool
       [<Option('O', HelpText = "Perform no optimisation stages.")>]
       noOptimise : bool
       [<Value(0, MetaName = "input", HelpText = "The file to load (omit, or supply -, for standard input).")>]
@@ -24,24 +31,22 @@ type Options =
 type Request = 
     /// Run the language frontend only, with the given request.
     | Frontend of Lang.Frontend.Request
-    /// Stop at structure flattening.
-    | Destructure
-    /// Stop at conditional expansion.
-    | Expand
-    /// Stop at semantic transformation.
-    | Semantics
-    /// Stop at frame-axiom-pair generation.
-    | Frame
+    /// Stop at graph axiomatisation.
+    | Axiomatise
+    /// Stop at goalAdd-axiom-pair generation.
+    | GoalAdd
     /// Stop at term generation.
     | TermGen
     /// Stop at view reification.
     | Reify
     /// Stop at term flattening.
     | Flatten
+    /// Stop at semantic transformation.
+    | Semantics
     /// Stop at term optimisation.
     | Optimise
     /// Run the Z3 backend, with the given request.
-    | Z3 of Z3.Backend.Request
+    | Z3 of Backends.Z3.Types.Request
     /// Run the HSF backend (experimental).
     | HSF
 
@@ -50,17 +55,18 @@ let requestMap =
     Map.ofList [ ("parse", Request.Frontend Lang.Frontend.Request.Parse)
                  ("collate", Request.Frontend Lang.Frontend.Request.Collate)
                  ("model", Request.Frontend Lang.Frontend.Request.Model)
-                 ("destructure", Request.Destructure)
-                 ("expand", Request.Expand)
-                 ("semantics", Request.Semantics)
-                 ("frame", Request.Frame)
+                 ("guard", Request.Frontend Lang.Frontend.Request.Guard)
+                 ("graph", Request.Frontend Lang.Frontend.Request.Graph)
+                 ("axiomatise", Request.Axiomatise)
+                 ("goalAdd", Request.GoalAdd)
                  ("termgen", Request.TermGen)
                  ("reify", Request.Reify)
                  ("flatten", Request.Flatten)
+                 ("semantics", Request.Semantics)
                  ("optimise", Request.Optimise)
-                 ("reifyZ3", Request.Z3 Z3.Backend.Request.Translate)
-                 ("z3", Request.Z3 Z3.Backend.Request.Combine)
-                 ("sat", Request.Z3 Z3.Backend.Request.Sat)
+                 ("reifyZ3", Request.Z3 Backends.Z3.Types.Request.Translate)
+                 ("z3", Request.Z3 Backends.Z3.Types.Request.Combine)
+                 ("sat", Request.Z3 Backends.Z3.Types.Request.Sat)
                  ("hsf", Request.HSF) ]
 
 /// Converts an optional -s stage name to a request item.
@@ -72,50 +78,84 @@ let requestFromStage ostage = Map.tryFind (withDefault "sat" ostage) requestMap
 type Response = 
     /// The result of frontend processing.
     | Frontend of Lang.Frontend.Response
-    /// The result of destructuring.
-    | Destructure of Model<PAxiom<CView>, DView>
-    /// The result of conditional expansion.
-    | Expand of Model<PAxiom<GView>, DView>
-    /// The result of semantic expansion.
-    | Semantics of Model<SAxiom<GView>, DView>
-    /// The result of frame-axiom-pair generation.
-    | Frame of Model<FramedAxiom, DView>
+    /// Stop at graph axiomatisation.
+    | Axiomatise of Model<Axiom<GView, VFunc>, DView>
+    /// The result of goal-axiom-pair generation.
+    | GoalAdd of Model<GoalAxiom, DView>
     /// The result of term generation.
-    | TermGen of Model<STerm<GView, View>, DView>
+    | TermGen of Model<PTerm<GView, View>, DView>
     /// The result of term reification.
-    | Reify of Model<STerm<ViewSet, View>, DView>
+    | Reify of Model<PTerm<ViewSet, View>, DView>
     /// The result of term flattening.
-    | Flatten of Model<STerm<GView, VFunc>, DFunc>
+    | Flatten of Model<PTerm<GView, VFunc>, DFunc>
+    /// The result of semantic expansion.
+    | Semantics of Model<STerm<GView, VFunc>, DFunc>
     /// The result of term optimisation.
     | Optimise of Model<STerm<GView, VFunc>, DFunc>
     /// The result of Z3 backend processing.
-    | Z3 of Z3.Backend.Response
+    | Z3 of Backends.Z3.Types.Response
     /// The result of HSF processing.
-    | HSF of Horn.Horn list
+    | HSF of Backends.Horn.Types.Horn list
 
 /// Pretty-prints a response.
-let printResponse = 
+let printResponse mview =        
     function 
-    | Frontend f -> Lang.Frontend.printResponse f
-    | Destructure f -> printModel (printPAxiom printCView) printDView f
-    | Expand e -> printModel (printPAxiom printGView) printDView  e
-    | Semantics e -> printModel (printSAxiom printGView) printDView  e
-    | Frame {Axioms = f} -> printNumHeaderedList printFramedAxiom f
-    | TermGen {Axioms = t} -> printNumHeaderedList (printSTerm printGView printView) t
-    | Reify {Axioms = t} -> printNumHeaderedList (printSTerm printViewSet printView) t
-    | Flatten m -> printModel (printSTerm printGView printVFunc) printDFunc m
-    | Optimise {Axioms = t} -> printNumHeaderedList (printSTerm printGView printVFunc) t
-    | Z3 z -> Z3.Backend.printResponse z
-    | HSF h -> Starling.Pretty.Horn.printHorns h
+    | Frontend f -> Lang.Frontend.printResponse mview f
+    | Axiomatise m ->
+        printModelView
+            mview
+            (printPAxiom printGView)
+            printDView
+            m
+    | GoalAdd m ->
+        printModelView
+            mview
+            printGoalAxiom printDView m
+    | TermGen m ->
+        printModelView
+            mview
+            (printPTerm printGView printView)
+            printDView
+            m
+    | Reify m ->
+        printModelView
+            mview
+            (printPTerm printViewSet printView)
+            printDView
+            m
+    | Flatten m ->
+        printModelView
+            mview
+            (printPTerm printGView printVFunc)
+            printDFunc
+            m
+    | Semantics m ->
+        printModelView
+            mview
+            (printSTerm printGView printVFunc)
+            printDFunc
+            m
+    | Optimise m ->
+        printModelView
+            mview
+            (printSTerm printGView printVFunc)
+            printDFunc
+            m
+    | Z3 z -> Backends.Z3.Pretty.printResponse mview z
+    | HSF h -> Backends.Horn.Pretty.printHorns h
 
 /// A top-level program error.
 type Error = 
     /// An error occurred in the frontend.
     | Frontend of Lang.Frontend.Error
+    /// An error occured in axiomatisation.
+    | Axiomatise of Core.Graph.Types.Error
+    /// An error occurred in semantic translation.
+    | Semantics of Semantics.Types.Error
     /// An error occurred in the Z3 backend.
-    | Z3 of Z3.Backend.Error
+    | Z3 of Backends.Z3.Types.Error
     /// An error occurred in the HSF backend.
-    | HSF of Errors.Horn.Error
+    | HSF of Backends.Horn.Types.Error
     /// A stage was requested using the -s flag that does not exist.
     | BadStage
     /// A miscellaneous (internal) error has occurred.
@@ -125,34 +165,46 @@ type Error =
 let printError = 
     function 
     | Frontend e -> Lang.Frontend.printError e
-    | Z3 e -> Z3.Backend.printError e
-    | HSF e -> Starling.Pretty.Errors.printHornError e
+    | Axiomatise e -> Core.Graph.Pretty.printError e
+    | Semantics e -> Semantics.Pretty.printSemanticsError e
+    | Z3 e -> Backends.Z3.Pretty.printError e
+    | HSF e -> Backends.Horn.Pretty.printHornError e
     | BadStage -> 
-        Pretty.Types.colonSep [ Pretty.Types.String "Bad stage"
-                                Pretty.Types.String "try"
-                                requestMap
-                                |> Map.toSeq
-                                |> Seq.map (fst >> Pretty.Types.String)
-                                |> Pretty.Types.commaSep ]
-    | Other e -> Pretty.Types.String e
+        colonSep [ String "Bad stage"
+                   String "try"
+                   requestMap
+                   |> Map.toSeq
+                   |> Seq.map (fst >> String)
+                   |> commaSep ]
+    | Other e -> String e
+
+/// Prints an ok result to stdout.
+let printOk pOk pBad =
+    pairMap pOk pBad
+    >> function
+       | (ok, []) -> ok
+       | (ok, ws) -> vsep [ ok
+                            VSkip
+                            Separator
+                            VSkip
+                            headed "Warnings" ws ]
+    >> print
+    >> printfn "%s"
+
+/// Prints an err result to stderr.
+let printErr pBad =
+    pBad >> headed "Errors" >> print >> eprintfn "%s"
 
 /// Pretty-prints a Chessie result, given printers for the successful
 /// case and failure messages.
 let printResult pOk pBad = 
-    either (pairMap pOk pBad >> function 
-            | (ok, []) -> ok
-            | (ok, ws) -> 
-                Starling.Pretty.Types.vsep [ ok
-                                             VSkip
-                                             Separator
-                                             VSkip
-                                             headed "Warnings" ws ]) (pBad >> headed "Errors")
+    either (printOk pOk pBad) (printErr pBad)
 
 /// Shorthand for the HSF stage.
-let hsf = bind (Starling.Horn.hsfModel >> mapMessages Error.HSF)
+let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
 
 /// Shorthand for the Z3 stage.
-let z3 rq = bind (Starling.Z3.Backend.run rq >> mapMessages Error.Z3)
+let z3 rq = bind (Backends.Z3.run rq >> mapMessages Error.Z3)
 
 /// Shorthand for the optimise stage.
 let optimise = lift Starling.Optimiser.optimise
@@ -166,26 +218,26 @@ let reify = lift Starling.Reifier.reify
 /// Shorthand for the term generation stage.
 let termGen = lift Starling.TermGen.termGen
 
-/// Shorthand for the framing stage.
-let frame = lift Starling.Framer.frame
+/// Shorthand for the goal adding stage.
+let goalAdd = lift Starling.Core.Axiom.goalAdd
 
 /// Shorthand for the semantics stage.
-let semantics = lift Starling.Semantics.translate
+let semantics = bind (Starling.Semantics.translate
+                >> mapMessages Error.Semantics)
 
-/// Shorthand for the expand stage.
-let expand = lift Starling.Expander.expand
-
-/// Shorthand for the destructure stage.
-let destructure = lift Starling.Destructurer.destructure
+/// Shorthand for the axiomatisation stage.
+let axiomatise = bind (Starling.Core.Graph.axiomatise
+                 >> mapMessages Error.Axiomatise)
 
 /// Shorthand for the frontend stage.
 let frontend rq = Lang.Frontend.run rq >> mapMessages Error.Frontend
 
 /// Shorthand for the full frontend stage.
 let model = 
-    frontend Lang.Frontend.Request.Model >> bind (function 
-                                                | Lang.Frontend.Response.Model m -> m |> ok
-                                                | _ -> Other "internal error: bad frontend response" |> fail)
+    frontend Lang.Frontend.Request.Graph
+    >> bind (function 
+             | Lang.Frontend.Response.Graph m -> m |> ok
+             | _ -> Other "internal error: bad frontend response" |> fail)
 
 /// Runs the Starling request at argument 2 on the file named by argument 3.
 /// If missing, we read from stdin.
@@ -195,108 +247,97 @@ let runStarling opt =
 
     function 
     | Request.Frontend rq -> frontend rq >> lift Response.Frontend
-    | Request.Destructure -> 
+    | Request.Axiomatise ->
         model
-        >> destructure
-        >> lift Response.Destructure
-    | Request.Expand -> 
+        >> axiomatise
+        >> lift Response.Axiomatise
+    | Request.GoalAdd -> 
         model
-        >> destructure
-        >> expand
-        >> lift Response.Expand
-    | Request.Semantics -> 
-        model
-        >> destructure
-        >> expand
-        >> semantics
-        >> lift Response.Semantics
-    | Request.Frame -> 
-        model
-        >> destructure
-        >> expand
-        >> semantics
-        >> frame
-        >> lift Response.Frame
+        >> axiomatise
+        >> goalAdd
+        >> lift Response.GoalAdd
     | Request.TermGen -> 
         model
-        >> destructure
-        >> expand
-        >> semantics
-        >> frame
+        >> axiomatise
+        >> goalAdd
         >> termGen
         >> lift Response.TermGen
     | Request.Reify -> 
         model
-        >> destructure
-        >> expand
-        >> semantics
-        >> frame
+        >> axiomatise
+        >> goalAdd
         >> termGen
         >> reify
         >> lift Response.Reify
     | Request.Flatten -> 
         model
-        >> destructure
-        >> expand
-        >> semantics
-        >> frame
+        >> axiomatise
+        >> goalAdd
         >> termGen
         >> reify
         >> flatten
         >> lift Response.Flatten
-    | Request.Optimise -> 
+    | Request.Semantics -> 
         model
-        >> destructure
-        >> expand
-        >> semantics
-        >> frame
+        >> axiomatise
+        >> goalAdd
         >> termGen
         >> reify
         >> flatten
+        >> semantics
+        >> lift Response.Semantics
+    | Request.Optimise -> 
+        model
+        >> axiomatise
+        >> goalAdd
+        >> termGen
+        >> reify
+        >> flatten
+        >> semantics
         >> maybeOptimise
         >> lift Response.Optimise
     | Request.Z3 rq -> 
         model
-        >> destructure
-        >> expand
-        >> semantics
-        >> frame
+        >> axiomatise
+        >> goalAdd
         >> termGen
         >> reify
         >> flatten
+        >> semantics
         >> maybeOptimise
         >> z3 rq
         >> lift Response.Z3
     | Request.HSF ->
         model
-        >> destructure
-        >> expand
-        >> semantics
-        >> frame
+        >> axiomatise
+        >> goalAdd
         >> termGen
         >> reify
         >> flatten
+        >> semantics
         >> maybeOptimise
         >> hsf
         >> lift Response.HSF
 
 /// Runs Starling with the given options, and outputs the results.
 let mainWithOptions opts = 
-    let input = opts.input
-    let raw = opts.raw
     let optimise = not opts.noOptimise
     
     let starlingR = 
         match (requestFromStage opts.stage) with
-        | Some otype -> runStarling optimise otype input
+        | Some otype -> runStarling optimise otype opts.input
         | None -> fail Error.BadStage
+
+    let mview =
+        match opts.term, opts.showModel with
+        | Some i, _ -> Term i
+        | None, false -> Terms
+        | _ -> Model
     
     let pfn = 
-        if raw then (sprintf "%A" >> Starling.Pretty.Types.String)
-               else printResponse   
+        if opts.raw then (sprintf "%A" >> String)
+                    else printResponse mview
     printResult pfn (List.map printError) starlingR
-    |> Starling.Pretty.Types.print
-    |> printfn "%s"
     0
 
 [<EntryPoint>]
@@ -304,7 +345,6 @@ let main argv =
     match CommandLine.Parser.Default.ParseArguments<Options> argv with
     | :? Parsed<Options> as parsed -> mainWithOptions parsed.Value
     | :? NotParsed<Options> as notParsed -> 
-        printfn "failure: %A" notParsed.Errors
         2
     | _ -> 
         printfn "parse result of unknown type"

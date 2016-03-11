@@ -1,48 +1,118 @@
-/// Utilities for working with expressions.
-module Starling.Expr
+/// <summary>
+///     Utilities and types for working with expressions.
+/// </summary>
+module Starling.Core.Expr
 
 open Starling.Utils
-open Starling.Var
+open Starling.Core.Var
 
-(*
- * Expression types
- *)
 
-type Const =
-    | Unmarked of string
-    | Before of string
-    | After of string
-    | Frame of bigint * string
+/// <summary>
+///     Expression types.
+/// </summary>
+[<AutoOpen>]
+module Types =
+    type Const =
+        | Unmarked of string
+        | Before of string
+        | After of string
+        | Goal of bigint * string
 
-/// An expression of arbitrary type.
-type Expr =
-    | BExpr of BoolExpr
-    | AExpr of ArithExpr
+    /// An expression of arbitrary type.
+    type Expr =
+        | BExpr of BoolExpr
+        | AExpr of ArithExpr
 
-/// An arithmetic expression.
-and ArithExpr =
-    | AConst of Const
-    | AInt of int64
-    | AAdd of ArithExpr list
-    | ASub of ArithExpr list
-    | AMul of ArithExpr list
-    | ADiv of ArithExpr * ArithExpr
+    /// An arithmetic expression.
+    and ArithExpr =
+        | AConst of Const
+        | AInt of int64
+        | AAdd of ArithExpr list
+        | ASub of ArithExpr list
+        | AMul of ArithExpr list
+        | ADiv of ArithExpr * ArithExpr
 
-/// A Boolean expression.
-and BoolExpr =
-    | BConst of Const
-    | BTrue
-    | BFalse
-    | BAnd of BoolExpr list
-    | BOr of BoolExpr list
-    | BImplies of BoolExpr * BoolExpr
-    | BEq of Expr * Expr
-    | BGt of ArithExpr * ArithExpr
-    | BGe of ArithExpr * ArithExpr
-    | BLe of ArithExpr * ArithExpr
-    | BLt of ArithExpr * ArithExpr
-    | BNot of BoolExpr
- 
+    /// A Boolean expression.
+    and BoolExpr =
+        | BConst of Const
+        | BTrue
+        | BFalse
+        | BAnd of BoolExpr list
+        | BOr of BoolExpr list
+        | BImplies of BoolExpr * BoolExpr
+        | BEq of Expr * Expr
+        | BGt of ArithExpr * ArithExpr
+        | BGe of ArithExpr * ArithExpr
+        | BLe of ArithExpr * ArithExpr
+        | BLt of ArithExpr * ArithExpr
+        | BNot of BoolExpr
+
+    /// Type for fresh variable generators.
+    type FreshGen = bigint ref
+
+
+// This is here as it is used by the pretty-printers.
+
+/// Converts a Starling constant into a string.
+let constToString =
+    function
+    | Unmarked s -> s
+    | Before s -> sprintf "%s!before" s
+    | After s -> sprintf "%s!after" s
+    | Goal (i, s) -> sprintf "%s!goal!%A" s i
+
+
+/// <summary>
+///     Pretty printers for expressions.
+///
+///     <para>
+///         These are deliberately made to look like the Z3 equivalent.
+///     </para>
+/// </summary>
+module Pretty =
+    open Starling.Core.Pretty
+
+    /// Creates an S-expression from an operator string, operand print function, and
+    /// sequence of operands.
+    let sexpr op pxs =
+        Seq.map pxs
+        >> scons (String op)
+        >> hsep
+        >> parened
+
+    /// Pretty-prints an arithmetic expression.
+    let rec printArithExpr =
+        function
+        | AConst c -> c |> constToString |> String
+        | AInt i -> i |> sprintf "%i" |> String
+        | AAdd xs -> sexpr "+" printArithExpr xs
+        | ASub xs -> sexpr "-" printArithExpr xs
+        | AMul xs -> sexpr "*" printArithExpr xs
+        | ADiv (x, y) -> sexpr "/" printArithExpr [x; y]
+
+    /// Pretty-prints a Boolean expression.
+    and printBoolExpr =
+        function
+        | BConst c -> c |> constToString |> String
+        | BTrue -> String "true"
+        | BFalse -> String "false"
+        | BAnd xs -> sexpr "and" printBoolExpr xs
+        | BOr xs -> sexpr "or" printBoolExpr xs
+        | BImplies (x, y) -> sexpr "=>" printBoolExpr [x; y]
+        | BEq (x, y) -> sexpr "=" printExpr [x; y]
+        | BGt (x, y) -> sexpr ">" printArithExpr [x; y]
+        | BGe (x, y) -> sexpr ">=" printArithExpr [x; y]
+        | BLe (x, y) -> sexpr "<=" printArithExpr [x; y]
+        | BLt (x, y) -> sexpr "<" printArithExpr [x; y]
+        | BNot x -> sexpr "not" printBoolExpr [x]
+
+    /// Pretty-prints an expression.
+    and printExpr =
+        function
+        | AExpr a -> printArithExpr a
+        | BExpr b -> printBoolExpr b
+
+
 /// Partial pattern that matches a Boolean equality on arithmetic expressions.
 let (|BAEq|_|) =
     function
@@ -121,7 +191,12 @@ let rec simp ax =
         | BFalse, BFalse 
         | BTrue, BTrue      -> BTrue
         | BTrue, BFalse 
-        | BFalse, BTrue     -> BFalse   
+        | BFalse, BTrue     -> BFalse
+        // A Boolean equality between something and True reduces to that something.
+        | x, BTrue          -> x
+        | BTrue, x          -> x
+        | x, BFalse         -> simp (BNot x)
+        | BFalse, x         -> simp (BNot x)
         | x, y              -> BEq(BExpr x, BExpr y)
     | x -> x
 
@@ -130,16 +205,14 @@ let rec simp ax =
 let isFalse =
     simp >> 
     function
-    // False is always false.
     | BFalse -> true
     | _      -> false
    
 let isTrue =
     simp >> 
     function
-    // False is always false.
     | BTrue -> true
-    | _      -> false
+    | _     -> false
       
 /// Extracts the name from a Starling constant.
 let stripMark =
@@ -147,15 +220,7 @@ let stripMark =
     | Unmarked s -> s
     | Before s -> s
     | After s -> s
-    | Frame (i, s) -> s
-
-/// Converts a Starling constant into a string.
-let constToString =
-    function
-    | Unmarked s -> s
-    | Before s -> sprintf "%s!before" s
-    | After s -> sprintf "%s!after" s
-    | Frame (i, s) -> sprintf "%s!frame!%A" s i
+    | Goal (i, s) -> s
 
 (*
  * Expression constructors
@@ -178,7 +243,6 @@ let bAfter c = c |> After |> BConst
 
 /// Creates a before-marked Boolean constant.
 let bBefore c = c |> Before |> BConst
-
 
 /// Creates a reference to a Boolean lvalue.
 /// This does NOT check to see if the lvalue exists!
@@ -263,99 +327,10 @@ let mkSub2 l r = ASub [ l; r ]
 /// Makes a Mul out of a pair of two expressions.
 let mkMul2 l r = AMul [ l; r ]
 
-(*
- * Substitutions
- *)
-
-/// Type for substitution function tables.
-[<NoComparison>]
-[<NoEquality>]
-type SubFun =
-    {ASub: Const -> ArithExpr
-     BSub: Const -> BoolExpr}
-
-/// Substitutes all variables with the given substitution function set
-/// for the given Boolean expression.
-let rec boolSubVars vfun =
-    function 
-    | BConst x -> vfun.BSub x
-    | BTrue -> BTrue
-    | BFalse -> BFalse
-    | BAnd xs -> BAnd (List.map (boolSubVars vfun) xs)
-    | BOr xs -> BOr (List.map (boolSubVars vfun) xs)
-    | BImplies (x, y) -> BImplies (boolSubVars vfun x,
-                                   boolSubVars vfun y)
-    | BEq (x, y) -> BEq (subVars vfun x,
-                         subVars vfun y)
-    | BGt (x, y) -> BGt (arithSubVars vfun x,
-                         arithSubVars vfun y)
-    | BGe (x, y) -> BGe (arithSubVars vfun x,
-                         arithSubVars vfun y)
-    | BLe (x, y) -> BLe (arithSubVars vfun x,
-                         arithSubVars vfun y)
-    | BLt (x, y) -> BLt (arithSubVars vfun x,
-                         arithSubVars vfun y)
-    | BNot x -> BNot (boolSubVars vfun x)
-
-/// Substitutes all variables with the given substitution function
-/// for the given arithmetic expression.
-and arithSubVars vfun =
-    function 
-    | AConst x -> vfun.ASub x
-    | AInt i -> AInt i
-    | AAdd xs -> AAdd (List.map (arithSubVars vfun) xs)
-    | ASub xs -> ASub (List.map (arithSubVars vfun) xs)
-    | AMul xs -> AMul (List.map (arithSubVars vfun) xs)
-    | ADiv (x, y) -> ADiv (arithSubVars vfun x,
-                           arithSubVars vfun y)
-
-/// Substitutes all variables with the given substitution function for the
-/// given expression.
-and subVars vfun =
-    function
-    | AExpr a -> arithSubVars vfun a |> AExpr
-    | BExpr b -> boolSubVars vfun b |> BExpr
-
-(*
- * Variable marking (special case of variable substitution)
- *)
-
-/// Lifts a variable set to a marking predicate.
-let inSet st var = Set.contains var st
-
-/// Converts some function from constants to strings to a substitution function
-/// table.
-let toSubFun f =
-    {ASub = f >> AConst
-     BSub = f >> BConst}
-
-/// Lifts a marking function to a substitution function table.
-let liftMarker marker vpred =
-    let gfun = function | Unmarked s when vpred s -> marker s
-                        | x -> x
-    toSubFun gfun
-
-/// Marks all variables in the given environment with the given marking
-/// functions / pre-states for the given arithmetic expression.
-let arithMarkVars marker vpred =
-    arithSubVars (liftMarker marker vpred)
-
-/// Marks all variables in the given environment with the given marking
-/// functions / pre-states for the given Boolean expression.
-let boolMarkVars marker vpred =
-    boolSubVars (liftMarker marker vpred)
-
-/// Marks all variables in the given set with the given marking
-/// functions / pre-states for the given arbitrary expression.
-let markVars marker vpred =
-    subVars (liftMarker marker vpred)
 
 (*
  * Fresh variable generation
  *)
-
-/// Type for fresh variable generators.
-type FreshGen = bigint ref
 
 /// Creates a new fresh generator.
 let freshGen () = ref 0I
@@ -366,10 +341,6 @@ let getFresh fg =
     let result = !fg
     fg := !fg + 1I
     result
-
-/// Given a fresh generator, yields a function promoting a string to a frame
-/// variable.
-let frame fg = fg |> getFresh |> curry Frame
 
 (*
  * Expression probing

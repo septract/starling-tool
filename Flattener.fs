@@ -2,9 +2,9 @@
 module Starling.Flattener
 
 open Starling.Collections
-open Starling.Expr
-open Starling.Model
-open Starling.Var
+open Starling.Core.Expr
+open Starling.Core.Model
+open Starling.Core.Var
 
 
 (*
@@ -48,7 +48,7 @@ let addGlobalsToViewSet gs =
     Multiset.map (addGlobalsToGuarded gs)
 
 /// Adds the globals in gs to the argument list of the assertions in a term.
-let addGlobalsToTerm gs =
+let addGlobalsToTerm gs _ =
     mapTerm id
             (addGlobalsToViewSet (gs Before))
             (funcOfView (gs After))
@@ -67,7 +67,7 @@ let addGlobalsToViewDef gs {View = v; Def = d} =
  *)
 
 /// Adds globals to the arguments of all views in a model.
-let flatten (mdl: Model<STerm<ViewSet, View>, DView>) =
+let flatten (mdl: Model<PTerm<ViewSet, View>, DView>) =
     /// Build a function making a list of global arguments, for view assertions.
     let gargs marker = 
         mdl.Globals
@@ -90,5 +90,6 @@ let flatten (mdl: Model<STerm<ViewSet, View>, DView>) =
 
     {Globals = mdl.Globals
      Locals = mdl.Locals
-     Axioms = List.map (addGlobalsToTerm gargs) mdl.Axioms
-     ViewDefs = List.map (addGlobalsToViewDef gpars) mdl.ViewDefs}
+     Axioms = Map.map (addGlobalsToTerm gargs) mdl.Axioms
+     ViewDefs = List.map (addGlobalsToViewDef gpars) mdl.ViewDefs
+     Semantics = mdl.Semantics}

@@ -15,6 +15,9 @@ let onlyOne s =
        | [x] -> Some x
        | _ -> None
 
+/// Reverses a 2-argument function.
+let flip f x y = f y x
+
 /// Reverses a pair.
 let flipPair (x, y) = (y, x)
 
@@ -59,32 +62,59 @@ let withDefault d =
 
 /// Maps a function f through a set, and concatenates the resulting
 /// list of lists into one set.
-let unionMap f = 
+let unionMap f =
     Set.toSeq
     >> Seq.map f
     >> Set.unionMany
 
 /// Maps a function f through a list, and concatenates the resulting
 /// list of lists into one list.
-let concatMap f xs = 
+let concatMap f xs =
     (* Adapted from the GHC base implementation,
      * see http://hackage.haskell.org/package/base-4.8.1.0/docs/src/Data.Foldable.html
      * for source and copyright information.
      *)
     List.foldBack (fun x b -> List.foldBack cons (f x) b) xs []
 
+(*
+ * Map data structure
+ *)
+
 /// Tries to find duplicate entries in a list.
 /// Returns a list of the duplicates found.
-let findDuplicates lst = 
+let findDuplicates lst =
     lst
-    |> List.groupBy id
-    |> List.choose (function 
-           | (_, []) | (_, [ _ ]) -> None
-           | (x, _) -> Some x)
+    |> Seq.groupBy id
+    |> Seq.choose
+           // dupes now contains all of the appearances of x.
+           // If we can successfully take 2 appearances, it's a duplicate.
+           (function
+            | (x, dupes) when dupes |> Seq.truncate 2 |> Seq.length = 2
+                -> Some x
+            | _ -> None)
+
+/// Returns the keys of a map as a sequence.
+let keys mp =
+    mp |> Map.toSeq |> Seq.map fst
+
+/// Returns the duplicate keys across two maps.
+let keyDuplicates a b =
+    findDuplicates (Seq.append (keys a) (keys b))
+
+/// Joins two maps together.
+let mapAppend a b =
+    Map.ofSeq (Seq.append (Map.toSeq a) (Map.toSeq b))
 
 (*
  * Chessie-related functions.
  *)
+
+/// Extends lift to functions of 3 arguments.
+let lift3 f a b c =
+    trial { let! av = a
+            let! bv = b
+            let! cv = c
+            return f av bv cv }
 
 /// Converts a Result into an option with Some x if the result was Ok x _.
 let okOption =
@@ -109,9 +139,9 @@ let seqBind f initialS = Seq.fold (fun s x -> bind (f x) s) (ok initialS)
 /// Fold that can be terminated earlier by the step function f returning None.
 /// If Any step returns None, the whole fold returns None.
 let rec foldFastTerm  (f : 'State -> 'T -> 'State option)  (s : 'State) (l : 'T list) =  
-     match l with 
+     match l with
      | []   -> Some s
-     | x::l -> 
-        match f s x with 
+     | x::l ->
+        match f s x with
         | Some s -> foldFastTerm f s l
-        | None -> None 
+        | None -> None

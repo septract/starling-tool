@@ -13,7 +13,7 @@
     ;; Treat view assertions as doc comments.
     '("{|[^|]*|}" . font-lock-doc-face)
     ;; Add colouring for remaining keywords.
-    (cons (regexp-opt '("shared" "thread" "if" "else" "do" "while")) font-lock-keyword-face)
+    (cons (regexp-opt '("search" "shared" "thread" "if" "else" "do" "while")) font-lock-keyword-face)
     (cons (regexp-opt '("int" "bool")) font-lock-type-face)))
   "Additional highlighting expressions for Starling mode.")
 

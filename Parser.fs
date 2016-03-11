@@ -8,7 +8,7 @@ open Chessie.ErrorHandling
 
 open Starling
 open Starling.Collections
-open Starling.Var
+open Starling.Core.Var
 open Starling.Lang.AST
 
 // Manually re-overload some FParsec operators Chessie overloaded.
@@ -74,9 +74,9 @@ let parseView, parseViewRef = createParserForwardedToRef<View, unit> ()
 /// Parser for view definitions.
 let parseViewDef, parseViewDefRef = createParserForwardedToRef<ViewDef, unit> ()
 /// Parser for commands.
-let parseCommand, parseCommandRef = createParserForwardedToRef<Command, unit> ()
+let parseCommand, parseCommandRef = createParserForwardedToRef<Command<View>, unit> ()
 /// Parser for blocks.
-let parseBlock, parseBlockRef = createParserForwardedToRef<Block, unit> ()
+let parseBlock, parseBlockRef = createParserForwardedToRef<Block<View, Command<View>>, unit> ()
 /// Parser for expressions.
 /// The expression parser is split into several chains as per
 /// preference rank.
@@ -268,7 +268,7 @@ let parseIfView =
             // ^-                 ... then <view> ...
             (pstring "else" >>. ws >>. parseView)
             // ^-                                 ... else <view>
-            (curry3 IfView)
+            (curry3 View.If)
 
 /// Parses a functional view.
 let parseFuncView = parseFunc parseExpression |>> View.Func
@@ -458,6 +458,15 @@ let parseVar kw = pstring kw >>. ws
                              .>> pstring ";"
                              // ^-                         ... ;
 
+/// Parses a search directive.
+let parseSearch =
+    pstring "search" >>. ws
+    // ^- search
+                     >>. pint32
+                     // ^- ... <depth>
+                     .>> ws
+                     .>> pstring ";"
+
 /// Parses a script of zero or more methods, including leading and trailing whitespace.
 let parseScript =
     // TODO(CaptainHayashi): parse things that aren't methods:
@@ -469,6 +478,8 @@ let parseScript =
                              parseViewProto |>> ViewProto
                              // ^- view <identifier> ;
                              //  | view <identifier> <view-proto-param-list> ;
+                             parseSearch |>> Search
+                             // ^- search 0;
                              parseVar "shared" |>> Global
                              // ^- shared <type> <identifier> ;
                              parseVar "thread" |>> Local] .>> ws ) eof

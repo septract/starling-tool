@@ -1,7 +1,21 @@
+# Output
 /bin
 /obj
-/packages
-/.vs
+/output
+/templates
 *.suo
 *.log
-/starling-doc/Help
+*.pdf
+*.xml
+
+# Backups
+*.sw?
+*.*~
+
+# IDE specifics
+*.sublime-*
+/.vscode
+/.vs
+
+# Misc
+/packages
