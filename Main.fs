@@ -44,7 +44,7 @@ type Request =
     /// Stop at semantic transformation.
     | Semantics
     /// Stop at term optimisation.
-    | Optimise
+    | TermOptimise
     /// Run the Z3 backend, with the given request.
     | Z3 of Backends.Z3.Types.Request
     /// Run the HSF backend (experimental).
@@ -63,7 +63,7 @@ let requestMap =
                  ("reify", Request.Reify)
                  ("flatten", Request.Flatten)
                  ("semantics", Request.Semantics)
-                 ("optimise", Request.Optimise)
+                 ("termOptimise", Request.TermOptimise)
                  ("reifyZ3", Request.Z3 Backends.Z3.Types.Request.Translate)
                  ("z3", Request.Z3 Backends.Z3.Types.Request.Combine)
                  ("sat", Request.Z3 Backends.Z3.Types.Request.Sat)
@@ -91,7 +91,7 @@ type Response =
     /// The result of semantic expansion.
     | Semantics of Model<STerm<GView, VFunc>, DFunc>
     /// The result of term optimisation.
-    | Optimise of Model<STerm<GView, VFunc>, DFunc>
+    | TermOptimise of Model<STerm<GView, VFunc>, DFunc>
     /// The result of Z3 backend processing.
     | Z3 of Backends.Z3.Types.Response
     /// The result of HSF processing.
@@ -135,7 +135,7 @@ let printResponse mview =
             (printSTerm printGView printVFunc)
             printDFunc
             m
-    | Optimise m ->
+    | TermOptimise m ->
         printModelView
             mview
             (printSTerm printGView printVFunc)
@@ -206,8 +206,8 @@ let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
 /// Shorthand for the Z3 stage.
 let z3 rq = bind (Backends.Z3.run rq >> mapMessages Error.Z3)
 
-/// Shorthand for the optimise stage.
-let optimise = lift Starling.Optimiser.optimise
+/// Shorthand for the term optimise stage.
+let termOptimise = lift Starling.Optimiser.Term.optimise
 
 /// Shorthand for the flattening stage.
 let flatten = lift Starling.Flattener.flatten
@@ -243,7 +243,7 @@ let model =
 /// If missing, we read from stdin.
 /// Argument 1 turns optimisation on if true.
 let runStarling opt = 
-    let maybeOptimise = if opt then optimise else id
+    let maybeTermOptimise = if opt then termOptimise else id
 
     function 
     | Request.Frontend rq -> frontend rq >> lift Response.Frontend
@@ -286,7 +286,7 @@ let runStarling opt =
         >> flatten
         >> semantics
         >> lift Response.Semantics
-    | Request.Optimise -> 
+    | Request.TermOptimise -> 
         model
         >> axiomatise
         >> goalAdd
@@ -294,8 +294,8 @@ let runStarling opt =
         >> reify
         >> flatten
         >> semantics
-        >> maybeOptimise
-        >> lift Response.Optimise
+        >> maybeTermOptimise
+        >> lift Response.TermOptimise
     | Request.Z3 rq -> 
         model
         >> axiomatise
@@ -304,7 +304,7 @@ let runStarling opt =
         >> reify
         >> flatten
         >> semantics
-        >> maybeOptimise
+        >> maybeTermOptimise
         >> z3 rq
         >> lift Response.Z3
     | Request.HSF ->
@@ -315,7 +315,7 @@ let runStarling opt =
         >> reify
         >> flatten
         >> semantics
-        >> maybeOptimise
+        >> maybeTermOptimise
         >> hsf
         >> lift Response.HSF
 
