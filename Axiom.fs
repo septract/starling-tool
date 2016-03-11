@@ -29,7 +29,7 @@ module Types =
     ///         An <c>Axiom</c> contains a precondition, inner command, and
     ///         postcondition.
     ///     </para>
-    type Axiom<'view, 'cmd> = 
+    type Axiom<'view, 'cmd> =
         { /// <summary>
           ///     The precondition of the axiom.
           /// </summary>
@@ -47,7 +47,7 @@ module Types =
     type PAxiom<'view> = Axiom<'view, VFunc>
 
     /// An axiom combined with a goal view.
-    type GoalAxiom = 
+    type GoalAxiom =
         { /// The axiom to be checked for soundness under Goal.
           Axiom : PAxiom<GView>
           /// The view representing the goal for any terms over Axiom.
@@ -60,17 +60,17 @@ module Pretty =
     open Starling.Core.Pretty
 
     open Starling.Core.Model.Pretty
-    
+
     /// Pretty-prints an Axiom, given knowledge of how to print its views
     /// and command.
-    let printAxiom pCmd pView { Pre = pre; Post = post; Cmd = cmd } = 
+    let printAxiom pCmd pView { Pre = pre; Post = post; Cmd = cmd } =
         Surround(pre |> pView, cmd |> pCmd, post |> pView)
 
     /// Pretty-prints a PAxiom.
-    let printPAxiom pView = printAxiom printVFunc pView    
+    let printPAxiom pView = printAxiom printVFunc pView
 
     /// Pretty-prints a goal axiom.
-    let printGoalAxiom {Axiom = a; Goal = f} = 
+    let printGoalAxiom {Axiom = a; Goal = f} =
         vsep [ headed "Axiom" (a |> printPAxiom printGView |> Seq.singleton)
                headed "Goal" (f |> printView |> Seq.singleton) ]
 
@@ -108,7 +108,7 @@ let goalAddAxiom ds fg (name, axiom) =
     // where the 0 is the edge number.
     // This appends the viewdef number after the edge number.
     List.mapi
-        (fun i { View = vs } -> 
+        (fun i { View = vs } ->
               (sprintf "%s_%d" name i,
                { Axiom = axiom
                  Goal = instantiateGoal fg vs }))
@@ -118,8 +118,8 @@ let goalAddAxiom ds fg (name, axiom) =
 ///     Converts the axioms of a <c>Model</c> into <c>GoalAxiom</c>s.
 ///
 ///     <para>
-///         <c>GoalAxiom</c>s are a Cartesian product of the existing axioms and
-///         the domain of the <c>ViewDefs</c> map.
+///         <c>GoalAxiom</c>s are a Cartesian product of the existing axioms
+///         and the domain of the <c>ViewDefs</c> map.
 ///     </para>
 /// </summary>
 /// <param name="_arg1">

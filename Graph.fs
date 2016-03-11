@@ -2,8 +2,8 @@
 ///     Types and helper functions for Starling control-flow graphs.
 ///
 ///     <para>
-///         Starling CFGs contain one node per view assertion, and one edge per
-///         command.
+///         Starling CFGs contain one node per view assertion, and one edge
+///         per command.
 ///     </para>
 /// </summary>
 module Starling.Core.Graph
@@ -39,7 +39,7 @@ module Types =
             ///     Set of nodes in the control-flow graph.
             /// </summary>
             Nodes: Map<string, GView>
-    
+
             /// <summary>
             ///     Set of edges in the control-flow graph.
             /// </summary>
@@ -82,7 +82,7 @@ module Types =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
-    
+
     open Starling.Core.Model.Pretty
     open Starling.Core.Axiom.Pretty
 
@@ -102,7 +102,7 @@ module Pretty =
           String "="
           labelCmd |> ssurround "\"" "\"" ]
         |> hsep |> squared
-    
+
     /// <summary>
     ///     Prints a node.
     /// </summary>
@@ -268,11 +268,11 @@ let graph name sg =
 /// <returns>
 ///     A <c>Graph</c>, wrapped in a Chessie result over <c>Error</c>.
 ///     If the two graphs do not contain duplicate
-///     nodes, then the result will be <c>ok</c>. 
+///     nodes, then the result will be <c>ok</c>.
 ///     The graph will contain the nodes and edges from <paramref
 ///     name="_arg1" /> and <paramref name="_arg2" />.
 /// </returns>
-let combine { Nodes = ans ; Edges = aes }    
+let combine { Nodes = ans ; Edges = aes }
             { Nodes = bns; Edges = bes } =
     match (keyDuplicates ans bns |> Seq.toList,
            keyDuplicates aes bes |> Seq.toList) with
@@ -291,14 +291,17 @@ let combine { Nodes = ans ; Edges = aes }
 ///     The edges of <paramref name="_arg1" />, as name-edge pairs.
 ///     This is wrapped in a Chessie result over <c>Error</c>.
 /// </returns>
-let axiomatiseGraph { Name = name; Contents = { Nodes = nodes; Edges = edges } } =
+let axiomatiseGraph { Name = name
+                      Contents = { Nodes = nodes; Edges = edges } } =
     edges
     |> Map.toList
     |> Seq.map
            (fun (name, { Pre = s; Post = t; Cmd = c }) ->
                 match (Map.tryFind s nodes, Map.tryFind t nodes) with
-                | Some sn, Some tn -> ok (name, { Pre = sn; Post = tn; Cmd = c })
-                | _ -> { Pre = s; Post = t; Cmd = c } |> EdgeOutOfBounds |> fail)
+                | Some sn, Some tn ->
+                    ok (name, { Pre = sn; Post = tn; Cmd = c })
+                | _ ->
+                    { Pre = s; Post = t; Cmd = c } |> EdgeOutOfBounds |> fail)
     |> collect
 
 /// <summary>
