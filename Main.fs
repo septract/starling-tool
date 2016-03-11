@@ -178,6 +178,8 @@ type Error =
     | Frontend of Lang.Frontend.Error
     /// An error occurred in axiomatisation.
     | Axiomatise of Core.Graph.Types.Error
+    /// An error occurred in graph optimisation.
+    | GraphOptimise of Core.Graph.Types.Error
     /// An error occurred in semantic translation.
     | Semantics of Semantics.Types.Error
     /// An error occurred in the Z3 backend.
@@ -194,6 +196,7 @@ let printError =
     function
     | Frontend e -> Lang.Frontend.printError e
     | Axiomatise e -> Core.Graph.Pretty.printError e
+    | GraphOptimise e -> Core.Graph.Pretty.printError e
     | Semantics e -> Semantics.Pretty.printSemanticsError e
     | Z3 e -> Backends.Z3.Pretty.printError e
     | HSF e -> Backends.Horn.Pretty.printHornError e
@@ -235,7 +238,8 @@ let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
 let z3 rq = bind (Backends.Z3.run rq >> mapMessages Error.Z3)
 
 /// Shorthand for the graph optimise stage.
-let graphOptimise = lift Starling.Optimiser.Graph.optimise
+let graphOptimise = bind (Starling.Optimiser.Graph.optimise
+                          >> mapMessages Error.GraphOptimise)
 
 /// Shorthand for the term optimise stage.
 let termOptimise = lift Starling.Optimiser.Term.optimise
@@ -254,11 +258,11 @@ let goalAdd = lift Starling.Core.Axiom.goalAdd
 
 /// Shorthand for the semantics stage.
 let semantics = bind (Starling.Semantics.translate
-                >> mapMessages Error.Semantics)
+                      >> mapMessages Error.Semantics)
 
 /// Shorthand for the axiomatisation stage.
 let axiomatise = bind (Starling.Core.Graph.axiomatise
-                 >> mapMessages Error.Axiomatise)
+                       >> mapMessages Error.Axiomatise)
 
 /// Shorthand for the frontend stage.
 let frontend rq = Lang.Frontend.run rq >> mapMessages Error.Frontend

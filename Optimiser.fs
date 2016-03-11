@@ -20,6 +20,27 @@ open Starling.Core.Sub
 ///     Graph optimisation.
 /// </summary>
 module Graph =
+    open Starling.Core.Graph
+
+    /// <summary>
+    ///     Merges equivalent nodes where they are connected, but only by 'Id'
+    ///     transitions.
+    ///
+    ///     <para>
+    ///         This assumes that 'Id' has the necessary semantics.
+    ///     </para>
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The graph to optimise.
+    /// </param>
+    /// <returns>
+    ///     A graph equivalent to <paramref name="_arg1" />, but with all
+    ///     equivalent nodes connected only by 'Id' merged.
+    /// </returns>
+    let removeIdTransitions { Name = name ; Contents = subgraph } =
+        // TODO(CaptainHayashi): do something here
+        graph name subgraph
+
     /// <summary>
     ///     Optimises a graph.
     /// </summary>
@@ -29,9 +50,21 @@ module Graph =
     /// <returns>
     ///     An optimised equivalent of <paramref name="graph" />.
     /// </returns>
-    let optimise graph =
-        // TODO(CaptainHayashi): do something here
+    let optimiseGraph graph =
         graph
+        |> removeIdTransitions
+
+    /// <summary>
+    ///     Optimises a model over graphs.
+    /// </summary>
+    /// <param name="mdl" />
+    ///     The model to optimise.
+    /// </param>
+    /// <returns>
+    ///     An optimised equivalent of <paramref name="mdl" />.
+    /// </returns>
+    let optimise mdl =
+        tryMapAxioms optimiseGraph mdl
 
 
 /// <summary>
