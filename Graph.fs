@@ -348,6 +348,54 @@ let axiomatise model =
 
 
 (*
+ * Graph transformations.
+ *)
+
+/// <summary>
+///     Unifies two nodes in a subgraph.
+/// </summary>
+/// <param name="_arg1">
+///     The subgraph to transform.
+/// </param>
+/// <param name="source">
+///     The node to delete in the unification.
+/// </param>
+/// <param name="target">
+///     The node to keep in the unification.
+/// </param>
+/// <returns>
+///     The subgraph that is <paramref name="_arg1" /> but with
+///     <paramref name="source" /> deleted, and all edges starting and ending
+///     at it redirected to <paramref name="target" />.
+/// </returns>
+/// <remarks>
+///     <para>
+///         If <c>source = target</c>, <paramref name="_arg1" /> is returned
+///         unchanged.
+///     </para>
+///     <para>
+///         This does no checking that <paramref name="source" /> or
+///         <paramref name="target" /> exist.  If the former does not exist,
+///         this function does nothing.  If the latter does not exist,
+///         we proceed as if it does: use <c>graph</c> to check to see if
+///         the result is a well-formed graph.
+///     </para>
+/// </remarks>
+let unify { Nodes = ns ; Edges = es } source target =
+    if source = target
+    then { Nodes = ns ; Edges = es }
+    else
+        let swapNode = function
+                       | n when n = source -> target
+                       | n -> n
+
+        { Nodes = Map.remove source ns
+          Edges = Map.map (fun _ { Pre = p; Post = q; Cmd = c } ->
+                               edge (swapNode p) c (swapNode q))
+                          es }
+
+
+(*
  * Graph queries
  *)
 
