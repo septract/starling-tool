@@ -4,6 +4,7 @@ module Starling.Tests.Studies
 open Starling
 open Starling.Collections
 open Starling.Core.Expr
+open Starling.Core.Graph
 open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.Axiom
@@ -232,3 +233,76 @@ let ticketLockModel : Model<Method<CView, PartCmd<CView>>, DView> =
       Axioms = ticketLockMethods
       ViewDefs = ticketLockViewDefs
       Semantics = Starling.Lang.Modeller.coreSemantics }
+
+/// The CFG for the ticketed lock lock method.
+let ticketLockLockSubgraph : Subgraph =
+    { Nodes =
+          Map.ofList
+              [ ("lock_V0",
+                     Multiset.empty ())
+                ("lock_V1",
+                     Multiset.singleton
+                         (gfunc BTrue "holdTick" [ AExpr (aUnmarked "t") ] ))
+                ("lock_V2",
+                     Multiset.singleton (gfunc BTrue "holdLock" [] ))
+                ("lock_V3",
+                     Multiset.singleton
+                         (gfunc BTrue "holdTick" [ AExpr (aUnmarked "t") ] ))
+                ("lock_V4",
+                     Multiset.ofList
+                         [ gfunc (aEq (aUnmarked "s") (aUnmarked "t"))
+                                 "holdLock"
+                                 []
+                           gfunc (BNot (aEq (aUnmarked "s") (aUnmarked "t")))
+                                 "holdTick"
+                                 [ AExpr (aUnmarked "t") ]] ) ]
+      Edges =
+          Map.ofList
+              [ ("lock_C0",
+                     edge "lock_V0"
+                          (func "!ILoad++"
+                                [ AExpr (aBefore "t")
+                                  AExpr (aAfter "t")
+                                  AExpr (aBefore "ticket")
+                                  AExpr (aAfter "ticket") ] )
+                          "lock_V1")
+                ("lock_C1",
+                     edge "lock_V3"
+                          (func "!ILoad"
+                                [ AExpr (aBefore "s")
+                                  AExpr (aAfter "s")
+                                  AExpr (aBefore "serving")
+                                  AExpr (aAfter "serving") ] )
+                          "lock_V4")
+                ("lock_C2",
+                     edge "lock_V4"
+                          (func "Assume"
+                                [ BExpr (BNot (aEq (aBefore "s")
+                                                   (aBefore "t"))) ] )
+                          "lock_V3")
+                ("lock_C3",
+                     edge "lock_V4"
+                          (func "Assume"
+                                [ BExpr (aEq (aBefore "s") (aBefore "t")) ] )
+                          "lock_V2")
+                ("lock_C4",
+                     edge "lock_V1"
+                          (func "Id" [])
+                          "lock_V3") ] }
+
+/// The CFG for the ticketed lock unlock method.
+let ticketLockUnlockSubgraph : Subgraph =
+    { Nodes =
+          Map.ofList
+              [ ("unlock_V0",
+                     Multiset.singleton
+                         (gfunc BTrue "holdLock" [] ))
+                ("unlock_V1", Multiset.empty () ) ]
+      Edges =
+           Map.ofList
+              [ ("unlock_C0",
+                     edge "unlock_V0"
+                          (func "!I++"
+                                [ AExpr (aBefore "serving")
+                                  AExpr (aAfter "serving") ] )
+                          "unlock_V1" ) ] }

@@ -336,6 +336,23 @@ let dfunc name (pars : (Type * string) seq) : DFunc = func name pars
 /// </returns>
 let vfunc name (pars : Expr seq) : VFunc = func name pars
 
+/// <summary>
+///     Creates a new <c>GFunc</c>.
+/// </summary>
+/// <param name="guard">
+///     The guard on which the <c>GFunc</c> is conditional.
+/// </param>
+/// <param name="name">
+///     The name of the <c>GFunc</c>.
+/// </param>
+/// <param name="pars">
+///     The parameters of the <c>GFunc</c>, as a sequence.
+/// </param>
+/// <returns>
+///     A new <c>GFunc</c> with the given guard, name, and parameters.
+/// </returns>
+let gfunc guard name pars = { Cond = guard ; Item = func name pars }
+
 /// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
 /// and its Goal with fG.
 let mapTerm fC fW fG {Cmd = c; WPre = w; Goal = g} =
