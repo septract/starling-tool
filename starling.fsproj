@@ -69,6 +69,7 @@
     <Compile Include="Z3.fs" />
     <Compile Include="TestStudies.fs" />
     <Compile Include="ExprTests.fs" />
+    <Compile Include="GraphTests.fs" />
     <Compile Include="InstantiateTests.fs" />
     <Compile Include="PrettyTests.fs" />
     <Compile Include="ParserTests.fs" />
