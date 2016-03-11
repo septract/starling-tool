@@ -6,6 +6,8 @@ open Chessie.ErrorHandling
 
 open Starling
 open Starling.Core.Pretty
+open Starling.Core.Graph
+open Starling.Core.Graph.Pretty
 open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.Model.Pretty
@@ -31,6 +33,8 @@ type Options =
 type Request = 
     /// Run the language frontend only, with the given request.
     | Frontend of Lang.Frontend.Request
+    /// Stop at graph optimisation.
+    | GraphOptimise
     /// Stop at graph axiomatisation.
     | Axiomatise
     /// Stop at goalAdd-axiom-pair generation.
@@ -57,6 +61,7 @@ let requestMap =
                  ("model", Request.Frontend Lang.Frontend.Request.Model)
                  ("guard", Request.Frontend Lang.Frontend.Request.Guard)
                  ("graph", Request.Frontend Lang.Frontend.Request.Graph)
+                 ("graphOptimise", Request.GraphOptimise)
                  ("axiomatise", Request.Axiomatise)
                  ("goalAdd", Request.GoalAdd)
                  ("termgen", Request.TermGen)
@@ -78,6 +83,8 @@ let requestFromStage ostage = Map.tryFind (withDefault "sat" ostage) requestMap
 type Response = 
     /// The result of frontend processing.
     | Frontend of Lang.Frontend.Response
+    /// Stop at graph optimisation.
+    | GraphOptimise of Model<Graph, DView>
     /// Stop at graph axiomatisation.
     | Axiomatise of Model<Axiom<GView, VFunc>, DView>
     /// The result of goal-axiom-pair generation.
@@ -101,6 +108,12 @@ type Response =
 let printResponse mview =        
     function 
     | Frontend f -> Lang.Frontend.printResponse mview f
+    | GraphOptimise g ->
+        printModelView
+            mview
+            printGraph
+            printDView
+            g
     | Axiomatise m ->
         printModelView
             mview
@@ -206,6 +219,9 @@ let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
 /// Shorthand for the Z3 stage.
 let z3 rq = bind (Backends.Z3.run rq >> mapMessages Error.Z3)
 
+/// Shorthand for the graph optimise stage.
+let graphOptimise = lift Starling.Optimiser.Graph.optimise
+
 /// Shorthand for the term optimise stage.
 let termOptimise = lift Starling.Optimiser.Term.optimise
 
@@ -243,27 +259,36 @@ let model =
 /// If missing, we read from stdin.
 /// Argument 1 turns optimisation on if true.
 let runStarling opt = 
+    let maybeGraphOptimise = if opt then graphOptimise else id
     let maybeTermOptimise = if opt then termOptimise else id
 
     function 
     | Request.Frontend rq -> frontend rq >> lift Response.Frontend
+    | Request.GraphOptimise ->
+        model
+        >> maybeGraphOptimise
+        >> lift Response.GraphOptimise
     | Request.Axiomatise ->
         model
+        >> maybeGraphOptimise
         >> axiomatise
         >> lift Response.Axiomatise
     | Request.GoalAdd -> 
         model
+        >> maybeGraphOptimise
         >> axiomatise
         >> goalAdd
         >> lift Response.GoalAdd
     | Request.TermGen -> 
         model
+        >> maybeGraphOptimise
         >> axiomatise
         >> goalAdd
         >> termGen
         >> lift Response.TermGen
     | Request.Reify -> 
         model
+        >> maybeGraphOptimise
         >> axiomatise
         >> goalAdd
         >> termGen
@@ -271,6 +296,7 @@ let runStarling opt =
         >> lift Response.Reify
     | Request.Flatten -> 
         model
+        >> maybeGraphOptimise
         >> axiomatise
         >> goalAdd
         >> termGen
@@ -279,6 +305,7 @@ let runStarling opt =
         >> lift Response.Flatten
     | Request.Semantics -> 
         model
+        >> maybeGraphOptimise
         >> axiomatise
         >> goalAdd
         >> termGen
@@ -288,6 +315,7 @@ let runStarling opt =
         >> lift Response.Semantics
     | Request.TermOptimise -> 
         model
+        >> maybeGraphOptimise
         >> axiomatise
         >> goalAdd
         >> termGen
@@ -298,6 +326,7 @@ let runStarling opt =
         >> lift Response.TermOptimise
     | Request.Z3 rq -> 
         model
+        >> maybeGraphOptimise
         >> axiomatise
         >> goalAdd
         >> termGen
@@ -309,6 +338,7 @@ let runStarling opt =
         >> lift Response.Z3
     | Request.HSF ->
         model
+        >> maybeGraphOptimise
         >> axiomatise
         >> goalAdd
         >> termGen

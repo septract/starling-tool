@@ -17,6 +17,24 @@ open Starling.Core.Sub
 
 
 /// <summary>
+///     Graph optimisation.
+/// </summary>
+module Graph =
+    /// <summary>
+    ///     Optimises a graph.
+    /// </summary>
+    /// <param name="graph" />
+    ///     The graph to optimise.
+    /// </param>
+    /// <returns>
+    ///     An optimised equivalent of <paramref name="graph" />.
+    /// </returns>
+    let optimise graph =
+        // TODO(CaptainHayashi): do something here
+        graph
+
+
+/// <summary>
 ///     Term optimisation.
 /// </summary>
 module Term =
