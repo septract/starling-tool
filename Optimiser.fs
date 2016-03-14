@@ -22,14 +22,24 @@ open Starling.Core.Sub
 module Graph =
     open Starling.Core.Axiom
     open Starling.Core.Graph
-    
+
+    /// <summary>
+    ///     Decides whether a program command is a no-op.
+    /// </summary>
+    /// <param name="cmd">
+    ///     The command, as a <c>VFunc</c>.
+    /// </param>
+    /// <returns>
+    ///     <c>true</c> if the command is a no-op;
+    ///     <c>false</c> otherwise.
+    /// </returns>
+    let isNop (cmd : VFunc) =
+        // TODO(CaptainHayashi): generalise this, if sound to do so
+        cmd.Name = "Id"
+
     /// <summary>
     ///     Unifies two given nodes in a subgraph if they are
-    ///     equivalent and connected, but only by 'Id' transitions.
-    ///
-    ///     <para>
-    ///         This assumes that 'Id' has the necessary semantics.
-    ///     </para>
+    ///     equivalent and connected, but only by no-op commands.
     /// </summary>
     /// <param name="sg">
     ///     The graph to unify (perhaps).
@@ -43,7 +53,7 @@ module Graph =
     /// <returns>
     ///     A subgraph equivalent to <paramref name="sg" />, but with
     ///     <paramref name="x" /> and <paramref name="y" /> merged if they are
-    ///     equivalent and connected only by 'Id' edges.
+    ///     equivalent and connected only by no-op commands.
     /// </returns>
     let removeIdStep sg x y =
         (* First, find out what the views on both sides are, and if they are
@@ -62,9 +72,7 @@ module Graph =
 
             // Are all of the edges id?
             let allId =
-                Map.forall
-                    (fun _ { Edge.Cmd = { Func.Name = n } } -> n = "Id")
-                    xyEdges
+                Map.forall (fun _ { Edge.Cmd = cmd } -> isNop cmd) xyEdges
 
             // If not, or the edge list is empty, leave the edges alone.
             if Map.isEmpty xyEdges || not allId

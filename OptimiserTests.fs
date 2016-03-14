@@ -5,11 +5,40 @@ open Starling.Collections
 open Starling.Core.Expr
 open Starling.Core.Model
 open Starling.Core.Sub
+open Starling.Optimiser.Graph
 open Starling.Optimiser.Term
 
 
 /// Tests for the term optimiser.
 type OptimiserTests() =
+    (*
+     * Graph optimisation
+     *)
+
+    /// <summary>
+    ///     Test cases for checking whether a command is a no-op.
+    /// </summary>
+    static member Nops =
+        [ TestCaseData(vfunc "Id" [])
+            .Returns(true)
+            .SetName("Classify Id() as a no-op")
+          TestCaseData(vfunc "Foo" [ AExpr (aBefore "bar")
+                                     AExpr (aAfter "bar") ] )
+            .Returns(false)
+            .SetName("Classify Foo(bar!before, bar!after as a non-no-op") ]
+
+    /// <summary>
+    ///     Tests <c>isNop</c>.
+    /// </summary>
+    [<TestCaseSource("Nops")>]
+    member x.``Tests whether commands are correctly identified as no-ops`` c =
+        isNop c
+
+
+    (*
+     * Term optimisation
+     *)
+
     /// A test environment of arithmetic after substitutions.
     static member AfterArithSubs =
         [ ("serving", AAdd [aBefore "serving"; AInt 1L])
