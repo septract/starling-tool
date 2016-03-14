@@ -1,5 +1,5 @@
 /*
- * Linux-style ticketed lock, with erroneously flipped loop condition.
+ * Linux-style ticket lock, with erroneously flipped loop condition.
  */
 
 shared int ticket;  // The next ticket to hand out.

@@ -81,7 +81,7 @@ type ParserTests() =
     /// Test cases for testing the full parser.
     static member ScriptParses =
         [ TestCaseData(Starling.Tests.Studies.ticketLock).Returns(Some(Starling.Tests.Studies.ticketLockParsed))
-            .SetName("Parse the ticketed lock") ]
+            .SetName("Parse the ticket lock") ]
 
     [<TestCaseSource("ScriptParses")>]
     /// Tests whether the script parser works correctly.

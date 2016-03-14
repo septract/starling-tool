@@ -1,5 +1,5 @@
 /*
- * Linux-style ticketed lock with some constraints left indefinite.
+ * Linux-style ticket lock with some constraints left indefinite.
  */
 
 shared int ticket;  // The next ticket to hand out.

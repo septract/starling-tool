@@ -1,5 +1,5 @@
 /*
- * Two-processLinux-style ticketed lock.
+ * Two-processLinux-style ticket lock.
  */
 
 /*

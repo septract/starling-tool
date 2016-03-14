@@ -1,5 +1,5 @@
 /*
- * Linux-style ticketed lock with no invariant.
+ * Linux-style ticket lock with no invariant.
  * This version was 'discovered' by HSF with
  * Examples/Pass/ticketLockIndefinite.cvf as input.
  */

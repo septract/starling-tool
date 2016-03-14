@@ -12,7 +12,7 @@ open Starling.Lang.AST
 open Starling.Lang.Collator
 open Starling.Lang.Modeller
 
-/// The raw form of the ticketed lock.
+/// The raw form of the ticket lock.
 let ticketLock = """
 view holdTick(int t);
 view holdLock();
@@ -48,7 +48,7 @@ method unlock() {
 }
 """
 
-/// The correct parsing of the ticketed lock's lock method.
+/// The correct parsing of the ticket lock's lock method.
 let ticketLockLockMethodAST = 
     { Signature = {Name = "lock"; Params = []}
       Body = 
@@ -68,7 +68,7 @@ let ticketLockLockMethodAST =
                              Bop(Neq, LV(LVIdent "s"), LV(LVIdent "t")))
                     Post = View.Func { Name = "holdLock"; Params = []} } ] } }
 
-/// The correct parsing of the ticketed lock's unlock method.
+/// The correct parsing of the ticket lock's unlock method.
 let ticketLockUnlockMethodAST = 
     { Signature = {Name = "unlock"; Params = []}
       Body = 
@@ -77,7 +77,7 @@ let ticketLockUnlockMethodAST =
                 [ { Command = Atomic(Postfix(LVIdent "serving", Increment))
                     Post = Unit } ] } }
 
-/// The parsed form of the ticketed lock.
+/// The parsed form of the ticket lock.
 let ticketLockParsed = 
     [ ViewProto { Name = "holdTick"
                   Params = [ (Type.Int, "t") ] }
@@ -102,7 +102,7 @@ let ticketLockParsed =
       Method ticketLockLockMethodAST
       Method ticketLockUnlockMethodAST ]
 
-/// The collated form of the ticketed lock.
+/// The collated form of the ticket lock.
 let ticketLockCollated = 
     { CollatedScript.Globals = 
           [ (Type.Int, "ticket")
@@ -156,7 +156,7 @@ let gHoldTick cnd = gfunc cnd "holdTick" [AExpr (aUnmarked "t")]
 /// Produces the expression 's == t'.
 let sIsT = aEq (aUnmarked "s") (aUnmarked "t")
 
-/// The ticketed lock's lock method.
+/// The ticket lock's lock method.
 let ticketLockLock =
     { Signature = func "lock" []
       Body =
@@ -198,13 +198,13 @@ let ticketLockUnlock =
                         |> Prim
                     Post = Multiset.empty() }]}}
 
-/// The methods of the ticketed lock.
+/// The methods of the ticket lock.
 let ticketLockMethods =
     [ ("lock", ticketLockLock)
       ("unlock", ticketLockUnlock) ] |> Map.ofList
 
 
-/// The ticketed lock's lock method, in guarded form.
+/// The ticket lock's lock method, in guarded form.
 let ticketLockGuardedLock =
     { Signature = func "lock" []
       Body =
@@ -244,7 +244,7 @@ let ticketLockGuardedUnlock : Method<GView, PartCmd<GView>> =
                         |> Prim
                     Post = Multiset.empty() } ] } }
 
-/// The view definitions of the ticketed lock model.
+/// The view definitions of the ticket lock model.
 let ticketLockViewDefs =
     [ { View = Multiset.empty()
         Def = Some <| BGe(aUnmarked "ticket", aUnmarked "serving") }
@@ -275,8 +275,8 @@ let ticketLockViewDefs =
                                 Params = [] } ]
         Def = Some <| BFalse } ]
 
-/// The model of a ticketed lock method.
 let ticketLockModel : Model<Method<CView, PartCmd<CView>>, DView> = 
+/// The model of the ticket lock.
     { Globals = 
           Map.ofList [ ("serving", Type.Int)
                        ("ticket", Type.Int) ]
@@ -287,7 +287,7 @@ let ticketLockModel : Model<Method<CView, PartCmd<CView>>, DView> =
       ViewDefs = ticketLockViewDefs
       Semantics = Starling.Lang.Modeller.coreSemantics }
 
-/// The CFG for the ticketed lock lock method.
+/// The CFG for the ticket lock lock method.
 let ticketLockLockSubgraph : Subgraph =
     { Nodes =
           Map.ofList
@@ -343,7 +343,7 @@ let ticketLockLockSubgraph : Subgraph =
                           (func "Id" [])
                           "lock_V3") ] }
 
-/// The CFG for the ticketed lock unlock method.
+/// The CFG for the ticket lock unlock method.
 let ticketLockUnlockSubgraph : Subgraph =
     { Nodes =
           Map.ofList

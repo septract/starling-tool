@@ -19,7 +19,7 @@ type SearchViewDefEntry =
 
 /// Tests for the modeller.
 type ModellerTests() =
-    /// View prototypes for the ticketed lock modeller.
+    /// View prototypes for the ticket lock modeller.
     static member TicketLockProtos : FuncTable<unit> =
         makeFuncTable
             [ (func "holdLock" [], ())
@@ -93,7 +93,7 @@ type ModellerTests() =
 
 
     /// Boolean expression modelling tests.
-    /// These all use the ticketed lock model.
+    /// These all use the ticket lock model.
     static member BooleanExprs =
         [ TestCaseData(Bop(And, Bop(Or, True, True), False)).Returns(Some BFalse)
             .SetName("model and simplify (true || true) && false") ]
@@ -139,14 +139,14 @@ type ModellerTests() =
 
 
     /// Tests for the atomic primitive modeller.
-    /// These use the ticketed lock model.
+    /// These use the ticket lock model.
     static member AtomicPrims =
         [ TestCaseData(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment))
             .Returns(Some <| func "!ILoad++" ["t" |> aBefore |> AExpr; "t" |> aAfter |> AExpr
                                               "ticket" |> aBefore |> AExpr; "ticket" |> aAfter |> AExpr])
             .SetName("model a valid integer load as a prim") ]
 
-    /// Tests the atomic primitive modeller using the ticketed lock.
+    /// Tests the atomic primitive modeller using the ticket lock.
     [<TestCaseSource("AtomicPrims")>]
     member x.``atomic actions are modelled correctly as prims`` a = modelAtomic ticketLockModel.Globals ticketLockModel.Locals a |> okOption
 
@@ -158,7 +158,7 @@ type ModellerTests() =
     static member atom (ac : AtomicAction) : Command<View> = Atomic ac
 
     /// Tests for the command axiom modeller.
-    /// These use the ticketed lock model.
+    /// These use the ticket lock model.
     static member CommandAxioms =
         [ TestCaseData(ModellerTests.atom(Fetch(LVIdent "t",
                                                 LV(LVIdent "ticket"),
@@ -169,7 +169,7 @@ type ModellerTests() =
                      |> Some)
             .SetName("model a valid integer load command as an axiom") ]
 
-    /// Tests the command modeller using the ticketed lock.
+    /// Tests the command modeller using the ticket lock.
     [<TestCaseSource("CommandAxioms")>]
     member x.``commands are modelled correctly as part-commands`` c =
         c
@@ -218,9 +218,9 @@ type ModellerTests() =
 
     /// Full case studies to model.
     static member Models =
-        [ TestCaseData(ticketLockCollated).Returns(Some ticketLockModel).SetName("model the ticketed lock") ]
+        [ TestCaseData(ticketLockCollated).Returns(Some ticketLockModel).SetName("model the ticket lock") ]
 
     /// Tests the whole modelling process.
     [<TestCaseSource("Models")>]
     member x.``case studies are modelled correctly`` col = model col |> okOption
-    
+

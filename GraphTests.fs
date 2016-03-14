@@ -42,7 +42,7 @@ type GraphTests() =
                                         [ AExpr (aBefore "serving")
                                           AExpr (aAfter "serving") ] )
                                   "unlock_V0" ) ] } )
-            .SetName("unify C1 into C0 on the ticketed lock 'unlock'")
+            .SetName("unify C1 into C0 on the ticket lock 'unlock'")
           TestCaseData(("unlock_V0", "unlock_V1"))
             .Returns(
                 { Nodes =
@@ -56,7 +56,7 @@ type GraphTests() =
                                         [ AExpr (aBefore "serving")
                                           AExpr (aAfter "serving") ] )
                                   "unlock_V1" ) ] } )
-            .SetName("unify C0 into C1 on the ticketed lock 'unlock'")
+            .SetName("unify C0 into C1 on the ticket lock 'unlock'")
           TestCaseData(("unlock_V0", "unlock_V2"))
             .Returns(
                 { Nodes =
@@ -94,7 +94,7 @@ type GraphTests() =
             .SetName("Extract 0 node pairs from the empty graph")
           TestCaseData(ticketLockUnlockSubgraph)
             .Returns(npset [ ("unlock_V0", "unlock_V1") ] )
-            .SetName("Extract 1 node pair from the ticketed lock 'unlock'")
+            .SetName("Extract 1 node pair from the ticket lock 'unlock'")
           TestCaseData(ticketLockLockSubgraph)
             .Returns(npset [ ("lock_V0", "lock_V1")
                              ("lock_V0", "lock_V2")
@@ -106,7 +106,7 @@ type GraphTests() =
                              ("lock_V2", "lock_V3")
                              ("lock_V2", "lock_V4")
                              ("lock_V3", "lock_V4") ] )
-            .SetName("Extract 10 node pairs from the ticketed lock 'lock'") ]
+            .SetName("Extract 10 node pairs from the ticket lock 'lock'") ]
 
     /// <summary>
     ///     Tests <c>nodePairs</c>.

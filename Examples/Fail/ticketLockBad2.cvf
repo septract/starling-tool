@@ -1,5 +1,5 @@
 /*
- * Linux-style ticketed lock.
+ * Linux-style ticket lock.
  */
 
 shared int ticket;  // The next ticket to hand out.
