@@ -3,6 +3,7 @@
 /// </summary>
 module Starling.Tests.Lang.Grapher
 
+open Chessie.ErrorHandling
 open NUnit.Framework
 
 open Starling.Collections
@@ -22,12 +23,10 @@ type GrapherTests() =
     /// </summary>
     static member GoodMethods =
         [ TestCaseData(ticketLockGuardedLock)
-            .Returns(Some { Name = "lock"
-                            Contents = ticketLockLockSubgraph } )
+            .Returns(Some ticketLockLockSubgraph)
             .SetName("Convert the ticket lock 'lock' method to a graph")
           TestCaseData(ticketLockGuardedUnlock)
-            .Returns(Some { Name = "unlock"
-                            Contents = ticketLockUnlockSubgraph } )
+            .Returns(Some ticketLockUnlockSubgraph)
             .SetName("Convert the ticket lock 'unlock' method to a graph") ]
 
     /// <summary>
@@ -35,4 +34,5 @@ type GrapherTests() =
     /// </summary>
     [<TestCaseSource("GoodMethods")>]
     member x.``valid methods are properly converted to graphs`` m =
-        m |> graphMethod |> okOption
+        // TODO(CaptainHayashi): don't convert down to subgraphs
+        m |> graphMethod |> lift toSubgraph |> okOption

@@ -127,7 +127,7 @@ type MapSep =
 /// <returns>
 ///     A printer for the given association list.
 /// </returns>
-let printAssoc mapSep = 
+let printAssoc mapSep =
     Seq.map
         (fun (k, v) ->
              match mapSep with

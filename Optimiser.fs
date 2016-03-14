@@ -103,19 +103,22 @@ module Graph =
     ///         This assumes that 'Id' has the necessary semantics.
     ///     </para>
     /// </summary>
-    /// <param name="_arg1">
+    /// <param name="g">
     ///     The graph to optimise.
     /// </param>
     /// <returns>
-    ///     A graph equivalent to <paramref name="_arg1" />, but with all
+    ///     A graph equivalent to <paramref name="g" />, but with all
     ///     equivalent nodes connected only by 'Id' merged.
     /// </returns>
-    let removeIdTransitions { Name = name ; Contents = subgraph } =
+    let removeIdTransitions g =
+        // TODO(CaptainHayashi): support graph format directly
+        let subgraph = toSubgraph g
+
         subgraph
         |> nodePairs
         |> Seq.fold (fun sg -> uncurry (removeIdStep sg))
            subgraph
-        |> graph name
+        |> graph g.Name
 
     /// <summary>
     ///     Optimises a graph.

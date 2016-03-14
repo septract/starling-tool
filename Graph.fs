@@ -32,6 +32,11 @@ module Types =
 
     /// <summary>
     ///     The container for a partial control-flow graph.
+    ///
+    ///     <para>
+    ///         Partial graphs use an inefficient representation.  Once
+    ///         complete, they may be converted into <c>Graph</c>s.
+    ///     </para>
     /// </summary>
     type Subgraph =
         {
@@ -47,17 +52,37 @@ module Types =
         }
 
     /// <summary>
-    ///     The type for a standalone control-flow graph.
+    ///     An edge in a standalone control-flow graph.
     /// </summary>
-    type Graph =
+    type GraphEdge =
         { /// <summary>
-          ///     The name of the graph.
+          ///    The name of the edge.
           /// </summary>
-          Name: string
+          Name : string
           /// <summary>
-          ///     The contents of the graph.
+          ///    The other node this edge connects.
           /// </summary>
-          Contents: Subgraph }
+          Dest : string
+          /// <summary>
+          ///    The command this edge represents.
+          /// </summary>
+          Command : VFunc }
+
+    /// <summary>
+    ///     A standalone control-flow graph.
+    ///
+    ///     <para>
+    ///         Control-flow graphs use an adjacency list format.
+    ///     </para>
+    /// </summary>
+    type Graph = { /// <summary>
+                   ///     The name of the graph.
+                   /// </summary>
+                   Name : string
+                   /// <summary>
+                   ///     The contents of the graph.
+                   /// </summary>
+                   Contents : Map<string, (GView * Set<GraphEdge>)> }
 
     /// <summary>
     ///     Type of Chessie errors for CFG actions.
@@ -78,128 +103,6 @@ module Types =
 
 
 /// <summary>
-///     Pretty printers for control-flow graphs.
-/// </summary>
-module Pretty =
-    open Starling.Core.Pretty
-
-    open Starling.Core.Model.Pretty
-    open Starling.Core.Axiom.Pretty
-
-
-    /// <summary>
-    ///     Prints a GraphViz label directive.
-    /// </summary>
-    /// <param name="labelCmd">
-    ///     The pretty-printer command to use as the label.
-    /// </param.
-    /// <returns>
-    ///     A pretty-printer command representing
-    ///     [label = "<paramref name="labelCmd" />"].
-    /// </returns>
-    let printLabel labelCmd =
-        [ String "label"
-          String "="
-          labelCmd |> ssurround "\"" "\"" ]
-        |> hsep |> squared
-
-    /// <summary>
-    ///     Prints a node.
-    /// </summary>
-    /// <param name="id">
-    ///     The unique ID of the node.
-    /// </param>
-    /// <param name="view">
-    ///     The <c>GView</c> contained in the node.
-    /// </param>
-    /// <returns>
-    ///     A pretty-printer <c>Command</c> representing the node.
-    /// </returns>
-    let printNode id view =
-        hsep [ id |> String
-               [ id |> String
-                 view |> printGView ] |> colonSep |> printLabel ]
-        |> withSemi
-
-    /// <summary>
-    ///     Prints an edge.
-    /// </summary>
-    /// <param name="id">
-    ///     The unique ID of the node.
-    /// </param>
-    /// <param name="_arg1">
-    ///     The <c>Edge</c> to print.
-    /// </param>
-    /// <returns>
-    ///     A pretty-printer <c>Command</c> representing
-    ///     <paramref name="_arg1" />.
-    /// </returns>
-    let printEdge id { Pre = s; Post = t; Cmd = vf } =
-        hsep [ s |> String
-               String "->"
-               t |> String
-               [ id |> String
-                 vf |> printVFunc ] |> colonSep |> printLabel ]
-        |> withSemi
-
-    /// <summary>
-    ///     Prints a <c>Subgraph</c>.
-    /// </summary>
-    /// <param name="_arg1">
-    ///     The subgraph to print.
-    /// </param>
-    /// <returns>
-    ///     A pretty-printer <c>Command</c> that prints
-    ///     <paramref name="_arg1" />.
-    /// </returns>
-    let printSubgraph { Nodes = nodes ; Edges = edges } =
-        Seq.append
-            (nodes |> Map.toSeq |> Seq.map (uncurry printNode))
-            (edges |> Map.toSeq |> Seq.map (uncurry printEdge))
-        |> ivsep |> braced
-
-    /// <summary>
-    ///     Prints a <c>Graph</c>.
-    ///
-    ///     <para>
-    ///         This pretty printer should create a dot-compatible digraph.
-    ///     </para>
-    /// </summary>
-    /// <param name="_arg1">
-    ///     The graph to print.
-    /// </param>
-    /// <returns>
-    ///     A pretty-printer <c>Command</c> that prints
-    ///     <paramref name="_arg1" />.
-    /// </returns>
-    let printGraph { Name = name; Contents = sg } =
-        hsep [ String "digraph"
-               String name
-               sg |> printSubgraph ]
-
-    /// <summary>
-    ///     Pretty-prints graph construction errors.
-    /// </summary>
-    /// <param name="_arg1">
-    ///     The graph error to print.
-    /// </param>
-    /// <returns>
-    ///     A pretty-printer command that prints
-    ///     <paramref name="_arg1" />.
-    /// </returns>
-    let printError =
-        function
-        | EdgeOutOfBounds edge ->
-            colonSep
-                [ String "edge out of bounds: "
-                  printPAxiom (fun x -> String (x.ToString())) edge ]
-        | DuplicateNode node ->
-            colonSep [ String "node duplicated: "; String node ]
-        | DuplicateEdge edge ->
-            colonSep [ String "edge duplicated: "; String edge ]
-
-
-/// <summary>
 ///     Creates a single <c>Edge</c>.
 /// </summary>
 /// <param name="_arg1">
@@ -215,6 +118,34 @@ module Pretty =
 ///     An <c>Edge</c> with the above properties.
 /// </returns>
 let edge = axiom
+
+/// <summary>
+///     Converts a <c>Graph</c> to a <c>Subgraph</c>.
+/// </summary>
+/// <param name="graph" />
+///     The graph to convert to a subgraph.
+/// </param>
+/// <returns>
+///     A <c>Subgraph</c> giving the same nodes and edges as
+///     <paramref name="graph" />.
+/// </returns>
+let toSubgraph graph =
+    { Nodes =
+          graph.Contents
+          |> Map.toSeq
+          |> Seq.map (fun (nodeName, (nodeView, _)) -> (nodeName, nodeView))
+          |> Map.ofSeq
+      Edges =
+          graph.Contents
+          |> Map.toSeq
+          |> Seq.map
+                 (fun (fromName, (_, edges)) ->
+                      Seq.map
+                          (fun { Name = n; Dest = toName; Command = cmd } ->
+                               (n, edge fromName cmd toName))
+                          edges)
+          |> Seq.concat
+          |> Map.ofSeq }
 
 /// <summary>
 ///     Attempts to create a new <c>Graph</c> with no node checking.
@@ -233,7 +164,33 @@ let subgraph nodes edges =
     { Nodes = nodes; Edges = edges } |> ok
 
 /// <summary>
-///     Checks that a subgraph is a standalone graph.
+///     Adds the given nodes into the given adjacency list, if they do
+///     not already exist.
+///
+///     <para>
+///         The nodes will be added with empty edge lists.
+///     </para>
+/// </summary>
+/// <param name="nodes" />
+///     The nodes to add, as a map from names to views.
+/// </param>
+/// <param name="adjlist" />
+///     The adjacency list, as a map from node names to entries.
+/// </param>
+/// <returns>
+///     The updated adjacency list.
+/// </returns>
+let addMissingNodes nodes adjlist =
+    nodes
+    // Which nodes are actually missing?
+    |> Map.filter (fun node _ -> not (Map.containsKey node adjlist))
+    // Convert from views to adjacency list entries...
+    |> Map.map (fun _ view -> (view, Set.empty))
+    // ...And merge into the original adjacency list.
+    |> mapAppend adjlist
+
+/// <summary>
+///     Converts a subgraph to a standalone graph.
 /// </summary>
 /// <param name="name">
 ///     The name to give the standalone graph.
@@ -253,7 +210,31 @@ let graph name sg =
                     not (Map.containsKey s sg.Nodes &&
                          Map.containsKey t sg.Nodes))
                sg.Edges) |> Map.toList with
-    | [] -> { Name = name; Contents = sg } |> ok
+    | [] ->
+        (* All of this massaging should now be sound, given that we checked
+         * for node sanity.
+         *)
+        sg.Edges
+        // First, build a sequence of (src, edge) pairs...
+        |> Map.toSeq
+        |> Seq.map
+               (fun (n, { Pre = s ; Post = t ; Cmd = c }) ->
+                    (s, { Name = n ; Dest = t ; Command = c } ))
+        // so we can use groupBy to turn them into (src, <(src, edge)>)...
+        |> Seq.groupBy fst
+        // ...which we can then massage into (src, (srcView, {edge}))...
+        |> Seq.map
+               (fun (s, es) ->
+                    (s, (Map.find s sg.Nodes,
+                         es |> Seq.map snd |> Set.ofSeq)))
+        // ...which can become our adjacency list representation...
+        |> Map.ofSeq
+        (* ...except we also need to add in any nodes that are not
+         * connected by edges too.
+         *)
+        |> addMissingNodes sg.Nodes
+        |> fun m -> { Name = name ; Contents = m }
+        |> ok
     | xs -> xs |> List.map (snd >> EdgeOutOfBounds) |> Bad
 
 /// <summary>
@@ -266,14 +247,14 @@ let graph name sg =
 ///    The second graph to combine.
 /// </param>
 /// <returns>
-///     A <c>Graph</c>, wrapped in a Chessie result over <c>Error</c>.
+///     A <c>Subgraph</c>, wrapped in a Chessie result over <c>Error</c>.
 ///     If the two graphs do not contain duplicate
 ///     nodes, then the result will be <c>ok</c>.
 ///     The graph will contain the nodes and edges from <paramref
 ///     name="_arg1" /> and <paramref name="_arg2" />.
 /// </returns>
 let combine { Nodes = ans ; Edges = aes }
-            { Nodes = bns; Edges = bes } =
+            { Nodes = bns ; Edges = bes } =
     match (keyDuplicates ans bns |> Seq.toList,
            keyDuplicates aes bes |> Seq.toList) with
     | ([], []) -> subgraph (mapAppend ans bns) (mapAppend aes bes)
@@ -291,8 +272,12 @@ let combine { Nodes = ans ; Edges = aes }
 ///     The edges of <paramref name="_arg1" />, as name-edge pairs.
 ///     This is wrapped in a Chessie result over <c>Error</c>.
 /// </returns>
-let axiomatiseGraph { Name = name
-                      Contents = { Nodes = nodes; Edges = edges } } =
+let axiomatiseGraph graph =
+    (* A subgraph nearly contains an axioms list verbatim, so
+     * switch back to subgraph representation.
+     *)
+    let { Nodes = nodes ; Edges = edges } = toSubgraph graph
+
     edges
     |> Map.toList
     |> Seq.map
@@ -424,3 +409,126 @@ let nodePairs subgraph =
                  *)
                 (Seq.skip (i + 1) allNodes))
     |> Seq.concat
+
+
+/// <summary>
+///     Pretty printers for control-flow graphs.
+/// </summary>
+module Pretty =
+    open Starling.Core.Pretty
+
+    open Starling.Core.Model.Pretty
+    open Starling.Core.Axiom.Pretty
+
+
+    /// <summary>
+    ///     Prints a GraphViz label directive.
+    /// </summary>
+    /// <param name="labelCmd">
+    ///     The pretty-printer command to use as the label.
+    /// </param.
+    /// <returns>
+    ///     A pretty-printer command representing
+    ///     [label = "<paramref name="labelCmd" />"].
+    /// </returns>
+    let printLabel labelCmd =
+        [ String "label"
+          String "="
+          labelCmd |> ssurround "\"" "\"" ]
+        |> hsep |> squared
+
+    /// <summary>
+    ///     Prints a node.
+    /// </summary>
+    /// <param name="id">
+    ///     The unique ID of the node.
+    /// </param>
+    /// <param name="view">
+    ///     The <c>GView</c> contained in the node.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer <c>Command</c> representing the node.
+    /// </returns>
+    let printNode id view =
+        hsep [ id |> String
+               [ id |> String
+                 view |> printGView ] |> colonSep |> printLabel ]
+        |> withSemi
+
+    /// <summary>
+    ///     Prints an edge.
+    /// </summary>
+    /// <param name="id">
+    ///     The unique ID of the node.
+    /// </param>
+    /// <param name="_arg1">
+    ///     The <c>Edge</c> to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer <c>Command</c> representing
+    ///     <paramref name="_arg1" />.
+    /// </returns>
+    let printEdge id { Pre = s; Post = t; Cmd = vf } =
+        hsep [ s |> String
+               String "->"
+               t |> String
+               [ id |> String
+                 vf |> printVFunc ] |> colonSep |> printLabel ]
+        |> withSemi
+
+    /// <summary>
+    ///     Prints a <c>Subgraph</c>.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The subgraph to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer <c>Command</c> that prints
+    ///     <paramref name="_arg1" />.
+    /// </returns>
+    let printSubgraph { Nodes = nodes ; Edges = edges } =
+        Seq.append
+            (nodes |> Map.toSeq |> Seq.map (uncurry printNode))
+            (edges |> Map.toSeq |> Seq.map (uncurry printEdge))
+        |> ivsep |> braced
+
+    /// <summary>
+    ///     Prints a <c>Graph</c>.
+    ///
+    ///     <para>
+    ///         This pretty printer should create a dot-compatible digraph.
+    ///     </para>
+    /// </summary>
+    /// <param name="graph">
+    ///     The graph to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer <c>Command</c> that prints
+    ///     <paramref name="graph" />.
+    /// </returns>
+    let printGraph graph =
+        hsep [ String "digraph"
+               String graph.Name
+               // TODO(CaptainHayashi): don't convert here?
+               graph |> toSubgraph |> printSubgraph ]
+
+    /// <summary>
+    ///     Pretty-prints graph construction errors.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The graph error to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command that prints
+    ///     <paramref name="_arg1" />.
+    /// </returns>
+    let printError =
+        function
+        | EdgeOutOfBounds edge ->
+            colonSep
+                [ String "edge out of bounds: "
+                  printPAxiom (fun x -> String (x.ToString())) edge ]
+        | DuplicateNode node ->
+            colonSep [ String "node duplicated: "; String node ]
+        | DuplicateEdge edge ->
+            colonSep [ String "edge duplicated: "; String edge ]
