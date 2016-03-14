@@ -47,7 +47,7 @@ let cAssumeNot = mkNot >> cAssume
 /// <returns>
 ///     A Chessie result containing the graph of this if statement.
 /// </returns>
-let rec graphWhile vg cg oP oQ isDo expr inner = 
+let rec graphWhile vg cg oP oQ isDo expr inner =
     (* If isDo:
      *   Translating [|oP|] do { [|iP|] [|iQ|] } while (C) [|oQ|].
      * Else:
@@ -115,7 +115,7 @@ let rec graphWhile vg cg oP oQ isDo expr inner =
 /// <returns>
 ///     A Chessie result containing the graph of this if statement.
 /// </returns>
-and graphITE vg cg oP oQ expr inTrue inFalse = 
+and graphITE vg cg oP oQ expr inTrue inFalse =
     (* While loops.
      * Translating [|oP|] if (C) { [|tP|] [|tQ|] } else { [|fP|] [|fQ|] } [|oQ|].
      *)
@@ -127,7 +127,7 @@ and graphITE vg cg oP oQ expr inTrue inFalse =
         let! tP, tQ, tGraph = graphBlock vg cg inTrue
         let! fP, fQ, fGraph = graphBlock vg cg inFalse
         let! tfGraph = combine tGraph fGraph
-     
+
         let cEdges =
             [ // {|oP|} assume C {|tP|}: enter true block
               (cg (), edge oP (cAssume expr) tP)
@@ -140,7 +140,7 @@ and graphITE vg cg oP oQ expr inTrue inFalse =
 
         // We don't add anything into the graph here.
         let! cGraph = subgraph Map.empty (Map.ofSeq cEdges)
-                 
+
         return! combine cGraph tfGraph }
 
 /// <summary>
@@ -200,7 +200,7 @@ and graphBlockStep vg cg (iP, oGraphR) {ViewedCommand.Command = cmd; Post = iQvi
          let! iGraph = iGraphR
          let! oGraph = oGraphR2
          return! combine iGraph oGraph }
-     
+
      (iQ, oGraphR3)
 
 /// <summary>
@@ -212,12 +212,12 @@ and graphBlockStep vg cg (iP, oGraphR) {ViewedCommand.Command = cmd; Post = iQvi
 /// <param name="cg">
 ///     The fresh identifier generator to use for command IDs.
 /// </param>
-and graphBlock vg cg {Pre = bPre; Contents = bContents} = 
+and graphBlock vg cg {Pre = bPre; Contents = bContents} =
     // First, generate the ID for the precondition.
     let oP = vg ()
 
     let initState = (oP, subgraph (Map.ofList [(oP, bPre)]) Map.empty)
-    
+
     (* We flip through every entry in the block, extracting its postcondition
      * and command.  The precondition is either the postcondition of
      * the last entry or the block precondition if none exists yet.
@@ -226,7 +226,7 @@ and graphBlock vg cg {Pre = bPre; Contents = bContents} =
      * the fold state.  First, however, we must add the postcondition
      * node to said graph, so the inner command graph can safely use it.
      * Each postcondition has to have a new node ID allocated for it.
-     * 
+     *
      * Supposing all of these steps worked, we can place the finished axiom
      * into the axioms list, and put the postcondition in place to serve as the
      * precondition for the next line.  Otherwise, our axiom list turns into a

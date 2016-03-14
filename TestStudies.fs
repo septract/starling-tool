@@ -49,36 +49,36 @@ method unlock() {
 """
 
 /// The correct parsing of the ticket lock's lock method.
-let ticketLockLockMethodAST = 
+let ticketLockLockMethodAST =
     { Signature = {Name = "lock"; Params = []}
-      Body = 
+      Body =
           { Pre = Unit
-            Contents = 
+            Contents =
                 [ { Command = Atomic(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment))
                     Post = View.Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]} }
-                  { Command = 
+                  { Command =
                         DoWhile
                             ({ Pre = View.Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]}
-                               Contents = 
+                               Contents =
                                    [ { Command = Atomic(Fetch(LVIdent "s", LV(LVIdent "serving"), Direct))
-                                       Post = 
+                                       Post =
                                            View.If
-                                               (Bop(Eq, LV(LVIdent "s"), LV(LVIdent "t")), View.Func {Name = "holdLock"; Params = []}, 
-                                                View.Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]}) } ] }, 
+                                               (Bop(Eq, LV(LVIdent "s"), LV(LVIdent "t")), View.Func {Name = "holdLock"; Params = []},
+                                                View.Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]}) } ] },
                              Bop(Neq, LV(LVIdent "s"), LV(LVIdent "t")))
                     Post = View.Func { Name = "holdLock"; Params = []} } ] } }
 
 /// The correct parsing of the ticket lock's unlock method.
-let ticketLockUnlockMethodAST = 
+let ticketLockUnlockMethodAST =
     { Signature = {Name = "unlock"; Params = []}
-      Body = 
+      Body =
           { Pre = View.Func {Name = "holdLock"; Params = []}
-            Contents = 
+            Contents =
                 [ { Command = Atomic(Postfix(LVIdent "serving", Increment))
                     Post = Unit } ] } }
 
 /// The parsed form of the ticket lock.
-let ticketLockParsed = 
+let ticketLockParsed =
     [ ViewProto { Name = "holdTick"
                   Params = [ (Type.Int, "t") ] }
       ViewProto { Name = "holdLock"
@@ -103,20 +103,20 @@ let ticketLockParsed =
       Method ticketLockUnlockMethodAST ]
 
 /// The collated form of the ticket lock.
-let ticketLockCollated = 
-    { CollatedScript.Globals = 
+let ticketLockCollated =
+    { CollatedScript.Globals =
           [ (Type.Int, "ticket")
             (Type.Int, "serving") ]
-      Locals = 
+      Locals =
           [ (Type.Int, "t")
             (Type.Int, "s") ]
       Search = None
-      VProtos = 
+      VProtos =
           [ { Name = "holdTick"
               Params = [ (Type.Int, "t") ] }
             { Name = "holdLock"
               Params = [] } ]
-      Constraints = 
+      Constraints =
           [ { // constraint emp => ticket >= serving;
               CView = ViewDef.Unit
               CExpression = Some <| Bop(Ge, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
@@ -248,39 +248,39 @@ let ticketLockGuardedUnlock : Method<GView, PartCmd<GView>> =
 let ticketLockViewDefs =
     [ { View = Multiset.empty()
         Def = Some <| BGe(aUnmarked "ticket", aUnmarked "serving") }
-      { View = 
+      { View =
             Multiset.ofList [ { Name = "holdTick"
                                 Params = [ (Type.Int, "t") ] } ]
         Def = Some <| BGt(aUnmarked "ticket", aUnmarked "t") }
-      { View = 
+      { View =
             Multiset.ofList [ { Name = "holdLock"
                                 Params = [] } ]
         Def = Some <| BGt(aUnmarked "ticket", aUnmarked "serving") }
-      { View = 
+      { View =
             Multiset.ofList [ { Name = "holdLock"
                                 Params = [] }
                               { Name = "holdTick"
                                 Params = [ (Type.Int, "t") ] } ]
         Def = Some <| BNot(aEq (aUnmarked "serving") (aUnmarked "t")) }
-      { View = 
+      { View =
             Multiset.ofList [ { Name = "holdTick"
                                 Params = [ (Type.Int, "ta") ] }
                               { Name = "holdTick"
                                 Params = [ (Type.Int, "tb") ] } ]
         Def = Some <| BNot(aEq (aUnmarked "ta") (aUnmarked "tb")) }
-      { View = 
+      { View =
             Multiset.ofList [ { Name = "holdLock"
                                 Params = [] }
                               { Name = "holdLock"
                                 Params = [] } ]
         Def = Some <| BFalse } ]
 
-let ticketLockModel : Model<Method<CView, PartCmd<CView>>, DView> = 
 /// The model of the ticket lock.
-    { Globals = 
+let ticketLockModel : Model<Method<CView, PartCmd<CView>>, DView> =
+    { Globals =
           Map.ofList [ ("serving", Type.Int)
                        ("ticket", Type.Int) ]
-      Locals = 
+      Locals =
           Map.ofList [ ("s", Type.Int)
                        ("t", Type.Int) ]
       Axioms = ticketLockMethods

@@ -209,7 +209,7 @@ type ModellerTests() =
                             { View = Multiset.singleton (func "holdTick" [(Type.Int, "t0")])
                               Def = None }])
              .SetName("Searching for size-1 viewdefs yields viewdefs for emp and the view prototypes") ]
-             
+
     /// Tests viewdef searches.
     [<TestCaseSource("SearchViewDefs")>]
     member x.``viewdef searches are carried out correctly`` svd =
