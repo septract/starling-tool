@@ -34,8 +34,17 @@ module Graph =
     ///     <c>false</c> otherwise.
     /// </returns>
     let isNop (cmd : VFunc) =
-        // TODO(CaptainHayashi): generalise this, if sound to do so
-        cmd.Name = "Id"
+        cmd.Params
+        (* We treat a command func as a no-op if all variables it contains
+         * are in the pre-state.  Thus, it cannot be modifying the
+         * post-state, if it is well-formed.
+         *)
+        |> Seq.forall (function
+                       | AExpr (AConst (Before _)) -> true
+                       | AExpr (AConst _) -> false
+                       | BExpr (BConst (Before _)) -> true
+                       | BExpr (BConst _) -> false
+                       | _ -> true)
 
     /// <summary>
     ///     Unifies two given nodes in a subgraph if they are

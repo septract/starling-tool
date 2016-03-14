@@ -22,10 +22,16 @@ type OptimiserTests() =
         [ TestCaseData(vfunc "Id" [])
             .Returns(true)
             .SetName("Classify Id() as a no-op")
+          TestCaseData(vfunc "Assume" [ BExpr (bBefore "x") ])
+            .Returns(true)
+            .SetName("Classify Assume(x!before) as a no-op")
+          TestCaseData(vfunc "Assume" [ BExpr (bAfter "x") ])
+            .Returns(false)
+            .SetName("Reject Assume(x!after) as a no-op")
           TestCaseData(vfunc "Foo" [ AExpr (aBefore "bar")
                                      AExpr (aAfter "bar") ] )
             .Returns(false)
-            .SetName("Classify Foo(bar!before, bar!after as a non-no-op") ]
+            .SetName("Reject Foo(bar!before, bar!after as a no-op") ]
 
     /// <summary>
     ///     Tests <c>isNop</c>.
