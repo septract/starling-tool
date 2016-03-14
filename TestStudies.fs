@@ -136,13 +136,25 @@ let ticketLockCollated =
               CExpression = Some <| False } ]
       Methods = [ ticketLockLockMethodAST; ticketLockUnlockMethodAST ] }
 
-/// The holdLock view.
-let holdLock =
-    func "holdLock" [] |> Func |> Multiset.singleton
+/// Shorthand for Multiset.singleton.
+let sing = Multiset.singleton
 
-/// The holdTick view.
+/// The conditional holdLock view.
+let holdLock =
+    func "holdLock" [] |> Func
+
+/// The conditional holdTick view.
 let holdTick =
-    func "holdTick" [AExpr (aUnmarked "t")] |> Func |> Multiset.singleton
+    func "holdTick" [AExpr (aUnmarked "t")] |> Func
+
+/// The guarded holdLock view.
+let gHoldLock cnd = gfunc cnd "holdLock" []
+
+/// The guarded holdTick view.
+let gHoldTick cnd = gfunc cnd "holdTick" [AExpr (aUnmarked "t")]
+
+/// Produces the expression 's == t'.
+let sIsT = aEq (aUnmarked "s") (aUnmarked "t")
 
 /// The ticketed lock's lock method.
 let ticketLockLock =
@@ -155,12 +167,12 @@ let ticketLockLock =
                              [ AExpr (aBefore "t"); AExpr (aAfter "t")
                                AExpr (aBefore "ticket"); AExpr (aAfter "ticket") ]
                         |> Prim
-                    Post = holdTick }
+                    Post = sing holdTick }
                   { Command =
                         While (isDo = true,
-                               expr = BNot (aEq (aUnmarked "s") (aUnmarked "t")),
+                               expr = BNot sIsT,
                                inner =
-                                   { Pre = holdTick
+                                   { Pre = sing holdTick
                                      Contents =
                                          [ { Command =
                                                  func "!ILoad"
@@ -168,18 +180,18 @@ let ticketLockLock =
                                                         AExpr (aBefore "serving"); AExpr (aAfter "serving") ]
                                                  |> Prim
                                              Post =
-                                                 (aEq (aUnmarked "s") (aUnmarked "t"),
-                                                  holdLock,
-                                                  holdTick)
+                                                 (sIsT,
+                                                  sing holdLock,
+                                                  sing holdTick)
                                                  |> CFunc.ITE
                                                  |> Multiset.singleton } ] } )
-                    Post = holdLock } ] } }
+                    Post = sing holdLock } ] } }
 
 /// The ticket lock's unlock method.
 let ticketLockUnlock =
     { Signature = func "unlock" []
       Body =
-          { Pre = holdLock
+          { Pre = sing holdLock
             Contents =
                 [ { Command =
                         func "!I++" [ AExpr (aBefore "serving"); AExpr (aAfter "serving") ]
@@ -190,6 +202,47 @@ let ticketLockUnlock =
 let ticketLockMethods =
     [ ("lock", ticketLockLock)
       ("unlock", ticketLockUnlock) ] |> Map.ofList
+
+
+/// The ticketed lock's lock method, in guarded form.
+let ticketLockGuardedLock =
+    { Signature = func "lock" []
+      Body =
+          { Pre = Multiset.empty()
+            Contents =
+                [ { Command =
+                        func "!ILoad++"
+                             [ AExpr (aBefore "t"); AExpr (aAfter "t")
+                               AExpr (aBefore "ticket"); AExpr (aAfter "ticket") ]
+                        |> Prim
+                    Post = sing (gHoldTick BTrue) }
+                  { Command =
+                        While (isDo = true,
+                               expr = BNot sIsT,
+                               inner =
+                                   { Pre = sing (gHoldTick BTrue)
+                                     Contents =
+                                         [ { Command =
+                                                 func "!ILoad"
+                                                      [ AExpr (aBefore "s"); AExpr (aAfter "s")
+                                                        AExpr (aBefore "serving"); AExpr (aAfter "serving") ]
+                                                 |> Prim
+                                             Post =
+                                                 Multiset.ofList
+                                                     [ gHoldLock sIsT
+                                                       gHoldTick (BNot sIsT) ] } ] } )
+                    Post = sing (gHoldLock BTrue) } ] } }
+
+/// The ticket lock's unlock method, in guarded form.
+let ticketLockGuardedUnlock : Method<GView, PartCmd<GView>> =
+    { Signature = func "unlock" []
+      Body =
+          { Pre = sing (gHoldLock BTrue)
+            Contents =
+                [ { Command =
+                        func "!I++" [ AExpr (aBefore "serving"); AExpr (aAfter "serving") ]
+                        |> Prim
+                    Post = Multiset.empty() } ] } }
 
 /// The view definitions of the ticketed lock model.
 let ticketLockViewDefs =
