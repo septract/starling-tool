@@ -351,47 +351,69 @@ let axiomatise model =
  *)
 
 /// <summary>
-///     Unifies two nodes in a subgraph.
+///     Unifies two nodes in a graph.
 /// </summary>
-/// <param name="_arg1">
-///     The subgraph to transform.
-/// </param>
 /// <param name="source">
 ///     The node to delete in the unification.
 /// </param>
 /// <param name="target">
 ///     The node to keep in the unification.
 /// </param>
+/// <param name="graph">
+///     The subgraph to transform.
+/// </param>
 /// <returns>
-///     The subgraph that is <paramref name="_arg1" /> but with
+///     The graph that is <paramref name="graph" /> but with
 ///     <paramref name="source" /> deleted, and all edges starting and ending
 ///     at it redirected to <paramref name="target" />.
 /// </returns>
 /// <remarks>
 ///     <para>
-///         If <c>source = target</c>, <paramref name="_arg1" /> is returned
-///         unchanged.
-///     </para>
-///     <para>
-///         This does no checking that <paramref name="source" /> or
-///         <paramref name="target" /> exist.  If the former does not exist,
-///         this function does nothing.  If the latter does not exist,
-///         we proceed as if it does: use <c>graph</c> to check to see if
-///         the result is a well-formed graph.
+///         If <c>source = target</c>, or either of the nodes do not exist,
+///         <paramref name="graph" /> is returned unchanged.
 ///     </para>
 /// </remarks>
-let unify { Nodes = ns ; Edges = es } source target =
-    if source = target
-    then { Nodes = ns ; Edges = es }
+let unify source target graph =
+    if (source = target)
+       || (not (Map.containsKey source graph.Contents))
+       || (not (Map.containsKey target graph.Contents))
+    then graph
     else
+        // Pull out the source's entry, ready to append later.
+        let _, srcOut, srcIn = graph.Contents.[source]
+
         let swapNode = function
                        | n when n = source -> target
                        | n -> n
+        let swapIn o = { o with Src = swapNode o.Src }
+        let swapOut o = { o with Dest = swapNode o.Dest }
 
-        { Nodes = Map.remove source ns
-          Edges = Map.map (fun _ { Pre = p; Post = q; Cmd = c } ->
-                               edge (swapNode p) c (swapNode q))
-                          es }
+        (* Remove a node if it is source;
+         * otherwise, inspect its nodes for source, and rewrite them
+         * to target.  If the node is target, add in the source edges.
+         *)
+        let unifyStep (name, (view, outEdges, inEdges)) =
+            if name = source
+            then None
+            else
+                let newOut =
+                    outEdges
+                    |> Set.map swapOut
+                    |> if name = target then Set.union srcOut else id
+                let newIn =
+                    inEdges
+                    |> Set.map swapIn
+                    |> if name = target then Set.union srcIn else id
+
+                Some (name, (view, newOut, newIn))
+
+        let contents =
+            graph.Contents
+            |> Map.toSeq
+            |> Seq.choose unifyStep
+            |> Map.ofSeq
+
+        { graph with Contents = contents }
 
 
 /// <summary>

@@ -178,8 +178,6 @@ type Error =
     | Frontend of Lang.Frontend.Error
     /// An error occurred in axiomatisation.
     | Axiomatise of Core.Graph.Types.Error
-    /// An error occurred in graph optimisation.
-    | GraphOptimise of Core.Graph.Types.Error
     /// An error occurred in semantic translation.
     | Semantics of Semantics.Types.Error
     /// An error occurred in the Z3 backend.
@@ -196,7 +194,6 @@ let printError =
     function
     | Frontend e -> Lang.Frontend.printError e
     | Axiomatise e -> Core.Graph.Pretty.printError e
-    | GraphOptimise e -> Core.Graph.Pretty.printError e
     | Semantics e -> Semantics.Pretty.printSemanticsError e
     | Z3 e -> Backends.Z3.Pretty.printError e
     | HSF e -> Backends.Horn.Pretty.printHornError e
@@ -238,8 +235,7 @@ let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
 let z3 rq = bind (Backends.Z3.run rq >> mapMessages Error.Z3)
 
 /// Shorthand for the graph optimise stage.
-let graphOptimise = bind (Starling.Optimiser.Graph.optimise
-                          >> mapMessages Error.GraphOptimise)
+let graphOptimise = lift Starling.Optimiser.Graph.optimise
 
 /// Shorthand for the term optimise stage.
 let termOptimise = lift Starling.Optimiser.Term.optimise

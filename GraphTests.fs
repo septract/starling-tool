@@ -58,19 +58,8 @@ type GraphTests() =
                                   "unlock_V1" ) ] } )
             .SetName("unify C0 into C1 on the ticket lock 'unlock'")
           TestCaseData(("unlock_V0", "unlock_V2"))
-            .Returns(
-                { Nodes =
-                      Map.ofList
-                          [ ("unlock_V1", Multiset.empty () ) ]
-                  Edges =
-                      Map.ofList
-                          [ ("unlock_C0",
-                             edge "unlock_V2"
-                                  (func "!I++"
-                                        [ AExpr (aBefore "serving")
-                                          AExpr (aAfter "serving") ] )
-                                  "unlock_V1" ) ] } )
-            .SetName("unifying into non-existent nodes is possible")
+            .Returns(ticketLockUnlockSubgraph)
+            .SetName("unifying into non-existent nodes does nothing")
           TestCaseData(("unlock_V2", "unlock_V0"))
             .Returns(ticketLockUnlockSubgraph)
             .SetName("unifying non-existent nodes does nothing")
@@ -82,8 +71,11 @@ type GraphTests() =
     ///     Tests <c>unify</c>.
     /// </summary>
     [<TestCaseSource("Unifies")>]
-    member x.``unify unifies nodes correctly`` tc =
-          uncurry (unify ticketLockUnlockSubgraph) tc
+    member x.``unify unifies nodes correctly`` st =
+          let s, t = st
+          ticketLockUnlockGraph
+          |> unify s t
+          |> toSubgraph  // TODO(CaptainHayashi): make unnecessary?
 
 
     /// <summary>

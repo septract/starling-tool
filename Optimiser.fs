@@ -127,14 +127,13 @@ module Graph =
         (* If we found any nodes, then unify them.
          * We also have to wipe out the edges between both nodes.
          *)
-        |> seqBind (fun xName (xs, gg) ->
+        |> Seq.fold (fun (xs, gg) xName ->
                         // TODO(CaptainHayashi): make unify work on graphs
                         gg
                         |> rmEdgesBetween nName xName
                         |> rmEdgesBetween xName nName
-                        |> toSubgraph
-                        |> fun sg -> (graph gg.Name (unify sg nName xName))
-                        |> lift (mkPair (xName :: xs)))
+                        |> unify nName xName
+                        |> mkPair (xName :: xs))
                     (removed, g)
 
     /// <summary>
@@ -153,22 +152,19 @@ module Graph =
     ///     equivalent nodes connected only by 'Id' merged.
     /// </returns>
     let rec removeIdTransitions graph =
-        let result =
+        let (xs, newGraph) =
             graph.Contents
             // Pull out nodeNames for removeIdStep.
             |> keys
             // Then, for each of those, try merging everything else into it.
-            |> seqBind
-                   (fun k (rms, g) -> removeIdStep rms g k)
-                   ([], graph)
+            |> Seq.fold (uncurry removeIdStep) ([], graph)
 
         (* Tail-recurse back if we removed some nodes.
          * This is to see if we enabled more removals.
          *)
-        match result with
-        | Pass (xs, newGraph) when not (Seq.isEmpty xs) ->
-              removeIdTransitions newGraph
-        | x -> lift snd x
+        if (Seq.isEmpty xs)
+        then newGraph
+        else removeIdTransitions newGraph
 
     /// <summary>
     ///     Optimises a graph.
@@ -193,7 +189,7 @@ module Graph =
     ///     An optimised equivalent of <paramref name="mdl" />.
     /// </returns>
     let optimise mdl =
-        tryMapAxioms optimiseGraph mdl
+        mapAxioms optimiseGraph mdl
 
 
 /// <summary>
