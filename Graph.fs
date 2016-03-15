@@ -394,6 +394,45 @@ let unify { Nodes = ns ; Edges = es } source target =
                           es }
 
 
+/// <summary>
+///     Removes all edges with the given source and destination.
+/// </summary>
+/// <param name="src">
+///     The source node.
+/// </param>
+/// <param name="dest">
+///     The destination node.
+/// </param>
+/// <param name="graph">
+///     The <c>Graph</c> to prune.
+/// </param>
+/// <returns>
+///     The equivalent of <paramref name="graph" /> with all edges
+///     between <param name="src" /> and <param name="dest" />
+///     removed.  If either or both edges do not exist, the graph
+///     is not changed.
+/// </returns>
+let rmEdgesBetween src dest graph =
+    (* The result will be a well-formed graph, because it cannot
+     * create dangling edges.
+     *)
+
+    // Do src and dest actually exist?
+    match (Map.tryFind src graph.Contents,
+           Map.tryFind dest graph.Contents) with
+    | (Some (srcView, srcOut, srcIn), Some(destView, destOut, destIn)) ->
+        // We need to delete the out entry in src going to dest...
+        let newSrcOut = Set.filter (fun { Dest = d } -> d <> dest) srcOut
+        // ...and the in entry in dest coming from src.
+        let newDestIn = Set.filter (fun { Src = s } -> s <> src) destIn
+
+        { graph with
+              Contents =
+                  graph.Contents
+                  |> Map.add src (srcView, newSrcOut, srcIn)
+                  |> Map.add dest (destView, destOut, newDestIn) }
+    | _ -> graph
+
 (*
  * Graph queries
  *)
@@ -431,26 +470,6 @@ let mapEdges f graph =
                              FullEdge.DestView = dv } )
                     outEdges)
     |> Seq.concat
-
-/// <summary>
-///     Returns all edges entering a given node in a graph.
-/// </summary>
-/// <param name="nName">
-///     The name of the node being entered.
-/// </param>
-/// <param name="graph">
-///     The graph to inspect.
-/// </param>
-/// <returns>
-///     A <c>Set</c> of <c>FullEdge</c>s, where the <c>DestName</c>
-///     is <paramref name="nName" />.
-/// </returns>
-let ins nName =
-    mapEdges (fun edge ->
-                  if edge.DestName = nName
-                  then Some edge
-                  else None)
-    >> Seq.choose id
 
 /// <summary>
 ///     Pretty printers for control-flow graphs.
@@ -550,6 +569,8 @@ module Pretty =
     let printGraph graph =
         hsep [ String "digraph"
                String graph.Name
+
+
                // TODO(CaptainHayashi): don't convert here?
                graph |> toSubgraph |> printSubgraph ]
 

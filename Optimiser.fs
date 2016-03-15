@@ -124,12 +124,17 @@ module Graph =
                     if (nopConnected g nName xName)
                     then (Some xName)
                     else None)
-        // If we found any nodes, then unify them.
+        (* If we found any nodes, then unify them.
+         * We also have to wipe out the edges between both nodes.
+         *)
         |> seqBind (fun xName (xs, gg) ->
                         // TODO(CaptainHayashi): make unify work on graphs
-                        let sg = toSubgraph gg
-                        lift (mkPair (xName :: xs))
-                             (graph gg.Name (unify sg nName xName)))
+                        gg
+                        |> rmEdgesBetween nName xName
+                        |> rmEdgesBetween xName nName
+                        |> toSubgraph
+                        |> fun sg -> (graph gg.Name (unify sg nName xName))
+                        |> lift (mkPair (xName :: xs)))
                     (removed, g)
 
     /// <summary>
