@@ -453,33 +453,6 @@ let ins nName =
     >> Seq.choose id
 
 /// <summary>
-///     Returns all unique node pairs in the subgraph.
-/// </summary>
-/// <param name="subgraph">
-///     The subgraph to inspect.
-/// </param>
-/// <returns>
-///     A sequence of every unique, irreflexive pair of node IDs in
-///     the subgraph.  If (a, b) is in the sequence, (b, a) will not
-///     be.  No guarantees are made as to ordering.
-/// </returns>
-let nodePairs subgraph =
-    let allNodes = subgraph.Nodes |> Map.toSeq |> Seq.map fst
-
-    allNodes
-    |> Seq.mapi
-       (fun i x ->
-            Seq.map
-                (mkPair x)
-                (* The skip ensures uniqueness:
-                 * if we're on index i, the first i nodes have been
-                 * put in pairs, and the next node is us.
-                 *)
-                (Seq.skip (i + 1) allNodes))
-    |> Seq.concat
-
-
-/// <summary>
 ///     Pretty printers for control-flow graphs.
 /// </summary>
 module Pretty =
