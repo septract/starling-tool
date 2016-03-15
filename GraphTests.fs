@@ -85,6 +85,30 @@ type GraphTests() =
     member x.``unify unifies nodes correctly`` tc =
           uncurry (unify ticketLockUnlockSubgraph) tc
 
+
+    /// <summary>
+    ///     Successful test cases for converting subgraphs to graphs.
+    /// </summary>
+    static member GoodSubgraphs =
+        [ TestCaseData(("empty", { Nodes = Map.empty ; Edges =  Map.empty } ))
+            .Returns(Some { Name = "empty" ; Contents = Map.empty } )
+            .SetName("The empty subgraph makes a valid graph")
+          TestCaseData(("lock", ticketLockLockSubgraph))
+            .Returns(Some ticketLockLockGraph)
+            .SetName("Ticket lock 'lock' subgraph makes a valid graph")
+          TestCaseData(("unlock", ticketLockUnlockSubgraph))
+            .Returns(Some ticketLockUnlockGraph)
+            .SetName("Ticket lock 'unlock' subgraph makes a valid graph") ]
+
+    /// <summary>
+    ///     Tests <c>graph</c>.
+    /// </summary>
+    [<TestCaseSource("GoodSubgraphs")>]
+    member x.``Valid complete subgraphs can be converted to graphs`` ns =
+        let (n, s) = ns
+        s |> graph n |> okOption
+
+
     /// <summary>
     ///     Test cases for checking node pair generation.
     /// </summary>

@@ -287,28 +287,19 @@ let ticketLockModel : Model<Method<CView, PartCmd<CView>>, DView> =
       ViewDefs = ticketLockViewDefs
       Semantics = Starling.Lang.Modeller.coreSemantics }
 
-/// The CFG for the ticket lock lock method.
+/// The partial CFG for the ticket lock lock method.
 let ticketLockLockSubgraph : Subgraph =
     { Nodes =
           Map.ofList
               [ ("lock_V0",
                      Multiset.empty ())
-                ("lock_V1",
-                     Multiset.singleton
-                         (gfunc BTrue "holdTick" [ AExpr (aUnmarked "t") ] ))
-                ("lock_V2",
-                     Multiset.singleton (gfunc BTrue "holdLock" [] ))
-                ("lock_V3",
-                     Multiset.singleton
-                         (gfunc BTrue "holdTick" [ AExpr (aUnmarked "t") ] ))
+                ("lock_V1", sing (gHoldTick BTrue))
+                ("lock_V2", sing (gHoldLock BTrue))
+                ("lock_V3", sing (gHoldTick BTrue))
                 ("lock_V4",
                      Multiset.ofList
-                         [ gfunc (aEq (aUnmarked "s") (aUnmarked "t"))
-                                 "holdLock"
-                                 []
-                           gfunc (BNot (aEq (aUnmarked "s") (aUnmarked "t")))
-                                 "holdTick"
-                                 [ AExpr (aUnmarked "t") ]] ) ]
+                         [ gHoldLock sIsT
+                           gHoldTick (BNot sIsT) ]) ]
       Edges =
           Map.ofList
               [ ("lock_C0",
@@ -343,7 +334,7 @@ let ticketLockLockSubgraph : Subgraph =
                           (func "Id" [])
                           "lock_V3") ] }
 
-/// The CFG for the ticket lock unlock method.
+/// The partial CFG for the ticket lock unlock method.
 let ticketLockUnlockSubgraph : Subgraph =
     { Nodes =
           Map.ofList
@@ -359,3 +350,75 @@ let ticketLockUnlockSubgraph : Subgraph =
                                 [ AExpr (aBefore "serving")
                                   AExpr (aAfter "serving") ] )
                           "unlock_V1" ) ] }
+
+let ticketLockLockGraph : Graph =
+    { Name = "lock"
+      Contents =
+          Map.ofList
+              [ ("lock_V0",
+                 (Multiset.empty (),
+                  Set.singleton
+                      { Name = "lock_C0"
+                        Dest = "lock_V1"
+                        Command =
+                            (func "!ILoad++"
+                                  [ AExpr (aBefore "t")
+                                    AExpr (aAfter "t")
+                                    AExpr (aBefore "ticket")
+                                    AExpr (aAfter "ticket") ] ) } ))
+                ("lock_V1",
+                 (sing (gHoldTick BTrue),
+                  Set.singleton
+                      { Name = "lock_C4"
+                        Dest = "lock_V3"
+                        Command = func "Id" [] } ))
+                ("lock_V2",
+                 (sing (gHoldLock BTrue),
+                  Set.empty ))
+                ("lock_V3",
+                 (sing (gHoldTick BTrue),
+                  Set.singleton
+                      { Name = "lock_C1"
+                        Dest = "lock_V4"
+                        Command =
+                            (func "!ILoad"
+                                  [ AExpr (aBefore "s")
+                                    AExpr (aAfter "s")
+                                    AExpr (aBefore "serving")
+                                    AExpr (aAfter "serving") ] ) } ))
+                ("lock_V4",
+                 (Multiset.ofList
+                      [ gHoldLock sIsT
+                        gHoldTick (BNot sIsT) ],
+                  Set.ofList
+                      [ { Name = "lock_C2"
+                          Dest = "lock_V3"
+                          Command =
+                              (func "Assume"
+                                    [ BExpr (BNot (aEq (aBefore "s")
+                                                       (aBefore "t"))) ] ) }
+                        { Name = "lock_C3"
+                          Dest = "lock_V2"
+                          Command =
+                              (func "Assume"
+                                    [ BExpr (aEq (aBefore "s")
+                                                 (aBefore "t")) ] ) } ] )) ] }
+
+/// The CFG for the ticket lock unlock method.
+let ticketLockUnlockGraph : Graph =
+    { Name = "unlock"
+      Contents =
+          Map.ofList
+              [ ("unlock_V0",
+                     (Multiset.singleton
+                          (gfunc BTrue "holdLock" [] ),
+                      Set.ofList
+                          [ { Name = "unlock_C0"
+                              Dest = "unlock_V1"
+                              Command =
+                                  func "!I++"
+                                       [ AExpr (aBefore "serving")
+                                         AExpr (aAfter "serving") ] } ] ))
+                ("unlock_V1",
+                     (Multiset.empty (),
+                      Set.empty)) ] }
