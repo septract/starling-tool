@@ -9,6 +9,8 @@
 /// </summary>
 module Starling.Optimiser
 
+open Chessie.ErrorHandling
+
 open Starling.Collections
 open Starling.Utils
 open Starling.Core.Expr
@@ -47,53 +49,88 @@ module Graph =
                        | _ -> true)
 
     /// <summary>
-    ///     Unifies two given nodes in a subgraph if they are
-    ///     equivalent and connected, but only by no-op commands.
+    ///     Decides whether two nodes have different names but the same view,
+    ///     and are connected, but only by no-op commands.
     /// </summary>
-    /// <param name="sg">
-    ///     The graph to unify (perhaps).
+    /// <param name="graph">
+    ///     The graph on which <paramref name="x" /> and
+    ///     <paramref name="y" /> lie.
     /// </param>
     /// <param name="x">
-    ///     The first node to consider.
+    ///     The name of one of the nodes to consider.
     /// </param>
     /// <param name="y">
-    ///     The second node to consider.
+    ///     The name of the other node to consider.
     /// </param>
     /// <returns>
-    ///     A subgraph equivalent to <paramref name="sg" />, but with
-    ///     <paramref name="x" /> and <paramref name="y" /> merged if they are
+    ///     <c>true</c> if, and only if, <paramref name="x" />
+    ///     and <paramref name="y" /> have different names, have the same
+    ///     view, and are connected, but only by no-op commands.
+    /// </returns>
+    let nopConnected graph x y =
+        let xView, xOut, xIn = graph.Contents.[x]
+        let yView, _, _ = graph.Contents.[y]
+
+        let xToY =
+            xOut |> Set.toSeq |> Seq.filter (fun { Dest = d } -> d = y)
+
+        let yToX =
+            xIn |> Set.toSeq |> Seq.filter (fun { Src = s } -> s = y)
+
+        // Different names?
+        (x <> y)
+        // Same view?
+        && (xView = yView)
+        // Connected?
+        && not (Seq.isEmpty xToY && Seq.isEmpty yToX)
+        // All edges from x to y are nop?
+        && Seq.forall (fun { OutEdge.Command = c } -> isNop c) xToY
+        // All edges from y to x are nop?
+        && Seq.forall (fun { InEdge.Command = c } -> isNop c) yToX
+
+
+    /// <summary>
+    ///     Given a node, tries to unify every other node that is
+    ///     equivalent and connected, but only by no-op commands, into it.
+    /// </summary>
+    /// <param name="removed">
+    ///     The list of nodes already unified, which is appended to in the
+    ///     result.
+    /// </param>
+    /// <param name="g">
+    ///     The graph to unify (perhaps).
+    /// </param>
+    /// <param name="nName">
+    ///     The name of the node to unify.
+    /// </param>
+    /// <returns>
+    ///     A Chessie result.  If ok, it contains a tuple, containing the list
+    ///     of node names removed and a graph.
+    ///     The graph is equivalent to <paramref name="g" />, but with some
+    ///     nodes merged into <paramref name="nName" /> " /> if they are
     ///     equivalent and connected only by no-op commands.
     /// </returns>
-    let removeIdStep sg x y =
-        (* First, find out what the views on both sides are, and if they are
-         * equal.
-         * This lets us check x and y are actually both still in the graph.
-         * Previous steps could have unified one or both of them away.
-         *)
-        match (Map.tryFind x sg.Nodes, Map.tryFind y sg.Nodes) with
-        | (Some xv, Some yv) when xv = yv ->
-            // Find the edges that map xv and yv.
-            let xyEdges =
-                Map.filter
-                    (fun _ { Edge.Pre = p ; Edge.Post = q } ->
-                         (p = x && q = y) || (p = y && q = x))
-                    sg.Edges
+    let removeIdStep removed g nName =
+        // First, find all of the other nodes that connect to this node.
+        let nView, outNodes, inNodes = g.Contents.[nName]
 
-            // Are all of the edges id?
-            let allId =
-                Map.forall (fun _ { Edge.Cmd = cmd } -> isNop cmd) xyEdges
+        let outs = outNodes |> Set.toSeq |> Seq.map (fun { Dest = d } -> d)
+        let ins = inNodes |> Set.toSeq |> Seq.map (fun { Src = s } -> s)
 
-            // If not, or the edge list is empty, leave the edges alone.
-            if Map.isEmpty xyEdges || not allId
-            then sg
-            else
-                // Delete the id nodes first, then unify the two nodes.
-                let toKeep ename _ = not (Map.containsKey ename xyEdges)
-
-                let sga =
-                    { sg with Edges = Map.filter toKeep sg.Edges }
-                unify sga x y
-        | _ -> sg
+        Seq.append outs ins
+        // Then, find out which ones are nop-connected.
+        |> Seq.choose
+               (fun xName ->
+                    if (nopConnected g nName xName)
+                    then (Some xName)
+                    else None)
+        // If we found any nodes, then unify them.
+        |> seqBind (fun xName (xs, gg) ->
+                        // TODO(CaptainHayashi): make unify work on graphs
+                        let sg = toSubgraph gg
+                        lift (mkPair (xName :: xs))
+                             (graph gg.Name (unify sg nName xName)))
+                    (removed, g)
 
     /// <summary>
     ///     Merges equivalent nodes where they are connected, but only by 'Id'
@@ -103,22 +140,30 @@ module Graph =
     ///         This assumes that 'Id' has the necessary semantics.
     ///     </para>
     /// </summary>
-    /// <param name="g">
+    /// <param name="graph">
     ///     The graph to optimise.
     /// </param>
     /// <returns>
-    ///     A graph equivalent to <paramref name="g" />, but with all
+    ///     A graph equivalent to <paramref name="graph" />, but with all
     ///     equivalent nodes connected only by 'Id' merged.
     /// </returns>
-    let removeIdTransitions g =
-        // TODO(CaptainHayashi): support graph format directly
-        let subgraph = toSubgraph g
+    let rec removeIdTransitions graph =
+        let result =
+            graph.Contents
+            // Pull out nodeNames for removeIdStep.
+            |> keys
+            // Then, for each of those, try merging everything else into it.
+            |> seqBind
+                   (fun k (rms, g) -> removeIdStep rms g k)
+                   ([], graph)
 
-        subgraph
-        |> nodePairs
-        |> Seq.fold (fun sg -> uncurry (removeIdStep sg))
-           subgraph
-        |> graph g.Name
+        (* Tail-recurse back if we removed some nodes.
+         * This is to see if we enabled more removals.
+         *)
+        match result with
+        | Pass (xs, newGraph) when not (Seq.isEmpty xs) ->
+              removeIdTransitions newGraph
+        | x -> lift snd x
 
     /// <summary>
     ///     Optimises a graph.

@@ -358,23 +358,40 @@ let ticketLockLockGraph : Graph =
               [ ("lock_V0",
                  (Multiset.empty (),
                   Set.singleton
+                      { OutEdge.Name = "lock_C0"
+                        OutEdge.Dest = "lock_V1"
+                        OutEdge.Command =
+                            (func "!ILoad++"
+                                  [ AExpr (aBefore "t")
+                                    AExpr (aAfter "t")
+                                    AExpr (aBefore "ticket")
+                                    AExpr (aAfter "ticket") ] ) },
+                  Set.empty))
+                ("lock_V1",
+                 (sing (gHoldTick BTrue),
+                  Set.singleton
+                      { Name = "lock_C4"
+                        Dest = "lock_V3"
+                        Command = func "Id" [] },
+                  Set.singleton
                       { Name = "lock_C0"
-                        Dest = "lock_V1"
+                        Src = "lock_V0"
                         Command =
                             (func "!ILoad++"
                                   [ AExpr (aBefore "t")
                                     AExpr (aAfter "t")
                                     AExpr (aBefore "ticket")
                                     AExpr (aAfter "ticket") ] ) } ))
-                ("lock_V1",
-                 (sing (gHoldTick BTrue),
-                  Set.singleton
-                      { Name = "lock_C4"
-                        Dest = "lock_V3"
-                        Command = func "Id" [] } ))
                 ("lock_V2",
                  (sing (gHoldLock BTrue),
-                  Set.empty ))
+                  Set.empty,
+                  Set.singleton
+                      { Name = "lock_C3"
+                        Src = "lock_V4"
+                        Command =
+                            (func "Assume"
+                                  [ BExpr (aEq (aBefore "s")
+                                               (aBefore "t")) ] ) } ))
                 ("lock_V3",
                  (sing (gHoldTick BTrue),
                   Set.singleton
@@ -385,7 +402,17 @@ let ticketLockLockGraph : Graph =
                                   [ AExpr (aBefore "s")
                                     AExpr (aAfter "s")
                                     AExpr (aBefore "serving")
-                                    AExpr (aAfter "serving") ] ) } ))
+                                    AExpr (aAfter "serving") ] ) },
+                  Set.ofList
+                      [ { Name = "lock_C2"
+                          Src = "lock_V4"
+                          Command =
+                              (func "Assume"
+                                    [ BExpr (BNot (aEq (aBefore "s")
+                                                       (aBefore "t"))) ] ) }
+                        { Name = "lock_C4"
+                          Src = "lock_V1"
+                          Command = func "Id" [] } ] ))
                 ("lock_V4",
                  (Multiset.ofList
                       [ gHoldLock sIsT
@@ -402,7 +429,16 @@ let ticketLockLockGraph : Graph =
                           Command =
                               (func "Assume"
                                     [ BExpr (aEq (aBefore "s")
-                                                 (aBefore "t")) ] ) } ] )) ] }
+                                                 (aBefore "t")) ] ) } ],
+                  Set.singleton
+                      { Name = "lock_C1"
+                        Src = "lock_V3"
+                        Command =
+                            (func "!ILoad"
+                                  [ AExpr (aBefore "s")
+                                    AExpr (aAfter "s")
+                                    AExpr (aBefore "serving")
+                                    AExpr (aAfter "serving") ] ) } )) ] }
 
 /// The CFG for the ticket lock unlock method.
 let ticketLockUnlockGraph : Graph =
@@ -410,15 +446,23 @@ let ticketLockUnlockGraph : Graph =
       Contents =
           Map.ofList
               [ ("unlock_V0",
-                     (Multiset.singleton
+                 (Multiset.singleton
                           (gfunc BTrue "holdLock" [] ),
-                      Set.ofList
-                          [ { Name = "unlock_C0"
-                              Dest = "unlock_V1"
-                              Command =
-                                  func "!I++"
-                                       [ AExpr (aBefore "serving")
-                                         AExpr (aAfter "serving") ] } ] ))
+                  Set.singleton
+                      { Name = "unlock_C0"
+                        Dest = "unlock_V1"
+                        Command =
+                            func "!I++"
+                                 [ AExpr (aBefore "serving")
+                                   AExpr (aAfter "serving") ] },
+                  Set.empty))
                 ("unlock_V1",
-                     (Multiset.empty (),
-                      Set.empty)) ] }
+                 (Multiset.empty (),
+                  Set.empty,
+                  Set.singleton
+                      { Name = "unlock_C0"
+                        Src = "unlock_V0"
+                        Command =
+                            func "!I++"
+                                 [ AExpr (aBefore "serving")
+                                   AExpr (aAfter "serving") ] } )) ] }

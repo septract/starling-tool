@@ -52,19 +52,65 @@ module Types =
         }
 
     /// <summary>
-    ///     An edge in a standalone control-flow graph.
+    ///     An in edge in a standalone control-flow graph.
     /// </summary>
-    type GraphEdge =
+    type InEdge =
         { /// <summary>
-          ///    The name of the edge.
+          ///      The name of the edge.
           /// </summary>
           Name : string
           /// <summary>
-          ///    The other node this edge connects.
+          ///      The source of this edge.
+          /// </summary>
+          Src : string
+          /// <summary>
+          ///      The command this edge represents.
+          /// </summary>
+          Command : VFunc }
+
+    /// <summary>
+    ///     An out edge in a standalone control-flow graph.
+    /// </summary>
+    type OutEdge =
+        { /// <summary>
+          ///      The name of the edge.
+          /// </summary>
+          Name : string
+          /// <summary>
+          ///      The destination of this edge.
           /// </summary>
           Dest : string
           /// <summary>
-          ///    The command this edge represents.
+          ///      The command this edge represents.
+          /// </summary>
+          Command : VFunc }
+
+    /// <summary>
+    ///     A fully resolved edge, containing views.
+    /// </summary>
+    type FullEdge =
+        { /// <summary>
+          ///     The name of the edge.
+          /// </summary>
+          Name : string
+          /// <summary>
+          ///     The name of the source node.
+          /// </summary>
+          SrcName : string
+          /// <summary>
+          ///     The view of the source node.
+          /// </summary>
+          SrcView : GView
+          /// <summary>
+          ///     The name of the destination node.
+          /// </summary>
+          DestName : string
+          /// <summary>
+          ///     The view of the destination node.
+          /// </summary>
+          DestView : GView
+          /// <summary>
+          ///      The command this edge represents.
           /// </summary>
           Command : VFunc }
 
@@ -82,7 +128,8 @@ module Types =
                    /// <summary>
                    ///     The contents of the graph.
                    /// </summary>
-                   Contents : Map<string, (GView * Set<GraphEdge>)> }
+                   Contents : Map<string, (GView * Set<OutEdge>
+                                                 * Set<InEdge>)> }
 
     /// <summary>
     ///     Type of Chessie errors for CFG actions.
@@ -133,61 +180,19 @@ let toSubgraph graph =
     { Nodes =
           graph.Contents
           |> Map.toSeq
-          |> Seq.map (fun (nodeName, (nodeView, _)) -> (nodeName, nodeView))
+          |> Seq.map (fun (nodeName, (nodeView, _, _)) -> (nodeName, nodeView))
           |> Map.ofSeq
       Edges =
           graph.Contents
           |> Map.toSeq
           |> Seq.map
-                 (fun (fromName, (_, edges)) ->
+                 (fun (fromName, (_, outEdges, _)) ->
                       Seq.map
                           (fun { Name = n; Dest = toName; Command = cmd } ->
                                (n, edge fromName cmd toName))
-                          edges)
+                          outEdges)
           |> Seq.concat
           |> Map.ofSeq }
-
-/// <summary>
-///     Attempts to create a new <c>Graph</c> with no node checking.
-/// </summary>
-/// <param name="nodes">
-///     The map of nodes in the graph.
-/// </param>
-/// <param name="edges">
-///     The sequence of edges in the graph.
-/// </param>
-/// <returns>
-///     A <c>Graph</c>, wrapped in a Chessie result over <c>Error</c>.
-///     Currently, there are no possible errors.
-/// </returns>
-let subgraph nodes edges =
-    { Nodes = nodes; Edges = edges } |> ok
-
-/// <summary>
-///     Adds the given nodes into the given adjacency list, if they do
-///     not already exist.
-///
-///     <para>
-///         The nodes will be added with empty edge lists.
-///     </para>
-/// </summary>
-/// <param name="nodes" />
-///     The nodes to add, as a map from names to views.
-/// </param>
-/// <param name="adjlist" />
-///     The adjacency list, as a map from node names to entries.
-/// </param>
-/// <returns>
-///     The updated adjacency list.
-/// </returns>
-let addMissingNodes nodes adjlist =
-    nodes
-    // Which nodes are actually missing?
-    |> Map.filter (fun node _ -> not (Map.containsKey node adjlist))
-    // Convert from views to adjacency list entries...
-    |> Map.map (fun _ view -> (view, Set.empty))
-    // ...And merge into the original adjacency list.
-    |> mapAppend adjlist
 
 /// <summary>
 ///     Converts a subgraph to a standalone graph.
@@ -211,28 +216,36 @@ let graph name sg =
                          Map.containsKey t sg.Nodes))
                sg.Edges) |> Map.toList with
     | [] ->
-        (* All of this massaging should now be sound, given that we checked
-         * for node sanity.
-         *)
-        sg.Edges
-        // First, build a sequence of (src, edge) pairs...
-        |> Map.toSeq
-        |> Seq.map
-               (fun (n, { Pre = s ; Post = t ; Cmd = c }) ->
-                    (s, { Name = n ; Dest = t ; Command = c } ))
-        // so we can use groupBy to turn them into (src, <(src, edge)>)...
-        |> Seq.groupBy fst
-        // ...which we can then massage into (src, (srcView, {edge}))...
-        |> Seq.map
-               (fun (s, es) ->
-                    (s, (Map.find s sg.Nodes,
-                         es |> Seq.map snd |> Set.ofSeq)))
-        // ...which can become our adjacency list representation...
-        |> Map.ofSeq
-        (* ...except we also need to add in any nodes that are not
-         * connected by edges too.
-         *)
-        |> addMissingNodes sg.Nodes
+        sg.Nodes
+        |> Map.map
+               (fun nodeName nodeView ->
+                    let outEdges =
+                        sg.Edges
+                        |> Map.toSeq
+                        |> Seq.choose
+                               (fun (edgeName, { Pre = src
+                                                 Post = dst
+                                                 Cmd = cmd }) ->
+                                if src = nodeName
+                                then (Some { OutEdge.Name = edgeName
+                                             OutEdge.Command = cmd
+                                             OutEdge.Dest = dst })
+                                else None)
+                         |> Set.ofSeq
+                    let inEdges =
+                        sg.Edges
+                        |> Map.toSeq
+                        |> Seq.choose
+                               (fun (edgeName, { Pre = src
+                                                 Post = dst
+                                                 Cmd = cmd }) ->
+                                if dst = nodeName
+                                then (Some { InEdge.Name = edgeName
+                                             InEdge.Command = cmd
+                                             InEdge.Src = src })
+                                else None)
+                         |> Set.ofSeq
+                    (nodeView, outEdges, inEdges))
         |> fun m -> { Name = name ; Contents = m }
         |> ok
     | xs -> xs |> List.map (snd >> EdgeOutOfBounds) |> Bad
@@ -257,7 +270,8 @@ let combine { Nodes = ans ; Edges = aes }
             { Nodes = bns ; Edges = bes } =
     match (keyDuplicates ans bns |> Seq.toList,
            keyDuplicates aes bes |> Seq.toList) with
-    | ([], []) -> subgraph (mapAppend ans bns) (mapAppend aes bes)
+    | ([], []) -> { Nodes = mapAppend ans bns
+                    Edges = mapAppend aes bes } |> ok
     | (xs, ys) -> List.append (xs |> List.map DuplicateNode)
                               (ys |> List.map DuplicateEdge)
                   |> Bad
@@ -385,9 +399,63 @@ let unify { Nodes = ns ; Edges = es } source target =
  *)
 
 /// <summary>
+///     Maps a function over all of the edges of a graph.
+/// </summary>
+/// <param name="f">
+///     The function to map, which will receive the edges as
+///     <c>FullEdge</c>s.
+/// </param>
+/// <param name="graph">
+///     A graph, the edges of which we will be mapping.
+/// </param>
+/// <returns>
+///     A sequence collecting the results of the map.
+/// </returns>
+let mapEdges f graph =
+    let m = graph.Contents
+
+    m
+    |> Map.toSeq
+    |> Seq.map
+           (fun (srcName, (srcView, outEdges, inEdges)) ->
+                Seq.map
+                    (fun { OutEdge.Name = edgeName
+                           OutEdge.Command = cmd
+                           OutEdge.Dest = destName } ->
+                         let dv, _, _ = m.[destName]
+                         f { FullEdge.Name = edgeName
+                             FullEdge.Command = cmd
+                             FullEdge.SrcName = srcName
+                             FullEdge.SrcView = srcView
+                             FullEdge.DestName = destName
+                             FullEdge.DestView = dv } )
+                    outEdges)
+    |> Seq.concat
+
+/// <summary>
+///     Returns all edges entering a given node in a graph.
+/// </summary>
+/// <param name="nName">
+///     The name of the node being entered.
+/// </param>
+/// <param name="graph">
+///     The graph to inspect.
+/// </param>
+/// <returns>
+///     A <c>Set</c> of <c>FullEdge</c>s, where the <c>DestName</c>
+///     is <paramref name="nName" />.
+/// </returns>
+let ins nName =
+    mapEdges (fun edge ->
+                  if edge.DestName = nName
+                  then Some edge
+                  else None)
+    >> Seq.choose id
+
+/// <summary>
 ///     Returns all unique node pairs in the subgraph.
 /// </summary>
-/// <param name="subgraph" />
+/// <param name="subgraph">
 ///     The subgraph to inspect.
 /// </param>
 /// <returns>

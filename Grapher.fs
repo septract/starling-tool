@@ -82,9 +82,9 @@ let rec graphWhile vg cg oP oQ isDo expr inner =
                   // {|oP|} assume ¬C {|oQ|} ...otherwise skip it.
                   (cg (), edge oP (cAssumeNot expr) oQ) ]
 
-        let! cGraph = subgraph Map.empty
-                               (Seq.append commonEdges diffEdges
-                                |> Map.ofSeq)
+        let cGraph = { Nodes = Map.empty
+                       Edges = (Seq.append commonEdges diffEdges
+                                |> Map.ofSeq) }
 
         return! combine cGraph iGraph }
 
@@ -139,7 +139,8 @@ and graphITE vg cg oP oQ expr inTrue inFalse =
               (cg (), edge fQ cId oQ) ]
 
         // We don't add anything into the graph here.
-        let! cGraph = subgraph Map.empty (Map.ofSeq cEdges)
+        let cGraph = { Nodes = Map.empty
+                       Edges = Map.ofSeq cEdges }
 
         return! combine cGraph tfGraph }
 
@@ -165,7 +166,7 @@ and graphCommand vg cg oP oQ : PartCmd<GView> -> Result<Subgraph, Error> =
     function
     | Prim vf ->
         /// Each prim is an edge by itself, so just make a one-edge graph.
-        subgraph Map.empty (Map.ofList [(cg (), edge oP vf oQ)])
+        ok { Nodes = Map.empty ; Edges = Map.ofList [(cg (), edge oP vf oQ)] }
     | While (isDo, expr, inner) ->
         graphWhile vg cg oP oQ isDo expr inner
     | ITE (expr, inTrue, inFalse) ->
@@ -188,7 +189,8 @@ and graphBlockStep vg cg (iP, oGraphR) {ViewedCommand.Command = cmd; Post = iQvi
 
      // Add the postcondition onto the outer subgraph.
      let oGraphR2 = trial {
-         let! pGraph = subgraph (Map.ofList [(iQ, iQview)]) Map.empty
+         let pGraph = { Nodes = Map.ofList [(iQ, iQview)]
+                        Edges = Map.empty }
          let! oGraph = oGraphR
          return! combine oGraph pGraph }
 
@@ -216,7 +218,8 @@ and graphBlock vg cg {Pre = bPre; Contents = bContents} =
     // First, generate the ID for the precondition.
     let oP = vg ()
 
-    let initState = (oP, subgraph (Map.ofList [(oP, bPre)]) Map.empty)
+    let initState = (oP, ok { Nodes = Map.ofList [(oP, bPre)]
+                              Edges = Map.empty } )
 
     (* We flip through every entry in the block, extracting its postcondition
      * and command.  The precondition is either the postcondition of
