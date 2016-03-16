@@ -169,27 +169,30 @@ module Graph =
     /// <summary>
     ///     Optimises a graph.
     /// </summary>
-    /// <param name="graph" />
+    /// <param name="model">
+    ///     The model whence the graph came.
+    /// </param>
+    /// <param name="_arg1">
     ///     The graph to optimise.
     /// </param>
     /// <returns>
-    ///     An optimised equivalent of <paramref name="graph" />.
+    ///     An optimised equivalent of <paramref name="_arg1" />.
     /// </returns>
-    let optimiseGraph graph =
-        graph
-        |> removeIdTransitions
+    let optimiseGraph model =
+        // TODO(CaptainHayashi): Use the model for something.
+        removeIdTransitions
 
     /// <summary>
     ///     Optimises a model over graphs.
     /// </summary>
-    /// <param name="mdl" />
+    /// <param name="mdl">
     ///     The model to optimise.
     /// </param>
     /// <returns>
     ///     An optimised equivalent of <paramref name="mdl" />.
     /// </returns>
     let optimise mdl =
-        mapAxioms optimiseGraph mdl
+        mapAxioms (optimiseGraph mdl) mdl
 
 
 /// <summary>
