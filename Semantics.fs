@@ -55,6 +55,53 @@ module Pretty =
                 [ printVFunc cmd ]
 
 
+
+/// <summary>
+///     Composes two Boolean expressions representing commands.
+///     <para>
+///         The pre-state of the first and post-state of the second become
+///         the pre- and post- state of the composition.  All of the
+///         intermediates (and pre-state) in the second are raised to the
+///         highest intermediate level in the first.  The post-state
+///         of the first then becomes the lowest intermediate level in the
+///         second.
+///     </para>
+/// </summary>
+/// <param name="x">
+///     The first expression to compose.
+/// </param>
+/// <param name="y">
+///     The second expression to compose.
+/// </param>
+/// <returns>
+///     The result of composing <paramref name="y" /> onto
+///     <paramref name="x" /> as above.
+/// </returns>
+let composeBools x y =
+    (* Find out what the next intermediate level is on x:
+     * this is going to replace !before in y, and each intermediate level
+     * in y will increase by this level plus one.
+     *)
+    let nLevel = nextBoolIntermediate x
+
+    let xRewrite =
+        function
+        | After v -> Intermediate (nLevel, v)
+        | v -> v
+        |> (fun f -> { AVSub = f >> AConst ; BVSub = f >> BConst } )
+        |> onVars
+
+    let yRewrite =
+        function
+        | Before v -> Intermediate (nLevel, v)
+        | Intermediate (i, v) -> Intermediate (i + nLevel + 1I, v)
+        | v -> v
+        |> (fun f -> { AVSub = f >> AConst ; BVSub = f >> BConst } )
+        |> onVars
+
+    mkAnd [ xRewrite.BSub x ; yRewrite.BSub y ]
+
+
 /// Generates a framing relation for a given variable.
 let frameVar name ty =
     let ve = mkVarExp(ty, name)

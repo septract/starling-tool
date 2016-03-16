@@ -12,7 +12,29 @@ open Starling.Tests.Studies
 
 /// Tests for the semantic transformer.
 type SemanticsTests() = 
-    
+    /// Test cases for composition.
+    static member Compositions =
+        [ TestCaseData((bEq (bAfter "foo") (bBefore "bar"),
+                        bEq (bAfter "baz") (bBefore "foo")))
+            .Returns(BAnd [ bEq (bInter 0I "foo") (bBefore "bar")
+                            bEq (bAfter "baz") (bInter 0I "foo") ] )
+            .SetName("Compose two basic assignments")
+          TestCaseData((BAnd [ bEq (bInter 0I "foo") (bBefore "bar")
+                               bEq (bAfter "baz") (bInter 0I "foo") ],
+                        BAnd [ bEq (bInter 0I "flop") (bBefore "baz")
+                               bEq (bAfter "froz") (bInter 0I "flop") ] ))
+            // TODO(CaptainHayashi): make this not order-dependent... somehow
+            .Returns(BAnd [ bEq (bInter 1I "baz") (bInter 0I "foo")
+                            bEq (bInter 0I "foo") (bBefore "bar")
+                            bEq (bAfter "froz") (bInter 2I "flop")
+                            bEq (bInter 2I "flop") (bInter 1I "baz") ] )
+            .SetName("Compose two compositions") ]
+
+    /// Tests whether composition behaves itself.
+    [<TestCaseSource("Compositions")>]
+    member x.``Boolean composition should work correctly`` xy =
+        xy ||> composeBools
+
     // Test cases for the expression framer.
     static member FrameExprs = 
         [ TestCaseData(BTrue).Returns([ aEq (aAfter "serving") (aBefore "serving")
