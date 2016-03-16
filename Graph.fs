@@ -431,6 +431,9 @@ let mkEdgeBetween name src dest cmd graph =
 
              ((srcView, srcOut', srcIn),
               (destView, destOut, destIn')))
+        src
+        dest
+        graph
 
 
 /// <summary>

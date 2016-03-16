@@ -24,6 +24,53 @@ let npset : (string * string) list -> Set<(string * string)> = Set.ofList
 /// </summary>
 type GraphTests() =
     /// <summary>
+    ///     Test cases for checking edge addition.
+    /// </summary>
+    static member Adds =
+        [ TestCaseData(("unlock_N0", "unlock_V1", "unlock_V0"))
+            .Returns(
+              Map.ofList
+                  [ ("unlock_V0",
+                     (Multiset.singleton
+                          (gHoldLock BTrue : GFunc),
+                      Set.singleton
+                          { Name = "unlock_C0"
+                            Dest = "unlock_V1"
+                            Command =
+                                func "!I++"
+                                     [ AExpr (aBefore "serving")
+                                       AExpr (aAfter "serving") ] },
+                      Set.singleton
+                          { Name = "unlock_N0"
+                            Src = "unlock_V1"
+                            Command = vfunc "Id" [] } ))
+                    ("unlock_V1",
+                     (Multiset.empty (),
+                      Set.singleton
+                          { Name = "unlock_N0"
+                            Dest = "unlock_V0"
+                            Command = vfunc "Id" [] },
+                      Set.singleton
+                          { Name = "unlock_C0"
+                            Src = "unlock_V0"
+                            Command =
+                                func "!I++"
+                                     [ AExpr (aBefore "serving")
+                                       AExpr (aAfter "serving") ] } )) ] )
+            .SetName("Adding a valid, unique edge to unlock works")]
+
+    /// <summary>
+    ///     Tests <c>unify</c>.
+    /// </summary>
+    [<TestCaseSource("Adds")>]
+    member x.``mkEdgeBetween adds edges correctly`` nsd =
+          let n, s, d = nsd
+          ticketLockUnlockGraph
+          |> mkEdgeBetween n s d (func "Id" [])
+          |> fun g -> g.Contents
+
+
+    /// <summary>
     ///     Test cases for checking unification.
     /// </summary>
     static member Unifies =
