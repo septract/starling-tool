@@ -348,6 +348,92 @@ let unify source target graph =
 
 
 /// <summary>
+///     Performs an operation on two nodes in a graph.
+/// </summary>
+/// <param name="f">
+///     The function to apply.
+///     This receives two parameters: the adjacency list records
+///     for <paramref name="x" /> and <paramref name="y" />
+///     respectively.
+/// </param>
+/// <param name="x">
+///     The first node's ID.
+/// </param>
+/// <param name="y">
+///     The second node's ID.
+/// </param>
+/// <param name="graph">
+///     The graph to change.
+/// </param>
+/// <returns>
+///     The graph resulting from applying <paramref name="f" /> to
+///     the records of nodes <paramref name="x" /> and
+///     <paramref name="y" /> in <paramref name="graph" />.
+/// </returns>
+let mapNodePair f x y graph =
+    match (Map.tryFind x graph.Contents,
+           Map.tryFind y graph.Contents) with
+    | (Some xRecord, Some yRecord) ->
+        let xRecord', yRecord' = f xRecord yRecord
+
+        let contents' =
+            graph.Contents
+            |> Map.add x xRecord'
+            |> Map.add y yRecord'
+
+        { graph with Contents = contents' }
+    | _ -> graph
+
+/// <summary>
+///     Adds an edge to the graph.
+/// </summary>
+/// <param name="name">
+///     A name for the parameter.
+///     This must be unique.
+/// </param>
+/// <param name="src">
+///     The source node.
+/// </param>
+/// <param name="dest">
+///     The destination node.
+/// </param>
+/// <param name="cmd">
+///     The command occurring on the edge.
+/// </param>
+/// <param name="graph">
+///     The graph to extend.
+/// </param>
+/// <returns>
+///     The graph resulting from adding an edge from
+///     <paramref name="src" /> to <paramref name="dest" />, with command
+///     <paramref name="cmd"/>, to <paramref name="graph"/>.
+///
+///     <para>
+///         This is a no-operation if either <paramref name="src" />
+///         or <paramref name="dest" /> point outside of the graph.
+///     </para>
+/// </returns>
+let mkEdgeBetween name src dest cmd graph =
+    // TODO(CaptainHayashi): signal an error if name is taken.
+    mapNodePair
+        (fun (srcView, srcOut, srcIn) (destView, destOut, destIn) ->
+             // An edge is recorded as an out in src, and in in dest.
+
+             let srcOut' = Set.add { Name = name
+                                     Dest = dest
+                                     Command = cmd }
+                                   srcOut
+
+             let destIn' = Set.add { Name = name
+                                     Src = src
+                                     Command = cmd }
+                                    destIn
+
+             ((srcView, srcOut', srcIn),
+              (destView, destOut, destIn')))
+
+
+/// <summary>
 ///     Removes all edges with the given source and destination.
 /// </summary>
 /// <param name="src">
@@ -356,35 +442,30 @@ let unify source target graph =
 /// <param name="dest">
 ///     The destination node.
 /// </param>
-/// <param name="graph">
+/// <param name="_arg1">
 ///     The <c>Graph</c> to prune.
 /// </param>
 /// <returns>
-///     The equivalent of <paramref name="graph" /> with all edges
+///     The equivalent of <paramref name="_arg1" /> with all edges
 ///     between <param name="src" /> and <param name="dest" />
 ///     removed.  If either or both edges do not exist, the graph
 ///     is not changed.
 /// </returns>
-let rmEdgesBetween src dest graph =
+let rmEdgesBetween src dest =
     (* The result will be a well-formed graph, because it cannot
      * create dangling edges.
      *)
+    mapNodePair
+        (fun (srcView, srcOut, srcIn) (destView, destOut, destIn) ->
+             // We need to delete the out entry in src going to dest...
+             let srcOut' = Set.filter (fun { Dest = d } -> d <> dest) srcOut
+             // ...and the in entry in dest coming from src.
+             let destIn' = Set.filter (fun { Src = s } -> s <> src) destIn
 
-    // Do src and dest actually exist?
-    match (Map.tryFind src graph.Contents,
-           Map.tryFind dest graph.Contents) with
-    | (Some (srcView, srcOut, srcIn), Some(destView, destOut, destIn)) ->
-        // We need to delete the out entry in src going to dest...
-        let newSrcOut = Set.filter (fun { Dest = d } -> d <> dest) srcOut
-        // ...and the in entry in dest coming from src.
-        let newDestIn = Set.filter (fun { Src = s } -> s <> src) destIn
-
-        { graph with
-              Contents =
-                  graph.Contents
-                  |> Map.add src (srcView, newSrcOut, srcIn)
-                  |> Map.add dest (destView, destOut, newDestIn) }
-    | _ -> graph
+             ((srcView, srcOut', srcIn),
+              (destView, destOut, destIn')))
+        src
+        dest
 
 (*
  * Graph queries
