@@ -72,6 +72,7 @@ module Pretty =
         | Unmarked c -> sprintf "V%sU" c |> String
         | Before c -> sprintf "V%sB" c |> String
         | After c -> sprintf "V%sA" c |> String
+        | Intermediate(i, c) -> sprintf "V%sI%A" c i |> String
         | Goal(i, c) -> sprintf "V%sG%A" c i |> String
 
     /// Decides whether to put brackets over the expression emission x,

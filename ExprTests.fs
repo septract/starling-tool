@@ -33,6 +33,30 @@ type ExprTests() =
         | SimpleArith -> false
         | CompoundArith -> true
 
+
+    /// Test cases for intermediate finding.
+    static member NextIntermediates =
+        [ TestCaseData(BExpr (bInter 5I "foo"))
+            .Returns(6I)
+            .SetName("nextIntermediate on Bool intermediate is one higher")
+          TestCaseData(BExpr (BNot (bInter 10I "bar")))
+            .Returns(11I)
+            .SetName("nextIntermediate on 'not' passes through")
+          TestCaseData(BExpr (BImplies (bInter 6I "a", bInter 11I "b")))
+            .Returns(12I)
+            .SetName("nextIntermediate on 'implies' is one higher than max")
+          TestCaseData(AExpr (AAdd [ aInter 1I "a"
+                                     aAfter "b"
+                                     aBefore "c"
+                                     aInter 2I "d" ] ))
+            .Returns(3I)
+            .SetName("nextIntermediate on 'add' is one higher than max") ]
+
+    /// Tests whether nextIntermediate works.
+    [<TestCaseSource("NextIntermediates")>]
+    member x.``test whether nextIntermediate gets the correct level`` expr =
+        nextIntermediate expr
+
     /// Test cases for testing goal rewriting.
     static member GoalConstants =
         [ TestCaseData(["foo"; "foo"; "foo"])
