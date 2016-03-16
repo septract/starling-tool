@@ -176,8 +176,6 @@ let printResponse mview =
 type Error =
     /// An error occurred in the frontend.
     | Frontend of Lang.Frontend.Error
-    /// An error occurred in axiomatisation.
-    | Axiomatise of Core.Graph.Types.Error
     /// An error occurred in semantic translation.
     | Semantics of Semantics.Types.Error
     /// An error occurred in the Z3 backend.
@@ -193,7 +191,6 @@ type Error =
 let printError =
     function
     | Frontend e -> Lang.Frontend.printError e
-    | Axiomatise e -> Core.Graph.Pretty.printError e
     | Semantics e -> Semantics.Pretty.printSemanticsError e
     | Z3 e -> Backends.Z3.Pretty.printError e
     | HSF e -> Backends.Horn.Pretty.printHornError e
@@ -257,8 +254,7 @@ let semantics = bind (Starling.Semantics.translate
                       >> mapMessages Error.Semantics)
 
 /// Shorthand for the axiomatisation stage.
-let axiomatise = bind (Starling.Core.Graph.axiomatise
-                       >> mapMessages Error.Axiomatise)
+let axiomatise = lift Starling.Core.Graph.axiomatise
 
 /// Shorthand for the frontend stage.
 let frontend rq = Lang.Frontend.run rq >> mapMessages Error.Frontend

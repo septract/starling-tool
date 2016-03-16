@@ -276,75 +276,6 @@ let combine { Nodes = ans ; Edges = aes }
                               (ys |> List.map DuplicateEdge)
                   |> Bad
 
-/// <summary>
-///     Returns the axioms characterising a graph.
-/// </summary>
-/// <param name="_arg1">
-///     The graph whose axioms are to be given.
-/// </param>
-/// <returns>
-///     The edges of <paramref name="_arg1" />, as name-edge pairs.
-///     This is wrapped in a Chessie result over <c>Error</c>.
-/// </returns>
-let axiomatiseGraph graph =
-    (* A subgraph nearly contains an axioms list verbatim, so
-     * switch back to subgraph representation.
-     *)
-    let { Nodes = nodes ; Edges = edges } = toSubgraph graph
-
-    edges
-    |> Map.toList
-    |> Seq.map
-           (fun (name, { Pre = s; Post = t; Cmd = c }) ->
-                match (Map.tryFind s nodes, Map.tryFind t nodes) with
-                | Some sn, Some tn ->
-                    ok (name, { Pre = sn; Post = tn; Cmd = c })
-                | _ ->
-                    { Pre = s; Post = t; Cmd = c } |> EdgeOutOfBounds |> fail)
-    |> collect
-
-/// <summary>
-///     Converts a list of control-flow graphs into a list of axioms.
-///
-///     <para>
-///         Each axiom represents an edge in a control-flow graph.
-///     </para>
-/// </summary>
-/// <param name="graphs">
-///     The sequence of graphs to axiomatise.
-///     Such graphs typically represent one method.
-/// </param>
-/// <returns>
-///     A map of axioms characterising <paramref name="graphs" />,
-///     wrapped in a Chessie result.
-/// </returns>
-let axiomatiseGraphs graphs =
-    // The map key is redundant, as we already have it inside the
-    // graph iself.
-    graphs
-    |> Map.toSeq
-    |> Seq.map (snd >> axiomatiseGraph)
-    |> collect
-    |> lift (Seq.concat >> Map.ofSeq)
-
-/// <summary>
-///     Converts a CFG-based model into an axiom-based model.
-///
-///     <para>
-///         Each axiom represents an edge in a control-flow graph.
-///     </para>
-/// </summary>
-/// <param name="model">
-///     The model to axiomatise.
-/// </param>
-/// <returns>
-///     An axiom-based model equivalent to <paramref name="model" />,
-///     wrapped in a Chessie result.
-/// </returns>
-let axiomatise model =
-    lift (fun xs -> withAxioms xs model)
-         (axiomatiseGraphs model.Axioms)
-
 
 (*
  * Graph transformations.
@@ -492,6 +423,66 @@ let mapEdges f graph =
                              FullEdge.DestView = dv } )
                     outEdges)
     |> Seq.concat
+
+
+(*
+ * Axiomatisation
+ *)
+
+/// <summary>
+///     Returns the axioms characterising a graph.
+/// </summary>
+/// <param name="_arg1">
+///     The graph whose axioms are to be given.
+/// </param>
+/// <returns>
+///     The edges of <paramref name="_arg1" />, as name-edge pairs.
+///     This is wrapped in a Chessie result over <c>Error</c>.
+/// </returns>
+let axiomatiseGraph =
+    mapEdges
+           (fun { Name = n; SrcView = s ; DestView = t ; Command = c } ->
+                (n, { Pre = s ; Post = t ; Cmd = c } ))
+
+/// <summary>
+///     Converts a list of control-flow graphs into a list of axioms.
+///
+///     <para>
+///         Each axiom represents an edge in a control-flow graph.
+///     </para>
+/// </summary>
+/// <param name="_arg1">
+///     The sequence of graphs to axiomatise.
+///     Such graphs typically represent one method.
+/// </param>
+/// <returns>
+///     A map of axioms characterising <paramref name="_arg1" />.
+/// </returns>
+let axiomatiseGraphs =
+    // The map key is redundant, as we already have it inside the
+    // graph iself.
+    Map.toSeq
+    >> Seq.map (snd >> axiomatiseGraph)
+    >> Seq.concat
+    >> Map.ofSeq
+
+/// <summary>
+///     Converts a CFG-based model into an axiom-based model.
+///
+///     <para>
+///         Each axiom represents an edge in a control-flow graph.
+///     </para>
+/// </summary>
+/// <param name="model">
+///     The model to axiomatise.
+/// </param>
+/// <returns>
+///     An axiom-based model equivalent to <paramref name="model" />,
+///     wrapped in a Chessie result.
+/// </returns>
+let axiomatise model =
+    withAxioms (axiomatiseGraphs model.Axioms) model
+
 
 /// <summary>
 ///     Pretty printers for control-flow graphs.
