@@ -33,13 +33,15 @@ module Types =
         | LV of LValue // foobaz
         | Bop of Bop * Expression * Expression // a BOP b
 
-    /// An atomic action.
-    type AtomicAction = 
+    /// A primitive action.
+    type Prim =
         | CompareAndSwap of LValue * LValue * Expression // <CAS(a, b, c)>
         | Fetch of LValue * Expression * FetchMode // <a = b??>
         | Postfix of LValue * FetchMode // <a++> or <a-->
         | Id // <id>
         | Assume of Expression // <assume(e)
+        /// A local assignment.
+        | LocalAssign of LValue * Expression // a = b;
 
     /// A view prototype.
     type ViewProto = Func<(Type * string)>
@@ -61,11 +63,9 @@ module Types =
         | If of Expression * View * View
 
     /// A statement in the command language.
-    type Command<'view> = 
-        /// An atomic action.
-        | Atomic of AtomicAction
-        /// A no-op.
-        | Skip
+    type Command<'view> =
+        /// A set of sequentially composed primitives.
+        | Prim of Prim list
         /// An if-then-else statement.
         | If of Expression
               * Block<'view, Command<'view>>
@@ -78,8 +78,6 @@ module Types =
                    * Expression // do { b } while (e)
         /// A list of parallel-composed blocks.
         | Blocks of Block<'view, Command<'view>> list
-        /// A local assignment.
-        | Assign of LValue * Expression // a = b;
 
     /// A combination of a command and its postcondition view.
     and ViewedCommand<'view, 'cmd> =
@@ -203,14 +201,19 @@ module Pretty =
             func "CAS" [ printLValue l
                          printLValue f
                          printExpression t ]
+            |> angled
         | Fetch(l, r, m) ->
             equality (printLValue l) (hjoin [ printExpression r
                                               printFetchMode m ])
+            |> angled
         | Postfix(l, m) ->
             hjoin [ printLValue l
                     printFetchMode m ]
-        | Id -> String "id"
-        | Assume e -> func "assume" [ printExpression e ]
+            |> angled
+        | Id -> String "id" |> angled
+        | Assume e -> func "assume" [ printExpression e ] |> angled
+        | LocalAssign(l, r) ->
+            equality (printLValue l) (printExpression r)
 
     /// Pretty-prints viewed commands with the given indent level (in spaces).
     let printViewedCommand (pView : 'view -> Command)
@@ -238,13 +241,11 @@ module Pretty =
                printBlock pView pCmd b ]
 
     /// Pretty-prints commands with the given indent level (in spaces).
-    let rec printCommand =        
-        function 
-        | Atomic a -> 
-            a
-            |> printAtomicAction
-            |> angled
-        | Skip -> Nop |> withSemi
+    let rec printCommand =
+        function
+        // The trick here is to make Prim [] appear as ;, but
+        // Prim [x; y; z] appear as x; y; z;.
+        | Prim a -> a |> Seq.map (printPrim) |> semiSep |> withSemi
         | If(c, t, f) ->
             hsep [ "if" |> String
                    c
@@ -270,7 +271,6 @@ module Pretty =
             bs
             |> List.map (printBlock printViewLine printCommand)
             |> hsepStr "||"
-        | Assign(l, r) -> binop "=" (printLValue l) (printExpression r) |> withSemi
 
     /// Pretty-prints a view prototype.
     let printViewProto { Name = n; Params = ps } =

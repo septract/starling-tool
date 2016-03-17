@@ -197,13 +197,24 @@ let parseFetchOrPostfix =
 let parseAssume =
     pstring "assume" >>. ws >>. inParens parseExpression |>> Assume
 
-/// Parser for atomic actions.
-let parseAtomic =
-    choice [ stringReturn "id" Id
-             parseAssume
-             parseCAS
-             parseFetchOrPostfix ]
+/// Parser for local assignments.
+let parseAssign =
+    pipe2ws parseLValue
+    // ^- <lvalue> ...
+            (pstring "=" >>. ws >>. parseExpression)
+                  //             ... = <expression> ;
+            (curry LocalAssign)
 
+/// Parser for atomic actions.
+let parsePrim =
+    // Either an atomic (angle brackets)...
+    (inAngles
+         (choice [ (stringReturn "id" Id)
+                   parseAssume
+                   parseCAS
+                   parseFetchOrPostfix ]))
+    // or a local assign (no angle brackets).
+    <|> parseAssign
 
 (*
  * Parameters and lists.
@@ -331,14 +342,6 @@ let parseViewProto =
  * Commands.
  *)
 
-/// Parser for assignments.
-let parseAssign =
-    pipe2ws parseLValue
-    // ^- <lvalue> ...
-            (pstring "=" >>. ws >>. parseExpression .>> ws .>> pstring ";")
-                  //             ... = <expression> ;
-            (curry Assign)
-
 /// Parser for blocks.
 let parseParSet =
     (sepBy1 (parseBlock .>> ws) (pstring "||" .>> ws)) |>> Blocks
@@ -367,33 +370,30 @@ let parseIf =
             parseBlock
             (curry3 If)
 
-/// Parser for atomic commands (not the actions themselves; that is parseAtomic).
-let parseAtomicCommand =
-    inAngles parseAtomic .>> ws .>> pstring ";" |>> Atomic
+/// Parser for prim compositions (not the prims themselves; that is parsePrim).
+let parsePrimSet =
+    many1 (parsePrim .>> ws .>> pstring ";" .>> ws) |>> Prim
 
 /// Parser for `skip` commands.
 /// Skip is inserted when we're in command position, but see a semicolon.
 let parseSkip
-    = stringReturn ";" Skip
+    = stringReturn ";" (Prim [])
     // ^- ;
 
 /// Parser for simple commands (atomics, skips, and bracketed commands).
 do parseCommandRef :=
-    choice [parseSkip
-            // ^- ;
-            parseAtomicCommand
-            // ^- < <atomic> > ;
-            parseIf
-            // ^- if ( <expression> ) <block> <block>
-            parseDoWhile
-            // ^- do <block> while ( <expression> )
-            parseWhile
-            // ^- while ( <expression> ) <block>
-            parseParSet
-            // ^- <par-set>
-            parseAssign]
-            // ^- <lvalue> = <expression>
-
+    choice [ parseSkip
+             // ^- ;
+             parseIf
+             // ^- if ( <expression> ) <block> <block>
+             parseDoWhile
+             // ^- do <block> while ( <expression> )
+             parseWhile
+             // ^- while ( <expression> ) <block>
+             parseParSet
+             // ^- <par-set>
+             parsePrimSet ]
+             // ^- <prim-set>
 
 (*
  * Blocks.

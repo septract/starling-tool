@@ -54,13 +54,15 @@ let ticketLockLockMethodAST =
       Body =
           { Pre = Unit
             Contents =
-                [ { Command = Atomic(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment))
+                [ { Command = Command.Prim [ Fetch(LVIdent "t",
+                                                   LV(LVIdent "ticket"),
+                                                   Increment) ]
                     Post = View.Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]} }
                   { Command =
                         DoWhile
                             ({ Pre = View.Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]}
                                Contents =
-                                   [ { Command = Atomic(Fetch(LVIdent "s", LV(LVIdent "serving"), Direct))
+                                   [ { Command = Command.Prim [ Fetch(LVIdent "s", LV(LVIdent "serving"), Direct) ]
                                        Post =
                                            View.If
                                                (Bop(Eq, LV(LVIdent "s"), LV(LVIdent "t")), View.Func {Name = "holdLock"; Params = []},
@@ -74,7 +76,8 @@ let ticketLockUnlockMethodAST =
       Body =
           { Pre = View.Func {Name = "holdLock"; Params = []}
             Contents =
-                [ { Command = Atomic(Postfix(LVIdent "serving", Increment))
+                [ { Command = Command.Prim [ Postfix(LVIdent "serving",
+                                                     Increment) ]
                     Post = Unit } ] } }
 
 /// The parsed form of the ticket lock.

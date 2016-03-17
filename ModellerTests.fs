@@ -67,7 +67,7 @@ type ModellerTests() =
              .Returns(Some [LookupError ("holdTick", CountMismatch(0, 1))])
              .SetName("Modelling a single view with bad parameter count returns an error")
           TestCaseData(afunc "holdTick" [Expression.True] |> View.Func)
-             .Returns(Some [LookupError ("holdTick", TypeMismatch ((Type.Int, "t"), Type.Bool))])
+             .Returns(Some [LookupError ("holdTick", Error.TypeMismatch ((Type.Int, "t"), Type.Bool))])
              .SetName("Modelling a single view with bad parameter type returns an error") ]
 
     /// <summary>
@@ -148,19 +148,19 @@ type ModellerTests() =
 
     /// Tests the atomic primitive modeller using the ticket lock.
     [<TestCaseSource("AtomicPrims")>]
-    member x.``atomic actions are modelled correctly as prims`` a = modelAtomic ticketLockModel.Globals ticketLockModel.Locals a |> okOption
+    member x.``atomic primitives are modelled correctly as prims`` a = modelPrim ticketLockModel.Globals ticketLockModel.Locals a |> okOption
 
 
     /// Constructs a Prim of the correct type to come out of a modeller.
     static member mprim (cmd : Command) : PartCmd<CView> = Prim cmd
 
-    /// Constructs an atomic command of type Command<View>.
-    static member atom (ac : AtomicAction) : Command<View> = Atomic ac
+    /// Constructs a single Prim of type Command<View>.
+    static member prim (ac : Prim) : Command<View> = Command.Prim [ ac ]
 
     /// Tests for the command axiom modeller.
     /// These use the ticket lock model.
     static member CommandAxioms =
-        [ TestCaseData(ModellerTests.atom(Fetch(LVIdent "t",
+        [ TestCaseData(ModellerTests.prim(Fetch(LVIdent "t",
                                                 LV(LVIdent "ticket"),
                                                 Increment)))
             .Returns(ModellerTests.mprim

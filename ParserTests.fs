@@ -36,21 +36,21 @@ type ParserTests() =
         |> run parseExpression
         |> ParserTests.ParseResultToOptional
 
-    /// Test cases for testing the atomic parser.
-    static member AtomicParses =
-        [ TestCaseData("foo++").Returns(Some(Postfix(LVIdent "foo", Increment)))
-          TestCaseData("foo--").Returns(Some(Postfix(LVIdent "foo", Decrement)))
-          TestCaseData("foo = bar").Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Direct)))
-          TestCaseData("foo = bar++").Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Increment)))
-          TestCaseData("foo = bar--").Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Decrement)))
-          TestCaseData("CAS(foo, bar, 2)").Returns(Some(CompareAndSwap(LVIdent "foo", LVIdent "bar", Int 2L))) ]
+    /// Test cases for testing the primitive parser.
+    static member PrimParses =
+        [ TestCaseData("<foo++>;").Returns(Some(Postfix(LVIdent "foo", Increment)))
+          TestCaseData("<foo-->;").Returns(Some(Postfix(LVIdent "foo", Decrement)))
+          TestCaseData("<foo = bar>;").Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Direct)))
+          TestCaseData("<foo = bar++>;").Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Increment)))
+          TestCaseData("<foo = bar-->;").Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Decrement)))
+          TestCaseData("<CAS(foo, bar, 2)>;").Returns(Some(CompareAndSwap(LVIdent "foo", LVIdent "bar", Int 2L))) ]
         |> List.map (fun d -> d.SetName(sprintf "Parse %A" d.OriginalArguments.[0]))
 
-    [<TestCaseSource("AtomicParses")>]
-    /// Tests whether the expression parser works correctly.
-    member x.``the atomics parser parses test case atomics correctly`` expr =
+    [<TestCaseSource("PrimParses")>]
+    /// Tests whether the primitive expression parser works correctly.
+    member x.``the prim parser parses test case prims correctly`` expr =
         expr
-        |> run parseAtomic
+        |> run parsePrim
         |> ParserTests.ParseResultToOptional
 
     /// Test cases for testing the constraint parser.
