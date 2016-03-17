@@ -107,13 +107,13 @@ let composeBools x y =
 /// Generates a framing relation for a given variable.
 let frameVar name ty =
     let ve = mkVarExp(ty, name)
-    
+
     BEq(subExpr (liftMarker After always) ve,
         subExpr (liftMarker Before always) ve)
 
 /// Generates a frame for a given expression.
 /// The frame is a relation a!after = a!before for every a not mentioned in the expression.
-let frame model expr = 
+let frame model expr =
     // Find all the bound post-variables in the expression...
     let evars =
         expr
@@ -133,7 +133,7 @@ let frame model expr =
 /// a set of framing terms forcing unbound variables to remain constant
 /// (through frame).
 let semanticsOfPrim model prim =
-    (* First, instantiate according to the semantics. 
+    (* First, instantiate according to the semantics.
      * This can succeed but return None.  This means there is no
      * entry (erroneous or otherwise) in the semantics for this prim.
      * Since this is an error in this case, make it one.
@@ -142,7 +142,7 @@ let semanticsOfPrim model prim =
         instantiate prim model.Semantics
         |> mapMessages (curry Instantiate prim)
         |> bind (failIfNone (MissingDef prim))
-        
+
     let aframe = lift (frame model >> List.ofSeq >> mkAnd) actions
 
     lift2 mkAnd2 actions aframe

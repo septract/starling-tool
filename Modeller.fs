@@ -18,7 +18,7 @@ open Starling.Lang.Collator
 [<AutoOpen>]
 module Types =
     /// A conditional (flat or if-then-else) func.
-    type CFunc = 
+    type CFunc =
         | ITE of BoolExpr * Multiset<CFunc> * Multiset<CFunc>
         | Func of VFunc
 
@@ -26,7 +26,7 @@ module Types =
     type CView = Multiset<CFunc>
 
     /// A partially resolved command.
-    type PartCmd<'view> = 
+    type PartCmd<'view> =
         | Prim of Command
         | While of
             isDo : bool
@@ -39,7 +39,7 @@ module Types =
 
     // TODO(CaptainHayashi): more consistent constructor names
     /// Represents an error when converting an expression.
-    type ExprError = 
+    type ExprError =
         /// A non-Boolean expression was found in a Boolean position.
         | ExprNotBoolean
         /// A non-Boolean variable was found in a Boolean position.
@@ -52,12 +52,12 @@ module Types =
         | Var of var : LValue * err : VarMapError
 
     /// Represents an error when converting a view prototype.
-    type ViewProtoError = 
+    type ViewProtoError =
         /// A parameter name was used more than once in the same view prototype.
         | VPEDuplicateParam of AST.Types.ViewProto * param : string
 
     /// Represents an error when converting a view or view def.
-    type ViewError = 
+    type ViewError =
         /// An expression in the view generated an `ExprError`.
         | BadExpr of expr : AST.Types.Expression * err : ExprError
         /// A view was requested that does not exist.
@@ -70,14 +70,14 @@ module Types =
         | GlobalVarConflict of err : VarMapError
 
     /// Represents an error when converting a constraint.
-    type ConstraintError = 
+    type ConstraintError =
         /// The view definition in the constraint generated a `ViewError`.
         | CEView of vdef : AST.Types.ViewDef * err : ViewError
         /// The expression in the constraint generated an `ExprError`.
         | CEExpr of expr : AST.Types.Expression * err : ExprError
 
     /// Type of errors found when generating axioms.
-    type AxiomError = 
+    type AxiomError =
         /// The axiom uses a variable in global position incorrectly.
         | AEBadGlobal of var : LValue * err : VarMapError
         /// The axiom uses a variable in local position incorrectly.
@@ -94,7 +94,7 @@ module Types =
         | AEUnsupportedCommand of cmd : AST.Types.Command<AST.Types.View> * reason : string
 
     /// Represents an error when converting a model.
-    type ModelError = 
+    type ModelError =
         /// A view prototype in the program generated a `ViewProtoError`.
         | MEVProto of proto : AST.Types.ViewProto * err : ViewProtoError
         /// A constraint in the program generated a `ConstraintError`.
@@ -116,9 +116,9 @@ module Pretty =
     open Starling.Lang.AST.Pretty
 
     /// Pretty-prints a CFunc.
-    let rec printCFunc = 
-        function 
-        | CFunc.ITE(i, t, e) -> 
+    let rec printCFunc =
+        function
+        | CFunc.ITE(i, t, e) ->
             hsep [ String "if"
                    printBoolExpr i
                    String "then"
@@ -131,10 +131,10 @@ module Pretty =
     let printCView = printMultiset printCFunc >> ssurround "[|" "|]"
 
     /// Pretty-prints a part-cmd at the given indent level.
-    let rec printPartCmd (pView : 'view -> Command) : PartCmd<'view> -> Command = 
-        function 
+    let rec printPartCmd (pView : 'view -> Command) : PartCmd<'view> -> Command =
+        function
         | Prim prim -> Model.Pretty.printCommand prim
-        | While(isDo, expr, inner) -> 
+        | While(isDo, expr, inner) ->
             cmdHeaded (hsep [ String(if isDo then "Do-while" else "While")
                               (printBoolExpr expr) ])
                       [printBlock pView (printPartCmd pView) inner]
@@ -231,7 +231,7 @@ let coreSemantics =
     [ (*
        * CAS
        *)
-      
+
       // Integer CAS
       (func "ICAS" [ ipar "destB"; ipar "destA"
                      ipar "testB"; ipar "testA"
@@ -256,7 +256,7 @@ let coreSemantics =
       (*
        * Atomic load
        *)
-      
+
       // Integer load
       (func "!ILoad" [ ipar "destB"; ipar "destA"
                        ipar "srcB"; ipar "srcA" ],
@@ -300,7 +300,7 @@ let coreSemantics =
       (*
        * Local set
        *)
-       
+
       // Integer local set
       (func "!ILSet" [ ipar "destB"; ipar "destA"
                        ipar "src" ],
@@ -325,12 +325,12 @@ let coreSemantics =
 
 /// Converts a Starling expression of ambiguous type to a Z3 predicate using
 /// the given environment.
-let rec modelExpr env expr = 
+let rec modelExpr env expr =
     match expr with
     (* First, if we have a variable, the type of expression is
      * determined by the type of the variable.
      *)
-    | LV v -> 
+    | LV v ->
         (* Look-up the variable to ensure it a) exists and b) is of a
          * Boolean type.
          *)
@@ -348,11 +348,11 @@ let rec modelExpr env expr =
 
 /// Converts a Starling Boolean expression to a Z3 predicate using
 /// the given partial model and environment.
-and modelBoolExpr env expr = 
+and modelBoolExpr env expr =
     match expr with
     | True -> BTrue |> ok
     | False -> BFalse |> ok
-    | LV v -> 
+    | LV v ->
         (* Look-up the variable to ensure it a) exists and b) is of a
          * Boolean type.
          *)
@@ -361,9 +361,9 @@ and modelBoolExpr env expr =
         |> bind (function
                  | Type.Bool -> v |> mkBoolLV |> ok
                  | _ -> v |> VarNotBoolean |> fail)
-    | Bop(BoolOp as op, l, r) -> 
+    | Bop(BoolOp as op, l, r) ->
         match op with
-        | ArithIn as o -> 
+        | ArithIn as o ->
             lift2 (match o with
                    | Gt -> mkGt
                    | Ge -> mkGe
@@ -379,7 +379,7 @@ and modelBoolExpr env expr =
                    | _ -> failwith "unreachable")
                   (modelBoolExpr env l)
                   (modelBoolExpr env r)
-        | AnyIn as o -> 
+        | AnyIn as o ->
             lift2 (match o with
                    | Eq -> mkEq
                    | Neq -> mkNeq
@@ -390,10 +390,10 @@ and modelBoolExpr env expr =
 
 /// Converts a Starling arithmetic expression ot a Z3 predicate using
 /// the given Z3 context.
-and modelArithExpr env expr = 
+and modelArithExpr env expr =
     match expr with
     | Int i -> i |> AInt |> ok
-    | LV v -> 
+    | LV v ->
         (* Look-up the variable to ensure it a) exists and b) is of an
          * arithmetic type.
          *)
@@ -402,7 +402,7 @@ and modelArithExpr env expr =
         |> bind (function
                  | Type.Int -> v |> mkIntLV |> ok
                  | _ -> v |> VarNotArith |> fail)
-    | Bop(ArithOp as op, l, r) -> 
+    | Bop(ArithOp as op, l, r) ->
         lift2 (match op with
                | Mul -> mkMul2
                | Div -> mkDiv
@@ -418,8 +418,8 @@ and modelArithExpr env expr =
  *)
 
 /// Tries to flatten a view definition AST into a multiset.
-let rec viewDefToSet = 
-    function 
+let rec viewDefToSet =
+    function
     | ViewDef.Func f -> [f]
     | ViewDef.Unit -> []
     | ViewDef.Join(l, r) -> joinViewDefs l r
@@ -452,7 +452,7 @@ let modelDFunc protos func =
                  [ dfunc func.Name (funcViewParMerge proto.Params func.Params) ])
 
 /// Tries to convert a view def into its model (multiset) form.
-let rec modelDView protos = 
+let rec modelDView protos =
     function
     | ViewDef.Unit -> ok []
     | ViewDef.Func dfunc -> modelDFunc protos dfunc
@@ -462,7 +462,7 @@ let rec modelDView protos =
 
 /// Produces the environment created by interpreting the viewdef vds using the
 /// view prototype map vpm.
-let rec localEnvOfViewDef vds = 
+let rec localEnvOfViewDef vds =
     vds
     |> Seq.ofList
     |> Seq.map (fun {Params = ps} -> makeVarMap ps)
@@ -474,8 +474,8 @@ let envOfViewDef globals =
     localEnvOfViewDef >> bind (combineMaps globals >> mapMessages GlobalVarConflict)
 
 /// Converts a single constraint to its model form.
-let modelViewDef globals vprotos { CView = av; CExpression = ae } = 
-    trial { 
+let modelViewDef globals vprotos { CView = av; CExpression = ae } =
+    trial {
         let! v = modelDView vprotos av |> mapMessages (curry CEView av)
         let! e = envOfViewDef globals v |> mapMessages (curry CEView av)
         let! c = match ae with
@@ -593,7 +593,7 @@ let addSearchDefs vprotos depth viewdefs =
 
 /// Extracts the view definitions from a CollatedScript, turning each into a
 /// ViewDef.
-let modelViewDefs globals vprotos { Search = s; Constraints = cs } = 
+let modelViewDefs globals vprotos { Search = s; Constraints = cs } =
     cs
     |> List.map (modelViewDef globals vprotos)
     |> collect
@@ -602,7 +602,7 @@ let modelViewDefs globals vprotos { Search = s; Constraints = cs } =
 //
 // View applications
 //
-       
+
 /// Models an AFunc as a CFunc.
 let modelCFunc protos env afunc =
     // First, make sure this AFunc actually has a prototype
@@ -654,7 +654,7 @@ let (|LocalVar|_|) _ ls (lvalue : LValue) = tryLookupVar ls lvalue
 
 /// Tries to look up the type of a variable in an environment.
 /// Returns a Chessie result; failures have AEBadGlobal messages.
-let lookupType env var = 
+let lookupType env var =
     match (tryLookupVar env var) with
     | Some ty -> ok ty
     | _ ->
@@ -665,14 +665,14 @@ let lookupType env var =
         |> fail
 
 /// Converts a Boolean load to a Prim.
-let modelBoolLoad globals atom dest src mode = 
+let modelBoolLoad globals atom dest src mode =
     (* In a Boolean load, the destination must be LOCAL and Boolean;
      *                    the source must be a GLOBAL Boolean lvalue;
      *                    and the fetch mode must be Direct.
      *)
     match src with
-    | LV s -> 
-        trial { 
+    | LV s ->
+        trial {
             let! stype = lookupType globals s
             match stype, mode with
             | Type.Bool, Direct -> return func "!BLoad" [ dest |> blBefore; dest |> blAfter
@@ -684,14 +684,14 @@ let modelBoolLoad globals atom dest src mode =
     | _ -> fail <| AEUnsupportedAtomic(atom, "loads must have a lvalue source")
 
 /// Converts an integer load to a Prim.
-let modelIntLoad globals atom dest src mode = 
+let modelIntLoad globals atom dest src mode =
     (* In an integer load, the destination must be LOCAL and integral;
      *                    the source must be a GLOBAL arithmetic lvalue;
      *                    and the fetch mode is unconstrained.
      *)
     match src with
-    | LV s -> 
-        trial { 
+    | LV s ->
+        trial {
             let! stype = lookupType globals s
             match stype, mode with
             | Type.Int, Direct -> return func "!ILoad" [ dest |> ilBefore; dest |> ilAfter
@@ -705,12 +705,12 @@ let modelIntLoad globals atom dest src mode =
     | _ -> fail <| AEUnsupportedAtomic(atom, "loads must have a lvalue source")
 
 /// Converts a Boolean store to a Prim.
-let modelBoolStore locals atom dest src mode = 
+let modelBoolStore locals atom dest src mode =
     (* In a Boolean store, the destination must be GLOBAL and Boolean;
      *                     the source must be LOCAL and Boolean;
      *                     and the fetch mode must be Direct.
      *)
-    trial { 
+    trial {
         let! sxp = modelBoolExpr locals src |> mapMessages (curry AEBadExpr src)
         match mode with
         | Direct -> return func "!BStore" [ dest |> blBefore; dest |> blAfter
@@ -720,12 +720,12 @@ let modelBoolStore locals atom dest src mode =
     }
 
 /// Converts an integral store to a Prim.
-let modelIntStore locals atom dest src mode = 
+let modelIntStore locals atom dest src mode =
     (* In an integral store, the destination must be GLOBAL and integral;
      *                       the source must be LOCAL and integral;
      *                       and the fetch mode must be Direct.
      *)
-    trial { 
+    trial {
         let! sxp = modelArithExpr locals src |> mapMessages (curry AEBadExpr src)
         match mode with
         | Direct -> return func "!IStore" [ dest |> ilBefore; dest |> ilAfter
@@ -735,16 +735,16 @@ let modelIntStore locals atom dest src mode =
     }
 
 /// Converts an atomic action to a Prim.
-let rec modelAtomic gs ls atom = 
+let rec modelAtomic gs ls atom =
     match atom with
-    | CompareAndSwap(dest, test, set) -> 
+    | CompareAndSwap(dest, test, set) ->
         (* In a CAS, the destination must be GLOBAL;
          *           the tester and fail destination must be LOCAL;
          *           and the to-set value must be a valid expression.
          * dest, test, and set must agree on type.
          * The type of dest and test influences how we interpret set.
          *)
-        trial { 
+        trial {
             let! dtype = lookupType gs dest
             let! ttype = lookupType ls test
             match dtype, ttype with
@@ -758,12 +758,12 @@ let rec modelAtomic gs ls atom =
                 return func "ICAS" [dest |> ilBefore; dest |> ilAfter
                                     test |> ilBefore; test |> ilAfter
                                     setE |> AExpr |> before]
-            | _ -> 
+            | _ ->
                 // Oops, we have a type error.
                 // Arbitrarily single out test as the cause of it.
                 return! fail <| AETypeMismatch(dtype, test, ttype)
         }
-    | Fetch(dest, src, mode) -> 
+    | Fetch(dest, src, mode) ->
         (* First, determine whether we have a fetch from global to local
          * (a load), or a fetch from local to global (a store).
          * Also figure out whether we have a Boolean or arithmetic
@@ -777,12 +777,12 @@ let rec modelAtomic gs ls atom =
         | LocalVar gs ls Type.Bool -> modelBoolLoad gs atom dest src mode
         // TODO(CaptainHayashi): incorrect error here.
         | lv -> fail <| AEBadGlobal(lv, NotFound(flattenLV dest))
-    | Postfix(operand, mode) -> 
+    | Postfix(operand, mode) ->
         (* A Postfix is basically a Fetch with no destination, at this point.
          * Thus, the source must be GLOBAL.
          * We don't allow the Direct fetch mode, as it is useless.
          *)
-        trial { 
+        trial {
             let! stype = lookupType gs operand
             // TODO(CaptainHayashi): sort out lvalues...
             let op = flattenLV operand
@@ -800,7 +800,7 @@ let rec modelAtomic gs ls atom =
         |> lift (BExpr >> Seq.singleton >> func "Assume")
 
 /// Converts a local variable assignment to a Prim.
-and modelAssign locals l e = 
+and modelAssign locals l e =
     (* We model assignments as !ILSet or !BLSet, depending on the
      * type of l, which _must_ be in the locals set..
      * We thus also have to make sure that e is the correct type.
@@ -817,7 +817,7 @@ and modelAssign locals l e =
     }
 
 /// Creates a partially resolved axiom for an if-then-else.
-and modelITE protos gs ls i t f = 
+and modelITE protos gs ls i t f =
     trial { let! iM = modelBoolExpr ls i |> mapMessages (curry AEBadExpr i)
             (* We need to calculate the recursive axioms first, because we
              * need the inner cpairs for each to store the ITE placeholder.
@@ -829,7 +829,7 @@ and modelITE protos gs ls i t f =
 /// Converts a while or do-while to a PartCmd.
 /// Which is being modelled is determined by the isDo parameter.
 /// The list is enclosed in a Chessie result.
-and modelWhile isDo protos gs ls e b = 
+and modelWhile isDo protos gs ls e b =
     (* A while is also not fully resolved.
      * Similarly, we convert the condition, recursively find the axioms,
      * inject a placeholder, and add in the recursive axioms.
@@ -840,8 +840,8 @@ and modelWhile isDo protos gs ls e b =
 
 /// Converts a command to a PartCmd.
 /// The list is enclosed in a Chessie result.
-and modelCommand protos gs ls = 
-    function 
+and modelCommand protos gs ls =
+    function
     | Atomic a -> modelAtomic gs ls a |> lift (List.singleton >> Prim)
     | Assign(l, e) -> modelAssign ls l e |> lift (List.singleton >> Prim)
     | Skip -> List.empty |> Prim |> ok
@@ -869,7 +869,7 @@ and modelBlock protos gs ls {Pre = bPre; Contents = bContents} =
 
 /// Converts a method's views and commands.
 /// The converted method is enclosed in a Chessie result.
-let modelMethod protos gs ls { Signature = sg ; Body = b } = 
+let modelMethod protos gs ls { Signature = sg ; Body = b } =
     // TODO(CaptainHayashi): method parameters
     b
     |> modelBlock protos gs ls
@@ -878,29 +878,29 @@ let modelMethod protos gs ls { Signature = sg ; Body = b } =
 
 /// Converts a list of methods.
 /// The resulting map is enclosed in a Chessie result.
-let modelMethods protos gs ls = 
+let modelMethods protos gs ls =
     // TODO(CaptainHayashi): method parameters
     Seq.map (modelMethod protos gs ls) >> collect >> lift Map.ofSeq
 
 /// Checks a view prototype to see if it contains duplicate parameters.
-let checkViewProtoDuplicates (proto : ViewProto) = 
+let checkViewProtoDuplicates (proto : ViewProto) =
     proto.Params
     |> Seq.map snd
     |> findDuplicates
     |> Seq.toList
-    |> function 
+    |> function
        | [] -> ok proto
        | ds -> List.map (fun d -> VPEDuplicateParam(proto, d)) ds |> Bad
 
 /// Checks a view prototype and converts it to an associative pair.
-let modelViewProto proto = 
+let modelViewProto proto =
     proto
     |> checkViewProtoDuplicates
     |> lift (fun pro -> (func pro.Name pro.Params, ()))
     |> mapMessages (curry MEVProto proto)
 
 /// Checks view prototypes and converts them to func-table form.
-let modelViewProtos protos = 
+let modelViewProtos protos =
     protos
     |> Seq.ofList
     |> Seq.map modelViewProto
@@ -908,10 +908,10 @@ let modelViewProtos protos =
     |> lift Instantiate.makeFuncTable
 
 /// Converts a collated script to a model.
-let model collated : Result<Model<AST.Types.Method<CView, PartCmd<CView>>, DView>, ModelError> = 
-    trial { 
+let model collated : Result<Model<AST.Types.Method<CView, PartCmd<CView>>, DView>, ModelError> =
+    trial {
         let! vprotos = modelViewProtos collated.VProtos
-        
+
         // Make variable maps out of the global and local variable definitions.
         let! globals = makeVarMap collated.Globals |> mapMessages MEVar
         let! locals = makeVarMap collated.Locals |> mapMessages MEVar

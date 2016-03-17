@@ -10,7 +10,7 @@ open Starling.Core.Var.Types
 [<AutoOpen>]
 module Types =
     /// A Boolean operator.
-    type Bop = 
+    type Bop =
         | Mul // a * b
         | Div // a / b
         | Add // a + b
@@ -26,7 +26,7 @@ module Types =
 
     /// An untyped, raw expression.
     /// These currently cover all languages, but this may change later.
-    type Expression = 
+    type Expression =
         | True // true
         | False // false
         | Int of int64 // 42
@@ -45,7 +45,7 @@ module Types =
     type ViewProto = Func<(Type * string)>
 
     /// A view definition.
-    type ViewDef = 
+    type ViewDef =
         | Unit
         | Join of ViewDef * ViewDef
         | Func of Func<string>
@@ -54,7 +54,7 @@ module Types =
     type AFunc = Func<Expression>
 
     /// A view expression.
-    type View = 
+    type View =
         | Unit
         | Join of View * View
         | Func of AFunc
@@ -82,28 +82,28 @@ module Types =
         | Assign of LValue * Expression // a = b;
 
     /// A combination of a command and its postcondition view.
-    and ViewedCommand<'view, 'cmd> = 
+    and ViewedCommand<'view, 'cmd> =
         { Command : 'cmd // <a := b++>;
           Post : 'view } // {| a = b |}
 
     /// A block or method body.
-    and Block<'view, 'cmd> = 
+    and Block<'view, 'cmd> =
         { Pre : 'view
           // Post-condition is that in the last Seq.
           Contents : ViewedCommand<'view, 'cmd> list }
 
     /// A constraint, binding a view to an optional expression.
-    type Constraint = 
+    type Constraint =
         { CView : ViewDef
           CExpression : Expression option }
 
     /// A method.
-    type Method<'view, 'cmd> = 
+    type Method<'view, 'cmd> =
         { Signature : Func<string> // main (argv, argc) ...
           Body : Block<'view, 'cmd> } // ... { ... }
 
     /// A top-level item in a Starling script.
-    type ScriptItem = 
+    type ScriptItem =
         | Global of Type * string // global int name;
         | Local of Type * string // local int name;
         | Method of Method<View, Command<View>> // method main(argv, argc) { ... }
@@ -120,12 +120,12 @@ module Pretty =
     open Starling.Core.Var.Pretty
 
     /// Pretty-prints lvalues.
-    let rec printLValue = function 
+    let rec printLValue = function
         | LVIdent i -> String i
 
     /// Pretty-prints Boolean operations.
-    let printBop = 
-        function 
+    let printBop =
+        function
         | Mul -> "*"
         | Div -> "/"
         | Add -> "+"
@@ -142,25 +142,25 @@ module Pretty =
 
     /// Pretty-prints expressions.
     /// This is not guaranteed to produce an optimal expression.
-    let rec printExpression = 
-        function 
+    let rec printExpression =
+        function
         | True -> String "true"
         | False -> String "false"
         | Expression.Int i -> i.ToString() |> String
         | LV x -> printLValue x
-        | Bop(op, a, b) -> 
+        | Bop(op, a, b) ->
             hsep [ printExpression a
                    printBop op
                    printExpression b ]
             |> parened
 
     /// Pretty-prints views.
-    let rec printView = 
-        function 
+    let rec printView =
+        function
         | View.Func f -> printFunc printExpression f
         | View.Unit -> String "emp"
         | View.Join(l, r) -> binop "*" (printView l) (printView r)
-        | View.If(e, l, r) -> 
+        | View.If(e, l, r) ->
             hsep [ String "if"
                    printExpression e
                    String "then"
@@ -169,20 +169,20 @@ module Pretty =
                    printView r ]
 
     /// Pretty-prints view definitions.
-    let rec printViewDef = 
-        function 
+    let rec printViewDef =
+        function
         | ViewDef.Func f -> printFunc String f
         | ViewDef.Unit -> String "emp"
         | ViewDef.Join(l, r) -> binop "*" (printViewDef l) (printViewDef r)
 
     /// Pretty-prints view lines.
-    let printViewLine vl = 
+    let printViewLine vl =
         vl
         |> printView
         |> ssurround "{|" "|}"
 
     /// Pretty-prints constraints.
-    let printConstraint { CView = v; CExpression = e } = 
+    let printConstraint { CView = v; CExpression = e } =
         hsep [ String "constraint"
                printViewDef v
                String "->"
@@ -190,23 +190,23 @@ module Pretty =
         |> withSemi
 
     /// Pretty-prints fetch modes.
-    let printFetchMode = 
-        function 
+    let printFetchMode =
+        function
         | Direct -> Nop
         | Increment -> String "++"
         | Decrement -> String "--"
 
     /// Pretty-prints atomic actions.
-    let printAtomicAction = 
-        function 
-        | CompareAndSwap(l, f, t) -> 
+    let printPrim =
+        function
+        | CompareAndSwap(l, f, t) ->
             func "CAS" [ printLValue l
                          printLValue f
                          printExpression t ]
-        | Fetch(l, r, m) -> 
+        | Fetch(l, r, m) ->
             equality (printLValue l) (hjoin [ printExpression r
                                               printFetchMode m ])
-        | Postfix(l, m) -> 
+        | Postfix(l, m) ->
             hjoin [ printLValue l
                     printFetchMode m ]
         | Id -> String "id"
@@ -215,7 +215,7 @@ module Pretty =
     /// Pretty-prints viewed commands with the given indent level (in spaces).
     let printViewedCommand (pView : 'view -> Command)
                            (pCmd : 'cmd -> Command)
-                           ({ Command = c; Post = p } : ViewedCommand<'view, 'cmd>) = 
+                           ({ Command = c; Post = p } : ViewedCommand<'view, 'cmd>) =
         vsep [ pCmd c
                pView p ]
 
@@ -223,7 +223,7 @@ module Pretty =
     let printBlock (pView : 'view -> Command)
                    (pCmd : 'cmd -> Command)
                    ({ Pre = p; Contents = c } : Block<'view, 'cmd>)
-                   : Command = 
+                   : Command =
         vsep ((p |> pView |> Indent)
               :: List.map (printViewedCommand pView pCmd >> Indent) c)
         |> braced
@@ -232,7 +232,7 @@ module Pretty =
     let printMethod (pView : 'view -> Command)
                     (pCmd : 'cmd -> Command)
                     ({ Signature = s; Body = b } : Method<'view, 'cmd>)
-                    : Command = 
+                    : Command =
         hsep [ "method" |> String
                printFunc String s
                printBlock pView pCmd b ]
@@ -245,20 +245,20 @@ module Pretty =
             |> printAtomicAction
             |> angled
         | Skip -> Nop |> withSemi
-        | If(c, t, f) -> 
+        | If(c, t, f) ->
             hsep [ "if" |> String
                    c
                    |> printExpression
                    |> parened
                    t |> printBlock printViewLine printCommand
                    f |> printBlock printViewLine printCommand ]
-        | While(c, b) -> 
+        | While(c, b) ->
             hsep [ "while" |> String
                    c
                    |> printExpression
                    |> parened
                    b |> printBlock printViewLine printCommand ]
-        | DoWhile(b, c) -> 
+        | DoWhile(b, c) ->
             hsep [ "do" |> String
                    b |> printBlock printViewLine printCommand
                    "while" |> String
@@ -266,16 +266,16 @@ module Pretty =
                    |> printExpression
                    |> parened ]
             |> withSemi
-        | Blocks bs -> 
+        | Blocks bs ->
             bs
             |> List.map (printBlock printViewLine printCommand)
             |> hsepStr "||"
         | Assign(l, r) -> binop "=" (printLValue l) (printExpression r) |> withSemi
 
     /// Pretty-prints a view prototype.
-    let printViewProto { Name = n; Params = ps } = 
+    let printViewProto { Name = n; Params = ps } =
         hsep [ "view" |> String
-               func n (List.map (fun (t, v) -> 
+               func n (List.map (fun (t, v) ->
                            hsep [ t |> printType
                                   v |> String ]) ps) ]
         |> withSemi
@@ -286,15 +286,15 @@ module Pretty =
                sprintf "%d" i |> String ]
 
     /// Pretty-prints a script variable of the given class.
-    let printScriptVar cls t v = 
+    let printScriptVar cls t v =
         hsep [ String cls
                printType t
                String v ]
         |> withSemi
 
     /// Pretty-prints script lines.
-    let printScriptLine = 
-        function 
+    let printScriptLine =
+        function
         | Global(t, v) -> printScriptVar "shared" t v
         | Local(t, v) -> printScriptVar "thread" t v
         | Method m -> printMethod printViewLine printCommand m
@@ -312,8 +312,8 @@ module Pretty =
 
 /// Active pattern classifying bops as to whether they create
 /// arithmetic or Boolean expressions.
-let (|ArithOp|BoolOp|) = 
-    function 
+let (|ArithOp|BoolOp|) =
+    function
     | Mul | Div | Add | Sub -> ArithOp
     | Gt | Ge | Le | Lt -> BoolOp
     | Eq | Neq -> BoolOp
@@ -321,8 +321,8 @@ let (|ArithOp|BoolOp|) =
 
 /// Active pattern classifying bops as to whether they take in
 /// arithmetic, Boolean, or indeterminate operands.
-let (|ArithIn|BoolIn|AnyIn|) = 
-    function 
+let (|ArithIn|BoolIn|AnyIn|) =
+    function
     | Mul | Div | Add | Sub -> ArithIn
     | Gt | Ge | Le | Lt -> ArithIn
     | Eq | Neq -> AnyIn
@@ -330,8 +330,8 @@ let (|ArithIn|BoolIn|AnyIn|) =
 
 /// Active pattern classifying expressions as to whether they are
 /// arithmetic, Boolean, or indeterminate.
-let (|BoolExp|ArithExp|AnyExp|) = 
-    function 
+let (|BoolExp|ArithExp|AnyExp|) =
+    function
     | LV _ -> AnyExp
     | Int _ -> ArithExp
     | True | False -> BoolExp
