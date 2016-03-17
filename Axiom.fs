@@ -43,13 +43,10 @@ module Types =
           /// </summary>
           Cmd : 'cmd }
 
-    /// An axiom with a VFunc as its command.
-    type PAxiom<'view> = Axiom<'view, VFunc>
-
     /// An axiom combined with a goal view.
     type GoalAxiom =
         { /// The axiom to be checked for soundness under Goal.
-          Axiom : PAxiom<GView>
+          Axiom : Axiom<GView, Command>
           /// The view representing the goal for any terms over Axiom.
           Goal : View }
 
@@ -66,12 +63,10 @@ module Pretty =
     let printAxiom pCmd pView { Pre = pre; Post = post; Cmd = cmd } =
         Surround(pre |> pView, cmd |> pCmd, post |> pView)
 
-    /// Pretty-prints a PAxiom.
-    let printPAxiom pView = printAxiom printVFunc pView
-
     /// Pretty-prints a goal axiom.
     let printGoalAxiom {Axiom = a; Goal = f} =
-        vsep [ headed "Axiom" (a |> printPAxiom printGView |> Seq.singleton)
+        vsep [ headed "Axiom"
+                      (a |> printAxiom printCommand printGView |> Seq.singleton)
                headed "Goal" (f |> printView |> Seq.singleton) ]
 
 

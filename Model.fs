@@ -91,6 +91,24 @@ module Types =
     /// </remarks>
     type GView = Multiset<GFunc>
 
+    /// <summary>
+    ///     A command.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Commands are keys into the <c>Semantics</c> <c>FuncTable</c>
+    ///         in the model.  This table contains two-state Boolean
+    ///         expressions capturing the command's semantics in a
+    ///         sort-of-denotational way.
+    ///     </para>
+    ///     <para>
+    ///         Commands are implemented in terms of <c>VFunc</c>s for
+    ///         convenience, not because of any deep relationship between
+    ///         the two concepts.
+    ///     </para>
+    /// </remarks>
+    type Command = VFunc
+
     (*
      * View sets
      *)
@@ -136,8 +154,8 @@ module Types =
           Goal : 'goal
         }
 
-    /// A term over <c>VFunc</c>-encoded commands.
-    type PTerm<'wpre, 'goal> = Term<VFunc, 'wpre, 'goal>
+    /// A term over <c>Command</c>s.
+    type PTerm<'wpre, 'goal> = Term<Command, 'wpre, 'goal>
 
     /// A term over semantic-relation commands.
     type STerm<'wpre, 'goal> = Term<BoolExpr, 'wpre, 'goal>
@@ -213,6 +231,9 @@ module Pretty =
     /// Pretty-prints a GView.
     let printGView = printMultiset printGFunc >> ssurround "<|" "|>"
 
+    /// Pretty-prints a Command.
+    let printCommand = printVFunc
+
     /// Pretty-prints a view set.
     let printViewSet =
         printMultiset (printGuarded printView >> ssurround "((" "))")
@@ -225,7 +246,7 @@ module Pretty =
                headed "Goal" (g |> pGoal |> Seq.singleton) ]
 
     /// Pretty-prints a PTerm.
-    let printPTerm pWPre pGoal = printTerm printVFunc pWPre pGoal
+    let printPTerm pWPre pGoal = printTerm printCommand pWPre pGoal
 
     /// Pretty-prints an STerm.
     let printSTerm pWPre pGoal = printTerm printBoolExpr pWPre pGoal

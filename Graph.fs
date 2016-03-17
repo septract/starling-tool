@@ -28,7 +28,7 @@ module Types =
     ///         Hoare triples.
     ///     </para>
     /// </summary>
-    type Edge = Axiom<string, VFunc>
+    type Edge = Axiom<string, Command>
 
     /// <summary>
     ///     The container for a partial control-flow graph.
@@ -66,7 +66,7 @@ module Types =
           /// <summary>
           ///      The command this edge represents.
           /// </summary>
-          Command : VFunc }
+          Command : Command }
 
     /// <summary>
     ///     An out edge in a standalone control-flow graph.
@@ -686,7 +686,9 @@ module Pretty =
         | EdgeOutOfBounds edge ->
             colonSep
                 [ String "edge out of bounds: "
-                  printPAxiom (fun x -> String (x.ToString())) edge ]
+                  printAxiom printCommand
+                             (fun x -> String (x.ToString()))
+                             edge ]
         | DuplicateNode node ->
             colonSep [ String "node duplicated: "; String node ]
         | DuplicateEdge edge ->

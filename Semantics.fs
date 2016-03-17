@@ -30,9 +30,10 @@ module Types =
     /// Type of errors relating to semantics instantiation.
     type Error =
         /// There was an error instantiating a semantic definition.
-        | Instantiate of cmd: VFunc * error: Starling.Core.Instantiate.Types.Error
+        | Instantiate of cmd: Command
+                       * error: Starling.Core.Instantiate.Types.Error
         /// A command has a missing semantic definition.
-        | MissingDef of cmd: VFunc
+        | MissingDef of cmd: Command
 
 
 /// <summary>

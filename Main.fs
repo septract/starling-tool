@@ -101,7 +101,7 @@ type Response =
     /// Stop at graph optimisation.
     | GraphOptimise of Model<Graph, DView>
     /// Stop at graph axiomatisation.
-    | Axiomatise of Model<Axiom<GView, VFunc>, DView>
+    | Axiomatise of Model<Axiom<GView, Command>, DView>
     /// The result of goal-axiom-pair generation.
     | GoalAdd of Model<GoalAxiom, DView>
     /// The result of term generation.
@@ -132,7 +132,7 @@ let printResponse mview =
     | Axiomatise m ->
         printModelView
             mview
-            (printPAxiom printGView)
+            (printAxiom printCommand printGView)
             printDView
             m
     | GoalAdd m ->

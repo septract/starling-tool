@@ -152,7 +152,7 @@ type ModellerTests() =
 
 
     /// Constructs a Prim of the correct type to come out of a modeller.
-    static member mprim (vf : VFunc) : PartCmd<CView> = Prim vf
+    static member mprim (cmd : Command) : PartCmd<CView> = Prim cmd
 
     /// Constructs an atomic command of type Command<View>.
     static member atom (ac : AtomicAction) : Command<View> = Atomic ac
