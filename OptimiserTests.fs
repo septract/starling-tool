@@ -19,19 +19,25 @@ type OptimiserTests() =
     ///     Test cases for checking whether a command is a no-op.
     /// </summary>
     static member Nops =
-        [ TestCaseData(vfunc "Id" [])
+        [ TestCaseData([] : Command)
             .Returns(true)
-            .SetName("Classify Id() as a no-op")
-          TestCaseData(vfunc "Assume" [ BExpr (bBefore "x") ])
+            .SetName("Classify [] as a no-op")
+          TestCaseData([ vfunc "Assume" [ BExpr (bBefore "x") ]])
             .Returns(true)
             .SetName("Classify Assume(x!before) as a no-op")
-          TestCaseData(vfunc "Assume" [ BExpr (bAfter "x") ])
+          TestCaseData([ vfunc "Assume" [ BExpr (bAfter "x") ]])
             .Returns(false)
             .SetName("Reject Assume(x!after) as a no-op")
-          TestCaseData(vfunc "Foo" [ AExpr (aBefore "bar")
-                                     AExpr (aAfter "bar") ] )
+          TestCaseData([ vfunc "Foo" [ AExpr (aBefore "bar")
+                                       AExpr (aAfter "bar") ]])
             .Returns(false)
-            .SetName("Reject Foo(bar!before, bar!after as a no-op") ]
+            .SetName("Reject Foo(bar!before, bar!after) as a no-op")
+          TestCaseData([ vfunc "Foo" [ AExpr (aBefore "bar")
+                                       AExpr (aAfter "bar") ]
+                         vfunc "Assume" [ BExpr (bBefore "x") ]])
+            .Returns(false)
+            .SetName("Reject Foo(bar!before, bar!after); Assume(x!before)\
+                      as a no-op") ]
 
     /// <summary>
     ///     Tests <c>isNop</c>.

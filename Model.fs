@@ -93,11 +93,17 @@ module Types =
 
     /// <summary>
     ///     A command.
+    ///
+    ///     <para>
+    ///         A command is a list, representing a sequential composition
+    ///         of primitives represented as <c>VFunc</c>.
+    ///     </para>
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         Commands are keys into the <c>Semantics</c> <c>FuncTable</c>
-    ///         in the model.  This table contains two-state Boolean
+    ///         Each <c>VFunc<c> element keys into a <c>Model</c>'s
+    ///         <c>Semantics</c> <c>FuncTable</c>.
+    ///         This table contains two-state Boolean
     ///         expressions capturing the command's semantics in a
     ///         sort-of-denotational way.
     ///     </para>
@@ -107,7 +113,7 @@ module Types =
     ///         the two concepts.
     ///     </para>
     /// </remarks>
-    type Command = VFunc
+    type Command = VFunc list
 
     (*
      * View sets
@@ -232,7 +238,7 @@ module Pretty =
     let printGView = printMultiset printGFunc >> ssurround "<|" "|>"
 
     /// Pretty-prints a Command.
-    let printCommand = printVFunc
+    let printCommand = List.map printVFunc >> semiSep
 
     /// Pretty-prints a view set.
     let printViewSet =

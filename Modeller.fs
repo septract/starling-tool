@@ -27,7 +27,7 @@ module Types =
 
     /// A partially resolved command.
     type PartCmd<'view> = 
-        | Prim of VFunc
+        | Prim of Command
         | While of
             isDo : bool
             * expr : BoolExpr
@@ -133,7 +133,7 @@ module Pretty =
     /// Pretty-prints a part-cmd at the given indent level.
     let rec printPartCmd (pView : 'view -> Command) : PartCmd<'view> -> Command = 
         function 
-        | Prim prim -> printVFunc prim
+        | Prim prim -> Model.Pretty.printCommand prim
         | While(isDo, expr, inner) -> 
             cmdHeaded (hsep [ String(if isDo then "Do-while" else "While")
                               (printBoolExpr expr) ])
@@ -842,9 +842,9 @@ and modelWhile isDo protos gs ls e b =
 /// The list is enclosed in a Chessie result.
 and modelCommand protos gs ls = 
     function 
-    | Atomic a -> modelAtomic gs ls a |> lift Prim
-    | Assign(l, e) -> modelAssign ls l e |> lift Prim
-    | Skip -> modelAtomic gs ls Id |> lift Prim
+    | Atomic a -> modelAtomic gs ls a |> lift (List.singleton >> Prim)
+    | Assign(l, e) -> modelAssign ls l e |> lift (List.singleton >> Prim)
+    | Skip -> List.empty |> Prim |> ok
     | If(i, t, e) -> modelITE protos gs ls i t e
     | Command.While(e, b) -> modelWhile false protos gs ls e b
     | DoWhile(b, e) -> modelWhile true protos gs ls e b

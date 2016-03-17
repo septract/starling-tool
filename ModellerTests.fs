@@ -164,8 +164,10 @@ type ModellerTests() =
                                                 LV(LVIdent "ticket"),
                                                 Increment)))
             .Returns(ModellerTests.mprim
-                         (func "!ILoad++" ["t" |> aBefore |> AExpr; "t" |> aAfter |> AExpr
-                                           "ticket" |> aBefore |> AExpr; "ticket" |> aAfter |> AExpr])
+                         [ func "!ILoad++" [ "t" |> aBefore |> AExpr
+                                             "t" |> aAfter |> AExpr
+                                             "ticket" |> aBefore |> AExpr
+                                             "ticket" |> aAfter |> AExpr ]]
                      |> Some)
             .SetName("model a valid integer load command as an axiom") ]
 

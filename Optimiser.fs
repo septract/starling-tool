@@ -28,25 +28,27 @@ module Graph =
     /// <summary>
     ///     Decides whether a program command is a no-op.
     /// </summary>
-    /// <param name="cmd">
-    ///     The command, as a <c>VFunc</c>.
+    /// <param name="_arg1">
+    ///     The command, as a <c>Command</c>.
     /// </param>
     /// <returns>
     ///     <c>true</c> if the command is a no-op;
     ///     <c>false</c> otherwise.
     /// </returns>
-    let isNop (cmd : VFunc) =
-        cmd.Params
-        (* We treat a command func as a no-op if all variables it contains
-         * are in the pre-state.  Thus, it cannot be modifying the
-         * post-state, if it is well-formed.
-         *)
-        |> Seq.forall (function
-                       | AExpr (AConst (Before _)) -> true
-                       | AExpr (AConst _) -> false
-                       | BExpr (BConst (Before _)) -> true
-                       | BExpr (BConst _) -> false
-                       | _ -> true)
+    let isNop =
+        List.forall
+            (fun { Params = ps } ->
+                 (* We treat a func as a no-op if all variables it contains
+                  * are in the pre-state.  Thus, it cannot be modifying the
+                  * post-state, if it is well-formed.
+                  *)
+                 Seq.forall (function
+                             | AExpr (AConst (Before _)) -> true
+                             | AExpr (AConst _) -> false
+                             | BExpr (BConst (Before _)) -> true
+                             | BExpr (BConst _) -> false
+                             | _ -> true)
+                            ps)
 
     /// <summary>
     ///     Decides whether two nodes have different names but the same view,

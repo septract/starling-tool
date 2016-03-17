@@ -83,7 +83,7 @@ module Types =
           /// <summary>
           ///      The command this edge represents.
           /// </summary>
-          Command : VFunc }
+          Command : Command }
 
     /// <summary>
     ///     A fully resolved edge, containing views.
@@ -112,7 +112,7 @@ module Types =
           /// <summary>
           ///      The command this edge represents.
           /// </summary>
-          Command : VFunc }
+          Command : Command }
 
     /// <summary>
     ///     A standalone control-flow graph.
@@ -625,12 +625,12 @@ module Pretty =
     ///     A pretty-printer <c>Command</c> representing
     ///     <paramref name="_arg1" />.
     /// </returns>
-    let printEdge id { Pre = s; Post = t; Cmd = vf } =
+    let printEdge id { Pre = s; Post = t; Cmd = cmd } =
         hsep [ s |> String
                String "->"
                t |> String
                [ id |> String
-                 vf |> printVFunc ] |> colonSep |> printLabel ]
+                 cmd |> printCommand ] |> colonSep |> printLabel ]
         |> withSemi
 
     /// <summary>

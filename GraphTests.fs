@@ -37,26 +37,26 @@ type GraphTests() =
                           { Name = "unlock_C0"
                             Dest = "unlock_V1"
                             Command =
-                                func "!I++"
-                                     [ AExpr (aBefore "serving")
-                                       AExpr (aAfter "serving") ] },
+                                [ func "!I++"
+                                       [ AExpr (aBefore "serving")
+                                         AExpr (aAfter "serving") ]] },
                       Set.singleton
                           { Name = "unlock_N0"
                             Src = "unlock_V1"
-                            Command = vfunc "Id" [] } ))
+                            Command = [] } ))
                     ("unlock_V1",
                      (Multiset.empty (),
                       Set.singleton
                           { Name = "unlock_N0"
                             Dest = "unlock_V0"
-                            Command = vfunc "Id" [] },
+                            Command = [] },
                       Set.singleton
                           { Name = "unlock_C0"
                             Src = "unlock_V0"
                             Command =
-                                func "!I++"
-                                     [ AExpr (aBefore "serving")
-                                       AExpr (aAfter "serving") ] } )) ] )
+                                [ func "!I++"
+                                       [ AExpr (aBefore "serving")
+                                         AExpr (aAfter "serving") ]] } )) ] )
             .SetName("Adding a valid, unique edge to unlock works")]
 
     /// <summary>
@@ -66,7 +66,7 @@ type GraphTests() =
     member x.``mkEdgeBetween adds edges correctly`` nsd =
           let n, s, d = nsd
           ticketLockUnlockGraph
-          |> mkEdgeBetween n s d (func "Id" [])
+          |> mkEdgeBetween n s d []
           |> fun g -> g.Contents
 
 
@@ -85,9 +85,9 @@ type GraphTests() =
                       Map.ofList
                           [ ("unlock_C0",
                              edge "unlock_V0"
-                                  (func "!I++"
-                                        [ AExpr (aBefore "serving")
-                                          AExpr (aAfter "serving") ] )
+                                  [ func "!I++"
+                                          [ AExpr (aBefore "serving")
+                                            AExpr (aAfter "serving") ]]
                                   "unlock_V0" ) ] } )
             .SetName("unify C1 into C0 on the ticket lock 'unlock'")
           TestCaseData(("unlock_V0", "unlock_V1"))
@@ -99,9 +99,9 @@ type GraphTests() =
                       Map.ofList
                           [ ("unlock_C0",
                              edge "unlock_V1"
-                                  (func "!I++"
-                                        [ AExpr (aBefore "serving")
-                                          AExpr (aAfter "serving") ] )
+                                  [ func "!I++"
+                                          [ AExpr (aBefore "serving")
+                                            AExpr (aAfter "serving") ]]
                                   "unlock_V1" ) ] } )
             .SetName("unify C0 into C1 on the ticket lock 'unlock'")
           TestCaseData(("unlock_V0", "unlock_V2"))

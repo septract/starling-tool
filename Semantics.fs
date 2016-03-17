@@ -30,10 +30,10 @@ module Types =
     /// Type of errors relating to semantics instantiation.
     type Error =
         /// There was an error instantiating a semantic definition.
-        | Instantiate of cmd: Command
+        | Instantiate of prim: VFunc
                        * error: Starling.Core.Instantiate.Types.Error
-        /// A command has a missing semantic definition.
-        | MissingDef of cmd: Command
+        /// A primitive has a missing semantic definition.
+        | MissingDef of prim: VFunc
 
 
 /// <summary>
@@ -47,13 +47,14 @@ module Pretty =
     /// Pretty-prints semantics errors.
     let printSemanticsError =
         function
-        | Instantiate (cmd, error) ->
+        | Instantiate (prim, error) ->
           colonSep
-              [ fmt "couldn't instantiate command '{0}'" [ printVFunc cmd ]
+              [ fmt "couldn't instantiate primitive '{0}'"
+                    [ printVFunc prim ]
                 Starling.Core.Instantiate.Pretty.printError error ]
-        | MissingDef cmd ->
-            fmt "command '{0}' has no semantic definition"
-                [ printVFunc cmd ]
+        | MissingDef prim ->
+            fmt "primitive '{0}' has no semantic definition"
+                [ printVFunc prim ]
 
 
 
@@ -127,11 +128,11 @@ let frame model expr =
     |> Seq.filter (fun (name, _) -> not (Set.contains name evars))
     |> Seq.map (uncurry frameVar)
 
-/// Translate a Prim to an expression completely characterising it.
+/// Translate a primitive command to an expression characterising it.
 /// This is the combination of the Prim's action (via emitPrim) and
 /// a set of framing terms forcing unbound variables to remain constant
 /// (through frame).
-let semanticsOf model prim =
+let semanticsOfPrim model prim =
     (* First, instantiate according to the semantics. 
      * This can succeed but return None.  This means there is no
      * entry (erroneous or otherwise) in the semantics for this prim.
@@ -146,8 +147,18 @@ let semanticsOf model prim =
 
     lift2 mkAnd2 actions aframe
 
+/// Translate a command to an expression characterising it.
+/// This is the sequential composition of the translations of each
+/// primitive inside it.
+let semanticsOfCommand model =
+    Seq.map (semanticsOfPrim model)
+    >> collect
+    >> lift (function
+             | [] -> BTrue
+             | xs -> List.reduce composeBools xs)
+
 /// Translates a model axiom into an axiom over a semantic expression.
-let translateAxiom model = tryMapTerm (semanticsOf model) ok ok
-    
+let translateAxiom model = tryMapTerm (semanticsOfCommand model) ok ok
+
 /// Translate a model over Prims to a model over semantic expressions.
 let translate model = tryMapAxioms (translateAxiom model) model

@@ -55,16 +55,17 @@ type SemanticsTests() =
     member x.``Test framing of expressions using the ticket lock model`` expr = frame ticketLockModel expr
     
     /// Test cases for full command semantic translation.
-    static member Commands = 
-        [ TestCaseData(func "Assume" [aEq (aBefore "s") (aBefore "t") |> BExpr])
+    static member Commands =
+        [ TestCaseData([ func "Assume" [ aEq (aBefore "s") (aBefore "t")
+                                         |> BExpr ]] )
               .Returns(Some <| Set.ofList [ aEq (aAfter "serving") (aBefore "serving")
                                             aEq (aAfter "ticket") (aBefore "ticket")
                                             aEq (aAfter "s") (aBefore "s")
                                             aEq (aAfter "t") (aBefore "t")
                                             aEq (aBefore "s") (aBefore "t") ])
               .SetName("Semantically translate <assume(s == t)> using the ticket lock model")
-          
-          TestCaseData(func "!I++" ["serving" |> aBefore |> AExpr; "serving" |> aAfter |> AExpr])
+          TestCaseData([ func "!I++" [ "serving" |> aBefore |> AExpr
+                                       "serving" |> aAfter |> AExpr ]] )
               .Returns(Some <| Set.ofList[ aEq (aAfter "ticket") (aBefore "ticket")
                                            aEq (aAfter "s") (aBefore "s")
                                            aEq (aAfter "t") (aBefore "t")
@@ -76,7 +77,7 @@ type SemanticsTests() =
     [<TestCaseSource("Commands")>]
     member x.``Test semantic translation of commands using the ticket lock model`` com = 
         com
-        |> semanticsOf ticketLockModel
+        |> semanticsOfCommand ticketLockModel
         |> okOption
         |> Option.bind (function
                         | BAnd xs -> xs |> Set.ofList |> Some

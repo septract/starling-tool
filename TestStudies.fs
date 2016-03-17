@@ -166,7 +166,7 @@ let ticketLockLock =
                         func "!ILoad++"
                              [ AExpr (aBefore "t"); AExpr (aAfter "t")
                                AExpr (aBefore "ticket"); AExpr (aAfter "ticket") ]
-                        |> Prim
+                        |> List.singleton |> Prim
                     Post = sing holdTick }
                   { Command =
                         While (isDo = true,
@@ -178,7 +178,7 @@ let ticketLockLock =
                                                  func "!ILoad"
                                                       [ AExpr (aBefore "s"); AExpr (aAfter "s")
                                                         AExpr (aBefore "serving"); AExpr (aAfter "serving") ]
-                                                 |> Prim
+                                                 |> List.singleton |> Prim
                                              Post =
                                                  (sIsT,
                                                   sing holdLock,
@@ -195,7 +195,7 @@ let ticketLockUnlock =
             Contents =
                 [ { Command =
                         func "!I++" [ AExpr (aBefore "serving"); AExpr (aAfter "serving") ]
-                        |> Prim
+                        |> List.singleton |> Prim
                     Post = Multiset.empty() }]}}
 
 /// The methods of the ticket lock.
@@ -214,7 +214,7 @@ let ticketLockGuardedLock =
                         func "!ILoad++"
                              [ AExpr (aBefore "t"); AExpr (aAfter "t")
                                AExpr (aBefore "ticket"); AExpr (aAfter "ticket") ]
-                        |> Prim
+                        |> List.singleton |> Prim
                     Post = sing (gHoldTick BTrue) }
                   { Command =
                         While (isDo = true,
@@ -226,7 +226,7 @@ let ticketLockGuardedLock =
                                                  func "!ILoad"
                                                       [ AExpr (aBefore "s"); AExpr (aAfter "s")
                                                         AExpr (aBefore "serving"); AExpr (aAfter "serving") ]
-                                                 |> Prim
+                                                 |> List.singleton |> Prim
                                              Post =
                                                  Multiset.ofList
                                                      [ gHoldLock sIsT
@@ -241,7 +241,7 @@ let ticketLockGuardedUnlock : Method<GView, PartCmd<GView>> =
             Contents =
                 [ { Command =
                         func "!I++" [ AExpr (aBefore "serving"); AExpr (aAfter "serving") ]
-                        |> Prim
+                        |> List.singleton |> Prim
                     Post = Multiset.empty() } ] } }
 
 /// The view definitions of the ticket lock model.
@@ -304,34 +304,35 @@ let ticketLockLockSubgraph : Subgraph =
           Map.ofList
               [ ("lock_C0",
                      edge "lock_V0"
-                          (func "!ILoad++"
-                                [ AExpr (aBefore "t")
-                                  AExpr (aAfter "t")
-                                  AExpr (aBefore "ticket")
-                                  AExpr (aAfter "ticket") ] )
+                          [ func "!ILoad++"
+                                 [ AExpr (aBefore "t")
+                                   AExpr (aAfter "t")
+                                   AExpr (aBefore "ticket")
+                                   AExpr (aAfter "ticket") ]]
                           "lock_V1")
                 ("lock_C1",
                      edge "lock_V3"
-                          (func "!ILoad"
-                                [ AExpr (aBefore "s")
-                                  AExpr (aAfter "s")
-                                  AExpr (aBefore "serving")
-                                  AExpr (aAfter "serving") ] )
+                          [ func "!ILoad"
+                                 [ AExpr (aBefore "s")
+                                   AExpr (aAfter "s")
+                                   AExpr (aBefore "serving")
+                                   AExpr (aAfter "serving") ]]
                           "lock_V4")
                 ("lock_C2",
                      edge "lock_V4"
-                          (func "Assume"
-                                [ BExpr (BNot (aEq (aBefore "s")
-                                                   (aBefore "t"))) ] )
+                          [ func "Assume"
+                                 [ BExpr (BNot (aEq (aBefore "s")
+                                                    (aBefore "t"))) ]]
                           "lock_V3")
                 ("lock_C3",
                      edge "lock_V4"
-                          (func "Assume"
-                                [ BExpr (aEq (aBefore "s") (aBefore "t")) ] )
+                          [ func "Assume"
+                                 [ BExpr (aEq (aBefore "s")
+                                              (aBefore "t")) ]]
                           "lock_V2")
                 ("lock_C4",
                      edge "lock_V1"
-                          (func "Id" [])
+                          []
                           "lock_V3") ] }
 
 /// The partial CFG for the ticket lock unlock method.
@@ -346,9 +347,9 @@ let ticketLockUnlockSubgraph : Subgraph =
            Map.ofList
               [ ("unlock_C0",
                      edge "unlock_V0"
-                          (func "!I++"
-                                [ AExpr (aBefore "serving")
-                                  AExpr (aAfter "serving") ] )
+                          [ func "!I++"
+                                 [ AExpr (aBefore "serving")
+                                   AExpr (aAfter "serving") ]]
                           "unlock_V1" ) ] }
 
 let ticketLockLockGraph : Graph =
@@ -361,27 +362,27 @@ let ticketLockLockGraph : Graph =
                       { OutEdge.Name = "lock_C0"
                         OutEdge.Dest = "lock_V1"
                         OutEdge.Command =
-                            (func "!ILoad++"
-                                  [ AExpr (aBefore "t")
-                                    AExpr (aAfter "t")
-                                    AExpr (aBefore "ticket")
-                                    AExpr (aAfter "ticket") ] ) },
+                            [ func "!ILoad++"
+                                   [ AExpr (aBefore "t")
+                                     AExpr (aAfter "t")
+                                     AExpr (aBefore "ticket")
+                                     AExpr (aAfter "ticket") ]] },
                   Set.empty))
                 ("lock_V1",
                  (sing (gHoldTick BTrue),
                   Set.singleton
                       { Name = "lock_C4"
                         Dest = "lock_V3"
-                        Command = func "Id" [] },
+                        Command = [] },
                   Set.singleton
                       { Name = "lock_C0"
                         Src = "lock_V0"
                         Command =
-                            (func "!ILoad++"
-                                  [ AExpr (aBefore "t")
-                                    AExpr (aAfter "t")
-                                    AExpr (aBefore "ticket")
-                                    AExpr (aAfter "ticket") ] ) } ))
+                            [ func "!ILoad++"
+                                   [ AExpr (aBefore "t")
+                                     AExpr (aAfter "t")
+                                     AExpr (aBefore "ticket")
+                                     AExpr (aAfter "ticket") ]] } ))
                 ("lock_V2",
                  (sing (gHoldLock BTrue),
                   Set.empty,
@@ -389,30 +390,30 @@ let ticketLockLockGraph : Graph =
                       { Name = "lock_C3"
                         Src = "lock_V4"
                         Command =
-                            (func "Assume"
-                                  [ BExpr (aEq (aBefore "s")
-                                               (aBefore "t")) ] ) } ))
+                            [ func "Assume"
+                                   [ BExpr (aEq (aBefore "s")
+                                                (aBefore "t")) ]] } ))
                 ("lock_V3",
                  (sing (gHoldTick BTrue),
                   Set.singleton
                       { Name = "lock_C1"
                         Dest = "lock_V4"
                         Command =
-                            (func "!ILoad"
-                                  [ AExpr (aBefore "s")
-                                    AExpr (aAfter "s")
-                                    AExpr (aBefore "serving")
-                                    AExpr (aAfter "serving") ] ) },
+                            [ func "!ILoad"
+                                   [ AExpr (aBefore "s")
+                                     AExpr (aAfter "s")
+                                     AExpr (aBefore "serving")
+                                     AExpr (aAfter "serving") ]] },
                   Set.ofList
                       [ { Name = "lock_C2"
                           Src = "lock_V4"
                           Command =
-                              (func "Assume"
-                                    [ BExpr (BNot (aEq (aBefore "s")
-                                                       (aBefore "t"))) ] ) }
+                              [ func "Assume"
+                                     [ BExpr (BNot (aEq (aBefore "s")
+                                                        (aBefore "t"))) ]] }
                         { Name = "lock_C4"
                           Src = "lock_V1"
-                          Command = func "Id" [] } ] ))
+                          Command = [] } ] ))
                 ("lock_V4",
                  (Multiset.ofList
                       [ gHoldLock sIsT
@@ -421,24 +422,24 @@ let ticketLockLockGraph : Graph =
                       [ { Name = "lock_C2"
                           Dest = "lock_V3"
                           Command =
-                              (func "Assume"
-                                    [ BExpr (BNot (aEq (aBefore "s")
-                                                       (aBefore "t"))) ] ) }
+                              [ func "Assume"
+                                     [ BExpr (BNot (aEq (aBefore "s")
+                                                        (aBefore "t"))) ]] }
                         { Name = "lock_C3"
                           Dest = "lock_V2"
                           Command =
-                              (func "Assume"
-                                    [ BExpr (aEq (aBefore "s")
-                                                 (aBefore "t")) ] ) } ],
+                              [ func "Assume"
+                                     [ BExpr (aEq (aBefore "s")
+                                                  (aBefore "t")) ]] } ],
                   Set.singleton
                       { Name = "lock_C1"
                         Src = "lock_V3"
                         Command =
-                            (func "!ILoad"
-                                  [ AExpr (aBefore "s")
-                                    AExpr (aAfter "s")
-                                    AExpr (aBefore "serving")
-                                    AExpr (aAfter "serving") ] ) } )) ] }
+                            [ func "!ILoad"
+                                   [ AExpr (aBefore "s")
+                                     AExpr (aAfter "s")
+                                     AExpr (aBefore "serving")
+                                     AExpr (aAfter "serving") ]] } )) ] }
 
 /// The CFG for the ticket lock unlock method.
 let ticketLockUnlockGraph : Graph =
@@ -452,9 +453,9 @@ let ticketLockUnlockGraph : Graph =
                       { Name = "unlock_C0"
                         Dest = "unlock_V1"
                         Command =
-                            func "!I++"
-                                 [ AExpr (aBefore "serving")
-                                   AExpr (aAfter "serving") ] },
+                            [ func "!I++"
+                                   [ AExpr (aBefore "serving")
+                                     AExpr (aAfter "serving") ]] },
                   Set.empty))
                 ("unlock_V1",
                  (Multiset.empty (),
@@ -463,6 +464,6 @@ let ticketLockUnlockGraph : Graph =
                       { Name = "unlock_C0"
                         Src = "unlock_V0"
                         Command =
-                            func "!I++"
-                                 [ AExpr (aBefore "serving")
-                                   AExpr (aAfter "serving") ] } )) ] }
+                            [ func "!I++"
+                                   [ AExpr (aBefore "serving")
+                                     AExpr (aAfter "serving") ]] } )) ] }

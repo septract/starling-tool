@@ -16,8 +16,9 @@ open Starling.Core.Graph
 open Starling.Lang.AST
 open Starling.Lang.Modeller
 
-let cId = func "Id" []
-let cAssume expr = func "Assume" [simp expr |> BExpr |> before]
+let cId = List.empty
+let cAssume expr =
+    func "Assume" [simp expr |> BExpr |> before] |> List.singleton
 let cAssumeNot = mkNot >> cAssume
 
 /// <summary>
@@ -164,9 +165,9 @@ and graphITE vg cg oP oQ expr inTrue inFalse =
 /// </param>
 and graphCommand vg cg oP oQ : PartCmd<GView> -> Result<Subgraph, Error> =
     function
-    | Prim vf ->
+    | Prim cmd ->
         /// Each prim is an edge by itself, so just make a one-edge graph.
-        ok { Nodes = Map.empty ; Edges = Map.ofList [(cg (), edge oP vf oQ)] }
+        ok { Nodes = Map.empty ; Edges = Map.ofList [(cg (), edge oP cmd oQ)] }
     | While (isDo, expr, inner) ->
         graphWhile vg cg oP oQ isDo expr inner
     | ITE (expr, inTrue, inFalse) ->
