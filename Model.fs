@@ -42,17 +42,6 @@ open Starling.Core.Var
 [<AutoOpen>]
 module Types =
     (*
-     * Guards
-     *)
-
-    /// A guarded item.
-    /// The semantics of a Guarded Item is that the Item is to be taken as
-    /// present in its parent context (eg a View) if, and only if, Cond holds.
-    type Guarded<'a> =
-        { Cond : BoolExpr
-          Item : 'a }
-
-    (*
      * Funcs (other than Starling.Collections.Func)
      *)
 
@@ -62,8 +51,6 @@ module Types =
     /// A view-definition func.
     type DFunc = Func<Type * string>
 
-    /// A guarded view func.
-    type GFunc = Guarded<VFunc>
 
     (*
      * Views
@@ -80,16 +67,6 @@ module Types =
 
     /// A view definition.
     type DView = Multiset<DFunc>
-
-    /// <summary>
-    ///     A guarded view.
-    /// </summary>
-    /// <remarks>
-    ///     These are the most common form of view in Starling internally,
-    ///     although theoretically speaking they are equivalent to Views
-    ///     with the guards lifting to proof case splits.
-    /// </remarks>
-    type GView = Multiset<GFunc>
 
     /// <summary>
     ///     A command.
@@ -114,13 +91,6 @@ module Types =
     ///     </para>
     /// </remarks>
     type Command = VFunc list
-
-    (*
-     * View sets
-     *)
-
-    /// A set of guarded views, as produced by reification.
-    type ViewSet = Multiset<Guarded<View>>
 
     (*
      * View definitions
@@ -166,12 +136,6 @@ module Types =
     /// A term over semantic-relation commands.
     type STerm<'wpre, 'goal> = Term<BoolExpr, 'wpre, 'goal>
 
-    /// <summary>
-    ///     A 'Datalog-style' term of one goal <c>VFunc</c> and a
-    ///     weakest-precondition <c>GView</c>.
-    /// </summary>
-    type DTerm = STerm<GView, VFunc>
-
     /// A term using only internal boolean expressions.
     type FTerm = STerm<BoolExpr, BoolExpr>
 
@@ -211,19 +175,8 @@ module Pretty =
         >> List.map pItem
         >> semiSep
 
-    /// Pretty-prints a guarded item.
-    let printGuarded pitem {Cond = c; Item = i} =
-        // Don't bother showing the guard if it's always true.
-        if isTrue c then pitem i
-        else
-            parened (HSep([ printBoolExpr c
-                            pitem i ], String "|"))
-
     /// Pretty-prints a VFunc.
     let printVFunc = printFunc printExpr
-
-    /// Pretty-prints a guarded view.
-    let printGFunc = printGuarded printVFunc
 
     /// Pretty-prints a DFunc.
     let printDFunc = printFunc printParam
@@ -234,16 +187,8 @@ module Pretty =
     /// Pretty-prints a DView.
     let printDView = printMultiset printDFunc >> squared
 
-    /// Pretty-prints a GView.
-    let printGView = printMultiset printGFunc >> ssurround "<|" "|>"
-
     /// Pretty-prints a Command.
     let printCommand = List.map printVFunc >> semiSep
-
-    /// Pretty-prints a view set.
-    let printViewSet =
-        printMultiset (printGuarded printView >> ssurround "((" "))")
-        >> ssurround "(|" "|)"
 
     /// Pretty-prints a term, given printers for its commands and views.
     let printTerm pCmd pWPre pGoal {Cmd = c; WPre = w; Goal = g} = 
@@ -362,23 +307,6 @@ let dfunc name (pars : (Type * string) seq) : DFunc = func name pars
 ///     A new <c>VFunc</c> with the given name and parameters.
 /// </returns>
 let vfunc name (pars : Expr seq) : VFunc = func name pars
-
-/// <summary>
-///     Creates a new <c>GFunc</c>.
-/// </summary>
-/// <param name="guard">
-///     The guard on which the <c>GFunc</c> is conditional.
-/// </param>
-/// <param name="name">
-///     The name of the <c>GFunc</c>.
-/// </param>
-/// <param name="pars">
-///     The parameters of the <c>GFunc</c>, as a sequence.
-/// </param>
-/// <returns>
-///     A new <c>GFunc</c> with the given guard, name, and parameters.
-/// </returns>
-let gfunc guard name pars = { Cond = guard ; Item = func name pars }
 
 /// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
 /// and its Goal with fG.

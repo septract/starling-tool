@@ -11,6 +11,8 @@ open Starling.Core.Graph.Pretty
 open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.Model.Pretty
+open Starling.Core.GuardedView
+open Starling.Core.GuardedView.Pretty
 open Starling.Core.Axiom
 open Starling.Core.Axiom.Pretty
 

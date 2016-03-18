@@ -10,6 +10,7 @@ open Starling.Utils
 open Starling.Core.Expr
 open Starling.Core.Graph
 open Starling.Core.Model
+open Starling.Core.GuardedView
 
 open Starling.Tests.Studies
 
@@ -32,7 +33,7 @@ type GraphTests() =
               Map.ofList
                   [ ("unlock_V0",
                      (Multiset.singleton
-                          (gHoldLock BTrue : GFunc),
+                          (gHoldLock BTrue),
                       Set.singleton
                           { Name = "unlock_C0"
                             Dest = "unlock_V1"

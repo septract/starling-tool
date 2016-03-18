@@ -4,8 +4,10 @@ open NUnit.Framework
 open Starling.Collections
 open Starling.Core.Expr
 open Starling.Core.Model
+open Starling.Core.GuardedView
 open Starling.Lang.Modeller
 open Starling.Lang.Guarder
+
 
 /// Tests for the view guarder.
 type GuarderTests() = 

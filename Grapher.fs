@@ -11,6 +11,7 @@ open Starling.Utils
 open Starling.Core.Expr
 open Starling.Core.Sub
 open Starling.Core.Model
+open Starling.Core.GuardedView
 open Starling.Core.Graph
 
 open Starling.Lang.AST

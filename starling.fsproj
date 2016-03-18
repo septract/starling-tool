@@ -49,6 +49,7 @@
     <Compile Include="Var.fs" />
     <Compile Include="Expr.fs" />
     <Compile Include="Model.fs" />
+    <Compile Include="GuardedView.fs" />
     <Compile Include="Axiom.fs" />
     <Compile Include="Graph.fs" />
     <Compile Include="Sub.fs" />

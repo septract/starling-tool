@@ -9,6 +9,7 @@ open Starling.Utils
 open Starling.Core.Var
 open Starling.Core.Expr
 open Starling.Core.Model
+open Starling.Core.GuardedView
 open Starling.Reifier
 
 /// <summary>

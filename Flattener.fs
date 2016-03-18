@@ -5,6 +5,7 @@ open Starling.Collections
 open Starling.Core.Expr
 open Starling.Core.Model
 open Starling.Core.Var
+open Starling.Core.GuardedView
 
 
 (*
@@ -39,13 +40,8 @@ let funcOfView globals view =
  * View usages
  *)
 
-/// Adds the globals in gs to the argument list of a guarded view.
-let addGlobalsToGuarded gs {Cond = c; Item = i} =
-    { Cond = c; Item = funcOfView gs i }
-
 /// Adds the globals in gs to the argument lists of a view assertion.
-let addGlobalsToViewSet gs =
-    Multiset.map (addGlobalsToGuarded gs)
+let addGlobalsToViewSet gs = mapItems (funcOfView gs)
 
 /// Adds the globals in gs to the argument list of the assertions in a term.
 let addGlobalsToTerm gs _ =

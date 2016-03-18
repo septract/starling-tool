@@ -16,6 +16,7 @@ open Starling.Utils
 open Starling.Core.Expr
 open Starling.Core.Model
 open Starling.Core.Sub
+open Starling.Core.GuardedView
 
 
 /// <summary>
@@ -277,13 +278,8 @@ module Term =
         | BNot x -> mkNot (reduce fs x)
         | x -> x
 
-    /// Reduce a guard, given some known facts.
-    let reduceGuarded fs {Cond = c; Item = i} =
-        {Cond = reduce fs c; Item = i}
-
     /// Reduce a GView, given some known facts.
-    let reduceGView fs =
-        Multiset.map (reduceGuarded fs)
+    let reduceGView fs = mapConds (reduce fs)
 
     /// Reduce the guards in a Term.
     let guardReduce {Cmd = c; WPre = w; Goal = g} =

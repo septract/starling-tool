@@ -4,6 +4,7 @@ open Starling.Collections
 open Starling.Utils
 open Starling.Core.Expr
 open Starling.Core.Model
+open Starling.Core.GuardedView
 open Starling.Lang.AST
 open Starling.Lang.Modeller
 

@@ -8,6 +8,7 @@ open Starling.Collections
 
 open Starling.Core.Expr
 open Starling.Core.Model
+open Starling.Core.GuardedView
 
 
 /// <summary>

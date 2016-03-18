@@ -8,6 +8,7 @@ open Starling.Core.Graph
 open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.Axiom
+open Starling.Core.GuardedView
 open Starling.Lang.AST
 open Starling.Lang.Collator
 open Starling.Lang.Modeller
@@ -151,10 +152,10 @@ let holdTick =
     func "holdTick" [AExpr (aUnmarked "t")] |> Func
 
 /// The guarded holdLock view.
-let gHoldLock cnd = gfunc cnd "holdLock" []
+let gHoldLock cnd : GFunc = gfunc cnd "holdLock" []
 
 /// The guarded holdTick view.
-let gHoldTick cnd = gfunc cnd "holdTick" [AExpr (aUnmarked "t")]
+let gHoldTick cnd : GFunc = gfunc cnd "holdTick" [AExpr (aUnmarked "t")]
 
 /// Produces the expression 's == t'.
 let sIsT = aEq (aUnmarked "s") (aUnmarked "t")
