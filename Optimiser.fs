@@ -279,7 +279,7 @@ module Term =
         | x -> x
 
     /// Reduce a GView, given some known facts.
-    let reduceGView fs = mapConds (reduce fs)
+    let reduceGView fs = mapConds (reduce fs) >> pruneGuardedSet
 
     /// Reduce the guards in a Term.
     let guardReduce {Cmd = c; WPre = w; Goal = g} =

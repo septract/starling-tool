@@ -94,6 +94,23 @@ let gfunc guard name pars = { Cond = guard ; Item = func name pars }
 
 
 (*
+ * Active patterns.
+ *)
+
+/// <summary>
+///     Active pattern matching on trivially true guards.
+/// </summary>
+let (|Always|_|) { Cond = c ; Item = i } =
+    if isTrue c then Some i else None
+
+/// <summary>
+///     Active pattern matching on trivially false guards.
+/// </summary>
+let (|Never|_|) { Cond = c ; Item = i } =
+    if isFalse c then Some i else None
+
+
+(*
  * Destructuring and mapping.
  *)
 
@@ -158,29 +175,30 @@ let mapConds f = Multiset.map (mapCond f)
 ///     The function to map over the items (typically funcs).
 /// </param>
 /// <param name="_arg1">
-///     The multiset of<c>Guarded</c>s over which we are mapping.
+///     The multiset of <c>Guarded</c>s over which we are mapping.
 /// </param>
 /// <returns>
 ///     The multiset <c>Guarded</c>s resulting from the map.
 /// </returns>
 let mapItems f = Multiset.map (mapItem f)
 
-
-(*
- * Active patterns.
- *)
-
 /// <summary>
-///     Active pattern matching on trivially true guards.
+///     Removes false guards from a guarded multiset.
 /// </summary>
-let (|Always|_|) { Cond = c ; Item = i } =
-    if isTrue c then Some i else None
-
-/// <summary>
-///     Active pattern matching on trivially false guards.
-/// </summary>
-let (|Never|_|) { Cond = c ; Item = i } =
-    if isFalse c then Some i else None
+/// <param name="gset">
+///     The multiset of <c>Guarded</c>s to prune.
+/// </param>
+/// <returns>
+///     The multiset of <c>Guarded</c>s after removing items with guards
+///     that are always false.
+/// </returns>
+let pruneGuardedSet gset =
+    gset
+    |> Multiset.toSeq
+    |> Seq.filter (function
+                   | Never _ -> false
+                   | _       -> true)
+    |> Multiset.ofSeq
 
 
 /// <summary>
