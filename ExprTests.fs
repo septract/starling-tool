@@ -5,6 +5,10 @@ open Starling.Core.Axiom
 open Starling.Core.Expr
 open Starling.Core.Sub
 
+open Starling.Core.Pretty
+open Starling.Core.Expr.Pretty
+
+let tcd : obj[] -> TestCaseData = TestCaseData
 
 /// Tests for the expression types and functions.
 type ExprTests() =
@@ -106,3 +110,48 @@ type ExprTests() =
     /// Tests whether rewriting constants in arithmetic expressions to post-state works.
     member x.``constants in arithmetic expressions can be rewritten to post-state`` expr =
         (liftMarker After (Set.ofList ["target1"; "target2"] |> inSet)).ASub expr
+
+    /// Test cases for negation checking.
+    static member ObviousNegations =
+        [ (tcd [| BTrue
+                  BFalse |])
+            .Returns(true)
+          (tcd [| BTrue
+                  BTrue |])
+            .Returns(false)
+          (tcd [| BFalse
+                  BFalse |])
+            .Returns(false)
+          (tcd [| BTrue
+                  (aEq (AInt 5L) (AInt 6L)) |])
+            .Returns(false)
+          (tcd [| (aEq (aUnmarked "x") (AInt 2L))
+                  (BNot (aEq (aUnmarked "x") (AInt 2L))) |])
+            .Returns(true)
+          (tcd [| (aEq (aUnmarked "x") (AInt 2L))
+                  (BNot (aEq (aUnmarked "y") (AInt 2L))) |])
+            .Returns(false)
+          // De Morgan
+          (tcd [| (BAnd [ bUnmarked "x" ; bUnmarked "y" ])
+                  (BOr [ BNot (bUnmarked "x")
+                         BNot (bUnmarked "y") ] ) |] )
+            .Returns(true)
+          (tcd [| (BOr [ bUnmarked "x" ; bUnmarked "y" ])
+                  (BAnd [ BNot (bUnmarked "x")
+                          BNot (bUnmarked "y") ] ) |] )
+            .Returns(true) ]
+        |> List.map (
+            fun d -> d.SetName(sprintf "%s and %s are %s negation"
+                                        (((d.OriginalArguments.[1])
+                                          :?> BoolExpr)
+                                         |> printBoolExpr |> print)
+                                        (((d.OriginalArguments.[0])
+                                          :?> BoolExpr)
+                                         |> printBoolExpr |> print)
+                                        (if (d.ExpectedResult :?> bool)
+                                         then "a" else "not a")))
+
+    /// Checks whether negation checking is sound and sufficiently complete.
+    [<TestCaseSource("ObviousNegations")>]
+    member x.``negates is sound and sufficiently complete`` a b =
+        negates a b

@@ -94,7 +94,7 @@ let gfunc guard name pars = { Cond = guard ; Item = func name pars }
 
 
 (*
- * Active patterns.
+ * Single-guard active patterns.
  *)
 
 /// <summary>
@@ -109,6 +109,23 @@ let (|Always|_|) { Cond = c ; Item = i } =
 let (|Never|_|) { Cond = c ; Item = i } =
     if isFalse c then Some i else None
 
+
+(*
+ * Multiple-guard active patterns.
+ *)
+
+/// <summary>
+///     Active pattern matching on if-then-else guard multisets.
+///
+///     <para>
+///         If-then-else guardsets contain two non-false guards, at least one
+///         of which is equal to the negation of the other.
+///     </para>
+/// </summary>
+let (|ITEGuards|_|) ms =
+    match (Multiset.toList ms) with
+    | x::y::[] when (negates x.Cond y.Cond) -> Some (x, y)
+    | _ -> None
 
 (*
  * Destructuring and mapping.
