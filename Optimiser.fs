@@ -91,7 +91,6 @@ module Graph =
         // All edges from y to x are nop?
         && Seq.forall (fun { InEdge.Command = c } -> isNop c) yToX
 
-
     /// <summary>
     ///     Given a node, tries to unify every other node that is
     ///     equivalent and connected, but only by no-op commands, into it.
@@ -107,10 +106,9 @@ module Graph =
     ///     The name of the node to unify.
     /// </param>
     /// <returns>
-    ///     A Chessie result.  If ok, it contains a tuple, containing the list
-    ///     of node names removed and a graph.
+    ///     A tuple containing the list of node names removed and a graph.
     ///     The graph is equivalent to <paramref name="g" />, but with some
-    ///     nodes merged into <paramref name="nName" /> " /> if they are
+    ///     nodes merged into <paramref name="nName" /> if they are
     ///     equivalent and connected only by no-op commands.
     /// </returns>
     let removeIdStep removed g nName =
@@ -140,34 +138,127 @@ module Graph =
                     (removed, g)
 
     /// <summary>
-    ///     Merges equivalent nodes where they are connected, but only by 'Id'
-    ///     transitions.
-    ///
-    ///     <para>
-    ///         This assumes that 'Id' has the necessary semantics.
-    ///     </para>
+    ///     Performs a node-wise optimisation on every node in the graph.
     /// </summary>
+    /// <param name="opt">
+    ///     The optimisation, which must take a list of edges currently
+    ///     removed, a graph, and a node to optimise.  It must return a tuple
+    ///     of the new list of edges removed, and optimised graph.
+    /// </param>
     /// <param name="graph">
     ///     The graph to optimise.
     /// </param>
     /// <returns>
-    ///     A graph equivalent to <paramref name="graph" />, but with all
-    ///     equivalent nodes connected only by 'Id' merged.
+    ///     A graph equivalent to <paramref name="graph" />, but with the
+    ///     node optimisation <paramref name="opt" /> performed as many times
+    ///     as possible.
     /// </returns>
-    let rec removeIdTransitions graph =
+    let rec liftNodeOptimisation opt graph =
+        // TODO(CaptainHayashi): do a proper depth-first search instead.
+
         let (xs, newGraph) =
             graph.Contents
             // Pull out nodeNames for removeIdStep.
             |> keys
             // Then, for each of those, try merging everything else into it.
-            |> Seq.fold (uncurry removeIdStep) ([], graph)
+            |> Seq.fold (uncurry opt) ([], graph)
 
         (* Tail-recurse back if we removed some nodes.
          * This is to see if we enabled more removals.
          *)
         if (Seq.isEmpty xs)
         then newGraph
-        else removeIdTransitions newGraph
+        else liftNodeOptimisation opt newGraph
+
+    /// <summary>
+    ///     Merges equivalent nodes where they are connected, but only by
+    ///     no-operations.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The graph to optimise.
+    /// </param>
+    /// <returns>
+    ///     A graph equivalent to <paramref name="_arg1" />, but with all
+    ///     equivalent nodes connected only by 'Id' merged.
+    /// </returns>
+    let removeIdTransitions = liftNodeOptimisation removeIdStep
+
+    /// <summary>
+    ///     Removes a node if it is an ITE-guarded view.
+    ///
+    ///     <para>
+    ///         An ITE-guarded view is a view with one in-edge,
+    ///         two guarded funcs which negate each other, and two
+    ///         out-edges, each assuming one of the guards.
+    ///     </para>
+    /// </summary>
+    /// <param name="removed">
+    ///     The list of nodes already removed, which is appended to in the
+    ///     result.
+    /// </param>
+    /// <param name="g">
+    ///     The graph to optimise (perhaps).
+    /// </param>
+    /// <param name="nName">
+    ///     The name of the node to optimise.
+    /// </param>
+    /// <returns>
+    ///     A tuple containing the list of node names removed and a graph.
+    ///     The graph is equivalent to <paramref name="g" />, but with
+    ///     nodes merged into <paramref name="nName" />
+    ///     equivalent and connected only by no-op commands.
+    /// </returns>
+    let removeITENodeStep removed g nName =
+        // Does nName actually exist, and is it an ITE node?
+        match (Map.tryFind nName g.Contents) with
+        | Some (ITEGuards ({ Cond = xc },
+                           { Cond = yc }), outEdges, inEdges) ->
+            // Are there only two out edges, and only one in edges?
+            if (Set.count outEdges = 2 && Set.count inEdges = 1)
+            then
+                let oE, iE = Set.toList outEdges, Set.toList inEdges
+                let outA, outB = oE.[0], oE.[1]
+                let inA : InEdge = iE.[0]
+
+                (* Translate xc and yc to pre-state, because that's what
+                 * the assumes will be.
+                 *)
+                let xcPre = xc |> BExpr |> before
+                let ycPre = yc |> BExpr |> before
+
+                // Are the out edges assumes over xc and yc?
+                if (outA.Command = [ func "Assume" [ xcPre ]]
+                    && outB.Command = [ func "Assume" [ ycPre ]]) ||
+                   (outB.Command = [ func "Assume" [ xcPre ]]
+                    && outA.Command = [ func "Assume" [ ycPre ]])
+                then
+                    let removed' =
+                        outA.Name :: outB.Name :: inA.Name :: removed
+
+                    let aCmd = inA.Command @ outA.Command
+
+                    g
+                    // Remove the existing edges first.
+                    |> rmEdgesBetween inA.Src nName
+                    |> rmEdgesBetween nName outA.Dest
+                    |> rmEdgesBetween nName outB.Dest
+                    // Then, remove the node.
+                    |> rmNode nName
+                    // Then, add the new edges.
+                    |> mkEdgeBetween (String.concat "__" [ inA.Name
+                                                           outA.Name ])
+                                     inA.Src
+                                     outA.Dest
+                                     (inA.Command @ outA.Command)
+                    |> mkEdgeBetween (String.concat "__" [ inA.Name
+                                                           outB.Name ])
+                                     inA.Src
+                                     outB.Dest
+                                     (inA.Command @ outB.Command)
+                    |> (mkPair removed')
+                else (removed, g)
+            else (removed, g)
+        | _ -> (removed, g)
 
     /// <summary>
     ///     Optimises a graph.
@@ -184,6 +275,7 @@ module Graph =
     let optimiseGraph model =
         // TODO(CaptainHayashi): Use the model for something.
         removeIdTransitions
+        >> liftNodeOptimisation removeITENodeStep
 
     /// <summary>
     ///     Optimises a model over graphs.

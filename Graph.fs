@@ -349,11 +349,16 @@ let unify source target graph =
 
 
 /// <summary>
-///     Performs an operation on two nodes in a graph.
+///     Performs an operation on the out and in edges of two nodes in the
+///     graph.
+///
+///     <para>
+///         The two nodes need not be disjoint.
+///     </para>
 /// </summary>
 /// <param name="f">
 ///     The function to apply.
-///     This receives two parameters: the adjacency list records
+///     This receives two parameters: the out and in nodes
 ///     for <paramref name="x" /> and <paramref name="y" />
 ///     respectively.
 /// </param>
@@ -374,13 +379,16 @@ let unify source target graph =
 let mapNodePair f x y graph =
     match (Map.tryFind x graph.Contents,
            Map.tryFind y graph.Contents) with
-    | (Some xRecord, Some yRecord) ->
-        let xRecord', yRecord' = f xRecord yRecord
+    | (Some (xv, xOut, xIn), Some (yv, yOut, yIn)) ->
+        let xOut', yIn' = f xOut yIn
 
+        // If x = y, we have to be careful to write all changes back.
         let contents' =
             graph.Contents
-            |> Map.add x xRecord'
-            |> Map.add y yRecord'
+            |> if x = y
+               then (Map.add x (xv, xOut', yIn'))
+               else (Map.add x (xv, xOut', xIn))
+                     >> Map.add y (yv, yOut, yIn')
 
         { graph with Contents = contents' }
     | _ -> graph
@@ -417,7 +425,7 @@ let mapNodePair f x y graph =
 let mkEdgeBetween name src dest cmd graph =
     // TODO(CaptainHayashi): signal an error if name is taken.
     mapNodePair
-        (fun (srcView, srcOut, srcIn) (destView, destOut, destIn) ->
+        (fun srcOut destIn ->
              // An edge is recorded as an out in src, and in in dest.
 
              let srcOut' = Set.add { Name = name
@@ -430,8 +438,7 @@ let mkEdgeBetween name src dest cmd graph =
                                      Command = cmd }
                                     destIn
 
-             ((srcView, srcOut', srcIn),
-              (destView, destOut, destIn')))
+             (srcOut', destIn'))
         src
         dest
         graph
@@ -460,16 +467,37 @@ let rmEdgesBetween src dest =
      * create dangling edges.
      *)
     mapNodePair
-        (fun (srcView, srcOut, srcIn) (destView, destOut, destIn) ->
+        (fun srcOut destIn ->
              // We need to delete the out entry in src going to dest...
              let srcOut' = Set.filter (fun { Dest = d } -> d <> dest) srcOut
              // ...and the in entry in dest coming from src.
              let destIn' = Set.filter (fun { Src = s } -> s <> src) destIn
 
-             ((srcView, srcOut', srcIn),
-              (destView, destOut, destIn')))
+             (srcOut', destIn'))
         src
         dest
+
+/// <summary>
+///     Removes a node, if it has no edges left.
+/// </summary>
+/// <param name="node">
+///     The name of the node to remove.
+/// </param>
+/// <param name="graph">
+///     The graph to prune.
+/// </param>
+/// <returns>
+///     If the node exists and has no edges left, the graph resulting from
+///     removing <paramref name="node" /> from <paramref name="graph" />.
+///     Else, <paramref name="graph" />.
+/// </returns>
+let rmNode node graph =
+    // TODO(CaptainHayashi): Chessie-ise this and the other functions?
+    { graph with Contents = Map.filter (fun n (_, outEdges, inEdges) ->
+                                            not (n = node
+                                                 && Set.isEmpty outEdges
+                                                 && Set.isEmpty inEdges))
+                                       graph.Contents }
 
 (*
  * Graph queries
