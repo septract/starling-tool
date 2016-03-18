@@ -1,0 +1,39 @@
+/*
+ * Herlihy/Shavit-style compare and swap lock.
+ * This version fuses the body into one observationally-atomic action.
+ */
+
+shared bool lock;  // True iff the lock is taken.
+thread bool test;  // Used when trying to take the lock.
+
+/*
+ * Locks the CAS lock.
+ */
+method lock() {
+  {| emp |}
+    do {
+      {| emp |}
+        test = false;
+        <CAS(lock, test, true)>;
+      {| if test == false then holdLock() else emp |}
+    } while (test == true);
+  {| holdLock() |}
+}
+
+/*
+ * Unlocks the CAS lock.
+ */
+method unlock() {
+  {| holdLock() |}
+  <lock = (false)>;
+  {| emp |}
+}
+
+
+// False is a hack to implement local variable reasoning.
+view False();
+constraint False() -> false;
+
+view holdLock();
+constraint holdLock() -> lock == true;  // Identity of lock.
+constraint holdLock() * holdLock() -> false;  // Mutual exclusion

@@ -7,7 +7,8 @@
 ./Examples/Pass/multicounter.cvf: 
 ./Examples/Pass/peterson.cvf: 
 ./Examples/Pass/petersonMultiCmd.cvf: 
-./Examples/Pass/spinLock.cvf: 
+./Examples/Pass/spinLock.cvf:
+./Examples/Pass/spinLockMultiCmd.cvf: 
 ./Examples/Pass/ticketLock.cvf: 
 ./Examples/Pass/ticketLockNoIf.cvf: 
 ./Examples/Pass/ticketLockNoInvariant.cvf: 
