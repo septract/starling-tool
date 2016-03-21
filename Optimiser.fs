@@ -21,6 +21,118 @@ open Starling.Core.GuardedView
 
 
 /// <summary>
+///     Utilities common to the whole optimisation system.
+/// </summary>
+module Utils =
+    /// <summary>
+    ///     Parses an optimisation string.
+    /// </summary>
+    /// <param name="opts">
+    ///     A string containing a comma or semicolon-separated list of
+    ///     optimisation names.
+    ///     Optimisation names starting with a + or - have this stripped off,
+    ///     and the optimisation is negated if the sign was -.
+    /// </param>
+    /// <returns>
+    ///     A tuple of two sets of optimisation names.  The first is the
+    ///     set of optimisations force-disabled (-).  The second is the set of
+    ///     optimisations force-enabled (+ or no sign).  Each optimisation
+    ///     name is downcased.  The optimisation name 'all' is special, as it
+    ///     force-enables (or force-disables) all optimisations.
+    /// </returns>
+    let parseOptString (opts : string) =
+        opts.ToLower()
+            .Split([| "," ; ";" |],
+                   System.StringSplitOptions.RemoveEmptyEntries)
+        |> Seq.toList
+        |> List.partition (fun str -> str.StartsWith("-"))
+        |> pairMap (Seq.map (fun s -> s.Remove(0, 1)) >> Set.ofSeq)
+                   (Seq.map (fun s ->
+                                 if s.StartsWith "+"
+                                 then s.Remove(0, 1)
+                                 else s) >> Set.ofSeq)
+
+    /// <summary>
+    ///     Applies a pair of optimisation removes and adds to an optimisation
+    ///     set.
+    /// </summary>
+    /// <param name="opts">
+    ///     The default set of optimisers.
+    /// </param>
+    /// <param name="removes">
+    ///     The set of optimisation names to remove.  If this contains 'all',
+    ///     no optimisations will be permitted.
+    /// </param>
+    /// <param name="adds">
+    ///     The set of optimisation names to adds.  If this contains 'all',
+    ///     all optimisations will be permitted.
+    /// </param>
+    /// <param name="verbose">
+    ///     If true, add warnings when a default optimisation is overridden.
+    /// </param>
+    /// <typeparam name="a">
+    ///     The type of item being optimised.
+    /// </typeparam>
+    /// <returns>
+    ///     A function that, given an optimisation name and an optimiser,
+    ///     returns that optimiser if the optimisation is switched on,
+    ///     and the identity function if the optimisation is switched off.
+    /// </returns>
+    let mkOptimiserGuard opts removes adds verbose
+        : (string -> ('a -> 'a) -> ('a -> 'a)) =
+        // Warn about expressly disabled optimisations if verbose is on.
+        let disabled =
+            if verbose
+            then fun fName v ->
+                if Set.contains fName opts
+                then eprintfn "note: disabled optimisation %s" fName
+                v
+            else fun _ -> id
+        // Also warn about expressly allowed optimisations if verbose is on.
+        let allowed =
+            if verbose
+            then fun fName f ->
+                if not (Set.contains fName opts)
+                then eprintfn "note: forced optimisation %s" fName
+                f
+            else fun _ f -> f
+
+        if Set.contains "all" removes
+        then
+             if verbose
+             then eprintfn "note: all optimisations disabled"
+
+             (fun fName _ -> disabled fName)
+        else if Set.contains "all" adds
+             then
+                  if verbose
+                  then eprintfn "note: all optimisations enabled"
+
+                  (fun fName -> allowed fName)
+             else
+                 let allowedSet =
+                     opts
+                     // Make sure negations prevail.
+                     |> Set.foldBack Set.remove removes
+                     |> Set.foldBack Set.add adds
+                     |> Set.ofSeq
+
+                 if verbose
+                 then eprintfn "default optimisations: %s"
+                               (String.concat ", " opts)
+                      eprintfn "added optimisations: %s"
+                               (String.concat ", " adds)
+                      eprintfn "removed optimisations: %s"
+                               (String.concat ", " removes)
+                      eprintfn "chosen optimisations: %s"
+                               (String.concat ", " allowedSet)
+
+                 (fun fName f ->
+                      if Set.contains fName allowedSet
+                      then (allowed fName f)
+                      else (disabled fName))
+
+/// <summary>
 ///     Graph optimisation.
 /// </summary>
 module Graph =
@@ -266,11 +378,26 @@ module Graph =
             else (removed, g)
         | _ -> (removed, g)
 
+    /// Graph optimisers switched on by default.
+    let defaultGraphOpts =
+        Set.ofList [ "graph-collapse-nops"
+                     "graph-collapse-ites" ]
+
     /// <summary>
     ///     Optimises a graph.
     /// </summary>
     /// <param name="model">
     ///     The model whence the graph came.
+    /// </param>
+    /// <param name="optR">
+    ///     Set of optimisations to suppress.
+    /// </param>
+    /// <param name="optA">
+    ///     Set of optimisations to force.
+    /// </param>
+    /// <param name="verbose">
+    ///     Flag which, if enabled, causes non-default optimisation changes
+    ///     to be reported to stderr.
     /// </param>
     /// <param name="_arg1">
     ///     The graph to optimise.
@@ -278,10 +405,12 @@ module Graph =
     /// <returns>
     ///     An optimised equivalent of <paramref name="_arg1" />.
     /// </returns>
-    let optimiseGraph model =
+    let optimiseGraph model optR optA verbose =
+        let guard = Utils.mkOptimiserGuard defaultGraphOpts optR optA verbose
+
         // TODO(CaptainHayashi): Use the model for something.
-        removeIdTransitions
-        >> liftNodeOptimisation removeITENodeStep
+        guard "graph-collapse-nops" removeIdTransitions
+        >> guard "graph-collapse-ites" (liftNodeOptimisation removeITENodeStep)
 
     /// <summary>
     ///     Optimises a model over graphs.
@@ -289,11 +418,21 @@ module Graph =
     /// <param name="mdl">
     ///     The model to optimise.
     /// </param>
+    /// <param name="optR">
+    ///     Set of optimisations to suppress.
+    /// </param>
+    /// <param name="optA">
+    ///     Set of optimisations to force.
+    /// </param>
+    /// <param name="verbose">
+    ///     Flag which, if enabled, causes non-default optimisation changes
+    ///     to be reported to stderr.
+    /// </param>
     /// <returns>
     ///     An optimised equivalent of <paramref name="mdl" />.
     /// </returns>
-    let optimise mdl =
-        mapAxioms (optimiseGraph mdl) mdl
+    let optimise optR optA verbose mdl =
+        mapAxioms (optimiseGraph mdl optR optA verbose) mdl
 
 
 /// <summary>
@@ -395,14 +534,23 @@ module Term =
      * Frontend
      *)
 
+    /// Term optimisers switched on by default.
+    let defaultTermOpts =
+        Set.ofList [ "term-remove-after"
+                     "term-reduce-guards"
+                     "term-simplify-bools" ]
+
     /// Optimises a term individually.
     /// (Or, it will, when finished.)
-    let optimiseTerm =
-        eliminateAfters
-        >> guardReduce
-        >> simpTerm
+    let optimiseTerm optR optA verbose =
+        let guard = Utils.mkOptimiserGuard defaultTermOpts optR optA verbose
+
+        guard "term-remove-after" eliminateAfters
+        >> guard "term-reduce-guards" guardReduce
+        >> guard "term-simplify-bools" simpTerm
 
     /// Optimises a model's terms.
-    let optimise : Model<STerm<GView, VFunc>, DFunc>
-                   -> Model<STerm<GView, VFunc>, DFunc> =
-        mapAxioms optimiseTerm
+    let optimise optR optA verbose
+        : Model<STerm<GView, VFunc>, DFunc>
+          -> Model<STerm<GView, VFunc>, DFunc> =
+        mapAxioms (optimiseTerm optR optA verbose)

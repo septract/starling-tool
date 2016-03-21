@@ -35,9 +35,11 @@ type Options =
                 "Show specific axiom or term in term-refinement stages.")>]
       term : string option
       [<Option('m', HelpText = "Show full model in term-refinement stages.")>]
-      showModel: bool
-      [<Option('O', HelpText = "Perform no optimisation stages.")>]
-      noOptimise : bool
+      showModel : bool
+      [<Option('O', HelpText = "Switches given optimisations on or off.")>]
+      optimiseString : string option
+      [<Option('v', HelpText = "Increases verbosity.")>]
+      verbose : bool
       [<Value(
             0,
             MetaName = "input",
@@ -234,10 +236,12 @@ let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
 let z3 rq = bind (Backends.Z3.run rq >> mapMessages Error.Z3)
 
 /// Shorthand for the graph optimise stage.
-let graphOptimise = lift Starling.Optimiser.Graph.optimise
+let graphOptimise optR optA verbose =
+    lift (Starling.Optimiser.Graph.optimise optR optA verbose)
 
 /// Shorthand for the term optimise stage.
-let termOptimise = lift Starling.Optimiser.Term.optimise
+let termOptimise optR optA verbose =
+    lift (Starling.Optimiser.Term.optimise optR optA verbose)
 
 /// Shorthand for the flattening stage.
 let flatten = lift Starling.Flattener.flatten
@@ -268,40 +272,55 @@ let model =
              | Lang.Frontend.Response.Graph m -> m |> ok
              | _ -> Other "internal error: bad frontend response" |> fail)
 
-/// Runs the Starling request at argument 2 on the file named by argument 3.
-/// If missing, we read from stdin.
-/// Argument 1 turns optimisation on if true.
-let runStarling opt =
-    let maybeGraphOptimise = if opt then graphOptimise else id
-    let maybeTermOptimise = if opt then termOptimise else id
+/// <summary>
+///     Runs a Starling request.
+/// </summary>
+/// <param name="optS">
+///     The string governing optimiser overrides.
+/// </param>
+/// <param name="verbose">
+///     If true, dump some internal information to stderr.
+/// </param>
+/// <param name="_arg1">
+///     The Starling request to run.
+/// </param>
+/// <param name="_arg2">
+///     The file containing input for the request.
+/// </param>
+/// <returns>
+///     The result of running the Starling request, as a <c>Result</c>
+///     over <c>Response</c> and <c>Error</c>.
+/// </returns>
+let runStarling optS verbose =
+    let optR, optA = Optimiser.Utils.parseOptString optS
 
     function
     | Request.Frontend rq -> frontend rq >> lift Response.Frontend
     | Request.GraphOptimise ->
         model
-        >> maybeGraphOptimise
+        >> graphOptimise optR optA verbose
         >> lift Response.GraphOptimise
     | Request.Axiomatise ->
         model
-        >> maybeGraphOptimise
+        >> graphOptimise optR optA verbose
         >> axiomatise
         >> lift Response.Axiomatise
     | Request.GoalAdd ->
         model
-        >> maybeGraphOptimise
+        >> graphOptimise optR optA verbose
         >> axiomatise
         >> goalAdd
         >> lift Response.GoalAdd
     | Request.TermGen ->
         model
-        >> maybeGraphOptimise
+        >> graphOptimise optR optA verbose
         >> axiomatise
         >> goalAdd
         >> termGen
         >> lift Response.TermGen
     | Request.Reify ->
         model
-        >> maybeGraphOptimise
+        >> graphOptimise optR optA verbose
         >> axiomatise
         >> goalAdd
         >> termGen
@@ -309,7 +328,7 @@ let runStarling opt =
         >> lift Response.Reify
     | Request.Flatten ->
         model
-        >> maybeGraphOptimise
+        >> graphOptimise optR optA verbose
         >> axiomatise
         >> goalAdd
         >> termGen
@@ -318,7 +337,7 @@ let runStarling opt =
         >> lift Response.Flatten
     | Request.Semantics ->
         model
-        >> maybeGraphOptimise
+        >> graphOptimise optR optA verbose
         >> axiomatise
         >> goalAdd
         >> termGen
@@ -328,47 +347,48 @@ let runStarling opt =
         >> lift Response.Semantics
     | Request.TermOptimise ->
         model
-        >> maybeGraphOptimise
+        >> graphOptimise optR optA verbose
         >> axiomatise
         >> goalAdd
         >> termGen
         >> reify
         >> flatten
         >> semantics
-        >> maybeTermOptimise
+        >> termOptimise optR optA verbose
         >> lift Response.TermOptimise
     | Request.Z3 rq ->
         model
-        >> maybeGraphOptimise
+        >> graphOptimise optR optA verbose
         >> axiomatise
         >> goalAdd
         >> termGen
         >> reify
         >> flatten
         >> semantics
-        >> maybeTermOptimise
+        >> termOptimise optR optA verbose
         >> z3 rq
         >> lift Response.Z3
     | Request.HSF ->
         model
-        >> maybeGraphOptimise
+        >> graphOptimise optR optA verbose
         >> axiomatise
         >> goalAdd
         >> termGen
         >> reify
         >> flatten
         >> semantics
-        >> maybeTermOptimise
+        >> termOptimise optR optA verbose
         >> hsf
         >> lift Response.HSF
 
 /// Runs Starling with the given options, and outputs the results.
 let mainWithOptions opts =
-    let optimise = not opts.noOptimise
+    let optS = withDefault "" opts.optimiseString
+    let verbose = opts.verbose
 
     let starlingR =
         match (requestFromStage opts.stage) with
-        | Some otype -> runStarling optimise otype opts.input
+        | Some otype -> runStarling optS verbose otype opts.input
         | None -> fail Error.BadStage
 
     let mview =
