@@ -154,7 +154,7 @@ let semanticsOfCommand model =
     Seq.map (semanticsOfPrim model)
     >> collect
     >> lift (function
-             | [] -> BTrue
+             | [] -> frame model BTrue |> List.ofSeq |> mkAnd
              | xs -> List.reduce composeBools xs)
 
 /// Translates a model axiom into an axiom over a semantic expression.
