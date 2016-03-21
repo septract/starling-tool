@@ -16,6 +16,7 @@ module Starling.Core.GuardedView
 
 open Starling.Collections
 open Starling.Core.Expr
+open Starling.Core.ExprEquiv
 open Starling.Core.Model
 
 
@@ -124,7 +125,7 @@ let (|Never|_|) { Cond = c ; Item = i } =
 /// </summary>
 let (|ITEGuards|_|) ms =
     match (Multiset.toList ms) with
-    | x::y::[] when (negates x.Cond y.Cond) -> Some (x, y)
+    | x::y::[] when (equivHolds (negates x.Cond y.Cond)) -> Some (x, y)
     | _ -> None
 
 (*

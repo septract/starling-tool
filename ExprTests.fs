@@ -3,6 +3,7 @@ module Starling.Tests.Core.Expr
 open NUnit.Framework
 open Starling.Core.Axiom
 open Starling.Core.Expr
+open Starling.Core.ExprEquiv
 open Starling.Core.Sub
 
 open Starling.Core.Pretty
@@ -124,7 +125,7 @@ type ExprTests() =
             .Returns(false)
           (tcd [| BTrue
                   (aEq (AInt 5L) (AInt 6L)) |])
-            .Returns(false)
+            .Returns(true)
           (tcd [| (aEq (aUnmarked "x") (AInt 2L))
                   (BNot (aEq (aUnmarked "x") (AInt 2L))) |])
             .Returns(true)
@@ -162,4 +163,4 @@ type ExprTests() =
     /// Checks whether negation checking is sound and sufficiently complete.
     [<TestCaseSource("ObviousNegations")>]
     member x.``negates is sound and sufficiently complete`` a b =
-        negates a b
+        equivHolds (negates a b)

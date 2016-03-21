@@ -236,7 +236,7 @@ let isTrue =
     function
     | BTrue -> true
     | _     -> false
-      
+
 /// Extracts the name from a Starling constant.
 let stripMark =
     function
@@ -407,30 +407,6 @@ and varsIn =
     function
     | AExpr a -> varsInArith a
     | BExpr b -> varsInBool b
-
-/// <summary>
-///     Returns true if two expressions are definitely negations of each
-///     other.
-///
-///     <para>
-///         This is sound, but not complete.  It should only be used for
-///         optimisations.
-///     </para>
-/// </summary>
-/// <param name="x">
-///     The first expression to check.
-/// </param>
-/// <param name="y">
-///     The second expression to check.
-/// </param>
-/// <returns>
-///     True only if (but not if!) <paramref name="x" /> and
-///     <paramref name="y" /> negate each other.
-/// </returns>
-let negates x y =
-    let sx, sy = simp x, simp y
-    // The || is intentional, to try and compensate for deficiencies in simp.
-    (x = mkNot y) || (y = mkNot x)
 
 
 (*

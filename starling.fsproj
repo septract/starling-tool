@@ -48,6 +48,8 @@
     <Compile Include="Pretty.fs" />
     <Compile Include="Var.fs" />
     <Compile Include="Expr.fs" />
+    <Compile Include="Z3.fs" />
+    <Compile Include="ExprEquiv.fs" />
     <Compile Include="Model.fs" />
     <Compile Include="GuardedView.fs" />
     <Compile Include="Axiom.fs" />

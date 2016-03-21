@@ -10,6 +10,7 @@ open Starling.Core.Model
 open Starling.Core.GuardedView
 open Starling.Core.Instantiate
 open Starling.Core.Sub
+open Starling.Core.Z3
 open Starling.Reifier
 open Starling.Optimiser
 
@@ -58,17 +59,7 @@ module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Instantiate.Pretty
-
-    /// Pretty-prints Z3 expressions.
-    let printZ3Exp (expr : #Z3.Expr) = String(expr.ToString())
-
-    /// Pretty-prints a satisfiability result.
-    let printSat = 
-        function 
-        | Z3.Status.SATISFIABLE -> "fail"
-        | Z3.Status.UNSATISFIABLE -> "success"
-        | _ -> "unknown"
-        >> String
+    open Starling.Core.Z3.Pretty
 
     /// Pretty-prints a response.
     let printResponse mview =
@@ -102,37 +93,7 @@ module Pretty =
 ///     Functions for translating Starling elements into Z3.
 /// </summary>
 module Translator =
-    /// Converts a Starling arithmetic expression to a Z3 ArithExpr.
-    let rec arithToZ3 (ctx: Z3.Context) =
-        function
-        | AConst c -> c |> constToString |> ctx.MkIntConst :> Z3.ArithExpr
-        | AInt i -> (i |> ctx.MkInt) :> Z3.ArithExpr
-        | AAdd xs -> ctx.MkAdd (xs |> Seq.map (arithToZ3 ctx) |> Seq.toArray)
-        | ASub xs -> ctx.MkSub (xs |> Seq.map (arithToZ3 ctx) |> Seq.toArray)
-        | AMul xs -> ctx.MkMul (xs |> Seq.map (arithToZ3 ctx) |> Seq.toArray)
-        | ADiv (x, y) -> ctx.MkDiv (arithToZ3 ctx x, arithToZ3 ctx y)
-
-    /// Converts a Starling Boolean expression to a Z3 ArithExpr.
-    and boolToZ3 (ctx : Z3.Context) =
-        function
-        | BConst c -> c |> constToString |> ctx.MkBoolConst
-        | BTrue -> ctx.MkTrue ()
-        | BFalse -> ctx.MkFalse ()
-        | BAnd xs -> ctx.MkAnd (xs |> Seq.map (boolToZ3 ctx) |> Seq.toArray)
-        | BOr xs -> ctx.MkOr (xs |> Seq.map (boolToZ3 ctx) |> Seq.toArray)
-        | BImplies (x, y) -> ctx.MkImplies (boolToZ3 ctx x, boolToZ3 ctx y)
-        | BEq (x, y) -> ctx.MkEq (exprToZ3 ctx x, exprToZ3 ctx y)
-        | BGt (x, y) -> ctx.MkGt (arithToZ3 ctx x, arithToZ3 ctx y)
-        | BGe (x, y) -> ctx.MkGe (arithToZ3 ctx x, arithToZ3 ctx y)
-        | BLe (x, y) -> ctx.MkLe (arithToZ3 ctx x, arithToZ3 ctx y)
-        | BLt (x, y) -> ctx.MkLt (arithToZ3 ctx x, arithToZ3 ctx y)
-        | BNot x -> x |> boolToZ3 ctx |> ctx.MkNot
-
-    /// Converts a Starling expression to a Z3 Expr.
-    and exprToZ3 (ctx: Z3.Context) =
-        function
-        | BExpr b -> boolToZ3 ctx b :> Z3.Expr
-        | AExpr a -> arithToZ3 ctx a :> Z3.Expr
+    open Starling.Core.Z3.Expr
 
     /// Produces the reification of an unguarded func.
     /// This corresponds to D^ in the theory.
@@ -248,9 +209,9 @@ let run resp =
     match resp with
     | Request.Translate ->
         translate
-        >> lift (mapAxioms (mapTerm (Translator.boolToZ3 ctx)
-                                    (Translator.boolToZ3 ctx)
-                                    (Translator.boolToZ3 ctx)))
+        >> lift (mapAxioms (mapTerm (Expr.boolToZ3 ctx)
+                                    (Expr.boolToZ3 ctx)
+                                    (Expr.boolToZ3 ctx)))
         >> lift Response.Translate
     | Request.Combine -> translate >> combine ctx >> lift Response.Combine
     | Request.Sat -> translate >> combine ctx >> sat ctx >> lift Response.Sat

@@ -14,6 +14,7 @@ open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Utils
 open Starling.Core.Expr
+open Starling.Core.ExprEquiv
 open Starling.Core.Model
 open Starling.Core.Sub
 open Starling.Core.GuardedView
@@ -223,15 +224,20 @@ module Graph =
                 (* Translate xc and yc to pre-state, because that's what
                  * the assumes will be.
                  *)
-                let xcPre = xc |> BExpr |> before
-                let ycPre = yc |> BExpr |> before
+                let xcPre = (liftMarker Before always).BSub xc
+                let ycPre = (liftMarker Before always).BSub yc
 
                 // Are the out edges assumes over xc and yc?
-                if (outA.Command = [ func "Assume" [ xcPre ]]
-                    && outB.Command = [ func "Assume" [ ycPre ]]) ||
-                   (outB.Command = [ func "Assume" [ xcPre ]]
-                    && outA.Command = [ func "Assume" [ ycPre ]])
-                then
+                match (outA.Command, outB.Command) with
+                | ([ { Name = aN ; Params = [ BExpr aP ] } ],
+                   [ { Name = bN ; Params = [ BExpr bP ] } ])
+                  when (aN = "Assume" && bN = "Assume"
+                        && (equivHolds
+                                (orEquiv
+                                     (andEquiv (equiv aP xcPre)
+                                               (equiv bP ycPre))
+                                     (andEquiv (equiv aP ycPre)
+                                               (equiv bP xcPre))))) ->
                     let removed' =
                         outA.Name :: outB.Name :: inA.Name :: removed
 
@@ -256,7 +262,7 @@ module Graph =
                                      outB.Dest
                                      (inA.Command @ outB.Command)
                     |> (mkPair removed')
-                else (removed, g)
+                | _ -> (removed, g)
             else (removed, g)
         | _ -> (removed, g)
 
