@@ -136,9 +136,17 @@ type ExprTests() =
                   (BOr [ BNot (bUnmarked "x")
                          BNot (bUnmarked "y") ] ) |] )
             .Returns(true)
+          (tcd [| (BAnd [ bUnmarked "x" ; bUnmarked "y" ])
+                  (BOr [ BNot (bUnmarked "y")
+                         BNot (bUnmarked "x") ] ) |] )
+            .Returns(true)
           (tcd [| (BOr [ bUnmarked "x" ; bUnmarked "y" ])
                   (BAnd [ BNot (bUnmarked "x")
                           BNot (bUnmarked "y") ] ) |] )
+            .Returns(true)
+          (tcd [| (BOr [ bUnmarked "x" ; bUnmarked "y" ])
+                  (BAnd [ BNot (bUnmarked "y")
+                          BNot (bUnmarked "x") ] ) |] )
             .Returns(true) ]
         |> List.map (
             fun d -> d.SetName(sprintf "%s and %s are %s negation"
