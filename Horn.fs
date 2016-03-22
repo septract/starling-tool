@@ -137,7 +137,7 @@ module Pretty =
         | Neq(x, y) -> printBop "=\=" x y
         | Gt(x, y) -> printBop ">" x y
         | Ge(x, y) -> printBop ">=" x y
-        | Le(x, y) -> printBop "<=" x y
+        | Le(x, y) -> printBop "=<" x y
         | Lt(x, y) -> printBop "<" x y
 
     /// Emits a Horn clause.
