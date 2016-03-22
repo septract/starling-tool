@@ -1,0 +1,172 @@
+/*
+ * Peterson's algorithm for mutual exclusion:
+ * http://dx.doi.org/10.1016/0020-0190(81)90106-X
+ *
+ * This version uses two threads, A and B, and separate views for each.
+ * A lot of duplication occurs that may be removable with arrays.
+ *
+ * This proof was manually written: future exercises could involve
+ * making it easier to synthesise parts of it.
+ *
+ * This version uses integer flags to allow HSF to work with it.
+ * We also set turn to 0/1 instead of 1/2, as currently HSF initialises
+ * variables to 0.
+ */
+
+
+shared int aFlag;
+shared int bFlag;
+shared int turn;
+
+thread int oFlag;
+thread int oTurn;
+
+
+// A
+view aFlagDown();       // A does not hold the lock and is not seeking it.
+view aFlagUp();         // A has put its flag up, but isn't waiting yet.
+view aWaiting();        // A is now waiting for the lock.
+view aHoldLock();       // A holds the lock.
+
+// B
+view bFlagDown();       // B does not hold the lock and is not seeking it.
+view bFlagUp();         // B has put its flag up, but isn't waiting yet.
+view bWaiting();        // B is now waiting for the lock.
+view bHoldLock();       // B holds the lock.
+
+
+/*
+ * Locks the Peterson lock from A's side.
+ */
+method lockA() {
+  {| aFlagDown() |}
+    <aFlag = (1)>;
+  {| aFlagUp() |}
+    <turn = (0)>;
+  {| aWaiting() |}
+    do {
+      {| aWaiting() |}
+        <oFlag = bFlag>;
+      {| if (oFlag == 1) then aWaiting() else aHoldLock() |}
+        <oTurn = turn>;
+      {| if (oFlag == 1 && oTurn == 0) then aWaiting() else aHoldLock() |}
+    } while (oFlag == 1 && oTurn == 0);
+  {| aHoldLock() |}
+}
+
+/*
+ * Unlocks the Peterson lock from A's side.
+ */
+method unlockA() {
+  {| aHoldLock() |}
+    <aFlag = (0)>;
+  {| aFlagDown() |}
+}
+
+/*
+ * Locks the Peterson lock from B's side.
+ */
+method lockB() {
+  {| bFlagDown() |}
+    <bFlag = (1)>;
+  {| bFlagUp() |}
+    <turn = (1)>;
+  {| bWaiting() |}
+    do {
+      {| bWaiting() |}
+        <oFlag = aFlag>;
+      {| if (oFlag == 1) then bWaiting() else bHoldLock() |}
+        <oTurn = turn>;
+      {| if (oFlag == 1 && oTurn == 1) then bWaiting() else bHoldLock() |}
+    } while (oFlag == 1 && oTurn == 1);
+  {| bHoldLock() |}
+}
+
+/*
+ * Unlocks the Peterson lock from B's side.
+ */
+method unlockB() {
+  {| bHoldLock() |}
+    <bFlag = (0)>;
+  {| bFlagDown() |}
+}
+
+
+// Invariant: either it's A's turn, or B's turn.
+// Also flags are either 0 or 1.
+constraint emp -> turn >= 0 && turn < 2 && aFlag >= 0 && aFlag < 2
+                                        && bFlag >= 0 && bFlag < 2;
+
+/*
+ * Predicate definitions.
+ *
+ * Most of the interesting work happens in the interactions between
+ * constraints: these just keep track of the flag.
+ */
+
+// A
+constraint aFlagDown()      -> aFlag == 0;
+constraint aFlagUp()        -> aFlag == 1;
+constraint aWaiting()       -> ?;
+constraint aHoldLock()      -> ?;
+
+// B
+constraint bFlagDown()      -> bFlag == 0;
+constraint bFlagUp()        -> bFlag == 1;
+constraint bWaiting()       -> ?;
+constraint bHoldLock()      -> ?;
+
+
+/*
+ * If we have the lock, and the other thread is waiting, we have the turn.
+ *
+ * We note that to get the lock we must have either seen
+ * the other thread's flag down (see above), or we must have already
+ * been given the turn.
+ *
+ * More directly (and closer to how Starling will be proving this),
+ * any transition where the other thread starts waiting sets the turn
+ * to our turn, and nothing destabilises this except us starting to
+ * wait too.
+ */
+constraint aHoldLock() * bWaiting() -> ?;
+constraint bHoldLock() * aWaiting() -> ?;
+
+
+/*
+ * We can't be in multiple states at the same time.
+ *
+ * Unless exactly one of those states is flag-down.  This is probably implicit
+ * from the fact that flag-down and every other state disagree on what the
+ * flag is.
+ */
+
+// A
+constraint aFlagDown() * aFlagDown() -> ?;
+
+constraint aFlagUp() * aFlagUp() -> ?;
+constraint aFlagUp() * aWaiting() -> ?;
+constraint aFlagUp() * aHoldLock() -> ?;
+
+constraint aWaiting() * aWaiting() -> ?;
+constraint aWaiting() * aHoldLock() -> ?;
+
+constraint aHoldLock() * aHoldLock() -> ?;
+
+// B
+constraint bFlagDown() * bFlagDown() -> ?;
+
+constraint bFlagUp() * bFlagUp() -> ?;
+constraint bFlagUp() * bWaiting() -> ?;
+constraint bFlagUp() * bHoldLock() -> ?;
+
+constraint bWaiting() * bWaiting() -> ?;
+constraint bWaiting() * bHoldLock() -> ?;
+
+constraint bHoldLock() * bHoldLock() -> ?;
+
+
+/*
+ * Goal: mutual exclusion.
+ */
+constraint aHoldLock() * bHoldLock() -> false;
