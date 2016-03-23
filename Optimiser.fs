@@ -322,6 +322,32 @@ module Graph =
     let glueNames { InEdge.Name = a } { OutEdge.Name = b } =
         String.concat "__" [ a ; b ]
 
+    /// <summary>
+    ///     Decides whether a command is local.
+    /// </summary>
+    /// <param name="tVars">
+    ///     A <c>VarMap</c> of thread-local variables.
+    /// </param>
+    /// <returns>
+    ///     A function returning True only if (but not necessarily if)
+    ///     the given command is local (uses only local variables).
+    /// </returns>
+    let isLocalCommand tVars : Command -> bool =
+        // A command is local if, for all of its funcs...
+        List.forall
+            (fun { Params = ps } ->
+                 // ...for all of the parameters in said funcs...
+                 Seq.forall
+                     (// ...for all of the variables in said parameters...
+                      varsIn
+                      >> Set.toSeq
+                      >> Seq.forall
+                             (// ...the variable is thread-local.
+                              fun c ->
+                                  match (Map.tryFind (stripMark c) tVars) with
+                                  | Some _ -> true
+                                  | _ -> false))
+                     ps)
 
     /// <summary>
     ///     Removes a node if it is an ITE-guarded view.
@@ -398,6 +424,57 @@ module Graph =
                     else (removed, g, Some nName)
                 | _ -> (removed, g, Some nName)
 
+    /// <summary>
+    ///     Removes views in the middle of two local commands.
+    /// </summary>
+    /// <param name="locals">
+    ///     The environment of local variables, used to determine whether
+    ///     commands are local.
+    /// </param>
+    /// <param name="_arg1">
+    ///     A triple of:
+    ///     the list of edges already removed, which is appended to in the
+    ///     result;
+    ///     the graph to optimise (perhaps);
+    ///     an Option containing the name of the node to optimise.
+    /// </param>
+    /// <returns>
+    ///     A triple containing the list of edge names removed, an
+    ///     optimised graph, and an Option containing the node name if it was
+    ///     not removed.
+    /// </returns>
+    /// <remarks>
+    ///     This removes a view that may be needed for the proof, so it is
+    ///     turned off by default.
+    /// </remarks>
+    let dropLocalMidView locals =
+        expandNodeIn <|
+            fun nName nView outEdges inEdges g removed ->
+                (* Only continue if there is one edge in each direction.
+                   This is a restriction of the original optimisation. *)
+                match (Set.toList outEdges, Set.toList inEdges) with
+                | ( [ outE ], [ inE ] )
+                    when // Don't allow cycles
+                         outE.Dest <> nName
+                         && inE.Src <> nName
+                         // Commands must be local.
+                         && isLocalCommand locals outE.Command
+                         && isLocalCommand locals inE.Command ->
+
+                    let removed' = outE.Name :: inE.Name :: removed
+
+                    let g' =
+                        g
+                        |> rmEdgesBetween inE.Src nName
+                        |> rmEdgesBetween nName outE.Dest
+                        |> rmNode nName
+                        |> mkEdgeBetween (glueNames inE outE)
+                                         inE.Src
+                                         outE.Dest
+                                         (inE.Command @ outE.Command)
+
+                    (removed', g', None)
+                | _ -> (removed, g, Some nName)
 
     /// <summary>
     ///     Performs a node-wise optimisation on every node in the graph.
@@ -460,7 +537,10 @@ module Graph =
         // TODO(CaptainHayashi): Use the model for something.
         onNodes (Utils.optimiseWith optR optA verbose
                      [ ("graph-collapse-nops", true, collapseNops)
-                       ("graph-collapse-ites", true, collapseITEs) ] )
+                       ("graph-collapse-ites", true, collapseITEs)
+                       ("x-graph-drop-local-midview",
+                        false,
+                        dropLocalMidView model.Locals) ] )
 
     /// <summary>
     ///     Optimises a model over graphs.
