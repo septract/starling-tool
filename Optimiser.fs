@@ -25,39 +25,63 @@ open Starling.Core.GuardedView
 /// </summary>
 module Utils =
     /// <summary>
-    ///     Parses an optimisation string.
+    ///     Parses an optimisation string list.
     /// </summary>
     /// <param name="opts">
-    ///     A string containing a comma or semicolon-separated list of
-    ///     optimisation names.
-    ///     Optimisation names starting with a + or - have this stripped off,
-    ///     and the optimisation is negated if the sign was -.
+    ///     A list of prefixes of optimisation names.
+    ///     Optimisation name prefixes starting with 'no-' have this stripped
+    ///     off, and the optimisation is negated.
     /// </param>
     /// <returns>
-    ///     A tuple of two sets of optimisation names.  The first is the
-    ///     set of optimisations force-disabled (-).  The second is the set of
-    ///     optimisations force-enabled (+ or no sign).  Each optimisation
-    ///     name is downcased.  The optimisation name 'all' is special, as it
-    ///     force-enables (or force-disables) all optimisations.
+    ///     <para>
+    ///         A tuple of two sets of optimisation prefixes.
+    ///         The first is the set of optimisations force-disabled (names
+    ///         beginning with no-).
+    ///         The second is the set of optimisations force-enabled.
+    ///         Each optimisation name is downcased.
+    ///     </para>
+    ///     <para>
+    ///         As these strings are prefixes, 'graph' will switch on
+    ///         all optimisations beginning with 'graph'.
+    ///     </para>
+    ///     <para>
+    ///         The optimisation name 'all' is special.
+    ///         It force-enables (or force-disables if 'no-all') all
+    ///         optimisations.
+    ///     </para>
     /// </returns>
-    let parseOptString (opts : string) =
-        opts.ToLower()
-            .Split([| "," ; ";" |],
-                   System.StringSplitOptions.RemoveEmptyEntries)
-        |> Seq.toList
-        |> List.partition (fun str -> str.StartsWith("-"))
-        |> pairMap (Seq.map (fun s -> s.Remove(0, 1)) >> Set.ofSeq)
-                   (Seq.map (fun s ->
-                                 if s.StartsWith "+"
-                                 then s.Remove(0, 1)
-                                 else s) >> Set.ofSeq)
+    let parseOptString (opts : string list) =
+        opts
+        |> List.partition (fun str -> str.StartsWith("no-"))
+        |> pairMap (Seq.map (fun s -> s.Remove(0, 3)) >> Set.ofSeq)
+                   (Set.ofSeq)
+
+    /// <summary>
+    ///     Decides whether an optimisation name matches an allowed
+    ///     optimisation prefix.
+    /// </summary>
+    /// <param name="prefixes">
+    ///     The set of allowed optimisation prefixes.
+    /// </param>
+    /// <param name="opt">
+    ///     The optimisation name to check.
+    /// </param>
+    /// <returns>
+    ///     True if <paramref name="opt" /> is allowed, according to
+    ///     <paramref name="prefixes" />.
+    /// </returns>
+    let optAllowed prefixes (opt : string) =
+        // Check for the most obvious (and O(1)) case first.
+        Set.contains opt prefixes ||
+        Set.exists opt.StartsWith prefixes
 
     /// <summary>
     ///     Applies a pair of optimisation removes and adds to an optimisation
     ///     set.
     /// </summary>
     /// <param name="opts">
-    ///     The default set of optimisers.
+    ///     A list of triples of optimiser name, whether it's enabled by
+    ///     default, and function.
     /// </param>
     /// <param name="removes">
     ///     The set of optimisation names to remove.  If this contains 'all',
@@ -70,67 +94,73 @@ module Utils =
     /// <param name="verbose">
     ///     If true, add warnings when a default optimisation is overridden.
     /// </param>
-    /// <typeparam name="a">
-    ///     The type of item being optimised.
-    /// </typeparam>
     /// <returns>
-    ///     A function that, given an optimisation name and an optimiser,
-    ///     returns that optimiser if the optimisation is switched on,
-    ///     and the identity function if the optimisation is switched off.
+    ///     A sequence of optimisers to run.
     /// </returns>
-    let mkOptimiserGuard opts removes adds verbose
-        : (string -> ('a -> 'a) -> ('a -> 'a)) =
-        // Warn about expressly disabled optimisations if verbose is on.
-        let disabled =
-            if verbose
-            then fun fName v ->
-                if Set.contains fName opts
-                then eprintfn "note: disabled optimisation %s" fName
-                v
-            else fun _ -> id
-        // Also warn about expressly allowed optimisations if verbose is on.
-        let allowed =
-            if verbose
-            then fun fName f ->
-                if not (Set.contains fName opts)
-                then eprintfn "note: forced optimisation %s" fName
-                f
-            else fun _ f -> f
-
+    let mkOptimiserSet opts removes adds verbose =
         if Set.contains "all" removes
         then
              if verbose
              then eprintfn "note: all optimisations disabled"
 
-             (fun fName _ -> disabled fName)
+             []
         else if Set.contains "all" adds
-             then
-                  if verbose
-                  then eprintfn "note: all optimisations enabled"
+        then
+            if verbose
+            then eprintfn "note: all optimisations enabled"
 
-                  (fun fName -> allowed fName)
-             else
-                 let allowedSet =
-                     opts
-                     // Make sure negations prevail.
-                     |> Set.foldBack Set.remove removes
-                     |> Set.foldBack Set.add adds
-                     |> Set.ofSeq
+            List.map (fun (_, _, ofun) -> ofun) opts
+        else
+            opts
+            |> Seq.choose
+                   (fun (name, on, f) ->
+                        let on' = (on || optAllowed adds name)
+                                  && (not (optAllowed removes name))
 
-                 if verbose
-                 then eprintfn "default optimisations: %s"
-                               (String.concat ", " opts)
-                      eprintfn "added optimisations: %s"
-                               (String.concat ", " adds)
-                      eprintfn "removed optimisations: %s"
-                               (String.concat ", " removes)
-                      eprintfn "chosen optimisations: %s"
-                               (String.concat ", " allowedSet)
+                        if (verbose && (on' <> on))
+                        then eprintfn "note: optimisation %s forced %s"
+                                      name
+                                      (if on' then "on" else "off")
 
-                 (fun fName f ->
-                      if Set.contains fName allowedSet
-                      then (allowed fName f)
-                      else (disabled fName))
+                        if on' then Some f else None)
+            (* We use List instead of Seq to make sure the above evaluates
+               only once. *)
+            |> List.ofSeq
+
+    /// <summary>
+    ///     Discovers which optimisers to activate, and applies them in
+    ///     the specified order.
+    /// </summary>
+    /// <param name="removes">
+    ///     The set of optimisation names to remove.  If this contains 'all',
+    ///     no optimisations will be permitted.
+    /// </param>
+    /// <param name="adds">
+    ///     The set of optimisation names to add.  If this contains 'all',
+    ///     all optimisations will be permitted.
+    /// </param>
+    /// <param name="verbose">
+    ///     If true, add warnings when a default optimisation is overridden.
+    /// </param>
+    /// <param name="opts">
+    ///     A list of triples of optimiser name, whether it's enabled by
+    ///     default, and function.
+    /// </param>
+    /// <typeparam name="a">
+    ///     The type of the item to optimise.
+    /// </typeparam>
+    /// <returns>
+    ///     A function that, when applied to something, optimises it with
+    ///     the selected optimisers.
+    /// </returns>
+    let optimiseWith removes adds verbose opts =
+        let fs = mkOptimiserSet opts removes adds verbose
+
+        (* This would be much more readable if it wasn't pointfree...
+           ...but would also cause fs to be evaluated every single time
+           the result of partially applying optimiseWith to removes, adds,
+           verbose and opts is then applied to the input!  Oh, F#.  *)
+        (flip (List.fold (|>)) fs)
 
 /// <summary>
 ///     Graph optimisation.
@@ -208,47 +238,49 @@ module Graph =
     ///     Given a node, tries to unify every other node that is
     ///     equivalent and connected, but only by no-op commands, into it.
     /// </summary>
-    /// <param name="removed">
-    ///     The list of nodes already unified, which is appended to in the
-    ///     result.
-    /// </param>
-    /// <param name="g">
-    ///     The graph to unify (perhaps).
-    /// </param>
-    /// <param name="nName">
-    ///     The name of the node to unify.
+    /// <param name="_arg1">
+    ///     A triple of:
+    ///     the list of nodes already removed, which is appended to in the
+    ///     result;
+    ///     the graph to optimise (perhaps);
+    ///     an Option containing the name of the node to optimise.
     /// </param>
     /// <returns>
-    ///     A tuple containing the list of node names removed and a graph.
+    ///     A triple containing the list of node names removed, a graph,
+    ///     and the input node Option.
     ///     The graph is equivalent to <paramref name="g" />, but with some
-    ///     nodes merged into <paramref name="nName" /> if they are
+    ///     nodes merged into the named node if they are
     ///     equivalent and connected only by no-op commands.
     /// </returns>
-    let removeIdStep removed g nName =
-        // First, find all of the other nodes that connect to this node.
-        let nView, outNodes, inNodes = g.Contents.[nName]
+    let removeIdStep (removed, g, nNameOpt) =
+        match nNameOpt with
+        | Some nName ->
+            // First, find all of the other nodes that connect to this node.
+            let nView, outNodes, inNodes = g.Contents.[nName]
 
-        let outs = outNodes |> Set.toSeq |> Seq.map (fun { Dest = d } -> d)
-        let ins = inNodes |> Set.toSeq |> Seq.map (fun { Src = s } -> s)
+            let outs = outNodes |> Set.toSeq |> Seq.map (fun { Dest = d } -> d)
+            let ins = inNodes |> Set.toSeq |> Seq.map (fun { Src = s } -> s)
 
-        Seq.append outs ins
-        // Then, find out which ones are nop-connected.
-        |> Seq.choose
-               (fun xName ->
-                    if (nopConnected g nName xName)
-                    then (Some xName)
-                    else None)
-        (* If we found any nodes, then unify them.
-         * We also have to wipe out the edges between both nodes.
-         *)
-        |> Seq.fold (fun (xs, gg) xName ->
-                        // TODO(CaptainHayashi): make unify work on graphs
-                        gg
-                        |> rmEdgesBetween nName xName
-                        |> rmEdgesBetween xName nName
-                        |> unify nName xName
-                        |> mkPair (xName :: xs))
-                    (removed, g)
+            Seq.append outs ins
+            // Then, find out which ones are nop-connected.
+            |> Seq.choose
+                   (fun xName ->
+                        if (nopConnected g nName xName)
+                        then (Some xName)
+                        else None)
+            (* If we found any nodes, then unify them.
+             * We also have to wipe out the edges between both nodes.
+             *)
+            |> Seq.fold (fun (xs, gg) xName ->
+                            // TODO(CaptainHayashi): make unify work on graphs
+                            gg
+                            |> rmEdgesBetween nName xName
+                            |> rmEdgesBetween xName nName
+                            |> unify nName xName
+                            |> mkPair (xName :: xs))
+                        (removed, g)
+            |> fun (removed', g') -> (removed', g', Some nName)
+        | None -> (removed, g, None)
 
     /// <summary>
     ///     Performs a node-wise optimisation on every node in the graph.
@@ -269,12 +301,14 @@ module Graph =
     let rec liftNodeOptimisation opt graph =
         // TODO(CaptainHayashi): do a proper depth-first search instead.
 
-        let (xs, newGraph) =
+        let (xs, newGraph, _) =
             graph.Contents
             // Pull out nodeNames for removeIdStep.
             |> keys
             // Then, for each of those, try merging everything else into it.
-            |> Seq.fold (uncurry opt) ([], graph)
+            // TODO(CaptainHayashi): react when an optimisation kills a node?
+            |> Seq.fold (fun (r, g, _) n -> opt (r, g, Some n))
+                        ([], graph, None)
 
         (* Tail-recurse back if we removed some nodes.
          * This is to see if we enabled more removals.
@@ -282,19 +316,6 @@ module Graph =
         if (Seq.isEmpty xs)
         then newGraph
         else liftNodeOptimisation opt newGraph
-
-    /// <summary>
-    ///     Merges equivalent nodes where they are connected, but only by
-    ///     no-operations.
-    /// </summary>
-    /// <param name="_arg1">
-    ///     The graph to optimise.
-    /// </param>
-    /// <returns>
-    ///     A graph equivalent to <paramref name="_arg1" />, but with all
-    ///     equivalent nodes connected only by 'Id' merged.
-    /// </returns>
-    let removeIdTransitions = liftNodeOptimisation removeIdStep
 
     /// <summary>
     ///     Removes a node if it is an ITE-guarded view.
@@ -305,27 +326,26 @@ module Graph =
     ///         out-edges, each assuming one of the guards.
     ///     </para>
     /// </summary>
-    /// <param name="removed">
-    ///     The list of nodes already removed, which is appended to in the
-    ///     result.
-    /// </param>
-    /// <param name="g">
-    ///     The graph to optimise (perhaps).
-    /// </param>
-    /// <param name="nName">
-    ///     The name of the node to optimise.
+    /// <param name="_arg1">
+    ///     A triple of:
+    ///     the list of nodes already removed, which is appended to in the
+    ///     result;
+    ///     the graph to optimise (perhaps);
+    ///     an Option containing the name of the node to optimise.
     /// </param>
     /// <returns>
-    ///     A tuple containing the list of node names removed and a graph.
-    ///     The graph is equivalent to <paramref name="g" />, but with
-    ///     nodes merged into <paramref name="nName" />
-    ///     equivalent and connected only by no-op commands.
+    ///     A triple containing the list of edge names removed, an
+    ///     optimised graph, and an Option containing the node name if it was
+    ///     not removed.
     /// </returns>
-    let removeITENodeStep removed g nName =
+    let removeITENodeStep (removed, g, nNameOpt) =
         // Does nName actually exist, and is it an ITE node?
-        match (Map.tryFind nName g.Contents) with
-        | Some (ITEGuards ({ Cond = xc },
-                           { Cond = yc }), outEdges, inEdges) ->
+        match (nNameOpt,
+               Option.bind (fun o -> Map.tryFind o g.Contents)
+                           nNameOpt) with
+        | (Some nName,
+           Some (ITEGuards ({ Cond = xc },
+                            { Cond = yc }), outEdges, inEdges)) ->
             // Are there only two out edges, and only one in edges?
             if (Set.count outEdges = 2 && Set.count inEdges = 1)
             then
@@ -373,15 +393,10 @@ module Graph =
                                      inA.Src
                                      outB.Dest
                                      (inA.Command @ outB.Command)
-                    |> (mkPair removed')
-                | _ -> (removed, g)
-            else (removed, g)
-        | _ -> (removed, g)
-
-    /// Graph optimisers switched on by default.
-    let defaultGraphOpts =
-        Set.ofList [ "graph-collapse-nops"
-                     "graph-collapse-ites" ]
+                    |> (fun g' -> removed', g', None)
+                | _ -> (removed, g, nNameOpt)
+            else (removed, g, nNameOpt)
+        | _ -> (removed, g, nNameOpt)
 
     /// <summary>
     ///     Optimises a graph.
@@ -406,11 +421,11 @@ module Graph =
     ///     An optimised equivalent of <paramref name="_arg1" />.
     /// </returns>
     let optimiseGraph model optR optA verbose =
-        let guard = Utils.mkOptimiserGuard defaultGraphOpts optR optA verbose
-
         // TODO(CaptainHayashi): Use the model for something.
-        guard "graph-collapse-nops" removeIdTransitions
-        >> guard "graph-collapse-ites" (liftNodeOptimisation removeITENodeStep)
+        let f = Utils.optimiseWith optR optA verbose
+                   [ ("graph-collapse-nops", true, removeIdStep)
+                     ("graph-collapse-ites", true, removeITENodeStep) ]
+        liftNodeOptimisation f
 
     /// <summary>
     ///     Optimises a model over graphs.
@@ -540,17 +555,11 @@ module Term =
                      "term-reduce-guards"
                      "term-simplify-bools" ]
 
-    /// Optimises a term individually.
-    /// (Or, it will, when finished.)
-    let optimiseTerm optR optA verbose =
-        let guard = Utils.mkOptimiserGuard defaultTermOpts optR optA verbose
-
-        guard "term-remove-after" eliminateAfters
-        >> guard "term-reduce-guards" guardReduce
-        >> guard "term-simplify-bools" simpTerm
-
     /// Optimises a model's terms.
-    let optimise optR optA verbose
-        : Model<STerm<GView, VFunc>, DFunc>
-          -> Model<STerm<GView, VFunc>, DFunc> =
-        mapAxioms (optimiseTerm optR optA verbose)
+    let optimise optR optA verbose =
+        let optimiseTerm =
+            Utils.optimiseWith optR optA verbose
+                [ ("term-remove-after", true, eliminateAfters)
+                  ("term-reduce-guards", true, guardReduce)
+                  ("term-simplify-bools", true, simpTerm) ]
+        mapAxioms optimiseTerm

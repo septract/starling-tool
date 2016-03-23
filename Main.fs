@@ -18,6 +18,7 @@ open Starling.Core.Axiom.Pretty
 
 
 /// Command-line flags used in the Starling executable.
+[<NoComparison>]
 type Options =
     { [<Option(
             'r',
@@ -37,7 +38,7 @@ type Options =
       [<Option('m', HelpText = "Show full model in term-refinement stages.")>]
       showModel : bool
       [<Option('O', HelpText = "Switches given optimisations on or off.")>]
-      optimiseString : string option
+      optimisers : string seq
       [<Option('v', HelpText = "Increases verbosity.")>]
       verbose : bool
       [<Value(
@@ -383,7 +384,7 @@ let runStarling optS verbose =
 
 /// Runs Starling with the given options, and outputs the results.
 let mainWithOptions opts =
-    let optS = withDefault "" opts.optimiseString
+    let optS = Seq.toList opts.optimisers
     let verbose = opts.verbose
 
     let starlingR =
