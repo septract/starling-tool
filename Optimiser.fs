@@ -235,12 +235,42 @@ module Graph =
         && Seq.forall (fun { InEdge.Command = c } -> isNop c) yToX
 
     /// <summary>
+    ///     Plumbs a function over various properties of a graph and
+    ///     node into the format expected by <c>onNodes</c>.
+    /// </summary>
+    /// <param name="f">
+    ///     The function, which takes:
+    ///     the name of the node to look at for optimising;
+    ///     the view of the node;
+    ///     the out-edges of the node;
+    ///     the in-edges of the node;
+    ///     the graph to optimise;
+    ///     and the list of edges removed from the node so far, to append
+    ///     to if this optimisation removes nodes.
+    ///
+    ///     It should return the list of edges removed, the optimised
+    ///     graph, and an Option containing the node name if the node has
+    ///     not been removed.
+    /// </param>
+    /// <returns>
+    ///     A new function, which takes and returns the edge-graph-node
+    ///     triple <c>onNodes</c> expects.
+    /// </returns>
+    let expandNodeIn f =
+        function
+        | (rs, g, None) -> (rs, g, None)
+        | (rs, g, Some n) ->
+            match Map.tryFind n g.Contents with
+            | Some (nV, outs, ins) -> f n nV outs ins g rs
+            | None -> (rs, g, Some n)
+
+    /// <summary>
     ///     Given a node, tries to unify every other node that is
     ///     equivalent and connected, but only by no-op commands, into it.
     /// </summary>
     /// <param name="_arg1">
     ///     A triple of:
-    ///     the list of nodes already removed, which is appended to in the
+    ///     the list of edges already removed, which is appended to in the
     ///     result;
     ///     the graph to optimise (perhaps);
     ///     an Option containing the name of the node to optimise.
@@ -252,70 +282,46 @@ module Graph =
     ///     nodes merged into the named node if they are
     ///     equivalent and connected only by no-op commands.
     /// </returns>
-    let removeIdStep (removed, g, nNameOpt) =
-        match nNameOpt with
-        | Some nName ->
-            // First, find all of the other nodes that connect to this node.
-            let nView, outNodes, inNodes = g.Contents.[nName]
+    let collapseNops =
+        expandNodeIn <|
+            fun nName nView outEdges inEdges g removed ->
+                let outNodes = outEdges
+                               |> Set.toSeq
+                               |> Seq.map (fun { Dest = d } -> d)
+                let inNodes = inEdges
+                              |> Set.toSeq
+                              |> Seq.map (fun { Src = s } -> s)
 
-            let outs = outNodes |> Set.toSeq |> Seq.map (fun { Dest = d } -> d)
-            let ins = inNodes |> Set.toSeq |> Seq.map (fun { Src = s } -> s)
-
-            Seq.append outs ins
-            // Then, find out which ones are nop-connected.
-            |> Seq.choose
-                   (fun xName ->
-                        if (nopConnected g nName xName)
-                        then (Some xName)
-                        else None)
-            (* If we found any nodes, then unify them.
-             * We also have to wipe out the edges between both nodes.
-             *)
-            |> Seq.fold (fun (xs, gg) xName ->
-                            // TODO(CaptainHayashi): make unify work on graphs
-                            gg
-                            |> rmEdgesBetween nName xName
-                            |> rmEdgesBetween xName nName
-                            |> unify nName xName
-                            |> mkPair (xName :: xs))
-                        (removed, g)
-            |> fun (removed', g') -> (removed', g', Some nName)
-        | None -> (removed, g, None)
+                Seq.append outNodes inNodes
+                // Then, find out which ones are nop-connected.
+                |> Seq.filter (nopConnected g nName)
+                (* If we found any nodes, then unify them.
+                 * We also have to wipe out the edges between both nodes.
+                 *)
+                |> Seq.fold (fun (xs, gg) xName ->
+                                gg
+                                |> rmEdgesBetween nName xName
+                                |> rmEdgesBetween xName nName
+                                |> unify nName xName
+                                |> mkPair (xName :: xs))
+                            (removed, g)
+                |> fun (removed', g') -> (removed', g', Some nName)
 
     /// <summary>
-    ///     Performs a node-wise optimisation on every node in the graph.
+    ///     Safely stitches the names of two edges together.
     /// </summary>
-    /// <param name="opt">
-    ///     The optimisation, which must take a list of edges currently
-    ///     removed, a graph, and a node to optimise.  It must return a tuple
-    ///     of the new list of edges removed, and optimised graph.
+    /// <param name="_arg1">
+    ///     The first edge, heading in.
     /// </param>
-    /// <param name="graph">
-    ///     The graph to optimise.
+    /// <param name="_arg2">
+    ///     The second edge, heading out.
     /// </param>
     /// <returns>
-    ///     A graph equivalent to <paramref name="graph" />, but with the
-    ///     node optimisation <paramref name="opt" /> performed as many times
-    ///     as possible.
+    ///     A name for any edge replacing both above edges.
     /// </returns>
-    let rec liftNodeOptimisation opt graph =
-        // TODO(CaptainHayashi): do a proper depth-first search instead.
+    let glueNames { InEdge.Name = a } { OutEdge.Name = b } =
+        String.concat "__" [ a ; b ]
 
-        let (xs, newGraph, _) =
-            graph.Contents
-            // Pull out nodeNames for removeIdStep.
-            |> keys
-            // Then, for each of those, try merging everything else into it.
-            // TODO(CaptainHayashi): react when an optimisation kills a node?
-            |> Seq.fold (fun (r, g, _) n -> opt (r, g, Some n))
-                        ([], graph, None)
-
-        (* Tail-recurse back if we removed some nodes.
-         * This is to see if we enabled more removals.
-         *)
-        if (Seq.isEmpty xs)
-        then newGraph
-        else liftNodeOptimisation opt newGraph
 
     /// <summary>
     ///     Removes a node if it is an ITE-guarded view.
@@ -338,65 +344,95 @@ module Graph =
     ///     optimised graph, and an Option containing the node name if it was
     ///     not removed.
     /// </returns>
-    let removeITENodeStep (removed, g, nNameOpt) =
-        // Does nName actually exist, and is it an ITE node?
-        match (nNameOpt,
-               Option.bind (fun o -> Map.tryFind o g.Contents)
-                           nNameOpt) with
-        | (Some nName,
-           Some (ITEGuards ({ Cond = xc },
-                            { Cond = yc }), outEdges, inEdges)) ->
-            // Are there only two out edges, and only one in edges?
-            if (Set.count outEdges = 2 && Set.count inEdges = 1)
-            then
-                let oE, iE = Set.toList outEdges, Set.toList inEdges
-                let outA, outB = oE.[0], oE.[1]
-                let inA : InEdge = iE.[0]
+    let collapseITEs =
+        expandNodeIn <|
+            fun nName nView outEdges inEdges g removed ->
+                match nView with
+                | ITEGuards ({ Cond = xc }, { Cond = yc }) ->
+                    // Are there only two out edges, and only one in edges?
+                    if (Set.count outEdges = 2 && Set.count inEdges = 1)
+                    then
+                        let oE, iE = Set.toList outEdges, Set.toList inEdges
+                        let outA, outB = oE.[0], oE.[1]
+                        let inA : InEdge = iE.[0]
 
-                (* Translate xc and yc to pre-state, because that's what
-                 * the assumes will be.
-                 *)
-                let xcPre = (liftMarker Before always).BSub xc
-                let ycPre = (liftMarker Before always).BSub yc
+                        (* Translate xc and yc to pre-state, to match the
+                           commands. *)
+                        let xcPre = (liftMarker Before always).BSub xc
+                        let ycPre = (liftMarker Before always).BSub yc
 
-                // Are the out edges assumes over xc and yc?
-                match (outA.Command, outB.Command) with
-                | ([ { Name = aN ; Params = [ BExpr aP ] } ],
-                   [ { Name = bN ; Params = [ BExpr bP ] } ])
-                  when (aN = "Assume" && bN = "Assume"
-                        && (equivHolds
-                                (orEquiv
-                                     (andEquiv (equiv aP xcPre)
-                                               (equiv bP ycPre))
-                                     (andEquiv (equiv aP ycPre)
-                                               (equiv bP xcPre))))) ->
-                    let removed' =
-                        outA.Name :: outB.Name :: inA.Name :: removed
+                        // Are the out edges assumes over xc and yc?
+                        match (outA.Command, outB.Command) with
+                        | ([ { Name = aN ; Params = [ BExpr aP ] } ],
+                           [ { Name = bN ; Params = [ BExpr bP ] } ])
+                            when (aN = "Assume" && bN = "Assume"
+                                  && equivHolds <|
+                                         orEquiv
+                                             (andEquiv (equiv aP xcPre)
+                                                       (equiv bP ycPre))
+                                             (andEquiv (equiv aP ycPre)
+                                                       (equiv bP xcPre))) ->
+                            let removed' =
+                                outA.Name :: outB.Name :: inA.Name :: removed
 
-                    let aCmd = inA.Command @ outA.Command
+                            let aCmd = inA.Command @ outA.Command
 
-                    g
-                    // Remove the existing edges first.
-                    |> rmEdgesBetween inA.Src nName
-                    |> rmEdgesBetween nName outA.Dest
-                    |> rmEdgesBetween nName outB.Dest
-                    // Then, remove the node.
-                    |> rmNode nName
-                    // Then, add the new edges.
-                    |> mkEdgeBetween (String.concat "__" [ inA.Name
-                                                           outA.Name ])
-                                     inA.Src
-                                     outA.Dest
-                                     (inA.Command @ outA.Command)
-                    |> mkEdgeBetween (String.concat "__" [ inA.Name
-                                                           outB.Name ])
-                                     inA.Src
-                                     outB.Dest
-                                     (inA.Command @ outB.Command)
-                    |> (fun g' -> removed', g', None)
-                | _ -> (removed, g, nNameOpt)
-            else (removed, g, nNameOpt)
-        | _ -> (removed, g, nNameOpt)
+                            g
+                            // Remove the existing edges first.
+                            |> rmEdgesBetween inA.Src nName
+                            |> rmEdgesBetween nName outA.Dest
+                            |> rmEdgesBetween nName outB.Dest
+                            // Then, remove the node.
+                            |> rmNode nName
+                            // Then, add the new edges.
+                            |> mkEdgeBetween (glueNames inA outA)
+                                             inA.Src
+                                             outA.Dest
+                                             (inA.Command @ outA.Command)
+                            |> mkEdgeBetween (glueNames inA outB)
+                                             inA.Src
+                                             outB.Dest
+                                             (inA.Command @ outB.Command)
+                            |> (fun g' -> removed', g', None)
+                        | _ -> (removed, g, Some nName)
+                    else (removed, g, Some nName)
+                | _ -> (removed, g, Some nName)
+
+
+    /// <summary>
+    ///     Performs a node-wise optimisation on every node in the graph.
+    /// </summary>
+    /// <param name="opt">
+    ///     The optimisation, which must take a list of edges currently
+    ///     removed, a graph, and a node to optimise.  It must return a tuple
+    ///     of the new list of edges removed, and optimised graph.
+    /// </param>
+    /// <param name="graph">
+    ///     The graph to optimise.
+    /// </param>
+    /// <returns>
+    ///     A graph equivalent to <paramref name="graph" />, but with the
+    ///     node optimisation <paramref name="opt" /> performed as many times
+    ///     as possible.
+    /// </returns>
+    let rec onNodes opt graph =
+        // TODO(CaptainHayashi): do a proper depth-first search instead.
+
+        let (xs, newGraph, _) =
+            graph.Contents
+            // Pull out nodeNames for removeIdStep.
+            |> keys
+            // Then, for each of those, try merging everything else into it.
+            // TODO(CaptainHayashi): react when an optimisation kills a node?
+            |> Seq.fold (fun (r, g, _) n -> opt (r, g, Some n))
+                        ([], graph, None)
+
+        (* Tail-recurse back if we removed some nodes.
+         * This is to see if we enabled more removals.
+         *)
+        if (Seq.isEmpty xs)
+        then newGraph
+        else onNodes opt newGraph
 
     /// <summary>
     ///     Optimises a graph.
@@ -422,10 +458,9 @@ module Graph =
     /// </returns>
     let optimiseGraph model optR optA verbose =
         // TODO(CaptainHayashi): Use the model for something.
-        let f = Utils.optimiseWith optR optA verbose
-                   [ ("graph-collapse-nops", true, removeIdStep)
-                     ("graph-collapse-ites", true, removeITENodeStep) ]
-        liftNodeOptimisation f
+        onNodes (Utils.optimiseWith optR optA verbose
+                     [ ("graph-collapse-nops", true, collapseNops)
+                       ("graph-collapse-ites", true, collapseITEs) ] )
 
     /// <summary>
     ///     Optimises a model over graphs.
