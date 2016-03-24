@@ -496,7 +496,10 @@ let parseFile name =
         // If - or no name was given, parse from the console.
         let stream, streamName =
             match name with
-            | None | Some("-") -> (Console.OpenStandardInput (), "(stdin)")
+            | None ->
+                eprintfn "note: no input filename given, reading from stdin"
+                (Console.OpenStandardInput (), "(stdin)")
+            | Some("-") -> (Console.OpenStandardInput (), "(stdin)")
             | Some(nam) -> (IO.File.OpenRead(nam) :> IO.Stream, nam)
 
         runParserOnStream parseScript () streamName stream Text.Encoding.UTF8
