@@ -303,7 +303,7 @@ let ticketLockLockSubgraph : Subgraph =
                 ("lock_V4",
                      (Multiset.ofList
                          [ gHoldLock sIsT
-                           gHoldTick (BNot sIsT) ], Entry)) ]
+                           gHoldTick (BNot sIsT) ], Normal)) ]
       Edges =
           Map.ofList
               [ ("lock_C0",
@@ -477,4 +477,4 @@ let ticketLockUnlockGraph : Graph =
                             [ func "!I++"
                                    [ AExpr (aBefore "serving")
                                      AExpr (aAfter "serving") ]] }, 
-                   Normal)) ] }
+                   Exit)) ] }

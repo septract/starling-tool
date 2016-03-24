@@ -28,7 +28,7 @@ module Types =
     ///         Used to signify if a node is an Entry or Edit node
     ///     </para>
     /// </summary>
-    type NodeKind = Normal | Entry | Exit
+    type NodeKind = Normal | Entry | Exit | EntryExit
 
     /// <summary>
     ///     Type synonym for graph edges.
@@ -328,12 +328,21 @@ let unify src dest graph =
         let swapIn o = { o with Src = swapNode o.Src }
         let swapOut o = { o with Dest = swapNode o.Dest }
 
+        (* Unify Node Kinds to account for Entry and Exit combining *)
+        let unifyNodeKind nk1 nk2 =
+            match nk1, nk2 with 
+            | Entry, Exit  | Exit, Entry
+            | EntryExit, _ | _, EntryExit -> EntryExit
+            | Entry, _     | _, Entry     -> Entry
+            | Exit, _      | _, Exit      -> Exit
+            | Normal, Normal              -> Normal
+
         (* Remove a node if it is source;
          * otherwise, inspect its nodes for source, and rewrite them
          * to target.  If the node is target, add in the source edges.
          *)
         let unifyStep (name, (view, outEdges, inEdges, nodeKind2)) =
-            if name = src && nodeKind2 = nodeKind
+            if name = src
             then None
             else
                 let newOut =
@@ -345,7 +354,7 @@ let unify src dest graph =
                     |> Set.map swapIn
                     |> if name = dest then Set.union srcIn else id
 
-                Some (name, (view, newOut, newIn, nodeKind))
+                Some (name, (view, newOut, newIn, unifyNodeKind nodeKind nodeKind2))
 
         let contents =
             graph.Contents
@@ -647,7 +656,7 @@ module Pretty =
     ///     A pretty-printer <c>Command</c> representing the node.
     /// </returns>
     let printNode id (view, nk) =
-        let list = match nk with Normal -> [] | Entry -> [String "(Entry)"] | Exit -> [String "(Exit)"] 
+        let list = match nk with Normal -> [] | Entry -> [String "(Entry)"] | Exit -> [String "(Exit)"] | EntryExit -> [String "(EntryExit)"]
         hsep [ id |> String
                ([ id |> String
                   view |> printGView ] @ list)|> colonSep |> printLabel 

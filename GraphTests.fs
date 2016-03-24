@@ -45,7 +45,8 @@ type GraphTests() =
                       Set.singleton
                           { Name = "unlock_N0"
                             Src = "unlock_V1"
-                            Command = [] } ))
+                            Command = [] },
+                      Entry ))
                     ("unlock_V1",
                      (Multiset.empty (),
                       Set.singleton
@@ -58,7 +59,8 @@ type GraphTests() =
                             Command =
                                 [ func "!I++"
                                        [ AExpr (aBefore "serving")
-                                         AExpr (aAfter "serving") ]] } )) ] )
+                                         AExpr (aAfter "serving") ]] },
+                      Exit)) ] )
             .SetName("Adding a valid, unique edge to unlock works")]
 
     /// <summary>
@@ -84,7 +86,7 @@ type GraphTests() =
                           [ ("unlock_V0",
                              (Multiset.singleton
                                  (gfunc BTrue "holdLock" [] ),
-                              Entry)) ]
+                              EntryExit)) ]
                   Edges =
                       Map.ofList
                           [ ("unlock_C0",
@@ -99,7 +101,7 @@ type GraphTests() =
                 Some <|
                 { Nodes =
                       Map.ofList
-                          [ ("unlock_V1", (Multiset.empty (), Exit)) ]
+                          [ ("unlock_V1", (Multiset.empty (), EntryExit)) ]
                   Edges =
                       Map.ofList
                           [ ("unlock_C0",
