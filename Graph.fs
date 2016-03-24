@@ -285,37 +285,36 @@ let combine { Nodes = ans ; Edges = aes }
 /// <summary>
 ///     Unifies two nodes in a graph.
 /// </summary>
-/// <param name="source">
+/// <param name="src">
 ///     The node to delete in the unification.
 /// </param>
-/// <param name="target">
+/// <param name="dest">
 ///     The node to keep in the unification.
 /// </param>
 /// <param name="graph">
 ///     The subgraph to transform.
 /// </param>
 /// <returns>
-///     The graph that is <paramref name="graph" /> but with
-///     <paramref name="source" /> deleted, and all edges starting and ending
-///     at it redirected to <paramref name="target" />.
+///     An Option.
+///     The option is <c>None</c> if either of the nodes do not exist.
+///     It is <c>Some</c> <paramref name="graph" /> if
+///     <paramref name="src" /> = <paramref name="dest" />.
+///     Otherwise, it contains the graph that is <paramref name="graph" />
+///     but with <paramref name="src" /> deleted, and all edges starting
+///     and ending at it redirected to <paramref name="dest" />.
 /// </returns>
-/// <remarks>
-///     <para>
-///         If <c>source = target</c>, or either of the nodes do not exist,
-///         <paramref name="graph" /> is returned unchanged.
-///     </para>
-/// </remarks>
-let unify source target graph =
-    if (source = target)
-       || (not (Map.containsKey source graph.Contents))
-       || (not (Map.containsKey target graph.Contents))
-    then graph
+let unify src dest graph =
+    if (src = dest)
+    then Some graph
+    else if (not (Map.containsKey src graph.Contents))
+            || (not (Map.containsKey dest graph.Contents))
+    then None
     else
         // Pull out the source's entry, ready to append later.
-        let _, srcOut, srcIn = graph.Contents.[source]
+        let _, srcOut, srcIn = graph.Contents.[src]
 
         let swapNode = function
-                       | n when n = source -> target
+                       | n when n = src -> dest
                        | n -> n
         let swapIn o = { o with Src = swapNode o.Src }
         let swapOut o = { o with Dest = swapNode o.Dest }
@@ -325,17 +324,17 @@ let unify source target graph =
          * to target.  If the node is target, add in the source edges.
          *)
         let unifyStep (name, (view, outEdges, inEdges)) =
-            if name = source
+            if name = src
             then None
             else
                 let newOut =
                     outEdges
                     |> Set.map swapOut
-                    |> if name = target then Set.union srcOut else id
+                    |> if name = dest then Set.union srcOut else id
                 let newIn =
                     inEdges
                     |> Set.map swapIn
-                    |> if name = target then Set.union srcIn else id
+                    |> if name = dest then Set.union srcIn else id
 
                 Some (name, (view, newOut, newIn))
 
@@ -345,7 +344,7 @@ let unify source target graph =
             |> Seq.choose unifyStep
             |> Map.ofSeq
 
-        { graph with Contents = contents }
+        Some { graph with Contents = contents }
 
 
 /// <summary>
@@ -372,9 +371,12 @@ let unify source target graph =
 ///     The graph to change.
 /// </param>
 /// <returns>
-///     The graph resulting from applying <paramref name="f" /> to
-///     the records of nodes <paramref name="x" /> and
-///     <paramref name="y" /> in <paramref name="graph" />.
+///     An Option.
+///     If None, the node pair does not exist.
+///     Otherwise, the Some contains the graph resulting from applying
+///     <paramref name="f" /> to the records of nodes
+///     <paramref name="x" /> and <paramref name="y" /> in
+///     <paramref name="graph" />.
 /// </returns>
 let mapNodePair f x y graph =
     match (Map.tryFind x graph.Contents,
@@ -390,21 +392,21 @@ let mapNodePair f x y graph =
                else (Map.add x (xv, xOut', xIn))
                      >> Map.add y (yv, yOut, yIn')
 
-        { graph with Contents = contents' }
-    | _ -> graph
+        Some { graph with Contents = contents' }
+    | _ -> None
 
 /// <summary>
 ///     Adds an edge to the graph.
 /// </summary>
-/// <param name="name">
-///     A name for the parameter.
-///     This must be unique.
-/// </param>
 /// <param name="src">
 ///     The source node.
 /// </param>
 /// <param name="dest">
 ///     The destination node.
+/// </param>
+/// <param name="name">
+///     A name for the parameter.
+///     This must be unique.
 /// </param>
 /// <param name="cmd">
 ///     The command occurring on the edge.
@@ -413,16 +415,13 @@ let mapNodePair f x y graph =
 ///     The graph to extend.
 /// </param>
 /// <returns>
-///     The graph resulting from adding an edge from
+///     An Option: None if either <paramref name="src" /> or
+///     <paramref name="dest" /> point out of the graph.
+///     Else, the graph resulting from adding an edge from
 ///     <paramref name="src" /> to <paramref name="dest" />, with command
 ///     <paramref name="cmd"/>, to <paramref name="graph"/>.
-///
-///     <para>
-///         This is a no-operation if either <paramref name="src" />
-///         or <paramref name="dest" /> point outside of the graph.
-///     </para>
 /// </returns>
-let mkEdgeBetween name src dest cmd graph =
+let mkEdgeBetween src dest name cmd graph =
     // TODO(CaptainHayashi): signal an error if name is taken.
     mapNodePair
         (fun srcOut destIn ->
@@ -457,7 +456,9 @@ let mkEdgeBetween name src dest cmd graph =
 ///     The <c>Graph</c> to prune.
 /// </param>
 /// <returns>
-///     The equivalent of <paramref name="_arg1" /> with all edges
+///     An Option: None if either <paramref name="src" /> or
+///     <paramref name="dest" /> point out of the graph.
+///     Else, contains <paramref name="_arg1" /> with all edges
 ///     between <param name="src" /> and <param name="dest" />
 ///     removed.  If either or both edges do not exist, the graph
 ///     is not changed.
@@ -487,17 +488,17 @@ let rmEdgesBetween src dest =
 ///     The graph to prune.
 /// </param>
 /// <returns>
-///     If the node exists and has no edges left, the graph resulting from
+///     An Option: None if <paramref name="node" /> does not exist or has
+///     edges pointing into or out of it.
+///     Else, the graph resulting from
 ///     removing <paramref name="node" /> from <paramref name="graph" />.
-///     Else, <paramref name="graph" />.
 /// </returns>
 let rmNode node graph =
     // TODO(CaptainHayashi): Chessie-ise this and the other functions?
-    { graph with Contents = Map.filter (fun n (_, outEdges, inEdges) ->
-                                            not (n = node
-                                                 && Set.isEmpty outEdges
-                                                 && Set.isEmpty inEdges))
-                                       graph.Contents }
+    match Map.tryFind node graph.Contents with
+    | Some (_, outE, inE) when Set.isEmpty outE && Set.isEmpty inE ->
+        Some { graph with Contents = Map.remove node graph.Contents }
+    | _ -> None
 
 (*
  * Graph queries

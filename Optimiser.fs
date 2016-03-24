@@ -21,6 +21,63 @@ open Starling.Core.GuardedView
 
 
 /// <summary>
+///     Types for the graph transformer.
+/// </summary>
+[<AutoOpen>]
+module Types =
+    open Starling.Core.Graph
+
+    /// <summary>
+    ///     A graph transformer command.
+    /// </summary>
+    type Transform =
+        /// <summary>
+        ///    Remove the given node.
+        ///    Abort transformation if the node does not exist, or has
+        ///    dangling edges.
+        /// </summary>
+        | RmNode of node : string
+        /// <summary>
+        ///    Remove edges from <c>src</c> to <c>dest</c>.
+        ///    Abort transformation if the nodes do not exist.
+        /// </summary>
+        | RmEdgesBetween of src : string * dest : string
+        /// <summary>
+        ///    Adds an edge from <c>src</c> to <c>dest</c>.
+        ///    Abort transformation if the nodes do not exist.
+        /// </summary>
+        | MkEdgeBetween of src : string * dest : string
+                         * name : string * cmd : Command
+        /// <summary>
+        ///    Merges the node <c>src</c> into <c>dest</c>,
+        ///    substituting the latter for the former in all edges.
+        ///    All edges between the two become cycles on <c>dest</c>.
+        ///    Abort transformation if the nodes do not exist.
+        /// </summary>
+        | Unify of src : string * dest : string
+
+    /// <summary>
+    ///     A node-centric graph transformation context.
+    /// </summary>
+    type TransformContext =
+        { /// <summary>
+          ///     The current state of the graph.
+          /// </summary>
+          Graph : Graph
+          /// <summary>
+          ///     The node currently being inspected.
+          ///     If None, the node has been removed and no longer needs
+          ///     transformation.
+          /// </summary>
+          Node : string option
+          /// <summary>
+          ///     The log of transformations done, in reverse chronological
+          ///     order.
+          /// </summary>
+          Transforms : Transform list
+        }
+
+/// <summary>
 ///     Utilities common to the whole optimisation system.
 /// </summary>
 module Utils =
@@ -170,6 +227,62 @@ module Graph =
     open Starling.Core.Graph
 
     /// <summary>
+    ///     Runs a graph transformation.
+    /// </summary>
+    /// <param name="ctx">
+    ///     The transformation context to transform.
+    /// </param>
+    /// <param name="xform">
+    ///     The transform to perform.
+    /// </param>
+    /// <returns>
+    ///     An Option.  If None, the transformation did not apply.
+    ///     Otherwise, the Option contains the new transformation context.
+    /// </returns>
+    let runTransform (ctx : TransformContext) xform =
+        let f =
+            match xform with
+            | RmNode node -> rmNode node
+            | RmEdgesBetween (src, dest) -> rmEdgesBetween src dest
+            | MkEdgeBetween (src, dest, name, cmd)
+                -> mkEdgeBetween src dest name cmd
+            | Unify (src, dest) -> unify src dest
+
+        let node' =
+            match xform with
+            | RmNode n when Some n = ctx.Node -> None
+            | _ -> ctx.Node
+
+        ctx.Graph
+        |> f
+        |> Option.map (fun g -> { Graph = g
+                                  Node = node'
+                                  Transforms = xform :: ctx.Transforms } )
+
+    /// <summary>
+    ///     Runs a graph transformation list.
+    ///
+    ///     If any transformation step fails, the initial context is
+    ///     returned, rewinding the transformations.
+    /// </summary>
+    /// <param name="xforms">
+    ///     The set of transforms to perform.
+    /// </param>
+    /// <param name="initial">
+    ///     A initial transformation context (to allow transformation results
+    ///     to compose).
+    /// </param>
+    /// <returns>
+    ///     The final transformation context.
+    ///     If the list of transformations has not changed from
+    ///     <paramref name="initial" />, the transformation list was rewound.
+    /// </returns>
+    let runTransforms xforms initial =
+        match (foldFastTerm runTransform initial xforms) with
+        | Some final -> final
+        | None -> initial
+
+    /// <summary>
     ///     Decides whether a program command is a no-op.
     /// </summary>
     /// <param name="_arg1">
@@ -238,42 +351,35 @@ module Graph =
     ///     Plumbs a function over various properties of a graph and
     ///     node into the format expected by <c>onNodes</c>.
     /// </summary>
+    /// <param name="ctx">
+    ///     The transformation context.
+    /// </param>
     /// <param name="f">
     ///     The function, which takes:
-    ///     the name of the node to look at for optimising;
+    ///     the name of the node;
     ///     the view of the node;
     ///     the out-edges of the node;
-    ///     the in-edges of the node;
-    ///     the graph to optimise;
-    ///     and the list of edges removed from the node so far, to append
-    ///     to if this optimisation removes nodes.
+    ///     the in-edges of the node.
     ///
-    ///     It should return the list of edges removed, the optimised
-    ///     graph, and an Option containing the node name if the node has
-    ///     not been removed.
+    ///     It should return a transformation context.
     /// </param>
     /// <returns>
-    ///     A new function, which takes and returns the edge-graph-node
-    ///     triple <c>onNodes</c> expects.
+    ///     If <paramref name="node" /> exists in the graph, the result of
+    ///     calling <paramref name="f" />.  Else, the original context.
     /// </returns>
-    let expandNodeIn f =
-        function
-        | (rs, g, None) -> (rs, g, None)
-        | (rs, g, Some n) ->
-            match Map.tryFind n g.Contents with
-            | Some (nV, outs, ins) -> f n nV outs ins g rs
-            | None -> (rs, g, Some n)
+    let expandNodeIn ctx f =
+        match (Option.bind (fun n -> Map.tryFind n ctx.Graph.Contents
+                                     |> Option.map (fun r -> (n, r)))
+                           ctx.Node) with
+        | Some (nN, (nV, outs, ins)) -> f nN nV outs ins
+        | None -> ctx
 
     /// <summary>
     ///     Given a node, tries to unify every other node that is
     ///     equivalent and connected, but only by no-op commands, into it.
     /// </summary>
-    /// <param name="_arg1">
-    ///     A triple of:
-    ///     the list of edges already removed, which is appended to in the
-    ///     result;
-    ///     the graph to optimise (perhaps);
-    ///     an Option containing the name of the node to optimise.
+    /// <param name="ctx">
+    ///     The transformation context.
     /// </param>
     /// <returns>
     ///     A triple containing the list of node names removed, a graph,
@@ -282,9 +388,9 @@ module Graph =
     ///     nodes merged into the named node if they are
     ///     equivalent and connected only by no-op commands.
     /// </returns>
-    let collapseNops =
-        expandNodeIn <|
-            fun nName nView outEdges inEdges g removed ->
+    let collapseNops ctx =
+        expandNodeIn ctx <|
+            fun node nView outEdges inEdges ->
                 let outNodes = outEdges
                                |> Set.toSeq
                                |> Seq.map (fun { Dest = d } -> d)
@@ -292,20 +398,23 @@ module Graph =
                               |> Set.toSeq
                               |> Seq.map (fun { Src = s } -> s)
 
-                Seq.append outNodes inNodes
-                // Then, find out which ones are nop-connected.
-                |> Seq.filter (nopConnected g nName)
-                (* If we found any nodes, then unify them.
-                 * We also have to wipe out the edges between both nodes.
-                 *)
-                |> Seq.fold (fun (xs, gg) xName ->
-                                gg
-                                |> rmEdgesBetween nName xName
-                                |> rmEdgesBetween xName nName
-                                |> unify nName xName
-                                |> mkPair (xName :: xs))
-                            (removed, g)
-                |> fun (removed', g') -> (removed', g', Some nName)
+                let xforms =
+                    Seq.append outNodes inNodes
+                    // Then, find out which ones are nop-connected.
+                    |> Seq.filter (nopConnected ctx.Graph node)
+                    (* If we found any nodes, then unify them.
+                       We must also remove the edges between the nodes. *)
+                    |> Seq.map
+                           (fun other ->
+                                seq {
+                                    yield RmEdgesBetween (node, other)
+                                    yield RmEdgesBetween (other, node)
+                                    yield Unify (other, node)
+                                } )
+                    |> Seq.concat
+                    |> Seq.toList
+
+                runTransforms xforms ctx
 
     /// <summary>
     ///     Safely stitches the names of two edges together.
@@ -358,21 +467,17 @@ module Graph =
     ///         out-edges, each assuming one of the guards.
     ///     </para>
     /// </summary>
-    /// <param name="_arg1">
-    ///     A triple of:
-    ///     the list of nodes already removed, which is appended to in the
-    ///     result;
-    ///     the graph to optimise (perhaps);
-    ///     an Option containing the name of the node to optimise.
+    /// <param name="ctx">
+    ///     The transformation context.
     /// </param>
     /// <returns>
     ///     A triple containing the list of edge names removed, an
     ///     optimised graph, and an Option containing the node name if it was
     ///     not removed.
     /// </returns>
-    let collapseITEs =
-        expandNodeIn <|
-            fun nName nView outEdges inEdges g removed ->
+    let collapseITEs ctx =
+        expandNodeIn ctx <|
+            fun node nView outEdges inEdges ->
                 match nView with
                 | ITEGuards ({ Cond = xc }, { Cond = yc }) ->
                     // Are there only two out edges, and only one in edges?
@@ -398,31 +503,29 @@ module Graph =
                                                        (equiv bP ycPre))
                                              (andEquiv (equiv aP ycPre)
                                                        (equiv bP xcPre))) ->
-                            let removed' =
-                                outA.Name :: outB.Name :: inA.Name :: removed
 
                             let aCmd = inA.Command @ outA.Command
 
-                            g
-                            // Remove the existing edges first.
-                            |> rmEdgesBetween inA.Src nName
-                            |> rmEdgesBetween nName outA.Dest
-                            |> rmEdgesBetween nName outB.Dest
-                            // Then, remove the node.
-                            |> rmNode nName
-                            // Then, add the new edges.
-                            |> mkEdgeBetween (glueNames inA outA)
-                                             inA.Src
-                                             outA.Dest
-                                             (inA.Command @ outA.Command)
-                            |> mkEdgeBetween (glueNames inA outB)
-                                             inA.Src
-                                             outB.Dest
-                                             (inA.Command @ outB.Command)
-                            |> (fun g' -> removed', g', None)
-                        | _ -> (removed, g, Some nName)
-                    else (removed, g, Some nName)
-                | _ -> (removed, g, Some nName)
+                            let xforms =
+                                [ // Remove the existing edges first.
+                                  RmEdgesBetween (inA.Src, node)
+                                  RmEdgesBetween (node, outA.Dest)
+                                  RmEdgesBetween (node, outB.Dest)
+                                  // Then, remove the node.
+                                  RmNode node
+                                  // Then, add the new edges.
+                                  MkEdgeBetween (inA.Src,
+                                                 outA.Dest,
+                                                 glueNames inA outA,
+                                                 inA.Command @ outA.Command)
+                                  MkEdgeBetween (inA.Src,
+                                                 outB.Dest,
+                                                 glueNames inA outB,
+                                                 inA.Command @ outB.Command) ]
+                            runTransforms xforms ctx
+                        | _ -> ctx
+                    else ctx
+                | _ -> ctx
 
     /// <summary>
     ///     Removes views in the middle of two local commands.
@@ -431,12 +534,8 @@ module Graph =
     ///     The environment of local variables, used to determine whether
     ///     commands are local.
     /// </param>
-    /// <param name="_arg1">
-    ///     A triple of:
-    ///     the list of edges already removed, which is appended to in the
-    ///     result;
-    ///     the graph to optimise (perhaps);
-    ///     an Option containing the name of the node to optimise.
+    /// <param name="ctx">
+    ///     The transformation context.
     /// </param>
     /// <returns>
     ///     A triple containing the list of edge names removed, an
@@ -447,34 +546,30 @@ module Graph =
     ///     This removes a view that may be needed for the proof, so it is
     ///     turned off by default.
     /// </remarks>
-    let dropLocalMidView locals =
-        expandNodeIn <|
-            fun nName nView outEdges inEdges g removed ->
+    let dropLocalMidView locals ctx =
+        expandNodeIn ctx <|
+            fun node nView outEdges inEdges ->
                 (* Only continue if there is one edge in each direction.
                    This is a restriction of the original optimisation. *)
                 match (Set.toList outEdges, Set.toList inEdges) with
                 | ( [ outE ], [ inE ] )
                     when // Don't allow cycles
-                         outE.Dest <> nName
-                         && inE.Src <> nName
+                         outE.Dest <> node
+                         && inE.Src <> node
                          // Commands must be local.
                          && isLocalCommand locals outE.Command
                          && isLocalCommand locals inE.Command ->
 
-                    let removed' = outE.Name :: inE.Name :: removed
-
-                    let g' =
-                        g
-                        |> rmEdgesBetween inE.Src nName
-                        |> rmEdgesBetween nName outE.Dest
-                        |> rmNode nName
-                        |> mkEdgeBetween (glueNames inE outE)
-                                         inE.Src
-                                         outE.Dest
-                                         (inE.Command @ outE.Command)
-
-                    (removed', g', None)
-                | _ -> (removed, g, Some nName)
+                    let xforms =
+                        [ RmEdgesBetween (inE.Src, node)
+                          RmEdgesBetween (node, outE.Dest)
+                          RmNode node
+                          MkEdgeBetween (inE.Src,
+                                         outE.Dest,
+                                         glueNames inE outE,
+                                         inE.Command @ outE.Command) ]
+                    runTransforms xforms ctx
+                | _ -> ctx
 
     /// <summary>
     ///     Performs a node-wise optimisation on every node in the graph.
@@ -495,18 +590,16 @@ module Graph =
     let rec onNodes opt graph =
         // TODO(CaptainHayashi): do a proper depth-first search instead.
 
-        let (xs, newGraph, _) =
+        let { Graph = newGraph ; Transforms = xs } =
             graph.Contents
             // Pull out nodeNames for removeIdStep.
             |> keys
             // Then, for each of those, try merging everything else into it.
-            // TODO(CaptainHayashi): react when an optimisation kills a node?
-            |> Seq.fold (fun (r, g, _) n -> opt (r, g, Some n))
-                        ([], graph, None)
+            |> Seq.fold (fun ctx node -> opt { ctx with Node = Some node })
+                        { Graph = graph ; Node = None ; Transforms = [] }
 
-        (* Tail-recurse back if we removed some nodes.
-         * This is to see if we enabled more removals.
-         *)
+        (* Tail-recurse back if we did some optimisations.
+           This is to see if we enabled more of them. *)
         if (Seq.isEmpty xs)
         then newGraph
         else onNodes opt newGraph

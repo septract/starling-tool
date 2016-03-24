@@ -30,6 +30,7 @@ type GraphTests() =
     static member Adds =
         [ TestCaseData(("unlock_N0", "unlock_V1", "unlock_V0"))
             .Returns(
+              Some <|
               Map.ofList
                   [ ("unlock_V0",
                      (Multiset.singleton
@@ -67,8 +68,8 @@ type GraphTests() =
     member x.``mkEdgeBetween adds edges correctly`` nsd =
           let n, s, d = nsd
           ticketLockUnlockGraph
-          |> mkEdgeBetween n s d []
-          |> fun g -> g.Contents
+          |> mkEdgeBetween s d n []
+          |> Option.map (fun g -> g.Contents)
 
 
     /// <summary>
@@ -77,6 +78,7 @@ type GraphTests() =
     static member Unifies =
         [ TestCaseData(("unlock_V1", "unlock_V0"))
             .Returns(
+                Some <|
                 { Nodes =
                       Map.ofList
                           [ ("unlock_V0",
@@ -93,6 +95,7 @@ type GraphTests() =
             .SetName("unify C1 into C0 on the ticket lock 'unlock'")
           TestCaseData(("unlock_V0", "unlock_V1"))
             .Returns(
+                Some <|
                 { Nodes =
                       Map.ofList
                           [ ("unlock_V1", Multiset.empty () ) ]
@@ -106,13 +109,13 @@ type GraphTests() =
                                   "unlock_V1" ) ] } )
             .SetName("unify C0 into C1 on the ticket lock 'unlock'")
           TestCaseData(("unlock_V0", "unlock_V2"))
-            .Returns(ticketLockUnlockSubgraph)
-            .SetName("unifying into non-existent nodes does nothing")
+            .Returns(None)
+            .SetName("unifying into non-existent nodes fails")
           TestCaseData(("unlock_V2", "unlock_V0"))
-            .Returns(ticketLockUnlockSubgraph)
-            .SetName("unifying non-existent nodes does nothing")
+            .Returns(None)
+            .SetName("unifying non-existent nodes fails")
           TestCaseData(("unlock_V0", "unlock_V0"))
-            .Returns(ticketLockUnlockSubgraph)
+            .Returns(Some ticketLockUnlockSubgraph)
             .SetName("unifying a node onto itself does nothing") ]
 
     /// <summary>
@@ -123,7 +126,7 @@ type GraphTests() =
           let s, t = st
           ticketLockUnlockGraph
           |> unify s t
-          |> toSubgraph  // TODO(CaptainHayashi): make unnecessary?
+          |> Option.map toSubgraph  // TODO(CaptainHayashi): make unnecessary?
 
 
     /// <summary>
