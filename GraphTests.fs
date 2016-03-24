@@ -82,8 +82,9 @@ type GraphTests() =
                 { Nodes =
                       Map.ofList
                           [ ("unlock_V0",
-                             Multiset.singleton
-                                 (gfunc BTrue "holdLock" [] )) ]
+                             (Multiset.singleton
+                                 (gfunc BTrue "holdLock" [] ),
+                              Entry)) ]
                   Edges =
                       Map.ofList
                           [ ("unlock_C0",
@@ -98,7 +99,7 @@ type GraphTests() =
                 Some <|
                 { Nodes =
                       Map.ofList
-                          [ ("unlock_V1", Multiset.empty () ) ]
+                          [ ("unlock_V1", (Multiset.empty (), Exit)) ]
                   Edges =
                       Map.ofList
                           [ ("unlock_C0",

@@ -57,7 +57,7 @@ let rec graphWhile vg cg oP oQ isDo expr inner =
      *)
     trial {
         // Recursively graph the block first.
-        let! iP, iQ, iGraph = graphBlock vg cg inner
+        let! iP, iQ, iGraph = graphBlock false vg cg inner
 
         (* We presume oP and oQ are added into the nodes list by the caller,
          * and that iP and iQ are returned in iNodes.  This means the nodes
@@ -126,8 +126,8 @@ and graphITE vg cg oP oQ expr inTrue inFalse =
          * and that tP and tQ are returned in tGraph (and fP/fQ in fGraph).
          * This means the nodes we return are tGraph and fGraph.
          *)
-        let! tP, tQ, tGraph = graphBlock vg cg inTrue
-        let! fP, fQ, fGraph = graphBlock vg cg inFalse
+        let! tP, tQ, tGraph = graphBlock false vg cg inTrue
+        let! fP, fQ, fGraph = graphBlock false vg cg inFalse
         let! tfGraph = combine tGraph fGraph
 
         let cEdges =
@@ -183,7 +183,7 @@ and graphCommand vg cg oP oQ : PartCmd<GView> -> Result<Subgraph, Error> =
 /// <param name="cg">
 ///     The fresh identifier generator to use for command IDs.
 /// </param>
-and graphBlockStep vg cg (iP, oGraphR) {ViewedCommand.Command = cmd; Post = iQview} =
+and graphBlockStep last vg cg (iP, oGraphR) {ViewedCommand.Command = cmd; Post = iQview} =
     (* We already know the precondition's ID--it's in pre.
      * However, we now need to create an ID for the postcondition.
      *)
@@ -191,7 +191,7 @@ and graphBlockStep vg cg (iP, oGraphR) {ViewedCommand.Command = cmd; Post = iQvi
 
      // Add the postcondition onto the outer subgraph.
      let oGraphR2 = trial {
-         let pGraph = { Nodes = Map.ofList [(iQ, iQview)]
+         let pGraph = { Nodes = Map.ofList [(iQ, (iQview, if last then Exit else Normal))]
                         Edges = Map.empty }
          let! oGraph = oGraphR
          return! combine oGraph pGraph }
@@ -216,11 +216,11 @@ and graphBlockStep vg cg (iP, oGraphR) {ViewedCommand.Command = cmd; Post = iQvi
 /// <param name="cg">
 ///     The fresh identifier generator to use for command IDs.
 /// </param>
-and graphBlock vg cg {Pre = bPre; Contents = bContents} =
+and graphBlock topLevel vg cg {Pre = bPre; Contents = bContents} =
     // First, generate the ID for the precondition.
     let oP = vg ()
 
-    let initState = (oP, ok { Nodes = Map.ofList [(oP, bPre)]
+    let initState = (oP, ok { Nodes = Map.ofList [(oP, (bPre, if topLevel then Entry else Normal))]
                               Edges = Map.empty } )
 
     (* We flip through every entry in the block, extracting its postcondition
@@ -237,7 +237,7 @@ and graphBlock vg cg {Pre = bPre; Contents = bContents} =
      * precondition for the next line.  Otherwise, our axiom list turns into a
      * failure.
      *)
-    let oQ, graphR = bContents |> List.fold (graphBlockStep vg cg) initState
+    let ((oQ, graphR), _) = bContents |> List.fold (fun (state,i) cmd -> (graphBlockStep (topLevel && bContents.Length = i) vg cg state cmd, i+1)) (initState,1)
 
     // Pull the whole set of returns into one Result.
     lift (fun gr -> (oP, oQ, gr)) graphR
@@ -252,7 +252,7 @@ let graphMethod { Signature = { Name = name }; Body = body } =
     let cmdName () = getFresh cgen |> sprintf "%s_C%A" name
 
     body
-    |> graphBlock viewName cmdName
+    |> graphBlock true viewName cmdName
     |> bind (fun (oP, oQ, gr) -> graph name gr)
 
 /// <summary>
