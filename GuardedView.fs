@@ -122,10 +122,22 @@ let (|Never|_|) { Cond = c ; Item = i } =
 ///         If-then-else guardsets contain two non-false guards, at least one
 ///         of which is equal to the negation of the other.
 ///     </para>
+///
+///     <para>
+///         The active pattern returns the guard and view of the first ITE
+///         guard, then the guard and view of the second.  The views are
+///         <c>GView</c>s, but with a <c>BTrue</c> guard.
+///     </para>
 /// </summary>
 let (|ITEGuards|_|) ms =
     match (Multiset.toList ms) with
-    | x::y::[] when (equivHolds (negates x.Cond y.Cond)) -> Some (x, y)
+    | [ x ; y ] when (equivHolds (negates x.Cond y.Cond)) ->
+        Some (x.Cond, Multiset.singleton { Cond = BTrue; Item = x.Item },
+              y.Cond, Multiset.singleton { Cond = BTrue; Item = y.Item })
+    // {| G -> P |} is trivially equivalent to {| G -> P * ¬G -> emp |}.
+    | [ x ] ->
+        Some (x.Cond, Multiset.singleton { Cond = BTrue; Item = x.Item },
+              mkNot x.Cond, Multiset.empty ())
     | _ -> None
 
 (*

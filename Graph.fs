@@ -539,6 +539,28 @@ let mapEdges f graph =
     |> Seq.concat
 
 
+/// <summary>
+///     Returns true if a node is present and has the given view.
+/// </summary>
+/// <param name="nodeName">
+///     The name of the node to look-up.
+/// </param>
+/// <param name="nodeView">
+///     The expected view of the node to look-up.
+/// </param>
+/// <param name="graph">
+///     The graph to query.
+/// </param>
+/// <returns>
+///     True if, and only if, <paramref name="nodeName" /> exists in
+///     <paramref name="graph" /> and its view is structurally equal
+///     to <paramref name="nodeView" />.
+/// </returns>
+let nodeHasView nodeName nodeView graph =
+    match (Map.tryFind nodeName graph.Contents) with
+    | Some (v, _, _) when v = nodeView -> true
+    | _ -> false
+
 (*
  * Axiomatisation
  *)

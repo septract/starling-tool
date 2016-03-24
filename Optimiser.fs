@@ -459,6 +459,15 @@ module Graph =
                      ps)
 
     /// <summary>
+    ///     Active pattern matching assume commands.
+    /// </summary>
+    let (|Assume|_|) =
+        function
+        | [ { Name = n ; Params = [ BExpr b ] } ]
+          when n = "Assume" -> Some b
+        | _ -> None
+
+    /// <summary>
     ///     Removes a node if it is an ITE-guarded view.
     ///
     ///     <para>
@@ -479,52 +488,52 @@ module Graph =
         expandNodeIn ctx <|
             fun node nView outEdges inEdges ->
                 match nView with
-                | ITEGuards ({ Cond = xc }, { Cond = yc }) ->
-                    // Are there only two out edges, and only one in edges?
-                    if (Set.count outEdges = 2 && Set.count inEdges = 1)
-                    then
-                        let oE, iE = Set.toList outEdges, Set.toList inEdges
-                        let outA, outB = oE.[0], oE.[1]
-                        let inA : InEdge = iE.[0]
+                | ITEGuards (xc, xv, yc, yv) ->
+                    (* Translate xc and yc to pre-state, to match the
+                       commands. *)
+                    let xcPre = (liftMarker Before always).BSub xc
+                    let ycPre = (liftMarker Before always).BSub yc
 
-                        (* Translate xc and yc to pre-state, to match the
-                           commands. *)
-                        let xcPre = (liftMarker Before always).BSub xc
-                        let ycPre = (liftMarker Before always).BSub yc
-
-                        // Are the out edges assumes over xc and yc?
-                        match (outA.Command, outB.Command) with
-                        | ([ { Name = aN ; Params = [ BExpr aP ] } ],
-                           [ { Name = bN ; Params = [ BExpr bP ] } ])
-                            when (aN = "Assume" && bN = "Assume"
-                                  && equivHolds <|
-                                         orEquiv
-                                             (andEquiv (equiv aP xcPre)
-                                                       (equiv bP ycPre))
-                                             (andEquiv (equiv aP ycPre)
-                                                       (equiv bP xcPre))) ->
-
-                            let aCmd = inA.Command @ outA.Command
-
-                            let xforms =
-                                [ // Remove the existing edges first.
-                                  RmEdgesBetween (inA.Src, node)
-                                  RmEdgesBetween (node, outA.Dest)
-                                  RmEdgesBetween (node, outB.Dest)
-                                  // Then, remove the node.
-                                  RmNode node
-                                  // Then, add the new edges.
-                                  MkEdgeBetween (inA.Src,
-                                                 outA.Dest,
-                                                 glueNames inA outA,
-                                                 inA.Command @ outA.Command)
-                                  MkEdgeBetween (inA.Src,
-                                                 outB.Dest,
-                                                 glueNames inA outB,
-                                                 inA.Command @ outB.Command) ]
-                            runTransforms xforms ctx
-                        | _ -> ctx
-                    else ctx
+                    match (Set.toList outEdges, Set.toList inEdges) with
+                    (* Are there only two out edges, and only one in edge?
+                       Are the out edges assumes? *)
+                    | ( [ { Dest = out1D
+                            Command = (Assume out1P) as out1C } as out1
+                          { Dest = out2D
+                            Command = (Assume out2P) as out2C } as out2
+                        ],
+                        [ { Src = inS
+                            Command = inC } as inE ] )
+                        when (// Is the first one x and the second y?
+                              (equivHolds
+                                   (andEquiv (equiv out1P xcPre)
+                                             (equiv out2P ycPre))
+                               && nodeHasView out1D xv ctx.Graph
+                               && nodeHasView out2D yv ctx.Graph)
+                                  // Or is the first one y and the second x?
+                              || (equivHolds
+                                      (andEquiv (equiv out2P xcPre)
+                                                (equiv out1P ycPre))
+                                  && nodeHasView out2D xv ctx.Graph
+                                  && nodeHasView out1D yv ctx.Graph)) ->
+                        let xforms =
+                            [ // Remove the existing edges first.
+                              RmEdgesBetween (inS, node)
+                              RmEdgesBetween (node, out1D)
+                              RmEdgesBetween (node, out2D)
+                              // Then, remove the node.
+                              RmNode node
+                              // Then, add the new edges.
+                              MkEdgeBetween (inS,
+                                             out1D,
+                                             glueNames inE out1,
+                                             inC @ out1C)
+                              MkEdgeBetween (inS,
+                                             out2D,
+                                             glueNames inE out2,
+                                             inC @ out2C) ]
+                        runTransforms xforms ctx
+                    | _ -> ctx
                 | _ -> ctx
 
     /// <summary>
