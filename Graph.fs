@@ -444,13 +444,18 @@ let mkEdgeBetween src dest name cmd graph =
 
 
 /// <summary>
-///     Removes all edges with the given source and destination.
+///     Removes all edges with the given source and destination,
+///     whose name satisfies a predicate.
 /// </summary>
 /// <param name="src">
 ///     The source node.
 /// </param>
 /// <param name="dest">
 ///     The destination node.
+/// </param>
+/// <param name="pred">
+///     A predicate that must hold true on the edge's name for it to
+///     be removed.
 /// </param>
 /// <param name="_arg1">
 ///     The <c>Graph</c> to prune.
@@ -463,16 +468,18 @@ let mkEdgeBetween src dest name cmd graph =
 ///     removed.  If either or both edges do not exist, the graph
 ///     is not changed.
 /// </returns>
-let rmEdgesBetween src dest =
+let rmEdgesBetween src dest pred =
     (* The result will be a well-formed graph, because it cannot
      * create dangling edges.
      *)
     mapNodePair
         (fun srcOut destIn ->
              // We need to delete the out entry in src going to dest...
-             let srcOut' = Set.filter (fun { Dest = d } -> d <> dest) srcOut
+             let srcOut' = Set.filter (fun { Dest = d ; Name = n } ->
+                                       not (d = dest && pred n)) srcOut
              // ...and the in entry in dest coming from src.
-             let destIn' = Set.filter (fun { Src = s } -> s <> src) destIn
+             let destIn' = Set.filter (fun { Src = s ; Name = n } ->
+                                       not (s = src && pred n)) destIn
 
              (srcOut', destIn'))
         src

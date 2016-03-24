@@ -38,10 +38,31 @@ module Types =
         /// </summary>
         | RmNode of node : string
         /// <summary>
-        ///    Remove edges from <c>src</c> to <c>dest</c>.
+        ///    Remove all edges from <c>src</c> to <c>dest</c>.
         ///    Abort transformation if the nodes do not exist.
         /// </summary>
-        | RmEdgesBetween of src : string * dest : string
+        | RmAllEdgesBetween of src : string * dest : string
+        /// <summary>
+        ///    Remove the given in-edge leading into <c>node</c>.
+        ///    Abort transformation if the edge doesn't make sense.
+        /// </summary>
+        | RmInEdge of edge : InEdge * dest : string
+        /// <summary>
+        ///    Remove the given out-edge leading out of <c>node</c>.
+        ///    Abort transformation if the edge doesn't make sense.
+        /// </summary>
+        | RmOutEdge of src : string * edge : OutEdge
+        /// <summary>
+        ///    Remove the named edge from <c>src</c> to <c>dest</c>.
+        ///    Abort transformation if the nodes do not exist.
+        /// </summary>
+        | RmNamedEdgeBetween of src : string * dest : string * name : string
+        /// <summary>
+        ///    Adds an edge combining the in edge <c>in</c> with the out
+        ///    edge <c>out</c>.
+        ///    Abort transformation if anything goes wrong.
+        /// </summary>
+        | MkCombinedEdge of inE : InEdge * outE : OutEdge
         /// <summary>
         ///    Adds an edge from <c>src</c> to <c>dest</c>.
         ///    Abort transformation if the nodes do not exist.
@@ -227,6 +248,21 @@ module Graph =
     open Starling.Core.Graph
 
     /// <summary>
+    ///     Safely stitches the names of two edges together.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The first edge, heading in.
+    /// </param>
+    /// <param name="_arg2">
+    ///     The second edge, heading out.
+    /// </param>
+    /// <returns>
+    ///     A name for any edge replacing both above edges.
+    /// </returns>
+    let glueNames { InEdge.Name = a } { OutEdge.Name = b } =
+        String.concat "__" [ a ; b ]
+
+    /// <summary>
     ///     Runs a graph transformation.
     /// </summary>
     /// <param name="ctx">
@@ -243,9 +279,19 @@ module Graph =
         let f =
             match xform with
             | RmNode node -> rmNode node
-            | RmEdgesBetween (src, dest) -> rmEdgesBetween src dest
-            | MkEdgeBetween (src, dest, name, cmd)
-                -> mkEdgeBetween src dest name cmd
+            // All of these commands can be implemented the same way!
+            | RmInEdge ({ Src = src ; Name = name }, dest)
+                | RmOutEdge (src, { Dest = dest ; Name = name } )
+                | RmNamedEdgeBetween (src, dest, name) ->
+                rmEdgesBetween src dest ((=) name)
+            | RmAllEdgesBetween (src, dest) -> rmEdgesBetween src dest always
+            | MkCombinedEdge (inE, outE) ->
+                mkEdgeBetween inE.Src
+                              outE.Dest
+                              (glueNames inE outE)
+                              (inE.Command @ outE.Command)
+            | MkEdgeBetween (src, dest, name, cmd) ->
+                mkEdgeBetween src dest name cmd
             | Unify (src, dest) -> unify src dest
 
         let node' =
@@ -407,29 +453,14 @@ module Graph =
                     |> Seq.map
                            (fun other ->
                                 seq {
-                                    yield RmEdgesBetween (node, other)
-                                    yield RmEdgesBetween (other, node)
+                                    yield RmAllEdgesBetween (node, other)
+                                    yield RmAllEdgesBetween (other, node)
                                     yield Unify (other, node)
                                 } )
                     |> Seq.concat
                     |> Seq.toList
 
                 runTransforms xforms ctx
-
-    /// <summary>
-    ///     Safely stitches the names of two edges together.
-    /// </summary>
-    /// <param name="_arg1">
-    ///     The first edge, heading in.
-    /// </param>
-    /// <param name="_arg2">
-    ///     The second edge, heading out.
-    /// </param>
-    /// <returns>
-    ///     A name for any edge replacing both above edges.
-    /// </returns>
-    let glueNames { InEdge.Name = a } { OutEdge.Name = b } =
-        String.concat "__" [ a ; b ]
 
     /// <summary>
     ///     Decides whether a command is local.
@@ -518,20 +549,14 @@ module Graph =
                                   && nodeHasView out1D yv ctx.Graph)) ->
                         let xforms =
                             [ // Remove the existing edges first.
-                              RmEdgesBetween (inS, node)
-                              RmEdgesBetween (node, out1D)
-                              RmEdgesBetween (node, out2D)
+                              RmInEdge (inE, node)
+                              RmOutEdge (node, out1)
+                              RmOutEdge (node, out2)
                               // Then, remove the node.
                               RmNode node
                               // Then, add the new edges.
-                              MkEdgeBetween (inS,
-                                             out1D,
-                                             glueNames inE out1,
-                                             inC @ out1C)
-                              MkEdgeBetween (inS,
-                                             out2D,
-                                             glueNames inE out2,
-                                             inC @ out2C) ]
+                              MkCombinedEdge (inE, out1)
+                              MkCombinedEdge (inE, out2) ]
                         runTransforms xforms ctx
                     | _ -> ctx
                 | _ -> ctx
@@ -570,13 +595,10 @@ module Graph =
                          && isLocalCommand locals inE.Command ->
 
                     let xforms =
-                        [ RmEdgesBetween (inE.Src, node)
-                          RmEdgesBetween (node, outE.Dest)
+                        [ RmInEdge (inE, node)
+                          RmOutEdge (node, outE)
                           RmNode node
-                          MkEdgeBetween (inE.Src,
-                                         outE.Dest,
-                                         glueNames inE outE,
-                                         inE.Command @ outE.Command) ]
+                          MkCombinedEdge (inE, outE) ]
                     runTransforms xforms ctx
                 | _ -> ctx
 
