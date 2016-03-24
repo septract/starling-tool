@@ -528,13 +528,10 @@ module Graph =
                     match (Set.toList outEdges, Set.toList inEdges) with
                     (* Are there only two out edges, and only one in edge?
                        Are the out edges assumes? *)
-                    | ( [ { Dest = out1D
-                            Command = (Assume out1P) as out1C } as out1
-                          { Dest = out2D
-                            Command = (Assume out2P) as out2C } as out2
+                    | ( [ { Dest = out1D ; Command = Assume out1P } as out1
+                          { Dest = out2D ; Command = Assume out2P } as out2
                         ],
-                        [ { Src = inS
-                            Command = inC } as inE ] )
+                        [ inE ] )
                         when (// Is the first one x and the second y?
                               (equivHolds
                                    (andEquiv (equiv out1P xcPre)
