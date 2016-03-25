@@ -567,23 +567,20 @@ module Graph =
                    && ((Set.forall (fun (e : OutEdge) -> isLocalCommand locals e.Command) outEdges)
                       || (Set.forall (fun (e : InEdge) -> isLocalCommand locals e.Command) inEdges))
                 then
-                    let mutable xforms = []
-                    let addXForm xf = xforms <- xf :: xforms
+                    let xforms = seq {
+                        for inE in inEdges do
+                            yield RmInEdge (inE, nName)
 
-                    addXForm (RmNode nName)
+                            for outE in outEdges do
+                                yield MkCombinedEdge (inE, outE)
 
-                    for inE in inEdges do
-                        addXForm (RmAllEdgesBetween (inE.Src, nName))
                         for outE in outEdges do
-                            addXForm (MkEdgeBetween (inE.Src,
-                                                     outE.Dest,
-                                                     glueNames inE outE,
-                                                     inE.Command @ outE.Command))
+                            yield RmOutEdge (nName, outE)
 
-                    for outE in outEdges do
-                        addXForm (RmAllEdgesBetween (nName, outE.Dest))
+                        yield RmNode nName
+                    }
 
-                    runTransforms xforms ctx
+                    runTransforms (Seq.toList xforms) ctx
                 else
                     ctx
 
