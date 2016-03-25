@@ -144,3 +144,26 @@ module Tests =
         [<TestCaseSource("Nops")>]
         member x.``Tests whether isNop correctly identifies no-ops`` c =
             Queries.isNop c
+
+        static member Assumes =
+            [ TestCaseData([] : Command)
+                .Returns(false)
+                .SetName("Reject [] as an assume")
+              TestCaseData([ vfunc "Assume" [ BExpr (bBefore "x") ]])
+                .Returns(true)
+                .SetName("Classify Assume(x!before) as an assume")
+              TestCaseData([ vfunc "Foo" [ AExpr (aBefore "bar")
+                                           AExpr (aAfter "bar") ]
+                             vfunc "Assume" [ BExpr (bBefore "x") ]])
+                .Returns(false)
+                .SetName("Reject Foo(bar!before, bar!after); Assume(x!before)\
+                          as an assume") ]
+
+        /// <summary>
+        ///     Tests <c>Assume</c>.
+        /// </summary>
+        [<TestCaseSource("Assumes")>]
+        member x.``Tests whether Assume correctly identifies assumes`` c =
+            match c with
+            | Queries.Assume _ -> true
+            | _ -> false
