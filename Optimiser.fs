@@ -351,8 +351,8 @@ module Graph =
     ///     view, and are connected, but only by no-op commands.
     /// </returns>
     let nopConnected graph x y =
-        let xView, xOut, xIn = graph.Contents.[x]
-        let yView, _, _ = graph.Contents.[y]
+        let xView, xOut, xIn, xnk = graph.Contents.[x]
+        let yView, _, _, ynk = graph.Contents.[y]
 
         let xToY =
             xOut |> Set.toSeq |> Seq.filter (fun { Dest = d } -> d = y)
@@ -364,6 +364,8 @@ module Graph =
         (x <> y)
         // Same view?
         && (xView = yView)
+        // Same Node Kind?
+        && xnk = ynk
         // Connected?
         && not (Seq.isEmpty xToY && Seq.isEmpty yToX)
         // All edges from x to y are nop?
@@ -395,7 +397,7 @@ module Graph =
         match (Option.bind (fun n -> Map.tryFind n ctx.Graph.Contents
                                      |> Option.map (fun r -> (n, r)))
                            ctx.Node) with
-        | Some (nN, (nV, outs, ins)) -> f nN nV outs ins
+        | Some (nN, (nV, outs, ins, nk)) -> f nN nV outs ins nk
         | None -> ctx
 
     /// <summary>
@@ -414,7 +416,7 @@ module Graph =
     /// </returns>
     let collapseNops ctx =
         expandNodeIn ctx <|
-            fun node nView outEdges inEdges ->
+            fun node nView outEdges inEdges nk ->
                 let outNodes = outEdges
                                |> Set.toSeq
                                |> Seq.map (fun { Dest = d } -> d)
@@ -427,9 +429,9 @@ module Graph =
                     // Then, find out which ones are nop-connected.
                     |> Seq.filter (nopConnected ctx.Graph node)
                     (* If we found any nodes, then unify them.
-                       We must also remove the edges between the nodes. *)
+                               We must also remove the edges between the nodes. *)
                     |> Seq.map
-                           (fun other ->
+                            (fun other ->
                                 seq {
                                     yield RmAllEdgesBetween (node, other)
                                     yield RmAllEdgesBetween (other, node)
@@ -486,7 +488,7 @@ module Graph =
     /// </returns>
     let collapseITEs ctx =
         expandNodeIn ctx <|
-            fun node nView outEdges inEdges ->
+            fun node nView outEdges inEdges nk ->
                 match nView with
                 | ITEGuards (xc, xv, yc, yv) ->
                     (* Translate xc and yc to pre-state, to match the
@@ -528,7 +530,8 @@ module Graph =
                 | _ -> ctx
 
     /// <summary>
-    ///     Removes views in the middle of two local commands.
+    ///     Removes views in the where either all of the entry commands are local, or
+    ///     all of the exit commands are local.
     /// </summary>
     /// <param name="locals">
     ///     The environment of local variables, used to determine whether
@@ -548,25 +551,41 @@ module Graph =
     /// </remarks>
     let dropLocalMidView locals ctx =
         expandNodeIn ctx <|
-            fun node nView outEdges inEdges ->
-                (* Only continue if there is one edge in each direction.
-                   This is a restriction of the original optimisation. *)
-                match (Set.toList outEdges, Set.toList inEdges) with
-                | ( [ outE ], [ inE ] )
-                    when // Don't allow cycles
-                         outE.Dest <> node
-                         && inE.Src <> node
-                         // Commands must be local.
-                         && isLocalCommand locals outE.Command
-                         && isLocalCommand locals inE.Command ->
+            fun nName nView outEdges inEdges nk ->
+                (* TODO @mjp41: Need to check nName is not an entry or exit node from the CFG *)
+                (* TODO @mjp41: Need to check nView is not something with a real definition *)
 
-                    let xforms =
-                        [ RmInEdge (inE, node)
-                          RmOutEdge (node, outE)
-                          RmNode node
-                          MkCombinedEdge (inE, outE) ]
+                if nk = Normal  // Check it is not an Entry or Exit node.
+                   (* Only continue if there is one edge for either the in or
+                      out direction. *)
+                   && ((Set.count outEdges < 2) || (Set.count inEdges < 2))
+                   && ((Set.count outEdges > 0) && (Set.count inEdges > 0))
+                  (* Only continue if there are no cycles *)
+                   && (Set.forall (fun (e : OutEdge) -> e.Dest <> nName) outEdges)
+                   && (Set.forall (fun (e : InEdge) -> e.Src <> nName) inEdges)
+                   (* Commands must be local on either the in or the out.*)
+                   && ((Set.forall (fun (e : OutEdge) -> isLocalCommand locals e.Command) outEdges)
+                      || (Set.forall (fun (e : InEdge) -> isLocalCommand locals e.Command) inEdges))
+                then
+                    let mutable xforms = []
+                    let addXForm xf = xforms <- xf :: xforms
+
+                    addXForm (RmNode nName)
+
+                    for inE in inEdges do
+                        addXForm (RmAllEdgesBetween (inE.Src, nName))
+                        for outE in outEdges do
+                            addXForm (MkEdgeBetween (inE.Src,
+                                                     outE.Dest,
+                                                     glueNames inE outE,
+                                                     inE.Command @ outE.Command))
+
+                    for outE in outEdges do
+                        addXForm (RmAllEdgesBetween (nName, outE.Dest))
+
                     runTransforms xforms ctx
-                | _ -> ctx
+                else
+                    ctx
 
     /// <summary>
     ///     Performs a node-wise optimisation on every node in the graph.

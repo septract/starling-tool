@@ -23,6 +23,15 @@ open Starling.Core.GuardedView
 [<AutoOpen>]
 module Types =
     /// <summary>
+    ///     Enumeration of node types.
+    ///
+    ///     <para>
+    ///         Used to signify if a node is an Entry or Edit node
+    ///     </para>
+    /// </summary>
+    type NodeKind = Normal | Entry | Exit | EntryExit
+
+    /// <summary>
     ///     Type synonym for graph edges.
     ///
     ///     <para>
@@ -45,7 +54,7 @@ module Types =
             /// <summary>
             ///     Set of nodes in the control-flow graph.
             /// </summary>
-            Nodes: Map<string, GView>
+            Nodes: Map<string, GView * NodeKind>
 
             /// <summary>
             ///     Set of edges in the control-flow graph.
@@ -131,7 +140,7 @@ module Types =
                    ///     The contents of the graph.
                    /// </summary>
                    Contents : Map<string, (GView * Set<OutEdge>
-                                                 * Set<InEdge>)> }
+                                                 * Set<InEdge> * NodeKind)> }
 
     /// <summary>
     ///     Type of Chessie errors for CFG actions.
@@ -182,13 +191,13 @@ let toSubgraph graph =
     { Nodes =
           graph.Contents
           |> Map.toSeq
-          |> Seq.map (fun (nodeName, (nodeView, _, _)) -> (nodeName, nodeView))
+          |> Seq.map (fun (nodeName, (nodeView, _, _, nodeKind)) -> (nodeName, (nodeView, nodeKind)))
           |> Map.ofSeq
       Edges =
           graph.Contents
           |> Map.toSeq
           |> Seq.map
-                 (fun (fromName, (_, outEdges, _)) ->
+                 (fun (fromName, (_, outEdges, _, _)) ->
                       Seq.map
                           (fun { Name = n; Dest = toName; Command = cmd } ->
                                (n, edge fromName cmd toName))
@@ -220,7 +229,7 @@ let graph name sg =
     | [] ->
         sg.Nodes
         |> Map.map
-               (fun nodeName nodeView ->
+               (fun nodeName (nodeView,nodeKind) ->
                     let outEdges =
                         sg.Edges
                         |> Map.toSeq
@@ -247,7 +256,7 @@ let graph name sg =
                                              InEdge.Src = src })
                                 else None)
                          |> Set.ofSeq
-                    (nodeView, outEdges, inEdges))
+                    (nodeView, outEdges, inEdges, nodeKind))
         |> fun m -> { Name = name ; Contents = m }
         |> ok
     | xs -> xs |> List.map (snd >> EdgeOutOfBounds) |> Bad
@@ -312,7 +321,7 @@ let unify src dest graph =
     then None
     else
         // Pull out the source's entry, ready to append later.
-        let _, srcOut, srcIn = graph.Contents.[src]
+        let _, srcOut, srcIn, nodeKind = graph.Contents.[src]
 
         let swapNode = function
                        | n when n = src -> dest
@@ -320,11 +329,20 @@ let unify src dest graph =
         let swapIn o = { o with Src = swapNode o.Src }
         let swapOut o = { o with Dest = swapNode o.Dest }
 
+        (* Unify Node Kinds to account for Entry and Exit combining *)
+        let unifyNodeKind nk1 nk2 =
+            match nk1, nk2 with 
+            | Entry, Exit  | Exit, Entry
+            | EntryExit, _ | _, EntryExit -> EntryExit
+            | Entry, _     | _, Entry     -> Entry
+            | Exit, _      | _, Exit      -> Exit
+            | Normal, Normal              -> Normal
+
         (* Remove a node if it is source;
          * otherwise, inspect its nodes for source, and rewrite them
          * to target.  If the node is target, add in the source edges.
          *)
-        let unifyStep (name, (view, outEdges, inEdges)) =
+        let unifyStep (name, (view, outEdges, inEdges, nodeKind2)) =
             if name = src
             then None
             else
@@ -337,7 +355,7 @@ let unify src dest graph =
                     |> Set.map swapIn
                     |> if name = dest then Set.union srcIn else id
 
-                Some (name, (view, newOut, newIn))
+                Some (name, (view, newOut, newIn, unifyNodeKind nodeKind nodeKind2))
 
         let contents =
             graph.Contents
@@ -382,16 +400,16 @@ let unify src dest graph =
 let mapNodePair f x y graph =
     match (Map.tryFind x graph.Contents,
            Map.tryFind y graph.Contents) with
-    | (Some (xv, xOut, xIn), Some (yv, yOut, yIn)) ->
+    | (Some (xv, xOut, xIn, xnk), Some (yv, yOut, yIn, ynk)) ->
         let xOut', yIn' = f xOut yIn
 
         // If x = y, we have to be careful to write all changes back.
         let contents' =
             graph.Contents
             |> if x = y
-               then (Map.add x (xv, xOut', yIn'))
-               else (Map.add x (xv, xOut', xIn))
-                     >> Map.add y (yv, yOut, yIn')
+               then (Map.add x (xv, xOut', yIn', xnk))
+               else (Map.add x (xv, xOut', xIn, xnk))
+                     >> Map.add y (yv, yOut, yIn', ynk)
 
         Some { graph with Contents = contents' }
     | _ -> None
@@ -504,7 +522,7 @@ let rmEdgesBetween src dest pred =
 let rmNode node graph =
     // TODO(CaptainHayashi): Chessie-ise this and the other functions?
     match Map.tryFind node graph.Contents with
-    | Some (_, outE, inE) when Set.isEmpty outE && Set.isEmpty inE ->
+    | Some (_, outE, inE, _) when Set.isEmpty outE && Set.isEmpty inE ->
         Some { graph with Contents = Map.remove node graph.Contents }
     | _ -> None
 
@@ -531,12 +549,12 @@ let mapEdges f graph =
     m
     |> Map.toSeq
     |> Seq.map
-           (fun (srcName, (srcView, outEdges, inEdges)) ->
+           (fun (srcName, (srcView, outEdges, inEdges, _)) ->
                 Seq.map
                     (fun { OutEdge.Name = edgeName
                            OutEdge.Command = cmd
                            OutEdge.Dest = destName } ->
-                         let dv, _, _ = m.[destName]
+                         let dv, _, _, _ = m.[destName]
                          f { FullEdge.Name = edgeName
                              FullEdge.Command = cmd
                              FullEdge.SrcName = srcName
@@ -566,7 +584,7 @@ let mapEdges f graph =
 /// </returns>
 let nodeHasView nodeName nodeView graph =
     match (Map.tryFind nodeName graph.Contents) with
-    | Some (v, _, _) when v = nodeView -> true
+    | Some (v, _, _, _) when v = nodeView -> true
     | _ -> false
 
 (*
@@ -668,10 +686,12 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer <c>Command</c> representing the node.
     /// </returns>
-    let printNode id view =
+    let printNode id (view, nk) =
+        let list = match nk with Normal -> [] | Entry -> [String "(Entry)"] | Exit -> [String "(Exit)"] | EntryExit -> [String "(EntryExit)"]
         hsep [ id |> String
-               [ id |> String
-                 view |> printGView ] |> colonSep |> printLabel ]
+               ([ id |> String
+                  view |> printGView ] @ list)|> colonSep |> printLabel 
+             ]
         |> withSemi
 
     /// <summary>
