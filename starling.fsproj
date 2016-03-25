@@ -51,6 +51,7 @@
     <Compile Include="Z3.fs" />
     <Compile Include="ExprEquiv.fs" />
     <Compile Include="Model.fs" />
+    <Compile Include="Command.fs" />
     <Compile Include="GuardedView.fs" />
     <Compile Include="Axiom.fs" />
     <Compile Include="Graph.fs" />

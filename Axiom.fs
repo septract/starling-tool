@@ -15,6 +15,7 @@ open Starling.Utils
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
+open Starling.Core.Command
 open Starling.Core.GuardedView
 
 
@@ -58,6 +59,7 @@ module Pretty =
     open Starling.Core.Pretty
 
     open Starling.Core.Model.Pretty
+    open Starling.Core.Command.Pretty
     open Starling.Core.GuardedView.Pretty
 
     /// Pretty-prints an Axiom, given knowledge of how to print its views

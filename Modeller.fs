@@ -7,6 +7,7 @@ open Starling.Core
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
+open Starling.Core.Command
 open Starling.Core.Sub
 open Starling.Lang.AST
 open Starling.Lang.Collator
@@ -134,6 +135,7 @@ module Pretty =
     open Starling.Core.Var.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Expr.Pretty
+    open Starling.Core.Command.Pretty
     open Starling.Lang.AST.Pretty
 
     /// Pretty-prints a CFunc.
@@ -154,7 +156,7 @@ module Pretty =
     /// Pretty-prints a part-cmd at the given indent level.
     let rec printPartCmd (pView : 'view -> Command) : PartCmd<'view> -> Command =
         function
-        | Prim prim -> Model.Pretty.printCommand prim
+        | Prim prim -> Command.Pretty.printCommand prim
         | While(isDo, expr, inner) ->
             cmdHeaded (hsep [ String(if isDo then "Do-while" else "While")
                               (printBoolExpr expr) ])

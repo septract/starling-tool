@@ -5,6 +5,7 @@ module Starling.Reifier
 open Starling.Collections
 open Starling.Core.Expr
 open Starling.Core.Model
+open Starling.Core.Command
 open Starling.Core.GuardedView
 
 

@@ -4,6 +4,7 @@ module Starling.Flattener
 open Starling.Collections
 open Starling.Core.Expr
 open Starling.Core.Model
+open Starling.Core.Command
 open Starling.Core.Var
 open Starling.Core.GuardedView
 

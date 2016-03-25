@@ -13,6 +13,7 @@ open Chessie.ErrorHandling
 open Starling.Utils
 open Starling.Core.Model
 open Starling.Core.Axiom
+open Starling.Core.Command
 open Starling.Core.GuardedView
 
 
@@ -634,6 +635,7 @@ module Pretty =
     open Starling.Core.Pretty
 
     open Starling.Core.Model.Pretty
+    open Starling.Core.Command.Pretty
     open Starling.Core.Axiom.Pretty
     open Starling.Core.GuardedView.Pretty
 

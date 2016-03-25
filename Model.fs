@@ -68,30 +68,6 @@ module Types =
     /// A view definition.
     type DView = Multiset<DFunc>
 
-    /// <summary>
-    ///     A command.
-    ///
-    ///     <para>
-    ///         A command is a list, representing a sequential composition
-    ///         of primitives represented as <c>VFunc</c>.
-    ///     </para>
-    /// </summary>
-    /// <remarks>
-    ///     <para>
-    ///         Each <c>VFunc<c> element keys into a <c>Model</c>'s
-    ///         <c>Semantics</c> <c>FuncTable</c>.
-    ///         This table contains two-state Boolean
-    ///         expressions capturing the command's semantics in a
-    ///         sort-of-denotational way.
-    ///     </para>
-    ///     <para>
-    ///         Commands are implemented in terms of <c>VFunc</c>s for
-    ///         convenience, not because of any deep relationship between
-    ///         the two concepts.
-    ///     </para>
-    /// </remarks>
-    type Command = VFunc list
-
     (*
      * View definitions
      *)
@@ -129,9 +105,6 @@ module Types =
           /// The intended goal of the Term, ie the frame to preserve.
           Goal : 'goal
         }
-
-    /// A term over <c>Command</c>s.
-    type PTerm<'wpre, 'goal> = Term<Command, 'wpre, 'goal>
 
     /// A term over semantic-relation commands.
     type STerm<'wpre, 'goal> = Term<BoolExpr, 'wpre, 'goal>
@@ -187,17 +160,11 @@ module Pretty =
     /// Pretty-prints a DView.
     let printDView = printMultiset printDFunc >> squared
 
-    /// Pretty-prints a Command.
-    let printCommand = List.map printVFunc >> semiSep
-
     /// Pretty-prints a term, given printers for its commands and views.
-    let printTerm pCmd pWPre pGoal {Cmd = c; WPre = w; Goal = g} = 
+    let printTerm pCmd pWPre pGoal {Cmd = c; WPre = w; Goal = g} =
         vsep [ headed "Command" (c |> pCmd |> Seq.singleton)
                headed "W/Prec" (w |> pWPre |> Seq.singleton)
                headed "Goal" (g |> pGoal |> Seq.singleton) ]
-
-    /// Pretty-prints a PTerm.
-    let printPTerm pWPre pGoal = printTerm printCommand pWPre pGoal
 
     /// Pretty-prints an STerm.
     let printSTerm pWPre pGoal = printTerm printBoolExpr pWPre pGoal

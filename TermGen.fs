@@ -7,6 +7,7 @@ open Starling.Core.Expr
 open Starling.Core.GuardedView
 open Starling.Core.Sub
 open Starling.Core.Model
+open Starling.Core.Command
 open Starling.Core.Axiom
 
 

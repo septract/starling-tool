@@ -6,6 +6,7 @@ open Starling.Collections
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
+open Starling.Core.Command
 open Starling.Core.Instantiate
 open Starling.Lang.AST
 open Starling.Lang.Modeller

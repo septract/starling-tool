@@ -16,6 +16,8 @@ open Starling.Utils
 open Starling.Core.Expr
 open Starling.Core.ExprEquiv
 open Starling.Core.Model
+open Starling.Core.Command
+open Starling.Core.Command.Queries
 open Starling.Core.Sub
 open Starling.Core.GuardedView
 
@@ -328,30 +330,6 @@ module Graph =
         | Some final -> final
         | None -> initial
 
-    /// <summary>
-    ///     Decides whether a program command is a no-op.
-    /// </summary>
-    /// <param name="_arg1">
-    ///     The command, as a <c>Command</c>.
-    /// </param>
-    /// <returns>
-    ///     <c>true</c> if the command is a no-op;
-    ///     <c>false</c> otherwise.
-    /// </returns>
-    let isNop =
-        List.forall
-            (fun { Params = ps } ->
-                 (* We treat a func as a no-op if all variables it contains
-                  * are in the pre-state.  Thus, it cannot be modifying the
-                  * post-state, if it is well-formed.
-                  *)
-                 Seq.forall (function
-                             | AExpr (AConst (Before _)) -> true
-                             | AExpr (AConst _) -> false
-                             | BExpr (BConst (Before _)) -> true
-                             | BExpr (BConst _) -> false
-                             | _ -> true)
-                            ps)
 
     /// <summary>
     ///     Decides whether two nodes have different names but the same view,
@@ -490,15 +468,6 @@ module Graph =
                      ps)
 
     /// <summary>
-    ///     Active pattern matching assume commands.
-    /// </summary>
-    let (|Assume|_|) =
-        function
-        | [ { Name = n ; Params = [ BExpr b ] } ]
-          when n = "Assume" -> Some b
-        | _ -> None
-
-    /// <summary>
     ///     Removes a node if it is an ITE-guarded view.
     ///
     ///     <para>
@@ -538,7 +507,7 @@ module Graph =
                                              (equiv out2P ycPre))
                                && nodeHasView out1D xv ctx.Graph
                                && nodeHasView out2D yv ctx.Graph)
-                                  // Or is the first one y and the second x?
+                              // Or is the first one y and the second x?
                               || (equivHolds
                                       (andEquiv (equiv out2P xcPre)
                                                 (equiv out1P ycPre))
