@@ -141,10 +141,15 @@ let seqBind f initialS = Seq.fold (fun s x -> bind (f x) s) (ok initialS)
 
 /// Fold that can be terminated earlier by the step function f returning None.
 /// If Any step returns None, the whole fold returns None.
-let rec foldFastTerm  (f : 'State -> 'T -> 'State option)  (s : 'State) (l : 'T list) =  
-     match l with
-     | []   -> Some s
-     | x::l ->
-        match f s x with
-        | Some s -> foldFastTerm f s l
-        | None -> None
+let foldFastTerm (f : 'State -> 'T -> 'State option)
+                 (s : 'State) (l : 'T seq) =
+    let en = l.GetEnumerator()
+
+    let rec fft f s' =
+        if (en.MoveNext())
+        then match f s' en.Current with
+             | Some s'' -> fft f s''
+             | None -> None
+        else (Some s')
+
+    fft f s

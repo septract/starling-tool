@@ -438,7 +438,6 @@ module Graph =
                                     yield Unify (other, node)
                                 } )
                     |> Seq.concat
-                    |> Seq.toList
 
                 runTransforms xforms ctx
 
@@ -516,15 +515,15 @@ module Graph =
                                   && nodeHasView out2D xv ctx.Graph
                                   && nodeHasView out1D yv ctx.Graph)) ->
                         let xforms =
-                            [ // Remove the existing edges first.
-                              RmInEdge (inE, node)
-                              RmOutEdge (node, out1)
-                              RmOutEdge (node, out2)
-                              // Then, remove the node.
-                              RmNode node
-                              // Then, add the new edges.
-                              MkCombinedEdge (inE, out1)
-                              MkCombinedEdge (inE, out2) ]
+                            seq { // Remove the existing edges first.
+                                  yield RmInEdge (inE, node)
+                                  yield RmOutEdge (node, out1)
+                                  yield RmOutEdge (node, out2)
+                                  // Then, remove the node.
+                                  yield RmNode node
+                                  // Then, add the new edges.
+                                  yield MkCombinedEdge (inE, out1)
+                                  yield MkCombinedEdge (inE, out2) }
                         runTransforms xforms ctx
                     | _ -> ctx
                 | _ -> ctx
@@ -580,7 +579,7 @@ module Graph =
                         yield RmNode nName
                     }
 
-                    runTransforms (Seq.toList xforms) ctx
+                    runTransforms xforms ctx
                 else
                     ctx
 
