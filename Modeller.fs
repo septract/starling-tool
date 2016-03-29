@@ -598,23 +598,54 @@ let inViewDefs viewdefs dview =
 /// <returns>
 ///     An indefinite constraint over <paramref name="dview" />.
 /// </returns>
-let searchViewToConstraint =
-    (* To ensure likewise-named parameters in separate DFuncs don't clash,
-     * append fresh identifiers to all of them.
-     * We don't use the parameter names anyway, so this is ok.
-     *)
+let searchViewToConstraint dview =
+    (* To ensure likewise-named parameters in separate DFuncs don't
+       clash, append fresh identifiers to all of them.
+
+       We don't use the parameter names anyway, so this is ok.
+
+       Do _NOT_ make dview implicit, it causes freshGen () to evaluate only
+       once for the entire function (!), ruining everything. *)
     let fg = freshGen ()
 
-    // Rename the DFunc parameters to avoid clashes.
-    Multiset.map
+    dview
+    |> Multiset.map
         (fun { Name = name; Params = ps } ->
+
              let nps =
                  List.map (fun (ty, str) ->
-                           (ty, sprintf "%s%A" str (getFresh fg)))
+                               (ty, sprintf "%s%A" str (getFresh fg)))
                           ps
              { Name = name; Params = nps })
     // Attach an indefinite constrant.
-    >> fun dfunc -> { View = dfunc ; Def = None }
+    |> fun dfunc -> { View = dfunc ; Def = None }
+
+/// <summary>
+///     Generates all views of the given size, from the given funcs.
+/// </summary>
+/// <param name="depth">
+///     The size of views to generate.
+/// </param>
+/// <param name="funcs">
+///     The pool of <c>Func</c>s to use when building views.
+/// </param>
+/// <returns>
+///     A set of all <c>View</c>s of maximum size <paramref name="depth" />,
+///     whose <c>Func</c>s are taken from <paramref name="funcs" />
+/// </returns>
+let genAllViewsAt depth funcs =
+    let rec f depth existing =
+        match depth with
+        // Multiset and set conversion removes duplicate views.
+        | 0 -> existing |> Seq.map Multiset.ofList |> Set.ofSeq
+        | n ->
+            let existing' =
+                seq { yield []
+                      for f in funcs do
+                          for e in existing do
+                              yield f :: e }
+            f (depth - 1) existing'
+    f depth (Seq.singleton [])
 
 /// <summary>
 ///     Completes a viewdef list by generating indefinite constraints of size
@@ -645,11 +676,7 @@ let addSearchDefs vprotos depth viewdefs =
         |> Instantiate.funcsInTable
         // Then, generate the view that is the *-conjunction of all of the
         // view protos.
-        |> Multiset.ofSeq
-        // Then, generate all views of size 0..|vprotos| from that view...
-        |> Multiset.power
-        // Then, filter the resulting set to views of size 0..depth...
-        |> Set.filter (fun ms -> Multiset.length ms <= n)
+        |> genAllViewsAt n
         // Then, throw out any views that already exist in viewdefs...
         |> Set.filter (inViewDefs viewdefs >> not)
         // Finally, convert the view to a constraint.

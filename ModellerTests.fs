@@ -211,7 +211,26 @@ type ModellerTests() =
                               Def = None }
                             { View = Multiset.singleton (func "holdTick" [(Type.Int, "t0")])
                               Def = None }])
-             .SetName("Searching for size-1 viewdefs yields viewdefs for emp and the view prototypes") ]
+             .SetName("Searching for size-1 viewdefs yields viewdefs for emp and the view prototypes")
+          TestCaseData({ Search = Some 2; InitDefs = [] })
+             .Returns(ModellerTests.viewDefSet
+                          [ { View = Multiset.empty ()
+                              Def = None }
+                            { View = Multiset.singleton (func "holdLock" [])
+                              Def = None }
+                            { View = Multiset.ofList [ func "holdLock" []
+                                                       func "holdLock" [] ]
+                              Def = None }
+                            { View = Multiset.ofList [ func "holdLock" []
+                                                       func "holdTick" [(Type.Int, "t0")] ]
+                              Def = None }
+                            { View = Multiset.singleton (func "holdTick" [(Type.Int, "t0")])
+                              Def = None }
+
+                            { View = Multiset.ofList [ func "holdTick" [(Type.Int, "t0")]
+                                                       func "holdTick" [(Type.Int, "t1")] ]
+                              Def = None }])
+             .SetName("Searching for size-2 viewdefs yields the correct views") ]
 
     /// Tests viewdef searches.
     [<TestCaseSource("SearchViewDefs")>]
