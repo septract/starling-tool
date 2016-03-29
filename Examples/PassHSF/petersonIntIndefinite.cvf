@@ -34,6 +34,17 @@ view bFlagUp();         // B has put its flag up, but isn't waiting yet.
 view bWaiting();        // B is now waiting for the lock.
 view bHoldLock();       // B holds the lock.
 
+view init();            // Used to start up the algorithm.
+
+
+/*
+ * Init method, used to make HSF realise both threads must be active.
+ */
+method init() {
+  {| init() |}
+  ;
+  {| aFlagDown() * bFlagDown() |}
+}
 
 /*
  * Locks the Peterson lock from A's side.
@@ -97,74 +108,12 @@ method unlockB() {
 constraint emp -> turn >= 0 && turn < 2 && aFlag >= 0 && aFlag < 2
                                         && bFlag >= 0 && bFlag < 2;
 
-/*
- * Predicate definitions.
- *
- * Most of the interesting work happens in the interactions between
- * constraints: these just keep track of the flag.
- */
+// Needed to ensure HSF doesn't send everything to false.
+constraint init() -> bFlag == 0 && aFlag == 0;
+constraint init() * init() -> false;
 
-// A
-constraint aFlagDown()      -> aFlag == 0;
-constraint aFlagUp()        -> aFlag == 1;
-constraint aWaiting()       -> ?;
-constraint aHoldLock()      -> ?;
-
-// B
-constraint bFlagDown()      -> bFlag == 0;
-constraint bFlagUp()        -> bFlag == 1;
-constraint bWaiting()       -> ?;
-constraint bHoldLock()      -> ?;
-
-
-/*
- * If we have the lock, and the other thread is waiting, we have the turn.
- *
- * We note that to get the lock we must have either seen
- * the other thread's flag down (see above), or we must have already
- * been given the turn.
- *
- * More directly (and closer to how Starling will be proving this),
- * any transition where the other thread starts waiting sets the turn
- * to our turn, and nothing destabilises this except us starting to
- * wait too.
- */
-constraint aHoldLock() * bWaiting() -> ?;
-constraint bHoldLock() * aWaiting() -> ?;
-
-
-/*
- * We can't be in multiple states at the same time.
- *
- * Unless exactly one of those states is flag-down.  This is probably implicit
- * from the fact that flag-down and every other state disagree on what the
- * flag is.
- */
-
-// A
-constraint aFlagDown() * aFlagDown() -> ?;
-
-constraint aFlagUp() * aFlagUp() -> ?;
-constraint aFlagUp() * aWaiting() -> ?;
-constraint aFlagUp() * aHoldLock() -> ?;
-
-constraint aWaiting() * aWaiting() -> ?;
-constraint aWaiting() * aHoldLock() -> ?;
-
-constraint aHoldLock() * aHoldLock() -> ?;
-
-// B
-constraint bFlagDown() * bFlagDown() -> ?;
-
-constraint bFlagUp() * bFlagUp() -> ?;
-constraint bFlagUp() * bWaiting() -> ?;
-constraint bFlagUp() * bHoldLock() -> ?;
-
-constraint bWaiting() * bWaiting() -> ?;
-constraint bWaiting() * bHoldLock() -> ?;
-
-constraint bHoldLock() * bHoldLock() -> ?;
-
+// We need constraints up to size 2 for this.
+search 2;
 
 /*
  * Goal: mutual exclusion.
