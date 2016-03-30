@@ -357,3 +357,19 @@ let (|Known|_|) =
     function
     | Advisory v | Mandatory v -> Some v
     | Unknown -> None
+
+/// <summary>
+///     Returns true if a <c>ViewExpr</c> can be removed at will without
+///     invalidating the proof.
+/// </summary>
+/// <param name="_arg1">
+///     The <c>ViewExpr</c> to query.
+/// </param>
+/// <returns>
+///     True if <paramref name="_arg1" /> is <c>Advisory</c> or
+///     <c>Unknown</c>.
+/// </returns>
+let isAdvisory =
+    function
+    | Advisory _ | Unknown -> true
+    | Mandatory _ -> false

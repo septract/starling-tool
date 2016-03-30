@@ -527,8 +527,8 @@ module Graph =
                 | _ -> ctx
 
     /// <summary>
-    ///     Removes views in the where either all of the entry commands are local, or
-    ///     all of the exit commands are local.
+    ///     Removes views where either all of the entry commands are local,
+    ///     or all of the exit commands are local, and the view is advisory.
     /// </summary>
     /// <param name="locals">
     ///     The environment of local variables, used to determine whether
@@ -542,14 +542,9 @@ module Graph =
     ///     optimised graph, and an Option containing the node name if it was
     ///     not removed.
     /// </returns>
-    /// <remarks>
-    ///     This removes a view that may be needed for the proof, so it is
-    ///     turned off by default.
-    /// </remarks>
     let dropLocalMidView locals ctx =
         expandNodeIn ctx <|
             fun nName nView outEdges inEdges nk ->
-                (* TODO @mjp41: Need to check nName is not an entry or exit node from the CFG *)
                 (* TODO @mjp41: Need to check nView is not something with a real definition *)
 
                 if nk = Normal  // Check it is not an Entry or Exit node.
@@ -557,6 +552,8 @@ module Graph =
                       out direction. *)
                    && ((Set.count outEdges < 2) || (Set.count inEdges < 2))
                    && ((Set.count outEdges > 0) && (Set.count inEdges > 0))
+                   // Only continue if the node can be safely removed.
+                   && isAdvisory nView
                   (* Only continue if there are no cycles *)
                    && (Set.forall (fun (e : OutEdge) -> e.Dest <> nName) outEdges)
                    && (Set.forall (fun (e : InEdge) -> e.Src <> nName) inEdges)
@@ -641,8 +638,8 @@ module Graph =
         onNodes (Utils.optimiseWith optR optA verbose
                      [ ("graph-collapse-nops", true, collapseNops)
                        ("graph-collapse-ites", true, collapseITEs)
-                       ("x-graph-drop-local-midview",
-                        false,
+                       ("graph-drop-local-midview",
+                        true,
                         dropLocalMidView model.Locals) ] )
 
     /// <summary>
