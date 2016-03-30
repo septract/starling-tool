@@ -55,15 +55,25 @@ let ticketLockLockMethodAST =
       Body =
           { Pre = Unit
             Contents =
-                [ { Command = Command.Prim [ Fetch(LVIdent "t",
-                                                   LV(LVIdent "ticket"),
-                                                   Increment) ]
+                [ { Command =
+                        Command.Prim
+                            { PreAssigns = []
+                              Atomics = [ Fetch(LVIdent "t",
+                                                LV(LVIdent "ticket"),
+                                                Increment) ]
+                              PostAssigns = [] }
                     Post = View.Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]} }
                   { Command =
                         DoWhile
                             ({ Pre = View.Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]}
                                Contents =
-                                   [ { Command = Command.Prim [ Fetch(LVIdent "s", LV(LVIdent "serving"), Direct) ]
+                                   [ { Command =
+                                           Command.Prim
+                                               { PreAssigns = []
+                                                 Atomics = [ Fetch(LVIdent "s",
+                                                                   LV(LVIdent "serving"),
+                                                                   Direct) ]
+                                                 PostAssigns = [] }
                                        Post =
                                            View.If
                                                (Bop(Eq, LV(LVIdent "s"), LV(LVIdent "t")), View.Func {Name = "holdLock"; Params = []},
@@ -77,8 +87,12 @@ let ticketLockUnlockMethodAST =
       Body =
           { Pre = View.Func {Name = "holdLock"; Params = []}
             Contents =
-                [ { Command = Command.Prim [ Postfix(LVIdent "serving",
-                                                     Increment) ]
+                [ { Command =
+                        Command.Prim
+                            { PreAssigns = []
+                              Atomics = [ Postfix(LVIdent "serving",
+                                                  Increment) ]
+                              PostAssigns = [] }
                     Post = Unit } ] } }
 
 /// The parsed form of the ticket lock.

@@ -138,6 +138,14 @@ type ModellerTests() =
     member x.``valid var lists are accepted during mapping`` (vl: (Type * string) list) =
         makeVarMap vl |> okOption
 
+    /// Constructs a Prim of the correct type to come out of a modeller.
+    static member mprim (cmd : Command) : PartCmd<CView> = Prim cmd
+
+    /// Constructs a Command<View> containing one atomic.
+    static member prim (ac : Atomic) : Command<View> =
+        Command.Prim { PreAssigns = []
+                       Atomics = [ ac ]
+                       PostAssigns = [] }
 
     /// Tests for the atomic primitive modeller.
     /// These use the ticket lock model.
@@ -149,14 +157,12 @@ type ModellerTests() =
 
     /// Tests the atomic primitive modeller using the ticket lock.
     [<TestCaseSource("AtomicPrims")>]
-    member x.``atomic primitives are modelled correctly as prims`` a = modelPrim ticketLockModel.Globals ticketLockModel.Locals a |> okOption
+    member x.``atomic primitives are modelled correctly as prims`` a =
+        a
+        |> modelAtomic ticketLockModel.Globals ticketLockModel.Locals
+        |> okOption
 
 
-    /// Constructs a Prim of the correct type to come out of a modeller.
-    static member mprim (cmd : Command) : PartCmd<CView> = Prim cmd
-
-    /// Constructs a single Prim of type Command<View>.
-    static member prim (ac : Prim) : Command<View> = Command.Prim [ ac ]
 
     /// Tests for the command axiom modeller.
     /// These use the ticket lock model.

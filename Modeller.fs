@@ -104,8 +104,11 @@ module Types =
 
     /// Represents an error when converting a method.
     type MethodError =
-        /// The method contains a semantically invalid primitive.
-        | BadPrim of prim : AST.Types.Prim * err : PrimError
+        /// The method contains a semantically invalid local assign.
+        | BadAssign of dest : LValue * src : AST.Types.Expression
+                                     * err : PrimError
+        /// The method contains a semantically invalid atomic action.
+        | BadAtomic of atom : Atomic * err : PrimError
         /// The method contains a bad if-then-else condition.
         | BadITECondition of expr: AST.Types.Expression * err: ExprError
         /// The method contains a bad while condition.
@@ -248,8 +251,10 @@ module Pretty =
     /// Pretty-prints method errors.
     let printMethodError =
         function
-        | BadPrim (prim, err) ->
-            wrapped "command" (printPrim prim) (printPrimError err)
+        | BadAssign (dest, src, err) ->
+            wrapped "local assign" (printAssign dest src) (printPrimError err)
+        | BadAtomic (atom, err) ->
+            wrapped "atomic action" (printAtomic atom) (printPrimError err)
         | BadITECondition (expr, err) ->
             wrapped "if-then-else condition" (printExpression expr)
                                              (printExprError err)
@@ -868,10 +873,9 @@ let modelFetch svars tvars dest src mode =
     | VarIn tvars Type.Bool -> modelBoolLoad svars dest src mode
     | lv -> fail (BadAVar(lv, NotFound(flattenLV lv)))
 
-/// Converts a single primitive command from AST to part-commands.
-let rec modelPrim svars tvars =
+/// Converts a single atomic command from AST to part-commands.
+let rec modelAtomic svars tvars =
     function
-    | LocalAssign(dest, src) -> modelAssign tvars dest src
     | CompareAndSwap(dest, test, set) -> modelCAS svars tvars dest test set
     | Fetch(dest, src, mode) -> modelFetch svars tvars dest src mode
     | Postfix(operand, mode) ->
@@ -944,15 +948,24 @@ and modelWhile isDo protos gs ls e b =
           (modelBoolExpr ls e |> mapMessages (curry BadWhileCondition e))
           (modelBlock protos gs ls b)
 
+/// Converts a PrimSet to a PartCmd.
+and modelPrim svars tvars { PreAssigns = ps
+                            Atomics = ts ;
+                            PostAssigns = qs } =
+
+    let mAssign = uncurry (wrapMessages2 BadAssign (modelAssign tvars))
+    let mAtomic = wrapMessages BadAtomic (modelAtomic svars tvars)
+
+    [ Seq.map mAssign ps ; Seq.map mAtomic ts ; Seq.map mAssign qs ]
+    |> Seq.concat
+    |> collect
+    |> lift Prim
+
 /// Converts a command to a PartCmd.
 /// The list is enclosed in a Chessie result.
 and modelCommand protos svars tvars =
     function
-    | AST.Types.Command.Prim xs ->
-        xs |> Seq.map (fun x -> x |> modelPrim svars tvars
-                                  |> mapMessages (curry BadPrim x))
-           |> collect
-           |> lift Prim
+    | AST.Types.Command.Prim p -> modelPrim svars tvars p
     | If(i, t, e) -> modelITE protos svars tvars i t e
     | Command.While(e, b) -> modelWhile false protos svars tvars e b
     | DoWhile(b, e) -> modelWhile true protos svars tvars e b

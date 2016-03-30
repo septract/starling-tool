@@ -134,6 +134,9 @@ let mapMessages f = either (fun (v, msgs) -> Ok(v, List.map f msgs)) (fun msgs -
 /// Performs f on x, but wraps each failure e to g(x, e).
 let wrapMessages g f x = x |> f |> mapMessages (curry g x)
 
+/// Performs f on x and y, but wraps each failure e to g(x, y, e).
+let wrapMessages2 g f x y = f x y |> mapMessages (curry3 g x y)
+
 /// Like fold, but constantly binds the given function over a Chessie result.
 /// The initial state is wrapped in 'ok'.
 let seqBind f initialS = Seq.fold (fun s x -> bind (f x) s) (ok initialS)

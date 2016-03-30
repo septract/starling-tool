@@ -206,7 +206,7 @@ let parseAssign =
     // ^- <lvalue> ...
             (pstring "=" >>. ws >>. parseExpression)
                   //             ... = <expression> ;
-            (curry LocalAssign)
+            mkPair
 
 /// Parser for atomic actions.
 let parseAtomic =
@@ -388,17 +388,17 @@ let parsePrimSet =
           (opt (parseAtomicSet .>> wsSemi .>> ws))
           (many (parseAssign .>> wsSemi .>> ws))
           (fun lassigns atom rassigns ->
-           List.concat (seq { yield lassigns
-                              match atom with
-                              | Some xs -> yield xs
-                              | None -> ()
-                              yield rassigns } )
-           |> Prim)
+               { PreAssigns = lassigns
+                 Atomics = withDefault [] atom
+                 PostAssigns = rassigns }
+               |> Prim)
 
 /// Parser for `skip` commands.
 /// Skip is inserted when we're in command position, but see a semicolon.
 let parseSkip
-    = stringReturn ";" (Prim [])
+    = stringReturn ";" (Prim { PreAssigns = []
+                               Atomics = []
+                               PostAssigns = [] })
     // ^- ;
 
 /// Parser for simple commands (atomics, skips, and bracketed commands).

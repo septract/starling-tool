@@ -33,15 +33,13 @@ module Types =
         | LV of LValue // foobaz
         | Bop of Bop * Expression * Expression // a BOP b
 
-    /// A primitive action.
-    type Prim =
+    /// An atomic action.
+    type Atomic =
         | CompareAndSwap of LValue * LValue * Expression // <CAS(a, b, c)>
         | Fetch of LValue * Expression * FetchMode // <a = b??>
         | Postfix of LValue * FetchMode // <a++> or <a-->
         | Id // <id>
         | Assume of Expression // <assume(e)
-        /// A local assignment.
-        | LocalAssign of LValue * Expression // a = b;
 
     /// A view prototype.
     type ViewProto = Func<(Type * string)>
@@ -62,10 +60,16 @@ module Types =
         | Func of AFunc
         | If of Expression * View * View
 
+    /// A set of primitives.
+    type PrimSet =
+        { PreAssigns: (LValue * Expression) list
+          Atomics: Atomic list
+          PostAssigns: (LValue * Expression) list }
+
     /// A statement in the command language.
     type Command<'view> =
         /// A set of sequentially composed primitives.
-        | Prim of Prim list
+        | Prim of PrimSet
         /// An if-then-else statement.
         | If of Expression
               * Block<'view, Command<'view>>
@@ -194,26 +198,25 @@ module Pretty =
         | Increment -> String "++"
         | Decrement -> String "--"
 
+    /// Pretty-prints local assignments.
+    let printAssign dest src =
+        equality (printLValue dest) (printExpression src)
+
     /// Pretty-prints atomic actions.
-    let printPrim =
+    let printAtomic =
         function
         | CompareAndSwap(l, f, t) ->
             func "CAS" [ printLValue l
                          printLValue f
                          printExpression t ]
-            |> angled
         | Fetch(l, r, m) ->
             equality (printLValue l) (hjoin [ printExpression r
                                               printFetchMode m ])
-            |> angled
         | Postfix(l, m) ->
             hjoin [ printLValue l
                     printFetchMode m ]
-            |> angled
-        | Id -> String "id" |> angled
-        | Assume e -> func "assume" [ printExpression e ] |> angled
-        | LocalAssign(l, r) ->
-            equality (printLValue l) (printExpression r)
+        | Id -> String "id"
+        | Assume e -> func "assume" [ printExpression e ]
 
     /// Pretty-prints viewed commands with the given indent level (in spaces).
     let printViewedCommand (pView : 'view -> Command)
@@ -243,9 +246,18 @@ module Pretty =
     /// Pretty-prints commands with the given indent level (in spaces).
     let rec printCommand =
         function
-        // The trick here is to make Prim [] appear as ;, but
-        // Prim [x; y; z] appear as x; y; z;.
-        | Prim a -> a |> Seq.map (printPrim) |> semiSep |> withSemi
+        (* The trick here is to make Prim [] appear as ;, but
+           Prim [x; y; z] appear as x; y; z;, and to do the same with
+           atomic lists. *)
+        | Prim { PreAssigns = ps
+                 Atomics = ts
+                 PostAssigns = qs } ->
+            seq { yield! Seq.map (uncurry printAssign) ps
+                  yield (ts
+                         |> Seq.map printAtomic
+                         |> semiSep |> withSemi |> braced |> angled)
+                  yield! Seq.map (uncurry printAssign) qs }
+            |> semiSep |> withSemi
         | If(c, t, f) ->
             hsep [ "if" |> String
                    c
