@@ -66,17 +66,7 @@ let addGlobalsToViewDef gs {View = v; Def = d} =
 /// Adds globals to the arguments of all views in a model.
 let flatten (mdl: Model<PTerm<ViewSet, View>, DView>) =
     /// Build a function making a list of global arguments, for view assertions.
-    let gargs marker = 
-        mdl.Globals
-        |> Map.toSeq
-        |> Seq.map
-            (fun (name, ty) ->
-                name
-                |> marker
-                |> match ty with
-                   | Type.Int -> AConst >> AExpr
-                   | Type.Bool -> BConst >> BExpr)
-        |> List.ofSeq
+    let gargs marker = varMapToExprs marker mdl.Globals
 
     /// Build a list of global parameters, for view definitions.
     let gpars =

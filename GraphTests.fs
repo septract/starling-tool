@@ -65,7 +65,7 @@ type GraphTests() =
             .SetName("Adding a valid, unique edge to unlock works")]
 
     /// <summary>
-    ///     Tests <c>unify</c>.
+    ///     Tests <c>mkEdgeBetween</c>.
     /// </summary>
     [<TestCaseSource("Adds")>]
     member x.``mkEdgeBetween adds edges correctly`` nsd =
@@ -156,3 +156,28 @@ type GraphTests() =
     member x.``Valid complete subgraphs can be converted to graphs`` ns =
         let (n, s) = ns
         s |> graph n |> okOption
+
+
+    /// <summary>
+    ///     Test cases for <c>flattenViewExpr</c>.
+    /// </summary>
+    static member ViewExprFlattens =
+        [ TestCaseData(Mandatory (sing (gHoldLock BTrue)))
+              .Returns(sing (gHoldLock BTrue))
+              .SetName("Flattening a mandatory viewexpr returns its view")
+          TestCaseData(Advisory (sing (gHoldTick BTrue)))
+              .Returns(sing (gHoldTick BTrue))
+              .SetName("Flattening an advisory viewexpr returns its view")
+          TestCaseData(Unknown : ViewExpr<GView>)
+              .Returns(sing (gfunc BTrue "0" [ AExpr (aUnmarked "s")
+                                               AExpr (aUnmarked "t") ]))
+              .SetName("Flattening an unknown viewexpr creates a new view\
+                        with a fresh name and all locals as parameters") ]
+
+    /// <summary>
+    ///     Tests <c>flattenViewExpr</c>.
+    /// </summary>
+    [<TestCaseSource("ViewExprFlattens")>]
+    member x.``View expressions can be flattened into views`` ve =
+        let fg = freshGen ()
+        flattenViewExpr ticketLockModel.Locals fg ve

@@ -297,12 +297,16 @@ let mkIntLV lv =
     |> AConst
 
 /// Converts a type-name pair to an expression.
-let mkVarExp (ty, name) =
+let mkVarExp marker ty name =
     name
-    |> Unmarked
+    |> marker
     |> match ty with
        | Int -> AConst >> AExpr
        | Bool -> BConst >> BExpr
+
+/// Converts a VarMap to a sequence of expressions.
+let varMapToExprs marker vm =
+    vm |> Map.toSeq |> Seq.map (fun (name, ty) -> mkVarExp marker ty name)
 
 (* The following are just curried versions of the usual constructors. *)
 

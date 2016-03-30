@@ -106,7 +106,7 @@ let composeBools x y =
 
 /// Generates a framing relation for a given variable.
 let frameVar name ty =
-    let ve = mkVarExp(ty, name)
+    let ve = mkVarExp Unmarked ty name
 
     BEq(subExpr (liftMarker After always) ve,
         subExpr (liftMarker Before always) ve)
