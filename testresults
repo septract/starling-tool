@@ -8,6 +8,7 @@
 ./Examples/Pass/peterson.cvf:
 ./Examples/Pass/petersonInt.cvf: 
 ./Examples/Pass/petersonMultiCmd.cvf: 
+./Examples/Pass/spinLockAdvisory.cvf: 
 ./Examples/Pass/spinLock.cvf:
 ./Examples/Pass/spinLockMultiCmd.cvf: 
 ./Examples/Pass/ticketLock.cvf: 
