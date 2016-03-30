@@ -35,6 +35,9 @@ let com = (lcom <|> bcom) <?> "comment"
 /// Parser for skipping zero or more whitespace characters.
 let ws = skipMany (com <|> spaces1)
 
+/// Parser accepting whitespace followed by a semicolon.
+let wsSemi = ws .>> pstring ";"
+
 /// As pipe2, but with automatic whitespace parsing after each parser.
 let pipe2ws x y f = pipe2 (x .>> ws) (y .>> ws) f
 
@@ -206,15 +209,20 @@ let parseAssign =
             (curry LocalAssign)
 
 /// Parser for atomic actions.
-let parsePrim =
-    // Either an atomic (angle brackets)...
-    (inAngles
-         (choice [ (stringReturn "id" Id)
-                   parseAssume
-                   parseCAS
-                   parseFetchOrPostfix ]))
-    // or a local assign (no angle brackets).
-    <|> parseAssign
+let parseAtomic =
+    choice [ (stringReturn "id" Id)
+             parseAssume
+             parseCAS
+             parseFetchOrPostfix ]
+
+/// Parser for a collection of atomic actions.
+let parseAtomicSet =
+    inAngles (
+        // Either one atomic...
+        (parseAtomic |>> List.singleton)
+        <|>
+        // ...or an atomic{} block.
+        (inBraces (many (parseAtomic .>> wsSemi .>> ws))))
 
 (*
  * Parameters and lists.
@@ -335,7 +343,7 @@ do parseViewDefRef := parseViewLike parseBasicViewDef ViewDef.Join
 
 /// Parses a view prototype.
 let parseViewProto =
-    pstring "view" >>. ws >>. parseFunc parseTypedParam .>> ws .>> pstring ";" .>> ws
+    pstring "view" >>. ws >>. parseFunc parseTypedParam .>> wsSemi .>> ws
 
 
 (*
@@ -360,7 +368,7 @@ let parseWhile =
 let parseDoWhile =
     pstring "do" >>. ws
                  >>. parseBlock
-                 .>>. (ws >>. parseWhileLeg .>> ws .>> pstring ";")
+                 .>>. (ws >>. parseWhileLeg .>> wsSemi)
                  |>> DoWhile
 
 /// Parser for if (expr) block else block.
@@ -370,9 +378,22 @@ let parseIf =
             parseBlock
             (curry3 If)
 
-/// Parser for prim compositions (not the prims themselves; that is parsePrim).
+/// Parser for prim compositions.
 let parsePrimSet =
-    many1 (parsePrim .>> ws .>> pstring ";" .>> ws) |>> Prim
+    (* We can parse only one atomic, but any number of assigns before it.
+       We must ensure there is a ; between the last assign and the atomic. *)
+    pipe3 (many (parseAssign .>> wsSemi .>> ws))
+          (* The atomic can be missing, and we can check unambiguously by
+             trying to parse a < here. *)
+          (opt (parseAtomicSet .>> wsSemi .>> ws))
+          (many (parseAssign .>> wsSemi .>> ws))
+          (fun lassigns atom rassigns ->
+           List.concat (seq { yield lassigns
+                              match atom with
+                              | Some xs -> yield xs
+                              | None -> ()
+                              yield rassigns } )
+           |> Prim)
 
 /// Parser for `skip` commands.
 /// Skip is inserted when we're in command position, but see a semicolon.

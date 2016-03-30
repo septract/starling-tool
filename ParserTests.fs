@@ -36,22 +36,47 @@ type ParserTests() =
         |> run parseExpression
         |> ParserTests.ParseResultToOptional
 
-    /// Test cases for testing the primitive parser.
-    static member PrimParses =
-        [ TestCaseData("<foo++>;").Returns(Some(Postfix(LVIdent "foo", Increment)))
-          TestCaseData("<foo-->;").Returns(Some(Postfix(LVIdent "foo", Decrement)))
-          TestCaseData("<foo = bar>;").Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Direct)))
-          TestCaseData("<foo = bar++>;").Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Increment)))
-          TestCaseData("<foo = bar-->;").Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Decrement)))
-          TestCaseData("<CAS(foo, bar, 2)>;").Returns(Some(CompareAndSwap(LVIdent "foo", LVIdent "bar", Int 2L))) ]
+    /// Test cases for testing the atomics parser.
+    static member AtomicParses =
+        [ TestCaseData("foo++").Returns(Some(Postfix(LVIdent "foo", Increment)))
+          TestCaseData("foo--").Returns(Some(Postfix(LVIdent "foo", Decrement)))
+          TestCaseData("foo = bar").Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Direct)))
+          TestCaseData("foo = bar++").Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Increment)))
+          TestCaseData("foo = bar--").Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Decrement)))
+          TestCaseData("CAS(foo, bar, 2)").Returns(Some(CompareAndSwap(LVIdent "foo", LVIdent "bar", Int 2L))) ]
         |> List.map (fun d -> d.SetName(sprintf "Parse %A" d.OriginalArguments.[0]))
 
-    [<TestCaseSource("PrimParses")>]
-    /// Tests whether the primitive expression parser works correctly.
-    member x.``the prim parser parses test case prims correctly`` expr =
+    [<TestCaseSource("AtomicParses")>]
+    /// Tests whether the atomics parser works correctly.
+    member x.``the atomics parser parses test case prims correctly`` expr =
         expr
-        |> run parsePrim
+        |> run parseAtomic
         |> ParserTests.ParseResultToOptional
+
+
+    /// Test cases for testing the atomic collection parser.
+    static member AtomicSetParses =
+        [ TestCaseData("<foo++>")
+            .Returns(Some[ Postfix(LVIdent "foo", Increment) ])
+            .SetName("Parse one atomic in angle brackets correctly")
+          TestCaseData("<foo++; bar-->")
+            .Returns(None)
+            .SetName("Refuse more than one atomic outside a block")
+          TestCaseData("< { foo++; } >")
+            .Returns(Some [ Postfix(LVIdent "foo", Increment) ])
+            .SetName("Parse one atomic in an atomic block correctly")
+          TestCaseData("< { foo++; bar--; } >")
+            .Returns(Some [ Postfix(LVIdent "foo", Increment)
+                            Postfix(LVIdent "bar", Decrement) ])
+            .SetName("Parse two atomic in an atomic block correctly") ]
+
+    [<TestCaseSource("AtomicSetParses")>]
+    /// Tests whether the atomic set parser works correctly.
+    member x.``the atomic set parser parses sets correctly`` expr =
+        expr
+        |> run parseAtomicSet
+        |> ParserTests.ParseResultToOptional
+
 
     /// Test cases for testing the constraint parser.
     static member ConstraintParses =

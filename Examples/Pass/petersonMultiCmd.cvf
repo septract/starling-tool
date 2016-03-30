@@ -46,8 +46,7 @@ method lockA() {
     do {
       {| aWaiting() |}
         // This is _one_ atomic action
-        <oFlag = bFlag>;
-        <oTurn = turn>;
+        <{oFlag = bFlag; oTurn = turn; }>;
       {| if (oFlag && oTurn == 1) then aWaiting() else aHoldLock() |}
     } while (oFlag && (oTurn == 1));
   {| aHoldLock() |}
@@ -73,8 +72,7 @@ method lockB() {
   {| bWaiting() |}
     do {
       {| bWaiting() |}
-        <oFlag = aFlag>;
-        <oTurn = turn>;
+       <{ oFlag = aFlag; oTurn = turn; }>;
       {| if (oFlag && oTurn == 2) then bWaiting() else bHoldLock() |}
     } while (oFlag && (oTurn == 2));
   {| bHoldLock() |}
