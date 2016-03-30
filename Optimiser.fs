@@ -364,8 +364,6 @@ module Graph =
         (x <> y)
         // Same view?
         && (xView = yView)
-        // Same Node Kind?
-        && xnk = ynk
         // Connected?
         && not (Seq.isEmpty xToY && Seq.isEmpty yToX)
         // All edges from x to y are nop?
