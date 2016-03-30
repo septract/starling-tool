@@ -110,7 +110,6 @@ constraint emp -> turn >= 0 && turn < 2 && aFlag >= 0 && aFlag < 2
 
 // Needed to ensure HSF doesn't send everything to false.
 constraint init() -> bFlag == 0 && aFlag == 0;
-constraint init() * init() -> false;
 
 // We need constraints up to size 2 for this.
 search 2;
