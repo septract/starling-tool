@@ -114,7 +114,7 @@ module Types =
         /// The method contains a bad while condition.
         | BadWhileCondition of expr: AST.Types.Expression * err: ExprError
         /// The method contains a bad view.
-        | BadView of view : AST.Types.View * err : ViewError
+        | BadView of view : ViewExpr<AST.Types.View> * err : ViewError
         /// The method contains an command not yet implemented in Starling.
         | CommandNotImplemented of cmd : AST.Types.Command<View>
 
@@ -262,7 +262,7 @@ module Pretty =
             wrapped "while-loop condition" (printExpression expr)
                                            (printExprError err)
         | BadView (view, err) ->
-            wrapped "view expression" (printView view)
+            wrapped "view expression" (printViewExpr printView view)
                                       (printViewError err)
         | CommandNotImplemented cmd ->
             fmt "command {0} not yet implemented"
@@ -971,10 +971,17 @@ and modelCommand protos svars tvars =
     | DoWhile(b, e) -> modelWhile true protos svars tvars e b
     | c -> fail (CommandNotImplemented c)
 
+/// Converts a view expression into a CView.
+and modelViewExpr protos ls =
+    function
+    | Mandatory v -> modelCView protos ls v |> lift Mandatory
+    | Advisory v -> modelCView protos ls v |> lift Advisory
+    | Unknown -> ok Unknown
+
 /// Converts the view and command in a ViewedCommand.
 and modelViewedCommand protos gs ls {Post = post; Command = command} =
     lift2 (fun postM commandM -> {Post = postM; Command = commandM})
-          (post |> modelCView protos ls
+          (post |> modelViewExpr protos ls
                 |> mapMessages (curry MethodError.BadView post))
           (command |> modelCommand protos gs ls)
 
@@ -986,7 +993,7 @@ and modelViewedCommands protos gs ls =
 /// The converted block is enclosed in a Chessie result.
 and modelBlock protos gs ls {Pre = bPre; Contents = bContents} =
     lift2 (fun bPreM bContentsM -> {Pre = bPreM; Contents = bContentsM})
-          (bPre |> modelCView protos ls
+          (bPre |> modelViewExpr protos ls
                 |> mapMessages (curry MethodError.BadView bPre))
           (bContents |> modelViewedCommands protos gs ls)
 

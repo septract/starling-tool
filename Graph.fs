@@ -10,11 +10,14 @@ module Starling.Core.Graph
 
 open Chessie.ErrorHandling
 
+open Starling.Collections
 open Starling.Utils
 open Starling.Core.Model
 open Starling.Core.Axiom
 open Starling.Core.Command
 open Starling.Core.GuardedView
+open Starling.Core.Var
+open Starling.Core.Expr
 
 
 /// <summary>
@@ -54,7 +57,7 @@ module Types =
             /// <summary>
             ///     Set of nodes in the control-flow graph.
             /// </summary>
-            Nodes: Map<string, GView * NodeKind>
+            Nodes: Map<string, ViewExpr<GView> * NodeKind>
 
             /// <summary>
             ///     Set of edges in the control-flow graph.
@@ -111,7 +114,7 @@ module Types =
           /// <summary>
           ///     The view of the source node.
           /// </summary>
-          SrcView : GView
+          SrcView : ViewExpr<GView>
           /// <summary>
           ///     The name of the destination node.
           /// </summary>
@@ -119,7 +122,7 @@ module Types =
           /// <summary>
           ///     The view of the destination node.
           /// </summary>
-          DestView : GView
+          DestView : ViewExpr<GView>
           /// <summary>
           ///      The command this edge represents.
           /// </summary>
@@ -139,8 +142,10 @@ module Types =
                    /// <summary>
                    ///     The contents of the graph.
                    /// </summary>
-                   Contents : Map<string, (GView * Set<OutEdge>
-                                                 * Set<InEdge> * NodeKind)> }
+                   Contents : Map<string, (ViewExpr<GView>
+                                           * Set<OutEdge>
+                                           * Set<InEdge>
+                                           * NodeKind)> }
 
     /// <summary>
     ///     Type of Chessie errors for CFG actions.
@@ -564,7 +569,6 @@ let mapEdges f graph =
                     outEdges)
     |> Seq.concat
 
-
 /// <summary>
 ///     Returns true if a node is present and has the given view.
 /// </summary>
@@ -584,7 +588,7 @@ let mapEdges f graph =
 /// </returns>
 let nodeHasView nodeName nodeView graph =
     match (Map.tryFind nodeName graph.Contents) with
-    | Some (v, _, _, _) when v = nodeView -> true
+    | Some (Known v, _, _, _) -> v = nodeView
     | _ -> false
 
 (*
@@ -592,19 +596,50 @@ let nodeHasView nodeName nodeView graph =
  *)
 
 /// <summary>
+///     Flattens a <c>ViewExpr</c> into a <c>GView</c>.
+/// </summary>
+/// <param name="fg">
+///     The fresh-generator used to make new views when the <c>ViewExpr</c>
+///     is <c>Unknown</c>.
+/// </param>
+/// <param name="_arg1">
+///     The <c>ViewExpr</c> to flatten.
+/// </param>
+/// <returns>
+///     A new <c>GView</c> representing the <c>ViewExpr</c>
+/// </returns>
+let flattenViewExpr fg =
+    function
+    | Mandatory v | Advisory v -> v
+    | Unknown ->
+        fg
+        |> getFresh
+        |> sprintf "%A"
+        |> fun n -> gfunc BTrue n []
+        |> Multiset.singleton
+
+/// <summary>
 ///     Returns the axioms characterising a graph.
 /// </summary>
-/// <param name="_arg1">
+/// <param name="graph">
 ///     The graph whose axioms are to be given.
 /// </param>
 /// <returns>
 ///     The edges of <paramref name="_arg1" />, as name-edge pairs.
 ///     This is wrapped in a Chessie result over <c>Error</c>.
 /// </returns>
-let axiomatiseGraph =
+let axiomatiseGraph graph =
+    let fg = freshGen ()
+
+    (* TODO(CaptainHayashi): generate new view constraints for '?' nodes
+       (by looking at the next freshGen to see how many were made?) *)
+
     mapEdges
-           (fun { Name = n; SrcView = s ; DestView = t ; Command = c } ->
-                (n, { Pre = s ; Post = t ; Cmd = c } ))
+        (fun { Name = n; SrcView = s ; DestView = t ; Command = c } ->
+            (n, { Pre = flattenViewExpr fg s
+                  Post = flattenViewExpr fg t
+                  Cmd = c } ))
+        graph
 
 /// <summary>
 ///     Converts a list of control-flow graphs into a list of axioms.
@@ -681,7 +716,7 @@ module Pretty =
     ///     The unique ID of the node.
     /// </param>
     /// <param name="view">
-    ///     The <c>GView</c> contained in the node.
+    ///     The <c>ViewExpr<GView></c> contained in the node.
     /// </param>
     /// <returns>
     ///     A pretty-printer <c>Command</c> representing the node.
@@ -690,7 +725,8 @@ module Pretty =
         let list = match nk with Normal -> [] | Entry -> [String "(Entry)"] | Exit -> [String "(Exit)"] | EntryExit -> [String "(EntryExit)"]
         hsep [ id |> String
                ([ id |> String
-                  view |> printGView ] @ list)|> colonSep |> printLabel 
+                  view |> printViewExpr printGView ] @ list)
+                |> colonSep |> printLabel 
              ]
         |> withSemi
 

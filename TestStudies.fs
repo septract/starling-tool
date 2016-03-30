@@ -53,7 +53,7 @@ method unlock() {
 let ticketLockLockMethodAST =
     { Signature = {Name = "lock"; Params = []}
       Body =
-          { Pre = Unit
+          { Pre = Mandatory Unit
             Contents =
                 [ { Command =
                         Command.Prim
@@ -62,10 +62,14 @@ let ticketLockLockMethodAST =
                                                 LV(LVIdent "ticket"),
                                                 Increment) ]
                               PostAssigns = [] }
-                    Post = View.Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]} }
+                    Post = Mandatory <|
+                           View.Func {Name = "holdTick"
+                                      Params = [ LV(LVIdent "t") ]} }
                   { Command =
                         DoWhile
-                            ({ Pre = View.Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]}
+                            ({ Pre = Mandatory <|
+                                     View.Func {Name = "holdTick"
+                                                Params = [ LV(LVIdent "t") ]}
                                Contents =
                                    [ { Command =
                                            Command.Prim
@@ -75,17 +79,19 @@ let ticketLockLockMethodAST =
                                                                    Direct) ]
                                                  PostAssigns = [] }
                                        Post =
+                                           Mandatory <|
                                            View.If
                                                (Bop(Eq, LV(LVIdent "s"), LV(LVIdent "t")), View.Func {Name = "holdLock"; Params = []},
                                                 View.Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]}) } ] },
                              Bop(Neq, LV(LVIdent "s"), LV(LVIdent "t")))
-                    Post = View.Func { Name = "holdLock"; Params = []} } ] } }
+                    Post = Mandatory <|
+                           View.Func { Name = "holdLock"; Params = [] } } ] } }
 
 /// The correct parsing of the ticket lock's unlock method.
 let ticketLockUnlockMethodAST =
     { Signature = {Name = "unlock"; Params = []}
       Body =
-          { Pre = View.Func {Name = "holdLock"; Params = []}
+          { Pre = Mandatory <| View.Func {Name = "holdLock"; Params = []}
             Contents =
                 [ { Command =
                         Command.Prim
@@ -93,7 +99,7 @@ let ticketLockUnlockMethodAST =
                               Atomics = [ Postfix(LVIdent "serving",
                                                   Increment) ]
                               PostAssigns = [] }
-                    Post = Unit } ] } }
+                    Post = Mandatory Unit } ] } }
 
 /// The parsed form of the ticket lock.
 let ticketLockParsed =
@@ -178,19 +184,19 @@ let sIsT = aEq (aUnmarked "s") (aUnmarked "t")
 let ticketLockLock =
     { Signature = func "lock" []
       Body =
-          { Pre = Multiset.empty()
+          { Pre = Mandatory <| Multiset.empty()
             Contents =
                 [ { Command =
                         func "!ILoad++"
                              [ AExpr (aBefore "t"); AExpr (aAfter "t")
                                AExpr (aBefore "ticket"); AExpr (aAfter "ticket") ]
                         |> List.singleton |> Prim
-                    Post = sing holdTick }
+                    Post = Mandatory <| sing holdTick }
                   { Command =
                         While (isDo = true,
                                expr = BNot sIsT,
                                inner =
-                                   { Pre = sing holdTick
+                                   { Pre = Mandatory <| sing holdTick
                                      Contents =
                                          [ { Command =
                                                  func "!ILoad"
@@ -202,19 +208,20 @@ let ticketLockLock =
                                                   sing holdLock,
                                                   sing holdTick)
                                                  |> CFunc.ITE
-                                                 |> Multiset.singleton } ] } )
-                    Post = sing holdLock } ] } }
+                                                 |> Multiset.singleton
+                                                 |> Mandatory } ] } )
+                    Post = Mandatory <| sing holdLock } ] } }
 
 /// The ticket lock's unlock method.
 let ticketLockUnlock =
     { Signature = func "unlock" []
       Body =
-          { Pre = sing holdLock
+          { Pre = Mandatory <| sing holdLock
             Contents =
                 [ { Command =
                         func "!I++" [ AExpr (aBefore "serving"); AExpr (aAfter "serving") ]
                         |> List.singleton |> Prim
-                    Post = Multiset.empty() }]}}
+                    Post = Mandatory <| Multiset.empty() }]}}
 
 /// The methods of the ticket lock.
 let ticketLockMethods =
@@ -226,19 +233,19 @@ let ticketLockMethods =
 let ticketLockGuardedLock =
     { Signature = func "lock" []
       Body =
-          { Pre = Multiset.empty()
+          { Pre = Mandatory <| Multiset.empty()
             Contents =
                 [ { Command =
                         func "!ILoad++"
                              [ AExpr (aBefore "t"); AExpr (aAfter "t")
                                AExpr (aBefore "ticket"); AExpr (aAfter "ticket") ]
                         |> List.singleton |> Prim
-                    Post = sing (gHoldTick BTrue) }
+                    Post = Mandatory <| sing (gHoldTick BTrue) }
                   { Command =
                         While (isDo = true,
                                expr = BNot sIsT,
                                inner =
-                                   { Pre = sing (gHoldTick BTrue)
+                                   { Pre = Mandatory <| sing (gHoldTick BTrue)
                                      Contents =
                                          [ { Command =
                                                  func "!ILoad"
@@ -246,21 +253,22 @@ let ticketLockGuardedLock =
                                                         AExpr (aBefore "serving"); AExpr (aAfter "serving") ]
                                                  |> List.singleton |> Prim
                                              Post =
+                                                 Mandatory <|
                                                  Multiset.ofList
                                                      [ gHoldLock sIsT
                                                        gHoldTick (BNot sIsT) ] } ] } )
-                    Post = sing (gHoldLock BTrue) } ] } }
+                    Post = Mandatory <| sing (gHoldLock BTrue) } ] } }
 
 /// The ticket lock's unlock method, in guarded form.
 let ticketLockGuardedUnlock : Method<GView, PartCmd<GView>> =
     { Signature = func "unlock" []
       Body =
-          { Pre = sing (gHoldLock BTrue)
+          { Pre = Mandatory <| sing (gHoldLock BTrue)
             Contents =
                 [ { Command =
                         func "!I++" [ AExpr (aBefore "serving"); AExpr (aAfter "serving") ]
                         |> List.singleton |> Prim
-                    Post = Multiset.empty() } ] } }
+                    Post = Mandatory <| Multiset.empty() } ] } }
 
 /// The view definitions of the ticket lock model.
 let ticketLockViewDefs =
@@ -310,12 +318,13 @@ let ticketLockLockSubgraph : Subgraph =
     { Nodes =
           Map.ofList
               [ ("lock_V0",
-                     (Multiset.empty (), Entry))
-                ("lock_V1", (sing (gHoldTick BTrue), Normal))
-                ("lock_V2", (sing (gHoldLock BTrue), Exit))
-                ("lock_V3", (sing (gHoldTick BTrue), Normal))
+                     (Mandatory <| Multiset.empty (), Entry))
+                ("lock_V1", (Mandatory <| sing (gHoldTick BTrue), Normal))
+                ("lock_V2", (Mandatory <| sing (gHoldLock BTrue), Exit))
+                ("lock_V3", (Mandatory <| sing (gHoldTick BTrue), Normal))
                 ("lock_V4",
-                     (Multiset.ofList
+                     (Mandatory <|
+                      Multiset.ofList
                          [ gHoldLock sIsT
                            gHoldTick (BNot sIsT) ], Normal)) ]
       Edges =
@@ -358,9 +367,10 @@ let ticketLockUnlockSubgraph : Subgraph =
     { Nodes =
           Map.ofList
               [ ("unlock_V0",
-                     (Multiset.singleton
+                     (Mandatory <|
+                      Multiset.singleton
                          (gfunc BTrue "holdLock" [] ), Entry))
-                ("unlock_V1", (Multiset.empty () , Exit)) ]
+                ("unlock_V1", (Mandatory <| Multiset.empty () , Exit)) ]
       Edges =
            Map.ofList
               [ ("unlock_C0",
@@ -375,7 +385,7 @@ let ticketLockLockGraph : Graph =
       Contents =
           Map.ofList
               [ ("lock_V0",
-                 ((Multiset.empty (),
+                 ((Mandatory <| Multiset.empty (),
                    Set.singleton
                       { OutEdge.Name = "lock_C0"
                         OutEdge.Dest = "lock_V1"
@@ -388,7 +398,7 @@ let ticketLockLockGraph : Graph =
                    Set.empty, 
                    Entry)))
                 ("lock_V1",
-                 (sing (gHoldTick BTrue),
+                 (Mandatory <| sing (gHoldTick BTrue),
                   Set.singleton
                       { Name = "lock_C4"
                         Dest = "lock_V3"
@@ -404,7 +414,7 @@ let ticketLockLockGraph : Graph =
                                      AExpr (aAfter "ticket") ]] },
                   Normal ))
                 ("lock_V2",
-                 (sing (gHoldLock BTrue),
+                 (Mandatory <| sing (gHoldLock BTrue),
                   Set.empty,
                   Set.singleton
                       { Name = "lock_C3"
@@ -415,7 +425,7 @@ let ticketLockLockGraph : Graph =
                                                 (aBefore "t")) ]] }, 
                    Exit))
                 ("lock_V3",
-                 (sing (gHoldTick BTrue),
+                 (Mandatory <| sing (gHoldTick BTrue),
                   Set.singleton
                       { Name = "lock_C1"
                         Dest = "lock_V4"
@@ -437,7 +447,8 @@ let ticketLockLockGraph : Graph =
                           Command = [] } ],
                    Normal))
                 ("lock_V4",
-                 (Multiset.ofList
+                 (Mandatory <|
+                  Multiset.ofList
                       [ gHoldLock sIsT
                         gHoldTick (BNot sIsT) ],
                   Set.ofList
@@ -470,7 +481,8 @@ let ticketLockUnlockGraph : Graph =
       Contents =
           Map.ofList
               [ ("unlock_V0",
-                 (Multiset.singleton
+                 (Mandatory <|
+                  Multiset.singleton
                           (gfunc BTrue "holdLock" [] ),
                   Set.singleton
                       { Name = "unlock_C0"
@@ -482,7 +494,7 @@ let ticketLockUnlockGraph : Graph =
                   Set.empty,
                   Entry))
                 ("unlock_V1",
-                 (Multiset.empty (),
+                 (Mandatory <| Multiset.empty (),
                   Set.empty,
                   Set.singleton
                       { Name = "unlock_C0"

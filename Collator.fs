@@ -18,7 +18,7 @@ module Types =
     /// <summary>
     ///     A script whose items have been partitioned by type.
     /// </summary>
-    type CollatedScript = 
+    type CollatedScript =
         { Globals : (Type * string) list
           Locals : (Type * string) list
           /// <summary>
@@ -41,9 +41,9 @@ module Types =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
-    
+
     open Starling.Lang.AST.Pretty
-    
+
     /// <summary>
     ///     Pretty-prints a collated script.
     /// </summary>
@@ -54,26 +54,26 @@ module Pretty =
     ///     A pretty-printer command for printing <paramref name="cs" />.
     /// </returns>
     let printCollatedScript (cs: CollatedScript) =
-        let definites = 
+        let definites =
             [ vsep <| Seq.map printViewProto cs.VProtos
               vsep <| Seq.map (uncurry (printScriptVar "shared")) cs.Globals
               vsep <| Seq.map (uncurry (printScriptVar "local")) cs.Locals
               vsep <| Seq.map printConstraint cs.Constraints
-              VSep(List.map (printMethod printViewLine printCommand) cs.Methods, VSkip)]
+              VSep(List.map (printMethod printView printCommand) cs.Methods, VSkip)]
 
         // Add in search, but only if it actually exists.
         let all =
             match cs.Search with
             | None -> definites
             | Some s -> printSearch s :: definites
-            
+
         VSep(all, (vsep [ VSkip; Separator; Nop ]))
 
 
 /// <summary>
 ///     The empty collated script.
 /// </summary>
-let empty = 
+let empty =
     { Constraints = []
       Methods = []
       Search = None
@@ -94,7 +94,7 @@ let empty =
 ///     The <c>CollatedScript</c> resulting from adding
 ///     <paramref name="item" /> to <paramref name="cs" />.
 /// </returns>
-let collateStep item cs = 
+let collateStep item cs =
     match item with
     | Global(v, t) -> { cs with Globals = (v, t) :: cs.Globals }
     | Local(v, t) -> { cs with Locals = (v, t) :: cs.Locals }
@@ -113,6 +113,6 @@ let collateStep item cs =
 ///     The <c>CollatedScript</c> resulting from collating the
 ///     <c>ScriptItems</c> in <paramref name="script" />.
 /// </returns>
-let collate script = 
+let collate script =
     // We foldBack instead of fold to preserve the original order.
     List.foldBack collateStep script empty

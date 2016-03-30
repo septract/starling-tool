@@ -2,6 +2,7 @@
 
 open Starling
 open Starling.Collections
+open Starling.Core.Model
 open Starling.Core.Var.Types
 
 /// <summary>
@@ -53,7 +54,7 @@ module Types =
     /// An AST func.
     type AFunc = Func<Expression>
 
-    /// A view expression.
+    /// A view.
     type View =
         | Unit
         | Join of View * View
@@ -86,11 +87,11 @@ module Types =
     /// A combination of a command and its postcondition view.
     and ViewedCommand<'view, 'cmd> =
         { Command : 'cmd // <a := b++>;
-          Post : 'view } // {| a = b |}
+          Post : ViewExpr<'view> } // {| a = b |}
 
     /// A block or method body.
     and Block<'view, 'cmd> =
-        { Pre : 'view
+        { Pre : ViewExpr<'view>
           // Post-condition is that in the last Seq.
           Contents : ViewedCommand<'view, 'cmd> list }
 
@@ -119,6 +120,7 @@ module Types =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
+    open Starling.Core.Model.Pretty
     open Starling.Core.Var.Pretty
 
     /// Pretty-prints lvalues.
@@ -177,12 +179,6 @@ module Pretty =
         | ViewDef.Unit -> String "emp"
         | ViewDef.Join(l, r) -> binop "*" (printViewDef l) (printViewDef r)
 
-    /// Pretty-prints view lines.
-    let printViewLine vl =
-        vl
-        |> printView
-        |> ssurround "{|" "|}"
-
     /// Pretty-prints constraints.
     let printConstraint { CView = v; CExpression = e } =
         hsep [ String "constraint"
@@ -222,15 +218,14 @@ module Pretty =
     let printViewedCommand (pView : 'view -> Command)
                            (pCmd : 'cmd -> Command)
                            ({ Command = c; Post = p } : ViewedCommand<'view, 'cmd>) =
-        vsep [ pCmd c
-               pView p ]
+        vsep [ pCmd c ; printViewExpr pView p ]
 
     /// Pretty-prints blocks with the given indent level (in spaces).
     let printBlock (pView : 'view -> Command)
                    (pCmd : 'cmd -> Command)
                    ({ Pre = p; Contents = c } : Block<'view, 'cmd>)
                    : Command =
-        vsep ((p |> pView |> Indent)
+        vsep ((p |> printViewExpr pView |> Indent)
               :: List.map (printViewedCommand pView pCmd >> Indent) c)
         |> braced
 
@@ -263,17 +258,17 @@ module Pretty =
                    c
                    |> printExpression
                    |> parened
-                   t |> printBlock printViewLine printCommand
-                   f |> printBlock printViewLine printCommand ]
+                   t |> printBlock printView printCommand
+                   f |> printBlock printView printCommand ]
         | While(c, b) ->
             hsep [ "while" |> String
                    c
                    |> printExpression
                    |> parened
-                   b |> printBlock printViewLine printCommand ]
+                   b |> printBlock printView printCommand ]
         | DoWhile(b, c) ->
             hsep [ "do" |> String
-                   b |> printBlock printViewLine printCommand
+                   b |> printBlock printView printCommand
                    "while" |> String
                    c
                    |> printExpression
@@ -281,7 +276,7 @@ module Pretty =
             |> withSemi
         | Blocks bs ->
             bs
-            |> List.map (printBlock printViewLine printCommand)
+            |> List.map (printBlock printView printCommand)
             |> hsepStr "||"
 
     /// Pretty-prints a view prototype.
@@ -309,7 +304,7 @@ module Pretty =
         function
         | Global(t, v) -> printScriptVar "shared" t v
         | Local(t, v) -> printScriptVar "thread" t v
-        | Method m -> printMethod printViewLine printCommand m
+        | Method m -> printMethod printView printCommand m
         | ViewProto v -> printViewProto v
         | Search i -> printSearch i
         | Constraint c -> printConstraint c

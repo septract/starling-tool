@@ -487,7 +487,7 @@ module Graph =
         expandNodeIn ctx <|
             fun node nView outEdges inEdges nk ->
                 match nView with
-                | ITEGuards (xc, xv, yc, yv) ->
+                | Known(ITEGuards (xc, xv, yc, yv)) ->
                     (* Translate xc and yc to pre-state, to match the
                        commands. *)
                     let xcPre = (liftMarker Before always).BSub xc

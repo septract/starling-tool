@@ -33,7 +33,8 @@ type GraphTests() =
               Some <|
               Map.ofList
                   [ ("unlock_V0",
-                     (Multiset.singleton
+                     (Mandatory <|
+                      Multiset.singleton
                           (gHoldLock BTrue),
                       Set.singleton
                           { Name = "unlock_C0"
@@ -48,7 +49,7 @@ type GraphTests() =
                             Command = [] },
                       Entry ))
                     ("unlock_V1",
-                     (Multiset.empty (),
+                     (Mandatory <| Multiset.empty (),
                       Set.singleton
                           { Name = "unlock_N0"
                             Dest = "unlock_V0"
@@ -84,7 +85,8 @@ type GraphTests() =
                 { Nodes =
                       Map.ofList
                           [ ("unlock_V0",
-                             (Multiset.singleton
+                             (Mandatory <|
+                              Multiset.singleton
                                  (gfunc BTrue "holdLock" [] ),
                               EntryExit)) ]
                   Edges =
@@ -101,7 +103,8 @@ type GraphTests() =
                 Some <|
                 { Nodes =
                       Map.ofList
-                          [ ("unlock_V1", (Multiset.empty (), EntryExit)) ]
+                          [ ("unlock_V1", (Mandatory <| Multiset.empty (),
+                                           EntryExit)) ]
                   Edges =
                       Map.ofList
                           [ ("unlock_C0",

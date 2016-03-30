@@ -8,6 +8,7 @@ open Chessie.ErrorHandling
 
 open Starling
 open Starling.Collections
+open Starling.Core.Model
 open Starling.Core.Var
 open Starling.Lang.AST
 
@@ -309,9 +310,20 @@ let parseBasicView =
 
 do parseViewRef := parseViewLike parseBasicView Join
 
-/// Parser for braced view statements.
-let parseViewLine = inViewBraces parseView
+/// Parser for view expressions.
+let parseViewExpr = between
+                        (pstring "{|" .>> ws)
+                        (pstring "|}")
+                        ((stringReturn "?" Unknown .>> ws)
+                         <|> pipe2ws parseView
+                                     (opt (stringReturn "?" ()))
+                                     (fun v qm ->
+                                          match qm with
+                                          | Some () -> Advisory v
+                                          | None -> Mandatory v))
                     // ^- {| <view> |}
+                    //  | {| <view> ? |}
+                    //  | {| ? |}
 
 
 (*
@@ -426,14 +438,14 @@ let parseCommands =
     many1
     <| pipe2ws parseCommand
                // ^- <command> ...
-               parseViewLine
+               parseViewExpr
                // ^-           ... <view-line>
                (fun c v -> { Command = c; Post = v })
                //  |             <command> ... <view-line> ... <commands>
 
 do parseBlockRef :=
     inBraces
-    <| pipe2ws parseViewLine
+    <| pipe2ws parseViewExpr
         // ^- {       ...                            ... }
                // ^- ... <view-line> ...
                parseCommands
