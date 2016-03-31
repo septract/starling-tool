@@ -201,6 +201,8 @@ let rec boolExpr =
     | BFalse -> ok <| False
     | BEq(AExpr x, AExpr y) -> lift2 (curry Eq) (checkArith x) (checkArith y)
     | BNot(BEq(AExpr x, AExpr y)) -> lift2 (curry Neq) (checkArith x) (checkArith y)
+    // TODO(CaptainHayashi): is implies allowed natively?
+    | BImplies(x, y) -> boolExpr (mkOr [ mkNot x ; y ])
     | BGt(x, y) -> lift2 (curry Gt) (checkArith x) (checkArith y)
     | BGe(x, y) -> lift2 (curry Ge) (checkArith x) (checkArith y)
     | BLe(x, y) -> lift2 (curry Le) (checkArith x) (checkArith y)
