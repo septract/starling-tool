@@ -1,0 +1,44 @@
+/*
+ * Herlihy/Shavit-style compare and swap lock.
+ * This version uses integer variables, to allow HSF to work.
+ */
+
+shared int lock;  // True iff the lock is taken.
+thread int test;  // Used when trying to take the lock.
+
+/*
+ * Locks the CAS lock.
+ */
+method lock() {
+  {| emp |}
+    do {
+      {| emp |}
+        test = 0;
+      {| if test == 0 then emp else False() |}
+        <CAS(lock, test, 1)>;
+      // Starling can't infer that test is always 0 or 1.
+      // Thus, we need to flip the condition here.
+      {| if test == 1 then emp else holdLock() |}
+    } while (test == 1);
+  {| holdLock() |}
+}
+
+/*
+ * Unlocks the CAS lock.
+ */
+method unlock() {
+  {| holdLock() |}
+  <lock = (0)>;
+  {| emp |}
+}
+
+
+// False is a hack to implement local variable reasoning.
+view False();
+constraint False() -> false;
+
+constraint emp -> 0 <= lock && lock <= 1;
+
+view holdLock();
+constraint holdLock() -> lock == 1;  // Identity of lock.
+constraint holdLock() * holdLock() -> false;  // Mutual exclusion
