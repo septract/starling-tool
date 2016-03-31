@@ -74,17 +74,23 @@ let inAngles p = inBrackets "<" ">" p
 // definitions.
 
 /// Parser for `raw` views (not surrounded in {braces}).
-let parseView, parseViewRef = createParserForwardedToRef<View, unit> ()
+let parseView, parseViewRef =
+    createParserForwardedToRef<View, unit> ()
 /// Parser for view definitions.
-let parseViewDef, parseViewDefRef = createParserForwardedToRef<ViewDef, unit> ()
+let parseViewDef, parseViewDefRef =
+    createParserForwardedToRef<ViewDef, unit> ()
 /// Parser for commands.
-let parseCommand, parseCommandRef = createParserForwardedToRef<Command<View>, unit> ()
+let parseCommand, parseCommandRef =
+    createParserForwardedToRef<Command<Marked<View>>, unit> ()
 /// Parser for blocks.
-let parseBlock, parseBlockRef = createParserForwardedToRef<Block<View, Command<View>>, unit> ()
+let parseBlock, parseBlockRef
+    = createParserForwardedToRef<Block<Marked<View>, Command<Marked<View>>>,
+                                 unit> ()
 /// Parser for expressions.
 /// The expression parser is split into several chains as per
 /// preference rank.
-let parseExpression, parseExpressionRef = createParserForwardedToRef<Expression, unit> ()
+let parseExpression, parseExpressionRef =
+    createParserForwardedToRef<Expression, unit> ()
 
 // From here on out, everything should line up more or less with the
 // BNF, except in reverse, bottom-up order.
@@ -319,8 +325,8 @@ let parseViewExpr = between
                                      (opt (stringReturn "?" ()))
                                      (fun v qm ->
                                           match qm with
-                                          | Some () -> Advisory v
-                                          | None -> Mandatory v))
+                                          | Some () -> Questioned v
+                                          | None -> Unmarked v))
                     // ^- {| <view> |}
                     //  | {| <view> ? |}
                     //  | {| ? |}

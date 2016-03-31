@@ -164,7 +164,8 @@ and graphITE vg cg oP oQ expr inTrue inFalse =
 /// <param name="_arg1">
 ///     The command to graph.
 /// </param>
-and graphCommand vg cg oP oQ : PartCmd<GView> -> Result<Subgraph, Error> =
+and graphCommand vg cg oP oQ : PartCmd<ViewExpr<GView>>
+                            -> Result<Subgraph, Error> =
     function
     | Prim cmd ->
         /// Each prim is an edge by itself, so just make a one-edge graph.
@@ -258,6 +259,6 @@ let graphMethod { Signature = { Name = name }; Body = body } =
 /// <summary>
 ///     Converts a model on method ASTs to one on method CFGs.
 /// </summary>
-let graph (model : Model<AST.Types.Method<GView, PartCmd<GView>>, DView>)
+let graph (model : Model<PMethod<ViewExpr<GView>>, DView>)
           : Result<Model<Graph, DView>, Error> =
     tryMapAxioms graphMethod model

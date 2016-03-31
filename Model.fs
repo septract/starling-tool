@@ -85,11 +85,6 @@ module Types =
         ///     Starling.
         /// </summary>
         | Advisory of 'view
-        /// <summary>
-        ///     This view expression generates an advisory view with a fresh
-        ///     name and indefinite constraint.
-        /// </summary>
-        | Unknown
 
     (*
      * View definitions
@@ -188,8 +183,6 @@ module Pretty =
         function
         | Mandatory v -> pView v
         | Advisory v -> hjoin [ pView v ; String "?" ]
-        | Unknown -> String "?"
-        >> ssurround "{|" "|}"
 
     /// Pretty-prints a term, given printers for its commands and views.
     let printTerm pCmd pWPre pGoal {Cmd = c; WPre = w; Goal = g} =
@@ -351,12 +344,11 @@ let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x, 'dview>)
           |> lift Map.ofList)
 
 /// <summary>
-///     Active pattern matching on a defined ViewExpr.
+///     Active pattern extracting a View from a ViewExpr.
 /// </summary>
-let (|Known|_|) =
+let (|InnerView|) =
     function
-    | Advisory v | Mandatory v -> Some v
-    | Unknown -> None
+    | Advisory v | Mandatory v -> v
 
 /// <summary>
 ///     Returns true if a <c>ViewExpr</c> can be removed at will without
@@ -371,5 +363,5 @@ let (|Known|_|) =
 /// </returns>
 let isAdvisory =
     function
-    | Advisory _ | Unknown -> true
+    | Advisory _ -> true
     | Mandatory _ -> false

@@ -38,6 +38,9 @@ module Types =
             * inTrue : Block<'view, PartCmd<'view>>
             * inFalse : Block<'view, PartCmd<'view>>
 
+    /// Methods over PartCmd.
+    type PMethod<'view> = Method<'view, PartCmd<'view>>
+
     // TODO(CaptainHayashi): more consistent constructor names
     /// Represents an error when converting an expression.
     type ExprError =
@@ -116,7 +119,7 @@ module Types =
         /// The method contains a bad view.
         | BadView of view : ViewExpr<AST.Types.View> * err : ViewError
         /// The method contains an command not yet implemented in Starling.
-        | CommandNotImplemented of cmd : AST.Types.Command<View>
+        | CommandNotImplemented of cmd : AST.Types.Command<ViewExpr<View>>
 
     /// Represents an error when converting a model.
     type ModelError =
@@ -266,7 +269,7 @@ module Pretty =
                                       (printViewError err)
         | CommandNotImplemented cmd ->
             fmt "command {0} not yet implemented"
-                [ printCommand cmd ]
+                [ printCommand (printViewExpr printView) cmd ]
 
     /// Pretty-prints model conversion errors.
     let printModelError =
@@ -548,7 +551,9 @@ let envOfViewDef svars =
 /// Converts a single constraint to its model form.
 let modelViewDef svars vprotos { CView = av; CExpression = ae } =
     trial {
-        let! v = modelDView vprotos av |> mapMessages (curry CEView av)
+        let vplist = List.ofSeq vprotos
+
+        let! v = modelDView vplist av |> mapMessages (curry CEView av)
         let! e = envOfViewDef svars v |> mapMessages (curry CEView av)
         let! c = match ae with
                  | Some dae -> modelBoolExpr e dae |> lift Some |> mapMessages (curry CEExpr dae)
@@ -976,7 +981,6 @@ and modelViewExpr protos ls =
     function
     | Mandatory v -> modelCView protos ls v |> lift Mandatory
     | Advisory v -> modelCView protos ls v |> lift Advisory
-    | Unknown -> ok Unknown
 
 /// Converts the view and command in a ViewedCommand.
 and modelViewedCommand protos gs ls {Post = post; Command = command} =
@@ -1032,23 +1036,27 @@ let modelViewProto proto =
 /// Checks view prototypes and converts them to func-table form.
 let modelViewProtos protos =
     protos
-    |> Seq.ofList
     |> Seq.map modelViewProto
     |> collect
     |> lift Instantiate.makeFuncTable
 
 /// Converts a collated script to a model.
-let model collated : Result<Model<AST.Types.Method<CView, PartCmd<CView>>, DView>, ModelError> =
+let model collated : Result<Model<PMethod<ViewExpr<CView>>, DView>, ModelError> =
     trial {
-        let! vprotos = modelViewProtos collated.VProtos
-
         // Make variable maps out of the global and local variable definitions.
         let! globals = makeVarMap collated.Globals
                        |> mapMessages (curry BadVar "shared")
         let! locals = makeVarMap collated.Locals
                       |> mapMessages (curry BadVar "thread-local")
+
+        let desugaredMethods, unknownProtos =
+            Starling.Lang.ViewDesugar.desugar locals collated.Methods
+
+        let! vprotos = modelViewProtos
+                           (Seq.append collated.VProtos unknownProtos)
+
         let! constraints = modelViewDefs globals vprotos collated
-        let! axioms = modelMethods vprotos globals locals collated.Methods
+        let! axioms = modelMethods vprotos globals locals desugaredMethods
         return
             { Globals = globals
               Locals = locals

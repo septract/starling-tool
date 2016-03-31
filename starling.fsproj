@@ -59,6 +59,7 @@
     <Compile Include="Instantiate.fs" />
     <Compile Include="AST.fs" />
     <Compile Include="Collator.fs" />
+    <Compile Include="ViewDesugar.fs" />
     <Compile Include="Modeller.fs" />
     <Compile Include="Guarder.fs" />
     <Compile Include="Grapher.fs" />

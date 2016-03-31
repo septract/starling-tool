@@ -7,6 +7,7 @@
 ./Examples/Pass/multicounter.cvf: 
 ./Examples/Pass/peterson.cvf:
 ./Examples/Pass/petersonInt.cvf: 
+./Examples/Pass/petersonIntMissingSynthesised.cvf: 
 ./Examples/Pass/petersonMultiCmd.cvf: 
 ./Examples/Pass/spinLockAdvisory.cvf: 
 ./Examples/Pass/spinLock.cvf:

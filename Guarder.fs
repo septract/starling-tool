@@ -38,7 +38,6 @@ let guardCViewExpr : ViewExpr<CView> -> ViewExpr<GView> =
     function
     | Mandatory v -> Mandatory (guardCView v)
     | Advisory v -> Advisory (guardCView v)
-    | Unknown -> Unknown
 
 /// Converts a viewed command to guarded views.
 let rec guardViewedCommand { Command = command ; Post = post } =
@@ -50,7 +49,7 @@ and guardBlock {Pre = pre; Contents = contents} =
       Contents = List.map guardViewedCommand contents }
 
 /// Converts a PartCmd to guarded views.
-and guardPartCmd : PartCmd<CView> -> PartCmd<GView> =
+and guardPartCmd : PartCmd<ViewExpr<CView>> -> PartCmd<ViewExpr<GView>> =
     function
     | Prim p -> Prim p
     | While (isDo, expr, inner) ->
@@ -63,5 +62,6 @@ let guardMethod { Signature = signature; Body = body } =
     { Signature = signature; Body = guardBlock body }
 
 /// Converts an entire model to guarded views.
-let guard : Model<Method<CView, PartCmd<CView>>, DView> -> Model<Method<GView, PartCmd<GView>>, DView> =
+let guard : Model<PMethod<ViewExpr<CView>>, DView>
+         -> Model<PMethod<ViewExpr<GView>>, DView> =
     mapAxioms guardMethod

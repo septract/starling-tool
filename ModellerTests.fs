@@ -139,10 +139,10 @@ type ModellerTests() =
         makeVarMap vl |> okOption
 
     /// Constructs a Prim of the correct type to come out of a modeller.
-    static member mprim (cmd : Command) : PartCmd<CView> = Prim cmd
+    static member mprim (cmd : Command) : PartCmd<ViewExpr<CView>> = Prim cmd
 
     /// Constructs a Command<View> containing one atomic.
-    static member prim (ac : Atomic) : Command<View> =
+    static member prim (ac : Atomic) : Command<ViewExpr<View>> =
         Command.Prim { PreAssigns = []
                        Atomics = [ ac ]
                        PostAssigns = [] }

@@ -33,7 +33,7 @@ module Types =
           Search : int option
           VProtos : ViewProto list
           Constraints : Constraint list
-          Methods : Method<View, Command<View>> list }
+          Methods : CMethod<Marked<View>> list }
 
 
 /// <summary>
@@ -59,7 +59,11 @@ module Pretty =
               vsep <| Seq.map (uncurry (printScriptVar "shared")) cs.Globals
               vsep <| Seq.map (uncurry (printScriptVar "local")) cs.Locals
               vsep <| Seq.map printConstraint cs.Constraints
-              VSep(List.map (printMethod printView printCommand) cs.Methods, VSkip)]
+              VSep(List.map (printMethod
+                                 (printMarkedView printView)
+                                 (printCommand (printMarkedView printView)))
+                            cs.Methods,
+                   VSkip)]
 
         // Add in search, but only if it actually exists.
         let all =

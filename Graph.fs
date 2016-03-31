@@ -588,7 +588,7 @@ let mapEdges f graph =
 /// </returns>
 let nodeHasView nodeName nodeView graph =
     match (Map.tryFind nodeName graph.Contents) with
-    | Some (Known v, _, _, _) -> v = nodeView
+    | Some (InnerView v, _, _, _) -> v = nodeView
     | _ -> false
 
 (*
@@ -596,56 +596,21 @@ let nodeHasView nodeName nodeView graph =
  *)
 
 /// <summary>
-///     Flattens a <c>ViewExpr</c> into a <c>GView</c>.
-/// </summary>
-/// <param name="tvars">
-///     The environment of thread-local variables.
-/// </param>
-/// <param name="fg">
-///     The fresh-generator used to make new views when the <c>ViewExpr</c>
-///     is <c>Unknown</c>.
-/// </param>
-/// <param name="_arg1">
-///     The <c>ViewExpr</c> to flatten.
-/// </param>
-/// <returns>
-///     A new <c>GView</c> representing the <c>ViewExpr</c>.
-/// </returns>
-let flattenViewExpr tvars fg =
-    function
-    | Mandatory v | Advisory v -> v
-    | Unknown ->
-        fg
-        |> getFresh
-        |> sprintf "%A"
-        |> fun n -> gfunc BTrue n (varMapToExprs Unmarked tvars)
-        |> Multiset.singleton
-
-/// <summary>
 ///     Returns the axioms characterising a graph.
 /// </summary>
-/// <param name="tvars">
-///     The environment of thread-local variables.
-/// </param>
-/// <param name="graph">
+/// <param name="_arg1">
 ///     The graph whose axioms are to be given.
 /// </param>
 /// <returns>
 ///     The edges of <paramref name="_arg1" />, as name-edge pairs.
 ///     This is wrapped in a Chessie result over <c>Error</c>.
 /// </returns>
-let axiomatiseGraph tvars graph =
-    let fg = freshGen ()
-
-    (* TODO(CaptainHayashi): generate new view constraints for '?' nodes
-       (by looking at the next freshGen to see how many were made?) *)
-
+let axiomatiseGraph =
     mapEdges
         (fun { Name = n; SrcView = s ; DestView = t ; Command = c } ->
-            (n, { Pre = flattenViewExpr tvars fg s
-                  Post = flattenViewExpr tvars fg t
+            (n, { Pre = match s with InnerView v -> v
+                  Post = match t with InnerView v -> v
                   Cmd = c } ))
-        graph
 
 /// <summary>
 ///     Converts a list of control-flow graphs into a list of axioms.
@@ -654,9 +619,6 @@ let axiomatiseGraph tvars graph =
 ///         Each axiom represents an edge in a control-flow graph.
 ///     </para>
 /// </summary>
-/// <param name="tvars">
-///     The environment of thread-local variables.
-/// </param>
 /// <param name="_arg1">
 ///     The sequence of graphs to axiomatise.
 ///     Such graphs typically represent one method.
@@ -664,11 +626,11 @@ let axiomatiseGraph tvars graph =
 /// <returns>
 ///     A map of axioms characterising <paramref name="_arg1" />.
 /// </returns>
-let axiomatiseGraphs tvars =
+let axiomatiseGraphs =
     // The map key is redundant, as we already have it inside the
     // graph iself.
     Map.toSeq
-    >> Seq.map (snd >> axiomatiseGraph tvars)
+    >> Seq.map (snd >> axiomatiseGraph)
     >> Seq.concat
     >> Map.ofSeq
 
@@ -686,8 +648,9 @@ let axiomatiseGraphs tvars =
 ///     An axiom-based model equivalent to <paramref name="model" />,
 ///     wrapped in a Chessie result.
 /// </returns>
-let axiomatise model =
-    withAxioms (axiomatiseGraphs model.Locals model.Axioms) model
+let axiomatise (model : Model<Graph, DView>)
+               : Model<Axiom<GView, Command>, DView> =
+    withAxioms (axiomatiseGraphs model.Axioms) model
 
 
 /// <summary>

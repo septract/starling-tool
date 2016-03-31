@@ -159,7 +159,7 @@ type GraphTests() =
 
 
     /// <summary>
-    ///     Test cases for <c>flattenViewExpr</c>.
+    ///     Test cases for <c>InnerView</c>.
     /// </summary>
     static member ViewExprFlattens =
         [ TestCaseData(Mandatory (sing (gHoldLock BTrue)))
@@ -167,17 +167,12 @@ type GraphTests() =
               .SetName("Flattening a mandatory viewexpr returns its view")
           TestCaseData(Advisory (sing (gHoldTick BTrue)))
               .Returns(sing (gHoldTick BTrue))
-              .SetName("Flattening an advisory viewexpr returns its view")
-          TestCaseData(Unknown : ViewExpr<GView>)
-              .Returns(sing (gfunc BTrue "0" [ AExpr (aUnmarked "s")
-                                               AExpr (aUnmarked "t") ]))
-              .SetName("Flattening an unknown viewexpr creates a new view\
-                        with a fresh name and all locals as parameters") ]
+              .SetName("Flattening an advisory viewexpr returns its view") ]
 
     /// <summary>
-    ///     Tests <c>flattenViewExpr</c>.
+    ///     Tests <c>InnerView</c>.
     /// </summary>
     [<TestCaseSource("ViewExprFlattens")>]
-    member x.``View expressions can be flattened into views`` ve =
-        let fg = freshGen ()
-        flattenViewExpr ticketLockModel.Locals fg ve
+    member x.``View expressions can be flattened into views``
+        (ve : ViewExpr<GView>) =
+        match ve with InnerView v -> v

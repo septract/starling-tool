@@ -51,6 +51,31 @@ module Types =
         | Join of ViewDef * ViewDef
         | Func of Func<string>
 
+    /// <summary>
+    ///     A view, annotated with additional syntax.
+    ///
+    ///     <para>
+    ///         This is modelled as Starling's <c>ViewExpr</c>, which
+    ///         cannot be <c>Unknown</c>.
+    ///     </para>
+    /// </summary>
+    /// <typeparam name="view">
+    ///     The type of view wrapped inside this expression.
+    /// </typeparam>
+    type Marked<'view> =
+        /// <summary>
+        ///     An unannotated view.
+        /// </summary>
+        | Unmarked of 'view
+        /// <summary>
+        ///     A ?-annotated view.
+        /// </summary>
+        | Questioned of 'view
+        /// <summary>
+        ///     An unknown view.
+        /// </summary>
+        | Unknown
+
     /// An AST func.
     type AFunc = Func<Expression>
 
@@ -87,11 +112,11 @@ module Types =
     /// A combination of a command and its postcondition view.
     and ViewedCommand<'view, 'cmd> =
         { Command : 'cmd // <a := b++>;
-          Post : ViewExpr<'view> } // {| a = b |}
+          Post : 'view } // {| a = b |}
 
     /// A block or method body.
     and Block<'view, 'cmd> =
-        { Pre : ViewExpr<'view>
+        { Pre : 'view
           // Post-condition is that in the last Seq.
           Contents : ViewedCommand<'view, 'cmd> list }
 
@@ -105,11 +130,14 @@ module Types =
         { Signature : Func<string> // main (argv, argc) ...
           Body : Block<'view, 'cmd> } // ... { ... }
 
+    /// Synonym for methods over Commands.
+    type CMethod<'view> = Method<'view, Command<'view>>
+
     /// A top-level item in a Starling script.
     type ScriptItem =
         | Global of Type * string // global int name;
         | Local of Type * string // local int name;
-        | Method of Method<View, Command<View>> // method main(argv, argc) { ... }
+        | Method of CMethod<Marked<View>> // method main(argv, argc) { ... }
         | Search of int // search 0;
         | ViewProto of ViewProto // view name(int arg);
         | Constraint of Constraint // constraint emp => true
@@ -172,6 +200,14 @@ module Pretty =
                    String "else"
                    printView r ]
 
+    /// Pretty-prints marked view lines.
+    let rec printMarkedView pView =
+        function
+        | Unmarked v -> pView v
+        | Questioned v -> hjoin [ pView v ; String "?" ]
+        | Unknown -> String "?"
+        >> ssurround "{|" "|}"
+
     /// Pretty-prints view definitions.
     let rec printViewDef =
         function
@@ -218,14 +254,14 @@ module Pretty =
     let printViewedCommand (pView : 'view -> Command)
                            (pCmd : 'cmd -> Command)
                            ({ Command = c; Post = p } : ViewedCommand<'view, 'cmd>) =
-        vsep [ pCmd c ; printViewExpr pView p ]
+        vsep [ pCmd c ; pView p ]
 
     /// Pretty-prints blocks with the given indent level (in spaces).
     let printBlock (pView : 'view -> Command)
                    (pCmd : 'cmd -> Command)
                    ({ Pre = p; Contents = c } : Block<'view, 'cmd>)
                    : Command =
-        vsep ((p |> printViewExpr pView |> Indent)
+        vsep ((p |> pView |> Indent)
               :: List.map (printViewedCommand pView pCmd >> Indent) c)
         |> braced
 
@@ -239,7 +275,7 @@ module Pretty =
                printBlock pView pCmd b ]
 
     /// Pretty-prints commands with the given indent level (in spaces).
-    let rec printCommand =
+    let rec printCommand pView =
         function
         (* The trick here is to make Prim [] appear as ;, but
            Prim [x; y; z] appear as x; y; z;, and to do the same with
@@ -258,17 +294,17 @@ module Pretty =
                    c
                    |> printExpression
                    |> parened
-                   t |> printBlock printView printCommand
-                   f |> printBlock printView printCommand ]
+                   t |> printBlock pView (printCommand pView)
+                   f |> printBlock pView (printCommand pView)]
         | While(c, b) ->
             hsep [ "while" |> String
                    c
                    |> printExpression
                    |> parened
-                   b |> printBlock printView printCommand ]
+                   b |> printBlock pView (printCommand pView) ]
         | DoWhile(b, c) ->
             hsep [ "do" |> String
-                   b |> printBlock printView printCommand
+                   b |> printBlock pView (printCommand pView)
                    "while" |> String
                    c
                    |> printExpression
@@ -276,7 +312,7 @@ module Pretty =
             |> withSemi
         | Blocks bs ->
             bs
-            |> List.map (printBlock printView printCommand)
+            |> List.map (printBlock pView (printCommand pView))
             |> hsepStr "||"
 
     /// Pretty-prints a view prototype.
@@ -304,7 +340,8 @@ module Pretty =
         function
         | Global(t, v) -> printScriptVar "shared" t v
         | Local(t, v) -> printScriptVar "thread" t v
-        | Method m -> printMethod printView printCommand m
+        | Method m -> printMethod (printMarkedView printView)
+                                  (printCommand (printMarkedView printView)) m
         | ViewProto v -> printViewProto v
         | Search i -> printSearch i
         | Constraint c -> printConstraint c

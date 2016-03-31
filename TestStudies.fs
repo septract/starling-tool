@@ -53,7 +53,7 @@ method unlock() {
 let ticketLockLockMethodAST =
     { Signature = {Name = "lock"; Params = []}
       Body =
-          { Pre = Mandatory Unit
+          { Pre = Unmarked Unit
             Contents =
                 [ { Command =
                         Command.Prim
@@ -62,12 +62,12 @@ let ticketLockLockMethodAST =
                                                 LV(LVIdent "ticket"),
                                                 Increment) ]
                               PostAssigns = [] }
-                    Post = Mandatory <|
+                    Post = Unmarked <|
                            View.Func {Name = "holdTick"
                                       Params = [ LV(LVIdent "t") ]} }
                   { Command =
                         DoWhile
-                            ({ Pre = Mandatory <|
+                            ({ Pre = Unmarked <|
                                      View.Func {Name = "holdTick"
                                                 Params = [ LV(LVIdent "t") ]}
                                Contents =
@@ -79,19 +79,19 @@ let ticketLockLockMethodAST =
                                                                    Direct) ]
                                                  PostAssigns = [] }
                                        Post =
-                                           Mandatory <|
+                                           Unmarked <|
                                            View.If
                                                (Bop(Eq, LV(LVIdent "s"), LV(LVIdent "t")), View.Func {Name = "holdLock"; Params = []},
                                                 View.Func {Name = "holdTick"; Params = [ LV(LVIdent "t") ]}) } ] },
                              Bop(Neq, LV(LVIdent "s"), LV(LVIdent "t")))
-                    Post = Mandatory <|
+                    Post = Unmarked <|
                            View.Func { Name = "holdLock"; Params = [] } } ] } }
 
 /// The correct parsing of the ticket lock's unlock method.
 let ticketLockUnlockMethodAST =
     { Signature = {Name = "unlock"; Params = []}
       Body =
-          { Pre = Mandatory <| View.Func {Name = "holdLock"; Params = []}
+          { Pre = Unmarked <| View.Func {Name = "holdLock"; Params = []}
             Contents =
                 [ { Command =
                         Command.Prim
@@ -99,7 +99,7 @@ let ticketLockUnlockMethodAST =
                               Atomics = [ Postfix(LVIdent "serving",
                                                   Increment) ]
                               PostAssigns = [] }
-                    Post = Mandatory Unit } ] } }
+                    Post = Unmarked Unit } ] } }
 
 /// The parsed form of the ticket lock.
 let ticketLockParsed =
@@ -260,7 +260,7 @@ let ticketLockGuardedLock =
                     Post = Mandatory <| sing (gHoldLock BTrue) } ] } }
 
 /// The ticket lock's unlock method, in guarded form.
-let ticketLockGuardedUnlock : Method<GView, PartCmd<GView>> =
+let ticketLockGuardedUnlock : PMethod<ViewExpr<GView>> =
     { Signature = func "unlock" []
       Body =
           { Pre = Mandatory <| sing (gHoldLock BTrue)
@@ -302,7 +302,7 @@ let ticketLockViewDefs =
         Def = Some <| BFalse } ]
 
 /// The model of the ticket lock.
-let ticketLockModel : Model<Method<CView, PartCmd<CView>>, DView> =
+let ticketLockModel : Model<PMethod<ViewExpr<CView>>, DView> =
     { Globals =
           Map.ofList [ ("serving", Type.Int)
                        ("ticket", Type.Int) ]
