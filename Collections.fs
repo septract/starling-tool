@@ -163,3 +163,99 @@ module Multiset =
                       |> ofSeq
         }
         |> Set.ofSeq
+
+/// <summary>
+///     Tests for collections.
+/// </summary>
+module Tests =
+    open NUnit.Framework
+
+    let tcd : obj[] -> TestCaseData = TestCaseData
+
+    /// <summary>
+    ///    NUnit tests for collections.
+    /// </summary>
+    type NUnit () =
+        /// <summary>
+        ///     Test cases for <c>Multiset.ofList</c>.
+        /// </summary>
+        static member ListMultisets =
+            [ TestCaseData([10; 23; 1; 85; 23; 1] : int list)
+                 .Returns(MSet [1; 1; 10; 23; 23; 85] : Multiset<int>)
+              TestCaseData([] : int list)
+                 .Returns(MSet [] : Multiset<int>) ]
+
+        /// <summary>
+        ///     Tests <c>Multiset.ofList</c>.
+        /// </summary>
+        [<TestCaseSource("ListMultisets")>]
+        member x.``Multiset.ofList creates correct multisets`` l =
+            Multiset.ofList l
+
+
+        /// <summary>
+        ///     Test cases for <c>Multiset.toList</c>.
+        /// </summary>
+        static member MultisetLists =
+            [ TestCaseData(MSet [1; 1; 10; 23; 23; 85] : Multiset<int>)
+                 .Returns([1; 1; 10; 23; 23; 85] : int list)
+              TestCaseData(MSet [] : Multiset<int>)
+                 .Returns([] : int list) ]
+
+        /// <summary>
+        ///     Tests <c>Multiset.ofList</c>.
+        /// </summary>
+        [<TestCaseSource("MultisetLists")>]
+        member x.``Multiset.toList creates correct lists`` ms =
+            Multiset.toList ms
+
+
+        /// <summary>
+        ///     Test cases for <c>Multiset.append</c>.
+        /// </summary>
+        static member MultisetAppends =
+            [ (tcd [| (MSet [] : Multiset<int>)
+                      (MSet [] : Multiset<int>) |])
+                 .Returns(MSet [] : Multiset<int>)
+                 .SetName("Appending two empty msets yields the empty mset")
+              (tcd [| (MSet [1; 2; 3] : Multiset<int>)
+                      (MSet [] : Multiset<int>) |])
+                 .Returns(MSet [1; 2; 3] : Multiset<int>)
+                 .SetName("Appending x and an empty mset yields x")
+              (tcd [| (MSet [] : Multiset<int>)
+                      (MSet [4; 5] : Multiset<int>) |])
+                 .Returns(MSet [4; 5] : Multiset<int>)
+                 .SetName("Appending an empty mset and x yields x")
+              (tcd [| (MSet [1; 3; 5] : Multiset<int>)
+                      (MSet [2; 4; 6] : Multiset<int>) |])
+                 .Returns(MSet [1; 2; 3; 4; 5; 6] : Multiset<int>)
+                 .SetName("Appending two msets works as expected") ]
+
+        /// <summary>
+        ///     Tests <c>Multiset.append</c>.
+        /// </summary>
+        [<TestCaseSource("MultisetAppends")>]
+        member x.``Multiset.append appends multisets correctly`` a b =
+            Multiset.append a b
+
+
+        /// <summary>
+        ///     Test cases for <c>Multiset.length</c>.
+        /// </summary>
+        static member MultisetLength =
+            [ (tcd [| (MSet [] : Multiset<int>) |])
+                 .Returns(0)
+                 .SetName("The empty mset contains 0 items")
+              (tcd [| (MSet [1; 2; 3] : Multiset<int>) |])
+                 .Returns(3)
+                 .SetName("A disjoint mset's length is the number of items")
+              (tcd [| (MSet [1; 2; 3; 2; 3] : Multiset<int>) |])
+                 .Returns(5)
+                 .SetName("A non-disjoint mset's length is correct") ]
+
+        /// <summary>
+        ///     Tests <c>Multiset.length</c>.
+        /// </summary>
+        [<TestCaseSource("MultisetLength")>]
+        member x.``Multiset.length takes multiset length correctly`` a =
+            Multiset.length a
