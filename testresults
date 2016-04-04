@@ -11,6 +11,7 @@
 ./Examples/Pass/petersonMultiCmd.cvf: 
 ./Examples/Pass/spinLockAdvisory.cvf: 
 ./Examples/Pass/spinLock.cvf:
+./Examples/Pass/spinLockInt.cvf: 
 ./Examples/Pass/spinLockMultiCmd.cvf: 
 ./Examples/Pass/ticketLock.cvf: 
 ./Examples/Pass/ticketLockNoIf.cvf: 
