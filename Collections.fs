@@ -182,8 +182,20 @@ module Multiset =
     ///     The result of appending <c>xs</c> to <c>ys</c>.
     /// </returns>
     let append xs ys =
-        // TODO(CaptainHayashi): a more efficient algorithm for this.
-        Seq.append (toFlatSeq xs) (toFlatSeq ys) |> ofFlatSeq
+        let MSet xmap, MSet ymap = xs, ys
+
+        // Figure out what the values in the appended sequence are...
+        Set.union (toSet xs) (toSet ys)
+        // Then, figure out what the occurrences are, by checking xs and ys.
+        |> Set.toSeq
+        |> Seq.map
+               (fun k ->
+                    let kInX = withDefault 0 (xmap.TryFind k)
+                    let kInY = withDefault 0 (ymap.TryFind k)
+                    (k, kInX + kInY))
+        // Now rebuild the multiset.
+        |> Map.ofSeq
+        |> MSet
 
     /// <summary>
     ///     Maps <c>f</c> over a multiset.
@@ -296,6 +308,15 @@ module Tests =
                  .Returns(MSet (Map.ofList [ (4, 1) ; (5, 1) ] )
                                : Multiset<int>)
                  .SetName("Appending an empty mset and x yields x")
+              (tcd [| (Multiset.ofFlatList [1; 2; 3; 4; 5] : Multiset<int>)
+                      (Multiset.ofFlatList [2; 4; 4; 5; 6] : Multiset<int>) |])
+                 .Returns(MSet (Map.ofList [ (1, 1)
+                                             (2, 2)
+                                             (3, 1)
+                                             (4, 3)
+                                             (5, 2)
+                                             (6, 1) ]) : Multiset<int>)
+                 .SetName("Appending two overlapping msets works as expected") 
               (tcd [| (Multiset.ofFlatList [1; 3; 5] : Multiset<int>)
                       (Multiset.ofFlatList [2; 4; 6] : Multiset<int>) |])
                  .Returns(MSet (Map.ofList [ (1, 1)
@@ -304,7 +325,7 @@ module Tests =
                                              (4, 1)
                                              (5, 1)
                                              (6, 1) ]) : Multiset<int>)
-                 .SetName("Appending two msets works as expected") ]
+                 .SetName("Appending two disjoint msets works as expected") ]
 
         /// <summary>
         ///     Tests <c>Multiset.append</c>.
