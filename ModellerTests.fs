@@ -33,14 +33,14 @@ type ModellerTests() =
                      ("baz", Type.Bool)
                      ("emp", Type.Bool) ]
 
-    static member EmptyCView : unit -> CView = Multiset.empty
+    static member EmptyCView : CView = Multiset.empty
 
     /// <summary>
     ///     Test cases for checking view modelling on correct view exprs.
     /// </summary>
     static member ViewExprsGood =
         [ TestCaseData(View.Unit)
-             .Returns(Some (ModellerTests.EmptyCView ()))
+             .Returns(Some (ModellerTests.EmptyCView))
              .SetName("Modelling the unit view returns the empty multiset")
           TestCaseData(afunc "holdLock" [] |> View.Func)
              .Returns(Some (Multiset.singleton (CFunc.Func (vfunc "holdLock" []))))
@@ -203,7 +203,7 @@ type ModellerTests() =
              .SetName("Searching for no viewdefs does not change a full viewdef set")
           TestCaseData({ Search = Some 0; InitDefs = []})
              .Returns(ModellerTests.viewDefSet
-                          [ { View = Multiset.empty ()
+                          [ { View = Multiset.empty
                               Def = None }])
              .SetName("Searching for size-0 viewdefs adds emp to an empty viewdef set")
           TestCaseData({ Search = Some 0; InitDefs = ticketLockViewDefs })
@@ -211,7 +211,7 @@ type ModellerTests() =
              .SetName("Searching for size-0 viewdefs does not change a full viewdef set")
           TestCaseData({ Search = Some 1; InitDefs = [] })
              .Returns(ModellerTests.viewDefSet
-                          [ { View = Multiset.empty ()
+                          [ { View = Multiset.empty
                               Def = None }
                             { View = Multiset.singleton (func "holdLock" [])
                               Def = None }
@@ -220,7 +220,7 @@ type ModellerTests() =
              .SetName("Searching for size-1 viewdefs yields viewdefs for emp and the view prototypes")
           TestCaseData({ Search = Some 2; InitDefs = [] })
              .Returns(ModellerTests.viewDefSet
-                          [ { View = Multiset.empty ()
+                          [ { View = Multiset.empty
                               Def = None }
                             { View = Multiset.singleton (func "holdLock" [])
                               Def = None }

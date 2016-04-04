@@ -14,8 +14,8 @@ type GuarderTests() =
     
     /// Test cases for converting CondViews to GuarViews
     static member CondViews = 
-        let msec : CView = Multiset.empty()
-        let mseg : GView = Multiset.empty()
+        let msec : CView = Multiset.empty
+        let mseg : GView = Multiset.empty
         [ TestCaseData(msec).Returns(mseg).SetName("Convert the empty CView to the empty GView")
           
           TestCaseData(Multiset.ofList [ Func { Name = "foo"

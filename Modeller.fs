@@ -745,7 +745,7 @@ let rec modelCView protos ls =
                  |> mapMessages (curry ViewError.BadExpr e))
               (modelCView protos ls l)
               (modelCView protos ls r)
-    | Unit -> Multiset.empty() |> ok
+    | Unit -> Multiset.empty |> ok
     | Join(l, r) ->
         lift2 (Multiset.append)
               (modelCView protos ls l)

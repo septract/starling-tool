@@ -1,6 +1,8 @@
 /// Collections used in Starling.
 module Starling.Collections
 
+open Starling.Utils
+
 /// <summary>
 ///     A function-like construct.
 /// </summary>
@@ -43,8 +45,8 @@ let func name pars = { Name = name; Params = List.ofSeq pars }
 /// <typeparam name="item">
 ///     The type of items in the Multiset.
 /// </typeparam>
-type Multiset<'item> =
-    | MSet of 'item list
+type Multiset<'item> when 'item: comparison =
+    | MSet of Map<'item, int>
 
 /// <summary>
 ///     Operations on multisets.
@@ -56,43 +58,48 @@ module Multiset =
      *)
 
     /// Creates a new, empty multiset.
-    let empty() = MSet []
-
-    /// Creates a new singleton multiset.
-    let singleton x = MSet [ x ]
-
-    /// Creates a new multiset with the given list as its contents.
-    let ofList xs =
-        xs
-        |> List.sort
-        |> MSet
+    let empty = MSet (Map.empty)
 
     /// Creates a new multiset with the given sequence as its contents.
     let ofSeq xs =
         xs
-        |> Seq.sort
-        |> Seq.toList
+        // First, collate into (k, [k, k, ...]) form...
+        |> Seq.groupBy id
+        // then, turn into (k, occurences of k).
+        |> Seq.map (pairMap id Seq.length)
+        |> Map.ofSeq
         |> MSet
+
+    /// Creates a new multiset with the given list as its contents.
+    let ofList xs =
+        xs |> List.toSeq |> ofSeq
+
+    /// Creates a new singleton multiset.
+    let singleton x = ofList [ x ]
+
 
     (*
      * Destruction
      *)
 
-    /// Converts a multiset to a sorted list.
-    let toList = function
-        | MSet xs -> xs
-
     /// Converts a multiset to a sorted seq.
-    let toSeq ms =
+    let toSeq (MSet ms) =
         ms
-        |> toList
-        |> List.toSeq
+        |> Map.toSeq
+        |> Seq.map (fun (k, amount) -> Seq.replicate amount k)
+        |> Seq.concat
+
+    /// Converts a multiset to a sorted list.
+    let toList ms =
+        ms
+        |> toSeq
+        |> List.ofSeq
 
     /// Converts a multiset to a set, removing duplicates.
     let toSet ms =
         ms
-        |> toList
-        |> Set.ofList
+        |> toSeq
+        |> Set.ofSeq
 
     (*
      * Operations
@@ -181,10 +188,14 @@ module Tests =
         /// </summary>
         static member ListMultisets =
             [ TestCaseData([10; 23; 1; 85; 23; 1] : int list)
-                 .Returns(MSet [1; 1; 10; 23; 23; 85] : Multiset<int>)
+                 .Returns(([ (1, 2)
+                             (10, 1)
+                             (23, 2)
+                             (85, 1) ]
+                          |> Map.ofList |> MSet) : Multiset<int>)
                  .SetName("A populated list produces the expected multiset")
               TestCaseData([] : int list)
-                 .Returns(MSet [] : Multiset<int>)
+                 .Returns(MSet (Map.empty) : Multiset<int>)
                  .SetName("An empty list produces the empty multiset") ]
 
         /// <summary>
@@ -199,10 +210,13 @@ module Tests =
         ///     Test cases for <c>Multiset.toList</c>.
         /// </summary>
         static member MultisetLists =
-            [ TestCaseData(MSet [1; 1; 10; 23; 23; 85] : Multiset<int>)
+            [ TestCaseData(MSet (Map.ofList [ (1, 2)
+                                              (10, 1)
+                                              (23, 2)
+                                              (85, 1) ] ) : Multiset<int>)
                  .Returns([1; 1; 10; 23; 23; 85] : int list)
                  .SetName("A populated multiset produces the expected list")
-              TestCaseData(MSet [] : Multiset<int>)
+              TestCaseData(MSet (Map.empty) : Multiset<int>)
                  .Returns([] : int list)
                  .SetName("An empty multiset produces the empty list") ]
 
@@ -218,21 +232,28 @@ module Tests =
         ///     Test cases for <c>Multiset.append</c>.
         /// </summary>
         static member MultisetAppends =
-            [ (tcd [| (MSet [] : Multiset<int>)
-                      (MSet [] : Multiset<int>) |])
-                 .Returns(MSet [] : Multiset<int>)
+            [ (tcd [| (Multiset.empty : Multiset<int>)
+                      (Multiset.empty : Multiset<int>) |])
+                 .Returns(MSet (Map.empty) : Multiset<int>)
                  .SetName("Appending two empty msets yields the empty mset")
-              (tcd [| (MSet [1; 2; 3] : Multiset<int>)
-                      (MSet [] : Multiset<int>) |])
-                 .Returns(MSet [1; 2; 3] : Multiset<int>)
+              (tcd [| (Multiset.ofList [1; 2; 3] : Multiset<int>)
+                      (Multiset.empty : Multiset<int>) |])
+                 .Returns(MSet (Map.ofList [ (1, 1) ; (2, 1) ; (3, 1) ] )
+                               : Multiset<int>)
                  .SetName("Appending x and an empty mset yields x")
-              (tcd [| (MSet [] : Multiset<int>)
-                      (MSet [4; 5] : Multiset<int>) |])
-                 .Returns(MSet [4; 5] : Multiset<int>)
+              (tcd [| (Multiset.empty : Multiset<int>)
+                      (Multiset.ofList [4; 5] : Multiset<int>) |])
+                 .Returns(MSet (Map.ofList [ (4, 1) ; (5, 1) ] )
+                               : Multiset<int>)
                  .SetName("Appending an empty mset and x yields x")
-              (tcd [| (MSet [1; 3; 5] : Multiset<int>)
-                      (MSet [2; 4; 6] : Multiset<int>) |])
-                 .Returns(MSet [1; 2; 3; 4; 5; 6] : Multiset<int>)
+              (tcd [| (Multiset.ofList [1; 3; 5] : Multiset<int>)
+                      (Multiset.ofList [2; 4; 6] : Multiset<int>) |])
+                 .Returns(MSet (Map.ofList [ (1, 1)
+                                             (2, 1)
+                                             (3, 1)
+                                             (4, 1)
+                                             (5, 1)
+                                             (6, 1) ]) : Multiset<int>)
                  .SetName("Appending two msets works as expected") ]
 
         /// <summary>
@@ -247,13 +268,13 @@ module Tests =
         ///     Test cases for <c>Multiset.length</c>.
         /// </summary>
         static member MultisetLength =
-            [ (tcd [| (MSet [] : Multiset<int>) |])
+            [ (tcd [| (Multiset.empty : Multiset<int>) |])
                  .Returns(0)
                  .SetName("The empty mset contains 0 items")
-              (tcd [| (MSet [1; 2; 3] : Multiset<int>) |])
+              (tcd [| (Multiset.ofList [ 1 ; 2 ; 3 ] : Multiset<int>) |])
                  .Returns(3)
                  .SetName("A disjoint mset's length is the number of items")
-              (tcd [| (MSet [1; 2; 3; 2; 3] : Multiset<int>) |])
+              (tcd [| (Multiset.ofList [ 1 ; 2 ; 3 ; 2 ; 3 ] : Multiset<int>) |])
                  .Returns(5)
                  .SetName("A non-disjoint mset's length is correct") ]
 

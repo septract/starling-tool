@@ -49,7 +49,7 @@ type GraphTests() =
                             Command = [] },
                       Entry ))
                     ("unlock_V1",
-                     (Mandatory <| Multiset.empty (),
+                     (Mandatory <| Multiset.empty,
                       Set.singleton
                           { Name = "unlock_N0"
                             Dest = "unlock_V0"
@@ -103,7 +103,7 @@ type GraphTests() =
                 Some <|
                 { Nodes =
                       Map.ofList
-                          [ ("unlock_V1", (Mandatory <| Multiset.empty (),
+                          [ ("unlock_V1", (Mandatory <| Multiset.empty,
                                            EntryExit)) ]
                   Edges =
                       Map.ofList

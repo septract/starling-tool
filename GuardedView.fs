@@ -137,7 +137,7 @@ let (|ITEGuards|_|) ms =
     // {| G -> P |} is trivially equivalent to {| G -> P * ¬G -> emp |}.
     | [ x ] ->
         Some (x.Cond, Multiset.singleton { Cond = BTrue; Item = x.Item },
-              mkNot x.Cond, Multiset.empty ())
+              mkNot x.Cond, Multiset.empty)
     | _ -> None
 
 (*
