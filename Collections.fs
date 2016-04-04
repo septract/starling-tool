@@ -182,15 +182,17 @@ module Tests =
         static member ListMultisets =
             [ TestCaseData([10; 23; 1; 85; 23; 1] : int list)
                  .Returns(MSet [1; 1; 10; 23; 23; 85] : Multiset<int>)
+                 .SetName("A populated list produces the expected multiset")
               TestCaseData([] : int list)
-                 .Returns(MSet [] : Multiset<int>) ]
+                 .Returns(MSet [] : Multiset<int>)
+                 .SetName("An empty list produces the empty multiset") ]
 
         /// <summary>
         ///     Tests <c>Multiset.ofList</c>.
         /// </summary>
         [<TestCaseSource("ListMultisets")>]
         member x.``Multiset.ofList creates correct multisets`` l =
-            Multiset.ofList l
+            (Multiset.ofList l) : Multiset<int>
 
 
         /// <summary>
@@ -199,15 +201,17 @@ module Tests =
         static member MultisetLists =
             [ TestCaseData(MSet [1; 1; 10; 23; 23; 85] : Multiset<int>)
                  .Returns([1; 1; 10; 23; 23; 85] : int list)
+                 .SetName("A populated multiset produces the expected list")
               TestCaseData(MSet [] : Multiset<int>)
-                 .Returns([] : int list) ]
+                 .Returns([] : int list)
+                 .SetName("An empty multiset produces the empty list") ]
 
         /// <summary>
         ///     Tests <c>Multiset.ofList</c>.
         /// </summary>
         [<TestCaseSource("MultisetLists")>]
         member x.``Multiset.toList creates correct lists`` ms =
-            Multiset.toList ms
+            (Multiset.toList ms) : int list
 
 
         /// <summary>
@@ -236,7 +240,7 @@ module Tests =
         /// </summary>
         [<TestCaseSource("MultisetAppends")>]
         member x.``Multiset.append appends multisets correctly`` a b =
-            Multiset.append a b
+            (Multiset.append a b) : Multiset<int>
 
 
         /// <summary>
@@ -257,5 +261,5 @@ module Tests =
         ///     Tests <c>Multiset.length</c>.
         /// </summary>
         [<TestCaseSource("MultisetLength")>]
-        member x.``Multiset.length takes multiset length correctly`` a =
+        member x.``Multiset.length takes multiset length correctly`` (a : Multiset<int>) =
             Multiset.length a
