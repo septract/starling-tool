@@ -57,10 +57,20 @@ module Multiset =
      * Construction
      *)
 
-    /// Creates a new, empty multiset.
+    /// <summary>
+    ///     The empty multiset.
+    /// </summary>
     let empty = MSet (Map.empty)
 
-    /// Creates a new multiset with the given sequence as its contents.
+    /// <summary>
+    ///     Creates a multiset with the given flat sequence as its contents.
+    /// </summary>
+    /// <param name="xs">
+    ///     The flat sequence to use to create the multiset.
+    /// </param>
+    /// <returns>
+    ///     A multiset containing the given items.
+    /// </returns>
     let ofSeq xs =
         xs
         // First, collate into (k, [k, k, ...]) form...
@@ -70,11 +80,27 @@ module Multiset =
         |> Map.ofSeq
         |> MSet
 
-    /// Creates a new multiset with the given list as its contents.
+    /// <summary>
+    ///     Creates a multiset with the given flat list as its contents.
+    /// </summary>
+    /// <param name="xs">
+    ///     The flat list to use to create the multiset.
+    /// </param>
+    /// <returns>
+    ///     A multiset containing the given items.
+    /// </returns>
     let ofList xs =
         xs |> List.toSeq |> ofSeq
 
-    /// Creates a new singleton multiset.
+    /// <summary>
+    ///     Creates a multiset with one item.
+    /// </summary>
+    /// <param name="x">
+    ///     The item to place in the multiset.
+    /// </param>
+    /// <returns>
+    ///     A singleton multiset.
+    /// </returns>
     let singleton x = ofList [ x ]
 
 
@@ -82,20 +108,44 @@ module Multiset =
      * Destruction
      *)
 
-    /// Converts a multiset to a sorted seq.
+    /// <summary>
+    ///     Converts a multiset to a sorted, flattened sequence.
+    /// </summary>
+    /// <param name="ms">
+    ///     The multiset to convert.
+    /// </param>
+    /// <returns>
+    ///     The sorted, flattened sequence.
+    /// </returns>
     let toSeq (MSet ms) =
         ms
         |> Map.toSeq
         |> Seq.map (fun (k, amount) -> Seq.replicate amount k)
         |> Seq.concat
 
-    /// Converts a multiset to a sorted list.
+    /// <summary>
+    ///     Converts a multiset to a sorted, flattened list.
+    /// </summary>
+    /// <param name="ms">
+    ///     The multiset to convert.
+    /// </param>
+    /// <returns>
+    ///     The sorted, flattened list.
+    /// </returns>
     let toList ms =
         ms
         |> toSeq
         |> List.ofSeq
 
-    /// Converts a multiset to a set, removing duplicates.
+    /// <summary>
+    ///     Converts a multiset to a set, removing duplicates.
+    /// </summary>
+    /// <param name="ms">
+    ///     The multiset to convert.
+    /// </param>
+    /// <returns>
+    ///     The set of items in the multiset.
+    /// </returns>
     let toSet ms =
         ms
         |> toSeq
