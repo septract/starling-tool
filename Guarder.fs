@@ -20,8 +20,8 @@ let rec guardCFuncIn (suffix : Set<BoolExpr>) =
                 |> mkAnd
             Item = v } ]
     | CFunc.ITE(expr, tviews, fviews) ->
-        List.concat [ guardCViewIn (suffix.Add expr) (Multiset.toList tviews)
-                      guardCViewIn (suffix.Add(mkNot expr)) (Multiset.toList fviews) ]
+        List.concat [ guardCViewIn (suffix.Add expr) (Multiset.toFlatList tviews)
+                      guardCViewIn (suffix.Add(mkNot expr)) (Multiset.toFlatList fviews) ]
 
 /// Resolves a list of views, given a set of conditions held true.
 and guardCViewIn suffix = concatMap (guardCFuncIn suffix)
@@ -29,9 +29,9 @@ and guardCViewIn suffix = concatMap (guardCFuncIn suffix)
 /// Resolves a full condition-view multiset into a guarded-view multiset.
 let guardCView : CView -> GView =
     // TODO(CaptainHayashi): woefully inefficient.
-    Multiset.toList
+    Multiset.toFlatList
     >> guardCViewIn Set.empty
-    >> Multiset.ofList
+    >> Multiset.ofFlatList
 
 /// Resolves a full condition-view ViewExpr into a guarded-view multiset.
 let guardCViewExpr : ViewExpr<CView> -> ViewExpr<GView> =

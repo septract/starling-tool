@@ -254,7 +254,7 @@ let ticketLockGuardedLock =
                                                  |> List.singleton |> Prim
                                              Post =
                                                  Mandatory <|
-                                                 Multiset.ofList
+                                                 Multiset.ofFlatList
                                                      [ gHoldLock sIsT
                                                        gHoldTick (BNot sIsT) ] } ] } )
                     Post = Mandatory <| sing (gHoldLock BTrue) } ] } }
@@ -275,30 +275,35 @@ let ticketLockViewDefs =
     [ { View = Multiset.empty
         Def = Some <| BGe(aUnmarked "ticket", aUnmarked "serving") }
       { View =
-            Multiset.ofList [ { Name = "holdTick"
-                                Params = [ (Type.Int, "t") ] } ]
+            Multiset.ofFlatList
+                [ { Name = "holdTick"
+                    Params = [ (Type.Int, "t") ] } ]
         Def = Some <| BGt(aUnmarked "ticket", aUnmarked "t") }
       { View =
-            Multiset.ofList [ { Name = "holdLock"
-                                Params = [] } ]
+            Multiset.ofFlatList
+                [ { Name = "holdLock"
+                    Params = [] } ]
         Def = Some <| BGt(aUnmarked "ticket", aUnmarked "serving") }
       { View =
-            Multiset.ofList [ { Name = "holdLock"
-                                Params = [] }
-                              { Name = "holdTick"
-                                Params = [ (Type.Int, "t") ] } ]
+            Multiset.ofFlatList
+                [ { Name = "holdLock"
+                    Params = [] }
+                  { Name = "holdTick"
+                    Params = [ (Type.Int, "t") ] } ]
         Def = Some <| BNot(aEq (aUnmarked "serving") (aUnmarked "t")) }
       { View =
-            Multiset.ofList [ { Name = "holdTick"
-                                Params = [ (Type.Int, "ta") ] }
-                              { Name = "holdTick"
-                                Params = [ (Type.Int, "tb") ] } ]
+            Multiset.ofFlatList
+                [ { Name = "holdTick"
+                    Params = [ (Type.Int, "ta") ] }
+                  { Name = "holdTick"
+                    Params = [ (Type.Int, "tb") ] } ]
         Def = Some <| BNot(aEq (aUnmarked "ta") (aUnmarked "tb")) }
       { View =
-            Multiset.ofList [ { Name = "holdLock"
-                                Params = [] }
-                              { Name = "holdLock"
-                                Params = [] } ]
+            Multiset.ofFlatList
+                [ { Name = "holdLock"
+                    Params = [] }
+                  { Name = "holdLock"
+                    Params = [] } ]
         Def = Some <| BFalse } ]
 
 /// The model of the ticket lock.
@@ -324,7 +329,7 @@ let ticketLockLockSubgraph : Subgraph =
                 ("lock_V3", (Mandatory <| sing (gHoldTick BTrue), Normal))
                 ("lock_V4",
                      (Mandatory <|
-                      Multiset.ofList
+                      Multiset.ofFlatList
                          [ gHoldLock sIsT
                            gHoldTick (BNot sIsT) ], Normal)) ]
       Edges =
@@ -448,7 +453,7 @@ let ticketLockLockGraph : Graph =
                    Normal))
                 ("lock_V4",
                  (Mandatory <|
-                  Multiset.ofList
+                  Multiset.ofFlatList
                       [ gHoldLock sIsT
                         gHoldTick (BNot sIsT) ],
                   Set.ofList

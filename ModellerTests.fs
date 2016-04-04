@@ -224,17 +224,20 @@ type ModellerTests() =
                               Def = None }
                             { View = Multiset.singleton (func "holdLock" [])
                               Def = None }
-                            { View = Multiset.ofList [ func "holdLock" []
-                                                       func "holdLock" [] ]
+                            { View = Multiset.ofFlatList
+                                         [ func "holdLock" []
+                                           func "holdLock" [] ]
                               Def = None }
-                            { View = Multiset.ofList [ func "holdLock" []
-                                                       func "holdTick" [(Type.Int, "t0")] ]
+                            { View = Multiset.ofFlatList
+                                         [ func "holdLock" []
+                                           func "holdTick" [(Type.Int, "t0")] ]
                               Def = None }
                             { View = Multiset.singleton (func "holdTick" [(Type.Int, "t0")])
                               Def = None }
 
-                            { View = Multiset.ofList [ func "holdTick" [(Type.Int, "t0")]
-                                                       func "holdTick" [(Type.Int, "t1")] ]
+                            { View = Multiset.ofFlatList
+                                         [ func "holdTick" [(Type.Int, "t0")]
+                                           func "holdTick" [(Type.Int, "t1")] ]
                               Def = None }])
              .SetName("Searching for size-2 viewdefs yields the correct views") ]
 

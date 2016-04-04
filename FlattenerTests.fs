@@ -17,7 +17,7 @@ type FlattenerTests() =
 
     /// Test cases for the view func renamer.
     static member ViewFuncNamings =
-        let ms : VFunc list -> View = Multiset.ofList
+        let ms : VFunc list -> View = Multiset.ofFlatList
         [ TestCaseData(ms [ { Name = "foo"; Params = [] }
                             { Name = "bar_baz"; Params = [] } ])
             .Returns("v_bar__baz_foo") // Remember, multisets sort!
@@ -34,7 +34,7 @@ type FlattenerTests() =
     /// Test cases for the full defining-view func converter.
     /// These all use the Globals environment above.
     static member DViewFuncs =
-        let ms : DFunc list -> DView = Multiset.ofList
+        let ms : DFunc list -> DView = Multiset.ofFlatList
         [ TestCaseData(ms [ { Name = "holdLock"; Params = [] }
                             { Name = "holdTick"; Params = [(Type.Int, "t")] } ])
              .Returns({ Name = "v_holdLock_holdTick"
@@ -54,7 +54,7 @@ type FlattenerTests() =
     /// Test cases for the full view func converter.
     /// These all use the Globals environment above.
     static member ViewFuncs =
-        let ms : VFunc list -> View = Multiset.ofList
+        let ms : VFunc list -> View = Multiset.ofFlatList
         [ TestCaseData(ms [ { Name = "holdLock"; Params = [] }
                             { Name = "holdTick"; Params = [AExpr (aUnmarked "t")] } ])
              .Returns({ Name = "v_holdLock_holdTick"

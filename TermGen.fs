@@ -85,13 +85,13 @@ let termGenPre gax =
     let pre =
         gax.Axiom.Pre
         |> subExprInGView (liftMarker Before always)
-        |> Multiset.toList
+        |> Multiset.toFlatList
     let post =
         gax.Axiom.Post
         |> subExprInGView (liftMarker After always)
-        |> Multiset.toList
-    let goal = gax.Goal |> Multiset.toList
-    List.append pre (termGenFrame goal post) |> Multiset.ofList
+        |> Multiset.toFlatList
+    let goal = gax.Goal |> Multiset.toFlatList
+    List.append pre (termGenFrame goal post) |> Multiset.ofFlatList
 
 /// Generates a term from a goal axiom.
 let termGenAxiom gax =

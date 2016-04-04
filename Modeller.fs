@@ -558,7 +558,7 @@ let modelViewDef svars vprotos { CView = av; CExpression = ae } =
         let! c = match ae with
                  | Some dae -> modelBoolExpr e dae |> lift Some |> mapMessages (curry CEExpr dae)
                  | _ -> ok None
-        return { View = Multiset.ofSeq v
+        return { View = Multiset.ofFlatSeq v
                  Def = c }
     }
     |> mapMessages (curry BadConstraint av)
@@ -590,8 +590,8 @@ let inViewDefs viewdefs dview =
              then
                  List.forall2
                      (fun vdfunc dfunc -> vdfunc.Name = dfunc.Name)
-                     (Multiset.toList viewdef)
-                     (Multiset.toList dview)
+                     (Multiset.toFlatList viewdef)
+                     (Multiset.toFlatList dview)
              else false)
         viewdefs
 
@@ -648,7 +648,7 @@ let genAllViewsAt depth funcs =
     let rec f depth existing =
         match depth with
         // Multiset and set conversion removes duplicate views.
-        | 0 -> existing |> Seq.map Multiset.ofList |> Set.ofSeq
+        | 0 -> existing |> Seq.map Multiset.ofFlatList |> Set.ofSeq
         | n ->
             let existing' =
                 seq { yield []

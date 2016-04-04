@@ -71,7 +71,7 @@ module Multiset =
     /// <returns>
     ///     A multiset containing the given items.
     /// </returns>
-    let ofSeq xs =
+    let ofFlatSeq xs =
         xs
         // First, collate into (k, [k, k, ...]) form...
         |> Seq.groupBy id
@@ -89,8 +89,8 @@ module Multiset =
     /// <returns>
     ///     A multiset containing the given items.
     /// </returns>
-    let ofList xs =
-        xs |> List.toSeq |> ofSeq
+    let ofFlatList xs =
+        xs |> List.toSeq |> ofFlatSeq
 
     /// <summary>
     ///     Creates a multiset with one item.
@@ -101,7 +101,7 @@ module Multiset =
     /// <returns>
     ///     A singleton multiset.
     /// </returns>
-    let singleton x = ofList [ x ]
+    let singleton x = ofFlatList [ x ]
 
 
     (*
@@ -117,7 +117,7 @@ module Multiset =
     /// <returns>
     ///     The sorted, flattened sequence.
     /// </returns>
-    let toSeq (MSet ms) =
+    let toFlatSeq (MSet ms) =
         ms
         |> Map.toSeq
         |> Seq.map (fun (k, amount) -> Seq.replicate amount k)
@@ -132,9 +132,9 @@ module Multiset =
     /// <returns>
     ///     The sorted, flattened list.
     /// </returns>
-    let toList ms =
+    let toFlatList ms =
         ms
-        |> toSeq
+        |> toFlatSeq
         |> List.ofSeq
 
     /// <summary>
@@ -148,7 +148,7 @@ module Multiset =
     /// </returns>
     let toSet ms =
         ms
-        |> toSeq
+        |> toFlatSeq
         |> Set.ofSeq
 
     (*
@@ -165,7 +165,7 @@ module Multiset =
     ///     The number of elements in <paramref name="_arg1" />.
     /// </returns>
     let length mset =
-        mset |> toSeq |> Seq.length
+        mset |> toFlatSeq |> Seq.length
 
     /// <summary>
     ///     Appends two multisets.
@@ -183,7 +183,7 @@ module Multiset =
     /// </returns>
     let append xs ys =
         // TODO(CaptainHayashi): a more efficient algorithm for this.
-        Seq.append (toSeq xs) (toSeq ys) |> ofSeq
+        Seq.append (toFlatSeq xs) (toFlatSeq ys) |> ofFlatSeq
 
     /// <summary>
     ///     Maps <c>f</c> over a multiset.
@@ -201,23 +201,23 @@ module Multiset =
     let map f =
         // TODO(CaptainHayashi): quite inefficient, but not sure how
         // else to do this correctly.
-        toList
+        toFlatList
         >> List.map f
-        >> ofList
+        >> ofFlatList
 
     /// Produces the power-multiset of a multiset, as a set of multisets.
     let power msm =
         (* Solve the problem using Boolean arithmetic on the index of the
          * powerset item.
          *)
-        let ms = toList msm
+        let ms = toFlatList msm
         seq {
             for i in 0..(1 <<< List.length ms) - 1 do
                 yield (seq { 0..(List.length ms) - 1 } |> Seq.choose (fun j -> 
                                                               let cnd : int = i &&& (1 <<< j)
                                                               if cnd <> 0 then Some ms.[j]
                                                               else None))
-                      |> ofSeq
+                      |> ofFlatSeq
         }
         |> Set.ofSeq
 
@@ -234,7 +234,7 @@ module Tests =
     /// </summary>
     type NUnit () =
         /// <summary>
-        ///     Test cases for <c>Multiset.ofList</c>.
+        ///     Test cases for <c>Multiset.ofFlatList</c>.
         /// </summary>
         static member ListMultisets =
             [ TestCaseData([10; 23; 1; 85; 23; 1] : int list)
@@ -249,15 +249,15 @@ module Tests =
                  .SetName("An empty list produces the empty multiset") ]
 
         /// <summary>
-        ///     Tests <c>Multiset.ofList</c>.
+        ///     Tests <c>Multiset.ofFlatList</c>.
         /// </summary>
         [<TestCaseSource("ListMultisets")>]
-        member x.``Multiset.ofList creates correct multisets`` l =
-            (Multiset.ofList l) : Multiset<int>
+        member x.``Multiset.ofFlatList creates correct multisets`` l =
+            (Multiset.ofFlatList l) : Multiset<int>
 
 
         /// <summary>
-        ///     Test cases for <c>Multiset.toList</c>.
+        ///     Test cases for <c>Multiset.toFlatList</c>.
         /// </summary>
         static member MultisetLists =
             [ TestCaseData(MSet (Map.ofList [ (1, 2)
@@ -271,11 +271,11 @@ module Tests =
                  .SetName("An empty multiset produces the empty list") ]
 
         /// <summary>
-        ///     Tests <c>Multiset.ofList</c>.
+        ///     Tests <c>Multiset.toFlatList</c>.
         /// </summary>
         [<TestCaseSource("MultisetLists")>]
-        member x.``Multiset.toList creates correct lists`` ms =
-            (Multiset.toList ms) : int list
+        member x.``Multiset.toFlatList creates correct lists`` ms =
+            (Multiset.toFlatList ms) : int list
 
 
         /// <summary>
@@ -286,18 +286,18 @@ module Tests =
                       (Multiset.empty : Multiset<int>) |])
                  .Returns(MSet (Map.empty) : Multiset<int>)
                  .SetName("Appending two empty msets yields the empty mset")
-              (tcd [| (Multiset.ofList [1; 2; 3] : Multiset<int>)
+              (tcd [| (Multiset.ofFlatList [1; 2; 3] : Multiset<int>)
                       (Multiset.empty : Multiset<int>) |])
                  .Returns(MSet (Map.ofList [ (1, 1) ; (2, 1) ; (3, 1) ] )
                                : Multiset<int>)
                  .SetName("Appending x and an empty mset yields x")
               (tcd [| (Multiset.empty : Multiset<int>)
-                      (Multiset.ofList [4; 5] : Multiset<int>) |])
+                      (Multiset.ofFlatList [4; 5] : Multiset<int>) |])
                  .Returns(MSet (Map.ofList [ (4, 1) ; (5, 1) ] )
                                : Multiset<int>)
                  .SetName("Appending an empty mset and x yields x")
-              (tcd [| (Multiset.ofList [1; 3; 5] : Multiset<int>)
-                      (Multiset.ofList [2; 4; 6] : Multiset<int>) |])
+              (tcd [| (Multiset.ofFlatList [1; 3; 5] : Multiset<int>)
+                      (Multiset.ofFlatList [2; 4; 6] : Multiset<int>) |])
                  .Returns(MSet (Map.ofList [ (1, 1)
                                              (2, 1)
                                              (3, 1)
@@ -321,10 +321,10 @@ module Tests =
             [ (tcd [| (Multiset.empty : Multiset<int>) |])
                  .Returns(0)
                  .SetName("The empty mset contains 0 items")
-              (tcd [| (Multiset.ofList [ 1 ; 2 ; 3 ] : Multiset<int>) |])
+              (tcd [| (Multiset.ofFlatList [ 1 ; 2 ; 3 ] : Multiset<int>) |])
                  .Returns(3)
                  .SetName("A disjoint mset's length is the number of items")
-              (tcd [| (Multiset.ofList [ 1 ; 2 ; 3 ; 2 ; 3 ] : Multiset<int>) |])
+              (tcd [| (Multiset.ofFlatList [ 1 ; 2 ; 3 ; 2 ; 3 ] : Multiset<int>) |])
                  .Returns(5)
                  .SetName("A non-disjoint mset's length is correct") ]
 
