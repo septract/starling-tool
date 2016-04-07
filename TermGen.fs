@@ -67,7 +67,11 @@ let termGenFrame r q =
      * Since r is unguarded at the start of the minus, we lift it
      * to the guarded view (true|r).
      *)
-    List.fold termGenFrameView (List.map guard r) q
+    let rl, ql = Multiset.toFlatList r, Multiset.toFlatList q
+
+    ql
+    |> List.fold termGenFrameView (List.map guard rl)
+    |> Multiset.ofFlatList
 
 /// Generates a (weakest) precondition from a framed axiom.
 let termGenPre gax =
@@ -85,13 +89,12 @@ let termGenPre gax =
     let pre =
         gax.Axiom.Pre
         |> subExprInGView (liftMarker Before always)
-        |> Multiset.toFlatList
     let post =
         gax.Axiom.Post
         |> subExprInGView (liftMarker After always)
-        |> Multiset.toFlatList
-    let goal = gax.Goal |> Multiset.toFlatList
-    List.append pre (termGenFrame goal post) |> Multiset.ofFlatList
+    let goal = gax.Goal
+
+    Multiset.append pre (termGenFrame goal post)
 
 /// Generates a term from a goal axiom.
 let termGenAxiom gax =
