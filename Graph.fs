@@ -185,7 +185,7 @@ let edge = axiom
 /// <summary>
 ///     Converts a <c>Graph</c> to a <c>Subgraph</c>.
 /// </summary>
-/// <param name="graph" />
+/// <param name="graph">
 ///     The graph to convert to a subgraph.
 /// </param>
 /// <returns>
@@ -272,7 +272,7 @@ let graph name sg =
 /// <param name="_arg1">
 ///    The first graph to combine.
 /// </param>
-/// <param name="_arg2"
+/// <param name="_arg2">
 ///    The second graph to combine.
 /// </param>
 /// <returns>
@@ -670,7 +670,7 @@ module Pretty =
     /// </summary>
     /// <param name="labelCmd">
     ///     The pretty-printer command to use as the label.
-    /// </param.
+    /// </param>
     /// <returns>
     ///     A pretty-printer command representing
     ///     [label = "<paramref name="labelCmd" />"].
@@ -688,7 +688,7 @@ module Pretty =
     ///     The unique ID of the node.
     /// </param>
     /// <param name="view">
-    ///     The <c>ViewExpr<GView></c> contained in the node.
+    ///     The <c>ViewExpr</c> contained in the node.
     /// </param>
     /// <returns>
     ///     A pretty-printer <c>Command</c> representing the node.

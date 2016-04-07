@@ -101,11 +101,11 @@ module Multiset =
     /// <summary>
     ///     Takes the length of a multiset.
     /// </summary>
-    /// <param name="mset" />
+    /// <param name="mset">
     ///     The multiset to measure.
     /// </param>
     /// <returns>
-    ///     The number of elements in <paramref name="_arg1".
+    ///     The number of elements in <paramref name="_arg1" />.
     /// </returns>
     let length mset =
         mset |> toSeq |> Seq.length

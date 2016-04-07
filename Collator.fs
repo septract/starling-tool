@@ -88,10 +88,10 @@ let empty =
 /// <summary>
 ///     Files a script item into the appropriate bin in a collated script.
 /// </summary>
-/// <param name="item" />
+/// <param name="item">
 ///     The <c>ScriptItem</c> to place into <paramref name="cs" />.
 /// </param>
-/// <param name="cs" />
+/// <param name="cs">
 ///     The <c>CollatedScript</c> to expand with <paramref name="item" />.
 /// </param>
 /// <returns>
@@ -110,7 +110,7 @@ let collateStep item cs =
 /// <summary>
 ///     Collates a script, grouping all like-typed items together.
 /// </summary>
-/// <param name="script" />
+/// <param name="script">
 ///     The <c>Script</c> to collate.
 /// </param>
 /// <returns>

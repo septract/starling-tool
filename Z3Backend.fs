@@ -127,7 +127,7 @@ module Translator =
     /// <returns>
     ///   A Chessie result, which, when ok, contains a <c>FuncTable</c> mapping
     ///   each defining view in <c>model</c> to its <c>BoolExpr</c> meaning.
-    /// <returns>
+    /// </returns>
     /// <remarks>
     ///   <para>
     ///     This stage requires all views in <c>model.ViewDefs</c> to be definite,
@@ -153,7 +153,7 @@ module Translator =
     ///   A Chessie result, which, when ok, contains a <c>Model</c> equivalent to
     ///   <c>model</c> except that each view is replaced with the <c>BoolExpr</c>
     ///   interpretation of it from <c>model</c>'s <c>ViewDefs</c>.
-    /// <returns>
+    /// </returns>
     /// <remarks>
     ///   <para>
     ///     This stage requires all views in <c>model.ViewDefs</c> to be definite,

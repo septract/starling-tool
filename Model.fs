@@ -38,7 +38,7 @@ open Starling.Core.Var
 
 /// <summary>
 ///     Model types.
-/// </summary
+/// </summary>
 [<AutoOpen>]
 module Types =
     (*

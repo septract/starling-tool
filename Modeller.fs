@@ -575,6 +575,7 @@ let modelViewDef svars vprotos { CView = av; CExpression = ae } =
 /// <returns>
 ///     <c>true</c> if the <c>DView</c> has been found in the <c>ViewDef</c>s.
 ///     This is a weak equality based on view names: see the remarks.
+/// </returns>
 /// <remarks>
 ///     <para>
 ///         We perform no sanity checking here.  It is assumed that, if the

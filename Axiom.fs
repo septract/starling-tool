@@ -31,6 +31,7 @@ module Types =
     ///         An <c>Axiom</c> contains a precondition, inner command, and
     ///         postcondition.
     ///     </para>
+    /// </summary>
     type Axiom<'view, 'cmd> =
         { /// <summary>
           ///     The precondition of the axiom.

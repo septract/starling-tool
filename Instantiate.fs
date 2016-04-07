@@ -207,8 +207,17 @@ let checkParamTypes func def =
 
 /// <summary>
 ///     Produces a <c>VSubFun</c> that substitutes the arguments of
-///     <c>_arg1</c> for their parameters in <c>_arg1</c>.
-/// substitutions.
+///     <c>_arg1</c> for their parameters in <c>_arg2</c>.
+/// </summary>
+/// <param name="_arg1">
+///     The func providing the arguments to substitute.
+/// </param>
+/// <param name="_arg2_">
+///     The <c>DFunc</c> into which we are substituting.
+/// </param>
+/// <returns>
+///     A <c>VSubFun</c> performing the above substitutions.
+/// </returns>
 let paramSubFun {Params = fpars} {Params = dpars} =
     let pmap =
         Seq.map2 (fun (_, name) up -> name, up) dpars fpars

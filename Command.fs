@@ -23,7 +23,7 @@ module Types =
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         Each <c>VFunc<c> element keys into a <c>Model</c>'s
+    ///         Each <c>VFunc</c> element keys into a <c>Model</c>'s
     ///         <c>Semantics</c> <c>FuncTable</c>.
     ///         This table contains two-state Boolean
     ///         expressions capturing the command's semantics in a

@@ -22,7 +22,7 @@ open Starling.Core.Model
 
 /// <summary>
 ///     Guarded view types.
-/// </summary
+/// </summary>
 [<AutoOpen>]
 module Types =
     /// <summary>
@@ -146,7 +146,7 @@ let (|ITEGuards|_|) ms =
 
 /// <summary>
 ///     Converts a <c>GFunc</c> to a tuple.
-/// <summary>
+/// </summary>
 /// <param name="_arg1">
 ///     The <c>GFunc</c> to destructure.
 /// </param>
