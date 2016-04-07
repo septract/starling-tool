@@ -105,3 +105,86 @@ let termGenAxiom gax =
 /// Converts a model's goal axioms to terms.
 let termGen : Model<GoalAxiom, DView> -> Model<PTerm<GView, View>, DView> =
     mapAxioms termGenAxiom
+
+
+/// <summary>
+///     Tests for <c>TermGen</c>.
+/// </summary>
+module Tests =
+    open NUnit.Framework
+
+
+    let tcd : obj[] -> TestCaseData = TestCaseData
+
+    /// <summary>
+    ///     NUnit tests for <c>TermGen</c>.
+    /// </summary>
+    type NUnit () =
+        /// <summary>
+        ///     Test cases for <c>termGenFrame</c>.
+        /// </summary>
+        static member FrameSubtracts =
+            [ (tcd [| (Multiset.singleton <|
+                           func "foo" [ BExpr (bGoal 0I "bar") ] )
+                      (Multiset.empty : GView) |] )
+                  .Returns(Multiset.singleton <|
+                           gfunc BTrue "foo" [ BExpr (bGoal 0I "bar") ] )
+                  .SetName("Removing emp from a func yields the original func")
+              (tcd [| (Multiset.singleton <|
+                           func "foo" [ BExpr (bGoal 0I "bar") ] )
+                      (Multiset.singleton <|
+                           gfunc BTrue "foo" [ BExpr (bAfter "baz") ] ) |] )
+                  .Returns(Multiset.singleton <|
+                           gfunc (BNot (bEq (bGoal 0I "bar")
+                                            (bAfter "baz")))
+                                "foo" [ BExpr (bGoal 0I "bar") ] )
+                  .SetName("Removing a func from itself generates a !x=y-guarded view")
+              (tcd [| (Multiset.singleton <|
+                           func "foo" [ BExpr (bGoal 0I "bar") ] )
+                      (Multiset.singleton <|
+                           gfunc BTrue "blop" [ BExpr (bAfter "baz") ] ) |] )
+                  .Returns(Multiset.singleton <|
+                           gfunc BTrue "foo" [ BExpr (bGoal 0I "bar") ] )
+                  .SetName("Removing a func from itself is inert")
+              (tcd [| (Multiset.ofFlatList <|
+                           [ func "foo" [ BExpr (bGoal 0I "bar") ]
+                             func "foo" [ BExpr (bGoal 1I "bar") ] ] )
+                      (Multiset.singleton <|
+                           gfunc BTrue "foo" [ BExpr (bAfter "baz") ] ) |] )
+                  .Returns(Multiset.ofFlatList <|
+                           [ gfunc (BNot (bEq (bGoal 0I "bar")
+                                              (bAfter "baz")))
+                                   "foo" [ BExpr (bGoal 0I "bar") ]
+                             gfunc (mkNot
+                                        (mkAnd
+                                             [ (mkNot (bEq (bGoal 0I "bar")
+                                                           (bAfter "baz")))
+                                               (bEq (bGoal 1I "bar")
+                                                    (bAfter "baz")) ] ))
+                                   "foo" [ BExpr (bGoal 1I "bar") ]] )
+                  .SetName("Removing a func from two copies of itself works correctly")
+              (tcd [| (Multiset.singleton <|
+                           func "foo" [ BExpr (bGoal 0I "bar") ] )
+                      (Multiset.singleton <|
+                           gfunc (BGt (aAfter "x",
+                                       aAfter "y"))
+                                 "foo" [ BExpr (bAfter "baz") ] ) |] )
+                  .Returns(Multiset.singleton <|
+                           gfunc (mkNot (BAnd [ (BGt (aAfter "x",
+                                                      aAfter "y"))
+                                                (bEq (bGoal 0I "bar")
+                                                     (bAfter "baz")) ] ))
+                                 "foo" [ BExpr (bGoal 0I "bar") ] )
+                  .SetName("Removing a guarded func from itself works correctly")
+              (tcd [| (Multiset.empty : View)
+                      (Multiset.singleton <|
+                           gfunc BTrue "foo" [ BExpr (bBefore "bar") ] ) |] )
+                  .Returns(Multiset.empty : GView)
+                  .SetName("Removing a func from emp yields emp") ]
+
+        /// <summary>
+        ///     Tests <c>termGenFrame</c>.
+        /// </summary>
+        [<TestCaseSource("FrameSubtracts")>]
+        member x.``termGenFrame performs multiset minus correctly`` r q =
+            termGenFrame r q
