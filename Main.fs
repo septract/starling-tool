@@ -93,6 +93,8 @@ let requestMap =
                  ("reifyZ3", Request.Z3 Backends.Z3.Types.Request.Translate)
                  ("z3", Request.Z3 Backends.Z3.Types.Request.Combine)
                  ("sat", Request.Z3 Backends.Z3.Types.Request.Sat)
+                 ("mutranslate", Request.Z3 Backends.Z3.Types.Request.MuTranslate)
+                 ("musat", Request.Z3 Backends.Z3.Types.Request.MuSat)
                  ("hsf", Request.HSF) ]
 
 /// Converts an optional -s stage name to a request item.

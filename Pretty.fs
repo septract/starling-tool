@@ -121,8 +121,7 @@ type MapSep =
 ///     The <c>MapSep</c> to use when joining the key and value.
 /// </param>
 /// <param name="_arg1">
-///     An association list, as a sequence,to print using <paramref name="pK" />
-///     and <paramref name="pV" />.
+///     An association list, as a sequence, to print.
 /// </param>
 /// <returns>
 ///     A printer for the given association list.

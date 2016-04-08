@@ -6,6 +6,7 @@ open Chessie.ErrorHandling
 open Starling
 open Starling.Collections
 open Starling.Core.Expr
+open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.GuardedView
 open Starling.Core.Instantiate
@@ -25,12 +26,36 @@ module Types =
 
     /// Type of requests to the Z3 backend.
     type Request =
-        /// Only translate the term views; return `Output.Translate`.
+        /// Only translate the term views; return `Response.Translate`.
         | Translate
-        /// Translate and combine term Z3 expressions; return `Output.Combine`.
+        /// Translate and combine term Z3 expressions; return `Response.Combine`.
         | Combine
-        /// Translate, combine, and run term Z3 expressions; return `Output.Sat`.
+        /// Translate, combine, and run term Z3 expressions; return `Response.Sat`.
         | Sat
+        /// Produce a MuZ3 fixedpoint query; return `Response.MuTranslate`.
+        | MuTranslate
+        /// Produce a MuZ3 sat list; return `Response.MuSat`.
+        | MuSat
+
+    /// <summary>
+    ///     Type of MuZ3 results.
+    /// </summary>
+    type MuSat =
+        /// <summary>
+        ///     The proof succeeded with the <c>FuncDecl</c> being assigned
+        ///     with the given <c>Expr</c>.
+        /// </summary>
+        | Sat of Z3.Expr
+        /// <summary>
+        ///     The proof failed with the assignments of the <c>FuncDecl</c>s
+        ///     given by the <c>Expr</c>.
+        /// </summary>
+        | Unsat of Z3.Expr
+        /// <summary>
+        ///     The proof gave an odd result.
+        /// </summary>
+        | Unknown
+
 
     /// Type of responses from the Z3 backend.
     [<NoComparison>]
@@ -38,11 +63,13 @@ module Types =
         /// Output of the term translation step only.
         | Translate of Model<ZTerm, DFunc>
         /// Output of the final Z3 terms only.
-        | Combine of Model<Microsoft.Z3.BoolExpr, DFunc>
-        /// Output of the MuZ3 translation step only.
-        | MuTranslate of Microsoft.Z3.Fixedpoint
+        | Combine of Model<Z3.BoolExpr, DFunc>
         /// Output of satisfiability reports for the Z3 terms.
-        | Sat of Map<string, Microsoft.Z3.Status>
+        | Sat of Map<string, Z3.Status>
+        /// Output of the MuZ3 translation step only.
+        | MuTranslate of (Z3.BoolExpr * Z3.Symbol) seq * Map<string, Z3.FuncDecl>
+        /// Output of the MuZ3 proof.
+        | MuSat of Map<string, MuSat>
 
     /// A Z3 translation error.
     type Error =
@@ -63,6 +90,14 @@ module Pretty =
     open Starling.Core.Instantiate.Pretty
     open Starling.Core.Z3.Pretty
 
+    /// Pretty-prints a MuSat.
+    let printMuSat =
+        function
+        | MuSat.Sat ex -> commaSep [ String "sat" ; printZ3Exp ex ]
+        | MuSat.Unsat ex -> commaSep [ String "unsat" ; printZ3Exp ex ]
+        | MuSat.Unknown -> String "?"
+    
+    
     /// Pretty-prints a response.
     let printResponse mview =
         function
@@ -78,13 +113,21 @@ module Pretty =
                 printZ3Exp
                 printDFunc
                 m
-        | Response.MuTranslate f ->
-            printAssoc
-                Indented
-                [ (String "Rules", f.Rules |> Seq.map printZ3Exp |> vsep)
-                  (String "Assertions", f.Assertions |> Seq.map printZ3Exp |> vsep) ]
         | Response.Sat s ->
             printMap Inline String printSat s
+        | Response.MuTranslate (rules, goals) ->
+            printAssoc
+                Indented
+                [ (String "Rules",
+                   rules
+                   |> Seq.map (fun (g, sym) ->
+                                   commaSep [ String (sym.ToString())
+                                              String (g.ToString()) ] )
+                   |> vsep)
+                  (String "Goals",
+                   printMap Inline String (fun s -> String (s.ToString())) goals) ]
+        | Response.MuSat s ->
+            printMap Inline String printMuSat s
 
     /// Pretty-prints Z3 translation errors.
     let printError =
@@ -189,6 +232,320 @@ module Translator =
 
 
 /// <summary>
+///     Functions for translating Starling elements into MuZ3.
+/// </summary>
+module MuTranslator =
+    open Starling.Core.Z3.Expr
+
+    (*
+     * View definitions
+     *)
+
+    /// <summary>
+    ///     Creates a <c>FuncDecl</c> from a <c>DFunc</c>.
+    /// </summary>
+    /// <param name="ctx">
+    ///     The Z3 context being used to create the <c>FuncDecl</c>.
+    /// </param>
+    /// <param name="_arg1">
+    ///     The <c>DFunc</c> to model as a <c>FuncDecl</c>.
+    /// </param>
+    /// <returns>
+    ///     A <c>FuncDecl</c> modelling the <c>DFunc</c>.
+    /// </returns>
+    let funcDeclOfDFunc (ctx : Z3.Context) { Name = n ; Params = pars } =
+        ctx.MkFuncDecl(
+            n,
+            pars
+            |> Seq.map
+                  (fst >> function
+                          | Type.Int -> ctx.MkIntSort () :> Z3.Sort
+                          | Type.Bool -> ctx.MkBoolSort () :> Z3.Sort)
+            |> Seq.toArray,
+            ctx.MkBoolSort () :> Z3.Sort)
+
+    /// <summary>
+    ///     Creates an application of a <c>FuncDecl</c> to a list of
+    ///     <c>Expr</c> parameters.
+    /// </summary>
+    /// <param name="ctx">
+    ///     The Z3 context being used to model the parameters.
+    /// </param>
+    /// <param name="funcDecl">
+    ///     The <c>FuncDecl</c> to apply.
+    /// </param>
+    /// <param name="ps">
+    ///     The <c>Expr</c> parameters to use.
+    /// </param>
+    /// <returns>
+    ///     A <c>BoolExpr</c> representing an application of
+    ///     <paramref name="ps"/> to <paramref name="funcDecl"/>.
+    let applyFunc ctx (funcDecl : Z3.FuncDecl) ps =
+        let psa : Z3.Expr[] = ps |> List.map (exprToZ3 ctx) |> List.toArray
+        funcDecl.Apply psa
+        :?> Z3.BoolExpr
+
+    /// <summary>
+    ///     Processes a view definition for MuZ3.
+    /// </summary>
+    /// <param name="ctx">
+    ///     The Z3 context being used to model the <c>ViewDef</c>.
+    /// </param>
+    /// <param name="_arg1">
+    ///     The <c>ViewDef</c> to process.
+    /// </param>
+    /// <returns>
+    ///     A pair of a pair of the name of the view, the <c>FuncDecl</c>
+    ///     produced for the view, and an optional tuple of <c>BoolExpr</c>
+    ///     and <c>Symbol</c> producing a rule for the definition.
+    /// </returns>
+    let translateViewDef (ctx : Z3.Context) ( { View = vs; Def = ex } : ViewDef<DFunc> ) =
+        let funcDecl = funcDeclOfDFunc ctx vs
+        let mapEntry = (vs.Name, funcDecl)
+
+        let rule =
+            Option.map
+                (fun dex ->
+                     (* This is a definite constraint, so we want muZ3 to
+                        use the existing constraint body for it.  We do this
+                        by creating a rule that vs <=> dex.
+                           
+                        We need to make an application of our new FuncDecl to
+                        create the constraints for it, if any.
+
+                        The parameters of a DFunc are in (type, name) format,
+                        which we need to convert to expression format first.
+                        dex uses Unmarked constants, so we do too. *)
+                     let eparams = List.map (uncurry (mkVarExp Unmarked)) vs.Params
+                     let funcApp = applyFunc ctx funcDecl eparams
+
+                     Seq.ofList
+                        // TODO(CaptainHayashi): this needs to be IFF, right?
+                        [ (ctx.MkImplies (boolToZ3 ctx dex, funcApp),
+                           ctx.MkSymbol (sprintf "R_%s" vs.Name) :> Z3.Symbol) ] )
+                ex
+            |> withDefault Seq.empty
+
+        (mapEntry, rule)
+
+    /// <summary>
+    ///     Constructs a declaration map and rule list from <c>ViewDef</c>s.
+    /// </summary>
+    /// <param name="ctx">
+    ///     The Z3 context being used to model the <c>ViewDef</c>s.
+    /// </param>
+    /// <param name="ds">
+    ///     The sequence of <c>ViewDef</c>s to model.
+    /// </param>
+    /// <returns>
+    ///     A tuple of a <c>Map</c> binding names to <c>FuncDecl</c>s and a
+    ///     set of tuples of <c>BoolExpr</c> and <c>Symbol</c> representing
+    ///     rules.
+    /// </returns>
+    let translateViewDefs ctx ds =
+        ds
+        |> Seq.map (translateViewDef ctx)
+        |> List.ofSeq
+        |> List.unzip
+        (* The LHS contains a list of tuples that need to make a map.
+           The RHS needs to be filtered for indefinite constraints. *)
+        |> pairMap Map.ofSeq Seq.concat
+
+    (*
+     * Views
+     *)
+
+    /// <summary>
+    ///     Models a <c>VFunc</c>.
+    /// </summary>
+    /// <param name="ctx">
+    ///     The Z3 context to use to model the func.
+    /// </param>
+    /// <param name="funcDecls">
+    ///     The map of <c>FuncDecls</c> to use in the modelling.
+    /// </param>
+    /// <param name="_arg1">
+    ///     The <c>VFunc</c> to model.
+    /// </param>
+    /// <returns>
+    ///     A Z3 boolean expression relating to the <c>VFunc</c>.
+    ///     If <paramref name="_arg1"/> is in <paramref name="funcDecls"/>, 
+    ///     then the expression is an application of the <c>FuncDecl</c>
+    ///     with the parameters in <paramref name="_arg1"/>.
+    ///     Else, it is true.
+    /// </returns>
+    let translateVFunc ctx (funcDecls : Map<string, Z3.FuncDecl>) { Name = n ; Params = ps } =
+        match funcDecls.TryFind n with
+        | Some fd -> applyFunc ctx fd ps
+        | None -> ctx.MkTrue ()
+
+    /// <summary>
+    ///     Models a <c>GView</c>.
+    /// <param name="ctx">
+    ///     The Z3 context to use to model the func.
+    /// </param>
+    /// <param name="funcDecls">
+    ///     The map of <c>FuncDecls</c> to use in the modelling.
+    /// </param>
+    /// <returns>
+    ///     A function taking a <c>GView</c> and returning a Z3
+    ///     Boolean expression characterising it.
+    /// </returns>
+    let translateGView (ctx : Z3.Context) funcDecls =
+        Multiset.toFlatSeq
+        >> Seq.map (fun { Cond = g ; Item = v } ->
+                        ctx.MkImplies (boolToZ3 ctx g,
+                                       translateVFunc ctx funcDecls v))
+        >> Seq.toArray
+        >> (fun a -> ctx.MkAnd a)
+
+    (*
+     * Variables
+     *)
+
+    /// <summary>
+    ///     Constructs a rule for initialising a variable.
+    /// </summary>
+    /// <param name="ctx">
+    ///     The Z3 context to use to model the rule.
+    /// </param>
+    /// <param name="funcs">
+    ///     A map of active view <c>FuncDecl</c>s.
+    /// </param>
+    /// <param name="svars">
+    ///     Map of shared variables in the program.
+    /// </param>
+    /// <returns>
+    ///     A sequence containing at most one pair of <c>BoolExpr</c> and
+    ///     <c>Symbol</c> representing the variable initialisation rule.
+    /// </returns>
+    let translateVariables ctx funcDecls svars =
+        let vpars =
+            svars
+            |> Map.toList
+            |> List.map (uncurry (flip (mkVarExp Unmarked)))
+
+        let head = 
+            translateVFunc ctx funcDecls { Name = "emp" ; Params = vpars }
+            
+        (* MuZ3 doesn't like 'true' appearing in the head of a rule, so
+           don't emit if emp resolved to this. *)
+        if head.IsTrue
+        then Seq.empty
+        else
+            // TODO(CaptainHayashi): actually get these initialisations from
+            // somewhere.
+            let body =
+                vpars
+                |> List.map
+                       (fun v -> BEq (v,
+                                      match v with
+                                      | AExpr _ -> AExpr (AInt 0L)
+                                      | BExpr _ -> BExpr (BFalse)))
+                |> mkAnd
+                |> boolToZ3 ctx
+
+            Seq.singleton <|
+            (ctx.MkImplies (body, head),
+             ctx.MkSymbol "init" :> Z3.Symbol)
+
+
+    (*
+     * Terms
+     *)
+
+    /// <summary>
+    ///     Constructs a muZ3 rule for a proof term.
+    /// </summary>
+    /// <param name="ctx">
+    ///     The Z3 context to use for modelling the term.
+    /// </param>
+    /// <param name="funcDecls">
+    ///     The map of <c>FuncDecl</c>s to use when creating view
+    ///     applications.
+    /// </param>
+    /// <param name="svars">
+    ///     The environment of active global variables.
+    /// </param>
+    /// <param name="_arg1">
+    ///     Pair of term name and <c>Term</c>.
+    /// </param>
+    /// <returns>
+    ///     A pair of Z3 Boolean expression and <c>Symbol</c> representing
+    ///     the rule form of the proof term.
+    /// </returns>
+    let translateTerm ctx funcDecls svars (name : string,
+                                           {Cmd = c ; WPre = w ; Goal = g}) =
+        let cZ = boolToZ3 ctx c
+        let wZ = translateGView ctx funcDecls w
+        let gZ = translateVFunc ctx funcDecls g
+
+        (ctx.MkImplies (ctx.MkAnd [| cZ ; wZ |], gZ),
+         ctx.MkSymbol name :> Z3.Symbol)
+
+    /// <summary>
+    ///     Constructs muZ3 rules and goals for a model.
+    /// </summary>
+    /// <param name="ctx">
+    ///     The Z3 context to use for modelling the fixpoint.
+    /// </param>
+    /// <param name="_arg1">
+    ///     The model to turn into a fixpoint.
+    /// </param>
+    /// <returns>
+    ///     A pair of the sequence of (<c>BoolExpr</c>, <c>Symbol</c>) goals
+    ///     used to prove the model, and the map of names to <c>FuncDecl</c>s
+    ///     to use to start queries.
+    /// </returns>
+    let translate ctx { Globals = svars ; ViewDefs = ds ; Axioms = xs } =
+        let funcDecls, drules = translateViewDefs ctx ds
+        let vrules = translateVariables ctx funcDecls svars
+        let trules = xs |> Map.toSeq |> Seq.map (translateTerm ctx funcDecls svars)
+
+        let rules =
+            Seq.concat [ drules ; vrules ; trules ]
+
+        (rules, funcDecls)
+
+
+    /// <summary>
+    ///     Runs a MuZ3 fixedpoint.
+    /// </summary>
+    /// <param name="ctx">
+    ///     The Z3 context to use for modelling the fixedpoint.
+    /// </param>
+    /// <param name="rules">
+    ///     The rules to use when proving the fixedpoint.
+    /// </param>
+    /// <param name="funcDecls">
+    ///     The map of names to view goals to send to the solver.
+    /// </param>
+    /// <returns>
+    ///     A list of <c>MuResult</c>s.
+    /// </returns>
+    let run (ctx : Z3.Context) rules funcDecls =
+        let fixedpoint = ctx.MkFixedpoint ()
+        
+        Seq.iter
+            (fun (g, s) -> fixedpoint.AddRule (g, s))
+            rules
+
+        Map.iter
+            (fun _ g -> fixedpoint.RegisterRelation g)
+            funcDecls
+
+        funcDecls
+        |> Map.map
+               (fun _ g ->
+                    match (fixedpoint.Query [| g |]) with
+                    | Z3.Status.SATISFIABLE ->
+                        MuSat.Sat (fixedpoint.GetAnswer ())
+                    | Z3.Status.UNSATISFIABLE ->
+                        MuSat.Unsat (fixedpoint.GetAnswer ())
+                    | _ -> MuSat.Unknown)
+
+
+/// <summary>
 ///     Proof execution using Z3.
 /// </summary>
 module Run =
@@ -202,11 +559,15 @@ module Run =
     let run ctx = axioms >> Map.map (runTerm ctx)
 
 
-/// Shorthand for the parser stage of the frontend pipeline.
+/// Shorthand for the translator stage of the MuZ3 pipeline.
+let mutranslate = MuTranslator.translate
+/// Shorthand for the satisfiability stage of the MuZ3 pipeline.
+let musat ctx = uncurry (MuTranslator.run ctx)
+/// Shorthand for the translator stage of the Z3 pipeline.
 let translate = Translator.interpret
-/// Shorthand for the collation stage of the frontend pipeline.
+/// Shorthand for the combination stage of the Z3 pipeline.
 let combine = Translator.combineTerms >> lift
-/// Shorthand for the modelling stage of the frontend pipeline.
+/// Shorthand for the satisfiability stage of the Z3 pipeline.
 let sat = Run.run >> lift
 
 /// Runs the Starling Z3 backend.
@@ -223,3 +584,12 @@ let run resp =
         >> lift Response.Translate
     | Request.Combine -> translate >> combine ctx >> lift Response.Combine
     | Request.Sat -> translate >> combine ctx >> sat ctx >> lift Response.Sat
+    | Request.MuTranslate ->
+        mutranslate ctx
+        >> Response.MuTranslate
+        >> ok
+    | Request.MuSat ->
+        mutranslate ctx
+        >> musat ctx
+        >> Response.MuSat
+        >> ok
