@@ -8,6 +8,7 @@ open Chessie.ErrorHandling
 
 open Starling
 open Starling.Collections
+open Starling.Core.Model
 open Starling.Core.Var
 open Starling.Lang.AST
 
@@ -34,6 +35,9 @@ let com = (lcom <|> bcom) <?> "comment"
 
 /// Parser for skipping zero or more whitespace characters.
 let ws = skipMany (com <|> spaces1)
+
+/// Parser accepting whitespace followed by a semicolon.
+let wsSemi = ws .>> pstring ";"
 
 /// As pipe2, but with automatic whitespace parsing after each parser.
 let pipe2ws x y f = pipe2 (x .>> ws) (y .>> ws) f
@@ -70,17 +74,23 @@ let inAngles p = inBrackets "<" ">" p
 // definitions.
 
 /// Parser for `raw` views (not surrounded in {braces}).
-let parseView, parseViewRef = createParserForwardedToRef<View, unit> ()
+let parseView, parseViewRef =
+    createParserForwardedToRef<View, unit> ()
 /// Parser for view definitions.
-let parseViewDef, parseViewDefRef = createParserForwardedToRef<ViewDef, unit> ()
+let parseViewDef, parseViewDefRef =
+    createParserForwardedToRef<ViewDef, unit> ()
 /// Parser for commands.
-let parseCommand, parseCommandRef = createParserForwardedToRef<Command<View>, unit> ()
+let parseCommand, parseCommandRef =
+    createParserForwardedToRef<Command<Marked<View>>, unit> ()
 /// Parser for blocks.
-let parseBlock, parseBlockRef = createParserForwardedToRef<Block<View, Command<View>>, unit> ()
+let parseBlock, parseBlockRef
+    = createParserForwardedToRef<Block<Marked<View>, Command<Marked<View>>>,
+                                 unit> ()
 /// Parser for expressions.
 /// The expression parser is split into several chains as per
 /// preference rank.
-let parseExpression, parseExpressionRef = createParserForwardedToRef<Expression, unit> ()
+let parseExpression, parseExpressionRef =
+    createParserForwardedToRef<Expression, unit> ()
 
 // From here on out, everything should line up more or less with the
 // BNF, except in reverse, bottom-up order.
@@ -197,13 +207,29 @@ let parseFetchOrPostfix =
 let parseAssume =
     pstring "assume" >>. ws >>. inParens parseExpression |>> Assume
 
+/// Parser for local assignments.
+let parseAssign =
+    pipe2ws parseLValue
+    // ^- <lvalue> ...
+            (pstring "=" >>. ws >>. parseExpression)
+                  //             ... = <expression> ;
+            mkPair
+
 /// Parser for atomic actions.
 let parseAtomic =
-    choice [ stringReturn "id" Id
+    choice [ (stringReturn "id" Id)
              parseAssume
              parseCAS
              parseFetchOrPostfix ]
 
+/// Parser for a collection of atomic actions.
+let parseAtomicSet =
+    inAngles (
+        // Either one atomic...
+        (parseAtomic |>> List.singleton)
+        <|>
+        // ...or an atomic{} block.
+        (inBraces (many (parseAtomic .>> wsSemi .>> ws))))
 
 (*
  * Parameters and lists.
@@ -290,9 +316,20 @@ let parseBasicView =
 
 do parseViewRef := parseViewLike parseBasicView Join
 
-/// Parser for braced view statements.
-let parseViewLine = inViewBraces parseView
+/// Parser for view expressions.
+let parseViewExpr = between
+                        (pstring "{|" .>> ws)
+                        (pstring "|}")
+                        ((stringReturn "?" Unknown .>> ws)
+                         <|> pipe2ws parseView
+                                     (opt (stringReturn "?" ()))
+                                     (fun v qm ->
+                                          match qm with
+                                          | Some () -> Questioned v
+                                          | None -> Unmarked v))
                     // ^- {| <view> |}
+                    //  | {| <view> ? |}
+                    //  | {| ? |}
 
 
 (*
@@ -324,20 +361,12 @@ do parseViewDefRef := parseViewLike parseBasicViewDef ViewDef.Join
 
 /// Parses a view prototype.
 let parseViewProto =
-    pstring "view" >>. ws >>. parseFunc parseTypedParam .>> ws .>> pstring ";" .>> ws
+    pstring "view" >>. ws >>. parseFunc parseTypedParam .>> wsSemi .>> ws
 
 
 (*
  * Commands.
  *)
-
-/// Parser for assignments.
-let parseAssign =
-    pipe2ws parseLValue
-    // ^- <lvalue> ...
-            (pstring "=" >>. ws >>. parseExpression .>> ws .>> pstring ";")
-                  //             ... = <expression> ;
-            (curry Assign)
 
 /// Parser for blocks.
 let parseParSet =
@@ -357,7 +386,7 @@ let parseWhile =
 let parseDoWhile =
     pstring "do" >>. ws
                  >>. parseBlock
-                 .>>. (ws >>. parseWhileLeg .>> ws .>> pstring ";")
+                 .>>. (ws >>. parseWhileLeg .>> wsSemi)
                  |>> DoWhile
 
 /// Parser for if (expr) block else block.
@@ -367,33 +396,43 @@ let parseIf =
             parseBlock
             (curry3 If)
 
-/// Parser for atomic commands (not the actions themselves; that is parseAtomic).
-let parseAtomicCommand =
-    inAngles parseAtomic .>> ws .>> pstring ";" |>> Atomic
+/// Parser for prim compositions.
+let parsePrimSet =
+    (* We can parse only one atomic, but any number of assigns before it.
+       We must ensure there is a ; between the last assign and the atomic. *)
+    pipe3 (many (parseAssign .>> wsSemi .>> ws))
+          (* The atomic can be missing, and we can check unambiguously by
+             trying to parse a < here. *)
+          (opt (parseAtomicSet .>> wsSemi .>> ws))
+          (many (parseAssign .>> wsSemi .>> ws))
+          (fun lassigns atom rassigns ->
+               { PreAssigns = lassigns
+                 Atomics = withDefault [] atom
+                 PostAssigns = rassigns }
+               |> Prim)
 
 /// Parser for `skip` commands.
 /// Skip is inserted when we're in command position, but see a semicolon.
 let parseSkip
-    = stringReturn ";" Skip
+    = stringReturn ";" (Prim { PreAssigns = []
+                               Atomics = []
+                               PostAssigns = [] })
     // ^- ;
 
 /// Parser for simple commands (atomics, skips, and bracketed commands).
 do parseCommandRef :=
-    choice [parseSkip
-            // ^- ;
-            parseAtomicCommand
-            // ^- < <atomic> > ;
-            parseIf
-            // ^- if ( <expression> ) <block> <block>
-            parseDoWhile
-            // ^- do <block> while ( <expression> )
-            parseWhile
-            // ^- while ( <expression> ) <block>
-            parseParSet
-            // ^- <par-set>
-            parseAssign]
-            // ^- <lvalue> = <expression>
-
+    choice [ parseSkip
+             // ^- ;
+             parseIf
+             // ^- if ( <expression> ) <block> <block>
+             parseDoWhile
+             // ^- do <block> while ( <expression> )
+             parseWhile
+             // ^- while ( <expression> ) <block>
+             parseParSet
+             // ^- <par-set>
+             parsePrimSet ]
+             // ^- <prim-set>
 
 (*
  * Blocks.
@@ -405,14 +444,14 @@ let parseCommands =
     many1
     <| pipe2ws parseCommand
                // ^- <command> ...
-               parseViewLine
+               parseViewExpr
                // ^-           ... <view-line>
                (fun c v -> { Command = c; Post = v })
                //  |             <command> ... <view-line> ... <commands>
 
 do parseBlockRef :=
     inBraces
-    <| pipe2ws parseViewLine
+    <| pipe2ws parseViewExpr
         // ^- {       ...                            ... }
                // ^- ... <view-line> ...
                parseCommands
@@ -496,7 +535,10 @@ let parseFile name =
         // If - or no name was given, parse from the console.
         let stream, streamName =
             match name with
-            | None | Some("-") -> (Console.OpenStandardInput (), "(stdin)")
+            | None ->
+                eprintfn "note: no input filename given, reading from stdin"
+                (Console.OpenStandardInput (), "(stdin)")
+            | Some("-") -> (Console.OpenStandardInput (), "(stdin)")
             | Some(nam) -> (IO.File.OpenRead(nam) :> IO.Stream, nam)
 
         runParserOnStream parseScript () streamName stream Text.Encoding.UTF8

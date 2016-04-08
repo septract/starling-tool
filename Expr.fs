@@ -13,10 +13,32 @@ open Starling.Core.Var
 [<AutoOpen>]
 module Types =
     type Const =
+        /// <summary>
+        ///     A variable that has not yet been assigned to the pre-state or
+        ///     the post-state.
+        /// </summary>
         | Unmarked of string
+        /// <summary>
+        ///     A variable belonging to the pre-state of a command.
+        /// </summary>
         | Before of string
+        /// <summary>
+        ///     A variable belonging to the post-state of a command.
+        /// </summary>
         | After of string
+        /// <summary>
+        ///     A variable belonging to part of the goal term.
+        ///     The bigint is used to ensure variables in one goal
+        ///     view are separate from variables in another.
+        /// </summary>
         | Goal of bigint * string
+        /// <summary>
+        ///     A variable belonging to an intermediate state of a composed
+        ///     command.
+        ///     The bigint is used to ensure different intermediate
+        ///     states are separate from each other.
+        /// </summary>
+        | Intermediate of bigint * string
 
     /// An expression of arbitrary type.
     type Expr =
@@ -59,6 +81,7 @@ let constToString =
     | Unmarked s -> s
     | Before s -> sprintf "%s!before" s
     | After s -> sprintf "%s!after" s
+    | Intermediate (i, s) -> sprintf "%s!int!%A" s i
     | Goal (i, s) -> sprintf "%s!goal!%A" s i
 
 
@@ -213,12 +236,13 @@ let isTrue =
     function
     | BTrue -> true
     | _     -> false
-      
+
 /// Extracts the name from a Starling constant.
 let stripMark =
     function
     | Unmarked s -> s
     | Before s -> s
+    | Intermediate (i, s) -> s
     | After s -> s
     | Goal (i, s) -> s
 
@@ -235,6 +259,9 @@ let aAfter c = c |> After |> AConst
 /// Creates a before-marked arithmetic constant.
 let aBefore c = c |> Before |> AConst
 
+/// Creates an intermediate-marked Boolean constant.
+let aInter i c = (i, c) |> Intermediate |> AConst
+
 /// Creates an unmarked Boolean constant.
 let bUnmarked c = c |> Unmarked |> BConst
 
@@ -243,6 +270,9 @@ let bAfter c = c |> After |> BConst
 
 /// Creates a before-marked Boolean constant.
 let bBefore c = c |> Before |> BConst
+
+/// Creates an intermediate-marked Boolean constant.
+let bInter i c = (i, c) |> Intermediate |> BConst
 
 /// Creates a reference to a Boolean lvalue.
 /// This does NOT check to see if the lvalue exists!
@@ -267,12 +297,16 @@ let mkIntLV lv =
     |> AConst
 
 /// Converts a type-name pair to an expression.
-let mkVarExp (ty, name) =
+let mkVarExp marker ty name =
     name
-    |> Unmarked
+    |> marker
     |> match ty with
        | Int -> AConst >> AExpr
        | Bool -> BConst >> BExpr
+
+/// Converts a VarMap to a sequence of expressions.
+let varMapToExprs marker vm =
+    vm |> Map.toSeq |> Seq.map (fun (name, ty) -> mkVarExp marker ty name)
 
 (* The following are just curried versions of the usual constructors. *)
 
@@ -377,6 +411,75 @@ and varsIn =
     function
     | AExpr a -> varsInArith a
     | BExpr b -> varsInBool b
+
+
+(*
+ * Composition
+ *)
+
+/// <summary>
+///     Finds the highest intermediate stage number in an Arithmetic
+///     expression.
+///     Returns one higher.
+/// </summary>
+/// <param name="_arg1">
+///     The <c>ArithExpr</c> to investigate.
+/// </param>
+/// <returns>
+///     The next available intermediate stage number.
+///     If the expression has no intermediate stages, we return 0.
+/// </returns>
+let rec nextIntIntermediate =
+    function
+    | AConst (Intermediate (n, _)) -> n + 1I
+    | AConst _ | AInt _ -> 0I
+    | AAdd xs | ASub xs | AMul xs ->
+        xs |> Seq.map nextIntIntermediate |> Seq.fold (curry bigint.Max) 0I
+    | ADiv (x, y) ->
+        bigint.Max (nextIntIntermediate x, nextIntIntermediate y)
+
+/// <summary>
+///     Finds the highest intermediate stage number in a Boolean expression.
+///     Returns one higher.
+/// </summary>
+/// <param name="_arg1">
+///     The <c>BoolExpr</c> to investigate.
+/// </param>
+/// <returns>
+///     The next available intermediate stage number.
+///     If the expression has no intermediate stages, we return 0.
+/// </returns>
+and nextBoolIntermediate =
+    function
+    | BConst (Intermediate (n, _)) -> n + 1I
+    | BConst _ -> 0I
+    | BAnd xs | BOr xs ->
+        xs |> Seq.map nextBoolIntermediate |> Seq.fold (curry bigint.Max) 0I
+    | BImplies (x, y) ->
+        bigint.Max (nextBoolIntermediate x, nextBoolIntermediate y)
+    | BNot x -> nextBoolIntermediate x
+    | BGt (x, y) | BLt (x, y) | BGe (x, y) | BLe (x, y) ->
+        bigint.Max (nextIntIntermediate x, nextIntIntermediate y)
+    | BEq (x, y) ->
+        bigint.Max (nextIntermediate x, nextIntermediate y)
+    | BTrue | BFalse -> 0I
+
+/// <summary>
+///     Finds the highest intermediate stage number in an expression.
+///     Returns one higher.
+/// </summary>
+/// <param name="_arg1">
+///     The <c>Expr</c> to investigate.
+/// </param>
+/// <returns>
+///     The next available intermediate stage number.
+///     If the expression has no intermediate stages, we return 0.
+/// </returns>
+and nextIntermediate =
+    function
+    | AExpr x -> nextIntIntermediate x
+    | BExpr x -> nextBoolIntermediate x
+
 
 (*
  * Active patterns

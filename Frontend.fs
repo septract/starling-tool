@@ -7,6 +7,8 @@ open Starling.Core.Graph
 open Starling.Core.Graph.Pretty
 open Starling.Core.Model
 open Starling.Core.Model.Pretty
+open Starling.Core.GuardedView
+open Starling.Core.GuardedView.Pretty
 open Starling.Lang.AST.Pretty
 open Starling.Lang.Modeller
 open Starling.Lang.Modeller.Pretty
@@ -40,9 +42,9 @@ type Response =
     /// Output of the parsing and collation steps.
     | Collate of Collator.Types.CollatedScript
     /// Output of the parsing, collation, and modelling steps.
-    | Model of Model<AST.Types.Method<CView, PartCmd<CView>>, DView>
+    | Model of Model<PMethod<ViewExpr<CView>>, DView>
     /// Output of the parsing, collation, modelling, and guarding stages.
-    | Guard of Model<AST.Types.Method<GView, PartCmd<GView>>, DView>
+    | Guard of Model<PMethod<ViewExpr<GView>>, DView>
     /// Output of the parsing, collation, modelling, guarding and destructuring stages.
     | Graph of Model<Graph, DView>
 
@@ -71,13 +73,15 @@ let printResponse mview =
     | Response.Model m ->
         printModelView
             mview
-            (printMethod printCView (printPartCmd printCView))
+            (printMethod (printViewExpr printCView)
+                         (printPartCmd (printViewExpr printCView)))
             printDView
             m
     | Response.Guard m ->
         printModelView
             mview
-            (printMethod printGView (printPartCmd printGView))
+            (printMethod (printViewExpr printGView)
+                         (printPartCmd (printViewExpr printGView)))
             printDView
             m
     | Response.Graph m ->

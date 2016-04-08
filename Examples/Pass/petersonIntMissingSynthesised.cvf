@@ -1,0 +1,208 @@
+/*
+ * Peterson's algorithm for mutual exclusion:
+ * http://dx.doi.org/10.1016/0020-0190(81)90106-X
+ *
+ * This version uses two threads, A and B, and separate views for each.
+ * A lot of duplication occurs that may be removable with arrays.
+ *
+ * This proof was manually written: future exercises could involve
+ * making it easier to synthesise parts of it.
+ *
+ * This version uses integer flags to allow HSF to work with it.
+ * We also set turn to 0/1 instead of 1/2, as currently HSF initialises
+ * variables to 0.
+ */
+
+
+shared int aFlag;
+shared int bFlag;
+shared int turn;
+
+thread int oFlag;
+thread int oTurn;
+
+
+// A
+view aFlagDown();       // A does not hold the lock and is not seeking it.
+view aFlagUp();         // A has put its flag up, but isn't waiting yet.
+view aWaiting();        // A is now waiting for the lock.
+view aHoldLock();       // A holds the lock.
+
+// B
+view bFlagDown();       // B does not hold the lock and is not seeking it.
+view bFlagUp();         // B has put its flag up, but isn't waiting yet.
+view bWaiting();        // B is now waiting for the lock.
+view bHoldLock();       // B holds the lock.
+
+view init();
+
+// Synthesised views:
+view v0(int f, int t);
+view v2(int f, int t);
+view v3(int f, int t);
+view v5(int f, int t);
+view v7(int f, int t);
+view v8(int f, int t);
+
+/*
+ * Locks the Peterson lock from A's side.
+ */
+method lockA() {
+  {| aFlagDown() |}
+    <aFlag = (1)>;
+  {| v0(oFlag, oTurn) |}
+    <turn = (0)>;
+  {| v2(oFlag, oTurn) |}
+    do {
+      {| v2(oFlag, oTurn) |}
+        <oFlag = bFlag>;
+      {| v3(oFlag, oTurn) |}
+        <oTurn = turn>;
+      {| if (oFlag == 1 && oTurn == 0) then v2(oFlag, oTurn) else aHoldLock() |}
+    } while (oFlag == 1 && oTurn == 0);
+  {| aHoldLock() |}
+}
+
+/*
+ * Unlocks the Peterson lock from A's side.
+ */
+method unlockA() {
+  {| aHoldLock() |}
+    <aFlag = (0)>;
+  {| aFlagDown() |}
+}
+
+/*
+ * Locks the Peterson lock from B's side.
+ */
+method lockB() {
+  {| bFlagDown() |}
+    <bFlag = (1)>;
+  {| v5(oFlag, oTurn) |}
+    <turn = (1)>;
+  {| v7(oFlag, oTurn) |}
+    do {
+      {| v7(oFlag, oTurn) |}
+        <oFlag = aFlag>;
+      {| v8(oFlag, oTurn) |}
+        <oTurn = turn>;
+      {| if (oFlag == 1 && oTurn == 1) then v7(oFlag, oTurn) else bHoldLock() |}
+    } while (oFlag == 1 && oTurn == 1);
+  {| bHoldLock() |}
+}
+
+/*
+ * Unlocks the Peterson lock from B's side.
+ */
+method unlockB() {
+  {| bHoldLock() |}
+    <bFlag = (0)>;
+  {| bFlagDown() |}
+}
+
+
+// Invariant: either it's A's turn, or B's turn.
+// Also flags are either 0 or 1.
+constraint emp -> turn >= 0 && turn < 2 && aFlag >= 0 && aFlag < 2
+                                        && bFlag >= 0 && bFlag < 2;
+
+/*
+ * Goal: mutual exclusion.
+ */
+constraint aHoldLock() * bHoldLock() -> false;
+
+
+constraint aFlagDown() -> aFlag == 0;
+constraint v0(oFlag0, oTurn1) -> aFlag == 1;
+constraint v2(oFlag0, oTurn1) -> aFlag == 1 && (bFlag == 1 || turn == 0);
+constraint v3(oFlag0, oTurn1) -> aFlag == 1 && oFlag0 <= 1 && (bFlag == 1 || turn == 0);
+constraint aHoldLock() -> aFlag == 1 && (bFlag == 1 || turn == 0);
+
+constraint bFlagDown() -> bFlag == 0;
+constraint v5(oFlag0, oTurn1) -> bFlag == 1;
+constraint v7(oFlag0, oTurn1) -> bFlag == 1 && (aFlag == 1 || turn == 1);
+constraint v8(oFlag0, oTurn1) -> bFlag == 1 && oFlag0 <= 1 && (aFlag == 1 || turn == 1);
+constraint bHoldLock() -> bFlag == 1 && (aFlag == 1 || turn == 1);
+
+constraint v0(oFlag0, oTurn1) * bFlagDown() -> true;
+constraint v0(oFlag0, oTurn1) * v5(oFlag2, oTurn3) -> true;
+constraint v0(oFlag0, oTurn1) * v7(oFlag2, oTurn3) -> turn == 1;
+constraint v0(oFlag0, oTurn1) * v8(oFlag2, oTurn3) -> turn == 1;
+constraint v0(oFlag0, oTurn1) * bHoldLock() -> turn == 1;
+
+constraint v2(oFlag0, oTurn1) * bFlagDown() -> turn == 0;
+constraint v2(oFlag0, oTurn1) * v5(oFlag2, oTurn3) -> turn == 0;
+constraint v2(oFlag0, oTurn1) * v7(oFlag2, oTurn3) -> true;
+constraint v2(oFlag0, oTurn1) * v8(oFlag2, oTurn3) -> turn == 0 || oFlag2 == 1;
+constraint v2(oFlag0, oTurn1) * bHoldLock() -> turn == 0;
+
+constraint v3(oFlag0, oTurn1) * bFlagDown() -> turn == 0;
+constraint v3(oFlag0, oTurn1) * v5(oFlag2, oTurn3) -> turn == 0;
+constraint v3(oFlag0, oTurn1) * v7(oFlag2, oTurn3) -> turn == 1 || oFlag0 == 1;
+constraint v3(oFlag0, oTurn1) * v8(oFlag2, oTurn3) -> (turn == 1 && oFlag2 == 1) || (turn == 0 && oFlag0 == 1);
+constraint v3(oFlag0, oTurn1) * bHoldLock() -> turn == 0 && oFlag0 == 1;
+
+constraint v5(oFlag0, oTurn1) * aHoldLock() -> turn == 0;
+constraint v5(oFlag0, oTurn1) * aFlagDown() -> true;
+
+constraint v7(oFlag0, oTurn1) * aHoldLock() -> turn == 1;
+constraint v7(oFlag0, oTurn1) * aFlagDown() -> turn == 1;
+
+constraint v8(oFlag0, oTurn1) * aHoldLock() -> oFlag0 == 1 && turn == 1;
+constraint v8(oFlag0, oTurn1) * aFlagDown() -> turn == 1;
+
+constraint aFlagDown() * bFlagDown() -> true;
+constraint aFlagDown() * bHoldLock() -> turn == 1;
+constraint aHoldLock() * bFlagDown() -> turn == 0;
+
+constraint init() * init() -> false;
+constraint init() * aFlagDown() -> false;
+constraint init() * v0(oFlag0, oTurn1) -> false;
+constraint init() * v2(oFlag0, oTurn1) -> false;
+constraint init() * v3(oFlag0, oTurn1) -> false;
+constraint init() * aHoldLock() -> false;
+constraint init() * bFlagDown() -> false;
+constraint init() * v5(oFlag0, oTurn1) -> false;
+constraint init() * v7(oFlag0, oTurn1) -> false;
+constraint init() * v8(oFlag0, oTurn1) -> false;
+constraint init() * bHoldLock() -> false;
+
+constraint aFlagDown() * aFlagDown() -> false;
+constraint aFlagDown() * v0(oFlag0, oTurn1) -> false;
+constraint aFlagDown() * v2(oFlag0, oTurn1) -> false;
+constraint aFlagDown() * v3(oFlag0, oTurn1) -> false;
+constraint aFlagDown() * aHoldLock() -> false;
+
+constraint v0(oFlag0, oTurn1) * v0(oFlag2, oTurn3) -> false;
+constraint v0(oFlag0, oTurn1) * v2(oFlag2, oTurn3) -> false;
+constraint v0(oFlag0, oTurn1) * v3(oFlag2, oTurn3) -> false;
+constraint v0(oFlag0, oTurn1) * aHoldLock() -> false;
+
+constraint v2(oFlag0, oTurn1) * v2(oFlag2, oTurn3) -> false;
+constraint v2(oFlag0, oTurn1) * v3(oFlag2, oTurn3) -> false;
+constraint v2(oFlag0, oTurn1) * aHoldLock() -> false;
+
+constraint v3(oFlag0, oTurn1) * v3(oFlag2, oTurn3) -> false;
+constraint v3(oFlag0, oTurn1) * aHoldLock() -> false;
+
+constraint aHoldLock() * aHoldLock() -> false;
+
+constraint bFlagDown() * bFlagDown() -> false;
+constraint bFlagDown() * v5(oFlag0, oTurn1) -> false;
+constraint bFlagDown() * v7(oFlag0, oTurn1) -> false;
+constraint bFlagDown() * v8(oFlag0, oTurn1) -> false;
+constraint bFlagDown() * bHoldLock() -> false;
+
+constraint v5(oFlag0, oTurn1) * v5(oFlag2, oTurn3) -> false;
+constraint v5(oFlag0, oTurn1) * v7(oFlag2, oTurn3) -> false;
+constraint v5(oFlag0, oTurn1) * v8(oFlag2, oTurn3) -> false;
+constraint v5(oFlag0, oTurn1) * bHoldLock() -> false;
+
+constraint v7(oFlag0, oTurn1) * bHoldLock() -> false;
+constraint v7(oFlag0, oTurn1) * v7(oFlag2, oTurn3) -> false;
+constraint v7(oFlag0, oTurn1) * v8(oFlag2, oTurn3) -> false;
+
+constraint v8(oFlag0, oTurn1) * v8(oFlag2, oTurn3) -> false;
+constraint v8(oFlag0, oTurn1) * bHoldLock() -> false;
+
+constraint bHoldLock() * bHoldLock() -> false;

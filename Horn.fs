@@ -9,6 +9,7 @@ open Starling.Utils
 open Starling.Core.Var
 open Starling.Core.Expr
 open Starling.Core.Model
+open Starling.Core.GuardedView
 open Starling.Reifier
 
 /// <summary>
@@ -72,6 +73,7 @@ module Pretty =
         | Unmarked c -> sprintf "V%sU" c |> String
         | Before c -> sprintf "V%sB" c |> String
         | After c -> sprintf "V%sA" c |> String
+        | Intermediate(i, c) -> sprintf "V%sI%A" c i |> String
         | Goal(i, c) -> sprintf "V%sG%A" c i |> String
 
     /// Decides whether to put brackets over the expression emission x,
@@ -135,7 +137,7 @@ module Pretty =
         | Neq(x, y) -> printBop "=\=" x y
         | Gt(x, y) -> printBop ">" x y
         | Ge(x, y) -> printBop ">=" x y
-        | Le(x, y) -> printBop "<=" x y
+        | Le(x, y) -> printBop "=<" x y
         | Lt(x, y) -> printBop "<" x y
 
     /// Emits a Horn clause.
@@ -199,6 +201,8 @@ let rec boolExpr =
     | BFalse -> ok <| False
     | BEq(AExpr x, AExpr y) -> lift2 (curry Eq) (checkArith x) (checkArith y)
     | BNot(BEq(AExpr x, AExpr y)) -> lift2 (curry Neq) (checkArith x) (checkArith y)
+    // TODO(CaptainHayashi): is implies allowed natively?
+    | BImplies(x, y) -> boolExpr (mkOr [ mkNot x ; y ])
     | BGt(x, y) -> lift2 (curry Gt) (checkArith x) (checkArith y)
     | BGe(x, y) -> lift2 (curry Ge) (checkArith x) (checkArith y)
     | BLe(x, y) -> lift2 (curry Le) (checkArith x) (checkArith y)

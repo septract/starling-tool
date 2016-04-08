@@ -1,5 +1,5 @@
 /*
- * Linux-style ticketed lock.
+ * Linux-style ticket lock.
  * Adapted to allow several readers
  */
 

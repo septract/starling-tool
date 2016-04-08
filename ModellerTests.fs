@@ -6,6 +6,7 @@ open Starling.Collections
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
+open Starling.Core.Command
 open Starling.Core.Instantiate
 open Starling.Lang.AST
 open Starling.Lang.Modeller
@@ -19,7 +20,7 @@ type SearchViewDefEntry =
 
 /// Tests for the modeller.
 type ModellerTests() =
-    /// View prototypes for the ticketed lock modeller.
+    /// View prototypes for the ticket lock modeller.
     static member TicketLockProtos : FuncTable<unit> =
         makeFuncTable
             [ (func "holdLock" [], ())
@@ -67,7 +68,7 @@ type ModellerTests() =
              .Returns(Some [LookupError ("holdTick", CountMismatch(0, 1))])
              .SetName("Modelling a single view with bad parameter count returns an error")
           TestCaseData(afunc "holdTick" [Expression.True] |> View.Func)
-             .Returns(Some [LookupError ("holdTick", TypeMismatch ((Type.Int, "t"), Type.Bool))])
+             .Returns(Some [LookupError ("holdTick", Error.TypeMismatch ((Type.Int, "t"), Type.Bool))])
              .SetName("Modelling a single view with bad parameter type returns an error") ]
 
     /// <summary>
@@ -93,7 +94,7 @@ type ModellerTests() =
 
 
     /// Boolean expression modelling tests.
-    /// These all use the ticketed lock model.
+    /// These all use the ticket lock model.
     static member BooleanExprs =
         [ TestCaseData(Bop(And, Bop(Or, True, True), False)).Returns(Some BFalse)
             .SetName("model and simplify (true || true) && false") ]
@@ -137,39 +138,47 @@ type ModellerTests() =
     member x.``valid var lists are accepted during mapping`` (vl: (Type * string) list) =
         makeVarMap vl |> okOption
 
+    /// Constructs a Prim of the correct type to come out of a modeller.
+    static member mprim (cmd : Command) : PartCmd<ViewExpr<CView>> = Prim cmd
+
+    /// Constructs a Command<View> containing one atomic.
+    static member prim (ac : Atomic) : Command<ViewExpr<View>> =
+        Command.Prim { PreAssigns = []
+                       Atomics = [ ac ]
+                       PostAssigns = [] }
 
     /// Tests for the atomic primitive modeller.
-    /// These use the ticketed lock model.
+    /// These use the ticket lock model.
     static member AtomicPrims =
         [ TestCaseData(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment))
             .Returns(Some <| func "!ILoad++" ["t" |> aBefore |> AExpr; "t" |> aAfter |> AExpr
                                               "ticket" |> aBefore |> AExpr; "ticket" |> aAfter |> AExpr])
             .SetName("model a valid integer load as a prim") ]
 
-    /// Tests the atomic primitive modeller using the ticketed lock.
+    /// Tests the atomic primitive modeller using the ticket lock.
     [<TestCaseSource("AtomicPrims")>]
-    member x.``atomic actions are modelled correctly as prims`` a = modelAtomic ticketLockModel.Globals ticketLockModel.Locals a |> okOption
+    member x.``atomic primitives are modelled correctly as prims`` a =
+        a
+        |> modelAtomic ticketLockModel.Globals ticketLockModel.Locals
+        |> okOption
 
 
-    /// Constructs a Prim of the correct type to come out of a modeller.
-    static member mprim (vf : VFunc) : PartCmd<CView> = Prim vf
-
-    /// Constructs an atomic command of type Command<View>.
-    static member atom (ac : AtomicAction) : Command<View> = Atomic ac
 
     /// Tests for the command axiom modeller.
-    /// These use the ticketed lock model.
+    /// These use the ticket lock model.
     static member CommandAxioms =
-        [ TestCaseData(ModellerTests.atom(Fetch(LVIdent "t",
+        [ TestCaseData(ModellerTests.prim(Fetch(LVIdent "t",
                                                 LV(LVIdent "ticket"),
                                                 Increment)))
             .Returns(ModellerTests.mprim
-                         (func "!ILoad++" ["t" |> aBefore |> AExpr; "t" |> aAfter |> AExpr
-                                           "ticket" |> aBefore |> AExpr; "ticket" |> aAfter |> AExpr])
+                         [ func "!ILoad++" [ "t" |> aBefore |> AExpr
+                                             "t" |> aAfter |> AExpr
+                                             "ticket" |> aBefore |> AExpr
+                                             "ticket" |> aAfter |> AExpr ]]
                      |> Some)
             .SetName("model a valid integer load command as an axiom") ]
 
-    /// Tests the command modeller using the ticketed lock.
+    /// Tests the command modeller using the ticket lock.
     [<TestCaseSource("CommandAxioms")>]
     member x.``commands are modelled correctly as part-commands`` c =
         c
@@ -208,8 +217,27 @@ type ModellerTests() =
                               Def = None }
                             { View = Multiset.singleton (func "holdTick" [(Type.Int, "t0")])
                               Def = None }])
-             .SetName("Searching for size-1 viewdefs yields viewdefs for emp and the view prototypes") ]
-             
+             .SetName("Searching for size-1 viewdefs yields viewdefs for emp and the view prototypes")
+          TestCaseData({ Search = Some 2; InitDefs = [] })
+             .Returns(ModellerTests.viewDefSet
+                          [ { View = Multiset.empty ()
+                              Def = None }
+                            { View = Multiset.singleton (func "holdLock" [])
+                              Def = None }
+                            { View = Multiset.ofList [ func "holdLock" []
+                                                       func "holdLock" [] ]
+                              Def = None }
+                            { View = Multiset.ofList [ func "holdLock" []
+                                                       func "holdTick" [(Type.Int, "t0")] ]
+                              Def = None }
+                            { View = Multiset.singleton (func "holdTick" [(Type.Int, "t0")])
+                              Def = None }
+
+                            { View = Multiset.ofList [ func "holdTick" [(Type.Int, "t0")]
+                                                       func "holdTick" [(Type.Int, "t1")] ]
+                              Def = None }])
+             .SetName("Searching for size-2 viewdefs yields the correct views") ]
+
     /// Tests viewdef searches.
     [<TestCaseSource("SearchViewDefs")>]
     member x.``viewdef searches are carried out correctly`` svd =
@@ -218,9 +246,9 @@ type ModellerTests() =
 
     /// Full case studies to model.
     static member Models =
-        [ TestCaseData(ticketLockCollated).Returns(Some ticketLockModel).SetName("model the ticketed lock") ]
+        [ TestCaseData(ticketLockCollated).Returns(Some ticketLockModel).SetName("model the ticket lock") ]
 
     /// Tests the whole modelling process.
     [<TestCaseSource("Models")>]
     member x.``case studies are modelled correctly`` col = model col |> okOption
-    
+

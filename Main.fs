@@ -6,31 +6,56 @@ open Chessie.ErrorHandling
 
 open Starling
 open Starling.Core.Pretty
+open Starling.Core.Graph
+open Starling.Core.Graph.Pretty
 open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.Model.Pretty
+open Starling.Core.Command
+open Starling.Core.Command.Pretty
+open Starling.Core.GuardedView
+open Starling.Core.GuardedView.Pretty
 open Starling.Core.Axiom
 open Starling.Core.Axiom.Pretty
 
+
 /// Command-line flags used in the Starling executable.
-type Options = 
-    { [<Option('r', HelpText = "Dump results in raw format instead of pretty-printing.")>]
+[<NoComparison>]
+type Options =
+    { [<Option(
+            'r',
+            HelpText =
+                "Dump results in raw format instead of pretty-printing.")>]
       raw : bool
-      [<Option('s', HelpText = "The stage at which Starling should stop and output.")>]
+      [<Option(
+            's',
+            HelpText =
+                "The stage at which Starling should stop and output.")>]
       stage : string option
-      [<Option('t', HelpText = "Show specific axiom or term in term-refinement stages.")>]
+      [<Option(
+            't',
+            HelpText =
+                "Show specific axiom or term in term-refinement stages.")>]
       term : string option
       [<Option('m', HelpText = "Show full model in term-refinement stages.")>]
-      showModel: bool
-      [<Option('O', HelpText = "Perform no optimisation stages.")>]
-      noOptimise : bool
-      [<Value(0, MetaName = "input", HelpText = "The file to load (omit, or supply -, for standard input).")>]
+      showModel : bool
+      [<Option('O', HelpText = "Switches given optimisations on or off.")>]
+      optimisers : string seq
+      [<Option('v', HelpText = "Increases verbosity.")>]
+      verbose : bool
+      [<Value(
+            0,
+            MetaName = "input",
+            HelpText =
+                "The file to load (omit, or supply -, for standard input).")>]
       input : string option }
 
 /// Enumeration of possible requests to Starling.
-type Request = 
+type Request =
     /// Run the language frontend only, with the given request.
     | Frontend of Lang.Frontend.Request
+    /// Stop at graph optimisation.
+    | GraphOptimise
     /// Stop at graph axiomatisation.
     | Axiomatise
     /// Stop at goalAdd-axiom-pair generation.
@@ -44,26 +69,27 @@ type Request =
     /// Stop at semantic transformation.
     | Semantics
     /// Stop at term optimisation.
-    | Optimise
+    | TermOptimise
     /// Run the Z3 backend, with the given request.
     | Z3 of Backends.Z3.Types.Request
     /// Run the HSF backend (experimental).
     | HSF
 
 /// Map of -s stage names to Request items.
-let requestMap = 
+let requestMap =
     Map.ofList [ ("parse", Request.Frontend Lang.Frontend.Request.Parse)
                  ("collate", Request.Frontend Lang.Frontend.Request.Collate)
                  ("model", Request.Frontend Lang.Frontend.Request.Model)
                  ("guard", Request.Frontend Lang.Frontend.Request.Guard)
                  ("graph", Request.Frontend Lang.Frontend.Request.Graph)
+                 ("graphOptimise", Request.GraphOptimise)
                  ("axiomatise", Request.Axiomatise)
                  ("goalAdd", Request.GoalAdd)
                  ("termgen", Request.TermGen)
                  ("reify", Request.Reify)
                  ("flatten", Request.Flatten)
                  ("semantics", Request.Semantics)
-                 ("optimise", Request.Optimise)
+                 ("termOptimise", Request.TermOptimise)
                  ("reifyZ3", Request.Z3 Backends.Z3.Types.Request.Translate)
                  ("z3", Request.Z3 Backends.Z3.Types.Request.Combine)
                  ("sat", Request.Z3 Backends.Z3.Types.Request.Sat)
@@ -71,15 +97,18 @@ let requestMap =
 
 /// Converts an optional -s stage name to a request item.
 /// If none is given, the latest stage is selected.
-let requestFromStage ostage = Map.tryFind (withDefault "sat" ostage) requestMap
+let requestFromStage ostage =
+    Map.tryFind (withDefault "sat" ostage) requestMap
 
 /// Type of possible outputs from a Starling run.
 [<NoComparison>]
-type Response = 
+type Response =
     /// The result of frontend processing.
     | Frontend of Lang.Frontend.Response
+    /// Stop at graph optimisation.
+    | GraphOptimise of Model<Graph, DView>
     /// Stop at graph axiomatisation.
-    | Axiomatise of Model<Axiom<GView, VFunc>, DView>
+    | Axiomatise of Model<Axiom<GView, Command>, DView>
     /// The result of goal-axiom-pair generation.
     | GoalAdd of Model<GoalAxiom, DView>
     /// The result of term generation.
@@ -91,20 +120,26 @@ type Response =
     /// The result of semantic expansion.
     | Semantics of Model<STerm<GView, VFunc>, DFunc>
     /// The result of term optimisation.
-    | Optimise of Model<STerm<GView, VFunc>, DFunc>
+    | TermOptimise of Model<STerm<GView, VFunc>, DFunc>
     /// The result of Z3 backend processing.
     | Z3 of Backends.Z3.Types.Response
     /// The result of HSF processing.
     | HSF of Backends.Horn.Types.Horn list
 
 /// Pretty-prints a response.
-let printResponse mview =        
-    function 
+let printResponse mview =
+    function
     | Frontend f -> Lang.Frontend.printResponse mview f
+    | GraphOptimise g ->
+        printModelView
+            mview
+            printGraph
+            printDView
+            g
     | Axiomatise m ->
         printModelView
             mview
-            (printPAxiom printGView)
+            (printAxiom printCommand printGView)
             printDView
             m
     | GoalAdd m ->
@@ -135,7 +170,7 @@ let printResponse mview =
             (printSTerm printGView printVFunc)
             printDFunc
             m
-    | Optimise m ->
+    | TermOptimise m ->
         printModelView
             mview
             (printSTerm printGView printVFunc)
@@ -145,11 +180,9 @@ let printResponse mview =
     | HSF h -> Backends.Horn.Pretty.printHorns h
 
 /// A top-level program error.
-type Error = 
+type Error =
     /// An error occurred in the frontend.
     | Frontend of Lang.Frontend.Error
-    /// An error occured in axiomatisation.
-    | Axiomatise of Core.Graph.Types.Error
     /// An error occurred in semantic translation.
     | Semantics of Semantics.Types.Error
     /// An error occurred in the Z3 backend.
@@ -162,14 +195,13 @@ type Error =
     | Other of string
 
 /// Prints a top-level program error.
-let printError = 
-    function 
+let printError =
+    function
     | Frontend e -> Lang.Frontend.printError e
-    | Axiomatise e -> Core.Graph.Pretty.printError e
     | Semantics e -> Semantics.Pretty.printSemanticsError e
     | Z3 e -> Backends.Z3.Pretty.printError e
     | HSF e -> Backends.Horn.Pretty.printHornError e
-    | BadStage -> 
+    | BadStage ->
         colonSep [ String "Bad stage"
                    String "try"
                    requestMap
@@ -197,7 +229,7 @@ let printErr pBad =
 
 /// Pretty-prints a Chessie result, given printers for the successful
 /// case and failure messages.
-let printResult pOk pBad = 
+let printResult pOk pBad =
     either (printOk pOk pBad) (printErr pBad)
 
 /// Shorthand for the HSF stage.
@@ -206,8 +238,13 @@ let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
 /// Shorthand for the Z3 stage.
 let z3 rq = bind (Backends.Z3.run rq >> mapMessages Error.Z3)
 
-/// Shorthand for the optimise stage.
-let optimise = lift Starling.Optimiser.optimise
+/// Shorthand for the graph optimise stage.
+let graphOptimise optR optA verbose =
+    lift (Starling.Optimiser.Graph.optimise optR optA verbose)
+
+/// Shorthand for the term optimise stage.
+let termOptimise optR optA verbose =
+    lift (Starling.Optimiser.Term.optimise optR optA verbose)
 
 /// Shorthand for the flattening stage.
 let flatten = lift Starling.Flattener.flatten
@@ -223,62 +260,87 @@ let goalAdd = lift Starling.Core.Axiom.goalAdd
 
 /// Shorthand for the semantics stage.
 let semantics = bind (Starling.Semantics.translate
-                >> mapMessages Error.Semantics)
+                      >> mapMessages Error.Semantics)
 
 /// Shorthand for the axiomatisation stage.
-let axiomatise = bind (Starling.Core.Graph.axiomatise
-                 >> mapMessages Error.Axiomatise)
+let axiomatise = lift Starling.Core.Graph.axiomatise
 
 /// Shorthand for the frontend stage.
 let frontend rq = Lang.Frontend.run rq >> mapMessages Error.Frontend
 
 /// Shorthand for the full frontend stage.
-let model = 
+let model =
     frontend Lang.Frontend.Request.Graph
-    >> bind (function 
+    >> bind (function
              | Lang.Frontend.Response.Graph m -> m |> ok
              | _ -> Other "internal error: bad frontend response" |> fail)
 
-/// Runs the Starling request at argument 2 on the file named by argument 3.
-/// If missing, we read from stdin.
-/// Argument 1 turns optimisation on if true.
-let runStarling opt = 
-    let maybeOptimise = if opt then optimise else id
+/// <summary>
+///     Runs a Starling request.
+/// </summary>
+/// <param name="optS">
+///     The string governing optimiser overrides.
+/// </param>
+/// <param name="verbose">
+///     If true, dump some internal information to stderr.
+/// </param>
+/// <param name="_arg1">
+///     The Starling request to run.
+/// </param>
+/// <param name="_arg2">
+///     The file containing input for the request.
+/// </param>
+/// <returns>
+///     The result of running the Starling request, as a <c>Result</c>
+///     over <c>Response</c> and <c>Error</c>.
+/// </returns>
+let runStarling optS verbose =
+    let optR, optA = Optimiser.Utils.parseOptString optS
 
-    function 
+    function
     | Request.Frontend rq -> frontend rq >> lift Response.Frontend
+    | Request.GraphOptimise ->
+        model
+        >> graphOptimise optR optA verbose
+        >> lift Response.GraphOptimise
     | Request.Axiomatise ->
         model
+        >> graphOptimise optR optA verbose
         >> axiomatise
         >> lift Response.Axiomatise
-    | Request.GoalAdd -> 
+    | Request.GoalAdd ->
         model
+        >> graphOptimise optR optA verbose
         >> axiomatise
         >> goalAdd
         >> lift Response.GoalAdd
-    | Request.TermGen -> 
+    | Request.TermGen ->
         model
+        >> graphOptimise optR optA verbose
         >> axiomatise
         >> goalAdd
         >> termGen
         >> lift Response.TermGen
-    | Request.Reify -> 
+    | Request.Reify ->
         model
+        >> graphOptimise optR optA verbose
         >> axiomatise
         >> goalAdd
         >> termGen
         >> reify
         >> lift Response.Reify
-    | Request.Flatten -> 
+    | Request.Flatten ->
         model
+        >> graphOptimise optR optA verbose
         >> axiomatise
         >> goalAdd
         >> termGen
         >> reify
         >> flatten
         >> lift Response.Flatten
-    | Request.Semantics -> 
+    | Request.Semantics ->
         model
+        >> graphOptimise optR optA verbose
         >> axiomatise
         >> goalAdd
         >> termGen
@@ -286,46 +348,50 @@ let runStarling opt =
         >> flatten
         >> semantics
         >> lift Response.Semantics
-    | Request.Optimise -> 
+    | Request.TermOptimise ->
         model
+        >> graphOptimise optR optA verbose
         >> axiomatise
         >> goalAdd
         >> termGen
         >> reify
         >> flatten
         >> semantics
-        >> maybeOptimise
-        >> lift Response.Optimise
-    | Request.Z3 rq -> 
+        >> termOptimise optR optA verbose
+        >> lift Response.TermOptimise
+    | Request.Z3 rq ->
         model
+        >> graphOptimise optR optA verbose
         >> axiomatise
         >> goalAdd
         >> termGen
         >> reify
         >> flatten
         >> semantics
-        >> maybeOptimise
+        >> termOptimise optR optA verbose
         >> z3 rq
         >> lift Response.Z3
     | Request.HSF ->
         model
+        >> graphOptimise optR optA verbose
         >> axiomatise
         >> goalAdd
         >> termGen
         >> reify
         >> flatten
         >> semantics
-        >> maybeOptimise
+        >> termOptimise optR optA verbose
         >> hsf
         >> lift Response.HSF
 
 /// Runs Starling with the given options, and outputs the results.
-let mainWithOptions opts = 
-    let optimise = not opts.noOptimise
-    
-    let starlingR = 
+let mainWithOptions opts =
+    let optS = Seq.toList opts.optimisers
+    let verbose = opts.verbose
+
+    let starlingR =
         match (requestFromStage opts.stage) with
-        | Some otype -> runStarling optimise otype opts.input
+        | Some otype -> runStarling optS verbose otype opts.input
         | None -> fail Error.BadStage
 
     let mview =
@@ -333,19 +399,19 @@ let mainWithOptions opts =
         | Some i, _ -> Term i
         | None, false -> Terms
         | _ -> Model
-    
-    let pfn = 
+
+    let pfn =
         if opts.raw then (sprintf "%A" >> String)
                     else printResponse mview
     printResult pfn (List.map printError) starlingR
     0
 
 [<EntryPoint>]
-let main argv = 
+let main argv =
     match CommandLine.Parser.Default.ParseArguments<Options> argv with
     | :? Parsed<Options> as parsed -> mainWithOptions parsed.Value
-    | :? NotParsed<Options> as notParsed -> 
+    | :? NotParsed<Options> as notParsed ->
         2
-    | _ -> 
+    | _ ->
         printfn "parse result of unknown type"
         3

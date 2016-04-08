@@ -1,0 +1,116 @@
+/*
+ * Peterson's algorithm for mutual exclusion:
+ * http://dx.doi.org/10.1016/0020-0190(81)90106-X
+ *
+ * This version uses two threads, A and B, and separate views for each.
+ * A lot of duplication occurs that may be removable with arrays.
+ *
+ * This proof was manually written: future exercises could involve
+ * making it easier to synthesise parts of it.
+ *
+ * This version uses integer flags to allow HSF to work with it.
+ * We also set turn to 0/1 instead of 1/2, as currently HSF initialises
+ * variables to 0.
+ */
+
+
+shared int aFlag;
+shared int bFlag;
+shared int turn;
+
+thread int oFlag;
+thread int oTurn;
+
+
+// A
+view aFlagDown();       // A does not hold the lock and is not seeking it.
+view aHoldLock();       // A holds the lock.
+
+// B
+view bFlagDown();       // B does not hold the lock and is not seeking it.
+view bHoldLock();       // B holds the lock.
+
+view init();            // Used to start up the algorithm.
+
+
+/*
+ * Init method, used to make HSF realise both threads must be active.
+ */
+method init() {
+  {| init() |}
+  ;
+  {| aFlagDown() * bFlagDown() |}
+}
+
+/*
+ * Locks the Peterson lock from A's side.
+ */
+method lockA() {
+  {| aFlagDown() |}
+    <aFlag = (1)>;
+  {| ? |}
+    <turn = (0)>;
+  {| ? |}
+    do {
+      {| ? |}
+        <oFlag = bFlag>;
+      {| ? |}
+        <oTurn = turn>;
+      {| ? |}
+    } while (oFlag == 1 && oTurn == 0);
+  {| aHoldLock() |}
+}
+
+/*
+ * Unlocks the Peterson lock from A's side.
+ */
+method unlockA() {
+  {| aHoldLock() |}
+    <aFlag = (0)>;
+  {| aFlagDown() |}
+}
+
+/*
+ * Locks the Peterson lock from B's side.
+ */
+method lockB() {
+  {| bFlagDown() |}
+    <bFlag = (1)>;
+  {| ? |}
+    <turn = (1)>;
+  {| ? |}
+    do {
+      {| ? |}
+        <oFlag = aFlag>;
+      {| ? |}
+        <oTurn = turn>;
+      {| ? |}
+    } while (oFlag == 1 && oTurn == 1);
+  {| bHoldLock() |}
+}
+
+/*
+ * Unlocks the Peterson lock from B's side.
+ */
+method unlockB() {
+  {| bHoldLock() |}
+    <bFlag = (0)>;
+  {| bFlagDown() |}
+}
+
+
+// Invariant: either it's A's turn, or B's turn.
+// Also flags are either 0 or 1.
+constraint emp -> turn >= 0 && turn < 2 && aFlag >= 0 && aFlag < 2
+                                        && bFlag >= 0 && bFlag < 2;
+
+// Needed to ensure HSF doesn't send everything to false.
+constraint init() -> bFlag == 0 && aFlag == 0;
+
+// We need constraints up to size 2 for this.
+search 2;
+
+/*
+ * Goal: mutual exclusion.
+ */
+constraint aHoldLock() * bHoldLock() -> false;

@@ -5,6 +5,8 @@ module Starling.Reifier
 open Starling.Collections
 open Starling.Core.Expr
 open Starling.Core.Model
+open Starling.Core.Command
+open Starling.Core.GuardedView
 
 
 /// Tries to look up a multiset View in the defining views dvs.
@@ -28,8 +30,6 @@ let findDefOfView dvs uviewm =
          *)
         List.length vd = List.length uview && List.forall2 (fun d s -> d.Name = s.Name) vd uview) dvs
 
-/// Converts a GuarView to a tuple.
-let tupleOfGuarView {Cond = c; Item = i} = (c, i)
 
 /// Reifies a single GuarView-list into a ReView.
 let reifySingle view = 
@@ -41,7 +41,7 @@ let reifySingle view =
     // First, pull the guards and views out of the view.
     let guars, views = 
         view
-        |> Multiset.map tupleOfGuarView
+        |> Multiset.map gFuncTuple
         |> Multiset.toList
         |> List.unzip
     { // Then, separately add them into a ReView.

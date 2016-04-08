@@ -30,9 +30,10 @@ module Types =
     /// Type of errors relating to semantics instantiation.
     type Error =
         /// There was an error instantiating a semantic definition.
-        | Instantiate of cmd: VFunc * error: Starling.Core.Instantiate.Types.Error
-        /// A command has a missing semantic definition.
-        | MissingDef of cmd: VFunc
+        | Instantiate of prim: VFunc
+                       * error: Starling.Core.Instantiate.Types.Error
+        /// A primitive has a missing semantic definition.
+        | MissingDef of prim: VFunc
 
 
 /// <summary>
@@ -46,25 +47,73 @@ module Pretty =
     /// Pretty-prints semantics errors.
     let printSemanticsError =
         function
-        | Instantiate (cmd, error) ->
+        | Instantiate (prim, error) ->
           colonSep
-              [ fmt "couldn't instantiate command '{0}'" [ printVFunc cmd ]
+              [ fmt "couldn't instantiate primitive '{0}'"
+                    [ printVFunc prim ]
                 Starling.Core.Instantiate.Pretty.printError error ]
-        | MissingDef cmd ->
-            fmt "command '{0}' has no semantic definition"
-                [ printVFunc cmd ]
+        | MissingDef prim ->
+            fmt "primitive '{0}' has no semantic definition"
+                [ printVFunc prim ]
+
+
+
+/// <summary>
+///     Composes two Boolean expressions representing commands.
+///     <para>
+///         The pre-state of the first and post-state of the second become
+///         the pre- and post- state of the composition.  All of the
+///         intermediates (and pre-state) in the second are raised to the
+///         highest intermediate level in the first.  The post-state
+///         of the first then becomes the lowest intermediate level in the
+///         second.
+///     </para>
+/// </summary>
+/// <param name="x">
+///     The first expression to compose.
+/// </param>
+/// <param name="y">
+///     The second expression to compose.
+/// </param>
+/// <returns>
+///     The result of composing <paramref name="y" /> onto
+///     <paramref name="x" /> as above.
+/// </returns>
+let composeBools x y =
+    (* Find out what the next intermediate level is on x:
+     * this is going to replace !before in y, and each intermediate level
+     * in y will increase by this level plus one.
+     *)
+    let nLevel = nextBoolIntermediate x
+
+    let xRewrite =
+        function
+        | After v -> Intermediate (nLevel, v)
+        | v -> v
+        |> (fun f -> { AVSub = f >> AConst ; BVSub = f >> BConst } )
+        |> onVars
+
+    let yRewrite =
+        function
+        | Before v -> Intermediate (nLevel, v)
+        | Intermediate (i, v) -> Intermediate (i + nLevel + 1I, v)
+        | v -> v
+        |> (fun f -> { AVSub = f >> AConst ; BVSub = f >> BConst } )
+        |> onVars
+
+    mkAnd [ xRewrite.BSub x ; yRewrite.BSub y ]
 
 
 /// Generates a framing relation for a given variable.
 let frameVar name ty =
-    let ve = mkVarExp(ty, name)
-    
+    let ve = mkVarExp Unmarked ty name
+
     BEq(subExpr (liftMarker After always) ve,
         subExpr (liftMarker Before always) ve)
 
 /// Generates a frame for a given expression.
 /// The frame is a relation a!after = a!before for every a not mentioned in the expression.
-let frame model expr = 
+let frame model expr =
     // Find all the bound post-variables in the expression...
     let evars =
         expr
@@ -79,12 +128,12 @@ let frame model expr =
     |> Seq.filter (fun (name, _) -> not (Set.contains name evars))
     |> Seq.map (uncurry frameVar)
 
-/// Translate a Prim to an expression completely characterising it.
+/// Translate a primitive command to an expression characterising it.
 /// This is the combination of the Prim's action (via emitPrim) and
 /// a set of framing terms forcing unbound variables to remain constant
 /// (through frame).
-let semanticsOf model prim =
-    (* First, instantiate according to the semantics. 
+let semanticsOfPrim model prim =
+    (* First, instantiate according to the semantics.
      * This can succeed but return None.  This means there is no
      * entry (erroneous or otherwise) in the semantics for this prim.
      * Since this is an error in this case, make it one.
@@ -93,13 +142,23 @@ let semanticsOf model prim =
         instantiate prim model.Semantics
         |> mapMessages (curry Instantiate prim)
         |> bind (failIfNone (MissingDef prim))
-        
+
     let aframe = lift (frame model >> List.ofSeq >> mkAnd) actions
 
     lift2 mkAnd2 actions aframe
 
+/// Translate a command to an expression characterising it.
+/// This is the sequential composition of the translations of each
+/// primitive inside it.
+let semanticsOfCommand model =
+    Seq.map (semanticsOfPrim model)
+    >> collect
+    >> lift (function
+             | [] -> frame model BTrue |> List.ofSeq |> mkAnd
+             | xs -> List.reduce composeBools xs)
+
 /// Translates a model axiom into an axiom over a semantic expression.
-let translateAxiom model = tryMapTerm (semanticsOf model) ok ok
-    
+let translateAxiom model = tryMapTerm (semanticsOfCommand model) ok ok
+
 /// Translate a model over Prims to a model over semantic expressions.
 let translate model = tryMapAxioms (translateAxiom model) model

@@ -131,6 +131,12 @@ let failOption =
 /// Maps f over e's messages.
 let mapMessages f = either (fun (v, msgs) -> Ok(v, List.map f msgs)) (fun msgs -> List.map f msgs |> Bad)
 
+/// Performs f on x, but wraps each failure e to g(x, e).
+let wrapMessages g f x = x |> f |> mapMessages (curry g x)
+
+/// Performs f on x and y, but wraps each failure e to g(x, y, e).
+let wrapMessages2 g f x y = f x y |> mapMessages (curry3 g x y)
+
 /// Like fold, but constantly binds the given function over a Chessie result.
 /// The initial state is wrapped in 'ok'.
 let seqBind f initialS = Seq.fold (fun s x -> bind (f x) s) (ok initialS)
@@ -138,10 +144,15 @@ let seqBind f initialS = Seq.fold (fun s x -> bind (f x) s) (ok initialS)
 
 /// Fold that can be terminated earlier by the step function f returning None.
 /// If Any step returns None, the whole fold returns None.
-let rec foldFastTerm  (f : 'State -> 'T -> 'State option)  (s : 'State) (l : 'T list) =  
-     match l with
-     | []   -> Some s
-     | x::l ->
-        match f s x with
-        | Some s -> foldFastTerm f s l
-        | None -> None
+let foldFastTerm (f : 'State -> 'T -> 'State option)
+                 (s : 'State) (l : 'T seq) =
+    let en = l.GetEnumerator()
+
+    let rec fft f s' =
+        if (en.MoveNext())
+        then match f s' en.Current with
+             | Some s'' -> fft f s''
+             | None -> None
+        else (Some s')
+
+    fft f s

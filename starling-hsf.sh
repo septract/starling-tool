@@ -5,9 +5,9 @@
 
 QARMC=${QARMC:-"qarmc"}
 
-if [ $# != 1 ];
+if [ $# -lt 1 ];
 then
-	echo "usage: $0 FILE"
+	echo "usage: $0 FILE starling-args..."
 	exit 1
 fi
 
@@ -20,7 +20,7 @@ then
 fi
 
 echo "--- STARLING ---"
-./starling.sh -shsf $1 | tee $tempfile
+./starling.sh -shsf $* | tee $tempfile
 echo "--- HSF ---"
 $QARMC $tempfile
 rm $tempfile

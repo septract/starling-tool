@@ -5,8 +5,14 @@
 ./Examples/Fail/ticketLockBad.cvf: unlock_C0_2 unlock_C0_3
 ./Examples/Fail/ticketLockFlippedLoop.cvf: lock_C2_1 lock_C2_4 lock_C3_2 lock_C3_3 lock_C3_5
 ./Examples/Pass/multicounter.cvf: 
-./Examples/Pass/peterson.cvf: 
-./Examples/Pass/spinLock.cvf: 
+./Examples/Pass/peterson.cvf:
+./Examples/Pass/petersonInt.cvf: 
+./Examples/Pass/petersonIntMissingSynthesised.cvf: 
+./Examples/Pass/petersonMultiCmd.cvf: 
+./Examples/Pass/spinLockAdvisory.cvf: 
+./Examples/Pass/spinLock.cvf:
+./Examples/Pass/spinLockInt.cvf: 
+./Examples/Pass/spinLockMultiCmd.cvf: 
 ./Examples/Pass/ticketLock.cvf: 
 ./Examples/Pass/ticketLockNoIf.cvf: 
 ./Examples/Pass/ticketLockNoInvariant.cvf: 

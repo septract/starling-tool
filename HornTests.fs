@@ -96,7 +96,7 @@ type HornTests() =
                     QueryNaming {Name = "v_holdLock_holdLock"; Params = ["serving"; "ticket"]}
                   ]
               |> Some
-          ).SetName("Model the ticketed lock's viewdefs as Horn clauses") ]
+          ).SetName("Model the ticket lock's viewdefs as Horn clauses") ]
 
     /// Tests the model viewdef translator.
     [<TestCaseSource("ViewDefModels")>]
@@ -114,7 +114,7 @@ type HornTests() =
                           [ Eq (aUnmarked "serving", AInt 0L)
                             Eq (aUnmarked "ticket", AInt 0L) ] )
               |> Some
-          ).SetName("Model the ticketed lock's variable initialisations as Horn clauses") ]
+          ).SetName("Model the ticket lock's variable initialisations as Horn clauses") ]
 
     /// Tests the model viewdef translator.
     [<TestCaseSource("VariableModels")>]

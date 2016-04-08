@@ -15,6 +15,8 @@ open Starling.Utils
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
+open Starling.Core.Command
+open Starling.Core.GuardedView
 
 
 /// <summary>
@@ -29,7 +31,8 @@ module Types =
     ///         An <c>Axiom</c> contains a precondition, inner command, and
     ///         postcondition.
     ///     </para>
-    type Axiom<'view, 'cmd> = 
+    /// </summary>
+    type Axiom<'view, 'cmd> =
         { /// <summary>
           ///     The precondition of the axiom.
           /// </summary>
@@ -43,13 +46,10 @@ module Types =
           /// </summary>
           Cmd : 'cmd }
 
-    /// An axiom with a VFunc as its command.
-    type PAxiom<'view> = Axiom<'view, VFunc>
-
     /// An axiom combined with a goal view.
-    type GoalAxiom = 
+    type GoalAxiom =
         { /// The axiom to be checked for soundness under Goal.
-          Axiom : PAxiom<GView>
+          Axiom : Axiom<GView, Command>
           /// The view representing the goal for any terms over Axiom.
           Goal : View }
 
@@ -60,18 +60,18 @@ module Pretty =
     open Starling.Core.Pretty
 
     open Starling.Core.Model.Pretty
-    
+    open Starling.Core.Command.Pretty
+    open Starling.Core.GuardedView.Pretty
+
     /// Pretty-prints an Axiom, given knowledge of how to print its views
     /// and command.
-    let printAxiom pCmd pView { Pre = pre; Post = post; Cmd = cmd } = 
+    let printAxiom pCmd pView { Pre = pre; Post = post; Cmd = cmd } =
         Surround(pre |> pView, cmd |> pCmd, post |> pView)
 
-    /// Pretty-prints a PAxiom.
-    let printPAxiom pView = printAxiom printVFunc pView    
-
     /// Pretty-prints a goal axiom.
-    let printGoalAxiom {Axiom = a; Goal = f} = 
-        vsep [ headed "Axiom" (a |> printPAxiom printGView |> Seq.singleton)
+    let printGoalAxiom {Axiom = a; Goal = f} =
+        vsep [ headed "Axiom"
+                      (a |> printAxiom printCommand printGView |> Seq.singleton)
                headed "Goal" (f |> printView |> Seq.singleton) ]
 
 
@@ -108,7 +108,7 @@ let goalAddAxiom ds fg (name, axiom) =
     // where the 0 is the edge number.
     // This appends the viewdef number after the edge number.
     List.mapi
-        (fun i { View = vs } -> 
+        (fun i { View = vs } ->
               (sprintf "%s_%d" name i,
                { Axiom = axiom
                  Goal = instantiateGoal fg vs }))
@@ -118,8 +118,8 @@ let goalAddAxiom ds fg (name, axiom) =
 ///     Converts the axioms of a <c>Model</c> into <c>GoalAxiom</c>s.
 ///
 ///     <para>
-///         <c>GoalAxiom</c>s are a Cartesian product of the existing axioms and
-///         the domain of the <c>ViewDefs</c> map.
+///         <c>GoalAxiom</c>s are a Cartesian product of the existing axioms
+///         and the domain of the <c>ViewDefs</c> map.
 ///     </para>
 /// </summary>
 /// <param name="_arg1">

@@ -4,7 +4,9 @@ module Starling.Flattener
 open Starling.Collections
 open Starling.Core.Expr
 open Starling.Core.Model
+open Starling.Core.Command
 open Starling.Core.Var
+open Starling.Core.GuardedView
 
 
 (*
@@ -39,13 +41,8 @@ let funcOfView globals view =
  * View usages
  *)
 
-/// Adds the globals in gs to the argument list of a guarded view.
-let addGlobalsToGuarded gs {Cond = c; Item = i} =
-    { Cond = c; Item = funcOfView gs i }
-
 /// Adds the globals in gs to the argument lists of a view assertion.
-let addGlobalsToViewSet gs =
-    Multiset.map (addGlobalsToGuarded gs)
+let addGlobalsToViewSet gs = mapItems (funcOfView gs)
 
 /// Adds the globals in gs to the argument list of the assertions in a term.
 let addGlobalsToTerm gs _ =
@@ -69,17 +66,7 @@ let addGlobalsToViewDef gs {View = v; Def = d} =
 /// Adds globals to the arguments of all views in a model.
 let flatten (mdl: Model<PTerm<ViewSet, View>, DView>) =
     /// Build a function making a list of global arguments, for view assertions.
-    let gargs marker = 
-        mdl.Globals
-        |> Map.toSeq
-        |> Seq.map
-            (fun (name, ty) ->
-                name
-                |> marker
-                |> match ty with
-                   | Type.Int -> AConst >> AExpr
-                   | Type.Bool -> BConst >> BExpr)
-        |> List.ofSeq
+    let gargs marker = varMapToExprs marker mdl.Globals
 
     /// Build a list of global parameters, for view definitions.
     let gpars =
