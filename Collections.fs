@@ -47,7 +47,7 @@ let func name pars = { Name = name; Params = List.ofSeq pars }
 /// </typeparam>
 type Multiset<'item> when 'item: comparison =
     | MSet of Map<'item, int>
-
+    override this.ToString() = sprintf "%A" this
 /// <summary>
 ///     Operations on multisets.
 /// </summary>
@@ -63,6 +63,18 @@ module Multiset =
     let empty = MSet (Map.empty)
 
     /// <summary>
+    ///     Adds an element n times to a multiset
+    /// </summary>
+    let addn (MSet ms) k m =
+        let n = ms.TryFind k |> Option.fold (fun x y -> y) 0
+        MSet (ms.Add (k, n+m))
+
+    /// <summary>
+    ///     Adds an element to a multiset
+    /// </summary>
+    let add ms k = addn ms k 1
+
+    /// <summary>
     ///     Creates a multiset with the given flat sequence as its contents.
     /// </summary>
     /// <param name="xs">
@@ -72,13 +84,7 @@ module Multiset =
     ///     A multiset containing the given items.
     /// </returns>
     let ofFlatSeq xs =
-        xs
-        // First, collate into (k, [k, k, ...]) form...
-        |> Seq.groupBy id
-        // then, turn into (k, occurences of k).
-        |> Seq.map (pairMap id Seq.length)
-        |> Map.ofSeq
-        |> MSet
+        Seq.fold add empty xs
 
     /// <summary>
     ///     Creates a multiset with the given flat list as its contents.
@@ -89,8 +95,8 @@ module Multiset =
     /// <returns>
     ///     A multiset containing the given items.
     /// </returns>
-    let ofFlatList xs =
-        xs |> List.toSeq |> ofFlatSeq
+    let ofFlatList (xs : List<_>) =
+        xs |> ofFlatSeq
 
     /// <summary>
     ///     Creates a multiset with one item.
@@ -101,7 +107,7 @@ module Multiset =
     /// <returns>
     ///     A singleton multiset.
     /// </returns>
-    let singleton x = ofFlatList [ x ]
+    let singleton x = add empty x
 
 
     (*
@@ -146,10 +152,8 @@ module Multiset =
     /// <returns>
     ///     The set of items in the multiset.
     /// </returns>
-    let toSet ms =
-        ms
-        |> toFlatSeq
-        |> Set.ofSeq
+    let toSet (MSet ms) =
+        Map.fold (fun set k n -> Set.add k set) Set.empty ms
 
     (*
      * Operations
@@ -164,8 +168,8 @@ module Multiset =
     /// <returns>
     ///     The number of elements in <paramref name="_arg1" />.
     /// </returns>
-    let length mset =
-        mset |> toFlatSeq |> Seq.length
+    let length (MSet mset) =
+        mset |> Map.fold (fun count _ n -> count + n) 0
 
     /// <summary>
     ///     Appends two multisets.
@@ -181,21 +185,8 @@ module Multiset =
     /// <returns>
     ///     The result of appending <c>xs</c> to <c>ys</c>.
     /// </returns>
-    let append xs ys =
-        let MSet xmap, MSet ymap = xs, ys
-
-        // Figure out what the values in the appended sequence are...
-        Set.union (toSet xs) (toSet ys)
-        // Then, figure out what the occurrences are, by checking xs and ys.
-        |> Set.toSeq
-        |> Seq.map
-               (fun k ->
-                    let kInX = withDefault 0 (xmap.TryFind k)
-                    let kInY = withDefault 0 (ymap.TryFind k)
-                    (k, kInX + kInY))
-        // Now rebuild the multiset.
-        |> Map.ofSeq
-        |> MSet
+    let append xs (MSet ymap) =
+        Map.fold addn xs ymap
 
     /// <summary>
     ///     Maps <c>f</c> over a multiset.
@@ -210,12 +201,13 @@ module Multiset =
     /// <returns>
     ///     The result of mapping <c>f</c> over the multiset.
     /// </returns>
-    let map f =
-        // TODO(CaptainHayashi): quite inefficient, but not sure how
-        // else to do this correctly.
-        toFlatList
-        >> List.map f
-        >> ofFlatList
+    let map f (MSet xs)=
+        let rec repeat_add map k n = 
+            match n with
+            | 0 -> map
+            | n -> repeat_add (add map (f k)) k (n-1)
+        //Note that this is used with side-effecting f, so must be called n times for each addition.
+        Map.fold repeat_add empty xs
 
     /// Produces the power-multiset of a multiset, as a set of multisets.
     let power msm =
