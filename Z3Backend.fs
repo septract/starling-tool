@@ -39,6 +39,8 @@ module Types =
         | Translate of Model<ZTerm, DFunc>
         /// Output of the final Z3 terms only.
         | Combine of Model<Microsoft.Z3.BoolExpr, DFunc>
+        /// Output of the MuZ3 translation step only.
+        | MuTranslate of Microsoft.Z3.Fixedpoint
         /// Output of satisfiability reports for the Z3 terms.
         | Sat of Map<string, Microsoft.Z3.Status>
 
@@ -76,7 +78,13 @@ module Pretty =
                 printZ3Exp
                 printDFunc
                 m
-        | Response.Sat s -> printMap Inline String printSat s
+        | Response.MuTranslate f ->
+            printAssoc
+                Indented
+                [ (String "Rules", f.Rules |> Seq.map printZ3Exp |> vsep)
+                  (String "Assertions", f.Assertions |> Seq.map printZ3Exp |> vsep) ]
+        | Response.Sat s ->
+            printMap Inline String printSat s
 
     /// Pretty-prints Z3 translation errors.
     let printError =
