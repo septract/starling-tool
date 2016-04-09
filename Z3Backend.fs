@@ -56,6 +56,22 @@ module Types =
         /// </summary>
         | Unknown
 
+    /// <summary>
+    ///     A MuZ3 model.
+    /// </summary>
+    type MuModel =
+        { /// <summary>
+          ///     List of (view = D(view)) assertions.
+          /// </summary>
+          Assertions : Z3.BoolExpr []
+          /// <summary>
+          ///     Map of (view name, FuncDecl) bindings.
+          /// </summary>
+          FuncDecls : Map<string, Z3.FuncDecl>
+          /// <summary>
+          ///     List of fixedpoint rules.
+          /// </summary>
+          Rules : Map<string, Z3.BoolExpr> }
 
     /// Type of responses from the Z3 backend.
     [<NoComparison>]
@@ -67,7 +83,7 @@ module Types =
         /// Output of satisfiability reports for the Z3 terms.
         | Sat of Map<string, Z3.Status>
         /// Output of the MuZ3 translation step only.
-        | MuTranslate of (Z3.BoolExpr * Z3.Symbol) seq * Map<string, Z3.FuncDecl>
+        | MuTranslate of MuModel
         /// Output of the MuZ3 proof.
         | MuSat of Map<string, MuSat>
 
@@ -97,7 +113,21 @@ module Pretty =
         | MuSat.Unsat ex -> commaSep [ String "unsat" ; printZ3Exp ex ]
         | MuSat.Unknown -> String "?"
     
-    
+    /// Pretty-prints a MuModel.
+    let printMuModel { Assertions = ts ; Rules = rs ; FuncDecls = fdm } =
+        printAssoc
+            Indented
+            [ (String "Assertions", ts |> Seq.map printZ3Exp |> vsep)
+              (String "Rules",
+               rs
+               |> Map.toSeq
+               |> Seq.map (fun (g, sym) ->
+                               commaSep [ String (sym.ToString())
+                                          String (g.ToString()) ] )
+               |> vsep)
+              (String "Goals",
+               printMap Inline String (fun s -> String (s.ToString())) fdm) ]
+
     /// Pretty-prints a response.
     let printResponse mview =
         function
@@ -115,17 +145,8 @@ module Pretty =
                 m
         | Response.Sat s ->
             printMap Inline String printSat s
-        | Response.MuTranslate (rules, goals) ->
-            printAssoc
-                Indented
-                [ (String "Rules",
-                   rules
-                   |> Seq.map (fun (g, sym) ->
-                                   commaSep [ String (sym.ToString())
-                                              String (g.ToString()) ] )
-                   |> vsep)
-                  (String "Goals",
-                   printMap Inline String (fun s -> String (s.ToString())) goals) ]
+        | Response.MuTranslate mm ->
+            printMuModel mm
         | Response.MuSat s ->
             printMap Inline String printMuSat s
 
@@ -295,9 +316,9 @@ module MuTranslator =
     ///     The <c>ViewDef</c> to process.
     /// </param>
     /// <returns>
-    ///     A pair of a pair of the name of the view, the <c>FuncDecl</c>
-    ///     produced for the view, and an optional tuple of <c>BoolExpr</c>
-    ///     and <c>Symbol</c> producing a rule for the definition.
+    ///     A pair of a pair of the name of the view and the <c>FuncDecl</c>
+    ///     produced for the view, and an optional <c>BoolExpr</c>
+    ///     assertion defining the view.
     /// </returns>
     let translateViewDef (ctx : Z3.Context) ( { View = vs; Def = ex } : ViewDef<DFunc> ) =
         let funcDecl = funcDeclOfDFunc ctx vs
@@ -319,12 +340,8 @@ module MuTranslator =
                      let eparams = List.map (uncurry (mkVarExp Unmarked)) vs.Params
                      let funcApp = applyFunc ctx funcDecl eparams
 
-                     Seq.ofList
-                        // TODO(CaptainHayashi): this needs to be IFF, right?
-                        [ (ctx.MkImplies (boolToZ3 ctx dex, funcApp),
-                           ctx.MkSymbol (sprintf "R_%s" vs.Name) :> Z3.Symbol) ] )
+                     ctx.MkIff (boolToZ3 ctx dex, funcApp))
                 ex
-            |> withDefault Seq.empty
 
         (mapEntry, rule)
 
@@ -339,8 +356,7 @@ module MuTranslator =
     /// </param>
     /// <returns>
     ///     A tuple of a <c>Map</c> binding names to <c>FuncDecl</c>s and a
-    ///     set of tuples of <c>BoolExpr</c> and <c>Symbol</c> representing
-    ///     rules.
+    ///     set of <c>BoolExprs</c> asserting view definitions.
     /// </returns>
     let translateViewDefs ctx ds =
         ds
@@ -349,7 +365,7 @@ module MuTranslator =
         |> List.unzip
         (* The LHS contains a list of tuples that need to make a map.
            The RHS needs to be filtered for indefinite constraints. *)
-        |> pairMap Map.ofSeq Seq.concat
+        |> pairMap Map.ofSeq (Seq.choose id)
 
     (*
      * Views
@@ -416,8 +432,8 @@ module MuTranslator =
     ///     Map of shared variables in the program.
     /// </param>
     /// <returns>
-    ///     A sequence containing at most one pair of <c>BoolExpr</c> and
-    ///     <c>Symbol</c> representing the variable initialisation rule.
+    ///     A sequence containing at most one pair of <c>string</c> and
+    ///     Z3 <c>BoolExpr</c> representing the variable initialisation rule.
     /// </returns>
     let translateVariables ctx funcDecls svars =
         let vpars =
@@ -445,9 +461,7 @@ module MuTranslator =
                 |> mkAnd
                 |> boolToZ3 ctx
 
-            Seq.singleton <|
-            (ctx.MkImplies (body, head),
-             ctx.MkSymbol "init" :> Z3.Symbol)
+            Seq.singleton ("init", ctx.MkImplies (body, head))
 
 
     (*
@@ -471,8 +485,8 @@ module MuTranslator =
     ///     Pair of term name and <c>Term</c>.
     /// </param>
     /// <returns>
-    ///     A pair of Z3 Boolean expression and <c>Symbol</c> representing
-    ///     the rule form of the proof term.
+    ///     A pair of the term name and the Z3 <c>BoolExpr</c> representing the
+    ///     rule form of the proof term.
     /// </returns>
     let translateTerm ctx funcDecls svars (name : string,
                                            {Cmd = c ; WPre = w ; Goal = g}) =
@@ -480,8 +494,7 @@ module MuTranslator =
         let wZ = translateGView ctx funcDecls w
         let gZ = translateVFunc ctx funcDecls g
 
-        (ctx.MkImplies (ctx.MkAnd [| cZ ; wZ |], gZ),
-         ctx.MkSymbol name :> Z3.Symbol)
+        (name, ctx.MkImplies (ctx.MkAnd [| cZ ; wZ |], gZ))
 
     /// <summary>
     ///     Constructs muZ3 rules and goals for a model.
@@ -498,14 +511,13 @@ module MuTranslator =
     ///     to use to start queries.
     /// </returns>
     let translate ctx { Globals = svars ; ViewDefs = ds ; Axioms = xs } =
-        let funcDecls, drules = translateViewDefs ctx ds
+        let funcDecls, assertions = translateViewDefs ctx ds
         let vrules = translateVariables ctx funcDecls svars
         let trules = xs |> Map.toSeq |> Seq.map (translateTerm ctx funcDecls svars)
 
-        let rules =
-            Seq.concat [ drules ; vrules ; trules ]
-
-        (rules, funcDecls)
+        { Assertions = Array.ofSeq assertions
+          Rules = Seq.append vrules trules |> Map.ofSeq
+          FuncDecls = funcDecls }
 
 
     /// <summary>
@@ -514,35 +526,28 @@ module MuTranslator =
     /// <param name="ctx">
     ///     The Z3 context to use for modelling the fixedpoint.
     /// </param>
-    /// <param name="rules">
-    ///     The rules to use when proving the fixedpoint.
-    /// </param>
-    /// <param name="funcDecls">
-    ///     The map of names to view goals to send to the solver.
+    /// <param name="_arg1">
+    ///     The <c>MuModel</c> to run.
     /// </param>
     /// <returns>
     ///     A list of <c>MuResult</c>s.
     /// </returns>
-    let run (ctx : Z3.Context) rules funcDecls =
+    let run (ctx : Z3.Context) { Assertions = ts; Rules = rs ; FuncDecls = fm } =
         let fixedpoint = ctx.MkFixedpoint ()
         
-        Seq.iter
-            (fun (g, s) -> fixedpoint.AddRule (g, s))
-            rules
+        fixedpoint.Assert ts
+        Map.iter (fun (s : string) g -> fixedpoint.AddRule (g, ctx.MkSymbol s :> Z3.Symbol)) rs
+        Map.iter (fun _ g -> fixedpoint.RegisterRelation g) fm
 
-        Map.iter
-            (fun _ g -> fixedpoint.RegisterRelation g)
-            funcDecls
-
-        funcDecls
-        |> Map.map
-               (fun _ g ->
-                    match (fixedpoint.Query [| g |]) with
-                    | Z3.Status.SATISFIABLE ->
-                        MuSat.Sat (fixedpoint.GetAnswer ())
-                    | Z3.Status.UNSATISFIABLE ->
-                        MuSat.Unsat (fixedpoint.GetAnswer ())
-                    | _ -> MuSat.Unknown)
+        Map.map
+            (fun _ g ->
+                 match (fixedpoint.Query [| g |]) with
+                 | Z3.Status.SATISFIABLE ->
+                     MuSat.Sat (fixedpoint.GetAnswer ())
+                 | Z3.Status.UNSATISFIABLE ->
+                     MuSat.Unsat (fixedpoint.GetAnswer ())
+                 | _ -> MuSat.Unknown)
+            fm
 
 
 /// <summary>
@@ -562,7 +567,7 @@ module Run =
 /// Shorthand for the translator stage of the MuZ3 pipeline.
 let mutranslate = MuTranslator.translate
 /// Shorthand for the satisfiability stage of the MuZ3 pipeline.
-let musat ctx = uncurry (MuTranslator.run ctx)
+let musat = MuTranslator.run 
 /// Shorthand for the translator stage of the Z3 pipeline.
 let translate = Translator.interpret
 /// Shorthand for the combination stage of the Z3 pipeline.
