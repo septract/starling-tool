@@ -162,7 +162,7 @@ module Pretty =
 
     /// Pretty-prints a multiset given a printer for its contents.
     let printMultiset pItem =
-        Multiset.toList
+        Multiset.toFlatList
         >> List.map pItem
         >> semiSep
 

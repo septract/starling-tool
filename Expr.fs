@@ -259,7 +259,10 @@ let aAfter c = c |> After |> AConst
 /// Creates a before-marked arithmetic constant.
 let aBefore c = c |> Before |> AConst
 
-/// Creates an intermediate-marked Boolean constant.
+/// Creates an goal-marked arithmetic constant.
+let aGoal i c = (i, c) |> Goal |> AConst
+
+/// Creates an intermediate-marked arithmetic constant.
 let aInter i c = (i, c) |> Intermediate |> AConst
 
 /// Creates an unmarked Boolean constant.
@@ -270,6 +273,9 @@ let bAfter c = c |> After |> BConst
 
 /// Creates a before-marked Boolean constant.
 let bBefore c = c |> Before |> BConst
+
+/// Creates an goal-marked Boolean constant.
+let bGoal i c = (i, c) |> Goal |> BConst
 
 /// Creates an intermediate-marked Boolean constant.
 let bInter i c = (i, c) |> Intermediate |> BConst

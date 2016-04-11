@@ -58,7 +58,7 @@ type InstantiateTests() =
           TestCaseData(vfunc "baz" [BTrue |> BExpr ; aAfter "burble" |> AExpr])
             .Returns([TypeMismatch ((Int, "quux"), Bool)
                       TypeMismatch ((Bool, "flop"), Int)] |> Some)
-            .SetName("Instantiate func with two arguments of different types") ]
+            .SetName("Instantiate func with two arguments of incorrect types") ]
           
     /// Tests whether invalid instantiations (don't) work.
     [<TestCaseSource("InvalidInstantiations")>]

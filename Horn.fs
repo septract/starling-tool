@@ -333,7 +333,7 @@ let hsfGFunc dvs env { Cond = c; Item = ms } =
 let hsfConditionBody dvs env ps sem =
     let psH =
         ps
-        |> Multiset.toSeq
+        |> Multiset.toFlatSeq
         |> Seq.choose (hsfGFunc dvs env)
         |> collect
         |> lift List.ofSeq

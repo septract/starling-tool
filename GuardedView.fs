@@ -130,14 +130,14 @@ let (|Never|_|) { Cond = c ; Item = i } =
 ///     </para>
 /// </summary>
 let (|ITEGuards|_|) ms =
-    match (Multiset.toList ms) with
+    match (Multiset.toFlatList ms) with
     | [ x ; y ] when (equivHolds (negates x.Cond y.Cond)) ->
         Some (x.Cond, Multiset.singleton { Cond = BTrue; Item = x.Item },
               y.Cond, Multiset.singleton { Cond = BTrue; Item = y.Item })
     // {| G -> P |} is trivially equivalent to {| G -> P * ¬G -> emp |}.
     | [ x ] ->
         Some (x.Cond, Multiset.singleton { Cond = BTrue; Item = x.Item },
-              mkNot x.Cond, Multiset.empty ())
+              mkNot x.Cond, Multiset.empty)
     | _ -> None
 
 (*
@@ -224,11 +224,11 @@ let mapItems f = Multiset.map (mapItem f)
 /// </returns>
 let pruneGuardedSet gset =
     gset
-    |> Multiset.toSeq
+    |> Multiset.toFlatSeq
     |> Seq.filter (function
                    | Never _ -> false
                    | _       -> true)
-    |> Multiset.ofSeq
+    |> Multiset.ofFlatSeq
 
 
 /// <summary>

@@ -12,7 +12,7 @@ open Starling.Core.GuardedView
 /// Tries to look up a multiset View in the defining views dvs.
 let findDefOfView dvs uviewm =
     // Why we do this is explained later.
-    let uview = Multiset.toList uviewm
+    let uview = Multiset.toFlatList uviewm
     (* We look up view-defs based on count of views and names of each
      * view in the def.
      *
@@ -24,7 +24,7 @@ let findDefOfView dvs uviewm =
          * so convert both sides to a (sorted) list.  We rely on the
          * sortedness to make the next step sound.
          *)
-        let vd = Multiset.toList vdm
+        let vd = Multiset.toFlatList vdm
         (* Do these two views have the same number of terms?
          * If not, using forall2 is an error.
          *)
@@ -42,18 +42,18 @@ let reifySingle view =
     let guars, views = 
         view
         |> Multiset.map gFuncTuple
-        |> Multiset.toList
+        |> Multiset.toFlatList
         |> List.unzip
     { // Then, separately add them into a ReView.
       Cond = mkAnd guars
-      Item = Multiset.ofList views }
+      Item = Multiset.ofFlatList views }
 
 /// Reifies an entire view application.
 let reifyView vap = 
     vap
     |> Multiset.power
     |> Seq.map reifySingle
-    |> Multiset.ofSeq
+    |> Multiset.ofFlatSeq
 
 /// Reifies all of the views in a term.
 let reifyTerm = 

@@ -16,14 +16,14 @@ open Starling.Core.GuardedView
 /// Extracts a sequence of all of the parameters in a view in order.
 let paramsOfView ms =
     ms
-    |> Multiset.toSeq
+    |> Multiset.toFlatSeq
     |> Seq.map (fun v -> v.Params)
     |> Seq.concat
 
 /// Constructs a (hopefully) unique name for a func encompassing a view.
 let funcNameOfView ms =
     ms
-    |> Multiset.toSeq
+    |> Multiset.toFlatSeq
     // These two steps are to ensure we don't capture an existing name.
     |> Seq.map (fun { Name = n } -> n.Replace("_", "__"))
     |> scons "v"

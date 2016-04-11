@@ -108,7 +108,7 @@ module Translator =
 
     /// Interprets an entire view application over the given functable.
     let interpretGView ft =
-        Multiset.toSeq
+        Multiset.toFlatSeq
         >> Seq.map (interpretGFunc ft)
         >> collect
         >> lift Seq.toList
