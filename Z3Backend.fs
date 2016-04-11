@@ -534,6 +534,11 @@ module MuTranslator =
     /// </returns>
     let run (ctx : Z3.Context) { Assertions = ts; Rules = rs ; FuncDecls = fm } =
         let fixedpoint = ctx.MkFixedpoint ()
+
+        let pars = ctx.MkParams ()
+        pars.Add("engine", ctx.MkSymbol("pdr"))
+        pars.Add("pdr.flexible_trace", true)
+        fixedpoint.Parameters <- pars
         
         fixedpoint.Assert ts
         Map.iter (fun (s : string) g -> fixedpoint.AddRule (g, ctx.MkSymbol s :> Z3.Symbol)) rs
