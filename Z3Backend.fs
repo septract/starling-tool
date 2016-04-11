@@ -54,7 +54,7 @@ module Types =
         /// <summary>
         ///     The proof gave an odd result.
         /// </summary>
-        | Unknown
+        | Unknown of reason: string
 
     /// <summary>
     ///     A MuZ3 model.
@@ -109,9 +109,9 @@ module Pretty =
     /// Pretty-prints a MuSat.
     let printMuSat =
         function
-        | MuSat.Sat ex -> commaSep [ String "sat" ; printZ3Exp ex ]
-        | MuSat.Unsat ex -> commaSep [ String "unsat" ; printZ3Exp ex ]
-        | MuSat.Unknown -> String "?"
+        | MuSat.Sat ex -> colonSep [ String "sat" ; printZ3Exp ex ]
+        | MuSat.Unsat ex -> colonSep [ String "unsat" ; printZ3Exp ex ]
+        | MuSat.Unknown reason -> colonSep [ String "unknown" ; String reason ]
     
     /// Pretty-prints a MuModel.
     let printMuModel { Assertions = ts ; Rules = rs ; FuncDecls = fdm } =
@@ -546,7 +546,9 @@ module MuTranslator =
                      MuSat.Sat (fixedpoint.GetAnswer ())
                  | Z3.Status.UNSATISFIABLE ->
                      MuSat.Unsat (fixedpoint.GetAnswer ())
-                 | _ -> MuSat.Unknown)
+                 | Z3.Status.UNKNOWN ->
+                     MuSat.Unknown (fixedpoint.GetReasonUnknown ())
+                 | _ -> MuSat.Unknown "query result out of bounds")
             fm
 
 
