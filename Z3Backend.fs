@@ -61,9 +61,9 @@ module Types =
     /// </summary>
     type MuModel =
         { /// <summary>
-          ///     List of (view = D(view)) assertions.
+          ///     List of definite viewdefs, as (view, def) pairs, to check.
           /// </summary>
-          Assertions : Z3.BoolExpr []
+          Definites : (Z3.BoolExpr * Z3.BoolExpr) list
           /// <summary>
           ///     Map of (view name, FuncDecl) bindings.
           /// </summary>
@@ -85,7 +85,7 @@ module Types =
         /// Output of the MuZ3 translation step only.
         | MuTranslate of MuModel
         /// Output of the MuZ3 proof.
-        | MuSat of Map<string, MuSat>
+        | MuSat of MuSat
 
     /// A Z3 translation error.
     type Error =
@@ -114,10 +114,14 @@ module Pretty =
         | MuSat.Unknown reason -> colonSep [ String "unknown" ; String reason ]
     
     /// Pretty-prints a MuModel.
-    let printMuModel { Assertions = ts ; Rules = rs ; FuncDecls = fdm } =
+    let printMuModel { Definites = ds ; Rules = rs ; FuncDecls = fdm } =
         printAssoc
             Indented
-            [ (String "Assertions", ts |> Seq.map printZ3Exp |> vsep)
+            [ (String "Definites",
+               ds |>
+               List.map (fun (f, d) -> equality (printZ3Exp f)
+                                                (printZ3Exp d))
+               |> vsep)
               (String "Rules",
                rs
                |> Map.toSeq
@@ -148,7 +152,7 @@ module Pretty =
         | Response.MuTranslate mm ->
             printMuModel mm
         | Response.MuSat s ->
-            printMap Inline String printMuSat s
+            printMuSat s
 
     /// Pretty-prints Z3 translation errors.
     let printError =
@@ -340,7 +344,7 @@ module MuTranslator =
                      let eparams = List.map (uncurry (mkVarExp Unmarked)) vs.Params
                      let funcApp = applyFunc ctx funcDecl eparams
 
-                     ctx.MkIff (boolToZ3 ctx dex, funcApp))
+                     (funcApp, boolToZ3 ctx dex))
                 ex
 
         (mapEntry, rule)
@@ -356,7 +360,7 @@ module MuTranslator =
     /// </param>
     /// <returns>
     ///     A tuple of a <c>Map</c> binding names to <c>FuncDecl</c>s and a
-    ///     set of <c>BoolExprs</c> asserting view definitions.
+    ///     list of (view, def) pairs defining definite viewdefs.
     /// </returns>
     let translateViewDefs ctx ds =
         ds
@@ -511,11 +515,11 @@ module MuTranslator =
     ///     to use to start queries.
     /// </returns>
     let translate ctx { Globals = svars ; ViewDefs = ds ; Axioms = xs } =
-        let funcDecls, assertions = translateViewDefs ctx ds
+        let funcDecls, definites = translateViewDefs ctx ds
         let vrules = translateVariables ctx funcDecls svars
         let trules = xs |> Map.toSeq |> Seq.map (translateTerm ctx funcDecls svars)
 
-        { Assertions = Array.ofSeq assertions
+        { Definites = List.ofSeq definites
           Rules = Seq.append vrules trules |> Map.ofSeq
           FuncDecls = funcDecls }
 
@@ -532,7 +536,7 @@ module MuTranslator =
     /// <returns>
     ///     A list of <c>MuResult</c>s.
     /// </returns>
-    let run (ctx : Z3.Context) { Assertions = ts; Rules = rs ; FuncDecls = fm } =
+    let run (ctx : Z3.Context) { Definites = ds; Rules = rs ; FuncDecls = fm } =
         let fixedpoint = ctx.MkFixedpoint ()
 
         let pars = ctx.MkParams ()
@@ -540,21 +544,32 @@ module MuTranslator =
         pars.Add("pdr.flexible_trace", true)
         fixedpoint.Parameters <- pars
         
-        fixedpoint.Assert ts
+        List.iter
+            (fun (view, def) ->
+                 fixedpoint.AddRule (ctx.MkImplies (def, view)))
+            ds
+
+        let unsafe = ctx.MkFuncDecl ("unsafe", [||], ctx.MkBoolSort () :> Z3.Sort)
+        fixedpoint.RegisterRelation unsafe
+        let unsafeapp = unsafe.Apply [| |] :?> Z3.BoolExpr
+
+        List.iter
+            (fun (view, def) ->
+                 fixedpoint.AddRule (ctx.MkImplies (ctx.MkAnd [| (ctx.MkNot def) ; view |],
+                                                    unsafeapp)))
+            ds
+
         Map.iter (fun (s : string) g -> fixedpoint.AddRule (g, ctx.MkSymbol s :> Z3.Symbol)) rs
         Map.iter (fun _ g -> fixedpoint.RegisterRelation g) fm
 
-        Map.map
-            (fun _ g ->
-                 match (fixedpoint.Query [| g |]) with
-                 | Z3.Status.SATISFIABLE ->
-                     MuSat.Sat (fixedpoint.GetAnswer ())
-                 | Z3.Status.UNSATISFIABLE ->
-                     MuSat.Unsat (fixedpoint.GetAnswer ())
-                 | Z3.Status.UNKNOWN ->
-                     MuSat.Unknown (fixedpoint.GetReasonUnknown ())
-                 | _ -> MuSat.Unknown "query result out of bounds")
-            fm
+        match (fixedpoint.Query [| unsafe |]) with
+        | Z3.Status.SATISFIABLE ->
+             MuSat.Sat (fixedpoint.GetAnswer ())
+        | Z3.Status.UNSATISFIABLE ->
+             MuSat.Unsat (fixedpoint.GetAnswer ())
+        | Z3.Status.UNKNOWN ->
+             MuSat.Unknown (fixedpoint.GetReasonUnknown ())
+         | _ -> MuSat.Unknown "query result out of bounds"
 
 
 /// <summary>
