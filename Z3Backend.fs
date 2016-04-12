@@ -63,7 +63,7 @@ module Types =
         { /// <summary>
           ///     List of definite viewdefs, as (view, def) pairs, to check.
           /// </summary>
-          Definites : (Z3.BoolExpr * Z3.BoolExpr) list
+          Definites : (VFunc * BoolExpr) list
           /// <summary>
           ///     Map of (view name, FuncDecl) bindings.
           /// </summary>
@@ -102,6 +102,7 @@ module Types =
 /// </summary>
 module Pretty =            
     open Starling.Core.Pretty
+    open Starling.Core.Expr.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Instantiate.Pretty
     open Starling.Core.Z3.Pretty
@@ -119,8 +120,8 @@ module Pretty =
             Indented
             [ (String "Definites",
                ds |>
-               List.map (fun (f, d) -> equality (printZ3Exp f)
-                                                (printZ3Exp d))
+               List.map (fun (f, d) -> equality (printVFunc f)
+                                                (printBoolExpr d))
                |> vsep)
               (String "Rules",
                rs
@@ -262,6 +263,20 @@ module Translator =
 module MuTranslator =
     open Starling.Core.Z3.Expr
 
+    /// <summary>
+    ///     Converts a type into a Z3 sort.
+    /// </summary>
+    /// <param name="ctx">
+    ///     The Z3 context to use to generate the sorts.
+    /// </param>
+    /// <returns>
+    ///     A function mapping types to sorts.
+    /// </returns>
+    let typeToSort (ctx : Z3.Context) =
+        function
+        | Type.Int -> ctx.MkIntSort () :> Z3.Sort
+        | Type.Bool -> ctx.MkBoolSort () :> Z3.Sort
+
     (*
      * View definitions
      *)
@@ -281,12 +296,7 @@ module MuTranslator =
     let funcDeclOfDFunc (ctx : Z3.Context) { Name = n ; Params = pars } =
         ctx.MkFuncDecl(
             n,
-            pars
-            |> Seq.map
-                  (fst >> function
-                          | Type.Int -> ctx.MkIntSort () :> Z3.Sort
-                          | Type.Bool -> ctx.MkBoolSort () :> Z3.Sort)
-            |> Seq.toArray,
+            pars |> Seq.map (fst >> typeToSort ctx) |> Seq.toArray,
             ctx.MkBoolSort () :> Z3.Sort)
 
     /// <summary>
@@ -342,9 +352,9 @@ module MuTranslator =
                         which we need to convert to expression format first.
                         dex uses Unmarked constants, so we do too. *)
                      let eparams = List.map (uncurry (mkVarExp Unmarked)) vs.Params
-                     let funcApp = applyFunc ctx funcDecl eparams
+                     let vfunc = { Name = vs.Name ; Params = eparams }
 
-                     (funcApp, boolToZ3 ctx dex))
+                     (vfunc, dex))
                 ex
 
         (mapEntry, rule)
@@ -424,6 +434,66 @@ module MuTranslator =
      *)
 
     /// <summary>
+    ///     Constructs a rule implying view, whose body is a conjunction of
+    ///     a <c>BoolExpr</c> and a <c>GView</c>.
+    /// </summary>
+    /// <param name="ctx">
+    ///     The Z3 context to use to model the func.
+    /// </param>
+    /// <param name="funcDecls">
+    ///     The map of <c>FuncDecls</c> to use in the modelling.
+    /// </param>
+    /// <param name="bodyExpr">
+    ///     The body, as a Starling <c>BoolExpr</c>.  May be <c>BTrue</c> if
+    ///     no view is desired.
+    /// </param>
+    /// <param name="bodyView">
+    ///     The view part, as a Starling <c>GView</c>.  May be emp if no view
+    ///     is desired.
+    /// </param>
+    /// <param name="head">
+    ///     The <c>VFunc</c> making up the head.
+    /// </param>
+    /// <returns>
+    ///     An <c>Option</c>al rule, which is present only if <c>head</c> is defined
+    ///     in <c>funcDecls</c>.
+    ///
+    ///     If present, the rule is of the form <c>(forall (vars) (=> body
+    ///     func))</c>, where <c>vars</c> is the union of the variables in
+    ///     <c>body</c>, <c>gview</c> and <c>head</c>.
+    /// </returns>
+    let mkRule (ctx : Z3.Context) funcDecls bodyExpr bodyView head =
+        let vars =
+            seq {
+                yield! (varsInBool bodyExpr)
+
+                for gfunc in Multiset.toFlatList bodyView do
+                    for param in gfunc.Item.Params do
+                        yield! (varsIn param)
+
+                for param in head.Params do
+                    yield! (varsIn param)
+            }
+            // Make sure we don't quantify over a variable twice.
+            |> Set.ofSeq
+            |> Set.map (fun (name, ty) ->
+                            ctx.MkConst (constToString name, typeToSort ctx ty))
+            |> Set.toArray
+
+        let bodyExprZ = boolToZ3 ctx bodyExpr
+
+        let bodyZ =
+            if (Multiset.length bodyView = 0)
+            then bodyExprZ
+            else ctx.MkAnd [| bodyExprZ ; translateGView ctx funcDecls bodyView |]
+
+        let headZ = translateVFunc ctx funcDecls head
+        if headZ.IsTrue
+        then None
+        else Some (ctx.MkForall (vars, ctx.MkImplies (bodyZ, headZ))
+                   :> Z3.BoolExpr)
+
+    /// <summary>
     ///     Constructs a rule for initialising a variable.
     /// </summary>
     /// <param name="ctx">
@@ -445,27 +515,23 @@ module MuTranslator =
             |> Map.toList
             |> List.map (uncurry (flip (mkVarExp Unmarked)))
 
-        let head = 
-            translateVFunc ctx funcDecls { Name = "emp" ; Params = vpars }
-            
-        (* MuZ3 doesn't like 'true' appearing in the head of a rule, so
-           don't emit if emp resolved to this. *)
-        if head.IsTrue
-        then Seq.empty
-        else
-            // TODO(CaptainHayashi): actually get these initialisations from
-            // somewhere.
-            let body =
-                vpars
-                |> List.map
-                       (fun v -> BEq (v,
-                                      match v with
-                                      | AExpr _ -> AExpr (AInt 0L)
-                                      | BExpr _ -> BExpr (BFalse)))
-                |> mkAnd
-                |> boolToZ3 ctx
+        // TODO(CaptainHayashi): actually get these initialisations from
+        // somewhere.
+        let body =
+            vpars
+            |> List.map
+                   (fun v -> BEq (v,
+                                  match v with
+                                  | AExpr _ -> AExpr (AInt 0L)
+                                  | BExpr _ -> BExpr (BFalse)))
+            |> mkAnd
 
-            Seq.singleton ("init", ctx.MkImplies (body, head))
+        let head = { Name = "emp" ; Params = vpars }
+
+        mkRule ctx funcDecls body Multiset.empty head
+        |> function
+           | Some x -> Seq.singleton ("init", x)
+           | None -> Seq.empty
 
 
     (*
@@ -482,23 +548,15 @@ module MuTranslator =
     ///     The map of <c>FuncDecl</c>s to use when creating view
     ///     applications.
     /// </param>
-    /// <param name="svars">
-    ///     The environment of active global variables.
-    /// </param>
     /// <param name="_arg1">
     ///     Pair of term name and <c>Term</c>.
     /// </param>
     /// <returns>
-    ///     A pair of the term name and the Z3 <c>BoolExpr</c> representing the
-    ///     rule form of the proof term.
+    ///     An <c>Option</c> containing a pair of the term name and the Z3
+    ///     <c>BoolExpr</c> representing the rule form of the proof term.
     /// </returns>
-    let translateTerm ctx funcDecls svars (name : string,
-                                           {Cmd = c ; WPre = w ; Goal = g}) =
-        let cZ = boolToZ3 ctx c
-        let wZ = translateGView ctx funcDecls w
-        let gZ = translateVFunc ctx funcDecls g
-
-        (name, ctx.MkImplies (ctx.MkAnd [| cZ ; wZ |], gZ))
+    let translateTerm ctx funcDecls (name : string, {Cmd = c ; WPre = w ; Goal = g}) =
+        mkRule ctx funcDecls c w g |> Option.map (mkPair name)
 
     /// <summary>
     ///     Constructs muZ3 rules and goals for a model.
@@ -517,7 +575,7 @@ module MuTranslator =
     let translate ctx { Globals = svars ; ViewDefs = ds ; Axioms = xs } =
         let funcDecls, definites = translateViewDefs ctx ds
         let vrules = translateVariables ctx funcDecls svars
-        let trules = xs |> Map.toSeq |> Seq.map (translateTerm ctx funcDecls svars)
+        let trules = xs |> Map.toSeq |> Seq.choose (translateTerm ctx funcDecls)
 
         { Definites = List.ofSeq definites
           Rules = Seq.append vrules trules |> Map.ofSeq
@@ -543,10 +601,12 @@ module MuTranslator =
         pars.Add("engine", ctx.MkSymbol("pdr"))
         pars.Add("pdr.flexible_trace", true)
         fixedpoint.Parameters <- pars
-        
+
         List.iter
             (fun (view, def) ->
-                 fixedpoint.AddRule (ctx.MkImplies (def, view)))
+                 match (mkRule ctx fm def Multiset.empty view) with
+                 | Some rule -> fixedpoint.AddRule rule
+                 | None -> ())
             ds
 
         let unsafe = ctx.MkFuncDecl ("unsafe", [||], ctx.MkBoolSort () :> Z3.Sort)
@@ -555,8 +615,23 @@ module MuTranslator =
 
         List.iter
             (fun (view, def) ->
-                 fixedpoint.AddRule (ctx.MkImplies (ctx.MkAnd [| (ctx.MkNot def) ; view |],
-                                                    unsafeapp)))
+                 // TODO(CaptainHayashi): de-duplicate this with mkRule.
+                 let vars =
+                    seq {
+                        yield! (varsInBool def)
+                        for param in view.Params do
+                            yield! (varsIn param)
+                    }
+                    |> Set.ofSeq
+                    |> Set.map (fun (name, ty) ->
+                                    ctx.MkConst (constToString name, typeToSort ctx ty))
+                    |> Set.toArray
+
+                 fixedpoint.AddRule (
+                    ctx.MkForall (vars,
+                                  ctx.MkImplies (ctx.MkAnd [| def |> mkNot |> boolToZ3 ctx
+                                                              translateVFunc ctx fm view |],
+                                                 unsafeapp))))
             ds
 
         Map.iter (fun (s : string) g -> fixedpoint.AddRule (g, ctx.MkSymbol s :> Z3.Symbol)) rs
