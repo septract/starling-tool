@@ -411,6 +411,7 @@ module MuTranslator =
 
     /// <summary>
     ///     Models a <c>GView</c>.
+    /// </summary>
     /// <param name="ctx">
     ///     The Z3 context to use to model the func.
     /// </param>
