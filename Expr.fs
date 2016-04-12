@@ -386,20 +386,26 @@ let getFresh fg =
  * Expression probing
  *)
 
-/// Returns a set of all variables used in an arithmetic expression.
+/// <summary>
+///     Returns a set of all variables used in an arithmetic expression,
+///     paired with their types.
+/// </summary>
 let rec varsInArith =
     function
-    | AConst c -> Set.singleton c
+    | AConst c -> Set.singleton (c, Type.Int)
     | AInt _ -> Set.empty
     | AAdd xs -> xs |> Seq.map varsInArith |> Set.unionMany
     | ASub xs -> xs |> Seq.map varsInArith |> Set.unionMany
     | AMul xs -> xs |> Seq.map varsInArith |> Set.unionMany
     | ADiv (x, y) -> Set.union (varsInArith x) (varsInArith y)
 
-/// Returns a set of all variables used in a Boolean expression.
+/// <summary>
+///     Returns a set of all variables used in a Boolean expression,
+///     paired with their types.
+/// </summary>
 and varsInBool =
     function
-    | BConst c -> Set.singleton c
+    | BConst c -> Set.singleton (c, Type.Bool)
     | BTrue -> Set.empty
     | BFalse -> Set.empty
     | BAnd xs -> xs |> Seq.map varsInBool |> Set.unionMany
@@ -512,8 +518,8 @@ let (|SimpleExpr|CompoundExpr|) =
 
 /// Partial pattern that matches a Boolean expression in terms of exactly one /
 /// constant.
-let rec (|ConstantBoolFunction|_|) = varsInBool >> onlyOne
+let rec (|ConstantBoolFunction|_|) = varsInBool >> Seq.map fst >> onlyOne
 
 /// Partial pattern that matches a Boolean expression in terms of exactly one /
 /// constant.
-let rec (|ConstantArithFunction|_|) = varsInArith >> onlyOne
+let rec (|ConstantArithFunction|_|) = varsInArith >> Seq.map fst >> onlyOne

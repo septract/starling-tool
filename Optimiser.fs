@@ -460,7 +460,7 @@ module Graph =
                       >> Set.toSeq
                       >> Seq.forall
                              (// ...the variable is thread-local.
-                              fun c ->
+                              fun (c, _) ->
                                   match (Map.tryFind (stripMark c) tVars) with
                                   | Some _ -> true
                                   | _ -> false))
