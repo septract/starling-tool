@@ -294,95 +294,38 @@ let model =
 ///     The result of running the Starling request, as a <c>Result</c>
 ///     over <c>Response</c> and <c>Error</c>.
 /// </returns>
-let runStarling optS verbose =
+let runStarling optS verbose request =
     let optR, optA = Optimiser.Utils.parseOptString optS
 
-    function
+    let failPhase = fun _ -> fail (Error.Other "Internal")
+    let backend =
+            match request with
+            | Request.HSF   -> hsf >> lift Response.HSF
+            | Request.Z3 rq -> z3 rq >> lift Response.Z3
+            | _             -> failPhase
+
+    let choose b t e = if b then lift t else e
+
+    match request with
     | Request.Frontend rq -> frontend rq >> lift Response.Frontend
-    | Request.GraphOptimise ->
+    | _ ->
         model
-        >> graphOptimise optR optA verbose
-        >> lift Response.GraphOptimise
-    | Request.Axiomatise ->
-        model
-        >> graphOptimise optR optA verbose
-        >> axiomatise
-        >> lift Response.Axiomatise
-    | Request.GoalAdd ->
-        model
-        >> graphOptimise optR optA verbose
-        >> axiomatise
-        >> goalAdd
-        >> lift Response.GoalAdd
-    | Request.TermGen ->
-        model
-        >> graphOptimise optR optA verbose
-        >> axiomatise
-        >> goalAdd
-        >> termGen
-        >> lift Response.TermGen
-    | Request.Reify ->
-        model
-        >> graphOptimise optR optA verbose
-        >> axiomatise
-        >> goalAdd
-        >> termGen
-        >> reify
-        >> lift Response.Reify
-    | Request.Flatten ->
-        model
-        >> graphOptimise optR optA verbose
-        >> axiomatise
-        >> goalAdd
-        >> termGen
-        >> reify
-        >> flatten
-        >> lift Response.Flatten
-    | Request.Semantics ->
-        model
-        >> graphOptimise optR optA verbose
-        >> axiomatise
-        >> goalAdd
-        >> termGen
-        >> reify
-        >> flatten
-        >> semantics
-        >> lift Response.Semantics
-    | Request.TermOptimise ->
-        model
-        >> graphOptimise optR optA verbose
-        >> axiomatise
-        >> goalAdd
-        >> termGen
-        >> reify
-        >> flatten
-        >> semantics
-        >> termOptimise optR optA verbose
-        >> lift Response.TermOptimise
-    | Request.Z3 rq ->
-        model
-        >> graphOptimise optR optA verbose
-        >> axiomatise
-        >> goalAdd
-        >> termGen
-        >> reify
-        >> flatten
-        >> semantics
-        >> termOptimise optR optA verbose
-        >> z3 rq
-        >> lift Response.Z3
-    | Request.HSF ->
-        model
-        >> graphOptimise optR optA verbose
-        >> axiomatise
-        >> goalAdd
-        >> termGen
-        >> reify
-        >> flatten
-        >> semantics
-        >> termOptimise optR optA verbose
-        >> hsf
-        >> lift Response.HSF
+        >> (graphOptimise optR optA verbose)
+        >> choose (request = Request.GraphOptimise) Response.GraphOptimise
+           (axiomatise
+            >> choose (request = Request.Axiomatise) Response.Axiomatise
+               (goalAdd
+               >> choose (request = Request.GoalAdd) Response.GoalAdd
+                  (termGen
+                   >> choose (request = Request.TermGen) Response.TermGen
+                      (reify
+                       >> choose (request = Request.Reify) Response.Reify
+                          (flatten
+                           >> choose (request = Request.Flatten) Response.Flatten
+                              (semantics
+                               >> choose (request = Request.Semantics) Response.Semantics
+                                    backend))))))
+
 
 /// Runs Starling with the given options, and outputs the results.
 let mainWithOptions opts =
