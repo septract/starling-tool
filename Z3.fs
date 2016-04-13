@@ -33,36 +33,38 @@ module Pretty =
 /// </summary>
 module Expr =
     /// Converts a Starling arithmetic expression to a Z3 ArithExpr.
-    let rec arithToZ3 (ctx: Z3.Context) =
+    let rec arithToZ3 reals (ctx: Z3.Context) =
         function
+        | AConst c when reals -> c |> constToString |> ctx.MkRealConst :> Z3.ArithExpr
         | AConst c -> c |> constToString |> ctx.MkIntConst :> Z3.ArithExpr
+        | AInt i when reals -> (i |> ctx.MkReal) :> Z3.ArithExpr
         | AInt i -> (i |> ctx.MkInt) :> Z3.ArithExpr
-        | AAdd xs -> ctx.MkAdd (xs |> Seq.map (arithToZ3 ctx) |> Seq.toArray)
-        | ASub xs -> ctx.MkSub (xs |> Seq.map (arithToZ3 ctx) |> Seq.toArray)
-        | AMul xs -> ctx.MkMul (xs |> Seq.map (arithToZ3 ctx) |> Seq.toArray)
-        | ADiv (x, y) -> ctx.MkDiv (arithToZ3 ctx x, arithToZ3 ctx y)
+        | AAdd xs -> ctx.MkAdd (xs |> Seq.map (arithToZ3 reals ctx) |> Seq.toArray)
+        | ASub xs -> ctx.MkSub (xs |> Seq.map (arithToZ3 reals ctx) |> Seq.toArray)
+        | AMul xs -> ctx.MkMul (xs |> Seq.map (arithToZ3 reals ctx) |> Seq.toArray)
+        | ADiv (x, y) -> ctx.MkDiv (arithToZ3 reals ctx x, arithToZ3 reals ctx y)
 
     /// Converts a Starling Boolean expression to a Z3 ArithExpr.
-    and boolToZ3 (ctx : Z3.Context) =
+    and boolToZ3 reals (ctx : Z3.Context) =
         function
         | BConst c -> c |> constToString |> ctx.MkBoolConst
         | BTrue -> ctx.MkTrue ()
         | BFalse -> ctx.MkFalse ()
-        | BAnd xs -> ctx.MkAnd (xs |> Seq.map (boolToZ3 ctx) |> Seq.toArray)
-        | BOr xs -> ctx.MkOr (xs |> Seq.map (boolToZ3 ctx) |> Seq.toArray)
-        | BImplies (x, y) -> ctx.MkImplies (boolToZ3 ctx x, boolToZ3 ctx y)
-        | BEq (x, y) -> ctx.MkEq (exprToZ3 ctx x, exprToZ3 ctx y)
-        | BGt (x, y) -> ctx.MkGt (arithToZ3 ctx x, arithToZ3 ctx y)
-        | BGe (x, y) -> ctx.MkGe (arithToZ3 ctx x, arithToZ3 ctx y)
-        | BLe (x, y) -> ctx.MkLe (arithToZ3 ctx x, arithToZ3 ctx y)
-        | BLt (x, y) -> ctx.MkLt (arithToZ3 ctx x, arithToZ3 ctx y)
-        | BNot x -> x |> boolToZ3 ctx |> ctx.MkNot
+        | BAnd xs -> ctx.MkAnd (xs |> Seq.map (boolToZ3 reals ctx) |> Seq.toArray)
+        | BOr xs -> ctx.MkOr (xs |> Seq.map (boolToZ3 reals ctx) |> Seq.toArray)
+        | BImplies (x, y) -> ctx.MkImplies (boolToZ3 reals ctx x, boolToZ3 reals ctx y)
+        | BEq (x, y) -> ctx.MkEq (exprToZ3 reals ctx x, exprToZ3 reals ctx y)
+        | BGt (x, y) -> ctx.MkGt (arithToZ3 reals ctx x, arithToZ3 reals ctx y)
+        | BGe (x, y) -> ctx.MkGe (arithToZ3 reals ctx x, arithToZ3 reals ctx y)
+        | BLe (x, y) -> ctx.MkLe (arithToZ3 reals ctx x, arithToZ3 reals ctx y)
+        | BLt (x, y) -> ctx.MkLt (arithToZ3 reals ctx x, arithToZ3 reals ctx y)
+        | BNot x -> x |> boolToZ3 reals ctx |> ctx.MkNot
 
     /// Converts a Starling expression to a Z3 Expr.
-    and exprToZ3 (ctx: Z3.Context) =
+    and exprToZ3 reals (ctx: Z3.Context) =
         function
-        | BExpr b -> boolToZ3 ctx b :> Z3.Expr
-        | AExpr a -> arithToZ3 ctx a :> Z3.Expr
+        | BExpr b -> boolToZ3 reals ctx b :> Z3.Expr
+        | AExpr a -> arithToZ3 reals ctx a :> Z3.Expr
 
 /// <summary>
 ///     Z3 invocation.

@@ -163,14 +163,18 @@ module Translator =
     /// <summary>
     ///     Converts a type into a Z3 sort.
     /// </summary>
+    /// <param name="reals">
+    ///     Whether to use Real instead of Int for integers.
+    /// </param>
     /// <param name="ctx">
     ///     The Z3 context to use to generate the sorts.
     /// </param>
     /// <returns>
     ///     A function mapping types to sorts.
     /// </returns>
-    let typeToSort (ctx : Z3.Context) =
+    let typeToSort reals (ctx : Z3.Context) =
         function
+        | Type.Int when reals -> ctx.MkRealSort () :> Z3.Sort
         | Type.Int -> ctx.MkIntSort () :> Z3.Sort
         | Type.Bool -> ctx.MkBoolSort () :> Z3.Sort
 
@@ -181,6 +185,9 @@ module Translator =
     /// <summary>
     ///     Creates a <c>FuncDecl</c> from a <c>DFunc</c>.
     /// </summary>
+    /// <param name="reals">
+    ///     Whether to use Real instead of Int for integers.
+    /// </param>
     /// <param name="ctx">
     ///     The Z3 context being used to create the <c>FuncDecl</c>.
     /// </param>
@@ -190,16 +197,19 @@ module Translator =
     /// <returns>
     ///     A <c>FuncDecl</c> modelling the <c>DFunc</c>.
     /// </returns>
-    let funcDeclOfDFunc (ctx : Z3.Context) { Name = n ; Params = pars } =
+    let funcDeclOfDFunc reals (ctx : Z3.Context) { Name = n ; Params = pars } =
         ctx.MkFuncDecl(
             n,
-            pars |> Seq.map (fst >> typeToSort ctx) |> Seq.toArray,
+            pars |> Seq.map (fst >> typeToSort reals ctx) |> Seq.toArray,
             ctx.MkBoolSort () :> Z3.Sort)
 
     /// <summary>
     ///     Creates an application of a <c>FuncDecl</c> to a list of
     ///     <c>Expr</c> parameters.
     /// </summary>
+    /// <param name="reals">
+    ///     Whether to use Real instead of Int for integers.
+    /// </param>
     /// <param name="ctx">
     ///     The Z3 context being used to model the parameters.
     /// </param>
@@ -213,14 +223,17 @@ module Translator =
     ///     A <c>BoolExpr</c> representing an application of
     ///     <paramref name="ps"/> to <paramref name="funcDecl"/>.
     /// </returns>
-    let applyFunc ctx (funcDecl : Z3.FuncDecl) ps =
-        let psa : Z3.Expr[] = ps |> List.map (exprToZ3 ctx) |> List.toArray
+    let applyFunc reals ctx (funcDecl : Z3.FuncDecl) ps =
+        let psa : Z3.Expr[] = ps |> List.map (exprToZ3 reals ctx) |> List.toArray
         funcDecl.Apply psa
         :?> Z3.BoolExpr
 
     /// <summary>
     ///     Processes a view definition for MuZ3.
     /// </summary>
+    /// <param name="reals">
+    ///     Whether to use Real instead of Int for integers.
+    /// </param>
     /// <param name="ctx">
     ///     The Z3 context being used to model the <c>ViewDef</c>.
     /// </param>
@@ -232,8 +245,8 @@ module Translator =
     ///     produced for the view, and an optional <c>BoolExpr</c>
     ///     assertion defining the view.
     /// </returns>
-    let translateViewDef (ctx : Z3.Context) ( { View = vs; Def = ex } : ViewDef<DFunc> ) =
-        let funcDecl = funcDeclOfDFunc ctx vs
+    let translateViewDef reals (ctx : Z3.Context) ( { View = vs; Def = ex } : ViewDef<DFunc> ) =
+        let funcDecl = funcDeclOfDFunc reals ctx vs
         let mapEntry = (vs.Name, funcDecl)
 
         let rule =
@@ -260,6 +273,9 @@ module Translator =
     /// <summary>
     ///     Constructs a declaration map and rule list from <c>ViewDef</c>s.
     /// </summary>
+    /// <param name="reals">
+    ///     Whether to use Real instead of Int for integers.
+    /// </param>
     /// <param name="ctx">
     ///     The Z3 context being used to model the <c>ViewDef</c>s.
     /// </param>
@@ -270,9 +286,9 @@ module Translator =
     ///     A tuple of a <c>Map</c> binding names to <c>FuncDecl</c>s and a
     ///     list of (view, def) pairs defining definite viewdefs.
     /// </returns>
-    let translateViewDefs ctx ds =
+    let translateViewDefs reals ctx ds =
         ds
-        |> Seq.map (translateViewDef ctx)
+        |> Seq.map (translateViewDef reals ctx)
         |> List.ofSeq
         |> List.unzip
         (* The LHS contains a list of tuples that need to make a map.
@@ -286,6 +302,9 @@ module Translator =
     /// <summary>
     ///     Models a <c>VFunc</c>.
     /// </summary>
+    /// <param name="reals">
+    ///     Whether to use Real instead of Int for integers.
+    /// </param>
     /// <param name="ctx">
     ///     The Z3 context to use to model the func.
     /// </param>
@@ -302,14 +321,20 @@ module Translator =
     ///     with the parameters in <paramref name="_arg1"/>.
     ///     Else, it is true.
     /// </returns>
-    let translateVFunc ctx (funcDecls : Map<string, Z3.FuncDecl>) { Name = n ; Params = ps } =
+    let translateVFunc reals
+                       ctx
+                       (funcDecls : Map<string, Z3.FuncDecl>)
+                       { Name = n ; Params = ps } =
         match funcDecls.TryFind n with
-        | Some fd -> applyFunc ctx fd ps
+        | Some fd -> applyFunc reals ctx fd ps
         | None -> ctx.MkTrue ()
 
     /// <summary>
     ///     Models a <c>GView</c>.
     /// </summary>
+    /// <param name="reals">
+    ///     Whether to use Real instead of Int for integers.
+    /// </param>
     /// <param name="ctx">
     ///     The Z3 context to use to model the func.
     /// </param>
@@ -320,17 +345,17 @@ module Translator =
     ///     A function taking a <c>GView</c> and returning a Z3
     ///     Boolean expression characterising it.
     /// </returns>
-    let translateGView (ctx : Z3.Context) funcDecls =
+    let translateGView reals (ctx : Z3.Context) funcDecls =
         Multiset.toFlatSeq
         >> Seq.choose
                (fun { Cond = g ; Item = v } ->
-                    let vZ = translateVFunc ctx funcDecls v
+                    let vZ = translateVFunc reals ctx funcDecls v
                     if (vZ.IsTrue)
                     then None
                     else Some <|
                          if (isTrue g)
                          then vZ
-                         else (ctx.MkImplies (boolToZ3 ctx g, vZ)))
+                         else (ctx.MkImplies (boolToZ3 reals ctx g, vZ)))
         >> Seq.toArray
         >> (fun a -> ctx.MkAnd a)
 
@@ -391,6 +416,9 @@ module Translator =
     ///     Constructs a rule implying a view, whose body is a conjunction of
     ///     a <c>BoolExpr</c> and a <c>GView</c>.
     /// </summary>
+    /// <param name="reals">
+    ///     Whether to use Real instead of Int for integers.
+    /// </param>
     /// <param name="ctx">
     ///     The Z3 context to use to model the rule.
     /// </param>
@@ -416,7 +444,7 @@ module Translator =
     ///     func))</c>, where <c>vars</c> is the union of the variables in
     ///     <c>body</c>, <c>gview</c> and <c>head</c>.
     /// </returns>
-    let mkRule (ctx : Z3.Context) funcDecls bodyExpr bodyView head =
+    let mkRule reals (ctx : Z3.Context) funcDecls bodyExpr bodyView head =
         let vars =
             seq {
                 yield! (varsInBool bodyExpr)
@@ -429,17 +457,17 @@ module Translator =
             // Make sure we don't quantify over a variable twice.
             |> Set.ofSeq
             |> Set.map (fun (name, ty) ->
-                            ctx.MkConst (constToString name, typeToSort ctx ty))
+                            ctx.MkConst (constToString name, typeToSort reals ctx ty))
             |> Set.toArray
 
-        let bodyExprZ = boolToZ3 ctx bodyExpr
+        let bodyExprZ = boolToZ3 reals ctx bodyExpr
 
         let bodyZ =
             if (Multiset.length bodyView = 0)
             then bodyExprZ
-            else ctx.MkAnd [| bodyExprZ ; translateGView ctx funcDecls bodyView |]
+            else ctx.MkAnd [| bodyExprZ ; translateGView reals ctx funcDecls bodyView |]
 
-        let headZ = translateVFunc ctx funcDecls head
+        let headZ = translateVFunc reals ctx funcDecls head
 
         mkQuantifiedEntailment ctx vars bodyZ headZ
 
@@ -451,6 +479,9 @@ module Translator =
     /// <summary>
     ///     Constructs a rule for initialising a variable.
     /// </summary>
+    /// <param name="reals">
+    ///     Whether to use Real instead of Int for integers.
+    /// </param>
     /// <param name="ctx">
     ///     The Z3 context to use to model the rule.
     /// </param>
@@ -464,7 +495,7 @@ module Translator =
     ///     A sequence containing at most one pair of <c>string</c> and
     ///     Z3 <c>BoolExpr</c> representing the variable initialisation rule.
     /// </returns>
-    let translateVariables ctx funcDecls svars =
+    let translateVariables reals ctx funcDecls svars =
         let vpars =
             svars
             |> Map.toList
@@ -483,7 +514,7 @@ module Translator =
 
         let head = { Name = "emp" ; Params = vpars }
 
-        mkRule ctx funcDecls body Multiset.empty head
+        mkRule reals ctx funcDecls body Multiset.empty head
         |> function
            | Some x -> Seq.singleton ("init", x)
            | None -> Seq.empty
@@ -496,6 +527,9 @@ module Translator =
     /// <summary>
     ///     Constructs a muZ3 rule for a proof term.
     /// </summary>
+    /// <param name="reals">
+    ///     Whether to use Real instead of Int for integers.
+    /// </param>
     /// <param name="ctx">
     ///     The Z3 context to use for modelling the term.
     /// </param>
@@ -510,12 +544,15 @@ module Translator =
     ///     An <c>Option</c> containing a pair of the term name and the Z3
     ///     <c>BoolExpr</c> representing the rule form of the proof term.
     /// </returns>
-    let translateTerm ctx funcDecls (name : string, {Cmd = c ; WPre = w ; Goal = g}) =
-        mkRule ctx funcDecls c w g |> Option.map (mkPair name)
+    let translateTerm reals ctx funcDecls (name : string, {Cmd = c ; WPre = w ; Goal = g}) =
+        mkRule reals ctx funcDecls c w g |> Option.map (mkPair name)
 
     /// <summary>
     ///     Constructs muZ3 rules and goals for a model.
     /// </summary>
+    /// <param name="reals">
+    ///     Whether to use Real instead of Int for integers.
+    /// </param>
     /// <param name="ctx">
     ///     The Z3 context to use for modelling the fixpoint.
     /// </param>
@@ -527,10 +564,10 @@ module Translator =
     ///     used to prove the model, and the map of names to <c>FuncDecl</c>s
     ///     to use to start queries.
     /// </returns>
-    let translate ctx { Globals = svars ; ViewDefs = ds ; Axioms = xs } =
-        let funcDecls, definites = translateViewDefs ctx ds
-        let vrules = translateVariables ctx funcDecls svars
-        let trules = xs |> Map.toSeq |> Seq.choose (translateTerm ctx funcDecls)
+    let translate reals ctx { Globals = svars ; ViewDefs = ds ; Axioms = xs } =
+        let funcDecls, definites = translateViewDefs reals ctx ds
+        let vrules = translateVariables reals ctx funcDecls svars
+        let trules = xs |> Map.toSeq |> Seq.choose (translateTerm reals ctx funcDecls)
 
         { Definites = List.ofSeq definites
           Rules = Seq.append vrules trules |> Map.ofSeq
@@ -546,6 +583,9 @@ module Run =
     /// <summary>
     ///     Generates a MuZ3 fixedpoint.
     /// </summary>
+    /// <param name="reals">
+    ///     Whether to use Real instead of Int for integers.
+    /// </param>
     /// <param name="ctx">
     ///     The Z3 context to use for modelling the fixedpoint.
     /// </param>
@@ -555,7 +595,7 @@ module Run =
     /// <returns>
     ///     The pair of Z3 <c>Fixedpoint</c> and unsafeness <c>FuncDecl</c>.
     /// </returns>
-    let fixgen (ctx : Z3.Context) { Definites = ds; Rules = rs ; FuncDecls = fm } =
+    let fixgen reals (ctx : Z3.Context) { Definites = ds; Rules = rs ; FuncDecls = fm } =
         let fixedpoint = ctx.MkFixedpoint ()
 
         let pars = ctx.MkParams ()
@@ -564,7 +604,7 @@ module Run =
 
         List.iter
             (fun (view, def) ->
-                 match (Translator.mkRule ctx fm def Multiset.empty view) with
+                 match (Translator.mkRule reals ctx fm def Multiset.empty view) with
                  | Some rule -> fixedpoint.AddRule rule
                  | None -> ())
             ds
@@ -585,15 +625,15 @@ module Run =
                      |> Set.ofSeq
                      |> Set.map (fun (name, ty) ->
                                      ctx.MkConst (constToString name,
-                                                  Translator.typeToSort ctx ty))
+                                                  Translator.typeToSort reals ctx ty))
                      |> Set.toArray
 
                  // Introduce 'V ^ ¬D(V) -> unsafe'.
                  Translator.mkQuantifiedEntailment
                      ctx
                      vars
-                     (ctx.MkAnd [| def |> mkNot |> boolToZ3 ctx
-                                   Translator.translateVFunc ctx fm view |])
+                     (ctx.MkAnd [| def |> mkNot |> boolToZ3 reals ctx
+                                   Translator.translateVFunc reals ctx fm view |])
                      unsafeapp
                  |> Option.iter (fixedpoint.AddRule))
             ds
@@ -636,24 +676,28 @@ let sat = uncurry Run.run
 /// <summary>
 ///     The Starling MuZ3 backend driver.
 /// </summary>
+/// <param name="reals">
+///     Whether to use Real instead of Int.
+///     This can be faster, but is slightly inaccurate.
+/// </param>
 /// <param name="req">
 ///     The request to handle.
 /// </param>
 /// <returns>
 ///     A function implementing the chosen MuZ3 backend process.
 /// </returns>
-let run req =
+let run reals req =
     use ctx = new Z3.Context()
     match req with
     | Request.Translate ->
-        translate ctx
+        translate reals ctx
         >> Response.Translate
     | Request.Fix ->
-        translate ctx
-        >> fix ctx
+        translate reals ctx
+        >> fix reals ctx
         >> Response.Fix
     | Request.Sat ->
-        translate ctx
-        >> fix ctx
+        translate reals ctx
+        >> fix reals ctx
         >> sat
         >> Response.Sat

@@ -180,7 +180,7 @@ module Translator =
         |> bind (fun ft -> tryMapAxioms (interpretTerm ft) model)
 
     /// Combines the components of a reified term.
-    let combineTerm (ctx: Z3.Context) {Cmd = c; WPre = w; Goal = g} =
+    let combineTerm reals (ctx: Z3.Context) {Cmd = c; WPre = w; Goal = g} =
         (* This is effectively asking Z3 to refute (c ^ w => g).
          *
          * This arranges to:
@@ -189,10 +189,10 @@ module Translator =
          *   - ((c^w) ^ ¬g) deMorgan
          *   - (c^w^¬g) associativity.
          *)
-        boolToZ3 ctx (mkAnd [c ; w; mkNot g] )
+        boolToZ3 reals ctx (mkAnd [c ; w; mkNot g] )
 
     /// Combines reified terms into a list of Z3 terms.
-    let combineTerms ctx = mapAxioms (combineTerm ctx)
+    let combineTerms reals ctx = mapAxioms (combineTerm reals ctx)
 
 
 /// <summary>
@@ -212,27 +212,31 @@ module Run =
 /// Shorthand for the translator stage of the Z3 pipeline.
 let translate = Translator.interpret
 /// Shorthand for the combination stage of the Z3 pipeline.
-let combine = Translator.combineTerms >> lift
+let combine reals = Translator.combineTerms reals >> lift
 /// Shorthand for the satisfiability stage of the Z3 pipeline.
 let sat = Run.run >> lift
 
 /// <summary>
 ///     The Starling Z3 backend driver.
 /// </summary>
+/// <param name="reals">
+///     Whether to use Real instead of Int.
+///     This can be faster, but is slightly inaccurate.
+/// </param>
 /// <param name="req">
 ///     The request to handle.
 /// </param>
 /// <returns>
 ///     A function implementing the chosen Z3 backend process.
 /// </returns>
-let run resp =
+let run reals req =
     use ctx = new Z3.Context()
-    match resp with
+    match req with
     | Request.Translate ->
         translate
-        >> lift (mapAxioms (mapTerm (Expr.boolToZ3 ctx)
-                                    (Expr.boolToZ3 ctx)
-                                    (Expr.boolToZ3 ctx)))
+        >> lift (mapAxioms (mapTerm (Expr.boolToZ3 reals ctx)
+                                    (Expr.boolToZ3 reals ctx)
+                                    (Expr.boolToZ3 reals ctx)))
         >> lift Response.Translate
-    | Request.Combine -> translate >> combine ctx >> lift Response.Combine
-    | Request.Sat -> translate >> combine ctx >> sat ctx >> lift Response.Sat
+    | Request.Combine -> translate >> combine reals ctx >> lift Response.Combine
+    | Request.Sat -> translate >> combine reals ctx >> sat ctx >> lift Response.Sat
