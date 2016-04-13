@@ -149,15 +149,15 @@ let funcsInTable (ftab : FuncTable<'defn>) =
 ///     Checks whether <c>func</c> and <c>_arg1</c> agree on parameter
 ///     count.
 /// </summary>
-/// <parameter name="func">
+/// <param name="func">
 ///     The func being looked up, the process of which this check is part.
-/// </parameter>
-/// <parameter name="_arg1">
+/// </param>
+/// <param name="_arg1">
 ///     An <c>Option</c>al pair of <c>DFunc</c> and its defining
 ///     <c>BoolExpr</c>.
 ///     The value <c>None</c> suggests that <c>func</c> has no definition,
 ///     which can be ok (eg. if the <c>func</c> is a non-defining view).
-/// </parameter>
+/// </param>
 /// <returns>
 ///     A Chessie result, where the <c>ok</c> value is the optional pair of
 ///     prototype func and definition, and the failure value is a
@@ -174,18 +174,18 @@ let checkParamCount func =
 /// <summary>
 ///     Look up <c>func</c> in <c>_arg1</c>.
 ///
-///     <param>
+///     <para>
 ///         This checks that the use of <c>func</c> agrees on the number of
 ///         parameters, but not necessarily types.  You will need to add
 ///         type checking if needed.
-///     </param>
+///     </para>
 /// </summary>
-/// <parameter name="func">
+/// <param name="func">
 ///     The func to look up in <c>_arg1</c>.
-/// </parameter>
-/// <parameter name="_arg1">
+/// </param>
+/// <param name="_arg1">
 ///     An associative sequence mapping <c>Func</c>s to some definition.
-/// </parameter>
+/// </param>
 /// <returns>
 ///     A Chessie result, where the <c>ok</c> value is an <c>Option</c>
 ///     containing the pair of
@@ -202,12 +202,12 @@ let lookup func =
 ///     Checks whether <c>func</c> and <c>_arg1</c> agree on parameter
 ///     types.
 /// </summary>
-/// <parameter name="func">
+/// <param name="func">
 ///     The func being looked up, the process of which this check is part.
-/// </parameter>
-/// <parameter name="def">
+/// </param>
+/// <param name="def">
 ///     The <c>DFunc</c> that <paramref name="func" /> has matched.
-/// </parameter>
+/// </param>
 /// <returns>
 ///     A Chessie result, where the <c>ok</c> value is
 ///     <paramref name="func" />, and the failure value is a
@@ -269,19 +269,19 @@ let paramSubFun {Params = fpars} {Params = dpars} =
 ///     value of <c>expr</c> with the arguments of <c>func</c>
 ///     substituted for the parameters of <c>dfunc</c>.
 /// </summary>
-/// <parameter name="func">
+/// <param name="func">
 ///     The <c>VFunc</c> whose arguments are to be substituted into
 ///     <c>expr</c>.
-/// </parameter>
-/// <parameter name="dfunc">
+/// </param>
+/// <param name="dfunc">
 ///     The <c>VFunc</c> whose parameters in <c>expr</c> are to be
 ///     replaced.
-/// </parameter>
-/// <parameter name="expr">
+/// </param>
+/// <param name="expr">
 ///     The <c>BoolExpr</c> in which each instance of a parameter from
 ///     <c>dfunc</c> is to be replaced with its argument in
 ///     <c>func</c>.
-/// </parameter>
+/// </param>
 /// <returns>
 ///     <c>expr</c> with the substitutions above made.
 /// </returns>
@@ -293,14 +293,14 @@ let substitute func dfunc expr =
 ///     resulting Boolean expression, substituting <c>func.Params</c>
 ///     for the parameters in the expression.
 /// </summary>
-/// <parameter name="func">
+/// <param name="func">
 ///     The <c>VFunc</c> whose arguments are to be substituted into
 ///     its definition in <c>_arg1</c>.
-/// </parameter>
-/// <parameter name="_arg1">
+/// </param>
+/// <param name="_arg1">
 ///     The <c>FuncTable</c> whose definition for <c>func</c> is to be
 ///     instantiated.
-/// </parameter>
+/// </param>
 /// <returns>
 ///     The instantiation of <c>func</c> as an <c>Option</c>al
 ///     <c>BoolExpr</c>.

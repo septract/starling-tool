@@ -198,9 +198,9 @@ module Translator =
     /// <summary>
     ///   Tries to make a <c>FuncTable</c> from <c>model</c>'s view definitions.
     /// </summary>
-    /// <parameter name="model">
+    /// <param name="model">
     ///   The model whose <c>ViewDefs</c> are to be turned into a <c>FuncTable</c>.
-    /// </parameter>
+    /// </param>
     /// <returns>
     ///   A Chessie result, which, when ok, contains a <c>FuncTable</c> mapping
     ///   each defining view in <c>model</c> to its <c>BoolExpr</c> meaning.
@@ -221,9 +221,9 @@ module Translator =
     /// <summary>
     ///   Interprets all views in a model, converting them to <c>FTerm</c>s.
     /// </summary>
-    /// <parameter name="model">
+    /// <param name="model">
     ///   The model whose views are to be interpreted.
-    /// </parameter>
+    /// </param>
     /// <returns>
     ///   A Chessie result, which, when ok, contains a <c>Model</c> equivalent to
     ///   <c>model</c> except that each view is replaced with the <c>BoolExpr</c>
@@ -313,6 +313,7 @@ module MuTranslator =
     /// <returns>
     ///     A <c>BoolExpr</c> representing an application of
     ///     <paramref name="ps"/> to <paramref name="funcDecl"/>.
+    /// </returns>
     let applyFunc ctx (funcDecl : Z3.FuncDecl) ps =
         let psa : Z3.Expr[] = ps |> List.map (exprToZ3 ctx) |> List.toArray
         funcDecl.Apply psa
