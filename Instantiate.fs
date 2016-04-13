@@ -106,6 +106,26 @@ let makeFuncTable fseq : FuncTable<'defn> =
     Seq.toList fseq
 
 /// <summary>
+///     Creates a <c>FuncTable</c> from a sequence of <c>ViewDef</c>s.
+/// </summary>
+/// <param name="viewdefs">
+///     The view definitions to use to create the <c>FuncTable</c>.
+/// </param>
+/// <returns>
+///     A tuple of a <c>FuncTable</c>, and a list of <c>DFunc</c>s with
+///     indefinite constraints.
+/// </returns>
+let funcTableFromViewDefs viewdefs =
+    let rec buildLists definites indefinites viewdefs' =
+        match viewdefs' with
+        | [] -> (definites, indefinites)
+        | { View = v ; Def = None } :: vs ->
+            buildLists definites (v :: indefinites) vs
+        | { View = v ; Def = Some s } :: vs ->
+            buildLists ((v, s) :: definites) indefinites vs
+    buildLists [] [] viewdefs
+
+/// <summary>
 ///     Returns the <c>Func</c>s contained in a <c>FuncTable</c>.
 /// </summary>
 /// <param name="ftab">

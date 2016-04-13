@@ -212,13 +212,11 @@ module Translator =
     ///   </para>
     /// </remarks>
     let makeFuncTable model =
-        model.ViewDefs
-        |> Seq.map
-            (function
-             | { View = vs; Def = None } -> IndefiniteConstraint vs |> fail
-             | { View = vs; Def = Some s } -> (vs, s) |> ok)
-        |> collect
-        |> lift Starling.Core.Instantiate.makeFuncTable
+        (* We cannot have any indefinite constraints for Z3.
+           These are the snd in the pair coming from funcTableFromViewDefs. *)
+        match (funcTableFromViewDefs model.ViewDefs) with
+        | ftab, [] -> ok ftab
+        | _, indefs -> indefs |> List.map IndefiniteConstraint |> Bad
 
     /// <summary>
     ///   Interprets all views in a model, converting them to <c>FTerm</c>s.
