@@ -429,9 +429,15 @@ module MuTranslator =
     /// </returns>
     let translateGView (ctx : Z3.Context) funcDecls =
         Multiset.toFlatSeq
-        >> Seq.map (fun { Cond = g ; Item = v } ->
-                        ctx.MkImplies (boolToZ3 ctx g,
-                                       translateVFunc ctx funcDecls v))
+        >> Seq.choose
+               (fun { Cond = g ; Item = v } ->
+                    let vZ = translateVFunc ctx funcDecls v
+                    if (vZ.IsTrue)
+                    then None
+                    else Some <|
+                         if (isTrue g)
+                         then vZ
+                         else (ctx.MkImplies (boolToZ3 ctx g, vZ)))
         >> Seq.toArray
         >> (fun a -> ctx.MkAnd a)
 
