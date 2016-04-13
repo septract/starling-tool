@@ -72,6 +72,8 @@ type Request =
     | TermOptimise
     /// Run the Z3 backend, with the given request.
     | Z3 of Backends.Z3.Types.Request
+    /// Run the MuZ3 backend (experimental), with the given request.
+    | MuZ3 of Backends.MuZ3.Types.Request
     /// Run the HSF backend (experimental).
     | HSF
 
@@ -93,9 +95,9 @@ let requestMap =
                  ("reifyZ3", Request.Z3 Backends.Z3.Types.Request.Translate)
                  ("z3", Request.Z3 Backends.Z3.Types.Request.Combine)
                  ("sat", Request.Z3 Backends.Z3.Types.Request.Sat)
-                 ("mutranslate", Request.Z3 Backends.Z3.Types.Request.MuTranslate)
-                 ("mufix", Request.Z3 Backends.Z3.Types.Request.MuFix)
-                 ("musat", Request.Z3 Backends.Z3.Types.Request.MuSat)
+                 ("mutranslate", Request.MuZ3 Backends.MuZ3.Types.Request.Translate)
+                 ("mufix", Request.MuZ3 Backends.MuZ3.Types.Request.Fix)
+                 ("musat", Request.MuZ3 Backends.MuZ3.Types.Request.Sat)
                  ("hsf", Request.HSF) ]
 
 /// Converts an optional -s stage name to a request item.
@@ -126,6 +128,8 @@ type Response =
     | TermOptimise of Model<STerm<GView, VFunc>, DFunc>
     /// The result of Z3 backend processing.
     | Z3 of Backends.Z3.Types.Response
+    /// The result of MuZ3 backend processing.
+    | MuZ3 of Backends.MuZ3.Types.Response
     /// The result of HSF processing.
     | HSF of Backends.Horn.Types.Horn list
 
@@ -180,6 +184,7 @@ let printResponse mview =
             printDFunc
             m
     | Z3 z -> Backends.Z3.Pretty.printResponse mview z
+    | MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
     | HSF h -> Backends.Horn.Pretty.printHorns h
 
 /// A top-level program error.
@@ -240,6 +245,9 @@ let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
 
 /// Shorthand for the Z3 stage.
 let z3 rq = bind (Backends.Z3.run rq >> mapMessages Error.Z3)
+
+/// Shorthand for the MuZ3 stage.
+let muz3 rq = lift (Backends.MuZ3.run rq)
 
 /// Shorthand for the graph optimise stage.
 let graphOptimise optR optA verbose =
@@ -303,9 +311,10 @@ let runStarling optS verbose request =
     let failPhase = fun _ -> fail (Error.Other "Internal")
     let backend =
             match request with
-            | Request.HSF   -> hsf >> lift Response.HSF
-            | Request.Z3 rq -> z3 rq >> lift Response.Z3
-            | _             -> failPhase
+            | Request.HSF     -> hsf >> lift Response.HSF
+            | Request.Z3 rq   -> z3 rq >> lift Response.Z3
+            | Request.MuZ3 rq -> muz3 rq >> lift Response.MuZ3
+            | _               -> failPhase
 
     let choose b t e = if b then lift t else e
 
