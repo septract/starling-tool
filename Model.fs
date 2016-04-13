@@ -373,3 +373,21 @@ let isAdvisory =
     function
     | Advisory _ -> true
     | Mandatory _ -> false
+
+
+(*
+ * Variable querying.
+ *)
+
+/// <summary>
+///     Extracts a sequence of all variables in a <c>VFunc</c>.
+/// </summary>
+/// <param name="_arg1">
+///     The <c>VFunc</c> to query.
+/// </param>
+/// <returns>
+///     A sequence of (<c>Const</c>, <c>Type</c>) pairs that represent all of
+///     the variables used in the <c>VFunc</c>.
+/// </returns>
+let varsInVFunc { Params = ps } =
+    ps |> Seq.map varsIn |> Seq.concat

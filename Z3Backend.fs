@@ -480,11 +480,9 @@ module MuTranslator =
                 yield! (varsInBool bodyExpr)
 
                 for gfunc in Multiset.toFlatList bodyView do
-                    for param in gfunc.Item.Params do
-                        yield! (varsIn param)
+                    yield! (varsInGFunc gfunc)
 
-                for param in head.Params do
-                    yield! (varsIn param)
+                yield! (varsInVFunc head)
             }
             // Make sure we don't quantify over a variable twice.
             |> Set.ofSeq
