@@ -610,7 +610,6 @@ module MuTranslator =
 
         let pars = ctx.MkParams ()
         pars.Add("engine", ctx.MkSymbol("pdr"))
-        pars.Add("pdr.flexible_trace", true)
         fixedpoint.Parameters <- pars
 
         List.iter
