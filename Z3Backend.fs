@@ -32,8 +32,10 @@ module Types =
         | Combine
         /// Translate, combine, and run term Z3 expressions; return `Response.Sat`.
         | Sat
-        /// Produce a MuZ3 fixedpoint query; return `Response.MuTranslate`.
+        /// Produce a MuZ3 model; return `Response.MuTranslate`.
         | MuTranslate
+        /// Produce a MuZ3 fixedpoint; return `Response.MuFix`.
+        | MuFix
         /// Produce a MuZ3 sat list; return `Response.MuSat`.
         | MuSat
 
@@ -84,6 +86,8 @@ module Types =
         | Sat of Map<string, Z3.Status>
         /// Output of the MuZ3 translation step only.
         | MuTranslate of MuModel
+        /// Output of the MuZ3 fixedpoint generation step only.
+        | MuFix of fixedpoint : Z3.Fixedpoint * unsafe : Z3.FuncDecl
         /// Output of the MuZ3 proof.
         | MuSat of MuSat
 
@@ -152,6 +156,8 @@ module Pretty =
             printMap Inline String printSat s
         | Response.MuTranslate mm ->
             printMuModel mm
+        | Response.MuFix (mf, _) ->
+            String (mf.ToString ())
         | Response.MuSat s ->
             printMuSat s
 
@@ -583,18 +589,18 @@ module MuTranslator =
 
 
     /// <summary>
-    ///     Runs a MuZ3 fixedpoint.
+    ///     Generates a MuZ3 fixedpoint.
     /// </summary>
     /// <param name="ctx">
     ///     The Z3 context to use for modelling the fixedpoint.
     /// </param>
     /// <param name="_arg1">
-    ///     The <c>MuModel</c> to run.
+    ///     The <c>MuModel</c> to use in generation.
     /// </param>
     /// <returns>
-    ///     A list of <c>MuResult</c>s.
+    ///     The pair of Z3 <c>Fixedpoint</c> and unsafeness <c>FuncDecl</c>.
     /// </returns>
-    let run (ctx : Z3.Context) { Definites = ds; Rules = rs ; FuncDecls = fm } =
+    let fixgen (ctx : Z3.Context) { Definites = ds; Rules = rs ; FuncDecls = fm } =
         let fixedpoint = ctx.MkFixedpoint ()
 
         let pars = ctx.MkParams ()
@@ -637,6 +643,21 @@ module MuTranslator =
         Map.iter (fun (s : string) g -> fixedpoint.AddRule (g, ctx.MkSymbol s :> Z3.Symbol)) rs
         Map.iter (fun _ g -> fixedpoint.RegisterRelation g) fm
 
+        (fixedpoint, unsafe)
+
+    /// <summary>
+    ///     Runs a MuZ3 fixedpoint.
+    /// </summary>
+    /// <param name="fixedpoint">
+    ///     The <c>Fixedpoint</c> to run.
+    /// </param>
+    /// <param name="unsafe">
+    ///     The <c>FuncDecl</c> naming the unsafeness predicate.
+    /// </param>
+    /// <returns>
+    ///     A <c>MuResult</c>.
+    /// </returns>
+    let run (fixedpoint : Z3.Fixedpoint) unsafe =
         match (fixedpoint.Query [| unsafe |]) with
         | Z3.Status.SATISFIABLE ->
              MuSat.Sat (fixedpoint.GetAnswer ())
@@ -663,8 +684,10 @@ module Run =
 
 /// Shorthand for the translator stage of the MuZ3 pipeline.
 let mutranslate = MuTranslator.translate
+/// Shorthand for the fixpoint generation stage of the MuZ3 pipeline.
+let mufix = MuTranslator.fixgen
 /// Shorthand for the satisfiability stage of the MuZ3 pipeline.
-let musat = MuTranslator.run 
+let musat = uncurry MuTranslator.run
 /// Shorthand for the translator stage of the Z3 pipeline.
 let translate = Translator.interpret
 /// Shorthand for the combination stage of the Z3 pipeline.
@@ -690,8 +713,14 @@ let run resp =
         mutranslate ctx
         >> Response.MuTranslate
         >> ok
+    | Request.MuFix ->
+        mutranslate ctx
+        >> mufix ctx
+        >> Response.MuFix
+        >> ok
     | Request.MuSat ->
         mutranslate ctx
-        >> musat ctx
+        >> mufix ctx
+        >> musat
         >> Response.MuSat
         >> ok

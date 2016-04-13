@@ -94,6 +94,7 @@ let requestMap =
                  ("z3", Request.Z3 Backends.Z3.Types.Request.Combine)
                  ("sat", Request.Z3 Backends.Z3.Types.Request.Sat)
                  ("mutranslate", Request.Z3 Backends.Z3.Types.Request.MuTranslate)
+                 ("mufix", Request.Z3 Backends.Z3.Types.Request.MuFix)
                  ("musat", Request.Z3 Backends.Z3.Types.Request.MuSat)
                  ("hsf", Request.HSF) ]
 
