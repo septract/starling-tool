@@ -114,9 +114,12 @@ module Pretty =
     /// Pretty-prints a MuSat.
     let printMuSat =
         function
-        | MuSat.Sat ex -> colonSep [ String "sat" ; printZ3Exp ex ]
-        | MuSat.Unsat ex -> colonSep [ String "unsat" ; printZ3Exp ex ]
-        | MuSat.Unknown reason -> colonSep [ String "unknown" ; String reason ]
+        | MuSat.Sat ex -> vsep [ String "Proof FAILED."
+                                 headed "Counter-example" [ printZ3Exp ex ] ]
+        | MuSat.Unsat ex -> vsep [ String "Proof SUCCEEDED."
+                                   headed "View assignments" [ printZ3Exp ex ] ]
+        | MuSat.Unknown reason -> colonSep [ String "Proof status unknown"
+                                             String reason ]
     
     /// Pretty-prints a MuModel.
     let printMuModel { Definites = ds ; Rules = rs ; FuncDecls = fdm } =
