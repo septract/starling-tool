@@ -324,6 +324,10 @@ let runStarling optS reals verbose request =
 
     let choose b t e = if b then lift t else e
 
+    if verbose
+    then
+        eprintfn "Z3 version: %s" (Microsoft.Z3.Version.ToString ())
+
     match request with
     | Request.Frontend rq -> frontend rq >> lift Response.Frontend
     | _ ->
