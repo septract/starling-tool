@@ -593,7 +593,6 @@ module MuTranslator =
           Rules = Seq.append vrules trules |> Map.ofSeq
           FuncDecls = funcDecls }
 
-
     /// <summary>
     ///     Generates a MuZ3 fixedpoint.
     /// </summary>
