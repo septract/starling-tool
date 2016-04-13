@@ -335,15 +335,64 @@ module Translator =
         >> (fun a -> ctx.MkAnd a)
 
     (*
-     * Variables
+     * Rule building
      *)
 
     /// <summary>
-    ///     Constructs a rule implying view, whose body is a conjunction of
+    ///     Makes an optimised implication between two Z3 expressions,
+    ///     universally quantified over a set of variables.
+    /// </summary>
+    /// <param name="ctx">
+    ///     The Z3 context to use to model the entailment.
+    /// </param>
+    /// <param name="vars">
+    ///     An array of Z3 <c>Expr</c>s representing variables to be
+    ///     quantified.  If this is empty, no quantification is done.
+    /// </param>
+    /// <param name="head">
+    ///     The Z3 <c>BoolExpr</c> to be implied.  If this is a
+    ///     tautology, the entire implication is thrown away.
+    /// </param>
+    /// <param name="body">
+    ///     The Z3 <c>BoolExpr</c> on the LHS of the implication.
+    ///     If this is a tautology, the head is substituted for the
+    ///     implication.  If it is a contradiction, the entire
+    ///     implication is thrown away.
+    /// </param>
+    /// <returns>
+    ///     A Z3 expression implementing the quantified implication.
+    /// </returns>
+    let mkQuantifiedEntailment (ctx : Z3.Context)
+                               vars
+                               (body : Z3.BoolExpr)
+                               (head : Z3.BoolExpr) =
+        (* Don't emit if the head is true: not only is the result true,
+           trivial, but MuZ3 will complain about interpreted heads later.
+           Also don't emit if the body is false: these are also always true. *)
+        if head.IsTrue || body.IsFalse
+        then None
+        else
+            let core =
+                if body.IsTrue
+                then head
+                else if head.IsFalse
+                then ctx.MkNot body
+                else ctx.MkImplies (body, head)
+
+            (* If this rule involves one or more variables, we must universally
+               quantify over them.
+               MuZ3 will complain if we universally quantify over nothing,
+               though, so we need to be careful! *)
+            Some (if Array.isEmpty vars
+                  then core
+                  else ctx.MkForall (vars, core) :> Z3.BoolExpr)
+
+    /// <summary>
+    ///     Constructs a rule implying a view, whose body is a conjunction of
     ///     a <c>BoolExpr</c> and a <c>GView</c>.
     /// </summary>
     /// <param name="ctx">
-    ///     The Z3 context to use to model the func.
+    ///     The Z3 context to use to model the rule.
     /// </param>
     /// <param name="funcDecls">
     ///     The map of <c>FuncDecls</c> to use in the modelling.
@@ -392,21 +441,12 @@ module Translator =
 
         let headZ = translateVFunc ctx funcDecls head
 
-        (* Don't emit a rule if it entails true: not only is such a rule
-           trivial, but MuZ3 will complain about interpreted heads. *)
-        if headZ.IsTrue
-        then None
-        else
-            let core = ctx.MkImplies (bodyZ, headZ)
+        mkQuantifiedEntailment ctx vars bodyZ headZ
 
-            (* If this rule involves one or more variables, we must universally
-               quantify over them.
-               MuZ3 will complain if we universally quantify over nothing,
-               though, so we need to be careful! *)
 
-            Some (if Array.isEmpty vars
-                  then core
-                  else ctx.MkForall (vars, core) :> Z3.BoolExpr)
+    (*
+     * Variables
+     *)
 
     /// <summary>
     ///     Constructs a rule for initialising a variable.
@@ -537,23 +577,25 @@ module Run =
             (fun (view, def) ->
                  // TODO(CaptainHayashi): de-duplicate this with mkRule.
                  let vars =
-                    seq {
-                        yield! (varsInBool def)
-                        for param in view.Params do
-                            yield! (varsIn param)
-                    }
-                    |> Set.ofSeq
-                    |> Set.map (fun (name, ty) ->
-                                    ctx.MkConst (constToString name,
-                                                 Translator.typeToSort ctx ty))
-                    |> Set.toArray
+                     seq {
+                         yield! (varsInBool def)
+                         for param in view.Params do
+                             yield! (varsIn param)
+                     }
+                     |> Set.ofSeq
+                     |> Set.map (fun (name, ty) ->
+                                     ctx.MkConst (constToString name,
+                                                  Translator.typeToSort ctx ty))
+                     |> Set.toArray
 
-                 fixedpoint.AddRule (
-                    ctx.MkForall
-                        (vars,
-                         ctx.MkImplies (ctx.MkAnd [| def |> mkNot |> boolToZ3 ctx
-                                                     Translator.translateVFunc ctx fm view |],
-                                        unsafeapp))))
+                 // Introduce 'V ^ ¬D(V) -> unsafe'.
+                 Translator.mkQuantifiedEntailment
+                     ctx
+                     vars
+                     (ctx.MkAnd [| def |> mkNot |> boolToZ3 ctx
+                                   Translator.translateVFunc ctx fm view |])
+                     unsafeapp
+                 |> Option.iter (fixedpoint.AddRule))
             ds
 
         Map.iter (fun (s : string) g -> fixedpoint.AddRule (g, ctx.MkSymbol s :> Z3.Symbol)) rs
