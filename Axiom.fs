@@ -51,7 +51,7 @@ module Types =
         { /// The axiom to be checked for soundness under Goal.
           Axiom : Axiom<GView, Command>
           /// The view representing the goal for any terms over Axiom.
-          Goal : View }
+          Goal : OView }
 
 /// <summary>
 ///     Pretty printers for axioms.
@@ -72,7 +72,7 @@ module Pretty =
     let printGoalAxiom {Axiom = a; Goal = f} =
         vsep [ headed "Axiom"
                       (a |> printAxiom printCommand printGView |> Seq.singleton)
-               headed "Goal" (f |> printView |> Seq.singleton) ]
+               headed "Goal" (f |> printOView |> Seq.singleton) ]
 
 
 /// Makes an axiom {p}c{q}.
@@ -97,7 +97,7 @@ let instantiateParam fg (ty, name) =
 
 /// Instantiates a defining view into a view expression.
 let instantiateGoal fg dvs =
-    dvs |> Multiset.map (fun { Name = n; Params = ps } ->
+    dvs |> List.map (fun { Name = n; Params = ps } ->
                { Name = n
                  Params = List.map (instantiateParam fg) ps })
 

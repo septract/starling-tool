@@ -112,9 +112,9 @@ type Response =
     /// The result of goal-axiom-pair generation.
     | GoalAdd of Model<GoalAxiom, DView>
     /// The result of term generation.
-    | TermGen of Model<PTerm<GView, View>, DView>
+    | TermGen of Model<PTerm<GView, OView>, DView>
     /// The result of term reification.
-    | Reify of Model<PTerm<ViewSet, View>, DView>
+    | Reify of Model<PTerm<ViewSet, OView>, DView>
     /// The result of term flattening.
     | Flatten of Model<PTerm<GView, VFunc>, DFunc>
     /// The result of semantic expansion.
@@ -149,13 +149,13 @@ let printResponse mview =
     | TermGen m ->
         printModelView
             mview
-            (printPTerm printGView printView)
+            (printPTerm printGView printOView)
             printDView
             m
     | Reify m ->
         printModelView
             mview
-            (printPTerm printViewSet printView)
+            (printPTerm printViewSet printOView)
             printDView
             m
     | Flatten m ->

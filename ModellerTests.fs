@@ -203,7 +203,7 @@ type ModellerTests() =
              .SetName("Searching for no viewdefs does not change a full viewdef set")
           TestCaseData({ Search = Some 0; InitDefs = []})
              .Returns(ModellerTests.viewDefSet
-                          [ { View = Multiset.empty
+                          [ { View = Multiset.empty |> Multiset.toFlatList
                               Def = None }])
              .SetName("Searching for size-0 viewdefs adds emp to an empty viewdef set")
           TestCaseData({ Search = Some 0; InitDefs = ticketLockViewDefs })
@@ -211,33 +211,32 @@ type ModellerTests() =
              .SetName("Searching for size-0 viewdefs does not change a full viewdef set")
           TestCaseData({ Search = Some 1; InitDefs = [] })
              .Returns(ModellerTests.viewDefSet
-                          [ { View = Multiset.empty
+                          [ { View = []
                               Def = None }
-                            { View = Multiset.singleton (func "holdLock" [])
+                            { View = Multiset.singleton (func "holdLock" [] )|> Multiset.toFlatList
                               Def = None }
-                            { View = Multiset.singleton (func "holdTick" [(Type.Int, "t0")])
+                            { View = Multiset.singleton (func "holdTick" [(Type.Int, "t0")]) |> Multiset.toFlatList
                               Def = None }])
              .SetName("Searching for size-1 viewdefs yields viewdefs for emp and the view prototypes")
           TestCaseData({ Search = Some 2; InitDefs = [] })
              .Returns(ModellerTests.viewDefSet
-                          [ { View = Multiset.empty
+                          [ { View = []
                               Def = None }
-                            { View = Multiset.singleton (func "holdLock" [])
+                            { View = [func "holdLock" []]
+                              Def = None }
+                            { View = [ func "holdLock" []
+                                       func "holdLock" [] ]
                               Def = None }
                             { View = Multiset.ofFlatList
                                          [ func "holdLock" []
-                                           func "holdLock" [] ]
+                                           func "holdTick" [(Type.Int, "t0")] ] |> Multiset.toFlatList
                               Def = None }
-                            { View = Multiset.ofFlatList
-                                         [ func "holdLock" []
-                                           func "holdTick" [(Type.Int, "t0")] ]
-                              Def = None }
-                            { View = Multiset.singleton (func "holdTick" [(Type.Int, "t0")])
+                            { View = [func "holdTick" [(Type.Int, "t0")]]
                               Def = None }
 
                             { View = Multiset.ofFlatList
                                          [ func "holdTick" [(Type.Int, "t0")]
-                                           func "holdTick" [(Type.Int, "t1")] ]
+                                           func "holdTick" [(Type.Int, "t1")] ] |> Multiset.toFlatList
                               Def = None }])
              .SetName("Searching for size-2 viewdefs yields the correct views") ]
 

@@ -8,60 +8,49 @@ open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.GuardedView
 
+/// Calculate the multiset of ways that this View matches the pattern in dv and add to the assumulator.
+let reifySingleDef view accumulator (dv : ViewDef<DView>) : ViewSet  = 
 
-/// Tries to look up a multiset View in the defining views dvs.
-let findDefOfView dvs uviewm =
-    // Why we do this is explained later.
-    let uview = Multiset.toFlatList uviewm
-    (* We look up view-defs based on count of views and names of each
-     * view in the def.
-     *
-     * Of course, this depends on us having ensured that there are no
-     * errors in the view or its definition earlier.
-     *)
-    List.tryFind (fun {View = vdm} ->
-        (* We need to do list operations on the multiset contents,
-         * so convert both sides to a (sorted) list.  We rely on the
-         * sortedness to make the next step sound.
-         *)
-        let vd = Multiset.toFlatList vdm
-        (* Do these two views have the same number of terms?
-         * If not, using forall2 is an error.
-         *)
-        List.length vd = List.length uview && List.forall2 (fun d s -> d.Name = s.Name) vd uview) dvs
+    let rec matchMultipleViews (pattern : DFunc list) (view : GFunc list) accumulator result =
+        match pattern with
+        | [] ->
+                //Pull out the set of guards used in this match, and add to the set
+                let guars, views =
+                    result
+                    |> List.map gFuncTuple
+                    |> List.unzip
+                Multiset.add accumulator 
+                    { // Then, separately add them into a ReView.
+                    Cond = mkAnd guars
+                    Item = List.rev views }
+        | p :: pattern ->
+            let rec matchSingleView (view : GFunc list) rview accumulator =
+               match view with
+               | [] -> accumulator
+               | v :: view ->
+                  let accumulator =
+                    if p.Name = v.Item.Name && p.Params.Length = v.Item.Params.Length then
+                        matchMultipleViews pattern (rview @ view) accumulator (v::result)
+                    else
+                        accumulator
+                  matchSingleView view (v :: rview) accumulator
+            matchSingleView view [] accumulator
 
+    matchMultipleViews dv.View view accumulator []
 
-/// Reifies a single GuarView-list into a ReView.
-let reifySingle view = 
-    (* This corresponds to Dlift in the theory.
-     * Our end goal is the term (implies (and guars...) vrs),
-     * where vrs is defined below.
-     *)
-
-    // First, pull the guards and views out of the view.
-    let guars, views = 
-        view
-        |> Multiset.map gFuncTuple
-        |> Multiset.toFlatList
-        |> List.unzip
-    { // Then, separately add them into a ReView.
-      Cond = mkAnd guars
-      Item = Multiset.ofFlatList views }
-
-/// Reifies an entire view application.
-let reifyView vap = 
-    vap
-    |> Multiset.power
-    |> Seq.map reifySingle
-    |> Multiset.ofFlatSeq
+/// Reifies an dvs entire view application.
+let reifyView (dvs : ViewDef<DView> List)  vap : ViewSet = 
+    let goal = Multiset.toFlatList vap
+    Seq.fold (reifySingleDef goal) Multiset.empty dvs
 
 /// Reifies all of the views in a term.
-let reifyTerm = 
+let reifyTerm dvs = 
     (* For the goal, we need only calculate D(r), not |_r_|.
      * This means we need not do anything with the goal.
      *)
-    mapTerm id reifyView id
+    mapTerm id (reifyView dvs) id
 
 /// Reifies all of the terms in a model's axiom list.
-let reify : Model<PTerm<GView, View>, DView> -> Model<PTerm<ViewSet, View>, DView> =
-    mapAxioms reifyTerm
+let reify : Model<PTerm<GView, OView>, DView> -> Model<PTerm<ViewSet, OView>, DView> =
+    fun ms -> 
+        mapAxioms (reifyTerm ms.ViewDefs) ms

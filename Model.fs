@@ -66,7 +66,12 @@ module Types =
     type View = Multiset<VFunc>
 
     /// A view definition.
-    type DView = Multiset<DFunc>
+    type DView = List<DFunc>
+
+    /// <summary>
+    ///     A basic view, as an ordered list of VFuncs.
+    /// </summary>
+    type OView = List<VFunc>
 
     /// <summary>
     ///     A view expression, combining a view with its kind.
@@ -175,8 +180,11 @@ module Pretty =
     /// Pretty-prints a View.
     let printView = printMultiset printVFunc
 
+    /// Pretty-prints a View.
+    let printOView = List.map printVFunc >> semiSep  >> squared
+
     /// Pretty-prints a DView.
-    let printDView = printMultiset printDFunc >> squared
+    let printDView = List.map printDFunc >> semiSep  >> squared
 
     /// Pretty-prints view expressions.
     let rec printViewExpr pView =
