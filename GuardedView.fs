@@ -92,7 +92,7 @@ module Types =
 /// <returns>
 ///     A new <c>GFunc</c> with the given guard, name, and parameters.
 /// </returns>
-let gfunc guard name pars = { Cond = guard ; Item = func name pars }
+let gfunc guard name pars = { Cond = guard ; Item = vfunc name pars }
 
 
 (*
