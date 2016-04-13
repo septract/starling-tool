@@ -46,6 +46,7 @@ module Types =
           ///    The guarded item.
           /// </summary>
           Item : 'item }
+        override this.ToString() = sprintf "(%A -> %A)" this.Cond this.Item
 
     (*
      * Shorthand for guarded items.
