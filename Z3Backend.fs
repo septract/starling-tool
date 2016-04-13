@@ -501,10 +501,22 @@ module MuTranslator =
             else ctx.MkAnd [| bodyExprZ ; translateGView ctx funcDecls bodyView |]
 
         let headZ = translateVFunc ctx funcDecls head
+
+        (* Don't emit a rule if it entails true: not only is such a rule
+           trivial, but MuZ3 will complain about interpreted heads. *)
         if headZ.IsTrue
         then None
-        else Some (ctx.MkForall (vars, ctx.MkImplies (bodyZ, headZ))
-                   :> Z3.BoolExpr)
+        else
+            let core = ctx.MkImplies (bodyZ, headZ)
+
+            (* If this rule involves one or more variables, we must universally
+               quantify over them.
+               MuZ3 will complain if we universally quantify over nothing,
+               though, so we need to be careful! *)
+
+            Some (if Array.isEmpty vars
+                  then core
+                  else ctx.MkForall (vars, core) :> Z3.BoolExpr)
 
     /// <summary>
     ///     Constructs a rule for initialising a variable.
