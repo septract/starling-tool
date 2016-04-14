@@ -67,8 +67,17 @@ module Types =
         /// </summary>
         | IndefiniteConstraint of view: DFunc
 
-    (* TODO(CaptainHayashi): DFModel shouldn't be in here, but
-       it is, due to a cyclic dependency on Model and FuncTable. *)
+    (* TODO(CaptainHayashi): these two shouldn't be in here, but
+       they are, due to a cyclic dependency on Model and FuncTable. *)
+
+    /// <summary>
+    ///     A <c>Model</c> whose view definitions form an indefinite
+    ///     <c>FuncTable</c>.
+    /// </summary>
+    /// <typeparam name="axiom">
+    ///     Type of program axioms.
+    /// </typeparam>
+    type IFModel<'axiom> = Model<'axiom, FuncTable<BoolExpr option>>
 
     /// <summary>
     ///     A <c>Model</c> whose view definitions form a definite
@@ -369,17 +378,46 @@ let instantiate func =
 /// </summary>
 module ViewDefFilter =
     /// <summary>
-    ///     Tries to convert an indefinite model into a definite one.
-    ///     The conversion fails if the model has any indefinite
-    ///     constraints.
+    ///     Tries to convert a <c>ViewDef</C> based model into one over
+    ///     definite or indefinite constraints.
     /// </summary>
     /// <param name="model">
     ///     A model over <c>ViewDef</c>s.
     /// </param>
     /// <returns>
-    ///     A <c>Result</c> over <c>DefinitionError</c> containing the
+    ///     A <c>Result</c> over <c>Error</c> containing the
     ///     new model if the original contained only definite view
-    ///     definitions.
+    ///     definitions.  The new model is an <c>IFModel</c>.
+    /// </returns>
+    let filterModelIndefinite (model : UFModel<'axiom>)
+                              : Result<IFModel<'axiom>, Error> =
+        (* TODO(CaptainHayashi): defs is already a func table, so
+           don't pretend it's just a list of tuples. *)
+        tryMapViewDefs
+            (funcTableFromViewDefs
+             >> fun (defs, indefs) ->
+                    makeFuncTable
+                       (seq {
+                            for (v, d) in defs do
+                                yield (v, Some d)
+                            for v in indefs do
+                                yield (v, None)
+                        } )
+                    |> ok)
+            model
+
+    /// <summary>
+    ///     Tries to convert a <c>ViewDef</C> based model into a
+    ///     definite one.  The conversion fails if the model has any
+    ///     indefinite constraints.
+    /// </summary>
+    /// <param name="model">
+    ///     A model over <c>ViewDef</c>s.
+    /// </param>
+    /// <returns>
+    ///     A <c>Result</c> over <c>Error</c> containing the
+    ///     new model if the original contained only definite view
+    ///     definitions.  The new model is a <c>DFModel</c>.
     /// </returns>
     let filterModelDefinite (model : UFModel<'axiom>)
                             : Result<DFModel<'axiom>, Error> =
