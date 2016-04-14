@@ -66,6 +66,11 @@ module Types =
         ///     assert that all constraints are definite.
         /// </summary>
         | IndefiniteConstraint of view: DFunc
+        /// <summary>
+        ///     We were given an uninterpreted constraint when trying to
+        ///     assert that all constraints are interpreted.
+        /// </summary>
+        | UninterpretedConstraint of view: DFunc * constr : string
 
     (* TODO(CaptainHayashi): these two shouldn't be in here, but
        they are, due to a cyclic dependency on Model and FuncTable. *)
@@ -139,6 +144,10 @@ module Pretty =
         | IndefiniteConstraint (view) ->
             fmt "indefinite 'constraint {0} -> ?' not allowed here"
                 [ printDFunc view ]
+        | UninterpretedConstraint (view, constr) ->
+            fmt "uninterpreted 'constraint {0} -> %\"{1}\"' not allowed here"
+                [ printDFunc view
+                  String constr ]
 
 
 (*
@@ -175,14 +184,16 @@ let makeFuncTable fseq : FuncTable<'defn> =
 ///     indefinite constraints.
 /// </returns>
 let funcTableFromViewDefs viewdefs =
-    let rec buildLists definites indefinites viewdefs' =
+    let rec buildLists definites indefinites uninterps viewdefs' =
         match viewdefs' with
-        | [] -> (makeFuncTable definites, indefinites)
+        | [] -> (makeFuncTable definites, indefinites, uninterps)
         | (Indefinite v) :: vs ->
-            buildLists definites (v :: indefinites) vs
+            buildLists definites (v :: indefinites) uninterps vs
         | (Definite (v, s)) :: vs ->
-            buildLists ((v, s) :: definites) indefinites vs
-    buildLists [] [] viewdefs
+            buildLists ((v, s) :: definites) indefinites uninterps vs
+        | (Uninterpreted (v, u)) :: vs ->
+            buildLists definites indefinites ((v, u) ::uninterps) vs
+    buildLists [] [] [] viewdefs
 
 /// <summary>
 ///     Returns the <c>Func</c>s contained in a <c>FuncTable</c>.
@@ -395,7 +406,8 @@ module ViewDefFilter =
            don't pretend it's just a list of tuples. *)
         tryMapViewDefs
             (funcTableFromViewDefs
-             >> fun (defs, indefs) ->
+             >> function
+                | (defs, indefs, []) ->
                     makeFuncTable
                        (seq {
                             for (v, d) in defs do
@@ -403,7 +415,9 @@ module ViewDefFilter =
                             for v in indefs do
                                 yield (v, None)
                         } )
-                    |> ok)
+                    |> ok
+                | (_, _, uninterps) ->
+                    uninterps |> List.map UninterpretedConstraint |> Bad)
             model
 
     /// <summary>
@@ -424,6 +438,9 @@ module ViewDefFilter =
         tryMapViewDefs
             (funcTableFromViewDefs
              >> function
-                | ftab, [] -> ok ftab
-                | _, indefs -> indefs |> List.map IndefiniteConstraint |> Bad)
+                | ftab, [], [] -> ok ftab
+                | _, indefs, uninterps ->
+                    List.append (indefs |> List.map IndefiniteConstraint)
+                                (uninterps |> List.map UninterpretedConstraint)
+                    |> Bad)
             model

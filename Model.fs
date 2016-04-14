@@ -103,14 +103,18 @@ module Types =
     ///     view View is satisfied if, and only if, Def holds.
     /// </remarks>
     type ViewDef<'view> =
-        | /// <summary>
+          /// <summary>
           ///     A definite <c>ViewDef</c>.
           /// </summary>
-          Definite of ('view * BoolExpr)
-        | /// <summary>
+        | Definite of ('view * BoolExpr)
+          /// <summary>
           ///     An indefinite <c>ViewDef</c>.
           /// </summary>
-          Indefinite of 'view
+        | Indefinite of 'view
+          /// <summary>
+          ///     An uninterpreted <c>ViewDef</c>.
+          /// </summary>
+        | Uninterpreted of 'view * string
 
     /// <summary>
     ///     Extracts the view of a <c>ViewDef</c>.
@@ -118,6 +122,7 @@ module Types =
     let viewOf =
         function
         | Definite (v, _)
+        | Uninterpreted (v, _)
         | Indefinite v -> v
 
     /// <summary>
@@ -250,6 +255,11 @@ module Pretty =
             printAssoc Inline
                 [ (String "View", pView vs)
                   (String "Def", printBoolExpr e) ]
+        | Uninterpreted (vs, e) ->
+            printAssoc Inline
+                [ (String "View", pView vs)
+                  (String "Def", hjoin [ String "%"
+                                         e |> String |> braced ] ) ]
         | Indefinite vs ->
             printAssoc Inline
                 [ (String "View", pView vs)
