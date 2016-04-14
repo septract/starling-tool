@@ -268,6 +268,14 @@ let semantics = bind (Starling.Semantics.translate
 let axiomatise = lift Starling.Core.Graph.axiomatise
 
 /// <summary>
+///     Shorthand for the stage filtering a model to indefinite and
+///     definite views.
+/// </summary>
+let filterIndefinite =
+    bind (Core.Instantiate.ViewDefFilter.filterModelIndefinite
+          >> mapMessages ModelFilterError)
+
+/// <summary>
 ///     Shorthand for the stage filtering a model to definite views only.
 /// </summary>
 let filterDefinite =
@@ -300,9 +308,9 @@ let runStarling optS reals verbose request =
     let failPhase = fun _ -> fail (Error.Other "Internal")
     let backend =
             match request with
-            | Request.HSF     -> hsf >> lift Response.HSF
+            | Request.HSF     -> filterIndefinite >> hsf >> lift Response.HSF
             | Request.Z3 rq   -> filterDefinite >> z3 reals rq >> lift Response.Z3
-            | Request.MuZ3 rq -> muz3 reals rq >> lift Response.MuZ3
+            | Request.MuZ3 rq -> filterIndefinite >> muz3 reals rq >> lift Response.MuZ3
             | _               -> failPhase
 
     //Build a phase with

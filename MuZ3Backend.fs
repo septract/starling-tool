@@ -245,28 +245,28 @@ module Translator =
     ///     produced for the view, and an optional <c>BoolExpr</c>
     ///     assertion defining the view.
     /// </returns>
-    let translateViewDef reals (ctx : Z3.Context) vd =
-        let funcDecl = funcDeclOfDFunc reals ctx (viewOf vd)
-        let mapEntry = ((viewOf vd).Name, funcDecl)
+    let translateViewDef reals (ctx : Z3.Context) (vs, ex) =
+        let funcDecl = funcDeclOfDFunc reals ctx vs
+        let mapEntry = (vs.Name, funcDecl)
 
         let rule =
-            match vd with
-            | Definite (vs, ex) ->
-                 (* This is a definite constraint, so we want muZ3 to
-                    use the existing constraint body for it.  We do this
-                    by creating a rule that vs <=> dex.
+            Option.map
+                (fun dex ->
+                     (* This is a definite constraint, so we want muZ3 to
+                        use the existing constraint body for it.  We do this
+                        by creating a rule that vs <=> dex.
                            
-                    We need to make an application of our new FuncDecl to
-                    create the constraints for it, if any.
+                        We need to make an application of our new FuncDecl to
+                        create the constraints for it, if any.
 
-                    The parameters of a DFunc are in (type, name) format,
-                    which we need to convert to expression format first.
-                    dex uses Unmarked constants, so we do too. *)
-                 let eparams = List.map (uncurry (mkVarExp Unmarked)) vs.Params
-                 let vfunc = { Name = vs.Name ; Params = eparams }
+                        The parameters of a DFunc are in (type, name) format,
+                        which we need to convert to expression format first.
+                        dex uses Unmarked constants, so we do too. *)
+                     let eparams = List.map (uncurry (mkVarExp Unmarked)) vs.Params
+                     let vfunc = { Name = vs.Name ; Params = eparams }
 
-                 Some (vfunc, ex)
-            | Indefinite _ -> None
+                     (vfunc, dex))
+                ex
 
         (mapEntry, rule)
 
@@ -564,7 +564,8 @@ module Translator =
     ///     used to prove the model, and the map of names to <c>FuncDecl</c>s
     ///     to use to start queries.
     /// </returns>
-    let translate reals ctx { Globals = svars ; ViewDefs = ds ; Axioms = xs } =
+    let translate reals ctx
+                  ( { Globals = svars ; ViewDefs = ds ; Axioms = xs } : IFModel<STerm<GView, VFunc>> ) =
         let funcDecls, definites = translateViewDefs reals ctx ds
         let vrules = translateVariables reals ctx funcDecls svars
         let trules = xs |> Map.toSeq |> Seq.choose (translateTerm reals ctx funcDecls)

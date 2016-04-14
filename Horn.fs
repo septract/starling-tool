@@ -4,11 +4,13 @@
 module Starling.Backends.Horn
 
 open Chessie.ErrorHandling
+open Starling.Core
 open Starling.Collections
 open Starling.Utils
 open Starling.Core.Var
 open Starling.Core.Expr
 open Starling.Core.Model
+open Starling.Core.Instantiate
 open Starling.Core.GuardedView
 open Starling.Reifier
 
@@ -48,6 +50,8 @@ module Types =
 
     /// An error caused when emitting a Horn clause.
     type Error = 
+        /// A Func is inconsistent with its definition.
+        | InconsistentFunc of func : VFunc * err : Instantiate.Types.Error
         /// A viewdef has a non-arithmetic param.
         | NonArithParam of Type * string
         /// A model has a non-arithmetic variable.
@@ -64,6 +68,7 @@ module Types =
 /// Pretty-prints HSF translation errors.
 module Pretty =
     open Starling.Core.Pretty
+    open Starling.Core.Model.Pretty
     open Starling.Core.Expr.Pretty
     open Starling.Core.Var.Pretty
 
@@ -163,6 +168,10 @@ module Pretty =
     
     let printHornError =
         function
+        | InconsistentFunc (func, err) ->
+            wrapped "view func"
+                    (printVFunc func)
+                    (Instantiate.Pretty.printError err)
         | NonArithParam (ty, name) ->
             fmt "parameter '{0}' is of type {1}: HSF only permits integers here"
                 [ String name
@@ -244,12 +253,12 @@ let queryNaming { Name = n; Params = ps } =
 /// Some is returned if the constraint is definite; None otherwise.
 let hsfViewDef gs =
     function
-    | Definite (vs, ex) ->
+    | (vs, Some ex) ->
         lift2 (fun hd bd -> [Clause (hd, [bd]); Clause (bd, [hd])])
               (boolExpr ex)
               (predOfFunc gs ensureArith vs)
         |> lift (fun c -> queryNaming vs :: c) 
-    | Indefinite vs -> ok [ queryNaming vs ]
+    | (vs, None) -> ok [ queryNaming vs ]
 
 /// Constructs a set of Horn clauses for all definite viewdefs in a model.
 let hsfModelViewDefs gs =
@@ -319,13 +328,17 @@ let hsfFunc dvs env func =
     // We check the defining views here, because anything not in the
     // defining views is to be held true.
     // Now that we're at the func level, finding the view is easy!
-    List.tryFind (fun (DefOver {Name = n}) -> n = func.Name) dvs
-    |> Option.map (fun _ -> predOfFunc env tryArithExpr func)
+    dvs
+    |> (lookup func >> mapMessages (curry InconsistentFunc func))
+    |> bind (function
+             | Some df -> lift Some (predOfFunc env tryArithExpr func)
+             | None -> ok None)
 
 /// Constructs a Horn literal for a GFunc.
 let hsfGFunc dvs env { Cond = c; Item = ms } =
     hsfFunc dvs env ms
-    |> Option.map (lift2 (fun cR msR -> ite cR msR True) (boolExpr c))
+    |> (lift2 (fun cR -> Option.map (fun m -> ite cR m True))
+              (boolExpr c))
 
 /// Constructs the body for a set of condition pair Horn clauses,
 /// given the defining views, preconditions and semantics clause.
@@ -333,9 +346,9 @@ let hsfConditionBody dvs env ps sem =
     let psH =
         ps
         |> Multiset.toFlatSeq
-        |> Seq.choose (hsfGFunc dvs env)
+        |> Seq.map (hsfGFunc dvs env)
         |> collect
-        |> lift List.ofSeq
+        |> lift (Seq.choose id >> List.ofSeq)
 
     let semH = topLevelExpr sem
 
@@ -346,8 +359,8 @@ let hsfConditionBody dvs env ps sem =
 let hsfTerm dvs env (name, {Cmd = c; WPre = w ; Goal = g}) =
     lift2 (fun head body ->
            [ Comment (sprintf "term %s" name)
-             Clause (head, body) ])
-          (Option.get (hsfFunc dvs env g))
+             Clause (Option.get head, body) ])
+          (hsfFunc dvs env g)
           (hsfConditionBody dvs env w c)
 
 /// Constructs a set of Horn clauses for all terms associated with a model.
@@ -358,7 +371,7 @@ let hsfModelTerms gs dvs =
     >> lift List.concat
 
 /// Constructs a HSF script for a model.
-let hsfModel { Globals = gs; ViewDefs = dvs; Axioms = xs } =
+let hsfModel ({ Globals = gs; ViewDefs = dvs; Axioms = xs } : IFModel<STerm<GView, VFunc>>) =
     trial {
         let! vs = gs |> hsfModelVariables
         let! ds = hsfModelViewDefs gs dvs |> lift Set.toList
