@@ -37,7 +37,7 @@ let reifySingleDef view accumulator (dv : ViewDef<DView>) =
                   matchSingleView view (v :: rview) accumulator
             matchSingleView view [] accumulator
 
-    matchMultipleViews dv.View view accumulator []
+    matchMultipleViews (viewOf dv) view accumulator []
 
 /// Reifies an dvs entire view application.
 let reifyView (dvs : ViewDef<DView> List)  vap : ViewSet = 
@@ -52,6 +52,6 @@ let reifyTerm dvs =
     mapTerm id (reifyView dvs) id
 
 /// Reifies all of the terms in a model's axiom list.
-let reify : IVModel<PTerm<GView, OView>> -> IVModel<PTerm<ViewSet, OView>> =
+let reify : UVModel<PTerm<GView, OView>> -> UVModel<PTerm<ViewSet, OView>> =
     fun ms -> 
         mapAxioms (reifyTerm ms.ViewDefs) ms

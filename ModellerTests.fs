@@ -192,52 +192,44 @@ type ModellerTests() =
     static member viewDefSet (vs : ViewDef<DView> seq) : Set<ViewDef<DView>> =
         Set.ofSeq vs
 
+    /// Type-constraining builder for indefinite viewdef sets.
+    static member indefinites (vs : DView seq) : Set<ViewDef<DView>> =
+        vs
+        |> Seq.map Indefinite
+        |> ModellerTests.viewDefSet
+
     /// Tests for the search modeller.
     /// These use TicketLockProtos.
     static member SearchViewDefs =
         [ TestCaseData({ Search = None; InitDefs = []})
-             .Returns(ModellerTests.viewDefSet [])
+             .Returns(ModellerTests.indefinites [])
              .SetName("Searching for no viewdefs does not change an empty viewdef set")
           TestCaseData({ Search = None; InitDefs = ticketLockViewDefs })
              .Returns(ModellerTests.viewDefSet ticketLockViewDefs)
              .SetName("Searching for no viewdefs does not change a full viewdef set")
           TestCaseData({ Search = Some 0; InitDefs = []})
-             .Returns(ModellerTests.viewDefSet
-                          [ { View = Multiset.empty |> Multiset.toFlatList
-                              Def = None }])
+             .Returns(ModellerTests.indefinites [ [] ] )
              .SetName("Searching for size-0 viewdefs adds emp to an empty viewdef set")
           TestCaseData({ Search = Some 0; InitDefs = ticketLockViewDefs })
              .Returns(ModellerTests.viewDefSet ticketLockViewDefs)
              .SetName("Searching for size-0 viewdefs does not change a full viewdef set")
           TestCaseData({ Search = Some 1; InitDefs = [] })
-             .Returns(ModellerTests.viewDefSet
-                          [ { View = []
-                              Def = None }
-                            { View = Multiset.singleton (func "holdLock" [] )|> Multiset.toFlatList
-                              Def = None }
-                            { View = Multiset.singleton (func "holdTick" [(Type.Int, "t0")]) |> Multiset.toFlatList
-                              Def = None }])
+             .Returns(ModellerTests.indefinites
+                          [ []
+                            [ func "holdLock" [] ]
+                            [ func "holdTick" [(Type.Int, "t0")] ] ] )
              .SetName("Searching for size-1 viewdefs yields viewdefs for emp and the view prototypes")
           TestCaseData({ Search = Some 2; InitDefs = [] })
-             .Returns(ModellerTests.viewDefSet
-                          [ { View = []
-                              Def = None }
-                            { View = [func "holdLock" []]
-                              Def = None }
-                            { View = [ func "holdLock" []
-                                       func "holdLock" [] ]
-                              Def = None }
-                            { View = Multiset.ofFlatList
-                                         [ func "holdLock" []
-                                           func "holdTick" [(Type.Int, "t0")] ] |> Multiset.toFlatList
-                              Def = None }
-                            { View = [func "holdTick" [(Type.Int, "t0")]]
-                              Def = None }
-
-                            { View = Multiset.ofFlatList
-                                         [ func "holdTick" [(Type.Int, "t0")]
-                                           func "holdTick" [(Type.Int, "t1")] ] |> Multiset.toFlatList
-                              Def = None }])
+             .Returns(ModellerTests.indefinites
+                          [ []
+                            [ func "holdLock" [] ]
+                            [ func "holdLock" []
+                              func "holdLock" [] ]
+                            [ func "holdLock" []
+                              func "holdTick" [(Type.Int, "t0")] ]
+                            [ func "holdTick" [(Type.Int, "t0")] ]
+                            [ func "holdTick" [(Type.Int, "t0")]
+                              func "holdTick" [(Type.Int, "t1")] ] ] )
              .SetName("Searching for size-2 viewdefs yields the correct views") ]
 
     /// Tests viewdef searches.

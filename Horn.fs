@@ -242,15 +242,14 @@ let queryNaming { Name = n; Params = ps } =
 /// Constructs a full constraint in HSF.
 /// The map of active globals should be passed as gs.
 /// Some is returned if the constraint is definite; None otherwise.
-let hsfViewDef gs { View = vs; Def = ex } =
-    let clause =
-        Option.map (fun dex ->
-            lift2 (fun hd bd -> [Clause (hd, [bd]); Clause (bd, [hd])])
-                  (boolExpr dex)
-                  (predOfFunc gs ensureArith vs)) ex
-    match clause with
-    | Some cl -> lift (fun c -> queryNaming vs :: c) cl
-    | None -> ok [ queryNaming vs ]
+let hsfViewDef gs =
+    function
+    | Definite (vs, ex) ->
+        lift2 (fun hd bd -> [Clause (hd, [bd]); Clause (bd, [hd])])
+              (boolExpr ex)
+              (predOfFunc gs ensureArith vs)
+        |> lift (fun c -> queryNaming vs :: c) 
+    | Indefinite vs -> ok [ queryNaming vs ]
 
 /// Constructs a set of Horn clauses for all definite viewdefs in a model.
 let hsfModelViewDefs gs =
@@ -320,7 +319,7 @@ let hsfFunc dvs env func =
     // We check the defining views here, because anything not in the
     // defining views is to be held true.
     // Now that we're at the func level, finding the view is easy!
-    List.tryFind (fun {View = {Name = n}} -> n = func.Name) dvs
+    List.tryFind (fun (DefOver {Name = n}) -> n = func.Name) dvs
     |> Option.map (fun _ -> predOfFunc env tryArithExpr func)
 
 /// Constructs a Horn literal for a GFunc.

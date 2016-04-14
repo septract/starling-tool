@@ -42,11 +42,11 @@ type Response =
     /// Output of the parsing and collation steps.
     | Collate of Collator.Types.CollatedScript
     /// Output of the parsing, collation, and modelling steps.
-    | Model of IVModel<PMethod<ViewExpr<CView>>>
+    | Model of UVModel<PMethod<ViewExpr<CView>>>
     /// Output of the parsing, collation, modelling, and guarding stages.
-    | Guard of IVModel<PMethod<ViewExpr<GView>>>
+    | Guard of UVModel<PMethod<ViewExpr<GView>>>
     /// Output of the parsing, collation, modelling, guarding and destructuring stages.
-    | Graph of IVModel<Graph>
+    | Graph of UVModel<Graph>
 
 (*
  * Error types
@@ -71,19 +71,19 @@ let printResponse mview =
     | Response.Parse s -> Lang.AST.Pretty.printScript s
     | Response.Collate c -> Lang.Collator.Pretty.printCollatedScript c
     | Response.Model m ->
-        printIVModelView
+        printUVModelView
             (printMethod (printViewExpr printCView)
                          (printPartCmd (printViewExpr printCView)))
             mview
             m
     | Response.Guard m ->
-        printIVModelView
+        printUVModelView
             (printMethod (printViewExpr printGView)
                          (printPartCmd (printViewExpr printGView)))
             mview
             m
     | Response.Graph m ->
-        printIVModelView
+        printUVModelView
             printGraph
             mview
             m

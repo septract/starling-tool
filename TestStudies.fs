@@ -272,42 +272,43 @@ let ticketLockGuardedUnlock : PMethod<ViewExpr<GView>> =
 
 /// The view definitions of the ticket lock model.
 let ticketLockViewDefs =
-    [ { View = []
-        Def = Some <| BGe(aUnmarked "ticket", aUnmarked "serving") }
-      { View =
-            Multiset.ofFlatList
-                [ { Name = "holdTick"
-                    Params = [ (Type.Int, "t") ] } ] |> Multiset.toFlatList
-        Def = Some <| BGt(aUnmarked "ticket", aUnmarked "t") }
-      { View =
-            Multiset.ofFlatList
-                [ { Name = "holdLock"
-                    Params = [] } ] |> Multiset.toFlatList
-        Def = Some <| BGt(aUnmarked "ticket", aUnmarked "serving") }
-      { View =
-            Multiset.ofFlatList
-                [ { Name = "holdLock"
-                    Params = [] }
-                  { Name = "holdTick"
-                    Params = [ (Type.Int, "t") ] } ] |> Multiset.toFlatList
-        Def = Some <| BNot(aEq (aUnmarked "serving") (aUnmarked "t")) }
-      { View =
-            Multiset.ofFlatList
-                [ { Name = "holdTick"
-                    Params = [ (Type.Int, "ta") ] }
-                  { Name = "holdTick"
-                    Params = [ (Type.Int, "tb") ] } ] |> Multiset.toFlatList
-        Def = Some <| BNot(aEq (aUnmarked "ta") (aUnmarked "tb")) }
-      { View =
-            Multiset.ofFlatList
-                [ { Name = "holdLock"
-                    Params = [] }
-                  { Name = "holdLock"
-                    Params = [] } ] |> Multiset.toFlatList
-        Def = Some <| BFalse } ]
+    [ Definite
+          ([],
+           BGe(aUnmarked "ticket", aUnmarked "serving"))
+      Definite
+          (Multiset.ofFlatList
+               [ { Name = "holdTick"
+                   Params = [ (Type.Int, "t") ] } ] |> Multiset.toFlatList,
+           BGt(aUnmarked "ticket", aUnmarked "t"))
+      Definite
+          (Multiset.ofFlatList
+               [ { Name = "holdLock"
+                   Params = [] } ] |> Multiset.toFlatList,
+           BGt(aUnmarked "ticket", aUnmarked "serving"))
+      Definite
+          (Multiset.ofFlatList
+               [ { Name = "holdLock"
+                   Params = [] }
+                 { Name = "holdTick"
+                   Params = [ (Type.Int, "t") ] } ] |> Multiset.toFlatList,
+           BNot(aEq (aUnmarked "serving") (aUnmarked "t")))
+      Definite
+          (Multiset.ofFlatList
+               [ { Name = "holdTick"
+                   Params = [ (Type.Int, "ta") ] }
+                 { Name = "holdTick"
+                   Params = [ (Type.Int, "tb") ] } ] |> Multiset.toFlatList,
+           BNot(aEq (aUnmarked "ta") (aUnmarked "tb")))
+      Definite
+          (Multiset.ofFlatList
+               [ { Name = "holdLock"
+                   Params = [] }
+                 { Name = "holdLock"
+                   Params = [] } ] |> Multiset.toFlatList,
+           BFalse) ]
 
 /// The model of the ticket lock.
-let ticketLockModel : IVModel<PMethod<ViewExpr<CView>>> =
+let ticketLockModel : UVModel<PMethod<ViewExpr<CView>>> =
     { Globals =
           Map.ofList [ ("serving", Type.Int)
                        ("ticket", Type.Int) ]

@@ -103,7 +103,7 @@ let termGenAxiom gax =
       Cmd = gax.Axiom.Cmd }
 
 /// Converts a model's goal axioms to terms.
-let termGen : IVModel<GoalAxiom> -> IVModel<PTerm<GView, OView>> =
+let termGen : UVModel<GoalAxiom> -> UVModel<PTerm<GView, OView>> =
     mapAxioms termGenAxiom
 
 

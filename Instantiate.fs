@@ -169,9 +169,9 @@ let funcTableFromViewDefs viewdefs =
     let rec buildLists definites indefinites viewdefs' =
         match viewdefs' with
         | [] -> (makeFuncTable definites, indefinites)
-        | { View = v ; Def = None } :: vs ->
+        | (Indefinite v) :: vs ->
             buildLists definites (v :: indefinites) vs
-        | { View = v ; Def = Some s } :: vs ->
+        | (Definite (v, s)) :: vs ->
             buildLists ((v, s) :: definites) indefinites vs
     buildLists [] [] viewdefs
 
@@ -374,14 +374,14 @@ module ViewDefFilter =
     ///     constraints.
     /// </summary>
     /// <param name="model">
-    ///     A model over indefinite <c>ViewDef</c>s.
+    ///     A model over <c>ViewDef</c>s.
     /// </param>
     /// <returns>
     ///     A <c>Result</c> over <c>DefinitionError</c> containing the
     ///     new model if the original contained only definite view
     ///     definitions.
     /// </returns>
-    let filterModelDefinite (model : IFModel<'axiom>)
+    let filterModelDefinite (model : UFModel<'axiom>)
                             : Result<DFModel<'axiom>, Error> =
         tryMapViewDefs
             (funcTableFromViewDefs

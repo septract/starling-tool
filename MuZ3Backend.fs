@@ -245,28 +245,28 @@ module Translator =
     ///     produced for the view, and an optional <c>BoolExpr</c>
     ///     assertion defining the view.
     /// </returns>
-    let translateViewDef reals (ctx : Z3.Context) ( { View = vs; Def = ex } : ViewDef<DFunc> ) =
-        let funcDecl = funcDeclOfDFunc reals ctx vs
-        let mapEntry = (vs.Name, funcDecl)
+    let translateViewDef reals (ctx : Z3.Context) vd =
+        let funcDecl = funcDeclOfDFunc reals ctx (viewOf vd)
+        let mapEntry = ((viewOf vd).Name, funcDecl)
 
         let rule =
-            Option.map
-                (fun dex ->
-                     (* This is a definite constraint, so we want muZ3 to
-                        use the existing constraint body for it.  We do this
-                        by creating a rule that vs <=> dex.
+            match vd with
+            | Definite (vs, ex) ->
+                 (* This is a definite constraint, so we want muZ3 to
+                    use the existing constraint body for it.  We do this
+                    by creating a rule that vs <=> dex.
                            
-                        We need to make an application of our new FuncDecl to
-                        create the constraints for it, if any.
+                    We need to make an application of our new FuncDecl to
+                    create the constraints for it, if any.
 
-                        The parameters of a DFunc are in (type, name) format,
-                        which we need to convert to expression format first.
-                        dex uses Unmarked constants, so we do too. *)
-                     let eparams = List.map (uncurry (mkVarExp Unmarked)) vs.Params
-                     let vfunc = { Name = vs.Name ; Params = eparams }
+                    The parameters of a DFunc are in (type, name) format,
+                    which we need to convert to expression format first.
+                    dex uses Unmarked constants, so we do too. *)
+                 let eparams = List.map (uncurry (mkVarExp Unmarked)) vs.Params
+                 let vfunc = { Name = vs.Name ; Params = eparams }
 
-                     (vfunc, dex))
-                ex
+                 Some (vfunc, ex)
+            | Indefinite _ -> None
 
         (mapEntry, rule)
 

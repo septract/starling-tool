@@ -556,11 +556,11 @@ let modelViewDef svars vprotos { CView = av; CExpression = ae } =
         let! vms = modelDView vplist av |> mapMessages (curry CEView av) 
         let  v = vms |> Multiset.toFlatList
         let! e = envOfViewDef svars v |> mapMessages (curry CEView av)
-        let! c = match ae with
-                 | Some dae -> modelBoolExpr e dae |> lift Some |> mapMessages (curry CEExpr dae)
-                 | _ -> ok None
-        return { View = v
-                 Def = c }
+        return! (match ae with
+                 | Some dae -> modelBoolExpr e dae
+                               |> mapMessages (curry CEExpr dae)
+                               |> lift (fun em -> Definite (v, em))
+                 | _ -> ok (Indefinite v))
     }
     |> mapMessages (curry BadConstraint av)
 
@@ -586,13 +586,14 @@ let modelViewDef svars vprotos { CView = av; CExpression = ae } =
 /// </remarks>
 let inViewDefs viewdefs dview =
     List.exists
-        (fun { View = viewdef } ->
-             if (List.length viewdef = List.length dview)
+        (function
+         | DefOver view ->
+             if (List.length view = List.length dview)
              then
                  List.forall2
                      (fun vdfunc dfunc -> vdfunc.Name = dfunc.Name)
-                     (viewdef)
-                     (dview)
+                     view
+                     dview
              else false)
         viewdefs
 
@@ -629,8 +630,7 @@ let searchViewToConstraint dview =
                                (ty, sprintf "%s%A" str (getFresh fg)))
                           ps
              { Name = name; Params = nps })
-    // Attach an indefinite constrant.
-    |> fun dfunc -> { View = dfunc ; Def = None }
+    |> Indefinite
 
 /// <summary>
 ///     Generates all views of the given size, from the given funcs.
@@ -1043,7 +1043,7 @@ let modelViewProtos protos =
     |> lift Instantiate.makeFuncTable
 
 /// Converts a collated script to a model.
-let model collated : Result<IVModel<PMethod<ViewExpr<CView>>>, ModelError> =
+let model collated : Result<UVModel<PMethod<ViewExpr<CView>>>, ModelError> =
     trial {
         // Make variable maps out of the global and local variable definitions.
         let! globals = makeVarMap collated.Globals

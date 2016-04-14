@@ -20,34 +20,40 @@ type HornTests() =
     /// These are in the form of models whose viewdefs are to be modelled.
     static member ViewDefModels =
       [ TestCaseData(
-          [ { View = { Name = "emp"
-                       Params = [ (Type.Int, "serving")
-                                  (Type.Int, "ticket") ] }
-              Def = Some <| BGe(aUnmarked "ticket", aUnmarked "serving") }
-            { View = { Name = "v_holdTick"
-                       Params = [ (Type.Int, "serving")
-                                  (Type.Int, "ticket")
-                                  (Type.Int, "t") ] }
-              Def = Some <| BGt(aUnmarked "ticket", aUnmarked "t") }
-            { View = { Name = "v_holdLock"
-                       Params = [ (Type.Int, "serving")
-                                  (Type.Int, "ticket") ] }
-              Def = Some <| BGt(aUnmarked "ticket", aUnmarked "serving") }
-            { View = { Name = "v_holdLock_holdTick"
-                       Params = [ (Type.Int, "serving")
-                                  (Type.Int, "ticket")
-                                  (Type.Int, "t") ] }
-              Def = Some <| BNot(aEq (aUnmarked "serving") (aUnmarked "t")) }
-            { View = { Name = "v_holdTick_holdTick"
-                       Params = [ (Type.Int, "serving")
-                                  (Type.Int, "ticket")
-                                  (Type.Int, "ta")
-                                  (Type.Int, "tb") ] }
-              Def = Some <| BNot(aEq (aUnmarked "ta") (aUnmarked "tb")) }
-            { View = { Name = "v_holdLock_holdLock"
-                       Params = [ (Type.Int, "serving")
-                                  (Type.Int, "ticket") ] }
-              Def = Some <| BFalse } ] )
+          [ Definite
+                ( { Name = "emp"
+                    Params = [ (Type.Int, "serving")
+                               (Type.Int, "ticket") ] },
+                  BGe(aUnmarked "ticket", aUnmarked "serving"))
+            Definite
+                ( { Name = "v_holdTick"
+                    Params = [ (Type.Int, "serving")
+                               (Type.Int, "ticket")
+                               (Type.Int, "t") ] },
+                  BGt(aUnmarked "ticket", aUnmarked "t"))
+            Definite
+                ( { Name = "v_holdLock"
+                    Params = [ (Type.Int, "serving")
+                               (Type.Int, "ticket") ] },
+                  BGt(aUnmarked "ticket", aUnmarked "serving"))
+            Definite
+                ( { Name = "v_holdLock_holdTick"
+                    Params = [ (Type.Int, "serving")
+                               (Type.Int, "ticket")
+                               (Type.Int, "t") ] },
+                  BNot(aEq (aUnmarked "serving") (aUnmarked "t")))
+            Definite
+                ( { Name = "v_holdTick_holdTick"
+                    Params = [ (Type.Int, "serving")
+                               (Type.Int, "ticket")
+                               (Type.Int, "ta")
+                               (Type.Int, "tb") ] },
+                  BNot(aEq (aUnmarked "ta") (aUnmarked "tb")))
+            Definite
+                ( { Name = "v_holdLock_holdLock"
+                    Params = [ (Type.Int, "serving")
+                               (Type.Int, "ticket") ] },
+                  BFalse ) ] )
           .Returns(
               Set.ofList
                   [ Clause(Ge (aUnmarked "ticket", aUnmarked "serving"),
