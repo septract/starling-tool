@@ -46,10 +46,3 @@ type ReifierTests() =
                              Params = [ (Type.Int, "t") ] } ])
             ).SetName("Find definition of view in a reversed order")
         ]
-
-    [<TestCaseSource("FindDefOfViewCases")>]
-    /// Tests whether findDefOfView behaves correctly.
-    member x.``findDefOfView finds view defs correctly on the ticketed lock`` view =
-        view
-        |> findDefOfView ticketLockModel.ViewDefs
-        |> Option.map (fun x -> x.View)

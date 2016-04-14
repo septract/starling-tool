@@ -272,38 +272,38 @@ let ticketLockGuardedUnlock : PMethod<ViewExpr<GView>> =
 
 /// The view definitions of the ticket lock model.
 let ticketLockViewDefs =
-    [ { View = Multiset.empty
+    [ { View = []
         Def = Some <| BGe(aUnmarked "ticket", aUnmarked "serving") }
       { View =
             Multiset.ofFlatList
                 [ { Name = "holdTick"
-                    Params = [ (Type.Int, "t") ] } ]
+                    Params = [ (Type.Int, "t") ] } ] |> Multiset.toFlatList
         Def = Some <| BGt(aUnmarked "ticket", aUnmarked "t") }
       { View =
             Multiset.ofFlatList
                 [ { Name = "holdLock"
-                    Params = [] } ]
+                    Params = [] } ] |> Multiset.toFlatList
         Def = Some <| BGt(aUnmarked "ticket", aUnmarked "serving") }
       { View =
             Multiset.ofFlatList
                 [ { Name = "holdLock"
                     Params = [] }
                   { Name = "holdTick"
-                    Params = [ (Type.Int, "t") ] } ]
+                    Params = [ (Type.Int, "t") ] } ] |> Multiset.toFlatList
         Def = Some <| BNot(aEq (aUnmarked "serving") (aUnmarked "t")) }
       { View =
             Multiset.ofFlatList
                 [ { Name = "holdTick"
                     Params = [ (Type.Int, "ta") ] }
                   { Name = "holdTick"
-                    Params = [ (Type.Int, "tb") ] } ]
+                    Params = [ (Type.Int, "tb") ] } ] |> Multiset.toFlatList
         Def = Some <| BNot(aEq (aUnmarked "ta") (aUnmarked "tb")) }
       { View =
             Multiset.ofFlatList
                 [ { Name = "holdLock"
                     Params = [] }
                   { Name = "holdLock"
-                    Params = [] } ]
+                    Params = [] } ] |> Multiset.toFlatList
         Def = Some <| BFalse } ]
 
 /// The model of the ticket lock.

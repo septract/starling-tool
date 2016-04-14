@@ -524,16 +524,16 @@ let modelDFunc protos func =
     func
     |> lookupFunc protos
     |> lift (fun proto ->
-                 [ dfunc func.Name (funcViewParMerge proto.Params func.Params) ])
+                 dfunc func.Name (funcViewParMerge proto.Params func.Params) |> Multiset.singleton)
 
 /// Tries to convert a view def into its model (multiset) form.
 let rec modelDView protos =
     function
-    | ViewDef.Unit -> ok []
+    | ViewDef.Unit -> ok Multiset.empty
     | ViewDef.Func dfunc -> modelDFunc protos dfunc
     | ViewDef.Join(l, r) -> trial { let! lM = modelDView protos l
                                     let! rM = modelDView protos r
-                                    return List.append lM rM }
+                                    return Multiset.append lM rM }
 
 /// Produces the environment created by interpreting the viewdef vds using the
 /// view prototype map vpm.
@@ -553,12 +553,13 @@ let modelViewDef svars vprotos { CView = av; CExpression = ae } =
     trial {
         let vplist = List.ofSeq vprotos
 
-        let! v = modelDView vplist av |> mapMessages (curry CEView av)
+        let! vms = modelDView vplist av |> mapMessages (curry CEView av) 
+        let  v = vms |> Multiset.toFlatList
         let! e = envOfViewDef svars v |> mapMessages (curry CEView av)
         let! c = match ae with
                  | Some dae -> modelBoolExpr e dae |> lift Some |> mapMessages (curry CEExpr dae)
                  | _ -> ok None
-        return { View = Multiset.ofFlatSeq v
+        return { View = v
                  Def = c }
     }
     |> mapMessages (curry BadConstraint av)
@@ -586,12 +587,12 @@ let modelViewDef svars vprotos { CView = av; CExpression = ae } =
 let inViewDefs viewdefs dview =
     List.exists
         (fun { View = viewdef } ->
-             if (Multiset.length viewdef = Multiset.length dview)
+             if (List.length viewdef = List.length dview)
              then
                  List.forall2
                      (fun vdfunc dfunc -> vdfunc.Name = dfunc.Name)
-                     (Multiset.toFlatList viewdef)
-                     (Multiset.toFlatList dview)
+                     (viewdef)
+                     (dview)
              else false)
         viewdefs
 
@@ -620,7 +621,7 @@ let searchViewToConstraint dview =
     let fg = freshGen ()
 
     dview
-    |> Multiset.map
+    |> List.map
         (fun { Name = name; Params = ps } ->
 
              let nps =
@@ -648,7 +649,7 @@ let genAllViewsAt depth funcs =
     let rec f depth existing =
         match depth with
         // Multiset and set conversion removes duplicate views.
-        | 0 -> existing |> Seq.map Multiset.ofFlatList |> Set.ofSeq
+        | 0 -> existing |> Seq.map (Multiset.ofFlatList >> Multiset.toFlatList) |> Set.ofSeq
         | n ->
             let existing' =
                 seq { yield []

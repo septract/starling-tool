@@ -17,7 +17,7 @@ type FlattenerTests() =
 
     /// Test cases for the view func renamer.
     static member ViewFuncNamings =
-        let ms : VFunc list -> View = Multiset.ofFlatList
+        let ms : VFunc list -> OView = Multiset.ofFlatList >> Multiset.toFlatList
         [ TestCaseData(ms [ { Name = "foo"; Params = [] }
                             { Name = "bar_baz"; Params = [] } ])
             .Returns("v_bar__baz_foo") // Remember, multisets sort!
@@ -28,13 +28,13 @@ type FlattenerTests() =
     /// Tests the view predicate name generator.
     [<TestCaseSource("ViewFuncNamings")>]
     member x.``the flattened view name generator generates names correctly`` v =
-        let pn : View -> string = funcNameOfView 
+        let pn : OView -> string = funcNameOfView 
         pn v
 
     /// Test cases for the full defining-view func converter.
     /// These all use the Globals environment above.
     static member DViewFuncs =
-        let ms : DFunc list -> DView = Multiset.ofFlatList
+        let ms : DFunc list -> DView = Multiset.ofFlatList >> Multiset.toFlatList
         [ TestCaseData(ms [ { Name = "holdLock"; Params = [] }
                             { Name = "holdTick"; Params = [(Type.Int, "t")] } ])
              .Returns({ Name = "v_holdLock_holdTick"
@@ -54,7 +54,7 @@ type FlattenerTests() =
     /// Test cases for the full view func converter.
     /// These all use the Globals environment above.
     static member ViewFuncs =
-        let ms : VFunc list -> View = Multiset.ofFlatList
+        let ms : VFunc list -> OView = Multiset.ofFlatList >> Multiset.toFlatList
         [ TestCaseData(ms [ { Name = "holdLock"; Params = [] }
                             { Name = "holdTick"; Params = [AExpr (aUnmarked "t")] } ])
              .Returns({ Name = "v_holdLock_holdTick"
@@ -66,7 +66,7 @@ type FlattenerTests() =
 
     /// Tests the viewdef LHS translator.
     [<TestCaseSource("ViewFuncs")>]
-    member x.``the view func translator works correctly`` (v: View) =
+    member x.``the view func translator works correctly`` (v: OView) =
         v |> funcOfView (FlattenerTests.Globals
                          |> Map.toSeq
                          |> Seq.map (function

@@ -67,10 +67,10 @@ let termGenFrame r q =
      * Since r is unguarded at the start of the minus, we lift it
      * to the guarded view (true|r).
      *)
-    let rl, ql = Multiset.toFlatList r, Multiset.toFlatList q
+    let ql = Multiset.toFlatList q
 
     ql
-    |> List.fold termGenFrameView (List.map guard rl)
+    |> List.fold termGenFrameView (List.map guard r)
     |> Multiset.ofFlatList
 
 /// Generates a (weakest) precondition from a framed axiom.
@@ -103,7 +103,7 @@ let termGenAxiom gax =
       Cmd = gax.Axiom.Cmd }
 
 /// Converts a model's goal axioms to terms.
-let termGen : Model<GoalAxiom, DView> -> Model<PTerm<GView, View>, DView> =
+let termGen : Model<GoalAxiom, DView> -> Model<PTerm<GView, OView>, DView> =
     mapAxioms termGenAxiom
 
 
@@ -124,13 +124,13 @@ module Tests =
         ///     Test cases for <c>termGenFrame</c>.
         /// </summary>
         static member FrameSubtracts =
-            [ (tcd [| (Multiset.singleton <|
+            [ (tcd [| (List.singleton <|
                            func "foo" [ BExpr (bGoal 0I "bar") ] )
                       (Multiset.empty : GView) |] )
                   .Returns(Multiset.singleton <|
                            gfunc BTrue "foo" [ BExpr (bGoal 0I "bar") ] )
                   .SetName("Removing emp from a func yields the original func")
-              (tcd [| (Multiset.singleton <|
+              (tcd [| (List.singleton <|
                            func "foo" [ BExpr (bGoal 0I "bar") ] )
                       (Multiset.singleton <|
                            gfunc BTrue "foo" [ BExpr (bAfter "baz") ] ) |] )
@@ -139,14 +139,15 @@ module Tests =
                                             (bAfter "baz")))
                                 "foo" [ BExpr (bGoal 0I "bar") ] )
                   .SetName("Removing a func from itself generates a !x=y-guarded view")
-              (tcd [| (Multiset.singleton <|
+              (tcd [| (List.singleton <|
                            func "foo" [ BExpr (bGoal 0I "bar") ] )
                       (Multiset.singleton <|
                            gfunc BTrue "blop" [ BExpr (bAfter "baz") ] ) |] )
                   .Returns(Multiset.singleton <|
                            gfunc BTrue "foo" [ BExpr (bGoal 0I "bar") ] )
                   .SetName("Removing a func from itself is inert")
-              (tcd [| (Multiset.ofFlatList <|
+              (tcd [| (Multiset.ofFlatList>>Multiset.toFlatList 
+                       <|
                            [ func "foo" [ BExpr (bGoal 0I "bar") ]
                              func "foo" [ BExpr (bGoal 1I "bar") ] ] )
                       (Multiset.singleton <|
@@ -163,7 +164,7 @@ module Tests =
                                                     (bAfter "baz")) ] ))
                                    "foo" [ BExpr (bGoal 1I "bar") ]] )
                   .SetName("Removing a func from two copies of itself works correctly")
-              (tcd [| (Multiset.singleton <|
+              (tcd [| (List.singleton <|
                            func "foo" [ BExpr (bGoal 0I "bar") ] )
                       (Multiset.singleton <|
                            gfunc (BGt (aAfter "x",
@@ -176,7 +177,7 @@ module Tests =
                                                      (bAfter "baz")) ] ))
                                  "foo" [ BExpr (bGoal 0I "bar") ] )
                   .SetName("Removing a guarded func from itself works correctly")
-              (tcd [| (Multiset.empty : View)
+              (tcd [| (List.empty : OView)
                       (Multiset.singleton <|
                            gfunc BTrue "foo" [ BExpr (bBefore "bar") ] ) |] )
                   .Returns(Multiset.empty : GView)

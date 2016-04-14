@@ -69,7 +69,7 @@ module Types =
     /// <summary>
     ///     A multiset of guarded views, as produced by reification.
     /// </summary>
-    type ViewSet = Multiset<Guarded<View>>
+    type ViewSet = Multiset<Guarded<OView>>
 
 
 (*
@@ -299,5 +299,5 @@ module Pretty =
     ///     A pretty-printer command to print the <c>ViewSet</c>.
     /// </returns>
     let printViewSet =
-        printMultiset (printGuarded printView >> ssurround "((" "))")
+        printMultiset (printGuarded printOView >> ssurround "((" "))")
         >> ssurround "(|" "|)"
