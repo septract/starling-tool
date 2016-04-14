@@ -322,32 +322,34 @@ let runStarling optS reals verbose request =
             | Request.MuZ3 rq -> muz3 reals rq >> lift Response.MuZ3
             | _               -> failPhase
 
-    let choose b t e = if b then lift t else e
+    //Build a phase with
+    //  op as what to do
+    //  if request is test, then we output the results
+    //  otherwise we continue with the rest of the phases.
+    let phase op test output continuation = op >> if request = test then lift output else continuation
+
+    // Left pipe is not right associative
+    // so locally overload a right associative operator to be left pipe
+    let ( ** ) = ( <| )
 
     if verbose
     then
         eprintfn "Z3 version: %s" (Microsoft.Z3.Version.ToString ())
 
+    let termOptimise = termOptimise optR optA verbose
+
     match request with
     | Request.Frontend rq -> frontend rq >> lift Response.Frontend
     | _ ->
-        model
-        >> (graphOptimise optR optA verbose)
-        >> choose (request = Request.GraphOptimise) Response.GraphOptimise
-           (axiomatise
-            >> choose (request = Request.Axiomatise) Response.Axiomatise
-               (goalAdd
-               >> choose (request = Request.GoalAdd) Response.GoalAdd
-                  (termGen
-                   >> choose (request = Request.TermGen) Response.TermGen
-                      (reify
-                       >> choose (request = Request.Reify) Response.Reify
-                          (flatten
-                           >> choose (request = Request.Flatten) Response.Flatten
-                              (semantics
-                               >> choose (request = Request.Semantics) Response.Semantics
-                                    backend))))))
-
+        phase     model        Request.GraphOptimise Response.GraphOptimise
+        ** phase  axiomatise   Request.Axiomatise    Response.Axiomatise
+        ** phase  goalAdd      Request.GoalAdd       Response.GoalAdd
+        ** phase  termGen      Request.TermGen       Response.TermGen
+        ** phase  reify        Request.Reify         Response.Reify
+        ** phase  flatten      Request.Flatten       Response.Flatten
+        ** phase  semantics    Request.Semantics     Response.Semantics
+        ** phase  termOptimise Request.TermOptimise  Response.TermOptimise
+        ** backend
 
 /// Runs Starling with the given options, and outputs the results.
 let mainWithOptions opts =
