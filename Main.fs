@@ -116,21 +116,21 @@ type Response =
     /// The result of frontend processing.
     | Frontend of Lang.Frontend.Response
     /// Stop at graph optimisation.
-    | GraphOptimise of Model<Graph, DView>
+    | GraphOptimise of IVModel<Graph>
     /// Stop at graph axiomatisation.
-    | Axiomatise of Model<Axiom<GView, Command>, DView>
+    | Axiomatise of IVModel<Axiom<GView, Command>>
     /// The result of goal-axiom-pair generation.
-    | GoalAdd of Model<GoalAxiom, DView>
+    | GoalAdd of IVModel<GoalAxiom>
     /// The result of term generation.
-    | TermGen of Model<PTerm<GView, OView>, DView>
+    | TermGen of IVModel<PTerm<GView, OView>>
     /// The result of term reification.
-    | Reify of Model<PTerm<ViewSet, OView>, DView>
+    | Reify of IVModel<PTerm<ViewSet, OView>>
     /// The result of term flattening.
-    | Flatten of Model<PTerm<GView, VFunc>, DFunc>
+    | Flatten of IFModel<PTerm<GView, VFunc>>
     /// The result of semantic expansion.
-    | Semantics of Model<STerm<GView, VFunc>, DFunc>
+    | Semantics of IFModel<STerm<GView, VFunc>>
     /// The result of term optimisation.
-    | TermOptimise of Model<STerm<GView, VFunc>, DFunc>
+    | TermOptimise of IFModel<STerm<GView, VFunc>>
     /// The result of Z3 backend processing.
     | Z3 of Backends.Z3.Types.Response
     /// The result of MuZ3 backend processing.

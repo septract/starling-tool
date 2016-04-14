@@ -96,6 +96,11 @@ module Types =
      *)
 
     /// <summary>
+    ///     Type of potentially indefinite view bodies.
+    /// </summary>
+    type Indefinite = BoolExpr option
+
+    /// <summary>
     ///     A view definition.
     /// </summary>
     /// <remarks>
@@ -104,7 +109,7 @@ module Types =
     /// </remarks>
     type ViewDef<'view> =
         { View : 'view
-          Def : BoolExpr option }
+          Def : Indefinite }
 
     (*
      * Terms
@@ -150,6 +155,24 @@ module Types =
           Semantics : (DFunc * BoolExpr) list
           // This corresponds to the function D.
           ViewDefs : ViewDef<'dview> list }
+
+    /// <summary>
+    ///     A <c>Model</c> whose view definitions map <c>DView</c>s to
+    ///     <c>Indefinite</c> bodies.
+    /// </summary>
+    /// <typeparam name="axiom">
+    ///     Type of program axioms.
+    /// </typeparam>
+    type IVModel<'axiom> = Model<'axiom, DView>
+
+    /// <summary>
+    ///     A <c>Model</c> whose view definitions map <c>DFunc</c>s to
+    ///     <c>Indefinite</c> bodies.
+    /// </summary>
+    /// <typeparam name="axiom">
+    ///     Type of program axioms.
+    /// </typeparam>
+    type IFModel<'axiom> = Model<'axiom, DFunc>
 
 
 /// <summary>

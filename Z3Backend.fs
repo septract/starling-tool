@@ -51,9 +51,9 @@ module Types =
     [<NoComparison>]
     type Response =
         /// Output of the term translation step only.
-        | Translate of Model<ZTerm, DFunc>
+        | Translate of IFModel<ZTerm>
         /// Output of the final Z3 terms only.
-        | Combine of Model<Z3.BoolExpr, DFunc>
+        | Combine of IFModel<Z3.BoolExpr>
         /// Output of satisfiability reports for the Z3 terms.
         | Sat of Map<string, Z3.Status>
 

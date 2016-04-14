@@ -42,11 +42,11 @@ type Response =
     /// Output of the parsing and collation steps.
     | Collate of Collator.Types.CollatedScript
     /// Output of the parsing, collation, and modelling steps.
-    | Model of Model<PMethod<ViewExpr<CView>>, DView>
+    | Model of IVModel<PMethod<ViewExpr<CView>>>
     /// Output of the parsing, collation, modelling, and guarding stages.
-    | Guard of Model<PMethod<ViewExpr<GView>>, DView>
+    | Guard of IVModel<PMethod<ViewExpr<GView>>>
     /// Output of the parsing, collation, modelling, guarding and destructuring stages.
-    | Graph of Model<Graph, DView>
+    | Graph of IVModel<Graph>
 
 (*
  * Error types
