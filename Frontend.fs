@@ -71,24 +71,21 @@ let printResponse mview =
     | Response.Parse s -> Lang.AST.Pretty.printScript s
     | Response.Collate c -> Lang.Collator.Pretty.printCollatedScript c
     | Response.Model m ->
-        printModelView
-            mview
+        printIVModelView
             (printMethod (printViewExpr printCView)
                          (printPartCmd (printViewExpr printCView)))
-            printDView
+            mview
             m
     | Response.Guard m ->
-        printModelView
-            mview
+        printIVModelView
             (printMethod (printViewExpr printGView)
                          (printPartCmd (printViewExpr printGView)))
-            printDView
+            mview
             m
     | Response.Graph m ->
-        printModelView
-            mview
+        printIVModelView
             printGraph
-            printDView
+            mview
             m
 
 /// Pretty-prints an error.

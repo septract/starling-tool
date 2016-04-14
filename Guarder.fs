@@ -62,6 +62,6 @@ let guardMethod { Signature = signature; Body = body } =
     { Signature = signature; Body = guardBlock body }
 
 /// Converts an entire model to guarded views.
-let guard : Model<PMethod<ViewExpr<CView>>, DView>
-         -> Model<PMethod<ViewExpr<GView>>, DView> =
+let guard : IVModel<PMethod<ViewExpr<CView>>>
+         -> IVModel<PMethod<ViewExpr<GView>>> =
     mapAxioms guardMethod

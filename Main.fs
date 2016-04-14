@@ -143,51 +143,21 @@ let printResponse mview =
     function
     | Frontend f -> Lang.Frontend.printResponse mview f
     | GraphOptimise g ->
-        printModelView
-            mview
-            printGraph
-            printDView
-            g
+        printIVModelView printGraph mview g
     | Axiomatise m ->
-        printModelView
-            mview
-            (printAxiom printCommand printGView)
-            printDView
-            m
+        printIVModelView (printAxiom printCommand printGView) mview m
     | GoalAdd m ->
-        printModelView
-            mview
-            printGoalAxiom printDView m
+        printIVModelView printGoalAxiom mview m
     | TermGen m ->
-        printModelView
-            mview
-            (printPTerm printGView printOView)
-            printDView
-            m
+        printIVModelView (printPTerm printGView printOView) mview m
     | Reify m ->
-        printModelView
-            mview
-            (printPTerm printViewSet printOView)
-            printDView
-            m
+        printIVModelView (printPTerm printViewSet printOView) mview m
     | Flatten m ->
-        printModelView
-            mview
-            (printPTerm printGView printVFunc)
-            printDFunc
-            m
+        printIFModelView (printPTerm printGView printVFunc) mview m
     | Semantics m ->
-        printModelView
-            mview
-            (printSTerm printGView printVFunc)
-            printDFunc
-            m
+        printIFModelView (printSTerm printGView printVFunc) mview m
     | TermOptimise m ->
-        printModelView
-            mview
-            (printSTerm printGView printVFunc)
-            printDFunc
-            m
+        printIFModelView (printSTerm printGView printVFunc) mview m
     | Z3 z -> Backends.Z3.Pretty.printResponse mview z
     | MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
     | HSF h -> Backends.Horn.Pretty.printHorns h

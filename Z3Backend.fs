@@ -81,17 +81,9 @@ module Pretty =
     let printResponse mview =
         function
         | Response.Translate m ->
-            printModelView
-                mview
-                (printTerm printZ3Exp printZ3Exp printZ3Exp)
-                printDFunc
-                m
+            printIFModelView (printTerm printZ3Exp printZ3Exp printZ3Exp) mview m
         | Response.Combine m ->
-            printModelView
-                mview
-                printZ3Exp
-                printDFunc
-                m
+            printIFModelView printZ3Exp mview m
         | Response.Sat s ->
             printMap Inline String printSat s
 
@@ -175,7 +167,7 @@ module Translator =
     ///     and will fail if any are not.
     ///   </para>
     /// </remarks>
-    let interpret model : Result<Model<FTerm, DFunc>, Error> =
+    let interpret model : Result<IFModel<FTerm>, Error> =
         makeFuncTable model
         |> bind (fun ft -> tryMapAxioms (interpretTerm ft) model)
 

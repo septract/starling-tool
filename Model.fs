@@ -145,7 +145,7 @@ module Types =
      *)
 
     /// A parameterised model of a Starling program.
-    type Model<'axiom, 'dview> =
+    type Model<'axiom, 'viewdefs> =
         { Globals : VarMap
           Locals : VarMap
           Axioms : Map<string, 'axiom>
@@ -154,7 +154,7 @@ module Types =
           /// </summary>
           Semantics : (DFunc * BoolExpr) list
           // This corresponds to the function D.
-          ViewDefs : ViewDef<'dview> list }
+          ViewDefs : 'viewdefs }
 
     /// <summary>
     ///     A <c>Model</c> whose view definitions map <c>DView</c>s to
@@ -163,7 +163,7 @@ module Types =
     /// <typeparam name="axiom">
     ///     Type of program axioms.
     /// </typeparam>
-    type IVModel<'axiom> = Model<'axiom, DView>
+    type IVModel<'axiom> = Model<'axiom, ViewDef<DView> list>
 
     /// <summary>
     ///     A <c>Model</c> whose view definitions map <c>DFunc</c>s to
@@ -172,7 +172,7 @@ module Types =
     /// <typeparam name="axiom">
     ///     Type of program axioms.
     /// </typeparam>
-    type IFModel<'axiom> = Model<'axiom, DFunc>
+    type IFModel<'axiom> = Model<'axiom, ViewDef<DFunc> list>
 
 
 /// <summary>
@@ -241,7 +241,7 @@ module Pretty =
         printMap Indented String pAxiom model.Axioms
 
     /// Pretty-prints a model given axiom and defining-view printers.
-    let printModel pAxiom pDView model =
+    let printModel pAxiom pViewDefs model =
         headed "Model"
             [ headed "Shared variables" <|
                   Seq.singleton
@@ -250,9 +250,10 @@ module Pretty =
                   Seq.singleton
                       (printMap Inline String printType model.Locals)
               headed "ViewDefs" <|
-                  List.map (printViewDef pDView) model.ViewDefs
+                  pViewDefs model.ViewDefs
               headed "Axioms" <|
                   Seq.singleton (printModelAxioms pAxiom model) ]
+
 
     /// <summary>
     ///     Enumerations of ways to view part or all of a <c>Model</c>.
@@ -274,15 +275,15 @@ module Pretty =
     /// <summary>
     ///     Prints a model using the <c>ModelView</c> given.
     /// </summary>
-    /// <param name="mview">
-    ///     The <c>ModelView</c> stating which part of the model should be
-    ///     printed.
-    /// </param>
     /// <param name="pAxiom">
     ///     The printer to use for model axioms.
     /// </param>
     /// <param name="pViewDef">
     ///     The printer to use for view definitions.
+    /// </param>
+    /// <param name="mview">
+    ///     The <c>ModelView</c> stating which part of the model should be
+    ///     printed.
     /// </param>
     /// <param name="model">
     ///     The model to print.
@@ -292,7 +293,7 @@ module Pretty =
     ///     <paramref name="model" /> specified by
     ///     <paramref name="mView" />.
     /// </returns>
-    let printModelView mView pAxiom pViewDef m =
+    let printModelView pAxiom pViewDef mView m =
         match mView with
         | ModelView.Model -> printModel pAxiom pViewDef m
         | ModelView.Terms -> printModelAxioms pAxiom m
@@ -300,6 +301,32 @@ module Pretty =
             Map.tryFind termstr m.Axioms
             |> Option.map pAxiom
             |> withDefault (termstr |> sprintf "no term '%s'" |> String)
+
+    /// <summary>
+    ///     Pretty-prints a model view for an <c>IVModel</c>.
+    /// </summary>
+    /// <param name="pAxiom">
+    ///     Pretty printer for axioms.
+    /// </param>
+    /// <returns>
+    ///     A function, taking a <c>ModelView</c> and <c>IVModel</c>, and
+    ///     returning a <c>Command</c>.
+    /// </returns>
+    let printIVModelView pAxiom =
+        printModelView pAxiom (List.map (printViewDef printDView))
+
+    /// <summary>
+    ///     Pretty-prints a model view for an <c>IFModel</c>.
+    /// </summary>
+    /// <param name="pAxiom">
+    ///     Pretty printer for axioms.
+    /// </param>
+    /// <returns>
+    ///     A function, taking a <c>ModelView</c> and <c>IFModel</c>, and
+    ///     returning a <c>Command</c>.
+    /// </returns>
+    let printIFModelView pAxiom =
+        printModelView pAxiom (List.map (printViewDef printDFunc))
 
 
 /// <summary>
@@ -414,3 +441,4 @@ let isAdvisory =
 /// </returns>
 let varsInVFunc { Params = ps } =
     ps |> Seq.map varsIn |> Seq.concat
+

@@ -52,6 +52,6 @@ let reifyTerm dvs =
     mapTerm id (reifyView dvs) id
 
 /// Reifies all of the terms in a model's axiom list.
-let reify : Model<PTerm<GView, OView>, DView> -> Model<PTerm<ViewSet, OView>, DView> =
+let reify : IVModel<PTerm<GView, OView>> -> IVModel<PTerm<ViewSet, OView>> =
     fun ms -> 
         mapAxioms (reifyTerm ms.ViewDefs) ms

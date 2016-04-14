@@ -61,6 +61,11 @@ module Types =
         ///     definition has <c>dn</c> parameters.
         /// </summary>
         | CountMismatch of fn: int * dn: int
+        /// <summary>
+        ///     We were given an indefinite constraint when trying to
+        ///     assert that all constraints are definite.
+        /// </summary>
+        | IndefiniteConstraint of view: DFunc
 
 
 /// <summary>
@@ -80,6 +85,9 @@ module Pretty =
         | CountMismatch (fn, dn) ->
             fmt "view usage has {0} parameter(s), but its definition has {1}"
                 [ fn |> sprintf "%d" |> String; dn |> sprintf "%d" |> String ]
+        | IndefiniteConstraint (view) ->
+            fmt "indefinite 'constraint {0} -> ?' not allowed here"
+                [ printDFunc view ]
 
 
 (*
@@ -118,7 +126,7 @@ let makeFuncTable fseq : FuncTable<'defn> =
 let funcTableFromViewDefs viewdefs =
     let rec buildLists definites indefinites viewdefs' =
         match viewdefs' with
-        | [] -> (definites, indefinites)
+        | [] -> (makeFuncTable definites, indefinites)
         | { View = v ; Def = None } :: vs ->
             buildLists definites (v :: indefinites) vs
         | { View = v ; Def = Some s } :: vs ->
@@ -312,3 +320,26 @@ let instantiate func =
              | Some (def, snd) -> lift (fun _ -> Some (def, snd))
                                        (checkParamTypes func def))
     >> lift (Option.map (uncurry (substitute func)))
+
+
+/// <summary>
+///     Functions for view definition filtering.
+/// </summary>
+module ViewDefFilter =
+    /// <summary>
+    ///     Tries to convert an indefinite model into a definite one.
+    ///     The conversion fails if the model has any indefinite
+    ///     constraints.
+    /// </summary>
+    /// <param name="model">
+    ///     The indefinite <c>Model</c> to convert.
+    /// </param>
+    /// <returns>
+    ///     A <c>Result</c> over <c>DefinitionError</c> containing the
+    ///     new model if the original contained only definite view
+    ///     definitions.
+    /// </returns>
+    let filterModelDefinite model =
+        match (funcTableFromViewDefs model.ViewDefs) with
+        | ftab, [] -> ok ftab
+        | _, indefs -> indefs |> List.map IndefiniteConstraint |> Bad

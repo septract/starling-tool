@@ -307,7 +307,7 @@ let ticketLockViewDefs =
         Def = Some <| BFalse } ]
 
 /// The model of the ticket lock.
-let ticketLockModel : Model<PMethod<ViewExpr<CView>>, DView> =
+let ticketLockModel : IVModel<PMethod<ViewExpr<CView>>> =
     { Globals =
           Map.ofList [ ("serving", Type.Int)
                        ("ticket", Type.Int) ]

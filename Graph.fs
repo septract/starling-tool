@@ -648,8 +648,8 @@ let axiomatiseGraphs =
 ///     An axiom-based model equivalent to <paramref name="model" />,
 ///     wrapped in a Chessie result.
 /// </returns>
-let axiomatise (model : Model<Graph, DView>)
-               : Model<Axiom<GView, Command>, DView> =
+let axiomatise (model : IVModel<Graph>)
+               : IVModel<Axiom<GView, Command>> =
     withAxioms (axiomatiseGraphs model.Axioms) model
 
 

@@ -259,6 +259,6 @@ let graphMethod { Signature = { Name = name }; Body = body } =
 /// <summary>
 ///     Converts a model on method ASTs to one on method CFGs.
 /// </summary>
-let graph (model : Model<PMethod<ViewExpr<GView>>, DView>)
-          : Result<Model<Graph, DView>, Error> =
+let graph (model : IVModel<PMethod<ViewExpr<GView>>>)
+          : Result<IVModel<Graph>, Error> =
     tryMapAxioms graphMethod model
