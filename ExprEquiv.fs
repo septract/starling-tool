@@ -98,8 +98,8 @@ let andEquiv x y : Equiv =
 /// </remarks>
 let equiv x y =
     fun ctx ->
-        let sx, sy = (x |> simp |> Expr.boolToZ3 ctx,
-                      y |> simp |> Expr.boolToZ3 ctx)
+        let sx, sy = (x |> simp |> Expr.boolToZ3 false ctx,
+                      y |> simp |> Expr.boolToZ3 false ctx)
         ctx.MkIff (sx, sy)
 
 /// <summary>

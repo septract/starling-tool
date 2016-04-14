@@ -72,6 +72,7 @@
     <Compile Include="Horn.fs" />
     <Compile Include="Frontend.fs" />
     <Compile Include="Z3Backend.fs" />
+    <Compile Include="MuZ3Backend.fs" />
     <Compile Include="TestStudies.fs" />
     <Compile Include="ExprTests.fs" />
     <Compile Include="GraphTests.fs" />

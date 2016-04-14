@@ -17,6 +17,7 @@ module Starling.Core.GuardedView
 open Starling.Collections
 open Starling.Core.Expr
 open Starling.Core.ExprEquiv
+open Starling.Core.Var
 open Starling.Core.Model
 
 
@@ -46,6 +47,7 @@ module Types =
           ///    The guarded item.
           /// </summary>
           Item : 'item }
+        override this.ToString() = sprintf "(%A -> %A)" this.Cond this.Item
 
     (*
      * Shorthand for guarded items.
@@ -91,7 +93,7 @@ module Types =
 /// <returns>
 ///     A new <c>GFunc</c> with the given guard, name, and parameters.
 /// </returns>
-let gfunc guard name pars = { Cond = guard ; Item = func name pars }
+let gfunc guard name pars = { Cond = guard ; Item = vfunc name pars }
 
 
 (*
@@ -139,6 +141,29 @@ let (|ITEGuards|_|) ms =
         Some (x.Cond, Multiset.singleton { Cond = BTrue; Item = x.Item },
               mkNot x.Cond, Multiset.empty)
     | _ -> None
+
+
+(*
+ * Variable querying.
+ *)
+
+/// <summary>
+///     Extracts a sequence of all variables in a <c>GFunc</c>.
+/// </summary>
+/// <param name="_arg1">
+///     The <c>GFunc</c> to query.
+/// </param>
+/// <returns>
+///     A sequence of (<c>Const</c>, <c>Type</c>) pairs that represent all of
+///     the variables used in the <c>GFunc</c>.
+/// </returns>
+let varsInGFunc { Cond = guard ; Item = func } =
+    seq {
+        yield! (varsInBool guard)
+        for param in func.Params do
+            yield! (varsIn param)
+    }
+
 
 (*
  * Destructuring and mapping.
@@ -301,3 +326,39 @@ module Pretty =
     let printViewSet =
         printMultiset (printGuarded printOView >> ssurround "((" "))")
         >> ssurround "(|" "|)"
+
+
+/// <summary>
+///     Tests for guarded views.
+/// </summary>
+module Tests =
+    open NUnit.Framework
+
+    /// <summary>
+    ///     NUnit tests for guarded views.
+    /// </summary>
+    type NUnit () =
+        /// <summary>
+        ///     Test cases for extracting variables from <c>GFunc</c>s.
+        /// </summary>
+        static member VarsInGFuncCases =
+            [ TestCaseData(gfunc BTrue "foo" [])
+                  .Returns(Set.empty : Set<(Const * Type)>)
+                  .SetName("GFunc with no guard and no parameters has no variables")
+              TestCaseData(gfunc (bUnmarked "bar") "foo" [])
+                  .Returns((Set.singleton (Unmarked "bar", Bool)) : Set<(Const * Type)>)
+                  .SetName("Variables in a GFunc's guard are returned by varsInGFunc")
+              TestCaseData(gfunc BTrue "foo" [ BExpr (bAfter "x")
+                                               AExpr (aBefore "y") ] )
+                  .Returns((Set.ofArray
+                                [| (After "x", Bool)
+                                   (Before "y", Int) |]): Set<(Const * Type)>)
+                  .SetName("Variables in a GFunc's parameters are returned by varsInGFunc") ]
+
+        /// <summary>
+        ///     Tests <c>varsInGFunc</c>.
+        /// </summary>
+        [<TestCaseSource("VarsInGFuncCases")>]
+        member this.testVarsInGFunc gf =
+            gf |> varsInGFunc |> Set.ofSeq
+

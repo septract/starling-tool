@@ -28,6 +28,11 @@ type Options =
                 "Dump results in raw format instead of pretty-printing.")>]
       raw : bool
       [<Option(
+            'R',
+            HelpText =
+                "(TEMPORARY) Use reals instead of ints in Z3 proofs.")>]
+      reals : bool
+      [<Option(
             's',
             HelpText =
                 "The stage at which Starling should stop and output.")>]
@@ -72,6 +77,8 @@ type Request =
     | TermOptimise
     /// Run the Z3 backend, with the given request.
     | Z3 of Backends.Z3.Types.Request
+    /// Run the MuZ3 backend (experimental), with the given request.
+    | MuZ3 of Backends.MuZ3.Types.Request
     /// Run the HSF backend (experimental).
     | HSF
 
@@ -93,6 +100,9 @@ let requestMap =
                  ("reifyZ3", Request.Z3 Backends.Z3.Types.Request.Translate)
                  ("z3", Request.Z3 Backends.Z3.Types.Request.Combine)
                  ("sat", Request.Z3 Backends.Z3.Types.Request.Sat)
+                 ("mutranslate", Request.MuZ3 Backends.MuZ3.Types.Request.Translate)
+                 ("mufix", Request.MuZ3 Backends.MuZ3.Types.Request.Fix)
+                 ("musat", Request.MuZ3 Backends.MuZ3.Types.Request.Sat)
                  ("hsf", Request.HSF) ]
 
 /// Converts an optional -s stage name to a request item.
@@ -123,6 +133,8 @@ type Response =
     | TermOptimise of Model<STerm<GView, VFunc>, DFunc>
     /// The result of Z3 backend processing.
     | Z3 of Backends.Z3.Types.Response
+    /// The result of MuZ3 backend processing.
+    | MuZ3 of Backends.MuZ3.Types.Response
     /// The result of HSF processing.
     | HSF of Backends.Horn.Types.Horn list
 
@@ -177,6 +189,7 @@ let printResponse mview =
             printDFunc
             m
     | Z3 z -> Backends.Z3.Pretty.printResponse mview z
+    | MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
     | HSF h -> Backends.Horn.Pretty.printHorns h
 
 /// A top-level program error.
@@ -236,7 +249,10 @@ let printResult pOk pBad =
 let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
 
 /// Shorthand for the Z3 stage.
-let z3 rq = bind (Backends.Z3.run rq >> mapMessages Error.Z3)
+let z3 reals rq = bind (Backends.Z3.run reals rq >> mapMessages Error.Z3)
+
+/// Shorthand for the MuZ3 stage.
+let muz3 reals rq = lift (Backends.MuZ3.run reals rq)
 
 /// Shorthand for the graph optimise stage.
 let graphOptimise optR optA verbose =
@@ -281,30 +297,36 @@ let model =
 /// <param name="optS">
 ///     The string governing optimiser overrides.
 /// </param>
+/// <param name="reals">
+///     (TEMPORARY) Whether to use reals instead of ints in MuZ proofs.
+/// </param>
 /// <param name="verbose">
 ///     If true, dump some internal information to stderr.
 /// </param>
-/// <param name="_arg1">
+/// <param name="request">
 ///     The Starling request to run.
 /// </param>
-/// <param name="_arg2">
-///     The file containing input for the request.
-/// </param>
 /// <returns>
-///     The result of running the Starling request, as a <c>Result</c>
-///     over <c>Response</c> and <c>Error</c>.
+///     A function implementing the chosen Starling pipeline,
+///     taking a file containing request input and returning a
+///     <c>Result</c> over <c>Response</c> and <c>Error</c>.
 /// </returns>
-let runStarling optS verbose request =
+let runStarling optS reals verbose request =
     let optR, optA = Optimiser.Utils.parseOptString optS
 
     let failPhase = fun _ -> fail (Error.Other "Internal")
     let backend =
             match request with
-            | Request.HSF   -> hsf >> lift Response.HSF
-            | Request.Z3 rq -> z3 rq >> lift Response.Z3
-            | _             -> failPhase
+            | Request.HSF     -> hsf >> lift Response.HSF
+            | Request.Z3 rq   -> z3 reals rq >> lift Response.Z3
+            | Request.MuZ3 rq -> muz3 reals rq >> lift Response.MuZ3
+            | _               -> failPhase
 
     let choose b t e = if b then lift t else e
+
+    if verbose
+    then
+        eprintfn "Z3 version: %s" (Microsoft.Z3.Version.ToString ())
 
     match request with
     | Request.Frontend rq -> frontend rq >> lift Response.Frontend
@@ -331,10 +353,11 @@ let runStarling optS verbose request =
 let mainWithOptions opts =
     let optS = Seq.toList opts.optimisers
     let verbose = opts.verbose
+    let reals = opts.reals
 
     let starlingR =
         match (requestFromStage opts.stage) with
-        | Some otype -> runStarling optS verbose otype opts.input
+        | Some otype -> runStarling optS reals verbose otype opts.input
         | None -> fail Error.BadStage
 
     let mview =

@@ -118,7 +118,7 @@ let frame model expr =
     let evars =
         expr
         |> varsInBool
-        |> Seq.choose (function | After x -> Some x
+        |> Seq.choose (function | (After x, _) -> Some x
                                 | _ -> None)
         |> Set.ofSeq
 

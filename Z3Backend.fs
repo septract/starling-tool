@@ -1,4 +1,18 @@
-/// The part of the Z3 backend that translates terms to Z3.
+/// <summary>
+///     The Z3 backend.
+///
+///     <para>
+///         This converts Starling proof terms into fully interpreted
+///         negated implications, and uses Z3 as a SMT solver to check
+///         the satisfiability of those terms one by one.
+///     </para>
+///     <para>
+///         The Z3 backend is relatively stable, fast, and can accept a
+///         large amount of Starling features, but does not support
+///         indefinite view constraints or placeholder views.  This
+///         means it is best for checking existing Starling proofs.
+///     </para>
+/// </summary>
 module Starling.Backends.Z3
 
 open Microsoft
@@ -6,6 +20,7 @@ open Chessie.ErrorHandling
 open Starling
 open Starling.Collections
 open Starling.Core.Expr
+open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.GuardedView
 open Starling.Core.Instantiate
@@ -25,11 +40,11 @@ module Types =
 
     /// Type of requests to the Z3 backend.
     type Request =
-        /// Only translate the term views; return `Output.Translate`.
+        /// Only translate the term views; return `Response.Translate`.
         | Translate
-        /// Translate and combine term Z3 expressions; return `Output.Combine`.
+        /// Translate and combine term Z3 expressions; return `Response.Combine`.
         | Combine
-        /// Translate, combine, and run term Z3 expressions; return `Output.Sat`.
+        /// Translate, combine, and run term Z3 expressions; return `Response.Sat`.
         | Sat
 
     /// Type of responses from the Z3 backend.
@@ -38,9 +53,9 @@ module Types =
         /// Output of the term translation step only.
         | Translate of Model<ZTerm, DFunc>
         /// Output of the final Z3 terms only.
-        | Combine of Model<Microsoft.Z3.BoolExpr, DFunc>
+        | Combine of Model<Z3.BoolExpr, DFunc>
         /// Output of satisfiability reports for the Z3 terms.
-        | Sat of Map<string, Microsoft.Z3.Status>
+        | Sat of Map<string, Z3.Status>
 
     /// A Z3 translation error.
     type Error =
@@ -57,6 +72,7 @@ module Types =
 /// </summary>
 module Pretty =            
     open Starling.Core.Pretty
+    open Starling.Core.Expr.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Instantiate.Pretty
     open Starling.Core.Z3.Pretty
@@ -76,7 +92,8 @@ module Pretty =
                 printZ3Exp
                 printDFunc
                 m
-        | Response.Sat s -> printMap Inline String printSat s
+        | Response.Sat s ->
+            printMap Inline String printSat s
 
     /// Pretty-prints Z3 translation errors.
     let printError =
@@ -121,9 +138,9 @@ module Translator =
     /// <summary>
     ///   Tries to make a <c>FuncTable</c> from <c>model</c>'s view definitions.
     /// </summary>
-    /// <parameter name="model">
+    /// <param name="model">
     ///   The model whose <c>ViewDefs</c> are to be turned into a <c>FuncTable</c>.
-    /// </parameter>
+    /// </param>
     /// <returns>
     ///   A Chessie result, which, when ok, contains a <c>FuncTable</c> mapping
     ///   each defining view in <c>model</c> to its <c>BoolExpr</c> meaning.
@@ -135,20 +152,18 @@ module Translator =
     ///   </para>
     /// </remarks>
     let makeFuncTable model =
-        model.ViewDefs
-        |> Seq.map
-            (function
-             | { View = vs; Def = None } -> IndefiniteConstraint vs |> fail
-             | { View = vs; Def = Some s } -> (vs, s) |> ok)
-        |> collect
-        |> lift Starling.Core.Instantiate.makeFuncTable
+        (* We cannot have any indefinite constraints for Z3.
+           These are the snd in the pair coming from funcTableFromViewDefs. *)
+        match (funcTableFromViewDefs model.ViewDefs) with
+        | ftab, [] -> ok ftab
+        | _, indefs -> indefs |> List.map IndefiniteConstraint |> Bad
 
     /// <summary>
     ///   Interprets all views in a model, converting them to <c>FTerm</c>s.
     /// </summary>
-    /// <parameter name="model">
+    /// <param name="model">
     ///   The model whose views are to be interpreted.
-    /// </parameter>
+    /// </param>
     /// <returns>
     ///   A Chessie result, which, when ok, contains a <c>Model</c> equivalent to
     ///   <c>model</c> except that each view is replaced with the <c>BoolExpr</c>
@@ -165,7 +180,7 @@ module Translator =
         |> bind (fun ft -> tryMapAxioms (interpretTerm ft) model)
 
     /// Combines the components of a reified term.
-    let combineTerm (ctx: Z3.Context) {Cmd = c; WPre = w; Goal = g} =
+    let combineTerm reals (ctx: Z3.Context) {Cmd = c; WPre = w; Goal = g} =
         (* This is effectively asking Z3 to refute (c ^ w => g).
          *
          * This arranges to:
@@ -174,10 +189,10 @@ module Translator =
          *   - ((c^w) ^ ¬g) deMorgan
          *   - (c^w^¬g) associativity.
          *)
-        boolToZ3 ctx (mkAnd [c ; w; mkNot g] )
+        boolToZ3 reals ctx (mkAnd [c ; w; mkNot g] )
 
     /// Combines reified terms into a list of Z3 terms.
-    let combineTerms ctx = mapAxioms (combineTerm ctx)
+    let combineTerms reals ctx = mapAxioms (combineTerm reals ctx)
 
 
 /// <summary>
@@ -194,24 +209,34 @@ module Run =
     let run ctx = axioms >> Map.map (runTerm ctx)
 
 
-/// Shorthand for the parser stage of the frontend pipeline.
+/// Shorthand for the translator stage of the Z3 pipeline.
 let translate = Translator.interpret
-/// Shorthand for the collation stage of the frontend pipeline.
-let combine = Translator.combineTerms >> lift
-/// Shorthand for the modelling stage of the frontend pipeline.
+/// Shorthand for the combination stage of the Z3 pipeline.
+let combine reals = Translator.combineTerms reals >> lift
+/// Shorthand for the satisfiability stage of the Z3 pipeline.
 let sat = Run.run >> lift
 
-/// Runs the Starling Z3 backend.
-/// Takes two arguments: the first is the `Response` telling the backend what
-/// to output; the second is the reified model to process with Z3.
-let run resp =
+/// <summary>
+///     The Starling Z3 backend driver.
+/// </summary>
+/// <param name="reals">
+///     Whether to use Real instead of Int.
+///     This can be faster, but is slightly inaccurate.
+/// </param>
+/// <param name="req">
+///     The request to handle.
+/// </param>
+/// <returns>
+///     A function implementing the chosen Z3 backend process.
+/// </returns>
+let run reals req =
     use ctx = new Z3.Context()
-    match resp with
+    match req with
     | Request.Translate ->
         translate
-        >> lift (mapAxioms (mapTerm (Expr.boolToZ3 ctx)
-                                    (Expr.boolToZ3 ctx)
-                                    (Expr.boolToZ3 ctx)))
+        >> lift (mapAxioms (mapTerm (Expr.boolToZ3 reals ctx)
+                                    (Expr.boolToZ3 reals ctx)
+                                    (Expr.boolToZ3 reals ctx)))
         >> lift Response.Translate
-    | Request.Combine -> translate >> combine ctx >> lift Response.Combine
-    | Request.Sat -> translate >> combine ctx >> sat ctx >> lift Response.Sat
+    | Request.Combine -> translate >> combine reals ctx >> lift Response.Combine
+    | Request.Sat -> translate >> combine reals ctx >> sat ctx >> lift Response.Sat
