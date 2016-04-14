@@ -172,6 +172,11 @@ type Error =
     | Z3 of Backends.Z3.Types.Error
     /// An error occurred in the HSF backend.
     | HSF of Backends.Horn.Types.Error
+    /// <summary>
+    ///     A backend required the model to be filtered for indefinite
+    ///     and/or uninterpreted viewdefs, but the filter failed.
+    /// </summary>
+    | ModelFilterError of Core.Instantiate.Types.Error
     /// A stage was requested using the -s flag that does not exist.
     | BadStage
     /// A miscellaneous (internal) error has occurred.
@@ -184,6 +189,9 @@ let printError =
     | Semantics e -> Semantics.Pretty.printSemanticsError e
     | Z3 e -> Backends.Z3.Pretty.printError e
     | HSF e -> Backends.Horn.Pretty.printHornError e
+    | ModelFilterError e ->
+        headed "View definitions are incompatible with this backend"
+               [ Core.Instantiate.Pretty.printError e ]
     | BadStage ->
         colonSep [ String "Bad stage"
                    String "try"
@@ -260,6 +268,13 @@ let semantics = bind (Starling.Semantics.translate
 let axiomatise = lift Starling.Core.Graph.axiomatise
 
 /// <summary>
+///     Shorthand for the stage filtering a model to definite views only.
+/// </summary>
+let filterDefinite =
+    bind (Core.Instantiate.ViewDefFilter.filterModelDefinite
+          >> mapMessages ModelFilterError)
+
+/// <summary>
 ///     Runs a Starling request.
 /// </summary>
 /// <param name="optS">
@@ -286,7 +301,7 @@ let runStarling optS reals verbose request =
     let backend =
             match request with
             | Request.HSF     -> hsf >> lift Response.HSF
-            | Request.Z3 rq   -> z3 reals rq >> lift Response.Z3
+            | Request.Z3 rq   -> filterDefinite >> z3 reals rq >> lift Response.Z3
             | Request.MuZ3 rq -> muz3 reals rq >> lift Response.MuZ3
             | _               -> failPhase
 

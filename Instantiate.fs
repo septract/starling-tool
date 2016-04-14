@@ -67,6 +67,18 @@ module Types =
         /// </summary>
         | IndefiniteConstraint of view: DFunc
 
+    (* TODO(CaptainHayashi): DFModel shouldn't be in here, but
+       it is, due to a cyclic dependency on Model and FuncTable. *)
+
+    /// <summary>
+    ///     A <c>Model</c> whose view definitions form a definite
+    ///     <c>FuncTable</c>.
+    /// </summary>
+    /// <typeparam name="axiom">
+    ///     Type of program axioms.
+    /// </typeparam>
+    type DFModel<'axiom> = Model<'axiom, FuncTable<BoolExpr>>
+
 
 /// <summary>
 ///     Pretty printers used in func instantiation.
@@ -75,6 +87,36 @@ module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Var.Pretty
+    open Starling.Core.Expr.Pretty
+
+    /// <summary>
+    ///     Pretty-prints <c>FuncTable</c>s.
+    /// </summary>
+    /// <param name="ft">
+    ///     The <c>FuncTable</c> to print.
+    /// </param>
+    /// <returns>
+    ///     A sequence of <c>Command</c>s representing the
+    ///     pretty-printed form of <paramref name="ft"/>.
+    /// </returns>
+    let printFuncTable ft : Command seq =
+        ft
+        |> List.map (fun (v, d) -> colonSep [ printDFunc v
+                                              printBoolExpr d ] )
+        |> List.toSeq
+
+    /// <summary>
+    ///     Pretty-prints a model view for a <c>DFModel</c>.
+    /// </summary>
+    /// <param name="pAxiom">
+    ///     Pretty printer for axioms.
+    /// </param>
+    /// <returns>
+    ///     A function, taking a <c>ModelView</c> and <c>DFModel</c>, and
+    ///     returning a <c>Command</c>.
+    /// </returns>
+    let printDFModelView pAxiom =
+        printModelView pAxiom printFuncTable
 
     /// Pretty-prints instantiation errors.
     let printError =
@@ -332,14 +374,18 @@ module ViewDefFilter =
     ///     constraints.
     /// </summary>
     /// <param name="model">
-    ///     The indefinite <c>Model</c> to convert.
+    ///     A model over indefinite <c>ViewDef</c>s.
     /// </param>
     /// <returns>
     ///     A <c>Result</c> over <c>DefinitionError</c> containing the
     ///     new model if the original contained only definite view
     ///     definitions.
     /// </returns>
-    let filterModelDefinite model =
-        match (funcTableFromViewDefs model.ViewDefs) with
-        | ftab, [] -> ok ftab
-        | _, indefs -> indefs |> List.map IndefiniteConstraint |> Bad
+    let filterModelDefinite (model : IFModel<'axiom>)
+                            : Result<DFModel<'axiom>, Error> =
+        tryMapViewDefs
+            (funcTableFromViewDefs
+             >> function
+                | ftab, [] -> ok ftab
+                | _, indefs -> indefs |> List.map IndefiniteConstraint |> Bad)
+            model

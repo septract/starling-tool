@@ -174,7 +174,6 @@ module Types =
     /// </typeparam>
     type IFModel<'axiom> = Model<'axiom, ViewDef<DFunc> list>
 
-
 /// <summary>
 ///     Pretty printers for the model.
 /// </summary>
@@ -400,6 +399,30 @@ let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x, 'dview>)
           |> Seq.map (fun (k, v) -> v |> f |> lift (mkPair k))
           |> collect
           |> lift Map.ofList)
+
+/// Returns the viewdefs of a model.
+let viewDefs {ViewDefs = ds} = ds
+
+/// Creates a new model that is the input model with a different viewdef set.
+/// The viewdef set may be of a different type.
+let withViewDefs (ds : 'y)
+                 (model : Model<'axiom, 'x>)
+                 : Model<'axiom, 'y> =
+    { Globals = model.Globals
+      Locals = model.Locals
+      ViewDefs = ds
+      Semantics = model.Semantics
+      Axioms = model.Axioms }
+
+/// Maps a pure function f over the viewdef database of a model.
+let mapViewDefs (f : 'x -> 'y) (model : Model<'axiom, 'x>) : Model<'axiom, 'y> =
+    withViewDefs (model |> viewDefs |> f) model
+
+/// Maps a failing function f over the viewdef database of a model.
+let tryMapViewDefs (f : 'x -> Result<'y, 'e>) (model : Model<'axiom, 'x>)
+    : Result<Model<'axiom, 'y>, 'e> =
+    lift (fun x -> withViewDefs x model) (model |> viewDefs |> f)
+
 
 /// <summary>
 ///     Active pattern extracting a View from a ViewExpr.

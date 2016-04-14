@@ -24,6 +24,7 @@ open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.GuardedView
 open Starling.Core.Instantiate
+open Starling.Core.Instantiate.ViewDefFilter
 open Starling.Core.Sub
 open Starling.Core.Z3
 open Starling.Reifier
@@ -51,17 +52,14 @@ module Types =
     [<NoComparison>]
     type Response =
         /// Output of the term translation step only.
-        | Translate of IFModel<ZTerm>
+        | Translate of DFModel<ZTerm>
         /// Output of the final Z3 terms only.
-        | Combine of IFModel<Z3.BoolExpr>
+        | Combine of DFModel<Z3.BoolExpr>
         /// Output of satisfiability reports for the Z3 terms.
         | Sat of Map<string, Z3.Status>
 
     /// A Z3 translation error.
     type Error =
-        /// The translator was given an indefinite constraint.
-        /// The Z3 backend cannot handle indefinite constraints.
-        | IndefiniteConstraint of viewdef: DFunc
         /// Instantiation of a view failed.
         | InstantiationError of view: VFunc
                               * details: Starling.Core.Instantiate.Types.Error
@@ -81,21 +79,17 @@ module Pretty =
     let printResponse mview =
         function
         | Response.Translate m ->
-            printIFModelView (printTerm printZ3Exp printZ3Exp printZ3Exp) mview m
+            printDFModelView (printTerm printZ3Exp printZ3Exp printZ3Exp) mview m
         | Response.Combine m ->
-            printIFModelView printZ3Exp mview m
+            printDFModelView printZ3Exp mview m
         | Response.Sat s ->
             printMap Inline String printSat s
 
     /// Pretty-prints Z3 translation errors.
     let printError =
         function
-        | IndefiniteConstraint vd ->
-            fmt "constraint of '{0}' is indefinite ('?'), and Z3 cannot use it"
-                [ printDFunc vd ]
         | InstantiationError (vfunc, err) ->
-            colonSep [ fmt "couldn't instantiate view '{0}'" [ printVFunc vfunc ]
-                       printError err ]
+            wrapped "view" (printVFunc vfunc) (printError err)
     
 
 /// <summary>
@@ -128,29 +122,6 @@ module Translator =
         tryMapTerm ok (interpretGView ft) (interpretVFunc ft)
 
     /// <summary>
-    ///   Tries to make a <c>FuncTable</c> from <c>model</c>'s view definitions.
-    /// </summary>
-    /// <param name="model">
-    ///   The model whose <c>ViewDefs</c> are to be turned into a <c>FuncTable</c>.
-    /// </param>
-    /// <returns>
-    ///   A Chessie result, which, when ok, contains a <c>FuncTable</c> mapping
-    ///   each defining view in <c>model</c> to its <c>BoolExpr</c> meaning.
-    /// </returns>
-    /// <remarks>
-    ///   <para>
-    ///     This stage requires all views in <c>model.ViewDefs</c> to be definite,
-    ///     and will fail if any are not.
-    ///   </para>
-    /// </remarks>
-    let makeFuncTable model =
-        (* We cannot have any indefinite constraints for Z3.
-           These are the snd in the pair coming from funcTableFromViewDefs. *)
-        match (funcTableFromViewDefs model.ViewDefs) with
-        | ftab, [] -> ok ftab
-        | _, indefs -> indefs |> List.map IndefiniteConstraint |> Bad
-
-    /// <summary>
     ///   Interprets all views in a model, converting them to <c>FTerm</c>s.
     /// </summary>
     /// <param name="model">
@@ -167,9 +138,8 @@ module Translator =
     ///     and will fail if any are not.
     ///   </para>
     /// </remarks>
-    let interpret model : Result<IFModel<FTerm>, Error> =
-        makeFuncTable model
-        |> bind (fun ft -> tryMapAxioms (interpretTerm ft) model)
+    let interpret model : Result<DFModel<FTerm>, Error> =
+        tryMapAxioms (interpretTerm model.ViewDefs) model
 
     /// Combines the components of a reified term.
     let combineTerm reals (ctx: Z3.Context) {Cmd = c; WPre = w; Goal = g} =
