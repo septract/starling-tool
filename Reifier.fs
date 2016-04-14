@@ -9,7 +9,7 @@ open Starling.Core.Command
 open Starling.Core.GuardedView
 
 /// Calculate the multiset of ways that this View matches the pattern in dv and add to the assumulator.
-let reifySingleDef view accumulator (dv : ViewDef<DView>) = 
+let reifySingleDef view accumulator (dv : BViewDef<DView>) = 
 
     let rec matchMultipleViews (pattern : DFunc list) (view : GFunc list) accumulator result =
         match pattern with
@@ -40,7 +40,7 @@ let reifySingleDef view accumulator (dv : ViewDef<DView>) =
     matchMultipleViews (viewOf dv) view accumulator []
 
 /// Reifies an dvs entire view application.
-let reifyView (dvs : ViewDef<DView> List)  vap : ViewSet = 
+let reifyView (dvs : BViewDef<DView> List)  vap : ViewSet = 
     let goal = Multiset.toFlatList vap
     Seq.fold (reifySingleDef goal) Set.empty dvs |> Multiset.ofFlatSeq
 

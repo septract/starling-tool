@@ -45,10 +45,10 @@ module Types =
     /// A view prototype.
     type ViewProto = Func<(Type * string)>
 
-    /// A view definition.
-    type ViewDef =
+    /// A view as seen on the LHS of a ViewDef.
+    type DView =
         | Unit
-        | Join of ViewDef * ViewDef
+        | Join of DView * DView
         | Func of Func<string>
 
     /// <summary>
@@ -120,11 +120,6 @@ module Types =
           // Post-condition is that in the last Seq.
           Contents : ViewedCommand<'view, 'cmd> list }
 
-    /// A constraint, binding a view to an optional expression.
-    type Constraint =
-        { CView : ViewDef
-          CExpression : Expression option }
-
     /// A method.
     type Method<'view, 'cmd> =
         { Signature : Func<string> // main (argv, argc) ...
@@ -140,7 +135,7 @@ module Types =
         | Method of CMethod<Marked<View>> // method main(argv, argc) { ... }
         | Search of int // search 0;
         | ViewProto of ViewProto // view name(int arg);
-        | Constraint of Constraint // constraint emp => true
+        | Constraint of ViewDef<DView, Expression> // constraint emp => true
 
 
 /// <summary>
@@ -209,18 +204,21 @@ module Pretty =
         >> ssurround "{|" "|}"
 
     /// Pretty-prints view definitions.
-    let rec printViewDef =
+    let rec printDView =
         function
-        | ViewDef.Func f -> printFunc String f
-        | ViewDef.Unit -> String "emp"
-        | ViewDef.Join(l, r) -> binop "*" (printViewDef l) (printViewDef r)
+        | DView.Func f -> printFunc String f
+        | DView.Unit -> String "emp"
+        | DView.Join(l, r) -> binop "*" (printDView l) (printDView r)
 
     /// Pretty-prints constraints.
-    let printConstraint { CView = v; CExpression = e } =
+    let printConstraint (cs : ViewDef<DView, Expression>) =
         hsep [ String "constraint"
-               printViewDef v
+               printDView (viewOf cs)
                String "->"
-               e |> Option.map printExpression |> withDefault (String "?") ]
+               (match cs with
+                | Definite (_, d) -> printExpression d
+                | Indefinite _ -> String "?"
+                | Uninterpreted (_, s) -> printSymbol s) ]
         |> withSemi
 
     /// Pretty-prints fetch modes.

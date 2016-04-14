@@ -5,10 +5,10 @@ open Starling
 open Starling.Collections
 open Starling.Core.Expr
 open Starling.Core.Var
-open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.Instantiate
 open Starling.Lang.AST
+open Starling.Core.Model
 open Starling.Lang.Modeller
 open Starling.Tests.Studies
 
@@ -16,7 +16,7 @@ open Starling.Tests.Studies
 /// Mainly exists to persuade nUnit to use the correct types.
 type SearchViewDefEntry =
     { Search : int option
-      InitDefs : ViewDef<DView> list }
+      InitDefs : BViewDef<DView> list }
 
 /// Tests for the modeller.
 type ModellerTests() =
@@ -142,7 +142,7 @@ type ModellerTests() =
     static member mprim (cmd : Command) : PartCmd<ViewExpr<CView>> = Prim cmd
 
     /// Constructs a Command<View> containing one atomic.
-    static member prim (ac : Atomic) : Command<ViewExpr<View>> =
+    static member prim (ac : Atomic) : Command<ViewExpr<Starling.Lang.AST.Types.View>> =
         Command.Prim { PreAssigns = []
                        Atomics = [ ac ]
                        PostAssigns = [] }
@@ -189,11 +189,11 @@ type ModellerTests() =
 
 
     /// Type-constraining builder for viewdef sets.
-    static member viewDefSet (vs : ViewDef<DView> seq) : Set<ViewDef<DView>> =
+    static member viewDefSet (vs : BViewDef<DView> seq) : Set<BViewDef<DView>> =
         Set.ofSeq vs
 
     /// Type-constraining builder for indefinite viewdef sets.
-    static member indefinites (vs : DView seq) : Set<ViewDef<DView>> =
+    static member indefinites (vs : DView seq) : Set<BViewDef<DView>> =
         vs
         |> Seq.map Indefinite
         |> ModellerTests.viewDefSet

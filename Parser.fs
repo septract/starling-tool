@@ -77,8 +77,8 @@ let inAngles p = inBrackets "<" ">" p
 let parseView, parseViewRef =
     createParserForwardedToRef<View, unit> ()
 /// Parser for view definitions.
-let parseViewDef, parseViewDefRef =
-    createParserForwardedToRef<ViewDef, unit> ()
+let parseDView, parseDViewRef =
+    createParserForwardedToRef<DView, unit> ()
 /// Parser for commands.
 let parseCommand, parseCommandRef =
     createParserForwardedToRef<Command<Marked<View>>, unit> ()
@@ -337,22 +337,22 @@ let parseViewExpr = between
  *)
 
 /// Parses a functional view definition.
-let parseDFuncView = parseFunc parseIdentifier |>> ViewDef.Func
+let parseDFuncView = parseFunc parseIdentifier |>> DView.Func
 
 /// Parses the unit view definition.
-let parseDUnit = stringReturn "emp" ViewDef.Unit
+let parseDUnit = stringReturn "emp" DView.Unit
 
 /// Parses a `basic` view definition (unit, if, named, or bracketed).
-let parseBasicViewDef =
+let parseBasicDView =
     choice [ parseDUnit
              // ^- `emp'
              parseDFuncView
              // ^- <identifier>
              //  | <identifier> <arg-list>
-             inParens parseViewDef ]
+             inParens parseDView ]
              // ( <view> )
 
-do parseViewDefRef := parseViewLike parseBasicViewDef ViewDef.Join
+do parseDViewRef := parseViewLike parseBasicDView DView.Join
 
 
 (*
@@ -465,19 +465,26 @@ do parseBlockRef :=
 
 /// Parses a constraint right-hand side.
 let parseConstraintRhs =
-    (stringReturn "?" None) <|> (parseExpression |>> Some)
+    choice [
+        (stringReturn "?" Indefinite)
+        (pstring "%"
+         >>. inBraces (manyChars (noneOf "}"))
+         |>> (fun sym v -> Uninterpreted (v, sym)))
+        (parseExpression
+         |>> (fun expr v -> Definite (v, expr))) ]
     // ^ ?
+    // ^ %{ <symbol> %}
     // ^ <expression>
 
 /// Parses a constraint.
 let parseConstraint =
     pstring "constraint" >>. ws >>.
     // ^- constraint ..
-        pipe2ws parseViewDef
+        pipe2ws parseDView
                 // ^- <view> ...
                 (pstring "->" >>. ws >>. parseConstraintRhs .>> ws .>> pstring ";")
                 // ^-        ... -> <constraint-rhs> ;
-                (fun v ex -> {CView = v ; CExpression = ex} )
+                (|>)
 
 /// Parses a single method, excluding leading or trailing whitespace.
 let parseMethod =

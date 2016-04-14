@@ -98,15 +98,21 @@ module Types =
     /// <summary>
     ///     A view definition.
     /// </summary>
+    /// <typeparam name="view">
+    ///     The type of views.
+    /// </typeparam>
+    /// <typeparam name="def">
+    ///     The type of the definitions of said views.
+    /// </typeparam>
     /// <remarks>
     ///     The semantics of a ViewDef is that, if Def is present, then the
     ///     view View is satisfied if, and only if, Def holds.
     /// </remarks>
-    type ViewDef<'view> =
+    type ViewDef<'view, 'def> =
           /// <summary>
           ///     A definite <c>ViewDef</c>.
           /// </summary>
-        | Definite of ('view * BoolExpr)
+        | Definite of ('view * 'def)
           /// <summary>
           ///     An indefinite <c>ViewDef</c>.
           /// </summary>
@@ -115,6 +121,14 @@ module Types =
           ///     An uninterpreted <c>ViewDef</c>.
           /// </summary>
         | Uninterpreted of 'view * string
+
+    /// <summary>
+    ///     A view definition over <c>BoolExpr</c>s.
+    /// </summary>
+    /// <typeparam name="view">
+    ///     The type of views.
+    /// </typeparam>
+    type BViewDef<'view> = ViewDef<'view, BoolExpr>
 
     /// <summary>
     ///     Extracts the view of a <c>ViewDef</c>.
@@ -183,7 +197,7 @@ module Types =
     /// <typeparam name="axiom">
     ///     Type of program axioms.
     /// </typeparam>
-    type UVModel<'axiom> = Model<'axiom, ViewDef<DView> list>
+    type UVModel<'axiom> = Model<'axiom, BViewDef<DView> list>
 
     /// <summary>
     ///     A <c>Model</c> whose view definitions map <c>DFunc</c>s
@@ -192,7 +206,7 @@ module Types =
     /// <typeparam name="axiom">
     ///     Type of program axioms.
     /// </typeparam>
-    type UFModel<'axiom> = Model<'axiom, ViewDef<DFunc> list>
+    type UFModel<'axiom> = Model<'axiom, BViewDef<DFunc> list>
 
 /// <summary>
 ///     Pretty printers for the model.
@@ -248,22 +262,37 @@ module Pretty =
         colonSep [ String name
                    printType ty ]
 
+    /// <summary>
+    ///     Pretty-prints an uninterpreted symbol.
+    /// </summary>
+    /// <param name="s">
+    ///     The value of the symbol.
+    /// </param>
+    /// <returns>
+    ///     A command printing <c>%{s}</c>.
+    /// </returns>
+    let printSymbol s =
+        hjoin [ String "%" ; s |> String |> braced ]
+
     /// Pretty-prints a model constraint.
-    let printViewDef pView =
+    let printViewDef pView pDef =
         function
         | Definite (vs, e) ->
             printAssoc Inline
                 [ (String "View", pView vs)
-                  (String "Def", printBoolExpr e) ]
+                  (String "Def", pDef e) ]
         | Uninterpreted (vs, e) ->
             printAssoc Inline
                 [ (String "View", pView vs)
-                  (String "Def", hjoin [ String "%"
-                                         e |> String |> braced ] ) ]
+                  (String "Def", printSymbol e) ]
         | Indefinite vs ->
             printAssoc Inline
                 [ (String "View", pView vs)
                   (String "Def", String "?") ]
+
+    /// Pretty-printer for BViewDefs.
+    let printBViewDef pView =
+        printViewDef pView printBoolExpr
 
     /// Pretty-prints the axiom map for a model.
     let printModelAxioms pAxiom model =
@@ -342,7 +371,7 @@ module Pretty =
     ///     returning a <c>Command</c>.
     /// </returns>
     let printUVModelView pAxiom =
-        printModelView pAxiom (List.map (printViewDef printDView))
+        printModelView pAxiom (List.map (printBViewDef printDView))
 
     /// <summary>
     ///     Pretty-prints a model view for an <c>UFModel</c>.
@@ -355,7 +384,7 @@ module Pretty =
     ///     returning a <c>Command</c>.
     /// </returns>
     let printUFModelView pAxiom =
-        printModelView pAxiom (List.map (printViewDef printDFunc))
+        printModelView pAxiom (List.map (printBViewDef printDFunc))
 
 
 /// <summary>

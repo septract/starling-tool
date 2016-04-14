@@ -1,0 +1,86 @@
+/* Currently as close to lclist.cvf as Starling can get. */
+
+shared int head; 
+thread int prev;
+thread int prev_next;
+thread bool prev_lock;
+thread int curr;
+thread int curr_next;
+thread int curr_val;
+thread bool curr_lock;
+
+thread int v;
+
+thread int _;
+
+view isHead(int prev);
+view false();
+view isList(); 
+view has1Lock(int x, int y); 
+view has2Lock(int x, int y); 
+view hasNode(int x); 
+
+method deleteVal() { 
+  {| isList() |} 
+    <prev = head>;
+  {| isList() * isHead(prev) |}
+    prev_lock = (true); 
+  {| has1Lock(prev, _) * isHead(prev) |} 
+    curr = prev_next; 
+  {| has1Lock(prev, curr) * isHead(prev) |} 
+    while (curr_val < v) { 
+      {| has1Lock(prev, curr) |} 
+        curr_lock = true; 
+      {| has2Lock(prev, curr) |} 
+        prev_lock = false; 
+      {| has1Lock(curr, _) |} 
+        prev = curr; 
+      {| has1Lock(prev, _) |} 
+        curr = prev_next;
+      {| has1Lock(prev, curr) |} 
+    } 
+  {| has1Lock(prev, curr) |} 
+    if (curr_val == v) { 
+      {| has1Lock(prev, curr) |} 
+        curr_lock = true;
+      {| has2Lock(prev, curr) |} 
+        prev_next = curr_next; 
+      {| has1Lock(prev, _) * hasNode(curr) |} 
+        curr = 0;  
+      {| has1Lock(prev, _) |} 
+    } else {
+      {| has1Lock(prev, curr) |} 
+      ;
+      {| has1Lock(prev, _) |} 
+    }
+  {| has1Lock(prev, _) |} 
+    prev_lock = false; 
+  {| isList() |} 
+}
+
+
+constraint isHead(x) -> x == head;
+
+// Define list properties 
+
+constraint isList() -> %{ lseg(head, e) * endNode(e) }; 
+
+constraint has1Lock(a,b) ->
+  %{lseg(head, a) * nodeLocked(a,b) * lseg(b, e) * endNode(e) }; 
+
+constraint has2Lock(a,b)  ->  
+  %{ lseg(head, a) * nodeLocked(a,b) * nodeLocked(b,c) 
+     * lseg(c, e) * endNode(e) }; 
+
+constraint hasNode(a) -> %{ nodeLocked(a) }; 
+
+
+// Constraints on views 
+constraint has1Lock(a,_) * has1Lock(c,__)  -> %{ a!=c };
+constraint has1Lock(a,_) * has2Lock(c,d)   -> %{ a!=c * a!=d };
+constraint has2Lock(a,b) * has2Lock(c,d)   -> %{ a!=c * a!=d * b!=c * b!=d };
+constraint has1Lock(a,_) * hasNode(c)      -> %{ a!=c };
+constraint has2Lock(a,b) * hasNode(c)      -> %{ a!=c * b!=c};
+
+// Could maybe replace some of the constraints above?
+//constraint has2Lock(a,b)   ->   has1Lock(a,_) * has1Lock(b,_) 

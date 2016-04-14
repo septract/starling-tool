@@ -76,7 +76,7 @@ module Types =
     /// Represents an error when converting a constraint.
     type ConstraintError =
         /// The view definition in the constraint generated a `ViewError`.
-        | CEView of vdef : AST.Types.ViewDef * err : ViewError
+        | CEView of vdef : AST.Types.DView * err : ViewError
         /// The expression in the constraint generated an `ExprError`.
         | CEExpr of expr : AST.Types.Expression * err : ExprError
 
@@ -126,7 +126,7 @@ module Types =
         /// A view prototype in the program generated a `ViewProtoError`.
         | BadVProto of proto : AST.Types.ViewProto * err : ViewProtoError
         /// A constraint in the program generated a `ConstraintError`.
-        | BadConstraint of constr : AST.Types.ViewDef * err : ConstraintError
+        | BadConstraint of constr : AST.Types.DView * err : ConstraintError
         /// A method in the program generated an `MethodError`.
         | BadMethod of methname : string * err : MethodError
         /// A variable in the program generated a `VarMapError`.
@@ -204,7 +204,7 @@ module Pretty =
     let printConstraintError =
         function
         | CEView(vdef, err) ->
-            wrapped "view definition" (printViewDef vdef) (printViewError err)
+            wrapped "view definition" (printDView vdef) (printViewError err)
         | CEExpr(expr, err) ->
             wrapped "expression" (printExpression expr) (printExprError err)
 
@@ -275,7 +275,7 @@ module Pretty =
     let printModelError =
         function
         | BadConstraint(constr, err) ->
-            wrapped "constraint" (printViewDef constr)
+            wrapped "constraint" (printDView constr)
                                  (printConstraintError err)
         | BadVar(scope, err) ->
             wrapped "variables in scope" (String scope) (printVarMapError err)
@@ -489,20 +489,6 @@ and modelArithExpr env expr =
     | _ -> fail ExprNotArith
 
 (*
- * View definitions
- *)
-
-/// Tries to flatten a view definition AST into a multiset.
-let rec viewDefToSet =
-    function
-    | ViewDef.Func f -> [f]
-    | ViewDef.Unit -> []
-    | ViewDef.Join(l, r) -> joinViewDefs l r
-
-/// Merges two sides of a view monoid in the AST into one multiset.
-and joinViewDefs l r = List.append (viewDefToSet l) (viewDefToSet r)
-
-(*
  * Views
  *)
 
@@ -529,11 +515,11 @@ let modelDFunc protos func =
 /// Tries to convert a view def into its model (multiset) form.
 let rec modelDView protos =
     function
-    | ViewDef.Unit -> ok Multiset.empty
-    | ViewDef.Func dfunc -> modelDFunc protos dfunc
-    | ViewDef.Join(l, r) -> trial { let! lM = modelDView protos l
-                                    let! rM = modelDView protos r
-                                    return Multiset.append lM rM }
+    | DView.Unit -> ok Multiset.empty
+    | DView.Func dfunc -> modelDFunc protos dfunc
+    | DView.Join(l, r) -> trial { let! lM = modelDView protos l
+                                  let! rM = modelDView protos r
+                                  return Multiset.append lM rM }
 
 /// Produces the environment created by interpreting the viewdef vds using the
 /// view prototype map vpm.
@@ -549,18 +535,24 @@ let envOfViewDef svars =
     localEnvOfViewDef >> bind (combineMaps svars >> mapMessages SVarConflict)
 
 /// Converts a single constraint to its model form.
-let modelViewDef svars vprotos { CView = av; CExpression = ae } =
+let modelViewDef svars vprotos avd =
+    let av = viewOf avd
+
     trial {
         let vplist = List.ofSeq vprotos
 
         let! vms = modelDView vplist av |> mapMessages (curry CEView av) 
         let  v = vms |> Multiset.toFlatList
         let! e = envOfViewDef svars v |> mapMessages (curry CEView av)
-        return! (match ae with
-                 | Some dae -> modelBoolExpr e dae
-                               |> mapMessages (curry CEExpr dae)
-                               |> lift (fun em -> Definite (v, em))
-                 | _ -> ok (Indefinite v))
+        return! (match avd with
+                 | Definite (_, dae) ->
+                    modelBoolExpr e dae
+                    |> mapMessages (curry CEExpr dae)
+                    |> lift (fun em -> Definite (v, em))
+                 | Uninterpreted (_, sym) ->
+                     ok (Uninterpreted (v, sym))
+                 | Indefinite _ ->
+                     ok (Indefinite v))
     }
     |> mapMessages (curry BadConstraint av)
 

@@ -107,18 +107,30 @@ let ticketLockParsed =
                   Params = [ (Type.Int, "t") ] }
       ViewProto { Name = "holdLock"
                   Params = [] }
-      Constraint { CView = ViewDef.Unit
-                   CExpression = Some <| Bop(Ge, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
-      Constraint { CView = ViewDef.Func {Name = "holdTick"; Params = [ "t" ]}
-                   CExpression = Some <| Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "t")) }
-      Constraint { CView = ViewDef.Func {Name = "holdLock"; Params = []}
-                   CExpression = Some <| Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
-      Constraint { CView = ViewDef.Join(ViewDef.Func {Name = "holdLock"; Params = []}, ViewDef.Func {Name = "holdTick"; Params = [ "t" ]})
-                   CExpression = Some <| Bop(Neq, LV(LVIdent "serving"), LV(LVIdent "t")) }
-      Constraint { CView = ViewDef.Join(ViewDef.Func {Name = "holdTick"; Params = [ "ta" ]}, ViewDef.Func { Name = "holdTick"; Params = [ "tb" ]})
-                   CExpression = Some <| Bop(Neq, LV(LVIdent "ta"), LV(LVIdent "tb")) }
-      Constraint { CView = ViewDef.Join(ViewDef.Func {Name = "holdLock"; Params = []}, ViewDef.Func { Name = "holdLock"; Params = []})
-                   CExpression = Some <| False }
+      Constraint (Definite
+                      (DView.Unit,
+                       Bop(Ge, LV(LVIdent "ticket"), LV(LVIdent "serving"))))
+      Constraint (Definite
+                      (DView.Func {Name = "holdTick"; Params = [ "t" ]},
+                       Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "t"))))
+      Constraint (Definite
+                      (DView.Func {Name = "holdLock"; Params = []},
+                       Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "serving"))))
+      Constraint (Definite
+                      (DView.Join
+                           (DView.Func {Name = "holdLock"; Params = []},
+                            DView.Func {Name = "holdTick"; Params = [ "t" ]}),
+                       Bop(Neq, LV(LVIdent "serving"), LV(LVIdent "t"))))
+      Constraint (Definite
+                      (DView.Join
+                           (DView.Func {Name = "holdTick"; Params = [ "ta" ]},
+                            DView.Func { Name = "holdTick"; Params = [ "tb" ]}),
+                       Bop(Neq, LV(LVIdent "ta"), LV(LVIdent "tb"))))
+      Constraint (Definite
+                      (DView.Join
+                           (DView.Func {Name = "holdLock"; Params = []},
+                            DView.Func { Name = "holdLock"; Params = []}),
+                       False))
       Global(Type.Int, "ticket")
       Global(Type.Int, "serving")
       Local(Type.Int, "t")
@@ -141,23 +153,36 @@ let ticketLockCollated =
             { Name = "holdLock"
               Params = [] } ]
       Constraints =
-          [ { // constraint emp => ticket >= serving;
-              CView = ViewDef.Unit
-              CExpression = Some <| Bop(Ge, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
-            { // constraint holdTick(t) => ticket > t;
-              CView = ViewDef.Func {Name = "holdTick"; Params = [ "t" ]}
-              CExpression = Some <| Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "t")) }
-            { // constraint holdLock() => ticket > serving;
-              CView = ViewDef.Func {Name = "holdLock"; Params = []}
-              CExpression = Some <| Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "serving")) }
-            { // constraint holdLock() * holdTick(t) => serving != t;
-              CView = ViewDef.Join(ViewDef.Func {Name = "holdLock"; Params = []}, ViewDef.Func {Name = "holdTick"; Params = [ "t" ]})
-              CExpression = Some <| Bop(Neq, LV(LVIdent "serving"), LV(LVIdent "t")) }
-            { // constraint holdLock() * holdLock() => false;
-              CView = ViewDef.Join(ViewDef.Func {Name = "holdTick"; Params = [ "ta" ]}, ViewDef.Func {Name = "holdTick"; Params = [ "tb" ]})
-              CExpression = Some <| Bop(Neq, LV(LVIdent "ta"), LV(LVIdent "tb")) }
-            { CView = ViewDef.Join(ViewDef.Func {Name = "holdLock"; Params = []}, ViewDef.Func {Name = "holdLock"; Params = []})
-              CExpression = Some <| False } ]
+          [ // constraint emp -> ticket >= serving;
+            Definite
+                (DView.Unit,
+                 Bop(Ge, LV(LVIdent "ticket"), LV(LVIdent "serving")))
+            // constraint holdTick(t) -> ticket > t;
+            Definite
+                (DView.Func {Name = "holdTick"; Params = [ "t" ]},
+                 Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "t")))
+            // constraint holdLock() -> ticket > serving;
+            Definite
+                (DView.Func {Name = "holdLock"; Params = []},
+                 Bop(Gt, LV(LVIdent "ticket"), LV(LVIdent "serving")))
+            // constraint holdLock() * holdTick(t) -> serving != t;
+            Definite
+                (DView.Join
+                     (DView.Func {Name = "holdLock"; Params = []},
+                      DView.Func {Name = "holdTick"; Params = [ "t" ]}),
+                 Bop(Neq, LV(LVIdent "serving"), LV(LVIdent "t")))
+            // constraint holdTick(ta) * holdTick(tb) -> ta != tb;
+            Definite
+                (DView.Join
+                    (DView.Func {Name = "holdTick"; Params = [ "ta" ]},
+                     DView.Func {Name = "holdTick"; Params = [ "tb" ]}),
+                 Bop(Neq, LV(LVIdent "ta"), LV(LVIdent "tb")))
+            // constraint holdLock() * holdLock() -> false;
+            Definite
+                (DView.Join
+                    (DView.Func {Name = "holdLock"; Params = []},
+                     DView.Func {Name = "holdLock"; Params = []}),
+                 False) ]
       Methods = [ ticketLockLockMethodAST; ticketLockUnlockMethodAST ] }
 
 /// Shorthand for Multiset.singleton.

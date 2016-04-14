@@ -6,6 +6,7 @@ module Starling.Lang.Collator
 
 open Starling.Utils
 open Starling.Core.Var
+open Starling.Core.Model
 
 open Starling.Lang.AST
 
@@ -32,7 +33,7 @@ module Types =
           /// </remarks>
           Search : int option
           VProtos : ViewProto list
-          Constraints : Constraint list
+          Constraints : ViewDef<DView, Expression> list
           Methods : CMethod<Marked<View>> list }
 
 
@@ -98,7 +99,7 @@ let empty =
 ///     The <c>CollatedScript</c> resulting from adding
 ///     <paramref name="item" /> to <paramref name="cs" />.
 /// </returns>
-let collateStep item cs =
+let collateStep item (cs : CollatedScript) =
     match item with
     | Global(v, t) -> { cs with Globals = (v, t) :: cs.Globals }
     | Local(v, t) -> { cs with Locals = (v, t) :: cs.Locals }
