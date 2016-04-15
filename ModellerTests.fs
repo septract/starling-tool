@@ -86,10 +86,10 @@ type ModellerTests() =
 
     /// Arithmetic expression modelling tests.
     static member ArithmeticExprs =
-        [ TestCaseData(Bop(Add, Bop(Mul, Int 1L, Int 2L), Int 3L)).Returns(Some <| AAdd [ AMul [ AInt 1L
-                                                                                                 AInt 2L ]
-                                                                                          AInt 3L ])
-            .SetName("model (1 * 2) + 3") ]
+        [ TestCaseData(Bop(Add, Bop(Mul, Int 1L, Int 2L), Int 3L))
+              .Returns(Some (AAdd [ AMul [ AInt 1L ; AInt 2L ] ; AInt 3L ]
+                             : CIntExpr))
+              .SetName("model (1 * 2) + 3") ]
 
     /// Tests whether the arithmetic expression modeller works.
     [<TestCaseSource("ArithmeticExprs")>]
@@ -99,8 +99,9 @@ type ModellerTests() =
     /// Boolean expression modelling tests.
     /// These all use the ticket lock model.
     static member BooleanExprs =
-        [ TestCaseData(Bop(And, Bop(Or, True, True), False)).Returns(Some BFalse)
-            .SetName("model and simplify (true || true) && false") ]
+        [ TestCaseData(Bop(And, Bop(Or, True, True), False))
+              .Returns(Some (BFalse : CBoolExpr))
+              .SetName("model and simplify (true || true) && false") ]
 
     /// Tests whether the arithmetic expression modeller works.
     [<TestCaseSource("BooleanExprs")>]
@@ -154,8 +155,8 @@ type ModellerTests() =
     /// These use the ticket lock model.
     static member AtomicPrims =
         [ TestCaseData(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment))
-            .Returns(Some <| func "!ILoad++" ["t" |> aBefore |> Expr.Int; "t" |> aAfter |> Expr.Int
-                                              "ticket" |> aBefore |> Expr.Int; "ticket" |> aAfter |> Expr.Int])
+            .Returns(Some <| func "!ILoad++" ["t" |> aBefore |> CExpr.Int; "t" |> aAfter |> CExpr.Int
+                                              "ticket" |> aBefore |> CExpr.Int; "ticket" |> aAfter |> CExpr.Int])
             .SetName("model a valid integer load as a prim") ]
 
     /// Tests the atomic primitive modeller using the ticket lock.
@@ -174,10 +175,10 @@ type ModellerTests() =
                                                 LV(LVIdent "ticket"),
                                                 Increment)))
             .Returns(ModellerTests.mprim
-                         [ func "!ILoad++" [ "t" |> aBefore |> Expr.Int
-                                             "t" |> aAfter |> Expr.Int
-                                             "ticket" |> aBefore |> Expr.Int
-                                             "ticket" |> aAfter |> Expr.Int ]]
+                         [ func "!ILoad++" [ "t" |> aBefore |> CExpr.Int
+                                             "t" |> aAfter |> CExpr.Int
+                                             "ticket" |> aBefore |> CExpr.Int
+                                             "ticket" |> aAfter |> CExpr.Int ]]
                      |> Some)
             .SetName("model a valid integer load command as an axiom") ]
 

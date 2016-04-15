@@ -46,7 +46,7 @@ module Types =
      *)
 
     /// A func over expressions, used in view expressions.
-    type VFunc = Func<Expr>
+    type VFunc = Func<CExpr>
 
     /// A view-definition func.
     type DFunc = Func<Param>
@@ -124,12 +124,12 @@ module Types =
         override this.ToString() = sprintf "%A" this
 
     /// <summary>
-    ///     A view definition over <c>BoolExpr</c>s.
+    ///     A view definition over <c>CBoolExpr</c>s.
     /// </summary>
     /// <typeparam name="view">
     ///     The type of views.
     /// </typeparam>
-    type BViewDef<'view> = ViewDef<'view, BoolExpr>
+    type BViewDef<'view> = ViewDef<'view, CBoolExpr>
 
     /// <summary>
     ///     Extracts the view of a <c>ViewDef</c>.
@@ -169,10 +169,10 @@ module Types =
         }
 
     /// A term over semantic-relation commands.
-    type STerm<'wpre, 'goal> = Term<BoolExpr, 'wpre, 'goal>
+    type STerm<'wpre, 'goal> = Term<CBoolExpr, 'wpre, 'goal>
 
     /// A term using only internal boolean expressions.
-    type FTerm = STerm<BoolExpr, BoolExpr>
+    type FTerm = STerm<CBoolExpr, CBoolExpr>
 
     (*
      * Models
@@ -186,7 +186,7 @@ module Types =
           /// <summary>
           ///     The semantic function for this model.
           /// </summary>
-          Semantics : (DFunc * BoolExpr) list
+          Semantics : (DFunc * CBoolExpr) list
           // This corresponds to the function D.
           ViewDefs : 'viewdefs }
 
@@ -229,7 +229,7 @@ module Pretty =
         >> semiSep
 
     /// Pretty-prints a VFunc.
-    let printVFunc = printFunc printExpr
+    let printVFunc = printFunc printCExpr
 
     /// Pretty-prints a DFunc.
     let printDFunc = printFunc printParam
@@ -256,7 +256,7 @@ module Pretty =
                headed "Goal" (g |> pGoal |> Seq.singleton) ]
 
     /// Pretty-prints an STerm.
-    let printSTerm pWPre pGoal = printTerm printBoolExpr pWPre pGoal
+    let printSTerm pWPre pGoal = printTerm printCBoolExpr pWPre pGoal
 
     /// Pretty-prints model variables.
     let printModelVar (name, ty) =
@@ -293,7 +293,7 @@ module Pretty =
 
     /// Pretty-printer for BViewDefs.
     let printBViewDef pView =
-        printViewDef pView printBoolExpr
+        printViewDef pView printCBoolExpr
 
     /// Pretty-prints the axiom map for a model.
     let printModelAxioms pAxiom model =
@@ -414,7 +414,7 @@ let dfunc name (pars : Param seq) : DFunc = func name pars
 /// <returns>
 ///     A new <c>VFunc</c> with the given name and parameters.
 /// </returns>
-let vfunc name (pars : Expr seq) : VFunc = func name pars
+let vfunc name (pars : CExpr seq) : VFunc = func name pars
 
 /// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
 /// and its Goal with fG.

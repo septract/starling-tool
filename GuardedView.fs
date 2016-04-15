@@ -42,7 +42,7 @@ module Types =
         { /// <summary>
           ///    The guard condition.
           /// </summary>
-          Cond : BoolExpr
+          Cond : CBoolExpr
           /// <summary>
           ///    The guarded item.
           /// </summary>
@@ -289,7 +289,7 @@ module Pretty =
         | Always i -> pitem i
         | Never i -> ssurround "~" "~" (pitem i)
         | { Cond = c ; Item = i } ->
-            parened (HSep([ printBoolExpr c
+            parened (HSep([ printCBoolExpr c
                             pitem i ], String " -> "))
 
     /// <summary>

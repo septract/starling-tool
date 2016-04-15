@@ -676,15 +676,15 @@ module Term =
      * After elimination
      *)
 
-    /// Finds all instances of the pattern `x!after = f(x!before)` in a
-    /// Boolean expression that is either an equality or conjunction, and
+    /// Finds all instances of the pattern `x!after = f(x!before)` in an
+    /// integral expression that is either an equality or conjunction, and
     /// where x is arithmetic.
     let rec findArithAfters =
         function
-        | BAEq(AConst(After x), (ConstantArithFunction (Before y) as fx))
+        | BAEq(AConst(After x), (ConstantIntFunction (Before y) as fx))
             when x = y
             -> [(x, fx)]
-        | BAEq(ConstantArithFunction (Before y) as fx, AConst(After x))
+        | BAEq(ConstantIntFunction (Before y) as fx, AConst(After x))
             when x = y
             -> [(x, fx)]
         | BAnd xs -> concatMap findArithAfters xs

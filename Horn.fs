@@ -26,18 +26,18 @@ module Types =
     /// Booleans.
     type Literal = 
         /// A predicate.
-        | Pred of Func<ArithExpr>
+        | Pred of Func<CIntExpr>
         | And of Literal list
         | Or of Literal list
         | True
         | False
         | ITE of Literal * Literal * Literal
-        | Eq of ArithExpr * ArithExpr
-        | Neq of ArithExpr * ArithExpr
-        | Gt of ArithExpr * ArithExpr
-        | Ge of ArithExpr * ArithExpr
-        | Le of ArithExpr * ArithExpr
-        | Lt of ArithExpr * ArithExpr
+        | Eq of CIntExpr * CIntExpr
+        | Neq of CIntExpr * CIntExpr
+        | Gt of CIntExpr * CIntExpr
+        | Ge of CIntExpr * CIntExpr
+        | Le of CIntExpr * CIntExpr
+        | Lt of CIntExpr * CIntExpr
 
     /// A Horn clause, in Datalog/HSF form.
     type Horn = 
@@ -57,7 +57,7 @@ module Types =
         /// A model has a non-arithmetic variable.
         | NonArithVar of CTyped<string>
         /// The expression given is not supported in the given position.
-        | UnsupportedExpr of Expr
+        | UnsupportedExpr of CExpr
         /// The expression given is compound, but empty.
         | EmptyCompoundExpr of exptype : string
 
@@ -85,40 +85,40 @@ module Pretty =
     /// given its expression as the second argument.
     let maybeBracket xe x = 
         match xe with 
-        | SimpleArith -> x
-        | CompoundArith -> parened x
+        | SimpleInt -> x
+        | CompoundInt -> parened x
 
-    /// Emits an arithmetic expression in Datalog syntax.
-    let rec printArith = 
+    /// Emits an integral expression in Datalog syntax.
+    let rec printInt = 
         function 
         | AConst c -> printConst c
         | AInt i -> sprintf "%d" i |> String
         // Do some reshuffling of n-ary expressions into binary ones.
         // These expressions are left-associative, so this should be sound.
         | AAdd [] -> failwith "unexpected empty addition"
-        | AAdd [ x ] -> printArith x
+        | AAdd [ x ] -> printInt x
         | AAdd [ x; y ] -> printBop "+" x y
-        | AAdd(x :: y :: xs) -> printArith (AAdd((AAdd [ x; y ]) :: xs))
+        | AAdd(x :: y :: xs) -> printInt (AAdd((AAdd [ x; y ]) :: xs))
         | ASub [] -> failwith "unexpected empty subtraction"
-        | ASub [ x ] -> printArith x
+        | ASub [ x ] -> printInt x
         | ASub [ x; y ] -> printBop "-" x y
-        | ASub(x :: y :: xs) -> printArith (ASub((ASub [ x; y ]) :: xs))
+        | ASub(x :: y :: xs) -> printInt (ASub((ASub [ x; y ]) :: xs))
         | AMul [] -> failwith "unexpected empty multiplication"
-        | AMul [ x ] -> printArith x
+        | AMul [ x ] -> printInt x
         | AMul [ x; y ] -> printBop "*" x y
-        | AMul(x :: y :: xs) -> printArith (AMul((AMul [ x; y ]) :: xs))
+        | AMul(x :: y :: xs) -> printInt (AMul((AMul [ x; y ]) :: xs))
         | ADiv(x, y) -> printBop "/" x y
 
     and printBop op x y =
         binop
             op
-            (x |> printArith |> maybeBracket x)
-            (y |> printArith |> maybeBracket y)
+            (x |> printInt |> maybeBracket x)
+            (y |> printInt |> maybeBracket y)
 
     /// Emits a Horn literal.
     let rec printLiteral = 
         function 
-        | Pred p -> printFunc printArith p
+        | Pred p -> printFunc printInt p
         | And xs ->
             xs
             |> Seq.map printLiteral
@@ -182,7 +182,7 @@ module Pretty =
                   p |> typeOf |> printType ]
         | UnsupportedExpr expr ->
             fmt "expression '{0}' is not supported in the HSF backend"
-                [ printExpr expr ]
+                [ printCExpr expr ]
         | EmptyCompoundExpr exptype ->
             fmt "found an empty '{0}' expression"
                 [ String exptype ]
@@ -192,7 +192,7 @@ module Pretty =
  * Expression generation
  *)
 
-/// Checks whether an ArithExpr is useable by HSF.
+/// Checks whether an CIntExpr is useable by HSF.
 let checkArith =
     function
     | AAdd [] -> EmptyCompoundExpr "addition" |> fail
@@ -200,7 +200,7 @@ let checkArith =
     | AMul [] -> EmptyCompoundExpr "multiplication" |> fail
     | x -> ok x
 
-/// Converts a BoolExpr to a HSF literal.
+/// Converts a CBoolExpr to a HSF literal.
 let rec boolExpr =
     function
     // TODO(CaptainHayashi): are these allowed?
@@ -222,9 +222,9 @@ let rec boolExpr =
  * Func sanitisation
  *)
 
-/// Extracts an ArithExpr from an Expr, if it is indeed arithmetic.
+/// Extracts an CIntExpr from an Expr, if it is indeed arithmetic.
 /// Fails with UnsupportedExpr if the expresson is Boolean.
-let tryArithExpr =
+let tryCIntExpr =
     function
     | Expr.Int x -> x |> ok
     | e -> e |> UnsupportedExpr |> fail
@@ -330,7 +330,7 @@ let hsfFunc dvs env func =
     dvs
     |> (lookup func >> mapMessages (curry InconsistentFunc func))
     |> bind (function
-             | Some df -> lift Some (predOfFunc env tryArithExpr func)
+             | Some df -> lift Some (predOfFunc env tryCIntExpr func)
              | None -> ok None)
 
 /// Constructs a Horn literal for a GFunc.

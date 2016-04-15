@@ -15,7 +15,7 @@ let tcd : obj[] -> TestCaseData = TestCaseData
 /// Tests for the expression types and functions.
 type ExprTests() =
     /// Test cases for testing simple/compound arithmetic classification.
-    static member ArithSimpleCompound =
+    static member IntSimpleCompound =
         [ TestCaseData(AInt 1L)
             .Returns(false)
             .SetName("Classify '1' as simple")
@@ -33,11 +33,11 @@ type ExprTests() =
             .SetName("Classify 'foo!before * bar!after' as compound") ]
 
     /// Tests whether the simple/compound arithmetic patterns work correctly
-    [<TestCaseSource("ArithSimpleCompound")>]
-    member x.``SimpleArith and CompoundArith classify properly`` e =
+    [<TestCaseSource("IntSimpleCompound")>]
+    member x.``SimpleInt and CompoundInt classify properly`` e =
         match e with
-        | SimpleArith -> false
-        | CompoundArith -> true
+        | SimpleInt -> false
+        | CompoundInt -> true
 
 
     /// Test cases for intermediate finding.
@@ -87,7 +87,7 @@ type ExprTests() =
         List.map (fun x -> goalVar fg x) xs
 
     /// Test cases for testing constant post-state rewriting.
-    static member ArithConstantPostStates =
+    static member IntConstantPostStates =
         seq {
             yield (new TestCaseData(aUnmarked "target1"))
                 .Returns(aAfter "target1")
@@ -101,32 +101,32 @@ type ExprTests() =
             yield (new TestCaseData(ASub [aUnmarked "target1"; aUnmarked "target2"]))
                 .Returns(ASub [aAfter "target1"; aAfter "target2"])
                 .SetName("Rewrite expression with two target constants to post-state")
-            yield (new TestCaseData(ADiv (AInt 6L, AInt 0L)))
-                .Returns(ADiv (AInt 6L, AInt 0L))
+            yield (new TestCaseData(ADiv (AInt 6L, AInt 0L) : CIntExpr))
+                .Returns(ADiv (AInt 6L, AInt 0L) : CIntExpr)
                 .SetName("Rewrite expression with no constants to post-state")
             yield (new TestCaseData(AMul [aUnmarked "foo"; aUnmarked "bar"]))
                 .Returns(AMul [aUnmarked "foo"; aUnmarked "bar"])
                 .SetName("Rewrite expression with two non-target constants to post-state")
         }
 
-    [<TestCaseSource("ArithConstantPostStates")>]
+    [<TestCaseSource("IntConstantPostStates")>]
     /// Tests whether rewriting constants in arithmetic expressions to post-state works.
     member x.``constants in arithmetic expressions can be rewritten to post-state`` expr =
         (liftMarker After (Set.ofList ["target1"; "target2"] |> inSet)).ASub expr
 
     /// Test cases for negation checking.
     static member ObviousNegations =
-        [ (tcd [| BTrue
-                  BFalse |])
+        [ (tcd [| (BTrue : CBoolExpr)
+                  (BFalse : CBoolExpr) |])
             .Returns(true)
-          (tcd [| BTrue
-                  BTrue |])
+          (tcd [| (BTrue : CBoolExpr)
+                  (BTrue : CBoolExpr) |])
             .Returns(false)
-          (tcd [| BFalse
-                  BFalse |])
+          (tcd [| (BFalse : CBoolExpr)
+                  (BFalse : CBoolExpr) |])
             .Returns(false)
-          (tcd [| BTrue
-                  (aEq (AInt 5L) (AInt 6L)) |])
+          (tcd [| (BTrue : CBoolExpr)
+                  (aEq (AInt 5L) (AInt 6L) : CBoolExpr) |])
             .Returns(true)
           (tcd [| (aEq (aUnmarked "x") (AInt 2L))
                   (BNot (aEq (aUnmarked "x") (AInt 2L))) |])
@@ -154,11 +154,11 @@ type ExprTests() =
         |> List.map (
             fun d -> d.SetName(sprintf "%s and %s are %s negation"
                                         (((d.OriginalArguments.[1])
-                                          :?> BoolExpr)
-                                         |> printBoolExpr |> print)
+                                          :?> CBoolExpr)
+                                         |> printCBoolExpr |> print)
                                         (((d.OriginalArguments.[0])
-                                          :?> BoolExpr)
-                                         |> printBoolExpr |> print)
+                                          :?> CBoolExpr)
+                                         |> printCBoolExpr |> print)
                                         (if (d.ExpectedResult :?> bool)
                                          then "a" else "not a")))
 

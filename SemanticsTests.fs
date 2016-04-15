@@ -37,10 +37,11 @@ type SemanticsTests() =
 
     // Test cases for the expression framer.
     static member FrameExprs = 
-        [ TestCaseData(BTrue).Returns([ aEq (aAfter "serving") (aBefore "serving")
-                                        aEq (aAfter "ticket") (aBefore "ticket")
-                                        aEq (aAfter "s") (aBefore "s")
-                                        aEq (aAfter "t") (aBefore "t") ])
+        [ TestCaseData(BTrue : CBoolExpr)
+              .Returns([ aEq (aAfter "serving") (aBefore "serving")
+                         aEq (aAfter "ticket") (aBefore "ticket")
+                         aEq (aAfter "s") (aBefore "s")
+                         aEq (aAfter "t") (aBefore "t") ])
               .SetName("Frame id using the ticket lock model")
           
           TestCaseData(BAnd [ BGt(aAfter "ticket", aBefore "ticket")

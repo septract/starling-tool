@@ -9,7 +9,7 @@ open Starling.Core.Var
 open Starling.Core.Instantiate
 
 
-let none : Option<BoolExpr> = None
+let none : Option<CBoolExpr> = None
 
 /// Tests for the func instantiation functions.
 type InstantiateTests() =
@@ -17,7 +17,7 @@ type InstantiateTests() =
     /// Environment of test funcs.
     static member TestFuncs =
         [ (dfunc "foo" [],
-           aEq (AInt 5L) (AInt 6L))
+           aEq (AInt 5L : CIntExpr) (AInt 6L))
           (dfunc "bar" [ Param.Int "quux" ],
            aEq (aUnmarked "quux") (aUnmarked "blob"))
           (dfunc "baz" [ Param.Int "quux" ; Param.Bool "flop" ],
@@ -30,7 +30,7 @@ type InstantiateTests() =
             .Returns(none |> Some)
             .SetName("Instantiate undefined func")
           TestCaseData(vfunc "foo" [])
-            .Returns(aEq (AInt 5L) (AInt 6L) |> Some |> Some)
+            .Returns(aEq (AInt 5L : CIntExpr) (AInt 6L : CIntExpr) |> Some |> Some)
             .SetName("Instantiate func with no arguments")
           TestCaseData(vfunc "bar" [AInt 101L |> Expr.Int])
             .Returns(aEq (AInt 101L) (aUnmarked "blob") |> Some |> Some)

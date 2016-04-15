@@ -11,7 +11,7 @@ open Starling.Lang.Modeller
 /// Converts a func from conditional to guarded form.
 /// This takes the set of all conditions forming the suffix of any guards
 /// generated from this view.
-let rec guardCFuncIn (suffix : Set<BoolExpr>) =
+let rec guardCFuncIn (suffix : Set<CBoolExpr>) =
     function
     | CFunc.Func v ->
         [ { Cond =

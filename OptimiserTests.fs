@@ -75,7 +75,7 @@ type OptimiserTests() =
 
     /// Test cases for discovering Boolean after-before pairs.
     static member BoolAfterDiscoveries =
-        let me : Map<string, BoolExpr> = Map.empty
+        let me : Map<string, CBoolExpr> = Map.empty
         [ TestCaseData(bEq (bAfter "foo") (bBefore "foo"))
             .Returns(
                 [("foo", bBefore "foo")]
@@ -104,11 +104,11 @@ type OptimiserTests() =
     /// Test cases for substituting afters in a func.
     static member AfterFuncs =
         [ TestCaseData({ Name = "foo"
-                         Params = [ Expr.Int (aAfter "serving")
-                                    Expr.Bool (bAfter "flag") ] })
+                         Params = [ CExpr.Int (aAfter "serving")
+                                    CExpr.Bool (bAfter "flag") ] })
             .Returns({ Name = "foo"
-                       Params = [ Expr.Int (AAdd [aBefore "serving"; AInt 1L])
-                                  Expr.Bool (BNot (bBefore "flag")) ] })
+                       Params = [ CExpr.Int (AAdd [aBefore "serving"; AInt 1L])
+                                  CExpr.Bool (BNot (bBefore "flag")) ] })
             .SetName("Substitute afters in a func with all-after params") ]
 
     /// Test substitution of afters in funcs.
@@ -120,29 +120,29 @@ type OptimiserTests() =
 
     /// Test cases for simplification.
     static member ObviousBools =
-        [ TestCaseData(BNot BFalse)
-            .Returns(BTrue)
+        [ TestCaseData(BNot BFalse : CBoolExpr)
+            .Returns(BTrue : CBoolExpr)
             .SetName("Simplify !false as a tautology")
-          TestCaseData(BAnd [BTrue; BTrue; BNot BFalse; bEq BFalse BFalse])
-            .Returns(BTrue)
+          TestCaseData(BAnd [BTrue; BTrue; BNot BFalse; bEq BFalse BFalse] : CBoolExpr)
+            .Returns(BTrue : CBoolExpr)
             .SetName("Simplify true&&true&&!false&&false==false to true")
-          TestCaseData(BImplies (BFalse, bEq BTrue BFalse))
-            .Returns(BTrue)
+          TestCaseData(BImplies (BFalse, bEq BTrue BFalse) : CBoolExpr)
+            .Returns(BTrue : CBoolExpr)
             .SetName("Simplify false=>true==false to true")
-          TestCaseData(BNot BTrue)
-            .Returns(BFalse)
+          TestCaseData(BNot BTrue : CBoolExpr)
+            .Returns(BFalse : CBoolExpr)
             .SetName("Simplify !true as a contradiction")
-          TestCaseData(BAnd [BTrue; BFalse; BNot BFalse; bEq BFalse BFalse])
-            .Returns(BFalse)
+          TestCaseData(BAnd [BTrue; BFalse; BNot BFalse; bEq BFalse BFalse] : CBoolExpr)
+            .Returns(BFalse : CBoolExpr)
             .SetName("Simplify true&&false&&!false&&false==false to false")
-          TestCaseData(BImplies (BTrue, bEq BTrue BFalse))
-            .Returns(BFalse)
+          TestCaseData(BImplies (BTrue, bEq BTrue BFalse) : CBoolExpr)
+            .Returns(BFalse : CBoolExpr)
             .SetName("Simplify true=>true==false to false")
           TestCaseData(BImplies ((bAfter "s"), BFalse))
             .Returns(BNot (bAfter "s"))
             .SetName("Simplify =>False into a Negation")
           TestCaseData(BImplies ((bAfter "s"), BTrue))
-            .Returns(BTrue)
+            .Returns(BTrue : CBoolExpr)
             .SetName("Simplify =>True into a True")
           TestCaseData(BImplies (BGt ((aAfter "s"), (aAfter "t")), BFalse))
             .Returns(BLe ((aAfter "s"), (aAfter "t" )))
@@ -151,7 +151,7 @@ type OptimiserTests() =
             .Returns((bAfter "s"))
             .SetName("Simplify True=>s into s")
           TestCaseData(BImplies (BFalse, (bAfter "s")))
-            .Returns(BTrue)
+            .Returns(BTrue : CBoolExpr)
             .SetName("Simplify False=>s into True")
             ]
 

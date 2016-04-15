@@ -20,16 +20,16 @@ module Types =
     /// Type for substitution function tables.
     [<NoComparison>]
     [<NoEquality>]
-    type SubFun =
-        {ASub: ArithExpr -> ArithExpr
-         BSub: BoolExpr -> BoolExpr}
+    type SubFun<'var> =
+        {ASub: IntExpr<'var> -> IntExpr<'var>
+         BSub: BoolExpr<'var> -> BoolExpr<'var>}
 
     /// Type for variable substitution function tables.
     [<NoComparison>]
     [<NoEquality>]
     type VSubFun =
-        {AVSub: Const -> ArithExpr
-         BVSub: Const -> BoolExpr}
+        {AVSub: Const -> CIntExpr
+         BVSub: Const -> CBoolExpr}
 
 
 (*

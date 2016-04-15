@@ -82,7 +82,7 @@ module Types =
     /// <typeparam name="axiom">
     ///     Type of program axioms.
     /// </typeparam>
-    type IFModel<'axiom> = Model<'axiom, FuncTable<BoolExpr option>>
+    type IFModel<'axiom> = Model<'axiom, FuncTable<CBoolExpr option>>
 
     /// <summary>
     ///     A <c>Model</c> whose view definitions form a definite
@@ -91,7 +91,7 @@ module Types =
     /// <typeparam name="axiom">
     ///     Type of program axioms.
     /// </typeparam>
-    type DFModel<'axiom> = Model<'axiom, FuncTable<BoolExpr>>
+    type DFModel<'axiom> = Model<'axiom, FuncTable<CBoolExpr>>
 
 
 /// <summary>
@@ -116,7 +116,7 @@ module Pretty =
     let printFuncTable ft : Command seq =
         ft
         |> List.map (fun (v, d) -> colonSep [ printDFunc v
-                                              printBoolExpr d ] )
+                                              printCBoolExpr d ] )
         |> List.toSeq
 
     /// <summary>

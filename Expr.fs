@@ -40,32 +40,61 @@ module Types =
         /// </summary>
         | Intermediate of bigint * string
 
-    /// An expression of arbitrary type.
-    type Expr = Typed<ArithExpr, BoolExpr>
+    /// <summary>
+    ///     An expression of arbitrary type.
+    /// </summary>
+    /// <typeparam name="var">
+    ///     The type of variables in the expression.
+    /// </typeparam>
+    type Expr<'var> = Typed<IntExpr<'var>, BoolExpr<'var>>
 
-    /// An arithmetic expression.
-    and ArithExpr =
-        | AConst of Const
+    /// <summary>
+    ///     An integral expression.
+    /// </summary>
+    /// <typeparam name="var">
+    ///     The type of variables in the expression.
+    /// </typeparam>
+    and IntExpr<'var> =
+        | AConst of 'var
         | AInt of int64
-        | AAdd of ArithExpr list
-        | ASub of ArithExpr list
-        | AMul of ArithExpr list
-        | ADiv of ArithExpr * ArithExpr
+        | AAdd of IntExpr<'var> list
+        | ASub of IntExpr<'var> list
+        | AMul of IntExpr<'var> list
+        | ADiv of IntExpr<'var> * IntExpr<'var>
 
-    /// A Boolean expression.
-    and BoolExpr =
-        | BConst of Const
+    /// <summary>
+    ///     A Boolean expression.
+    /// </summary>
+    /// <typeparam name="var">
+    ///     The type of variables in the expression.
+    /// </typeparam>
+    and BoolExpr<'var> =
+        | BConst of 'var
         | BTrue
         | BFalse
-        | BAnd of BoolExpr list
-        | BOr of BoolExpr list
-        | BImplies of BoolExpr * BoolExpr
-        | BEq of Expr * Expr
-        | BGt of ArithExpr * ArithExpr
-        | BGe of ArithExpr * ArithExpr
-        | BLe of ArithExpr * ArithExpr
-        | BLt of ArithExpr * ArithExpr
-        | BNot of BoolExpr
+        | BAnd of BoolExpr<'var> list
+        | BOr of BoolExpr<'var> list
+        | BImplies of BoolExpr<'var> * BoolExpr<'var>
+        | BEq of Expr<'var> * Expr<'var>
+        | BGt of IntExpr<'var> * IntExpr<'var>
+        | BGe of IntExpr<'var> * IntExpr<'var>
+        | BLe of IntExpr<'var> * IntExpr<'var>
+        | BLt of IntExpr<'var> * IntExpr<'var>
+        | BNot of BoolExpr<'var>
+
+    /// <summary>
+    ///     An expression of arbitrary type using <c>Const</c>s.
+    /// </summary>
+    type CExpr = Expr<Const>
+    /// <summary>
+    ///     An expression of Boolean type using <c>Const</c>s.
+    /// </summary>
+    type CBoolExpr = BoolExpr<Const>
+    /// <summary>
+    ///     An expression of integral type using <c>Const</c>s.
+    /// </summary>
+    type CIntExpr = IntExpr<Const>
+
 
     /// Type for fresh variable generators.
     type FreshGen = bigint ref
@@ -102,37 +131,43 @@ module Pretty =
         >> parened
 
     /// Pretty-prints an arithmetic expression.
-    let rec printArithExpr =
+    let rec printIntExpr pVar =
         function
-        | AConst c -> c |> constToString |> String
+        | AConst c -> pVar c
         | AInt i -> i |> sprintf "%i" |> String
-        | AAdd xs -> sexpr "+" printArithExpr xs
-        | ASub xs -> sexpr "-" printArithExpr xs
-        | AMul xs -> sexpr "*" printArithExpr xs
-        | ADiv (x, y) -> sexpr "/" printArithExpr [x; y]
+        | AAdd xs -> sexpr "+" (printIntExpr pVar) xs
+        | ASub xs -> sexpr "-" (printIntExpr pVar) xs
+        | AMul xs -> sexpr "*" (printIntExpr pVar) xs
+        | ADiv (x, y) -> sexpr "/" (printIntExpr pVar) [x; y]
 
     /// Pretty-prints a Boolean expression.
-    and printBoolExpr =
+    and printBoolExpr pVar =
         function
-        | BConst c -> c |> constToString |> String
+        | BConst c -> pVar c
         | BTrue -> String "true"
         | BFalse -> String "false"
-        | BAnd xs -> sexpr "and" printBoolExpr xs
-        | BOr xs -> sexpr "or" printBoolExpr xs
-        | BImplies (x, y) -> sexpr "=>" printBoolExpr [x; y]
-        | BEq (x, y) -> sexpr "=" printExpr [x; y]
-        | BGt (x, y) -> sexpr ">" printArithExpr [x; y]
-        | BGe (x, y) -> sexpr ">=" printArithExpr [x; y]
-        | BLe (x, y) -> sexpr "<=" printArithExpr [x; y]
-        | BLt (x, y) -> sexpr "<" printArithExpr [x; y]
-        | BNot x -> sexpr "not" printBoolExpr [x]
+        | BAnd xs -> sexpr "and" (printBoolExpr pVar)xs
+        | BOr xs -> sexpr "or" (printBoolExpr pVar) xs
+        | BImplies (x, y) -> sexpr "=>" (printBoolExpr pVar) [x; y]
+        | BEq (x, y) -> sexpr "=" (printExpr pVar) [x; y]
+        | BGt (x, y) -> sexpr ">" (printIntExpr pVar) [x; y]
+        | BGe (x, y) -> sexpr ">=" (printIntExpr pVar) [x; y]
+        | BLe (x, y) -> sexpr "<=" (printIntExpr pVar) [x; y]
+        | BLt (x, y) -> sexpr "<" (printIntExpr pVar) [x; y]
+        | BNot x -> sexpr "not" (printBoolExpr pVar) [x]
 
     /// Pretty-prints an expression.
-    and printExpr =
+    and printExpr pVar =
         function
-        | Int a -> printArithExpr a
-        | Bool b -> printBoolExpr b
+        | Int a -> printIntExpr pVar a
+        | Bool b -> printBoolExpr pVar b
 
+    /// Pretty-prints a CExpr.
+    let printCExpr = printExpr (constToString >> String)
+    /// Pretty-prints a CBoolExpr.
+    let printCBoolExpr = printBoolExpr (constToString >> String)
+    /// Pretty-prints a CIntExpr.
+    let printCIntExpr = printIntExpr (constToString >> String)
 
 /// Partial pattern that matches a Boolean equality on arithmetic expressions.
 let (|BAEq|_|) =
@@ -223,15 +258,13 @@ let rec simp ax =
 
 /// Returns true if the expression is definitely false.
 /// This is sound, but not complete.
-let isFalse =
-    simp >> 
-    function
+let isFalse expr =
+    match (simp expr) with
     | BFalse -> true
     | _      -> false
    
-let isTrue =
-    simp >> 
-    function
+let isTrue expr =
+    match (simp expr) with
     | BTrue -> true
     | _     -> false
 
@@ -313,33 +346,33 @@ let varMapToExprs marker vm =
 (* The following are just curried versions of the usual constructors. *)
 
 /// Curried wrapper over BGt.
-let mkGt = curry BGt
+let mkGt a b = BGt (a, b)
 /// Curried wrapper over BGe.
-let mkGe = curry BGe
+let mkGe a b = BGe (a, b)
 /// Curried wrapper over BLt.
-let mkLt = curry BLt
+let mkLt a b = BLt (a, b)
 /// Curried wrapper over BLe.
-let mkLe = curry BLe
+let mkLe a b = BLe (a, b)
 
 /// Curried wrapper over BEq.
-let mkEq = curry BEq
+let mkEq a b = BEq (a, b)
 
 /// Makes an arithmetic equality.
-let aEq = curry (pairMap Int Int >> BEq)
+let aEq a b = BEq (Int a, Int b)
 
 /// Makes a Boolean equality.
-let bEq = curry (pairMap Bool Bool >> BEq)
+let bEq a b = BEq (Bool a, Bool b)
 
 /// Curried wrapper over ADiv.
-let mkDiv = curry ADiv
+let mkDiv a b = ADiv (a, b)
 
 /// Slightly optimised version of ctx.MkAnd.
 /// Returns true for the empty array, and x for the singleton set {x}.
-let mkAnd = BAnd >> simp
+let mkAnd xs = simp (BAnd xs)
 
 /// Slightly optimised version of ctx.MkOr.
 /// Returns false for the empty set, and x for the singleton set {x}.
-let mkOr  = BOr >> simp
+let mkOr xs = simp (BOr xs)
 
 /// Makes an And from a pair of two expressions.
 let mkAnd2 l r = mkAnd [l ; r]
@@ -348,7 +381,7 @@ let mkAnd2 l r = mkAnd [l ; r]
 let mkOr2 l r = mkOr [l ; r]
 
 /// Symbolically inverts a Boolean expression.
-let mkNot = BNot >> simp
+let mkNot x = simp (BNot x)
 
 /// Makes not-equals.
 let mkNeq l r = mkEq l r |> mkNot
@@ -386,14 +419,14 @@ let getFresh fg =
 ///     Returns a set of all variables used in an arithmetic expression,
 ///     coupled with type.
 /// </summary>
-let rec varsInArith =
+let rec varsInInt =
     function
     | AConst c -> Set.singleton (Typed.Int c)
     | AInt _ -> Set.empty
-    | AAdd xs -> xs |> Seq.map varsInArith |> Set.unionMany
-    | ASub xs -> xs |> Seq.map varsInArith |> Set.unionMany
-    | AMul xs -> xs |> Seq.map varsInArith |> Set.unionMany
-    | ADiv (x, y) -> Set.union (varsInArith x) (varsInArith y)
+    | AAdd xs -> xs |> Seq.map varsInInt |> Set.unionMany
+    | ASub xs -> xs |> Seq.map varsInInt |> Set.unionMany
+    | AMul xs -> xs |> Seq.map varsInInt |> Set.unionMany
+    | ADiv (x, y) -> Set.union (varsInInt x) (varsInInt y)
 
 /// <summary>
 ///     Returns a set of all variables used in a Boolean expression,
@@ -408,16 +441,16 @@ and varsInBool =
     | BOr xs -> xs |> Seq.map varsInBool |> Set.unionMany
     | BImplies (x, y) -> Set.union (varsInBool x) (varsInBool y)
     | BEq (x, y) -> Set.union (varsIn x) (varsIn y)
-    | BGt (x, y) -> Set.union (varsInArith x) (varsInArith y)
-    | BGe (x, y) -> Set.union (varsInArith x) (varsInArith y)
-    | BLe (x, y) -> Set.union (varsInArith x) (varsInArith y)
-    | BLt (x, y) -> Set.union (varsInArith x) (varsInArith y)
+    | BGt (x, y) -> Set.union (varsInInt x) (varsInInt y)
+    | BGe (x, y) -> Set.union (varsInInt x) (varsInInt y)
+    | BLe (x, y) -> Set.union (varsInInt x) (varsInInt y)
+    | BLt (x, y) -> Set.union (varsInInt x) (varsInInt y)
     | BNot x -> varsInBool x
 
 /// Returns a set of all variables used in an expression.
 and varsIn =
     function
-    | Int a -> varsInArith a
+    | Int a -> varsInInt a
     | Bool b -> varsInBool b
 
 
@@ -426,12 +459,12 @@ and varsIn =
  *)
 
 /// <summary>
-///     Finds the highest intermediate stage number in an Arithmetic
+///     Finds the highest intermediate stage number in an integral
 ///     expression.
 ///     Returns one higher.
 /// </summary>
 /// <param name="_arg1">
-///     The <c>ArithExpr</c> to investigate.
+///     The <c>IntExpr</c> to investigate.
 /// </param>
 /// <returns>
 ///     The next available intermediate stage number.
@@ -493,11 +526,11 @@ and nextIntermediate =
  * Active patterns
  *)
 
-/// Categorises arithmetic expressions into simple or compound.
-let (|SimpleArith|CompoundArith|) =
+/// Categorises integral expressions into simple or compound.
+let (|SimpleInt|CompoundInt|) =
     function
-    | AConst _ | AInt _ -> SimpleArith
-    | _ -> CompoundArith
+    | AConst _ | AInt _ -> SimpleInt
+    | _ -> CompoundInt
 
 /// Categorises Boolean expressions into simple or compound.
 let (|SimpleBool|CompoundBool|) =
@@ -509,13 +542,15 @@ let (|SimpleBool|CompoundBool|) =
 let (|SimpleExpr|CompoundExpr|) =
     function
     | Bool (SimpleBool) -> SimpleExpr
-    | Int (SimpleArith) -> SimpleExpr
+    | Int (SimpleInt) -> SimpleExpr
     | _ -> CompoundExpr
 
 /// Partial pattern that matches a Boolean expression in terms of exactly one /
 /// constant.
-let rec (|ConstantBoolFunction|_|) = varsInBool >> Seq.map valueOf >> onlyOne
+let rec (|ConstantBoolFunction|_|) x =
+    x |> varsInBool |> Seq.map valueOf |> onlyOne
 
 /// Partial pattern that matches a Boolean expression in terms of exactly one /
 /// constant.
-let rec (|ConstantArithFunction|_|) = varsInArith >> Seq.map valueOf >> onlyOne
+let rec (|ConstantIntFunction|_|) x =
+    x |>varsInInt |> Seq.map valueOf |> onlyOne
