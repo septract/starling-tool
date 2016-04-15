@@ -13,7 +13,7 @@ open Starling.Flattener
 type FlattenerTests() =
     /// The globals environment used in the tests.
     static member Globals =
-        Map.ofList [ ("serving", Type.Int) ; ("ticket", Type.Int) ]
+        Map.ofList [ ("serving", Type.Int ()) ; ("ticket", Type.Int ()) ]
 
     /// Test cases for the view func renamer.
     static member ViewFuncNamings =
@@ -36,12 +36,12 @@ type FlattenerTests() =
     static member DViewFuncs =
         let ms : DFunc list -> DView = Multiset.ofFlatList >> Multiset.toFlatList
         [ TestCaseData(ms [ { Name = "holdLock"; Params = [] }
-                            { Name = "holdTick"; Params = [(Type.Int, "t")] } ])
+                            { Name = "holdTick"; Params = [ Param.Int "t" ] } ])
              .Returns({ Name = "v_holdLock_holdTick"
                         Params =
-                            [ (Type.Int, "serving")
-                              (Type.Int, "ticket")
-                              (Type.Int, "t") ] })
+                            [ Param.Int "serving"
+                              Param.Int "ticket"
+                              Param.Int "t" ] })
             .SetName("Convert defining view 'holdLock() * holdTick(t)' to defining func") ]
 
     /// Tests the viewdef LHS translator.
@@ -49,19 +49,19 @@ type FlattenerTests() =
     member x.``the defining view func translator works correctly`` (v: DView) =
         v |> funcOfView (FlattenerTests.Globals
                          |> Map.toSeq
-                         |> Seq.map flipPair)
+                         |> Seq.map (fun (n, t) -> withType t n))
 
     /// Test cases for the full view func converter.
     /// These all use the Globals environment above.
     static member ViewFuncs =
         let ms : VFunc list -> OView = Multiset.ofFlatList >> Multiset.toFlatList
         [ TestCaseData(ms [ { Name = "holdLock"; Params = [] }
-                            { Name = "holdTick"; Params = [AExpr (aUnmarked "t")] } ])
+                            { Name = "holdTick"; Params = [Expr.Int (aUnmarked "t")] } ])
              .Returns({ Name = "v_holdLock_holdTick"
                         Params =
-                            [ AExpr (aUnmarked "serving")
-                              AExpr (aUnmarked "ticket")
-                              AExpr (aUnmarked "t") ] })
+                            [ Expr.Int (aUnmarked "serving")
+                              Expr.Int (aUnmarked "ticket")
+                              Expr.Int (aUnmarked "t") ] })
             .SetName("Convert 'holdLock() * holdTick(t)' to func") ]
 
     /// Tests the viewdef LHS translator.
@@ -70,5 +70,5 @@ type FlattenerTests() =
         v |> funcOfView (FlattenerTests.Globals
                          |> Map.toSeq
                          |> Seq.map (function
-                                     | (x, Type.Int) -> x |> aUnmarked |> AExpr
-                                     | (x, Type.Bool) -> x |> bUnmarked |> BExpr))
+                                     | (x, Type.Int ()) -> x |> aUnmarked |> Expr.Int
+                                     | (x, Type.Bool ()) -> x |> bUnmarked |> Expr.Bool))

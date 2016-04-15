@@ -275,11 +275,14 @@ let parseViewLike basic join =
  *)
 
 /// Parses a type identifier.
-let parseType = stringReturn "int" Type.Int <|> stringReturn "bool" Type.Bool;
+let parseType =
+    stringReturn "int" (Type.Int ())
+    <|> stringReturn "bool" (Type.Bool ());
 
 /// Parses a pair of type identifier and parameter name.
-let parseTypedParam = parseType .>> ws .>>. parseIdentifier
-                      //^ <type> <identifier>
+let parseTypedParam : Parser<Param, unit> =
+    pipe2ws parseType parseIdentifier withType
+    // ^ <type> <identifier>
 
 
 (*

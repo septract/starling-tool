@@ -17,10 +17,84 @@ module Types =
         // TODO(CaptainHayashi): add support for non-variable LValues.
         | LVIdent of string
 
-    /// A variable type.
-    type Type = 
-        | Int
-        | Bool
+    /// <summary>
+    ///     A typed item.
+    /// </summary>
+    /// <typeparam name="int">
+    ///     The real type of the item when it is 'typed' as <c>Int</c>.
+    /// </typeparam>
+    /// <typeparam name="bool">
+    ///     The real type of the item when it is 'typed' as <c>Bool</c>.
+    /// </typeparam>
+    type Typed<'int, 'bool> = 
+        /// <summary>
+        ///    An item of integral 'type'.
+        /// </summary>
+        | Int of 'int
+        | Bool of 'bool
+
+    /// <summary>
+    ///     A typed item where every 'type' leads to the same real type.
+    /// </summary>
+    /// <typeparam name="ty">
+    ///     The real type to use for all <c>Typed</c> parameters.
+    /// </typeparam>
+    type CTyped<'ty> = Typed<'ty, 'ty>
+
+    /// <summary>
+    ///     A standalone type annotation.
+    /// </summary>
+    type Type = CTyped<unit>
+
+    /// <summary>
+    ///     A formal parameter.
+    /// </summary>
+    type Param = CTyped<string>
+
+    /// <summary>
+    ///     Extracts the <c>Type</c> of a <c>Typed</c> item.
+    /// </summary>
+    /// <param name="typed">
+    ///     The typed item.
+    /// </param>
+    /// <returns>
+    ///     The item's <c>Type</c>.
+    /// </returns>
+    let typeOf (typed : Typed<_, _>) : Type =
+        match typed with
+        | Int _ -> Int ()
+        | Bool _ -> Bool ()
+
+    /// <summary>
+    ///     Combines a <c>Type</c> with an item to make it
+    ///     <c>CTyped</c>.
+    /// </summary>
+    /// <param name="ty">
+    ///     The type to use to mark the item.
+    /// </param>
+    /// <param name="item">
+    ///     The item to be marked.
+    /// </param>
+    /// <returns>
+    ///     A <c>CTyped</c> with <paramref name="item"/> as its value.
+    /// </returns>
+    let withType (ty : Type) (item : 'a) : CTyped<'a> =
+        match ty with
+        | Int () -> Int item
+        | Bool () -> Bool item
+
+    /// <summary>
+    ///     Extracts the value of a <c>CTyped</c> item.
+    /// </summary>
+    /// <param name="typed">
+    ///     The typed item.
+    /// </param>
+    /// <returns>
+    ///     The item's value
+    /// </returns>
+    let valueOf (typed : CTyped<'a>) : 'a =
+        match typed with
+        | Int a | Bool a -> a
 
     /// A variable map.
     type VarMap = Map<string, Type>
@@ -47,8 +121,8 @@ module Pretty =
     /// Pretty-prints a variable type.
     let printType = 
         function 
-        | Type.Int -> "int" |> String
-        | Type.Bool -> "bool" |> String
+        | Int () -> "int" |> String
+        | Bool () -> "bool" |> String
 
     /// Pretty-prints variable conversion errors.
     let printVarMapError =
@@ -67,11 +141,14 @@ let rec flattenLV =
 /// Makes a variable map from a list of type-name pairs.
 let makeVarMap lst = 
     lst
-    |> List.map snd // Extract all names from the list.
+    |> List.map valueOf // Extract all names from the list.
     |> findDuplicates
     |> Seq.toList
     |> function
-       | [] -> lst |> Seq.ofList |> Seq.map (fun (ty, name) -> (name, ty)) |> Map.ofSeq |> ok
+       | [] -> lst
+               |> Seq.ofList
+               |> Seq.map (fun param -> (valueOf param, typeOf param))
+               |> Map.ofSeq |> ok
        | ds -> List.map Duplicate ds |> Bad
 
 /// Tries to combine two variable maps.
@@ -96,13 +173,3 @@ let lookupVar env s =
     s
     |> tryLookupVar env
     |> failIfNone (NotFound(flattenLV s))
-
-(*
- * Parameter functions
- *)
-
-/// Constructs an integer param.
-let ipar x = (Type.Int, x)
-
-/// Constructs a Boolean param.
-let bpar x = (Type.Bool, x)

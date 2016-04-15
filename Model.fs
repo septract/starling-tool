@@ -49,7 +49,7 @@ module Types =
     type VFunc = Func<Expr>
 
     /// A view-definition func.
-    type DFunc = Func<Type * string>
+    type DFunc = Func<Param>
 
 
     (*
@@ -121,6 +121,7 @@ module Types =
           ///     An uninterpreted <c>ViewDef</c>.
           /// </summary>
         | Uninterpreted of 'view * string
+        override this.ToString() = sprintf "%A" this
 
     /// <summary>
     ///     A view definition over <c>BoolExpr</c>s.
@@ -217,9 +218,9 @@ module Pretty =
     open Starling.Core.Expr.Pretty
 
     /// Pretty-prints a type-name parameter.
-    let printParam (ty, name) =
-        hsep [ ty |> printType
-               name |> String ]
+    let printParam param =
+        hsep [ param |> typeOf |> printType
+               param |> valueOf |> String ]
 
     /// Pretty-prints a multiset given a printer for its contents.
     let printMultiset pItem =
@@ -399,7 +400,7 @@ module Pretty =
 /// <returns>
 ///     A new <c>DFunc</c> with the given name and parameters.
 /// </returns>
-let dfunc name (pars : (Type * string) seq) : DFunc = func name pars
+let dfunc name (pars : Param seq) : DFunc = func name pars
 
 /// <summary>
 ///     Type-constrained version of <c>func</c> for <c>VFunc</c>s.

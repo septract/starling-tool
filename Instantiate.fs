@@ -55,7 +55,7 @@ module Types =
         ///     has been assigned to an argument of the incorrect type
         ///     <c>atype</c>.
         /// </summary>
-        | TypeMismatch of param: (Type * string) * atype: Type
+        | TypeMismatch of param: Param * atype: Type
         /// <summary>
         ///     The func looked up has <c>fn</c> arguments, but its
         ///     definition has <c>dn</c> parameters.
@@ -287,8 +287,8 @@ let checkParamTypes func def =
     List.map2
         (curry
              (function
-              | (AExpr _, ((Bool, _) as param)) -> TypeMismatch (param, Int) |> fail
-              | (BExpr _, ((Int, _) as param)) -> TypeMismatch (param, Bool) |> fail
+              | (Int _, ((Bool _) as param)) -> TypeMismatch (param, Int ()) |> fail
+              | (Bool _, ((Int _) as param)) -> TypeMismatch (param, Bool ()) |> fail
               | _ -> ok ()))
         func.Params
         def.Params
@@ -310,7 +310,7 @@ let checkParamTypes func def =
 /// </returns>
 let paramSubFun {Params = fpars} {Params = dpars} =
     let pmap =
-        Seq.map2 (fun (_, name) up -> name, up) dpars fpars
+        Seq.map2 (fun par up -> valueOf par, up) dpars fpars
         |> Map.ofSeq
 
     // TODO(CaptainHayashi): make this type-safe.
@@ -319,7 +319,7 @@ let paramSubFun {Params = fpars} {Params = dpars} =
         function
         | Unmarked p as up ->
             match (Map.tryFind p pmap) with
-            | Some (AExpr e) -> e
+            | Some (Typed.Int e) -> e
             | Some _ -> failwith "param substitution type error"
             | None -> AConst up
         | q -> AConst q
@@ -327,7 +327,7 @@ let paramSubFun {Params = fpars} {Params = dpars} =
         function
         | Unmarked p as up ->
             match (Map.tryFind p pmap) with
-            | Some (BExpr e) -> e
+            | Some (Typed.Bool e) -> e
             | Some _ -> failwith "param substitution type error"
             | None -> BConst up
         | q -> BConst q

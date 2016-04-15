@@ -2,6 +2,7 @@ module Starling.Tests.Core.Expr
 
 open NUnit.Framework
 open Starling.Core.Axiom
+open Starling.Core.Var
 open Starling.Core.Expr
 open Starling.Core.ExprEquiv
 open Starling.Core.Sub
@@ -41,19 +42,20 @@ type ExprTests() =
 
     /// Test cases for intermediate finding.
     static member NextIntermediates =
-        [ TestCaseData(BExpr (bInter 5I "foo"))
+        [ TestCaseData(Expr.Bool (bInter 5I "foo"))
             .Returns(6I)
             .SetName("nextIntermediate on Bool intermediate is one higher")
-          TestCaseData(BExpr (BNot (bInter 10I "bar")))
+          TestCaseData(Expr.Bool (BNot (bInter 10I "bar")))
             .Returns(11I)
             .SetName("nextIntermediate on 'not' passes through")
-          TestCaseData(BExpr (BImplies (bInter 6I "a", bInter 11I "b")))
+          TestCaseData(Expr.Bool (BImplies (bInter 6I "a", bInter 11I "b")))
             .Returns(12I)
             .SetName("nextIntermediate on 'implies' is one higher than max")
-          TestCaseData(AExpr (AAdd [ aInter 1I "a"
-                                     aAfter "b"
-                                     aBefore "c"
-                                     aInter 2I "d" ] ))
+          TestCaseData(Expr.Int
+                           (AAdd [ aInter 1I "a"
+                                   aAfter "b"
+                                   aBefore "c"
+                                   aInter 2I "d" ] ))
             .Returns(3I)
             .SetName("nextIntermediate on 'add' is one higher than max") ]
 

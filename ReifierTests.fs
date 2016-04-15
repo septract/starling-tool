@@ -21,20 +21,20 @@ type ReifierTests() =
                         [ { Name = "holdLock"
                             Params = [] }
                           { Name = "holdTick"
-                            Params = [ AExpr (aUnmarked "t") ] } ]
+                            Params = [ Expr.Int (aUnmarked "t") ] } ]
                 )
             ).Returns(
                 Some(Multiset.ofFlatList
                          [ { Name = "holdLock"
                              Params = [] }
                            { Name = "holdTick"
-                             Params = [ (Type.Int, "t") ] } ])
+                             Params = [ Param.Int "t" ] } ])
             ).SetName("Find definition of view in the same order")
             (
                 new TestCaseData(
                     Multiset.ofFlatList
                         [ { Name = "holdTick"
-                            Params = [ AExpr (aUnmarked "t") ] }
+                            Params = [ Expr.Int (aUnmarked "t") ] }
                           { Name = "holdLock"
                             Params = [] } ]
                 )
@@ -43,6 +43,6 @@ type ReifierTests() =
                          [ { Name = "holdLock"
                              Params = [] }
                            { Name = "holdTick"
-                             Params = [ (Type.Int, "t") ] } ])
+                             Params = [ Param.Int "t" ] } ])
             ).SetName("Find definition of view in a reversed order")
         ]

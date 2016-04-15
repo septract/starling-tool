@@ -53,9 +53,9 @@ module Types =
         /// A Func is inconsistent with its definition.
         | InconsistentFunc of func : VFunc * err : Instantiate.Types.Error
         /// A viewdef has a non-arithmetic param.
-        | NonArithParam of Type * string
+        | NonArithParam of Param
         /// A model has a non-arithmetic variable.
-        | NonArithVar of Type * string
+        | NonArithVar of CTyped<string>
         /// The expression given is not supported in the given position.
         | UnsupportedExpr of Expr
         /// The expression given is compound, but empty.
@@ -172,14 +172,14 @@ module Pretty =
             wrapped "view func"
                     (printVFunc func)
                     (Instantiate.Pretty.printError err)
-        | NonArithParam (ty, name) ->
+        | NonArithParam p ->
             fmt "parameter '{0}' is of type {1}: HSF only permits integers here"
-                [ String name
-                  printType ty ]
-        | NonArithVar (ty, name) ->
+                [ p |> valueOf |> String
+                  p |> typeOf |> printType ]
+        | NonArithVar p ->
             fmt "variable '{0}' is of type {1}: HSF only permits integers here"
-                [ String name
-                  printType ty ]
+                [ p |> valueOf |> String
+                  p |> typeOf |> printType ]
         | UnsupportedExpr expr ->
             fmt "expression '{0}' is not supported in the HSF backend"
                 [ printExpr expr ]
@@ -208,15 +208,15 @@ let rec boolExpr =
     | BOr xs -> List.map boolExpr xs |> collect |> lift Or
     | BTrue -> ok <| True
     | BFalse -> ok <| False
-    | BEq(AExpr x, AExpr y) -> lift2 (curry Eq) (checkArith x) (checkArith y)
-    | BNot(BEq(AExpr x, AExpr y)) -> lift2 (curry Neq) (checkArith x) (checkArith y)
+    | BEq(Expr.Int x, Expr.Int y) -> lift2 (curry Eq) (checkArith x) (checkArith y)
+    | BNot(BEq(Expr.Int x, Expr.Int y)) -> lift2 (curry Neq) (checkArith x) (checkArith y)
     // TODO(CaptainHayashi): is implies allowed natively?
     | BImplies(x, y) -> boolExpr (mkOr [ mkNot x ; y ])
     | BGt(x, y) -> lift2 (curry Gt) (checkArith x) (checkArith y)
     | BGe(x, y) -> lift2 (curry Ge) (checkArith x) (checkArith y)
     | BLe(x, y) -> lift2 (curry Le) (checkArith x) (checkArith y)
     | BLt(x, y) -> lift2 (curry Lt) (checkArith x) (checkArith y)
-    | x -> fail <| UnsupportedExpr(BExpr x)
+    | x -> fail <| UnsupportedExpr(Expr.Bool x)
 
 (*
  * Func sanitisation
@@ -226,13 +226,13 @@ let rec boolExpr =
 /// Fails with UnsupportedExpr if the expresson is Boolean.
 let tryArithExpr =
     function
-    | AExpr x -> x |> ok
+    | Expr.Int x -> x |> ok
     | e -> e |> UnsupportedExpr |> fail
 
 /// Ensures a param in a viewdef multiset is arithmetic.
 let ensureArith =
    function
-   | (Type.Int, x) -> ok (aUnmarked x)
+   | Param.Int x -> ok (aUnmarked x)
    | x -> fail <| NonArithParam x
 
 /// Constructs a pred from a Func, given a set of active globals,
@@ -245,8 +245,8 @@ let predOfFunc gs parT { Name = n; Params = pars } =
  *)
 
 /// Generates a query_naming clause for a viewdef.
-let queryNaming { Name = n; Params = ps } =
-    QueryNaming {Name = n; Params = ps |> List.map snd}
+let queryNaming { Name = n ; Params = ps } =
+    QueryNaming { Name = n ; Params = List.map valueOf ps }
 
 /// Constructs a full constraint in HSF.
 /// The map of active globals should be passed as gs.
@@ -279,10 +279,9 @@ let hsfModelVariables gs =
         gs
         |> Map.toSeq
         |> Seq.map
-            (fun (name, ty) ->
-             match ty with
-             | Type.Int -> aUnmarked name |> ok
-             | _ -> NonArithVar (ty, name) |> fail)
+            (function
+             | (name, Type.Int()) -> aUnmarked name |> ok
+             | (name, ty) -> name |> withType ty |> NonArithVar |> fail)
         |> collect
 
     let head = 

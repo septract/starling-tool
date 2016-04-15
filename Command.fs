@@ -5,6 +5,7 @@ module Starling.Core.Command
 
 open Starling.Collections
 open Starling.Core.Expr
+open Starling.Core.Var
 open Starling.Core.Model
 
 
@@ -71,10 +72,10 @@ module Queries =
                   * post-state, if it is well-formed.
                   *)
                  Seq.forall (function
-                             | AExpr (AConst (Before _)) -> true
-                             | AExpr (AConst _) -> false
-                             | BExpr (BConst (Before _)) -> true
-                             | BExpr (BConst _) -> false
+                             | Typed.Int (AConst (Before _)) -> true
+                             | Typed.Int (AConst _) -> false
+                             | Typed.Bool (BConst (Before _)) -> true
+                             | Typed.Bool (BConst _) -> false
                              | _ -> true)
                             ps)
 
@@ -83,7 +84,7 @@ module Queries =
     /// </summary>
     let (|Assume|_|) =
         function
-        | [ { Name = n ; Params = [ BExpr b ] } ]
+        | [ { Name = n ; Params = [ Typed.Bool b ] } ]
           when n = "Assume" -> Some b
         | _ -> None
 
@@ -121,19 +122,19 @@ module Tests =
             [ TestCaseData([] : Command)
                 .Returns(true)
                 .SetName("Classify [] as a no-op")
-              TestCaseData([ vfunc "Assume" [ BExpr (bBefore "x") ]])
+              TestCaseData([ vfunc "Assume" [ Typed.Bool (bBefore "x") ]])
                 .Returns(true)
                 .SetName("Classify Assume(x!before) as a no-op")
-              TestCaseData([ vfunc "Assume" [ BExpr (bAfter "x") ]])
+              TestCaseData([ vfunc "Assume" [ Typed.Bool (bAfter "x") ]])
                 .Returns(false)
                 .SetName("Reject Assume(x!after) as a no-op")
-              TestCaseData([ vfunc "Foo" [ AExpr (aBefore "bar")
-                                           AExpr (aAfter "bar") ]])
+              TestCaseData([ vfunc "Foo" [ Typed.Int (aBefore "bar")
+                                           Typed.Int (aAfter "bar") ]])
                 .Returns(false)
                 .SetName("Reject Foo(bar!before, bar!after) as a no-op")
-              TestCaseData([ vfunc "Foo" [ AExpr (aBefore "bar")
-                                           AExpr (aAfter "bar") ]
-                             vfunc "Assume" [ BExpr (bBefore "x") ]])
+              TestCaseData([ vfunc "Foo" [ Typed.Int (aBefore "bar")
+                                           Typed.Int (aAfter "bar") ]
+                             vfunc "Assume" [ Typed.Bool (bBefore "x") ]])
                 .Returns(false)
                 .SetName("Reject Foo(bar!before, bar!after); Assume(x!before)\
                           as a no-op") ]
@@ -149,12 +150,12 @@ module Tests =
             [ TestCaseData([] : Command)
                 .Returns(false)
                 .SetName("Reject [] as an assume")
-              TestCaseData([ vfunc "Assume" [ BExpr (bBefore "x") ]])
+              TestCaseData([ vfunc "Assume" [ Typed.Bool (bBefore "x") ]])
                 .Returns(true)
                 .SetName("Classify Assume(x!before) as an assume")
-              TestCaseData([ vfunc "Foo" [ AExpr (aBefore "bar")
-                                           AExpr (aAfter "bar") ]
-                             vfunc "Assume" [ BExpr (bBefore "x") ]])
+              TestCaseData([ vfunc "Foo" [ Typed.Int (aBefore "bar")
+                                           Typed.Int (aAfter "bar") ]
+                             vfunc "Assume" [ Typed.Bool (bBefore "x") ]])
                 .Returns(false)
                 .SetName("Reject Foo(bar!before, bar!after); Assume(x!before)\
                           as an assume") ]

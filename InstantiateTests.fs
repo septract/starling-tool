@@ -9,8 +9,6 @@ open Starling.Core.Var
 open Starling.Core.Instantiate
 
 
-let vfunc : string -> Expr list -> VFunc = func
-let dfunc : string -> (Type * string) list -> DFunc = func
 let none : Option<BoolExpr> = None
 
 /// Tests for the func instantiation functions.
@@ -20,9 +18,9 @@ type InstantiateTests() =
     static member TestFuncs =
         [ (dfunc "foo" [],
            aEq (AInt 5L) (AInt 6L))
-          (dfunc "bar" [(Int, "quux")],
+          (dfunc "bar" [ Param.Int "quux" ],
            aEq (aUnmarked "quux") (aUnmarked "blob"))
-          (dfunc "baz" [(Int, "quux"); (Bool, "flop")],
+          (dfunc "baz" [ Param.Int "quux" ; Param.Bool "flop" ],
            BAnd [bUnmarked "flop"; BGt (aUnmarked "quux", aUnmarked "quux")]) ]
 
 
@@ -34,10 +32,10 @@ type InstantiateTests() =
           TestCaseData(vfunc "foo" [])
             .Returns(aEq (AInt 5L) (AInt 6L) |> Some |> Some)
             .SetName("Instantiate func with no arguments")
-          TestCaseData(vfunc "bar" [AInt 101L |> AExpr])
+          TestCaseData(vfunc "bar" [AInt 101L |> Expr.Int])
             .Returns(aEq (AInt 101L) (aUnmarked "blob") |> Some |> Some)
             .SetName("Instantiate func with one int argument")
-          TestCaseData(vfunc "baz" [aAfter "burble" |> AExpr ; BTrue |> BExpr])
+          TestCaseData(vfunc "baz" [aAfter "burble" |> Expr.Int ; BTrue |> Expr.Bool])
             .Returns(BAnd [BTrue; BGt (aAfter "burble", aAfter "burble")] |> Some |> Some)
             .SetName("Instantiate func with two arguments of different types") ]
           
@@ -49,15 +47,15 @@ type InstantiateTests() =
 
     /// Test cases for testing invalid instantiation.
     static member InvalidInstantiations =
-        [ TestCaseData(vfunc "foo" [AInt 101L |> AExpr])
+        [ TestCaseData(vfunc "foo" [AInt 101L |> Expr.Int])
             .Returns([CountMismatch(1, 0)] |> Some)
             .SetName("Instantiate func with too many arguments")
           TestCaseData(vfunc "bar" [])
             .Returns([CountMismatch(0, 1)] |> Some)
             .SetName("Instantiate func with too few arguments")
-          TestCaseData(vfunc "baz" [BTrue |> BExpr ; aAfter "burble" |> AExpr])
-            .Returns([TypeMismatch ((Int, "quux"), Bool)
-                      TypeMismatch ((Bool, "flop"), Int)] |> Some)
+          TestCaseData(vfunc "baz" [BTrue |> Expr.Bool ; aAfter "burble" |> Expr.Int])
+            .Returns([TypeMismatch (Param.Int "quux", Type.Bool ())
+                      TypeMismatch (Param.Bool "flop", Type.Int ())] |> Some)
             .SetName("Instantiate func with two arguments of incorrect types") ]
           
     /// Tests whether invalid instantiations (don't) work.

@@ -19,32 +19,32 @@ type GuarderTests() =
         [ TestCaseData(msec).Returns(mseg).SetName("Convert the empty CView to the empty GView")
           
           TestCaseData(Multiset.ofFlatList [ Func { Name = "foo"
-                                                    Params = [ AExpr(AConst(Unmarked "bar")) ] }
+                                                    Params = [ Expr.Int(AConst(Unmarked "bar")) ] }
                                              Func { Name = "bar"
-                                                    Params = [ AExpr(AConst(Unmarked "baz")) ] } ])
+                                                    Params = [ Expr.Int(AConst(Unmarked "baz")) ] } ])
               .Returns(Multiset.ofFlatList [ { Cond = BTrue
                                                Item = 
                                                    { Name = "foo"
-                                                     Params = [ AExpr(AConst(Unmarked "bar")) ] } }
+                                                     Params = [ Expr.Int(AConst(Unmarked "bar")) ] } }
                                              { Cond = BTrue
                                                Item = 
                                                    { Name = "bar"
-                                                     Params = [ AExpr(AConst(Unmarked "baz")) ] } } ])
+                                                     Params = [ Expr.Int(AConst(Unmarked "baz")) ] } } ])
               .SetName("Convert a flat CondView-list to a GuarView-list with no guards")
           
           TestCaseData(Multiset.ofFlatList [ CFunc.ITE((BConst(Unmarked "s")), 
                                                        Multiset.ofFlatList [ Func { Name = "foo"
-                                                                                    Params = [ AExpr(AConst(Unmarked "bar")) ] } ], 
+                                                                                    Params = [ Expr.Int(AConst(Unmarked "bar")) ] } ], 
                                                        Multiset.ofFlatList [ Func { Name = "bar"
-                                                                                    Params = [ AExpr(AConst(Unmarked "baz")) ] } ]) ])
+                                                                                    Params = [ Expr.Int(AConst(Unmarked "baz")) ] } ]) ])
               .Returns(Multiset.ofFlatList [ { Cond = BConst(Unmarked "s")
                                                Item = 
                                                    { Name = "foo"
-                                                     Params = [ AExpr(AConst(Unmarked "bar")) ] } }
+                                                     Params = [ Expr.Int(AConst(Unmarked "bar")) ] } }
                                              { Cond = BNot(BConst(Unmarked "s"))
                                                Item = 
                                                    { Name = "bar"
-                                                     Params = [ AExpr(AConst(Unmarked "baz")) ] } } ])
+                                                     Params = [ Expr.Int(AConst(Unmarked "baz")) ] } } ])
               .SetName("Convert a singly-nested CondView-list to a GuarView-list with unit guards")
           
           TestCaseData(Multiset.ofFlatList
@@ -52,42 +52,42 @@ type GuarderTests() =
                                        Multiset.ofFlatList
                                            [ CFunc.ITE(BConst(Unmarked "t"), 
                                                        Multiset.ofFlatList [ Func { Name = "foo"
-                                                                                    Params = [ AExpr(AConst(Unmarked "bar")) ] }
+                                                                                    Params = [ Expr.Int(AConst(Unmarked "bar")) ] }
                                                                              Func { Name = "bar"
-                                                                                    Params = [ AExpr(AConst(Unmarked "baz")) ] } ], 
+                                                                                    Params = [ Expr.Int(AConst(Unmarked "baz")) ] } ], 
                                                        Multiset.ofFlatList [ Func { Name = "fizz"
-                                                                                    Params = [ AExpr(AConst(Unmarked "buzz")) ] } ])
+                                                                                    Params = [ Expr.Int(AConst(Unmarked "buzz")) ] } ])
                                              Func { Name = "in"
-                                                    Params = [ AExpr(AConst(Unmarked "out")) ] } ], 
+                                                    Params = [ Expr.Int(AConst(Unmarked "out")) ] } ], 
                                        Multiset.ofFlatList
                                            [ Func { Name = "ding"
-                                                    Params = [ AExpr(AConst(Unmarked "dong")) ] } ]) ])
+                                                    Params = [ Expr.Int(AConst(Unmarked "dong")) ] } ]) ])
               .Returns(Multiset.ofFlatList [ { Cond = 
                                                    BAnd [ BConst(Unmarked "s")
                                                           BConst(Unmarked "t") ]
                                                Item = 
                                                    { Name = "foo"
-                                                     Params = [ AExpr(AConst(Unmarked "bar")) ] } }
+                                                     Params = [ Expr.Int(AConst(Unmarked "bar")) ] } }
                                              { Cond = 
                                                    BAnd [ BConst(Unmarked "s")
                                                           BConst(Unmarked "t") ]
                                                Item = 
                                                    { Name = "bar"
-                                                     Params = [ AExpr(AConst(Unmarked "baz")) ] } }
+                                                     Params = [ Expr.Int(AConst(Unmarked "baz")) ] } }
                                              { Cond = 
                                                    BAnd [ BConst(Unmarked "s")
                                                           BNot(BConst(Unmarked "t")) ]
                                                Item = 
                                                    { Name = "fizz"
-                                                     Params = [ AExpr(AConst(Unmarked "buzz")) ] } }
+                                                     Params = [ Expr.Int(AConst(Unmarked "buzz")) ] } }
                                              { Cond = BConst(Unmarked "s")
                                                Item = 
                                                    { Name = "in"
-                                                     Params = [ AExpr(AConst(Unmarked "out")) ] } }
+                                                     Params = [ Expr.Int(AConst(Unmarked "out")) ] } }
                                              { Cond = BNot(BConst(Unmarked "s"))
                                                Item = 
                                                    { Name = "ding"
-                                                     Params = [ AExpr(AConst(Unmarked "dong")) ] } } ])
+                                                     Params = [ Expr.Int(AConst(Unmarked "dong")) ] } } ])
               .SetName("Convert a complex-nested CondView-list to a GuarView-list with complex guards") ]
     
     // Test conversion of CViews into GViews.

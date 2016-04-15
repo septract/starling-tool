@@ -24,14 +24,14 @@ type ModellerTests() =
     static member TicketLockProtos : FuncTable<unit> =
         makeFuncTable
             [ (func "holdLock" [], ())
-              (func "holdTick" [(Type.Int, "t")], ()) ]
+              (func "holdTick" [ Param.Int "t" ], ()) ]
 
     /// Sample environment used in expression modelling tests.
     static member Env =
-        Map.ofList [ ("foo", Type.Int)
-                     ("bar", Type.Int)
-                     ("baz", Type.Bool)
-                     ("emp", Type.Bool) ]
+        Map.ofList [ ("foo", Type.Int ())
+                     ("bar", Type.Int ())
+                     ("baz", Type.Bool ())
+                     ("emp", Type.Bool ()) ]
 
     static member EmptyCView : CView = Multiset.empty
 
@@ -68,7 +68,10 @@ type ModellerTests() =
              .Returns(Some [LookupError ("holdTick", CountMismatch(0, 1))])
              .SetName("Modelling a single view with bad parameter count returns an error")
           TestCaseData(afunc "holdTick" [Expression.True] |> View.Func)
-             .Returns(Some [LookupError ("holdTick", Error.TypeMismatch ((Type.Int, "t"), Type.Bool))])
+             .Returns(Some [ LookupError
+                                 ("holdTick",
+                                  Error.TypeMismatch
+                                      (Param.Int "t", Type.Bool ()))])
              .SetName("Modelling a single view with bad parameter type returns an error") ]
 
     /// <summary>
@@ -109,12 +112,12 @@ type ModellerTests() =
 
     /// Tests for modelling bad variable lists.
     static member BadVarLists =
-        [ TestCaseData([ (Type.Bool, "foo")
-                         (Type.Bool, "foo") ]).Returns(Some <| [ VarMapError.Duplicate "foo" ])
+        [ TestCaseData([ (CTyped.Bool "foo")
+                         (CTyped.Bool "foo") ]).Returns(Some <| [ VarMapError.Duplicate "foo" ])
               .SetName("disallow var lists with duplicates of same type")
 
-          TestCaseData([ (Type.Int, "bar")
-                         (Type.Bool, "bar") ]).Returns(Some <| [ VarMapError.Duplicate "bar" ])
+          TestCaseData([ (CTyped.Int "bar")
+                         (CTyped.Bool "bar") ]).Returns(Some <| [ VarMapError.Duplicate "bar" ])
               .SetName("disallow var lists with duplicates of different type") ]
 
 
@@ -124,18 +127,18 @@ type ModellerTests() =
 
     /// Tests for modelling valid variable lists.
     static member VarLists =
-        let emp : (Type * string) list = []
+        let emp : CTyped<string> list = []
         let empm : VarMap = Map.empty
-        [ TestCaseData([ (Type.Int, "baz")
-                         (Type.Bool, "emp") ])
-              .Returns(Some <| Map.ofList [ ("baz", Type.Int)
-                                            ("emp", Type.Bool) ])
+        [ TestCaseData([ (CTyped.Int "baz")
+                         (CTyped.Bool "emp") ])
+              .Returns(Some <| Map.ofList [ ("baz", Type.Int ())
+                                            ("emp", Type.Bool ()) ])
               .SetName("allow var lists with no duplicate variables")
           TestCaseData(emp).Returns(Some <| empm).SetName("allow empty var lists") ]
 
     /// Tests the creation of var lists.
     [<TestCaseSource("VarLists")>]
-    member x.``valid var lists are accepted during mapping`` (vl: (Type * string) list) =
+    member x.``valid var lists are accepted during mapping`` (vl: CTyped<string> list) =
         makeVarMap vl |> okOption
 
     /// Constructs a Prim of the correct type to come out of a modeller.
@@ -151,8 +154,8 @@ type ModellerTests() =
     /// These use the ticket lock model.
     static member AtomicPrims =
         [ TestCaseData(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment))
-            .Returns(Some <| func "!ILoad++" ["t" |> aBefore |> AExpr; "t" |> aAfter |> AExpr
-                                              "ticket" |> aBefore |> AExpr; "ticket" |> aAfter |> AExpr])
+            .Returns(Some <| func "!ILoad++" ["t" |> aBefore |> Expr.Int; "t" |> aAfter |> Expr.Int
+                                              "ticket" |> aBefore |> Expr.Int; "ticket" |> aAfter |> Expr.Int])
             .SetName("model a valid integer load as a prim") ]
 
     /// Tests the atomic primitive modeller using the ticket lock.
@@ -171,10 +174,10 @@ type ModellerTests() =
                                                 LV(LVIdent "ticket"),
                                                 Increment)))
             .Returns(ModellerTests.mprim
-                         [ func "!ILoad++" [ "t" |> aBefore |> AExpr
-                                             "t" |> aAfter |> AExpr
-                                             "ticket" |> aBefore |> AExpr
-                                             "ticket" |> aAfter |> AExpr ]]
+                         [ func "!ILoad++" [ "t" |> aBefore |> Expr.Int
+                                             "t" |> aAfter |> Expr.Int
+                                             "ticket" |> aBefore |> Expr.Int
+                                             "ticket" |> aAfter |> Expr.Int ]]
                      |> Some)
             .SetName("model a valid integer load command as an axiom") ]
 
@@ -217,7 +220,7 @@ type ModellerTests() =
              .Returns(ModellerTests.indefinites
                           [ []
                             [ func "holdLock" [] ]
-                            [ func "holdTick" [(Type.Int, "t0")] ] ] )
+                            [ func "holdTick" [ Param.Int "t0" ] ] ] )
              .SetName("Searching for size-1 viewdefs yields viewdefs for emp and the view prototypes")
           TestCaseData({ Search = Some 2; InitDefs = [] })
              .Returns(ModellerTests.indefinites
@@ -226,10 +229,10 @@ type ModellerTests() =
                             [ func "holdLock" []
                               func "holdLock" [] ]
                             [ func "holdLock" []
-                              func "holdTick" [(Type.Int, "t0")] ]
-                            [ func "holdTick" [(Type.Int, "t0")] ]
-                            [ func "holdTick" [(Type.Int, "t0")]
-                              func "holdTick" [(Type.Int, "t1")] ] ] )
+                              func "holdTick" [ Param.Int "t0" ] ]
+                            [ func "holdTick" [ Param.Int "t0" ] ]
+                            [ func "holdTick" [ Param.Int "t0" ]
+                              func "holdTick" [ Param.Int "t1" ] ] ] )
              .SetName("Searching for size-2 viewdefs yields the correct views") ]
 
     /// Tests viewdef searches.

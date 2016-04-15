@@ -105,8 +105,8 @@ let composeBools x y =
 
 
 /// Generates a framing relation for a given variable.
-let frameVar name ty =
-    let ve = mkVarExp Unmarked ty name
+let frameVar par =
+    let ve = mkVarExp Unmarked par
 
     BEq(subExpr (liftMarker After always) ve,
         subExpr (liftMarker Before always) ve)
@@ -118,15 +118,17 @@ let frame model expr =
     let evars =
         expr
         |> varsInBool
-        |> Seq.choose (function | (After x, _) -> Some x
-                                | _ -> None)
+        |> Seq.choose (valueOf
+                       >> function
+                          | After x -> Some x
+                          | _ -> None)
         |> Set.ofSeq
 
     // Then, for all of the variables in the model, choose those not in evars, and make frame expressions for them.
     Seq.append (Map.toSeq model.Globals) (Map.toSeq model.Locals)
     // TODO(CaptainHayashi): this is fairly inefficient.
     |> Seq.filter (fun (name, _) -> not (Set.contains name evars))
-    |> Seq.map (uncurry frameVar)
+    |> Seq.map (fun (name, ty) -> frameVar (withType ty name))
 
 /// Translate a primitive command to an expression characterising it.
 /// This is the combination of the Prim's action (via emitPrim) and

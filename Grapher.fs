@@ -19,7 +19,7 @@ open Starling.Lang.Modeller
 
 let cId = List.empty
 let cAssume expr =
-    func "Assume" [simp expr |> BExpr |> before] |> List.singleton
+    func "Assume" [simp expr |> Expr.Bool |> before] |> List.singleton
 let cAssumeNot = mkNot >> cAssume
 
 /// <summary>

@@ -43,7 +43,7 @@ module Types =
         | Assume of Expression // <assume(e)
 
     /// A view prototype.
-    type ViewProto = Func<(Type * string)>
+    type ViewProto = Func<Param>
 
     /// A view as seen on the LHS of a ViewDef.
     type DView =
@@ -130,12 +130,13 @@ module Types =
 
     /// A top-level item in a Starling script.
     type ScriptItem =
-        | Global of Type * string // global int name;
-        | Local of Type * string // local int name;
+        | Global of CTyped<string> // global int name;
+        | Local of CTyped<string> // local int name;
         | Method of CMethod<Marked<View>> // method main(argv, argc) { ... }
         | Search of int // search 0;
         | ViewProto of ViewProto // view name(int arg);
         | Constraint of ViewDef<DView, Expression> // constraint emp => true
+        override this.ToString() = sprintf "%A" this
 
 
 /// <summary>
@@ -316,9 +317,9 @@ module Pretty =
     /// Pretty-prints a view prototype.
     let printViewProto { Name = n; Params = ps } =
         hsep [ "view" |> String
-               func n (List.map (fun (t, v) ->
-                           hsep [ t |> printType
-                                  v |> String ]) ps) ]
+               func n (List.map
+                           (fun p -> hsep [ p |> typeOf |> printType
+                                            p |> valueOf |> String ] ) ps) ]
         |> withSemi
 
     /// Pretty-prints a search directive.
@@ -327,17 +328,18 @@ module Pretty =
                sprintf "%d" i |> String ]
 
     /// Pretty-prints a script variable of the given class.
-    let printScriptVar cls t v =
-        hsep [ String cls
-               printType t
-               String v ]
+    let printScriptVar cls v =
+        hsep
+            [ String cls
+              printType (typeOf v)
+              String (valueOf v) ]
         |> withSemi
 
     /// Pretty-prints script lines.
     let printScriptLine =
         function
-        | Global(t, v) -> printScriptVar "shared" t v
-        | Local(t, v) -> printScriptVar "thread" t v
+        | Global v -> printScriptVar "shared" v
+        | Local v -> printScriptVar "thread" v
         | Method m -> printMethod (printMarkedView printView)
                                   (printCommand (printMarkedView printView)) m
         | ViewProto v -> printViewProto v

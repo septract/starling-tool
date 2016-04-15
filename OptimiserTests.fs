@@ -104,11 +104,11 @@ type OptimiserTests() =
     /// Test cases for substituting afters in a func.
     static member AfterFuncs =
         [ TestCaseData({ Name = "foo"
-                         Params = [ AExpr (aAfter "serving")
-                                    BExpr (bAfter "flag") ] })
+                         Params = [ Expr.Int (aAfter "serving")
+                                    Expr.Bool (bAfter "flag") ] })
             .Returns({ Name = "foo"
-                       Params = [ AExpr (AAdd [aBefore "serving"; AInt 1L])
-                                  BExpr (BNot (bBefore "flag")) ] })
+                       Params = [ Expr.Int (AAdd [aBefore "serving"; AInt 1L])
+                                  Expr.Bool (BNot (bBefore "flag")) ] })
             .SetName("Substitute afters in a func with all-after params") ]
 
     /// Test substitution of afters in funcs.

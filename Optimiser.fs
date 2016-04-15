@@ -15,6 +15,7 @@ open Starling.Collections
 open Starling.Utils
 open Starling.Core.Expr
 open Starling.Core.ExprEquiv
+open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.Command.Queries
@@ -449,7 +450,7 @@ module Graph =
     ///     A function returning True only if (but not necessarily if)
     ///     the given command is local (uses only local variables).
     /// </returns>
-    let isLocalCommand tVars : Command -> bool =
+    let isLocalCommand (tVars : Map<string, Type>) : Command -> bool =
         // A command is local if, for all of its funcs...
         List.forall
             (fun { Params = ps } ->
@@ -460,10 +461,12 @@ module Graph =
                       >> Set.toSeq
                       >> Seq.forall
                              (// ...the variable is thread-local.
-                              fun (c, _) ->
-                                  match (Map.tryFind (stripMark c) tVars) with
-                                  | Some _ -> true
-                                  | _ -> false))
+                              valueOf
+                              >> stripMark
+                              >> tVars.TryFind
+                              >> function
+                                 | Some _ -> true
+                                 | _ -> false))
                      ps)
 
     /// <summary>
@@ -741,7 +744,7 @@ module Term =
         | x when Set.contains (mkNot x) fs -> BFalse
         | BAnd xs -> mkAnd (List.map (reduce fs) xs)
         | BOr xs -> mkOr (List.map (reduce fs) xs)
-        | BBEq (x, y) -> mkEq (reduce fs x |> BExpr) (reduce fs y |> BExpr)
+        | BBEq (x, y) -> mkEq (reduce fs x |> Expr.Bool) (reduce fs y |> Expr.Bool)
         | BNot x -> mkNot (reduce fs x)
         | x -> x
 

@@ -343,16 +343,16 @@ module Tests =
         /// </summary>
         static member VarsInGFuncCases =
             [ TestCaseData(gfunc BTrue "foo" [])
-                  .Returns(Set.empty : Set<(Const * Type)>)
+                  .Returns(Set.empty : Set<CTyped<Const>>)
                   .SetName("GFunc with no guard and no parameters has no variables")
               TestCaseData(gfunc (bUnmarked "bar") "foo" [])
-                  .Returns((Set.singleton (Unmarked "bar", Bool)) : Set<(Const * Type)>)
+                  .Returns((Set.singleton (Bool (Unmarked "bar"))) : Set<CTyped<Const>>)
                   .SetName("Variables in a GFunc's guard are returned by varsInGFunc")
-              TestCaseData(gfunc BTrue "foo" [ BExpr (bAfter "x")
-                                               AExpr (aBefore "y") ] )
+              TestCaseData(gfunc BTrue "foo" [ Typed.Bool (bAfter "x")
+                                               Typed.Int (aBefore "y") ] )
                   .Returns((Set.ofArray
-                                [| (After "x", Bool)
-                                   (Before "y", Int) |]): Set<(Const * Type)>)
+                                [| (Typed.Bool (After "x"))
+                                   (Typed.Int (Before "y")) |]): Set<CTyped<Const>>)
                   .SetName("Variables in a GFunc's parameters are returned by varsInGFunc") ]
 
         /// <summary>

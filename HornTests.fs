@@ -14,39 +14,39 @@ open Starling.Tests.Studies
 type HornTests() =
     /// The globals environment used in the tests.
     static member Globals =
-        Map.ofList [ ("serving", Type.Int) ; ("ticket", Type.Int) ]
+        Map.ofList [ ("serving", Type.Int ()) ; ("ticket", Type.Int ()) ]
 
     /// Test cases for the viewdef Horn clause modeller.
     /// These are in the form of models whose viewdefs are to be modelled.
     static member ViewDefModels =
       [ TestCaseData(
           [ ( { Name = "emp"
-                Params = [ (Type.Int, "serving")
-                           (Type.Int, "ticket") ] },
+                Params = [ Param.Int "serving"
+                           Param.Int "ticket" ] },
               Some <| BGe(aUnmarked "ticket", aUnmarked "serving"))
             ( { Name = "v_holdTick"
-                Params = [ (Type.Int, "serving")
-                           (Type.Int, "ticket")
-                           (Type.Int, "t") ] },
+                Params = [ Param.Int "serving"
+                           Param.Int "ticket"
+                           Param.Int "t" ] },
               Some <| BGt(aUnmarked "ticket", aUnmarked "t"))
             ( { Name = "v_holdLock"
-                Params = [ (Type.Int, "serving")
-                           (Type.Int, "ticket") ] },
+                Params = [ Param.Int "serving"
+                           Param.Int "ticket" ] },
               Some <| BGt(aUnmarked "ticket", aUnmarked "serving"))
             ( { Name = "v_holdLock_holdTick"
-                Params = [ (Type.Int, "serving")
-                           (Type.Int, "ticket")
-                           (Type.Int, "t") ] },
+                Params = [ Param.Int "serving"
+                           Param.Int "ticket"
+                           Param.Int "t" ] },
               Some <| BNot(aEq (aUnmarked "serving") (aUnmarked "t")))
             ( { Name = "v_holdTick_holdTick"
-                Params = [ (Type.Int, "serving")
-                           (Type.Int, "ticket")
-                           (Type.Int, "ta")
-                           (Type.Int, "tb") ] },
+                Params = [ Param.Int "serving"
+                           Param.Int "ticket"
+                           Param.Int "ta"
+                           Param.Int "tb" ] },
               Some <| BNot(aEq (aUnmarked "ta") (aUnmarked "tb")))
             ( { Name = "v_holdLock_holdLock"
-                Params = [ (Type.Int, "serving")
-                           (Type.Int, "ticket") ] },
+                Params = [ Param.Int "serving"
+                           Param.Int "ticket" ] },
               Some <| BFalse ) ] )
           .Returns(
               Set.ofList

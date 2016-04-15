@@ -6,6 +6,7 @@ module Starling.Core.Sub
 open Starling.Utils
 open Starling.Collections
 
+open Starling.Core.Var
 open Starling.Core.Expr
 open Starling.Core.Model
 open Starling.Core.GuardedView
@@ -40,8 +41,8 @@ module Types =
 /// </summary>
 let subExpr { ASub = fa; BSub = fb } =
     function
-    | AExpr a -> a |> fa |> AExpr
-    | BExpr b -> b |> fb |> BExpr
+    | Typed.Int a -> a |> fa |> Typed.Int
+    | Typed.Bool b -> b |> fb |> Typed.Bool
 
 (*
  * Model element substitution functions
@@ -205,13 +206,13 @@ let before = subExpr (liftMarker Before always)
 let after = subExpr (liftMarker After always)
 
 /// Creates a pre-state Boolean lvalue expression.
-let blBefore = mkBoolLV >> BExpr >> before
+let blBefore = mkBoolLV >> Typed.Bool >> before
 
 /// Creates a post-state Boolean lvalue expression.
-let blAfter = mkBoolLV >> BExpr >> after
+let blAfter = mkBoolLV >> Typed.Bool >> after
 
 /// Creates a pre-state integral lvalue expression.
-let ilBefore = mkIntLV >> AExpr >> before
+let ilBefore = mkIntLV >> Typed.Int >> before
 
 /// Creates a post-state integral lvalue expression.
-let ilAfter = mkIntLV >> AExpr >> after
+let ilAfter = mkIntLV >> Typed.Int >> after

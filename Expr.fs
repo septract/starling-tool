@@ -41,9 +41,7 @@ module Types =
         | Intermediate of bigint * string
 
     /// An expression of arbitrary type.
-    type Expr =
-        | BExpr of BoolExpr
-        | AExpr of ArithExpr
+    type Expr = Typed<ArithExpr, BoolExpr>
 
     /// An arithmetic expression.
     and ArithExpr =
@@ -132,20 +130,20 @@ module Pretty =
     /// Pretty-prints an expression.
     and printExpr =
         function
-        | AExpr a -> printArithExpr a
-        | BExpr b -> printBoolExpr b
+        | Int a -> printArithExpr a
+        | Bool b -> printBoolExpr b
 
 
 /// Partial pattern that matches a Boolean equality on arithmetic expressions.
 let (|BAEq|_|) =
     function
-    | BEq (AExpr x, AExpr y) -> Some (x, y)
+    | BEq (Int x, Int y) -> Some (x, y)
     | _ -> None
 
 /// Partial pattern that matches a Boolean equality on Boolean expressions.
 let (|BBEq|_|) =
     function
-    | BEq (BExpr x, BExpr y) -> Some (x, y)
+    | BEq (Bool x, Bool y) -> Some (x, y)
     | _ -> None
 
 /// Recursively simplify a formula
@@ -220,7 +218,7 @@ let rec simp ax =
         | BTrue, x          -> x
         | x, BFalse         -> simp (BNot x)
         | BFalse, x         -> simp (BNot x)
-        | x, y              -> BEq(BExpr x, BExpr y)
+        | x, y              -> BEq(Bool x, Bool y)
     | x -> x
 
 /// Returns true if the expression is definitely false.
@@ -302,17 +300,15 @@ let mkIntLV lv =
     |> Unmarked
     |> AConst
 
-/// Converts a type-name pair to an expression.
-let mkVarExp marker ty name =
-    name
-    |> marker
-    |> match ty with
-       | Int -> AConst >> AExpr
-       | Bool -> BConst >> BExpr
+/// Converts a typed string to an expression.
+let mkVarExp marker (ts : CTyped<string>) =
+    match ts with
+    | Int s -> s |> marker |> AConst |> Int
+    | Bool s -> s |> marker |> BConst |> Bool
 
 /// Converts a VarMap to a sequence of expressions.
 let varMapToExprs marker vm =
-    vm |> Map.toSeq |> Seq.map (fun (name, ty) -> mkVarExp marker ty name)
+    vm |> Map.toSeq |> Seq.map (fun (name, ty) -> mkVarExp marker (withType ty name))
 
 (* The following are just curried versions of the usual constructors. *)
 
@@ -329,10 +325,10 @@ let mkLe = curry BLe
 let mkEq = curry BEq
 
 /// Makes an arithmetic equality.
-let aEq = curry (pairMap AExpr AExpr >> BEq)
+let aEq = curry (pairMap Int Int >> BEq)
 
 /// Makes a Boolean equality.
-let bEq = curry (pairMap BExpr BExpr >> BEq)
+let bEq = curry (pairMap Bool Bool >> BEq)
 
 /// Curried wrapper over ADiv.
 let mkDiv = curry ADiv
@@ -388,11 +384,11 @@ let getFresh fg =
 
 /// <summary>
 ///     Returns a set of all variables used in an arithmetic expression,
-///     paired with their types.
+///     coupled with type.
 /// </summary>
 let rec varsInArith =
     function
-    | AConst c -> Set.singleton (c, Type.Int)
+    | AConst c -> Set.singleton (Typed.Int c)
     | AInt _ -> Set.empty
     | AAdd xs -> xs |> Seq.map varsInArith |> Set.unionMany
     | ASub xs -> xs |> Seq.map varsInArith |> Set.unionMany
@@ -401,11 +397,11 @@ let rec varsInArith =
 
 /// <summary>
 ///     Returns a set of all variables used in a Boolean expression,
-///     paired with their types.
+///     coupled with type.
 /// </summary>
 and varsInBool =
     function
-    | BConst c -> Set.singleton (c, Type.Bool)
+    | BConst c -> Set.singleton (Typed.Bool c)
     | BTrue -> Set.empty
     | BFalse -> Set.empty
     | BAnd xs -> xs |> Seq.map varsInBool |> Set.unionMany
@@ -421,8 +417,8 @@ and varsInBool =
 /// Returns a set of all variables used in an expression.
 and varsIn =
     function
-    | AExpr a -> varsInArith a
-    | BExpr b -> varsInBool b
+    | Int a -> varsInArith a
+    | Bool b -> varsInBool b
 
 
 (*
@@ -489,8 +485,8 @@ and nextBoolIntermediate =
 /// </returns>
 and nextIntermediate =
     function
-    | AExpr x -> nextIntIntermediate x
-    | BExpr x -> nextBoolIntermediate x
+    | Int x -> nextIntIntermediate x
+    | Bool x -> nextBoolIntermediate x
 
 
 (*
@@ -512,14 +508,14 @@ let (|SimpleBool|CompoundBool|) =
 /// Categorises expressions into simple or compound.
 let (|SimpleExpr|CompoundExpr|) =
     function
-    | BExpr (SimpleBool) -> SimpleExpr
-    | AExpr (SimpleArith) -> SimpleExpr
+    | Bool (SimpleBool) -> SimpleExpr
+    | Int (SimpleArith) -> SimpleExpr
     | _ -> CompoundExpr
 
 /// Partial pattern that matches a Boolean expression in terms of exactly one /
 /// constant.
-let rec (|ConstantBoolFunction|_|) = varsInBool >> Seq.map fst >> onlyOne
+let rec (|ConstantBoolFunction|_|) = varsInBool >> Seq.map valueOf >> onlyOne
 
 /// Partial pattern that matches a Boolean expression in terms of exactly one /
 /// constant.
-let rec (|ConstantArithFunction|_|) = varsInArith >> Seq.map fst >> onlyOne
+let rec (|ConstantArithFunction|_|) = varsInArith >> Seq.map valueOf >> onlyOne

@@ -8,6 +8,7 @@ open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.Command
+open Starling.Core.Instantiate
 open Starling.Core.Sub
 open Starling.Lang.AST
 open Starling.Lang.Collator
@@ -308,9 +309,9 @@ let coreSemantics =
        *)
 
       // Integer CAS
-      (func "ICAS" [ ipar "destB"; ipar "destA"
-                     ipar "testB"; ipar "testA"
-                     ipar "set" ],
+      (func "ICAS" [ Param.Int "destB"; Param.Int "destA"
+                     Param.Int "testB"; Param.Int "testA"
+                     Param.Int "set" ],
        mkAnd [ mkImplies (aEq (aUnmarked "destB") (aUnmarked "testB"))
                          (mkAnd [ aEq (aUnmarked "destA") (aUnmarked "set")
                                   aEq (aUnmarked "testA") (aUnmarked "testB") ] )
@@ -318,9 +319,9 @@ let coreSemantics =
                          (mkAnd [ aEq (aUnmarked "destA") (aUnmarked "destB")
                                   aEq (aUnmarked "testA") (aUnmarked "destB") ] ) ] )
       // Boolean CAS
-      (func "BCAS" [ bpar "destB"; bpar "destA"
-                     bpar "testB"; bpar "testA"
-                     bpar "set" ],
+      (func "BCAS" [ Param.Bool "destB"; Param.Bool "destA"
+                     Param.Bool "testB"; Param.Bool "testA"
+                     Param.Bool "set" ],
        mkAnd [ mkImplies (bEq (bUnmarked "destB") (bUnmarked "testB"))
                          (mkAnd [ bEq (bUnmarked "destA") (bUnmarked "set")
                                   bEq (bUnmarked "testA") (bUnmarked "testB") ] )
@@ -333,29 +334,29 @@ let coreSemantics =
        *)
 
       // Integer load
-      (func "!ILoad" [ ipar "destB"; ipar "destA"
-                       ipar "srcB"; ipar "srcA" ],
+      (func "!ILoad" [ Param.Int "destB"; Param.Int "destA"
+                       Param.Int "srcB"; Param.Int "srcA" ],
        mkAnd [ aEq (aUnmarked "destA") (aUnmarked "srcB")
                aEq (aUnmarked "srcA") (aUnmarked "srcB") ] )
       // Integer load-and-increment
-      (func "!ILoad++" [ ipar "destB"; ipar "destA"
-                         ipar "srcB"; ipar "srcA" ],
+      (func "!ILoad++" [ Param.Int "destB"; Param.Int "destA"
+                         Param.Int "srcB"; Param.Int "srcA" ],
        mkAnd [ aEq (aUnmarked "destA") (aUnmarked "srcB")
                aEq (aUnmarked "srcA") (mkAdd2 (aUnmarked "srcB") (AInt 1L)) ] )
       // Integer load-and-decrement
-      (func "!ILoad--" [ ipar "destB"; ipar "destA"
-                         ipar "srcB"; ipar "srcA" ],
+      (func "!ILoad--" [ Param.Int "destB"; Param.Int "destA"
+                         Param.Int "srcB"; Param.Int "srcA" ],
        mkAnd [ aEq (aUnmarked "destA") (aUnmarked "srcB")
                aEq (aUnmarked "srcA") (mkSub2 (aUnmarked "srcB") (AInt 1L)) ] )
       // Integer increment
-      (func "!I++" [ ipar "srcB"; ipar "srcA" ],
+      (func "!I++" [ Param.Int "srcB"; Param.Int "srcA" ],
        mkAnd [ aEq (aUnmarked "srcA") (mkAdd2 (aUnmarked "srcB") (AInt 1L)) ] )
       // Integer decrement
-      (func "!I--" [ ipar "srcB"; ipar "srcA" ],
+      (func "!I--" [ Param.Int "srcB"; Param.Int "srcA" ],
        mkAnd [ aEq (aUnmarked "srcA") (mkSub2 (aUnmarked "srcB") (AInt 1L)) ] )
       // Boolean load
-      (func "!BLoad" [ bpar "destB"; bpar "destA"
-                       bpar "srcB"; bpar "srcA" ],
+      (func "!BLoad" [ Param.Bool "destB"; Param.Bool "destA"
+                       Param.Bool "srcB"; Param.Bool "srcA" ],
        mkAnd [ bEq (bUnmarked "destA") (bUnmarked "srcB")
                bEq (bUnmarked "srcA") (bUnmarked "srcB") ] )
 
@@ -364,12 +365,12 @@ let coreSemantics =
        *)
 
       // Integer store
-      (func "!IStore" [ ipar "destB"; ipar "destA"
-                        ipar "src" ],
+      (func "!IStore" [ Param.Int "destB"; Param.Int "destA"
+                        Param.Int "src" ],
        aEq (aUnmarked "destA") (aUnmarked "src"))
       // Boolean store
-      (func "!BStore" [ bpar "destB"; bpar "destA"
-                        bpar "src" ],
+      (func "!BStore" [ Param.Bool "destB"; Param.Bool "destA"
+                        Param.Bool "src" ],
        bEq (bUnmarked "destA") (bUnmarked "src"))
 
       (*
@@ -377,12 +378,12 @@ let coreSemantics =
        *)
 
       // Integer local set
-      (func "!ILSet" [ ipar "destB"; ipar "destA"
-                       ipar "src" ],
+      (func "!ILSet" [ Param.Int "destB"; Param.Int "destA"
+                       Param.Int "src" ],
        aEq (aUnmarked "destA") (aUnmarked "src"))
       // Boolean store
-      (func "!BLSet" [ bpar "destB"; bpar "destA"
-                       bpar "src" ],
+      (func "!BLSet" [ Param.Bool "destB"; Param.Bool "destA"
+                       Param.Bool "src" ],
        bEq (bUnmarked "destA") (bUnmarked "src"))
 
       (*
@@ -392,7 +393,7 @@ let coreSemantics =
       // Identity
       (func "Id" [], BTrue)
       // Assume
-      (func "Assume" [ bpar "expr" ], bUnmarked "expr") ]
+      (func "Assume" [ Param.Bool "expr" ], bUnmarked "expr") ]
 
 (*
  * Expression translation
@@ -412,13 +413,13 @@ let rec modelExpr env expr =
         lookupVar env v
         |> mapMessages ((curry Var) v)
         |> lift (function
-                 | Type.Bool -> v |> mkBoolLV |> BExpr
-                 | Type.Int -> v |> mkIntLV |> AExpr)
+                 | Type.Bool () -> v |> mkBoolLV |> Expr.Bool
+                 | Type.Int  () -> v |> mkIntLV |> Expr.Int)
     (* We can use the active patterns above to figure out whether we
      * need to treat this expression as arithmetic or Boolean.
      *)
-    | ArithExp -> modelArithExpr env expr |> lift AExpr
-    | BoolExp -> modelBoolExpr env expr |> lift BExpr
+    | ArithExp -> modelArithExpr env expr |> lift Expr.Int
+    | BoolExp -> modelBoolExpr env expr |> lift Expr.Bool
     | _ -> failwith "unreachable"
 
 /// Converts a Starling Boolean expression to a Z3 predicate using
@@ -434,7 +435,7 @@ and modelBoolExpr env expr =
         v
         |> wrapMessages Var (lookupVar env)
         |> bind (function
-                 | Type.Bool -> v |> mkBoolLV |> ok
+                 | Type.Bool () -> v |> mkBoolLV |> ok
                  | _ -> v |> VarNotBoolean |> fail)
     | Bop(BoolOp as op, l, r) ->
         match op with
@@ -475,7 +476,7 @@ and modelArithExpr env expr =
         v
         |> wrapMessages Var (lookupVar env)
         |> bind (function
-                 | Type.Int -> v |> mkIntLV |> ok
+                 | Type.Int () -> v |> mkIntLV |> ok
                  | _ -> v |> VarNotArith |> fail)
     | Bop(ArithOp as op, l, r) ->
         lift2 (match op with
@@ -494,7 +495,8 @@ and modelArithExpr env expr =
 
 /// Merges a list of prototype and definition parameters into one list,
 /// binding the types from the former to the names from the latter.
-let funcViewParMerge ppars dpars = List.map2 (fun (ty, _) name -> (ty, name)) ppars dpars
+let funcViewParMerge ppars dpars =
+    List.map2 (fun ppar dpar -> withType (typeOf ppar) dpar) ppars dpars
 
 /// Adapts Instantiate.lookup to the modeller's needs.
 let lookupFunc protos func =
@@ -506,14 +508,18 @@ let lookupFunc protos func =
              | None -> func.Name |> NoSuchView |> fail)
 
 /// Models part of a view definition as a DFunc.
-let modelDFunc protos func =
+let modelDFunc
+  (protos : FuncTable<unit>)
+  func
+  : Result<Multiset<DFunc>, ViewError> =
     func
     |> lookupFunc protos
     |> lift (fun proto ->
-                 dfunc func.Name (funcViewParMerge proto.Params func.Params) |> Multiset.singleton)
+                 dfunc func.Name (funcViewParMerge proto.Params func.Params)
+                 |> Multiset.singleton)
 
 /// Tries to convert a view def into its model (multiset) form.
-let rec modelDView protos =
+let rec modelDView (protos : FuncTable<unit>) =
     function
     | DView.Unit -> ok Multiset.empty
     | DView.Func dfunc -> modelDFunc protos dfunc
@@ -535,13 +541,15 @@ let envOfViewDef svars =
     localEnvOfViewDef >> bind (combineMaps svars >> mapMessages SVarConflict)
 
 /// Converts a single constraint to its model form.
-let modelViewDef svars vprotos avd =
+let modelViewDef
+  svars
+  (vprotos : FuncTable<unit>)
+  avd
+  : Result<BViewDef<Model.Types.DView>, ModelError> =
     let av = viewOf avd
 
     trial {
-        let vplist = List.ofSeq vprotos
-
-        let! vms = modelDView vplist av |> mapMessages (curry CEView av) 
+        let! vms = modelDView vprotos av |> mapMessages (curry CEView av) 
         let  v = vms |> Multiset.toFlatList
         let! e = envOfViewDef svars v |> mapMessages (curry CEView av)
         return! (match avd with
@@ -603,7 +611,8 @@ let inViewDefs viewdefs dview =
 /// <returns>
 ///     An indefinite constraint over <paramref name="dview" />.
 /// </returns>
-let searchViewToConstraint dview =
+let searchViewToConstraint
+  (dview : Model.Types.DView) =
     (* To ensure likewise-named parameters in separate DFuncs don't
        clash, append fresh identifiers to all of them.
 
@@ -618,8 +627,10 @@ let searchViewToConstraint dview =
         (fun { Name = name; Params = ps } ->
 
              let nps =
-                 List.map (fun (ty, str) ->
-                               (ty, sprintf "%s%A" str (getFresh fg)))
+                 List.map (fun p ->
+                               (withType
+                                    (typeOf p)
+                                    (sprintf "%s%A" (valueOf p) (getFresh fg))))
                           ps
              { Name = name; Params = nps })
     |> Indefinite
@@ -637,11 +648,15 @@ let searchViewToConstraint dview =
 ///     A set of all <c>View</c>s of maximum size <paramref name="depth" />,
 ///     whose <c>Func</c>s are taken from <paramref name="funcs" />
 /// </returns>
-let genAllViewsAt depth funcs =
+let genAllViewsAt depth (funcs : DFunc seq) : Set<Model.Types.DView> =
     let rec f depth existing =
         match depth with
         // Multiset and set conversion removes duplicate views.
-        | 0 -> existing |> Seq.map (Multiset.ofFlatList >> Multiset.toFlatList) |> Set.ofSeq
+        // TODO(CaptainHayashi): remove the multiset conversion somehow.
+        | 0 ->
+            existing
+            |> Seq.map (Multiset.ofFlatList >> Multiset.toFlatList)
+            |> Set.ofSeq
         | n ->
             let existing' =
                 seq { yield []
@@ -671,7 +686,10 @@ let genAllViewsAt depth funcs =
 ///     constraints for all views of size <paramref name="depth" />
 ///     generated from the views at <paramref name="vprotos" />.
 /// </returns>
-let addSearchDefs vprotos depth viewdefs =
+let addSearchDefs
+  (vprotos : FuncTable<unit>)
+  depth
+  (viewdefs : BViewDef<Model.Types.DView> list) =
     match depth with
     | None -> viewdefs
     | Some n ->
@@ -691,7 +709,10 @@ let addSearchDefs vprotos depth viewdefs =
 
 /// Extracts the view definitions from a CollatedScript, turning each into a
 /// ViewDef.
-let modelViewDefs svars vprotos { Search = s; Constraints = cs } =
+let modelViewDefs
+  svars
+  (vprotos : FuncTable<unit>)
+  { Search = s; Constraints = cs } =
     cs
     |> List.map (modelViewDef svars vprotos)
     |> collect
@@ -761,12 +782,12 @@ let modelBoolLoad svars dest src mode =
         trial {
             let! stype = lookupVar svars s |> mapMessages (curry BadSVar s)
             match stype, mode with
-            | Type.Bool, Direct ->
+            | Type.Bool (), Direct ->
                 return func "!BLoad" [ dest |> blBefore; dest |> blAfter
                                        s |> blBefore; s |> blAfter ]
-            | Type.Bool, Increment -> return! fail (IncBool src)
-            | Type.Bool, Decrement -> return! fail (DecBool src)
-            | _ -> return! fail (TypeMismatch(Type.Bool, s, stype))
+            | Type.Bool (), Increment -> return! fail (IncBool src)
+            | Type.Bool (), Decrement -> return! fail (DecBool src)
+            | _ -> return! fail (TypeMismatch (Type.Bool (), s, stype))
         }
     | _ -> fail (LoadNonLV src)
 
@@ -782,16 +803,16 @@ let modelIntLoad svars dest src mode =
             let! stype = lookupVar svars s
                          |> mapMessages (curry BadSVar s)
             match stype, mode with
-            | Type.Int, Direct ->
+            | Type.Int (), Direct ->
                 return func "!ILoad" [ dest |> ilBefore; dest |> ilAfter
                                        s |> ilBefore; s |> ilAfter ]
-            | Type.Int, Increment ->
+            | Type.Int (), Increment ->
                 return func "!ILoad++" [ dest |> ilBefore; dest |> ilAfter
                                          s |> ilBefore; s |> ilAfter ]
-            | Type.Int, Decrement ->
+            | Type.Int (), Decrement ->
                 return func "!ILoad--" [ dest |> ilBefore; dest |> ilAfter
                                          s |> ilBefore; s |> ilAfter ]
-            | _ -> return! fail (TypeMismatch(Type.Int, s, stype))
+            | _ -> return! fail (TypeMismatch (Type.Int (), s, stype))
         }
     | _ -> fail (LoadNonLV src)
 
@@ -805,7 +826,7 @@ let modelBoolStore locals dest src mode =
         let! sxp = modelBoolExpr locals src |> mapMessages (curry BadExpr src)
         match mode with
         | Direct -> return func "!BStore" [ dest |> blBefore; dest |> blAfter
-                                            sxp |> BExpr |> before ]
+                                            sxp |> Expr.Bool |> before ]
         | Increment -> return! fail (IncBool src)
         | Decrement -> return! fail (DecBool src)
     }
@@ -820,7 +841,7 @@ let modelIntStore locals dest src mode =
         let! sxp = modelArithExpr locals src |> mapMessages (curry BadExpr src)
         match mode with
         | Direct -> return func "!IStore" [ dest |> ilBefore; dest |> ilAfter
-                                            sxp |> AExpr |> before ]
+                                            sxp |> Expr.Int |> before ]
         | Increment -> return! fail (IncExpr src)
         | Decrement -> return! fail (DecExpr src)
     }
@@ -839,22 +860,22 @@ let modelCAS svars tvars dest test set =
         let! ttype = lookupVar tvars test
                      |> mapMessages (curry BadTVar dest)
         match dtype, ttype with
-        | Type.Bool, Type.Bool ->
+        | Type.Bool (), Type.Bool () ->
             let! setE = modelBoolExpr tvars set
                         |> mapMessages (curry BadExpr set)
             return func "BCAS" [dest |> blBefore; dest |> blAfter
                                 test |> blBefore; test |> blAfter
-                                setE |> BExpr |> before]
-        | Type.Int, Type.Int ->
+                                setE |> Expr.Bool |> before]
+        | Type.Int (), Type.Int () ->
             let! setE = modelArithExpr tvars set
                         |> mapMessages (curry BadExpr set)
             return func "ICAS" [dest |> ilBefore; dest |> ilAfter
                                 test |> ilBefore; test |> ilAfter
-                                setE |> AExpr |> before]
+                                setE |> Expr.Int |> before]
         | _ ->
             // Oops, we have a type error.
             // Arbitrarily single out test as the cause of it.
-            return! fail <| TypeMismatch(dtype, test, ttype)
+            return! fail <| TypeMismatch (dtype, test, ttype)
     }
 
 /// Converts an atomic fetch to a model command.
@@ -866,10 +887,10 @@ let modelFetch svars tvars dest src mode =
      * We figure this out by looking at dest.
      *)
     match dest with
-    | VarIn svars Type.Int -> modelIntStore tvars dest src mode
-    | VarIn svars Type.Bool -> modelBoolStore tvars dest src mode
-    | VarIn tvars Type.Int -> modelIntLoad svars dest src mode
-    | VarIn tvars Type.Bool -> modelBoolLoad svars dest src mode
+    | VarIn svars (Type.Int ()) -> modelIntStore tvars dest src mode
+    | VarIn svars (Type.Bool ())-> modelBoolStore tvars dest src mode
+    | VarIn tvars (Type.Int ()) -> modelIntLoad svars dest src mode
+    | VarIn tvars (Type.Bool ()) -> modelBoolLoad svars dest src mode
     | lv -> fail (BadAVar(lv, NotFound(flattenLV lv)))
 
 /// Converts a single atomic command from AST to part-commands.
@@ -890,20 +911,22 @@ let rec modelAtomic svars tvars =
             match mode, stype with
             | Direct, _ ->
                 return! fail Useless
-            | Increment, Type.Bool -> return! fail (IncBool (LV operand))
-            | Decrement, Type.Bool -> return! fail (DecBool (LV operand))
-            | Increment, Type.Int ->
-                return func "!I++" [op |> aBefore |> AExpr
-                                    op |> aAfter |> AExpr]
-            | Decrement, Type.Int ->
-                return func "!I--" [op |> aBefore |> AExpr
-                                    op |> aAfter |> AExpr]
+            | Increment, Type.Bool () ->
+                return! fail (IncBool (LV operand))
+            | Decrement, Type.Bool () ->
+                return! fail (DecBool (LV operand))
+            | Increment, Type.Int () ->
+                return func "!I++" [op |> aBefore |> Expr.Int
+                                    op |> aAfter |> Expr.Int]
+            | Decrement, Type.Int () ->
+                return func "!I--" [op |> aBefore |> Expr.Int
+                                    op |> aAfter |> Expr.Int]
         }
     | Id -> ok (func "Id" [])
     | Assume e ->
         modelBoolExpr tvars e
         |> mapMessages (curry BadExpr e)
-        |> lift (BExpr >> Seq.singleton >> func "Assume")
+        |> lift (Expr.Bool >> Seq.singleton >> func "Assume")
 
 /// Converts a local variable assignment to a Prim.
 and modelAssign tvars l e =
@@ -914,14 +937,27 @@ and modelAssign tvars l e =
     trial {
         let! ltype = l |> lookupVar tvars |> mapMessages (curry BadTVar l)
         match ltype with
-        | Type.Bool -> let! em = e |> modelBoolExpr tvars
-                                   |> mapMessages (curry BadExpr e)
-                       return func "!BLSet" [ l |> blBefore; l |> blAfter
-                                              em |> BExpr |> before ]
-        | Type.Int -> let! em = modelArithExpr tvars e
-                                |> mapMessages (curry BadExpr e)
-                      return func "!ILSet" [ l |> ilBefore; l |> ilAfter
-                                             em |> AExpr |> before ]
+        | Type.Bool () ->
+            let! em =
+                e
+                |> modelBoolExpr tvars
+                |> mapMessages (curry BadExpr e)
+
+            return
+                func
+                    "!BLSet"
+                    [ l |> blBefore; l |> blAfter
+                      em |> Expr.Bool |> before ]
+        | Type.Int () ->
+            let! em =
+                e
+                |> modelArithExpr tvars
+                |> mapMessages (curry BadExpr e)
+            return
+                func
+                    "!ILSet"
+                    [ l |> ilBefore; l |> ilAfter
+                      em |> Expr.Int |> before ]
     }
 
 /// Creates a partially resolved axiom for an if-then-else.
@@ -1013,7 +1049,7 @@ let modelMethods protos gs ls =
 /// Checks a view prototype to see if it contains duplicate parameters.
 let checkViewProtoDuplicates (proto : ViewProto) =
     proto.Params
-    |> Seq.map snd
+    |> Seq.map valueOf
     |> findDuplicates
     |> Seq.toList
     |> function
@@ -1024,7 +1060,7 @@ let checkViewProtoDuplicates (proto : ViewProto) =
 let modelViewProto proto =
     proto
     |> checkViewProtoDuplicates
-    |> lift (fun pro -> (func pro.Name pro.Params, ()))
+    |> lift (fun pro -> (pro, ()))
     |> mapMessages (curry BadVProto proto)
 
 /// Checks view prototypes and converts them to func-table form.

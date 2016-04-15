@@ -57,15 +57,15 @@ type SemanticsTests() =
     /// Test cases for full command semantic translation.
     static member Commands =
         [ TestCaseData([ func "Assume" [ aEq (aBefore "s") (aBefore "t")
-                                         |> BExpr ]] )
+                                         |> Expr.Bool ]] )
               .Returns(Some <| Set.ofList [ aEq (aAfter "serving") (aBefore "serving")
                                             aEq (aAfter "ticket") (aBefore "ticket")
                                             aEq (aAfter "s") (aBefore "s")
                                             aEq (aAfter "t") (aBefore "t")
                                             aEq (aBefore "s") (aBefore "t") ])
               .SetName("Semantically translate <assume(s == t)> using the ticket lock model")
-          TestCaseData([ func "!I++" [ "serving" |> aBefore |> AExpr
-                                       "serving" |> aAfter |> AExpr ]] )
+          TestCaseData([ func "!I++" [ "serving" |> aBefore |> Expr.Int
+                                       "serving" |> aAfter |> Expr.Int ]] )
               .Returns(Some <| Set.ofList[ aEq (aAfter "ticket") (aBefore "ticket")
                                            aEq (aAfter "s") (aBefore "s")
                                            aEq (aAfter "t") (aBefore "t")

@@ -72,7 +72,7 @@ let flatten (mdl: UVModel<PTerm<ViewSet, OView>>) =
     let gpars =
         mdl.Globals
         |> Map.toSeq
-        |> Seq.map flipPair
+        |> Seq.map (fun (name, ty) -> withType ty name)
         |> List.ofSeq
 
     {Globals = mdl.Globals

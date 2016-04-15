@@ -20,8 +20,8 @@ module Types =
     ///     A script whose items have been partitioned by type.
     /// </summary>
     type CollatedScript =
-        { Globals : (Type * string) list
-          Locals : (Type * string) list
+        { Globals : CTyped<string> list
+          Locals : CTyped<string> list
           /// <summary>
           ///     The search depth, defaulting to <c>None</c> (no search).
           /// </summary>
@@ -57,8 +57,8 @@ module Pretty =
     let printCollatedScript (cs: CollatedScript) =
         let definites =
             [ vsep <| Seq.map printViewProto cs.VProtos
-              vsep <| Seq.map (uncurry (printScriptVar "shared")) cs.Globals
-              vsep <| Seq.map (uncurry (printScriptVar "local")) cs.Locals
+              vsep <| Seq.map (printScriptVar "shared") cs.Globals
+              vsep <| Seq.map (printScriptVar "local") cs.Locals
               vsep <| Seq.map printConstraint cs.Constraints
               VSep(List.map (printMethod
                                  (printMarkedView printView)
@@ -101,8 +101,8 @@ let empty =
 /// </returns>
 let collateStep item (cs : CollatedScript) =
     match item with
-    | Global(v, t) -> { cs with Globals = (v, t) :: cs.Globals }
-    | Local(v, t) -> { cs with Locals = (v, t) :: cs.Locals }
+    | Global g -> { cs with Globals = g :: cs.Globals }
+    | Local l -> { cs with Locals = l :: cs.Locals }
     | ViewProto v -> { cs with VProtos = v :: cs.VProtos }
     | Search i -> { cs with Search = Some i }
     | Method m -> { cs with Methods = m :: cs.Methods }

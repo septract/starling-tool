@@ -89,11 +89,8 @@ let axiom p c q =
 let goalVar (fg : FreshGen) = fg |> getFresh |> curry Goal
 
 /// Instantiates a view parameter.
-let instantiateParam fg (ty, name) =
-    goalVar fg name
-    |> match ty with
-       | Bool -> BConst >> BExpr
-       | Int -> AConst >> AExpr
+let instantiateParam fg =
+    mkVarExp (goalVar fg)
 
 /// Instantiates a defining view into a view expression.
 let instantiateGoal fg dvs =
