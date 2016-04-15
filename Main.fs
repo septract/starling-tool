@@ -254,9 +254,17 @@ let z3 reals rq = bind (Backends.Z3.run reals rq >> mapMessages Error.Z3)
 /// Shorthand for the MuZ3 stage.
 let muz3 reals rq = lift (Backends.MuZ3.run reals rq)
 
+/// Shorthand for the frontend stage.
+let frontend rq = Lang.Frontend.run rq >> mapMessages Error.Frontend
+
 /// Shorthand for the graph optimise stage.
 let graphOptimise optR optA verbose =
-    lift (Starling.Optimiser.Graph.optimise optR optA verbose)
+    // graphOptimise implies the full frontend has run.
+    frontend Lang.Frontend.Request.Graph
+    >> bind (function
+             | Lang.Frontend.Response.Graph m -> m |> ok
+             | _ -> Other "internal error: bad frontend response" |> fail)
+    >> lift (Starling.Optimiser.Graph.optimise optR optA verbose)
 
 /// Shorthand for the term optimise stage.
 let termOptimise optR optA verbose =
@@ -280,16 +288,6 @@ let semantics = bind (Starling.Semantics.translate
 
 /// Shorthand for the axiomatisation stage.
 let axiomatise = lift Starling.Core.Graph.axiomatise
-
-/// Shorthand for the frontend stage.
-let frontend rq = Lang.Frontend.run rq >> mapMessages Error.Frontend
-
-/// Shorthand for the full frontend stage.
-let model =
-    frontend Lang.Frontend.Request.Graph
-    >> bind (function
-             | Lang.Frontend.Response.Graph m -> m |> ok
-             | _ -> Other "internal error: bad frontend response" |> fail)
 
 /// <summary>
 ///     Runs a Starling request.
@@ -336,19 +334,20 @@ let runStarling optS reals verbose request =
     then
         eprintfn "Z3 version: %s" (Microsoft.Z3.Version.ToString ())
 
+    let graphOptimise = graphOptimise optR optA verbose
     let termOptimise = termOptimise optR optA verbose
 
     match request with
     | Request.Frontend rq -> frontend rq >> lift Response.Frontend
     | _ ->
-        phase     model        Request.GraphOptimise Response.GraphOptimise
-        ** phase  axiomatise   Request.Axiomatise    Response.Axiomatise
-        ** phase  goalAdd      Request.GoalAdd       Response.GoalAdd
-        ** phase  termGen      Request.TermGen       Response.TermGen
-        ** phase  reify        Request.Reify         Response.Reify
-        ** phase  flatten      Request.Flatten       Response.Flatten
-        ** phase  semantics    Request.Semantics     Response.Semantics
-        ** phase  termOptimise Request.TermOptimise  Response.TermOptimise
+        phase     graphOptimise  Request.GraphOptimise  Response.GraphOptimise
+        ** phase  axiomatise     Request.Axiomatise     Response.Axiomatise
+        ** phase  goalAdd        Request.GoalAdd        Response.GoalAdd
+        ** phase  termGen        Request.TermGen        Response.TermGen
+        ** phase  reify          Request.Reify          Response.Reify
+        ** phase  flatten        Request.Flatten        Response.Flatten
+        ** phase  semantics      Request.Semantics      Response.Semantics
+        ** phase  termOptimise   Request.TermOptimise   Response.TermOptimise
         ** backend
 
 /// Runs Starling with the given options, and outputs the results.
