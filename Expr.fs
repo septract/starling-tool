@@ -3,6 +3,7 @@
 /// </summary>
 module Starling.Core.Expr
 
+open Starling.Collections
 open Starling.Utils
 open Starling.Core.Var
 
@@ -13,6 +14,11 @@ open Starling.Core.Var
 [<AutoOpen>]
 module Types =
     /// <summary>
+    ///     A variable with no marking.
+    /// </summary>
+    type Var = string
+
+    /// <summary>
     ///     A variable that has been marked according to whether it comes
     ///     from the pre-state, the post-state, an intermediate state, or
     ///     a possibly-external observation in the goal view.
@@ -22,28 +28,51 @@ module Types =
         ///     A variable that has not yet been assigned to the pre-state or
         ///     the post-state.
         /// </summary>
-        | Unmarked of string
+        | Unmarked of Var
         /// <summary>
         ///     A variable belonging to the pre-state of a command.
         /// </summary>
-        | Before of string
+        | Before of Var
         /// <summary>
         ///     A variable belonging to the post-state of a command.
         /// </summary>
-        | After of string
+        | After of Var
         /// <summary>
         ///     A variable belonging to part of the goal term.
         ///     The bigint is used to ensure variables in one goal
         ///     view are separate from variables in another.
         /// </summary>
-        | Goal of bigint * string
+        | Goal of bigint * Var
         /// <summary>
         ///     A variable belonging to an intermediate state of a composed
         ///     command.
         ///     The bigint is used to ensure different intermediate
         ///     states are separate from each other.
         /// </summary>
-        | Intermediate of bigint * string
+        | Intermediate of bigint * Var
+
+    /// <summary>
+    ///     A variable reference that may be symbolic.
+    ///
+    ///     <para>
+    ///         A symbolic variable is one whose value depends on an
+    ///         uninterpreted function of multiple 'real' Starling variables.
+    ///         It allows encoding into Starling of patterns of variable usage
+    ///         Starling doesn't yet understand natively.
+    ///     </para>
+    /// </summary>
+    /// <typeparam name="var">
+    ///     The non-symbolic variable <c>Sym</c> wraps.
+    /// </typeparam>
+    type Sym<'var> =
+        /// <summary>
+        ///     A symbolic variable, predicated over multiple concrete variables.
+        ///     The symbol itself is the name inside the <c>Func</c>.
+        /// </summary>
+        | Sym of Func<'var>
+        /// <summary>
+        ///     A regular, non-symbolic variable.
+        | Reg of 'var
 
     /// <summary>
     ///     An expression of arbitrary type.
@@ -88,6 +117,19 @@ module Types =
         | BNot of BoolExpr<'var>
 
     /// <summary>
+    ///     An expression of arbitrary type using <c>Var</c>s.
+    /// </summary>
+    type VExpr = Expr<MarkedVar>
+    /// <summary>
+    ///     An expression of Boolean type using <c>Var</c>s.
+    /// </summary>
+    type VBoolExpr = BoolExpr<MarkedVar>
+    /// <summary>
+    ///     An expression of integral type using <c>Var</c>s.
+    /// </summary>
+    type VIntExpr = IntExpr<MarkedVar>
+
+    /// <summary>
     ///     An expression of arbitrary type using <c>MarkedVar</c>s.
     /// </summary>
     type MExpr = Expr<MarkedVar>
@@ -99,6 +141,32 @@ module Types =
     ///     An expression of integral type using <c>MarkedVar</c>s.
     /// </summary>
     type MIntExpr = IntExpr<MarkedVar>
+
+    /// <summary>
+    ///     An expression of arbitrary type using symbolic <c>Var</c>s.
+    /// </summary>
+    type SVExpr = Expr<Sym<MarkedVar>>
+    /// <summary>
+    ///     An expression of Boolean type using symbolic <c>Var</c>s.
+    /// </summary>
+    type SVBoolExpr = BoolExpr<Sym<MarkedVar>>
+    /// <summary>
+    ///     An expression of integral type using <c>Var</c>s.
+    /// </summary>
+    type SVIntExpr = IntExpr<Sym<MarkedVar>>
+
+    /// <summary>
+    ///     An expression of arbitrary type using symbolic <c>MarkedVar</c>s.
+    /// </summary>
+    type SMExpr = Expr<Sym<MarkedVar>>
+    /// <summary>
+    ///     An expression of Boolean type using symbolic <c>MarkedVar</c>s.
+    /// </summary>
+    type SMBoolExpr = BoolExpr<Sym<MarkedVar>>
+    /// <summary>
+    ///     An expression of integral type using symbolic <c>MarkedVar</c>s.
+    /// </summary>
+    type SMIntExpr = IntExpr<Sym<MarkedVar>>
 
 
     /// Type for fresh variable generators.
