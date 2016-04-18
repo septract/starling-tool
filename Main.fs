@@ -233,16 +233,11 @@ let z3 reals rq = bind (Backends.Z3.run reals rq >> mapMessages Error.Z3)
 let muz3 reals rq = lift (Backends.MuZ3.run reals rq)
 
 /// Shorthand for the frontend stage.
-let frontend rq = Lang.Frontend.run rq >> mapMessages Error.Frontend
+let frontend rq = Lang.Frontend.run rq Response.Frontend Error.Frontend
 
 /// Shorthand for the graph optimise stage.
 let graphOptimise optR optA verbose =
-    // graphOptimise implies the full frontend has run.
-    frontend Lang.Frontend.Request.Graph
-    >> bind (function
-             | Lang.Frontend.Response.Graph m -> m |> ok
-             | _ -> Other "internal error: bad frontend response" |> fail)
-    >> lift (Starling.Optimiser.Graph.optimise optR optA verbose)
+    lift (Starling.Optimiser.Graph.optimise optR optA verbose)
 
 /// Shorthand for the term optimise stage.
 let termOptimise optR optA verbose =
@@ -305,19 +300,24 @@ let filterDefinite =
 let runStarling optS reals verbose request =
     let optR, optA = Optimiser.Utils.parseOptString optS
 
-    let failPhase = fun _ -> fail (Error.Other "Internal")
-    let backend =
+    let backend m =
+            let phase op response =
+                op m
+                |> lift response
+
             match request with
-            | Request.HSF     -> filterIndefinite >> hsf >> lift Response.HSF
-            | Request.Z3 rq   -> filterDefinite >> z3 reals rq >> lift Response.Z3
-            | Request.MuZ3 rq -> filterIndefinite >> muz3 reals rq >> lift Response.MuZ3
-            | _               -> failPhase
+            | Request.HSF     -> phase (filterIndefinite >> hsf) Response.HSF
+            | Request.Z3 rq   -> phase (filterDefinite >> z3 reals rq) Response.Z3
+            | Request.MuZ3 rq -> phase (filterIndefinite >> muz3 reals rq) Response.MuZ3
+            | _               -> fail (Error.Other "Internal")
 
     //Build a phase with
     //  op as what to do
     //  if request is test, then we output the results
     //  otherwise we continue with the rest of the phases.
-    let phase op test output continuation = op >> if request = test then lift output else continuation
+    let phase op test output continuation m =
+        op m
+        |> if request = test then lift output else continuation
 
     // Left pipe is not right associative
     // so locally overload a right associative operator to be left pipe
@@ -330,18 +330,16 @@ let runStarling optS reals verbose request =
     let graphOptimise = graphOptimise optR optA verbose
     let termOptimise = termOptimise optR optA verbose
 
-    match request with
-    | Request.Frontend rq -> frontend rq >> lift Response.Frontend
-    | _ ->
-        phase     graphOptimise  Request.GraphOptimise  Response.GraphOptimise
-        ** phase  axiomatise     Request.Axiomatise     Response.Axiomatise
-        ** phase  goalAdd        Request.GoalAdd        Response.GoalAdd
-        ** phase  termGen        Request.TermGen        Response.TermGen
-        ** phase  reify          Request.Reify          Response.Reify
-        ** phase  flatten        Request.Flatten        Response.Flatten
-        ** phase  semantics      Request.Semantics      Response.Semantics
-        ** phase  termOptimise   Request.TermOptimise   Response.TermOptimise
-        ** backend
+    frontend (match request with | Request.Frontend rq -> rq | _ -> Lang.Frontend.Request.Continuation)
+    ** phase  graphOptimise  Request.GraphOptimise  Response.GraphOptimise
+    ** phase  axiomatise     Request.Axiomatise     Response.Axiomatise
+    ** phase  goalAdd        Request.GoalAdd        Response.GoalAdd
+    ** phase  termGen        Request.TermGen        Response.TermGen
+    ** phase  reify          Request.Reify          Response.Reify
+    ** phase  flatten        Request.Flatten        Response.Flatten
+    ** phase  semantics      Request.Semantics      Response.Semantics
+    ** phase  termOptimise   Request.TermOptimise   Response.TermOptimise
+    ** backend
 
 /// Runs Starling with the given options, and outputs the results.
 let mainWithOptions opts =
