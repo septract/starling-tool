@@ -38,17 +38,17 @@ type SemanticsTests() =
     // Test cases for the expression framer.
     static member FrameExprs = 
         [ TestCaseData(BTrue : MBoolExpr)
-              .Returns([ aEq (aAfter "serving") (aBefore "serving")
-                         aEq (aAfter "ticket") (aBefore "ticket")
-                         aEq (aAfter "s") (aBefore "s")
-                         aEq (aAfter "t") (aBefore "t") ])
+              .Returns([ aEq (iAfter "serving") (iBefore "serving")
+                         aEq (iAfter "ticket") (iBefore "ticket")
+                         aEq (iAfter "s") (iBefore "s")
+                         aEq (iAfter "t") (iBefore "t") ])
               .SetName("Frame id using the ticket lock model")
           
-          TestCaseData(BAnd [ BGt(aAfter "ticket", aBefore "ticket")
-                              BLe(aAfter "serving", aBefore "serving")
+          TestCaseData(BAnd [ BGt(iAfter "ticket", iBefore "ticket")
+                              BLe(iAfter "serving", iBefore "serving")
                               bUnmarked "frozzle"
-                              aEq (aBefore "s") (aBefore "t") ]).Returns([ aEq (aAfter "s") (aBefore "s")
-                                                                           aEq (aAfter "t") (aBefore "t") ])
+                              aEq (iBefore "s") (iBefore "t") ]).Returns([ aEq (iAfter "s") (iBefore "s")
+                                                                           aEq (iAfter "t") (iBefore "t") ])
               .SetName("Frame a simple command expression using the ticket lock model") ]
     
     // Test framing of expressions.
@@ -57,20 +57,20 @@ type SemanticsTests() =
     
     /// Test cases for full command semantic translation.
     static member Commands =
-        [ TestCaseData([ func "Assume" [ aEq (aBefore "s") (aBefore "t")
+        [ TestCaseData([ func "Assume" [ aEq (iBefore "s") (iBefore "t")
                                          |> Expr.Bool ]] )
-              .Returns(Some <| Set.ofList [ aEq (aAfter "serving") (aBefore "serving")
-                                            aEq (aAfter "ticket") (aBefore "ticket")
-                                            aEq (aAfter "s") (aBefore "s")
-                                            aEq (aAfter "t") (aBefore "t")
-                                            aEq (aBefore "s") (aBefore "t") ])
+              .Returns(Some <| Set.ofList [ aEq (iAfter "serving") (iBefore "serving")
+                                            aEq (iAfter "ticket") (iBefore "ticket")
+                                            aEq (iAfter "s") (iBefore "s")
+                                            aEq (iAfter "t") (iBefore "t")
+                                            aEq (iBefore "s") (iBefore "t") ])
               .SetName("Semantically translate <assume(s == t)> using the ticket lock model")
-          TestCaseData([ func "!I++" [ "serving" |> aBefore |> Expr.Int
-                                       "serving" |> aAfter |> Expr.Int ]] )
-              .Returns(Some <| Set.ofList[ aEq (aAfter "ticket") (aBefore "ticket")
-                                           aEq (aAfter "s") (aBefore "s")
-                                           aEq (aAfter "t") (aBefore "t")
-                                           aEq (aAfter "serving") (AAdd [ aBefore "serving"
+          TestCaseData([ func "!I++" [ "serving" |> iBefore |> Expr.Int
+                                       "serving" |> iAfter |> Expr.Int ]] )
+              .Returns(Some <| Set.ofList[ aEq (iAfter "ticket") (iBefore "ticket")
+                                           aEq (iAfter "s") (iBefore "s")
+                                           aEq (iAfter "t") (iBefore "t")
+                                           aEq (iAfter "serving") (AAdd [ iBefore "serving"
                                                                           AInt 1L ]) ])
               .SetName("Semantically translate <serving++> using the ticket lock model") ]
     

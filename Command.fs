@@ -128,12 +128,12 @@ module Tests =
               TestCaseData([ vfunc "Assume" [ Typed.Bool (bAfter "x") ]])
                 .Returns(false)
                 .SetName("Reject Assume(x!after) as a no-op")
-              TestCaseData([ vfunc "Foo" [ Typed.Int (aBefore "bar")
-                                           Typed.Int (aAfter "bar") ]])
+              TestCaseData([ vfunc "Foo" [ Typed.Int (iBefore "bar")
+                                           Typed.Int (iAfter "bar") ]])
                 .Returns(false)
                 .SetName("Reject Foo(bar!before, bar!after) as a no-op")
-              TestCaseData([ vfunc "Foo" [ Typed.Int (aBefore "bar")
-                                           Typed.Int (aAfter "bar") ]
+              TestCaseData([ vfunc "Foo" [ Typed.Int (iBefore "bar")
+                                           Typed.Int (iAfter "bar") ]
                              vfunc "Assume" [ Typed.Bool (bBefore "x") ]])
                 .Returns(false)
                 .SetName("Reject Foo(bar!before, bar!after); Assume(x!before)\
@@ -153,8 +153,8 @@ module Tests =
               TestCaseData([ vfunc "Assume" [ Typed.Bool (bBefore "x") ]])
                 .Returns(true)
                 .SetName("Classify Assume(x!before) as an assume")
-              TestCaseData([ vfunc "Foo" [ Typed.Int (aBefore "bar")
-                                           Typed.Int (aAfter "bar") ]
+              TestCaseData([ vfunc "Foo" [ Typed.Int (iBefore "bar")
+                                           Typed.Int (iAfter "bar") ]
                              vfunc "Assume" [ Typed.Bool (bBefore "x") ]])
                 .Returns(false)
                 .SetName("Reject Foo(bar!before, bar!after); Assume(x!before)\

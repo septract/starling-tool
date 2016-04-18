@@ -42,8 +42,8 @@ type GraphTests() =
                             Dest = "unlock_V1"
                             Command =
                                 [ func "!I++"
-                                       [ Typed.Int (aBefore "serving")
-                                         Typed.Int (aAfter "serving") ]] },
+                                       [ Typed.Int (iBefore "serving")
+                                         Typed.Int (iAfter "serving") ]] },
                       Set.singleton
                           { Name = "unlock_N0"
                             Src = "unlock_V1"
@@ -60,8 +60,8 @@ type GraphTests() =
                             Src = "unlock_V0"
                             Command =
                                 [ func "!I++"
-                                       [ Typed.Int (aBefore "serving")
-                                         Typed.Int (aAfter "serving") ]] },
+                                       [ Typed.Int (iBefore "serving")
+                                         Typed.Int (iAfter "serving") ]] },
                       Exit)) ] )
             .SetName("Adding a valid, unique edge to unlock works")]
 
@@ -95,8 +95,8 @@ type GraphTests() =
                           [ ("unlock_C0",
                              edge "unlock_V0"
                                   [ func "!I++"
-                                          [ Typed.Int (aBefore "serving")
-                                            Typed.Int (aAfter "serving") ]]
+                                          [ Typed.Int (iBefore "serving")
+                                            Typed.Int (iAfter "serving") ]]
                                   "unlock_V0" ) ] } )
             .SetName("unify C1 into C0 on the ticket lock 'unlock'")
           TestCaseData(("unlock_V0", "unlock_V1"))
@@ -111,8 +111,8 @@ type GraphTests() =
                           [ ("unlock_C0",
                              edge "unlock_V1"
                                   [ func "!I++"
-                                          [ Typed.Int (aBefore "serving")
-                                            Typed.Int (aAfter "serving") ]]
+                                          [ Typed.Int (iBefore "serving")
+                                            Typed.Int (iAfter "serving") ]]
                                   "unlock_V1" ) ] } )
             .SetName("unify C0 into C1 on the ticket lock 'unlock'")
           TestCaseData(("unlock_V0", "unlock_V2"))

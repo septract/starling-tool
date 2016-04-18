@@ -19,8 +19,8 @@ type OptimiserTests() =
 
     /// A test environment of arithmetic after substitutions.
     static member AfterArithSubs =
-        [ ("serving", AAdd [aBefore "serving"; AInt 1L])
-          ("ticket", aBefore "ticket") ]
+        [ ("serving", AAdd [iBefore "serving"; AInt 1L])
+          ("ticket", iBefore "ticket") ]
         |> Map.ofList
 
     static member AfterBoolSubs =
@@ -30,18 +30,18 @@ type OptimiserTests() =
 
     /// Test cases for rewriting Boolean expressions containing afters.
     static member AfterBools =
-        [ TestCaseData(aEq (aAfter "serving") (aAfter "ticket"))
-            .Returns(aEq (AAdd [aBefore "serving"; AInt 1L])
-                         (aBefore "ticket"))
+        [ TestCaseData(aEq (iAfter "serving") (iAfter "ticket"))
+            .Returns(aEq (AAdd [iBefore "serving"; AInt 1L])
+                         (iBefore "ticket"))
             .SetName("Remove arithmetic afters in a simple equality")
-          TestCaseData(aEq (aAfter "serving") (AAdd [aBefore "serving"
+          TestCaseData(aEq (iAfter "serving") (AAdd [iBefore "serving"
                                                      AInt 1L]))
-            .Returns(aEq (AAdd [aBefore "serving"; AInt 1L])
-                         (AAdd [aBefore "serving"; AInt 1L]))
+            .Returns(aEq (AAdd [iBefore "serving"; AInt 1L])
+                         (AAdd [iBefore "serving"; AInt 1L]))
             .SetName("Remove arithmetic afters in after-before relation")
-          TestCaseData(BGt (aAfter "serving", aAfter "t"))
-            .Returns(BGt (AAdd [aBefore "serving"; AInt 1L],
-                          aAfter "t"))
+          TestCaseData(BGt (iAfter "serving", iAfter "t"))
+            .Returns(BGt (AAdd [iBefore "serving"; AInt 1L],
+                          iAfter "t"))
             .SetName("Remove arithmetic afters only if in the environment")
           TestCaseData(bEq (bAfter "flag") (bAfter "turn"))
             .Returns(bEq (BNot (bBefore "flag"))
@@ -55,17 +55,17 @@ type OptimiserTests() =
             .Returns(BAnd [ BNot (bBefore "flag")
                             bAfter "pole" ])
             .SetName("Remove Boolean afters only if in the environment")
-          TestCaseData(BAnd [BGt (aAfter "serving", aAfter "t")
+          TestCaseData(BAnd [BGt (iAfter "serving", iAfter "t")
                              BOr [bAfter "flag"; bAfter "pole"]])
-            .Returns(BAnd [ BGt ((AAdd [aBefore "serving"
-                                        AInt 1L]), aAfter "t")
+            .Returns(BAnd [ BGt ((AAdd [iBefore "serving"
+                                        AInt 1L]), iAfter "t")
                             BOr [BNot (bBefore "flag"); bAfter "pole" ]])
             .SetName("Remove afters of both types simultaneously")
-          TestCaseData(BNot (BImplies (bAfter "flag", BGt (aAfter "serving",
-                                                           aAfter "t"))))
+          TestCaseData(BNot (BImplies (bAfter "flag", BGt (iAfter "serving",
+                                                           iAfter "t"))))
             .Returns(BNot (BImplies (BNot (bBefore "flag"),
-                                     BGt (AAdd [aBefore "serving"; AInt 1L],
-                                          aAfter "t"))))
+                                     BGt (AAdd [iBefore "serving"; AInt 1L],
+                                          iAfter "t"))))
             .SetName("Remove arithmetic afters from a complex expression")]
 
     /// Test after-elimination of Booleans.
@@ -106,10 +106,10 @@ type OptimiserTests() =
     /// Test cases for substituting afters in a func.
     static member AfterFuncs =
         [ TestCaseData({ Name = "foo"
-                         Params = [ MExpr.Int (aAfter "serving")
+                         Params = [ MExpr.Int (iAfter "serving")
                                     MExpr.Bool (bAfter "flag") ] })
             .Returns({ Name = "foo"
-                       Params = [ MExpr.Int (AAdd [aBefore "serving"; AInt 1L])
+                       Params = [ MExpr.Int (AAdd [iBefore "serving"; AInt 1L])
                                   MExpr.Bool (BNot (bBefore "flag")) ] })
             .SetName("Substitute afters in a func with all-after params") ]
 
@@ -146,8 +146,8 @@ type OptimiserTests() =
           TestCaseData(BImplies ((bAfter "s"), BTrue))
             .Returns(BTrue : MBoolExpr)
             .SetName("Simplify =>True into a True")
-          TestCaseData(BImplies (BGt ((aAfter "s"), (aAfter "t")), BFalse))
-            .Returns(BLe ((aAfter "s"), (aAfter "t" )))
+          TestCaseData(BImplies (BGt ((iAfter "s"), (iAfter "t")), BFalse))
+            .Returns(BLe ((iAfter "s"), (iAfter "t" )))
             .SetName("Simplify =>False wrapped around a > into <=")
           TestCaseData(BImplies (BTrue, (bAfter "s")))
             .Returns((bAfter "s"))

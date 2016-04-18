@@ -155,8 +155,8 @@ type ModellerTests() =
     /// These use the ticket lock model.
     static member AtomicPrims =
         [ TestCaseData(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment))
-            .Returns(Some <| func "!ILoad++" ["t" |> aBefore |> MExpr.Int; "t" |> aAfter |> MExpr.Int
-                                              "ticket" |> aBefore |> MExpr.Int; "ticket" |> aAfter |> MExpr.Int])
+            .Returns(Some <| func "!ILoad++" ["t" |> iBefore |> MExpr.Int; "t" |> iAfter |> MExpr.Int
+                                              "ticket" |> iBefore |> MExpr.Int; "ticket" |> iAfter |> MExpr.Int])
             .SetName("model a valid integer load as a prim") ]
 
     /// Tests the atomic primitive modeller using the ticket lock.
@@ -175,10 +175,10 @@ type ModellerTests() =
                                                 LV(LVIdent "ticket"),
                                                 Increment)))
             .Returns(ModellerTests.mprim
-                         [ func "!ILoad++" [ "t" |> aBefore |> MExpr.Int
-                                             "t" |> aAfter |> MExpr.Int
-                                             "ticket" |> aBefore |> MExpr.Int
-                                             "ticket" |> aAfter |> MExpr.Int ]]
+                         [ func "!ILoad++" [ "t" |> iBefore |> MExpr.Int
+                                             "t" |> iAfter |> MExpr.Int
+                                             "ticket" |> iBefore |> MExpr.Int
+                                             "ticket" |> iAfter |> MExpr.Int ]]
                      |> Some)
             .SetName("model a valid integer load command as an axiom") ]
 

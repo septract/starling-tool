@@ -56,12 +56,12 @@ type FlattenerTests() =
     static member ViewFuncs =
         let ms : VFunc list -> OView = Multiset.ofFlatList >> Multiset.toFlatList
         [ TestCaseData(ms [ { Name = "holdLock"; Params = [] }
-                            { Name = "holdTick"; Params = [Expr.Int (aUnmarked "t")] } ])
+                            { Name = "holdTick"; Params = [Expr.Int (iUnmarked "t")] } ])
              .Returns({ Name = "v_holdLock_holdTick"
                         Params =
-                            [ Expr.Int (aUnmarked "serving")
-                              Expr.Int (aUnmarked "ticket")
-                              Expr.Int (aUnmarked "t") ] })
+                            [ Expr.Int (iUnmarked "serving")
+                              Expr.Int (iUnmarked "ticket")
+                              Expr.Int (iUnmarked "t") ] })
             .SetName("Convert 'holdLock() * holdTick(t)' to func") ]
 
     /// Tests the viewdef LHS translator.
@@ -70,5 +70,5 @@ type FlattenerTests() =
         v |> funcOfView (FlattenerTests.Globals
                          |> Map.toSeq
                          |> Seq.map (function
-                                     | (x, Type.Int ()) -> x |> aUnmarked |> Expr.Int
+                                     | (x, Type.Int ()) -> x |> iUnmarked |> Expr.Int
                                      | (x, Type.Bool ()) -> x |> bUnmarked |> Expr.Bool))

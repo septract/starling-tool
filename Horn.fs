@@ -232,7 +232,7 @@ let tryIntExpr =
 /// Ensures a param in a viewdef multiset is arithmetic.
 let ensureArith =
    function
-   | Param.Int x -> ok (aUnmarked x)
+   | Param.Int x -> ok (iUnmarked x)
    | x -> fail <| NonArithParam x
 
 /// Constructs a pred from a Func, given a set of active globals,
@@ -280,7 +280,7 @@ let hsfModelVariables gs =
         |> Map.toSeq
         |> Seq.map
             (function
-             | (name, Type.Int()) -> aUnmarked name |> ok
+             | (name, Type.Int()) -> iUnmarked name |> ok
              | (name, ty) -> name |> withType ty |> NonArithVar |> fail)
         |> collect
 

@@ -25,10 +25,10 @@ type ExprTests() =
           TestCaseData(ASub [AAdd [AInt 1L; AInt 2L]; AInt 3L])
             .Returns(true)
             .SetName("Classify '(1+2)-3' as compound")
-          TestCaseData(aBefore "foo")
+          TestCaseData(iBefore "foo")
             .Returns(false)
             .SetName("Classify 'foo!before' as simple")
-          TestCaseData(AMul [aBefore "foo"; aAfter "bar"])
+          TestCaseData(AMul [iBefore "foo"; iAfter "bar"])
             .Returns(true)
             .SetName("Classify 'foo!before * bar!after' as compound") ]
 
@@ -52,10 +52,10 @@ type ExprTests() =
             .Returns(12I)
             .SetName("nextIntermediate on 'implies' is one higher than max")
           TestCaseData(Expr.Int
-                           (AAdd [ aInter 1I "a"
-                                   aAfter "b"
-                                   aBefore "c"
-                                   aInter 2I "d" ] ))
+                           (AAdd [ iInter 1I "a"
+                                   iAfter "b"
+                                   iBefore "c"
+                                   iInter 2I "d" ] ))
             .Returns(3I)
             .SetName("nextIntermediate on 'add' is one higher than max") ]
 
@@ -89,23 +89,23 @@ type ExprTests() =
     /// Test cases for testing constant post-state rewriting.
     static member IntConstantPostStates =
         seq {
-            yield (new TestCaseData(aUnmarked "target1"))
-                .Returns(aAfter "target1")
+            yield (new TestCaseData(iUnmarked "target1"))
+                .Returns(iAfter "target1")
                 .SetName("Rewrite single target constant to post-state")
-            yield (new TestCaseData(aUnmarked "notTarget"))
-                .Returns(aUnmarked "notTarget")
+            yield (new TestCaseData(iUnmarked "notTarget"))
+                .Returns(iUnmarked "notTarget")
                 .SetName("Rewrite single non-target constant to post-state")
-            yield (new TestCaseData(AAdd [AInt 4L; aUnmarked "target1"]))
-                .Returns(AAdd [AInt 4L; aAfter "target1"])
+            yield (new TestCaseData(AAdd [AInt 4L; iUnmarked "target1"]))
+                .Returns(AAdd [AInt 4L; iAfter "target1"])
                 .SetName("Rewrite expression with one target constant to post-state")
-            yield (new TestCaseData(ASub [aUnmarked "target1"; aUnmarked "target2"]))
-                .Returns(ASub [aAfter "target1"; aAfter "target2"])
+            yield (new TestCaseData(ASub [iUnmarked "target1"; iUnmarked "target2"]))
+                .Returns(ASub [iAfter "target1"; iAfter "target2"])
                 .SetName("Rewrite expression with two target constants to post-state")
             yield (new TestCaseData(ADiv (AInt 6L, AInt 0L) : MIntExpr))
                 .Returns(ADiv (AInt 6L, AInt 0L) : MIntExpr)
                 .SetName("Rewrite expression with no constants to post-state")
-            yield (new TestCaseData(AMul [aUnmarked "foo"; aUnmarked "bar"]))
-                .Returns(AMul [aUnmarked "foo"; aUnmarked "bar"])
+            yield (new TestCaseData(AMul [iUnmarked "foo"; iUnmarked "bar"]))
+                .Returns(AMul [iUnmarked "foo"; iUnmarked "bar"])
                 .SetName("Rewrite expression with two non-target constants to post-state")
         }
 
@@ -130,11 +130,11 @@ type ExprTests() =
           (tcd [| (BTrue : MBoolExpr)
                   (aEq (AInt 5L) (AInt 6L) : MBoolExpr) |])
             .Returns(true)
-          (tcd [| (aEq (aUnmarked "x") (AInt 2L))
-                  (BNot (aEq (aUnmarked "x") (AInt 2L))) |])
+          (tcd [| (aEq (iUnmarked "x") (AInt 2L))
+                  (BNot (aEq (iUnmarked "x") (AInt 2L))) |])
             .Returns(true)
-          (tcd [| (aEq (aUnmarked "x") (AInt 2L))
-                  (BNot (aEq (aUnmarked "y") (AInt 2L))) |])
+          (tcd [| (aEq (iUnmarked "x") (AInt 2L))
+                  (BNot (aEq (iUnmarked "y") (AInt 2L))) |])
             .Returns(false)
           // De Morgan
           (tcd [| (BAnd [ bUnmarked "x" ; bUnmarked "y" ])

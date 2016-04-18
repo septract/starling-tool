@@ -312,12 +312,12 @@ let coreSemantics =
       (func "ICAS" [ Param.Int "destB"; Param.Int "destA"
                      Param.Int "testB"; Param.Int "testA"
                      Param.Int "set" ],
-       mkAnd [ mkImplies (aEq (aUnmarked "destB") (aUnmarked "testB"))
-                         (mkAnd [ aEq (aUnmarked "destA") (aUnmarked "set")
-                                  aEq (aUnmarked "testA") (aUnmarked "testB") ] )
-               mkImplies (mkNot (aEq (aUnmarked "destB") (aUnmarked "testB")))
-                         (mkAnd [ aEq (aUnmarked "destA") (aUnmarked "destB")
-                                  aEq (aUnmarked "testA") (aUnmarked "destB") ] ) ] )
+       mkAnd [ mkImplies (aEq (iUnmarked "destB") (iUnmarked "testB"))
+                         (mkAnd [ aEq (iUnmarked "destA") (iUnmarked "set")
+                                  aEq (iUnmarked "testA") (iUnmarked "testB") ] )
+               mkImplies (mkNot (aEq (iUnmarked "destB") (iUnmarked "testB")))
+                         (mkAnd [ aEq (iUnmarked "destA") (iUnmarked "destB")
+                                  aEq (iUnmarked "testA") (iUnmarked "destB") ] ) ] )
       // Boolean CAS
       (func "BCAS" [ Param.Bool "destB"; Param.Bool "destA"
                      Param.Bool "testB"; Param.Bool "testA"
@@ -336,24 +336,24 @@ let coreSemantics =
       // Integer load
       (func "!ILoad" [ Param.Int "destB"; Param.Int "destA"
                        Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ aEq (aUnmarked "destA") (aUnmarked "srcB")
-               aEq (aUnmarked "srcA") (aUnmarked "srcB") ] )
+       mkAnd [ aEq (iUnmarked "destA") (iUnmarked "srcB")
+               aEq (iUnmarked "srcA") (iUnmarked "srcB") ] )
       // Integer load-and-increment
       (func "!ILoad++" [ Param.Int "destB"; Param.Int "destA"
                          Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ aEq (aUnmarked "destA") (aUnmarked "srcB")
-               aEq (aUnmarked "srcA") (mkAdd2 (aUnmarked "srcB") (AInt 1L)) ] )
+       mkAnd [ aEq (iUnmarked "destA") (iUnmarked "srcB")
+               aEq (iUnmarked "srcA") (mkAdd2 (iUnmarked "srcB") (AInt 1L)) ] )
       // Integer load-and-decrement
       (func "!ILoad--" [ Param.Int "destB"; Param.Int "destA"
                          Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ aEq (aUnmarked "destA") (aUnmarked "srcB")
-               aEq (aUnmarked "srcA") (mkSub2 (aUnmarked "srcB") (AInt 1L)) ] )
+       mkAnd [ aEq (iUnmarked "destA") (iUnmarked "srcB")
+               aEq (iUnmarked "srcA") (mkSub2 (iUnmarked "srcB") (AInt 1L)) ] )
       // Integer increment
       (func "!I++" [ Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ aEq (aUnmarked "srcA") (mkAdd2 (aUnmarked "srcB") (AInt 1L)) ] )
+       mkAnd [ aEq (iUnmarked "srcA") (mkAdd2 (iUnmarked "srcB") (AInt 1L)) ] )
       // Integer decrement
       (func "!I--" [ Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ aEq (aUnmarked "srcA") (mkSub2 (aUnmarked "srcB") (AInt 1L)) ] )
+       mkAnd [ aEq (iUnmarked "srcA") (mkSub2 (iUnmarked "srcB") (AInt 1L)) ] )
       // Boolean load
       (func "!BLoad" [ Param.Bool "destB"; Param.Bool "destA"
                        Param.Bool "srcB"; Param.Bool "srcA" ],
@@ -367,7 +367,7 @@ let coreSemantics =
       // Integer store
       (func "!IStore" [ Param.Int "destB"; Param.Int "destA"
                         Param.Int "src" ],
-       aEq (aUnmarked "destA") (aUnmarked "src"))
+       aEq (iUnmarked "destA") (iUnmarked "src"))
       // Boolean store
       (func "!BStore" [ Param.Bool "destB"; Param.Bool "destA"
                         Param.Bool "src" ],
@@ -380,7 +380,7 @@ let coreSemantics =
       // Integer local set
       (func "!ILSet" [ Param.Int "destB"; Param.Int "destA"
                        Param.Int "src" ],
-       aEq (aUnmarked "destA") (aUnmarked "src"))
+       aEq (iUnmarked "destA") (iUnmarked "src"))
       // Boolean store
       (func "!BLSet" [ Param.Bool "destB"; Param.Bool "destA"
                        Param.Bool "src" ],
@@ -411,7 +411,7 @@ let rec modelExpr env expr =
         |> wrapMessages Var (lookupVar env)
         |> lift
                (TypeMapper.map
-                    (TypeMapper.make aUnmarked bUnmarked))
+                    (TypeMapper.make iUnmarked bUnmarked))
     (* We can use the active patterns above to figure out whether we
      * need to treat this expression as arithmetic or Boolean.
      *)
@@ -473,7 +473,7 @@ and modelArithExpr env expr =
         v
         |> wrapMessages Var (lookupVar env)
         |> bind (function
-                 | Typed.Int vn -> vn |> aUnmarked |> ok
+                 | Typed.Int vn -> vn |> iUnmarked |> ok
                  | _ -> v |> VarNotArith |> fail)
     | Bop(ArithOp as op, l, r) ->
         lift2 (match op with
@@ -769,48 +769,59 @@ let rec modelCView protos ls =
 let (|VarIn|_|) env (lvalue : LValue) = tryLookupVar env lvalue
 
 /// Converts a Boolean load to a Prim.
-let modelBoolLoad svars dest src mode =
+let modelBoolLoad svars dest srcExpr mode =
     (* In a Boolean load, the destination must be LOCAL and Boolean;
      *                    the source must be a GLOBAL Boolean lvalue;
      *                    and the fetch mode must be Direct.
      *)
-    match src with
-    | LV s ->
+    match srcExpr with
+    | LV srcLV ->
         trial {
-            let! stype = lookupVar svars s |> mapMessages (curry BadSVar s)
-            match stype, mode with
-            | Typed.Bool _, Direct ->
-                return func "!BLoad" [ dest |> blBefore; dest |> blAfter
-                                       s |> blBefore; s |> blAfter ]
-            | Typed.Bool _, Increment -> return! fail (IncBool src)
-            | Typed.Bool _, Decrement -> return! fail (DecBool src)
-            | _ -> return! fail (TypeMismatch (Type.Bool (), s, typeOf stype))
+            let! src = wrapMessages BadSVar (lookupVar svars) srcLV
+            match src, mode with
+            | Typed.Bool s, Direct ->
+                return
+                    vfunc
+                        "!BLoad"
+                            [ dest |> bBefore |> Expr.Bool
+                              dest |> bAfter |> Expr.Bool
+                              s |> bBefore |> Expr.Bool
+                              s |> bAfter |> Expr.Bool ]
+            | Typed.Bool s, Increment -> return! fail (IncBool srcExpr)
+            | Typed.Bool s, Decrement -> return! fail (DecBool srcExpr)
+            | _ -> return! fail (TypeMismatch (Type.Bool (), srcLV, typeOf src))
         }
-    | _ -> fail (LoadNonLV src)
+    | _ -> fail (LoadNonLV srcExpr)
 
 /// Converts an integer load to a Prim.
-let modelIntLoad svars dest src mode =
+let modelIntLoad svars dest srcExpr mode =
     (* In an integer load, the destination must be LOCAL and integral;
      *                    the source must be a GLOBAL arithmetic lvalue;
      *                    and the fetch mode is unconstrained.
      *)
-    match src with
-    | LV s ->
+    match srcExpr with
+    | LV srcLV ->
         trial {
-            let! stype = wrapMessages BadSVar (lookupVar svars) s
-            match stype, mode with
-            | Typed.Int _, Direct ->
-                return func "!ILoad" [ dest |> ilBefore; dest |> ilAfter
-                                       s |> ilBefore; s |> ilAfter ]
-            | Typed.Int _, Increment ->
-                return func "!ILoad++" [ dest |> ilBefore; dest |> ilAfter
-                                         s |> ilBefore; s |> ilAfter ]
-            | Typed.Int _, Decrement ->
-                return func "!ILoad--" [ dest |> ilBefore; dest |> ilAfter
-                                         s |> ilBefore; s |> ilAfter ]
-            | _ -> return! fail (TypeMismatch (Type.Int (), s, typeOf stype))
+            let! src = wrapMessages BadSVar (lookupVar svars) srcLV
+            match src, mode with
+            | Typed.Int s, Direct ->
+                return func "!ILoad" [ dest |> iBefore |> Expr.Int
+                                       dest |> iAfter |> Expr.Int
+                                       s |> iBefore |> Expr.Int
+                                       s |> iAfter |> Expr.Int ]
+            | Typed.Int s, Increment ->
+                return func "!ILoad++" [ dest |> iBefore |> Expr.Int
+                                         dest |> iAfter |> Expr.Int
+                                         s |> iBefore |> Expr.Int
+                                         s |> iAfter |> Expr.Int ]
+            | Typed.Int s, Decrement ->
+                return func "!ILoad--" [ dest |> iBefore |> Expr.Int
+                                         dest |> iAfter |> Expr.Int
+                                         s |> iBefore |> Expr.Int
+                                         s |> iAfter |> Expr.Int ]
+            | _ -> return! fail (TypeMismatch (Type.Int (), srcLV, typeOf src))
         }
-    | _ -> fail (LoadNonLV src)
+    | _ -> fail (LoadNonLV srcExpr)
 
 /// Converts a Boolean store to a Prim.
 let modelBoolStore locals dest src mode =
@@ -821,7 +832,8 @@ let modelBoolStore locals dest src mode =
     trial {
         let! sxp = wrapMessages BadExpr (modelBoolExpr locals) src
         match mode with
-        | Direct -> return func "!BStore" [ dest |> blBefore; dest |> blAfter
+        | Direct -> return func "!BStore" [ dest |> bBefore |> Expr.Bool
+                                            dest |> bAfter |> Expr.Bool
                                             sxp |> Expr.Bool |> before ]
         | Increment -> return! fail (IncBool src)
         | Decrement -> return! fail (DecBool src)
@@ -836,14 +848,15 @@ let modelIntStore locals dest src mode =
     trial {
         let! sxp = wrapMessages BadExpr (modelArithExpr locals) src
         match mode with
-        | Direct -> return func "!IStore" [ dest |> ilBefore; dest |> ilAfter
+        | Direct -> return func "!IStore" [ dest |> iBefore |> Expr.Int
+                                            dest |> iAfter |> Expr.Int
                                             sxp |> Expr.Int |> before ]
         | Increment -> return! fail (IncExpr src)
         | Decrement -> return! fail (DecExpr src)
     }
 
 /// Converts a CAS to part-commands.
-let modelCAS svars tvars dest test set =
+let modelCAS svars tvars destLV testLV set =
     (* In a CAS, the destination must be SHARED;
      *           the test variable must be THREADLOCAL;
      *           and the to-set value must be a valid expression.
@@ -851,38 +864,48 @@ let modelCAS svars tvars dest test set =
      * The type of dest and test influences how we interpret set.
      *)
     trial {
-        let! dtype = wrapMessages BadSVar (lookupVar svars) dest
-        let! ttype = wrapMessages BadTVar (lookupVar tvars) test
-        match dtype, ttype with
-        | Typed.Bool _, Typed.Bool _ ->
+        let! dest = wrapMessages BadSVar (lookupVar svars) destLV
+        let! test = wrapMessages BadTVar (lookupVar tvars) testLV
+        match dest, test with
+        | Typed.Bool d, Typed.Bool t ->
             let! setE = wrapMessages BadExpr (modelBoolExpr tvars) set
-            return func "BCAS" [dest |> blBefore; dest |> blAfter
-                                test |> blBefore; test |> blAfter
-                                setE |> Expr.Bool |> before]
-        | Typed.Int _, Typed.Int _ ->
+            return
+                func
+                    "BCAS"
+                    [ d |> bBefore |> Expr.Bool
+                      d |> bAfter |> Expr.Bool
+                      t |> bBefore |> Expr.Bool
+                      t |> bAfter |> Expr.Bool
+                      setE |> Expr.Bool |> before ]
+        | Typed.Int d, Typed.Int t ->
             let! setE = wrapMessages BadExpr (modelArithExpr tvars) set
-            return func "ICAS" [dest |> ilBefore; dest |> ilAfter
-                                test |> ilBefore; test |> ilAfter
-                                setE |> Expr.Int |> before]
+            return
+                func
+                    "ICAS"
+                    [ d |> iBefore |> Expr.Int
+                      d |> iAfter |> Expr.Int
+                      t |> iBefore |> Expr.Int
+                      t |> iAfter |> Expr.Int
+                      setE |> Expr.Int |> before ]
         | _ ->
             // Oops, we have a type error.
             // Arbitrarily single out test as the cause of it.
-            return! fail <| TypeMismatch (typeOf dtype, test, typeOf ttype)
+            return! fail <| TypeMismatch (typeOf dest, testLV, typeOf test)
     }
 
 /// Converts an atomic fetch to a model command.
-let modelFetch svars tvars dest src mode =
+let modelFetch svars tvars destLV srcExpr mode =
     (* First, determine whether we have a fetch from shared to thread
      * (a load), or a fetch from thread to shared (a store).
      * Also figure out whether we have a Boolean or arithmetic
      * version.
      * We figure this out by looking at dest.
      *)
-    match dest with
-    | VarIn svars (Typed.Int _) -> modelIntStore tvars dest src mode
-    | VarIn svars (Typed.Bool _)-> modelBoolStore tvars dest src mode
-    | VarIn tvars (Typed.Int _) -> modelIntLoad svars dest src mode
-    | VarIn tvars (Typed.Bool _) -> modelBoolLoad svars dest src mode
+    match destLV with
+    | VarIn svars (Typed.Int dest) -> modelIntStore tvars dest srcExpr mode
+    | VarIn svars (Typed.Bool dest) -> modelBoolStore tvars dest srcExpr mode
+    | VarIn tvars (Typed.Int dest) -> modelIntLoad svars dest srcExpr mode
+    | VarIn tvars (Typed.Bool dest) -> modelBoolLoad svars dest srcExpr mode
     | lv -> fail (BadAVar(lv, NotFound (flattenLV lv)))
 
 /// Converts a single atomic command from AST to part-commands.
@@ -907,11 +930,11 @@ let rec modelAtomic svars tvars =
             | Decrement, Typed.Bool _ ->
                 return! fail (DecBool (LV operand))
             | Increment, Typed.Int _ ->
-                return func "!I++" [op |> aBefore |> Expr.Int
-                                    op |> aAfter |> Expr.Int]
+                return func "!I++" [op |> iBefore |> Expr.Int
+                                    op |> iAfter |> Expr.Int]
             | Decrement, Typed.Int _ ->
-                return func "!I--" [op |> aBefore |> Expr.Int
-                                    op |> aAfter |> Expr.Int]
+                return func "!I--" [op |> iBefore |> Expr.Int
+                                    op |> iAfter |> Expr.Int]
         }
     | Id -> ok (func "Id" [])
     | Assume e ->
@@ -920,27 +943,29 @@ let rec modelAtomic svars tvars =
         |> lift (Expr.Bool >> Seq.singleton >> func "Assume")
 
 /// Converts a local variable assignment to a Prim.
-and modelAssign tvars l e =
+and modelAssign tvars lLV e =
     (* We model assignments as !ILSet or !BLSet, depending on the
      * type of l, which _must_ be in the locals set..
      * We thus also have to make sure that e is the correct type.
      *)
     trial {
-        let! ltype = wrapMessages BadTVar (lookupVar tvars) l
-        match ltype with
-        | Typed.Bool _ ->
+        let! l = wrapMessages BadTVar (lookupVar tvars) lLV
+        match l with
+        | Typed.Bool ls ->
             let! em = wrapMessages BadExpr (modelBoolExpr tvars) e
             return
                 func
                     "!BLSet"
-                    [ l |> blBefore; l |> blAfter
+                    [ ls |> bBefore |> Expr.Bool
+                      ls |> bAfter |> Expr.Bool
                       em |> Expr.Bool |> before ]
-        | Typed.Int _ ->
+        | Typed.Int ls ->
             let! em = wrapMessages BadExpr (modelArithExpr tvars) e
             return
                 func
                     "!ILSet"
-                    [ l |> ilBefore; l |> ilAfter
+                    [ ls |> iBefore |> Expr.Int
+                      ls |> iAfter |> Expr.Int
                       em |> Expr.Int |> before ]
     }
 

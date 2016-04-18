@@ -226,15 +226,3 @@ let before = subExpr (liftMarker Before always)
 
 /// Converts an expression to its post-state.
 let after = subExpr (liftMarker After always)
-
-/// Creates a pre-state Boolean lvalue expression.
-let blBefore = mkBoolLV >> Typed.Bool >> before
-
-/// Creates a post-state Boolean lvalue expression.
-let blAfter = mkBoolLV >> Typed.Bool >> after
-
-/// Creates a pre-state integral lvalue expression.
-let ilBefore = mkIntLV >> Typed.Int >> before
-
-/// Creates a post-state integral lvalue expression.
-let ilAfter = mkIntLV >> Typed.Int >> after

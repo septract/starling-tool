@@ -23,69 +23,69 @@ type HornTests() =
           [ ( { Name = "emp"
                 Params = [ Param.Int "serving"
                            Param.Int "ticket" ] },
-              Some <| BGe(aUnmarked "ticket", aUnmarked "serving"))
+              Some <| BGe(iUnmarked "ticket", iUnmarked "serving"))
             ( { Name = "v_holdTick"
                 Params = [ Param.Int "serving"
                            Param.Int "ticket"
                            Param.Int "t" ] },
-              Some <| BGt(aUnmarked "ticket", aUnmarked "t"))
+              Some <| BGt(iUnmarked "ticket", iUnmarked "t"))
             ( { Name = "v_holdLock"
                 Params = [ Param.Int "serving"
                            Param.Int "ticket" ] },
-              Some <| BGt(aUnmarked "ticket", aUnmarked "serving"))
+              Some <| BGt(iUnmarked "ticket", iUnmarked "serving"))
             ( { Name = "v_holdLock_holdTick"
                 Params = [ Param.Int "serving"
                            Param.Int "ticket"
                            Param.Int "t" ] },
-              Some <| BNot(aEq (aUnmarked "serving") (aUnmarked "t")))
+              Some <| BNot(aEq (iUnmarked "serving") (iUnmarked "t")))
             ( { Name = "v_holdTick_holdTick"
                 Params = [ Param.Int "serving"
                            Param.Int "ticket"
                            Param.Int "ta"
                            Param.Int "tb" ] },
-              Some <| BNot(aEq (aUnmarked "ta") (aUnmarked "tb")))
+              Some <| BNot(aEq (iUnmarked "ta") (iUnmarked "tb")))
             ( { Name = "v_holdLock_holdLock"
                 Params = [ Param.Int "serving"
                            Param.Int "ticket" ] },
               Some <| BFalse ) ] )
           .Returns(
               Set.ofList
-                  [ Clause(Ge (aUnmarked "ticket", aUnmarked "serving"),
+                  [ Clause(Ge (iUnmarked "ticket", iUnmarked "serving"),
                            [ Pred { Name = "emp"
-                                    Params = [ aUnmarked "serving"; aUnmarked "ticket" ] } ] )
-                    Clause(Gt (aUnmarked "ticket", aUnmarked "t"),
+                                    Params = [ iUnmarked "serving"; iUnmarked "ticket" ] } ] )
+                    Clause(Gt (iUnmarked "ticket", iUnmarked "t"),
                            [ Pred { Name = "v_holdTick"
-                                    Params = [ aUnmarked "serving"; aUnmarked "ticket"; aUnmarked "t" ] } ] )
-                    Clause(Gt (aUnmarked "ticket", aUnmarked "serving"),
+                                    Params = [ iUnmarked "serving"; iUnmarked "ticket"; iUnmarked "t" ] } ] )
+                    Clause(Gt (iUnmarked "ticket", iUnmarked "serving"),
                            [ Pred { Name = "v_holdLock"
-                                    Params = [ aUnmarked "serving"; aUnmarked "ticket" ] } ] )
-                    Clause(Neq (aUnmarked "serving", aUnmarked "t"),
+                                    Params = [ iUnmarked "serving"; iUnmarked "ticket" ] } ] )
+                    Clause(Neq (iUnmarked "serving", iUnmarked "t"),
                            [ Pred { Name = "v_holdLock_holdTick"
-                                    Params = [ aUnmarked "serving"; aUnmarked "ticket"; aUnmarked "t" ] } ] )
-                    Clause(Neq (aUnmarked "ta", aUnmarked "tb"),
+                                    Params = [ iUnmarked "serving"; iUnmarked "ticket"; iUnmarked "t" ] } ] )
+                    Clause(Neq (iUnmarked "ta", iUnmarked "tb"),
                            [ Pred { Name = "v_holdTick_holdTick"
-                                    Params = [ aUnmarked "serving"; aUnmarked "ticket"; aUnmarked "ta"; aUnmarked "tb" ] } ] )
+                                    Params = [ iUnmarked "serving"; iUnmarked "ticket"; iUnmarked "ta"; iUnmarked "tb" ] } ] )
                     Clause(False,
                            [ Pred { Name = "v_holdLock_holdLock"
-                                    Params = [ aUnmarked "serving"; aUnmarked "ticket"] } ] )
+                                    Params = [ iUnmarked "serving"; iUnmarked "ticket"] } ] )
                     Clause(Pred { Name = "emp"
-                                  Params = [ aUnmarked "serving"; aUnmarked "ticket" ] },
-                           [ Ge (aUnmarked "ticket", aUnmarked "serving") ] )
+                                  Params = [ iUnmarked "serving"; iUnmarked "ticket" ] },
+                           [ Ge (iUnmarked "ticket", iUnmarked "serving") ] )
                     Clause(Pred { Name = "v_holdTick"
-                                  Params = [ aUnmarked "serving"; aUnmarked "ticket"; aUnmarked "t" ] },
-                           [ Gt (aUnmarked "ticket", aUnmarked "t") ] )
+                                  Params = [ iUnmarked "serving"; iUnmarked "ticket"; iUnmarked "t" ] },
+                           [ Gt (iUnmarked "ticket", iUnmarked "t") ] )
                     Clause(Pred { Name = "v_holdLock"
-                                  Params = [ aUnmarked "serving"; aUnmarked "ticket" ] },
-                           [ Gt (aUnmarked "ticket", aUnmarked "serving") ] )
+                                  Params = [ iUnmarked "serving"; iUnmarked "ticket" ] },
+                           [ Gt (iUnmarked "ticket", iUnmarked "serving") ] )
                     Clause(Pred { Name = "v_holdLock_holdTick"
-                                  Params = [ aUnmarked "serving"; aUnmarked "ticket"; aUnmarked "t" ] },
-                           [ Neq (aUnmarked "serving", aUnmarked "t") ] )
+                                  Params = [ iUnmarked "serving"; iUnmarked "ticket"; iUnmarked "t" ] },
+                           [ Neq (iUnmarked "serving", iUnmarked "t") ] )
 
                     Clause(Pred { Name = "v_holdTick_holdTick"
-                                  Params = [ aUnmarked "serving"; aUnmarked "ticket"; aUnmarked "ta"; aUnmarked "tb" ] },
-                           [ Neq (aUnmarked "ta", aUnmarked "tb") ] )
+                                  Params = [ iUnmarked "serving"; iUnmarked "ticket"; iUnmarked "ta"; iUnmarked "tb" ] },
+                           [ Neq (iUnmarked "ta", iUnmarked "tb") ] )
                     Clause(Pred { Name = "v_holdLock_holdLock"
-                                  Params = [ aUnmarked "serving"; aUnmarked "ticket"] },
+                                  Params = [ iUnmarked "serving"; iUnmarked "ticket"] },
                            [ False ] )
 
                     QueryNaming {Name = "emp"; Params = ["serving"; "ticket"]}
@@ -110,9 +110,9 @@ type HornTests() =
       [ TestCaseData(HornTests.Globals)
           .Returns(
                   Clause (Pred { Name = "emp"
-                                 Params = [ aUnmarked "serving"; aUnmarked "ticket" ] },
-                          [ Eq (aUnmarked "serving", AInt 0L)
-                            Eq (aUnmarked "ticket", AInt 0L) ] )
+                                 Params = [ iUnmarked "serving"; iUnmarked "ticket" ] },
+                          [ Eq (iUnmarked "serving", AInt 0L)
+                            Eq (iUnmarked "ticket", AInt 0L) ] )
               |> Some
           ).SetName("Model the ticket lock's variable initialisations as Horn clauses") ]
 

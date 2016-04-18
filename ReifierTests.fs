@@ -21,7 +21,7 @@ type ReifierTests() =
                         [ { Name = "holdLock"
                             Params = [] }
                           { Name = "holdTick"
-                            Params = [ Expr.Int (aUnmarked "t") ] } ]
+                            Params = [ Expr.Int (iUnmarked "t") ] } ]
                 )
             ).Returns(
                 Some(Multiset.ofFlatList
@@ -34,7 +34,7 @@ type ReifierTests() =
                 new TestCaseData(
                     Multiset.ofFlatList
                         [ { Name = "holdTick"
-                            Params = [ Expr.Int (aUnmarked "t") ] }
+                            Params = [ Expr.Int (iUnmarked "t") ] }
                           { Name = "holdLock"
                             Params = [] } ]
                 )

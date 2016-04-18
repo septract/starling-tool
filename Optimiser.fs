@@ -710,7 +710,7 @@ module Term =
         onVars
             (TypeMapper.make
                 (function
-                 | After a -> Map.tryFind a asubs |> withDefault (aAfter a)
+                 | After a -> Map.tryFind a asubs |> withDefault (iAfter a)
                  | x -> AVar x)
                 (function
                  | After a -> Map.tryFind a bsubs |> withDefault (bAfter a)

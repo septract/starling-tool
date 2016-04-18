@@ -354,57 +354,35 @@ let stripMark =
  * Expression constructors
  *)
 
-/// Creates an unmarked arithmetic constant.
-let aUnmarked c = c |> Unmarked |> AVar
+/// Creates an unmarked integer variable.
+let iUnmarked c = c |> Unmarked |> AVar
 
-/// Creates an after-marked arithmetic constant.
-let aAfter c = c |> After |> AVar
+/// Creates an after-marked integer variable.
+let iAfter c = c |> After |> AVar
 
-/// Creates a before-marked arithmetic constant.
-let aBefore c = c |> Before |> AVar
+/// Creates a before-marked integer variable.
+let iBefore c = c |> Before |> AVar
 
-/// Creates an goal-marked arithmetic constant.
-let aGoal i c = (i, c) |> Goal |> AVar
+/// Creates an goal-marked integer variable.
+let iGoal i c = (i, c) |> Goal |> AVar
 
-/// Creates an intermediate-marked arithmetic constant.
-let aInter i c = (i, c) |> Intermediate |> AVar
+/// Creates an intermediate-marked integer variable.
+let iInter i c = (i, c) |> Intermediate |> AVar
 
-/// Creates an unmarked Boolean constant.
+/// Creates an unmarked Boolean variable.
 let bUnmarked c = c |> Unmarked |> BVar
 
-/// Creates an after-marked Boolean constant.
+/// Creates an after-marked Boolean variable.
 let bAfter c = c |> After |> BVar
 
-/// Creates a before-marked Boolean constant.
+/// Creates a before-marked Boolean variable.
 let bBefore c = c |> Before |> BVar
 
-/// Creates an goal-marked Boolean constant.
+/// Creates an goal-marked Boolean variable.
 let bGoal i c = (i, c) |> Goal |> BVar
 
-/// Creates an intermediate-marked Boolean constant.
+/// Creates an intermediate-marked Boolean variable.
 let bInter i c = (i, c) |> Intermediate |> BVar
-
-/// Creates a reference to a Boolean lvalue.
-/// This does NOT check to see if the lvalue exists!
-let mkBoolLV lv = 
-    (* TODO(CaptainHayashi): when we support pointers, this will
-     *                       need totally changing.
-     *)
-    lv
-    |> flattenLV
-    |> Unmarked
-    |> BVar
-
-/// Creates a reference to an integer lvalue.
-/// This does NOT check to see if the lvalue exists!
-let mkIntLV lv = 
-    (* TODO(CaptainHayashi): when we support pointers, this will
-     *                       need totally changing.
-     *)
-    lv
-    |> flattenLV
-    |> Unmarked
-    |> AVar
 
 /// Converts a typed string to an expression.
 let mkVarExp marker (ts : CTyped<string>) =

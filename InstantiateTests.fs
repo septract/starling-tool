@@ -19,9 +19,9 @@ type InstantiateTests() =
         [ (dfunc "foo" [],
            aEq (AInt 5L : MIntExpr) (AInt 6L))
           (dfunc "bar" [ Param.Int "quux" ],
-           aEq (aUnmarked "quux") (aUnmarked "blob"))
+           aEq (iUnmarked "quux") (iUnmarked "blob"))
           (dfunc "baz" [ Param.Int "quux" ; Param.Bool "flop" ],
-           BAnd [bUnmarked "flop"; BGt (aUnmarked "quux", aUnmarked "quux")]) ]
+           BAnd [bUnmarked "flop"; BGt (iUnmarked "quux", iUnmarked "quux")]) ]
 
 
     /// Test cases for testing valid instantiation.
@@ -33,10 +33,10 @@ type InstantiateTests() =
             .Returns(aEq (AInt 5L : MIntExpr) (AInt 6L : MIntExpr) |> Some |> Some)
             .SetName("Instantiate func with no arguments")
           TestCaseData(vfunc "bar" [AInt 101L |> Expr.Int])
-            .Returns(aEq (AInt 101L) (aUnmarked "blob") |> Some |> Some)
+            .Returns(aEq (AInt 101L) (iUnmarked "blob") |> Some |> Some)
             .SetName("Instantiate func with one int argument")
-          TestCaseData(vfunc "baz" [aAfter "burble" |> Expr.Int ; BTrue |> Expr.Bool])
-            .Returns(BAnd [BTrue; BGt (aAfter "burble", aAfter "burble")] |> Some |> Some)
+          TestCaseData(vfunc "baz" [iAfter "burble" |> Expr.Int ; BTrue |> Expr.Bool])
+            .Returns(BAnd [BTrue; BGt (iAfter "burble", iAfter "burble")] |> Some |> Some)
             .SetName("Instantiate func with two arguments of different types") ]
           
     /// Tests whether valid instantiations work.
@@ -53,7 +53,7 @@ type InstantiateTests() =
           TestCaseData(vfunc "bar" [])
             .Returns([CountMismatch(0, 1)] |> Some)
             .SetName("Instantiate func with too few arguments")
-          TestCaseData(vfunc "baz" [BTrue |> Expr.Bool ; aAfter "burble" |> Expr.Int])
+          TestCaseData(vfunc "baz" [BTrue |> Expr.Bool ; iAfter "burble" |> Expr.Int])
             .Returns([TypeMismatch (Param.Int "quux", Type.Bool ())
                       TypeMismatch (Param.Bool "flop", Type.Int ())] |> Some)
             .SetName("Instantiate func with two arguments of incorrect types") ]

@@ -168,12 +168,12 @@ module Tests =
               (tcd [| (List.singleton <|
                            func "foo" [ Expr.Bool (bGoal 0I "bar") ] )
                       (Multiset.singleton <|
-                           gfunc (BGt (aAfter "x",
-                                       aAfter "y"))
+                           gfunc (BGt (iAfter "x",
+                                       iAfter "y"))
                                  "foo" [ Expr.Bool (bAfter "baz") ] ) |] )
                   .Returns(Multiset.singleton <|
-                           gfunc (mkNot (BAnd [ (BGt (aAfter "x",
-                                                      aAfter "y"))
+                           gfunc (mkNot (BAnd [ (BGt (iAfter "x",
+                                                      iAfter "y"))
                                                 (bEq (bGoal 0I "bar")
                                                      (bAfter "baz")) ] ))
                                  "foo" [ Expr.Bool (bGoal 0I "bar") ] )

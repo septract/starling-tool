@@ -194,16 +194,16 @@ let holdLock =
 
 /// The conditional holdTick view.
 let holdTick =
-    func "holdTick" [Typed.Int (aUnmarked "t")] |> Func
+    func "holdTick" [Typed.Int (iUnmarked "t")] |> Func
 
 /// The guarded holdLock view.
 let gHoldLock cnd : GFunc = gfunc cnd "holdLock" []
 
 /// The guarded holdTick view.
-let gHoldTick cnd : GFunc = gfunc cnd "holdTick" [Typed.Int (aUnmarked "t")]
+let gHoldTick cnd : GFunc = gfunc cnd "holdTick" [Typed.Int (iUnmarked "t")]
 
 /// Produces the expression 's == t'.
-let sIsT = aEq (aUnmarked "s") (aUnmarked "t")
+let sIsT = aEq (iUnmarked "s") (iUnmarked "t")
 
 /// The ticket lock's lock method.
 let ticketLockLock =
@@ -213,8 +213,8 @@ let ticketLockLock =
             Contents =
                 [ { Command =
                         func "!ILoad++"
-                             [ Typed.Int (aBefore "t"); Typed.Int (aAfter "t")
-                               Typed.Int (aBefore "ticket"); Typed.Int (aAfter "ticket") ]
+                             [ Typed.Int (iBefore "t"); Typed.Int (iAfter "t")
+                               Typed.Int (iBefore "ticket"); Typed.Int (iAfter "ticket") ]
                         |> List.singleton |> Prim
                     Post = Mandatory <| sing holdTick }
                   { Command =
@@ -225,8 +225,8 @@ let ticketLockLock =
                                      Contents =
                                          [ { Command =
                                                  func "!ILoad"
-                                                      [ Typed.Int (aBefore "s"); Typed.Int (aAfter "s")
-                                                        Typed.Int (aBefore "serving"); Typed.Int (aAfter "serving") ]
+                                                      [ Typed.Int (iBefore "s"); Typed.Int (iAfter "s")
+                                                        Typed.Int (iBefore "serving"); Typed.Int (iAfter "serving") ]
                                                  |> List.singleton |> Prim
                                              Post =
                                                  (sIsT,
@@ -244,7 +244,7 @@ let ticketLockUnlock =
           { Pre = Mandatory <| sing holdLock
             Contents =
                 [ { Command =
-                        func "!I++" [ Typed.Int (aBefore "serving"); Typed.Int (aAfter "serving") ]
+                        func "!I++" [ Typed.Int (iBefore "serving"); Typed.Int (iAfter "serving") ]
                         |> List.singleton |> Prim
                     Post = Mandatory <| Multiset.empty }]}}
 
@@ -262,8 +262,8 @@ let ticketLockGuardedLock =
             Contents =
                 [ { Command =
                         func "!ILoad++"
-                             [ Typed.Int (aBefore "t"); Typed.Int (aAfter "t")
-                               Typed.Int (aBefore "ticket"); Typed.Int (aAfter "ticket") ]
+                             [ Typed.Int (iBefore "t"); Typed.Int (iAfter "t")
+                               Typed.Int (iBefore "ticket"); Typed.Int (iAfter "ticket") ]
                         |> List.singleton |> Prim
                     Post = Mandatory <| sing (gHoldTick BTrue) }
                   { Command =
@@ -274,8 +274,8 @@ let ticketLockGuardedLock =
                                      Contents =
                                          [ { Command =
                                                  func "!ILoad"
-                                                      [ Typed.Int (aBefore "s"); Typed.Int (aAfter "s")
-                                                        Typed.Int (aBefore "serving"); Typed.Int (aAfter "serving") ]
+                                                      [ Typed.Int (iBefore "s"); Typed.Int (iAfter "s")
+                                                        Typed.Int (iBefore "serving"); Typed.Int (iAfter "serving") ]
                                                  |> List.singleton |> Prim
                                              Post =
                                                  Mandatory <|
@@ -291,7 +291,7 @@ let ticketLockGuardedUnlock : PMethod<ViewExpr<GView>> =
           { Pre = Mandatory <| sing (gHoldLock BTrue)
             Contents =
                 [ { Command =
-                        func "!I++" [ Expr.Int (aBefore "serving"); Expr.Int (aAfter "serving") ]
+                        func "!I++" [ Expr.Int (iBefore "serving"); Expr.Int (iAfter "serving") ]
                         |> List.singleton |> Prim
                     Post = Mandatory <| Multiset.empty } ] } }
 
@@ -299,31 +299,31 @@ let ticketLockGuardedUnlock : PMethod<ViewExpr<GView>> =
 let ticketLockViewDefs =
     [ Definite
           ([],
-           BGe(aUnmarked "ticket", aUnmarked "serving"))
+           BGe(iUnmarked "ticket", iUnmarked "serving"))
       Definite
           (Multiset.ofFlatList
                [ { Name = "holdTick"
                    Params = [ Param.Int "t" ] } ] |> Multiset.toFlatList,
-           BGt(aUnmarked "ticket", aUnmarked "t"))
+           BGt(iUnmarked "ticket", iUnmarked "t"))
       Definite
           (Multiset.ofFlatList
                [ { Name = "holdLock"
                    Params = [] } ] |> Multiset.toFlatList,
-           BGt(aUnmarked "ticket", aUnmarked "serving"))
+           BGt(iUnmarked "ticket", iUnmarked "serving"))
       Definite
           (Multiset.ofFlatList
                [ { Name = "holdLock"
                    Params = [] }
                  { Name = "holdTick"
                    Params = [ Param.Int "t" ] } ] |> Multiset.toFlatList,
-           BNot(aEq (aUnmarked "serving") (aUnmarked "t")))
+           BNot(aEq (iUnmarked "serving") (iUnmarked "t")))
       Definite
           (Multiset.ofFlatList
                [ { Name = "holdTick"
                    Params = [ Param.Int "ta" ] }
                  { Name = "holdTick"
                    Params = [ Param.Int "tb" ] } ] |> Multiset.toFlatList,
-           BNot(aEq (aUnmarked "ta") (aUnmarked "tb")))
+           BNot(aEq (iUnmarked "ta") (iUnmarked "tb")))
       Definite
           (Multiset.ofFlatList
                [ { Name = "holdLock"
@@ -363,32 +363,32 @@ let ticketLockLockSubgraph : Subgraph =
               [ ("lock_C0",
                      edge "lock_V0"
                           [ func "!ILoad++"
-                                 [ Typed.Int (aBefore "t")
-                                   Typed.Int (aAfter "t")
-                                   Typed.Int (aBefore "ticket")
-                                   Typed.Int (aAfter "ticket") ]]
+                                 [ Typed.Int (iBefore "t")
+                                   Typed.Int (iAfter "t")
+                                   Typed.Int (iBefore "ticket")
+                                   Typed.Int (iAfter "ticket") ]]
                           "lock_V1")
                 ("lock_C1",
                      edge "lock_V3"
                           [ func "!ILoad"
-                                 [ Typed.Int (aBefore "s")
-                                   Typed.Int (aAfter "s")
-                                   Typed.Int (aBefore "serving")
-                                   Typed.Int (aAfter "serving") ]]
+                                 [ Typed.Int (iBefore "s")
+                                   Typed.Int (iAfter "s")
+                                   Typed.Int (iBefore "serving")
+                                   Typed.Int (iAfter "serving") ]]
                           "lock_V4")
                 ("lock_C2",
                      edge "lock_V4"
                           [ func "Assume"
                                  [ Typed.Bool
-                                       (BNot (aEq (aBefore "s")
-                                                  (aBefore "t"))) ]]
+                                       (BNot (aEq (iBefore "s")
+                                                  (iBefore "t"))) ]]
                           "lock_V3")
                 ("lock_C3",
                      edge "lock_V4"
                           [ func "Assume"
                                  [ Typed.Bool
-                                       (aEq (aBefore "s")
-                                            (aBefore "t")) ]]
+                                       (aEq (iBefore "s")
+                                            (iBefore "t")) ]]
                           "lock_V2")
                 ("lock_C4",
                      edge "lock_V1"
@@ -409,8 +409,8 @@ let ticketLockUnlockSubgraph : Subgraph =
               [ ("unlock_C0",
                      edge "unlock_V0"
                           [ func "!I++"
-                                 [ Typed.Int (aBefore "serving")
-                                   Typed.Int (aAfter "serving") ]]
+                                 [ Typed.Int (iBefore "serving")
+                                   Typed.Int (iAfter "serving") ]]
                           "unlock_V1" ) ] }
 
 let ticketLockLockGraph : Graph =
@@ -424,10 +424,10 @@ let ticketLockLockGraph : Graph =
                         OutEdge.Dest = "lock_V1"
                         OutEdge.Command =
                             [ func "!ILoad++"
-                                   [ Typed.Int (aBefore "t")
-                                     Typed.Int (aAfter "t")
-                                     Typed.Int (aBefore "ticket")
-                                     Typed.Int (aAfter "ticket") ]] },
+                                   [ Typed.Int (iBefore "t")
+                                     Typed.Int (iAfter "t")
+                                     Typed.Int (iBefore "ticket")
+                                     Typed.Int (iAfter "ticket") ]] },
                    Set.empty, 
                    Entry)))
                 ("lock_V1",
@@ -441,10 +441,10 @@ let ticketLockLockGraph : Graph =
                         Src = "lock_V0"
                         Command =
                             [ func "!ILoad++"
-                                   [ Typed.Int (aBefore "t")
-                                     Typed.Int (aAfter "t")
-                                     Typed.Int (aBefore "ticket")
-                                     Typed.Int (aAfter "ticket") ]] },
+                                   [ Typed.Int (iBefore "t")
+                                     Typed.Int (iAfter "t")
+                                     Typed.Int (iBefore "ticket")
+                                     Typed.Int (iAfter "ticket") ]] },
                   Normal ))
                 ("lock_V2",
                  (Mandatory <| sing (gHoldLock BTrue),
@@ -455,8 +455,8 @@ let ticketLockLockGraph : Graph =
                         Command =
                             [ func "Assume"
                                    [ Typed.Bool
-                                         (aEq (aBefore "s")
-                                              (aBefore "t")) ]] }, 
+                                         (aEq (iBefore "s")
+                                              (iBefore "t")) ]] }, 
                    Exit))
                 ("lock_V3",
                  (Mandatory <| sing (gHoldTick BTrue),
@@ -465,18 +465,18 @@ let ticketLockLockGraph : Graph =
                         Dest = "lock_V4"
                         Command =
                             [ func "!ILoad"
-                                   [ Typed.Int (aBefore "s")
-                                     Typed.Int (aAfter "s")
-                                     Typed.Int (aBefore "serving")
-                                     Typed.Int (aAfter "serving") ]] },
+                                   [ Typed.Int (iBefore "s")
+                                     Typed.Int (iAfter "s")
+                                     Typed.Int (iBefore "serving")
+                                     Typed.Int (iAfter "serving") ]] },
                   Set.ofList
                       [ { Name = "lock_C2"
                           Src = "lock_V4"
                           Command =
                               [ func "Assume"
                                      [ Typed.Bool
-                                           (BNot (aEq (aBefore "s")
-                                                      (aBefore "t"))) ]] }
+                                           (BNot (aEq (iBefore "s")
+                                                      (iBefore "t"))) ]] }
                         { Name = "lock_C4"
                           Src = "lock_V1"
                           Command = [] } ],
@@ -492,24 +492,24 @@ let ticketLockLockGraph : Graph =
                           Command =
                               [ func "Assume"
                                      [ Typed.Bool
-                                           (BNot (aEq (aBefore "s")
-                                                      (aBefore "t"))) ]] }
+                                           (BNot (aEq (iBefore "s")
+                                                      (iBefore "t"))) ]] }
                         { Name = "lock_C3"
                           Dest = "lock_V2"
                           Command =
                               [ func "Assume"
                                      [ Typed.Bool
-                                           (aEq (aBefore "s")
-                                                (aBefore "t")) ]] } ],
+                                           (aEq (iBefore "s")
+                                                (iBefore "t")) ]] } ],
                   Set.singleton
                       { Name = "lock_C1"
                         Src = "lock_V3"
                         Command =
                             [ func "!ILoad"
-                                   [ Typed.Int (aBefore "s")
-                                     Typed.Int (aAfter "s")
-                                     Typed.Int (aBefore "serving")
-                                     Typed.Int (aAfter "serving") ]] }, 
+                                   [ Typed.Int (iBefore "s")
+                                     Typed.Int (iAfter "s")
+                                     Typed.Int (iBefore "serving")
+                                     Typed.Int (iAfter "serving") ]] }, 
                   Normal)) ] }
 
 /// The CFG for the ticket lock unlock method.
@@ -526,8 +526,8 @@ let ticketLockUnlockGraph : Graph =
                         Dest = "unlock_V1"
                         Command =
                             [ func "!I++"
-                                   [ Typed.Int (aBefore "serving")
-                                     Typed.Int (aAfter "serving") ]] },
+                                   [ Typed.Int (iBefore "serving")
+                                     Typed.Int (iAfter "serving") ]] },
                   Set.empty,
                   Entry))
                 ("unlock_V1",
@@ -538,6 +538,6 @@ let ticketLockUnlockGraph : Graph =
                         Src = "unlock_V0"
                         Command =
                             [ func "!I++"
-                                   [ Typed.Int (aBefore "serving")
-                                     Typed.Int (aAfter "serving") ]] }, 
+                                   [ Typed.Int (iBefore "serving")
+                                     Typed.Int (iAfter "serving") ]] }, 
                    Exit)) ] }

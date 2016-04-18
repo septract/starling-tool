@@ -349,7 +349,7 @@ module Tests =
                   .Returns((Set.singleton (Bool (Unmarked "bar"))) : Set<CTyped<MarkedVar>>)
                   .SetName("Variables in a GFunc's guard are returned by varsInGFunc")
               TestCaseData(gfunc BTrue "foo" [ Typed.Bool (bAfter "x")
-                                               Typed.Int (aBefore "y") ] )
+                                               Typed.Int (iBefore "y") ] )
                   .Returns((Set.ofArray
                                 [| (Typed.Bool (After "x"))
                                    (Typed.Int (Before "y")) |]): Set<CTyped<MarkedVar>>)
