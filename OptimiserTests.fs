@@ -3,6 +3,7 @@ module Starling.Tests.Optimiser
 open NUnit.Framework
 open Starling.Collections
 open Starling.Core.Expr
+open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.Sub
@@ -70,8 +71,9 @@ type OptimiserTests() =
     /// Test after-elimination of Booleans.
     [<TestCaseSource("AfterBools")>]
     member x.``After-elimination of Booleans should operate correctly`` b =
-        (afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs)
-            .BSub b
+        TypeMapper.mapBool
+            (afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs)
+            b
 
     /// Test cases for discovering Boolean after-before pairs.
     static member BoolAfterDiscoveries =

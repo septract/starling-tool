@@ -96,6 +96,33 @@ module Types =
         match typed with
         | Int a | Bool a -> a
 
+    /// <summary>
+    ///     A table of mapping functions from one <c>Typed</c> type to another.
+    /// </summary>
+    /// <typeparam name="srcInt">
+    ///     The type of <c>Int</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="srcBool">
+    ///     The type of <c>Bool</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstInt">
+    ///     The type of <c>Int</c>-typed values leaving the map.
+    /// </typeparam>
+    /// <typeparam name="dstBool">
+    ///     The type of <c>Bool</c>-typed values leaving the map.
+    /// </typeparam>
+    [<NoComparison>]
+    [<NoEquality>]
+    type TypeMapper<'srcInt, 'srcBool, 'dstInt, 'dstBool> =
+        { /// <summary>
+          ///     Mapping function for integers.
+          /// </summary>
+          I: 'srcInt -> 'dstInt
+          /// <summary>
+          ///     Mapping function for Booleans.
+          /// </summary>
+          B: 'srcBool -> 'dstBool }
+
     /// A variable map.
     type VarMap = Map<string, Type>
 
@@ -129,6 +156,175 @@ module Pretty =
         function
         | Duplicate vn -> fmt "variable '{0}' is defined multiple times" [ String vn ]
         | NotFound vn -> fmt "variable '{0}' not in environment" [ String vn ]
+
+
+/// <summary>
+///     Functions for dealing with <c>TypeMapper</c>s.
+/// </summary>
+module TypeMapper =
+    /// <summary>
+    ///     Runs a <c>TypeMapper</c> on a <c>Typed</c> value.
+    /// </summary>
+    /// <param name="tm">
+    ///     The <c>TypeMapper</c> to run.
+    /// </param>
+    /// <typeparam name="srcInt">
+    ///     The type of <c>Int</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="srcBool">
+    ///     The type of <c>Bool</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstInt">
+    ///     The type of <c>Int</c>-typed values leaving the map.
+    /// </typeparam>
+    /// <typeparam name="dstBool">
+    ///     The type of <c>Bool</c>-typed values leaving the map.
+    /// </typeparam>
+    /// <returns>
+    ///     A function mapping over a <c>Typed</c> value with
+    ///     <paramref name="tm"/>.
+    /// </returns>
+    let map
+      (tm : TypeMapper<'srcInt, 'srcBool, 'dstInt, 'dstBool>)
+      : (Typed<'srcInt, 'srcBool> -> Typed<'dstInt, 'dstBool>) =
+        function
+        | Typed.Int i -> i |> tm.I |> Typed.Int
+        | Typed.Bool i -> i |> tm.B |> Typed.Bool
+
+    /// <summary>
+    ///     Runs a <c>TypeMapper</c> on an integral value.
+    /// </summary>
+    /// <param name="tm">
+    ///     The <c>TypeMapper</c> to run.
+    /// </param>
+    /// <typeparam name="srcInt">
+    ///     The type of <c>Int</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstInt">
+    ///     The type of <c>Int</c>-typed values leaving the map.
+    /// </typeparam>
+    /// <returns>
+    ///     A function mapping over an integral value (ie, the
+    ///     <c>srcInt</c> and <c>dstInt</c> types) with
+    ///     <paramref name="tm"/>.
+    /// </returns>
+    let mapInt
+      (tm : TypeMapper<'srcInt, _, 'dstInt, _>)
+      : 'srcInt -> 'dstInt =
+        tm.I
+
+    /// <summary>
+    ///     Runs a <c>TypeMapper</c> on a Boolean value.
+    /// </summary>
+    /// <param name="tm">
+    ///     The <c>TypeMapper</c> to run.
+    /// </param>
+    /// <typeparam name="srcBool">
+    ///     The type of <c>Bool</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstBool">
+    ///     The type of <c>Bool</c>-typed values leaving the map.
+    /// </typeparam>
+    /// <returns>
+    ///     A function mapping over a Boolean value (ie, the
+    ///     <c>srcBool</c> and <c>dstBool</c> types) with
+    ///     <paramref name="tm"/>.
+    /// </returns>
+    let mapBool
+      (tm : TypeMapper<_, 'srcBool, _, 'dstBool>)
+      : 'srcBool -> 'dstBool =
+        tm.B
+
+    /// <summary>
+    ///     Constructs a <c>TypeMapper</c>.
+    /// </summary>
+    /// <param name="iFun">
+    ///     The function to apply on integral values.
+    /// </param>
+    /// <param name="bFun">
+    ///     The function to apply on Boolean values.
+    /// </param>
+    /// <typeparam name="srcInt">
+    ///     The type of <c>Int</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="srcBool">
+    ///     The type of <c>Bool</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstInt">
+    ///     The type of <c>Int</c>-typed values leaving the map.
+    /// </typeparam>
+    /// <typeparam name="dstBool">
+    ///     The type of <c>Bool</c>-typed values leaving the map.
+    /// </typeparam>
+    /// <returns>
+    ///     A <c>TypeMapper</c> using <paramref name="iFun"/> and
+    ///     <paramref name="bFun"/>.
+    /// </returns>
+    let make
+      (iFun : 'srcInt -> 'dstInt)
+      (bFun : 'srcBool -> 'dstBool)
+      : TypeMapper<'srcInt, 'srcBool, 'dstInt, 'dstBool> =
+        { I = iFun ; B = bFun }
+
+    /// <summary>
+    ///     Constructs a <c>TypeMapper</c> over <c>CTyped</c>.
+    /// </summary>
+    /// <param name="f">
+    ///     The function to apply on all values.
+    /// </param>
+    /// <typeparam name="src">
+    ///     The type of values entering the map.
+    /// </typeparam>
+    /// <typeparam name="dst">
+    ///     The type of values leaving the map.
+    /// </typeparam>
+    /// <returns>
+    ///     A <c>TypeMapper</c> using <paramref name="f"/>.
+    /// </returns>
+    let cmake
+      (f : 'src -> 'dst)
+      : TypeMapper<'src, 'src, 'dst, 'dst> =
+        make f f
+
+    /// <summary>
+    ///     Composes two <c>TypeMapper</c>s.
+    /// </summary>
+    /// <param name="f">
+    ///     The <c>TypeMapper</c> to apply first.
+    /// </param>
+    /// <param name="g">
+    ///     The <c>TypeMapper</c> to apply second.
+    /// </param>
+    /// <typeparam name="srcInt">
+    ///     The type of <c>Int</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="srcBool">
+    ///     The type of <c>Bool</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="fInt">
+    ///     The type of <c>Int</c>-typed values after
+    ///     <paramref name="f" />.
+    /// </typeparam>
+    /// <typeparam name="fBool">
+    ///     The type of <c>Bool</c>-typed values after
+    ///     <paramref name="f" />.
+    /// </typeparam>
+    /// <typeparam name="dstInt">
+    ///     The type of <c>Int</c>-typed values leaving the map.
+    /// </typeparam>
+    /// <typeparam name="dstBool">
+    ///     The type of <c>Bool</c>-typed values leaving the map.
+    /// </typeparam>
+    /// <returns>
+    ///     A <c>TypeMapper</c> composing <paramref name="f"/> and
+    ///     <paramref name="g"/> left-to-right.
+    /// </returns>
+    let compose
+      (f : TypeMapper<'srcInt, 'srcBool, 'fInt, 'fBool>)
+      (g : TypeMapper<'fInt, 'fBool, 'dstInt, 'dstBool>)
+      : TypeMapper<'srcInt, 'srcBool, 'dstInt, 'dstBool> =
+        { I = f.I >> g.I
+          B = f.B >> g.B }
 
 
 /// Flattens a LV to a string.

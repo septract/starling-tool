@@ -315,23 +315,21 @@ let paramSubFun {Params = fpars} {Params = dpars} =
 
     // TODO(CaptainHayashi): make this type-safe.
     // TODO(CaptainHayashi): maybe have a separate Const leg for params.
-    {AVSub =
-        function
-        | Unmarked p as up ->
-            match (Map.tryFind p pmap) with
-            | Some (Typed.Int e) -> e
-            | Some _ -> failwith "param substitution type error"
-            | None -> AVar up
-        | q -> AVar q
-     BVSub =
-        function
-        | Unmarked p as up ->
-            match (Map.tryFind p pmap) with
-            | Some (Typed.Bool e) -> e
-            | Some _ -> failwith "param substitution type error"
-            | None -> BVar up
-        | q -> BVar q
-    }
+    TypeMapper.make
+        (function
+         | Unmarked p as up ->
+             match (Map.tryFind p pmap) with
+             | Some (Typed.Int e) -> e
+             | Some _ -> failwith "param substitution type error"
+             | None -> AVar up
+         | q -> AVar q)
+        (function
+         | Unmarked p as up ->
+             match (Map.tryFind p pmap) with
+             | Some (Typed.Bool e) -> e
+             | Some _ -> failwith "param substitution type error"
+             | None -> BVar up
+         | q -> BVar q)
 
 /// <summary>
 ///     Given a func <c>func</c>, its prototype <c>dfunc</c>, and that

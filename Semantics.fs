@@ -90,7 +90,10 @@ let composeBools x y =
         function
         | After v -> Intermediate (nLevel, v)
         | v -> v
-        |> (fun f -> { AVSub = f >> AVar ; BVSub = f >> BVar } )
+        |> (fun f ->
+                TypeMapper.compose
+                    (TypeMapper.cmake f)
+                    (TypeMapper.make AVar BVar))
         |> onVars
 
     let yRewrite =
@@ -98,10 +101,15 @@ let composeBools x y =
         | Before v -> Intermediate (nLevel, v)
         | Intermediate (i, v) -> Intermediate (i + nLevel + 1I, v)
         | v -> v
-        |> (fun f -> { AVSub = f >> AVar ; BVSub = f >> BVar } )
+        |> (fun f ->
+                TypeMapper.compose
+                    (TypeMapper.cmake f)
+                    (TypeMapper.make AVar BVar))
         |> onVars
 
-    mkAnd [ xRewrite.BSub x ; yRewrite.BSub y ]
+    mkAnd
+        [ TypeMapper.mapBool xRewrite x
+          TypeMapper.mapBool yRewrite y ]
 
 
 /// Generates a framing relation for a given variable.

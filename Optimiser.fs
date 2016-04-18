@@ -493,8 +493,9 @@ module Graph =
                 | InnerView(ITEGuards (xc, xv, yc, yv)) ->
                     (* Translate xc and yc to pre-state, to match the
                        commands. *)
-                    let xcPre = (liftMarker Before always).BSub xc
-                    let ycPre = (liftMarker Before always).BSub yc
+                    let toPre = TypeMapper.mapBool (liftMarker Before always)
+                    let xcPre = toPre xc
+                    let ycPre = toPre yc
 
                     match (Set.toList outEdges, Set.toList inEdges) with
                     (* Are there only two out edges, and only one in edge?
@@ -706,13 +707,14 @@ module Term =
 
     /// Lifts a pair of before/after maps to a SubFun.
     let afterSubs asubs bsubs =
-        { AVSub = function
-                  | After a -> Map.tryFind a asubs |> withDefault (aAfter a)
-                  | x -> AVar x
-          BVSub = function
-                  | After a -> Map.tryFind a bsubs |> withDefault (bAfter a)
-                  | x -> BVar x }
-        |> onVars
+        onVars
+            (TypeMapper.make
+                (function
+                 | After a -> Map.tryFind a asubs |> withDefault (aAfter a)
+                 | x -> AVar x)
+                (function
+                 | After a -> Map.tryFind a bsubs |> withDefault (bAfter a)
+                 | x -> BVar x))
 
     /// Eliminates bound before/after pairs in the term.
     /// If x!after = f(x!before) in the action, we replace x!after with
@@ -761,7 +763,7 @@ module Term =
      *)
 
     /// Performs expression simplification on a term.
-    let simpTerm = subExprInDTerm { ASub = id; BSub = simp }
+    let simpTerm = subExprInDTerm (TypeMapper.make id simp)
 
     (*
      * Frontend

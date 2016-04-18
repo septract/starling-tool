@@ -112,7 +112,9 @@ type ExprTests() =
     [<TestCaseSource("IntConstantPostStates")>]
     /// Tests whether rewriting constants in arithmetic expressions to post-state works.
     member x.``constants in arithmetic expressions can be rewritten to post-state`` expr =
-        (liftMarker After (Set.ofList ["target1"; "target2"] |> inSet)).ASub expr
+        TypeMapper.mapInt
+            (liftMarker After (Set.ofList ["target1"; "target2"] |> inSet))
+            expr
 
     /// Test cases for negation checking.
     static member ObviousNegations =

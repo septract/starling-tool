@@ -17,19 +17,35 @@ open Starling.Core.GuardedView
 /// </summary>
 [<AutoOpen>]
 module Types =
-    /// Type for substitution function tables.
+    /// <summary>
+    ///     A <c>TypeMap</c> mapping between forms of <c>Expr</c>s.
+    /// </summary>
+    /// <typeparam name="srcVar">
+    ///     The type of variables entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstVar">
+    ///     The type of variables leaving the map.
+    /// </typeparam>
     [<NoComparison>]
     [<NoEquality>]
-    type SubFun<'var> =
-        {ASub: IntExpr<'var> -> IntExpr<'var>
-         BSub: BoolExpr<'var> -> BoolExpr<'var>}
+    type SubFun<'srcVar, 'dstVar> =
+        TypeMapper<
+            IntExpr<'srcVar>, BoolExpr<'srcVar>,
+            IntExpr<'dstVar>, BoolExpr<'dstVar>>
 
-    /// Type for variable substitution function tables.
+    /// <summary>
+    ///     A <c>TypeMap</c> mapping between forms of <c>Var</c>s.
+    /// </summary>
+    /// <typeparam name="srcVar">
+    ///     The type of variables entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstVar">
+    ///     The type of variables leaving the map.
+    /// </typeparam>
     [<NoComparison>]
     [<NoEquality>]
-    type VSubFun =
-        {AVSub: MarkedVar -> MIntExpr
-         BVSub: MarkedVar -> MBoolExpr}
+    type VSubFun<'srcVar, 'dstVar> =
+        TypeMapper<'srcVar, 'srcVar, IntExpr<'dstVar>, BoolExpr<'dstVar>>
 
 
 (*
@@ -39,10 +55,8 @@ module Types =
 /// <summary>
 ///   Runs the given <c>SubFun</c> on an <c>Expr</c>.
 /// </summary>
-let subExpr { ASub = fa; BSub = fb } =
-    function
-    | Typed.Int a -> a |> fa |> Typed.Int
-    | Typed.Bool b -> b |> fb |> Typed.Bool
+let subExpr : SubFun<'srcVar, 'dstVar> -> Expr<'srcVar> -> Expr<'dstVar> =
+    TypeMapper.map
 
 (*
  * Model element substitution functions
@@ -54,7 +68,7 @@ let subExpr { ASub = fa; BSub = fb } =
 /// <param name="sub">
 ///   The <c>SubFun</c> to map over all expressions in the <c>VFunc</c>.
 /// </param>
-/// <param name="func">
+/// <param name="_arg1">
 ///   The <c>VFunc</c> over which whose expressions are to be mapped.
 /// </param>
 /// <returns>
@@ -65,8 +79,10 @@ let subExpr { ASub = fa; BSub = fb } =
 ///     The expressions in a <c>VFunc</c> are its parameters.
 ///   </para>
 /// </remarks>
-let subExprInVFunc sub func =
-    { func with Params = List.map (subExpr sub) func.Params }
+let subExprInVFunc
+  (sub : SubFun<MarkedVar, MarkedVar>)
+  { Name = n ; Params = ps } =
+  { Name = n ; Params = List.map (subExpr sub) ps }
 
 /// <summary>
 ///   Maps a <c>SubFun</c> over all expressions in a <c>GFunc</c>.
@@ -83,8 +99,10 @@ let subExprInVFunc sub func =
 ///     the expressions of the enclosed <c>VFunc</c>.
 ///   </para>
 /// </remarks>
-let subExprInGFunc sub {Cond = cond; Item = item} =
-    { Cond = sub.BSub cond
+let subExprInGFunc
+  (sub : SubFun<MarkedVar, MarkedVar>)
+  { Cond = cond ; Item = item } =
+    { Cond = TypeMapper.mapBool sub cond
       Item = subExprInVFunc sub item }
 
 /// <summary>
@@ -105,7 +123,8 @@ let subExprInGFunc sub {Cond = cond; Item = item} =
 ///     <c>GFunc</c>s.
 ///   </para>
 /// </remarks>
-let subExprInGView sub = Multiset.map (subExprInGFunc sub)
+let subExprInGView (sub : SubFun<MarkedVar, MarkedVar>) =
+    Multiset.map (subExprInGFunc sub)
 
 /// <summary>
 ///   Maps a <c>SubFun</c> over all expressions in a <c>DTerm</c>.
@@ -126,8 +145,11 @@ let subExprInGView sub = Multiset.map (subExprInGFunc sub)
 ///     (<c>GView</c>), and its goal (<c>VFunc</c>).
 ///   </para>
 /// </remarks>
-let subExprInDTerm sub =
-    mapTerm (sub.BSub) (subExprInGView sub) (subExprInVFunc sub)
+let subExprInDTerm (sub : SubFun<MarkedVar, MarkedVar>) =
+    mapTerm
+        (TypeMapper.mapBool sub)
+        (subExprInGView sub)
+        (subExprInVFunc sub)
 
 (*
  * Variable substitution (special case of substitution)
@@ -135,9 +157,9 @@ let subExprInDTerm sub =
 
 /// Substitutes all variables with the given substitution function set
 /// for the given Boolean expression.
-let rec boolSubVars vfun =
+let rec boolSubVars (vfun : VSubFun<'srcVar, 'dstVar>) =
     function 
-    | BVar x -> vfun.BVSub x
+    | BVar x -> TypeMapper.mapBool vfun x
     | BTrue -> BTrue
     | BFalse -> BFalse
     | BAnd xs -> BAnd (List.map (boolSubVars vfun) xs)
@@ -158,9 +180,9 @@ let rec boolSubVars vfun =
 
 /// Substitutes all variables with the given substitution function
 /// for the given arithmetic expression.
-and arithSubVars vfun =
+and arithSubVars (vfun : VSubFun<'srcVar, 'dstVar>) =
     function 
-    | AVar x -> vfun.AVSub x
+    | AVar x -> TypeMapper.mapInt vfun x
     | AInt i -> AInt i
     | AAdd xs -> AAdd (List.map (arithSubVars vfun) xs)
     | ASub xs -> ASub (List.map (arithSubVars vfun) xs)
@@ -172,8 +194,8 @@ and arithSubVars vfun =
 ///   Creates a <c>SubFun</c> from a <c>VSubFun</c>.
 /// </summary>
 and onVars vsub =
-    { ASub = arithSubVars vsub
-      BSub = boolSubVars vsub }
+    { I = arithSubVars vsub
+      B = boolSubVars vsub }
 
 
 (*
@@ -187,8 +209,8 @@ let inSet st var = Set.contains var st
 let liftMarkerV marker vpred =
     let gfun = function | Unmarked s when vpred s -> marker s
                         | x -> x
-    {AVSub = gfun >> AVar
-     BVSub = gfun >> BVar}
+    { I = gfun >> AVar
+      B = gfun >> BVar }
 
 /// Lifts a marking function to a substitution function table.
 let liftMarker marker vpred =
