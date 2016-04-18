@@ -681,10 +681,10 @@ module Term =
     /// where x is arithmetic.
     let rec findArithAfters =
         function
-        | BAEq(AConst(After x), (ConstantIntFunction (Before y) as fx))
+        | BAEq(AVar(After x), (ConstantIntFunction (Before y) as fx))
             when x = y
             -> [(x, fx)]
-        | BAEq(ConstantIntFunction (Before y) as fx, AConst(After x))
+        | BAEq(ConstantIntFunction (Before y) as fx, AVar(After x))
             when x = y
             -> [(x, fx)]
         | BAnd xs -> concatMap findArithAfters xs
@@ -695,10 +695,10 @@ module Term =
     /// where x is Boolean.
     let rec findBoolAfters =
         function
-        | BBEq(BConst(After x), (ConstantBoolFunction (Before y) as fx))
+        | BBEq(BVar(After x), (ConstantBoolFunction (Before y) as fx))
             when x = y
             -> [(x, fx)]
-        | BBEq(ConstantBoolFunction (Before y) as fx, BConst(After x))
+        | BBEq(ConstantBoolFunction (Before y) as fx, BVar(After x))
             when x = y
             -> [(x, fx)]
         | BAnd xs -> concatMap findBoolAfters xs
@@ -708,10 +708,10 @@ module Term =
     let afterSubs asubs bsubs =
         { AVSub = function
                   | After a -> Map.tryFind a asubs |> withDefault (aAfter a)
-                  | x -> AConst x
+                  | x -> AVar x
           BVSub = function
                   | After a -> Map.tryFind a bsubs |> withDefault (bAfter a)
-                  | x -> BConst x }
+                  | x -> BVar x }
         |> onVars
 
     /// Eliminates bound before/after pairs in the term.

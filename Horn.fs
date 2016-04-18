@@ -26,18 +26,18 @@ module Types =
     /// Booleans.
     type Literal = 
         /// A predicate.
-        | Pred of Func<CIntExpr>
+        | Pred of Func<MIntExpr>
         | And of Literal list
         | Or of Literal list
         | True
         | False
         | ITE of Literal * Literal * Literal
-        | Eq of CIntExpr * CIntExpr
-        | Neq of CIntExpr * CIntExpr
-        | Gt of CIntExpr * CIntExpr
-        | Ge of CIntExpr * CIntExpr
-        | Le of CIntExpr * CIntExpr
-        | Lt of CIntExpr * CIntExpr
+        | Eq of MIntExpr * MIntExpr
+        | Neq of MIntExpr * MIntExpr
+        | Gt of MIntExpr * MIntExpr
+        | Ge of MIntExpr * MIntExpr
+        | Le of MIntExpr * MIntExpr
+        | Lt of MIntExpr * MIntExpr
 
     /// A Horn clause, in Datalog/HSF form.
     type Horn = 
@@ -57,7 +57,7 @@ module Types =
         /// A model has a non-arithmetic variable.
         | NonArithVar of CTyped<string>
         /// The expression given is not supported in the given position.
-        | UnsupportedExpr of CExpr
+        | UnsupportedExpr of MExpr
         /// The expression given is compound, but empty.
         | EmptyCompoundExpr of exptype : string
 
@@ -72,8 +72,8 @@ module Pretty =
     open Starling.Core.Expr.Pretty
     open Starling.Core.Var.Pretty
 
-    /// Emits a constant, munged to work in Datalog.
-    let printConst = 
+    /// Emits a marked variable, munged to work in Datalog.
+    let printMarkedVar = 
         function 
         | Unmarked c -> sprintf "V%sU" c |> String
         | Before c -> sprintf "V%sB" c |> String
@@ -91,7 +91,7 @@ module Pretty =
     /// Emits an integral expression in Datalog syntax.
     let rec printInt = 
         function 
-        | AConst c -> printConst c
+        | AVar c -> printMarkedVar c
         | AInt i -> sprintf "%d" i |> String
         // Do some reshuffling of n-ary expressions into binary ones.
         // These expressions are left-associative, so this should be sound.
@@ -182,7 +182,7 @@ module Pretty =
                   p |> typeOf |> printType ]
         | UnsupportedExpr expr ->
             fmt "expression '{0}' is not supported in the HSF backend"
-                [ printCExpr expr ]
+                [ printMExpr expr ]
         | EmptyCompoundExpr exptype ->
             fmt "found an empty '{0}' expression"
                 [ String exptype ]
@@ -192,7 +192,7 @@ module Pretty =
  * Expression generation
  *)
 
-/// Checks whether an CIntExpr is useable by HSF.
+/// Checks whether an MIntExpr is useable by HSF.
 let checkArith =
     function
     | AAdd [] -> EmptyCompoundExpr "addition" |> fail
@@ -200,7 +200,7 @@ let checkArith =
     | AMul [] -> EmptyCompoundExpr "multiplication" |> fail
     | x -> ok x
 
-/// Converts a CBoolExpr to a HSF literal.
+/// Converts a MBoolExpr to a HSF literal.
 let rec boolExpr =
     function
     // TODO(CaptainHayashi): are these allowed?
@@ -222,9 +222,9 @@ let rec boolExpr =
  * Func sanitisation
  *)
 
-/// Extracts an CIntExpr from an Expr, if it is indeed arithmetic.
+/// Extracts an IntExpr from an Expr, if it is indeed arithmetic.
 /// Fails with UnsupportedExpr if the expresson is Boolean.
-let tryCIntExpr =
+let tryIntExpr =
     function
     | Expr.Int x -> x |> ok
     | e -> e |> UnsupportedExpr |> fail
@@ -330,7 +330,7 @@ let hsfFunc dvs env func =
     dvs
     |> (lookup func >> mapMessages (curry InconsistentFunc func))
     |> bind (function
-             | Some df -> lift Some (predOfFunc env tryCIntExpr func)
+             | Some df -> lift Some (predOfFunc env tryIntExpr func)
              | None -> ok None)
 
 /// Constructs a Horn literal for a GFunc.

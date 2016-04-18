@@ -37,7 +37,7 @@ type SemanticsTests() =
 
     // Test cases for the expression framer.
     static member FrameExprs = 
-        [ TestCaseData(BTrue : CBoolExpr)
+        [ TestCaseData(BTrue : MBoolExpr)
               .Returns([ aEq (aAfter "serving") (aBefore "serving")
                          aEq (aAfter "ticket") (aBefore "ticket")
                          aEq (aAfter "s") (aBefore "s")

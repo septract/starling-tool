@@ -72,10 +72,10 @@ module Queries =
                   * post-state, if it is well-formed.
                   *)
                  Seq.forall (function
-                             | Typed.Int (AConst (Before _)) -> true
-                             | Typed.Int (AConst _) -> false
-                             | Typed.Bool (BConst (Before _)) -> true
-                             | Typed.Bool (BConst _) -> false
+                             | Typed.Int (AVar (Before _)) -> true
+                             | Typed.Int (AVar _) -> false
+                             | Typed.Bool (BVar (Before _)) -> true
+                             | Typed.Bool (BVar _) -> false
                              | _ -> true)
                             ps)
 

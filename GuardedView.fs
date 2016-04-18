@@ -42,7 +42,7 @@ module Types =
         { /// <summary>
           ///    The guard condition.
           /// </summary>
-          Cond : CBoolExpr
+          Cond : MBoolExpr
           /// <summary>
           ///    The guarded item.
           /// </summary>
@@ -289,7 +289,7 @@ module Pretty =
         | Always i -> pitem i
         | Never i -> ssurround "~" "~" (pitem i)
         | { Cond = c ; Item = i } ->
-            parened (HSep([ printCBoolExpr c
+            parened (HSep([ printMBoolExpr c
                             pitem i ], String " -> "))
 
     /// <summary>
@@ -343,16 +343,16 @@ module Tests =
         /// </summary>
         static member VarsInGFuncCases =
             [ TestCaseData(gfunc BTrue "foo" [])
-                  .Returns(Set.empty : Set<CTyped<Const>>)
+                  .Returns(Set.empty : Set<CTyped<MarkedVar>>)
                   .SetName("GFunc with no guard and no parameters has no variables")
               TestCaseData(gfunc (bUnmarked "bar") "foo" [])
-                  .Returns((Set.singleton (Bool (Unmarked "bar"))) : Set<CTyped<Const>>)
+                  .Returns((Set.singleton (Bool (Unmarked "bar"))) : Set<CTyped<MarkedVar>>)
                   .SetName("Variables in a GFunc's guard are returned by varsInGFunc")
               TestCaseData(gfunc BTrue "foo" [ Typed.Bool (bAfter "x")
                                                Typed.Int (aBefore "y") ] )
                   .Returns((Set.ofArray
                                 [| (Typed.Bool (After "x"))
-                                   (Typed.Int (Before "y")) |]): Set<CTyped<Const>>)
+                                   (Typed.Int (Before "y")) |]): Set<CTyped<MarkedVar>>)
                   .SetName("Variables in a GFunc's parameters are returned by varsInGFunc") ]
 
         /// <summary>

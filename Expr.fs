@@ -12,7 +12,12 @@ open Starling.Core.Var
 /// </summary>
 [<AutoOpen>]
 module Types =
-    type Const =
+    /// <summary>
+    ///     A variable that has been marked according to whether it comes
+    ///     from the pre-state, the post-state, an intermediate state, or
+    ///     a possibly-external observation in the goal view.
+    /// </summary>
+    type MarkedVar =
         /// <summary>
         ///     A variable that has not yet been assigned to the pre-state or
         ///     the post-state.
@@ -55,7 +60,7 @@ module Types =
     ///     The type of variables in the expression.
     /// </typeparam>
     and IntExpr<'var> =
-        | AConst of 'var
+        | AVar of 'var
         | AInt of int64
         | AAdd of IntExpr<'var> list
         | ASub of IntExpr<'var> list
@@ -69,7 +74,7 @@ module Types =
     ///     The type of variables in the expression.
     /// </typeparam>
     and BoolExpr<'var> =
-        | BConst of 'var
+        | BVar of 'var
         | BTrue
         | BFalse
         | BAnd of BoolExpr<'var> list
@@ -83,17 +88,17 @@ module Types =
         | BNot of BoolExpr<'var>
 
     /// <summary>
-    ///     An expression of arbitrary type using <c>Const</c>s.
+    ///     An expression of arbitrary type using <c>MarkedVar</c>s.
     /// </summary>
-    type CExpr = Expr<Const>
+    type MExpr = Expr<MarkedVar>
     /// <summary>
-    ///     An expression of Boolean type using <c>Const</c>s.
+    ///     An expression of Boolean type using <c>MarkedVar</c>s.
     /// </summary>
-    type CBoolExpr = BoolExpr<Const>
+    type MBoolExpr = BoolExpr<MarkedVar>
     /// <summary>
-    ///     An expression of integral type using <c>Const</c>s.
+    ///     An expression of integral type using <c>MarkedVar</c>s.
     /// </summary>
-    type CIntExpr = IntExpr<Const>
+    type MIntExpr = IntExpr<MarkedVar>
 
 
     /// Type for fresh variable generators.
@@ -133,7 +138,7 @@ module Pretty =
     /// Pretty-prints an arithmetic expression.
     let rec printIntExpr pVar =
         function
-        | AConst c -> pVar c
+        | AVar c -> pVar c
         | AInt i -> i |> sprintf "%i" |> String
         | AAdd xs -> sexpr "+" (printIntExpr pVar) xs
         | ASub xs -> sexpr "-" (printIntExpr pVar) xs
@@ -143,7 +148,7 @@ module Pretty =
     /// Pretty-prints a Boolean expression.
     and printBoolExpr pVar =
         function
-        | BConst c -> pVar c
+        | BVar c -> pVar c
         | BTrue -> String "true"
         | BFalse -> String "false"
         | BAnd xs -> sexpr "and" (printBoolExpr pVar)xs
@@ -162,12 +167,12 @@ module Pretty =
         | Int a -> printIntExpr pVar a
         | Bool b -> printBoolExpr pVar b
 
-    /// Pretty-prints a CExpr.
-    let printCExpr = printExpr (constToString >> String)
-    /// Pretty-prints a CBoolExpr.
-    let printCBoolExpr = printBoolExpr (constToString >> String)
-    /// Pretty-prints a CIntExpr.
-    let printCIntExpr = printIntExpr (constToString >> String)
+    /// Pretty-prints a MExpr.
+    let printMExpr = printExpr (constToString >> String)
+    /// Pretty-prints a MBoolExpr.
+    let printMBoolExpr = printBoolExpr (constToString >> String)
+    /// Pretty-prints a MIntExpr.
+    let printMIntExpr = printIntExpr (constToString >> String)
 
 /// Partial pattern that matches a Boolean equality on arithmetic expressions.
 let (|BAEq|_|) =
@@ -282,34 +287,34 @@ let stripMark =
  *)
 
 /// Creates an unmarked arithmetic constant.
-let aUnmarked c = c |> Unmarked |> AConst
+let aUnmarked c = c |> Unmarked |> AVar
 
 /// Creates an after-marked arithmetic constant.
-let aAfter c = c |> After |> AConst
+let aAfter c = c |> After |> AVar
 
 /// Creates a before-marked arithmetic constant.
-let aBefore c = c |> Before |> AConst
+let aBefore c = c |> Before |> AVar
 
 /// Creates an goal-marked arithmetic constant.
-let aGoal i c = (i, c) |> Goal |> AConst
+let aGoal i c = (i, c) |> Goal |> AVar
 
 /// Creates an intermediate-marked arithmetic constant.
-let aInter i c = (i, c) |> Intermediate |> AConst
+let aInter i c = (i, c) |> Intermediate |> AVar
 
 /// Creates an unmarked Boolean constant.
-let bUnmarked c = c |> Unmarked |> BConst
+let bUnmarked c = c |> Unmarked |> BVar
 
 /// Creates an after-marked Boolean constant.
-let bAfter c = c |> After |> BConst
+let bAfter c = c |> After |> BVar
 
 /// Creates a before-marked Boolean constant.
-let bBefore c = c |> Before |> BConst
+let bBefore c = c |> Before |> BVar
 
 /// Creates an goal-marked Boolean constant.
-let bGoal i c = (i, c) |> Goal |> BConst
+let bGoal i c = (i, c) |> Goal |> BVar
 
 /// Creates an intermediate-marked Boolean constant.
-let bInter i c = (i, c) |> Intermediate |> BConst
+let bInter i c = (i, c) |> Intermediate |> BVar
 
 /// Creates a reference to a Boolean lvalue.
 /// This does NOT check to see if the lvalue exists!
@@ -320,7 +325,7 @@ let mkBoolLV lv =
     lv
     |> flattenLV
     |> Unmarked
-    |> BConst
+    |> BVar
 
 /// Creates a reference to an integer lvalue.
 /// This does NOT check to see if the lvalue exists!
@@ -331,13 +336,13 @@ let mkIntLV lv =
     lv
     |> flattenLV
     |> Unmarked
-    |> AConst
+    |> AVar
 
 /// Converts a typed string to an expression.
 let mkVarExp marker (ts : CTyped<string>) =
     match ts with
-    | Int s -> s |> marker |> AConst |> Int
-    | Bool s -> s |> marker |> BConst |> Bool
+    | Int s -> s |> marker |> AVar |> Int
+    | Bool s -> s |> marker |> BVar |> Bool
 
 /// Converts a VarMap to a sequence of expressions.
 let varMapToExprs marker vm =
@@ -421,7 +426,7 @@ let getFresh fg =
 /// </summary>
 let rec varsInInt =
     function
-    | AConst c -> Set.singleton (Typed.Int c)
+    | AVar c -> Set.singleton (Typed.Int c)
     | AInt _ -> Set.empty
     | AAdd xs -> xs |> Seq.map varsInInt |> Set.unionMany
     | ASub xs -> xs |> Seq.map varsInInt |> Set.unionMany
@@ -434,7 +439,7 @@ let rec varsInInt =
 /// </summary>
 and varsInBool =
     function
-    | BConst c -> Set.singleton (Typed.Bool c)
+    | BVar c -> Set.singleton (Typed.Bool c)
     | BTrue -> Set.empty
     | BFalse -> Set.empty
     | BAnd xs -> xs |> Seq.map varsInBool |> Set.unionMany
@@ -472,8 +477,8 @@ and varsIn =
 /// </returns>
 let rec nextIntIntermediate =
     function
-    | AConst (Intermediate (n, _)) -> n + 1I
-    | AConst _ | AInt _ -> 0I
+    | AVar (Intermediate (n, _)) -> n + 1I
+    | AVar _ | AInt _ -> 0I
     | AAdd xs | ASub xs | AMul xs ->
         xs |> Seq.map nextIntIntermediate |> Seq.fold (curry bigint.Max) 0I
     | ADiv (x, y) ->
@@ -492,8 +497,8 @@ let rec nextIntIntermediate =
 /// </returns>
 and nextBoolIntermediate =
     function
-    | BConst (Intermediate (n, _)) -> n + 1I
-    | BConst _ -> 0I
+    | BVar (Intermediate (n, _)) -> n + 1I
+    | BVar _ -> 0I
     | BAnd xs | BOr xs ->
         xs |> Seq.map nextBoolIntermediate |> Seq.fold (curry bigint.Max) 0I
     | BImplies (x, y) ->
@@ -529,13 +534,13 @@ and nextIntermediate =
 /// Categorises integral expressions into simple or compound.
 let (|SimpleInt|CompoundInt|) =
     function
-    | AConst _ | AInt _ -> SimpleInt
+    | AVar _ | AInt _ -> SimpleInt
     | _ -> CompoundInt
 
 /// Categorises Boolean expressions into simple or compound.
 let (|SimpleBool|CompoundBool|) =
     function
-    | BConst _ | BTrue | BFalse -> SimpleBool
+    | BVar _ | BTrue | BFalse -> SimpleBool
     | _ -> CompoundBool
 
 /// Categorises expressions into simple or compound.

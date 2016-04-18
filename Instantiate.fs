@@ -82,7 +82,7 @@ module Types =
     /// <typeparam name="axiom">
     ///     Type of program axioms.
     /// </typeparam>
-    type IFModel<'axiom> = Model<'axiom, FuncTable<CBoolExpr option>>
+    type IFModel<'axiom> = Model<'axiom, FuncTable<MBoolExpr option>>
 
     /// <summary>
     ///     A <c>Model</c> whose view definitions form a definite
@@ -91,7 +91,7 @@ module Types =
     /// <typeparam name="axiom">
     ///     Type of program axioms.
     /// </typeparam>
-    type DFModel<'axiom> = Model<'axiom, FuncTable<CBoolExpr>>
+    type DFModel<'axiom> = Model<'axiom, FuncTable<MBoolExpr>>
 
 
 /// <summary>
@@ -116,7 +116,7 @@ module Pretty =
     let printFuncTable ft : Command seq =
         ft
         |> List.map (fun (v, d) -> colonSep [ printDFunc v
-                                              printCBoolExpr d ] )
+                                              printMBoolExpr d ] )
         |> List.toSeq
 
     /// <summary>
@@ -321,16 +321,16 @@ let paramSubFun {Params = fpars} {Params = dpars} =
             match (Map.tryFind p pmap) with
             | Some (Typed.Int e) -> e
             | Some _ -> failwith "param substitution type error"
-            | None -> AConst up
-        | q -> AConst q
+            | None -> AVar up
+        | q -> AVar q
      BVSub =
         function
         | Unmarked p as up ->
             match (Map.tryFind p pmap) with
             | Some (Typed.Bool e) -> e
             | Some _ -> failwith "param substitution type error"
-            | None -> BConst up
-        | q -> BConst q
+            | None -> BVar up
+        | q -> BVar q
     }
 
 /// <summary>

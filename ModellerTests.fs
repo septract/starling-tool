@@ -88,7 +88,7 @@ type ModellerTests() =
     static member ArithmeticExprs =
         [ TestCaseData(Bop(Add, Bop(Mul, Int 1L, Int 2L), Int 3L))
               .Returns(Some (AAdd [ AMul [ AInt 1L ; AInt 2L ] ; AInt 3L ]
-                             : CIntExpr))
+                             : MIntExpr))
               .SetName("model (1 * 2) + 3") ]
 
     /// Tests whether the arithmetic expression modeller works.
@@ -100,7 +100,7 @@ type ModellerTests() =
     /// These all use the ticket lock model.
     static member BooleanExprs =
         [ TestCaseData(Bop(And, Bop(Or, True, True), False))
-              .Returns(Some (BFalse : CBoolExpr))
+              .Returns(Some (BFalse : MBoolExpr))
               .SetName("model and simplify (true || true) && false") ]
 
     /// Tests whether the arithmetic expression modeller works.
@@ -155,8 +155,8 @@ type ModellerTests() =
     /// These use the ticket lock model.
     static member AtomicPrims =
         [ TestCaseData(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment))
-            .Returns(Some <| func "!ILoad++" ["t" |> aBefore |> CExpr.Int; "t" |> aAfter |> CExpr.Int
-                                              "ticket" |> aBefore |> CExpr.Int; "ticket" |> aAfter |> CExpr.Int])
+            .Returns(Some <| func "!ILoad++" ["t" |> aBefore |> MExpr.Int; "t" |> aAfter |> MExpr.Int
+                                              "ticket" |> aBefore |> MExpr.Int; "ticket" |> aAfter |> MExpr.Int])
             .SetName("model a valid integer load as a prim") ]
 
     /// Tests the atomic primitive modeller using the ticket lock.
@@ -175,10 +175,10 @@ type ModellerTests() =
                                                 LV(LVIdent "ticket"),
                                                 Increment)))
             .Returns(ModellerTests.mprim
-                         [ func "!ILoad++" [ "t" |> aBefore |> CExpr.Int
-                                             "t" |> aAfter |> CExpr.Int
-                                             "ticket" |> aBefore |> CExpr.Int
-                                             "ticket" |> aAfter |> CExpr.Int ]]
+                         [ func "!ILoad++" [ "t" |> aBefore |> MExpr.Int
+                                             "t" |> aAfter |> MExpr.Int
+                                             "ticket" |> aBefore |> MExpr.Int
+                                             "ticket" |> aAfter |> MExpr.Int ]]
                      |> Some)
             .SetName("model a valid integer load command as an axiom") ]
 

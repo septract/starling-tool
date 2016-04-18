@@ -28,8 +28,8 @@ module Types =
     [<NoComparison>]
     [<NoEquality>]
     type VSubFun =
-        {AVSub: Const -> CIntExpr
-         BVSub: Const -> CBoolExpr}
+        {AVSub: MarkedVar -> MIntExpr
+         BVSub: MarkedVar -> MBoolExpr}
 
 
 (*
@@ -137,7 +137,7 @@ let subExprInDTerm sub =
 /// for the given Boolean expression.
 let rec boolSubVars vfun =
     function 
-    | BConst x -> vfun.BVSub x
+    | BVar x -> vfun.BVSub x
     | BTrue -> BTrue
     | BFalse -> BFalse
     | BAnd xs -> BAnd (List.map (boolSubVars vfun) xs)
@@ -160,7 +160,7 @@ let rec boolSubVars vfun =
 /// for the given arithmetic expression.
 and arithSubVars vfun =
     function 
-    | AConst x -> vfun.AVSub x
+    | AVar x -> vfun.AVSub x
     | AInt i -> AInt i
     | AAdd xs -> AAdd (List.map (arithSubVars vfun) xs)
     | ASub xs -> ASub (List.map (arithSubVars vfun) xs)
@@ -187,8 +187,8 @@ let inSet st var = Set.contains var st
 let liftMarkerV marker vpred =
     let gfun = function | Unmarked s when vpred s -> marker s
                         | x -> x
-    {AVSub = gfun >> AConst
-     BVSub = gfun >> BConst}
+    {AVSub = gfun >> AVar
+     BVSub = gfun >> BVar}
 
 /// Lifts a marking function to a substitution function table.
 let liftMarker marker vpred =

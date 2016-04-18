@@ -21,7 +21,7 @@ open Starling.Lang.Collator
 module Types =
     /// A conditional (flat or if-then-else) func.
     type CFunc =
-        | ITE of CBoolExpr * Multiset<CFunc> * Multiset<CFunc>
+        | ITE of MBoolExpr * Multiset<CFunc> * Multiset<CFunc>
         | Func of VFunc
 
     /// A conditional view, or multiset of CFuncs.
@@ -32,10 +32,10 @@ module Types =
         | Prim of Command
         | While of
             isDo : bool
-            * expr : CBoolExpr
+            * expr : MBoolExpr
             * inner : Block<'view, PartCmd<'view>>
         | ITE of
-            expr : CBoolExpr
+            expr : MBoolExpr
             * inTrue : Block<'view, PartCmd<'view>>
             * inFalse : Block<'view, PartCmd<'view>>
 
@@ -150,7 +150,7 @@ module Pretty =
         function
         | CFunc.ITE(i, t, e) ->
             hsep [ String "if"
-                   printCBoolExpr i
+                   printMBoolExpr i
                    String "then"
                    t |> printMultiset printCFunc |> ssurround "[" "]"
                    String "else"
@@ -166,11 +166,11 @@ module Pretty =
         | Prim prim -> Command.Pretty.printCommand prim
         | While(isDo, expr, inner) ->
             cmdHeaded (hsep [ String(if isDo then "Do-while" else "While")
-                              (printCBoolExpr expr) ])
+                              (printMBoolExpr expr) ])
                       [printBlock pView (printPartCmd pView) inner]
         | ITE(expr, inTrue, inFalse) ->
             cmdHeaded (hsep [String "begin if"
-                             (printCBoolExpr expr) ])
+                             (printMBoolExpr expr) ])
                       [headed "True" [printBlock pView (printPartCmd pView) inTrue]
                        headed "False" [printBlock pView (printPartCmd pView) inFalse]]
 

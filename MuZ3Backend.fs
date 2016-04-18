@@ -70,7 +70,7 @@ module Types =
         { /// <summary>
           ///     List of definite viewdefs, as (view, def) pairs, to check.
           /// </summary>
-          Definites : (VFunc * CBoolExpr) list
+          Definites : (VFunc * MBoolExpr) list
           /// <summary>
           ///     Map of (view name, FuncDecl) bindings.
           /// </summary>
@@ -131,7 +131,7 @@ module Pretty =
             [ (String "Definites",
                ds |>
                List.map (fun (f, d) -> equality (printVFunc f)
-                                                (printCBoolExpr d))
+                                                (printMBoolExpr d))
                |> vsep)
               (String "Rules",
                rs
@@ -286,7 +286,7 @@ module Translator =
     ///     A tuple of a <c>Map</c> binding names to <c>FuncDecl</c>s and a
     ///     list of (view, def) pairs defining definite viewdefs.
     /// </returns>
-    let translateViewDefs reals ctx (ds : FuncTable<CBoolExpr option>) =
+    let translateViewDefs reals ctx (ds : FuncTable<MBoolExpr option>) =
         ds
         |> Seq.map (translateViewDef reals ctx)
         |> List.ofSeq
