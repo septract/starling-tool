@@ -407,14 +407,11 @@ let rec modelExpr env expr =
      * determined by the type of the variable.
      *)
     | LV v ->
-        (* Look-up the variable to ensure it a) exists and b) is of a
-         * Boolean type.
-         *)
-        lookupVar env v
-        |> mapMessages ((curry Var) v)
-        |> lift (function
-                 | Type.Bool () -> v |> mkBoolLV |> Expr.Bool
-                 | Type.Int  () -> v |> mkIntLV |> Expr.Int)
+        v
+        |> wrapMessages Var (lookupVar env)
+        |> lift
+               (TypeMapper.map
+                    (TypeMapper.make aUnmarked bUnmarked))
     (* We can use the active patterns above to figure out whether we
      * need to treat this expression as arithmetic or Boolean.
      *)
@@ -435,7 +432,7 @@ and modelBoolExpr env expr =
         v
         |> wrapMessages Var (lookupVar env)
         |> bind (function
-                 | Type.Bool () -> v |> mkBoolLV |> ok
+                 | Typed.Bool vn -> vn |> bUnmarked |> ok
                  | _ -> v |> VarNotBoolean |> fail)
     | Bop(BoolOp as op, l, r) ->
         match op with
@@ -476,7 +473,7 @@ and modelArithExpr env expr =
         v
         |> wrapMessages Var (lookupVar env)
         |> bind (function
-                 | Type.Int () -> v |> mkIntLV |> ok
+                 | Typed.Int vn -> vn |> aUnmarked |> ok
                  | _ -> v |> VarNotArith |> fail)
     | Bop(ArithOp as op, l, r) ->
         lift2 (match op with
@@ -782,12 +779,12 @@ let modelBoolLoad svars dest src mode =
         trial {
             let! stype = lookupVar svars s |> mapMessages (curry BadSVar s)
             match stype, mode with
-            | Type.Bool (), Direct ->
+            | Typed.Bool _, Direct ->
                 return func "!BLoad" [ dest |> blBefore; dest |> blAfter
                                        s |> blBefore; s |> blAfter ]
-            | Type.Bool (), Increment -> return! fail (IncBool src)
-            | Type.Bool (), Decrement -> return! fail (DecBool src)
-            | _ -> return! fail (TypeMismatch (Type.Bool (), s, stype))
+            | Typed.Bool _, Increment -> return! fail (IncBool src)
+            | Typed.Bool _, Decrement -> return! fail (DecBool src)
+            | _ -> return! fail (TypeMismatch (Type.Bool (), s, typeOf stype))
         }
     | _ -> fail (LoadNonLV src)
 
@@ -800,19 +797,18 @@ let modelIntLoad svars dest src mode =
     match src with
     | LV s ->
         trial {
-            let! stype = lookupVar svars s
-                         |> mapMessages (curry BadSVar s)
+            let! stype = wrapMessages BadSVar (lookupVar svars) s
             match stype, mode with
-            | Type.Int (), Direct ->
+            | Typed.Int _, Direct ->
                 return func "!ILoad" [ dest |> ilBefore; dest |> ilAfter
                                        s |> ilBefore; s |> ilAfter ]
-            | Type.Int (), Increment ->
+            | Typed.Int _, Increment ->
                 return func "!ILoad++" [ dest |> ilBefore; dest |> ilAfter
                                          s |> ilBefore; s |> ilAfter ]
-            | Type.Int (), Decrement ->
+            | Typed.Int _, Decrement ->
                 return func "!ILoad--" [ dest |> ilBefore; dest |> ilAfter
                                          s |> ilBefore; s |> ilAfter ]
-            | _ -> return! fail (TypeMismatch (Type.Int (), s, stype))
+            | _ -> return! fail (TypeMismatch (Type.Int (), s, typeOf stype))
         }
     | _ -> fail (LoadNonLV src)
 
@@ -823,7 +819,7 @@ let modelBoolStore locals dest src mode =
      *                     and the fetch mode must be Direct.
      *)
     trial {
-        let! sxp = modelBoolExpr locals src |> mapMessages (curry BadExpr src)
+        let! sxp = wrapMessages BadExpr (modelBoolExpr locals) src
         match mode with
         | Direct -> return func "!BStore" [ dest |> blBefore; dest |> blAfter
                                             sxp |> Expr.Bool |> before ]
@@ -838,7 +834,7 @@ let modelIntStore locals dest src mode =
      *                       and the fetch mode must be Direct.
      *)
     trial {
-        let! sxp = modelArithExpr locals src |> mapMessages (curry BadExpr src)
+        let! sxp = wrapMessages BadExpr (modelArithExpr locals) src
         match mode with
         | Direct -> return func "!IStore" [ dest |> ilBefore; dest |> ilAfter
                                             sxp |> Expr.Int |> before ]
@@ -855,27 +851,23 @@ let modelCAS svars tvars dest test set =
      * The type of dest and test influences how we interpret set.
      *)
     trial {
-        let! dtype = lookupVar svars dest
-                     |> mapMessages (curry BadSVar dest)
-        let! ttype = lookupVar tvars test
-                     |> mapMessages (curry BadTVar dest)
+        let! dtype = wrapMessages BadSVar (lookupVar svars) dest
+        let! ttype = wrapMessages BadTVar (lookupVar tvars) test
         match dtype, ttype with
-        | Type.Bool (), Type.Bool () ->
-            let! setE = modelBoolExpr tvars set
-                        |> mapMessages (curry BadExpr set)
+        | Typed.Bool _, Typed.Bool _ ->
+            let! setE = wrapMessages BadExpr (modelBoolExpr tvars) set
             return func "BCAS" [dest |> blBefore; dest |> blAfter
                                 test |> blBefore; test |> blAfter
                                 setE |> Expr.Bool |> before]
-        | Type.Int (), Type.Int () ->
-            let! setE = modelArithExpr tvars set
-                        |> mapMessages (curry BadExpr set)
+        | Typed.Int _, Typed.Int _ ->
+            let! setE = wrapMessages BadExpr (modelArithExpr tvars) set
             return func "ICAS" [dest |> ilBefore; dest |> ilAfter
                                 test |> ilBefore; test |> ilAfter
                                 setE |> Expr.Int |> before]
         | _ ->
             // Oops, we have a type error.
             // Arbitrarily single out test as the cause of it.
-            return! fail <| TypeMismatch (dtype, test, ttype)
+            return! fail <| TypeMismatch (typeOf dtype, test, typeOf ttype)
     }
 
 /// Converts an atomic fetch to a model command.
@@ -887,11 +879,11 @@ let modelFetch svars tvars dest src mode =
      * We figure this out by looking at dest.
      *)
     match dest with
-    | VarIn svars (Type.Int ()) -> modelIntStore tvars dest src mode
-    | VarIn svars (Type.Bool ())-> modelBoolStore tvars dest src mode
-    | VarIn tvars (Type.Int ()) -> modelIntLoad svars dest src mode
-    | VarIn tvars (Type.Bool ()) -> modelBoolLoad svars dest src mode
-    | lv -> fail (BadAVar(lv, NotFound(flattenLV lv)))
+    | VarIn svars (Typed.Int _) -> modelIntStore tvars dest src mode
+    | VarIn svars (Typed.Bool _)-> modelBoolStore tvars dest src mode
+    | VarIn tvars (Typed.Int _) -> modelIntLoad svars dest src mode
+    | VarIn tvars (Typed.Bool _) -> modelBoolLoad svars dest src mode
+    | lv -> fail (BadAVar(lv, NotFound (flattenLV lv)))
 
 /// Converts a single atomic command from AST to part-commands.
 let rec modelAtomic svars tvars =
@@ -904,28 +896,27 @@ let rec modelAtomic svars tvars =
          * We don't allow the Direct fetch mode, as it is useless.
          *)
         trial {
-            let! stype = lookupVar svars operand
-                         |> mapMessages (curry BadSVar operand)
+            let! stype = wrapMessages BadSVar (lookupVar svars) operand
             // TODO(CaptainHayashi): sort out lvalues...
             let op = flattenLV operand
             match mode, stype with
             | Direct, _ ->
                 return! fail Useless
-            | Increment, Type.Bool () ->
+            | Increment, Typed.Bool _ ->
                 return! fail (IncBool (LV operand))
-            | Decrement, Type.Bool () ->
+            | Decrement, Typed.Bool _ ->
                 return! fail (DecBool (LV operand))
-            | Increment, Type.Int () ->
+            | Increment, Typed.Int _ ->
                 return func "!I++" [op |> aBefore |> Expr.Int
                                     op |> aAfter |> Expr.Int]
-            | Decrement, Type.Int () ->
+            | Decrement, Typed.Int _ ->
                 return func "!I--" [op |> aBefore |> Expr.Int
                                     op |> aAfter |> Expr.Int]
         }
     | Id -> ok (func "Id" [])
     | Assume e ->
-        modelBoolExpr tvars e
-        |> mapMessages (curry BadExpr e)
+        e
+        |> wrapMessages BadExpr (modelBoolExpr tvars)
         |> lift (Expr.Bool >> Seq.singleton >> func "Assume")
 
 /// Converts a local variable assignment to a Prim.
@@ -935,24 +926,17 @@ and modelAssign tvars l e =
      * We thus also have to make sure that e is the correct type.
      *)
     trial {
-        let! ltype = l |> lookupVar tvars |> mapMessages (curry BadTVar l)
+        let! ltype = wrapMessages BadTVar (lookupVar tvars) l
         match ltype with
-        | Type.Bool () ->
-            let! em =
-                e
-                |> modelBoolExpr tvars
-                |> mapMessages (curry BadExpr e)
-
+        | Typed.Bool _ ->
+            let! em = wrapMessages BadExpr (modelBoolExpr tvars) e
             return
                 func
                     "!BLSet"
                     [ l |> blBefore; l |> blAfter
                       em |> Expr.Bool |> before ]
-        | Type.Int () ->
-            let! em =
-                e
-                |> modelArithExpr tvars
-                |> mapMessages (curry BadExpr e)
+        | Typed.Int _ ->
+            let! em = wrapMessages BadExpr (modelArithExpr tvars) e
             return
                 func
                     "!ILSet"

@@ -360,12 +360,21 @@ let combineMaps (a : VarMap) (b : VarMap) =
 
 /// Tries to look up a variable record in a variable map.
 /// Failures are in terms of Some/None.
-let tryLookupVar env = function 
-    | LVIdent s -> Map.tryFind s env
+let tryLookupVar
+  (env : VarMap)
+  : LValue -> CTyped<string> option =
+    function 
+    | LVIdent s ->
+        s
+        |> env.TryFind
+        |> Option.map (fun ty -> withType ty s)
 
 /// Looks up a variable record in a variable map.
 /// Failures are in terms of VarMapError.
-let lookupVar env s = 
+let lookupVar
+  (env : VarMap)
+  (s : LValue)
+  : Result<CTyped<string>, VarMapError> =
     s
     |> tryLookupVar env
-    |> failIfNone (NotFound(flattenLV s))
+    |> failIfNone (NotFound (flattenLV s))
