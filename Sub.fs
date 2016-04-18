@@ -194,8 +194,7 @@ and arithSubVars (vfun : VSubFun<'srcVar, 'dstVar>) =
 ///   Creates a <c>SubFun</c> from a <c>VSubFun</c>.
 /// </summary>
 and onVars vsub =
-    { I = arithSubVars vsub
-      B = boolSubVars vsub }
+    TypeMapper.make (arithSubVars vsub) (boolSubVars vsub)
 
 
 (*
@@ -207,10 +206,12 @@ let inSet st var = Set.contains var st
 
 /// Lifts a marking function to a variable substitution function table.
 let liftMarkerV marker vpred =
-    let gfun = function | Unmarked s when vpred s -> marker s
-                        | x -> x
-    { I = gfun >> AVar
-      B = gfun >> BVar }
+    TypeMapper.compose
+        (TypeMapper.cmake
+             (function
+              | Unmarked s when vpred s -> marker s
+              | x -> x))
+        (TypeMapper.make AVar BVar)
 
 /// Lifts a marking function to a substitution function table.
 let liftMarker marker vpred =
