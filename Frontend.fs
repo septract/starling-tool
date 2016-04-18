@@ -116,14 +116,17 @@ let guard = lift Guarder.guard
 let graph = bind (Grapher.graph >> mapMessages Error.Graph)
 
 /// Runs the Starling frontend.
-/// Takes five arguments: the first is the `Response` telling the frontend what
-/// to output; the second, and third, are functions to connect the successful, and
+/// Takes six arguments: the first is whether to output times; the second is the
+/// `Response` telling the frontend what
+/// to output; the third, and fourth, are functions to connect the successful, and
 /// error, output with the surrounding pipeline; the fifth is a continuation for the
 /// surrounding pipeline; and final is an optional filename from which the frontend
 /// should read (if empty, read from stdin).
-let run request success error continuation =
+let run times request success error continuation =
     let phase op test output continuation m =
+        let time = System.Diagnostics.Stopwatch.StartNew()
         op m
+        |> (time.Stop(); (if times then printfn "Phase %A; Elapsed: %dms" test time.ElapsedMilliseconds); id)
         |> if request = test then lift (output >> success) >> mapMessages error else continuation
     let ( ** ) = ( <| )
     phase    parse   Request.Parse   Response.Parse
