@@ -51,6 +51,9 @@ module Types =
     /// A func over marked-var expressions.
     type MVFunc = VFunc<MarkedVar>
 
+    /// A func over symbolic-marked-var expressions.
+    type SMVFunc = VFunc<Sym<MarkedVar>>
+
     /// A view-definition func.
     type DFunc = Func<Param>
 
@@ -441,6 +444,21 @@ let vfunc name (pars : Expr<'var> seq) : VFunc<'var> = func name pars
 ///     A new <c>MVFunc</c> with the given name and parameters.
 /// </returns>
 let mvfunc name (pars : MExpr seq) : MVFunc = vfunc name pars
+
+/// <summary>
+///     Type-constrained version of <c>vfunc</c> for <c>SMVFunc</c>s.
+/// </summary>
+/// <param name="name">
+///     The name of the <c>SMVFunc</c>.
+/// </param>
+/// <param name="pars">
+///     The parameters of the <c>SMVFunc</c>, as a sequence.
+/// </param>
+/// <returns>
+///     A new <c>MVFunc</c> with the given name and parameters.
+/// </returns>
+let smvfunc name (pars : SMExpr seq) : SMVFunc = vfunc name pars
+
 
 /// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
 /// and its Goal with fG.
