@@ -42,20 +42,20 @@ type ExprTests() =
 
     /// Test cases for intermediate finding.
     static member NextIntermediates =
-        [ TestCaseData(Expr.Bool (bInter 5I "foo"))
+        [ TestCaseData(Expr.Bool (sbInter 5I "foo"))
             .Returns(6I)
             .SetName("nextIntermediate on Bool intermediate is one higher")
-          TestCaseData(Expr.Bool (BNot (bInter 10I "bar")))
+          TestCaseData(Expr.Bool (BNot (sbInter 10I "bar")))
             .Returns(11I)
             .SetName("nextIntermediate on 'not' passes through")
-          TestCaseData(Expr.Bool (BImplies (bInter 6I "a", bInter 11I "b")))
+          TestCaseData(Expr.Bool (BImplies (sbInter 6I "a", sbInter 11I "b")))
             .Returns(12I)
             .SetName("nextIntermediate on 'implies' is one higher than max")
           TestCaseData(Expr.Int
-                           (AAdd [ iInter 1I "a"
-                                   iAfter "b"
-                                   iBefore "c"
-                                   iInter 2I "d" ] ))
+                           (AAdd [ siInter 1I "a"
+                                   siAfter "b"
+                                   siBefore "c"
+                                   siInter 2I "d" ] ))
             .Returns(3I)
             .SetName("nextIntermediate on 'add' is one higher than max") ]
 
@@ -66,15 +66,14 @@ type ExprTests() =
 
     /// Test cases for testing goal rewriting.
     static member GoalConstants =
-        [ TestCaseData(["foo"; "foo"; "foo"])
-                .Returns([Goal (0I, "foo")
-                          Goal (1I, "foo")
-                          Goal (2I, "foo")])
-          TestCaseData(["foo"; "bar"; "baz"])
-                .Returns([Goal (0I, "foo")
-                          Goal (1I, "bar")
-                          Goal (2I, "baz")])
-        ]
+        [ TestCaseData( [ "foo"; "foo"; "foo"] )
+              .Returns( [ Reg (Goal (0I, "foo"))
+                          Reg (Goal (1I, "foo"))
+                          Reg (Goal (2I, "foo")) ] )
+          TestCaseData( ["foo"; "bar"; "baz"] )
+              .Returns( [ Reg (Goal (0I, "foo"))
+                          Reg (Goal (1I, "bar"))
+                          Reg (Goal (2I, "baz")) ] ) ]
 
     /// Tests that the frame name generator works fine.
     [<TestCaseSource("GoalConstants")>]
@@ -88,26 +87,24 @@ type ExprTests() =
 
     /// Test cases for testing constant post-state rewriting.
     static member IntConstantPostStates =
-        seq {
-            yield (new TestCaseData(iUnmarked "target1"))
-                .Returns(iAfter "target1")
-                .SetName("Rewrite single target constant to post-state")
-            yield (new TestCaseData(iUnmarked "notTarget"))
-                .Returns(iUnmarked "notTarget")
-                .SetName("Rewrite single non-target constant to post-state")
-            yield (new TestCaseData(AAdd [AInt 4L; iUnmarked "target1"]))
-                .Returns(AAdd [AInt 4L; iAfter "target1"])
-                .SetName("Rewrite expression with one target constant to post-state")
-            yield (new TestCaseData(ASub [iUnmarked "target1"; iUnmarked "target2"]))
-                .Returns(ASub [iAfter "target1"; iAfter "target2"])
-                .SetName("Rewrite expression with two target constants to post-state")
-            yield (new TestCaseData(ADiv (AInt 6L, AInt 0L) : MIntExpr))
-                .Returns(ADiv (AInt 6L, AInt 0L) : MIntExpr)
-                .SetName("Rewrite expression with no constants to post-state")
-            yield (new TestCaseData(AMul [iUnmarked "foo"; iUnmarked "bar"]))
-                .Returns(AMul [iUnmarked "foo"; iUnmarked "bar"])
-                .SetName("Rewrite expression with two non-target constants to post-state")
-        }
+        [ TestCaseData(siUnmarked "target1")
+              .Returns(siAfter "target1")
+              .SetName("Rewrite single target constant to post-state")
+          TestCaseData(siUnmarked "notTarget")
+              .Returns(siUnmarked "notTarget")
+              .SetName("Rewrite single non-target constant to post-state")
+          TestCaseData(AAdd [AInt 4L; siUnmarked "target1"])
+              .Returns(AAdd [AInt 4L; siAfter "target1"])
+              .SetName("Rewrite expression with one target constant to post-state")
+          TestCaseData(ASub [siUnmarked "target1"; siUnmarked "target2"])
+              .Returns(ASub [siAfter "target1"; siAfter "target2"])
+              .SetName("Rewrite expression with two target constants to post-state")
+          TestCaseData(ADiv (AInt 6L, AInt 0L) : SMIntExpr)
+              .Returns(ADiv (AInt 6L, AInt 0L) : SMIntExpr)
+              .SetName("Rewrite expression with no constants to post-state")
+          TestCaseData(AMul [siUnmarked "foo"; siUnmarked "bar"])
+              .Returns(AMul [siUnmarked "foo"; siUnmarked "bar"])
+              .SetName("Rewrite expression with two non-target constants to post-state") ]
 
     [<TestCaseSource("IntConstantPostStates")>]
     /// Tests whether rewriting constants in arithmetic expressions to post-state works.

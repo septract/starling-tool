@@ -14,83 +14,81 @@ type GuarderTests() =
     
     /// Test cases for converting CondViews to GuarViews
     static member CondViews = 
-        let msec : CView = Multiset.empty
-        let mseg : MGView = Multiset.empty
-        [ TestCaseData(msec)
-              .Returns(mseg)
+        [ TestCaseData(Multiset.empty : CView)
+              .Returns(Multiset.empty : SMGView)
               .SetName("Convert the empty CView to the empty GView")
 
           TestCaseData(Multiset.ofFlatList
-                           [ Func <| mvfunc "foo" [ Expr.Int (iUnmarked "bar") ]
-                             Func <| mvfunc "bar" [ Expr.Int (iUnmarked "baz") ]] )
+                           [ Func <| smvfunc "foo" [ Expr.Int (siUnmarked "bar") ]
+                             Func <| smvfunc "bar" [ Expr.Int (siUnmarked "baz") ]] )
               .Returns(Multiset.ofFlatList
-                           [ mgfunc BTrue "foo" [ Expr.Int (iUnmarked "bar") ]
-                             mgfunc BTrue "bar" [ Expr.Int (iUnmarked "baz") ]] )
+                           [ smgfunc BTrue "foo" [ Expr.Int (siUnmarked "bar") ]
+                             smgfunc BTrue "bar" [ Expr.Int (siUnmarked "baz") ]] )
               .SetName("Convert a flat CondView-list to a GuarView-list with no guards")
 
           TestCaseData(Multiset.ofFlatList
                            [ CFunc.ITE
-                                 (bUnmarked "s", 
+                                 (sbUnmarked "s", 
                                   Multiset.ofFlatList
-                                      [ Func <| mvfunc "foo" [ Expr.Int (iUnmarked "bar") ]], 
+                                      [ Func <| smvfunc "foo" [ Expr.Int (siUnmarked "bar") ]], 
                                   Multiset.ofFlatList
-                                      [ Func <| mvfunc "bar" [ Expr.Int (iUnmarked "baz") ]] ) ] )
+                                      [ Func <| smvfunc "bar" [ Expr.Int (siUnmarked "baz") ]] ) ] )
               .Returns(Multiset.ofFlatList
-                           [ mgfunc
-                                (bUnmarked "s")
+                           [ smgfunc
+                                (sbUnmarked "s")
                                 "foo"
-                                [ Expr.Int (iUnmarked "bar") ]
-                             mgfunc
-                                (BNot (bUnmarked "s"))
+                                [ Expr.Int (siUnmarked "bar") ]
+                             smgfunc
+                                (BNot (sbUnmarked "s"))
                                 "bar"
-                                [ Expr.Int (iUnmarked "baz") ]] )
+                                [ Expr.Int (siUnmarked "baz") ]] )
               .SetName("Convert a singly-nested CondView-list to a GuarView-list with unit guards")
 
           TestCaseData(Multiset.ofFlatList
                            [ CFunc.ITE
-                                 (bUnmarked "s", 
+                                 (sbUnmarked "s", 
                                   Multiset.ofFlatList
                                        [ CFunc.ITE
-                                             (bUnmarked "t", 
+                                             (sbUnmarked "t", 
                                               Multiset.ofFlatList
-                                                  [ Func <| mvfunc
+                                                  [ Func <| smvfunc
                                                         "foo"
-                                                        [ Expr.Int (iUnmarked "bar") ]
-                                                    Func <| mvfunc
+                                                        [ Expr.Int (siUnmarked "bar") ]
+                                                    Func <| smvfunc
                                                         "bar"
-                                                        [ Expr.Int (iUnmarked "baz") ]], 
+                                                        [ Expr.Int (siUnmarked "baz") ]], 
                                               Multiset.ofFlatList
-                                                  [ Func <| mvfunc
+                                                  [ Func <| smvfunc
                                                         "fizz"
-                                                        [ Expr.Int (iUnmarked "buzz") ]])
-                                         Func <| mvfunc
+                                                        [ Expr.Int (siUnmarked "buzz") ]])
+                                         Func <| smvfunc
                                              "in"
-                                               [ Expr.Int (iUnmarked "out") ]], 
+                                               [ Expr.Int (siUnmarked "out") ]], 
                                   Multiset.ofFlatList
-                                      [ Func <| mvfunc
+                                      [ Func <| smvfunc
                                             "ding"
-                                            [ Expr.Int (iUnmarked "dong") ]] ) ] )
+                                            [ Expr.Int (siUnmarked "dong") ]] ) ] )
               .Returns(Multiset.ofFlatList
-                           [ mgfunc
-                                 (BAnd [ bUnmarked "s"; bUnmarked "t" ] )
+                           [ smgfunc
+                                 (BAnd [ sbUnmarked "s"; sbUnmarked "t" ] )
                                  "foo"
-                                 [ Expr.Int (iUnmarked "bar") ]
-                             mgfunc
-                                 (BAnd [ bUnmarked "s"; bUnmarked "t" ] )
+                                 [ Expr.Int (siUnmarked "bar") ]
+                             smgfunc
+                                 (BAnd [ sbUnmarked "s"; sbUnmarked "t" ] )
                                  "bar"
-                                 [ Expr.Int (iUnmarked "baz") ]
-                             mgfunc
-                                 (BAnd [ bUnmarked "s"; BNot (bUnmarked "t") ] )
+                                 [ Expr.Int (siUnmarked "baz") ]
+                             smgfunc
+                                 (BAnd [ sbUnmarked "s"; BNot (sbUnmarked "t") ] )
                                  "fizz"
-                                 [ Expr.Int (iUnmarked "buzz") ]
-                             mgfunc
-                                 (bUnmarked "s")
+                                 [ Expr.Int (siUnmarked "buzz") ]
+                             smgfunc
+                                 (sbUnmarked "s")
                                  "in"
-                                 [ Expr.Int (iUnmarked "out") ]
-                             mgfunc
-                                 (BNot (bUnmarked "s"))
+                                 [ Expr.Int (siUnmarked "out") ]
+                             smgfunc
+                                 (BNot (sbUnmarked "s"))
                                  "ding"
-                                 [ Expr.Int (iUnmarked "dong") ]] )
+                                 [ Expr.Int (siUnmarked "dong") ]] )
               .SetName("Convert a complex-nested CondView-list to a GuarView-list with complex guards") ]
     
     // Test conversion of CViews into GViews.

@@ -49,7 +49,7 @@ module Types =
     /// An axiom combined with a goal view.
     type GoalAxiom =
         { /// The axiom to be checked for soundness under Goal.
-          Axiom : Axiom<MGView, Command>
+          Axiom : Axiom<SMGView, Command>
           /// The view representing the goal for any terms over Axiom.
           Goal : OView }
 
@@ -69,9 +69,9 @@ module Pretty =
         Surround(pre |> pView, cmd |> pCmd, post |> pView)
 
     /// Pretty-prints a goal axiom.
-    let printGoalAxiom {Axiom = a; Goal = f} =
+    let printGoalAxiom { Axiom = a; Goal = f } =
         vsep [ headed "Axiom"
-                      (a |> printAxiom printCommand printMGView |> Seq.singleton)
+                      (a |> printAxiom printCommand printSMGView |> Seq.singleton)
                headed "Goal" (f |> printOView |> Seq.singleton) ]
 
 
@@ -86,7 +86,7 @@ let axiom p c q =
 
 /// Given a fresh generator, yields a function promoting a string to a
 /// goal variable.
-let goalVar (fg : FreshGen) = fg |> getFresh |> curry Goal
+let goalVar (fg : FreshGen) = (fg |> getFresh |> curry Goal) >> Reg
 
 /// Instantiates a view parameter.
 let instantiateParam fg =

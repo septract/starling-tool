@@ -52,29 +52,6 @@ module Types =
         | Intermediate of bigint * Var
 
     /// <summary>
-    ///     A variable reference that may be symbolic.
-    ///
-    ///     <para>
-    ///         A symbolic variable is one whose value depends on an
-    ///         uninterpreted function of multiple 'real' Starling variables.
-    ///         It allows encoding into Starling of patterns of variable usage
-    ///         Starling doesn't yet understand natively.
-    ///     </para>
-    /// </summary>
-    /// <typeparam name="var">
-    ///     The non-symbolic variable <c>Sym</c> wraps.
-    /// </typeparam>
-    type Sym<'var> =
-        /// <summary>
-        ///     A symbolic variable, predicated over multiple concrete variables.
-        ///     The symbol itself is the name inside the <c>Func</c>.
-        /// </summary>
-        | Sym of Func<'var>
-        /// <summary>
-        ///     A regular, non-symbolic variable.
-        | Reg of 'var
-
-    /// <summary>
     ///     An expression of arbitrary type.
     /// </summary>
     /// <typeparam name="var">
@@ -115,6 +92,29 @@ module Types =
         | BLe of IntExpr<'var> * IntExpr<'var>
         | BLt of IntExpr<'var> * IntExpr<'var>
         | BNot of BoolExpr<'var>
+
+    /// <summary>
+    ///     A variable reference that may be symbolic.
+    ///
+    ///     <para>
+    ///         A symbolic variable is one whose value depends on an
+    ///         uninterpreted function of multiple 'real' Starling variables.
+    ///         It allows encoding into Starling of patterns of variable usage
+    ///         Starling doesn't yet understand natively.
+    ///     </para>
+    /// </summary>
+    /// <typeparam name="var">
+    ///     The non-symbolic variable <c>Sym</c> wraps.
+    /// </typeparam>
+    type Sym<'var> =
+        /// <summary>
+        ///     A symbolic variable, predicated over multiple expressions.
+        ///     The symbol itself is the name inside the <c>Func</c>.
+        /// </summary>
+        | Sym of Func<Expr<Sym<'var>>>
+        /// <summary>
+        ///     A regular, non-symbolic variable.
+        | Reg of 'var
 
     /// <summary>
     ///     An expression of arbitrary type using <c>Var</c>s.
@@ -235,8 +235,28 @@ module Pretty =
         | Int a -> printIntExpr pVar a
         | Bool b -> printBoolExpr pVar b
 
+    /// <summary>
+    ///     Pretty-prints a <c>Sym</c>.
+    /// </summary>
+    /// <param name="pReg">
+    ///     Pretty printer to use for regular variables.
+    /// </param>
+    /// <returns>
+    ///     A function taking <c>Sym</c>s and returning pretty-printer
+    ///     <c>Command</c>s.
+    /// </returns>
+    let rec printSym pReg =
+        function
+        | Sym { Name = sym ; Params = regs } ->
+            func (sprintf "%%{%s}" sym) (Seq.map (printExpr (printSym pReg)) regs)
+        | Reg reg -> pReg reg
+
     /// Pretty-prints a MExpr.
     let printMExpr = printExpr (constToString >> String)
+    /// Pretty-prints a SMExpr.
+    let printSMExpr = printExpr (printSym (constToString >> String))
+    /// Pretty-prints a MBoolExpr.
+    let printSMBoolExpr = printBoolExpr (printSym (constToString >> String))
     /// Pretty-prints a MBoolExpr.
     let printMBoolExpr = printBoolExpr (constToString >> String)
     /// Pretty-prints a MIntExpr.
@@ -255,7 +275,8 @@ let (|BBEq|_|) =
     | _ -> None
 
 /// Recursively simplify a formula
-let rec simp ax =
+/// Note: this does _not_ simplify variables.
+let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
     match ax with 
     | BNot (x) -> 
         match simp x with 
@@ -357,32 +378,62 @@ let stripMark =
 /// Creates an unmarked integer variable.
 let iUnmarked c = c |> Unmarked |> AVar
 
+/// Creates an unmarked integer sym-variable.
+let siUnmarked c = c |> Unmarked |> Reg |> AVar
+
 /// Creates an after-marked integer variable.
 let iAfter c = c |> After |> AVar
+
+/// Creates an after-marked integer sym-variable.
+let siAfter c = c |> After |> Reg |> AVar
 
 /// Creates a before-marked integer variable.
 let iBefore c = c |> Before |> AVar
 
-/// Creates an goal-marked integer variable.
+/// Creates an before-marked integer sym-variable.
+let siBefore c = c |> Before |> Reg |> AVar
+
+/// Creates a goal-marked integer variable.
 let iGoal i c = (i, c) |> Goal |> AVar
+
+/// Creates a goal-marked integer sym-variable.
+let siGoal i c = (i, c) |> Goal |> Reg |> AVar
 
 /// Creates an intermediate-marked integer variable.
 let iInter i c = (i, c) |> Intermediate |> AVar
 
+/// Creates an intermediate-marked integer sym-variable.
+let siInter i c = (i, c) |> Intermediate |> Reg |> AVar
+
 /// Creates an unmarked Boolean variable.
 let bUnmarked c = c |> Unmarked |> BVar
+
+/// Creates an unmarked Boolean sym-variable.
+let sbUnmarked c = c |> Unmarked |> Reg |> BVar
 
 /// Creates an after-marked Boolean variable.
 let bAfter c = c |> After |> BVar
 
+/// Creates an before-marked Boolean sym-variable.
+let sbAfter c = c |> After |> Reg |> BVar
+
 /// Creates a before-marked Boolean variable.
 let bBefore c = c |> Before |> BVar
 
-/// Creates an goal-marked Boolean variable.
+/// Creates an before-marked Boolean sym-variable.
+let sbBefore c = c |> Before |> Reg |> BVar
+
+/// Creates a goal-marked Boolean variable.
 let bGoal i c = (i, c) |> Goal |> BVar
+
+/// Creates a goal-marked Inter sym-variable.
+let sbGoal i c = (i, c) |> Goal |> Reg |> BVar
 
 /// Creates an intermediate-marked Boolean variable.
 let bInter i c = (i, c) |> Intermediate |> BVar
+
+/// Creates an intermediate-marked Boolean sym-variable.
+let sbInter i c = (i, c) |> Intermediate |> Reg |> BVar
 
 /// Converts a typed string to an expression.
 let mkVarExp marker (ts : CTyped<string>) =
@@ -504,6 +555,31 @@ and varsIn =
     | Int a -> varsInInt a
     | Bool b -> varsInBool b
 
+/// <summary>
+///     Extracts all of the regular variables in a symbolic variable.
+/// </summary>
+/// <param name="sym">
+///     The symbolic variable to destructure.
+/// </param>
+/// <typeparam name="var">
+///     The type of regular variables in the symbolic variable.
+/// </typeparam>
+/// <returns>
+///     A list of regular variables bound in a symbolic variable.
+/// </returns>
+let rec regularVarsInSym
+  (sym : Sym<'var>)
+  : 'var list =
+    match sym with
+    | Reg x -> [x]
+    | Sym { Params = xs } ->
+        xs
+        |> List.map (varsIn
+                     >> Set.toList
+                     >> List.map (valueOf >> regularVarsInSym)
+                     >> List.concat)
+        |> List.concat
+
 
 (*
  * Composition
@@ -523,7 +599,9 @@ and varsIn =
 /// </returns>
 let rec nextIntIntermediate =
     function
-    | AVar (Intermediate (n, _)) -> n + 1I
+    | AVar (Reg (Intermediate (n, _))) -> n + 1I
+    | AVar (Sym { Params = xs } ) -> 
+        xs |> Seq.map nextIntermediate |> Seq.fold (curry bigint.Max) 0I
     | AVar _ | AInt _ -> 0I
     | AAdd xs | ASub xs | AMul xs ->
         xs |> Seq.map nextIntIntermediate |> Seq.fold (curry bigint.Max) 0I
@@ -543,7 +621,9 @@ let rec nextIntIntermediate =
 /// </returns>
 and nextBoolIntermediate =
     function
-    | BVar (Intermediate (n, _)) -> n + 1I
+    | BVar (Reg (Intermediate (n, _))) -> n + 1I
+    | BVar (Sym { Params = xs } ) ->
+        xs |> Seq.map nextIntermediate |> Seq.fold (curry bigint.Max) 0I
     | BVar _ -> 0I
     | BAnd xs | BOr xs ->
         xs |> Seq.map nextBoolIntermediate |> Seq.fold (curry bigint.Max) 0I

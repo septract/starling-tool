@@ -17,7 +17,7 @@ type FlattenerTests() =
 
     /// Test cases for the view func renamer.
     static member ViewFuncNamings =
-        let ms : MVFunc list -> OView = Multiset.ofFlatList >> Multiset.toFlatList
+        let ms : SMVFunc list -> OView = Multiset.ofFlatList >> Multiset.toFlatList
         [ TestCaseData(ms [ { Name = "foo"; Params = [] }
                             { Name = "bar_baz"; Params = [] } ])
             .Returns("v_bar__baz_foo") // Remember, multisets sort!
@@ -54,14 +54,14 @@ type FlattenerTests() =
     /// Test cases for the full view func converter.
     /// These all use the Globals environment above.
     static member ViewFuncs =
-        let ms : MVFunc list -> OView = Multiset.ofFlatList >> Multiset.toFlatList
+        let ms : SMVFunc list -> OView = Multiset.ofFlatList >> Multiset.toFlatList
         [ TestCaseData(ms [ { Name = "holdLock"; Params = [] }
-                            { Name = "holdTick"; Params = [Expr.Int (iUnmarked "t")] } ])
+                            { Name = "holdTick"; Params = [ Expr.Int (siUnmarked "t") ] } ])
              .Returns({ Name = "v_holdLock_holdTick"
                         Params =
-                            [ Expr.Int (iUnmarked "serving")
-                              Expr.Int (iUnmarked "ticket")
-                              Expr.Int (iUnmarked "t") ] })
+                            [ Expr.Int (siUnmarked "serving")
+                              Expr.Int (siUnmarked "ticket")
+                              Expr.Int (siUnmarked "t") ] })
             .SetName("Convert 'holdLock() * holdTick(t)' to func") ]
 
     /// Tests the viewdef LHS translator.
@@ -70,5 +70,5 @@ type FlattenerTests() =
         v |> funcOfView (FlattenerTests.Globals
                          |> Map.toSeq
                          |> Seq.map (function
-                                     | (x, Type.Int ()) -> x |> iUnmarked |> Expr.Int
-                                     | (x, Type.Bool ()) -> x |> bUnmarked |> Expr.Bool))
+                                     | (x, Type.Int ()) -> x |> siUnmarked |> Expr.Int
+                                     | (x, Type.Bool ()) -> x |> sbUnmarked |> Expr.Bool))

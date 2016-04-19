@@ -16,7 +16,7 @@ open Starling.Tests.Studies
 /// Mainly exists to persuade nUnit to use the correct types.
 type SearchViewDefEntry =
     { Search : int option
-      InitDefs : BViewDef<DView> list }
+      InitDefs : SMBViewDef<DView> list }
 
 /// Tests for the modeller.
 type ModellerTests() =
@@ -156,8 +156,12 @@ type ModellerTests() =
     /// These use the ticket lock model.
     static member AtomicPrims =
         [ TestCaseData(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment))
-            .Returns(Some <| func "!ILoad++" ["t" |> iBefore |> MExpr.Int; "t" |> iAfter |> MExpr.Int
-                                              "ticket" |> iBefore |> MExpr.Int; "ticket" |> iAfter |> MExpr.Int])
+            .Returns(Some <|
+                         smvfunc "!ILoad++"
+                             [ "t" |> siBefore |> SMExpr.Int
+                               "t" |> siAfter |> SMExpr.Int
+                               "ticket" |> siBefore |> SMExpr.Int
+                               "ticket" |> siAfter |> SMExpr.Int ] )
             .SetName("model a valid integer load as a prim") ]
 
     /// Tests the atomic primitive modeller using the ticket lock.
@@ -176,10 +180,10 @@ type ModellerTests() =
                                                 LV(LVIdent "ticket"),
                                                 Increment)))
             .Returns(ModellerTests.mprim
-                         [ func "!ILoad++" [ "t" |> iBefore |> MExpr.Int
-                                             "t" |> iAfter |> MExpr.Int
-                                             "ticket" |> iBefore |> MExpr.Int
-                                             "ticket" |> iAfter |> MExpr.Int ]]
+                         [ func "!ILoad++" [ "t" |> siBefore |> SMExpr.Int
+                                             "t" |> siAfter |> SMExpr.Int
+                                             "ticket" |> siBefore |> SMExpr.Int
+                                             "ticket" |> siAfter |> SMExpr.Int ]]
                      |> Some)
             .SetName("model a valid integer load command as an axiom") ]
 
@@ -194,11 +198,11 @@ type ModellerTests() =
 
 
     /// Type-constraining builder for viewdef sets.
-    static member viewDefSet (vs : BViewDef<DView> seq) : Set<BViewDef<DView>> =
+    static member viewDefSet (vs : SMBViewDef<DView> seq) : Set<SMBViewDef<DView>> =
         Set.ofSeq vs
 
     /// Type-constraining builder for indefinite viewdef sets.
-    static member indefinites (vs : DView seq) : Set<BViewDef<DView>> =
+    static member indefinites (vs : DView seq) : Set<SMBViewDef<DView>> =
         vs
         |> Seq.map Indefinite
         |> ModellerTests.viewDefSet

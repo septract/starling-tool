@@ -33,6 +33,12 @@ open Starling.Core.Var
  *        representation of a command.
  *
  * prim: a structured representation of an axiom command.
+ *
+ * We also use the following prefixes in type synonyms:
+ *
+ * M: markedvar
+ * G: guarded
+ * S: sym
  *)
 
 
@@ -69,7 +75,7 @@ module Types =
     ///     Though View is the canonical Concurrent Views Framework view,
     ///     we actually seldom use it.
     /// </remarks>
-    type View = Multiset<MVFunc>
+    type View = Multiset<SMVFunc>
 
     /// A view definition.
     type DView = List<DFunc>
@@ -77,7 +83,7 @@ module Types =
     /// <summary>
     ///     A basic view, as an ordered list of VFuncs.
     /// </summary>
-    type OView = List<MVFunc>
+    type OView = List<SMVFunc>
 
     /// <summary>
     ///     A view expression, combining a view with its kind.
@@ -130,12 +136,12 @@ module Types =
         override this.ToString() = sprintf "%A" this
 
     /// <summary>
-    ///     A view definition over <c>MBoolExpr</c>s.
+    ///     A view definition over <c>SMBoolExpr</c>s.
     /// </summary>
     /// <typeparam name="view">
     ///     The type of views.
     /// </typeparam>
-    type BViewDef<'view> = ViewDef<'view, MBoolExpr>
+    type SMBViewDef<'view> = ViewDef<'view, SMBoolExpr>
 
     /// <summary>
     ///     Extracts the view of a <c>ViewDef</c>.
@@ -175,10 +181,10 @@ module Types =
         }
 
     /// A term over semantic-relation commands.
-    type STerm<'wpre, 'goal> = Term<MBoolExpr, 'wpre, 'goal>
+    type STerm<'wpre, 'goal> = Term<SMBoolExpr, 'wpre, 'goal>
 
     /// A term using only internal boolean expressions.
-    type FTerm = STerm<MBoolExpr, MBoolExpr>
+    type FTerm = Term<MBoolExpr, MBoolExpr, MBoolExpr>
 
     (*
      * Models
@@ -192,7 +198,7 @@ module Types =
           /// <summary>
           ///     The semantic function for this model.
           /// </summary>
-          Semantics : (DFunc * MBoolExpr) list
+          Semantics : (DFunc * SMBoolExpr) list
           // This corresponds to the function D.
           ViewDefs : 'viewdefs }
 
@@ -204,7 +210,7 @@ module Types =
     /// <typeparam name="axiom">
     ///     Type of program axioms.
     /// </typeparam>
-    type UVModel<'axiom> = Model<'axiom, BViewDef<DView> list>
+    type UVModel<'axiom> = Model<'axiom, SMBViewDef<DView> list>
 
     /// <summary>
     ///     A <c>Model</c> whose view definitions map <c>DFunc</c>s
@@ -213,7 +219,7 @@ module Types =
     /// <typeparam name="axiom">
     ///     Type of program axioms.
     /// </typeparam>
-    type UFModel<'axiom> = Model<'axiom, BViewDef<DFunc> list>
+    type UFModel<'axiom> = Model<'axiom, SMBViewDef<DFunc> list>
 
 /// <summary>
 ///     Pretty printers for the model.
@@ -237,8 +243,11 @@ module Pretty =
     /// Pretty-prints a VFunc.
     let printVFunc pVar = printFunc (printExpr pVar)
 
-    /// Pretty-prints a VFunc.
+    /// Pretty-prints an MVFunc.
     let printMVFunc = printFunc printMExpr
+
+    /// Pretty-prints a SMVFunc.
+    let printSMVFunc = printFunc printSMExpr
 
     /// Pretty-prints a DFunc.
     let printDFunc = printFunc printParam
@@ -247,10 +256,10 @@ module Pretty =
     let printView pVar = printMultiset (printVFunc pVar)
 
     /// Pretty-prints a MView.
-    let printMVar = printMultiset printMVFunc
+    let printMView = printMultiset printMVFunc
 
     /// Pretty-prints an OView.
-    let printOView = List.map printMVFunc >> semiSep >> squared
+    let printOView = List.map printSMVFunc >> semiSep >> squared
 
     /// Pretty-prints a DView.
     let printDView = List.map printDFunc >> semiSep >> squared
@@ -268,7 +277,7 @@ module Pretty =
                headed "Goal" (g |> pGoal |> Seq.singleton) ]
 
     /// Pretty-prints an STerm.
-    let printSTerm pWPre pGoal = printTerm printMBoolExpr pWPre pGoal
+    let printSTerm pWPre pGoal = printTerm printSMBoolExpr pWPre pGoal
 
     /// Pretty-prints model variables.
     let printModelVar (name, ty) =
@@ -304,8 +313,8 @@ module Pretty =
                   (String "Def", String "?") ]
 
     /// Pretty-printer for BViewDefs.
-    let printBViewDef pView =
-        printViewDef pView printMBoolExpr
+    let printSMBViewDef pView =
+        printViewDef pView printSMBoolExpr
 
     /// Pretty-prints the axiom map for a model.
     let printModelAxioms pAxiom model =
@@ -384,7 +393,7 @@ module Pretty =
     ///     returning a <c>Command</c>.
     /// </returns>
     let printUVModelView pAxiom =
-        printModelView pAxiom (List.map (printBViewDef printDView))
+        printModelView pAxiom (List.map (printSMBViewDef printDView))
 
     /// <summary>
     ///     Pretty-prints a model view for an <c>UFModel</c>.
@@ -397,7 +406,7 @@ module Pretty =
     ///     returning a <c>Command</c>.
     /// </returns>
     let printUFModelView pAxiom =
-        printModelView pAxiom (List.map (printBViewDef printDFunc))
+        printModelView pAxiom (List.map (printSMBViewDef printDFunc))
 
 
 /// <summary>

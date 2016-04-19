@@ -42,7 +42,9 @@ type InstantiateTests() =
     /// Tests whether valid instantiations work.
     [<TestCaseSource("ValidInstantiations")>]
     member x.``Valid instantiations are executed correctly`` func =
-        instantiate func InstantiateTests.TestFuncs |> okOption
+        func
+        |> instantiate mvParamSubFun InstantiateTests.TestFuncs
+        |> okOption
 
 
     /// Test cases for testing invalid instantiation.
@@ -61,4 +63,6 @@ type InstantiateTests() =
     /// Tests whether invalid instantiations (don't) work.
     [<TestCaseSource("InvalidInstantiations")>]
     member x.``Invalid instantiations raise correct errors`` func =
-        instantiate func InstantiateTests.TestFuncs |> failOption
+        func
+        |> instantiate mvParamSubFun InstantiateTests.TestFuncs
+        |> failOption

@@ -568,7 +568,7 @@ module Translator =
     let translate
       reals
       (ctx : Z3.Context)
-      ( { Globals = svars ; ViewDefs = ds ; Axioms = xs } : IFModel<STerm<MGView, MVFunc>> ) =
+      ( { Globals = svars ; ViewDefs = ds ; Axioms = xs } : IFModel<Term<MBoolExpr, MGView, MVFunc>> ) =
         let funcDecls, definites = translateViewDefs reals ctx ds
         let vrules = translateVariables reals ctx funcDecls svars
         let trules = xs |> Map.toSeq |> Seq.choose (translateTerm reals ctx funcDecls)

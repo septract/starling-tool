@@ -70,6 +70,11 @@ module Types =
     type MGFunc = GFunc<MarkedVar>
 
     /// <summary>
+    ///     A <c>GFunc</c> over symbolic <c>MarkedVar</c>s.
+    /// </summary>
+    type SMGFunc = GFunc<Sym<MarkedVar>>
+
+    /// <summary>
     ///     A guarded view.
     /// </summary>
     /// <typeparam name="var">
@@ -89,6 +94,11 @@ module Types =
     type MGView = GView<MarkedVar>
 
     /// <summary>
+    ///     A <c>GView</c> over symbolic <c>MarkedVar</c>s.
+    /// </summary>
+    type SMGView = GView<Sym<MarkedVar>>
+
+    /// <summary>
     ///     A multiset of guarded views, as produced by reification.
     /// </summary>
     /// <typeparam name="var">
@@ -101,6 +111,12 @@ module Types =
     ///     A <c>ViewSet</c> over <c>MarkedVar</c>s.
     /// </summary>
     type MViewSet = ViewSet<MarkedVar>
+
+    /// <summary>
+    ///     A <c>ViewSet</c> over symbolic <c>MarkedVar</c>s.
+    /// </summary>
+    type SMViewSet = ViewSet<Sym<MarkedVar>>
+
 
 (*
  * Constructors.
@@ -149,6 +165,25 @@ let gfunc
 let mgfunc (guard : MBoolExpr) (name : string) (pars : MExpr seq) : MGFunc =
     gfunc guard name pars
 
+/// <summary>
+///     Creates a new <c>SMGFunc</c>.
+/// </summary>
+/// <param name="guard">
+///     The guard on which the <c>SMGFunc</c> is conditional.
+/// </param>
+/// <param name="name">
+///     The name of the <c>SMGFunc</c>.
+/// </param>
+/// <param name="pars">
+///     The parameters of the <c>SMGFunc</c>, as a sequence.
+/// </param>
+/// <returns>
+///     A new <c>SMGFunc</c> with the given guard, name, and parameters.
+/// </returns>
+let smgfunc (guard : SMBoolExpr) (name : string) (pars : SMExpr seq) : SMGFunc =
+    gfunc guard name pars
+
+
 (*
  * Single-guard active patterns.
  *)
@@ -164,37 +199,6 @@ let (|Always|_|) { Cond = c ; Item = i } =
 /// </summary>
 let (|Never|_|) { Cond = c ; Item = i } =
     if isFalse c then Some i else None
-
-
-(*
- * Multiple-guard active patterns.
- *)
-
-/// <summary>
-///     Active pattern matching on if-then-else guard multisets.
-///
-///     <para>
-///         If-then-else guardsets contain two non-false guards, at least one
-///         of which is equal to the negation of the other.
-///     </para>
-///
-///     <para>
-///         The active pattern returns the guard and view of the first ITE
-///         guard, then the guard and view of the second.  The views are
-///         <c>GView</c>s, but with a <c>BTrue</c> guard.
-///     </para>
-/// </summary>
-let (|ITEGuards|_|) ms =
-    match (Multiset.toFlatList ms) with
-    | [ x ; y ] when (equivHolds (negates x.Cond y.Cond)) ->
-        Some (x.Cond, Multiset.singleton { Cond = BTrue; Item = x.Item },
-              y.Cond, Multiset.singleton { Cond = BTrue; Item = y.Item })
-    // {| G -> P |} is trivially equivalent to {| G -> P * ¬G -> emp |}.
-    | [ x ] ->
-        Some (x.Cond, Multiset.singleton { Cond = BTrue; Item = x.Item },
-              mkNot x.Cond, Multiset.empty)
-    | _ -> None
-
 
 (*
  * Variable querying.
@@ -388,6 +392,17 @@ module Pretty =
     let printMGFunc = printGFunc (constToString >> String)
 
     /// <summary>
+    ///     Pretty-prints a guarded <c>VFunc</c> over symbolic <c>MarkedVar</c>s.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>SMGFunc</c> to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command to print the <c>SMGFunc</c>.
+    /// </returns>
+    let printSMGFunc = printGFunc (printSym (constToString >> String))
+
+    /// <summary>
     ///     Pretty-prints a guarded view.
     /// </summary>
     /// <param name="pVar">
@@ -413,6 +428,17 @@ module Pretty =
     ///     A pretty-printer command to print the <c>MGView</c>.
     /// </returns>
     let printMGView = printGView (constToString >> String)
+
+    /// <summary>
+    ///     Pretty-prints a guarded view over symbolic <c>MarkedVar</c>s.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>SMGView</c> to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command to print the <c>MGView</c>.
+    /// </returns>
+    let printSMGView = printGView (printSym (constToString >> String))
 
     /// <summary>
     ///     Pretty-prints a guarded view set.
@@ -441,6 +467,18 @@ module Pretty =
     /// </returns>
     let printMViewSet =
         printViewSet (constToString >> String)
+
+    /// <summary>
+    ///     Pretty-prints a guarded view set over symbolic <c>MarkedVar</c>s.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>SMViewSet</c> to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command to print the <c>SMViewSet</c>.
+    /// </returns>
+    let printSMViewSet =
+        printViewSet (printSym (constToString >> String))
 
 
 /// <summary>

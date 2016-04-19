@@ -41,9 +41,9 @@ type GraphTests() =
                           { Name = "unlock_C0"
                             Dest = "unlock_V1"
                             Command =
-                                [ func "!I++"
-                                       [ Typed.Int (iBefore "serving")
-                                         Typed.Int (iAfter "serving") ]] },
+                                [ smvfunc "!I++"
+                                       [ Typed.Int (siBefore "serving")
+                                         Typed.Int (siAfter "serving") ]] },
                       Set.singleton
                           { Name = "unlock_N0"
                             Src = "unlock_V1"
@@ -59,9 +59,9 @@ type GraphTests() =
                           { Name = "unlock_C0"
                             Src = "unlock_V0"
                             Command =
-                                [ func "!I++"
-                                       [ Typed.Int (iBefore "serving")
-                                         Typed.Int (iAfter "serving") ]] },
+                                [ smvfunc "!I++"
+                                       [ Typed.Int (siBefore "serving")
+                                         Typed.Int (siAfter "serving") ]] },
                       Exit)) ] )
             .SetName("Adding a valid, unique edge to unlock works")]
 
@@ -94,9 +94,9 @@ type GraphTests() =
                       Map.ofList
                           [ ("unlock_C0",
                              edge "unlock_V0"
-                                  [ func "!I++"
-                                          [ Typed.Int (iBefore "serving")
-                                            Typed.Int (iAfter "serving") ]]
+                                  [ smvfunc "!I++"
+                                          [ Typed.Int (siBefore "serving")
+                                            Typed.Int (siAfter "serving") ]]
                                   "unlock_V0" ) ] } )
             .SetName("unify C1 into C0 on the ticket lock 'unlock'")
           TestCaseData(("unlock_V0", "unlock_V1"))
@@ -110,9 +110,9 @@ type GraphTests() =
                       Map.ofList
                           [ ("unlock_C0",
                              edge "unlock_V1"
-                                  [ func "!I++"
-                                          [ Typed.Int (iBefore "serving")
-                                            Typed.Int (iAfter "serving") ]]
+                                  [ smvfunc "!I++"
+                                          [ Typed.Int (siBefore "serving")
+                                            Typed.Int (siAfter "serving") ]]
                                   "unlock_V1" ) ] } )
             .SetName("unify C0 into C1 on the ticket lock 'unlock'")
           TestCaseData(("unlock_V0", "unlock_V2"))
@@ -175,5 +175,5 @@ type GraphTests() =
     /// </summary>
     [<TestCaseSource("ViewExprFlattens")>]
     member x.``View expressions can be flattened into views``
-        (ve : ViewExpr<MGView>) =
+        (ve : ViewExpr<SMGView>) =
         match ve with InnerView v -> v

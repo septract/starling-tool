@@ -101,7 +101,7 @@ module Translator =
     /// Produces the reification of an unguarded func.
     /// This corresponds to D^ in the theory.
     let interpretVFunc ft func =
-        instantiate func ft
+        instantiate mvParamSubFun ft func
         |> lift (withDefault BTrue)  // Undefined views go to True by metatheory
         |> mapMessages (curry InstantiationError func)
 
@@ -118,7 +118,7 @@ module Translator =
         >> lift mkAnd
 
     /// Interprets all of the views in a term over the given functable.
-    let interpretTerm ft : STerm<MGView, MVFunc> -> Result<FTerm, Error> =
+    let interpretTerm ft : Term<MBoolExpr, MGView, MVFunc> -> Result<FTerm, Error> =
         tryMapTerm ok (interpretGView ft) (interpretVFunc ft)
 
     /// <summary>

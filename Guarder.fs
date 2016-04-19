@@ -11,7 +11,7 @@ open Starling.Lang.Modeller
 /// Converts a func from conditional to guarded form.
 /// This takes the set of all conditions forming the suffix of any guards
 /// generated from this view.
-let rec guardCFuncIn (suffix : Set<MBoolExpr>) =
+let rec guardCFuncIn (suffix : Set<SMBoolExpr>) =
     function
     | CFunc.Func v ->
         [ { Cond =
@@ -21,20 +21,20 @@ let rec guardCFuncIn (suffix : Set<MBoolExpr>) =
             Item = v } ]
     | CFunc.ITE(expr, tviews, fviews) ->
         List.concat [ guardCViewIn (suffix.Add expr) (Multiset.toFlatList tviews)
-                      guardCViewIn (suffix.Add(mkNot expr)) (Multiset.toFlatList fviews) ]
+                      guardCViewIn (suffix.Add (mkNot expr)) (Multiset.toFlatList fviews) ]
 
 /// Resolves a list of views, given a set of conditions held true.
 and guardCViewIn suffix = concatMap (guardCFuncIn suffix)
 
 /// Resolves a full condition-view multiset into a guarded-view multiset.
-let guardCView : CView -> MGView =
+let guardCView : CView -> SMGView =
     // TODO(CaptainHayashi): woefully inefficient.
     Multiset.toFlatList
     >> guardCViewIn Set.empty
     >> Multiset.ofFlatList
 
 /// Resolves a full condition-view ViewExpr into a guarded-view multiset.
-let guardCViewExpr : ViewExpr<CView> -> ViewExpr<MGView> =
+let guardCViewExpr : ViewExpr<CView> -> ViewExpr<SMGView> =
     function
     | Mandatory v -> Mandatory (guardCView v)
     | Advisory v -> Advisory (guardCView v)
@@ -49,7 +49,7 @@ and guardBlock {Pre = pre; Contents = contents} =
       Contents = List.map guardViewedCommand contents }
 
 /// Converts a PartCmd to guarded views.
-and guardPartCmd : PartCmd<ViewExpr<CView>> -> PartCmd<ViewExpr<MGView>> =
+and guardPartCmd : PartCmd<ViewExpr<CView>> -> PartCmd<ViewExpr<SMGView>> =
     function
     | Prim p -> Prim p
     | While (isDo, expr, inner) ->
@@ -63,5 +63,5 @@ let guardMethod { Signature = signature; Body = body } =
 
 /// Converts an entire model to guarded views.
 let guard : UVModel<PMethod<ViewExpr<CView>>>
-         -> UVModel<PMethod<ViewExpr<MGView>>> =
+         -> UVModel<PMethod<ViewExpr<SMGView>>> =
     mapAxioms guardMethod

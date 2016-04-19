@@ -19,53 +19,69 @@ type OptimiserTests() =
 
     /// A test environment of arithmetic after substitutions.
     static member AfterArithSubs =
-        [ ("serving", AAdd [iBefore "serving"; AInt 1L])
-          ("ticket", iBefore "ticket") ]
+        [ ("serving", AAdd [siBefore "serving"; AInt 1L])
+          ("ticket", siBefore "ticket") ]
         |> Map.ofList
 
     static member AfterBoolSubs =
-        [ ("flag", BNot (bBefore "flag"))
-          ("turn", bBefore "turn") ]
+        [ ("flag", BNot (sbBefore "flag"))
+          ("turn", sbBefore "turn") ]
         |> Map.ofList
 
     /// Test cases for rewriting Boolean expressions containing afters.
     static member AfterBools =
-        [ TestCaseData(iEq (iAfter "serving") (iAfter "ticket"))
-            .Returns(iEq (AAdd [iBefore "serving"; AInt 1L])
-                         (iBefore "ticket"))
-            .SetName("Remove arithmetic afters in a simple equality")
-          TestCaseData(iEq (iAfter "serving") (AAdd [iBefore "serving"
-                                                     AInt 1L]))
-            .Returns(iEq (AAdd [iBefore "serving"; AInt 1L])
-                         (AAdd [iBefore "serving"; AInt 1L]))
-            .SetName("Remove arithmetic afters in after-before relation")
-          TestCaseData(BGt (iAfter "serving", iAfter "t"))
-            .Returns(BGt (AAdd [iBefore "serving"; AInt 1L],
-                          iAfter "t"))
-            .SetName("Remove arithmetic afters only if in the environment")
-          TestCaseData(bEq (bAfter "flag") (bAfter "turn"))
-            .Returns(bEq (BNot (bBefore "flag"))
-                         (bBefore "turn"))
-            .SetName("Remove Boolean afters in a simple equality")
-          TestCaseData(bEq (bAfter "flag") (BNot (bBefore "flag")))
-            .Returns(bEq (BNot (bBefore "flag"))
-                         (BNot (bBefore "flag")))
-            .SetName("Remove Boolean afters in after-before relation")
-          TestCaseData(BAnd [bAfter "flag"; bAfter "pole"])
-            .Returns(BAnd [ BNot (bBefore "flag")
-                            bAfter "pole" ])
-            .SetName("Remove Boolean afters only if in the environment")
-          TestCaseData(BAnd [BGt (iAfter "serving", iAfter "t")
-                             BOr [bAfter "flag"; bAfter "pole"]])
-            .Returns(BAnd [ BGt ((AAdd [iBefore "serving"
-                                        AInt 1L]), iAfter "t")
-                            BOr [BNot (bBefore "flag"); bAfter "pole" ]])
-            .SetName("Remove afters of both types simultaneously")
-          TestCaseData(BNot (BImplies (bAfter "flag", BGt (iAfter "serving",
-                                                           iAfter "t"))))
-            .Returns(BNot (BImplies (BNot (bBefore "flag"),
-                                     BGt (AAdd [iBefore "serving"; AInt 1L],
-                                          iAfter "t"))))
+        [ TestCaseData(iEq (siAfter "serving") (siAfter "ticket"))
+              .Returns(iEq
+                           (AAdd [ siBefore "serving"; AInt 1L ] )
+                           (siBefore "ticket"))
+              .SetName("Remove arithmetic afters in a simple equality")
+          TestCaseData(iEq
+                           (siAfter "serving")
+                           (AAdd [ siBefore "serving"; AInt 1L ] ))
+              .Returns(iEq
+                           (AAdd [ siBefore "serving"; AInt 1L ] )
+                           (AAdd [ siBefore "serving"; AInt 1L ] ))
+              .SetName("Remove arithmetic afters in after-before relation")
+          TestCaseData(BGt (siAfter "serving", siAfter "t"))
+              .Returns(BGt
+                           (AAdd [ siBefore "serving"; AInt 1L ],
+                            siAfter "t"))
+              .SetName("Remove arithmetic afters only if in the environment")
+          TestCaseData(bEq (sbAfter "flag") (sbAfter "turn"))
+              .Returns(bEq
+                           (BNot (sbBefore "flag"))
+                           (sbBefore "turn"))
+              .SetName("Remove Boolean afters in a simple equality")
+          TestCaseData(bEq (sbAfter "flag") (BNot (sbBefore "flag")))
+              .Returns(bEq
+                           (BNot (sbBefore "flag"))
+                           (BNot (sbBefore "flag")))
+              .SetName("Remove Boolean afters in after-before relation")
+          TestCaseData(BAnd [ sbAfter "flag"; sbAfter "pole" ] )
+              .Returns(BAnd [ BNot (sbBefore "flag")
+                              sbAfter "pole" ])
+              .SetName("Remove Boolean afters only if in the environment")
+          TestCaseData(BAnd
+                           [ BGt (siAfter "serving", siAfter "t")
+                             BOr [ sbAfter "flag"; sbAfter "pole" ]] )
+              .Returns(BAnd
+                           [ BGt
+                                 ((AAdd [ siBefore "serving"; AInt 1L ] ),
+                                  siAfter "t")
+                             BOr [ BNot (sbBefore "flag"); sbAfter "pole" ]] )
+              .SetName("Remove afters of both types simultaneously")
+          TestCaseData(BNot
+                           (BImplies
+                                (sbAfter "flag",
+                                 BGt
+                                     (siAfter "serving",
+                                      siAfter "t"))))
+              .Returns(BNot
+                           (BImplies
+                                (BNot (sbBefore "flag"),
+                                 BGt
+                                     (AAdd [siBefore "serving"; AInt 1L],
+                                      siAfter "t"))))
             .SetName("Remove arithmetic afters from a complex expression")]
 
     /// Test after-elimination of Booleans.
@@ -77,26 +93,25 @@ type OptimiserTests() =
 
     /// Test cases for discovering Boolean after-before pairs.
     static member BoolAfterDiscoveries =
-        let me : Map<string, MBoolExpr> = Map.empty
-        [ TestCaseData(bEq (bAfter "foo") (bBefore "foo"))
-            .Returns(
-                [("foo", bBefore "foo")]
-                |> Map.ofList)
-            .SetName("Detect a simple Boolean after-before pair")
-          TestCaseData(BNot (bEq (bAfter "foo") (bBefore "foo")))
-            .Returns(me)
-            .SetName("Ignore a negated Boolean after-before pair")
-          TestCaseData(BAnd [bEq (bAfter "foo") (bBefore "foo")
-                             bEq (bAfter "bar") (BNot (bBefore "bar"))])
-            .Returns(
-                [("foo", bBefore "foo")
-                 ("bar", BNot (bBefore "bar"))]
-                |> Map.ofList)
-            .SetName("Detect a conjunction of Boolean after-before pairs")
-          TestCaseData(BOr [bEq (bAfter "foo") (bBefore "foo")
-                            bEq (bAfter "bar") (BNot (bBefore "bar"))])
-            .Returns(me)
-            .SetName("Ignore a disjunction of Boolean after-before pairs") ]
+        [ TestCaseData(bEq (sbAfter "foo") (sbBefore "foo"))
+              .Returns( [ ("foo", sbBefore "foo") ]
+                        |> Map.ofList)
+              .SetName("Detect a simple Boolean after-before pair")
+          TestCaseData(BNot (bEq (sbAfter "foo") (sbBefore "foo")))
+              .Returns(Map.empty : Map<string, SMBoolExpr> )
+              .SetName("Ignore a negated Boolean after-before pair")
+          TestCaseData(BAnd
+                           [ bEq (sbAfter "foo") (sbBefore "foo")
+                             bEq (sbAfter "bar") (BNot (sbBefore "bar")) ] )
+              .Returns( [ ("foo", sbBefore "foo")
+                          ("bar", BNot (sbBefore "bar")) ]
+                        |> Map.ofList)
+              .SetName("Detect a conjunction of Boolean after-before pairs")
+          TestCaseData(BOr
+                           [ bEq (sbAfter "foo") (sbBefore "foo")
+                             bEq (sbAfter "bar") (BNot (sbBefore "bar")) ] )
+              .Returns(Map.empty : Map<string, SMBoolExpr> )
+              .SetName("Ignore a disjunction of Boolean after-before pairs") ]
 
     /// Test discovery of Boolean before-after pairs.
     [<TestCaseSource("BoolAfterDiscoveries")>]
@@ -106,12 +121,12 @@ type OptimiserTests() =
     /// Test cases for substituting afters in a func.
     static member AfterFuncs =
         [ TestCaseData({ Name = "foo"
-                         Params = [ MExpr.Int (iAfter "serving")
-                                    MExpr.Bool (bAfter "flag") ] })
-            .Returns({ Name = "foo"
-                       Params = [ MExpr.Int (AAdd [iBefore "serving"; AInt 1L])
-                                  MExpr.Bool (BNot (bBefore "flag")) ] })
-            .SetName("Substitute afters in a func with all-after params") ]
+                         Params = [ SMExpr.Int (siAfter "serving")
+                                    SMExpr.Bool (sbAfter "flag") ] })
+              .Returns({ Name = "foo"
+                         Params = [ SMExpr.Int (AAdd [siBefore "serving"; AInt 1L])
+                                    SMExpr.Bool (BNot (sbBefore "flag")) ] })
+              .SetName("Substitute afters in a func with all-after params") ]
 
     /// Test substitution of afters in funcs.
     [<TestCaseSource("AfterFuncs")>]

@@ -462,12 +462,49 @@ module Graph =
                       >> Seq.forall
                              (// ...the variable is thread-local.
                               valueOf
-                              >> stripMark
-                              >> tVars.TryFind
                               >> function
-                                 | Some _ -> true
-                                 | _ -> false))
+                                 | Sym _ -> false
+                                 | Reg x ->
+                                   x
+                                   |> stripMark
+                                   |> tVars.TryFind
+                                   |> function
+                                      | Some _ -> true
+                                      | _ -> false))
                      ps)
+    /// <summary>
+    ///     Partial active pattern matching <c>Sym</c>-less expressions.
+    /// </summary>
+    let (|NoSym|_|) : SMBoolExpr -> MBoolExpr option =
+        TypeMapper.mapBool (tsfRemoveSym (fun _ -> ())) >> okOption
+
+    /// <summary>
+    ///     Active pattern matching on if-then-else guard multisets.
+    ///
+    ///     <para>
+    ///         If-then-else guardsets contain two non-false guards, at least one
+    ///         of which is equal to the negation of the other.
+    ///         Neither guard can be symbolic.
+    ///     </para>
+    ///
+    ///     <para>
+    ///         The active pattern returns the guard and view of the first ITE
+    ///         guard, then the guard and view of the second.  The views are
+    ///         <c>NGView</c>s, but with a <c>BTrue</c> guard.
+    ///     </para>
+    /// </summary>
+    let (|ITEGuards|_|) ms =
+        match (Multiset.toFlatList ms) with
+        | [ { Cond = NoSym xc; Item = xi }
+            { Cond = NoSym yc; Item = yi } ]
+              when (equivHolds (negates xc yc)) ->
+            Some (xc, Multiset.singleton { Cond = BTrue; Item = xi },
+                  yc, Multiset.singleton { Cond = BTrue; Item = yi })
+        // {| G -> P |} is trivially equivalent to {| G -> P * ¬G -> emp |}.
+        | [ { Cond = (NoSym xc); Item = xi } ] ->
+            Some (xc, Multiset.singleton { Cond = BTrue; Item = xi },
+                  mkNot xc, Multiset.empty)
+        | _ -> None
 
     /// <summary>
     ///     Removes a node if it is an ITE-guarded view.
@@ -492,16 +529,27 @@ module Graph =
                 match nView with
                 | InnerView(ITEGuards (xc, xv, yc, yv)) ->
                     (* Translate xc and yc to pre-state, to match the
-                       commands. *)
-                    let toPre = TypeMapper.mapBool (liftMarker Before always)
+                       commands.
+                       We also need to re-introduce the symbolic layer
+                       removed by NoSymView. *)
+                    let toPre =
+                        TypeMapper.mapBool
+                            (onVars
+                                 (liftVSubFun
+                                      (TypeMapper.cmake
+                                           (function
+                                            | Unmarked s -> Before s
+                                            | x -> x))))
                     let xcPre = toPre xc
                     let ycPre = toPre yc
 
                     match (Set.toList outEdges, Set.toList inEdges) with
                     (* Are there only two out edges, and only one in edge?
-                       Are the out edges assumes? *)
-                    | ( [ { Dest = out1D ; Command = Assume out1P } as out1
-                          { Dest = out2D ; Command = Assume out2P } as out2
+                       Are the out edges assumes, and are they non-symbolic? *)
+                    | ( [ { Dest = out1D
+                            Command = Assume (NoSym out1P) } as out1
+                          { Dest = out2D
+                            Command = Assume (NoSym out2P) } as out2
                         ],
                         [ inE ] )
                         when (// Is the first one x and the second y?
@@ -682,10 +730,10 @@ module Term =
     /// where x is arithmetic.
     let rec findArithAfters =
         function
-        | BAEq(AVar(After x), (ConstantIntFunction (Before y) as fx))
+        | BAEq(AVar (Reg (After x)), (ConstantIntFunction (Reg (Before y)) as fx))
             when x = y
             -> [(x, fx)]
-        | BAEq(ConstantIntFunction (Before y) as fx, AVar(After x))
+        | BAEq(ConstantIntFunction (Reg (Before y)) as fx, AVar (Reg (After x)))
             when x = y
             -> [(x, fx)]
         | BAnd xs -> concatMap findArithAfters xs
@@ -696,10 +744,10 @@ module Term =
     /// where x is Boolean.
     let rec findBoolAfters =
         function
-        | BBEq(BVar(After x), (ConstantBoolFunction (Before y) as fx))
+        | BBEq(BVar (Reg (After x)), (ConstantBoolFunction (Reg (Before y)) as fx))
             when x = y
             -> [(x, fx)]
-        | BBEq(ConstantBoolFunction (Before y) as fx, BVar(After x))
+        | BBEq(ConstantBoolFunction (Reg (Before y)) as fx, BVar (Reg (After x)))
             when x = y
             -> [(x, fx)]
         | BAnd xs -> concatMap findBoolAfters xs
@@ -708,18 +756,21 @@ module Term =
     /// Lifts a pair of before/after maps to a SubFun.
     let afterSubs asubs bsubs =
         onVars
-            (TypeMapper.make
-                (function
-                 | After a -> Map.tryFind a asubs |> withDefault (iAfter a)
-                 | x -> AVar x)
-                (function
-                 | After a -> Map.tryFind a bsubs |> withDefault (bAfter a)
-                 | x -> BVar x))
+            (liftVToSym
+                (TypeMapper.make
+                    (function
+                     | After a -> (Map.tryFind a asubs |> withDefault (siAfter a))
+                     | x -> AVar (Reg x))
+                    (function
+                     | After a -> (Map.tryFind a bsubs |> withDefault (sbAfter a))
+                     | x -> BVar (Reg x))))
 
     /// Eliminates bound before/after pairs in the term.
     /// If x!after = f(x!before) in the action, we replace x!after with
     /// f(x!before) in the precondition and postcondition.
-    let eliminateAfters term =
+    let eliminateAfters 
+      (term : STerm<SMGView, SMVFunc> )
+      : STerm<SMGView, SMVFunc> =
         let sub = afterSubs (term.Cmd |> findArithAfters |> Map.ofList)
                             (term.Cmd |> findBoolAfters |> Map.ofList)
 
@@ -754,7 +805,10 @@ module Term =
     let reduceGView fs = mapConds (reduce fs) >> pruneGuardedSet
 
     /// Reduce the guards in a Term.
-    let guardReduce {Cmd = c; WPre = w; Goal = g} =
+    let guardReduce
+      ( {Cmd = c; WPre = w; Goal = g} : STerm<SMGView, SMVFunc> )
+      : STerm<SMGView, SMVFunc> =
+    
         let fs = c |> facts |> Set.ofList
         {Cmd = c; WPre = reduceGView fs w; Goal = g}
 
@@ -763,7 +817,10 @@ module Term =
      *)
 
     /// Performs expression simplification on a term.
-    let simpTerm = subExprInDTerm (TypeMapper.make id simp)
+    let simpTerm
+      : STerm<SMGView, SMVFunc>
+        -> STerm<SMGView, SMVFunc> =
+        subExprInDTerm (TypeMapper.make id simp)
 
     (*
      * Frontend
@@ -776,7 +833,9 @@ module Term =
                      "term-simplify-bools" ]
 
     /// Optimises a model's terms.
-    let optimise optR optA verbose =
+    let optimise optR optA verbose
+      : UFModel<STerm<SMGView, SMVFunc>>
+          -> UFModel<STerm<SMGView, SMVFunc>> =
         let optimiseTerm =
             Utils.optimiseWith optR optA verbose
                 [ ("term-remove-after", true, eliminateAfters)

@@ -61,7 +61,7 @@ let termGenFrameView r q = List.fold termGenFrameStep ([], q) r |> fst
 let guard r = { Cond = BTrue; Item = r }
 
 /// Generates the frame part of the weakest precondition.
-let termGenFrame r q =
+let termGenFrame (r : OView) (q : SMGView) =
     (* We iterate on multiset minus of each item in q:
      * A \ (B * C) = (A \ B) \ C
      *
@@ -75,7 +75,9 @@ let termGenFrame r q =
     |> Multiset.ofFlatList
 
 /// Generates a (weakest) precondition from a framed axiom.
-let termGenPre gax =
+let termGenPre 
+  (gax : GoalAxiom)
+  : SMGView =
     (* Theoretically speaking, this is crunching an axiom {P} C {Q} and
      * goal view R into (P * (R \ Q)), where R \ Q is the weakest frame.
      * Remember that * is multiset union.
@@ -98,13 +100,15 @@ let termGenPre gax =
     Multiset.append pre (termGenFrame goal post)
 
 /// Generates a term from a goal axiom.
-let termGenAxiom gax =
+let termGenAxiom
+  (gax : GoalAxiom)
+  : PTerm<SMGView, OView> =
     { WPre = termGenPre gax
       Goal = gax.Goal
       Cmd = gax.Axiom.Cmd }
 
 /// Converts a model's goal axioms to terms.
-let termGen : UVModel<GoalAxiom> -> UVModel<PTerm<MGView, OView>> =
+let termGen : UVModel<GoalAxiom> -> UVModel<PTerm<SMGView, OView>> =
     mapAxioms termGenAxiom
 
 
@@ -126,62 +130,71 @@ module Tests =
         /// </summary>
         static member FrameSubtracts =
             [ (tcd [| (List.singleton <|
-                           func "foo" [ Expr.Bool (bGoal 0I "bar") ] )
-                      (Multiset.empty : MGView) |] )
+                           func "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
+                      (Multiset.empty : SMGView) |] )
                   .Returns(Multiset.singleton <|
-                           gfunc BTrue "foo" [ Expr.Bool (bGoal 0I "bar") ] )
+                           smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
                   .SetName("Removing emp from a func yields the original func")
               (tcd [| (List.singleton <|
-                           func "foo" [ Expr.Bool (bGoal 0I "bar") ] )
+                           smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
                       (Multiset.singleton <|
-                           gfunc BTrue "foo" [ Expr.Bool (bAfter "baz") ] ) |] )
+                           smgfunc BTrue "foo" [ Expr.Bool (sbAfter "baz") ] ) |] )
                   .Returns(Multiset.singleton <|
-                           gfunc (BNot (bEq (bGoal 0I "bar")
-                                            (bAfter "baz")))
-                                "foo" [ Expr.Bool (bGoal 0I "bar") ] )
+                           smgfunc
+                               (BNot (bEq (sbGoal 0I "bar")
+                                          (sbAfter "baz")))
+                               "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
                   .SetName("Removing a func from itself generates a !x=y-guarded view")
               (tcd [| (List.singleton <|
-                           func "foo" [ Expr.Bool (bGoal 0I "bar") ] )
+                           smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
                       (Multiset.singleton <|
-                           gfunc BTrue "blop" [ Expr.Bool (bAfter "baz") ] ) |] )
+                           smgfunc BTrue "blop" [ Expr.Bool (sbAfter "baz") ] ) |] )
                   .Returns(Multiset.singleton <|
-                           gfunc BTrue "foo" [ Expr.Bool (bGoal 0I "bar") ] )
+                           smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
                   .SetName("Removing a func from itself is inert")
               (tcd [| (Multiset.ofFlatList>>Multiset.toFlatList 
                        <|
-                           [ func "foo" [ Expr.Bool (bGoal 0I "bar") ]
-                             func "foo" [ Expr.Bool (bGoal 1I "bar") ] ] )
+                           [ smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ]
+                             smvfunc "foo" [ Expr.Bool (sbGoal 1I "bar") ] ] )
                       (Multiset.singleton <|
-                           gfunc BTrue "foo" [ Expr.Bool (bAfter "baz") ] ) |] )
+                           smgfunc BTrue "foo" [ Expr.Bool (sbAfter "baz") ] ) |] )
                   .Returns(Multiset.ofFlatList <|
-                           [ gfunc (BNot (bEq (bGoal 0I "bar")
-                                              (bAfter "baz")))
-                                   "foo" [ Expr.Bool (bGoal 0I "bar") ]
-                             gfunc (mkNot
-                                        (mkAnd
-                                             [ (mkNot (bEq (bGoal 0I "bar")
-                                                           (bAfter "baz")))
-                                               (bEq (bGoal 1I "bar")
-                                                    (bAfter "baz")) ] ))
-                                   "foo" [ Typed.Bool (bGoal 1I "bar") ]] )
+                           [ smgfunc
+                                 (BNot (bEq (sbGoal 0I "bar")
+                                            (sbAfter "baz")))
+                                 "foo"
+                                 [ Expr.Bool (sbGoal 0I "bar") ]
+                             smgfunc
+                                 (mkNot
+                                      (mkAnd
+                                           [ (mkNot (bEq (sbGoal 0I "bar")
+                                                         (sbAfter "baz")))
+                                             (bEq (sbGoal 1I "bar")
+                                                  (sbAfter "baz")) ] ))
+                                 "foo"
+                                 [ Typed.Bool (sbGoal 1I "bar") ]] )
                   .SetName("Removing a func from two copies of itself works correctly")
               (tcd [| (List.singleton <|
-                           func "foo" [ Expr.Bool (bGoal 0I "bar") ] )
+                           smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
                       (Multiset.singleton <|
-                           gfunc (BGt (iAfter "x",
-                                       iAfter "y"))
-                                 "foo" [ Expr.Bool (bAfter "baz") ] ) |] )
+                           smgfunc
+                               (BGt (siAfter "x",
+                                     siAfter "y"))
+                               "foo"
+                               [ Expr.Bool (sbAfter "baz") ] ) |] )
                   .Returns(Multiset.singleton <|
-                           gfunc (mkNot (BAnd [ (BGt (iAfter "x",
-                                                      iAfter "y"))
-                                                (bEq (bGoal 0I "bar")
-                                                     (bAfter "baz")) ] ))
-                                 "foo" [ Expr.Bool (bGoal 0I "bar") ] )
+                           smgfunc
+                               (mkNot (BAnd [ (BGt (siAfter "x",
+                                                    siAfter "y"))
+                                              (bEq (sbGoal 0I "bar")
+                                                   (sbAfter "baz")) ] ))
+                               "foo"
+                               [ Expr.Bool (sbGoal 0I "bar") ] )
                   .SetName("Removing a guarded func from itself works correctly")
               (tcd [| (List.empty : OView)
                       (Multiset.singleton <|
-                           gfunc BTrue "foo" [ Expr.Bool (bBefore "bar") ] ) |] )
-                  .Returns(Multiset.empty : MGView)
+                           smgfunc BTrue "foo" [ Expr.Bool (sbBefore "bar") ] ) |] )
+                  .Returns(Multiset.empty : SMGView)
                   .SetName("Removing a func from emp yields emp") ]
 
         /// <summary>

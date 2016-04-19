@@ -21,8 +21,8 @@ open Starling.Lang.Collator
 module Types =
     /// A conditional (flat or if-then-else) func.
     type CFunc =
-        | ITE of MBoolExpr * Multiset<CFunc> * Multiset<CFunc>
-        | Func of MVFunc
+        | ITE of SMBoolExpr * Multiset<CFunc> * Multiset<CFunc>
+        | Func of SMVFunc
 
     /// A conditional view, or multiset of CFuncs.
     type CView = Multiset<CFunc>
@@ -32,10 +32,10 @@ module Types =
         | Prim of Command
         | While of
             isDo : bool
-            * expr : MBoolExpr
+            * expr : SMBoolExpr
             * inner : Block<'view, PartCmd<'view>>
         | ITE of
-            expr : MBoolExpr
+            expr : SMBoolExpr
             * inTrue : Block<'view, PartCmd<'view>>
             * inFalse : Block<'view, PartCmd<'view>>
 
@@ -150,12 +150,12 @@ module Pretty =
         function
         | CFunc.ITE(i, t, e) ->
             hsep [ String "if"
-                   printMBoolExpr i
+                   printSMBoolExpr i
                    String "then"
                    t |> printMultiset printCFunc |> ssurround "[" "]"
                    String "else"
                    e |> printMultiset printCFunc |> ssurround "[" "]" ]
-        | Func v -> printMVFunc v
+        | Func v -> printSMVFunc v
 
     /// Pretty-prints a CView.
     let printCView = printMultiset printCFunc >> ssurround "[|" "|]"
@@ -166,11 +166,11 @@ module Pretty =
         | Prim prim -> Command.Pretty.printCommand prim
         | While(isDo, expr, inner) ->
             cmdHeaded (hsep [ String(if isDo then "Do-while" else "While")
-                              (printMBoolExpr expr) ])
+                              (printSMBoolExpr expr) ])
                       [printBlock pView (printPartCmd pView) inner]
         | ITE(expr, inTrue, inFalse) ->
             cmdHeaded (hsep [String "begin if"
-                             (printMBoolExpr expr) ])
+                             (printSMBoolExpr expr) ])
                       [headed "True" [printBlock pView (printPartCmd pView) inTrue]
                        headed "False" [printBlock pView (printPartCmd pView) inFalse]]
 
@@ -312,22 +312,22 @@ let coreSemantics =
       (func "ICAS" [ Param.Int "destB"; Param.Int "destA"
                      Param.Int "testB"; Param.Int "testA"
                      Param.Int "set" ],
-       mkAnd [ mkImplies (iEq (iUnmarked "destB") (iUnmarked "testB"))
-                         (mkAnd [ iEq (iUnmarked "destA") (iUnmarked "set")
-                                  iEq (iUnmarked "testA") (iUnmarked "testB") ] )
-               mkImplies (mkNot (iEq (iUnmarked "destB") (iUnmarked "testB")))
-                         (mkAnd [ iEq (iUnmarked "destA") (iUnmarked "destB")
-                                  iEq (iUnmarked "testA") (iUnmarked "destB") ] ) ] )
+       mkAnd [ mkImplies (iEq (siUnmarked "destB") (siUnmarked "testB"))
+                         (mkAnd [ iEq (siUnmarked "destA") (siUnmarked "set")
+                                  iEq (siUnmarked "testA") (siUnmarked "testB") ] )
+               mkImplies (mkNot (iEq (siUnmarked "destB") (siUnmarked "testB")))
+                         (mkAnd [ iEq (siUnmarked "destA") (siUnmarked "destB")
+                                  iEq (siUnmarked "testA") (siUnmarked "destB") ] ) ] )
       // Boolean CAS
       (func "BCAS" [ Param.Bool "destB"; Param.Bool "destA"
                      Param.Bool "testB"; Param.Bool "testA"
                      Param.Bool "set" ],
-       mkAnd [ mkImplies (bEq (bUnmarked "destB") (bUnmarked "testB"))
-                         (mkAnd [ bEq (bUnmarked "destA") (bUnmarked "set")
-                                  bEq (bUnmarked "testA") (bUnmarked "testB") ] )
-               mkImplies (mkNot (bEq (bUnmarked "destB") (bUnmarked "testB")))
-                         (mkAnd [ bEq (bUnmarked "destA") (bUnmarked "destB")
-                                  bEq (bUnmarked "testA") (bUnmarked "destB") ] ) ] )
+       mkAnd [ mkImplies (bEq (sbUnmarked "destB") (sbUnmarked "testB"))
+                         (mkAnd [ bEq (sbUnmarked "destA") (sbUnmarked "set")
+                                  bEq (sbUnmarked "testA") (sbUnmarked "testB") ] )
+               mkImplies (mkNot (bEq (sbUnmarked "destB") (sbUnmarked "testB")))
+                         (mkAnd [ bEq (sbUnmarked "destA") (sbUnmarked "destB")
+                                  bEq (sbUnmarked "testA") (sbUnmarked "destB") ] ) ] )
 
       (*
        * Atomic load
@@ -336,29 +336,29 @@ let coreSemantics =
       // Integer load
       (func "!ILoad" [ Param.Int "destB"; Param.Int "destA"
                        Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ iEq (iUnmarked "destA") (iUnmarked "srcB")
-               iEq (iUnmarked "srcA") (iUnmarked "srcB") ] )
+       mkAnd [ iEq (siUnmarked "destA") (siUnmarked "srcB")
+               iEq (siUnmarked "srcA") (siUnmarked "srcB") ] )
       // Integer load-and-increment
       (func "!ILoad++" [ Param.Int "destB"; Param.Int "destA"
                          Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ iEq (iUnmarked "destA") (iUnmarked "srcB")
-               iEq (iUnmarked "srcA") (mkAdd2 (iUnmarked "srcB") (AInt 1L)) ] )
+       mkAnd [ iEq (siUnmarked "destA") (siUnmarked "srcB")
+               iEq (siUnmarked "srcA") (mkAdd2 (siUnmarked "srcB") (AInt 1L)) ] )
       // Integer load-and-decrement
       (func "!ILoad--" [ Param.Int "destB"; Param.Int "destA"
                          Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ iEq (iUnmarked "destA") (iUnmarked "srcB")
-               iEq (iUnmarked "srcA") (mkSub2 (iUnmarked "srcB") (AInt 1L)) ] )
+       mkAnd [ iEq (siUnmarked "destA") (siUnmarked "srcB")
+               iEq (siUnmarked "srcA") (mkSub2 (siUnmarked "srcB") (AInt 1L)) ] )
       // Integer increment
       (func "!I++" [ Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ iEq (iUnmarked "srcA") (mkAdd2 (iUnmarked "srcB") (AInt 1L)) ] )
+       mkAnd [ iEq (siUnmarked "srcA") (mkAdd2 (siUnmarked "srcB") (AInt 1L)) ] )
       // Integer decrement
       (func "!I--" [ Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ iEq (iUnmarked "srcA") (mkSub2 (iUnmarked "srcB") (AInt 1L)) ] )
+       mkAnd [ iEq (siUnmarked "srcA") (mkSub2 (siUnmarked "srcB") (AInt 1L)) ] )
       // Boolean load
       (func "!BLoad" [ Param.Bool "destB"; Param.Bool "destA"
                        Param.Bool "srcB"; Param.Bool "srcA" ],
-       mkAnd [ bEq (bUnmarked "destA") (bUnmarked "srcB")
-               bEq (bUnmarked "srcA") (bUnmarked "srcB") ] )
+       mkAnd [ bEq (sbUnmarked "destA") (sbUnmarked "srcB")
+               bEq (sbUnmarked "srcA") (sbUnmarked "srcB") ] )
 
       (*
        * Atomic store
@@ -367,11 +367,11 @@ let coreSemantics =
       // Integer store
       (func "!IStore" [ Param.Int "destB"; Param.Int "destA"
                         Param.Int "src" ],
-       iEq (iUnmarked "destA") (iUnmarked "src"))
+       iEq (siUnmarked "destA") (siUnmarked "src"))
       // Boolean store
       (func "!BStore" [ Param.Bool "destB"; Param.Bool "destA"
                         Param.Bool "src" ],
-       bEq (bUnmarked "destA") (bUnmarked "src"))
+       bEq (sbUnmarked "destA") (sbUnmarked "src"))
 
       (*
        * Local set
@@ -380,11 +380,11 @@ let coreSemantics =
       // Integer local set
       (func "!ILSet" [ Param.Int "destB"; Param.Int "destA"
                        Param.Int "src" ],
-       iEq (iUnmarked "destA") (iUnmarked "src"))
+       iEq (siUnmarked "destA") (siUnmarked "src"))
       // Boolean store
       (func "!BLSet" [ Param.Bool "destB"; Param.Bool "destA"
                        Param.Bool "src" ],
-       bEq (bUnmarked "destA") (bUnmarked "src"))
+       bEq (sbUnmarked "destA") (sbUnmarked "src"))
 
       (*
        * Assumptions
@@ -393,7 +393,7 @@ let coreSemantics =
       // Identity
       (func "Id" [], BTrue)
       // Assume
-      (func "Assume" [ Param.Bool "expr" ], bUnmarked "expr") ]
+      (func "Assume" [ Param.Bool "expr" ], sbUnmarked "expr") ]
 
 (*
  * Expression translation
@@ -646,7 +646,7 @@ let modelViewDef
   svars
   (vprotos : FuncTable<unit>)
   avd
-  : Result<BViewDef<Model.Types.DView>, ModelError> =
+  : Result<SMBViewDef<Model.Types.DView>, ModelError> =
     let av = viewOf avd
 
     trial {
@@ -656,7 +656,7 @@ let modelViewDef
         return! (match avd with
                  | Definite (_, dae) ->
                     dae
-                    |> wrapMessages CEExpr (modelBoolExpr e MarkedVar.Unmarked)
+                    |> wrapMessages CEExpr (modelBoolExpr e (MarkedVar.Unmarked >> Reg))
                     |> lift (fun em -> Definite (v, em))
                  | Uninterpreted (_, sym) ->
                      ok (Uninterpreted (v, sym))
@@ -790,7 +790,7 @@ let genAllViewsAt depth (funcs : DFunc seq) : Set<Model.Types.DView> =
 let addSearchDefs
   (vprotos : FuncTable<unit>)
   depth
-  (viewdefs : BViewDef<Model.Types.DView> list) =
+  (viewdefs : SMBViewDef<Model.Types.DView> list) =
     match depth with
     | None -> viewdefs
     | Some n ->
@@ -834,7 +834,7 @@ let modelCFunc protos env afunc =
              afunc.Params
              |> Seq.map (fun e ->
                              e
-                             |> modelExpr env MarkedVar.Unmarked
+                             |> modelExpr env (MarkedVar.Unmarked >> Reg)
                              |> mapMessages (curry ViewError.BadExpr e))
              |> collect
              // Then, put them into a VFunc.
@@ -856,7 +856,7 @@ let rec modelCView protos ls =
         modelCFunc protos ls afunc |> lift Multiset.singleton
     | View.If(e, l, r) ->
         lift3 (fun em lm rm -> CFunc.ITE(em, lm, rm) |> Multiset.singleton)
-              (e |> modelBoolExpr ls MarkedVar.Unmarked
+              (e |> modelBoolExpr ls (MarkedVar.Unmarked >> Reg)
                  |> mapMessages (curry ViewError.BadExpr e))
               (modelCView protos ls l)
               (modelCView protos ls r)
@@ -887,10 +887,10 @@ let modelBoolLoad svars dest srcExpr mode =
                 return
                     vfunc
                         "!BLoad"
-                            [ dest |> bBefore |> Expr.Bool
-                              dest |> bAfter |> Expr.Bool
-                              s |> bBefore |> Expr.Bool
-                              s |> bAfter |> Expr.Bool ]
+                            [ dest |> Before |> Reg |> BVar |> Expr.Bool
+                              dest |> After |> Reg |> BVar |> Expr.Bool
+                              s |> Before |> Reg |> BVar |> Expr.Bool
+                              s |> After |> Reg |> BVar |> Expr.Bool ]
             | Typed.Bool s, Increment -> return! fail (IncBool srcExpr)
             | Typed.Bool s, Decrement -> return! fail (DecBool srcExpr)
             | _ -> return! fail (TypeMismatch (Type.Bool (), srcLV, typeOf src))
@@ -909,20 +909,20 @@ let modelIntLoad svars dest srcExpr mode =
             let! src = wrapMessages BadSVar (lookupVar svars) srcLV
             match src, mode with
             | Typed.Int s, Direct ->
-                return func "!ILoad" [ dest |> iBefore |> Expr.Int
-                                       dest |> iAfter |> Expr.Int
-                                       s |> iBefore |> Expr.Int
-                                       s |> iAfter |> Expr.Int ]
+                return func "!ILoad" [ dest |> Before |> Reg |> AVar |> Expr.Int
+                                       dest |> After |> Reg |> AVar |> Expr.Int
+                                       s |> Before |> Reg |> AVar |> Expr.Int
+                                       s |> After |> Reg |> AVar |> Expr.Int ]
             | Typed.Int s, Increment ->
-                return func "!ILoad++" [ dest |> iBefore |> Expr.Int
-                                         dest |> iAfter |> Expr.Int
-                                         s |> iBefore |> Expr.Int
-                                         s |> iAfter |> Expr.Int ]
+                return func "!ILoad++" [ dest |> Before |> Reg |> AVar |> Expr.Int
+                                         dest |> After |> Reg |> AVar |> Expr.Int
+                                         s |> Before |> Reg |> AVar |> Expr.Int
+                                         s |> After |> Reg |> AVar |> Expr.Int ]
             | Typed.Int s, Decrement ->
-                return func "!ILoad--" [ dest |> iBefore |> Expr.Int
-                                         dest |> iAfter |> Expr.Int
-                                         s |> iBefore |> Expr.Int
-                                         s |> iAfter |> Expr.Int ]
+                return func "!ILoad--" [ dest |> Before |> Reg |> AVar |> Expr.Int
+                                         dest |> After |> Reg |> AVar |> Expr.Int
+                                         s |> Before |> Reg |> AVar |> Expr.Int
+                                         s |> After |> Reg |> AVar |> Expr.Int ]
             | _ -> return! fail (TypeMismatch (Type.Int (), srcLV, typeOf src))
         }
     | _ -> fail (LoadNonLV srcExpr)
@@ -934,11 +934,15 @@ let modelBoolStore locals dest src mode =
      *                     and the fetch mode must be Direct.
      *)
     trial {
-        let! sxp = wrapMessages BadExpr (modelBoolExpr locals MarkedVar.Unmarked) src
+        let! sxp = wrapMessages BadExpr (modelBoolExpr locals (Before >> Reg)) src
         match mode with
-        | Direct -> return func "!BStore" [ dest |> bBefore |> Expr.Bool
-                                            dest |> bAfter |> Expr.Bool
-                                            sxp |> Expr.Bool |> before ]
+        | Direct ->
+            return
+                smvfunc
+                    "!BStore"
+                    [ dest |> Before |> Reg |> BVar |> Expr.Bool
+                      dest |> After |> Reg |> BVar |> Expr.Bool
+                      sxp |> Expr.Bool ]
         | Increment -> return! fail (IncBool src)
         | Decrement -> return! fail (DecBool src)
     }
@@ -951,11 +955,11 @@ let modelIntStore locals dest src mode =
      *)
     trial {
         let! sxp =
-            wrapMessages BadExpr (modelIntExpr locals MarkedVar.Unmarked) src
+            wrapMessages BadExpr (modelIntExpr locals (MarkedVar.Before >> Reg)) src
         match mode with
-        | Direct -> return func "!IStore" [ dest |> iBefore |> Expr.Int
-                                            dest |> iAfter |> Expr.Int
-                                            sxp |> Expr.Int |> before ]
+        | Direct -> return func "!IStore" [ dest |> Before |> Reg |> AVar |> Expr.Int
+                                            dest |> After |> Reg |> AVar |> Expr.Int
+                                            sxp |> Expr.Int ]
         | Increment -> return! fail (IncExpr src)
         | Decrement -> return! fail (DecExpr src)
     }
@@ -974,26 +978,26 @@ let modelCAS svars tvars destLV testLV set =
         match dest, test with
         | Typed.Bool d, Typed.Bool t ->
             let! setE =
-                wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Unmarked) set
+                wrapMessages BadExpr (modelBoolExpr tvars (MarkedVar.Unmarked >> Reg)) set
             return
                 func
                     "BCAS"
-                    [ d |> bBefore |> Expr.Bool
-                      d |> bAfter |> Expr.Bool
-                      t |> bBefore |> Expr.Bool
-                      t |> bAfter |> Expr.Bool
-                      setE |> Expr.Bool |> before ]
+                    [ d |> Before |> Reg |> BVar |> Expr.Bool
+                      d |> After |> Reg |> BVar |> Expr.Bool
+                      t |> Before |> Reg |> BVar |> Expr.Bool
+                      t |> After |> Reg |> BVar |> Expr.Bool
+                      setE |> Expr.Bool ]
         | Typed.Int d, Typed.Int t ->
             let! setE =
-                wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Unmarked) set
+                wrapMessages BadExpr (modelIntExpr tvars (MarkedVar.Before >> Reg)) set
             return
                 func
                     "ICAS"
-                    [ d |> iBefore |> Expr.Int
-                      d |> iAfter |> Expr.Int
-                      t |> iBefore |> Expr.Int
-                      t |> iAfter |> Expr.Int
-                      setE |> Expr.Int |> before ]
+                    [ d |> Before |> Reg |> AVar |> Expr.Int
+                      d |> After |> Reg |> AVar |> Expr.Int
+                      t |> Before |> Reg |> AVar |> Expr.Int
+                      t |> After |> Reg |> AVar |> Expr.Int
+                      setE |> Expr.Int ]
         | _ ->
             // Oops, we have a type error.
             // Arbitrarily single out test as the cause of it.
@@ -1037,16 +1041,16 @@ let rec modelAtomic svars tvars =
             | Decrement, Typed.Bool _ ->
                 return! fail (DecBool (LV operand))
             | Increment, Typed.Int _ ->
-                return func "!I++" [op |> iBefore |> Expr.Int
-                                    op |> iAfter |> Expr.Int]
+                return func "!I++" [op |> Before |> Reg |> AVar |> Expr.Int
+                                    op |> After |> Reg |> AVar |> Expr.Int]
             | Decrement, Typed.Int _ ->
-                return func "!I--" [op |> iBefore |> Expr.Int
-                                    op |> iAfter |> Expr.Int]
+                return func "!I--" [op |> Before |> Reg |> AVar |> Expr.Int
+                                    op |> After |> Reg |> AVar |> Expr.Int]
         }
     | Id -> ok (func "Id" [])
     | Assume e ->
         e
-        |> wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Unmarked)
+        |> wrapMessages BadExpr (modelBoolExpr tvars (MarkedVar.Before >> Reg))
         |> lift (Expr.Bool >> Seq.singleton >> func "Assume")
 
 /// Converts a local variable assignment to a Prim.
@@ -1060,22 +1064,22 @@ and modelAssign tvars lLV e =
         match l with
         | Typed.Bool ls ->
             let! em =
-                wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Unmarked) e
+                wrapMessages BadExpr (modelBoolExpr tvars (MarkedVar.Before >> Reg)) e
             return
                 func
                     "!BLSet"
-                    [ ls |> bBefore |> Expr.Bool
-                      ls |> bAfter |> Expr.Bool
-                      em |> Expr.Bool |> before ]
+                    [ ls |> Before |> Reg |> BVar |> Expr.Bool
+                      ls |> After |> Reg |> BVar |> Expr.Bool
+                      em |> Expr.Bool ]
         | Typed.Int ls ->
             let! em =
-                wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Unmarked) e
+                wrapMessages BadExpr (modelIntExpr tvars (MarkedVar.Before >> Reg)) e
             return
                 func
                     "!ILSet"
-                    [ ls |> iBefore |> Expr.Int
-                      ls |> iAfter |> Expr.Int
-                      em |> Expr.Int |> before ]
+                    [ ls |> Before |> Reg |> AVar |> Expr.Int
+                      ls |> After |> Reg |> AVar |> Expr.Int
+                      em |> Expr.Int ]
     }
 
 /// Creates a partially resolved axiom for an if-then-else.
@@ -1083,7 +1087,7 @@ and modelITE protos svars tvars i t f =
     trial { let! iM =
                 wrapMessages
                     BadITECondition
-                    (modelBoolExpr tvars MarkedVar.Unmarked)
+                    (modelBoolExpr tvars (MarkedVar.Before >> Reg))
                     i
             (* We need to calculate the recursive axioms first, because we
              * need the inner cpairs for each to store the ITE placeholder.
@@ -1103,7 +1107,7 @@ and modelWhile isDo protos gs ls e b =
     lift2 (fun eM bM -> PartCmd.While(isDo, eM, bM))
           (wrapMessages
                BadWhileCondition
-               (modelBoolExpr ls MarkedVar.Unmarked)
+               (modelBoolExpr ls (MarkedVar.Before >> Reg))
                e)
           (modelBlock protos gs ls b)
 
