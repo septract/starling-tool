@@ -46,7 +46,10 @@ module Types =
      *)
 
     /// A func over expressions, used in view expressions.
-    type VFunc = Func<MExpr>
+    type VFunc<'var> = Func<Expr<'var>>
+
+    /// A func over marked-var expressions.
+    type MVFunc = VFunc<MarkedVar>
 
     /// A view-definition func.
     type DFunc = Func<Param>
@@ -63,7 +66,7 @@ module Types =
     ///     Though View is the canonical Concurrent Views Framework view,
     ///     we actually seldom use it.
     /// </remarks>
-    type View = Multiset<VFunc>
+    type View = Multiset<MVFunc>
 
     /// A view definition.
     type DView = List<DFunc>
@@ -71,7 +74,7 @@ module Types =
     /// <summary>
     ///     A basic view, as an ordered list of VFuncs.
     /// </summary>
-    type OView = List<VFunc>
+    type OView = List<MVFunc>
 
     /// <summary>
     ///     A view expression, combining a view with its kind.
@@ -229,19 +232,25 @@ module Pretty =
         >> semiSep
 
     /// Pretty-prints a VFunc.
-    let printVFunc = printFunc printMExpr
+    let printVFunc pVar = printFunc (printExpr pVar)
+
+    /// Pretty-prints a VFunc.
+    let printMVFunc = printFunc printMExpr
 
     /// Pretty-prints a DFunc.
     let printDFunc = printFunc printParam
 
     /// Pretty-prints a View.
-    let printView = printMultiset printVFunc
+    let printView pVar = printMultiset (printVFunc pVar)
+
+    /// Pretty-prints a MView.
+    let printMVar = printMultiset printMVFunc
 
     /// Pretty-prints an OView.
-    let printOView = List.map printVFunc >> semiSep  >> squared
+    let printOView = List.map printMVFunc >> semiSep >> squared
 
     /// Pretty-prints a DView.
-    let printDView = List.map printDFunc >> semiSep  >> squared
+    let printDView = List.map printDFunc >> semiSep >> squared
 
     /// Pretty-prints view expressions.
     let rec printViewExpr pView =
@@ -405,21 +414,43 @@ let dfunc name (pars : Param seq) : DFunc = func name pars
 /// <summary>
 ///     Type-constrained version of <c>func</c> for <c>VFunc</c>s.
 /// </summary>
-/// <parameter name="name">
+/// <param name="name">
 ///     The name of the <c>VFunc</c>.
-/// </parameter>
-/// <parameter name="pars">
+/// </param>
+/// <param name="pars">
 ///     The parameters of the <c>VFunc</c>, as a sequence.
-/// </parameter>
+/// </param>
+/// <typeparam name="var">
+///     The type of variables in the <c>VFunc</c>'s parameters.
+/// </typeparam>
 /// <returns>
 ///     A new <c>VFunc</c> with the given name and parameters.
 /// </returns>
-let vfunc name (pars : MExpr seq) : VFunc = func name pars
+let vfunc name (pars : Expr<'var> seq) : VFunc<'var> = func name pars
+
+/// <summary>
+///     Type-constrained version of <c>vfunc</c> for <c>MVFunc</c>s.
+/// </summary>
+/// <param name="name">
+///     The name of the <c>MVFunc</c>.
+/// </param>
+/// <param name="pars">
+///     The parameters of the <c>MVFunc</c>, as a sequence.
+/// </param>
+/// <returns>
+///     A new <c>MVFunc</c> with the given name and parameters.
+/// </returns>
+let mvfunc name (pars : MExpr seq) : MVFunc = vfunc name pars
 
 /// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
 /// and its Goal with fG.
-let mapTerm fC fW fG {Cmd = c; WPre = w; Goal = g} =
-    {Cmd = fC c; WPre = fW w; Goal = fG g}
+let mapTerm
+  (fC : 'srcCmd -> 'dstCmd)
+  (fW : 'srcWpre -> 'dstWpre)
+  (fG : 'srcGoal -> 'dstGoal)
+  ( { Cmd = c; WPre = w; Goal = g } : Term<'srcCmd, 'srcWpre, 'srcGoal> )
+  : Term<'dstCmd, 'dstWpre, 'dstGoal> =
+    { Cmd = fC c; WPre = fW w; Goal = fG g }
 
 /// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
 /// and its Goal with fG.

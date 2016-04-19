@@ -118,19 +118,19 @@ type Response =
     /// Stop at graph optimisation.
     | GraphOptimise of UVModel<Graph>
     /// Stop at graph axiomatisation.
-    | Axiomatise of UVModel<Axiom<GView, Command>>
+    | Axiomatise of UVModel<Axiom<MGView, Command>>
     /// The result of goal-axiom-pair generation.
     | GoalAdd of UVModel<GoalAxiom>
     /// The result of term generation.
-    | TermGen of UVModel<PTerm<GView, OView>>
+    | TermGen of UVModel<PTerm<MGView, OView>>
     /// The result of term reification.
-    | Reify of UVModel<PTerm<ViewSet, OView>>
+    | Reify of UVModel<PTerm<MViewSet, OView>>
     /// The result of term flattening.
-    | Flatten of UFModel<PTerm<GView, VFunc>>
+    | Flatten of UFModel<PTerm<MGView, MVFunc>>
     /// The result of semantic expansion.
-    | Semantics of UFModel<STerm<GView, VFunc>>
+    | Semantics of UFModel<STerm<MGView, MVFunc>>
     /// The result of term optimisation.
-    | TermOptimise of UFModel<STerm<GView, VFunc>>
+    | TermOptimise of UFModel<STerm<MGView, MVFunc>>
     /// The result of Z3 backend processing.
     | Z3 of Backends.Z3.Types.Response
     /// The result of MuZ3 backend processing.
@@ -145,19 +145,19 @@ let printResponse mview =
     | GraphOptimise g ->
         printUVModelView printGraph mview g
     | Axiomatise m ->
-        printUVModelView (printAxiom printCommand printGView) mview m
+        printUVModelView (printAxiom printCommand printMGView) mview m
     | GoalAdd m ->
         printUVModelView printGoalAxiom mview m
     | TermGen m ->
-        printUVModelView (printPTerm printGView printOView) mview m
+        printUVModelView (printPTerm printMGView printOView) mview m
     | Reify m ->
-        printUVModelView (printPTerm printViewSet printOView) mview m
+        printUVModelView (printPTerm printMViewSet printOView) mview m
     | Flatten m ->
-        printUFModelView (printPTerm printGView printVFunc) mview m
+        printUFModelView (printPTerm printMGView printMVFunc) mview m
     | Semantics m ->
-        printUFModelView (printSTerm printGView printVFunc) mview m
+        printUFModelView (printSTerm printMGView printMVFunc) mview m
     | TermOptimise m ->
-        printUFModelView (printSTerm printGView printVFunc) mview m
+        printUFModelView (printSTerm printMGView printMVFunc) mview m
     | Z3 z -> Backends.Z3.Pretty.printResponse mview z
     | MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
     | HSF h -> Backends.Horn.Pretty.printHorns h

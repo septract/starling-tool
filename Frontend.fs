@@ -44,7 +44,7 @@ type Response =
     /// Output of the parsing, collation, and modelling steps.
     | Model of UVModel<PMethod<ViewExpr<CView>>>
     /// Output of the parsing, collation, modelling, and guarding stages.
-    | Guard of UVModel<PMethod<ViewExpr<GView>>>
+    | Guard of UVModel<PMethod<ViewExpr<MGView>>>
     /// Output of the parsing, collation, modelling, guarding and destructuring stages.
     | Graph of UVModel<Graph>
 
@@ -78,8 +78,8 @@ let printResponse mview =
             m
     | Response.Guard m ->
         printUVModelView
-            (printMethod (printViewExpr printGView)
-                         (printPartCmd (printViewExpr printGView)))
+            (printMethod (printViewExpr printMGView)
+                         (printPartCmd (printViewExpr printMGView)))
             mview
             m
     | Response.Graph m ->

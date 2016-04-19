@@ -26,16 +26,16 @@ type InstantiateTests() =
 
     /// Test cases for testing valid instantiation.
     static member ValidInstantiations =
-        [ TestCaseData(vfunc "nope" [])
+        [ TestCaseData(mvfunc "nope" [])
             .Returns(none |> Some)
             .SetName("Instantiate undefined func")
-          TestCaseData(vfunc "foo" [])
+          TestCaseData(mvfunc "foo" [])
             .Returns(iEq (AInt 5L : MIntExpr) (AInt 6L : MIntExpr) |> Some |> Some)
             .SetName("Instantiate func with no arguments")
-          TestCaseData(vfunc "bar" [AInt 101L |> Expr.Int])
+          TestCaseData(mvfunc "bar" [AInt 101L |> Expr.Int])
             .Returns(iEq (AInt 101L) (iUnmarked "blob") |> Some |> Some)
             .SetName("Instantiate func with one int argument")
-          TestCaseData(vfunc "baz" [iAfter "burble" |> Expr.Int ; BTrue |> Expr.Bool])
+          TestCaseData(mvfunc "baz" [iAfter "burble" |> Expr.Int ; BTrue |> Expr.Bool])
             .Returns(BAnd [BTrue; BGt (iAfter "burble", iAfter "burble")] |> Some |> Some)
             .SetName("Instantiate func with two arguments of different types") ]
           
@@ -47,10 +47,10 @@ type InstantiateTests() =
 
     /// Test cases for testing invalid instantiation.
     static member InvalidInstantiations =
-        [ TestCaseData(vfunc "foo" [AInt 101L |> Expr.Int])
+        [ TestCaseData(mvfunc "foo" [AInt 101L |> Expr.Int])
             .Returns([CountMismatch(1, 0)] |> Some)
             .SetName("Instantiate func with too many arguments")
-          TestCaseData(vfunc "bar" [])
+          TestCaseData(mvfunc "bar" [])
             .Returns([CountMismatch(0, 1)] |> Some)
             .SetName("Instantiate func with too few arguments")
           TestCaseData(vfunc "baz" [BTrue |> Expr.Bool ; iAfter "burble" |> Expr.Int])

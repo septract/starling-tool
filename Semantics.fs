@@ -30,10 +30,10 @@ module Types =
     /// Type of errors relating to semantics instantiation.
     type Error =
         /// There was an error instantiating a semantic definition.
-        | Instantiate of prim: VFunc
+        | Instantiate of prim: MVFunc
                        * error: Starling.Core.Instantiate.Types.Error
         /// A primitive has a missing semantic definition.
-        | MissingDef of prim: VFunc
+        | MissingDef of prim: MVFunc
 
 
 /// <summary>
@@ -50,11 +50,11 @@ module Pretty =
         | Instantiate (prim, error) ->
           colonSep
               [ fmt "couldn't instantiate primitive '{0}'"
-                    [ printVFunc prim ]
+                    [ printMVFunc prim ]
                 Starling.Core.Instantiate.Pretty.printError error ]
         | MissingDef prim ->
             fmt "primitive '{0}' has no semantic definition"
-                [ printVFunc prim ]
+                [ printMVFunc prim ]
 
 
 

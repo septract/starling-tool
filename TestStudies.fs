@@ -197,10 +197,10 @@ let holdTick =
     func "holdTick" [Typed.Int (iUnmarked "t")] |> Func
 
 /// The guarded holdLock view.
-let gHoldLock cnd : GFunc = gfunc cnd "holdLock" []
+let gHoldLock cnd : MGFunc = gfunc cnd "holdLock" []
 
 /// The guarded holdTick view.
-let gHoldTick cnd : GFunc = gfunc cnd "holdTick" [Typed.Int (iUnmarked "t")]
+let gHoldTick cnd : MGFunc = gfunc cnd "holdTick" [Typed.Int (iUnmarked "t")]
 
 /// Produces the expression 's == t'.
 let sIsT = iEq (iUnmarked "s") (iUnmarked "t")
@@ -285,7 +285,7 @@ let ticketLockGuardedLock =
                     Post = Mandatory <| sing (gHoldLock BTrue) } ] } }
 
 /// The ticket lock's unlock method, in guarded form.
-let ticketLockGuardedUnlock : PMethod<ViewExpr<GView>> =
+let ticketLockGuardedUnlock : PMethod<ViewExpr<MGView>> =
     { Signature = func "unlock" []
       Body =
           { Pre = Mandatory <| sing (gHoldLock BTrue)

@@ -22,7 +22,7 @@ module Types =
     /// A conditional (flat or if-then-else) func.
     type CFunc =
         | ITE of MBoolExpr * Multiset<CFunc> * Multiset<CFunc>
-        | Func of VFunc
+        | Func of MVFunc
 
     /// A conditional view, or multiset of CFuncs.
     type CView = Multiset<CFunc>
@@ -155,7 +155,7 @@ module Pretty =
                    t |> printMultiset printCFunc |> ssurround "[" "]"
                    String "else"
                    e |> printMultiset printCFunc |> ssurround "[" "]" ]
-        | Func v -> printVFunc v
+        | Func v -> printMVFunc v
 
     /// Pretty-prints a CView.
     let printCView = printMultiset printCFunc >> ssurround "[|" "|]"

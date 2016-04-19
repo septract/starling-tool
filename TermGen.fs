@@ -104,7 +104,7 @@ let termGenAxiom gax =
       Cmd = gax.Axiom.Cmd }
 
 /// Converts a model's goal axioms to terms.
-let termGen : UVModel<GoalAxiom> -> UVModel<PTerm<GView, OView>> =
+let termGen : UVModel<GoalAxiom> -> UVModel<PTerm<MGView, OView>> =
     mapAxioms termGenAxiom
 
 
@@ -127,7 +127,7 @@ module Tests =
         static member FrameSubtracts =
             [ (tcd [| (List.singleton <|
                            func "foo" [ Expr.Bool (bGoal 0I "bar") ] )
-                      (Multiset.empty : GView) |] )
+                      (Multiset.empty : MGView) |] )
                   .Returns(Multiset.singleton <|
                            gfunc BTrue "foo" [ Expr.Bool (bGoal 0I "bar") ] )
                   .SetName("Removing emp from a func yields the original func")
@@ -181,7 +181,7 @@ module Tests =
               (tcd [| (List.empty : OView)
                       (Multiset.singleton <|
                            gfunc BTrue "foo" [ Expr.Bool (bBefore "bar") ] ) |] )
-                  .Returns(Multiset.empty : GView)
+                  .Returns(Multiset.empty : MGView)
                   .SetName("Removing a func from emp yields emp") ]
 
         /// <summary>

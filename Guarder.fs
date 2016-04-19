@@ -27,14 +27,14 @@ let rec guardCFuncIn (suffix : Set<MBoolExpr>) =
 and guardCViewIn suffix = concatMap (guardCFuncIn suffix)
 
 /// Resolves a full condition-view multiset into a guarded-view multiset.
-let guardCView : CView -> GView =
+let guardCView : CView -> MGView =
     // TODO(CaptainHayashi): woefully inefficient.
     Multiset.toFlatList
     >> guardCViewIn Set.empty
     >> Multiset.ofFlatList
 
 /// Resolves a full condition-view ViewExpr into a guarded-view multiset.
-let guardCViewExpr : ViewExpr<CView> -> ViewExpr<GView> =
+let guardCViewExpr : ViewExpr<CView> -> ViewExpr<MGView> =
     function
     | Mandatory v -> Mandatory (guardCView v)
     | Advisory v -> Advisory (guardCView v)
@@ -49,7 +49,7 @@ and guardBlock {Pre = pre; Contents = contents} =
       Contents = List.map guardViewedCommand contents }
 
 /// Converts a PartCmd to guarded views.
-and guardPartCmd : PartCmd<ViewExpr<CView>> -> PartCmd<ViewExpr<GView>> =
+and guardPartCmd : PartCmd<ViewExpr<CView>> -> PartCmd<ViewExpr<MGView>> =
     function
     | Prim p -> Prim p
     | While (isDo, expr, inner) ->
@@ -63,5 +63,5 @@ let guardMethod { Signature = signature; Body = body } =
 
 /// Converts an entire model to guarded views.
 let guard : UVModel<PMethod<ViewExpr<CView>>>
-         -> UVModel<PMethod<ViewExpr<GView>>> =
+         -> UVModel<PMethod<ViewExpr<MGView>>> =
     mapAxioms guardMethod

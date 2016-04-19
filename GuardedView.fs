@@ -35,14 +35,17 @@ module Types =
     ///         <c>Cond</c> holds.
     ///     </para>
     /// </summary>
+    /// <typeparam name="var">
+    ///     The type of variables in the guard.
+    /// </typeparam>
     /// <typeparam name="item">
     ///     The type of the guarded item.
     /// </typeparam>
-    type Guarded<'item> =
+    type Guarded<'var, 'item> =
         { /// <summary>
           ///    The guard condition.
           /// </summary>
-          Cond : MBoolExpr
+          Cond : BoolExpr<'var>
           /// <summary>
           ///    The guarded item.
           /// </summary>
@@ -56,23 +59,48 @@ module Types =
     /// <summary>
     ///     A guarded <c>VFunc</c>.
     /// </summary>
-    type GFunc = Guarded<VFunc>
+    /// <typeparam name="var">
+    ///     The type of variables in the guard.
+    /// </typeparam>
+    type GFunc<'var> = Guarded<'var, VFunc<'var>>
+
+    /// <summary>
+    ///     A <c>GFunc</c> over <c>MarkedVar</c>s.
+    /// </summary>
+    type MGFunc = GFunc<MarkedVar>
 
     /// <summary>
     ///     A guarded view.
     /// </summary>
+    /// <typeparam name="var">
+    ///     The type of variables in the guard.
+    /// </typeparam>
     /// <remarks>
     ///     These are the most common form of view in Starling internally,
     ///     although theoretically speaking they are equivalent to Views
     ///     with the guards lifting to proof case splits.
     /// </remarks>
-    type GView = Multiset<GFunc>
+    type GView<'var> when 'var : comparison =
+        Multiset<GFunc<'var>>
+
+    /// <summary>
+    ///     A <c>GView</c> over <c>MarkedVar</c>s.
+    /// </summary>
+    type MGView = GView<MarkedVar>
 
     /// <summary>
     ///     A multiset of guarded views, as produced by reification.
     /// </summary>
-    type ViewSet = Multiset<Guarded<OView>>
+    /// <typeparam name="var">
+    ///     The type of variables in the guard.
+    /// </typeparam>
+    type ViewSet<'var> when 'var : comparison =
+        Multiset<Guarded<'var, OView>>
 
+    /// <summary>
+    ///     A <c>ViewSet</c> over <c>MarkedVar</c>s.
+    /// </summary>
+    type MViewSet = ViewSet<MarkedVar>
 
 (*
  * Constructors.
@@ -90,11 +118,36 @@ module Types =
 /// <param name="pars">
 ///     The parameters of the <c>GFunc</c>, as a sequence.
 /// </param>
+/// <typeparam name="var">
+///     The type of variables in the <c>GFunc</c>'s parameters.
+/// </typeparam>
 /// <returns>
 ///     A new <c>GFunc</c> with the given guard, name, and parameters.
 /// </returns>
-let gfunc guard name pars = { Cond = guard ; Item = vfunc name pars }
+let gfunc
+  (guard : BoolExpr<'var>)
+  (name : string)
+  (pars : Expr<'var> seq)
+  : GFunc<'var> =
+    { Cond = guard ; Item = vfunc name pars }
 
+/// <summary>
+///     Creates a new <c>MGFunc</c>.
+/// </summary>
+/// <param name="guard">
+///     The guard on which the <c>MGFunc</c> is conditional.
+/// </param>
+/// <param name="name">
+///     The name of the <c>MGFunc</c>.
+/// </param>
+/// <param name="pars">
+///     The parameters of the <c>MGFunc</c>, as a sequence.
+/// </param>
+/// <returns>
+///     A new <c>MGFunc</c> with the given guard, name, and parameters.
+/// </returns>
+let mgfunc (guard : MBoolExpr) (name : string) (pars : MExpr seq) : MGFunc =
+    gfunc guard name pars
 
 (*
  * Single-guard active patterns.
@@ -275,7 +328,10 @@ module Pretty =
     ///         arrow to separate them.
     ///     </para>
     /// </summary>
-    /// <param name="pitem">
+    /// <param name="pVar">
+    ///     A pretty-printer for variables in the <c>Cond</c>.
+    /// </param>
+    /// <param name="pItem">
     ///     A pretty-printer for the <c>Item</c>.
     /// </param>
     /// <param name="_arg1">
@@ -284,48 +340,107 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer command to print the guarded item.
     /// </returns>
-    let printGuarded pitem =
+    let printGuarded pVar pItem =
         function
-        | Always i -> pitem i
-        | Never i -> ssurround "~" "~" (pitem i)
+        | Always i -> pItem i
+        | Never i -> ssurround "~" "~" (pItem i)
         | { Cond = c ; Item = i } ->
-            parened (HSep([ printMBoolExpr c
-                            pitem i ], String " -> "))
+            parened (HSep([ printBoolExpr pVar c
+                            pItem i ], String " -> "))
+
+    /// <summary>
+    ///     Pretty-prints a guarded item over <c>MarkedVar</c>s.
+    /// </summary>
+    /// <param name="pItem">
+    ///     A pretty-printer for the <c>Item</c>.
+    /// </param>
+    /// <param name="_arg1">
+    ///     The guard to pretty-print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command to print the guarded item.
+    /// </returns>
+    let printMGuarded pItem = printGuarded (constToString >> String) pItem
 
     /// <summary>
     ///     Pretty-prints a guarded <c>VFunc</c>.
     /// </summary>
+    /// <param name="pVar">
+    ///     A pretty-printer for variables in the <c>Cond</c>.
+    /// </param>
     /// <param name="_arg1">
     ///     The <c>GFunc</c> to print.
     /// </param>
     /// <returns>
     ///     A pretty-printer command to print the <c>GFunc</c>.
     /// </returns>
-    let printGFunc = printGuarded printVFunc
+    let printGFunc pVar = printGuarded pVar (printVFunc pVar)
+
+    /// <summary>
+    ///     Pretty-prints a guarded <c>VFunc</c> over <c>MarkedVar</c>s.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>MGFunc</c> to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command to print the <c>MGFunc</c>.
+    /// </returns>
+    let printMGFunc = printGFunc (constToString >> String)
 
     /// <summary>
     ///     Pretty-prints a guarded view.
     /// </summary>
+    /// <param name="pVar">
+    ///     A pretty-printer for variables in the <c>Cond</c>.
+    /// </param>
     /// <param name="_arg1">
     ///     The <c>GView</c> to print.
     /// </param>
     /// <returns>
     ///     A pretty-printer command to print the <c>GView</c>.
     /// </returns>
-    let printGView = printMultiset printGFunc >> ssurround "<|" "|>"
+    let printGView pVar =
+        printMultiset (printGFunc pVar)
+        >> ssurround "<|" "|>"
+
+    /// <summary>
+    ///     Pretty-prints a guarded view over <c>MarkedVar</c>s.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>MGView</c> to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command to print the <c>MGView</c>.
+    /// </returns>
+    let printMGView = printGView (constToString >> String)
 
     /// <summary>
     ///     Pretty-prints a guarded view set.
     /// </summary>
+    /// <param name="pVar">
+    ///     A pretty-printer for variables in the <c>Cond</c>.
+    /// </param>
     /// <param name="_arg1">
     ///     The <c>ViewSet</c> to print.
     /// </param>
     /// <returns>
     ///     A pretty-printer command to print the <c>ViewSet</c>.
     /// </returns>
-    let printViewSet =
-        printMultiset (printGuarded printOView >> ssurround "((" "))")
+    let printViewSet pVar =
+        printMultiset (printGuarded pVar printOView >> ssurround "((" "))")
         >> ssurround "(|" "|)"
+
+    /// <summary>
+    ///     Pretty-prints a guarded view set over <c>MarkedVar</c>s.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>MViewSet</c> to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command to print the <c>MViewSet</c>.
+    /// </returns>
+    let printMViewSet =
+        printViewSet (constToString >> String)
 
 
 /// <summary>

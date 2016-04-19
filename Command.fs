@@ -36,7 +36,7 @@ module Types =
     ///         the two concepts.
     ///     </para>
     /// </remarks>
-    type Command = VFunc list
+    type Command = MVFunc list
 
     /// <summary>
     ///     A term over <c>Command</c>s.
@@ -99,7 +99,7 @@ module Pretty =
     open Starling.Core.Model.Pretty
 
     /// Pretty-prints a Command.
-    let printCommand = List.map printVFunc >> semiSep
+    let printCommand = List.map printMVFunc >> semiSep
 
     /// Pretty-prints a PTerm.
     let printPTerm pWPre pGoal = printTerm printCommand pWPre pGoal

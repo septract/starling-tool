@@ -61,7 +61,7 @@ module Types =
     /// A Z3 translation error.
     type Error =
         /// Instantiation of a view failed.
-        | InstantiationError of view: VFunc
+        | InstantiationError of view: MVFunc
                               * details: Starling.Core.Instantiate.Types.Error
 
 
@@ -89,7 +89,7 @@ module Pretty =
     let printError =
         function
         | InstantiationError (vfunc, err) ->
-            wrapped "view" (printVFunc vfunc) (printError err)
+            wrapped "view" (printMVFunc vfunc) (printError err)
     
 
 /// <summary>
@@ -118,7 +118,7 @@ module Translator =
         >> lift mkAnd
 
     /// Interprets all of the views in a term over the given functable.
-    let interpretTerm ft : STerm<GView, VFunc> -> Result<FTerm, Error> =
+    let interpretTerm ft : STerm<MGView, MVFunc> -> Result<FTerm, Error> =
         tryMapTerm ok (interpretGView ft) (interpretVFunc ft)
 
     /// <summary>

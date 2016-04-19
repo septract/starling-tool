@@ -163,6 +163,46 @@ module Pretty =
 /// </summary>
 module TypeMapper =
     /// <summary>
+    ///     Runs a possibly failing <c>TypeMapper</c> on a <c>Typed</c> value.
+    /// </summary>
+    /// <param name="tm">
+    ///     The <c>TypeMapper</c> to run.
+    /// </param>
+    /// <typeparam name="srcInt">
+    ///     The type of <c>Int</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="srcBool">
+    ///     The type of <c>Bool</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstInt">
+    ///     The type of <c>Int</c>-typed values leaving the map.
+    ///     This excludes the Chessie <c>Result</c>.
+    /// </typeparam>
+    /// <typeparam name="dstBool">
+    ///     The type of <c>Bool</c>-typed values leaving the map.
+    ///     This excludes the Chessie <c>Result</c>.
+    /// </typeparam>
+    /// <typeparam name="err">
+    ///     The type of errors occurring in the map.
+    /// </typeparam>
+    /// <returns>
+    ///     A function mapping over a <c>Typed</c> value with
+    ///     <paramref name="tm"/>, returning a <c>Result</c> over
+    ///     <c>'err</c>.
+    /// </returns>
+    let tryMap
+      (tm :
+           TypeMapper<
+               'srcInt, 'srcBool,
+               Result<'dstInt, 'err>, Result<'dstBool, 'err>> )
+      : (Typed<'srcInt, 'srcBool> ->
+             Result<Typed<'dstInt, 'dstBool>, 'err>) =
+        function
+        | Typed.Int i -> i |> tm.I |> lift Typed.Int
+        | Typed.Bool i -> i |> tm.B |> lift Typed.Bool
+
+
+    /// <summary>
     ///     Runs a <c>TypeMapper</c> on a <c>Typed</c> value.
     /// </summary>
     /// <param name="tm">

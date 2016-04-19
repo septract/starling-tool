@@ -164,7 +164,7 @@ and graphITE vg cg oP oQ expr inTrue inFalse =
 /// <param name="_arg1">
 ///     The command to graph.
 /// </param>
-and graphCommand vg cg oP oQ : PartCmd<ViewExpr<GView>>
+and graphCommand vg cg oP oQ : PartCmd<ViewExpr<MGView>>
                             -> Result<Subgraph, Error> =
     function
     | Prim cmd ->
@@ -259,6 +259,6 @@ let graphMethod { Signature = { Name = name }; Body = body } =
 /// <summary>
 ///     Converts a model on method ASTs to one on method CFGs.
 /// </summary>
-let graph (model : UVModel<PMethod<ViewExpr<GView>>>)
+let graph (model : UVModel<PMethod<ViewExpr<MGView>>>)
           : Result<UVModel<Graph>, Error> =
     tryMapAxioms graphMethod model

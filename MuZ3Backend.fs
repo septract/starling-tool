@@ -70,7 +70,7 @@ module Types =
         { /// <summary>
           ///     List of definite viewdefs, as (view, def) pairs, to check.
           /// </summary>
-          Definites : (VFunc * MBoolExpr) list
+          Definites : (MVFunc * MBoolExpr) list
           /// <summary>
           ///     Map of (view name, FuncDecl) bindings.
           /// </summary>
@@ -130,7 +130,7 @@ module Pretty =
             Indented
             [ (String "Definites",
                ds |>
-               List.map (fun (f, d) -> equality (printVFunc f)
+               List.map (fun (f, d) -> equality (printMVFunc f)
                                                 (printMBoolExpr d))
                |> vsep)
               (String "Rules",
@@ -565,8 +565,10 @@ module Translator =
     ///     used to prove the model, and the map of names to <c>FuncDecl</c>s
     ///     to use to start queries.
     /// </returns>
-    let translate reals ctx
-                  ( { Globals = svars ; ViewDefs = ds ; Axioms = xs } : IFModel<STerm<GView, VFunc>> ) =
+    let translate
+      reals
+      (ctx : Z3.Context)
+      ( { Globals = svars ; ViewDefs = ds ; Axioms = xs } : IFModel<STerm<MGView, MVFunc>> ) =
         let funcDecls, definites = translateViewDefs reals ctx ds
         let vrules = translateVariables reals ctx funcDecls svars
         let trules = xs |> Map.toSeq |> Seq.choose (translateTerm reals ctx funcDecls)

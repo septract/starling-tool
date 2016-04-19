@@ -175,5 +175,5 @@ type GraphTests() =
     /// </summary>
     [<TestCaseSource("ViewExprFlattens")>]
     member x.``View expressions can be flattened into views``
-        (ve : ViewExpr<GView>) =
+        (ve : ViewExpr<MGView>) =
         match ve with InnerView v -> v

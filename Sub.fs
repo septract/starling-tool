@@ -3,6 +3,8 @@
 /// </summary>
 module Starling.Core.Sub
 
+open Chessie.ErrorHandling
+
 open Starling.Utils
 open Starling.Collections
 
@@ -32,6 +34,26 @@ module Types =
         TypeMapper<
             IntExpr<'srcVar>, BoolExpr<'srcVar>,
             IntExpr<'dstVar>, BoolExpr<'dstVar>>
+
+    /// <summary>
+    ///     A possibly failing <c>TypeMap</c> mapping between forms of <c>Expr</c>s.
+    /// </summary>
+    /// <typeparam name="srcVar">
+    ///     The type of variables entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstVar">
+    ///     The type of variables leaving the map.
+    /// </typeparam>
+    /// <typeparam name="err">
+    ///     The type of errors occurring in the map.
+    /// </typeparam>
+    [<NoComparison>]
+    [<NoEquality>]
+    type TrySubFun<'srcVar, 'dstVar, 'err> =
+        TypeMapper<
+            IntExpr<'srcVar>, BoolExpr<'srcVar>,
+            Result<IntExpr<'dstVar>, 'err>,
+            Result<BoolExpr<'dstVar>, 'err>>
 
     /// <summary>
     ///     A <c>TypeMap</c> mapping between forms of <c>Var</c>s.
@@ -71,6 +93,12 @@ let subExpr : SubFun<'srcVar, 'dstVar> -> Expr<'srcVar> -> Expr<'dstVar> =
 /// <param name="_arg1">
 ///   The <c>VFunc</c> over which whose expressions are to be mapped.
 /// </param>
+/// <typeparam name="srcVar">
+///     The type of variables entering the map.
+/// </typeparam>
+/// <typeparam name="dstVar">
+///     The type of variables leaving the map.
+/// </typeparam>
 /// <returns>
 ///   The <c>VFunc</c> resulting from the mapping.
 /// </returns>
@@ -80,9 +108,10 @@ let subExpr : SubFun<'srcVar, 'dstVar> -> Expr<'srcVar> -> Expr<'dstVar> =
 ///   </para>
 /// </remarks>
 let subExprInVFunc
-  (sub : SubFun<MarkedVar, MarkedVar>)
-  { Name = n ; Params = ps } =
-  { Name = n ; Params = List.map (subExpr sub) ps }
+  (sub : SubFun<'srcVar, 'dstVar>)
+  ( { Name = n ; Params = ps } : VFunc<'srcVar> )
+  : VFunc<'dstVar> =
+    { Name = n ; Params = List.map (subExpr sub) ps }
 
 /// <summary>
 ///   Maps a <c>SubFun</c> over all expressions in a <c>GFunc</c>.
@@ -90,6 +119,12 @@ let subExprInVFunc
 /// <param name="_arg1">
 ///   The <c>GFunc</c> over which whose expressions are to be mapped.
 /// </param>
+/// <typeparam name="srcVar">
+///     The type of variables entering the map.
+/// </typeparam>
+/// <typeparam name="dstVar">
+///     The type of variables leaving the map.
+/// </typeparam>
 /// <returns>
 ///   The <c>GFunc</c> resulting from the mapping.
 /// </returns>
@@ -100,8 +135,9 @@ let subExprInVFunc
 ///   </para>
 /// </remarks>
 let subExprInGFunc
-  (sub : SubFun<MarkedVar, MarkedVar>)
-  { Cond = cond ; Item = item } =
+  (sub : SubFun<'srcVar, 'dstVar>)
+  ( { Cond = cond ; Item = item } : GFunc<'srcVar> )
+  : GFunc<'dstVar> =
     { Cond = TypeMapper.mapBool sub cond
       Item = subExprInVFunc sub item }
 
@@ -114,6 +150,12 @@ let subExprInGFunc
 /// <param name="_arg1">
 ///   The <c>GView</c> over which whose expressions are to be mapped.
 /// </param>
+/// <typeparam name="srcVar">
+///     The type of variables entering the map.
+/// </typeparam>
+/// <typeparam name="dstVar">
+///     The type of variables leaving the map.
+/// </typeparam>
 /// <returns>
 ///   The <c>GView</c> resulting from the mapping.
 /// </returns>
@@ -123,33 +165,191 @@ let subExprInGFunc
 ///     <c>GFunc</c>s.
 ///   </para>
 /// </remarks>
-let subExprInGView (sub : SubFun<MarkedVar, MarkedVar>) =
+let subExprInGView
+  (sub : SubFun<'srcVar, 'dstVar>)
+  : GView<'srcVar>
+  -> GView<'dstVar> =
     Multiset.map (subExprInGFunc sub)
 
 /// <summary>
-///   Maps a <c>SubFun</c> over all expressions in a <c>DTerm</c>.
+///     Maps a <c>SubFun</c> over all expressions in an <c>Term</c>
+///     over a <c>GView</c> weakest-pre and <c>VFunc</c> goal.
 /// </summary>
 /// <param name="sub">
-///   The <c>SubFun</c> to map over all expressions in the <c>DTerm</c>.
+///     The <c>SubFun</c> to map over all expressions in the <c>STerm</c>.
 /// </param>
-/// <param name="_arg1">
-///   The <c>DTerm</c> over which whose expressions are to be mapped.
+/// <param name="term">
+///     The <c>Term</c> over which whose expressions are to be mapped.
 /// </param>
+/// <typeparam name="srcVar">
+///     The type of variables entering the map.
+/// </typeparam>
+/// <typeparam name="dstVar">
+///     The type of variables leaving the map.
+/// </typeparam>
 /// <returns>
-///   The <c>DTerm</c> resulting from the mapping.
+///     The <c>Term</c> resulting from the mapping.
 /// </returns>
 /// <remarks>
-///   <para>
-///     The expressions in a <c>DTerm</c> are those of its constituent
-///     command (<c>BoolExpr</c>), its weakest precondition
-///     (<c>GView</c>), and its goal (<c>VFunc</c>).
-///   </para>
+///     <para>
+///         The expressions in the term are those of its
+///         constituent command (<c>BoolExpr</c>), its weakest
+///         precondition (<c>GView</c>), and its goal (<c>VFunc</c>).
+///     </para>
 /// </remarks>
-let subExprInDTerm (sub : SubFun<MarkedVar, MarkedVar>) =
+let subExprInDTerm
+  (sub : SubFun<'srcVar, 'dstVar>)
+  (term : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>)
+  : Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>> =
     mapTerm
         (TypeMapper.mapBool sub)
         (subExprInGView sub)
         (subExprInVFunc sub)
+        term
+
+/// <summary>
+///     Maps a <c>TrySubFun</c> over all expressions in a <c>VFunc</c>.
+/// </summary>
+/// <param name="sub">
+///     The <c>TrySubFun</c> to map over all expressions in the <c>VFunc</c>.
+/// </param>
+/// <param name="_arg1">
+///     The <c>VFunc</c> over which whose expressions are to be mapped.
+/// </param>
+/// <typeparam name="srcVar">
+///     The type of variables entering the map.
+/// </typeparam>
+/// <typeparam name="dstVar">
+///     The type of variables leaving the map.
+/// </typeparam>
+/// <typeparam name="err">
+///     The type of any returned errors.
+/// </typeparam>
+/// <returns>
+///     The Chessie-wrapped <c>VFunc</c> resulting from the mapping.
+/// </returns>
+/// <remarks>
+///     <para>
+///         The expressions in a <c>VFunc</c> are its parameters.
+///     </para>
+/// </remarks>
+let trySubExprInVFunc
+  (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
+  ( { Name = n ; Params = ps } : VFunc<'srcVar> )
+  : Result<VFunc<'dstVar>, 'err> =
+    ps
+    |> List.map (TypeMapper.tryMap sub)
+    |> collect
+    |> lift (fun ps' -> { Name = n ; Params = ps' } )
+
+/// <summary>
+///     Maps a <c>TrySubFun</c> over all expressions in a <c>GFunc</c>.
+/// </summary>
+/// <param name="_arg1">
+///     The <c>GFunc</c> over which whose expressions are to be mapped.
+/// </param>
+/// <typeparam name="srcVar">
+///     The type of variables entering the map.
+/// </typeparam>
+/// <typeparam name="dstVar">
+///     The type of variables leaving the map.
+/// </typeparam>
+/// <typeparam name="err">
+///     The type of errors occurring in the map.
+/// </typeparam>
+/// <returns>
+///     The Chessie-wrapped <c>GFunc</c> resulting from the mapping.
+/// </returns>
+/// <remarks>
+///     <para>
+///         The expressions in a <c>GFunc</c> are the guard itself, and
+///         the expressions of the enclosed <c>VFunc</c>.
+///     </para>
+/// </remarks>
+let trySubExprInGFunc
+  (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
+  ( { Cond = cond ; Item = item } : GFunc<'srcVar> )
+  : Result<GFunc<'dstVar>, 'err> =
+    lift2
+        (fun cond' item' -> { Cond = cond' ; Item = item' } )
+        (TypeMapper.mapBool sub cond)
+        (trySubExprInVFunc sub item)
+
+/// <summary>
+///     Maps a <c>TrySubFun</c> over all expressions in a <c>GView</c>.
+/// </summary>
+/// <param name="sub">
+///     The <c>TrySubFun</c> to map over all expressions in the
+///     <c>GView</c>.
+/// </param>
+/// <param name="_arg1">
+///     The <c>GView</c> over which whose expressions are to be mapped.
+/// </param>
+/// <typeparam name="srcVar">
+///     The type of variables entering the map.
+/// </typeparam>
+/// <typeparam name="dstVar">
+///     The type of variables leaving the map.
+/// </typeparam>
+/// <typeparam name="err">
+///     The type of any returned errors.
+/// </typeparam>
+/// <returns>
+///     The Chessie-wrapped <c>GView</c> resulting from the mapping.
+/// </returns>
+/// <remarks>
+///     <para>
+///         The expressions in a <c>GView</c> are those of its
+///         constituent <c>GFunc</c>s.
+///     </para>
+/// </remarks>
+let trySubExprInGView
+  (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
+  : GView<'srcVar> -> Result<GView<'dstVar>, 'err> =
+    Multiset.toFlatList
+    >> List.map (trySubExprInGFunc sub)
+    >> collect
+    >> lift Multiset.ofFlatList
+
+/// <summary>
+///     Maps a <c>TrySubFun</c> over all expressions in a <c>Term</c>
+///     over a <c>GView</c> weakest-pre and <c>VFunc</c> goal.
+/// </summary>
+/// <param name="sub">
+///     The <c>TrySubFun</c> to map over all expressions in the
+///     <c>Term</c>.
+/// </param>
+/// <param name="_arg1">
+///     The <c>Term</c> over which whose expressions are to be mapped.
+/// </param>
+/// <typeparam name="srcVar">
+///     The type of variables entering the map.
+/// </typeparam>
+/// <typeparam name="dstVar">
+///     The type of variables leaving the map.
+/// </typeparam>
+/// <typeparam name="err">
+///     The type of any returned errors.
+/// </typeparam>
+/// <returns>
+///     The Chessie-wrapped <c>Term</c> resulting from the mapping.
+/// </returns>
+/// <remarks>
+///     <para>
+///         The expressions in the term are those of its
+///         constituent command (<c>BoolExpr</c>), its weakest
+///         precondition (<c>GView</c>), and its goal (<c>VFunc</c>).
+///     </para>
+/// </remarks>
+let trySubExprInDTerm
+  (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
+  : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>
+  -> Result<Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>>, 'err> =
+    tryMapTerm
+        (TypeMapper.mapBool sub)
+        (trySubExprInGView sub)
+        (trySubExprInVFunc sub)
+
 
 (*
  * Variable substitution (special case of substitution)

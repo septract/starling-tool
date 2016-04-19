@@ -11,7 +11,7 @@ open Starling.Core.GuardedView
 /// Calculate the multiset of ways that this View matches the pattern in dv and add to the assumulator.
 let reifySingleDef view accumulator (dv : BViewDef<DView>) = 
 
-    let rec matchMultipleViews (pattern : DFunc list) (view : GFunc list) accumulator result =
+    let rec matchMultipleViews (pattern : DFunc list) (view : MGFunc list) accumulator result =
         match pattern with
         | [] ->
                 //Pull out the set of guards used in this match, and add to the set
@@ -25,7 +25,7 @@ let reifySingleDef view accumulator (dv : BViewDef<DView>) =
                     Item = List.rev views }
                     accumulator 
         | p :: pattern ->
-            let rec matchSingleView (view : GFunc list) rview accumulator =
+            let rec matchSingleView (view : MGFunc list) rview accumulator =
                match view with
                | [] -> accumulator
                | v :: view ->
@@ -40,7 +40,7 @@ let reifySingleDef view accumulator (dv : BViewDef<DView>) =
     matchMultipleViews (viewOf dv) view accumulator []
 
 /// Reifies an dvs entire view application.
-let reifyView (dvs : BViewDef<DView> List)  vap : ViewSet = 
+let reifyView (dvs : BViewDef<DView> List)  vap : MViewSet = 
     let goal = Multiset.toFlatList vap
     Seq.fold (reifySingleDef goal) Set.empty dvs |> Multiset.ofFlatSeq
 
@@ -52,6 +52,6 @@ let reifyTerm dvs =
     mapTerm id (reifyView dvs) id
 
 /// Reifies all of the terms in a model's axiom list.
-let reify : UVModel<PTerm<GView, OView>> -> UVModel<PTerm<ViewSet, OView>> =
+let reify : UVModel<PTerm<MGView, OView>> -> UVModel<PTerm<MViewSet, OView>> =
     fun ms -> 
         mapAxioms (reifyTerm ms.ViewDefs) ms

@@ -51,7 +51,7 @@ module Types =
     /// An error caused when emitting a Horn clause.
     type Error = 
         /// A Func is inconsistent with its definition.
-        | InconsistentFunc of func : VFunc * err : Instantiate.Types.Error
+        | InconsistentFunc of func : MVFunc * err : Instantiate.Types.Error
         /// A viewdef has a non-arithmetic param.
         | NonArithParam of Param
         /// A model has a non-arithmetic variable.
@@ -170,7 +170,7 @@ module Pretty =
         function
         | InconsistentFunc (func, err) ->
             wrapped "view func"
-                    (printVFunc func)
+                    (printMVFunc func)
                     (Instantiate.Pretty.printError err)
         | NonArithParam p ->
             fmt "parameter '{0}' is of type {1}: HSF only permits integers here"
@@ -370,7 +370,8 @@ let hsfModelTerms gs dvs =
     >> lift List.concat
 
 /// Constructs a HSF script for a model.
-let hsfModel ({ Globals = gs; ViewDefs = dvs; Axioms = xs } : IFModel<STerm<GView, VFunc>>) =
+let hsfModel
+  ( { Globals = gs; ViewDefs = dvs; Axioms = xs } : IFModel<STerm<MGView, MVFunc>> ) =
     trial {
         let! vs = gs |> hsfModelVariables
         let! ds = hsfModelViewDefs gs dvs |> lift Set.toList
