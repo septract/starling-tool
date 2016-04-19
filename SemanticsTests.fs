@@ -35,6 +35,24 @@ type SemanticsTests() =
     member x.``Boolean composition should work correctly`` xy =
         xy ||> composeBools
 
+    /// <summary>
+    ///     Test cases for the variable framer.
+    /// </summary>
+    static member FrameVars =
+        [ TestCaseData(CTyped.Int "foo")
+              .Returns(iEq (iAfter "foo") (iBefore "foo"))
+              .SetName("Frame an integer variable")
+          TestCaseData(CTyped.Bool "bar")
+              .Returns(bEq (bAfter "bar") (bBefore "bar"))
+              .SetName("Frame an integer variable") ]
+
+    /// <summary>
+    ///     Tests <c>frameVar</c>.
+    /// </summary>
+    [<TestCaseSource("FrameVars")>]
+    member x.``Test framing of individual variables`` var =
+        frameVar var
+
     // Test cases for the expression framer.
     static member FrameExprs = 
         [ TestCaseData(BTrue : MBoolExpr)
