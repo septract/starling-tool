@@ -203,7 +203,7 @@ let gHoldLock cnd : GFunc = gfunc cnd "holdLock" []
 let gHoldTick cnd : GFunc = gfunc cnd "holdTick" [Typed.Int (iUnmarked "t")]
 
 /// Produces the expression 's == t'.
-let sIsT = aEq (iUnmarked "s") (iUnmarked "t")
+let sIsT = iEq (iUnmarked "s") (iUnmarked "t")
 
 /// The ticket lock's lock method.
 let ticketLockLock =
@@ -316,14 +316,14 @@ let ticketLockViewDefs =
                    Params = [] }
                  { Name = "holdTick"
                    Params = [ Param.Int "t" ] } ] |> Multiset.toFlatList,
-           BNot(aEq (iUnmarked "serving") (iUnmarked "t")))
+           BNot(iEq (iUnmarked "serving") (iUnmarked "t")))
       Definite
           (Multiset.ofFlatList
                [ { Name = "holdTick"
                    Params = [ Param.Int "ta" ] }
                  { Name = "holdTick"
                    Params = [ Param.Int "tb" ] } ] |> Multiset.toFlatList,
-           BNot(aEq (iUnmarked "ta") (iUnmarked "tb")))
+           BNot(iEq (iUnmarked "ta") (iUnmarked "tb")))
       Definite
           (Multiset.ofFlatList
                [ { Name = "holdLock"
@@ -380,14 +380,14 @@ let ticketLockLockSubgraph : Subgraph =
                      edge "lock_V4"
                           [ func "Assume"
                                  [ Typed.Bool
-                                       (BNot (aEq (iBefore "s")
+                                       (BNot (iEq (iBefore "s")
                                                   (iBefore "t"))) ]]
                           "lock_V3")
                 ("lock_C3",
                      edge "lock_V4"
                           [ func "Assume"
                                  [ Typed.Bool
-                                       (aEq (iBefore "s")
+                                       (iEq (iBefore "s")
                                             (iBefore "t")) ]]
                           "lock_V2")
                 ("lock_C4",
@@ -455,7 +455,7 @@ let ticketLockLockGraph : Graph =
                         Command =
                             [ func "Assume"
                                    [ Typed.Bool
-                                         (aEq (iBefore "s")
+                                         (iEq (iBefore "s")
                                               (iBefore "t")) ]] }, 
                    Exit))
                 ("lock_V3",
@@ -475,7 +475,7 @@ let ticketLockLockGraph : Graph =
                           Command =
                               [ func "Assume"
                                      [ Typed.Bool
-                                           (BNot (aEq (iBefore "s")
+                                           (BNot (iEq (iBefore "s")
                                                       (iBefore "t"))) ]] }
                         { Name = "lock_C4"
                           Src = "lock_V1"
@@ -492,14 +492,14 @@ let ticketLockLockGraph : Graph =
                           Command =
                               [ func "Assume"
                                      [ Typed.Bool
-                                           (BNot (aEq (iBefore "s")
+                                           (BNot (iEq (iBefore "s")
                                                       (iBefore "t"))) ]] }
                         { Name = "lock_C3"
                           Dest = "lock_V2"
                           Command =
                               [ func "Assume"
                                      [ Typed.Bool
-                                           (aEq (iBefore "s")
+                                           (iEq (iBefore "s")
                                                 (iBefore "t")) ]] } ],
                   Set.singleton
                       { Name = "lock_C1"

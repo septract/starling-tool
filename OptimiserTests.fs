@@ -30,13 +30,13 @@ type OptimiserTests() =
 
     /// Test cases for rewriting Boolean expressions containing afters.
     static member AfterBools =
-        [ TestCaseData(aEq (iAfter "serving") (iAfter "ticket"))
-            .Returns(aEq (AAdd [iBefore "serving"; AInt 1L])
+        [ TestCaseData(iEq (iAfter "serving") (iAfter "ticket"))
+            .Returns(iEq (AAdd [iBefore "serving"; AInt 1L])
                          (iBefore "ticket"))
             .SetName("Remove arithmetic afters in a simple equality")
-          TestCaseData(aEq (iAfter "serving") (AAdd [iBefore "serving"
+          TestCaseData(iEq (iAfter "serving") (AAdd [iBefore "serving"
                                                      AInt 1L]))
-            .Returns(aEq (AAdd [iBefore "serving"; AInt 1L])
+            .Returns(iEq (AAdd [iBefore "serving"; AInt 1L])
                          (AAdd [iBefore "serving"; AInt 1L]))
             .SetName("Remove arithmetic afters in after-before relation")
           TestCaseData(BGt (iAfter "serving", iAfter "t"))

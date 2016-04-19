@@ -409,7 +409,7 @@ let mkLe a b = BLe (a, b)
 let mkEq a b = BEq (a, b)
 
 /// Makes an arithmetic equality.
-let aEq a b = BEq (Int a, Int b)
+let iEq a b = BEq (Int a, Int b)
 
 /// Makes a Boolean equality.
 let bEq a b = BEq (Bool a, Bool b)

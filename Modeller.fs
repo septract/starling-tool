@@ -312,12 +312,12 @@ let coreSemantics =
       (func "ICAS" [ Param.Int "destB"; Param.Int "destA"
                      Param.Int "testB"; Param.Int "testA"
                      Param.Int "set" ],
-       mkAnd [ mkImplies (aEq (iUnmarked "destB") (iUnmarked "testB"))
-                         (mkAnd [ aEq (iUnmarked "destA") (iUnmarked "set")
-                                  aEq (iUnmarked "testA") (iUnmarked "testB") ] )
-               mkImplies (mkNot (aEq (iUnmarked "destB") (iUnmarked "testB")))
-                         (mkAnd [ aEq (iUnmarked "destA") (iUnmarked "destB")
-                                  aEq (iUnmarked "testA") (iUnmarked "destB") ] ) ] )
+       mkAnd [ mkImplies (iEq (iUnmarked "destB") (iUnmarked "testB"))
+                         (mkAnd [ iEq (iUnmarked "destA") (iUnmarked "set")
+                                  iEq (iUnmarked "testA") (iUnmarked "testB") ] )
+               mkImplies (mkNot (iEq (iUnmarked "destB") (iUnmarked "testB")))
+                         (mkAnd [ iEq (iUnmarked "destA") (iUnmarked "destB")
+                                  iEq (iUnmarked "testA") (iUnmarked "destB") ] ) ] )
       // Boolean CAS
       (func "BCAS" [ Param.Bool "destB"; Param.Bool "destA"
                      Param.Bool "testB"; Param.Bool "testA"
@@ -336,24 +336,24 @@ let coreSemantics =
       // Integer load
       (func "!ILoad" [ Param.Int "destB"; Param.Int "destA"
                        Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ aEq (iUnmarked "destA") (iUnmarked "srcB")
-               aEq (iUnmarked "srcA") (iUnmarked "srcB") ] )
+       mkAnd [ iEq (iUnmarked "destA") (iUnmarked "srcB")
+               iEq (iUnmarked "srcA") (iUnmarked "srcB") ] )
       // Integer load-and-increment
       (func "!ILoad++" [ Param.Int "destB"; Param.Int "destA"
                          Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ aEq (iUnmarked "destA") (iUnmarked "srcB")
-               aEq (iUnmarked "srcA") (mkAdd2 (iUnmarked "srcB") (AInt 1L)) ] )
+       mkAnd [ iEq (iUnmarked "destA") (iUnmarked "srcB")
+               iEq (iUnmarked "srcA") (mkAdd2 (iUnmarked "srcB") (AInt 1L)) ] )
       // Integer load-and-decrement
       (func "!ILoad--" [ Param.Int "destB"; Param.Int "destA"
                          Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ aEq (iUnmarked "destA") (iUnmarked "srcB")
-               aEq (iUnmarked "srcA") (mkSub2 (iUnmarked "srcB") (AInt 1L)) ] )
+       mkAnd [ iEq (iUnmarked "destA") (iUnmarked "srcB")
+               iEq (iUnmarked "srcA") (mkSub2 (iUnmarked "srcB") (AInt 1L)) ] )
       // Integer increment
       (func "!I++" [ Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ aEq (iUnmarked "srcA") (mkAdd2 (iUnmarked "srcB") (AInt 1L)) ] )
+       mkAnd [ iEq (iUnmarked "srcA") (mkAdd2 (iUnmarked "srcB") (AInt 1L)) ] )
       // Integer decrement
       (func "!I--" [ Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ aEq (iUnmarked "srcA") (mkSub2 (iUnmarked "srcB") (AInt 1L)) ] )
+       mkAnd [ iEq (iUnmarked "srcA") (mkSub2 (iUnmarked "srcB") (AInt 1L)) ] )
       // Boolean load
       (func "!BLoad" [ Param.Bool "destB"; Param.Bool "destA"
                        Param.Bool "srcB"; Param.Bool "srcA" ],
@@ -367,7 +367,7 @@ let coreSemantics =
       // Integer store
       (func "!IStore" [ Param.Int "destB"; Param.Int "destA"
                         Param.Int "src" ],
-       aEq (iUnmarked "destA") (iUnmarked "src"))
+       iEq (iUnmarked "destA") (iUnmarked "src"))
       // Boolean store
       (func "!BStore" [ Param.Bool "destB"; Param.Bool "destA"
                         Param.Bool "src" ],
@@ -380,7 +380,7 @@ let coreSemantics =
       // Integer local set
       (func "!ILSet" [ Param.Int "destB"; Param.Int "destA"
                        Param.Int "src" ],
-       aEq (iUnmarked "destA") (iUnmarked "src"))
+       iEq (iUnmarked "destA") (iUnmarked "src"))
       // Boolean store
       (func "!BLSet" [ Param.Bool "destB"; Param.Bool "destA"
                        Param.Bool "src" ],

@@ -17,9 +17,9 @@ type InstantiateTests() =
     /// Environment of test funcs.
     static member TestFuncs =
         [ (dfunc "foo" [],
-           aEq (AInt 5L : MIntExpr) (AInt 6L))
+           iEq (AInt 5L : MIntExpr) (AInt 6L))
           (dfunc "bar" [ Param.Int "quux" ],
-           aEq (iUnmarked "quux") (iUnmarked "blob"))
+           iEq (iUnmarked "quux") (iUnmarked "blob"))
           (dfunc "baz" [ Param.Int "quux" ; Param.Bool "flop" ],
            BAnd [bUnmarked "flop"; BGt (iUnmarked "quux", iUnmarked "quux")]) ]
 
@@ -30,10 +30,10 @@ type InstantiateTests() =
             .Returns(none |> Some)
             .SetName("Instantiate undefined func")
           TestCaseData(vfunc "foo" [])
-            .Returns(aEq (AInt 5L : MIntExpr) (AInt 6L : MIntExpr) |> Some |> Some)
+            .Returns(iEq (AInt 5L : MIntExpr) (AInt 6L : MIntExpr) |> Some |> Some)
             .SetName("Instantiate func with no arguments")
           TestCaseData(vfunc "bar" [AInt 101L |> Expr.Int])
-            .Returns(aEq (AInt 101L) (iUnmarked "blob") |> Some |> Some)
+            .Returns(iEq (AInt 101L) (iUnmarked "blob") |> Some |> Some)
             .SetName("Instantiate func with one int argument")
           TestCaseData(vfunc "baz" [iAfter "burble" |> Expr.Int ; BTrue |> Expr.Bool])
             .Returns(BAnd [BTrue; BGt (iAfter "burble", iAfter "burble")] |> Some |> Some)

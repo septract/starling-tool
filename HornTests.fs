@@ -37,13 +37,13 @@ type HornTests() =
                 Params = [ Param.Int "serving"
                            Param.Int "ticket"
                            Param.Int "t" ] },
-              Some <| BNot(aEq (iUnmarked "serving") (iUnmarked "t")))
+              Some <| BNot(iEq (iUnmarked "serving") (iUnmarked "t")))
             ( { Name = "v_holdTick_holdTick"
                 Params = [ Param.Int "serving"
                            Param.Int "ticket"
                            Param.Int "ta"
                            Param.Int "tb" ] },
-              Some <| BNot(aEq (iUnmarked "ta") (iUnmarked "tb")))
+              Some <| BNot(iEq (iUnmarked "ta") (iUnmarked "tb")))
             ( { Name = "v_holdLock_holdLock"
                 Params = [ Param.Int "serving"
                            Param.Int "ticket" ] },
