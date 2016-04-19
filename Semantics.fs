@@ -114,10 +114,7 @@ let composeBools x y =
 
 /// Generates a framing relation for a given variable.
 let frameVar par =
-    let ve = mkVarExp Unmarked par
-
-    BEq(subExpr (liftMarker After always) ve,
-        subExpr (liftMarker Before always) ve)
+    BEq (mkVarExp After par, mkVarExp Before par)
 
 /// Generates a frame for a given expression.
 /// The frame is a relation a!after = a!before for every a not mentioned in the expression.
