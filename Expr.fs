@@ -119,15 +119,15 @@ module Types =
     /// <summary>
     ///     An expression of arbitrary type using <c>Var</c>s.
     /// </summary>
-    type VExpr = Expr<MarkedVar>
+    type VExpr = Expr<Var>
     /// <summary>
     ///     An expression of Boolean type using <c>Var</c>s.
     /// </summary>
-    type VBoolExpr = BoolExpr<MarkedVar>
+    type VBoolExpr = BoolExpr<Var>
     /// <summary>
     ///     An expression of integral type using <c>Var</c>s.
     /// </summary>
-    type VIntExpr = IntExpr<MarkedVar>
+    type VIntExpr = IntExpr<Var>
 
     /// <summary>
     ///     An expression of arbitrary type using <c>MarkedVar</c>s.

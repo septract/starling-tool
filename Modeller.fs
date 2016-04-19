@@ -49,10 +49,10 @@ module Types =
         | ExprNotBoolean
         /// A non-Boolean variable was found in a Boolean position.
         | VarNotBoolean of var : LValue
-        /// A non-arithmetic expression was found in an arithmetic position.
-        | ExprNotArith
-        /// A non-arithmetic variable was found in an arithmetic position.
-        | VarNotArith of var : LValue
+        /// A non-integral expression was found in an integral position.
+        | ExprNotInt
+        /// A non-integral variable was found in an integral position.
+        | VarNotInt of var : LValue
         /// A variable usage in the expression produced a `VarMapError`.
         | Var of var : LValue * err : VarMapError
 
@@ -181,10 +181,10 @@ module Pretty =
             "expression is not suitable for use in a Boolean position" |> String
         | VarNotBoolean lv ->
             fmt "lvalue '{0}' is not a suitable type for use in a Boolean expressio    n" [ printLValue lv ]
-        | ExprNotArith ->
-            "expression is not suitable for use in an arithmetic position" |> String
-        | VarNotArith lv ->
-            fmt "lvalue '{0}' is not a suitable type for use in an arithmetic expre    ssion" [ printLValue lv ]
+        | ExprNotInt ->
+            "expression is not suitable for use in an integral position" |> String
+        | VarNotInt lv ->
+            fmt "lvalue '{0}' is not a suitable type for use in an integral expre    ssion" [ printLValue lv ]
         | Var(var, err) -> wrapped "variable" (var |> printLValue) (err |> printVarMapError)
 
     /// Pretty-prints view conversion errors.
@@ -399,10 +399,47 @@ let coreSemantics =
  * Expression translation
  *)
 
-/// Converts a Starling expression of ambiguous type to a Z3 predicate using
-/// the given environment.
-let rec modelExpr env expr =
-    match expr with
+/// <summary>
+///     Models a Starling expression as an <c>Expr</c>.
+///
+///     <para>
+///         Whenever we find a variable, we check the given environment
+///         to make sure it both exists and is being used in a type-safe
+///         manner.  Thus, this part of the modeller implements much of
+///         Starling's type checking.
+///     </para>
+///     <para>
+///         Since <c>modelExpr</c> and its Boolean and integral
+///         equivalents are used to create expressions over both
+///         <c>Var</c> and <c>MarkedVar</c>, we allow variable lookups
+///         to be modified by a post-processing function.
+///     </para>
+/// </summary>
+/// <param name="env">
+///     The <c>VarMap</c> of variables bound where this expression
+///     occurs.  Usually, but not always, these are the thread-local
+///     variables.
+/// </param>
+/// <param name="varF">
+///     A function to transform any variables after they are looked-up,
+///     but before they are placed in the modelled expression.  Use this
+///     to apply markers on variables, etc.
+/// </param>
+/// <typeparam name="var">
+///     The type of variables in the <c>Expr</c>, achieved by
+///     applying <paramref name="varF"/> to <c>Var</c>s.
+/// </typeparam>
+/// <returns>
+///     A function taking <c>Expression</c>s.  This function will return
+///     a <c>Result</c>, over <c>ExprError</c>, containing the modelled
+///     <c>Expr</c> on success.  The exact type parameters of the
+///     expression depend on <paramref name="varF"/>.
+/// </returns>
+let rec modelExpr
+  (env : VarMap)
+  (varF : Var -> 'var)
+  : Expression -> Result<Expr<'var>, ExprError> =
+    function
     (* First, if we have a variable, the type of expression is
      * determined by the type of the variable.
      *)
@@ -411,80 +448,147 @@ let rec modelExpr env expr =
         |> wrapMessages Var (lookupVar env)
         |> lift
                (TypeMapper.map
-                    (TypeMapper.make iUnmarked bUnmarked))
+                    (TypeMapper.compose
+                         (TypeMapper.cmake varF)
+                         (TypeMapper.make AVar BVar)))
     (* We can use the active patterns above to figure out whether we
      * need to treat this expression as arithmetic or Boolean.
      *)
-    | ArithExp -> modelArithExpr env expr |> lift Expr.Int
-    | BoolExp -> modelBoolExpr env expr |> lift Expr.Bool
+    | ArithExp expr -> expr |> modelIntExpr env varF |> lift Expr.Int
+    | BoolExp expr -> expr |> modelBoolExpr env varF |> lift Expr.Bool
     | _ -> failwith "unreachable"
 
-/// Converts a Starling Boolean expression to a Z3 predicate using
-/// the given partial model and environment.
-and modelBoolExpr env expr =
-    match expr with
-    | True -> BTrue |> ok
-    | False -> BFalse |> ok
-    | LV v ->
-        (* Look-up the variable to ensure it a) exists and b) is of a
-         * Boolean type.
-         *)
-        v
-        |> wrapMessages Var (lookupVar env)
-        |> bind (function
-                 | Typed.Bool vn -> vn |> bUnmarked |> ok
-                 | _ -> v |> VarNotBoolean |> fail)
-    | Bop(BoolOp as op, l, r) ->
-        match op with
-        | ArithIn as o ->
-            lift2 (match o with
-                   | Gt -> mkGt
-                   | Ge -> mkGe
-                   | Le -> mkLe
-                   | Lt -> mkLt
-                   | _ -> failwith "unreachable")
-                  (modelArithExpr env l)
-                  (modelArithExpr env r)
-        | BoolIn as o ->
-            lift2 (match o with
-                   | And -> mkAnd2
-                   | Or -> mkOr2
-                   | _ -> failwith "unreachable")
-                  (modelBoolExpr env l)
-                  (modelBoolExpr env r)
-        | AnyIn as o ->
-            lift2 (match o with
-                   | Eq -> mkEq
-                   | Neq -> mkNeq
-                   | _ -> failwith "unreachable")
-                  (modelExpr env l)
-                  (modelExpr env r)
-    | _ -> fail ExprNotBoolean
+/// <summary>
+///     Models a Starling integral expression as a <c>BoolExpr</c>.
+///
+///     <para>
+///         See <c>modelExpr</c> for more information.
+///     </para>
+/// </summary>
+/// <param name="env">
+///     The <c>VarMap</c> of variables bound where this expression
+///     occurs.  Usually, but not always, these are the thread-local
+///     variables.
+/// </param>
+/// <param name="varF">
+///     A function to transform any variables after they are looked-up,
+///     but before they are placed in <c>AVar</c>.  Use this to apply
+///     markers on variables, etc.
+/// </param>
+/// <typeparam name="var">
+///     The type of variables in the <c>BoolExpr</c>, achieved by
+///     applying <paramref name="varF"/> to <c>Var</c>s.
+/// </typeparam>
+/// <returns>
+///     A function, taking <c>Expression</c>s previously judged as
+///     Boolean.  This function will return a <c>Result</c>, over
+///     <c>ExprError</c>, containing the modelled <c>BoolExpr</c> on
+///     success.  The exact type parameters of the expression depend on
+///     <paramref name="varF"/>.
+/// </returns>
+and modelBoolExpr
+  (env : VarMap)
+  (varF : Var -> 'var)
+  : Expression -> Result<BoolExpr<'var>, ExprError> =
+    let mi = modelIntExpr env varF
+    let me = modelExpr env varF
 
-/// Converts a Starling arithmetic expression ot a Z3 predicate using
-/// the given Z3 context.
-and modelArithExpr env expr =
-    match expr with
-    | Int i -> i |> AInt |> ok
-    | LV v ->
-        (* Look-up the variable to ensure it a) exists and b) is of an
-         * arithmetic type.
-         *)
-        v
-        |> wrapMessages Var (lookupVar env)
-        |> bind (function
-                 | Typed.Int vn -> vn |> iUnmarked |> ok
-                 | _ -> v |> VarNotArith |> fail)
-    | Bop(ArithOp as op, l, r) ->
-        lift2 (match op with
-               | Mul -> mkMul2
-               | Div -> mkDiv
-               | Add -> mkAdd2
-               | Sub -> mkSub2
-               | _ -> failwith "unreachable")
-              (modelArithExpr env l)
-              (modelArithExpr env r)
-    | _ -> fail ExprNotArith
+    let rec mb =
+        function
+        | True -> BTrue |> ok
+        | False -> BFalse |> ok
+        | LV v ->
+            (* Look-up the variable to ensure it a) exists and b) is of a
+             * Boolean type.
+             *)
+            v
+            |> wrapMessages Var (lookupVar env)
+            |> bind (function
+                     | Typed.Bool vn -> vn |> varF |> BVar |> ok
+                     | _ -> v |> VarNotBoolean |> fail)
+        | Bop(BoolOp as op, l, r) ->
+            match op with
+            | ArithIn as o ->
+                lift2 (match o with
+                       | Gt -> mkGt
+                       | Ge -> mkGe
+                       | Le -> mkLe
+                       | Lt -> mkLt
+                       | _ -> failwith "unreachable")
+                      (mi l)
+                      (mi r)
+            | BoolIn as o ->
+                lift2 (match o with
+                       | And -> mkAnd2
+                       | Or -> mkOr2
+                       | _ -> failwith "unreachable")
+                      (mb l)
+                      (mb r)
+            | AnyIn as o ->
+                lift2 (match o with
+                       | Eq -> mkEq
+                       | Neq -> mkNeq
+                       | _ -> failwith "unreachable")
+                      (me l)
+                      (me r)
+        | _ -> fail ExprNotBoolean
+    mb
+
+/// <summary>
+///     Models a Starling integral expression as an <c>IntExpr</c>.
+///
+///     <para>
+///         See <c>modelExpr</c> for more information.
+///     </para>
+/// </summary>
+/// <param name="env">
+///     The <c>VarMap</c> of variables bound where this expression
+///     occurs.  Usually, but not always, these are the thread-local
+///     variables.
+/// </param>
+/// <param name="varF">
+///     A function to transform any variables after they are looked-up,
+///     but before they are placed in <c>AVar</c>.  Use this to apply
+///     markers on variables, etc.
+/// </param>
+/// <typeparam name="var">
+///     The type of variables in the <c>IntExpr</c>, achieved by
+///     applying <paramref name="varF"/> to <c>Var</c>s.
+/// </typeparam>
+/// <returns>
+///     A function, taking <c>Expression</c>s previously judged as
+///     integral.  This function will return a <c>Result</c>, over
+///     <c>ExprError</c>, containing the modelled <c>IntExpr</c> on
+///     success.  The exact type parameters of the expression depend on
+///     <paramref name="varF"/>.
+/// </returns>
+and modelIntExpr
+  (env : VarMap)
+  (varF : Var -> 'var)
+  : Expression -> Result<IntExpr<'var>, ExprError> =
+    let rec fn =
+        function
+        | Int i -> i |> AInt |> ok
+        | LV v ->
+            (* Look-up the variable to ensure it a) exists and b) is of an
+             * arithmetic type.
+             *)
+            v
+            |> wrapMessages Var (lookupVar env)
+            |> bind (function
+                     | Typed.Int vn -> vn |> varF |> AVar |> ok
+                     | _ -> v |> VarNotInt |> fail)
+        | Bop(ArithOp as op, l, r) ->
+            lift2 (match op with
+                   | Mul -> mkMul2
+                   | Div -> mkDiv
+                   | Add -> mkAdd2
+                   | Sub -> mkSub2
+                   | _ -> failwith "unreachable")
+                  (fn l)
+                  (fn r)
+        | _ -> fail ExprNotInt
+    fn 
 
 (*
  * Views
@@ -546,13 +650,13 @@ let modelViewDef
     let av = viewOf avd
 
     trial {
-        let! vms = modelDView vprotos av |> mapMessages (curry CEView av) 
+        let! vms = wrapMessages CEView (modelDView vprotos) av
         let  v = vms |> Multiset.toFlatList
         let! e = envOfViewDef svars v |> mapMessages (curry CEView av)
         return! (match avd with
                  | Definite (_, dae) ->
-                    modelBoolExpr e dae
-                    |> mapMessages (curry CEExpr dae)
+                    dae
+                    |> wrapMessages CEExpr (modelBoolExpr e MarkedVar.Unmarked)
                     |> lift (fun em -> Definite (v, em))
                  | Uninterpreted (_, sym) ->
                      ok (Uninterpreted (v, sym))
@@ -730,7 +834,7 @@ let modelCFunc protos env afunc =
              afunc.Params
              |> Seq.map (fun e ->
                              e
-                             |> modelExpr env
+                             |> modelExpr env MarkedVar.Unmarked
                              |> mapMessages (curry ViewError.BadExpr e))
              |> collect
              // Then, put them into a VFunc.
@@ -752,7 +856,7 @@ let rec modelCView protos ls =
         modelCFunc protos ls afunc |> lift Multiset.singleton
     | View.If(e, l, r) ->
         lift3 (fun em lm rm -> CFunc.ITE(em, lm, rm) |> Multiset.singleton)
-              (e |> modelBoolExpr ls
+              (e |> modelBoolExpr ls MarkedVar.Unmarked
                  |> mapMessages (curry ViewError.BadExpr e))
               (modelCView protos ls l)
               (modelCView protos ls r)
@@ -830,7 +934,7 @@ let modelBoolStore locals dest src mode =
      *                     and the fetch mode must be Direct.
      *)
     trial {
-        let! sxp = wrapMessages BadExpr (modelBoolExpr locals) src
+        let! sxp = wrapMessages BadExpr (modelBoolExpr locals MarkedVar.Unmarked) src
         match mode with
         | Direct -> return func "!BStore" [ dest |> bBefore |> Expr.Bool
                                             dest |> bAfter |> Expr.Bool
@@ -846,7 +950,8 @@ let modelIntStore locals dest src mode =
      *                       and the fetch mode must be Direct.
      *)
     trial {
-        let! sxp = wrapMessages BadExpr (modelArithExpr locals) src
+        let! sxp =
+            wrapMessages BadExpr (modelIntExpr locals MarkedVar.Unmarked) src
         match mode with
         | Direct -> return func "!IStore" [ dest |> iBefore |> Expr.Int
                                             dest |> iAfter |> Expr.Int
@@ -868,7 +973,8 @@ let modelCAS svars tvars destLV testLV set =
         let! test = wrapMessages BadTVar (lookupVar tvars) testLV
         match dest, test with
         | Typed.Bool d, Typed.Bool t ->
-            let! setE = wrapMessages BadExpr (modelBoolExpr tvars) set
+            let! setE =
+                wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Unmarked) set
             return
                 func
                     "BCAS"
@@ -878,7 +984,8 @@ let modelCAS svars tvars destLV testLV set =
                       t |> bAfter |> Expr.Bool
                       setE |> Expr.Bool |> before ]
         | Typed.Int d, Typed.Int t ->
-            let! setE = wrapMessages BadExpr (modelArithExpr tvars) set
+            let! setE =
+                wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Unmarked) set
             return
                 func
                     "ICAS"
@@ -939,7 +1046,7 @@ let rec modelAtomic svars tvars =
     | Id -> ok (func "Id" [])
     | Assume e ->
         e
-        |> wrapMessages BadExpr (modelBoolExpr tvars)
+        |> wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Unmarked)
         |> lift (Expr.Bool >> Seq.singleton >> func "Assume")
 
 /// Converts a local variable assignment to a Prim.
@@ -952,7 +1059,8 @@ and modelAssign tvars lLV e =
         let! l = wrapMessages BadTVar (lookupVar tvars) lLV
         match l with
         | Typed.Bool ls ->
-            let! em = wrapMessages BadExpr (modelBoolExpr tvars) e
+            let! em =
+                wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Unmarked) e
             return
                 func
                     "!BLSet"
@@ -960,7 +1068,8 @@ and modelAssign tvars lLV e =
                       ls |> bAfter |> Expr.Bool
                       em |> Expr.Bool |> before ]
         | Typed.Int ls ->
-            let! em = wrapMessages BadExpr (modelArithExpr tvars) e
+            let! em =
+                wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Unmarked) e
             return
                 func
                     "!ILSet"
@@ -971,8 +1080,11 @@ and modelAssign tvars lLV e =
 
 /// Creates a partially resolved axiom for an if-then-else.
 and modelITE protos svars tvars i t f =
-    trial { let! iM = i |> modelBoolExpr tvars
-                        |> mapMessages (curry BadITECondition i)
+    trial { let! iM =
+                wrapMessages
+                    BadITECondition
+                    (modelBoolExpr tvars MarkedVar.Unmarked)
+                    i
             (* We need to calculate the recursive axioms first, because we
              * need the inner cpairs for each to store the ITE placeholder.
              *)
@@ -989,7 +1101,10 @@ and modelWhile isDo protos gs ls e b =
      * inject a placeholder, and add in the recursive axioms.
      *)
     lift2 (fun eM bM -> PartCmd.While(isDo, eM, bM))
-          (modelBoolExpr ls e |> mapMessages (curry BadWhileCondition e))
+          (wrapMessages
+               BadWhileCondition
+               (modelBoolExpr ls MarkedVar.Unmarked)
+               e)
           (modelBlock protos gs ls b)
 
 /// Converts a PrimSet to a PartCmd.

@@ -374,13 +374,13 @@ let (|ArithIn|BoolIn|AnyIn|) =
 
 /// Active pattern classifying expressions as to whether they are
 /// arithmetic, Boolean, or indeterminate.
-let (|BoolExp|ArithExp|AnyExp|) =
-    function
-    | LV _ -> AnyExp
-    | Int _ -> ArithExp
-    | True | False -> BoolExp
-    | Bop(BoolOp, _, _) -> BoolExp
-    | Bop(ArithOp, _, _) -> ArithExp
+let (|BoolExp|ArithExp|AnyExp|) e =
+    match e with
+    | LV _ -> AnyExp e
+    | Int _ -> ArithExp e
+    | True | False -> BoolExp e
+    | Bop(BoolOp, _, _) -> BoolExp e
+    | Bop(ArithOp, _, _) -> ArithExp e
 
 (*
  * Misc
