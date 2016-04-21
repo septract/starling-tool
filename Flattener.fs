@@ -57,7 +57,6 @@ let addGlobalsToViewDef gs =
     function
     | Definite (v, d) -> Definite (funcOfView gs v, d)
     | Indefinite v -> Indefinite (funcOfView gs v)
-    | Uninterpreted (v, d) -> Uninterpreted (funcOfView gs v, d)
 
 (*
  * Whole models

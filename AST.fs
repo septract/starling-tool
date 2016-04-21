@@ -221,8 +221,7 @@ module Pretty =
                String "->"
                (match cs with
                 | Definite (_, d) -> printExpression d
-                | Indefinite _ -> String "?"
-                | Uninterpreted (_, s) -> printSymbol s) ]
+                | Indefinite _ -> String "?") ]
         |> withSemi
 
     /// Pretty-prints fetch modes.

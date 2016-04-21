@@ -679,8 +679,6 @@ let modelViewDef
                     dae
                     |> wrapMessages CEExpr (modelBoolExpr e MarkedVar.Unmarked)
                     |> lift (fun em -> Definite (v, em))
-                 | Uninterpreted (_, sym) ->
-                     ok (Uninterpreted (v, sym))
                  | Indefinite _ ->
                      ok (Indefinite v))
     }

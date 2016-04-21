@@ -68,11 +68,6 @@ module Types =
         /// </summary>
         | IndefiniteConstraint of view: DFunc
         /// <summary>
-        ///     We were given an uninterpreted constraint when trying to
-        ///     assert that all constraints are interpreted.
-        /// </summary>
-        | UninterpretedConstraint of view: DFunc * constr : string
-        /// <summary>
         ///     We found a symbolic variable somewhere we didn't expect
         ///     one.
         /// </summary>
@@ -150,10 +145,6 @@ module Pretty =
         | IndefiniteConstraint (view) ->
             fmt "indefinite 'constraint {0} -> ?' not allowed here"
                 [ printDFunc view ]
-        | UninterpretedConstraint (view, constr) ->
-            fmt "uninterpreted 'constraint {0} -> %\"{1}\"' not allowed here"
-                [ printDFunc view
-                  String constr ]
         | UnwantedSym sym ->
             // TODO(CaptainHayashi): this is a bit shoddy.
             fmt "encountered uninterpreted symbol {0}"
@@ -194,16 +185,14 @@ let makeFuncTable fseq : FuncTable<'defn> =
 ///     indefinite constraints.
 /// </returns>
 let funcTableFromViewDefs viewdefs =
-    let rec buildLists definites indefinites uninterps viewdefs' =
+    let rec buildLists definites indefinites viewdefs' =
         match viewdefs' with
-        | [] -> (makeFuncTable definites, indefinites, uninterps)
+        | [] -> (makeFuncTable definites, indefinites)
         | (Indefinite v) :: vs ->
-            buildLists definites (v :: indefinites) uninterps vs
+            buildLists definites (v :: indefinites) vs
         | (Definite (v, s)) :: vs ->
-            buildLists ((v, s) :: definites) indefinites uninterps vs
-        | (Uninterpreted (v, u)) :: vs ->
-            buildLists definites indefinites ((v, u) ::uninterps) vs
-    buildLists [] [] [] viewdefs
+            buildLists ((v, s) :: definites) indefinites vs
+    buildLists [] [] viewdefs
 
 /// <summary>
 ///     Returns the <c>Func</c>s contained in a <c>FuncTable</c>.
@@ -493,7 +482,7 @@ module ViewDefFilter =
         (* TODO(CaptainHayashi): defs is already a func table, so
            don't pretend it's just a list of tuples. *)
         |> function
-           | (defs, indefs, []) ->
+           | (defs, indefs) ->
                defs
                |> tryRemoveViewDefSymbols
                |> lift
@@ -505,8 +494,6 @@ module ViewDefFilter =
                                    for v in indefs do
                                        yield (v, None)
                                } ))
-           | (_, _, uninterps) ->
-               uninterps |> List.map UninterpretedConstraint |> Bad
 
     /// <summary>
     ///     Converts a <c>ViewDef</c> list into a <c>FuncTable</c> of only
@@ -519,12 +506,10 @@ module ViewDefFilter =
         vds
         |> funcTableFromViewDefs
         |> function
-           | defs, [], [] ->
+           | defs, [] ->
                tryRemoveViewDefSymbols defs
-           | _, indefs, uninterps ->
-               List.append (indefs |> List.map IndefiniteConstraint)
-                           (uninterps |> List.map UninterpretedConstraint)
-               |> Bad
+           | _, indefs ->
+               indefs |> List.map IndefiniteConstraint |> Bad
 
     /// <summary>
     ///     Tries to convert a <c>ViewDef</C> based model into one over

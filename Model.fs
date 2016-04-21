@@ -129,10 +129,6 @@ module Types =
           ///     An indefinite <c>ViewDef</c>.
           /// </summary>
         | Indefinite of 'view
-          /// <summary>
-          ///     An uninterpreted <c>ViewDef</c>.
-          /// </summary>
-        | Uninterpreted of 'view * string
         override this.ToString() = sprintf "%A" this
 
     /// <summary>
@@ -149,7 +145,6 @@ module Types =
     let viewOf =
         function
         | Definite (v, _)
-        | Uninterpreted (v, _)
         | Indefinite v -> v
 
     /// <summary>
@@ -303,10 +298,6 @@ module Pretty =
             printAssoc Inline
                 [ (String "View", pView vs)
                   (String "Def", pDef e) ]
-        | Uninterpreted (vs, e) ->
-            printAssoc Inline
-                [ (String "View", pView vs)
-                  (String "Def", printSymbol e) ]
         | Indefinite vs ->
             printAssoc Inline
                 [ (String "View", pView vs)
