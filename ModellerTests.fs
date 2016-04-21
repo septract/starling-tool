@@ -88,7 +88,7 @@ type ModellerTests() =
     static member ArithmeticExprs =
         [ TestCaseData(Bop(Add, Bop(Mul, Int 1L, Int 2L), Int 3L))
               .Returns(Some (AAdd [ AMul [ AInt 1L ; AInt 2L ] ; AInt 3L ]
-                             : VIntExpr))
+                             : IntExpr<Sym<Var>>))
               .SetName("model (1 * 2) + 3") ]
 
     /// Tests whether the arithmetic expression modeller works.
@@ -101,7 +101,7 @@ type ModellerTests() =
     /// These all use the ticket lock model.
     static member BooleanExprs =
         [ TestCaseData(Bop(And, Bop(Or, True, True), False))
-              .Returns(Some (BFalse : VBoolExpr))
+              .Returns(Some (BFalse : BoolExpr<Sym<Var>>))
               .SetName("model and simplify (true || true) && false") ]
 
     /// Tests whether the arithmetic expression modeller works.

@@ -32,6 +32,7 @@ module Types =
         | False // false
         | Int of int64 // 42
         | LV of LValue // foobaz
+        | Symbolic of string * Expression list // %{foo}(exprs)
         | Bop of Bop * Expression * Expression // a BOP b
 
     /// An atomic action.
@@ -176,6 +177,8 @@ module Pretty =
         | False -> String "false"
         | Expression.Int i -> i.ToString() |> String
         | LV x -> printLValue x
+        | Symbolic (sym, args) -> 
+            func (sprintf "%%{%s}" sym) (Seq.map printExpression args)
         | Bop(op, a, b) ->
             hsep [ printExpression a
                    printBop op
@@ -377,6 +380,7 @@ let (|ArithIn|BoolIn|AnyIn|) =
 let (|BoolExp|ArithExp|AnyExp|) e =
     match e with
     | LV _ -> AnyExp e
+    | Symbolic _ -> AnyExp e
     | Int _ -> ArithExp e
     | True | False -> BoolExp e
     | Bop(BoolOp, _, _) -> BoolExp e

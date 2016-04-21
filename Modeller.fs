@@ -55,6 +55,8 @@ module Types =
         | VarNotInt of var : LValue
         /// A variable usage in the expression produced a `VarMapError`.
         | Var of var : LValue * err : VarMapError
+        /// A symbolic expression appeared in an ambiguous position.
+        | AmbiguousSym of sym : string
 
     /// Represents an error when converting a view prototype.
     type ViewProtoError =
@@ -186,6 +188,11 @@ module Pretty =
         | VarNotInt lv ->
             fmt "lvalue '{0}' is not a suitable type for use in an integral expre    ssion" [ printLValue lv ]
         | Var(var, err) -> wrapped "variable" (var |> printLValue) (err |> printVarMapError)
+        | AmbiguousSym sym ->
+            fmt
+                "symbolic var '{0}' has ambiguous type: \
+                 place it inside an expression with non-symbolic components"
+                [ printSymbol sym ] 
 
     /// Pretty-prints view conversion errors.
     let printViewError =
@@ -438,19 +445,21 @@ let coreSemantics =
 let rec modelExpr
   (env : VarMap)
   (varF : Var -> 'var)
-  : Expression -> Result<Expr<'var>, ExprError> =
+  : Expression -> Result<Expr<Sym<'var>>, ExprError> =
     function
     (* First, if we have a variable, the type of expression is
-     * determined by the type of the variable.
-     *)
+       determined by the type of the variable.  If the variable is
+       symbolic, then we have ambiguity. *)
     | LV v ->
         v
         |> wrapMessages Var (lookupVar env)
         |> lift
                (TypeMapper.map
                     (TypeMapper.compose
-                         (TypeMapper.cmake varF)
+                         (TypeMapper.cmake (varF >> Reg))
                          (TypeMapper.make AVar BVar)))
+    | Symbolic (sym, exprs) ->
+        fail (AmbiguousSym sym)
     (* We can use the active patterns above to figure out whether we
      * need to treat this expression as arithmetic or Boolean.
      *)
@@ -489,7 +498,7 @@ let rec modelExpr
 and modelBoolExpr
   (env : VarMap)
   (varF : Var -> 'var)
-  : Expression -> Result<BoolExpr<'var>, ExprError> =
+  : Expression -> Result<BoolExpr<Sym<'var>>, ExprError> =
     let mi = modelIntExpr env varF
     let me = modelExpr env varF
 
@@ -504,8 +513,13 @@ and modelBoolExpr
             v
             |> wrapMessages Var (lookupVar env)
             |> bind (function
-                     | Typed.Bool vn -> vn |> varF |> BVar |> ok
+                     | Typed.Bool vn -> vn |> varF |> Reg |> BVar |> ok
                      | _ -> v |> VarNotBoolean |> fail)
+        | Symbolic (sym, args) ->
+            args
+            |> List.map me
+            |> collect
+            |> lift (func sym >> Sym >> BVar)
         | Bop(BoolOp as op, l, r) ->
             match op with
             | ArithIn as o ->
@@ -565,8 +579,10 @@ and modelBoolExpr
 and modelIntExpr
   (env : VarMap)
   (varF : Var -> 'var)
-  : Expression -> Result<IntExpr<'var>, ExprError> =
-    let rec fn =
+  : Expression -> Result<IntExpr<Sym<'var>>, ExprError> =
+    let me = modelExpr env varF
+
+    let rec mi =
         function
         | Int i -> i |> AInt |> ok
         | LV v ->
@@ -576,8 +592,13 @@ and modelIntExpr
             v
             |> wrapMessages Var (lookupVar env)
             |> bind (function
-                     | Typed.Int vn -> vn |> varF |> AVar |> ok
+                     | Typed.Int vn -> vn |> varF |> Reg |> AVar |> ok
                      | _ -> v |> VarNotInt |> fail)
+        | Symbolic (sym, args) ->
+            args
+            |> List.map me
+            |> collect
+            |> lift (func sym >> Sym >> AVar)
         | Bop(ArithOp as op, l, r) ->
             lift2 (match op with
                    | Mul -> mkMul2
@@ -585,10 +606,10 @@ and modelIntExpr
                    | Add -> mkAdd2
                    | Sub -> mkSub2
                    | _ -> failwith "unreachable")
-                  (fn l)
-                  (fn r)
+                  (mi l)
+                  (mi r)
         | _ -> fail ExprNotInt
-    fn 
+    mi 
 
 (*
  * Views
@@ -656,7 +677,7 @@ let modelViewDef
         return! (match avd with
                  | Definite (_, dae) ->
                     dae
-                    |> wrapMessages CEExpr (modelBoolExpr e (MarkedVar.Unmarked >> Reg))
+                    |> wrapMessages CEExpr (modelBoolExpr e MarkedVar.Unmarked)
                     |> lift (fun em -> Definite (v, em))
                  | Uninterpreted (_, sym) ->
                      ok (Uninterpreted (v, sym))
@@ -834,7 +855,7 @@ let modelCFunc protos env afunc =
              afunc.Params
              |> Seq.map (fun e ->
                              e
-                             |> modelExpr env (MarkedVar.Unmarked >> Reg)
+                             |> modelExpr env MarkedVar.Unmarked
                              |> mapMessages (curry ViewError.BadExpr e))
              |> collect
              // Then, put them into a VFunc.
@@ -856,7 +877,7 @@ let rec modelCView protos ls =
         modelCFunc protos ls afunc |> lift Multiset.singleton
     | View.If(e, l, r) ->
         lift3 (fun em lm rm -> CFunc.ITE(em, lm, rm) |> Multiset.singleton)
-              (e |> modelBoolExpr ls (MarkedVar.Unmarked >> Reg)
+              (e |> modelBoolExpr ls MarkedVar.Unmarked
                  |> mapMessages (curry ViewError.BadExpr e))
               (modelCView protos ls l)
               (modelCView protos ls r)
@@ -934,7 +955,7 @@ let modelBoolStore locals dest src mode =
      *                     and the fetch mode must be Direct.
      *)
     trial {
-        let! sxp = wrapMessages BadExpr (modelBoolExpr locals (Before >> Reg)) src
+        let! sxp = wrapMessages BadExpr (modelBoolExpr locals Before) src
         match mode with
         | Direct ->
             return
@@ -955,7 +976,7 @@ let modelIntStore locals dest src mode =
      *)
     trial {
         let! sxp =
-            wrapMessages BadExpr (modelIntExpr locals (MarkedVar.Before >> Reg)) src
+            wrapMessages BadExpr (modelIntExpr locals MarkedVar.Before) src
         match mode with
         | Direct -> return func "!IStore" [ dest |> Before |> Reg |> AVar |> Expr.Int
                                             dest |> After |> Reg |> AVar |> Expr.Int
@@ -978,7 +999,7 @@ let modelCAS svars tvars destLV testLV set =
         match dest, test with
         | Typed.Bool d, Typed.Bool t ->
             let! setE =
-                wrapMessages BadExpr (modelBoolExpr tvars (MarkedVar.Unmarked >> Reg)) set
+                wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Unmarked) set
             return
                 func
                     "BCAS"
@@ -989,7 +1010,7 @@ let modelCAS svars tvars destLV testLV set =
                       setE |> Expr.Bool ]
         | Typed.Int d, Typed.Int t ->
             let! setE =
-                wrapMessages BadExpr (modelIntExpr tvars (MarkedVar.Before >> Reg)) set
+                wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Before) set
             return
                 func
                     "ICAS"
@@ -1050,7 +1071,7 @@ let rec modelAtomic svars tvars =
     | Id -> ok (func "Id" [])
     | Assume e ->
         e
-        |> wrapMessages BadExpr (modelBoolExpr tvars (MarkedVar.Before >> Reg))
+        |> wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Before)
         |> lift (Expr.Bool >> Seq.singleton >> func "Assume")
 
 /// Converts a local variable assignment to a Prim.
@@ -1064,7 +1085,7 @@ and modelAssign tvars lLV e =
         match l with
         | Typed.Bool ls ->
             let! em =
-                wrapMessages BadExpr (modelBoolExpr tvars (MarkedVar.Before >> Reg)) e
+                wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Before) e
             return
                 func
                     "!BLSet"
@@ -1073,7 +1094,7 @@ and modelAssign tvars lLV e =
                       em |> Expr.Bool ]
         | Typed.Int ls ->
             let! em =
-                wrapMessages BadExpr (modelIntExpr tvars (MarkedVar.Before >> Reg)) e
+                wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Before) e
             return
                 func
                     "!ILSet"
@@ -1087,7 +1108,7 @@ and modelITE protos svars tvars i t f =
     trial { let! iM =
                 wrapMessages
                     BadITECondition
-                    (modelBoolExpr tvars (MarkedVar.Before >> Reg))
+                    (modelBoolExpr tvars MarkedVar.Before)
                     i
             (* We need to calculate the recursive axioms first, because we
              * need the inner cpairs for each to store the ITE placeholder.
@@ -1107,7 +1128,7 @@ and modelWhile isDo protos gs ls e b =
     lift2 (fun eM bM -> PartCmd.While(isDo, eM, bM))
           (wrapMessages
                BadWhileCondition
-               (modelBoolExpr ls (MarkedVar.Before >> Reg))
+               (modelBoolExpr ls MarkedVar.Before)
                e)
           (modelBlock protos gs ls b)
 

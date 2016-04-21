@@ -95,6 +95,27 @@ let parseExpression, parseExpressionRef =
 // From here on out, everything should line up more or less with the
 // BNF, except in reverse, bottom-up order.
 
+(*
+ * Parameters and lists.
+ *)
+
+/// Parses a comma-delimited parameter list.
+/// Each parameter is parsed by argp.
+let parseParams argp =
+    sepBy argp (pstring "," .>> ws)
+    // ^- {empty}
+    //  | <identifier>
+    //  | <identifier> , <params>
+
+/// Parses a comma-delimited, parenthesised parameter list.
+let parseParamList argp =
+    // TODO(CaptainHayashi):
+    //   Make this generic in the first argument to sepBy, and also
+    //   make said first argument more robust -- currently this parses all
+    //   whitespace before the ,!
+    inParens (parseParams argp)
+    // ^- ()
+    //  | ( <params> )
 
 (*
  * Expressions.
@@ -107,12 +128,27 @@ do parseLValueRef :=
     //<|>
     (parseIdentifier |>> LVIdent)
 
+/// <summary>
+///     Parser for symbolic expressions.
+///
+///     <para>
+///         Symbolic expressions are of the form
+///         <c>%{arbitrary string}(expr1, expr2, ..., exprN)</c>.
+///     </para>
+/// </summary>
+let parseSymbolic =
+    pstring "%"
+    >>. inBraces (manyChars (noneOf "}"))
+    .>> ws
+    .>>. parseParamList parseExpression
+
 /// Parser for primary expressions.
 let parsePrimaryExpression =
     choice [ pstring "true" >>% True
              pstring "false" >>% False
              pint64 |>> Int
              parseLValue |>> LV
+             parseSymbolic |>> Symbolic
              inParens parseExpression ] .>> ws
 
 /// Generic parser for tiers of binary expressions.
@@ -230,28 +266,6 @@ let parseAtomicSet =
         <|>
         // ...or an atomic{} block.
         (inBraces (many (parseAtomic .>> wsSemi .>> ws))))
-
-(*
- * Parameters and lists.
- *)
-
-/// Parses a comma-delimited parameter list.
-/// Each parameter is parsed by argp.
-let parseParams argp =
-    sepBy argp (pstring "," .>> ws)
-    // ^- {empty}
-    //  | <identifier>
-    //  | <identifier> , <params>
-
-/// Parses a comma-delimited, parenthesised parameter list.
-let parseParamList argp =
-    // TODO(CaptainHayashi):
-    //   Make this generic in the first argument to sepBy, and also
-    //   make said first argument more robust -- currently this parses all
-    //   whitespace before the ,!
-    inParens (parseParams argp)
-    // ^- ()
-    //  | ( <params> )
 
 /// Parses a Func given the argument parser argp.
 let parseFunc argp =
@@ -470,9 +484,6 @@ do parseBlockRef :=
 let parseConstraintRhs =
     choice [
         (stringReturn "?" Indefinite)
-        (pstring "%"
-         >>. inBraces (manyChars (noneOf "}"))
-         |>> (fun sym v -> Uninterpreted (v, sym)))
         (parseExpression
          |>> (fun expr v -> Definite (v, expr))) ]
     // ^ ?

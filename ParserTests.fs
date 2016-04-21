@@ -97,11 +97,13 @@ type ParserTests() =
                                  (DView.Func { Name = "Func"
                                                Params = [ "a"; "b" ] } )
                              : ViewDef<DView, Expression>))
-          TestCaseData("constraint Func(a, b) -> %{uninterpreted symbol};")
-              .Returns(Some (Uninterpreted
+          TestCaseData("constraint Func(a, b) -> %{uninterpreted symbol}() == true;")
+              .Returns(Some (Definite
                                  (DView.Func { Name = "Func"
                                                Params = [ "a"; "b" ] },
-                                  "uninterpreted symbol")
+                                  Bop (Eq,
+                                       Symbolic("uninterpreted symbol", []),
+                                       True))
                              : ViewDef<DView, Expression>)) ]
         |> List.map (fun d -> d.SetName(sprintf "Parse %A" d.OriginalArguments.[0]))
 
