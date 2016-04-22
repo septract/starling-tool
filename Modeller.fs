@@ -5,6 +5,7 @@ open Starling
 open Starling.Collections
 open Starling.Core
 open Starling.Core.TypeSystem
+open Starling.Core.TypeSystem.Check
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
@@ -986,44 +987,45 @@ let modelIntStore locals dest src mode =
     }
 
 /// Converts a CAS to part-commands.
-let modelCAS svars tvars destLV testLV set =
+let modelCAS svars tvars destLV testLV set
+  : Result<SMVFunc, PrimError> =
     (* In a CAS, the destination must be SHARED;
      *           the test variable must be THREADLOCAL;
      *           and the to-set value must be a valid expression.
      * dest, test, and set must agree on type.
      * The type of dest and test influences how we interpret set.
      *)
-    trial {
-        let! dest = wrapMessages BadSVar (lookupVar svars) destLV
-        let! test = wrapMessages BadTVar (lookupVar tvars) testLV
-        match dest, test with
-        | Typed.Bool d, Typed.Bool t ->
-            let! setE =
-                wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Unmarked) set
-            return
-                func
-                    "BCAS"
-                    [ d |> Before |> Reg |> BVar |> Expr.Bool
-                      d |> After |> Reg |> BVar |> Expr.Bool
-                      t |> Before |> Reg |> BVar |> Expr.Bool
-                      t |> After |> Reg |> BVar |> Expr.Bool
-                      setE |> Expr.Bool ]
-        | Typed.Int d, Typed.Int t ->
-            let! setE =
-                wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Before) set
-            return
-                func
-                    "ICAS"
-                    [ d |> Before |> Reg |> AVar |> Expr.Int
-                      d |> After |> Reg |> AVar |> Expr.Int
-                      t |> Before |> Reg |> AVar |> Expr.Int
-                      t |> After |> Reg |> AVar |> Expr.Int
-                      setE |> Expr.Int ]
-        | _ ->
-            // Oops, we have a type error.
-            // Arbitrarily single out test as the cause of it.
-            return! fail <| TypeMismatch (typeOf dest, testLV, typeOf test)
-    }
+    wrapMessages BadSVar (lookupVar svars) destLV
+    >>= (fun dest ->
+             mkPair dest
+             <!> wrapMessages BadTVar (lookupVar tvars) testLV)
+    >>= (function
+         | UnifyBool (d, t) ->
+             set
+             |> wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Before)
+             |> lift
+                    (fun s ->
+                         smvfunc "BCAS"
+                             [ d |> sbBefore |> Expr.Bool
+                               d |> sbAfter |> Expr.Bool
+                               t |> sbBefore |> Expr.Bool
+                               t |> sbAfter |> Expr.Bool
+                               s |> Expr.Bool ] )
+         | UnifyInt (d, t) ->
+            set
+            |> wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Before)
+            |> lift
+                   (fun s ->
+                        smvfunc "ICAS"
+                            [ d |> siBefore |> Expr.Int
+                              d |> siAfter |> Expr.Int
+                              t |> siBefore |> Expr.Int
+                              t |> siAfter |> Expr.Int
+                              s |> Expr.Int ] )
+         | UnifyFail (d, t) ->
+             // Oops, we have a type error.
+             // Arbitrarily single out test as the cause of it.
+             fail (TypeMismatch (typeOf d, testLV, typeOf t)))
 
 /// Converts an atomic fetch to a model command.
 let modelFetch svars tvars destLV srcExpr mode =

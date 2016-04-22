@@ -23,6 +23,7 @@ open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Utils
 open Starling.Core.TypeSystem
+open Starling.Core.TypeSystem.Check
 open Starling.Core.Expr
 open Starling.Core.Model
 open Starling.Core.Var
@@ -288,9 +289,8 @@ let checkParamTypes func def =
     List.map2
         (curry
              (function
-              | (Int _, ((Bool _) as param)) -> TypeMismatch (param, Int ()) |> fail
-              | (Bool _, ((Int _) as param)) -> TypeMismatch (param, Bool ()) |> fail
-              | _ -> ok ()))
+              | UnifyInt _ | UnifyBool _ -> ok ()
+              | UnifyFail (fp, dp) -> fail (TypeMismatch (dp, typeOf fp))))
         func.Params
         def.Params
     |> collect
