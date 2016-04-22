@@ -487,6 +487,8 @@ module Pretty =
 module Tests =
     open NUnit.Framework
 
+    open Starling.Core.TypeSystem
+
     /// <summary>
     ///     NUnit tests for guarded views.
     /// </summary>

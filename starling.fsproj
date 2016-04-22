@@ -46,6 +46,7 @@
     <Compile Include="Utils.fs" />
     <Compile Include="Collections.fs" />
     <Compile Include="Pretty.fs" />
+    <Compile Include="TypeSystem.fs" />
     <Compile Include="Var.fs" />
     <Compile Include="Expr.fs" />
     <Compile Include="Z3.fs" />

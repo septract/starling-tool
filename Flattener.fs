@@ -2,6 +2,7 @@
 module Starling.Flattener
 
 open Starling.Collections
+open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Model
 open Starling.Core.Command

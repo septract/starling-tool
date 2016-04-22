@@ -3,6 +3,7 @@
 module Starling.TermGen
 
 open Starling.Collections
+open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.GuardedView

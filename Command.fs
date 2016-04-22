@@ -77,10 +77,10 @@ module Queries =
                   * put into it!
                   *)
                  Seq.forall (function
-                             | Typed.Int (AVar (Reg (Before _))) -> true
-                             | Typed.Int (AVar _) -> false
-                             | Typed.Bool (BVar (Reg (Before _))) -> true
-                             | Typed.Bool (BVar _) -> false
+                             | SMExpr.Int (AVar (Reg (Before _))) -> true
+                             | SMExpr.Int (AVar _) -> false
+                             | SMExpr.Bool (BVar (Reg (Before _))) -> true
+                             | SMExpr.Bool (BVar _) -> false
                              | _ -> true)
                             ps)
 
@@ -89,7 +89,7 @@ module Queries =
     /// </summary>
     let (|Assume|_|) =
         function
-        | [ { Name = n ; Params = [ Typed.Bool b ] } ]
+        | [ { Name = n ; Params = [ SMExpr.Bool b ] } ]
           when n = "Assume" -> Some b
         | _ -> None
 
@@ -128,23 +128,23 @@ module Tests =
                 .Returns(true)
                 .SetName("Classify [] as a no-op")
               TestCaseData([ smvfunc "Assume"
-                                 [ Typed.Bool (sbBefore "x") ]])
+                                 [ SMExpr.Bool (sbBefore "x") ]])
                 .Returns(true)
                 .SetName("Classify Assume(x!before) as a no-op")
               TestCaseData([ smvfunc "Assume"
-                                 [ Typed.Bool (sbAfter "x") ]])
+                                 [ SMExpr.Bool (sbAfter "x") ]])
                 .Returns(false)
                 .SetName("Reject Assume(x!after) as a no-op")
               TestCaseData([ smvfunc "Foo"
-                                 [ Typed.Int (siBefore "bar")
-                                   Typed.Int (siAfter "bar") ]])
+                                 [ SMExpr.Int (siBefore "bar")
+                                   SMExpr.Int (siAfter "bar") ]])
                 .Returns(false)
                 .SetName("Reject Foo(bar!before, bar!after) as a no-op")
               TestCaseData([ smvfunc "Foo"
-                                 [ Typed.Int (siBefore "bar")
-                                   Typed.Int (siAfter "bar") ]
+                                 [ SMExpr.Int (siBefore "bar")
+                                   SMExpr.Int (siAfter "bar") ]
                              smvfunc "Assume"
-                                 [ Typed.Bool (sbBefore "x") ]])
+                                 [ SMExpr.Bool (sbBefore "x") ]])
                 .Returns(false)
                 .SetName("Reject Foo(bar!before, bar!after); Assume(x!before)\
                           as a no-op") ]
@@ -160,12 +160,14 @@ module Tests =
             [ TestCaseData([] : Command)
                 .Returns(false)
                 .SetName("Reject [] as an assume")
-              TestCaseData([ vfunc "Assume" [ Typed.Bool (bBefore "x") ]])
+              TestCaseData([ smvfunc "Assume"
+                                 [ SMExpr.Bool (sbBefore "x") ]])
                 .Returns(true)
                 .SetName("Classify Assume(x!before) as an assume")
-              TestCaseData([ vfunc "Foo" [ Typed.Int (iBefore "bar")
-                                           Typed.Int (iAfter "bar") ]
-                             vfunc "Assume" [ Typed.Bool (bBefore "x") ]])
+              TestCaseData([ smvfunc "Foo"
+                                 [ SMExpr.Int (siBefore "bar")
+                                   SMExpr.Int (siAfter "bar") ]
+                             smvfunc "Assume" [ SMExpr.Bool (sbBefore "x") ]])
                 .Returns(false)
                 .SetName("Reject Foo(bar!before, bar!after); Assume(x!before)\
                           as an assume") ]

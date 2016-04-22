@@ -8,6 +8,7 @@ open Chessie.ErrorHandling
 
 open Starling
 open Starling.Collections
+open Starling.Core.TypeSystem
 open Starling.Core.Model
 open Starling.Core.Var
 open Starling.Lang.AST

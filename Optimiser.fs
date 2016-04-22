@@ -11,6 +11,7 @@ module Starling.Optimiser
 
 open Chessie.ErrorHandling
 
+open Starling.Core.TypeSystem
 open Starling.Collections
 open Starling.Utils
 open Starling.Core.Expr
@@ -450,7 +451,7 @@ module Graph =
     ///     A function returning True only if (but not necessarily if)
     ///     the given command is local (uses only local variables).
     /// </returns>
-    let isLocalCommand (tVars : Map<string, Type>) : Command -> bool =
+    let isLocalCommand (tVars : VarMap) : Command -> bool =
         // A command is local if, for all of its funcs...
         List.forall
             (fun { Params = ps } ->
@@ -476,7 +477,7 @@ module Graph =
     ///     Partial active pattern matching <c>Sym</c>-less expressions.
     /// </summary>
     let (|NoSym|_|) : SMBoolExpr -> MBoolExpr option =
-        TypeMapper.mapBool (tsfRemoveSym (fun _ -> ())) >> okOption
+        Mapper.mapBool (tsfRemoveSym (fun _ -> ())) >> okOption
 
     /// <summary>
     ///     Active pattern matching on if-then-else guard multisets.
@@ -533,10 +534,10 @@ module Graph =
                        We also need to re-introduce the symbolic layer
                        removed by NoSymView. *)
                     let toPre =
-                        TypeMapper.mapBool
+                        Mapper.mapBool
                             (onVars
                                  (liftVSubFun
-                                      (TypeMapper.cmake
+                                      (Mapper.cmake
                                            (function
                                             | Unmarked s -> Before s
                                             | x -> x))))
@@ -757,7 +758,7 @@ module Term =
     let afterSubs asubs bsubs =
         onVars
             (liftVToSym
-                (TypeMapper.make
+                (Mapper.make
                     (function
                      | After a -> (Map.tryFind a asubs |> withDefault (siAfter a))
                      | x -> AVar (Reg x))
@@ -820,7 +821,7 @@ module Term =
     let simpTerm
       : STerm<SMGView, SMVFunc>
         -> STerm<SMGView, SMVFunc> =
-        subExprInDTerm (TypeMapper.make id simp)
+        subExprInDTerm (Mapper.make id simp)
 
     (*
      * Frontend

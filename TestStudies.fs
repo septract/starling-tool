@@ -3,6 +3,7 @@ module Starling.Tests.Studies
 
 open Starling
 open Starling.Collections
+open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Graph
 open Starling.Core.Var
@@ -131,21 +132,21 @@ let ticketLockParsed =
                            (DView.Func {Name = "holdLock"; Params = []},
                             DView.Func { Name = "holdLock"; Params = []}),
                        False))
-      Global (CTyped.Int "ticket")
-      Global (CTyped.Int "serving")
-      Local (CTyped.Int "t")
-      Local (CTyped.Int "s")
+      Global (VarDecl.Int "ticket")
+      Global (VarDecl.Int "serving")
+      Local (VarDecl.Int "t")
+      Local (VarDecl.Int "s")
       Method ticketLockLockMethodAST
       Method ticketLockUnlockMethodAST ]
 
 /// The collated form of the ticket lock.
 let ticketLockCollated =
     { CollatedScript.Globals =
-          [ (CTyped.Int "ticket")
-            (CTyped.Int "serving") ]
+          [ (VarDecl.Int "ticket")
+            (VarDecl.Int "serving") ]
       Locals =
-          [ (CTyped.Int "t")
-            (CTyped.Int "s") ]
+          [ (VarDecl.Int "t")
+            (VarDecl.Int "s") ]
       Search = None
       VProtos =
           [ { Name = "holdTick"
@@ -190,17 +191,17 @@ let sing = Multiset.singleton
 
 /// The conditional holdLock view.
 let holdLock =
-    func "holdLock" [] |> Func
+    smvfunc "holdLock" [] |> Func
 
 /// The conditional holdTick view.
 let holdTick =
-    func "holdTick" [Typed.Int (siUnmarked "t")] |> Func
+    smvfunc "holdTick" [SMExpr.Int (siUnmarked "t")] |> Func
 
 /// The guarded holdLock view.
 let gHoldLock cnd : SMGFunc = smgfunc cnd "holdLock" []
 
 /// The guarded holdTick view.
-let gHoldTick cnd : SMGFunc = smgfunc cnd "holdTick" [Typed.Int (siUnmarked "t")]
+let gHoldTick cnd : SMGFunc = smgfunc cnd "holdTick" [SMExpr.Int (siUnmarked "t")]
 
 /// Produces the expression 's!before == t!before'.
 let sIsT mark = iEq (AVar (Reg (mark "s"))) (AVar (Reg (mark "t")))
@@ -213,8 +214,8 @@ let ticketLockLock =
             Contents =
                 [ { Command =
                         smvfunc "!ILoad++"
-                             [ Typed.Int (siBefore "t"); Typed.Int (siAfter "t")
-                               Typed.Int (siBefore "ticket"); Typed.Int (siAfter "ticket") ]
+                             [ SMExpr.Int (siBefore "t"); SMExpr.Int (siAfter "t")
+                               SMExpr.Int (siBefore "ticket"); SMExpr.Int (siAfter "ticket") ]
                         |> List.singleton |> Prim
                     Post = Mandatory <| sing holdTick }
                   { Command =
@@ -225,8 +226,8 @@ let ticketLockLock =
                                      Contents =
                                          [ { Command =
                                                  smvfunc "!ILoad"
-                                                      [ Typed.Int (siBefore "s"); Typed.Int (siAfter "s")
-                                                        Typed.Int (siBefore "serving"); Typed.Int (siAfter "serving") ]
+                                                      [ SMExpr.Int (siBefore "s"); SMExpr.Int (siAfter "s")
+                                                        SMExpr.Int (siBefore "serving"); SMExpr.Int (siAfter "serving") ]
                                                  |> List.singleton |> Prim
                                              Post =
                                                  (sIsT MarkedVar.Unmarked,
@@ -244,7 +245,7 @@ let ticketLockUnlock =
           { Pre = Mandatory <| sing holdLock
             Contents =
                 [ { Command =
-                        smvfunc "!I++" [ Typed.Int (siBefore "serving"); Typed.Int (siAfter "serving") ]
+                        smvfunc "!I++" [ SMExpr.Int (siBefore "serving"); SMExpr.Int (siAfter "serving") ]
                         |> List.singleton |> Prim
                     Post = Mandatory <| Multiset.empty }]}}
 
@@ -262,8 +263,8 @@ let ticketLockGuardedLock =
             Contents =
                 [ { Command =
                         smvfunc "!ILoad++"
-                             [ Typed.Int (siBefore "t"); Typed.Int (siAfter "t")
-                               Typed.Int (siBefore "ticket"); Typed.Int (siAfter "ticket") ]
+                             [ SMExpr.Int (siBefore "t"); SMExpr.Int (siAfter "t")
+                               SMExpr.Int (siBefore "ticket"); SMExpr.Int (siAfter "ticket") ]
                         |> List.singleton |> Prim
                     Post = Mandatory <| sing (gHoldTick BTrue) }
                   { Command =
@@ -274,8 +275,8 @@ let ticketLockGuardedLock =
                                      Contents =
                                          [ { Command =
                                                  smvfunc "!ILoad"
-                                                      [ Typed.Int (siBefore "s"); Typed.Int (siAfter "s")
-                                                        Typed.Int (siBefore "serving"); Typed.Int (siAfter "serving") ]
+                                                      [ SMExpr.Int (siBefore "s"); SMExpr.Int (siAfter "s")
+                                                        SMExpr.Int (siBefore "serving"); SMExpr.Int (siAfter "serving") ]
                                                  |> List.singleton |> Prim
                                              Post =
                                                  Mandatory <|

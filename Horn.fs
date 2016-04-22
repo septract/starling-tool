@@ -4,9 +4,9 @@
 module Starling.Backends.Horn
 
 open Chessie.ErrorHandling
-open Starling.Core
 open Starling.Collections
 open Starling.Utils
+open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.Expr
 open Starling.Core.Model
@@ -51,11 +51,13 @@ module Types =
     /// An error caused when emitting a Horn clause.
     type Error = 
         /// A Func is inconsistent with its definition.
-        | InconsistentFunc of func : MVFunc * err : Instantiate.Types.Error
+        | InconsistentFunc of
+              func : MVFunc
+              * err : Starling.Core.Instantiate.Types.Error
         /// A viewdef has a non-arithmetic param.
         | NonArithParam of Param
         /// A model has a non-arithmetic variable.
-        | NonArithVar of CTyped<string>
+        | NonArithVar of VarDecl
         /// The expression given is not supported in the given position.
         | UnsupportedExpr of MExpr
         /// The expression given is compound, but empty.
@@ -171,15 +173,13 @@ module Pretty =
         | InconsistentFunc (func, err) ->
             wrapped "view func"
                     (printMVFunc func)
-                    (Instantiate.Pretty.printError err)
+                    (Starling.Core.Instantiate.Pretty.printError err)
         | NonArithParam p ->
             fmt "parameter '{0}' is of type {1}: HSF only permits integers here"
-                [ p |> valueOf |> String
-                  p |> typeOf |> printType ]
+                [ printParam p ]
         | NonArithVar p ->
             fmt "variable '{0}' is of type {1}: HSF only permits integers here"
-                [ p |> valueOf |> String
-                  p |> typeOf |> printType ]
+                [ printParam p ]
         | UnsupportedExpr expr ->
             fmt "expression '{0}' is not supported in the HSF backend"
                 [ printMExpr expr ]

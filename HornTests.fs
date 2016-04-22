@@ -1,6 +1,7 @@
 /// Tests for Starling.Backends.Horn and
 module Starling.Tests.Backends.Horn
 
+open Chessie.ErrorHandling
 open NUnit.Framework
 open Starling.Collections
 open Starling.Utils
@@ -13,8 +14,11 @@ open Starling.Tests.Studies
 /// Tests for Starling.Horn and Starling.HSF.
 type HornTests() =
     /// The globals environment used in the tests.
-    static member Globals =
-        Map.ofList [ ("serving", Type.Int ()) ; ("ticket", Type.Int ()) ]
+    static member Globals : VarMap =
+        returnOrFail <| makeVarMap
+            [ VarDecl.Int "serving"
+              VarDecl.Int "ticket" ]
+
 
     /// Test cases for the viewdef Horn clause modeller.
     /// These are in the form of models whose viewdefs are to be modelled.

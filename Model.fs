@@ -221,13 +221,12 @@ module Types =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
+    open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.Expr.Pretty
 
     /// Pretty-prints a type-name parameter.
-    let printParam param =
-        hsep [ param |> typeOf |> printType
-               param |> valueOf |> String ]
+    let printParam = printCTyped String
 
     /// Pretty-prints a multiset given a printer for its contents.
     let printMultiset pItem =

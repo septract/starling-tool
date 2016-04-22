@@ -8,6 +8,7 @@ open Chessie.ErrorHandling
 open Starling.Utils
 open Starling.Collections
 
+open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.Expr
 open Starling.Core.Model
@@ -20,7 +21,7 @@ open Starling.Core.GuardedView
 [<AutoOpen>]
 module Types =
     /// <summary>
-    ///     A <c>TypeMapper</c> mapping between forms of <c>Expr</c>s.
+    ///     A <c>Mapper</c> mapping between forms of <c>Expr</c>s.
     /// </summary>
     /// <typeparam name="srcVar">
     ///     The type of variables entering the map.
@@ -31,12 +32,12 @@ module Types =
     [<NoComparison>]
     [<NoEquality>]
     type SubFun<'srcVar, 'dstVar> =
-        TypeMapper<
+        Mapper<
             IntExpr<'srcVar>, BoolExpr<'srcVar>,
             IntExpr<'dstVar>, BoolExpr<'dstVar>>
 
     /// <summary>
-    ///     A possibly failing <c>TypeMapper</c> mapping between forms of <c>Expr</c>s.
+    ///     A possibly failing <c>Mapper</c> mapping between forms of <c>Expr</c>s.
     /// </summary>
     /// <typeparam name="srcVar">
     ///     The type of variables entering the map.
@@ -50,13 +51,13 @@ module Types =
     [<NoComparison>]
     [<NoEquality>]
     type TrySubFun<'srcVar, 'dstVar, 'err> =
-        TypeMapper<
+        Mapper<
             IntExpr<'srcVar>, BoolExpr<'srcVar>,
             Result<IntExpr<'dstVar>, 'err>,
             Result<BoolExpr<'dstVar>, 'err>>
 
     /// <summary>
-    ///     A <c>TypeMapper</c> mapping between forms of <c>Var</c>s.
+    ///     A <c>Mapper</c> mapping between forms of <c>Var</c>s.
     /// </summary>
     /// <typeparam name="srcVar">
     ///     The type of variables entering the map.
@@ -67,7 +68,7 @@ module Types =
     [<NoComparison>]
     [<NoEquality>]
     type VSubFun<'srcVar, 'dstVar> =
-        TypeMapper<'srcVar, 'srcVar, IntExpr<'dstVar>, BoolExpr<'dstVar>>
+        Mapper<'srcVar, 'srcVar, IntExpr<'dstVar>, BoolExpr<'dstVar>>
 
     /// <summary>
     ///     A <c>TypeMap</c> partially mapping between forms of <c>Var</c>s.
@@ -84,7 +85,7 @@ module Types =
     [<NoComparison>]
     [<NoEquality>]
     type VTrySubFun<'srcVar, 'dstVar, 'err> =
-        TypeMapper<
+        Mapper<
             'srcVar, 'srcVar,
             Result<IntExpr<'dstVar>, 'err>,
             Result<BoolExpr<'dstVar>, 'err>>
@@ -98,7 +99,7 @@ module Types =
 ///   Runs the given <c>SubFun</c> on an <c>Expr</c>.
 /// </summary>
 let subExpr : SubFun<'srcVar, 'dstVar> -> Expr<'srcVar> -> Expr<'dstVar> =
-    TypeMapper.map
+    Mapper.map
 
 (*
  * Model element substitution functions
@@ -158,7 +159,7 @@ let subExprInGFunc
   (sub : SubFun<'srcVar, 'dstVar>)
   ( { Cond = cond ; Item = item } : GFunc<'srcVar> )
   : GFunc<'dstVar> =
-    { Cond = TypeMapper.mapBool sub cond
+    { Cond = Mapper.mapBool sub cond
       Item = subExprInVFunc sub item }
 
 /// <summary>
@@ -222,7 +223,7 @@ let subExprInDTerm
   (term : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>)
   : Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>> =
     mapTerm
-        (TypeMapper.mapBool sub)
+        (Mapper.mapBool sub)
         (subExprInGView sub)
         (subExprInVFunc sub)
         term
@@ -258,7 +259,7 @@ let trySubExprInVFunc
   ( { Name = n ; Params = ps } : VFunc<'srcVar> )
   : Result<VFunc<'dstVar>, 'err> =
     ps
-    |> List.map (TypeMapper.tryMap sub)
+    |> List.map (Mapper.tryMap sub)
     |> collect
     |> lift (fun ps' -> { Name = n ; Params = ps' } )
 
@@ -292,7 +293,7 @@ let trySubExprInGFunc
   : Result<GFunc<'dstVar>, 'err> =
     lift2
         (fun cond' item' -> { Cond = cond' ; Item = item' } )
-        (TypeMapper.mapBool sub cond)
+        (Mapper.mapBool sub cond)
         (trySubExprInVFunc sub item)
 
 /// <summary>
@@ -366,7 +367,7 @@ let trySubExprInDTerm
   : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>
   -> Result<Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>>, 'err> =
     tryMapTerm
-        (TypeMapper.mapBool sub)
+        (Mapper.mapBool sub)
         (trySubExprInGView sub)
         (trySubExprInVFunc sub)
 
@@ -379,7 +380,7 @@ let trySubExprInDTerm
 /// for the given Boolean expression.
 let rec boolSubVars (vfun : VSubFun<'srcVar, 'dstVar>) =
     function 
-    | BVar x -> TypeMapper.mapBool vfun x
+    | BVar x -> Mapper.mapBool vfun x
     | BTrue -> BTrue
     | BFalse -> BFalse
     | BAnd xs -> BAnd (List.map (boolSubVars vfun) xs)
@@ -402,7 +403,7 @@ let rec boolSubVars (vfun : VSubFun<'srcVar, 'dstVar>) =
 /// for the given arithmetic expression.
 and intSubVars (vfun : VSubFun<'srcVar, 'dstVar>) =
     function 
-    | AVar x -> TypeMapper.mapInt vfun x
+    | AVar x -> Mapper.mapInt vfun x
     | AInt i -> AInt i
     | AAdd xs -> AAdd (List.map (intSubVars vfun) xs)
     | ASub xs -> ASub (List.map (intSubVars vfun) xs)
@@ -414,12 +415,12 @@ and intSubVars (vfun : VSubFun<'srcVar, 'dstVar>) =
 ///   Creates a <c>SubFun</c> from a <c>VSubFun</c>.
 /// </summary>
 and onVars vsub =
-    TypeMapper.make (intSubVars vsub) (boolSubVars vsub)
+    Mapper.make (intSubVars vsub) (boolSubVars vsub)
 
 /// Failing form of boolSubVars.
 let rec tryBoolSubVars (vfun : VTrySubFun<'srcVar, 'dstVar, 'err>) =
     function 
-    | BVar x -> TypeMapper.mapBool vfun x
+    | BVar x -> Mapper.mapBool vfun x
     | BTrue -> ok BTrue
     | BFalse -> ok BFalse
     | BAnd xs -> 
@@ -434,8 +435,8 @@ let rec tryBoolSubVars (vfun : VTrySubFun<'srcVar, 'dstVar, 'err>) =
     | BEq (x, y) -> 
         lift2
             (curry BEq)
-            (TypeMapper.tryMap (tryOnVars vfun) x)
-            (TypeMapper.tryMap (tryOnVars vfun) y)
+            (Mapper.tryMap (tryOnVars vfun) x)
+            (Mapper.tryMap (tryOnVars vfun) y)
     | BGt (x, y) -> 
         lift2
             (curry BGt)
@@ -462,7 +463,7 @@ let rec tryBoolSubVars (vfun : VTrySubFun<'srcVar, 'dstVar, 'err>) =
 /// Failing version of intSubVars.
 and tryIntSubVars (vfun : VTrySubFun<'srcVar, 'dstVar, 'err>) =
     function 
-    | AVar x -> TypeMapper.mapInt vfun x
+    | AVar x -> Mapper.mapInt vfun x
     | AInt i -> i |> AInt |> ok
     | AAdd xs -> 
         xs
@@ -490,7 +491,7 @@ and tryIntSubVars (vfun : VTrySubFun<'srcVar, 'dstVar, 'err>) =
 /// </summary>
 and tryOnVars
   (vsub : VTrySubFun<'srcVar, 'dstVar, 'err>) =
-    TypeMapper.make (tryIntSubVars vsub) (tryBoolSubVars vsub)
+    Mapper.make (tryIntSubVars vsub) (tryBoolSubVars vsub)
 
 
 (*
@@ -499,7 +500,7 @@ and tryOnVars
 
 /// Lifts a VSubFun so it returns expressions.
 let liftVSubFun vsf =
-    TypeMapper.compose vsf (TypeMapper.make AVar BVar)
+    Mapper.compose vsf (Mapper.make AVar BVar)
 
 /// Lifts a variable set to a marking predicate.
 let inSet st var = Set.contains var st
@@ -508,9 +509,9 @@ let inSet st var = Set.contains var st
 let rec liftVToSym
   (sf : VSubFun<MarkedVar, Sym<MarkedVar>>)
   : VSubFun<Sym<MarkedVar>, Sym<MarkedVar>> =
-    TypeMapper.make
+    Mapper.make
         (function
-         | Reg r -> TypeMapper.mapInt sf r
+         | Reg r -> Mapper.mapInt sf r
          | Sym { Name = sym; Params = rs } ->
              // TODO(CaptainHayashi): this is horrible.
              // Are our abstractions wrong?
@@ -519,16 +520,16 @@ let rec liftVToSym
                  Params = List.map (sf
                                     |> liftVToSym
                                     |> onVars
-                                    |> TypeMapper.map) rs } )
+                                    |> Mapper.map) rs } )
         (function
-         | Reg r -> TypeMapper.mapBool sf r
+         | Reg r -> Mapper.mapBool sf r
          | Sym { Name = sym; Params = rs } ->
            BVar <| Sym
                { Name = sym
                  Params = List.map (sf
                                     |> liftVToSym
                                     |> onVars
-                                    |> TypeMapper.map) rs } )
+                                    |> Mapper.map) rs } )
 
 
 /// Lifts a marking function to a variable substitution function table.
@@ -536,7 +537,7 @@ let liftMarkerV marker vpred =
     (function
      | Unmarked s when vpred s -> Reg (marker s)
      | x -> Reg x)
-    |> TypeMapper.cmake
+    |> Mapper.cmake
     |> liftVSubFun
     |> liftVToSym
 
@@ -570,7 +571,7 @@ let after = subExpr (liftMarker After always)
 let tsfRemoveSym
   (err : Func<Expr<Sym<MarkedVar>>> -> 'err)
   : TrySubFun<Sym<MarkedVar>, MarkedVar, 'err> =
-    tryOnVars <| TypeMapper.make
+    tryOnVars <| Mapper.make
         (function
          | Sym s -> s |> err |> fail
          | Reg f -> f |> AVar |> ok)

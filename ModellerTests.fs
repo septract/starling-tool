@@ -3,6 +3,7 @@ module Starling.Tests.Modeller
 open NUnit.Framework
 open Starling
 open Starling.Collections
+open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Command
@@ -140,7 +141,7 @@ type ModellerTests() =
 
     /// Tests the creation of var lists.
     [<TestCaseSource("VarLists")>]
-    member x.``valid var lists are accepted during mapping`` (vl: CTyped<string> list) =
+    member x.``valid var lists are accepted during mapping`` (vl: VarDecl list) =
         makeVarMap vl |> okOption
 
     /// Constructs a Prim of the correct type to come out of a modeller.

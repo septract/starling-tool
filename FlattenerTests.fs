@@ -1,9 +1,11 @@
 ﻿/// Tests for Starling.Flattener.
 module Starling.Tests.Flattener
 
+open Chessie.ErrorHandling
 open NUnit.Framework
 open Starling.Collections
 open Starling.Utils
+open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.Expr
 open Starling.Core.Model
@@ -12,8 +14,10 @@ open Starling.Flattener
 /// Tests for Starling.Flattener.
 type FlattenerTests() =
     /// The globals environment used in the tests.
-    static member Globals =
-        Map.ofList [ ("serving", Type.Int ()) ; ("ticket", Type.Int ()) ]
+    static member Globals : VarMap =
+        returnOrFail <| makeVarMap
+            [ VarDecl.Int "serving"
+              VarDecl.Int "ticket" ]
 
     /// Test cases for the view func renamer.
     static member ViewFuncNamings =

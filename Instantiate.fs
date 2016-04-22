@@ -22,6 +22,7 @@ module Starling.Core.Instantiate
 open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Utils
+open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Model
 open Starling.Core.Var
@@ -100,6 +101,7 @@ module Types =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
+    open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.Expr.Pretty
@@ -340,7 +342,7 @@ let paramSubFun
         Seq.map2 (fun par up -> valueOf par, up) dpars fpars
         |> Map.ofSeq
 
-    TypeMapper.make
+    Mapper.make
         (fun srcV ->
              match (Option.bind pmap.TryFind (liftSrcVar srcV)) with
              | Some (Typed.Int expr) -> expr
@@ -446,7 +448,7 @@ let instantiate
     |> lift
            (Option.map
                 (fun (dfunc, defn) ->
-                     TypeMapper.mapBool (onVars (psf vfunc dfunc)) defn))
+                     Mapper.mapBool (onVars (psf vfunc dfunc)) defn))
 
 /// <summary>
 ///     Functions for view definition filtering.
@@ -464,7 +466,7 @@ module ViewDefFilter =
         |> List.map
                (fun (f, d) ->
                     d
-                    |> TypeMapper.mapBool (tsfRemoveSym UnwantedSym)
+                    |> Mapper.mapBool (tsfRemoveSym UnwantedSym)
                     |> lift (mkPair f))
         |> collect
 

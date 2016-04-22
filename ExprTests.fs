@@ -1,6 +1,7 @@
 module Starling.Tests.Core.Expr
 
 open NUnit.Framework
+open Starling.Core.TypeSystem
 open Starling.Core.Axiom
 open Starling.Core.Var
 open Starling.Core.Expr
@@ -109,7 +110,7 @@ type ExprTests() =
     [<TestCaseSource("IntConstantPostStates")>]
     /// Tests whether rewriting constants in arithmetic expressions to post-state works.
     member x.``constants in arithmetic expressions can be rewritten to post-state`` expr =
-        TypeMapper.mapInt
+        Mapper.mapInt
             (liftMarker After (Set.ofList ["target1"; "target2"] |> inSet))
             expr
 

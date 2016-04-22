@@ -64,8 +64,8 @@ module Expr =
     /// Converts a Starling expression to a Z3 Expr.
     and exprToZ3 reals (ctx: Z3.Context) =
         function
-        | Typed.Bool b -> boolToZ3 reals ctx b :> Z3.Expr
-        | Typed.Int a -> arithToZ3 reals ctx a :> Z3.Expr
+        | Expr.Bool b -> boolToZ3 reals ctx b :> Z3.Expr
+        | Expr.Int a -> arithToZ3 reals ctx a :> Z3.Expr
 
 /// <summary>
 ///     Z3 invocation.

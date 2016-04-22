@@ -4,6 +4,7 @@ open Chessie.ErrorHandling
 open Starling
 open Starling.Collections
 open Starling.Core
+open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
@@ -141,6 +142,7 @@ module Types =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
+    open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Expr.Pretty
@@ -454,10 +456,10 @@ let rec modelExpr
         v
         |> wrapMessages Var (lookupVar env)
         |> lift
-               (TypeMapper.map
-                    (TypeMapper.compose
-                         (TypeMapper.cmake (varF >> Reg))
-                         (TypeMapper.make AVar BVar)))
+               (Mapper.map
+                    (Mapper.compose
+                         (Mapper.cmake (varF >> Reg))
+                         (Mapper.make AVar BVar)))
     | Symbolic (sym, exprs) ->
         fail (AmbiguousSym sym)
     (* We can use the active patterns above to figure out whether we

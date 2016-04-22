@@ -46,12 +46,12 @@ type SemanticsTests() =
     ///     Test cases for the variable framer.
     /// </summary>
     static member FrameVars =
-        [ TestCaseData(CTyped.Int "foo")
+        [ TestCaseData(VarDecl.Int "foo")
               .Returns(iEq (siAfter "foo") (siBefore "foo"))
               .SetName("Frame an integer variable")
-          TestCaseData(CTyped.Bool "bar")
+          TestCaseData(VarDecl.Bool "bar")
               .Returns(bEq (sbAfter "bar") (sbBefore "bar"))
-              .SetName("Frame an integer variable") ]
+              .SetName("Frame a Boolean variable") ]
 
     /// <summary>
     ///     Tests <c>frameVar</c>.

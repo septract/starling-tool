@@ -28,6 +28,7 @@ module Starling.Backends.MuZ3
 open Microsoft
 open Starling
 open Starling.Collections
+open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model

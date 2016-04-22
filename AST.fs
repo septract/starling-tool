@@ -131,8 +131,8 @@ module Types =
 
     /// A top-level item in a Starling script.
     type ScriptItem =
-        | Global of CTyped<string> // global int name;
-        | Local of CTyped<string> // local int name;
+        | Global of VarDecl // global int name;
+        | Local of VarDecl // local int name;
         | Method of CMethod<Marked<View>> // method main(argv, argc) { ... }
         | Search of int // search 0;
         | ViewProto of ViewProto // view name(int arg);
@@ -145,6 +145,7 @@ module Types =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
+    open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Var.Pretty
 
@@ -319,9 +320,7 @@ module Pretty =
     /// Pretty-prints a view prototype.
     let printViewProto { Name = n; Params = ps } =
         hsep [ "view" |> String
-               func n (List.map
-                           (fun p -> hsep [ p |> typeOf |> printType
-                                            p |> valueOf |> String ] ) ps) ]
+               func n (List.map (printCTyped String) ps) ]
         |> withSemi
 
     /// Pretty-prints a search directive.
@@ -331,11 +330,7 @@ module Pretty =
 
     /// Pretty-prints a script variable of the given class.
     let printScriptVar cls v =
-        hsep
-            [ String cls
-              printType (typeOf v)
-              String (valueOf v) ]
-        |> withSemi
+        hsep [ String cls; printCTyped String v ] |> withSemi
 
     /// Pretty-prints script lines.
     let printScriptLine =

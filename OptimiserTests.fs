@@ -1,7 +1,9 @@
 module Starling.Tests.Optimiser
 
+open Chessie.ErrorHandling
 open NUnit.Framework
 open Starling.Collections
+open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
@@ -87,7 +89,7 @@ type OptimiserTests() =
     /// Test after-elimination of Booleans.
     [<TestCaseSource("AfterBools")>]
     member x.``After-elimination of Booleans should operate correctly`` b =
-        TypeMapper.mapBool
+        Mapper.mapBool
             (afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs)
             b
 

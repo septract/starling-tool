@@ -3,6 +3,7 @@ module Starling.Tests.Instantiate
 open NUnit.Framework
 open Starling.Collections
 open Starling.Utils
+open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Model
 open Starling.Core.Var

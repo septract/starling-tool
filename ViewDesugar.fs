@@ -5,6 +5,7 @@ module Starling.Lang.ViewDesugar
 
 open Starling.Collections
 open Starling.Utils
+open Starling.Core.TypeSystem
 open Starling.Core.Model
 open Starling.Core.Var
 open Starling.Core.Expr

@@ -15,6 +15,7 @@ module Starling.Semantics
 
 open Chessie.ErrorHandling
 open Starling.Collections
+open Starling.Core.TypeSystem
 open Starling.Core.Command
 open Starling.Core.GuardedView
 open Starling.Core.Expr
@@ -93,9 +94,9 @@ let composeBools x y =
         | After v -> Reg (Intermediate (nLevel, v))
         | v -> Reg v
         |> (fun f ->
-                TypeMapper.compose
-                    (TypeMapper.cmake f)
-                    (TypeMapper.make AVar BVar))
+                Mapper.compose
+                    (Mapper.cmake f)
+                    (Mapper.make AVar BVar))
         |> liftVToSym
         |> onVars
 
@@ -105,15 +106,15 @@ let composeBools x y =
         | Intermediate (i, v) -> Reg (Intermediate (i + nLevel + 1I, v))
         | v -> Reg v
         |> (fun f ->
-                TypeMapper.compose
-                    (TypeMapper.cmake f)
-                    (TypeMapper.make AVar BVar))
+                Mapper.compose
+                    (Mapper.cmake f)
+                    (Mapper.make AVar BVar))
         |> liftVToSym
         |> onVars
 
     mkAnd
-        [ TypeMapper.mapBool xRewrite x
-          TypeMapper.mapBool yRewrite y ]
+        [ Mapper.mapBool xRewrite x
+          Mapper.mapBool yRewrite y ]
 
 
 /// Generates a framing relation for a given variable.
