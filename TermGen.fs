@@ -90,12 +90,8 @@ let termGenPre
      * stage, both sides only contain local variables.
      *)
     // TODO(CaptainHayashi): use something better than lists.
-    let pre =
-        gax.Axiom.Pre
-        |> subExprInGView (liftMarker Before always)
-    let post =
-        gax.Axiom.Post
-        |> subExprInGView (liftMarker After always)
+    let pre = subExprInGView before gax.Axiom.Pre
+    let post = subExprInGView after gax.Axiom.Post
     let goal = gax.Goal
 
     Multiset.append pre (termGenFrame goal post)

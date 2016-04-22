@@ -23,8 +23,8 @@ open Starling.Lang.Collator
 module Types =
     /// A conditional (flat or if-then-else) func.
     type CFunc =
-        | ITE of SMBoolExpr * Multiset<CFunc> * Multiset<CFunc>
-        | Func of SMVFunc
+        | ITE of SVBoolExpr * Multiset<CFunc> * Multiset<CFunc>
+        | Func of SVFunc
 
     /// A conditional view, or multiset of CFuncs.
     type CView = Multiset<CFunc>
@@ -34,10 +34,10 @@ module Types =
         | Prim of Command
         | While of
             isDo : bool
-            * expr : SMBoolExpr
+            * expr : SVBoolExpr
             * inner : Block<'view, PartCmd<'view>>
         | ITE of
-            expr : SMBoolExpr
+            expr : SVBoolExpr
             * inTrue : Block<'view, PartCmd<'view>>
             * inFalse : Block<'view, PartCmd<'view>>
 
@@ -155,12 +155,12 @@ module Pretty =
         function
         | CFunc.ITE(i, t, e) ->
             hsep [ String "if"
-                   printSMBoolExpr i
+                   printSVBoolExpr i
                    String "then"
                    t |> printMultiset printCFunc |> ssurround "[" "]"
                    String "else"
                    e |> printMultiset printCFunc |> ssurround "[" "]" ]
-        | Func v -> printSMVFunc v
+        | Func v -> printSVFunc v
 
     /// Pretty-prints a CView.
     let printCView = printMultiset printCFunc >> ssurround "[|" "|]"
@@ -171,11 +171,11 @@ module Pretty =
         | Prim prim -> Command.Pretty.printCommand prim
         | While(isDo, expr, inner) ->
             cmdHeaded (hsep [ String(if isDo then "Do-while" else "While")
-                              (printSMBoolExpr expr) ])
+                              (printSVBoolExpr expr) ])
                       [printBlock pView (printPartCmd pView) inner]
         | ITE(expr, inTrue, inFalse) ->
             cmdHeaded (hsep [String "begin if"
-                             (printSMBoolExpr expr) ])
+                             (printSVBoolExpr expr) ])
                       [headed "True" [printBlock pView (printPartCmd pView) inTrue]
                        headed "False" [printBlock pView (printPartCmd pView) inFalse]]
 
@@ -322,22 +322,22 @@ let coreSemantics =
       (func "ICAS" [ Param.Int "destB"; Param.Int "destA"
                      Param.Int "testB"; Param.Int "testA"
                      Param.Int "set" ],
-       mkAnd [ mkImplies (iEq (siUnmarked "destB") (siUnmarked "testB"))
-                         (mkAnd [ iEq (siUnmarked "destA") (siUnmarked "set")
-                                  iEq (siUnmarked "testA") (siUnmarked "testB") ] )
-               mkImplies (mkNot (iEq (siUnmarked "destB") (siUnmarked "testB")))
-                         (mkAnd [ iEq (siUnmarked "destA") (siUnmarked "destB")
-                                  iEq (siUnmarked "testA") (siUnmarked "destB") ] ) ] )
+       mkAnd [ mkImplies (iEq (siVar "destB") (siVar "testB"))
+                         (mkAnd [ iEq (siVar "destA") (siVar "set")
+                                  iEq (siVar "testA") (siVar "testB") ] )
+               mkImplies (mkNot (iEq (siVar "destB") (siVar "testB")))
+                         (mkAnd [ iEq (siVar "destA") (siVar "destB")
+                                  iEq (siVar "testA") (siVar "destB") ] ) ] )
       // Boolean CAS
       (func "BCAS" [ Param.Bool "destB"; Param.Bool "destA"
                      Param.Bool "testB"; Param.Bool "testA"
                      Param.Bool "set" ],
-       mkAnd [ mkImplies (bEq (sbUnmarked "destB") (sbUnmarked "testB"))
-                         (mkAnd [ bEq (sbUnmarked "destA") (sbUnmarked "set")
-                                  bEq (sbUnmarked "testA") (sbUnmarked "testB") ] )
-               mkImplies (mkNot (bEq (sbUnmarked "destB") (sbUnmarked "testB")))
-                         (mkAnd [ bEq (sbUnmarked "destA") (sbUnmarked "destB")
-                                  bEq (sbUnmarked "testA") (sbUnmarked "destB") ] ) ] )
+       mkAnd [ mkImplies (bEq (sbVar "destB") (sbVar "testB"))
+                         (mkAnd [ bEq (sbVar "destA") (sbVar "set")
+                                  bEq (sbVar "testA") (sbVar "testB") ] )
+               mkImplies (mkNot (bEq (sbVar "destB") (sbVar "testB")))
+                         (mkAnd [ bEq (sbVar "destA") (sbVar "destB")
+                                  bEq (sbVar "testA") (sbVar "destB") ] ) ] )
 
       (*
        * Atomic load
@@ -346,29 +346,29 @@ let coreSemantics =
       // Integer load
       (func "!ILoad" [ Param.Int "destB"; Param.Int "destA"
                        Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ iEq (siUnmarked "destA") (siUnmarked "srcB")
-               iEq (siUnmarked "srcA") (siUnmarked "srcB") ] )
+       mkAnd [ iEq (siVar "destA") (siVar "srcB")
+               iEq (siVar "srcA") (siVar "srcB") ] )
       // Integer load-and-increment
       (func "!ILoad++" [ Param.Int "destB"; Param.Int "destA"
                          Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ iEq (siUnmarked "destA") (siUnmarked "srcB")
-               iEq (siUnmarked "srcA") (mkAdd2 (siUnmarked "srcB") (AInt 1L)) ] )
+       mkAnd [ iEq (siVar "destA") (siVar "srcB")
+               iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (AInt 1L)) ] )
       // Integer load-and-decrement
       (func "!ILoad--" [ Param.Int "destB"; Param.Int "destA"
                          Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ iEq (siUnmarked "destA") (siUnmarked "srcB")
-               iEq (siUnmarked "srcA") (mkSub2 (siUnmarked "srcB") (AInt 1L)) ] )
+       mkAnd [ iEq (siVar "destA") (siVar "srcB")
+               iEq (siVar "srcA") (mkSub2 (siVar "srcB") (AInt 1L)) ] )
       // Integer increment
       (func "!I++" [ Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ iEq (siUnmarked "srcA") (mkAdd2 (siUnmarked "srcB") (AInt 1L)) ] )
+       mkAnd [ iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (AInt 1L)) ] )
       // Integer decrement
       (func "!I--" [ Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ iEq (siUnmarked "srcA") (mkSub2 (siUnmarked "srcB") (AInt 1L)) ] )
+       mkAnd [ iEq (siVar "srcA") (mkSub2 (siVar "srcB") (AInt 1L)) ] )
       // Boolean load
       (func "!BLoad" [ Param.Bool "destB"; Param.Bool "destA"
                        Param.Bool "srcB"; Param.Bool "srcA" ],
-       mkAnd [ bEq (sbUnmarked "destA") (sbUnmarked "srcB")
-               bEq (sbUnmarked "srcA") (sbUnmarked "srcB") ] )
+       mkAnd [ bEq (sbVar "destA") (sbVar "srcB")
+               bEq (sbVar "srcA") (sbVar "srcB") ] )
 
       (*
        * Atomic store
@@ -377,11 +377,11 @@ let coreSemantics =
       // Integer store
       (func "!IStore" [ Param.Int "destB"; Param.Int "destA"
                         Param.Int "src" ],
-       iEq (siUnmarked "destA") (siUnmarked "src"))
+       iEq (siVar "destA") (siVar "src"))
       // Boolean store
       (func "!BStore" [ Param.Bool "destB"; Param.Bool "destA"
                         Param.Bool "src" ],
-       bEq (sbUnmarked "destA") (sbUnmarked "src"))
+       bEq (sbVar "destA") (sbVar "src"))
 
       (*
        * Local set
@@ -390,11 +390,11 @@ let coreSemantics =
       // Integer local set
       (func "!ILSet" [ Param.Int "destB"; Param.Int "destA"
                        Param.Int "src" ],
-       iEq (siUnmarked "destA") (siUnmarked "src"))
+       iEq (siVar "destA") (siVar "src"))
       // Boolean store
       (func "!BLSet" [ Param.Bool "destB"; Param.Bool "destA"
                        Param.Bool "src" ],
-       bEq (sbUnmarked "destA") (sbUnmarked "src"))
+       bEq (sbVar "destA") (sbVar "src"))
 
       (*
        * Assumptions
@@ -403,7 +403,7 @@ let coreSemantics =
       // Identity
       (func "Id" [], BTrue)
       // Assume
-      (func "Assume" [ Param.Bool "expr" ], sbUnmarked "expr") ]
+      (func "Assume" [ Param.Bool "expr" ], sbVar "expr") ]
 
 (*
  * Expression translation
@@ -670,7 +670,7 @@ let modelViewDef
   svars
   (vprotos : FuncTable<unit>)
   avd
-  : Result<SMBViewDef<Model.Types.DView>, ModelError> =
+  : Result<SVBViewDef<Model.Types.DView>, ModelError> =
     let av = viewOf avd
 
     trial {
@@ -680,7 +680,7 @@ let modelViewDef
         return! (match avd with
                  | Definite (_, dae) ->
                     dae
-                    |> wrapMessages CEExpr (modelBoolExpr e MarkedVar.Unmarked)
+                    |> wrapMessages CEExpr (modelBoolExpr e id)
                     |> lift (fun em -> Definite (v, em))
                  | Indefinite _ ->
                      ok (Indefinite v))
@@ -812,7 +812,7 @@ let genAllViewsAt depth (funcs : DFunc seq) : Set<Model.Types.DView> =
 let addSearchDefs
   (vprotos : FuncTable<unit>)
   depth
-  (viewdefs : SMBViewDef<Model.Types.DView> list) =
+  (viewdefs : SVBViewDef<Model.Types.DView> list) =
     match depth with
     | None -> viewdefs
     | Some n ->
@@ -856,7 +856,7 @@ let modelCFunc protos env afunc =
              afunc.Params
              |> Seq.map (fun e ->
                              e
-                             |> modelExpr env MarkedVar.Unmarked
+                             |> modelExpr env id
                              |> mapMessages (curry ViewError.BadExpr e))
              |> collect
              // Then, put them into a VFunc.
@@ -878,7 +878,7 @@ let rec modelCView protos ls =
         modelCFunc protos ls afunc |> lift Multiset.singleton
     | View.If(e, l, r) ->
         lift3 (fun em lm rm -> CFunc.ITE(em, lm, rm) |> Multiset.singleton)
-              (e |> modelBoolExpr ls MarkedVar.Unmarked
+              (e |> modelBoolExpr ls id
                  |> mapMessages (curry ViewError.BadExpr e))
               (modelCView protos ls l)
               (modelCView protos ls r)
@@ -907,7 +907,7 @@ let modelBoolLoad svars dest srcExpr mode =
             match src, mode with
             | Typed.Bool s, Direct ->
                 return
-                    vfunc
+                    smvfunc
                         "!BLoad"
                             [ dest |> Before |> Reg |> BVar |> Expr.Bool
                               dest |> After |> Reg |> BVar |> Expr.Bool
@@ -1110,7 +1110,7 @@ and modelITE protos svars tvars i t f =
     trial { let! iM =
                 wrapMessages
                     BadITECondition
-                    (modelBoolExpr tvars MarkedVar.Before)
+                    (modelBoolExpr tvars id)
                     i
             (* We need to calculate the recursive axioms first, because we
              * need the inner cpairs for each to store the ITE placeholder.
@@ -1130,7 +1130,7 @@ and modelWhile isDo protos gs ls e b =
     lift2 (fun eM bM -> PartCmd.While(isDo, eM, bM))
           (wrapMessages
                BadWhileCondition
-               (modelBoolExpr ls MarkedVar.Before)
+               (modelBoolExpr ls id)
                e)
           (modelBlock protos gs ls b)
 

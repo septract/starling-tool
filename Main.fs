@@ -118,7 +118,7 @@ type Response =
     /// Stop at graph optimisation.
     | GraphOptimise of UVModel<Graph>
     /// Stop at graph axiomatisation.
-    | Axiomatise of UVModel<Axiom<SMGView, Command>>
+    | Axiomatise of UVModel<Axiom<SVGView, Command>>
     /// The result of goal-axiom-pair generation.
     | GoalAdd of UVModel<GoalAxiom>
     /// The result of term generation.
@@ -145,7 +145,7 @@ let printResponse mview =
     | GraphOptimise g ->
         printUVModelView printGraph mview g
     | Axiomatise m ->
-        printUVModelView (printAxiom printCommand printSMGView) mview m
+        printUVModelView (printAxiom printCommand printSVGView) mview m
     | GoalAdd m ->
         printUVModelView printGoalAxiom mview m
     | TermGen m ->

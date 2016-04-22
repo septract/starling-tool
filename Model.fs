@@ -57,6 +57,9 @@ module Types =
     /// A func over marked-var expressions.
     type MVFunc = VFunc<MarkedVar>
 
+    /// A func over symbolic var expressions.
+    type SVFunc = VFunc<Sym<Var>>
+
     /// A func over symbolic-marked-var expressions.
     type SMVFunc = VFunc<Sym<MarkedVar>>
 
@@ -132,12 +135,20 @@ module Types =
         override this.ToString() = sprintf "%A" this
 
     /// <summary>
-    ///     A view definition over <c>SMBoolExpr</c>s.
+    ///     A view definition over <c>MBoolExpr</c>s.
     /// </summary>
     /// <typeparam name="view">
     ///     The type of views.
     /// </typeparam>
-    type SMBViewDef<'view> = ViewDef<'view, SMBoolExpr>
+    type MBViewDef<'view> = ViewDef<'view, MBoolExpr>
+
+    /// <summary>
+    ///     A view definition over <c>SVBoolExpr</c>s.
+    /// </summary>
+    /// <typeparam name="view">
+    ///     The type of views.
+    /// </typeparam>
+    type SVBViewDef<'view> = ViewDef<'view, SVBoolExpr>
 
     /// <summary>
     ///     Extracts the view of a <c>ViewDef</c>.
@@ -193,7 +204,7 @@ module Types =
           /// <summary>
           ///     The semantic function for this model.
           /// </summary>
-          Semantics : (DFunc * SMBoolExpr) list
+          Semantics : (DFunc * SVBoolExpr) list
           // This corresponds to the function D.
           ViewDefs : 'viewdefs }
 
@@ -205,7 +216,7 @@ module Types =
     /// <typeparam name="axiom">
     ///     Type of program axioms.
     /// </typeparam>
-    type UVModel<'axiom> = Model<'axiom, SMBViewDef<DView> list>
+    type UVModel<'axiom> = Model<'axiom, SVBViewDef<DView> list>
 
     /// <summary>
     ///     A <c>Model</c> whose view definitions map <c>DFunc</c>s
@@ -214,7 +225,7 @@ module Types =
     /// <typeparam name="axiom">
     ///     Type of program axioms.
     /// </typeparam>
-    type UFModel<'axiom> = Model<'axiom, SMBViewDef<DFunc> list>
+    type UFModel<'axiom> = Model<'axiom, SVBViewDef<DFunc> list>
 
 /// <summary>
 ///     Pretty printers for the model.
@@ -239,6 +250,9 @@ module Pretty =
 
     /// Pretty-prints an MVFunc.
     let printMVFunc = printFunc printMExpr
+
+    /// Pretty-prints a SVFunc.
+    let printSVFunc = printFunc printSVExpr
 
     /// Pretty-prints a SMVFunc.
     let printSMVFunc = printFunc printSMExpr
@@ -303,8 +317,8 @@ module Pretty =
                   (String "Def", String "?") ]
 
     /// Pretty-printer for BViewDefs.
-    let printSMBViewDef pView =
-        printViewDef pView printSMBoolExpr
+    let printSVBViewDef pView =
+        printViewDef pView printSVBoolExpr
 
     /// Pretty-prints the axiom map for a model.
     let printModelAxioms pAxiom model =
@@ -383,7 +397,7 @@ module Pretty =
     ///     returning a <c>Command</c>.
     /// </returns>
     let printUVModelView pAxiom =
-        printModelView pAxiom (List.map (printSMBViewDef printDView))
+        printModelView pAxiom (List.map (printSVBViewDef printDView))
 
     /// <summary>
     ///     Pretty-prints a model view for an <c>UFModel</c>.
@@ -396,7 +410,7 @@ module Pretty =
     ///     returning a <c>Command</c>.
     /// </returns>
     let printUFModelView pAxiom =
-        printModelView pAxiom (List.map (printSMBViewDef printDFunc))
+        printModelView pAxiom (List.map (printSVBViewDef printDFunc))
 
 
 /// <summary>
@@ -445,6 +459,21 @@ let vfunc name (pars : Expr<'var> seq) : VFunc<'var> = func name pars
 let mvfunc name (pars : MExpr seq) : MVFunc = vfunc name pars
 
 /// <summary>
+///     Type-constrained version of <c>vfunc</c> for <c>SVFunc</c>s.
+/// </summary>
+/// <param name="name">
+///     The name of the <c>SVFunc</c>.
+/// </param>
+/// <param name="pars">
+///     The parameters of the <c>SVFunc</c>, as a sequence.
+/// </param>
+/// <returns>
+///     A new <c>SVFunc</c> with the given name and parameters.
+/// </returns>
+let svfunc name (pars : SVExpr seq) : SVFunc = vfunc name pars
+
+
+/// <summary>
 ///     Type-constrained version of <c>vfunc</c> for <c>SMVFunc</c>s.
 /// </summary>
 /// <param name="name">
@@ -454,7 +483,7 @@ let mvfunc name (pars : MExpr seq) : MVFunc = vfunc name pars
 ///     The parameters of the <c>SMVFunc</c>, as a sequence.
 /// </param>
 /// <returns>
-///     A new <c>MVFunc</c> with the given name and parameters.
+///     A new <c>SMVFunc</c> with the given name and parameters.
 /// </returns>
 let smvfunc name (pars : SMExpr seq) : SMVFunc = vfunc name pars
 

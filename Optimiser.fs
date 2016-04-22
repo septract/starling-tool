@@ -476,8 +476,15 @@ module Graph =
     /// <summary>
     ///     Partial active pattern matching <c>Sym</c>-less expressions.
     /// </summary>
-    let (|NoSym|_|) : SMBoolExpr -> MBoolExpr option =
+    let (|VNoSym|_|) : BoolExpr<Sym<Var>> -> BoolExpr<Var> option =
         Mapper.mapBool (tsfRemoveSym (fun _ -> ())) >> okOption
+
+    /// <summary>
+    ///     Partial active pattern matching <c>Sym</c>-less expressions.
+    /// </summary>
+    let (|MNoSym|_|) : BoolExpr<Sym<MarkedVar>> -> BoolExpr<MarkedVar> option =
+        Mapper.mapBool (tsfRemoveSym (fun _ -> ())) >> okOption
+
 
     /// <summary>
     ///     Active pattern matching on if-then-else guard multisets.
@@ -491,18 +498,18 @@ module Graph =
     ///     <para>
     ///         The active pattern returns the guard and view of the first ITE
     ///         guard, then the guard and view of the second.  The views are
-    ///         <c>NGView</c>s, but with a <c>BTrue</c> guard.
+    ///         <c>GView</c>s, but with a <c>BTrue</c> guard.
     ///     </para>
     /// </summary>
-    let (|ITEGuards|_|) ms =
+    let (|ITEGuards|_|) (ms: SVGView) =
         match (Multiset.toFlatList ms) with
-        | [ { Cond = NoSym xc; Item = xi }
-            { Cond = NoSym yc; Item = yi } ]
-              when (equivHolds (negates xc yc)) ->
+        | [ { Cond = VNoSym xc; Item = xi }
+            { Cond = VNoSym yc; Item = yi } ]
+              when (equivHolds id (negates xc yc)) ->
             Some (xc, Multiset.singleton { Cond = BTrue; Item = xi },
                   yc, Multiset.singleton { Cond = BTrue; Item = yi })
         // {| G -> P |} is trivially equivalent to {| G -> P * ¬G -> emp |}.
-        | [ { Cond = (NoSym xc); Item = xi } ] ->
+        | [ { Cond = (VNoSym xc); Item = xi } ] ->
             Some (xc, Multiset.singleton { Cond = BTrue; Item = xi },
                   mkNot xc, Multiset.empty)
         | _ -> None
@@ -530,37 +537,29 @@ module Graph =
                 match nView with
                 | InnerView(ITEGuards (xc, xv, yc, yv)) ->
                     (* Translate xc and yc to pre-state, to match the
-                       commands.
-                       We also need to re-introduce the symbolic layer
-                       removed by NoSymView. *)
-                    let toPre =
-                        Mapper.mapBool
-                            (onVars
-                                 (liftVSubFun
-                                      (Mapper.cmake
-                                           (function
-                                            | Unmarked s -> Before s
-                                            | x -> x))))
-                    let xcPre = toPre xc
-                    let ycPre = toPre yc
+                       commands. *)
+                    let xcPre = Mapper.mapBool vBefore xc
+                    let ycPre = Mapper.mapBool vBefore yc
 
                     match (Set.toList outEdges, Set.toList inEdges) with
                     (* Are there only two out edges, and only one in edge?
                        Are the out edges assumes, and are they non-symbolic? *)
                     | ( [ { Dest = out1D
-                            Command = Assume (NoSym out1P) } as out1
+                            Command = Assume (MNoSym out1P) } as out1
                           { Dest = out2D
-                            Command = Assume (NoSym out2P) } as out2
+                            Command = Assume (MNoSym out2P) } as out2
                         ],
                         [ inE ] )
                         when (// Is the first one x and the second y?
                               (equivHolds
+                                   constToString
                                    (andEquiv (equiv out1P xcPre)
                                              (equiv out2P ycPre))
                                && nodeHasView out1D xv ctx.Graph
                                && nodeHasView out2D yv ctx.Graph)
                               // Or is the first one y and the second x?
                               || (equivHolds
+                                      constToString
                                       (andEquiv (equiv out2P xcPre)
                                                 (equiv out1P ycPre))
                                   && nodeHasView out2D xv ctx.Graph

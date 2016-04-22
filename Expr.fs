@@ -146,15 +146,15 @@ module Types =
     /// <summary>
     ///     An expression of arbitrary type using symbolic <c>Var</c>s.
     /// </summary>
-    type SVExpr = Expr<Sym<MarkedVar>>
+    type SVExpr = Expr<Sym<Var>>
     /// <summary>
     ///     An expression of Boolean type using symbolic <c>Var</c>s.
     /// </summary>
-    type SVBoolExpr = BoolExpr<Sym<MarkedVar>>
+    type SVBoolExpr = BoolExpr<Sym<Var>>
     /// <summary>
     ///     An expression of integral type using <c>Var</c>s.
     /// </summary>
-    type SVIntExpr = IntExpr<Sym<MarkedVar>>
+    type SVIntExpr = IntExpr<Sym<Var>>
 
     /// <summary>
     ///     An expression of arbitrary type using symbolic <c>MarkedVar</c>s.
@@ -252,11 +252,19 @@ module Pretty =
             func (sprintf "%%{%s}" sym) (Seq.map (printExpr (printSym pReg)) regs)
         | Reg reg -> pReg reg
 
+    /// Pretty-prints a VExpr.
+    let printVExpr = printExpr String
     /// Pretty-prints a MExpr.
     let printMExpr = printExpr (constToString >> String)
+    /// Pretty-prints a SVExpr.
+    let printSVExpr = printExpr (printSym String)
     /// Pretty-prints a SMExpr.
     let printSMExpr = printExpr (printSym (constToString >> String))
-    /// Pretty-prints a MBoolExpr.
+    /// Pretty-prints a VBoolExpr.
+    let printVBoolExpr = printBoolExpr String
+    /// Pretty-prints a SVBoolExpr.
+    let printSVBoolExpr = printBoolExpr (printSym String)
+    /// Pretty-prints a SMBoolExpr.
     let printSMBoolExpr = printBoolExpr (printSym (constToString >> String))
     /// Pretty-prints a MBoolExpr.
     let printMBoolExpr = printBoolExpr (constToString >> String)
@@ -376,6 +384,9 @@ let stripMark =
  * Expression constructors
  *)
 
+/// Creates an integer sym-variable.
+let siVar c = c |> Reg |> AVar
+
 /// Creates an unmarked integer variable.
 let iUnmarked c = c |> Unmarked |> AVar
 
@@ -405,6 +416,9 @@ let iInter i c = (i, c) |> Intermediate |> AVar
 
 /// Creates an intermediate-marked integer sym-variable.
 let siInter i c = (i, c) |> Intermediate |> Reg |> AVar
+
+/// Creates a Boolean sym-variable.
+let sbVar c = c |> Reg |> BVar
 
 /// Creates an unmarked Boolean variable.
 let bUnmarked c = c |> Unmarked |> BVar

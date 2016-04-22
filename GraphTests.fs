@@ -163,11 +163,16 @@ type GraphTests() =
     ///     Test cases for <c>InnerView</c>.
     /// </summary>
     static member ViewExprFlattens =
-        [ TestCaseData(Mandatory (sing (gHoldLock BTrue)))
-              .Returns(sing (gHoldLock BTrue))
+        [ TestCaseData(Mandatory (sing (smgfunc BTrue "holdLock" [])))
+              .Returns(sing (smgfunc BTrue "holdLock" []))
               .SetName("Flattening a mandatory viewexpr returns its view")
-          TestCaseData(Advisory (sing (gHoldTick BTrue)))
-              .Returns(sing (gHoldTick BTrue))
+          TestCaseData(Advisory
+                           (sing
+                                (smgfunc BTrue "holdTick"
+                                     [ SMExpr.Int (siBefore "t") ] )))
+              .Returns(sing
+                           (smgfunc BTrue "holdTick"
+                                [ SMExpr.Int (siBefore "t") ] ))
               .SetName("Flattening an advisory viewexpr returns its view") ]
 
     /// <summary>

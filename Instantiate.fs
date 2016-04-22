@@ -73,7 +73,7 @@ module Types =
         ///     We found a symbolic variable somewhere we didn't expect
         ///     one.
         /// </summary>
-        | UnwantedSym of sym: Func<Expr<Sym<MarkedVar>>>
+        | UnwantedSym of sym: string
 
     (* TODO(CaptainHayashi): these two shouldn't be in here, but
        they are, due to a cyclic dependency on Model and FuncTable. *)
@@ -85,7 +85,7 @@ module Types =
     /// <typeparam name="axiom">
     ///     Type of program axioms.
     /// </typeparam>
-    type IFModel<'axiom> = Model<'axiom, FuncTable<MBoolExpr option>>
+    type IFModel<'axiom> = Model<'axiom, FuncTable<VBoolExpr option>>
 
     /// <summary>
     ///     A <c>Model</c> whose view definitions form a definite
@@ -94,7 +94,7 @@ module Types =
     /// <typeparam name="axiom">
     ///     Type of program axioms.
     /// </typeparam>
-    type DFModel<'axiom> = Model<'axiom, FuncTable<MBoolExpr>>
+    type DFModel<'axiom> = Model<'axiom, FuncTable<VBoolExpr>>
 
 
 /// <summary>
@@ -108,19 +108,27 @@ module Pretty =
     open Starling.Core.Expr.Pretty
 
     /// <summary>
-    ///     Pretty-prints <c>FuncTable</c>s over <c>MBoolExpr</c>s.
+    ///     Pretty-prints <c>FuncTable</c>s.
     /// </summary>
+    /// <param name="pDefn">
+    ///     Pretty printer for definitions.
+    /// </param>
     /// <param name="ft">
     ///     The <c>FuncTable</c> to print.
     /// </param>
+    /// <typeparam name="defn">
+    ///     The type of definitions in the <c>FuncTable</c>.
+    /// </typeparam>
     /// <returns>
     ///     A sequence of <c>Command</c>s representing the
     ///     pretty-printed form of <paramref name="ft"/>.
     /// </returns>
-    let printFuncTable ft : Command seq =
+    let printFuncTable
+      (pDefn : 'defn -> Command)
+      (ft : FuncTable<'defn>)
+      : Command seq =
         ft
-        |> List.map (fun (v, d) -> colonSep [ printDFunc v
-                                              printMBoolExpr d ] )
+        |> List.map (fun (v, d) -> colonSep [ printDFunc v; pDefn d ] )
         |> List.toSeq
 
     /// <summary>
@@ -129,12 +137,17 @@ module Pretty =
     /// <param name="pAxiom">
     ///     Pretty printer for axioms.
     /// </param>
+    /// <typeparam name="axiom">
+    ///     Type of axioms.
+    /// </typeparam>
     /// <returns>
     ///     A function, taking a <c>ModelView</c> and <c>DFModel</c>, and
     ///     returning a <c>Command</c>.
     /// </returns>
-    let printDFModelView pAxiom =
-        printModelView pAxiom printFuncTable
+    let printDFModelView
+      (pAxiom : 'axiom -> Command)
+      : ModelView -> DFModel<'axiom> -> Command =
+        printModelView pAxiom (printFuncTable printVBoolExpr)
 
     /// Pretty-prints instantiation errors.
     let printError =
@@ -151,7 +164,7 @@ module Pretty =
         | UnwantedSym sym ->
             // TODO(CaptainHayashi): this is a bit shoddy.
             fmt "encountered uninterpreted symbol {0}"
-                [ printSym (constToString >> String) (Sym sym) ]
+                [ String sym ]
 
 
 (*
@@ -370,13 +383,9 @@ let paramSubFun
 let smvParamSubFun
   (smvfunc : SMVFunc)
   (dfunc : DFunc)
-  : VSubFun<Sym<MarkedVar>, Sym<MarkedVar>> =
+  : VSubFun<Sym<Var>, Sym<MarkedVar>> =
     liftVToSym
-        (paramSubFun 
-            (function Unmarked str -> Some str | _ -> None)
-            Reg
-            smvfunc
-            dfunc)
+        (paramSubFun Some (Unmarked >> Reg) smvfunc dfunc)
 
 /// <summary>
 ///     Produces a parameter substitution <c>VSubFun</c> from
@@ -391,15 +400,11 @@ let smvParamSubFun
 /// <returns>
 ///     A <c>VSubFun</c> performing the above substitutions.
 /// </returns>
-let mvParamSubFun
+let vParamSubFun
   (mvfunc : MVFunc)
   (dfunc : DFunc)
-  : VSubFun<MarkedVar, MarkedVar> =
-    (paramSubFun 
-        (function Unmarked str -> Some str | _ -> None)
-        id
-        mvfunc
-        dfunc)
+  : VSubFun<Var, MarkedVar> =
+    (paramSubFun Some Unmarked mvfunc dfunc)
 
 /// <summary>
 ///     Look up <c>func</c> in <c>_arg1</c>, and instantiate the
@@ -458,8 +463,8 @@ module ViewDefFilter =
     ///     Tries to remove symbols from <c>ViewDef</c>s.
     /// </summary>
     let tryRemoveViewDefSymbols
-      (defs : FuncTable<SMBoolExpr>)
-      : Result<FuncTable<MBoolExpr>, Error> = 
+      (defs : FuncTable<SVBoolExpr>)
+      : Result<FuncTable<VBoolExpr>, Error> = 
         // TODO(CaptainHayashi): proper doc comment.
         // TODO(CaptainHayashi): stop assuming FuncTable is a list.
         defs
@@ -476,8 +481,8 @@ module ViewDefFilter =
     ///     indefinite views.
     /// </summary>
     let filterIndefiniteViewDefs
-      (vds : SMBViewDef<DFunc> list)
-      : Result<FuncTable<MBoolExpr option>, Error> =
+      (vds : SVBViewDef<DFunc> list)
+      : Result<FuncTable<VBoolExpr option>, Error> =
         // TODO(CaptainHayashi): proper doc comment.
         vds
         |> funcTableFromViewDefs
@@ -502,8 +507,8 @@ module ViewDefFilter =
     ///     definite views.
     /// </summary>
     let filterDefiniteViewDefs
-      (vds : SMBViewDef<DFunc> list)
-      : Result<FuncTable<MBoolExpr>, Error> =
+      (vds : SVBViewDef<DFunc> list)
+      : Result<FuncTable<VBoolExpr>, Error> =
         // TODO(CaptainHayashi): proper doc comment.
         vds
         |> funcTableFromViewDefs

@@ -20,23 +20,33 @@ open Starling.Core.Z3
 /// <summary>
 ///     Type for equivalence checks.
 /// </summary>
-type Equiv = Z3.Context -> Z3.BoolExpr
+type Equiv<'var> = ('var -> string) -> Z3.Context -> Z3.BoolExpr
 
 /// <summary>
 ///     Runs an equivalence check.
 /// </summary>
+/// <param name="toVar">
+///     A function converting variables in the check to <c>Var</c>s.
+///     The vars must be unique to their origin variables across the
+///     equivalence.
+/// </param>
 /// <param name="e">
 ///     The equivalence check to run.
 /// </param>
+/// <typeparam name="var">
+///     Meta-type of variables inside the equivalence-checked expressions.
+/// </typeparam>
 /// <returns>
 ///     True if the equivalence check definitely succeeded.
 ///     False otherwise (including if the check was undecideable).
 /// </returns>
-let equivHolds (e : Equiv) =
+let equivHolds
+  (toVar : 'var -> Var)
+  (e : Equiv<'var>) =
     (* The tactic here is the same as the Starling one:
        negate the equivalence and try to falsify it. *)
     use ctx = new Z3.Context ()
-    let term = ctx.MkNot (e ctx)
+    let term = ctx.MkNot (e toVar ctx)
     match (Run.runTerm ctx term) with
     | Z3.Status.UNSATISFIABLE -> true
     | _ -> false
@@ -50,12 +60,16 @@ let equivHolds (e : Equiv) =
 /// <param name="y">
 ///     The second equivalence check to disjoin.
 /// </param>
+/// <typeparam name="var">
+///     Meta-type of variables inside the equivalence-checked expressions.
+/// </typeparam>
 /// <returns>
 ///     The or-disjunction of the two, which will return true only if
 ///     (but not necessarily if!) at least one equivalence holds.
 /// </returns>
-let orEquiv x y : Equiv =
-    fun (ctx : Z3.Context) -> ctx.MkOr [| x ctx ; y ctx |]
+let orEquiv (x : Equiv<'var>) (y : Equiv<'var>) : Equiv<'var> =
+    fun toVar (ctx : Z3.Context) ->
+        ctx.MkOr [| x toVar ctx ; y toVar ctx |]
 
 /// <summary>
 ///     And-conjoins two equivalence checks.
@@ -66,12 +80,16 @@ let orEquiv x y : Equiv =
 /// <param name="y">
 ///     The second equivalence check to conjoin.
 /// </param>
+/// <typeparam name="var">
+///     Meta-type of variables inside the equivalence-checked expressions.
+/// </typeparam>
 /// <returns>
 ///     The and-conjunction of the two, which will return true only if
 ///     (but not necessarily if!) both equivalences hold.
 /// </returns>
-let andEquiv x y : Equiv =
-    fun (ctx : Z3.Context) -> ctx.MkAnd [| x ctx ; y ctx |]
+let andEquiv (x : Equiv<'var>) (y : Equiv<'var>) : Equiv<'var> =
+    fun toVar (ctx : Z3.Context) ->
+        ctx.MkAnd [| x toVar ctx ; y toVar ctx |]
 
 /// <summary>
 ///     Returns true if two expressions are definitely equivalent to each
@@ -88,6 +106,9 @@ let andEquiv x y : Equiv =
 /// <param name="y">
 ///     The second expression to check.
 /// </param>
+/// <typeparam name="var">
+///     Meta-type of variables inside the equivalence-checked expressions.
+/// </typeparam>
 /// <returns>
 ///     An equivalence check returning true only if (but not if!)
 ///     <paramref name="x" /> and <paramref name="y" /> are equivalent.
@@ -96,10 +117,10 @@ let andEquiv x y : Equiv =
 ///     This function calls into Z3, and is thus likely to be slow.
 ///     Use with caution.
 /// </remarks>
-let equiv x y =
-    fun ctx ->
-        let sx, sy = (x |> simp |> Expr.boolToZ3 false ctx,
-                      y |> simp |> Expr.boolToZ3 false ctx)
+let equiv (x : BoolExpr<'var>) (y : BoolExpr<'var>) : Equiv<'var> =
+    fun toVar ctx ->
+        let sx, sy = (x |> simp |> Expr.boolToZ3 false toVar ctx,
+                      y |> simp |> Expr.boolToZ3 false toVar ctx)
         ctx.MkIff (sx, sy)
 
 /// <summary>
@@ -117,6 +138,9 @@ let equiv x y =
 /// <param name="y">
 ///     The second expression to check.
 /// </param>
+/// <typeparam name="var">
+///     Meta-type of variables inside the equivalence-checked expressions.
+/// </typeparam>
 /// <returns>
 ///     An equivalence check returning true only if (but not if!)
 ///     <paramref name="x" /> and <paramref name="y" /> negate each other.
@@ -125,5 +149,5 @@ let equiv x y =
 ///     This function calls into Z3, and is thus likely to be slow.
 ///     Use with caution.
 /// </remarks>
-let negates x y =
-    fun ctx -> equiv x (BNot y) ctx
+let negates (x : BoolExpr<'var>) (y : BoolExpr<'var>) : Equiv<'var> =
+    fun toVar ctx -> equiv x (BNot y) toVar ctx

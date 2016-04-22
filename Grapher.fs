@@ -8,6 +8,7 @@ open Chessie.ErrorHandling
 
 open Starling.Collections
 open Starling.Utils
+open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Sub
 open Starling.Core.Model
@@ -53,7 +54,13 @@ let cAssumeNot : SMBoolExpr -> Command = mkNot >> cAssume
 /// <returns>
 ///     A Chessie result containing the graph of this if statement.
 /// </returns>
-let rec graphWhile vg cg oP oQ isDo (expr : SMBoolExpr) inner =
+let rec graphWhile vg cg oP oQ isDo (expr : SVBoolExpr) inner =
+    (* First, we need to convert the expression into an assert.
+       This means we cast it into the pre-state, as it is diverging the
+       program if its state _entering_ the loop condition makes expr go
+       false. *)
+    let exprB = Mapper.mapBool before expr
+
     (* If isDo:
      *   Translating [|oP|] do { [|iP|] [|iQ|] } while (C) [|oQ|].
      * Else:
@@ -71,10 +78,10 @@ let rec graphWhile vg cg oP oQ isDo (expr : SMBoolExpr) inner =
         // Outer edges common to do-while and while loops.
         let commonEdges =
             [ // {|iQ|} assume C {|iP|}: loop back.
-              (cg (), edge iQ (cAssume expr) iP)
+              (cg (), edge iQ (cAssume exprB) iP)
 
               // {|iQ|} assume ¬C {|oQ|}: fall out of loop.
-              (cg (), edge iQ (cAssumeNot expr) oQ) ]
+              (cg (), edge iQ (cAssumeNot exprB) oQ) ]
 
         // Outer edges different between do-while and while loops.
         let diffEdges =
@@ -84,9 +91,9 @@ let rec graphWhile vg cg oP oQ isDo (expr : SMBoolExpr) inner =
                   (cg (), edge oP cId iP) ]
             else
                 [ // {|oP|} assume C {|iP|} conditionally enter loop...
-                  (cg (), edge oP (cAssume expr) iP)
+                  (cg (), edge oP (cAssume exprB) iP)
                   // {|oP|} assume ¬C {|oQ|} ...otherwise skip it.
-                  (cg (), edge oP (cAssumeNot expr) oQ) ]
+                  (cg (), edge oP (cAssumeNot exprB) oQ) ]
 
         let cGraph = { Nodes = Map.empty
                        Edges = (Seq.append commonEdges diffEdges
@@ -122,9 +129,13 @@ let rec graphWhile vg cg oP oQ isDo (expr : SMBoolExpr) inner =
 ///     A Chessie result containing the graph of this if statement.
 /// </returns>
 and graphITE vg cg oP oQ expr inTrue inFalse =
-    (* While loops.
-     * Translating [|oP|] if (C) { [|tP|] [|tQ|] } else { [|fP|] [|fQ|] } [|oQ|].
-     *)
+    (* First, we need to convert the expression into an assert.
+       This means we cast it into the pre-state, as it is diverging the
+       program if its state _entering_ the loop condition makes expr go
+       false. *)
+    let exprB = Mapper.mapBool before expr
+
+    // Translating [|oP|] if (C) { [|tP|] [|tQ|] } else { [|fP|] [|fQ|] } [|oQ|].
     trial {
         (* We presume oP and oQ are added into the nodes list by the caller,
          * and that tP and tQ are returned in tGraph (and fP/fQ in fGraph).
@@ -136,11 +147,11 @@ and graphITE vg cg oP oQ expr inTrue inFalse =
 
         let cEdges =
             [ // {|oP|} assume C {|tP|}: enter true block
-              (cg (), edge oP (cAssume expr) tP)
+              (cg (), edge oP (cAssume exprB) tP)
               // {|tQ|} id {|oQ|}: exit true block
               (cg (), edge tQ cId oQ)
               // {|oP|} assume ¬C {|fP|}: enter false block
-              (cg (), edge oP (cAssumeNot expr) fP)
+              (cg (), edge oP (cAssumeNot exprB) fP)
               // {|fQ|} id {|oQ|}: exit false block
               (cg (), edge fQ cId oQ) ]
 
@@ -168,7 +179,7 @@ and graphITE vg cg oP oQ expr inTrue inFalse =
 /// <param name="_arg1">
 ///     The command to graph.
 /// </param>
-and graphCommand vg cg oP oQ : PartCmd<ViewExpr<SMGView>>
+and graphCommand vg cg oP oQ : PartCmd<ViewExpr<SVGView>>
                             -> Result<Subgraph, Error> =
     function
     | Prim cmd ->
@@ -263,6 +274,6 @@ let graphMethod { Signature = { Name = name }; Body = body } =
 /// <summary>
 ///     Converts a model on method ASTs to one on method CFGs.
 /// </summary>
-let graph (model : UVModel<PMethod<ViewExpr<SMGView>>>)
+let graph (model : UVModel<PMethod<ViewExpr<SVGView>>>)
           : Result<UVModel<Graph>, Error> =
     tryMapAxioms graphMethod model

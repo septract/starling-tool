@@ -507,8 +507,8 @@ let inSet st var = Set.contains var st
 
 /// Lifts a VSubFun over MarkedVars to deal with symbolic vars.
 let rec liftVToSym
-  (sf : VSubFun<MarkedVar, Sym<MarkedVar>>)
-  : VSubFun<Sym<MarkedVar>, Sym<MarkedVar>> =
+  (sf : VSubFun<'srcVar, Sym<'dstVar>>)
+  : VSubFun<Sym<'srcVar>, Sym<'dstVar>> =
     Mapper.make
         (function
          | Reg r -> Mapper.mapInt sf r
@@ -551,30 +551,62 @@ let liftMarker marker vpred =
  *)
 
 /// Converts an expression to its pre-state.
-let before = subExpr (liftMarker Before always)
+let before
+  : SubFun<Sym<Var>, Sym<MarkedVar>> =
+    (Before >> Reg)
+    |> Mapper.cmake
+    |> liftVSubFun
+    |> liftVToSym
+    |> onVars
 
 /// Converts an expression to its post-state.
-let after = subExpr (liftMarker After always)
+let after
+  : SubFun<Sym<Var>, Sym<MarkedVar>> =
+    (After >> Reg)
+    |> Mapper.cmake
+    |> liftVSubFun
+    |> liftVToSym
+    |> onVars
+
+/// Converts a non-symbolic expression to its pre-state.
+let vBefore
+  : SubFun<Var, MarkedVar> =
+    Before
+    |> Mapper.cmake
+    |> liftVSubFun
+    |> onVars
+
+/// Converts a non-symbolic expression to its post-state.
+let vAfter
+  : SubFun<Var, MarkedVar> =
+    After
+    |> Mapper.cmake
+    |> liftVSubFun
+    |> onVars
 
 /// <summary>
 ///     Substitution table for removing symbols from expressions.
 /// </summary>
 /// <param name="err">
-///     The error to throw when detecting a symbol.
+///     Function mapping a symbol's contents to an error to throw when
+///     detecting one.
 /// </param>
 /// <typeparam name="err">
 ///     The type of <paramref name="err"/>.
+/// </typeparam>
+/// <typeparam name="err">
+///     The type of regular (non-symbolic) variables.
 /// </typeparam>
 /// <returns>
 ///     A <c>TrySubFun</c> trying to remove symbols.
 /// </returns>
 let tsfRemoveSym
-  (err : Func<Expr<Sym<MarkedVar>>> -> 'err)
-  : TrySubFun<Sym<MarkedVar>, MarkedVar, 'err> =
+  (err : string -> 'err)
+  : TrySubFun<Sym<'var>, 'var, 'err> =
     tryOnVars <| Mapper.make
         (function
-         | Sym s -> s |> err |> fail
+         | Sym s -> s.Name |> err |> fail
          | Reg f -> f |> AVar |> ok)
         (function
-         | Sym s -> s |> err |> fail
+         | Sym s -> s.Name |> err |> fail
          | Reg f -> f |> BVar |> ok)

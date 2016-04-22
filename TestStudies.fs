@@ -191,20 +191,20 @@ let sing = Multiset.singleton
 
 /// The conditional holdLock view.
 let holdLock =
-    smvfunc "holdLock" [] |> Func
+    svfunc "holdLock" [] |> Func
 
 /// The conditional holdTick view.
 let holdTick =
-    smvfunc "holdTick" [SMExpr.Int (siUnmarked "t")] |> Func
+    svfunc "holdTick" [SVExpr.Int (siVar "t")] |> Func
 
 /// The guarded holdLock view.
-let gHoldLock cnd : SMGFunc = smgfunc cnd "holdLock" []
+let gHoldLock cnd : SVGFunc = svgfunc cnd "holdLock" []
 
 /// The guarded holdTick view.
-let gHoldTick cnd : SMGFunc = smgfunc cnd "holdTick" [SMExpr.Int (siUnmarked "t")]
+let gHoldTick cnd : SVGFunc = svgfunc cnd "holdTick" [SVExpr.Int (siVar "t")]
 
 /// Produces the expression 's!before == t!before'.
-let sIsT mark = iEq (AVar (Reg (mark "s"))) (AVar (Reg (mark "t")))
+let sIsT = iEq (siVar "s") (siVar "t")
 
 /// The ticket lock's lock method.
 let ticketLockLock =
@@ -220,7 +220,7 @@ let ticketLockLock =
                     Post = Mandatory <| sing holdTick }
                   { Command =
                         While (isDo = true,
-                               expr = BNot (sIsT Before),
+                               expr = BNot sIsT,
                                inner =
                                    { Pre = Mandatory <| sing holdTick
                                      Contents =
@@ -230,7 +230,7 @@ let ticketLockLock =
                                                         SMExpr.Int (siBefore "serving"); SMExpr.Int (siAfter "serving") ]
                                                  |> List.singleton |> Prim
                                              Post =
-                                                 (sIsT MarkedVar.Unmarked,
+                                                 (sIsT,
                                                   sing holdLock,
                                                   sing holdTick)
                                                  |> CFunc.ITE
@@ -269,7 +269,7 @@ let ticketLockGuardedLock =
                     Post = Mandatory <| sing (gHoldTick BTrue) }
                   { Command =
                         While (isDo = true,
-                               expr = BNot (sIsT Before),
+                               expr = BNot sIsT,
                                inner =
                                    { Pre = Mandatory <| sing (gHoldTick BTrue)
                                      Contents =
@@ -281,12 +281,12 @@ let ticketLockGuardedLock =
                                              Post =
                                                  Mandatory <|
                                                  Multiset.ofFlatList
-                                                     [ gHoldLock (sIsT MarkedVar.Unmarked)
-                                                       gHoldTick (BNot (sIsT MarkedVar.Unmarked)) ] } ] } )
+                                                     [ gHoldLock sIsT
+                                                       gHoldTick (BNot sIsT) ] } ] } )
                     Post = Mandatory <| sing (gHoldLock BTrue) } ] } }
 
 /// The ticket lock's unlock method, in guarded form.
-let ticketLockGuardedUnlock : PMethod<ViewExpr<SMGView>> =
+let ticketLockGuardedUnlock : PMethod<ViewExpr<SVGView>> =
     { Signature = func "unlock" []
       Body =
           { Pre = Mandatory <| sing (gHoldLock BTrue)
@@ -300,31 +300,31 @@ let ticketLockGuardedUnlock : PMethod<ViewExpr<SMGView>> =
 let ticketLockViewDefs =
     [ Definite
           ([],
-           BGe(siUnmarked "ticket", siUnmarked "serving"))
+           BGe(siVar "ticket", siVar "serving"))
       Definite
           (Multiset.ofFlatList
                [ { Name = "holdTick"
                    Params = [ Param.Int "t" ] } ] |> Multiset.toFlatList,
-           BGt(siUnmarked "ticket", siUnmarked "t"))
+           BGt(siVar "ticket", siVar "t"))
       Definite
           (Multiset.ofFlatList
                [ { Name = "holdLock"
                    Params = [] } ] |> Multiset.toFlatList,
-           BGt(siUnmarked "ticket", siUnmarked "serving"))
+           BGt(siVar "ticket", siVar "serving"))
       Definite
           (Multiset.ofFlatList
                [ { Name = "holdLock"
                    Params = [] }
                  { Name = "holdTick"
                    Params = [ Param.Int "t" ] } ] |> Multiset.toFlatList,
-           BNot(iEq (siUnmarked "serving") (siUnmarked "t")))
+           BNot(iEq (siVar "serving") (siVar "t")))
       Definite
           (Multiset.ofFlatList
                [ { Name = "holdTick"
                    Params = [ Param.Int "ta" ] }
                  { Name = "holdTick"
                    Params = [ Param.Int "tb" ] } ] |> Multiset.toFlatList,
-           BNot(iEq (siUnmarked "ta") (siUnmarked "tb")))
+           BNot(iEq (siVar "ta") (siVar "tb")))
       Definite
           (Multiset.ofFlatList
                [ { Name = "holdLock"
@@ -357,8 +357,8 @@ let ticketLockLockSubgraph : Subgraph =
                 ("lock_V4",
                      (Mandatory <|
                       Multiset.ofFlatList
-                         [ gHoldLock (sIsT MarkedVar.Unmarked)
-                           gHoldTick (BNot (sIsT MarkedVar.Unmarked)) ], Normal)) ]
+                         [ gHoldLock sIsT
+                           gHoldTick (BNot sIsT) ], Normal)) ]
       Edges =
           Map.ofList
               [ ("lock_C0",
@@ -403,7 +403,7 @@ let ticketLockUnlockSubgraph : Subgraph =
               [ ("unlock_V0",
                      (Mandatory <|
                       Multiset.singleton
-                         (smgfunc BTrue "holdLock" [] ), Entry))
+                         (svgfunc BTrue "holdLock" [] ), Entry))
                 ("unlock_V1", (Mandatory <| Multiset.empty, Exit)) ]
       Edges =
            Map.ofList
@@ -485,8 +485,8 @@ let ticketLockLockGraph : Graph =
                 ("lock_V4",
                  (Mandatory <|
                   Multiset.ofFlatList
-                      [ gHoldLock (sIsT MarkedVar.Unmarked)
-                        gHoldTick (BNot (sIsT MarkedVar.Unmarked)) ],
+                      [ gHoldLock sIsT
+                        gHoldTick (BNot sIsT) ],
                   Set.ofList
                       [ { Name = "lock_C2"
                           Dest = "lock_V3"

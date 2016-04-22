@@ -144,7 +144,7 @@ let frame svars tvars expr =
 /// a set of framing terms forcing unbound variables to remain constant
 /// (through frame).
 let semanticsOfPrim
-  (semantics : FuncTable<SMBoolExpr>)
+  (semantics : FuncTable<SVBoolExpr>)
   (svars : VarMap)
   (tvars : VarMap)
   (prim : SMVFunc)
@@ -168,7 +168,7 @@ let semanticsOfPrim
 /// This is the sequential composition of the translations of each
 /// primitive inside it.
 let semanticsOfCommand
-  (semantics : FuncTable<SMBoolExpr>)
+  (semantics : FuncTable<SVBoolExpr>)
   (svars : VarMap)
   (tvars : VarMap)
   : Command -> Result<SMBoolExpr, Error> =

@@ -17,7 +17,7 @@ open Starling.Tests.Studies
 /// Mainly exists to persuade nUnit to use the correct types.
 type SearchViewDefEntry =
     { Search : int option
-      InitDefs : SMBViewDef<DView> list }
+      InitDefs : SVBViewDef<DView> list }
 
 /// Tests for the modeller.
 type ModellerTests() =
@@ -199,11 +199,11 @@ type ModellerTests() =
 
 
     /// Type-constraining builder for viewdef sets.
-    static member viewDefSet (vs : SMBViewDef<DView> seq) : Set<SMBViewDef<DView>> =
+    static member viewDefSet (vs : SVBViewDef<DView> seq) : Set<SVBViewDef<DView>> =
         Set.ofSeq vs
 
     /// Type-constraining builder for indefinite viewdef sets.
-    static member indefinites (vs : DView seq) : Set<SMBViewDef<DView>> =
+    static member indefinites (vs : DView seq) : Set<SVBViewDef<DView>> =
         vs
         |> Seq.map Indefinite
         |> ModellerTests.viewDefSet

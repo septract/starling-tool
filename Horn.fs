@@ -9,6 +9,7 @@ open Starling.Utils
 open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.Expr
+open Starling.Core.Sub
 open Starling.Core.Model
 open Starling.Core.Instantiate
 open Starling.Core.GuardedView
@@ -26,18 +27,18 @@ module Types =
     /// Booleans.
     type Literal = 
         /// A predicate.
-        | Pred of Func<MIntExpr>
+        | Pred of Func<VIntExpr>
         | And of Literal list
         | Or of Literal list
         | True
         | False
         | ITE of Literal * Literal * Literal
-        | Eq of MIntExpr * MIntExpr
-        | Neq of MIntExpr * MIntExpr
-        | Gt of MIntExpr * MIntExpr
-        | Ge of MIntExpr * MIntExpr
-        | Le of MIntExpr * MIntExpr
-        | Lt of MIntExpr * MIntExpr
+        | Eq of VIntExpr * VIntExpr
+        | Neq of VIntExpr * VIntExpr
+        | Gt of VIntExpr * VIntExpr
+        | Ge of VIntExpr * VIntExpr
+        | Le of VIntExpr * VIntExpr
+        | Lt of VIntExpr * VIntExpr
 
     /// A Horn clause, in Datalog/HSF form.
     type Horn = 
@@ -59,9 +60,19 @@ module Types =
         /// A model has a non-arithmetic variable.
         | NonArithVar of VarDecl
         /// The expression given is not supported in the given position.
-        | UnsupportedExpr of MExpr
+        | UnsupportedExpr of VExpr
         /// The expression given is compound, but empty.
         | EmptyCompoundExpr of exptype : string
+
+
+/// Emits a marked variable, munged to work in Datalog.
+let unmarkVar : MarkedVar -> Var = 
+    function 
+    | Unmarked c -> sprintf "V%sU" c
+    | Before c -> sprintf "V%sB" c
+    | After c -> sprintf "V%sA" c
+    | Intermediate(i, c) -> sprintf "V%sI%A" c i
+    | Goal(i, c) -> sprintf "V%sG%A" c i
 
 
 /// <summary>
@@ -74,15 +85,6 @@ module Pretty =
     open Starling.Core.Expr.Pretty
     open Starling.Core.Var.Pretty
 
-    /// Emits a marked variable, munged to work in Datalog.
-    let printMarkedVar = 
-        function 
-        | Unmarked c -> sprintf "V%sU" c |> String
-        | Before c -> sprintf "V%sB" c |> String
-        | After c -> sprintf "V%sA" c |> String
-        | Intermediate(i, c) -> sprintf "V%sI%A" c i |> String
-        | Goal(i, c) -> sprintf "V%sG%A" c i |> String
-
     /// Decides whether to put brackets over the expression emission x,
     /// given its expression as the second argument.
     let maybeBracket xe x = 
@@ -91,9 +93,9 @@ module Pretty =
         | CompoundInt -> parened x
 
     /// Emits an integral expression in Datalog syntax.
-    let rec printInt = 
+    let rec printInt : VIntExpr -> Command = 
         function 
-        | AVar c -> printMarkedVar c
+        | AVar c -> String c
         | AInt i -> sprintf "%d" i |> String
         // Do some reshuffling of n-ary expressions into binary ones.
         // These expressions are left-associative, so this should be sound.
@@ -182,7 +184,7 @@ module Pretty =
                 [ printParam p ]
         | UnsupportedExpr expr ->
             fmt "expression '{0}' is not supported in the HSF backend"
-                [ printMExpr expr ]
+                [ printVExpr expr ]
         | EmptyCompoundExpr exptype ->
             fmt "found an empty '{0}' expression"
                 [ String exptype ]
@@ -192,52 +194,111 @@ module Pretty =
  * Expression generation
  *)
 
-/// Checks whether an MIntExpr is useable by HSF.
-let checkArith =
-    function
-    | AAdd [] -> EmptyCompoundExpr "addition" |> fail
-    | ASub [] -> EmptyCompoundExpr "subtraction" |> fail
-    | AMul [] -> EmptyCompoundExpr "multiplication" |> fail
-    | x -> ok x
+/// <summary>
+///     Checks whether an <c>IntExpr</c> is useable in HSF, and converts
+///     its variables to string form.
+/// </summary>
+/// <param name="toVar">
+///     Converter from variables in the <c>IntExpr</c> to some unique
+///     <c>Var</c> representing the variable.  Usually this will be
+///     <c>id</c> for <c>VIntExpr</c>s, and <c>unmarkVar</c> for
+///     <c>MIntExpr</c>s.
+/// </param>
+/// <typeparam name="var">
+///     The meta-type of variables in the <c>IntExpr</c>.
+/// </typeparam>
+/// <returns>
+///     A function mapping <c>IntExpr</c>s to Chessie-wrapped
+///     <c>VIntExpr</c>s.
+/// </returns>
+let checkArith
+  (toVar : 'var -> Var)
+  : IntExpr<'var> -> Result<VIntExpr, Error> =
+    let rec ca =
+        function
+        | AVar c -> c |> toVar |> AVar |> ok
+        | AInt i -> i |> AInt |> ok
+        | AAdd [] -> EmptyCompoundExpr "addition" |> fail
+        | ASub [] -> EmptyCompoundExpr "subtraction" |> fail
+        | AMul [] -> EmptyCompoundExpr "multiplication" |> fail
+        | AAdd xs -> xs |> List.map ca |> collect |> lift AAdd
+        | ASub xs -> xs |> List.map ca |> collect |> lift ASub
+        | AMul xs -> xs |> List.map ca |> collect |> lift AMul
+        | ADiv (x, y) -> lift2 (curry ADiv) (ca x) (ca y)
+    ca
 
-/// Converts a MBoolExpr to a HSF literal.
-let rec boolExpr =
-    function
-    // TODO(CaptainHayashi): are these allowed?
-    | BAnd xs -> List.map boolExpr xs |> collect |> lift And
-    | BOr xs -> List.map boolExpr xs |> collect |> lift Or
-    | BTrue -> ok <| True
-    | BFalse -> ok <| False
-    | BEq(Expr.Int x, Expr.Int y) -> lift2 (curry Eq) (checkArith x) (checkArith y)
-    | BNot(BEq(Expr.Int x, Expr.Int y)) -> lift2 (curry Neq) (checkArith x) (checkArith y)
-    // TODO(CaptainHayashi): is implies allowed natively?
-    | BImplies(x, y) -> boolExpr (mkOr [ mkNot x ; y ])
-    | BGt(x, y) -> lift2 (curry Gt) (checkArith x) (checkArith y)
-    | BGe(x, y) -> lift2 (curry Ge) (checkArith x) (checkArith y)
-    | BLe(x, y) -> lift2 (curry Le) (checkArith x) (checkArith y)
-    | BLt(x, y) -> lift2 (curry Lt) (checkArith x) (checkArith y)
-    | x -> fail <| UnsupportedExpr(Expr.Bool x)
+/// <summary>
+///     Converts a <c>BoolExpr</c> to a HSF literal.
+/// </summary>
+/// <param name="toVar">
+///     Converter from variables in the <c>BoolExpr</c> to some unique 
+///     <c>Var</c> representing the variable.  Usually this will be
+///     <c>id</c> for <c>VBoolExpr</c>s, and <c>unmarkVar</c> for
+///     <c>MBoolExpr</c>s.
+/// </param>
+/// <typeparam name="var">
+///     The meta-type of variables in the <c>BoolExpr</c>.
+/// </typeparam>
+/// <returns>
+///     A function mapping <c>BoolExpr</c>s to Chessie-wrapped
+///     <c>Literal</c>s.
+/// </returns>
+let boolExpr
+  (toVar : 'var -> Var)
+  : BoolExpr<'var> -> Result<Literal, Error> =
+    let ca = checkArith toVar
+
+    let rec be =
+        function
+        // TODO(CaptainHayashi): are these allowed?
+        | BAnd xs -> xs |> List.map be |> collect |> lift And
+        | BOr xs -> xs |> List.map be |> collect |> lift Or
+        | BTrue -> ok <| True
+        | BFalse -> ok <| False
+        | BEq(Expr.Int x, Expr.Int y) -> lift2 (curry Eq) (ca x) (ca y)
+        | BNot(BEq(Expr.Int x, Expr.Int y)) -> lift2 (curry Neq) (ca x) (ca y)
+        // TODO(CaptainHayashi): is implies allowed natively?
+        | BImplies(x, y) -> be (mkOr [ mkNot x ; y ])
+        | BGt(x, y) -> lift2 (curry Gt) (ca x) (ca y)
+        | BGe(x, y) -> lift2 (curry Ge) (ca x) (ca y)
+        | BLe(x, y) -> lift2 (curry Le) (ca x) (ca y)
+        | BLt(x, y) -> lift2 (curry Lt) (ca x) (ca y)
+        | x ->
+            x
+            |> Expr.Bool
+            |> Mapper.map (onVars (liftVSubFun (Mapper.cmake toVar)))
+            |> UnsupportedExpr
+            |> fail
+    be
 
 (*
  * Func sanitisation
  *)
 
-/// Extracts an IntExpr from an Expr, if it is indeed arithmetic.
-/// Fails with UnsupportedExpr if the expresson is Boolean.
-let tryIntExpr =
-    function
-    | Expr.Int x -> x |> ok
-    | e -> e |> UnsupportedExpr |> fail
+/// <summary>
+///     Tries to convert a <c>MExpr</c> to a <c>VIntExpr</c>.
+///     Fails with <c>UnsupportedExpr</c> if the expression is
+///     Boolean.
+/// </summary>
+let tryIntExpr : MExpr -> Result<VIntExpr, Error> =
+    Mapper.map (onVars (liftVSubFun (Mapper.cmake unmarkVar)))
+    >> function
+       | Expr.Int x -> ok x
+       | e -> e |> UnsupportedExpr |> fail
 
 /// Ensures a param in a viewdef multiset is arithmetic.
 let ensureArith =
    function
-   | Param.Int x -> ok (iUnmarked x)
-   | x -> fail <| NonArithParam x
+   | Param.Int x -> x |> AVar |> ok
+   | x -> x |> NonArithParam |> fail
 
 /// Constructs a pred from a Func, given a set of active globals,
 /// and some validator on the parameters.
-let predOfFunc gs parT { Name = n; Params = pars } =
+let predOfFunc
+  (svars : VarMap)
+  (parT : 'par -> Result<VIntExpr, Error>)
+  ( { Name = n; Params = pars } : Func<'par>)
+  : Result<Literal, Error> =
     lift (fun parR -> Pred { Name = n; Params = parR })
          (pars |> Seq.map parT |> collect)
 (*
@@ -251,18 +312,20 @@ let queryNaming { Name = n ; Params = ps } =
 /// Constructs a full constraint in HSF.
 /// The map of active globals should be passed as gs.
 /// Some is returned if the constraint is definite; None otherwise.
-let hsfViewDef gs =
+let hsfModelViewDef svars
+  : (DFunc * VBoolExpr option) -> Result<Horn list, Error> =
     function
     | (vs, Some ex) ->
         lift2 (fun hd bd -> [Clause (hd, [bd]); Clause (bd, [hd])])
-              (boolExpr ex)
-              (predOfFunc gs ensureArith vs)
+              (boolExpr id ex)
+              (predOfFunc svars ensureArith vs)
         |> lift (fun c -> queryNaming vs :: c) 
     | (vs, None) -> ok [ queryNaming vs ]
 
 /// Constructs a set of Horn clauses for all definite viewdefs in a model.
-let hsfModelViewDefs gs =
-    Seq.map (hsfViewDef gs)
+let hsfModelViewDefs svars
+  : FuncTable<VBoolExpr option> -> Result<Set<Horn>, Error> =
+    Seq.map (hsfModelViewDef svars)
     >> collect
     >> lift (List.concat >> Set.ofSeq)
 
@@ -274,20 +337,20 @@ let hsfModelViewDefs gs =
 /// Returns an error if the variable is not an integer.
 /// Returns no clause if the variable is not initialised.
 /// Takes the environment of active global variables.
-let hsfModelVariables gs =
+let hsfModelVariables (svars : VarMap) : Result<Horn, Error> =
     let vpars =
-        gs
+        svars
         |> Map.toSeq
         |> Seq.map
             (function
-             | (name, Type.Int()) -> iUnmarked name |> ok
+             | (name, Type.Int()) -> name |> AVar |> ok
              | (name, ty) -> name |> withType ty |> NonArithVar |> fail)
         |> collect
 
     let head = 
         bind
             (fun vp -> predOfFunc
-                           gs
+                           svars
                            ok
                            { Name = "emp"; Params = vp })
             vpars
@@ -311,7 +374,7 @@ let topLevelExpr =
     function
     | BAnd xs -> xs
     | x -> [x]
-    >> List.map boolExpr
+    >> List.map (boolExpr unmarkVar)
     >> collect
     >> lift List.ofSeq
 
@@ -323,7 +386,7 @@ let ite i t e =
     | _ -> ITE(i,t,e)
 
 /// Constructs a Horn literal for a Func.
-let hsfFunc dvs env func =
+let hsfFunc dvs env (func : MVFunc) =
     // We check the defining views here, because anything not in the
     // defining views is to be held true.
     // Now that we're at the func level, finding the view is easy!
@@ -337,7 +400,7 @@ let hsfFunc dvs env func =
 let hsfGFunc dvs env { Cond = c; Item = ms } =
     hsfFunc dvs env ms
     |> (lift2 (fun cR -> Option.map (fun m -> ite cR m True))
-              (boolExpr c))
+              (boolExpr unmarkVar c))
 
 /// Constructs the body for a set of condition pair Horn clauses,
 /// given the defining views, preconditions and semantics clause.

@@ -70,6 +70,11 @@ module Types =
     type MGFunc = GFunc<MarkedVar>
 
     /// <summary>
+    ///     A <c>GFunc</c> over symbolic <c>Var</c>s.
+    /// </summary>
+    type SVGFunc = GFunc<Sym<Var>>
+
+    /// <summary>
     ///     A <c>GFunc</c> over symbolic <c>MarkedVar</c>s.
     /// </summary>
     type SMGFunc = GFunc<Sym<MarkedVar>>
@@ -92,6 +97,11 @@ module Types =
     ///     A <c>GView</c> over <c>MarkedVar</c>s.
     /// </summary>
     type MGView = GView<MarkedVar>
+
+    /// <summary>
+    ///     A <c>GView</c> over symbolic <c>Var</c>s.
+    /// </summary>
+    type SVGView = GView<Sym<Var>>
 
     /// <summary>
     ///     A <c>GView</c> over symbolic <c>MarkedVar</c>s.
@@ -146,6 +156,24 @@ let gfunc
   (pars : Expr<'var> seq)
   : GFunc<'var> =
     { Cond = guard ; Item = vfunc name pars }
+
+/// <summary>
+///     Creates a new <c>SVGFunc</c>.
+/// </summary>
+/// <param name="guard">
+///     The guard on which the <c>SVGFunc</c> is conditional.
+/// </param>
+/// <param name="name">
+///     The name of the <c>SVGFunc</c>.
+/// </param>
+/// <param name="pars">
+///     The parameters of the <c>SVGFunc</c>, as a sequence.
+/// </param>
+/// <returns>
+///     A new <c>SVGFunc</c> with the given guard, name, and parameters.
+/// </returns>
+let svgfunc (guard : SVBoolExpr) (name : string) (pars : SVExpr seq) : SVGFunc =
+    gfunc guard name pars
 
 /// <summary>
 ///     Creates a new <c>MGFunc</c>.
@@ -392,6 +420,17 @@ module Pretty =
     let printMGFunc = printGFunc (constToString >> String)
 
     /// <summary>
+    ///     Pretty-prints a <c>GFunc</c> over symbolic <c>Var</c>s.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>SGFunc</c> to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command to print the <c>SGFunc</c>.
+    /// </returns>
+    let printSVGFunc = printGFunc (printSym String)
+
+    /// <summary>
     ///     Pretty-prints a guarded <c>VFunc</c> over symbolic <c>MarkedVar</c>s.
     /// </summary>
     /// <param name="_arg1">
@@ -430,13 +469,24 @@ module Pretty =
     let printMGView = printGView (constToString >> String)
 
     /// <summary>
+    ///     Pretty-prints a guarded view over symbolic <c>Var</c>s.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>SGView</c> to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command to print the <c>SGView</c>.
+    /// </returns>
+    let printSVGView : SVGView -> Command = printGView (printSym String)
+
+    /// <summary>
     ///     Pretty-prints a guarded view over symbolic <c>MarkedVar</c>s.
     /// </summary>
     /// <param name="_arg1">
     ///     The <c>SMGView</c> to print.
     /// </param>
     /// <returns>
-    ///     A pretty-printer command to print the <c>MGView</c>.
+    ///     A pretty-printer command to print the <c>SMGView</c>.
     /// </returns>
     let printSMGView = printGView (printSym (constToString >> String))
 

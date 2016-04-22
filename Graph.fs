@@ -57,7 +57,7 @@ module Types =
             /// <summary>
             ///     Set of nodes in the control-flow graph.
             /// </summary>
-            Nodes: Map<string, ViewExpr<SMGView> * NodeKind>
+            Nodes: Map<string, ViewExpr<SVGView> * NodeKind>
 
             /// <summary>
             ///     Set of edges in the control-flow graph.
@@ -114,7 +114,7 @@ module Types =
           /// <summary>
           ///     The view of the source node.
           /// </summary>
-          SrcView : ViewExpr<SMGView>
+          SrcView : ViewExpr<SVGView>
           /// <summary>
           ///     The name of the destination node.
           /// </summary>
@@ -122,7 +122,7 @@ module Types =
           /// <summary>
           ///     The view of the destination node.
           /// </summary>
-          DestView : ViewExpr<SMGView>
+          DestView : ViewExpr<SVGView>
           /// <summary>
           ///      The command this edge represents.
           /// </summary>
@@ -145,7 +145,7 @@ module Types =
         /// </summary>
         Contents : Map<
             string,
-            (ViewExpr<SMGView>
+            (ViewExpr<SVGView>
              * Set<OutEdge>
              * Set<InEdge>
              * NodeKind)> }
@@ -652,7 +652,7 @@ let axiomatiseGraphs =
 ///     wrapped in a Chessie result.
 /// </returns>
 let axiomatise (model : UVModel<Graph>)
-               : UVModel<Axiom<SMGView, Command>> =
+               : UVModel<Axiom<SVGView, Command>> =
     withAxioms (axiomatiseGraphs model.Axioms) model
 
 
@@ -696,11 +696,11 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer <c>Command</c> representing the node.
     /// </returns>
-    let printNode id (view, nk) =
+    let printNode id (view : ViewExpr<SVGView>, nk : NodeKind) =
         let list = match nk with Normal -> [] | Entry -> [String "(Entry)"] | Exit -> [String "(Exit)"] | EntryExit -> [String "(EntryExit)"]
         hsep [ id |> String
                ([ id |> String
-                  view |> printViewExpr printSMGView ] @ list)
+                  view |> printViewExpr printSVGView ] @ list)
                 |> colonSep |> printLabel 
              ]
         |> withSemi

@@ -18,11 +18,11 @@ type InstantiateTests() =
     /// Environment of test funcs.
     static member TestFuncs =
         [ (dfunc "foo" [],
-           iEq (AInt 5L : MIntExpr) (AInt 6L))
+           iEq (AInt 5L : VIntExpr) (AInt 6L))
           (dfunc "bar" [ Param.Int "quux" ],
-           iEq (iUnmarked "quux") (iUnmarked "blob"))
+           iEq (AVar "quux") (AVar "blob"))
           (dfunc "baz" [ Param.Int "quux" ; Param.Bool "flop" ],
-           BAnd [bUnmarked "flop"; BGt (iUnmarked "quux", iUnmarked "quux")]) ]
+           BAnd [BVar "flop"; BGt (AVar "quux", AVar "quux")]) ]
 
 
     /// Test cases for testing valid instantiation.
@@ -44,7 +44,7 @@ type InstantiateTests() =
     [<TestCaseSource("ValidInstantiations")>]
     member x.``Valid instantiations are executed correctly`` func =
         func
-        |> instantiate mvParamSubFun InstantiateTests.TestFuncs
+        |> instantiate vParamSubFun InstantiateTests.TestFuncs
         |> okOption
 
 
@@ -65,5 +65,5 @@ type InstantiateTests() =
     [<TestCaseSource("InvalidInstantiations")>]
     member x.``Invalid instantiations raise correct errors`` func =
         func
-        |> instantiate mvParamSubFun InstantiateTests.TestFuncs
+        |> instantiate vParamSubFun InstantiateTests.TestFuncs
         |> failOption

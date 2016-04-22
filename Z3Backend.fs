@@ -100,17 +100,17 @@ module Translator =
 
     /// Produces the reification of an unguarded func.
     /// This corresponds to D^ in the theory.
-    let interpretVFunc ft func =
-        instantiate mvParamSubFun ft func
+    let interpretVFunc (ft : FuncTable<VBoolExpr>) func =
+        instantiate vParamSubFun ft func
         |> lift (withDefault BTrue)  // Undefined views go to True by metatheory
         |> mapMessages (curry InstantiationError func)
 
-    let interpretGFunc ft {Cond = c; Item = i} =
+    let interpretGFunc (ft : FuncTable<VBoolExpr>) {Cond = c; Item = i} =
         interpretVFunc ft i
         |> lift (mkImplies c)
 
     /// Interprets an entire view application over the given functable.
-    let interpretGView ft =
+    let interpretGView (ft : FuncTable<VBoolExpr>) =
         Multiset.toFlatSeq
         >> Seq.map (interpretGFunc ft)
         >> collect
@@ -118,7 +118,9 @@ module Translator =
         >> lift mkAnd
 
     /// Interprets all of the views in a term over the given functable.
-    let interpretTerm ft : Term<MBoolExpr, MGView, MVFunc> -> Result<FTerm, Error> =
+    let interpretTerm
+      (ft : FuncTable<VBoolExpr>)
+      : Term<MBoolExpr, MGView, MVFunc> -> Result<FTerm, Error> =
         tryMapTerm ok (interpretGView ft) (interpretVFunc ft)
 
     /// <summary>
@@ -138,7 +140,9 @@ module Translator =
     ///     and will fail if any are not.
     ///   </para>
     /// </remarks>
-    let interpret model : Result<DFModel<FTerm>, Error> =
+    let interpret
+      (model: DFModel<Term<MBoolExpr, MGView, MVFunc>>)
+      : Result<DFModel<FTerm>, Error> =
         tryMapAxioms (interpretTerm model.ViewDefs) model
 
     /// Combines the components of a reified term.
@@ -151,7 +155,7 @@ module Translator =
          *   - ((c^w) ^ ¬g) deMorgan
          *   - (c^w^¬g) associativity.
          *)
-        boolToZ3 reals ctx (mkAnd [c ; w; mkNot g] )
+        boolToZ3 reals constToString ctx (mkAnd [c ; w; mkNot g] )
 
     /// Combines reified terms into a list of Z3 terms.
     let combineTerms reals ctx = mapAxioms (combineTerm reals ctx)
@@ -196,9 +200,9 @@ let run reals req =
     match req with
     | Request.Translate ->
         translate
-        >> lift (mapAxioms (mapTerm (Expr.boolToZ3 reals ctx)
-                                    (Expr.boolToZ3 reals ctx)
-                                    (Expr.boolToZ3 reals ctx)))
+        >> lift (mapAxioms (mapTerm (Expr.boolToZ3 reals constToString ctx)
+                                    (Expr.boolToZ3 reals constToString ctx)
+                                    (Expr.boolToZ3 reals constToString ctx)))
         >> lift Response.Translate
     | Request.Combine -> translate >> combine reals ctx >> lift Response.Combine
     | Request.Sat -> translate >> combine reals ctx >> sat ctx >> lift Response.Sat
