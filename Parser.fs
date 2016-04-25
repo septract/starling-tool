@@ -77,8 +77,8 @@ let inAngles p = inBrackets "<" ">" p
 let parseView, parseViewRef =
     createParserForwardedToRef<View, unit> ()
 /// Parser for view definitions.
-let parseViewDef, parseViewDefRef =
-    createParserForwardedToRef<ViewDef, unit> ()
+let parseDView, parseDViewRef =
+    createParserForwardedToRef<DView, unit> ()
 /// Parser for commands.
 let parseCommand, parseCommandRef =
     createParserForwardedToRef<Command<Marked<View>>, unit> ()
@@ -95,6 +95,27 @@ let parseExpression, parseExpressionRef =
 // From here on out, everything should line up more or less with the
 // BNF, except in reverse, bottom-up order.
 
+(*
+ * Parameters and lists.
+ *)
+
+/// Parses a comma-delimited parameter list.
+/// Each parameter is parsed by argp.
+let parseParams argp =
+    sepBy argp (pstring "," .>> ws)
+    // ^- {empty}
+    //  | <identifier>
+    //  | <identifier> , <params>
+
+/// Parses a comma-delimited, parenthesised parameter list.
+let parseParamList argp =
+    // TODO(CaptainHayashi):
+    //   Make this generic in the first argument to sepBy, and also
+    //   make said first argument more robust -- currently this parses all
+    //   whitespace before the ,!
+    inParens (parseParams argp)
+    // ^- ()
+    //  | ( <params> )
 
 (*
  * Expressions.
@@ -107,12 +128,27 @@ do parseLValueRef :=
     //<|>
     (parseIdentifier |>> LVIdent)
 
+/// <summary>
+///     Parser for symbolic expressions.
+///
+///     <para>
+///         Symbolic expressions are of the form
+///         <c>%{arbitrary string}(expr1, expr2, ..., exprN)</c>.
+///     </para>
+/// </summary>
+let parseSymbolic =
+    pstring "%"
+    >>. inBraces (manyChars (noneOf "}"))
+    .>> ws
+    .>>. parseParamList parseExpression
+
 /// Parser for primary expressions.
 let parsePrimaryExpression =
     choice [ pstring "true" >>% True
              pstring "false" >>% False
              pint64 |>> Int
              parseLValue |>> LV
+             parseSymbolic |>> Symbolic
              inParens parseExpression ] .>> ws
 
 /// Generic parser for tiers of binary expressions.
@@ -231,28 +267,6 @@ let parseAtomicSet =
         // ...or an atomic{} block.
         (inBraces (many (parseAtomic .>> wsSemi .>> ws))))
 
-(*
- * Parameters and lists.
- *)
-
-/// Parses a comma-delimited parameter list.
-/// Each parameter is parsed by argp.
-let parseParams argp =
-    sepBy argp (pstring "," .>> ws)
-    // ^- {empty}
-    //  | <identifier>
-    //  | <identifier> , <params>
-
-/// Parses a comma-delimited, parenthesised parameter list.
-let parseParamList argp =
-    // TODO(CaptainHayashi):
-    //   Make this generic in the first argument to sepBy, and also
-    //   make said first argument more robust -- currently this parses all
-    //   whitespace before the ,!
-    inParens (parseParams argp)
-    // ^- ()
-    //  | ( <params> )
-
 /// Parses a Func given the argument parser argp.
 let parseFunc argp =
     pipe2ws parseIdentifier (parseParamList argp) (fun f xs -> {Name = f; Params = xs})
@@ -275,11 +289,14 @@ let parseViewLike basic join =
  *)
 
 /// Parses a type identifier.
-let parseType = stringReturn "int" Type.Int <|> stringReturn "bool" Type.Bool;
+let parseType =
+    stringReturn "int" (Type.Int ())
+    <|> stringReturn "bool" (Type.Bool ());
 
 /// Parses a pair of type identifier and parameter name.
-let parseTypedParam = parseType .>> ws .>>. parseIdentifier
-                      //^ <type> <identifier>
+let parseTypedParam : Parser<Param, unit> =
+    pipe2ws parseType parseIdentifier withType
+    // ^ <type> <identifier>
 
 
 (*
@@ -337,22 +354,22 @@ let parseViewExpr = between
  *)
 
 /// Parses a functional view definition.
-let parseDFuncView = parseFunc parseIdentifier |>> ViewDef.Func
+let parseDFuncView = parseFunc parseIdentifier |>> DView.Func
 
 /// Parses the unit view definition.
-let parseDUnit = stringReturn "emp" ViewDef.Unit
+let parseDUnit = stringReturn "emp" DView.Unit
 
 /// Parses a `basic` view definition (unit, if, named, or bracketed).
-let parseBasicViewDef =
+let parseBasicDView =
     choice [ parseDUnit
              // ^- `emp'
              parseDFuncView
              // ^- <identifier>
              //  | <identifier> <arg-list>
-             inParens parseViewDef ]
+             inParens parseDView ]
              // ( <view> )
 
-do parseViewDefRef := parseViewLike parseBasicViewDef ViewDef.Join
+do parseDViewRef := parseViewLike parseBasicDView DView.Join
 
 
 (*
@@ -465,19 +482,23 @@ do parseBlockRef :=
 
 /// Parses a constraint right-hand side.
 let parseConstraintRhs =
-    (stringReturn "?" None) <|> (parseExpression |>> Some)
+    choice [
+        (stringReturn "?" Indefinite)
+        (parseExpression
+         |>> (fun expr v -> Definite (v, expr))) ]
     // ^ ?
+    // ^ %{ <symbol> %}
     // ^ <expression>
 
 /// Parses a constraint.
 let parseConstraint =
     pstring "constraint" >>. ws >>.
     // ^- constraint ..
-        pipe2ws parseViewDef
+        pipe2ws parseDView
                 // ^- <view> ...
                 (pstring "->" >>. ws >>. parseConstraintRhs .>> ws .>> pstring ";")
                 // ^-        ... -> <constraint-rhs> ;
-                (fun v ex -> {CView = v ; CExpression = ex} )
+                (|>)
 
 /// Parses a single method, excluding leading or trailing whitespace.
 let parseMethod =

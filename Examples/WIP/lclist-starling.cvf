@@ -1,0 +1,98 @@
+/* Currently as close to lclist.cvf as Starling can get. */
+
+shared int head; 
+thread int prev;
+thread int curr;
+
+thread int v;
+
+thread int _;
+
+view isHead(int prev);
+view false();
+view isList(); 
+view has1Lock(int x, int y); 
+view has2Lock(int x, int y); 
+view hasNode(int x); 
+
+method deleteVal() { 
+  {| isList() |} 
+    v = (%{getV}());
+  {| isList() |} 
+    <prev = head>;
+  {| isList() * isHead(prev) |}
+    prev = (%{lock(#1)}(prev)); 
+  {| has1Lock(prev, _) * isHead(prev) |} 
+    curr = (%{next(#1)}(curr)); 
+  {| has1Lock(prev, curr) * isHead(prev) |} 
+    // The 0+ forces the symbol to be read as an int.
+    // Otherwise, the type is ambiguous.
+    // (We could probably do better than this, since v is known to be an
+    // int at this point.)
+    while (0 + %{val(#1)}(curr) < v) { 
+      {| has1Lock(prev, curr) |} 
+        curr = (%{lock(#1)}(curr));
+      {| has2Lock(prev, curr) |} 
+        prev = (%{unlock(#1)}(prev));
+      {| has1Lock(curr, _) |} 
+        prev = curr; 
+      {| has1Lock(prev, _) |} 
+        curr = (%{next(#1)}(curr));
+      {| has1Lock(prev, curr) |} 
+    } 
+  {| has1Lock(prev, curr) |} 
+    if ((0 + %{val(#1)}(curr)) == v) { 
+      {| has1Lock(prev, curr) |} 
+        curr = (%{lock(#1)}(curr));
+      {| has2Lock(prev, curr) |} 
+        prev = (%{set_next(#1, next(#2))}(prev, curr));
+      {| has1Lock(prev, _) * hasNode(curr) |} 
+        curr = (%{dispose(#1)}(curr));  
+      {| has1Lock(prev, _) |} 
+    } else {
+      {| has1Lock(prev, curr) |} 
+      ;
+      {| has1Lock(prev, _) |} 
+    }
+  {| has1Lock(prev, _) |} 
+    prev = (%{unlock(#1)}(prev));
+  {| isList() |} 
+}
+
+
+constraint isHead(x) -> x == head;
+
+// Define list properties 
+// The (true &&) device is necessary to prevent type ambiguity.
+
+constraint isList() ->
+  true &&
+  %{ exists e . lseg(#1, e)
+              * endNode(e) }(head); 
+
+constraint has1Lock(a,b) ->
+  true &&
+  %{ exists e . lseg(#1, #2)
+              * nodeLocked(#2, #3)
+              * lseg(#3, e)
+              * endNode(e) }(head, a, b);
+
+constraint has2Lock(a,b)  ->  
+  true &&
+  %{ exists c, e . lseg(#1, #2)
+                 * nodeLocked(#2, #3)
+                 * nodeLocked(#3, c) 
+                 * lseg(c, e) * endNode(e) }(head, a, b); 
+
+constraint hasNode(a) -> true && %{ nodeLocked(#1) }(a); 
+
+
+// Constraints on views 
+constraint has1Lock(a,_) * has1Lock(c,__)  -> true && %{ #1!=#2 }(a, c);
+constraint has1Lock(a,_) * has2Lock(c,d)   -> true && %{ #1!=#2 * #1!=#2 }(a, c, d);
+constraint has2Lock(a,b) * has2Lock(c,d)   -> true && %{ #1!=#2 * #1!=#4 * #2!=#3 * #2!=#4 }(a, b, c, d);
+constraint has1Lock(a,_) * hasNode(c)      -> true && %{ #1!=#2 }(a, c);
+constraint has2Lock(a,b) * hasNode(c)      -> true && %{ #1!=#2 * #2!=#3}(a, b, c);
+
+// Could maybe replace some of the constraints above?
+constraint has2Lock(a,b) -> %{ has1Lock(#1,_) * has1Lock(#2,_) }(a, b);

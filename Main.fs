@@ -116,21 +116,21 @@ type Response =
     /// The result of frontend processing.
     | Frontend of Lang.Frontend.Response
     /// Stop at graph optimisation.
-    | GraphOptimise of Model<Graph, DView>
+    | GraphOptimise of UVModel<Graph>
     /// Stop at graph axiomatisation.
-    | Axiomatise of Model<Axiom<GView, Command>, DView>
+    | Axiomatise of UVModel<Axiom<SMGView, Command>>
     /// The result of goal-axiom-pair generation.
-    | GoalAdd of Model<GoalAxiom, DView>
+    | GoalAdd of UVModel<GoalAxiom>
     /// The result of term generation.
-    | TermGen of Model<PTerm<GView, OView>, DView>
+    | TermGen of UVModel<PTerm<SMGView, OView>>
     /// The result of term reification.
-    | Reify of Model<PTerm<ViewSet, OView>, DView>
+    | Reify of UVModel<PTerm<SMViewSet, OView>>
     /// The result of term flattening.
-    | Flatten of Model<PTerm<GView, VFunc>, DFunc>
+    | Flatten of UFModel<PTerm<SMGView, SMVFunc>>
     /// The result of semantic expansion.
-    | Semantics of Model<STerm<GView, VFunc>, DFunc>
+    | Semantics of UFModel<STerm<SMGView, SMVFunc>>
     /// The result of term optimisation.
-    | TermOptimise of Model<STerm<GView, VFunc>, DFunc>
+    | TermOptimise of UFModel<STerm<SMGView, SMVFunc>>
     /// The result of Z3 backend processing.
     | Z3 of Backends.Z3.Types.Response
     /// The result of MuZ3 backend processing.
@@ -143,51 +143,21 @@ let printResponse mview =
     function
     | Frontend f -> Lang.Frontend.printResponse mview f
     | GraphOptimise g ->
-        printModelView
-            mview
-            printGraph
-            printDView
-            g
+        printUVModelView printGraph mview g
     | Axiomatise m ->
-        printModelView
-            mview
-            (printAxiom printCommand printGView)
-            printDView
-            m
+        printUVModelView (printAxiom printCommand printSMGView) mview m
     | GoalAdd m ->
-        printModelView
-            mview
-            printGoalAxiom printDView m
+        printUVModelView printGoalAxiom mview m
     | TermGen m ->
-        printModelView
-            mview
-            (printPTerm printGView printOView)
-            printDView
-            m
+        printUVModelView (printPTerm printSMGView printOView) mview m
     | Reify m ->
-        printModelView
-            mview
-            (printPTerm printViewSet printOView)
-            printDView
-            m
+        printUVModelView (printPTerm printSMViewSet printOView) mview m
     | Flatten m ->
-        printModelView
-            mview
-            (printPTerm printGView printVFunc)
-            printDFunc
-            m
+        printUFModelView (printPTerm printSMGView printSMVFunc) mview m
     | Semantics m ->
-        printModelView
-            mview
-            (printSTerm printGView printVFunc)
-            printDFunc
-            m
+        printUFModelView (printSTerm printSMGView printSMVFunc) mview m
     | TermOptimise m ->
-        printModelView
-            mview
-            (printSTerm printGView printVFunc)
-            printDFunc
-            m
+        printUFModelView (printSTerm printSMGView printSMVFunc) mview m
     | Z3 z -> Backends.Z3.Pretty.printResponse mview z
     | MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
     | HSF h -> Backends.Horn.Pretty.printHorns h
@@ -202,6 +172,11 @@ type Error =
     | Z3 of Backends.Z3.Types.Error
     /// An error occurred in the HSF backend.
     | HSF of Backends.Horn.Types.Error
+    /// <summary>
+    ///     A backend required the model to be filtered for indefinite
+    ///     and/or uninterpreted viewdefs, but the filter failed.
+    /// </summary>
+    | ModelFilterError of Core.Instantiate.Types.Error
     /// A stage was requested using the -s flag that does not exist.
     | BadStage
     /// A miscellaneous (internal) error has occurred.
@@ -214,6 +189,9 @@ let printError =
     | Semantics e -> Semantics.Pretty.printSemanticsError e
     | Z3 e -> Backends.Z3.Pretty.printError e
     | HSF e -> Backends.Horn.Pretty.printHornError e
+    | ModelFilterError e ->
+        headed "View definitions are incompatible with this backend"
+               [ Core.Instantiate.Pretty.printError e ]
     | BadStage ->
         colonSep [ String "Bad stage"
                    String "try"
@@ -290,6 +268,21 @@ let semantics = bind (Starling.Semantics.translate
 let axiomatise = lift Starling.Core.Graph.axiomatise
 
 /// <summary>
+///     Shorthand for the stage filtering a model to indefinite and
+///     definite views.
+/// </summary>
+let filterIndefinite =
+    bind (Core.Instantiate.ViewDefFilter.filterModelIndefinite
+          >> mapMessages ModelFilterError)
+
+/// <summary>
+///     Shorthand for the stage filtering a model to definite views only.
+/// </summary>
+let filterDefinite =
+    bind (Core.Instantiate.ViewDefFilter.filterModelDefinite
+          >> mapMessages ModelFilterError)
+
+/// <summary>
 ///     Runs a Starling request.
 /// </summary>
 /// <param name="optS">
@@ -315,9 +308,9 @@ let runStarling optS reals verbose request =
     let failPhase = fun _ -> fail (Error.Other "Internal")
     let backend =
             match request with
-            | Request.HSF     -> hsf >> lift Response.HSF
-            | Request.Z3 rq   -> z3 reals rq >> lift Response.Z3
-            | Request.MuZ3 rq -> muz3 reals rq >> lift Response.MuZ3
+            | Request.HSF     -> filterIndefinite >> hsf >> lift Response.HSF
+            | Request.Z3 rq   -> filterDefinite >> z3 reals rq >> lift Response.Z3
+            | Request.MuZ3 rq -> filterIndefinite >> muz3 reals rq >> lift Response.MuZ3
             | _               -> failPhase
 
     //Build a phase with

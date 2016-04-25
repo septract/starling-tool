@@ -42,11 +42,11 @@ type Response =
     /// Output of the parsing and collation steps.
     | Collate of Collator.Types.CollatedScript
     /// Output of the parsing, collation, and modelling steps.
-    | Model of Model<PMethod<ViewExpr<CView>>, DView>
+    | Model of UVModel<PMethod<ViewExpr<CView>>>
     /// Output of the parsing, collation, modelling, and guarding stages.
-    | Guard of Model<PMethod<ViewExpr<GView>>, DView>
+    | Guard of UVModel<PMethod<ViewExpr<SMGView>>>
     /// Output of the parsing, collation, modelling, guarding and destructuring stages.
-    | Graph of Model<Graph, DView>
+    | Graph of UVModel<Graph>
 
 (*
  * Error types
@@ -71,24 +71,21 @@ let printResponse mview =
     | Response.Parse s -> Lang.AST.Pretty.printScript s
     | Response.Collate c -> Lang.Collator.Pretty.printCollatedScript c
     | Response.Model m ->
-        printModelView
-            mview
+        printUVModelView
             (printMethod (printViewExpr printCView)
                          (printPartCmd (printViewExpr printCView)))
-            printDView
+            mview
             m
     | Response.Guard m ->
-        printModelView
+        printUVModelView
+            (printMethod (printViewExpr printSMGView)
+                         (printPartCmd (printViewExpr printSMGView)))
             mview
-            (printMethod (printViewExpr printGView)
-                         (printPartCmd (printViewExpr printGView)))
-            printDView
             m
     | Response.Graph m ->
-        printModelView
-            mview
+        printUVModelView
             printGraph
-            printDView
+            mview
             m
 
 /// Pretty-prints an error.

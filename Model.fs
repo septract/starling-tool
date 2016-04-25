@@ -33,6 +33,12 @@ open Starling.Core.Var
  *        representation of a command.
  *
  * prim: a structured representation of an axiom command.
+ *
+ * We also use the following prefixes in type synonyms:
+ *
+ * M: markedvar
+ * G: guarded
+ * S: sym
  *)
 
 
@@ -46,10 +52,16 @@ module Types =
      *)
 
     /// A func over expressions, used in view expressions.
-    type VFunc = Func<Expr>
+    type VFunc<'var> = Func<Expr<'var>>
+
+    /// A func over marked-var expressions.
+    type MVFunc = VFunc<MarkedVar>
+
+    /// A func over symbolic-marked-var expressions.
+    type SMVFunc = VFunc<Sym<MarkedVar>>
 
     /// A view-definition func.
-    type DFunc = Func<Type * string>
+    type DFunc = Func<Param>
 
 
     (*
@@ -63,7 +75,7 @@ module Types =
     ///     Though View is the canonical Concurrent Views Framework view,
     ///     we actually seldom use it.
     /// </remarks>
-    type View = Multiset<VFunc>
+    type View = Multiset<SMVFunc>
 
     /// A view definition.
     type DView = List<DFunc>
@@ -71,7 +83,7 @@ module Types =
     /// <summary>
     ///     A basic view, as an ordered list of VFuncs.
     /// </summary>
-    type OView = List<VFunc>
+    type OView = List<SMVFunc>
 
     /// <summary>
     ///     A view expression, combining a view with its kind.
@@ -98,13 +110,47 @@ module Types =
     /// <summary>
     ///     A view definition.
     /// </summary>
+    /// <typeparam name="view">
+    ///     The type of views.
+    /// </typeparam>
+    /// <typeparam name="def">
+    ///     The type of the definitions of said views.
+    /// </typeparam>
     /// <remarks>
     ///     The semantics of a ViewDef is that, if Def is present, then the
     ///     view View is satisfied if, and only if, Def holds.
     /// </remarks>
-    type ViewDef<'view> =
-        { View : 'view
-          Def : BoolExpr option }
+    type ViewDef<'view, 'def> =
+          /// <summary>
+          ///     A definite <c>ViewDef</c>.
+          /// </summary>
+        | Definite of ('view * 'def)
+          /// <summary>
+          ///     An indefinite <c>ViewDef</c>.
+          /// </summary>
+        | Indefinite of 'view
+        override this.ToString() = sprintf "%A" this
+
+    /// <summary>
+    ///     A view definition over <c>SMBoolExpr</c>s.
+    /// </summary>
+    /// <typeparam name="view">
+    ///     The type of views.
+    /// </typeparam>
+    type SMBViewDef<'view> = ViewDef<'view, SMBoolExpr>
+
+    /// <summary>
+    ///     Extracts the view of a <c>ViewDef</c>.
+    /// </summary>
+    let viewOf =
+        function
+        | Definite (v, _)
+        | Indefinite v -> v
+
+    /// <summary>
+    ///     Active pattern extracting the view of a <c>ViewDef</c>.
+    /// </summary>
+    let (|DefOver|) = viewOf
 
     (*
      * Terms
@@ -130,27 +176,45 @@ module Types =
         }
 
     /// A term over semantic-relation commands.
-    type STerm<'wpre, 'goal> = Term<BoolExpr, 'wpre, 'goal>
+    type STerm<'wpre, 'goal> = Term<SMBoolExpr, 'wpre, 'goal>
 
     /// A term using only internal boolean expressions.
-    type FTerm = STerm<BoolExpr, BoolExpr>
+    type FTerm = Term<MBoolExpr, MBoolExpr, MBoolExpr>
 
     (*
      * Models
      *)
 
     /// A parameterised model of a Starling program.
-    type Model<'axiom, 'dview> =
+    type Model<'axiom, 'viewdefs> =
         { Globals : VarMap
           Locals : VarMap
           Axioms : Map<string, 'axiom>
           /// <summary>
           ///     The semantic function for this model.
           /// </summary>
-          Semantics : (DFunc * BoolExpr) list
+          Semantics : (DFunc * SMBoolExpr) list
           // This corresponds to the function D.
-          ViewDefs : ViewDef<'dview> list }
+          ViewDefs : 'viewdefs }
 
+    /// <summary>
+    ///     A <c>Model</c> whose view definitions map <c>DView</c>s
+    ///     through <c>ViewDef</c>s.
+    ///     <c>Indefinite</c> bodies.
+    /// </summary>
+    /// <typeparam name="axiom">
+    ///     Type of program axioms.
+    /// </typeparam>
+    type UVModel<'axiom> = Model<'axiom, SMBViewDef<DView> list>
+
+    /// <summary>
+    ///     A <c>Model</c> whose view definitions map <c>DFunc</c>s
+    ///     through <c>ViewDef</c>s.
+    /// </summary>
+    /// <typeparam name="axiom">
+    ///     Type of program axioms.
+    /// </typeparam>
+    type UFModel<'axiom> = Model<'axiom, SMBViewDef<DFunc> list>
 
 /// <summary>
 ///     Pretty printers for the model.
@@ -161,9 +225,9 @@ module Pretty =
     open Starling.Core.Expr.Pretty
 
     /// Pretty-prints a type-name parameter.
-    let printParam (ty, name) =
-        hsep [ ty |> printType
-               name |> String ]
+    let printParam param =
+        hsep [ param |> typeOf |> printType
+               param |> valueOf |> String ]
 
     /// Pretty-prints a multiset given a printer for its contents.
     let printMultiset pItem =
@@ -172,19 +236,28 @@ module Pretty =
         >> semiSep
 
     /// Pretty-prints a VFunc.
-    let printVFunc = printFunc printExpr
+    let printVFunc pVar = printFunc (printExpr pVar)
+
+    /// Pretty-prints an MVFunc.
+    let printMVFunc = printFunc printMExpr
+
+    /// Pretty-prints a SMVFunc.
+    let printSMVFunc = printFunc printSMExpr
 
     /// Pretty-prints a DFunc.
     let printDFunc = printFunc printParam
 
     /// Pretty-prints a View.
-    let printView = printMultiset printVFunc
+    let printView pVar = printMultiset (printVFunc pVar)
 
-    /// Pretty-prints a View.
-    let printOView = List.map printVFunc >> semiSep  >> squared
+    /// Pretty-prints a MView.
+    let printMView = printMultiset printMVFunc
+
+    /// Pretty-prints an OView.
+    let printOView = List.map printSMVFunc >> semiSep >> squared
 
     /// Pretty-prints a DView.
-    let printDView = List.map printDFunc >> semiSep  >> squared
+    let printDView = List.map printDFunc >> semiSep >> squared
 
     /// Pretty-prints view expressions.
     let rec printViewExpr pView =
@@ -199,26 +272,47 @@ module Pretty =
                headed "Goal" (g |> pGoal |> Seq.singleton) ]
 
     /// Pretty-prints an STerm.
-    let printSTerm pWPre pGoal = printTerm printBoolExpr pWPre pGoal
+    let printSTerm pWPre pGoal = printTerm printSMBoolExpr pWPre pGoal
 
     /// Pretty-prints model variables.
     let printModelVar (name, ty) =
         colonSep [ String name
                    printType ty ]
 
+    /// <summary>
+    ///     Pretty-prints an uninterpreted symbol.
+    /// </summary>
+    /// <param name="s">
+    ///     The value of the symbol.
+    /// </param>
+    /// <returns>
+    ///     A command printing <c>%{s}</c>.
+    /// </returns>
+    let printSymbol s =
+        hjoin [ String "%" ; s |> String |> braced ]
+
     /// Pretty-prints a model constraint.
-    let printViewDef pView { View = vs; Def = e } =
-        printAssoc Inline
-            [ (String "View", pView vs)
-              (String "Def", withDefault (String "?")
-                                         (Option.map printBoolExpr e)) ]
+    let printViewDef pView pDef =
+        function
+        | Definite (vs, e) ->
+            printAssoc Inline
+                [ (String "View", pView vs)
+                  (String "Def", pDef e) ]
+        | Indefinite vs ->
+            printAssoc Inline
+                [ (String "View", pView vs)
+                  (String "Def", String "?") ]
+
+    /// Pretty-printer for BViewDefs.
+    let printSMBViewDef pView =
+        printViewDef pView printSMBoolExpr
 
     /// Pretty-prints the axiom map for a model.
     let printModelAxioms pAxiom model =
         printMap Indented String pAxiom model.Axioms
 
     /// Pretty-prints a model given axiom and defining-view printers.
-    let printModel pAxiom pDView model =
+    let printModel pAxiom pViewDefs model =
         headed "Model"
             [ headed "Shared variables" <|
                   Seq.singleton
@@ -227,9 +321,10 @@ module Pretty =
                   Seq.singleton
                       (printMap Inline String printType model.Locals)
               headed "ViewDefs" <|
-                  List.map (printViewDef pDView) model.ViewDefs
+                  pViewDefs model.ViewDefs
               headed "Axioms" <|
                   Seq.singleton (printModelAxioms pAxiom model) ]
+
 
     /// <summary>
     ///     Enumerations of ways to view part or all of a <c>Model</c>.
@@ -251,15 +346,15 @@ module Pretty =
     /// <summary>
     ///     Prints a model using the <c>ModelView</c> given.
     /// </summary>
-    /// <param name="mview">
-    ///     The <c>ModelView</c> stating which part of the model should be
-    ///     printed.
-    /// </param>
     /// <param name="pAxiom">
     ///     The printer to use for model axioms.
     /// </param>
     /// <param name="pViewDef">
     ///     The printer to use for view definitions.
+    /// </param>
+    /// <param name="mview">
+    ///     The <c>ModelView</c> stating which part of the model should be
+    ///     printed.
     /// </param>
     /// <param name="model">
     ///     The model to print.
@@ -269,7 +364,7 @@ module Pretty =
     ///     <paramref name="model" /> specified by
     ///     <paramref name="mView" />.
     /// </returns>
-    let printModelView mView pAxiom pViewDef m =
+    let printModelView pAxiom pViewDef mView m =
         match mView with
         | ModelView.Model -> printModel pAxiom pViewDef m
         | ModelView.Terms -> printModelAxioms pAxiom m
@@ -277,6 +372,32 @@ module Pretty =
             Map.tryFind termstr m.Axioms
             |> Option.map pAxiom
             |> withDefault (termstr |> sprintf "no term '%s'" |> String)
+
+    /// <summary>
+    ///     Pretty-prints a model view for an <c>UVModel</c>.
+    /// </summary>
+    /// <param name="pAxiom">
+    ///     Pretty printer for axioms.
+    /// </param>
+    /// <returns>
+    ///     A function, taking a <c>ModelView</c> and <c>UVModel</c>, and
+    ///     returning a <c>Command</c>.
+    /// </returns>
+    let printUVModelView pAxiom =
+        printModelView pAxiom (List.map (printSMBViewDef printDView))
+
+    /// <summary>
+    ///     Pretty-prints a model view for an <c>UFModel</c>.
+    /// </summary>
+    /// <param name="pAxiom">
+    ///     Pretty printer for axioms.
+    /// </param>
+    /// <returns>
+    ///     A function, taking a <c>ModelView</c> and <c>UFModel</c>, and
+    ///     returning a <c>Command</c>.
+    /// </returns>
+    let printUFModelView pAxiom =
+        printModelView pAxiom (List.map (printSMBViewDef printDFunc))
 
 
 /// <summary>
@@ -291,26 +412,63 @@ module Pretty =
 /// <returns>
 ///     A new <c>DFunc</c> with the given name and parameters.
 /// </returns>
-let dfunc name (pars : (Type * string) seq) : DFunc = func name pars
+let dfunc name (pars : Param seq) : DFunc = func name pars
 
 /// <summary>
 ///     Type-constrained version of <c>func</c> for <c>VFunc</c>s.
 /// </summary>
-/// <parameter name="name">
+/// <param name="name">
 ///     The name of the <c>VFunc</c>.
-/// </parameter>
-/// <parameter name="pars">
+/// </param>
+/// <param name="pars">
 ///     The parameters of the <c>VFunc</c>, as a sequence.
-/// </parameter>
+/// </param>
+/// <typeparam name="var">
+///     The type of variables in the <c>VFunc</c>'s parameters.
+/// </typeparam>
 /// <returns>
 ///     A new <c>VFunc</c> with the given name and parameters.
 /// </returns>
-let vfunc name (pars : Expr seq) : VFunc = func name pars
+let vfunc name (pars : Expr<'var> seq) : VFunc<'var> = func name pars
+
+/// <summary>
+///     Type-constrained version of <c>vfunc</c> for <c>MVFunc</c>s.
+/// </summary>
+/// <param name="name">
+///     The name of the <c>MVFunc</c>.
+/// </param>
+/// <param name="pars">
+///     The parameters of the <c>MVFunc</c>, as a sequence.
+/// </param>
+/// <returns>
+///     A new <c>MVFunc</c> with the given name and parameters.
+/// </returns>
+let mvfunc name (pars : MExpr seq) : MVFunc = vfunc name pars
+
+/// <summary>
+///     Type-constrained version of <c>vfunc</c> for <c>SMVFunc</c>s.
+/// </summary>
+/// <param name="name">
+///     The name of the <c>SMVFunc</c>.
+/// </param>
+/// <param name="pars">
+///     The parameters of the <c>SMVFunc</c>, as a sequence.
+/// </param>
+/// <returns>
+///     A new <c>MVFunc</c> with the given name and parameters.
+/// </returns>
+let smvfunc name (pars : SMExpr seq) : SMVFunc = vfunc name pars
+
 
 /// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
 /// and its Goal with fG.
-let mapTerm fC fW fG {Cmd = c; WPre = w; Goal = g} =
-    {Cmd = fC c; WPre = fW w; Goal = fG g}
+let mapTerm
+  (fC : 'srcCmd -> 'dstCmd)
+  (fW : 'srcWpre -> 'dstWpre)
+  (fG : 'srcGoal -> 'dstGoal)
+  ( { Cmd = c; WPre = w; Goal = g } : Term<'srcCmd, 'srcWpre, 'srcGoal> )
+  : Term<'dstCmd, 'dstWpre, 'dstGoal> =
+    { Cmd = fC c; WPre = fW w; Goal = fG g }
 
 /// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
 /// and its Goal with fG.
@@ -350,6 +508,30 @@ let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x, 'dview>)
           |> Seq.map (fun (k, v) -> v |> f |> lift (mkPair k))
           |> collect
           |> lift Map.ofList)
+
+/// Returns the viewdefs of a model.
+let viewDefs {ViewDefs = ds} = ds
+
+/// Creates a new model that is the input model with a different viewdef set.
+/// The viewdef set may be of a different type.
+let withViewDefs (ds : 'y)
+                 (model : Model<'axiom, 'x>)
+                 : Model<'axiom, 'y> =
+    { Globals = model.Globals
+      Locals = model.Locals
+      ViewDefs = ds
+      Semantics = model.Semantics
+      Axioms = model.Axioms }
+
+/// Maps a pure function f over the viewdef database of a model.
+let mapViewDefs (f : 'x -> 'y) (model : Model<'axiom, 'x>) : Model<'axiom, 'y> =
+    withViewDefs (model |> viewDefs |> f) model
+
+/// Maps a failing function f over the viewdef database of a model.
+let tryMapViewDefs (f : 'x -> Result<'y, 'e>) (model : Model<'axiom, 'x>)
+    : Result<Model<'axiom, 'y>, 'e> =
+    lift (fun x -> withViewDefs x model) (model |> viewDefs |> f)
+
 
 /// <summary>
 ///     Active pattern extracting a View from a ViewExpr.
@@ -391,3 +573,4 @@ let isAdvisory =
 /// </returns>
 let varsInVFunc { Params = ps } =
     ps |> Seq.map varsIn |> Seq.concat
+

@@ -70,7 +70,7 @@ module Types =
         { /// <summary>
           ///     List of definite viewdefs, as (view, def) pairs, to check.
           /// </summary>
-          Definites : (VFunc * BoolExpr) list
+          Definites : (MVFunc * MBoolExpr) list
           /// <summary>
           ///     Map of (view name, FuncDecl) bindings.
           /// </summary>
@@ -130,8 +130,8 @@ module Pretty =
             Indented
             [ (String "Definites",
                ds |>
-               List.map (fun (f, d) -> equality (printVFunc f)
-                                                (printBoolExpr d))
+               List.map (fun (f, d) -> equality (printMVFunc f)
+                                                (printMBoolExpr d))
                |> vsep)
               (String "Rules",
                rs
@@ -174,9 +174,9 @@ module Translator =
     /// </returns>
     let typeToSort reals (ctx : Z3.Context) =
         function
-        | Type.Int when reals -> ctx.MkRealSort () :> Z3.Sort
-        | Type.Int -> ctx.MkIntSort () :> Z3.Sort
-        | Type.Bool -> ctx.MkBoolSort () :> Z3.Sort
+        | Type.Int _ when reals -> ctx.MkRealSort () :> Z3.Sort
+        | Type.Int _ -> ctx.MkIntSort () :> Z3.Sort
+        | Type.Bool _ -> ctx.MkBoolSort () :> Z3.Sort
 
     (*
      * View definitions
@@ -200,7 +200,7 @@ module Translator =
     let funcDeclOfDFunc reals (ctx : Z3.Context) { Name = n ; Params = pars } =
         ctx.MkFuncDecl(
             n,
-            pars |> Seq.map (fst >> typeToSort reals ctx) |> Seq.toArray,
+            pars |> Seq.map (typeOf >> typeToSort reals ctx) |> Seq.toArray,
             ctx.MkBoolSort () :> Z3.Sort)
 
     /// <summary>
@@ -245,7 +245,7 @@ module Translator =
     ///     produced for the view, and an optional <c>BoolExpr</c>
     ///     assertion defining the view.
     /// </returns>
-    let translateViewDef reals (ctx : Z3.Context) ( { View = vs; Def = ex } : ViewDef<DFunc> ) =
+    let translateViewDef reals (ctx : Z3.Context) (vs : DFunc, ex) =
         let funcDecl = funcDeclOfDFunc reals ctx vs
         let mapEntry = (vs.Name, funcDecl)
 
@@ -259,10 +259,10 @@ module Translator =
                         We need to make an application of our new FuncDecl to
                         create the constraints for it, if any.
 
-                        The parameters of a DFunc are in (type, name) format,
+                        The parameters of a DFunc are in parameter format,
                         which we need to convert to expression format first.
                         dex uses Unmarked constants, so we do too. *)
-                     let eparams = List.map (uncurry (mkVarExp Unmarked)) vs.Params
+                     let eparams = List.map (mkVarExp Unmarked) vs.Params
                      let vfunc = { Name = vs.Name ; Params = eparams }
 
                      (vfunc, dex))
@@ -286,7 +286,7 @@ module Translator =
     ///     A tuple of a <c>Map</c> binding names to <c>FuncDecl</c>s and a
     ///     list of (view, def) pairs defining definite viewdefs.
     /// </returns>
-    let translateViewDefs reals ctx ds =
+    let translateViewDefs reals ctx (ds : FuncTable<MBoolExpr option>) =
         ds
         |> Seq.map (translateViewDef reals ctx)
         |> List.ofSeq
@@ -456,8 +456,9 @@ module Translator =
             }
             // Make sure we don't quantify over a variable twice.
             |> Set.ofSeq
-            |> Set.map (fun (name, ty) ->
-                            ctx.MkConst (constToString name, typeToSort reals ctx ty))
+            |> Set.map (fun p ->
+                            ctx.MkConst (p |> valueOf |> constToString,
+                                         p |> typeOf |> typeToSort reals ctx))
             |> Set.toArray
 
         let bodyExprZ = boolToZ3 reals ctx bodyExpr
@@ -499,7 +500,7 @@ module Translator =
         let vpars =
             svars
             |> Map.toList
-            |> List.map (uncurry (flip (mkVarExp Unmarked)))
+            |> List.map (fun (v, t) -> mkVarExp Unmarked (withType t v))
 
         // TODO(CaptainHayashi): actually get these initialisations from
         // somewhere.
@@ -508,8 +509,8 @@ module Translator =
             |> List.map
                    (fun v -> BEq (v,
                                   match v with
-                                  | AExpr _ -> AExpr (AInt 0L)
-                                  | BExpr _ -> BExpr (BFalse)))
+                                  | Expr.Int _ -> Expr.Int (AInt 0L)
+                                  | Expr.Bool _ -> Expr.Bool (BFalse)))
             |> mkAnd
 
         let head = { Name = "emp" ; Params = vpars }
@@ -564,7 +565,10 @@ module Translator =
     ///     used to prove the model, and the map of names to <c>FuncDecl</c>s
     ///     to use to start queries.
     /// </returns>
-    let translate reals ctx { Globals = svars ; ViewDefs = ds ; Axioms = xs } =
+    let translate
+      reals
+      (ctx : Z3.Context)
+      ( { Globals = svars ; ViewDefs = ds ; Axioms = xs } : IFModel<Term<MBoolExpr, MGView, MVFunc>> ) =
         let funcDecls, definites = translateViewDefs reals ctx ds
         let vrules = translateVariables reals ctx funcDecls svars
         let trules = xs |> Map.toSeq |> Seq.choose (translateTerm reals ctx funcDecls)
@@ -623,9 +627,10 @@ module Run =
                              yield! (varsIn param)
                      }
                      |> Set.ofSeq
-                     |> Set.map (fun (name, ty) ->
-                                     ctx.MkConst (constToString name,
-                                                  Translator.typeToSort reals ctx ty))
+                     |> Set.map
+                            (fun var ->
+                                 ctx.MkConst (constToString (valueOf var),
+                                              Translator.typeToSort reals ctx (typeOf var)))
                      |> Set.toArray
 
                  // Introduce 'V ^ ¬D(V) -> unsafe'.

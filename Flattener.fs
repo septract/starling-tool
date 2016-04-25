@@ -53,24 +53,25 @@ let addGlobalsToTerm gs _ =
  *)
 
 /// Adds the globals in gs to a defining view.
-let addGlobalsToViewDef gs {View = v; Def = d} =
-    { View = funcOfView gs v; Def = d }
-
+let addGlobalsToViewDef gs =
+    function
+    | Definite (v, d) -> Definite (funcOfView gs v, d)
+    | Indefinite v -> Indefinite (funcOfView gs v)
 
 (*
  * Whole models
  *)
 
 /// Adds globals to the arguments of all views in a model.
-let flatten (mdl: Model<PTerm<ViewSet, OView>, DView>) =
+let flatten (mdl: UVModel<PTerm<SMViewSet, OView>>) =
     /// Build a function making a list of global arguments, for view assertions.
-    let gargs marker = varMapToExprs marker mdl.Globals
+    let gargs marker = varMapToExprs (marker >> Reg) mdl.Globals
 
     /// Build a list of global parameters, for view definitions.
     let gpars =
         mdl.Globals
         |> Map.toSeq
-        |> Seq.map flipPair
+        |> Seq.map (fun (name, ty) -> withType ty name)
         |> List.ofSeq
 
     {Globals = mdl.Globals

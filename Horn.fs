@@ -4,11 +4,13 @@
 module Starling.Backends.Horn
 
 open Chessie.ErrorHandling
+open Starling.Core
 open Starling.Collections
 open Starling.Utils
 open Starling.Core.Var
 open Starling.Core.Expr
 open Starling.Core.Model
+open Starling.Core.Instantiate
 open Starling.Core.GuardedView
 open Starling.Reifier
 
@@ -24,18 +26,18 @@ module Types =
     /// Booleans.
     type Literal = 
         /// A predicate.
-        | Pred of Func<ArithExpr>
+        | Pred of Func<MIntExpr>
         | And of Literal list
         | Or of Literal list
         | True
         | False
         | ITE of Literal * Literal * Literal
-        | Eq of ArithExpr * ArithExpr
-        | Neq of ArithExpr * ArithExpr
-        | Gt of ArithExpr * ArithExpr
-        | Ge of ArithExpr * ArithExpr
-        | Le of ArithExpr * ArithExpr
-        | Lt of ArithExpr * ArithExpr
+        | Eq of MIntExpr * MIntExpr
+        | Neq of MIntExpr * MIntExpr
+        | Gt of MIntExpr * MIntExpr
+        | Ge of MIntExpr * MIntExpr
+        | Le of MIntExpr * MIntExpr
+        | Lt of MIntExpr * MIntExpr
 
     /// A Horn clause, in Datalog/HSF form.
     type Horn = 
@@ -48,12 +50,14 @@ module Types =
 
     /// An error caused when emitting a Horn clause.
     type Error = 
+        /// A Func is inconsistent with its definition.
+        | InconsistentFunc of func : MVFunc * err : Instantiate.Types.Error
         /// A viewdef has a non-arithmetic param.
-        | NonArithParam of Type * string
+        | NonArithParam of Param
         /// A model has a non-arithmetic variable.
-        | NonArithVar of Type * string
+        | NonArithVar of CTyped<string>
         /// The expression given is not supported in the given position.
-        | UnsupportedExpr of Expr
+        | UnsupportedExpr of MExpr
         /// The expression given is compound, but empty.
         | EmptyCompoundExpr of exptype : string
 
@@ -64,11 +68,12 @@ module Types =
 /// Pretty-prints HSF translation errors.
 module Pretty =
     open Starling.Core.Pretty
+    open Starling.Core.Model.Pretty
     open Starling.Core.Expr.Pretty
     open Starling.Core.Var.Pretty
 
-    /// Emits a constant, munged to work in Datalog.
-    let printConst = 
+    /// Emits a marked variable, munged to work in Datalog.
+    let printMarkedVar = 
         function 
         | Unmarked c -> sprintf "V%sU" c |> String
         | Before c -> sprintf "V%sB" c |> String
@@ -80,40 +85,40 @@ module Pretty =
     /// given its expression as the second argument.
     let maybeBracket xe x = 
         match xe with 
-        | SimpleArith -> x
-        | CompoundArith -> parened x
+        | SimpleInt -> x
+        | CompoundInt -> parened x
 
-    /// Emits an arithmetic expression in Datalog syntax.
-    let rec printArith = 
+    /// Emits an integral expression in Datalog syntax.
+    let rec printInt = 
         function 
-        | AConst c -> printConst c
+        | AVar c -> printMarkedVar c
         | AInt i -> sprintf "%d" i |> String
         // Do some reshuffling of n-ary expressions into binary ones.
         // These expressions are left-associative, so this should be sound.
         | AAdd [] -> failwith "unexpected empty addition"
-        | AAdd [ x ] -> printArith x
+        | AAdd [ x ] -> printInt x
         | AAdd [ x; y ] -> printBop "+" x y
-        | AAdd(x :: y :: xs) -> printArith (AAdd((AAdd [ x; y ]) :: xs))
+        | AAdd(x :: y :: xs) -> printInt (AAdd((AAdd [ x; y ]) :: xs))
         | ASub [] -> failwith "unexpected empty subtraction"
-        | ASub [ x ] -> printArith x
+        | ASub [ x ] -> printInt x
         | ASub [ x; y ] -> printBop "-" x y
-        | ASub(x :: y :: xs) -> printArith (ASub((ASub [ x; y ]) :: xs))
+        | ASub(x :: y :: xs) -> printInt (ASub((ASub [ x; y ]) :: xs))
         | AMul [] -> failwith "unexpected empty multiplication"
-        | AMul [ x ] -> printArith x
+        | AMul [ x ] -> printInt x
         | AMul [ x; y ] -> printBop "*" x y
-        | AMul(x :: y :: xs) -> printArith (AMul((AMul [ x; y ]) :: xs))
+        | AMul(x :: y :: xs) -> printInt (AMul((AMul [ x; y ]) :: xs))
         | ADiv(x, y) -> printBop "/" x y
 
     and printBop op x y =
         binop
             op
-            (x |> printArith |> maybeBracket x)
-            (y |> printArith |> maybeBracket y)
+            (x |> printInt |> maybeBracket x)
+            (y |> printInt |> maybeBracket y)
 
     /// Emits a Horn literal.
     let rec printLiteral = 
         function 
-        | Pred p -> printFunc printArith p
+        | Pred p -> printFunc printInt p
         | And xs ->
             xs
             |> Seq.map printLiteral
@@ -163,17 +168,21 @@ module Pretty =
     
     let printHornError =
         function
-        | NonArithParam (ty, name) ->
+        | InconsistentFunc (func, err) ->
+            wrapped "view func"
+                    (printMVFunc func)
+                    (Instantiate.Pretty.printError err)
+        | NonArithParam p ->
             fmt "parameter '{0}' is of type {1}: HSF only permits integers here"
-                [ String name
-                  printType ty ]
-        | NonArithVar (ty, name) ->
+                [ p |> valueOf |> String
+                  p |> typeOf |> printType ]
+        | NonArithVar p ->
             fmt "variable '{0}' is of type {1}: HSF only permits integers here"
-                [ String name
-                  printType ty ]
+                [ p |> valueOf |> String
+                  p |> typeOf |> printType ]
         | UnsupportedExpr expr ->
             fmt "expression '{0}' is not supported in the HSF backend"
-                [ printExpr expr ]
+                [ printMExpr expr ]
         | EmptyCompoundExpr exptype ->
             fmt "found an empty '{0}' expression"
                 [ String exptype ]
@@ -183,7 +192,7 @@ module Pretty =
  * Expression generation
  *)
 
-/// Checks whether an ArithExpr is useable by HSF.
+/// Checks whether an MIntExpr is useable by HSF.
 let checkArith =
     function
     | AAdd [] -> EmptyCompoundExpr "addition" |> fail
@@ -191,7 +200,7 @@ let checkArith =
     | AMul [] -> EmptyCompoundExpr "multiplication" |> fail
     | x -> ok x
 
-/// Converts a BoolExpr to a HSF literal.
+/// Converts a MBoolExpr to a HSF literal.
 let rec boolExpr =
     function
     // TODO(CaptainHayashi): are these allowed?
@@ -199,31 +208,31 @@ let rec boolExpr =
     | BOr xs -> List.map boolExpr xs |> collect |> lift Or
     | BTrue -> ok <| True
     | BFalse -> ok <| False
-    | BEq(AExpr x, AExpr y) -> lift2 (curry Eq) (checkArith x) (checkArith y)
-    | BNot(BEq(AExpr x, AExpr y)) -> lift2 (curry Neq) (checkArith x) (checkArith y)
+    | BEq(Expr.Int x, Expr.Int y) -> lift2 (curry Eq) (checkArith x) (checkArith y)
+    | BNot(BEq(Expr.Int x, Expr.Int y)) -> lift2 (curry Neq) (checkArith x) (checkArith y)
     // TODO(CaptainHayashi): is implies allowed natively?
     | BImplies(x, y) -> boolExpr (mkOr [ mkNot x ; y ])
     | BGt(x, y) -> lift2 (curry Gt) (checkArith x) (checkArith y)
     | BGe(x, y) -> lift2 (curry Ge) (checkArith x) (checkArith y)
     | BLe(x, y) -> lift2 (curry Le) (checkArith x) (checkArith y)
     | BLt(x, y) -> lift2 (curry Lt) (checkArith x) (checkArith y)
-    | x -> fail <| UnsupportedExpr(BExpr x)
+    | x -> fail <| UnsupportedExpr(Expr.Bool x)
 
 (*
  * Func sanitisation
  *)
 
-/// Extracts an ArithExpr from an Expr, if it is indeed arithmetic.
+/// Extracts an IntExpr from an Expr, if it is indeed arithmetic.
 /// Fails with UnsupportedExpr if the expresson is Boolean.
-let tryArithExpr =
+let tryIntExpr =
     function
-    | AExpr x -> x |> ok
+    | Expr.Int x -> x |> ok
     | e -> e |> UnsupportedExpr |> fail
 
 /// Ensures a param in a viewdef multiset is arithmetic.
 let ensureArith =
    function
-   | (Type.Int, x) -> ok (aUnmarked x)
+   | Param.Int x -> ok (iUnmarked x)
    | x -> fail <| NonArithParam x
 
 /// Constructs a pred from a Func, given a set of active globals,
@@ -236,21 +245,20 @@ let predOfFunc gs parT { Name = n; Params = pars } =
  *)
 
 /// Generates a query_naming clause for a viewdef.
-let queryNaming { Name = n; Params = ps } =
-    QueryNaming {Name = n; Params = ps |> List.map snd}
+let queryNaming { Name = n ; Params = ps } =
+    QueryNaming { Name = n ; Params = List.map valueOf ps }
 
 /// Constructs a full constraint in HSF.
 /// The map of active globals should be passed as gs.
 /// Some is returned if the constraint is definite; None otherwise.
-let hsfViewDef gs { View = vs; Def = ex } =
-    let clause =
-        Option.map (fun dex ->
-            lift2 (fun hd bd -> [Clause (hd, [bd]); Clause (bd, [hd])])
-                  (boolExpr dex)
-                  (predOfFunc gs ensureArith vs)) ex
-    match clause with
-    | Some cl -> lift (fun c -> queryNaming vs :: c) cl
-    | None -> ok [ queryNaming vs ]
+let hsfViewDef gs =
+    function
+    | (vs, Some ex) ->
+        lift2 (fun hd bd -> [Clause (hd, [bd]); Clause (bd, [hd])])
+              (boolExpr ex)
+              (predOfFunc gs ensureArith vs)
+        |> lift (fun c -> queryNaming vs :: c) 
+    | (vs, None) -> ok [ queryNaming vs ]
 
 /// Constructs a set of Horn clauses for all definite viewdefs in a model.
 let hsfModelViewDefs gs =
@@ -271,10 +279,9 @@ let hsfModelVariables gs =
         gs
         |> Map.toSeq
         |> Seq.map
-            (fun (name, ty) ->
-             match ty with
-             | Type.Int -> aUnmarked name |> ok
-             | _ -> NonArithVar (ty, name) |> fail)
+            (function
+             | (name, Type.Int()) -> iUnmarked name |> ok
+             | (name, ty) -> name |> withType ty |> NonArithVar |> fail)
         |> collect
 
     let head = 
@@ -320,13 +327,17 @@ let hsfFunc dvs env func =
     // We check the defining views here, because anything not in the
     // defining views is to be held true.
     // Now that we're at the func level, finding the view is easy!
-    List.tryFind (fun {View = {Name = n}} -> n = func.Name) dvs
-    |> Option.map (fun _ -> predOfFunc env tryArithExpr func)
+    dvs
+    |> (lookup func >> mapMessages (curry InconsistentFunc func))
+    |> bind (function
+             | Some df -> lift Some (predOfFunc env tryIntExpr func)
+             | None -> ok None)
 
 /// Constructs a Horn literal for a GFunc.
 let hsfGFunc dvs env { Cond = c; Item = ms } =
     hsfFunc dvs env ms
-    |> Option.map (lift2 (fun cR msR -> ite cR msR True) (boolExpr c))
+    |> (lift2 (fun cR -> Option.map (fun m -> ite cR m True))
+              (boolExpr c))
 
 /// Constructs the body for a set of condition pair Horn clauses,
 /// given the defining views, preconditions and semantics clause.
@@ -334,9 +345,9 @@ let hsfConditionBody dvs env ps sem =
     let psH =
         ps
         |> Multiset.toFlatSeq
-        |> Seq.choose (hsfGFunc dvs env)
+        |> Seq.map (hsfGFunc dvs env)
         |> collect
-        |> lift List.ofSeq
+        |> lift (Seq.choose id >> List.ofSeq)
 
     let semH = topLevelExpr sem
 
@@ -347,8 +358,8 @@ let hsfConditionBody dvs env ps sem =
 let hsfTerm dvs env (name, {Cmd = c; WPre = w ; Goal = g}) =
     lift2 (fun head body ->
            [ Comment (sprintf "term %s" name)
-             Clause (head, body) ])
-          (Option.get (hsfFunc dvs env g))
+             Clause (Option.get head, body) ])
+          (hsfFunc dvs env g)
           (hsfConditionBody dvs env w c)
 
 /// Constructs a set of Horn clauses for all terms associated with a model.
@@ -359,7 +370,8 @@ let hsfModelTerms gs dvs =
     >> lift List.concat
 
 /// Constructs a HSF script for a model.
-let hsfModel { Globals = gs; ViewDefs = dvs; Axioms = xs } =
+let hsfModel
+  ( { Globals = gs; ViewDefs = dvs; Axioms = xs } : IFModel<Term<MBoolExpr, MGView, MVFunc>> ) =
     trial {
         let! vs = gs |> hsfModelVariables
         let! ds = hsfModelViewDefs gs dvs |> lift Set.toList

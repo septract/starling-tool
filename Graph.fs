@@ -57,7 +57,7 @@ module Types =
             /// <summary>
             ///     Set of nodes in the control-flow graph.
             /// </summary>
-            Nodes: Map<string, ViewExpr<GView> * NodeKind>
+            Nodes: Map<string, ViewExpr<SMGView> * NodeKind>
 
             /// <summary>
             ///     Set of edges in the control-flow graph.
@@ -114,7 +114,7 @@ module Types =
           /// <summary>
           ///     The view of the source node.
           /// </summary>
-          SrcView : ViewExpr<GView>
+          SrcView : ViewExpr<SMGView>
           /// <summary>
           ///     The name of the destination node.
           /// </summary>
@@ -122,7 +122,7 @@ module Types =
           /// <summary>
           ///     The view of the destination node.
           /// </summary>
-          DestView : ViewExpr<GView>
+          DestView : ViewExpr<SMGView>
           /// <summary>
           ///      The command this edge represents.
           /// </summary>
@@ -135,17 +135,20 @@ module Types =
     ///         Control-flow graphs use an adjacency list format.
     ///     </para>
     /// </summary>
-    type Graph = { /// <summary>
-                   ///     The name of the graph.
-                   /// </summary>
-                   Name : string
-                   /// <summary>
-                   ///     The contents of the graph.
-                   /// </summary>
-                   Contents : Map<string, (ViewExpr<GView>
-                                           * Set<OutEdge>
-                                           * Set<InEdge>
-                                           * NodeKind)> }
+    type Graph = {
+        /// <summary>
+        ///     The name of the graph.
+        /// </summary>
+        Name : string
+        /// <summary>
+        ///     The contents of the graph.
+        /// </summary>
+        Contents : Map<
+            string,
+            (ViewExpr<SMGView>
+             * Set<OutEdge>
+             * Set<InEdge>
+             * NodeKind)> }
 
     /// <summary>
     ///     Type of Chessie errors for CFG actions.
@@ -648,8 +651,8 @@ let axiomatiseGraphs =
 ///     An axiom-based model equivalent to <paramref name="model" />,
 ///     wrapped in a Chessie result.
 /// </returns>
-let axiomatise (model : Model<Graph, DView>)
-               : Model<Axiom<GView, Command>, DView> =
+let axiomatise (model : UVModel<Graph>)
+               : UVModel<Axiom<SMGView, Command>> =
     withAxioms (axiomatiseGraphs model.Axioms) model
 
 
@@ -697,7 +700,7 @@ module Pretty =
         let list = match nk with Normal -> [] | Entry -> [String "(Entry)"] | Exit -> [String "(Exit)"] | EntryExit -> [String "(EntryExit)"]
         hsep [ id |> String
                ([ id |> String
-                  view |> printViewExpr printGView ] @ list)
+                  view |> printViewExpr printSMGView ] @ list)
                 |> colonSep |> printLabel 
              ]
         |> withSemi

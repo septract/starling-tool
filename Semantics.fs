@@ -15,6 +15,8 @@ module Starling.Semantics
 
 open Chessie.ErrorHandling
 open Starling.Collections
+open Starling.Core.Command
+open Starling.Core.GuardedView
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
@@ -30,10 +32,10 @@ module Types =
     /// Type of errors relating to semantics instantiation.
     type Error =
         /// There was an error instantiating a semantic definition.
-        | Instantiate of prim: VFunc
+        | Instantiate of prim: SMVFunc
                        * error: Starling.Core.Instantiate.Types.Error
         /// A primitive has a missing semantic definition.
-        | MissingDef of prim: VFunc
+        | MissingDef of prim: SMVFunc
 
 
 /// <summary>
@@ -50,11 +52,11 @@ module Pretty =
         | Instantiate (prim, error) ->
           colonSep
               [ fmt "couldn't instantiate primitive '{0}'"
-                    [ printVFunc prim ]
+                    [ printSMVFunc prim ]
                 Starling.Core.Instantiate.Pretty.printError error ]
         | MissingDef prim ->
             fmt "primitive '{0}' has no semantic definition"
-                [ printVFunc prim ]
+                [ printSMVFunc prim ]
 
 
 
@@ -88,77 +90,102 @@ let composeBools x y =
 
     let xRewrite =
         function
-        | After v -> Intermediate (nLevel, v)
-        | v -> v
-        |> (fun f -> { AVSub = f >> AConst ; BVSub = f >> BConst } )
+        | After v -> Reg (Intermediate (nLevel, v))
+        | v -> Reg v
+        |> (fun f ->
+                TypeMapper.compose
+                    (TypeMapper.cmake f)
+                    (TypeMapper.make AVar BVar))
+        |> liftVToSym
         |> onVars
 
     let yRewrite =
         function
-        | Before v -> Intermediate (nLevel, v)
-        | Intermediate (i, v) -> Intermediate (i + nLevel + 1I, v)
-        | v -> v
-        |> (fun f -> { AVSub = f >> AConst ; BVSub = f >> BConst } )
+        | Before v -> Reg (Intermediate (nLevel, v))
+        | Intermediate (i, v) -> Reg (Intermediate (i + nLevel + 1I, v))
+        | v -> Reg v
+        |> (fun f ->
+                TypeMapper.compose
+                    (TypeMapper.cmake f)
+                    (TypeMapper.make AVar BVar))
+        |> liftVToSym
         |> onVars
 
-    mkAnd [ xRewrite.BSub x ; yRewrite.BSub y ]
+    mkAnd
+        [ TypeMapper.mapBool xRewrite x
+          TypeMapper.mapBool yRewrite y ]
 
 
 /// Generates a framing relation for a given variable.
-let frameVar name ty =
-    let ve = mkVarExp Unmarked ty name
-
-    BEq(subExpr (liftMarker After always) ve,
-        subExpr (liftMarker Before always) ve)
+let frameVar par : SMBoolExpr =
+    BEq (mkVarExp (After >> Reg) par, mkVarExp (Before >> Reg) par)
 
 /// Generates a frame for a given expression.
 /// The frame is a relation a!after = a!before for every a not mentioned in the expression.
-let frame model expr =
+let frame svars tvars expr =
     // Find all the bound post-variables in the expression...
     let evars =
         expr
         |> varsInBool
-        |> Seq.choose (function | (After x, _) -> Some x
-                                | _ -> None)
+        |> Seq.map (valueOf >> regularVarsInSym)
+        |> Seq.concat
+        |> Seq.choose (function After x -> Some x | _ -> None)
         |> Set.ofSeq
 
     // Then, for all of the variables in the model, choose those not in evars, and make frame expressions for them.
-    Seq.append (Map.toSeq model.Globals) (Map.toSeq model.Locals)
+    Seq.append (Map.toSeq svars) (Map.toSeq tvars)
     // TODO(CaptainHayashi): this is fairly inefficient.
     |> Seq.filter (fun (name, _) -> not (Set.contains name evars))
-    |> Seq.map (uncurry frameVar)
+    |> Seq.map (fun (name, ty) -> frameVar (withType ty name))
 
 /// Translate a primitive command to an expression characterising it.
 /// This is the combination of the Prim's action (via emitPrim) and
 /// a set of framing terms forcing unbound variables to remain constant
 /// (through frame).
-let semanticsOfPrim model prim =
+let semanticsOfPrim
+  (semantics : FuncTable<SMBoolExpr>)
+  (svars : VarMap)
+  (tvars : VarMap)
+  (prim : SMVFunc)
+  : Result<SMBoolExpr, Error> =
     (* First, instantiate according to the semantics.
      * This can succeed but return None.  This means there is no
      * entry (erroneous or otherwise) in the semantics for this prim.
      * Since this is an error in this case, make it one.
      *)
     let actions =
-        instantiate prim model.Semantics
-        |> mapMessages (curry Instantiate prim)
+        prim
+        |> wrapMessages Instantiate
+               (instantiate smvParamSubFun semantics)
         |> bind (failIfNone (MissingDef prim))
 
-    let aframe = lift (frame model >> List.ofSeq >> mkAnd) actions
+    let aframe = lift (frame svars tvars >> List.ofSeq >> mkAnd) actions
 
     lift2 mkAnd2 actions aframe
 
 /// Translate a command to an expression characterising it.
 /// This is the sequential composition of the translations of each
 /// primitive inside it.
-let semanticsOfCommand model =
-    Seq.map (semanticsOfPrim model)
+let semanticsOfCommand
+  (semantics : FuncTable<SMBoolExpr>)
+  (svars : VarMap)
+  (tvars : VarMap)
+  : Command -> Result<SMBoolExpr, Error> =
+    Seq.map (semanticsOfPrim semantics svars tvars)
     >> collect
     >> lift (function
-             | [] -> frame model BTrue |> List.ofSeq |> mkAnd
+             | [] -> frame svars tvars BTrue |> List.ofSeq |> mkAnd
              | xs -> List.reduce composeBools xs)
 
 /// Translates a model axiom into an axiom over a semantic expression.
-let translateAxiom model = tryMapTerm (semanticsOfCommand model) ok ok
+let translateAxiom model =
+    tryMapTerm
+        (semanticsOfCommand model.Semantics model.Globals model.Locals)
+        ok
+        ok
 
 /// Translate a model over Prims to a model over semantic expressions.
-let translate model = tryMapAxioms (translateAxiom model) model
+let translate
+  (model : UFModel<PTerm<SMGView, SMVFunc>>)
+  : Result<UFModel<STerm<SMGView, SMVFunc>>, Error> =
+    tryMapAxioms (translateAxiom model) model

@@ -16,11 +16,15 @@ open Starling.Core.Graph
 
 open Starling.Lang.AST
 open Starling.Lang.Modeller
+open Starling.Core.Command
 
 let cId = List.empty
-let cAssume expr =
-    func "Assume" [simp expr |> BExpr |> before] |> List.singleton
-let cAssumeNot = mkNot >> cAssume
+(* TODO(CaptainHayashi): currently we're assuming Assumed expressions
+   are in pre-state position.  When we move to type-safe renaming this
+   change should happen *here*. *)
+let cAssume (expr : SMBoolExpr) : Command =
+    func "Assume" [ simp expr |> Expr.Bool ] |> List.singleton
+let cAssumeNot : SMBoolExpr -> Command = mkNot >> cAssume
 
 /// <summary>
 ///     Constructs a graph from a while loop.
@@ -49,7 +53,7 @@ let cAssumeNot = mkNot >> cAssume
 /// <returns>
 ///     A Chessie result containing the graph of this if statement.
 /// </returns>
-let rec graphWhile vg cg oP oQ isDo expr inner =
+let rec graphWhile vg cg oP oQ isDo (expr : SMBoolExpr) inner =
     (* If isDo:
      *   Translating [|oP|] do { [|iP|] [|iQ|] } while (C) [|oQ|].
      * Else:
@@ -164,7 +168,7 @@ and graphITE vg cg oP oQ expr inTrue inFalse =
 /// <param name="_arg1">
 ///     The command to graph.
 /// </param>
-and graphCommand vg cg oP oQ : PartCmd<ViewExpr<GView>>
+and graphCommand vg cg oP oQ : PartCmd<ViewExpr<SMGView>>
                             -> Result<Subgraph, Error> =
     function
     | Prim cmd ->
@@ -259,6 +263,6 @@ let graphMethod { Signature = { Name = name }; Body = body } =
 /// <summary>
 ///     Converts a model on method ASTs to one on method CFGs.
 /// </summary>
-let graph (model : Model<PMethod<ViewExpr<GView>>, DView>)
-          : Result<Model<Graph, DView>, Error> =
+let graph (model : UVModel<PMethod<ViewExpr<SMGView>>>)
+          : Result<UVModel<Graph>, Error> =
     tryMapAxioms graphMethod model

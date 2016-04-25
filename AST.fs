@@ -32,6 +32,7 @@ module Types =
         | False // false
         | Int of int64 // 42
         | LV of LValue // foobaz
+        | Symbolic of string * Expression list // %{foo}(exprs)
         | Bop of Bop * Expression * Expression // a BOP b
 
     /// An atomic action.
@@ -43,12 +44,12 @@ module Types =
         | Assume of Expression // <assume(e)
 
     /// A view prototype.
-    type ViewProto = Func<(Type * string)>
+    type ViewProto = Func<Param>
 
-    /// A view definition.
-    type ViewDef =
+    /// A view as seen on the LHS of a ViewDef.
+    type DView =
         | Unit
-        | Join of ViewDef * ViewDef
+        | Join of DView * DView
         | Func of Func<string>
 
     /// <summary>
@@ -120,11 +121,6 @@ module Types =
           // Post-condition is that in the last Seq.
           Contents : ViewedCommand<'view, 'cmd> list }
 
-    /// A constraint, binding a view to an optional expression.
-    type Constraint =
-        { CView : ViewDef
-          CExpression : Expression option }
-
     /// A method.
     type Method<'view, 'cmd> =
         { Signature : Func<string> // main (argv, argc) ...
@@ -135,12 +131,13 @@ module Types =
 
     /// A top-level item in a Starling script.
     type ScriptItem =
-        | Global of Type * string // global int name;
-        | Local of Type * string // local int name;
+        | Global of CTyped<string> // global int name;
+        | Local of CTyped<string> // local int name;
         | Method of CMethod<Marked<View>> // method main(argv, argc) { ... }
         | Search of int // search 0;
         | ViewProto of ViewProto // view name(int arg);
-        | Constraint of Constraint // constraint emp => true
+        | Constraint of ViewDef<DView, Expression> // constraint emp => true
+        override this.ToString() = sprintf "%A" this
 
 
 /// <summary>
@@ -180,6 +177,8 @@ module Pretty =
         | False -> String "false"
         | Expression.Int i -> i.ToString() |> String
         | LV x -> printLValue x
+        | Symbolic (sym, args) -> 
+            func (sprintf "%%{%s}" sym) (Seq.map printExpression args)
         | Bop(op, a, b) ->
             hsep [ printExpression a
                    printBop op
@@ -209,18 +208,20 @@ module Pretty =
         >> ssurround "{|" "|}"
 
     /// Pretty-prints view definitions.
-    let rec printViewDef =
+    let rec printDView =
         function
-        | ViewDef.Func f -> printFunc String f
-        | ViewDef.Unit -> String "emp"
-        | ViewDef.Join(l, r) -> binop "*" (printViewDef l) (printViewDef r)
+        | DView.Func f -> printFunc String f
+        | DView.Unit -> String "emp"
+        | DView.Join(l, r) -> binop "*" (printDView l) (printDView r)
 
     /// Pretty-prints constraints.
-    let printConstraint { CView = v; CExpression = e } =
+    let printConstraint (cs : ViewDef<DView, Expression>) =
         hsep [ String "constraint"
-               printViewDef v
+               printDView (viewOf cs)
                String "->"
-               e |> Option.map printExpression |> withDefault (String "?") ]
+               (match cs with
+                | Definite (_, d) -> printExpression d
+                | Indefinite _ -> String "?") ]
         |> withSemi
 
     /// Pretty-prints fetch modes.
@@ -318,9 +319,9 @@ module Pretty =
     /// Pretty-prints a view prototype.
     let printViewProto { Name = n; Params = ps } =
         hsep [ "view" |> String
-               func n (List.map (fun (t, v) ->
-                           hsep [ t |> printType
-                                  v |> String ]) ps) ]
+               func n (List.map
+                           (fun p -> hsep [ p |> typeOf |> printType
+                                            p |> valueOf |> String ] ) ps) ]
         |> withSemi
 
     /// Pretty-prints a search directive.
@@ -329,17 +330,18 @@ module Pretty =
                sprintf "%d" i |> String ]
 
     /// Pretty-prints a script variable of the given class.
-    let printScriptVar cls t v =
-        hsep [ String cls
-               printType t
-               String v ]
+    let printScriptVar cls v =
+        hsep
+            [ String cls
+              printType (typeOf v)
+              String (valueOf v) ]
         |> withSemi
 
     /// Pretty-prints script lines.
     let printScriptLine =
         function
-        | Global(t, v) -> printScriptVar "shared" t v
-        | Local(t, v) -> printScriptVar "thread" t v
+        | Global v -> printScriptVar "shared" v
+        | Local v -> printScriptVar "thread" v
         | Method m -> printMethod (printMarkedView printView)
                                   (printCommand (printMarkedView printView)) m
         | ViewProto v -> printViewProto v
@@ -374,13 +376,14 @@ let (|ArithIn|BoolIn|AnyIn|) =
 
 /// Active pattern classifying expressions as to whether they are
 /// arithmetic, Boolean, or indeterminate.
-let (|BoolExp|ArithExp|AnyExp|) =
-    function
-    | LV _ -> AnyExp
-    | Int _ -> ArithExp
-    | True | False -> BoolExp
-    | Bop(BoolOp, _, _) -> BoolExp
-    | Bop(ArithOp, _, _) -> ArithExp
+let (|BoolExp|ArithExp|AnyExp|) e =
+    match e with
+    | LV _ -> AnyExp e
+    | Symbolic _ -> AnyExp e
+    | Int _ -> ArithExp e
+    | True | False -> BoolExp e
+    | Bop(BoolOp, _, _) -> BoolExp e
+    | Bop(ArithOp, _, _) -> ArithExp e
 
 (*
  * Misc

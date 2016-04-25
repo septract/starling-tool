@@ -25,9 +25,12 @@ open Starling.Lang.AST
 ///     A pair of a fresh <c>View</c>, and its corresponding <c>ViewProto</c>.
 /// </returns>
 let makeFreshView tvars fg =
-    let viewName = fg |> getFresh |> sprintf "%A"
-    let viewArgs = tvars |> Map.toSeq |> Seq.map (fst >> LVIdent >> LV)
-    let viewParams = tvars |> Map.toSeq |> Seq.map flipPair
+    let viewName =
+        fg |> getFresh |> sprintf "%A"
+    let viewArgs =
+        tvars |> Map.toSeq |> Seq.map (fst >> LVIdent >> LV)
+    let viewParams =
+        tvars |> Map.toSeq |> Seq.map (fun (name, ty) -> withType ty name)
 
     (Func (func viewName viewArgs), func viewName viewParams)
 
@@ -204,6 +207,6 @@ module Tests =
         /// </summary>
         member x.``Marked views desugar properly into ViewExprs`` v =
              let fg = freshGen ()
-             desugarView (Map.ofList [ ("s", Type.Int)
-                                       ("t", Type.Int) ])
+             desugarView (Map.ofList [ ("s", Type.Int ())
+                                       ("t", Type.Int ()) ])
                          fg v

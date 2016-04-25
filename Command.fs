@@ -5,6 +5,7 @@ module Starling.Core.Command
 
 open Starling.Collections
 open Starling.Core.Expr
+open Starling.Core.Var
 open Starling.Core.Model
 
 
@@ -35,7 +36,7 @@ module Types =
     ///         the two concepts.
     ///     </para>
     /// </remarks>
-    type Command = VFunc list
+    type Command = SMVFunc list
 
     /// <summary>
     ///     A term over <c>Command</c>s.
@@ -69,12 +70,17 @@ module Queries =
                  (* We treat a func as a no-op if all variables it contains
                   * are in the pre-state.  Thus, it cannot be modifying the
                   * post-state, if it is well-formed.
+                  *
+                  * If we see any symbolic variables, err on the side of
+                  * caution and say it isn't a nop.  This is because the
+                  * symbol could mean _anything_, regardless of what we
+                  * put into it!
                   *)
                  Seq.forall (function
-                             | AExpr (AConst (Before _)) -> true
-                             | AExpr (AConst _) -> false
-                             | BExpr (BConst (Before _)) -> true
-                             | BExpr (BConst _) -> false
+                             | Typed.Int (AVar (Reg (Before _))) -> true
+                             | Typed.Int (AVar _) -> false
+                             | Typed.Bool (BVar (Reg (Before _))) -> true
+                             | Typed.Bool (BVar _) -> false
                              | _ -> true)
                             ps)
 
@@ -83,7 +89,7 @@ module Queries =
     /// </summary>
     let (|Assume|_|) =
         function
-        | [ { Name = n ; Params = [ BExpr b ] } ]
+        | [ { Name = n ; Params = [ Typed.Bool b ] } ]
           when n = "Assume" -> Some b
         | _ -> None
 
@@ -98,7 +104,7 @@ module Pretty =
     open Starling.Core.Model.Pretty
 
     /// Pretty-prints a Command.
-    let printCommand = List.map printVFunc >> semiSep
+    let printCommand = List.map printSMVFunc >> semiSep
 
     /// Pretty-prints a PTerm.
     let printPTerm pWPre pGoal = printTerm printCommand pWPre pGoal
@@ -121,19 +127,24 @@ module Tests =
             [ TestCaseData([] : Command)
                 .Returns(true)
                 .SetName("Classify [] as a no-op")
-              TestCaseData([ vfunc "Assume" [ BExpr (bBefore "x") ]])
+              TestCaseData([ smvfunc "Assume"
+                                 [ Typed.Bool (sbBefore "x") ]])
                 .Returns(true)
                 .SetName("Classify Assume(x!before) as a no-op")
-              TestCaseData([ vfunc "Assume" [ BExpr (bAfter "x") ]])
+              TestCaseData([ smvfunc "Assume"
+                                 [ Typed.Bool (sbAfter "x") ]])
                 .Returns(false)
                 .SetName("Reject Assume(x!after) as a no-op")
-              TestCaseData([ vfunc "Foo" [ AExpr (aBefore "bar")
-                                           AExpr (aAfter "bar") ]])
+              TestCaseData([ smvfunc "Foo"
+                                 [ Typed.Int (siBefore "bar")
+                                   Typed.Int (siAfter "bar") ]])
                 .Returns(false)
                 .SetName("Reject Foo(bar!before, bar!after) as a no-op")
-              TestCaseData([ vfunc "Foo" [ AExpr (aBefore "bar")
-                                           AExpr (aAfter "bar") ]
-                             vfunc "Assume" [ BExpr (bBefore "x") ]])
+              TestCaseData([ smvfunc "Foo"
+                                 [ Typed.Int (siBefore "bar")
+                                   Typed.Int (siAfter "bar") ]
+                             smvfunc "Assume"
+                                 [ Typed.Bool (sbBefore "x") ]])
                 .Returns(false)
                 .SetName("Reject Foo(bar!before, bar!after); Assume(x!before)\
                           as a no-op") ]
@@ -149,12 +160,12 @@ module Tests =
             [ TestCaseData([] : Command)
                 .Returns(false)
                 .SetName("Reject [] as an assume")
-              TestCaseData([ vfunc "Assume" [ BExpr (bBefore "x") ]])
+              TestCaseData([ vfunc "Assume" [ Typed.Bool (bBefore "x") ]])
                 .Returns(true)
                 .SetName("Classify Assume(x!before) as an assume")
-              TestCaseData([ vfunc "Foo" [ AExpr (aBefore "bar")
-                                           AExpr (aAfter "bar") ]
-                             vfunc "Assume" [ BExpr (bBefore "x") ]])
+              TestCaseData([ vfunc "Foo" [ Typed.Int (iBefore "bar")
+                                           Typed.Int (iAfter "bar") ]
+                             vfunc "Assume" [ Typed.Bool (bBefore "x") ]])
                 .Returns(false)
                 .SetName("Reject Foo(bar!before, bar!after); Assume(x!before)\
                           as an assume") ]
