@@ -84,7 +84,6 @@
     <Compile Include="ModellerTests.fs" />
     <Compile Include="GuarderTests.fs" />
     <Compile Include="SemanticsTests.fs" />
-    <Compile Include="ReifierTests.fs" />
     <Compile Include="FlattenerTests.fs" />
     <Compile Include="OptimiserTests.fs" />
     <Compile Include="HornTests.fs" />

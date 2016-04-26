@@ -26,11 +26,6 @@ module Types =
     /// </summary>
     type MarkedVar =
         /// <summary>
-        ///     A variable that has not yet been assigned to the pre-state or
-        ///     the post-state.
-        /// </summary>
-        | Unmarked of Var
-        /// <summary>
         ///     A variable belonging to the pre-state of a command.
         /// </summary>
         | Before of Var
@@ -179,7 +174,6 @@ module Types =
 /// Converts a Starling constant into a string.
 let constToString =
     function
-    | Unmarked s -> s
     | Before s -> sprintf "%s!before" s
     | After s -> sprintf "%s!after" s
     | Intermediate (i, s) -> sprintf "%s!int!%A" s i
@@ -374,7 +368,6 @@ let isTrue expr =
 /// Extracts the name from a Starling constant.
 let stripMark =
     function
-    | Unmarked s -> s
     | Before s -> s
     | Intermediate (i, s) -> s
     | After s -> s
@@ -386,12 +379,6 @@ let stripMark =
 
 /// Creates an integer sym-variable.
 let siVar c = c |> Reg |> AVar
-
-/// Creates an unmarked integer variable.
-let iUnmarked c = c |> Unmarked |> AVar
-
-/// Creates an unmarked integer sym-variable.
-let siUnmarked c = c |> Unmarked |> Reg |> AVar
 
 /// Creates an after-marked integer variable.
 let iAfter c = c |> After |> AVar
@@ -419,12 +406,6 @@ let siInter i c = (i, c) |> Intermediate |> Reg |> AVar
 
 /// Creates a Boolean sym-variable.
 let sbVar c = c |> Reg |> BVar
-
-/// Creates an unmarked Boolean variable.
-let bUnmarked c = c |> Unmarked |> BVar
-
-/// Creates an unmarked Boolean sym-variable.
-let sbUnmarked c = c |> Unmarked |> Reg |> BVar
 
 /// Creates an after-marked Boolean variable.
 let bAfter c = c |> After |> BVar

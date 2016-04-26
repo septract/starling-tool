@@ -68,7 +68,6 @@ module Types =
 /// Emits a marked variable, munged to work in Datalog.
 let unmarkVar : MarkedVar -> Var = 
     function 
-    | Unmarked c -> sprintf "V%sU" c
     | Before c -> sprintf "V%sB" c
     | After c -> sprintf "V%sA" c
     | Intermediate(i, c) -> sprintf "V%sI%A" c i

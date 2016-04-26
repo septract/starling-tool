@@ -531,21 +531,6 @@ let rec liftVToSym
                                     |> onVars
                                     |> Mapper.map) rs } )
 
-
-/// Lifts a marking function to a variable substitution function table.
-let liftMarkerV marker vpred =
-    (function
-     | Unmarked s when vpred s -> Reg (marker s)
-     | x -> Reg x)
-    |> Mapper.cmake
-    |> liftVSubFun
-    |> liftVToSym
-
-/// Lifts a marking function to a substitution function table.
-let liftMarker marker vpred =
-    onVars (liftMarkerV marker vpred)
-
-
 (*
  * Common substitutions
  *)

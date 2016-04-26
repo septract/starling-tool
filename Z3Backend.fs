@@ -101,7 +101,7 @@ module Translator =
     /// Produces the reification of an unguarded func.
     /// This corresponds to D^ in the theory.
     let interpretVFunc (ft : FuncTable<VBoolExpr>) func =
-        instantiate vParamSubFun ft func
+        instantiate paramSubFun ft func
         |> lift (withDefault BTrue)  // Undefined views go to True by metatheory
         |> mapMessages (curry InstantiationError func)
 

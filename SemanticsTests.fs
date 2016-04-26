@@ -72,7 +72,6 @@ type SemanticsTests() =
           TestCaseData(BAnd
                            [ BGt(siAfter "ticket", siBefore "ticket")
                              BLe(siAfter "serving", siBefore "serving")
-                             sbUnmarked "frozzle"
                              iEq (siBefore "s") (siBefore "t") ] )
               .Returns( [ iEq (siAfter "s") (siBefore "s")
                           iEq (siAfter "t") (siBefore "t") ] )

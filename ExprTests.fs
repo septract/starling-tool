@@ -88,31 +88,23 @@ type ExprTests() =
 
     /// Test cases for testing constant post-state rewriting.
     static member IntConstantPostStates =
-        [ TestCaseData(siUnmarked "target1")
+        [ TestCaseData(siVar "target1")
               .Returns(siAfter "target1")
-              .SetName("Rewrite single target constant to post-state")
-          TestCaseData(siUnmarked "notTarget")
-              .Returns(siUnmarked "notTarget")
-              .SetName("Rewrite single non-target constant to post-state")
-          TestCaseData(AAdd [AInt 4L; siUnmarked "target1"])
+              .SetName("Rewrite single variable to post-state")
+          TestCaseData(AAdd [AInt 4L; siVar "target1"])
               .Returns(AAdd [AInt 4L; siAfter "target1"])
-              .SetName("Rewrite expression with one target constant to post-state")
-          TestCaseData(ASub [siUnmarked "target1"; siUnmarked "target2"])
+              .SetName("Rewrite expression with one variable to post-state")
+          TestCaseData(ASub [siVar "target1"; siVar "target2"])
               .Returns(ASub [siAfter "target1"; siAfter "target2"])
-              .SetName("Rewrite expression with two target constants to post-state")
-          TestCaseData(ADiv (AInt 6L, AInt 0L) : SMIntExpr)
+              .SetName("Rewrite expression with two variables to post-state")
+          TestCaseData(ADiv (AInt 6L, AInt 0L) : SVIntExpr)
               .Returns(ADiv (AInt 6L, AInt 0L) : SMIntExpr)
-              .SetName("Rewrite expression with no constants to post-state")
-          TestCaseData(AMul [siUnmarked "foo"; siUnmarked "bar"])
-              .Returns(AMul [siUnmarked "foo"; siUnmarked "bar"])
-              .SetName("Rewrite expression with two non-target constants to post-state") ]
+              .SetName("Rewrite expression with no variables to post-state") ]
 
     [<TestCaseSource("IntConstantPostStates")>]
     /// Tests whether rewriting constants in arithmetic expressions to post-state works.
     member x.``constants in arithmetic expressions can be rewritten to post-state`` expr =
-        Mapper.mapInt
-            (liftMarker After (Set.ofList ["target1"; "target2"] |> inSet))
-            expr
+        Mapper.mapInt after expr
 
     /// Test cases for negation checking.
     static member ObviousNegations =

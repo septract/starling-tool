@@ -321,24 +321,12 @@ let checkParamTypes func def =
 ///         and <c>Sym</c>s.
 ///     </para>
 /// </summary>
-/// <param name="liftSrcVar">
-///     A partial function lifting the source variable type to
-///     <c>string</c>s.  Any variable not mapped by this function
-///     is instead mapped by <c>passSrcVar</c>.
-/// </param>
-/// <param name="passSrcVar">
-///     A function directly converting source to destination
-///     variable types.
-/// </param>
 /// <param name="_arg1">
 ///     The func providing the arguments to substitute.
 /// </param>
 /// <param name="_arg2">
 ///     The <c>DFunc</c> into which we are substituting.
 /// </param>
-/// <typeparam name="srcVar">
-///     The type of variables in the parameters being substituted into.
-/// </typeparam>
 /// <typeparam name="dstVar">
 ///     The type of variables in the arguments being substituted.
 /// </typeparam>
@@ -346,26 +334,24 @@ let checkParamTypes func def =
 ///     A <c>VSubFun</c> performing the above substitutions.
 /// </returns>
 let paramSubFun
-  (liftSrcVar : 'srcVar -> string option)
-  (passSrcVar : 'srcVar -> 'dstVar)
   ( { Params = fpars } : VFunc<'dstVar>)
   ( { Params = dpars } : DFunc)
-  : VSubFun<'srcVar, 'dstVar> =
+  : VSubFun<Var, 'dstVar> =
     let pmap =
         Seq.map2 (fun par up -> valueOf par, up) dpars fpars
         |> Map.ofSeq
 
     Mapper.make
         (fun srcV ->
-             match (Option.bind pmap.TryFind (liftSrcVar srcV)) with
+             match (pmap.TryFind srcV) with
              | Some (Typed.Int expr) -> expr
              | Some _ -> failwith "param substitution type error"
-             | None -> AVar (passSrcVar srcV))
+             | None -> failwith "free variable in substitution")
         (fun srcV ->
-             match (Option.bind pmap.TryFind (liftSrcVar srcV)) with
+             match (pmap.TryFind srcV) with
              | Some (Typed.Bool expr) -> expr
              | Some _ -> failwith "param substitution type error"
-             | None -> BVar (passSrcVar srcV))
+             | None -> failwith "free variable in substitution")
 
 /// <summary>
 ///     Produces a parameter substitution <c>VSubFun</c> from
@@ -384,27 +370,7 @@ let smvParamSubFun
   (smvfunc : SMVFunc)
   (dfunc : DFunc)
   : VSubFun<Sym<Var>, Sym<MarkedVar>> =
-    liftVToSym
-        (paramSubFun Some (Unmarked >> Reg) smvfunc dfunc)
-
-/// <summary>
-///     Produces a parameter substitution <c>VSubFun</c> from
-///     <c>MVFunc</c>s.
-/// </summary>
-/// <param name="_arg1">
-///     The <c>MVFunc</c> providing the arguments to substitute.
-/// </param>
-/// <param name="_arg2">
-///     The <c>DFunc</c> into which we are substituting.
-/// </param>
-/// <returns>
-///     A <c>VSubFun</c> performing the above substitutions.
-/// </returns>
-let vParamSubFun
-  (mvfunc : MVFunc)
-  (dfunc : DFunc)
-  : VSubFun<Var, MarkedVar> =
-    (paramSubFun Some Unmarked mvfunc dfunc)
+    liftVToSym (paramSubFun smvfunc dfunc)
 
 /// <summary>
 ///     Look up <c>func</c> in <c>_arg1</c>, and instantiate the

@@ -20,7 +20,7 @@ type InstantiateTests() =
         [ (dfunc "foo" [],
            iEq (AInt 5L : VIntExpr) (AInt 6L))
           (dfunc "bar" [ Param.Int "quux" ],
-           iEq (AVar "quux") (AVar "blob"))
+           iEq (AVar "quux") (AInt 6L))
           (dfunc "baz" [ Param.Int "quux" ; Param.Bool "flop" ],
            BAnd [BVar "flop"; BGt (AVar "quux", AVar "quux")]) ]
 
@@ -34,7 +34,7 @@ type InstantiateTests() =
             .Returns(iEq (AInt 5L : MIntExpr) (AInt 6L : MIntExpr) |> Some |> Some)
             .SetName("Instantiate func with no arguments")
           TestCaseData(mvfunc "bar" [AInt 101L |> Expr.Int])
-            .Returns(iEq (AInt 101L) (iUnmarked "blob") |> Some |> Some)
+            .Returns(iEq (AInt 101L) (AInt 6L : MIntExpr) |> Some |> Some)
             .SetName("Instantiate func with one int argument")
           TestCaseData(mvfunc "baz" [iAfter "burble" |> Expr.Int ; BTrue |> Expr.Bool])
             .Returns(BAnd [BTrue; BGt (iAfter "burble", iAfter "burble")] |> Some |> Some)
@@ -44,7 +44,7 @@ type InstantiateTests() =
     [<TestCaseSource("ValidInstantiations")>]
     member x.``Valid instantiations are executed correctly`` func =
         func
-        |> instantiate vParamSubFun InstantiateTests.TestFuncs
+        |> instantiate paramSubFun InstantiateTests.TestFuncs
         |> okOption
 
 
@@ -65,5 +65,5 @@ type InstantiateTests() =
     [<TestCaseSource("InvalidInstantiations")>]
     member x.``Invalid instantiations raise correct errors`` func =
         func
-        |> instantiate vParamSubFun InstantiateTests.TestFuncs
+        |> instantiate paramSubFun InstantiateTests.TestFuncs
         |> failOption
