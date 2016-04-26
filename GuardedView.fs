@@ -347,6 +347,7 @@ let pruneGuardedSet gset =
 module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Expr.Pretty
+    open Starling.Core.Var.Pretty
     open Starling.Core.Model.Pretty
 
     /// <summary>

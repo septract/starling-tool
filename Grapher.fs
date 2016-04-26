@@ -10,6 +10,7 @@ open Starling.Collections
 open Starling.Utils
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
+open Starling.Core.Var
 open Starling.Core.Sub
 open Starling.Core.Model
 open Starling.Core.GuardedView

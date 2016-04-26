@@ -3,8 +3,10 @@ module Starling.Core.Var
 
 open Chessie.ErrorHandling
 
-open Starling.Core.TypeSystem
+open Starling.Collections
 open Starling.Utils
+open Starling.Core.TypeSystem
+open Starling.Core.Expr
 
 
 /// <summary>
@@ -12,8 +14,66 @@ open Starling.Utils
 /// </summary>
 [<AutoOpen>]
 module Types =
-    /// An lvalue.
-    /// This is given a separate type in case we add to it later.
+    /// <summary>
+    ///     A variable with no marking.
+    /// </summary>
+    type Var = string
+
+    /// <summary>
+    ///     A variable that has been marked according to whether it comes
+    ///     from the pre-state, the post-state, an intermediate state, or
+    ///     a possibly-external observation in the goal view.
+    /// </summary>
+    type MarkedVar =
+        /// <summary>
+        ///     A variable belonging to the pre-state of a command.
+        /// </summary>
+        | Before of Var
+        /// <summary>
+        ///     A variable belonging to the post-state of a command.
+        /// </summary>
+        | After of Var
+        /// <summary>
+        ///     A variable belonging to part of the goal term.
+        ///     The bigint is used to ensure variables in one goal
+        ///     view are separate from variables in another.
+        /// </summary>
+        | Goal of bigint * Var
+        /// <summary>
+        ///     A variable belonging to an intermediate state of a composed
+        ///     command.
+        ///     The bigint is used to ensure different intermediate
+        ///     states are separate from each other.
+        /// </summary>
+        | Intermediate of bigint * Var
+
+    /// <summary>
+    ///     A variable reference that may be symbolic.
+    ///
+    ///     <para>
+    ///         A symbolic variable is one whose value depends on an
+    ///         uninterpreted function of multiple 'real' Starling variables.
+    ///         It allows encoding into Starling of patterns of variable usage
+    ///         Starling doesn't yet understand natively.
+    ///     </para>
+    /// </summary>
+    /// <typeparam name="var">
+    ///     The non-symbolic variable <c>Sym</c> wraps.
+    /// </typeparam>
+    type Sym<'var> =
+        /// <summary>
+        ///     A symbolic variable, predicated over multiple expressions.
+        ///     The symbol itself is the name inside the <c>Func</c>.
+        /// </summary>
+        | Sym of Func<Expr<Sym<'var>>>
+        /// <summary>
+        ///     A regular, non-symbolic variable.
+        | Reg of 'var
+
+    /// <summary>
+    ///     An lvalue.
+    ///     This is given a separate type in case we add to it later.
+    /// </summary>
     type LValue = 
         // TODO(CaptainHayashi): add support for non-variable LValues.
         | LVIdent of string
@@ -45,16 +105,117 @@ module Types =
 
 
 /// <summary>
+///     Type synonyms for expressions over various forms of variable.
+/// </summary>
+[<AutoOpen>]
+module VarExprs =
+    /// <summary>
+    ///     An expression of arbitrary type using <c>Var</c>s.
+    /// </summary>
+    type VExpr = Expr<Var>
+    /// <summary>
+    ///     An expression of Boolean type using <c>Var</c>s.
+    /// </summary>
+    type VBoolExpr = BoolExpr<Var>
+    /// <summary>
+    ///     An expression of integral type using <c>Var</c>s.
+    /// </summary>
+    type VIntExpr = IntExpr<Var>
+
+    /// <summary>
+    ///     An expression of arbitrary type using <c>MarkedVar</c>s.
+    /// </summary>
+    type MExpr = Expr<MarkedVar>
+    /// <summary>
+    ///     An expression of Boolean type using <c>MarkedVar</c>s.
+    /// </summary>
+    type MBoolExpr = BoolExpr<MarkedVar>
+    /// <summary>
+    ///     An expression of integral type using <c>MarkedVar</c>s.
+    /// </summary>
+    type MIntExpr = IntExpr<MarkedVar>
+
+    /// <summary>
+    ///     An expression of arbitrary type using symbolic <c>Var</c>s.
+    /// </summary>
+    type SVExpr = Expr<Sym<Var>>
+    /// <summary>
+    ///     An expression of Boolean type using symbolic <c>Var</c>s.
+    /// </summary>
+    type SVBoolExpr = BoolExpr<Sym<Var>>
+    /// <summary>
+    ///     An expression of integral type using <c>Var</c>s.
+    /// </summary>
+    type SVIntExpr = IntExpr<Sym<Var>>
+
+    /// <summary>
+    ///     An expression of arbitrary type using symbolic <c>MarkedVar</c>s.
+    /// </summary>
+    type SMExpr = Expr<Sym<MarkedVar>>
+    /// <summary>
+    ///     An expression of Boolean type using symbolic <c>MarkedVar</c>s.
+    /// </summary>
+    type SMBoolExpr = BoolExpr<Sym<MarkedVar>>
+    /// <summary>
+    ///     An expression of integral type using symbolic <c>MarkedVar</c>s.
+    /// </summary>
+    type SMIntExpr = IntExpr<Sym<MarkedVar>>
+
+/// Converts a Starling constant into a string.
+let constToString =
+    function
+    | Before s -> sprintf "%s!before" s
+    | After s -> sprintf "%s!after" s
+    | Intermediate (i, s) -> sprintf "%s!int!%A" s i
+    | Goal (i, s) -> sprintf "%s!goal!%A" s i
+
+/// <summary>
 ///     Pretty printers for variables.
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
+    open Starling.Core.Expr.Pretty
 
     /// Pretty-prints variable conversion errors.
     let printVarMapError =
         function
         | Duplicate vn -> fmt "variable '{0}' is defined multiple times" [ String vn ]
         | NotFound vn -> fmt "variable '{0}' not in environment" [ String vn ]
+
+    /// <summary>
+    ///     Pretty-prints a <c>Sym</c>.
+    /// </summary>
+    /// <param name="pReg">
+    ///     Pretty printer to use for regular variables.
+    /// </param>
+    /// <returns>
+    ///     A function taking <c>Sym</c>s and returning pretty-printer
+    ///     <c>Command</c>s.
+    /// </returns>
+    let rec printSym pReg =
+        function
+        | Sym { Name = sym ; Params = regs } ->
+            func (sprintf "%%{%s}" sym) (Seq.map (printExpr (printSym pReg)) regs)
+        | Reg reg -> pReg reg
+
+    /// Pretty-prints a VExpr.
+    let printVExpr = printExpr String
+    /// Pretty-prints a MExpr.
+    let printMExpr = printExpr (constToString >> String)
+    /// Pretty-prints a SVExpr.
+    let printSVExpr = printExpr (printSym String)
+    /// Pretty-prints a SMExpr.
+    let printSMExpr = printExpr (printSym (constToString >> String))
+    /// Pretty-prints a VBoolExpr.
+    let printVBoolExpr = printBoolExpr String
+    /// Pretty-prints a SVBoolExpr.
+    let printSVBoolExpr = printBoolExpr (printSym String)
+    /// Pretty-prints a SMBoolExpr.
+    let printSMBoolExpr = printBoolExpr (printSym (constToString >> String))
+    /// Pretty-prints a MBoolExpr.
+    let printMBoolExpr = printBoolExpr (constToString >> String)
+    /// Pretty-prints a MIntExpr.
+    let printMIntExpr = printIntExpr (constToString >> String)
 
 
 /// Flattens a LV to a string.
@@ -108,3 +269,90 @@ let lookupVar
     s
     |> tryLookupVar env
     |> failIfNone (NotFound (flattenLV s))
+
+(*
+ * Expression constructors
+ *)
+
+/// Creates an integer sym-variable.
+let siVar c = c |> Reg |> AVar
+
+/// Creates an after-marked integer variable.
+let iAfter c = c |> After |> AVar
+
+/// Creates an after-marked integer sym-variable.
+let siAfter c = c |> After |> Reg |> AVar
+
+/// Creates a before-marked integer variable.
+let iBefore c = c |> Before |> AVar
+
+/// Creates an before-marked integer sym-variable.
+let siBefore c = c |> Before |> Reg |> AVar
+
+/// Creates a goal-marked integer variable.
+let iGoal i c = (i, c) |> Goal |> AVar
+
+/// Creates a goal-marked integer sym-variable.
+let siGoal i c = (i, c) |> Goal |> Reg |> AVar
+
+/// Creates an intermediate-marked integer variable.
+let iInter i c = (i, c) |> Intermediate |> AVar
+
+/// Creates an intermediate-marked integer sym-variable.
+let siInter i c = (i, c) |> Intermediate |> Reg |> AVar
+
+/// Creates a Boolean sym-variable.
+let sbVar c = c |> Reg |> BVar
+
+/// Creates an after-marked Boolean variable.
+let bAfter c = c |> After |> BVar
+
+/// Creates an before-marked Boolean sym-variable.
+let sbAfter c = c |> After |> Reg |> BVar
+
+/// Creates a before-marked Boolean variable.
+let bBefore c = c |> Before |> BVar
+
+/// Creates an before-marked Boolean sym-variable.
+let sbBefore c = c |> Before |> Reg |> BVar
+
+/// Creates a goal-marked Boolean variable.
+let bGoal i c = (i, c) |> Goal |> BVar
+
+/// Creates a goal-marked Inter sym-variable.
+let sbGoal i c = (i, c) |> Goal |> Reg |> BVar
+
+/// Creates an intermediate-marked Boolean variable.
+let bInter i c = (i, c) |> Intermediate |> BVar
+
+/// Creates an intermediate-marked Boolean sym-variable.
+let sbInter i c = (i, c) |> Intermediate |> Reg |> BVar
+
+
+/// <summary>
+///     Extracts all of the regular variables in a symbolic variable.
+/// </summary>
+/// <param name="sym">
+///     The symbolic variable to destructure.
+/// </param>
+/// <typeparam name="var">
+///     The type of regular variables in the symbolic variable.
+/// </typeparam>
+/// <returns>
+///     A list of regular variables bound in a symbolic variable.
+/// </returns>
+let rec regularVarsInSym
+  (sym : Sym<'var>)
+  : 'var list =
+    match sym with
+    | Reg x -> [x]
+    | Sym { Params = xs } ->
+        xs
+        |> List.map (varsIn
+                     >> Set.toList
+                     >> List.map (valueOf >> regularVarsInSym)
+                     >> List.concat)
+        |> List.concat
+
+
+

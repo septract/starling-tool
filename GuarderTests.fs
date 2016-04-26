@@ -3,6 +3,7 @@ module Starling.Tests.Guarder
 open NUnit.Framework
 open Starling.Collections
 open Starling.Core.Expr
+open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.GuardedView
 open Starling.Lang.Modeller

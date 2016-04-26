@@ -15,6 +15,7 @@ module Starling.Core.ExprEquiv
 
 open Microsoft
 open Starling.Core.Expr
+open Starling.Core.Var
 open Starling.Core.Z3
 
 /// <summary>

@@ -465,9 +465,11 @@ module Graph =
                               valueOf
                               >> function
                                  | Sym _ -> false
-                                 | Reg x ->
+                                 | Reg (After x)
+                                 | Reg (Before x)
+                                 | Reg (Intermediate (_, x))
+                                 | Reg (Goal (_, x)) ->
                                    x
-                                   |> stripMark
                                    |> tVars.TryFind
                                    |> function
                                       | Some _ -> true

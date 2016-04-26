@@ -3,7 +3,9 @@
 /// </summary>
 module Starling.Core.Command
 
+open Starling.Utils
 open Starling.Collections
+open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
@@ -92,6 +94,78 @@ module Queries =
         | [ { Name = n ; Params = [ SMExpr.Bool b ] } ]
           when n = "Assume" -> Some b
         | _ -> None
+
+
+/// <summary>
+///     Composition of Boolean expressions representing commands.
+/// </summary>
+module Compose =
+    /// <summary>
+    ///     Finds the highest intermediate stage number in an integral
+    ///     expression.
+    ///     Returns one higher.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>IntExpr</c> to investigate.
+    /// </param>
+    /// <returns>
+    ///     The next available intermediate stage number.
+    ///     If the expression has no intermediate stages, we return 0.
+    /// </returns>
+    let rec nextIntIntermediate =
+        function
+        | AVar (Reg (Intermediate (n, _))) -> n + 1I
+        | AVar (Sym { Params = xs } ) -> 
+            xs |> Seq.map nextIntermediate |> Seq.fold (curry bigint.Max) 0I
+        | AVar _ | AInt _ -> 0I
+        | AAdd xs | ASub xs | AMul xs ->
+            xs |> Seq.map nextIntIntermediate |> Seq.fold (curry bigint.Max) 0I
+        | ADiv (x, y) ->
+            bigint.Max (nextIntIntermediate x, nextIntIntermediate y)
+
+    /// <summary>
+    ///     Finds the highest intermediate stage number in a Boolean expression.
+    ///     Returns one higher.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>BoolExpr</c> to investigate.
+    /// </param>
+    /// <returns>
+    ///     The next available intermediate stage number.
+    ///     If the expression has no intermediate stages, we return 0.
+    /// </returns>
+    and nextBoolIntermediate =
+        function
+        | BVar (Reg (Intermediate (n, _))) -> n + 1I
+        | BVar (Sym { Params = xs } ) ->
+            xs |> Seq.map nextIntermediate |> Seq.fold (curry bigint.Max) 0I
+        | BVar _ -> 0I
+        | BAnd xs | BOr xs ->
+            xs |> Seq.map nextBoolIntermediate |> Seq.fold (curry bigint.Max) 0I
+        | BImplies (x, y) ->
+            bigint.Max (nextBoolIntermediate x, nextBoolIntermediate y)
+        | BNot x -> nextBoolIntermediate x
+        | BGt (x, y) | BLt (x, y) | BGe (x, y) | BLe (x, y) ->
+            bigint.Max (nextIntIntermediate x, nextIntIntermediate y)
+        | BEq (x, y) ->
+            bigint.Max (nextIntermediate x, nextIntermediate y)
+        | BTrue | BFalse -> 0I
+
+    /// <summary>
+    ///     Finds the highest intermediate stage number in an expression.
+    ///     Returns one higher.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>Expr</c> to investigate.
+    /// </param>
+    /// <returns>
+    ///     The next available intermediate stage number.
+    ///     If the expression has no intermediate stages, we return 0.
+    /// </returns>
+    and nextIntermediate =
+        function
+        | Int x -> nextIntIntermediate x
+        | Bool x -> nextBoolIntermediate x
 
 
 /// <summary>

@@ -4,12 +4,15 @@ open NUnit.Framework
 open Starling.Core.TypeSystem
 open Starling.Core.Axiom
 open Starling.Core.Var
+open Starling.Core.Command
+open Starling.Core.Command.Compose
 open Starling.Core.Expr
 open Starling.Core.ExprEquiv
 open Starling.Core.Sub
 
 open Starling.Core.Pretty
 open Starling.Core.Expr.Pretty
+open Starling.Core.Var.Pretty
 
 let tcd : obj[] -> TestCaseData = TestCaseData
 
