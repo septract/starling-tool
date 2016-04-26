@@ -614,7 +614,7 @@ module Translator =
     ///     <c>BoolExpr</c> representing the rule form of the proof term.
     /// </returns>
     let translateTerm reals ctx funcDecls (name : string, {Cmd = c ; WPre = w ; Goal = g}) =
-        mkRule reals constToString ctx funcDecls c w g |> Option.map (mkPair name)
+        mkRule reals unmarkVar ctx funcDecls c w g |> Option.map (mkPair name)
 
     /// <summary>
     ///     Constructs muZ3 rules and goals for a model.

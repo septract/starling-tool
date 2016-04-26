@@ -393,7 +393,7 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer command to print the guarded item.
     /// </returns>
-    let printMGuarded pItem = printGuarded (constToString >> String) pItem
+    let printMGuarded pItem = printGuarded printMarkedVar pItem
 
     /// <summary>
     ///     Pretty-prints a guarded <c>VFunc</c>.
@@ -418,7 +418,7 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer command to print the <c>MGFunc</c>.
     /// </returns>
-    let printMGFunc = printGFunc (constToString >> String)
+    let printMGFunc = printGFunc printMarkedVar
 
     /// <summary>
     ///     Pretty-prints a <c>GFunc</c> over symbolic <c>Var</c>s.
@@ -440,7 +440,7 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer command to print the <c>SMGFunc</c>.
     /// </returns>
-    let printSMGFunc = printGFunc (printSym (constToString >> String))
+    let printSMGFunc = printGFunc (printSym printMarkedVar)
 
     /// <summary>
     ///     Pretty-prints a guarded view.
@@ -467,7 +467,7 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer command to print the <c>MGView</c>.
     /// </returns>
-    let printMGView = printGView (constToString >> String)
+    let printMGView = printGView printMarkedVar
 
     /// <summary>
     ///     Pretty-prints a guarded view over symbolic <c>Var</c>s.
@@ -489,7 +489,7 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer command to print the <c>SMGView</c>.
     /// </returns>
-    let printSMGView = printGView (printSym (constToString >> String))
+    let printSMGView = printGView (printSym printMarkedVar)
 
     /// <summary>
     ///     Pretty-prints a guarded view set.
@@ -517,7 +517,7 @@ module Pretty =
     ///     A pretty-printer command to print the <c>MViewSet</c>.
     /// </returns>
     let printMViewSet =
-        printViewSet (constToString >> String)
+        printViewSet printMarkedVar
 
     /// <summary>
     ///     Pretty-prints a guarded view set over symbolic <c>MarkedVar</c>s.
@@ -528,8 +528,7 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer command to print the <c>SMViewSet</c>.
     /// </returns>
-    let printSMViewSet =
-        printViewSet (printSym (constToString >> String))
+    let printSMViewSet = printViewSet (printSym printMarkedVar)
 
 
 /// <summary>

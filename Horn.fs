@@ -65,15 +65,6 @@ module Types =
         | EmptyCompoundExpr of exptype : string
 
 
-/// Emits a marked variable, munged to work in Datalog.
-let unmarkVar : MarkedVar -> Var = 
-    function 
-    | Before c -> sprintf "V%sB" c
-    | After c -> sprintf "V%sA" c
-    | Intermediate(i, c) -> sprintf "V%sI%A" c i
-    | Goal(i, c) -> sprintf "V%sG%A" c i
-
-
 /// <summary>
 ///     Pretty printers for the Horn clause generator.
 /// </summary>

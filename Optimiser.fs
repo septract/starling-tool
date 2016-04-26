@@ -554,14 +554,14 @@ module Graph =
                         [ inE ] )
                         when (// Is the first one x and the second y?
                               (equivHolds
-                                   constToString
+                                   unmarkVar
                                    (andEquiv (equiv out1P xcPre)
                                              (equiv out2P ycPre))
                                && nodeHasView out1D xv ctx.Graph
                                && nodeHasView out2D yv ctx.Graph)
                               // Or is the first one y and the second x?
                               || (equivHolds
-                                      constToString
+                                      unmarkVar
                                       (andEquiv (equiv out2P xcPre)
                                                 (equiv out1P ycPre))
                                   && nodeHasView out2D xv ctx.Graph

@@ -155,7 +155,7 @@ module Translator =
          *   - ((c^w) ^ ¬g) deMorgan
          *   - (c^w^¬g) associativity.
          *)
-        boolToZ3 reals constToString ctx (mkAnd [c ; w; mkNot g] )
+        boolToZ3 reals unmarkVar ctx (mkAnd [c ; w; mkNot g] )
 
     /// Combines reified terms into a list of Z3 terms.
     let combineTerms reals ctx = mapAxioms (combineTerm reals ctx)
@@ -200,9 +200,9 @@ let run reals req =
     match req with
     | Request.Translate ->
         translate
-        >> lift (mapAxioms (mapTerm (Expr.boolToZ3 reals constToString ctx)
-                                    (Expr.boolToZ3 reals constToString ctx)
-                                    (Expr.boolToZ3 reals constToString ctx)))
+        >> lift (mapAxioms (mapTerm (Expr.boolToZ3 reals unmarkVar ctx)
+                                    (Expr.boolToZ3 reals unmarkVar ctx)
+                                    (Expr.boolToZ3 reals unmarkVar ctx)))
         >> lift Response.Translate
     | Request.Combine -> translate >> combine reals ctx >> lift Response.Combine
     | Request.Sat -> translate >> combine reals ctx >> sat ctx >> lift Response.Sat

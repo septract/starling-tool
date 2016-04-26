@@ -161,13 +161,22 @@ module VarExprs =
     /// </summary>
     type SMIntExpr = IntExpr<Sym<MarkedVar>>
 
-/// Converts a Starling constant into a string.
-let constToString =
-    function
-    | Before s -> sprintf "%s!before" s
-    | After s -> sprintf "%s!after" s
-    | Intermediate (i, s) -> sprintf "%s!int!%A" s i
-    | Goal (i, s) -> sprintf "%s!goal!%A" s i
+/// <summary>
+///     Converts a <c>MarkedVar</c> to a <c>Var</c>, munging its name.
+///
+///     <para>
+///         This function should give each unique <c>MarkedVar</c> a unique
+///         name, providing that all are converted with this function.
+///         The munging should work with all backends, as it only adds
+///         letters and digits to the name.
+///     </para>
+/// </summary>
+let unmarkVar : MarkedVar -> Var = 
+    function 
+    | Before c -> sprintf "V%sBEFORE" c
+    | After c -> sprintf "V%sAFTER" c
+    | Intermediate(i, c) -> sprintf "V%sINT%A" c i
+    | Goal(i, c) -> sprintf "V%sGOAL%A" c i
 
 /// <summary>
 ///     Pretty printers for variables.
@@ -181,6 +190,16 @@ module Pretty =
         function
         | Duplicate vn -> fmt "variable '{0}' is defined multiple times" [ String vn ]
         | NotFound vn -> fmt "variable '{0}' not in environment" [ String vn ]
+
+    /// <summary>
+    ///     Pretty-prints a <c>MarkedVar</c>.
+    /// </summary>
+    let printMarkedVar =
+        function
+        | Before s -> sexpr "before" String [ s ]
+        | After s -> sexpr "after" String [ s ]
+        | Intermediate (i, s) -> sexpr "inter" String [ (sprintf "%A" i); s ]
+        | Goal (i, s) -> sexpr "goal" String [ (sprintf "%A" i); s ]
 
     /// <summary>
     ///     Pretty-prints a <c>Sym</c>.
@@ -201,21 +220,21 @@ module Pretty =
     /// Pretty-prints a VExpr.
     let printVExpr = printExpr String
     /// Pretty-prints a MExpr.
-    let printMExpr = printExpr (constToString >> String)
+    let printMExpr = printExpr printMarkedVar
     /// Pretty-prints a SVExpr.
     let printSVExpr = printExpr (printSym String)
     /// Pretty-prints a SMExpr.
-    let printSMExpr = printExpr (printSym (constToString >> String))
+    let printSMExpr = printExpr (printSym printMarkedVar)
     /// Pretty-prints a VBoolExpr.
     let printVBoolExpr = printBoolExpr String
     /// Pretty-prints a SVBoolExpr.
     let printSVBoolExpr = printBoolExpr (printSym String)
     /// Pretty-prints a SMBoolExpr.
-    let printSMBoolExpr = printBoolExpr (printSym (constToString >> String))
+    let printSMBoolExpr = printBoolExpr (printSym printMarkedVar)
     /// Pretty-prints a MBoolExpr.
-    let printMBoolExpr = printBoolExpr (constToString >> String)
+    let printMBoolExpr = printBoolExpr printMarkedVar
     /// Pretty-prints a MIntExpr.
-    let printMIntExpr = printIntExpr (constToString >> String)
+    let printMIntExpr = printIntExpr printMarkedVar
 
 
 /// Flattens a LV to a string.
