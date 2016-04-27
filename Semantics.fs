@@ -21,6 +21,7 @@ open Starling.Core.Command.Compose
 open Starling.Core.GuardedView
 open Starling.Core.Expr
 open Starling.Core.Var
+open Starling.Core.Symbolic
 open Starling.Core.Model
 open Starling.Core.Sub
 open Starling.Core.Instantiate
@@ -129,7 +130,7 @@ let frame svars tvars expr =
     let evars =
         expr
         |> varsInBool
-        |> Seq.map (valueOf >> regularVarsInSym)
+        |> Seq.map (valueOf >> varsInSym)
         |> Seq.concat
         |> Seq.choose (function After x -> Some x | _ -> None)
         |> Set.ofSeq

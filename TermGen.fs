@@ -9,7 +9,9 @@ open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.GuardedView
+open Starling.Core.GuardedView.Sub
 open Starling.Core.Sub
+open Starling.Core.Symbolic
 open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.Axiom

@@ -50,29 +50,6 @@ module Types =
         | Intermediate of bigint * Var
 
     /// <summary>
-    ///     A variable reference that may be symbolic.
-    ///
-    ///     <para>
-    ///         A symbolic variable is one whose value depends on an
-    ///         uninterpreted function of multiple 'real' Starling variables.
-    ///         It allows encoding into Starling of patterns of variable usage
-    ///         Starling doesn't yet understand natively.
-    ///     </para>
-    /// </summary>
-    /// <typeparam name="var">
-    ///     The non-symbolic variable <c>Sym</c> wraps.
-    /// </typeparam>
-    type Sym<'var> =
-        /// <summary>
-        ///     A symbolic variable, predicated over multiple expressions.
-        ///     The symbol itself is the name inside the <c>Func</c>.
-        /// </summary>
-        | Sym of Func<Expr<Sym<'var>>>
-        /// <summary>
-        ///     A regular, non-symbolic variable.
-        | Reg of 'var
-
-    /// <summary>
     ///     An lvalue.
     ///     This is given a separate type in case we add to it later.
     /// </summary>
@@ -137,32 +114,6 @@ module VarExprs =
     /// </summary>
     type MIntExpr = IntExpr<MarkedVar>
 
-    /// <summary>
-    ///     An expression of arbitrary type using symbolic <c>Var</c>s.
-    /// </summary>
-    type SVExpr = Expr<Sym<Var>>
-    /// <summary>
-    ///     An expression of Boolean type using symbolic <c>Var</c>s.
-    /// </summary>
-    type SVBoolExpr = BoolExpr<Sym<Var>>
-    /// <summary>
-    ///     An expression of integral type using <c>Var</c>s.
-    /// </summary>
-    type SVIntExpr = IntExpr<Sym<Var>>
-
-    /// <summary>
-    ///     An expression of arbitrary type using symbolic <c>MarkedVar</c>s.
-    /// </summary>
-    type SMExpr = Expr<Sym<MarkedVar>>
-    /// <summary>
-    ///     An expression of Boolean type using symbolic <c>MarkedVar</c>s.
-    /// </summary>
-    type SMBoolExpr = BoolExpr<Sym<MarkedVar>>
-    /// <summary>
-    ///     An expression of integral type using symbolic <c>MarkedVar</c>s.
-    /// </summary>
-    type SMIntExpr = IntExpr<Sym<MarkedVar>>
-
 /// <summary>
 ///     Converts a <c>MarkedVar</c> to a <c>Var</c>, munging its name.
 ///
@@ -203,36 +154,12 @@ module Pretty =
         | Intermediate (i, s) -> sexpr "inter" String [ (sprintf "%A" i); s ]
         | Goal (i, s) -> sexpr "goal" String [ (sprintf "%A" i); s ]
 
-    /// <summary>
-    ///     Pretty-prints a <c>Sym</c>.
-    /// </summary>
-    /// <param name="pReg">
-    ///     Pretty printer to use for regular variables.
-    /// </param>
-    /// <returns>
-    ///     A function taking <c>Sym</c>s and returning pretty-printer
-    ///     <c>Command</c>s.
-    /// </returns>
-    let rec printSym pReg =
-        function
-        | Sym { Name = sym ; Params = regs } ->
-            func (sprintf "%%{%s}" sym) (Seq.map (printExpr (printSym pReg)) regs)
-        | Reg reg -> pReg reg
-
     /// Pretty-prints a VExpr.
     let printVExpr = printExpr String
     /// Pretty-prints a MExpr.
     let printMExpr = printExpr printMarkedVar
-    /// Pretty-prints a SVExpr.
-    let printSVExpr = printExpr (printSym String)
-    /// Pretty-prints a SMExpr.
-    let printSMExpr = printExpr (printSym printMarkedVar)
     /// Pretty-prints a VBoolExpr.
     let printVBoolExpr = printBoolExpr String
-    /// Pretty-prints a SVBoolExpr.
-    let printSVBoolExpr = printBoolExpr (printSym String)
-    /// Pretty-prints a SMBoolExpr.
-    let printSMBoolExpr = printBoolExpr (printSym printMarkedVar)
     /// Pretty-prints a MBoolExpr.
     let printMBoolExpr = printBoolExpr printMarkedVar
     /// Pretty-prints a MIntExpr.
@@ -298,88 +225,31 @@ let lookupVar
 
 /// Given a fresh generator, yields a function promoting a string to a
 /// goal variable.
-let goalVar (fg : FreshGen) = (fg |> getFresh |> curry Goal) >> Reg
-
-/// Creates an integer sym-variable.
-let siVar c = c |> Reg |> AVar
-
-/// Creates an after-marked integer variable.
-let iAfter c = c |> After |> AVar
-
-/// Creates an after-marked integer sym-variable.
-let siAfter c = c |> After |> Reg |> AVar
+let goalVar (fg : FreshGen) = (fg |> getFresh |> curry Goal)
 
 /// Creates a before-marked integer variable.
 let iBefore c = c |> Before |> AVar
 
-/// Creates an before-marked integer sym-variable.
-let siBefore c = c |> Before |> Reg |> AVar
+/// Creates an after-marked integer variable.
+let iAfter c = c |> After |> AVar
 
 /// Creates a goal-marked integer variable.
 let iGoal i c = (i, c) |> Goal |> AVar
 
-/// Creates a goal-marked integer sym-variable.
-let siGoal i c = (i, c) |> Goal |> Reg |> AVar
-
 /// Creates an intermediate-marked integer variable.
 let iInter i c = (i, c) |> Intermediate |> AVar
-
-/// Creates an intermediate-marked integer sym-variable.
-let siInter i c = (i, c) |> Intermediate |> Reg |> AVar
-
-/// Creates a Boolean sym-variable.
-let sbVar c = c |> Reg |> BVar
-
-/// Creates an after-marked Boolean variable.
-let bAfter c = c |> After |> BVar
-
-/// Creates an before-marked Boolean sym-variable.
-let sbAfter c = c |> After |> Reg |> BVar
 
 /// Creates a before-marked Boolean variable.
 let bBefore c = c |> Before |> BVar
 
-/// Creates an before-marked Boolean sym-variable.
-let sbBefore c = c |> Before |> Reg |> BVar
+/// Creates an after-marked Boolean variable.
+let bAfter c = c |> After |> BVar
 
 /// Creates a goal-marked Boolean variable.
 let bGoal i c = (i, c) |> Goal |> BVar
 
-/// Creates a goal-marked Inter sym-variable.
-let sbGoal i c = (i, c) |> Goal |> Reg |> BVar
-
 /// Creates an intermediate-marked Boolean variable.
 let bInter i c = (i, c) |> Intermediate |> BVar
-
-/// Creates an intermediate-marked Boolean sym-variable.
-let sbInter i c = (i, c) |> Intermediate |> Reg |> BVar
-
-
-/// <summary>
-///     Extracts all of the regular variables in a symbolic variable.
-/// </summary>
-/// <param name="sym">
-///     The symbolic variable to destructure.
-/// </param>
-/// <typeparam name="var">
-///     The type of regular variables in the symbolic variable.
-/// </typeparam>
-/// <returns>
-///     A list of regular variables bound in a symbolic variable.
-/// </returns>
-let rec regularVarsInSym
-  (sym : Sym<'var>)
-  : 'var list =
-    match sym with
-    | Reg x -> [x]
-    | Sym { Params = xs } ->
-        xs
-        |> List.map (varsIn
-                     >> Set.toList
-                     >> List.map (valueOf >> regularVarsInSym)
-                     >> List.concat)
-        |> List.concat
-
 
 /// <summary>
 ///     Tests for <c>Var</c>.
@@ -395,13 +265,13 @@ module Tests =
         /// Test cases for testing goal rewriting.
         static member GoalConstants =
             [ TestCaseData( [ "foo"; "foo"; "foo"] )
-                  .Returns( [ Reg (Goal (0I, "foo"))
-                              Reg (Goal (1I, "foo"))
-                              Reg (Goal (2I, "foo")) ] )
+                  .Returns( [ Goal (0I, "foo")
+                              Goal (1I, "foo")
+                              Goal (2I, "foo") ] )
               TestCaseData( ["foo"; "bar"; "baz"] )
-                  .Returns( [ Reg (Goal (0I, "foo"))
-                              Reg (Goal (1I, "bar"))
-                              Reg (Goal (2I, "baz")) ] ) ]
+                  .Returns( [ Goal (0I, "foo")
+                              Goal (1I, "bar")
+                              Goal (2I, "baz") ] ) ]
 
         /// Tests that the frame name generator works fine.
         [<TestCaseSource("GoalConstants")>]

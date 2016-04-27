@@ -12,6 +12,7 @@ open Starling.Core.TypeSystem
 open Starling.Core.TypeSystem.Check
 open Starling.Core.Expr
 open Starling.Core.Var
+open Starling.Core.Symbolic
 open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.Instantiate
@@ -152,6 +153,7 @@ module Pretty =
     open Starling.Core.Model.Pretty
     open Starling.Core.Expr.Pretty
     open Starling.Core.Command.Pretty
+    open Starling.Core.Symbolic.Pretty
     open Starling.Lang.AST.Pretty
 
     /// Pretty-prints a CFunc.

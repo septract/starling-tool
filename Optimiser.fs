@@ -17,11 +17,13 @@ open Starling.Utils
 open Starling.Core.Expr
 open Starling.Core.ExprEquiv
 open Starling.Core.Var
+open Starling.Core.Symbolic
 open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.Command.Queries
 open Starling.Core.Sub
 open Starling.Core.GuardedView
+open Starling.Core.GuardedView.Sub
 
 
 /// <summary>

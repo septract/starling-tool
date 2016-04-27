@@ -8,6 +8,7 @@ open Starling.Collections
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
+open Starling.Core.Symbolic
 open Starling.Core.Model
 
 

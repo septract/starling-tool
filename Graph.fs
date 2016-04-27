@@ -17,6 +17,7 @@ open Starling.Core.Axiom
 open Starling.Core.Command
 open Starling.Core.GuardedView
 open Starling.Core.Var
+open Starling.Core.Symbolic
 open Starling.Core.Expr
 
 

@@ -7,8 +7,10 @@ open Chessie.ErrorHandling
 
 open Starling.Collections
 open Starling.Utils
+open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
+open Starling.Core.Symbolic
 
 
 (*
@@ -57,14 +59,14 @@ module Types =
     /// A func over marked-var expressions.
     type MVFunc = VFunc<MarkedVar>
 
+    /// A view-definition func.
+    type DFunc = Func<Param>
+
     /// A func over symbolic var expressions.
     type SVFunc = VFunc<Sym<Var>>
 
     /// A func over symbolic-marked-var expressions.
     type SMVFunc = VFunc<Sym<MarkedVar>>
-
-    /// A view-definition func.
-    type DFunc = Func<Param>
 
 
     (*
@@ -235,6 +237,7 @@ module Pretty =
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.Expr.Pretty
+    open Starling.Core.Symbolic.Pretty
 
     /// Pretty-prints a type-name parameter.
     let printParam = printCTyped String
@@ -602,3 +605,73 @@ let isAdvisory =
 let varsInVFunc { Params = ps } =
     ps |> Seq.map varsIn |> Seq.concat
 
+
+/// <summary>
+///     Functions for substituting over model elements.
+/// </summary>
+module Sub =
+    open Starling.Core.Sub
+
+    /// <summary>
+    ///   Maps a <c>SubFun</c> over all expressions in a <c>VFunc</c>.
+    /// </summary>
+    /// <param name="sub">
+    ///   The <c>SubFun</c> to map over all expressions in the <c>VFunc</c>.
+    /// </param>
+    /// <param name="_arg1">
+    ///   The <c>VFunc</c> over which whose expressions are to be mapped.
+    /// </param>
+    /// <typeparam name="srcVar">
+    ///     The type of variables entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstVar">
+    ///     The type of variables leaving the map.
+    /// </typeparam>
+    /// <returns>
+    ///   The <c>VFunc</c> resulting from the mapping.
+    /// </returns>
+    /// <remarks>
+    ///   <para>
+    ///     The expressions in a <c>VFunc</c> are its parameters.
+    ///   </para>
+    /// </remarks>
+    let subExprInVFunc
+      (sub : SubFun<'srcVar, 'dstVar>)
+      ( { Name = n ; Params = ps } : VFunc<'srcVar> )
+      : VFunc<'dstVar> =
+        { Name = n ; Params = List.map (Mapper.map sub) ps }
+
+    /// <summary>
+    ///     Maps a <c>TrySubFun</c> over all expressions in a <c>VFunc</c>.
+    /// </summary>
+    /// <param name="sub">
+    ///     The <c>TrySubFun</c> to map over all expressions in the <c>VFunc</c>.
+    /// </param>
+    /// <param name="_arg1">
+    ///     The <c>VFunc</c> over which whose expressions are to be mapped.
+    /// </param>
+    /// <typeparam name="srcVar">
+    ///     The type of variables entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstVar">
+    ///     The type of variables leaving the map.
+    /// </typeparam>
+    /// <typeparam name="err">
+    ///     The type of any returned errors.
+    /// </typeparam>
+    /// <returns>
+    ///     The Chessie-wrapped <c>VFunc</c> resulting from the mapping.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         The expressions in a <c>VFunc</c> are its parameters.
+    ///     </para>
+    /// </remarks>
+    let trySubExprInVFunc
+      (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
+      ( { Name = n ; Params = ps } : VFunc<'srcVar> )
+      : Result<VFunc<'dstVar>, 'err> =
+        ps
+        |> List.map (Mapper.tryMap sub)
+        |> collect
+        |> lift (fun ps' -> { Name = n ; Params = ps' } )

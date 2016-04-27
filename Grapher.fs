@@ -12,10 +12,10 @@ open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Sub
+open Starling.Core.Symbolic
 open Starling.Core.Model
 open Starling.Core.GuardedView
 open Starling.Core.Graph
-
 open Starling.Lang.AST
 open Starling.Lang.Modeller
 open Starling.Core.Command

@@ -14,6 +14,7 @@ open Starling.Collections
 open Starling.Utils
 open Starling.Core.Expr
 open Starling.Core.Var
+open Starling.Core.Symbolic
 open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.GuardedView
@@ -86,7 +87,7 @@ let axiom p c q =
 
 /// Instantiates a view parameter.
 let instantiateParam fg =
-    mkVarExp (goalVar fg)
+    mkVarExp (goalVar fg >> Reg) 
 
 /// Instantiates a defining view into a view expression.
 let instantiateGoal fg dvs =

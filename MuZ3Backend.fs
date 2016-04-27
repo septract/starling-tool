@@ -32,7 +32,9 @@ open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
+open Starling.Core.Model.Sub
 open Starling.Core.GuardedView
+open Starling.Core.GuardedView.Sub
 open Starling.Core.Instantiate
 open Starling.Core.Sub
 open Starling.Core.Z3

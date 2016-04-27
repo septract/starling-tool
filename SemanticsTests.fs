@@ -7,13 +7,13 @@ open NUnit.Framework
 open Starling
 open Starling.Collections
 open Starling.Utils
+open Starling.Utils.Testing
 open Starling.Core.Expr
+open Starling.Core.Symbolic
 open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Semantics
 open Starling.Tests.Studies
-
-let tcd : obj[] -> TestCaseData = TestCaseData
 
 /// Tests for the semantic transformer.
 type SemanticsTests() =

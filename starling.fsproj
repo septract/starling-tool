@@ -51,12 +51,13 @@
     <Compile Include="Var.fs" />
     <Compile Include="Z3.fs" />
     <Compile Include="ExprEquiv.fs" />
+    <Compile Include="Sub.fs" />
+    <Compile Include="Symbolic.fs" />
     <Compile Include="Model.fs" />
     <Compile Include="Command.fs" />
     <Compile Include="GuardedView.fs" />
     <Compile Include="Axiom.fs" />
     <Compile Include="Graph.fs" />
-    <Compile Include="Sub.fs" />
     <Compile Include="Instantiate.fs" />
     <Compile Include="AST.fs" />
     <Compile Include="Collator.fs" />
