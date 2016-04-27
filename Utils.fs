@@ -160,3 +160,15 @@ let foldFastTerm (f : 'State -> 'T -> 'State option)
         else (Some s')
 
     fft f s
+
+
+/// <summary>
+///    Utilities for testing.
+/// </summary>
+module Testing =
+    open NUnit.Framework
+
+    /// <summary>
+    ///     A more F#-friendly overload of <c>TestCaseData</c>.
+    /// </summary>
+    let tcd : obj[] -> TestCaseData = TestCaseData

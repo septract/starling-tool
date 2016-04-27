@@ -116,9 +116,8 @@ let termGen : UVModel<GoalAxiom> -> UVModel<PTerm<SMGView, OView>> =
 /// </summary>
 module Tests =
     open NUnit.Framework
+    open Starling.Utils.Testing
 
-
-    let tcd : obj[] -> TestCaseData = TestCaseData
 
     /// <summary>
     ///     NUnit tests for <c>TermGen</c>.
