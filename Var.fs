@@ -291,9 +291,14 @@ let lookupVar
     |> tryLookupVar env
     |> failIfNone (NotFound (flattenLV s))
 
+
 (*
- * Expression constructors
+ * Variable constructors
  *)
+
+/// Given a fresh generator, yields a function promoting a string to a
+/// goal variable.
+let goalVar (fg : FreshGen) = (fg |> getFresh |> curry Goal) >> Reg
 
 /// Creates an integer sym-variable.
 let siVar c = c |> Reg |> AVar

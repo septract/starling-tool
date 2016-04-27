@@ -84,10 +84,6 @@ let axiom p c q =
  * GoalAxioms
  *)
 
-/// Given a fresh generator, yields a function promoting a string to a
-/// goal variable.
-let goalVar (fg : FreshGen) = (fg |> getFresh |> curry Goal) >> Reg
-
 /// Instantiates a view parameter.
 let instantiateParam fg =
     mkVarExp (goalVar fg)
