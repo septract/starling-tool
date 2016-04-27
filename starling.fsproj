@@ -75,7 +75,6 @@
     <Compile Include="Z3Backend.fs" />
     <Compile Include="MuZ3Backend.fs" />
     <Compile Include="TestStudies.fs" />
-    <Compile Include="GraphTests.fs" />
     <Compile Include="GrapherTests.fs" />
     <Compile Include="InstantiateTests.fs" />
     <Compile Include="PrettyTests.fs" />
@@ -83,7 +82,6 @@
     <Compile Include="ModellerTests.fs" />
     <Compile Include="GuarderTests.fs" />
     <Compile Include="SemanticsTests.fs" />
-    <Compile Include="FlattenerTests.fs" />
     <Compile Include="OptimiserTests.fs" />
     <Compile Include="HornTests.fs" />
     <Compile Include="Main.fs" />
