@@ -254,3 +254,27 @@ module Tests =
             match c with
             | Queries.Assume _ -> true
             | _ -> false
+
+        /// Test cases for intermediate finding.
+        static member NextIntermediates =
+            [ TestCaseData(Expr.Bool (sbInter 5I "foo"))
+                .Returns(6I)
+                .SetName("nextIntermediate on Bool intermediate is one higher")
+              TestCaseData(Expr.Bool (BNot (sbInter 10I "bar")))
+                .Returns(11I)
+                .SetName("nextIntermediate on 'not' passes through")
+              TestCaseData(Expr.Bool (BImplies (sbInter 6I "a", sbInter 11I "b")))
+                .Returns(12I)
+                .SetName("nextIntermediate on 'implies' is one higher than max")
+              TestCaseData(Expr.Int
+                               (AAdd [ siInter 1I "a"
+                                       siAfter "b"
+                                       siBefore "c"
+                                       siInter 2I "d" ] ))
+                .Returns(3I)
+                .SetName("nextIntermediate on 'add' is one higher than max") ]
+
+        /// Tests whether nextIntermediate works.
+        [<TestCaseSource("NextIntermediates")>]
+        member x.``test whether nextIntermediate gets the correct level`` expr =
+            Compose.nextIntermediate expr

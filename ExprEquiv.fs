@@ -152,3 +152,70 @@ let equiv (x : BoolExpr<'var>) (y : BoolExpr<'var>) : Equiv<'var> =
 /// </remarks>
 let negates (x : BoolExpr<'var>) (y : BoolExpr<'var>) : Equiv<'var> =
     fun toVar ctx -> equiv x (BNot y) toVar ctx
+
+
+/// <summary>
+///     Tests for <c>ExprEquiv</c>.
+/// </summary>
+module Tests =
+    open NUnit.Framework
+    open Starling.Utils.Testing
+    open Starling.Core.Pretty
+    open Starling.Core.Var.Pretty
+
+    /// <summary>
+    ///     NUnit tests for <c>ExprEquiv</c>.
+    /// </summary>
+    type NUnit () =
+        /// Test cases for negation checking.
+        static member ObviousNegations =
+            [ (tcd [| (BTrue : VBoolExpr)
+                      (BFalse : VBoolExpr) |])
+                .Returns(true)
+              (tcd [| (BTrue : VBoolExpr)
+                      (BTrue : VBoolExpr) |])
+                .Returns(false)
+              (tcd [| (BFalse : VBoolExpr)
+                      (BFalse : VBoolExpr) |])
+                .Returns(false)
+              (tcd [| (BTrue : VBoolExpr)
+                      (iEq (AInt 5L) (AInt 6L) : VBoolExpr) |])
+                .Returns(true)
+              (tcd [| (iEq (AVar "x") (AInt 2L))
+                      (BNot (iEq (AVar "x") (AInt 2L))) |])
+                .Returns(true)
+              (tcd [| (iEq (AVar "x") (AInt 2L))
+                      (BNot (iEq (AVar "y") (AInt 2L))) |])
+                .Returns(false)
+              // De Morgan
+              (tcd [| (BAnd [ BVar "x" ; BVar "y" ])
+                      (BOr [ BNot (BVar "x")
+                             BNot (BVar "y") ] ) |] )
+                .Returns(true)
+              (tcd [| (BAnd [ BVar "x" ; BVar "y" ])
+                      (BOr [ BNot (BVar "y")
+                             BNot (BVar "x") ] ) |] )
+                .Returns(true)
+              (tcd [| (BOr [ BVar "x" ; BVar "y" ])
+                      (BAnd [ BNot (BVar "x")
+                              BNot (BVar "y") ] ) |] )
+                .Returns(true)
+              (tcd [| (BOr [ BVar "x" ; BVar "y" ])
+                      (BAnd [ BNot (BVar "y")
+                              BNot (BVar "x") ] ) |] )
+                .Returns(true) ]
+            |> List.map (
+                fun d -> d.SetName(sprintf "%s and %s are %s negation"
+                                            (((d.OriginalArguments.[1])
+                                              :?> VBoolExpr)
+                                             |> printVBoolExpr |> print)
+                                            (((d.OriginalArguments.[0])
+                                              :?> VBoolExpr)
+                                             |> printVBoolExpr |> print)
+                                            (if (d.ExpectedResult :?> bool)
+                                             then "a" else "not a")))
+
+        /// Checks whether negation checking is sound and sufficiently complete.
+        [<TestCaseSource("ObviousNegations")>]
+        member x.``negates is sound and sufficiently complete`` a b =
+            equivHolds id (negates a b)

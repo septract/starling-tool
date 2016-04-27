@@ -363,3 +363,40 @@ let rec (|ConstantBoolFunction|_|) x =
 /// constant.
 let rec (|ConstantIntFunction|_|) x =
     x |>varsInInt |> Seq.map valueOf |> onlyOne
+
+
+/// <summary>
+///     Tests for <c>Expr</c>.
+/// </summary>
+module Tests =
+    open NUnit.Framework
+    open Starling.Utils.Testing
+
+    /// <summary>
+    ///     NUnit tests for <c>Expr</c>.
+    /// </summary>
+    type NUnit () =
+        /// Test cases for testing simple/compound arithmetic classification.
+        static member IntSimpleCompound =
+            [ TestCaseData(AInt 1L)
+                .Returns(false)
+                .SetName("Classify '1' as simple")
+              TestCaseData(AAdd [AInt 1L; AInt 2L])
+                .Returns(true)
+                .SetName("Classify '1+2' as compound")
+              TestCaseData(ASub [AAdd [AInt 1L; AInt 2L]; AInt 3L])
+                .Returns(true)
+                .SetName("Classify '(1+2)-3' as compound")
+              TestCaseData(AVar "foo")
+                .Returns(false)
+                .SetName("Classify 'foo' as simple")
+              TestCaseData(AMul [AVar "foo"; AVar "bar"])
+                .Returns(true)
+                .SetName("Classify 'foo * bar' as compound") ]
+
+        /// Tests whether the simple/compound arithmetic patterns work correctly
+        [<TestCaseSource("IntSimpleCompound")>]
+        member x.``SimpleInt and CompoundInt classify properly`` e =
+            match e with
+            | SimpleInt -> false
+            | CompoundInt -> true

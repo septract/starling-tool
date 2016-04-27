@@ -381,4 +381,35 @@ let rec regularVarsInSym
         |> List.concat
 
 
+/// <summary>
+///     Tests for <c>Var</c>.
+/// </summary>
+module Tests =
+    open NUnit.Framework
+    open Starling.Utils.Testing
+
+    /// <summary>
+    ///     NUnit tests for <c>Var</c>.
+    /// </summary>
+    type NUnit () =
+        /// Test cases for testing goal rewriting.
+        static member GoalConstants =
+            [ TestCaseData( [ "foo"; "foo"; "foo"] )
+                  .Returns( [ Reg (Goal (0I, "foo"))
+                              Reg (Goal (1I, "foo"))
+                              Reg (Goal (2I, "foo")) ] )
+              TestCaseData( ["foo"; "bar"; "baz"] )
+                  .Returns( [ Reg (Goal (0I, "foo"))
+                              Reg (Goal (1I, "bar"))
+                              Reg (Goal (2I, "baz")) ] ) ]
+
+        /// Tests that the frame name generator works fine.
+        [<TestCaseSource("GoalConstants")>]
+        member x.``goal generation uses fresh variables properly`` xs =
+            // TODO(CaptainHayashi): move this to AxiomTests.
+            let fg = freshGen ()
+
+            // The fun x boilerplate seems to be necessary.
+            // Otherwise, mutations to fg apparently don't propagate!
+            List.map (fun x -> goalVar fg x) xs
 

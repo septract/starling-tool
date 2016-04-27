@@ -595,3 +595,35 @@ let tsfRemoveSym
         (function
          | Sym s -> s.Name |> err |> fail
          | Reg f -> f |> BVar |> ok)
+
+
+/// <summary>
+///     Tests for <c>Sub</c>.
+/// </summary>
+module Tests =
+    open NUnit.Framework
+    open Starling.Utils.Testing
+
+    /// <summary>
+    ///     NUnit tests for <c>Sub</c>.
+    /// </summary>
+    type NUnit () =
+        /// Test cases for testing constant post-state rewriting.
+        static member IntConstantPostStates =
+            [ TestCaseData(siVar "target1")
+                  .Returns(siAfter "target1")
+                  .SetName("Rewrite single variable to post-state")
+              TestCaseData(AAdd [AInt 4L; siVar "target1"])
+                  .Returns(AAdd [AInt 4L; siAfter "target1"])
+                  .SetName("Rewrite expression with one variable to post-state")
+              TestCaseData(ASub [siVar "target1"; siVar "target2"])
+                  .Returns(ASub [siAfter "target1"; siAfter "target2"])
+                  .SetName("Rewrite expression with two variables to post-state")
+              TestCaseData(ADiv (AInt 6L, AInt 0L) : SVIntExpr)
+                  .Returns(ADiv (AInt 6L, AInt 0L) : SMIntExpr)
+                  .SetName("Rewrite expression with no variables to post-state") ]
+
+        [<TestCaseSource("IntConstantPostStates")>]
+        /// Tests whether rewriting constants in arithmetic expressions to post-state works.
+        member x.``constants in arithmetic expressions can be rewritten to post-state`` expr =
+            Mapper.mapInt after expr
