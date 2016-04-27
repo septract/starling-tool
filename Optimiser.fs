@@ -770,7 +770,7 @@ module Term =
     /// Eliminates bound before/after pairs in the term.
     /// If x!after = f(x!before) in the action, we replace x!after with
     /// f(x!before) in the precondition and postcondition.
-    let eliminateAfters 
+    let eliminateAfters
       (term : STerm<SMGView, SMVFunc> )
       : STerm<SMGView, SMVFunc> =
         let sub = afterSubs (term.Cmd |> findArithAfters |> Map.ofList)
@@ -810,7 +810,7 @@ module Term =
     let guardReduce
       ( {Cmd = c; WPre = w; Goal = g} : STerm<SMGView, SMVFunc> )
       : STerm<SMGView, SMVFunc> =
-    
+
         let fs = c |> facts |> Set.ofList
         {Cmd = c; WPre = reduceGView fs w; Goal = g}
 

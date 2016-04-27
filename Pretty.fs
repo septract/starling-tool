@@ -1,3 +1,6 @@
+/// <summary>
+///     The pretty printing engine Starling uses.
+/// </summary>
 module Starling.Core.Pretty
 
 open Starling.Collections
@@ -5,7 +8,7 @@ open Starling.Utils
 
 /// Type of pretty-printer commands.
 [<NoComparison>]
-type Command = 
+type Command =
     | Header of heading : Command * Command
     | Separator
     | String of string
@@ -33,17 +36,17 @@ let indent level = new string(' ', level * 4)
 /// Enters a new line at the given indent level.
 let lnIndent level = "\n" + indent level
 
-let rec printLevel level = 
-    function 
+let rec printLevel level =
+    function
     | Header(heading, incmd) -> printLevel level heading + ":" + lnIndent level + printLevel level incmd + lnIndent level
     | Separator -> "----"
     | VSkip -> lnIndent level
     | String s -> s.Replace("\n", lnIndent level)
-    | Surround(left, Vertical mid, right) -> 
+    | Surround(left, Vertical mid, right) ->
         printLevel level left + lnIndent level + printLevel level mid + lnIndent level + printLevel level right
     | Surround(left, mid, right) -> printLevel level left + printLevel level mid + printLevel level right
     | Indent incmd -> indent 1 + printLevel (level + 1) incmd
-    | VSep(cmds, separator) -> 
+    | VSep(cmds, separator) ->
         Seq.map (printLevel level) cmds |> String.concat (printLevel level separator + lnIndent level)
     | HSep(cmds, separator) -> Seq.map (printLevel level) cmds |> String.concat (printLevel level separator)
     | Nop -> ""

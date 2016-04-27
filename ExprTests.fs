@@ -1,3 +1,6 @@
+/// <summary>
+///     Tests for the expression functions and types.
+/// </summary>
 module Starling.Tests.Core.Expr
 
 open NUnit.Framework

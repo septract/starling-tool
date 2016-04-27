@@ -1,4 +1,6 @@
-﻿/// Parser for the Starling language.
+﻿/// <summary>
+///     Parser for the Starling language.
+/// </summary>
 module Starling.Lang.Parser
 
 open System

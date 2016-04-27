@@ -316,7 +316,7 @@ let checkParamTypes func def =
 ///
 ///     <para>
 ///         The function takes a pair of hooks for transforming various
-///         parts of the substitution function, because it is used 
+///         parts of the substitution function, because it is used
 ///         for generating <c>VSubFun</c>s for both <c>MarkedVar</c>s
 ///         and <c>Sym</c>s.
 ///     </para>
@@ -430,7 +430,7 @@ module ViewDefFilter =
     /// </summary>
     let tryRemoveViewDefSymbols
       (defs : FuncTable<SVBoolExpr>)
-      : Result<FuncTable<VBoolExpr>, Error> = 
+      : Result<FuncTable<VBoolExpr>, Error> =
         // TODO(CaptainHayashi): proper doc comment.
         // TODO(CaptainHayashi): stop assuming FuncTable is a list.
         defs
@@ -441,7 +441,7 @@ module ViewDefFilter =
                     |> lift (mkPair f))
         |> collect
 
-    
+
     /// <summary>
     ///     Converts a <c>ViewDef</c> list into a <c>FuncTable</c> of possibly
     ///     indefinite views.

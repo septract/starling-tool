@@ -1,3 +1,6 @@
+/// <summary>
+///     Tests for the guarder.
+/// </summary>
 module Starling.Tests.Guarder
 
 open NUnit.Framework

@@ -1,3 +1,6 @@
+/// <summary>
+///    Tests for <c>Starling.Core.Semantics</c>.
+/// </summary>
 module Starling.Tests.Semantics
 
 open NUnit.Framework
@@ -13,7 +16,7 @@ open Starling.Tests.Studies
 let tcd : obj[] -> TestCaseData = TestCaseData
 
 /// Tests for the semantic transformer.
-type SemanticsTests() = 
+type SemanticsTests() =
     /// Test cases for composition.
     static member Compositions =
         [ (tcd
@@ -61,14 +64,14 @@ type SemanticsTests() =
         frameVar var
 
     // Test cases for the expression framer.
-    static member FrameExprs = 
+    static member FrameExprs =
         [ TestCaseData(BTrue : SMBoolExpr)
               .Returns( [ iEq (siAfter "serving") (siBefore "serving")
                           iEq (siAfter "ticket") (siBefore "ticket")
                           iEq (siAfter "s") (siBefore "s")
                           iEq (siAfter "t") (siBefore "t") ] )
               .SetName("Frame id using the ticket lock model")
-          
+
           TestCaseData(BAnd
                            [ BGt(siAfter "ticket", siBefore "ticket")
                              BLe(siAfter "serving", siBefore "serving")
@@ -76,7 +79,7 @@ type SemanticsTests() =
               .Returns( [ iEq (siAfter "s") (siBefore "s")
                           iEq (siAfter "t") (siBefore "t") ] )
               .SetName("Frame a simple command expression using the ticket lock model") ]
-    
+
     // Test framing of expressions.
     [<TestCaseSource("FrameExprs")>]
     member x.``Test framing of expressions using the ticket lock model`` expr =
@@ -84,7 +87,7 @@ type SemanticsTests() =
             (ticketLockModel.Globals)
             (ticketLockModel.Locals)
             expr
-    
+
     /// Test cases for full command semantic translation.
     static member Commands =
         [ TestCaseData([ smvfunc "Assume"
@@ -106,10 +109,10 @@ type SemanticsTests() =
                              iEq (siAfter "t") (siBefore "t")
                              iEq (siAfter "serving") (AAdd [ siBefore "serving"; AInt 1L ]) ])
               .SetName("Semantically translate <serving++> using the ticket lock model") ]
-    
+
     // Test semantic reification of commands.
     [<TestCaseSource("Commands")>]
-    member x.``Test semantic translation of commands using the ticket lock model`` com = 
+    member x.``Test semantic translation of commands using the ticket lock model`` com =
         com
         |> semanticsOfCommand
                (Starling.Lang.Modeller.coreSemantics)
@@ -118,4 +121,4 @@ type SemanticsTests() =
         |> okOption
         |> Option.bind (function
                         | BAnd xs -> xs |> Set.ofList |> Some
-                        | _ -> None) 
+                        | _ -> None)

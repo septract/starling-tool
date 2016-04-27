@@ -1,3 +1,6 @@
+/// <summary>
+///     Tests for <c>Starling.Tests.Modeller</c>.
+/// </summary>
 module Starling.Tests.Modeller
 
 open NUnit.Framework

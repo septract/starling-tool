@@ -339,7 +339,7 @@ let unify src dest graph =
 
         (* Unify Node Kinds to account for Entry and Exit combining *)
         let unifyNodeKind nk1 nk2 =
-            match nk1, nk2 with 
+            match nk1, nk2 with
             | Entry, Exit  | Exit, Entry
             | EntryExit, _ | _, EntryExit -> EntryExit
             | Entry, _     | _, Entry     -> Entry
@@ -701,7 +701,7 @@ module Pretty =
         hsep [ id |> String
                ([ id |> String
                   view |> printViewExpr printSVGView ] @ list)
-                |> colonSep |> printLabel 
+                |> colonSep |> printLabel
              ]
         |> withSemi
 

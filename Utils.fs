@@ -1,7 +1,11 @@
-/// The dreaded 'miscellaneous functions' module.
+/// <summary>
+///     The dreaded 'miscellaneous functions' module.
 ///
-/// Most of these are generic, stand-alone combinators, but some also
-/// augment Chessie and other libraries.
+///     <para>
+///         Most of these are generic, stand-alone combinators, but some
+///         also augment Chessie and other libraries.
+///     </para>
+/// </summary>
 [<AutoOpen>]
 module Starling.Utils
 

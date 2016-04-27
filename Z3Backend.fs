@@ -68,7 +68,7 @@ module Types =
 /// <summary>
 ///     Pretty printers for the Z3 types.
 /// </summary>
-module Pretty =            
+module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Expr.Pretty
     open Starling.Core.Model.Pretty
@@ -90,7 +90,7 @@ module Pretty =
         function
         | InstantiationError (vfunc, err) ->
             wrapped "view" (printMVFunc vfunc) (printError err)
-    
+
 
 /// <summary>
 ///     Functions for translating Starling elements into Z3.

@@ -1,4 +1,6 @@
-/// Types and functions for variables and variable maps.
+/// <summary>
+///     Types and functions for variables and variable maps.
+/// </summary>
 module Starling.Core.Var
 
 open Chessie.ErrorHandling
@@ -74,7 +76,7 @@ module Types =
     ///     An lvalue.
     ///     This is given a separate type in case we add to it later.
     /// </summary>
-    type LValue = 
+    type LValue =
         // TODO(CaptainHayashi): add support for non-variable LValues.
         | LVIdent of string
 
@@ -92,13 +94,13 @@ module Types =
     type VarMap = Map<string, Type>
 
     /// A mode for the Fetch atomic action.
-    type FetchMode = 
+    type FetchMode =
         | Direct // <a = b>
         | Increment // <a = b++>
         | Decrement // <a = b-->
 
     /// Represents an error when building or converting a variable map.
-    type VarMapError = 
+    type VarMapError =
         | Duplicate of name : string
         // The variable was not found.
         | NotFound of name : string
@@ -171,8 +173,8 @@ module VarExprs =
 ///         letters and digits to the name.
 ///     </para>
 /// </summary>
-let unmarkVar : MarkedVar -> Var = 
-    function 
+let unmarkVar : MarkedVar -> Var =
+    function
     | Before c -> sprintf "V%sBEFORE" c
     | After c -> sprintf "V%sAFTER" c
     | Intermediate(i, c) -> sprintf "V%sINT%A" c i
@@ -238,14 +240,14 @@ module Pretty =
 
 
 /// Flattens a LV to a string.
-let rec flattenLV = 
+let rec flattenLV =
     // TODO(CaptainHayashi): this is completely wrong, but we don't
     // have a semantics for it yet.
-    function 
+    function
     | LVIdent s -> s
 
 /// Makes a variable map from a list of type-name pairs.
-let makeVarMap lst = 
+let makeVarMap lst =
     lst
     |> List.map valueOf // Extract all names from the list.
     |> findDuplicates
@@ -260,9 +262,9 @@ let makeVarMap lst =
 /// Tries to combine two variable maps.
 /// Fails if the environments are not disjoint.
 /// Failures are in terms of VarMapError.
-let combineMaps (a : VarMap) (b : VarMap) = 
-    Map.fold (fun (sR : Result<VarMap, VarMapError>) name var -> 
-        trial { 
+let combineMaps (a : VarMap) (b : VarMap) =
+    Map.fold (fun (sR : Result<VarMap, VarMapError>) name var ->
+        trial {
             let! s = sR
             if s.ContainsKey name then return! (fail (Duplicate name))
             else return (s.Add(name, var))
@@ -273,7 +275,7 @@ let combineMaps (a : VarMap) (b : VarMap) =
 let tryLookupVar
   (env : VarMap)
   : LValue -> CTyped<string> option =
-    function 
+    function
     | LVIdent s ->
         s
         |> env.TryFind

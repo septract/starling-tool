@@ -115,7 +115,7 @@ module Compose =
     let rec nextIntIntermediate =
         function
         | AVar (Reg (Intermediate (n, _))) -> n + 1I
-        | AVar (Sym { Params = xs } ) -> 
+        | AVar (Sym { Params = xs } ) ->
             xs |> Seq.map nextIntermediate |> Seq.fold (curry bigint.Max) 0I
         | AVar _ | AInt _ -> 0I
         | AAdd xs | ASub xs | AMul xs ->

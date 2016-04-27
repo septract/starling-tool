@@ -1,3 +1,7 @@
+/// <summary>
+///     The part of the language frontend that desugars conditional
+///     (if-then-else) views to guarded views.
+/// </summary>
 module Starling.Lang.Guarder
 
 open Starling.Collections

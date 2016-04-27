@@ -1,4 +1,7 @@
-﻿module Starling.Lang.AST
+﻿/// <summary>
+///    The abstract syntax tree for the Starling language.
+/// </summary>
+module Starling.Lang.AST
 
 open Starling
 open Starling.Collections
@@ -178,7 +181,7 @@ module Pretty =
         | False -> String "false"
         | Expression.Int i -> i.ToString() |> String
         | LV x -> printLValue x
-        | Symbolic (sym, args) -> 
+        | Symbolic (sym, args) ->
             func (sprintf "%%{%s}" sym) (Seq.map printExpression args)
         | Bop(op, a, b) ->
             hsep [ printExpression a

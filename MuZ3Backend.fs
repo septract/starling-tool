@@ -108,7 +108,7 @@ module Types =
 /// <summary>
 ///     Pretty printers for the MuZ3 types.
 /// </summary>
-module Pretty =            
+module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Expr.Pretty
     open Starling.Core.Var.Pretty
@@ -125,7 +125,7 @@ module Pretty =
                                    headed "View assignments" [ printZ3Exp ex ] ]
         | MuSat.Unknown reason -> colonSep [ String "Proof status unknown"
                                              String reason ]
-    
+
     /// Pretty-prints a MuModel.
     let printMuModel { Definites = ds ; Rules = rs ; FuncDecls = fdm } =
         printAssoc
@@ -271,7 +271,7 @@ module Translator =
                      (* This is a definite constraint, so we want muZ3 to
                         use the existing constraint body for it.  We do this
                         by creating a rule that vs <=> dex.
-                           
+
                         We need to make an application of our new FuncDecl to
                         create the constraints for it, if any.
 
@@ -344,7 +344,7 @@ module Translator =
     /// </typeparam>
     /// <returns>
     ///     A Z3 boolean expression relating to the <c>VFunc</c>.
-    ///     If <paramref name="_arg1"/> is in <paramref name="funcDecls"/>, 
+    ///     If <paramref name="_arg1"/> is in <paramref name="funcDecls"/>,
     ///     then the expression is an application of the <c>FuncDecl</c>
     ///     with the parameters in <paramref name="_arg1"/>.
     ///     Else, it is true.
@@ -504,7 +504,7 @@ module Translator =
       (head : VFunc<'var>)
       : Z3.BoolExpr option =
         let vsub = onVars (liftVSubFun (Mapper.cmake toVar))
-        
+
         // First, make everything use string variables.
         let bodyExpr' = Mapper.mapBool vsub bodyExpr
         let bodyView' = subExprInGView vsub bodyView

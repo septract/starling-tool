@@ -25,7 +25,7 @@ module Types =
     /// expressions not modellable in Datalog at output time.
     /// Only arithmetic expressions can be modelled in HSF, so we disallow
     /// Booleans.
-    type Literal = 
+    type Literal =
         /// A predicate.
         | Pred of Func<VIntExpr>
         | And of Literal list
@@ -41,7 +41,7 @@ module Types =
         | Lt of VIntExpr * VIntExpr
 
     /// A Horn clause, in Datalog/HSF form.
-    type Horn = 
+    type Horn =
         /// A normal Horn clause.
         | Clause of head: Literal * body: (Literal list)
         /// A comment.
@@ -50,7 +50,7 @@ module Types =
         | QueryNaming of Func<string>
 
     /// An error caused when emitting a Horn clause.
-    type Error = 
+    type Error =
         /// A Func is inconsistent with its definition.
         | InconsistentFunc of
               func : MVFunc
@@ -77,14 +77,14 @@ module Pretty =
 
     /// Decides whether to put brackets over the expression emission x,
     /// given its expression as the second argument.
-    let maybeBracket xe x = 
-        match xe with 
+    let maybeBracket xe x =
+        match xe with
         | SimpleInt -> x
         | CompoundInt -> parened x
 
     /// Emits an integral expression in Datalog syntax.
-    let rec printInt : VIntExpr -> Command = 
-        function 
+    let rec printInt : VIntExpr -> Command =
+        function
         | AVar c -> String c
         | AInt i -> sprintf "%d" i |> String
         // Do some reshuffling of n-ary expressions into binary ones.
@@ -110,8 +110,8 @@ module Pretty =
             (y |> printInt |> maybeBracket y)
 
     /// Emits a Horn literal.
-    let rec printLiteral = 
-        function 
+    let rec printLiteral =
+        function
         | Pred p -> printFunc printInt p
         | And xs ->
             xs
@@ -156,10 +156,10 @@ module Pretty =
                     ]
                     |> commaSep |> parened
                     String "." ]
-                           
+
     /// Emits a Horn clause list.
     let printHorns hs = hs |> List.map printHorn |> vsep
-    
+
     let printHornError =
         function
         | InconsistentFunc (func, err) ->
@@ -221,7 +221,7 @@ let checkArith
 ///     Converts a <c>BoolExpr</c> to a HSF literal.
 /// </summary>
 /// <param name="toVar">
-///     Converter from variables in the <c>BoolExpr</c> to some unique 
+///     Converter from variables in the <c>BoolExpr</c> to some unique
 ///     <c>Var</c> representing the variable.  Usually this will be
 ///     <c>id</c> for <c>VBoolExpr</c>s, and <c>unmarkVar</c> for
 ///     <c>MBoolExpr</c>s.
@@ -309,7 +309,7 @@ let hsfModelViewDef svars
         lift2 (fun hd bd -> [Clause (hd, [bd]); Clause (bd, [hd])])
               (boolExpr id ex)
               (predOfFunc svars ensureArith vs)
-        |> lift (fun c -> queryNaming vs :: c) 
+        |> lift (fun c -> queryNaming vs :: c)
     | (vs, None) -> ok [ queryNaming vs ]
 
 /// Constructs a set of Horn clauses for all definite viewdefs in a model.
@@ -337,7 +337,7 @@ let hsfModelVariables (svars : VarMap) : Result<Horn, Error> =
              | (name, ty) -> name |> withType ty |> NonArithVar |> fail)
         |> collect
 
-    let head = 
+    let head =
         bind
             (fun vp -> predOfFunc
                            svars

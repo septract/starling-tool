@@ -1,4 +1,6 @@
-/// Case studies for unit testing.
+/// <summary>
+///     Pre-processed case studies for unit testing.
+/// </summary>
 module Starling.Tests.Studies
 
 open Starling
@@ -429,7 +431,7 @@ let ticketLockLockGraph : Graph =
                                      Typed.Int (siAfter "t")
                                      Typed.Int (siBefore "ticket")
                                      Typed.Int (siAfter "ticket") ]] },
-                   Set.empty, 
+                   Set.empty,
                    Entry)))
                 ("lock_V1",
                  (Mandatory <| sing (gHoldTick BTrue),
@@ -457,7 +459,7 @@ let ticketLockLockGraph : Graph =
                             [ smvfunc "Assume"
                                    [ Typed.Bool
                                          (iEq (siBefore "s")
-                                              (siBefore "t")) ]] }, 
+                                              (siBefore "t")) ]] },
                    Exit))
                 ("lock_V3",
                  (Mandatory <| sing (gHoldTick BTrue),
@@ -510,7 +512,7 @@ let ticketLockLockGraph : Graph =
                                    [ Typed.Int (siBefore "s")
                                      Typed.Int (siAfter "s")
                                      Typed.Int (siBefore "serving")
-                                     Typed.Int (siAfter "serving") ]] }, 
+                                     Typed.Int (siAfter "serving") ]] },
                   Normal)) ] }
 
 /// The CFG for the ticket lock unlock method.
@@ -540,5 +542,5 @@ let ticketLockUnlockGraph : Graph =
                         Command =
                             [ smvfunc "!I++"
                                    [ Typed.Int (siBefore "serving")
-                                     Typed.Int (siAfter "serving") ]] }, 
+                                     Typed.Int (siAfter "serving") ]] },
                    Exit)) ] }

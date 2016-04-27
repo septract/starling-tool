@@ -1,5 +1,7 @@
-/// The part of Starling that generates unreified terms from framed
-/// axioms.
+/// <summary>
+///     The part of Starling that generates unreified terms from framed
+///     axioms.
+/// </summary>
 module Starling.TermGen
 
 open Starling.Collections
@@ -76,7 +78,7 @@ let termGenFrame (r : OView) (q : SMGView) =
     |> Multiset.ofFlatList
 
 /// Generates a (weakest) precondition from a framed axiom.
-let termGenPre 
+let termGenPre
   (gax : GoalAxiom)
   : SMGView =
     (* Theoretically speaking, this is crunching an axiom {P} C {Q} and
@@ -149,7 +151,7 @@ module Tests =
                   .Returns(Multiset.singleton <|
                            smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
                   .SetName("Removing a func from itself is inert")
-              (tcd [| (Multiset.ofFlatList>>Multiset.toFlatList 
+              (tcd [| (Multiset.ofFlatList>>Multiset.toFlatList
                        <|
                            [ smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ]
                              smvfunc "foo" [ Expr.Bool (sbGoal 1I "bar") ] ] )

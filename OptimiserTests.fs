@@ -1,3 +1,6 @@
+/// <summary>
+///     Tests for the optimiser.
+/// </summary>
 module Starling.Tests.Optimiser
 
 open Chessie.ErrorHandling

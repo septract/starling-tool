@@ -1,4 +1,8 @@
-﻿module Starling.Lang.Modeller
+﻿/// <summary>
+///     The main part of the converter from Starling's language AST to
+///     its internal representation.
+/// </summary>
+module Starling.Lang.Modeller
 
 open Chessie.ErrorHandling
 open Starling
@@ -195,7 +199,7 @@ module Pretty =
             fmt
                 "symbolic var '{0}' has ambiguous type: \
                  place it inside an expression with non-symbolic components"
-                [ printSymbol sym ] 
+                [ printSymbol sym ]
 
     /// Pretty-prints view conversion errors.
     let printViewError =
@@ -612,7 +616,7 @@ and modelIntExpr
                   (mi l)
                   (mi r)
         | _ -> fail ExprNotInt
-    mi 
+    mi
 
 (*
  * Views

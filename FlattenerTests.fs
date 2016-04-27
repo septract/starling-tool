@@ -1,4 +1,6 @@
-﻿/// Tests for Starling.Flattener.
+﻿/// <summary>
+///     Tests for Starling.Flattener.
+/// </summary>
 module Starling.Tests.Flattener
 
 open Chessie.ErrorHandling
@@ -32,7 +34,7 @@ type FlattenerTests() =
     /// Tests the view predicate name generator.
     [<TestCaseSource("ViewFuncNamings")>]
     member x.``the flattened view name generator generates names correctly`` v =
-        let pn : OView -> string = funcNameOfView 
+        let pn : OView -> string = funcNameOfView
         pn v
 
     /// Test cases for the full defining-view func converter.

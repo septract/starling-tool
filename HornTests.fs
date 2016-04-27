@@ -1,4 +1,6 @@
-/// Tests for Starling.Backends.Horn and
+/// <summary>
+///     Tests for <c>Starling.Backends.Horn</c>.
+/// </summary>
 module Starling.Tests.Backends.Horn
 
 open Chessie.ErrorHandling

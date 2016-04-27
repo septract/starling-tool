@@ -1,3 +1,6 @@
+/// <summary>
+///     Tests for <c>Starling.Core.Instantiate</c>.
+/// </summary>
 module Starling.Tests.Instantiate
 
 open NUnit.Framework
@@ -14,7 +17,7 @@ let none : Option<MBoolExpr> = None
 
 /// Tests for the func instantiation functions.
 type InstantiateTests() =
-    
+
     /// Environment of test funcs.
     static member TestFuncs =
         [ (dfunc "foo" [],
@@ -39,7 +42,7 @@ type InstantiateTests() =
           TestCaseData(mvfunc "baz" [iAfter "burble" |> Expr.Int ; BTrue |> Expr.Bool])
             .Returns(BAnd [BTrue; BGt (iAfter "burble", iAfter "burble")] |> Some |> Some)
             .SetName("Instantiate func with two arguments of different types") ]
-          
+
     /// Tests whether valid instantiations work.
     [<TestCaseSource("ValidInstantiations")>]
     member x.``Valid instantiations are executed correctly`` func =
@@ -60,7 +63,7 @@ type InstantiateTests() =
             .Returns([TypeMismatch (Param.Int "quux", Type.Bool ())
                       TypeMismatch (Param.Bool "flop", Type.Int ())] |> Some)
             .SetName("Instantiate func with two arguments of incorrect types") ]
-          
+
     /// Tests whether invalid instantiations (don't) work.
     [<TestCaseSource("InvalidInstantiations")>]
     member x.``Invalid instantiations raise correct errors`` func =

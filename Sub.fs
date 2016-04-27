@@ -379,7 +379,7 @@ let trySubExprInDTerm
 /// Substitutes all variables with the given substitution function set
 /// for the given Boolean expression.
 let rec boolSubVars (vfun : VSubFun<'srcVar, 'dstVar>) =
-    function 
+    function
     | BVar x -> Mapper.mapBool vfun x
     | BTrue -> BTrue
     | BFalse -> BFalse
@@ -402,7 +402,7 @@ let rec boolSubVars (vfun : VSubFun<'srcVar, 'dstVar>) =
 /// Substitutes all variables with the given substitution function
 /// for the given arithmetic expression.
 and intSubVars (vfun : VSubFun<'srcVar, 'dstVar>) =
-    function 
+    function
     | AVar x -> Mapper.mapInt vfun x
     | AInt i -> AInt i
     | AAdd xs -> AAdd (List.map (intSubVars vfun) xs)
@@ -419,53 +419,53 @@ and onVars vsub =
 
 /// Failing form of boolSubVars.
 let rec tryBoolSubVars (vfun : VTrySubFun<'srcVar, 'dstVar, 'err>) =
-    function 
+    function
     | BVar x -> Mapper.mapBool vfun x
     | BTrue -> ok BTrue
     | BFalse -> ok BFalse
-    | BAnd xs -> 
-        xs |> List.map (tryBoolSubVars vfun) |> collect |> lift BAnd 
-    | BOr xs -> 
-        xs |> List.map (tryBoolSubVars vfun) |> collect |> lift BOr 
+    | BAnd xs ->
+        xs |> List.map (tryBoolSubVars vfun) |> collect |> lift BAnd
+    | BOr xs ->
+        xs |> List.map (tryBoolSubVars vfun) |> collect |> lift BOr
     | BImplies (x, y) ->
         lift2
             (curry BImplies)
             (tryBoolSubVars vfun x)
             (tryBoolSubVars vfun y)
-    | BEq (x, y) -> 
+    | BEq (x, y) ->
         lift2
             (curry BEq)
             (Mapper.tryMap (tryOnVars vfun) x)
             (Mapper.tryMap (tryOnVars vfun) y)
-    | BGt (x, y) -> 
+    | BGt (x, y) ->
         lift2
             (curry BGt)
             (tryIntSubVars vfun x)
             (tryIntSubVars vfun y)
-    | BGe (x, y) -> 
+    | BGe (x, y) ->
         lift2
             (curry BGe)
             (tryIntSubVars vfun x)
             (tryIntSubVars vfun y)
-    | BLe (x, y) -> 
+    | BLe (x, y) ->
         lift2
             (curry BLe)
             (tryIntSubVars vfun x)
             (tryIntSubVars vfun y)
-    | BLt (x, y) -> 
+    | BLt (x, y) ->
         lift2
             (curry BLt)
             (tryIntSubVars vfun x)
             (tryIntSubVars vfun y)
-    | BNot x -> 
+    | BNot x ->
         x |> tryBoolSubVars vfun |> lift BNot
 
 /// Failing version of intSubVars.
 and tryIntSubVars (vfun : VTrySubFun<'srcVar, 'dstVar, 'err>) =
-    function 
+    function
     | AVar x -> Mapper.mapInt vfun x
     | AInt i -> i |> AInt |> ok
-    | AAdd xs -> 
+    | AAdd xs ->
         xs
         |> List.map (tryIntSubVars vfun)
         |> collect
@@ -474,13 +474,13 @@ and tryIntSubVars (vfun : VTrySubFun<'srcVar, 'dstVar, 'err>) =
         xs
         |> List.map (tryIntSubVars vfun)
         |> collect
-        |> lift ASub 
+        |> lift ASub
     | AMul xs ->
         xs
         |> List.map (tryIntSubVars vfun)
         |> collect
-        |> lift AMul 
-    | ADiv (x, y) -> 
+        |> lift AMul
+    | ADiv (x, y) ->
         lift2
             (curry ADiv)
             (tryIntSubVars vfun x)

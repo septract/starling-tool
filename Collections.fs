@@ -1,4 +1,6 @@
-/// Collections used in Starling.
+/// <summary>
+///     Collections used in Starling.
+/// </summary>
 module Starling.Collections
 
 open Starling.Utils
@@ -202,7 +204,7 @@ module Multiset =
     ///     The result of mapping <c>f</c> over the multiset.
     /// </returns>
     let map f (MSet xs)=
-        let rec repeat_add map k n = 
+        let rec repeat_add map k n =
             match n with
             | 0 -> map
             | n -> repeat_add (add map (f k)) k (n-1)
@@ -217,7 +219,7 @@ module Multiset =
         let ms = toFlatList msm
         seq {
             for i in 0..(1 <<< List.length ms) - 1 do
-                yield (seq { 0..(List.length ms) - 1 } |> Seq.choose (fun j -> 
+                yield (seq { 0..(List.length ms) - 1 } |> Seq.choose (fun j ->
                                                               let cnd : int = i &&& (1 <<< j)
                                                               if cnd <> 0 then Some ms.[j]
                                                               else None))
@@ -308,7 +310,7 @@ module Tests =
                                              (4, 3)
                                              (5, 2)
                                              (6, 1) ]) : Multiset<int>)
-                 .SetName("Appending two overlapping msets works as expected") 
+                 .SetName("Appending two overlapping msets works as expected")
               (tcd [| (Multiset.ofFlatList [1; 3; 5] : Multiset<int>)
                       (Multiset.ofFlatList [2; 4; 6] : Multiset<int>) |])
                  .Returns(MSet (Map.ofList [ (1, 1)

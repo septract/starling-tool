@@ -1,4 +1,6 @@
-/// Part of the Starling tool that flattens terms, adding in globals.
+/// <summary>
+///     Part of the Starling tool that flattens terms, adding in globals.
+/// </summary>
 module Starling.Flattener
 
 open Starling.Collections

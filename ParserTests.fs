@@ -1,3 +1,6 @@
+/// <summary>
+///     Parser tests.
+/// </summary>
 module Starling.Tests.Lang.Parser
 
 open NUnit.Framework

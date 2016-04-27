@@ -125,9 +125,9 @@ let (|BBEq|_|) =
 /// Recursively simplify a formula
 /// Note: this does _not_ simplify variables.
 let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
-    match ax with 
-    | BNot (x) -> 
-        match simp x with 
+    match ax with
+    | BNot (x) ->
+        match simp x with
         | BTrue      -> BFalse
         | BFalse     -> BTrue
         | BNot x     -> x
@@ -135,60 +135,60 @@ let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
         | BGe (x, y) -> BLt (x, y)
         | BLe (x, y) -> BGt (x, y)
         | BLt (x, y) -> BGe (x, y)
-        //Following, all come from DeMorgan 
+        //Following, all come from DeMorgan
         | BAnd xs        -> simp (BOr (List.map BNot xs))
-        | BOr xs         -> simp (BAnd (List.map BNot xs)) 
-        | BImplies (x,y) -> simp (BAnd [x; BNot y]) 
+        | BOr xs         -> simp (BAnd (List.map BNot xs))
+        | BImplies (x,y) -> simp (BAnd [x; BNot y])
         | y          -> BNot y
     // x = x is always true.
     | BEq (x, y) when x = y -> BTrue
     // As are x >= x, and x <= x.
-    | BGe (x, y) 
+    | BGe (x, y)
     | BLe (x, y) when x = y -> BTrue
     | BImplies (x, y) ->
         match simp x, simp y with
-        | BFalse, _ 
+        | BFalse, _
         | _, BTrue      -> BTrue
         | BTrue, y      -> y
         | x, BFalse     -> simp (BNot x)
         | x, y          -> BImplies(x,y)
-    | BOr xs -> 
-        match foldFastTerm  
+    | BOr xs ->
+        match foldFastTerm
                 (fun s x ->
-                  match simp x with 
+                  match simp x with
                   | BTrue  -> None
-                  | BFalse -> Some s   
-                  | BOr ys -> Some (ys @ s)  
+                  | BFalse -> Some s
+                  | BOr ys -> Some (ys @ s)
                   | y      -> Some (y :: s)
                 )
-                [] 
-                xs with 
+                []
+                xs with
         | Some []  -> BFalse
         | Some [x] -> x
         | Some xs  -> BOr (List.rev xs)
         | None     -> BTrue
     // An and is always true if everything in it is always true.
-    | BAnd xs -> 
-        match foldFastTerm  
+    | BAnd xs ->
+        match foldFastTerm
                 (fun s x ->
-                  match simp x with 
+                  match simp x with
                   | BFalse  -> None
-                  | BTrue   -> Some s     
+                  | BTrue   -> Some s
                   | BAnd ys -> Some (ys @ s)
                   | y       -> Some (y :: s)
                 )
-                [] 
-                xs with 
+                []
+                xs with
         | Some []  -> BTrue
-        | Some [x] -> x 
+        | Some [x] -> x
         | Some xs  -> BAnd (List.rev xs)
         | None     -> BFalse
     // A Boolean equality between two contradictions or tautologies is always true.
-    | BBEq (x, y)  -> 
+    | BBEq (x, y)  ->
         match simp x, simp y with
-        | BFalse, BFalse 
+        | BFalse, BFalse
         | BTrue, BTrue      -> BTrue
-        | BTrue, BFalse 
+        | BTrue, BFalse
         | BFalse, BTrue     -> BFalse
         // A Boolean equality between something and True reduces to that something.
         | x, BTrue          -> x
@@ -204,7 +204,7 @@ let isFalse expr =
     match (simp expr) with
     | BFalse -> true
     | _      -> false
-   
+
 let isTrue expr =
     match (simp expr) with
     | BTrue -> true
