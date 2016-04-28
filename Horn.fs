@@ -256,7 +256,7 @@ let boolExpr
         | x ->
             x
             |> Expr.Bool
-            |> Mapper.map (onVars (liftVSubFun (Mapper.cmake toVar)))
+            |> Mapper.map (liftCToSub (Mapper.cmake toVar))
             |> UnsupportedExpr
             |> fail
     be
@@ -271,7 +271,7 @@ let boolExpr
 ///     Boolean.
 /// </summary>
 let tryIntExpr : MExpr -> Result<VIntExpr, Error> =
-    Mapper.map (onVars (liftVSubFun (Mapper.cmake unmarkVar)))
+    Mapper.map (liftCToSub (Mapper.cmake unmarkVar))
     >> function
        | Expr.Int x -> ok x
        | e -> e |> UnsupportedExpr |> fail

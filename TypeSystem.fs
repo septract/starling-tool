@@ -77,6 +77,19 @@ type Mapper<'srcInt, 'srcBool, 'dstInt, 'dstBool> =
           /// </summary>
           B: 'srcBool -> 'dstBool }
 
+/// <summary>
+///     A table of mapping functions from one <c>CTyped</c> type to another.
+/// </summary>
+/// <typeparam name="src">
+///     The type of values entering the map.
+/// </typeparam>
+/// <typeparam name="dst">
+///     The type of typed values leaving the map.
+/// </typeparam>
+[<NoComparison>]
+[<NoEquality>]
+type CMapper<'src, 'dst> = Mapper<'src, 'src, 'dst, 'dst>
+
 
 /// <summary>
 ///     The Starling type checker.
@@ -253,11 +266,9 @@ module Mapper =
     ///     The type of values leaving the map.
     /// </typeparam>
     /// <returns>
-    ///     A <c>Mapper</c> using <paramref name="f"/>.
+    ///     A <c>CMapper</c> using <paramref name="f"/>.
     /// </returns>
-    let cmake
-      (f : 'src -> 'dst)
-      : Mapper<'src, 'src, 'dst, 'dst> =
+    let cmake (f : 'src -> 'dst) : CMapper<'src, 'dst> =
         make f f
 
     /// <summary>

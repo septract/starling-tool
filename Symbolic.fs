@@ -221,23 +221,41 @@ module Queries =
      * Common substitutions
      *)
 
+    /// <summary>
+    ///     Converts a marking <c>CMapper</c> to a <c>SubFun</c> over
+    ///     symbolic variables.
+    /// </summary>
+    /// <param name="mapper">
+    ///     The variable <c>CMapper</c> to lift.
+    /// </param>
+    /// <typeparam name="srcVar">
+    ///     The type of variables entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstVar">
+    ///     The type of variables leaving the map.
+    /// </typeparam>
+    /// <returns>
+    ///     <paramref name="mapper">, lifted into a <C>SubFun</c>
+    ///     over symbolic variables.
+    /// </returns>
+    let liftCToSymSub
+      (mapper : CMapper<'srcVar, 'dstVar>)
+      : SubFun<Sym<'srcVar>, Sym<'dstVar>> =
+        Mapper.compose mapper (Mapper.cmake Reg)
+        |> liftCToVSub
+        |> liftVToSym
+        |> onVars
+
+
     /// Converts an expression to its pre-state.
     let before
       : SubFun<Sym<Var>, Sym<MarkedVar>> =
-        (Before >> Reg)
-        |> Mapper.cmake
-        |> liftVSubFun
-        |> liftVToSym
-        |> onVars
+        liftCToSymSub (Mapper.cmake Before)
 
     /// Converts an expression to its post-state.
     let after
       : SubFun<Sym<Var>, Sym<MarkedVar>> =
-        (After >> Reg)
-        |> Mapper.cmake
-        |> liftVSubFun
-        |> liftVToSym
-        |> onVars
+        liftCToSymSub (Mapper.cmake After)
 
 
 /// <summary>

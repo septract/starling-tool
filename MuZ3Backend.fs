@@ -505,7 +505,7 @@ module Translator =
       (bodyView : GView<'var>)
       (head : VFunc<'var>)
       : Z3.BoolExpr option =
-        let vsub = onVars (liftVSubFun (Mapper.cmake toVar))
+        let vsub = (liftCToSub (Mapper.cmake toVar))
 
         // First, make everything use string variables.
         let bodyExpr' = Mapper.mapBool vsub bodyExpr
