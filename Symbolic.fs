@@ -239,7 +239,7 @@ module Queries =
     ///     over symbolic variables.
     /// </returns>
     let liftCToSymSub
-      (mapper : CMapper<'srcVar, 'dstVar>)
+      (mapper : CMapper<unit, 'srcVar, 'dstVar>)
       : SubFun<Sym<'srcVar>, Sym<'dstVar>> =
         Mapper.compose mapper (Mapper.cmake Reg)
         |> liftCToVSub

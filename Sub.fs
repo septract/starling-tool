@@ -31,6 +31,7 @@ module Types =
     [<NoEquality>]
     type SubFun<'srcVar, 'dstVar> =
         Mapper<
+            unit,
             IntExpr<'srcVar>, BoolExpr<'srcVar>,
             IntExpr<'dstVar>, BoolExpr<'dstVar>>
 
@@ -50,6 +51,7 @@ module Types =
     [<NoEquality>]
     type TrySubFun<'srcVar, 'dstVar, 'err> =
         Mapper<
+            unit,
             IntExpr<'srcVar>, BoolExpr<'srcVar>,
             Result<IntExpr<'dstVar>, 'err>,
             Result<BoolExpr<'dstVar>, 'err>>
@@ -66,7 +68,7 @@ module Types =
     [<NoComparison>]
     [<NoEquality>]
     type VSubFun<'srcVar, 'dstVar> =
-        Mapper<'srcVar, 'srcVar, IntExpr<'dstVar>, BoolExpr<'dstVar>>
+        Mapper<unit, 'srcVar, 'srcVar, IntExpr<'dstVar>, BoolExpr<'dstVar>>
 
     /// <summary>
     ///     A <c>TypeMap</c> partially mapping between forms of <c>Var</c>s.
@@ -84,6 +86,7 @@ module Types =
     [<NoEquality>]
     type VTrySubFun<'srcVar, 'dstVar, 'err> =
         Mapper<
+            unit,
             'srcVar, 'srcVar,
             Result<IntExpr<'dstVar>, 'err>,
             Result<BoolExpr<'dstVar>, 'err>>
@@ -227,7 +230,7 @@ module Var =
     ///     <paramref name="mapper">, lifted into a <C>VSubFun</c>.
     /// </returns>
     let liftCToVSub
-      (mapper : CMapper<'srcVar, 'dstVar>)
+      (mapper : CMapper<unit, 'srcVar, 'dstVar>)
       : VSubFun<'srcVar, 'dstVar> =
         Mapper.compose mapper (Mapper.make AVar BVar)
 
@@ -247,7 +250,7 @@ module Var =
     ///     <paramref name="mapper">, lifted into a <C>SubFun</c>.
     /// </returns>
     let liftCToSub
-      (mapper : CMapper<'srcVar, 'dstVar>)
+      (mapper : CMapper<unit, 'srcVar, 'dstVar>)
       : SubFun<'srcVar, 'dstVar> =
         mapper |> liftCToVSub |> onVars
 
