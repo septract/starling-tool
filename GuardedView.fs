@@ -545,6 +545,12 @@ module Sub =
     /// <summary>
     ///   Maps a <c>SubFun</c> over all expressions in a <c>GFunc</c>.
     /// </summary>
+    /// <param name="sub">
+    ///     The <c>SubFun</c> to map.
+    /// </param>
+    /// <param name="context">
+    ///     The context to pass to the <c>SubFun</c>.
+    /// </param>
     /// <param name="_arg1">
     ///   The <c>GFunc</c> over which whose expressions are to be mapped.
     /// </param>
@@ -565,18 +571,22 @@ module Sub =
     /// </remarks>
     let subExprInGFunc
       (sub : SubFun<'srcVar, 'dstVar>)
+      (context : Position)
       ( { Cond = cond ; Item = item } : GFunc<'srcVar> )
-      : GFunc<'dstVar> =
-        // TODO(CaptainHayashi): properly use context?
-        // TODO(CaptainHayashi): is Negative correct here
-        { Cond = cond |> Mapper.mapBoolCtx sub Negative |> snd
-          Item = subExprInVFunc sub item }
+      : (Position * GFunc<'dstVar>) =
+        let contextC, cond' = Mapper.mapBoolCtx sub context cond
+        let context', item' = subExprInVFunc sub context item
+
+        (context', { Cond = cond'; Item = item' } )
 
     /// <summary>
     ///   Maps a <c>SubFun</c> over all expressions in a <c>GView</c>.
     /// </summary>
     /// <param name="sub">
     ///   The <c>SubFun</c> to map over all expressions in the <c>GView</c>.
+    /// </param>
+    /// <param name="context">
+    ///     The context to pass to the <c>SubFun</c>.
     /// </param>
     /// <param name="_arg1">
     ///   The <c>GView</c> over which whose expressions are to be mapped.
@@ -598,9 +608,10 @@ module Sub =
     /// </remarks>
     let subExprInGView
       (sub : SubFun<'srcVar, 'dstVar>)
-      : GView<'srcVar>
-      -> GView<'dstVar> =
-        Multiset.map (subExprInGFunc sub)
+      (context : Position)
+      : GView<'srcVar> -> (Position * GView<'dstVar>) =
+        /// TODO(CaptainHayashi): make this more performant.
+        Multiset.mapAccum (fun ctx f _ -> subExprInGFunc sub ctx f) context
 
     /// <summary>
     ///     Maps a <c>SubFun</c> over all expressions in an <c>Term</c>
@@ -630,17 +641,16 @@ module Sub =
     /// </remarks>
     let subExprInDTerm
       (sub : SubFun<'srcVar, 'dstVar>)
+      (context : Position)
       (term : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>)
-      : Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>> =
-        // TODO(CaptainHayashi): properly use context?
-        // TODO(CaptainHayashi): is Negative correct here?
-        mapTerm
-            (Mapper.mapBoolCtx sub Negative >> snd)
-            // TODO(CaptainHayashi): this should be Negative
-            (subExprInGView sub)
-            // TODO(CaptainHayashi): this should be Positive
-            (subExprInVFunc sub)
-            term
+      : (Position * Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>>) =
+        let contextT, cmd' =
+            Mapper.mapBoolCtx sub (Position.negate context) term.Cmd
+        let contextW, wpre' =
+            subExprInGView sub (Position.negate contextT) term.WPre
+        let context', goal' =
+            subExprInVFunc sub contextW term.Goal
+        (context', { Cmd = cmd'; WPre = wpre'; Goal = goal' } )
 
     /// <summary>
     ///     Maps a <c>TrySubFun</c> over all expressions in a <c>GFunc</c>.

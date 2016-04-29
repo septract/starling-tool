@@ -782,7 +782,7 @@ module Term =
          * f(x!before) = f(x!before).
          * We assume we can eliminate it later.
          *)
-        subExprInDTerm sub term
+        subExprInDTerm sub Positive term |> snd
 
     (*
      * Guard reduction
@@ -824,7 +824,7 @@ module Term =
     let simpTerm
       : STerm<SMGView, SMVFunc>
         -> STerm<SMGView, SMVFunc> =
-        subExprInDTerm (Mapper.make id simp)
+        subExprInDTerm (Mapper.make id simp) Positive >> snd
 
     (*
      * Frontend

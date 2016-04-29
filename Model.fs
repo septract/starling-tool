@@ -618,6 +618,9 @@ module Sub =
     /// <param name="sub">
     ///   The <c>SubFun</c> to map over all expressions in the <c>VFunc</c>.
     /// </param>
+    /// <param name="context">
+    ///     The context to pass to the <c>SubFun</c>.
+    /// </param>
     /// <param name="_arg1">
     ///   The <c>VFunc</c> over which whose expressions are to be mapped.
     /// </param>
@@ -637,10 +640,11 @@ module Sub =
     /// </remarks>
     let subExprInVFunc
       (sub : SubFun<'srcVar, 'dstVar>)
+      (context : Position)
       ( { Name = n ; Params = ps } : VFunc<'srcVar> )
-      : VFunc<'dstVar> =
-        // TODO(CaptainHayashi): properly use context?
-        { Name = n ; Params = List.map (Mapper.mapCtx sub Positive >> snd) ps }
+      : (Position * VFunc<'dstVar> ) =
+        let context', ps' = mapAccumL (Mapper.mapCtx sub) context ps
+        (context', { Name = n; Params = ps' } )
 
     /// <summary>
     ///     Maps a <c>TrySubFun</c> over all expressions in a <c>VFunc</c>.

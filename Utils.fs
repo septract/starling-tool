@@ -118,9 +118,6 @@ let keyDuplicates a b =
 /// <param name="lst">
 ///     The list to map.
 /// </param>
-/// <returns>
-///     A tuple of the final accumulator and mapped list.
-/// </returns>
 /// <typeparam name="acc">
 ///     The type of the accumulator.
 /// </typeparam>
@@ -130,6 +127,9 @@ let keyDuplicates a b =
 /// <typeparam name="dst">
 ///     The type of variables in the list after mapping.
 /// </typeparam>
+/// <returns>
+///     A tuple of the final accumulator and mapped list.
+/// </returns>
 let mapAccumL
   (f : 'acc -> 'src -> ('acc * 'dst))
   (init : 'acc)

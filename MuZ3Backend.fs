@@ -509,8 +509,8 @@ module Translator =
 
         // First, make everything use string variables.
         let _, bodyExpr' = Mapper.mapBoolCtx vsub Positive bodyExpr
-        let bodyView' = subExprInGView vsub bodyView
-        let head' = subExprInVFunc vsub head
+        let _, bodyView' = subExprInGView vsub Positive bodyView
+        let _, head' = subExprInVFunc vsub Positive head
 
         let vars =
             seq {

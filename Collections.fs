@@ -191,6 +191,51 @@ module Multiset =
         Map.fold addn xs ymap
 
     /// <summary>
+    ///     Maps <c>f</c> over the unique items of a multiset, passing
+    ///     an accumulator in some arbitrary order.
+    /// </summary>
+    /// <param name="f">
+    ///     The function to map over the multiset.  This takes the
+    ///     accumulator, the item, and the number of times that item
+    ///     appears in the multiset.  It should return the new item.  It
+    ///     is assumed the number of appearances does not change.
+    /// </param>
+    /// <param name="init">
+    ///     The initial value of the accumulator.
+    /// </param>
+    /// <typeparam name="acc">
+    ///     The type of the accumulator.
+    /// </typeparam>
+    /// <typeparam name="src">
+    ///     The type of variables in the list to map.
+    /// </typeparam>
+    /// <typeparam name="dst">
+    ///     The type of variables in the list after mapping.
+    /// </typeparam>
+    /// <returns>
+    ///     The pair of the final value of the accumulator, and the
+    ///     result of mapping <c>f</c> over the multiset.
+    /// </returns>
+    /// <remarks>
+    ///     Since multisets are ordered, mapping can change the position of
+    ///     items.
+    /// </remarks>
+    let mapAccum
+      (f : 'acc -> 'src -> int -> ('acc * 'dst))
+      (init : 'acc)
+      (MSet ms : Multiset<'src>)
+      : ('acc * Multiset<'dst>) =
+        // TODO(CaptainHayashi): convert map to a similar abstraction.
+        ms
+        |> Map.toList
+        |> mapAccumL
+               (fun acc (src, num) ->
+                   let acc', dst = f acc src num
+                   (acc, (dst, num)))
+               init
+        |> pairMap id (Map.ofList >> MSet)
+
+    /// <summary>
     ///     Maps <c>f</c> over a multiset.
     /// </summary>
     /// <remarks>
