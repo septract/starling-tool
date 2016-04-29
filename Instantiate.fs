@@ -503,7 +503,7 @@ module ViewDefFilter =
       (model : UFModel<Term<SMBoolExpr, SMGView, SMVFunc>> )
       : Result<IFModel<Term<MBoolExpr, MGView, MVFunc>>, Error> =
         model
-        |> tryMapAxioms (trySubExprInDTerm (tsfRemoveSym UnwantedSym))
+        |> tryMapAxioms (trySubExprInDTerm (tsfRemoveSym UnwantedSym) NoCtx >> snd)
         |> bind (tryMapViewDefs filterIndefiniteViewDefs)
 
     /// <summary>
@@ -523,5 +523,5 @@ module ViewDefFilter =
       (model : UFModel<Term<SMBoolExpr, SMGView, SMVFunc>> )
       : Result<DFModel<Term<MBoolExpr, MGView, MVFunc>>, Error> =
         model
-        |> tryMapAxioms (trySubExprInDTerm (tsfRemoveSym UnwantedSym))
+        |> tryMapAxioms (trySubExprInDTerm (tsfRemoveSym UnwantedSym) NoCtx >> snd)
         |> bind (tryMapViewDefs filterDefiniteViewDefs)

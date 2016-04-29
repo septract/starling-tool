@@ -3,6 +3,7 @@
 /// </summary>
 module Starling.Collections
 
+open Chessie.ErrorHandling
 open Starling.Utils
 
 /// <summary>
@@ -50,6 +51,8 @@ let func name pars = { Name = name; Params = List.ofSeq pars }
 type Multiset<'item> when 'item: comparison =
     | MSet of Map<'item, int>
     override this.ToString() = sprintf "%A" this
+
+
 /// <summary>
 ///     Operations on multisets.
 /// </summary>
@@ -271,6 +274,35 @@ module Multiset =
                       |> ofFlatSeq
         }
         |> Set.ofSeq
+
+    /// <summary>
+    ///     Collapses a multiset of results to a result on a multiset.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The multiset to collect.
+    /// </param>
+    /// <typeparam name="item">
+    ///     Type of items in the multiset.
+    /// </typeparam>
+    /// <typeparam name="err">
+    ///     Type of errors in the result.
+    /// </typeparam>
+    /// <returns>
+    ///     A result, containing the collected form of
+    ///     <paramref name="_arg1" />.
+    /// </returns>
+    let collect
+      (MSet ms : Multiset<Result<'item, 'err>>)
+      : Result<Multiset<'item>, 'err> =
+        // TODO(CaptainHayashi): unify with map?
+        let rec itr tos fros warns : Result<Multiset<'item>, 'err> =
+            match tos with
+            | [] -> ok (MSet (Map.ofList fros))
+            | ((Warn (x, ws), n)::xs) -> itr xs ((x, n)::fros) (ws@warns)
+            | ((Pass x, n)::xs) -> itr xs ((x, n)::fros) warns
+            | ((Fail e, n)::xs) -> Bad e
+        itr (Map.toList ms) [] []
+
 
 /// <summary>
 ///     Tests for collections.

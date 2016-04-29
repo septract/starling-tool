@@ -16,6 +16,7 @@ module Starling.Core.GuardedView
 
 open Chessie.ErrorHandling
 open Starling.Collections
+open Starling.Utils
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.ExprEquiv
@@ -610,7 +611,6 @@ module Sub =
       (sub : SubFun<'srcVar, 'dstVar>)
       (context : SubCtx)
       : GView<'srcVar> -> (SubCtx * GView<'dstVar>) =
-        /// TODO(CaptainHayashi): make this more performant.
         Multiset.mapAccum (fun ctx f _ -> subExprInGFunc sub ctx f) context
 
     /// <summary>
@@ -620,8 +620,11 @@ module Sub =
     /// <param name="sub">
     ///     The <c>SubFun</c> to map over all expressions in the <c>STerm</c>.
     /// </param>
+    /// <param name="context">
+    ///     The context to pass to the <c>SubFun</c>.
+    /// </param>
     /// <param name="term">
-    ///     The <c>Term</c> over which whose expressions are to be mapped.
+    ///     The <c>Term</c> over which expressions are to be mapped.
     /// </param>
     /// <typeparam name="srcVar">
     ///     The type of variables entering the map.
@@ -658,6 +661,9 @@ module Sub =
     /// <param name="_arg1">
     ///     The <c>GFunc</c> over which whose expressions are to be mapped.
     /// </param>
+    /// <param name="context">
+    ///     The context to pass to the <c>SubFun</c>.
+    /// </param>
     /// <typeparam name="srcVar">
     ///     The type of variables entering the map.
     /// </typeparam>
@@ -678,12 +684,17 @@ module Sub =
     /// </remarks>
     let trySubExprInGFunc
       (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
+      (context : SubCtx)
       ( { Cond = cond ; Item = item } : GFunc<'srcVar> )
-      : Result<GFunc<'dstVar>, 'err> =
-        lift2
-            (fun cond' item' -> { Cond = cond' ; Item = item' } )
-            (Mapper.mapBoolCtx sub NoCtx cond |> snd)
-            (trySubExprInVFunc sub item)
+      : (SubCtx * Result<GFunc<'dstVar>, 'err> ) =
+        let contextC, cond' = Mapper.mapBoolCtx sub (Position.push id context) cond
+        let context', item' = trySubExprInVFunc sub (Position.push id contextC) item
+
+        (context',
+         lift2
+             (fun cond' item' -> { Cond = cond' ; Item = item' } )
+             cond'
+             item')
 
     /// <summary>
     ///     Maps a <c>TrySubFun</c> over all expressions in a <c>GView</c>.
@@ -691,6 +702,9 @@ module Sub =
     /// <param name="sub">
     ///     The <c>TrySubFun</c> to map over all expressions in the
     ///     <c>GView</c>.
+    /// </param>
+    /// <param name="context">
+    ///     The context to pass to the <c>SubFun</c>.
     /// </param>
     /// <param name="_arg1">
     ///     The <c>GView</c> over which whose expressions are to be mapped.
@@ -715,11 +729,10 @@ module Sub =
     /// </remarks>
     let trySubExprInGView
       (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
-      : GView<'srcVar> -> Result<GView<'dstVar>, 'err> =
-        Multiset.toFlatList
-        >> List.map (trySubExprInGFunc sub)
-        >> collect
-        >> lift Multiset.ofFlatList
+      (context : SubCtx)
+      : GView<'srcVar> -> (SubCtx * Result<GView<'dstVar>, 'err> ) =
+        Multiset.mapAccum (fun ctx f _ -> trySubExprInGFunc sub ctx f) context
+        >> pairMap id Multiset.collect
 
     /// <summary>
     ///     Maps a <c>TrySubFun</c> over all expressions in a <c>Term</c>
@@ -729,8 +742,11 @@ module Sub =
     ///     The <c>TrySubFun</c> to map over all expressions in the
     ///     <c>Term</c>.
     /// </param>
-    /// <param name="_arg1">
-    ///     The <c>Term</c> over which whose expressions are to be mapped.
+    /// <param name="context">
+    ///     The context to pass to the <c>SubFun</c>.
+    /// </param>
+    /// <param name="term">
+    ///     The <c>Term</c> over which expressions are to be mapped.
     /// </param>
     /// <typeparam name="srcVar">
     ///     The type of variables entering the map.
@@ -753,13 +769,21 @@ module Sub =
     /// </remarks>
     let trySubExprInDTerm
       (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
-      : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>
-      -> Result<Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>>, 'err> =
-        tryMapTerm
-            // TODO(CaptainHayashi): also fix up this use of context.
-            (Mapper.mapBoolCtx sub NoCtx >> snd)
-            (trySubExprInGView sub)
-            (trySubExprInVFunc sub)
+      (context : SubCtx)
+      (term : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>)
+      : (SubCtx * Result<Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>>, 'err> ) =
+        let contextT, cmd' =
+            Mapper.mapBoolCtx sub (Position.push (Position.negate) context) term.Cmd
+        let contextW, wpre' =
+            trySubExprInGView sub (Position.push (Position.negate) contextT) term.WPre
+        let context', goal' =
+            trySubExprInVFunc sub (Position.push id contextW) term.Goal
+        (context',
+         lift3
+             (fun c w g -> { Cmd = c; WPre = w; Goal = g } )
+             cmd'
+             wpre'
+             goal')
 
 
 /// <summary>

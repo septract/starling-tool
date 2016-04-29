@@ -643,9 +643,9 @@ module Sub =
       (context : SubCtx)
       ( { Name = n ; Params = ps } : VFunc<'srcVar> )
       : (SubCtx * VFunc<'dstVar> ) =
-        let context', ps'
-            = mapAccumL
-                  (fun acc -> Mapper.mapCtx sub (Position.push id acc)) context ps
+        let context', ps' =
+            mapAccumL
+                (fun acc -> Mapper.mapCtx sub (Position.push id acc)) context ps
         (context', { Name = n; Params = ps' } )
 
     /// <summary>
@@ -653,6 +653,9 @@ module Sub =
     /// </summary>
     /// <param name="sub">
     ///     The <c>TrySubFun</c> to map over all expressions in the <c>VFunc</c>.
+    /// </param>
+    /// <param name="context">
+    ///     The context to pass to the <c>SubFun</c>.
     /// </param>
     /// <param name="_arg1">
     ///     The <c>VFunc</c> over which whose expressions are to be mapped.
@@ -676,10 +679,13 @@ module Sub =
     /// </remarks>
     let trySubExprInVFunc
       (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
+      (context : SubCtx)
       ( { Name = n ; Params = ps } : VFunc<'srcVar> )
-      : Result<VFunc<'dstVar>, 'err> =
-        // TODO(CaptainHayashi): properly use context?
-        ps
-        |> List.map (Mapper.tryMapCtx sub NoCtx >> snd)
-        |> collect
-        |> lift (fun ps' -> { Name = n ; Params = ps' } )
+      : (SubCtx * Result<VFunc<'dstVar>, 'err>) =
+        let context', ps' =
+            mapAccumL
+                (fun acc -> Mapper.tryMapCtx sub (Position.push id acc)) context ps
+        (context',
+         ps'
+         |> collect
+         |> lift (fun ps' -> { Name = n ; Params = ps' } ))
