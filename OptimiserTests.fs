@@ -94,9 +94,11 @@ type OptimiserTests() =
     /// Test after-elimination of Booleans.
     [<TestCaseSource("AfterBools")>]
     member x.``After-elimination of Booleans should operate correctly`` b =
-        Mapper.mapBool
-            (afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs)
-            b
+        b
+        |> Mapper.mapBoolCtx
+              (afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs)
+              Positive
+        |> snd
 
     /// Test cases for discovering Boolean after-before pairs.
     static member BoolAfterDiscoveries =

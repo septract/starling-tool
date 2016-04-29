@@ -567,7 +567,9 @@ module Sub =
       (sub : SubFun<'srcVar, 'dstVar>)
       ( { Cond = cond ; Item = item } : GFunc<'srcVar> )
       : GFunc<'dstVar> =
-        { Cond = Mapper.mapBool sub cond
+        // TODO(CaptainHayashi): properly use context?
+        // TODO(CaptainHayashi): is Negative correct here
+        { Cond = cond |> Mapper.mapBoolCtx sub Negative |> snd
           Item = subExprInVFunc sub item }
 
     /// <summary>
@@ -630,9 +632,13 @@ module Sub =
       (sub : SubFun<'srcVar, 'dstVar>)
       (term : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>)
       : Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>> =
+        // TODO(CaptainHayashi): properly use context?
+        // TODO(CaptainHayashi): is Negative correct here?
         mapTerm
-            (Mapper.mapBool sub)
+            (Mapper.mapBoolCtx sub Negative >> snd)
+            // TODO(CaptainHayashi): this should be Negative
             (subExprInGView sub)
+            // TODO(CaptainHayashi): this should be Positive
             (subExprInVFunc sub)
             term
 
@@ -666,7 +672,7 @@ module Sub =
       : Result<GFunc<'dstVar>, 'err> =
         lift2
             (fun cond' item' -> { Cond = cond' ; Item = item' } )
-            (Mapper.mapBool sub cond)
+            (Mapper.mapBoolCtx sub Positive cond |> snd)
             (trySubExprInVFunc sub item)
 
     /// <summary>
@@ -740,7 +746,8 @@ module Sub =
       : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>
       -> Result<Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>>, 'err> =
         tryMapTerm
-            (Mapper.mapBool sub)
+            // TODO(CaptainHayashi): also fix up this use of context.
+            (Mapper.mapBoolCtx sub Positive >> snd)
             (trySubExprInGView sub)
             (trySubExprInVFunc sub)
 

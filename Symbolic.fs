@@ -29,6 +29,7 @@ module Starling.Core.Symbolic
 
 open Chessie.ErrorHandling
 open Starling.Collections
+open Starling.Utils
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
@@ -168,27 +169,22 @@ module Queries =
     let rec liftVToSym
       (sf : VSubFun<'srcVar, Sym<'dstVar>>)
       : VSubFun<Sym<'srcVar>, Sym<'dstVar>> =
-        Mapper.make
-            (function
-             | Reg r -> Mapper.mapInt sf r
-             | Sym { Name = sym; Params = rs } ->
-                 // TODO(CaptainHayashi): this is horrible.
-                 // Are our abstractions wrong?
-               AVar <| Sym
-                   { Name = sym
-                     Params = List.map (sf
-                                        |> liftVToSym
-                                        |> onVars
-                                        |> Mapper.map) rs } )
-            (function
-             | Reg r -> Mapper.mapBool sf r
-             | Sym { Name = sym; Params = rs } ->
-               BVar <| Sym
-                   { Name = sym
-                     Params = List.map (sf
-                                        |> liftVToSym
-                                        |> onVars
-                                        |> Mapper.map) rs } )
+        let rmap ctx = (sf |> liftVToSym |> onVars |> Mapper.mapCtx) ctx
+        Mapper.makeCtx
+            (fun pos v ->
+                 match v with
+                 | Reg r -> Mapper.mapIntCtx sf pos r
+                 | Sym { Name = sym; Params = rs } ->
+                     // TODO(CaptainHayashi): this is horrible.
+                     // Are our abstractions wrong?
+                     let pos', rs' = mapAccumL rmap pos rs
+                     (pos', AVar (Sym { Name = sym; Params = rs' } )))
+            (fun pos v ->
+                 match v with
+                 | Reg r -> Mapper.mapBoolCtx sf pos r
+                 | Sym { Name = sym; Params = rs } ->
+                     let pos', rs' = mapAccumL rmap pos rs
+                     (pos', BVar (Sym { Name = sym; Params = rs' } )))
 
     /// <summary>
     ///     Substitution table for removing symbols from expressions.
@@ -239,7 +235,7 @@ module Queries =
     ///     over symbolic variables.
     /// </returns>
     let liftCToSymSub
-      (mapper : CMapper<unit, 'srcVar, 'dstVar>)
+      (mapper : CMapper<Position, 'srcVar, 'dstVar>)
       : SubFun<Sym<'srcVar>, Sym<'dstVar>> =
         Mapper.compose mapper (Mapper.cmake Reg)
         |> liftCToVSub
@@ -321,4 +317,4 @@ module Tests =
         [<TestCaseSource("IntConstantPostStates")>]
         /// Tests whether rewriting constants in arithmetic expressions to post-state works.
         member x.``constants in arithmetic expressions can be rewritten to post-state`` expr =
-            Mapper.mapInt after expr
+            expr |> Mapper.mapIntCtx after Positive |> snd

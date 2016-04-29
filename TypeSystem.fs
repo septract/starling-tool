@@ -19,6 +19,7 @@
 module Starling.Core.TypeSystem
 
 open Chessie.ErrorHandling
+open Starling.Utils
 
 /// <summary>
 ///     A typed item.
@@ -124,6 +125,146 @@ module Check =
 /// </summary>
 module Mapper =
     /// <summary>
+    ///     Runs a <c>Mapper</c> on an integral value, using context.
+    /// </summary>
+    /// <param name="tm">
+    ///     The <c>Mapper</c> to run.
+    /// </param>
+    /// <param name="context">
+    ///     The context to use.
+    /// </param>
+    /// <typeparam name="context">
+    ///     The type of <c>Int</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="srcInt">
+    ///     The type of <c>Int</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstInt">
+    ///     The type of <c>Int</c>-typed values leaving the map.
+    /// </typeparam>
+    /// <returns>
+    ///     A function mapping over an integral value (ie, the
+    ///     <c>srcInt</c> and <c>dstInt</c> types) with
+    ///     <paramref name="tm"/>.
+    /// </returns>
+    let mapIntCtx
+      (tm : Mapper<'context, 'srcInt, _, 'dstInt, _>)
+      : 'context -> 'srcInt -> ('context * 'dstInt) =
+        tm.I
+
+    /// <summary>
+    ///     Runs a <c>Mapper</c> on a Boolean value, with context.
+    /// </summary>
+    /// <param name="tm">
+    ///     The <c>Mapper</c> to run, using context.
+    /// </param>
+    /// <param name="context">
+    ///     The context to use.
+    /// </param>
+    /// <typeparam name="context">
+    ///     The type of <c>Int</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="srcBool">
+    ///     The type of <c>Bool</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstBool">
+    ///     The type of <c>Bool</c>-typed values leaving the map.
+    /// </typeparam>
+    /// <returns>
+    ///     A function mapping over a Boolean value (ie, the
+    ///     <c>srcBool</c> and <c>dstBool</c> types) with
+    ///     <paramref name="tm"/>.
+    /// </returns>
+    let mapBoolCtx
+      (tm : Mapper<'context, _, 'srcBool, _, 'dstBool>)
+      : 'context -> 'srcBool -> ('context * 'dstBool) =
+        tm.B
+
+    /// <summary>
+    ///     Runs a possibly failing <c>Mapper</c> on a <c>Typed</c>
+    ///     value, with context.
+    /// </summary>
+    /// <param name="tm">
+    ///     The <c>Mapper</c> to run, with context.
+    /// </param>
+    /// <param name="context">
+    ///     The context to use.
+    /// </param>
+    /// <typeparam name="context">
+    ///     The type of <c>Int</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="srcInt">
+    ///     The type of <c>Int</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="srcBool">
+    ///     The type of <c>Bool</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstInt">
+    ///     The type of <c>Int</c>-typed values leaving the map.
+    ///     This excludes the Chessie <c>Result</c>.
+    /// </typeparam>
+    /// <typeparam name="dstBool">
+    ///     The type of <c>Bool</c>-typed values leaving the map.
+    ///     This excludes the Chessie <c>Result</c>.
+    /// </typeparam>
+    /// <typeparam name="err">
+    ///     The type of errors occurring in the map.
+    /// </typeparam>
+    /// <returns>
+    ///     A function mapping over a <c>Typed</c> value with
+    ///     <paramref name="tm"/>, returning a <c>Result</c> over
+    ///     <c>'err</c>.
+    /// </returns>
+    let tryMapCtx
+      (tm :
+           Mapper<
+               'context,
+               'srcInt, 'srcBool,
+               Result<'dstInt, 'err>, Result<'dstBool, 'err>> )
+      (context : 'context)
+      : (Typed<'srcInt, 'srcBool> ->
+             ('context * Result<Typed<'dstInt, 'dstBool>, 'err>)) =
+        function
+        | Typed.Int i -> i |> mapIntCtx tm context |> pairMap id (lift Typed.Int)
+        | Typed.Bool i -> i |> mapBoolCtx tm context |> pairMap id (lift Typed.Bool)
+
+    /// <summary>
+    ///     Runs a <c>Mapper</c> on a <c>Typed</c> value, with context.
+    /// </summary>
+    /// <param name="tm">
+    ///     The <c>Mapper</c> to run, with context.
+    /// </param>
+    /// <param name="context">
+    ///     The context to use.
+    /// </param>
+    /// <typeparam name="context">
+    ///     The type of <c>Int</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="srcInt">
+    ///     The type of <c>Int</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="srcBool">
+    ///     The type of <c>Bool</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstInt">
+    ///     The type of <c>Int</c>-typed values leaving the map.
+    /// </typeparam>
+    /// <typeparam name="dstBool">
+    ///     The type of <c>Bool</c>-typed values leaving the map.
+    /// </typeparam>
+    /// <returns>
+    ///     A function mapping over a <c>Typed</c> value with
+    ///     <paramref name="tm"/>.
+    /// </returns>
+    let mapCtx
+      (tm : Mapper<'context, 'srcInt, 'srcBool, 'dstInt, 'dstBool>)
+      (context : 'context)
+      : (Typed<'srcInt, 'srcBool> -> ('context * Typed<'dstInt, 'dstBool>)) =
+        function
+        | Typed.Int i -> i |> mapIntCtx tm context |> pairMap id Typed.Int
+        | Typed.Bool i -> i |> mapBoolCtx tm context |> pairMap id Typed.Bool
+
+    /// <summary>
     ///     Runs a <c>Mapper</c> on an integral value.
     /// </summary>
     /// <param name="tm">
@@ -209,7 +350,6 @@ module Mapper =
         | Typed.Int i -> i |> mapInt tm |> lift Typed.Int
         | Typed.Bool i -> i |> mapBool tm |> lift Typed.Bool
 
-
     /// <summary>
     ///     Runs a <c>Mapper</c> on a <c>Typed</c> value.
     /// </summary>
@@ -241,7 +381,7 @@ module Mapper =
         | Typed.Bool i -> i |> mapBool tm |> Typed.Bool
 
     /// <summary>
-    ///     Constructs a <c>Mapper</c>.
+    ///     Constructs a <c>Mapper</c> that uses context.
     /// </summary>
     /// <param name="iFun">
     ///     The function to apply on integral values.
@@ -249,6 +389,9 @@ module Mapper =
     /// <param name="bFun">
     ///     The function to apply on Boolean values.
     /// </param>
+    /// <typeparam name="context">
+    ///     The type of the context.  Context may be changed.
+    /// </typeparam>
     /// <typeparam name="srcInt">
     ///     The type of <c>Int</c>-typed values entering the map.
     /// </typeparam>
@@ -263,14 +406,49 @@ module Mapper =
     /// </typeparam>
     /// <returns>
     ///     A <c>Mapper</c> using <paramref name="iFun"/> and
-    ///     <paramref name="bFun"/>.  The mapper does not use context.
+    ///     <paramref name="bFun"/>, and taking and returning context.
+    /// </returns>
+    let makeCtx
+      (iFun : 'context -> 'srcInt -> ('context * 'dstInt))
+      (bFun : 'context -> 'srcBool -> ('context * 'dstBool))
+      : Mapper<'context, 'srcInt, 'srcBool, 'dstInt, 'dstBool> =
+        { I = iFun
+          B = bFun }
+
+    /// <summary>
+    ///     Constructs a <c>Mapper</c>.
+    /// </summary>
+    /// <param name="iFun">
+    ///     The function to apply on integral values.
+    /// </param>
+    /// <param name="bFun">
+    ///     The function to apply on Boolean values.
+    /// </param>
+    /// <typeparam name="context">
+    ///     The type of the context.  Context is passed through unused.
+    /// </typeparam>
+    /// <typeparam name="srcInt">
+    ///     The type of <c>Int</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="srcBool">
+    ///     The type of <c>Bool</c>-typed values entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstInt">
+    ///     The type of <c>Int</c>-typed values leaving the map.
+    /// </typeparam>
+    /// <typeparam name="dstBool">
+    ///     The type of <c>Bool</c>-typed values leaving the map.
+    /// </typeparam>
+    /// <returns>
+    ///     A <c>Mapper</c> using <paramref name="iFun"/> and
+    ///     <paramref name="bFun"/>.  The mapper passes through context
+    ///     unused.
     /// </returns>
     let make
       (iFun : 'srcInt -> 'dstInt)
       (bFun : 'srcBool -> 'dstBool)
-      : Mapper<unit, 'srcInt, 'srcBool, 'dstInt, 'dstBool> =
-        { I = fun (_ : unit) i -> ((), iFun i)
-          B = fun (_ : unit) b -> ((), bFun b) }
+      : Mapper<'context, 'srcInt, 'srcBool, 'dstInt, 'dstBool> =
+        makeCtx (fun c i -> (c, iFun i)) (fun c b -> (c, bFun b))
 
     /// <summary>
     ///     Constructs a <c>Mapper</c> over <c>CTyped</c>.
@@ -278,6 +456,9 @@ module Mapper =
     /// <param name="f">
     ///     The function to apply on all values.
     /// </param>
+    /// <typeparam name="context">
+    ///     The type of the context.  Context is passed through unused.
+    /// </typeparam>
     /// <typeparam name="src">
     ///     The type of values entering the map.
     /// </typeparam>
@@ -285,10 +466,10 @@ module Mapper =
     ///     The type of values leaving the map.
     /// </typeparam>
     /// <returns>
-    ///     A <c>CMapper</c> using <paramref name="f"/>, without
-    ///     context.
+    ///     A <c>CMapper</c> using <paramref name="f"/>, passing
+    ///     through the context unused.
     /// </returns>
-    let cmake (f : 'src -> 'dst) : CMapper<unit, 'src, 'dst> =
+    let cmake (f : 'src -> 'dst) : CMapper<'context, 'src, 'dst> =
         make f f
 
     /// <summary>

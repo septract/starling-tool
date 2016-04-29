@@ -105,6 +105,44 @@ let keys mp =
 let keyDuplicates a b =
     findDuplicates (Seq.append (keys a) (keys b))
 
+/// <summary>
+///     Behaves like a combination of <c>List.map</c> and
+///     <c>List.fold</c>.
+/// </summary>
+/// <param name="f">
+///     The mapping function.
+/// </param>
+/// <param name="init">
+///     The initial accumulator.
+/// </param>
+/// <param name="lst">
+///     The list to map.
+/// </param>
+/// <returns>
+///     A tuple of the final accumulator and mapped list.
+/// </returns>
+/// <typeparam name="acc">
+///     The type of the accumulator.
+/// </typeparam>
+/// <typeparam name="src">
+///     The type of variables in the list to map.
+/// </typeparam>
+/// <typeparam name="dst">
+///     The type of variables in the list after mapping.
+/// </typeparam>
+let mapAccumL
+  (f : 'acc -> 'src -> ('acc * 'dst))
+  (init : 'acc)
+  (lst : 'src list)
+  : ('acc * 'dst list) =
+    let rec it acc srcs dsts =
+        match srcs with
+        | [] -> (acc, List.rev dsts)
+        | x::xs ->
+            let acc', x' = f acc x
+            it acc' xs (x'::dsts)
+    it init lst []
+
 /// Joins two maps together.
 let mapAppend a b =
     Map.ofSeq (Seq.append (Map.toSeq a) (Map.toSeq b))

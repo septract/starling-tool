@@ -508,7 +508,7 @@ module Translator =
         let vsub = (liftCToSub (Mapper.cmake toVar))
 
         // First, make everything use string variables.
-        let bodyExpr' = Mapper.mapBool vsub bodyExpr
+        let _, bodyExpr' = Mapper.mapBoolCtx vsub Positive bodyExpr
         let bodyView' = subExprInGView vsub bodyView
         let head' = subExprInVFunc vsub head
 

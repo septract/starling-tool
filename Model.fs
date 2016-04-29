@@ -639,7 +639,8 @@ module Sub =
       (sub : SubFun<'srcVar, 'dstVar>)
       ( { Name = n ; Params = ps } : VFunc<'srcVar> )
       : VFunc<'dstVar> =
-        { Name = n ; Params = List.map (Mapper.map sub) ps }
+        // TODO(CaptainHayashi): properly use context?
+        { Name = n ; Params = List.map (Mapper.mapCtx sub Positive >> snd) ps }
 
     /// <summary>
     ///     Maps a <c>TrySubFun</c> over all expressions in a <c>VFunc</c>.
@@ -671,7 +672,8 @@ module Sub =
       (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
       ( { Name = n ; Params = ps } : VFunc<'srcVar> )
       : Result<VFunc<'dstVar>, 'err> =
+        // TODO(CaptainHayashi): properly use context?
         ps
-        |> List.map (Mapper.tryMap sub)
+        |> List.map (Mapper.tryMapCtx sub Positive >> snd)
         |> collect
         |> lift (fun ps' -> { Name = n ; Params = ps' } )

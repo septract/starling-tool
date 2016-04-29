@@ -60,7 +60,7 @@ let rec graphWhile vg cg oP oQ isDo (expr : SVBoolExpr) inner =
        This means we cast it into the pre-state, as it is diverging the
        program if its state _entering_ the loop condition makes expr go
        false. *)
-    let exprB = Mapper.mapBool before expr
+    let _, exprB = Mapper.mapBoolCtx before Positive expr
 
     (* If isDo:
      *   Translating [|oP|] do { [|iP|] [|iQ|] } while (C) [|oQ|].
@@ -134,7 +134,7 @@ and graphITE vg cg oP oQ expr inTrue inFalse =
        This means we cast it into the pre-state, as it is diverging the
        program if its state _entering_ the loop condition makes expr go
        false. *)
-    let exprB = Mapper.mapBool before expr
+    let _, exprB = Mapper.mapBoolCtx before Positive expr
 
     // Translating [|oP|] if (C) { [|tP|] [|tQ|] } else { [|fP|] [|fQ|] } [|oQ|].
     trial {

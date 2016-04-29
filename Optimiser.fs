@@ -481,13 +481,13 @@ module Graph =
     ///     Partial active pattern matching <c>Sym</c>-less expressions.
     /// </summary>
     let (|VNoSym|_|) : BoolExpr<Sym<Var>> -> BoolExpr<Var> option =
-        Mapper.mapBool (tsfRemoveSym (fun _ -> ())) >> okOption
+        Mapper.mapBoolCtx (tsfRemoveSym (fun _ -> ())) Positive >> snd >> okOption
 
     /// <summary>
     ///     Partial active pattern matching <c>Sym</c>-less expressions.
     /// </summary>
     let (|MNoSym|_|) : BoolExpr<Sym<MarkedVar>> -> BoolExpr<MarkedVar> option =
-        Mapper.mapBool (tsfRemoveSym (fun _ -> ())) >> okOption
+        Mapper.mapBoolCtx (tsfRemoveSym (fun _ -> ())) Positive >> snd >> okOption
 
 
     /// <summary>
@@ -542,8 +542,8 @@ module Graph =
                 | InnerView(ITEGuards (xc, xv, yc, yv)) ->
                     (* Translate xc and yc to pre-state, to match the
                        commands. *)
-                    let xcPre = Mapper.mapBool vBefore xc
-                    let ycPre = Mapper.mapBool vBefore yc
+                    let _, xcPre = Mapper.mapBoolCtx vBefore Positive xc
+                    let _, ycPre = Mapper.mapBoolCtx vBefore Positive yc
 
                     match (Set.toList outEdges, Set.toList inEdges) with
                     (* Are there only two out edges, and only one in edge?

@@ -421,7 +421,7 @@ let instantiate
     |> lift
            (Option.map
                 (fun (dfunc, defn) ->
-                     Mapper.mapBool (onVars (psf vfunc dfunc)) defn))
+                     Mapper.mapBoolCtx (onVars (psf vfunc dfunc)) Positive defn |> snd))
 
 /// <summary>
 ///     Functions for view definition filtering.
@@ -439,7 +439,8 @@ module ViewDefFilter =
         |> List.map
                (fun (f, d) ->
                     d
-                    |> Mapper.mapBool (tsfRemoveSym UnwantedSym)
+                    |> Mapper.mapBoolCtx (tsfRemoveSym UnwantedSym) Positive
+                    |> snd
                     |> lift (mkPair f))
         |> collect
 

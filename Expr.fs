@@ -34,6 +34,7 @@ module Types =
         | ASub of IntExpr<'var> list
         | AMul of IntExpr<'var> list
         | ADiv of IntExpr<'var> * IntExpr<'var>
+        override this.ToString () = sprintf "%A" this
 
     /// <summary>
     ///     A Boolean expression.
