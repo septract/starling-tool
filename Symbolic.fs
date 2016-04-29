@@ -235,7 +235,7 @@ module Queries =
     ///     over symbolic variables.
     /// </returns>
     let liftCToSymSub
-      (mapper : CMapper<Position, 'srcVar, 'dstVar>)
+      (mapper : CMapper<SubCtx, 'srcVar, 'dstVar>)
       : SubFun<Sym<'srcVar>, Sym<'dstVar>> =
         Mapper.compose mapper (Mapper.cmake Reg)
         |> liftCToVSub
@@ -317,4 +317,4 @@ module Tests =
         [<TestCaseSource("IntConstantPostStates")>]
         /// Tests whether rewriting constants in arithmetic expressions to post-state works.
         member x.``constants in arithmetic expressions can be rewritten to post-state`` expr =
-            expr |> Mapper.mapIntCtx after Positive |> snd
+            expr |> Mapper.mapIntCtx after NoCtx |> snd

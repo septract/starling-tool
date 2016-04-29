@@ -115,8 +115,8 @@ let composeBools x y =
         |> onVars
 
     mkAnd
-        [ Mapper.mapBoolCtx xRewrite Positive x |> snd
-          Mapper.mapBoolCtx yRewrite Positive y |> snd ]
+        [ Mapper.mapBoolCtx xRewrite NoCtx x |> snd
+          Mapper.mapBoolCtx yRewrite NoCtx y |> snd ]
 
 
 /// Generates a framing relation for a given variable.

@@ -571,9 +571,9 @@ module Sub =
     /// </remarks>
     let subExprInGFunc
       (sub : SubFun<'srcVar, 'dstVar>)
-      (context : Position)
+      (context : SubCtx)
       ( { Cond = cond ; Item = item } : GFunc<'srcVar> )
-      : (Position * GFunc<'dstVar>) =
+      : (SubCtx * GFunc<'dstVar>) =
         let contextC, cond' = Mapper.mapBoolCtx sub context cond
         let context', item' = subExprInVFunc sub context item
 
@@ -608,8 +608,8 @@ module Sub =
     /// </remarks>
     let subExprInGView
       (sub : SubFun<'srcVar, 'dstVar>)
-      (context : Position)
-      : GView<'srcVar> -> (Position * GView<'dstVar>) =
+      (context : SubCtx)
+      : GView<'srcVar> -> (SubCtx * GView<'dstVar>) =
         /// TODO(CaptainHayashi): make this more performant.
         Multiset.mapAccum (fun ctx f _ -> subExprInGFunc sub ctx f) context
 
@@ -641,15 +641,15 @@ module Sub =
     /// </remarks>
     let subExprInDTerm
       (sub : SubFun<'srcVar, 'dstVar>)
-      (context : Position)
+      (context : SubCtx)
       (term : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>)
-      : (Position * Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>>) =
+      : (SubCtx * Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>>) =
         let contextT, cmd' =
-            Mapper.mapBoolCtx sub (Position.negate context) term.Cmd
+            Mapper.mapBoolCtx sub (Position.push (Position.negate) context) term.Cmd
         let contextW, wpre' =
-            subExprInGView sub (Position.negate contextT) term.WPre
+            subExprInGView sub (Position.push (Position.negate) contextT) term.WPre
         let context', goal' =
-            subExprInVFunc sub contextW term.Goal
+            subExprInVFunc sub (Position.push id contextW) term.Goal
         (context', { Cmd = cmd'; WPre = wpre'; Goal = goal' } )
 
     /// <summary>
@@ -682,7 +682,7 @@ module Sub =
       : Result<GFunc<'dstVar>, 'err> =
         lift2
             (fun cond' item' -> { Cond = cond' ; Item = item' } )
-            (Mapper.mapBoolCtx sub Positive cond |> snd)
+            (Mapper.mapBoolCtx sub NoCtx cond |> snd)
             (trySubExprInVFunc sub item)
 
     /// <summary>
@@ -757,7 +757,7 @@ module Sub =
       -> Result<Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>>, 'err> =
         tryMapTerm
             // TODO(CaptainHayashi): also fix up this use of context.
-            (Mapper.mapBoolCtx sub Positive >> snd)
+            (Mapper.mapBoolCtx sub NoCtx >> snd)
             (trySubExprInGView sub)
             (trySubExprInVFunc sub)
 

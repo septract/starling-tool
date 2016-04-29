@@ -97,7 +97,7 @@ type OptimiserTests() =
         b
         |> Mapper.mapBoolCtx
               (afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs)
-              Positive
+              NoCtx
         |> snd
 
     /// Test cases for discovering Boolean after-before pairs.
@@ -142,7 +142,7 @@ type OptimiserTests() =
     member x.``Afters in func params should be substituted correctly`` f =
         let sub = afterSubs OptimiserTests.AfterArithSubs
                             OptimiserTests.AfterBoolSubs
-        subExprInVFunc sub f
+        f |> subExprInVFunc sub NoCtx |> snd
 
     /// Test cases for simplification.
     static member ObviousBools =

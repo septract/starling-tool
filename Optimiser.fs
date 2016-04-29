@@ -481,13 +481,13 @@ module Graph =
     ///     Partial active pattern matching <c>Sym</c>-less expressions.
     /// </summary>
     let (|VNoSym|_|) : BoolExpr<Sym<Var>> -> BoolExpr<Var> option =
-        Mapper.mapBoolCtx (tsfRemoveSym (fun _ -> ())) Positive >> snd >> okOption
+        Mapper.mapBoolCtx (tsfRemoveSym (fun _ -> ())) NoCtx >> snd >> okOption
 
     /// <summary>
     ///     Partial active pattern matching <c>Sym</c>-less expressions.
     /// </summary>
     let (|MNoSym|_|) : BoolExpr<Sym<MarkedVar>> -> BoolExpr<MarkedVar> option =
-        Mapper.mapBoolCtx (tsfRemoveSym (fun _ -> ())) Positive >> snd >> okOption
+        Mapper.mapBoolCtx (tsfRemoveSym (fun _ -> ())) NoCtx >> snd >> okOption
 
 
     /// <summary>
@@ -542,8 +542,8 @@ module Graph =
                 | InnerView(ITEGuards (xc, xv, yc, yv)) ->
                     (* Translate xc and yc to pre-state, to match the
                        commands. *)
-                    let _, xcPre = Mapper.mapBoolCtx vBefore Positive xc
-                    let _, ycPre = Mapper.mapBoolCtx vBefore Positive yc
+                    let _, xcPre = Mapper.mapBoolCtx vBefore NoCtx xc
+                    let _, ycPre = Mapper.mapBoolCtx vBefore NoCtx yc
 
                     match (Set.toList outEdges, Set.toList inEdges) with
                     (* Are there only two out edges, and only one in edge?
@@ -782,7 +782,7 @@ module Term =
          * f(x!before) = f(x!before).
          * We assume we can eliminate it later.
          *)
-        subExprInDTerm sub Positive term |> snd
+        subExprInDTerm sub NoCtx term |> snd
 
     (*
      * Guard reduction
@@ -824,7 +824,7 @@ module Term =
     let simpTerm
       : STerm<SMGView, SMVFunc>
         -> STerm<SMGView, SMVFunc> =
-        subExprInDTerm (Mapper.make id simp) Positive >> snd
+        subExprInDTerm (Mapper.make id simp) NoCtx >> snd
 
     (*
      * Frontend

@@ -640,10 +640,12 @@ module Sub =
     /// </remarks>
     let subExprInVFunc
       (sub : SubFun<'srcVar, 'dstVar>)
-      (context : Position)
+      (context : SubCtx)
       ( { Name = n ; Params = ps } : VFunc<'srcVar> )
-      : (Position * VFunc<'dstVar> ) =
-        let context', ps' = mapAccumL (Mapper.mapCtx sub) context ps
+      : (SubCtx * VFunc<'dstVar> ) =
+        let context', ps'
+            = mapAccumL
+                  (fun acc -> Mapper.mapCtx sub (Position.push id acc)) context ps
         (context', { Name = n; Params = ps' } )
 
     /// <summary>
@@ -678,6 +680,6 @@ module Sub =
       : Result<VFunc<'dstVar>, 'err> =
         // TODO(CaptainHayashi): properly use context?
         ps
-        |> List.map (Mapper.tryMapCtx sub Positive >> snd)
+        |> List.map (Mapper.tryMapCtx sub NoCtx >> snd)
         |> collect
         |> lift (fun ps' -> { Name = n ; Params = ps' } )
