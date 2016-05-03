@@ -65,7 +65,6 @@ module Types =
         | Reg of 'var
 
 
-
 /// <summary>
 ///     Type synonyms for expressions over various forms of symbolic
 ///     variable.
@@ -243,7 +242,6 @@ module Queries =
         |> liftCToVSub
         |> liftVToSym
         |> onVars
-
 
     /// Converts an expression to its pre-state.
     let before
