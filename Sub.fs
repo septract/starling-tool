@@ -163,8 +163,8 @@ module Position =
     /// </typeparam>
     let underapprox : Position -> BoolExpr<'var> =
         function
-        | Positive -> BTrue
-        | Negative -> BFalse
+        | Positive -> BFalse
+        | Negative -> BTrue
 
     /// <summary>
     ///     If the context is position-based, push a new position onto
