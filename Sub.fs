@@ -199,6 +199,40 @@ module Position =
         | Positions (x::xs) -> Positions xs
         | x -> x
 
+    /// <summary>
+    ///     Wraps a context-sensitive function in a push and pop.
+    /// </summary>
+    /// <param name="f">
+    ///     The function transforming the position at the top of the stack.
+    /// </param>
+    /// <param name="g">
+    ///     The function, taking a context, to wrap; returns a pair of context
+    ///     and another item.
+    /// </param>
+    /// <typeparam name="item">
+    ///     The return type of <paramref name="g"/>, less the context.
+    /// </typeparam>
+    /// <returns>
+    ///     A function over a <c>SubCtx</c>, which behaves as
+    ///     <paramref name="g"/>, but, if the <c>SubCtx</c> is
+    ///     <c>Positions</c>, has pushed onto its incoming position stack
+    ///     the result of calling <paramref name="f"/> on the current position.
+    /// </returns>
+    let changePos
+      (f : Position -> Position)
+      (g : SubCtx -> (SubCtx * 'item))
+      : (SubCtx -> (SubCtx * 'item)) =
+        push f >> g >> pairMap pop id
+
+    /// <summary>
+    ///     An initial positive position context.
+    /// </summary>
+    let positive : SubCtx = Positions [Positive]
+
+    /// <summary>
+    ///     An initial negative position context.
+    /// </summary>
+    let negative : SubCtx = Positions [Negative]
 
 /// <summary>
 ///     Functions for variable substitution.
@@ -210,68 +244,77 @@ module Var =
     let rec boolSubVars
       (vfun : VSubFun<'srcVar, 'dstVar>)
       (ctx : SubCtx) =
+        // We do some tricky inserting and removing of positions on the stack
+        // to ensure the correct position appears in the correct place, and
+        // is removed when we pop back up the expression stack.
+        let bsv f c x = Position.changePos f (flip (boolSubVars vfun) x) c
+        let isv f c x = Position.changePos f (flip (intSubVars vfun) x) c
+        let esv f c x = Position.changePos f (flip (Mapper.mapCtx (onVars vfun)) x) c
+
         function
-        | BVar x -> Mapper.mapBoolCtx vfun (Position.push id ctx) x
+        | BVar x ->
+            Position.changePos id (flip (Mapper.mapBoolCtx vfun) x) ctx
         | BTrue -> (ctx, BTrue)
         | BFalse -> (ctx, BFalse)
         | BAnd xs ->
-            let ctx', xs' = mapAccumL (Position.push id >> boolSubVars vfun) ctx xs
+            let ctx', xs' = mapAccumL (bsv id) ctx xs
             (ctx', BAnd xs')
         | BOr xs ->
-            let ctx', xs' = mapAccumL (Position.push id >> boolSubVars vfun) ctx xs
+            let ctx', xs' = mapAccumL (bsv id) ctx xs
             (ctx', BOr xs')
         | BImplies (x, y) ->
-            // The LHS of an implies is in negative ctxition.
-            let ctxx, x' = boolSubVars vfun (Position.push Position.negate ctx) x
-            let ctx', y' = boolSubVars vfun (Position.push id ctxx) y
+            // The LHS of an implies is in negative position.
+            let ctxx, x' = bsv Position.negate ctx x
+            let ctx', y' = bsv id ctxx y
             (ctx', BImplies (x', y'))
         | BEq (x, y) ->
-            let ctxx, x' = Mapper.mapCtx (onVars vfun) (Position.push id ctx) x
-            let ctx', y' = Mapper.mapCtx (onVars vfun) (Position.push id ctxx) y
+            let ctxx, x' = esv id ctx x
+            let ctx', y' = esv id ctxx y
             (ctx', BEq (x', y'))
         | BGt (x, y) ->
-            let ctxx, x' = intSubVars vfun (Position.push id ctx) x
-            let ctx', y' = intSubVars vfun (Position.push id ctxx) y
+            let ctxx, x' = isv id ctx x
+            let ctx', y' = isv id ctxx y
             (ctx', BGt (x', y'))
         | BGe (x, y) ->
-            let ctxx, x' = intSubVars vfun (Position.push id ctx) x
-            let ctx', y' = intSubVars vfun (Position.push id ctxx) y
+            let ctxx, x' = isv id ctx x
+            let ctx', y' = isv id ctxx y
             (ctx', BGe (x', y'))
         | BLe (x, y) ->
-            let ctxx, x' = intSubVars vfun (Position.push id ctx) x
-            let ctx', y' = intSubVars vfun (Position.push id ctxx) y
+            let ctxx, x' = isv id ctx x
+            let ctx', y' = isv id ctxx y
             (ctx', BLe (x', y'))
         | BLt (x, y) ->
-            let ctxx, x' = intSubVars vfun (Position.push id ctx) x
-            let ctx', y' = intSubVars vfun (Position.push id ctxx) y
+            let ctxx, x' = isv id ctx x
+            let ctx', y' = isv id ctxx y
             (ctx', BLt (x', y'))
         | BNot x ->
-            let ctx', x' = boolSubVars vfun (Position.push Position.negate ctx) x
+            let ctx', x' = bsv Position.negate ctx x
             (ctx', BNot x')
-        >> pairMap Position.pop id
 
     /// Substitutes all variables with the given substitution function
     /// for the given arithmetic expression.
     and intSubVars
       (vfun : VSubFun<'srcVar, 'dstVar>)
       (ctx : SubCtx) =
+        let isv f c x = Position.changePos f (flip (intSubVars vfun) x) c
+
         function
-        | AVar x -> Mapper.mapIntCtx vfun (Position.push id ctx) x
+        | AVar x ->
+            Position.changePos id (flip (Mapper.mapIntCtx vfun) x) ctx
         | AInt i -> (ctx, AInt i)
         | AAdd xs ->
-            let ctx', xs' = mapAccumL (Position.push id >> intSubVars vfun) ctx xs
+            let ctx', xs' = mapAccumL (isv id) ctx xs
             (ctx', AAdd xs')
         | ASub xs ->
-            let ctx', xs' = mapAccumL (Position.push id >> intSubVars vfun) ctx xs
+            let ctx', xs' = mapAccumL (isv id) ctx xs
             (ctx', ASub xs')
         | AMul xs ->
-            let ctx', xs' = mapAccumL (Position.push id >> intSubVars vfun) ctx xs
+            let ctx', xs' = mapAccumL (isv id) ctx xs
             (ctx', AMul xs')
         | ADiv (x, y) ->
-            let ctxx, x' = intSubVars vfun (Position.push id ctx) x
-            let ctx', y' = intSubVars vfun (Position.push id ctxx) y
+            let ctxx, x' = isv id ctx x
+            let ctx', y' = isv id ctxx y
             (ctx', ADiv (x', y'))
-        >> pairMap Position.pop id
 
     /// <summary>
     ///   Creates a <c>SubFun</c> from a <c>VSubFun</c>.
@@ -283,64 +326,73 @@ module Var =
     let rec tryBoolSubVars
       (vfun : VTrySubFun<'srcVar, 'dstVar, 'err>)
       (ctx : SubCtx) =
+        let bsv f c x = Position.changePos f (flip (tryBoolSubVars vfun) x) c
+        let isv f c x = Position.changePos f (flip (tryIntSubVars vfun) x) c
+        let esv f c x = Position.changePos f (flip (Mapper.tryMapCtx (tryOnVars vfun)) x) c
+
         function
-        | BVar x -> Mapper.mapBoolCtx vfun (Position.push id ctx) x
+        | BVar x ->
+            Position.changePos id (flip (Mapper.mapBoolCtx vfun) x) ctx
         | BTrue -> (ctx, ok BTrue)
         | BFalse -> (ctx, ok BFalse)
         | BAnd xs ->
-            let ctx', xs' = mapAccumL (Position.push id >> tryBoolSubVars vfun) ctx xs
+            let ctx', xs' = mapAccumL (bsv id) ctx xs
             (ctx', lift BAnd (collect xs'))
         | BOr xs ->
-            let ctx', xs' = mapAccumL (Position.push id >> tryBoolSubVars vfun) ctx xs
+            let ctx', xs' = mapAccumL (bsv id) ctx xs
             (ctx', lift BOr (collect xs'))
         | BImplies (x, y) ->
-            // The LHS of an implies is in negative ctxition.
-            let ctxx, x' = tryBoolSubVars vfun (Position.push Position.negate ctx) x
-            let ctx', y' = tryBoolSubVars vfun (Position.push id ctxx) y
+            // The LHS of an implies is in negative position.
+            let ctxx, x' = bsv Position.negate ctx x
+            let ctx', y' = bsv id ctxx y
             (ctx', lift2 (curry BImplies) x' y')
         | BEq (x, y) ->
-            let ctxx, x' = Mapper.tryMapCtx (tryOnVars vfun) (Position.push id ctx) x
-            let ctx', y' = Mapper.tryMapCtx (tryOnVars vfun) (Position.push id ctxx) y
+            let ctxx, x' = esv id ctx x
+            let ctx', y' = esv id ctxx y
             (ctx', lift2 (curry BEq) x' y')
         | BGt (x, y) ->
-            let ctxx, x' = tryIntSubVars vfun (Position.push id ctx) x
-            let ctx', y' = tryIntSubVars vfun (Position.push id ctxx) y
+            let ctxx, x' = isv id ctx x
+            let ctx', y' = isv id ctxx y
             (ctx', lift2 (curry BGt) x' y')
         | BGe (x, y) ->
-            let ctxx, x' = tryIntSubVars vfun (Position.push id ctx) x
-            let ctx', y' = tryIntSubVars vfun (Position.push id ctxx) y
+            let ctxx, x' = isv id ctx x
+            let ctx', y' = isv id ctxx y
             (ctx', lift2 (curry BGe) x' y')
         | BLe (x, y) ->
-            let ctxx, x' = tryIntSubVars vfun (Position.push id ctx) x
-            let ctx', y' = tryIntSubVars vfun (Position.push id ctxx) y
+            let ctxx, x' = isv id ctx x
+            let ctx', y' = isv id ctxx y
             (ctx', lift2 (curry BLe) x' y')
         | BLt (x, y) ->
-            let ctxx, x' = tryIntSubVars vfun (Position.push id ctx) x
-            let ctx', y' = tryIntSubVars vfun (Position.push id ctxx) y
+            let ctxx, x' = isv id ctx x
+            let ctx', y' = isv id ctxx y
             (ctx', lift2 (curry BLt) x' y')
         | BNot x ->
-            let ctx', x' = tryBoolSubVars vfun (Position.push Position.negate ctx) x
+            let ctx', x' = bsv Position.negate ctx x
             (ctx', lift BNot x')
 
     /// Failing version of intSubVars.
     and tryIntSubVars
       (vfun : VTrySubFun<'srcVar, 'dstVar, 'err>)
       (ctx : SubCtx) =
+        let isv f c x = Position.changePos f (flip (tryIntSubVars vfun) x) c
+
         function
-        | AVar x -> Mapper.mapIntCtx vfun (Position.push id ctx) x
+        | AVar x ->
+            Position.changePos id (flip (Mapper.mapIntCtx vfun) x) ctx
         | AInt i -> (ctx, ok (AInt i))
         | AAdd xs ->
+            let ctx', xs' = mapAccumL (isv id) ctx xs
             let ctx', xs' = mapAccumL (Position.push id >> tryIntSubVars vfun) ctx xs
             (ctx', lift AAdd (collect xs'))
         | ASub xs ->
-            let ctx', xs' = mapAccumL (Position.push id >> tryIntSubVars vfun) ctx xs
+            let ctx', xs' = mapAccumL (isv id) ctx xs
             (ctx', lift ASub (collect xs'))
         | AMul xs ->
-            let ctx', xs' = mapAccumL (Position.push id >> tryIntSubVars vfun) ctx xs
+            let ctx', xs' = mapAccumL (isv id) ctx xs
             (ctx', lift AMul (collect xs'))
         | ADiv (x, y) ->
-            let ctxx, x' = tryIntSubVars vfun (Position.push id ctx) x
-            let ctx', y' = tryIntSubVars vfun (Position.push id ctxx) y
+            let ctxx, x' = isv id ctx x
+            let ctx', y' = isv id ctxx y
             (ctx', lift2 (curry ADiv) x' y')
 
     /// <summary>

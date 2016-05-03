@@ -575,8 +575,16 @@ module Sub =
       (context : SubCtx)
       ( { Cond = cond ; Item = item } : GFunc<'srcVar> )
       : (SubCtx * GFunc<'dstVar>) =
-        let contextC, cond' = Mapper.mapBoolCtx sub context cond
-        let context', item' = subExprInVFunc sub context item
+        let contextC, cond' =
+            Position.changePos
+                id
+                (flip (Mapper.mapBoolCtx sub) cond)
+                context
+        let context', item' =
+            Position.changePos
+                id
+                (flip (subExprInVFunc sub) item)
+                context
 
         (context', { Cond = cond'; Item = item' } )
 
@@ -611,7 +619,13 @@ module Sub =
       (sub : SubFun<'srcVar, 'dstVar>)
       (context : SubCtx)
       : GView<'srcVar> -> (SubCtx * GView<'dstVar>) =
-        Multiset.mapAccum (fun ctx f _ -> subExprInGFunc sub ctx f) context
+        Multiset.mapAccum
+            (fun ctx f _ ->
+                 Position.changePos
+                     id
+                     (flip (subExprInGFunc sub) f)
+                     ctx)
+            context
 
     /// <summary>
     ///     Maps a <c>SubFun</c> over all expressions in an <c>Term</c>
@@ -648,11 +662,20 @@ module Sub =
       (term : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>)
       : (SubCtx * Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>>) =
         let contextT, cmd' =
-            Mapper.mapBoolCtx sub (Position.push (Position.negate) context) term.Cmd
+            Position.changePos
+                Position.negate
+                (flip (Mapper.mapBoolCtx sub) term.Cmd)
+                context
         let contextW, wpre' =
-            subExprInGView sub (Position.push (Position.negate) contextT) term.WPre
+            Position.changePos
+                Position.negate
+                (flip (subExprInGView sub) term.WPre)
+                contextT
         let context', goal' =
-            subExprInVFunc sub (Position.push id contextW) term.Goal
+            Position.changePos
+                id
+                (flip (subExprInVFunc sub) term.Goal)
+                contextW
         (context', { Cmd = cmd'; WPre = wpre'; Goal = goal' } )
 
     /// <summary>
@@ -687,8 +710,16 @@ module Sub =
       (context : SubCtx)
       ( { Cond = cond ; Item = item } : GFunc<'srcVar> )
       : (SubCtx * Result<GFunc<'dstVar>, 'err> ) =
-        let contextC, cond' = Mapper.mapBoolCtx sub (Position.push id context) cond
-        let context', item' = trySubExprInVFunc sub (Position.push id contextC) item
+        let contextC, cond' =
+            Position.changePos
+                id
+                (flip (Mapper.mapBoolCtx sub) cond)
+                context
+        let context', item' =
+            Position.changePos
+                id
+                (flip (trySubExprInVFunc sub) item)
+                context
 
         (context',
          lift2
@@ -731,7 +762,13 @@ module Sub =
       (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
       (context : SubCtx)
       : GView<'srcVar> -> (SubCtx * Result<GView<'dstVar>, 'err> ) =
-        Multiset.mapAccum (fun ctx f _ -> trySubExprInGFunc sub ctx f) context
+        Multiset.mapAccum
+            (fun ctx f _ ->
+                 Position.changePos
+                     id
+                     (flip (trySubExprInGFunc sub) f)
+                     ctx)
+            context
         >> pairMap id Multiset.collect
 
     /// <summary>
@@ -773,11 +810,20 @@ module Sub =
       (term : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>)
       : (SubCtx * Result<Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>>, 'err> ) =
         let contextT, cmd' =
-            Mapper.mapBoolCtx sub (Position.push (Position.negate) context) term.Cmd
+            Position.changePos
+                Position.negate
+                (flip (Mapper.mapBoolCtx sub) term.Cmd)
+                context
         let contextW, wpre' =
-            trySubExprInGView sub (Position.push (Position.negate) contextT) term.WPre
+            Position.changePos
+                Position.negate
+                (flip (trySubExprInGView sub) term.WPre)
+                contextT
         let context', goal' =
-            trySubExprInVFunc sub (Position.push id contextW) term.Goal
+            Position.changePos
+                id
+                (flip (trySubExprInVFunc sub) term.Goal)
+                contextW
         (context',
          lift3
              (fun c w g -> { Cmd = c; WPre = w; Goal = g } )

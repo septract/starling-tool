@@ -169,7 +169,9 @@ module Queries =
     let rec liftVToSym
       (sf : VSubFun<'srcVar, Sym<'dstVar>>)
       : VSubFun<Sym<'srcVar>, Sym<'dstVar>> =
-        let rmap ctx = (sf |> liftVToSym |> onVars |> Mapper.mapCtx) ctx
+        let rmap ctx =
+            (sf |> liftVToSym |> onVars |> Mapper.mapCtx) ctx
+
         Mapper.makeCtx
             (fun pos v ->
                  match v with
