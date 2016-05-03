@@ -253,6 +253,31 @@ module Queries =
       : SubFun<Sym<Var>, Sym<MarkedVar>> =
         liftCToSymSub (Mapper.cmake After)
 
+    /// <summary>
+    ///     Replaces symbols in a Boolean position with their
+    ///     under-approximation.
+    /// </summary>
+    let approx
+      : SubFun<Sym<MarkedVar>, Sym<MarkedVar>> =
+        let rec boolSub pos v =
+            (pos,
+             match (pos, v) with
+             | (Positions (position::_), Sym _) ->
+                   Position.underapprox position
+             | (Positions _, Reg x) -> BVar (Reg x)
+             | _ -> failwith "approx must be used with Position context")
+        and intSub pos v =
+             match v with
+             | Reg r -> (pos, AVar (Reg r))
+             | Sym { Name = sym; Params = rs } ->
+                 let pos', rs' = mapAccumL rmap pos rs
+                 (pos', AVar (Sym { Name = sym; Params = rs' } ))
+        and vsf = Mapper.makeCtx intSub boolSub
+        and sf = onVars vsf
+        and rmap ctx = Mapper.mapCtx sf (Position.push id ctx)
+
+        sf
+
 
 /// <summary>
 ///     Pretty printers for symbolics.
@@ -318,3 +343,108 @@ module Tests =
         /// Tests whether rewriting constants in arithmetic expressions to post-state works.
         member x.``constants in arithmetic expressions can be rewritten to post-state`` expr =
             expr |> Mapper.mapIntCtx after NoCtx |> snd
+
+        /// <summary>
+        ///     Test cases for testing underapproximation of Booleans.
+        /// </summary>
+        static member BoolApprox =
+            [ (tcd
+                   [| BAnd
+                          [ bEq
+                                (sbBefore "foo")
+                                (sbAfter "bar")
+                            BGt
+                                (siBefore "baz", AInt 1L) ]
+                      Position.positive |])
+                  .Returns(
+                    (Positions [ Positive ],
+                     ((BAnd
+                          [ bEq
+                                (sbBefore "foo")
+                                (sbAfter "bar")
+                            BGt
+                                (siBefore "baz", AInt 1L) ] ) : SMBoolExpr)))
+                  .SetName("Don't alter +ve symbol-less expression")
+              (tcd
+                   [| BVar
+                          (Sym
+                               { Name = "test"
+                                 Params = ([] : SMExpr list) } )
+                      Position.positive |])
+                  .Returns(
+                      (Positions [ Positive ], (BFalse : SMBoolExpr)))
+                  .SetName("Rewrite +ve param-less Bool symbol to false")
+              (tcd
+                   [| BVar
+                          (Sym
+                               { Name = "test"
+                                 Params = ([] : SMExpr list) } )
+                      Position.negative |])
+                  .Returns(
+                      (Positions [ Negative ], (BTrue : SMBoolExpr)))
+                  .SetName("Rewrite -ve param-less Bool symbol to true")
+              (tcd
+                   [| BVar
+                          (Sym { Name = "test"
+                                 Params =
+                                     ([ Expr.Int (siBefore "foo")
+                                        Expr.Bool (sbAfter "bar") ] : SMExpr list) } )
+                      Position.positive |])
+                  .Returns(
+                      (Positions [ Positive ], (BFalse : SMBoolExpr)))
+                  .SetName("Rewrite +ve Reg-params Bool symbol to false")
+              (tcd
+                   [| BVar
+                          (Sym { Name = "test"
+                                 Params =
+                                     ([ Expr.Int (siBefore "foo")
+                                        Expr.Bool (sbAfter "bar") ] : SMExpr list) } )
+                      Position.negative |])
+                  .Returns(
+                       (Positions [ Negative ], (BTrue : SMBoolExpr)))
+                  .SetName("Rewrite -ve Reg-params Bool symbol to true")
+              (tcd
+                   [| BImplies
+                          (BVar
+                               (Sym { Name = "test1"
+                                      Params =
+                                          ([ Expr.Int (siBefore "foo")
+                                             Expr.Bool (sbAfter "bar") ] : SMExpr list) } ),
+                           BVar
+                               (Sym { Name = "test2"
+                                      Params =
+                                          ([ Expr.Int (siBefore "baz")
+                                             Expr.Bool (sbAfter "barbaz") ] : SMExpr list) } ))
+                      Position.positive |])
+                  .Returns(
+                      (Positions [ Positive ],
+                       BImplies
+                           ((BTrue : SMBoolExpr),
+                            (BFalse : SMBoolExpr))))
+                  .SetName("Rewrite +ve implication correctly")
+              (tcd
+                   [| BImplies
+                          (BVar
+                               (Sym { Name = "test1"
+                                      Params =
+                                          ([ Expr.Int (siBefore "foo")
+                                             Expr.Bool (sbAfter "bar") ] : SMExpr list) } ),
+                           BVar
+                               (Sym { Name = "test2"
+                                      Params =
+                                          ([ Expr.Int (siBefore "baz")
+                                             Expr.Bool (sbAfter "barbaz") ] : SMExpr list) } ))
+                      Position.negative |])
+                  .Returns(
+                      (Positions [ Negative ],
+                       BImplies
+                           ((BFalse : SMBoolExpr),
+                            (BTrue : SMBoolExpr))))
+                  .SetName("Rewrite -ve implication correctly") ]
+
+        /// <summary>
+        ///     Tests whether Boolean underapproximation works.
+        /// </summary>
+        [<TestCaseSource("BoolApprox")>]
+        member this.testBoolApprox bl pos =
+            bl |> Mapper.mapBoolCtx approx pos
