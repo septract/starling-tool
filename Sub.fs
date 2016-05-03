@@ -56,6 +56,7 @@ module Types =
         ///     </para>
         /// </summary>
         | Positions of Position list
+        override this.ToString () = sprintf "%A" this
 
     /// <summary>
     ///     A <c>Mapper</c> mapping between forms of <c>Expr</c>s.

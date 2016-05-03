@@ -55,6 +55,7 @@ module Types =
         | BLe of IntExpr<'var> * IntExpr<'var>
         | BLt of IntExpr<'var> * IntExpr<'var>
         | BNot of BoolExpr<'var>
+        override this.ToString () = sprintf "%A" this
 
     /// Type for fresh variable generators.
     type FreshGen = bigint ref
