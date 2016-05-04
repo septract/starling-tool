@@ -181,5 +181,5 @@ type OptimiserTests() =
 
      /// Test Boolean simplification
     [<TestCaseSource("ObviousBools")>]
-    member x.``Boolean expressions should be simplified properly`` b =
+    member x.``Boolean expressions should be simplified properly`` (b : BoolExpr<MarkedVar>) =
         simp b

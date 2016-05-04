@@ -779,6 +779,6 @@ module Tests =
         ///     Tests <c>varsInGFunc</c>.
         /// </summary>
         [<TestCaseSource("VarsInGFuncCases")>]
-        member this.testVarsInGFunc gf =
+        member this.testVarsInGFunc (gf : MGFunc) =
             gf |> varsInGFunc |> Set.ofSeq
 
