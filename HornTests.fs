@@ -56,42 +56,42 @@ type HornTests() =
               Some <| BFalse ) ] )
           .Returns(
               Set.ofList
-                  [ Clause(Ge (AVar "ticket", AVar "serving"),
+                  [ Clause(Ge (AVar "Vticket", AVar "Vserving"),
                            [ Pred { Name = "emp"
-                                    Params = [ AVar "serving"; AVar "ticket" ] } ] )
-                    Clause(Gt (AVar "ticket", AVar "t"),
+                                    Params = [ AVar "Vserving"; AVar "Vticket" ] } ] )
+                    Clause(Gt (AVar "Vticket", AVar "Vt"),
                            [ Pred { Name = "v_holdTick"
-                                    Params = [ AVar "serving"; AVar "ticket"; AVar "t" ] } ] )
-                    Clause(Gt (AVar "ticket", AVar "serving"),
+                                    Params = [ AVar "Vserving"; AVar "Vticket"; AVar "Vt" ] } ] )
+                    Clause(Gt (AVar "Vticket", AVar "Vserving"),
                            [ Pred { Name = "v_holdLock"
-                                    Params = [ AVar "serving"; AVar "ticket" ] } ] )
-                    Clause(Neq (AVar "serving", AVar "t"),
+                                    Params = [ AVar "Vserving"; AVar "Vticket" ] } ] )
+                    Clause(Neq (AVar "Vserving", AVar "Vt"),
                            [ Pred { Name = "v_holdLock_holdTick"
-                                    Params = [ AVar "serving"; AVar "ticket"; AVar "t" ] } ] )
-                    Clause(Neq (AVar "ta", AVar "tb"),
+                                    Params = [ AVar "Vserving"; AVar "Vticket"; AVar "Vt" ] } ] )
+                    Clause(Neq (AVar "Vta", AVar "Vtb"),
                            [ Pred { Name = "v_holdTick_holdTick"
-                                    Params = [ AVar "serving"; AVar "ticket"; AVar "ta"; AVar "tb" ] } ] )
+                                    Params = [ AVar "Vserving"; AVar "Vticket"; AVar "Vta"; AVar "Vtb" ] } ] )
                     Clause(False,
                            [ Pred { Name = "v_holdLock_holdLock"
-                                    Params = [ AVar "serving"; AVar "ticket"] } ] )
+                                    Params = [ AVar "Vserving"; AVar "Vticket"] } ] )
                     Clause(Pred { Name = "emp"
-                                  Params = [ AVar "serving"; AVar "ticket" ] },
-                           [ Ge (AVar "ticket", AVar "serving") ] )
+                                  Params = [ AVar "Vserving"; AVar "Vticket" ] },
+                           [ Ge (AVar "Vticket", AVar "Vserving") ] )
                     Clause(Pred { Name = "v_holdTick"
-                                  Params = [ AVar "serving"; AVar "ticket"; AVar "t" ] },
-                           [ Gt (AVar "ticket", AVar "t") ] )
+                                  Params = [ AVar "Vserving"; AVar "Vticket"; AVar "Vt" ] },
+                           [ Gt (AVar "Vticket", AVar "Vt") ] )
                     Clause(Pred { Name = "v_holdLock"
-                                  Params = [ AVar "serving"; AVar "ticket" ] },
-                           [ Gt (AVar "ticket", AVar "serving") ] )
+                                  Params = [ AVar "Vserving"; AVar "Vticket" ] },
+                           [ Gt (AVar "Vticket", AVar "Vserving") ] )
                     Clause(Pred { Name = "v_holdLock_holdTick"
-                                  Params = [ AVar "serving"; AVar "ticket"; AVar "t" ] },
-                           [ Neq (AVar "serving", AVar "t") ] )
+                                  Params = [ AVar "Vserving"; AVar "Vticket"; AVar "Vt" ] },
+                           [ Neq (AVar "Vserving", AVar "Vt") ] )
 
                     Clause(Pred { Name = "v_holdTick_holdTick"
-                                  Params = [ AVar "serving"; AVar "ticket"; AVar "ta"; AVar "tb" ] },
-                           [ Neq (AVar "ta", AVar "tb") ] )
+                                  Params = [ AVar "Vserving"; AVar "Vticket"; AVar "Vta"; AVar "Vtb" ] },
+                           [ Neq (AVar "Vta", AVar "Vtb") ] )
                     Clause(Pred { Name = "v_holdLock_holdLock"
-                                  Params = [ AVar "serving"; AVar "ticket"] },
+                                  Params = [ AVar "Vserving"; AVar "Vticket"] },
                            [ False ] )
 
                     QueryNaming {Name = "emp"; Params = ["serving"; "ticket"]}
@@ -116,9 +116,9 @@ type HornTests() =
       [ TestCaseData(HornTests.Globals)
           .Returns(
                   Clause (Pred { Name = "emp"
-                                 Params = [ AVar "serving"; AVar "ticket" ] },
-                          [ Eq (AVar "serving", AInt 0L)
-                            Eq (AVar "ticket", AInt 0L) ] )
+                                 Params = [ AVar "Vserving"; AVar "Vticket" ] },
+                          [ Eq (AVar "Vserving", AInt 0L)
+                            Eq (AVar "Vticket", AInt 0L) ] )
               |> Some
           ).SetName("Model the ticket lock's variable initialisations as Horn clauses") ]
 

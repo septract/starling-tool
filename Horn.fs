@@ -276,11 +276,18 @@ let tryIntExpr : MExpr -> Result<VIntExpr, Error> =
        | Expr.Int x -> ok x
        | e -> e |> UnsupportedExpr |> fail
 
+///<summary>
+///     HSF requires variables to start with a capital letter.
+///     so we prepend a "V".  This is also done in unmarkVar.
+///     @mjp41: TODO: We should consider consolidating this.
+///</summary>
+let makeHSFVar = (+) "V"
+
 /// Ensures a param in a viewdef multiset is arithmetic.
 let ensureArith =
-   function
-   | Param.Int x -> x |> AVar |> ok
-   | x -> x |> NonArithParam |> fail
+    function
+    | Param.Int x -> x |> makeHSFVar |> AVar |> ok
+    | x -> x |> NonArithParam |> fail
 
 /// Constructs a pred from a Func, given a set of active globals,
 /// and some validator on the parameters.
@@ -307,7 +314,7 @@ let hsfModelViewDef svars
     function
     | (vs, Some ex) ->
         lift2 (fun hd bd -> [Clause (hd, [bd]); Clause (bd, [hd])])
-              (boolExpr id ex)
+              (boolExpr makeHSFVar ex)
               (predOfFunc svars ensureArith vs)
         |> lift (fun c -> queryNaming vs :: c)
     | (vs, None) -> ok [ queryNaming vs ]
@@ -333,7 +340,7 @@ let hsfModelVariables (svars : VarMap) : Result<Horn, Error> =
         |> Map.toSeq
         |> Seq.map
             (function
-             | (name, Type.Int()) -> name |> AVar |> ok
+             | (name, Type.Int()) -> name |> makeHSFVar |> AVar |> ok
              | (name, ty) -> name |> withType ty |> NonArithVar |> fail)
         |> collect
 
