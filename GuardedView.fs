@@ -761,14 +761,15 @@ module Tests =
         ///     Test cases for extracting variables from <c>GFunc</c>s.
         /// </summary>
         static member VarsInGFuncCases =
-            [ TestCaseData(gfunc BTrue "foo" [])
+            [ TestCaseData(mgfunc BTrue "foo" [])
                   .Returns(Set.empty : Set<CTyped<MarkedVar>>)
                   .SetName("GFunc with no guard and no parameters has no variables")
-              TestCaseData(gfunc (bBefore "bar") "foo" [])
+              TestCaseData(mgfunc (bBefore "bar") "foo" [])
                   .Returns((Set.singleton (Typed.Bool (Before "bar"))) : Set<CTyped<MarkedVar>>)
                   .SetName("Variables in a GFunc's guard are returned by varsInGFunc")
-              TestCaseData(gfunc BTrue "foo" [ Typed.Bool (bAfter "x")
-                                               Typed.Int (iBefore "y") ] )
+              TestCaseData(mgfunc BTrue "foo"
+                               [ Typed.Bool (bAfter "x")
+                                 Typed.Int (iBefore "y") ] )
                   .Returns((Set.ofArray
                                 [| (Typed.Bool (After "x"))
                                    (Typed.Int (Before "y")) |]): Set<CTyped<MarkedVar>>)
