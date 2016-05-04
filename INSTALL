@@ -33,3 +33,6 @@ Linux as well)
   > xbuild starling.sln
 
 - The binary will be starling-tool/bin/Debug/starling.exe
+
+- Run the NUnit tests by running: 
+ > mono [path to NUnitConsolerunner]/tools/nunit3-console.exe bin/Debug/starling.exe
