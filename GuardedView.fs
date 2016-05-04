@@ -578,13 +578,15 @@ module Sub =
         let contextC, cond' =
             Position.changePos
                 id
-                (flip (Mapper.mapBoolCtx sub) cond)
+                (Mapper.mapBoolCtx sub)
                 context
+                cond
         let context', item' =
             Position.changePos
                 id
-                (flip (subExprInVFunc sub) item)
+                (subExprInVFunc sub)
                 context
+                item
 
         (context', { Cond = cond'; Item = item' } )
 
@@ -623,8 +625,9 @@ module Sub =
             (fun ctx f _ ->
                  Position.changePos
                      id
-                     (flip (subExprInGFunc sub) f)
-                     ctx)
+                     (subExprInGFunc sub)
+                     ctx
+                     f)
             context
 
     /// <summary>
@@ -664,18 +667,21 @@ module Sub =
         let contextT, cmd' =
             Position.changePos
                 Position.negate
-                (flip (Mapper.mapBoolCtx sub) term.Cmd)
+                (Mapper.mapBoolCtx sub)
                 context
+                term.Cmd
         let contextW, wpre' =
             Position.changePos
                 Position.negate
-                (flip (subExprInGView sub) term.WPre)
+                (subExprInGView sub)
                 contextT
+                term.WPre
         let context', goal' =
             Position.changePos
                 id
-                (flip (subExprInVFunc sub) term.Goal)
+                (subExprInVFunc sub)
                 contextW
+                term.Goal
         (context', { Cmd = cmd'; WPre = wpre'; Goal = goal' } )
 
     /// <summary>
@@ -713,13 +719,15 @@ module Sub =
         let contextC, cond' =
             Position.changePos
                 id
-                (flip (Mapper.mapBoolCtx sub) cond)
+                (Mapper.mapBoolCtx sub)
                 context
+                cond
         let context', item' =
             Position.changePos
                 id
-                (flip (trySubExprInVFunc sub) item)
+                (trySubExprInVFunc sub)
                 context
+                item
 
         (context',
          lift2
@@ -766,8 +774,8 @@ module Sub =
             (fun ctx f _ ->
                  Position.changePos
                      id
-                     (flip (trySubExprInGFunc sub) f)
-                     ctx)
+                     (trySubExprInGFunc sub)
+                     ctx f)
             context
         >> pairMap id Multiset.collect
 
@@ -812,18 +820,21 @@ module Sub =
         let contextT, cmd' =
             Position.changePos
                 Position.negate
-                (flip (Mapper.mapBoolCtx sub) term.Cmd)
+                (Mapper.mapBoolCtx sub)
                 context
+                term.Cmd
         let contextW, wpre' =
             Position.changePos
                 Position.negate
-                (flip (trySubExprInGView sub) term.WPre)
+                (trySubExprInGView sub)
                 contextT
+                term.WPre
         let context', goal' =
             Position.changePos
                 id
-                (flip (trySubExprInVFunc sub) term.Goal)
+                (trySubExprInVFunc sub)
                 contextW
+                term.Goal
         (context',
          lift3
              (fun c w g -> { Cmd = c; WPre = w; Goal = g } )

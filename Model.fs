@@ -645,11 +645,7 @@ module Sub =
       : (SubCtx * VFunc<'dstVar> ) =
         let context', ps' =
             mapAccumL
-                (fun acc p ->
-                     Position.changePos
-                         id
-                         (flip (Mapper.mapCtx sub) p)
-                         acc)
+                (Position.changePos id (Mapper.mapCtx sub))
                 context
                 ps
         (context', { Name = n; Params = ps' } )
@@ -690,11 +686,7 @@ module Sub =
       : (SubCtx * Result<VFunc<'dstVar>, 'err>) =
         let context', ps' =
             mapAccumL
-                (fun acc p ->
-                     Position.changePos
-                         id
-                         (flip (Mapper.tryMapCtx sub) p)
-                         acc)
+                (Position.changePos id (Mapper.tryMapCtx sub))
                 context
                 ps
         (context',

@@ -206,10 +206,16 @@ module Position =
     ///     The function transforming the position at the top of the stack.
     /// </param>
     /// <param name="g">
-    ///     The function, taking a context, to wrap; returns a pair of context
-    ///     and another item.
+    ///     The function, taking a context and item, to wrap; returns a pair of
+    ///     context and another item.
     /// </param>
-    /// <typeparam name="item">
+    /// <param name="ctx">
+    ///     The current context.
+    /// </param>
+    /// <typeparam name="src">
+    ///     The input type of <paramref name="g"/>, less the context.
+    /// </typeparam>
+    /// <typeparam name="dst">
     ///     The return type of <paramref name="g"/>, less the context.
     /// </typeparam>
     /// <returns>
@@ -220,9 +226,10 @@ module Position =
     /// </returns>
     let changePos
       (f : Position -> Position)
-      (g : SubCtx -> (SubCtx * 'item))
-      : (SubCtx -> (SubCtx * 'item)) =
-        push f >> g >> pairMap pop id
+      (g : SubCtx -> 'src -> (SubCtx * 'item))
+      (ctx : SubCtx)
+      : ('src -> (SubCtx * 'item)) =
+        g (push f ctx) >> pairMap pop id
 
     /// <summary>
     ///     An initial positive position context.
@@ -247,13 +254,13 @@ module Var =
         // We do some tricky inserting and removing of positions on the stack
         // to ensure the correct position appears in the correct place, and
         // is removed when we pop back up the expression stack.
-        let bsv f c x = Position.changePos f (flip (boolSubVars vfun) x) c
-        let isv f c x = Position.changePos f (flip (intSubVars vfun) x) c
-        let esv f c x = Position.changePos f (flip (Mapper.mapCtx (onVars vfun)) x) c
+        let bsv f = Position.changePos f (boolSubVars vfun)
+        let isv f = Position.changePos f (intSubVars vfun)
+        let esv f = Position.changePos f (Mapper.mapCtx (onVars vfun))
 
         function
         | BVar x ->
-            Position.changePos id (flip (Mapper.mapBoolCtx vfun) x) ctx
+            Position.changePos id (Mapper.mapBoolCtx vfun) ctx x
         | BTrue -> (ctx, BTrue)
         | BFalse -> (ctx, BFalse)
         | BAnd xs ->
@@ -296,11 +303,11 @@ module Var =
     and intSubVars
       (vfun : VSubFun<'srcVar, 'dstVar>)
       (ctx : SubCtx) =
-        let isv f c x = Position.changePos f (flip (intSubVars vfun) x) c
+        let isv f = Position.changePos f (intSubVars vfun)
 
         function
         | AVar x ->
-            Position.changePos id (flip (Mapper.mapIntCtx vfun) x) ctx
+            Position.changePos id (Mapper.mapIntCtx vfun) ctx x
         | AInt i -> (ctx, AInt i)
         | AAdd xs ->
             let ctx', xs' = mapAccumL (isv id) ctx xs
@@ -326,13 +333,13 @@ module Var =
     let rec tryBoolSubVars
       (vfun : VTrySubFun<'srcVar, 'dstVar, 'err>)
       (ctx : SubCtx) =
-        let bsv f c x = Position.changePos f (flip (tryBoolSubVars vfun) x) c
-        let isv f c x = Position.changePos f (flip (tryIntSubVars vfun) x) c
-        let esv f c x = Position.changePos f (flip (Mapper.tryMapCtx (tryOnVars vfun)) x) c
+        let bsv f = Position.changePos f (tryBoolSubVars vfun)
+        let isv f = Position.changePos f (tryIntSubVars vfun)
+        let esv f = Position.changePos f (Mapper.tryMapCtx (tryOnVars vfun))
 
         function
         | BVar x ->
-            Position.changePos id (flip (Mapper.mapBoolCtx vfun) x) ctx
+            Position.changePos id (Mapper.mapBoolCtx vfun) ctx x
         | BTrue -> (ctx, ok BTrue)
         | BFalse -> (ctx, ok BFalse)
         | BAnd xs ->
@@ -374,11 +381,11 @@ module Var =
     and tryIntSubVars
       (vfun : VTrySubFun<'srcVar, 'dstVar, 'err>)
       (ctx : SubCtx) =
-        let isv f c x = Position.changePos f (flip (tryIntSubVars vfun) x) c
+        let isv f = Position.changePos f (tryIntSubVars vfun)
 
         function
         | AVar x ->
-            Position.changePos id (flip (Mapper.mapIntCtx vfun) x) ctx
+            Position.changePos id (Mapper.mapIntCtx vfun) ctx x
         | AInt i -> (ctx, ok (AInt i))
         | AAdd xs ->
             let ctx', xs' = mapAccumL (isv id) ctx xs
