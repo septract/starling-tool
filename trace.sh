@@ -11,7 +11,7 @@ then
 fi
 
 echo "Framer:"
-./starling.sh -s frame -t "$2" "$1" | $SED "s/^/    /"
+./starling.sh -s goalAdd -t "$2" "$1" | $SED "s/^/    /"
 echo "TermGen:"
 ./starling.sh -s termgen -t "$2" "$1" | $SED "s/^/    /"
 echo "Reify:"
@@ -21,6 +21,6 @@ echo "Flatten:"
 echo "Semantics:"
 ./starling.sh -s semantics -t "$2" "$1" | $SED "s/^/    /"
 echo "Optimise:"
-./starling.sh -s optimise -t "$2" "$1" | $SED "s/^/    /"
+./starling.sh -s termOptimise -t "$2" "$1" | $SED "s/^/    /"
 echo "Z3:"
 ./starling.sh -s z3 -t "$2" "$1" | $SED "s/^/    /"
