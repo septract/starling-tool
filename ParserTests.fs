@@ -1,9 +1,13 @@
+/// <summary>
+///     Parser tests.
+/// </summary>
 module Starling.Tests.Lang.Parser
 
 open NUnit.Framework
 open FParsec
 open Starling
 open Starling.Core.Var
+open Starling.Core.Model
 open Starling.Lang.AST
 open Starling.Lang.Parser
 
@@ -80,20 +84,30 @@ type ParserTests() =
 
     /// Test cases for testing the constraint parser.
     static member ConstraintParses =
-        [ TestCaseData("constraint emp -> true;").Returns(Some { CView = ViewDef.Unit
-                                                                 CExpression = Some True })
-
+        [ TestCaseData("constraint emp -> true;")
+              .Returns(Some (Definite (DView.Unit, True)))
           TestCaseData("constraint Func(a, b) -> c > a + b;")
-              .Returns(Some { CView =
-                                  ViewDef.Func { Name = "Func"
-                                                 Params = [ "a"; "b" ] }
-                              CExpression = Some <| Bop(Gt, LV(LVIdent "c"), Bop(Add, LV(LVIdent "a"), LV(LVIdent "b"))) })
-
+              .Returns(Some (Definite
+                                 (DView.Func { Name = "Func"
+                                               Params = [ "a"; "b" ] },
+                                  Bop (Gt,
+                                       LV(LVIdent "c"),
+                                       Bop(Add,
+                                           LV(LVIdent "a"),
+                                           LV(LVIdent "b"))))))
           TestCaseData("constraint Func(a, b) -> ?;")
-              .Returns(Some { CView =
-                                  ViewDef.Func { Name = "Func"
-                                                 Params = [ "a"; "b" ] }
-                              CExpression = None }) ]
+              .Returns(Some (Indefinite
+                                 (DView.Func { Name = "Func"
+                                               Params = [ "a"; "b" ] } )
+                             : ViewDef<DView, Expression>))
+          TestCaseData("constraint Func(a, b) -> %{uninterpreted symbol}() == true;")
+              .Returns(Some (Definite
+                                 (DView.Func { Name = "Func"
+                                               Params = [ "a"; "b" ] },
+                                  Bop (Eq,
+                                       Symbolic("uninterpreted symbol", []),
+                                       True))
+                             : ViewDef<DView, Expression>)) ]
         |> List.map (fun d -> d.SetName(sprintf "Parse %A" d.OriginalArguments.[0]))
 
     [<TestCaseSource("ConstraintParses")>]

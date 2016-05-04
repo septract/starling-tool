@@ -1,7 +1,11 @@
-/// The dreaded 'miscellaneous functions' module.
+/// <summary>
+///     The dreaded 'miscellaneous functions' module.
 ///
-/// Most of these are generic, stand-alone combinators, but some also
-/// augment Chessie and other libraries.
+///     <para>
+///         Most of these are generic, stand-alone combinators, but some
+///         also augment Chessie and other libraries.
+///     </para>
+/// </summary>
 [<AutoOpen>]
 module Starling.Utils
 
@@ -156,3 +160,15 @@ let foldFastTerm (f : 'State -> 'T -> 'State option)
         else (Some s')
 
     fft f s
+
+
+/// <summary>
+///    Utilities for testing.
+/// </summary>
+module Testing =
+    open NUnit.Framework
+
+    /// <summary>
+    ///     A more F#-friendly overload of <c>TestCaseData</c>.
+    /// </summary>
+    let tcd : obj[] -> TestCaseData = TestCaseData

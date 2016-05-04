@@ -28,10 +28,13 @@ module Starling.Backends.MuZ3
 open Microsoft
 open Starling
 open Starling.Collections
+open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
+open Starling.Core.Model.Sub
 open Starling.Core.GuardedView
+open Starling.Core.GuardedView.Sub
 open Starling.Core.Instantiate
 open Starling.Core.Sub
 open Starling.Core.Z3
@@ -70,7 +73,7 @@ module Types =
         { /// <summary>
           ///     List of definite viewdefs, as (view, def) pairs, to check.
           /// </summary>
-          Definites : (VFunc * BoolExpr) list
+          Definites : (VFunc<Var> * VBoolExpr) list
           /// <summary>
           ///     Map of (view name, FuncDecl) bindings.
           /// </summary>
@@ -107,9 +110,10 @@ module Types =
 /// <summary>
 ///     Pretty printers for the MuZ3 types.
 /// </summary>
-module Pretty =            
+module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Expr.Pretty
+    open Starling.Core.Var.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Instantiate.Pretty
     open Starling.Core.Z3.Pretty
@@ -123,15 +127,15 @@ module Pretty =
                                    headed "View assignments" [ printZ3Exp ex ] ]
         | MuSat.Unknown reason -> colonSep [ String "Proof status unknown"
                                              String reason ]
-    
+
     /// Pretty-prints a MuModel.
     let printMuModel { Definites = ds ; Rules = rs ; FuncDecls = fdm } =
         printAssoc
             Indented
             [ (String "Definites",
                ds |>
-               List.map (fun (f, d) -> equality (printVFunc f)
-                                                (printBoolExpr d))
+               List.map (fun (f, d) -> equality (printVFunc String f)
+                                                (printVBoolExpr d))
                |> vsep)
               (String "Rules",
                rs
@@ -174,9 +178,9 @@ module Translator =
     /// </returns>
     let typeToSort reals (ctx : Z3.Context) =
         function
-        | Type.Int when reals -> ctx.MkRealSort () :> Z3.Sort
-        | Type.Int -> ctx.MkIntSort () :> Z3.Sort
-        | Type.Bool -> ctx.MkBoolSort () :> Z3.Sort
+        | Type.Int _ when reals -> ctx.MkRealSort () :> Z3.Sort
+        | Type.Int _ -> ctx.MkIntSort () :> Z3.Sort
+        | Type.Bool _ -> ctx.MkBoolSort () :> Z3.Sort
 
     (*
      * View definitions
@@ -200,7 +204,7 @@ module Translator =
     let funcDeclOfDFunc reals (ctx : Z3.Context) { Name = n ; Params = pars } =
         ctx.MkFuncDecl(
             n,
-            pars |> Seq.map (fst >> typeToSort reals ctx) |> Seq.toArray,
+            pars |> Seq.map (typeOf >> typeToSort reals ctx) |> Seq.toArray,
             ctx.MkBoolSort () :> Z3.Sort)
 
     /// <summary>
@@ -219,14 +223,24 @@ module Translator =
     /// <param name="ps">
     ///     The <c>Expr</c> parameters to use.
     /// </param>
+    /// <typeparam name="var">
+    ///     The meta-type of variables in the parameters.
+    /// </typeparam>
     /// <returns>
     ///     A <c>BoolExpr</c> representing an application of
     ///     <paramref name="ps"/> to <paramref name="funcDecl"/>.
     /// </returns>
-    let applyFunc reals ctx (funcDecl : Z3.FuncDecl) ps =
-        let psa : Z3.Expr[] = ps |> List.map (exprToZ3 reals ctx) |> List.toArray
-        funcDecl.Apply psa
-        :?> Z3.BoolExpr
+    let applyFunc
+      (reals : bool)
+      (toVar : 'var -> Var)
+      (ctx : Z3.Context)
+      (funcDecl : Z3.FuncDecl)
+      (ps : Expr<'var> list)
+      : Z3.BoolExpr =
+        let psa : Z3.Expr[] =
+            ps |> List.map (exprToZ3 reals toVar ctx) |> List.toArray
+
+        funcDecl.Apply psa :?> Z3.BoolExpr
 
     /// <summary>
     ///     Processes a view definition for MuZ3.
@@ -245,7 +259,11 @@ module Translator =
     ///     produced for the view, and an optional <c>BoolExpr</c>
     ///     assertion defining the view.
     /// </returns>
-    let translateViewDef reals (ctx : Z3.Context) ( { View = vs; Def = ex } : ViewDef<DFunc> ) =
+    let translateViewDef
+      (reals : bool)
+      (ctx : Z3.Context)
+      (vs : DFunc, ex)
+      : ((string * Z3.FuncDecl) * ((VFunc<Var> * VBoolExpr) option))=
         let funcDecl = funcDeclOfDFunc reals ctx vs
         let mapEntry = (vs.Name, funcDecl)
 
@@ -255,14 +273,14 @@ module Translator =
                      (* This is a definite constraint, so we want muZ3 to
                         use the existing constraint body for it.  We do this
                         by creating a rule that vs <=> dex.
-                           
+
                         We need to make an application of our new FuncDecl to
                         create the constraints for it, if any.
 
-                        The parameters of a DFunc are in (type, name) format,
+                        The parameters of a DFunc are in parameter format,
                         which we need to convert to expression format first.
                         dex uses Unmarked constants, so we do too. *)
-                     let eparams = List.map (uncurry (mkVarExp Unmarked)) vs.Params
+                     let eparams = List.map (mkVarExp id) vs.Params
                      let vfunc = { Name = vs.Name ; Params = eparams }
 
                      (vfunc, dex))
@@ -286,7 +304,12 @@ module Translator =
     ///     A tuple of a <c>Map</c> binding names to <c>FuncDecl</c>s and a
     ///     list of (view, def) pairs defining definite viewdefs.
     /// </returns>
-    let translateViewDefs reals ctx ds =
+    let translateViewDefs
+      (reals : bool)
+      (ctx : Z3.Context)
+      (ds : FuncTable<VBoolExpr option>)
+      : (Map<string, Z3.FuncDecl>
+         * (VFunc<Var> * VBoolExpr) seq) =
         ds
         |> Seq.map (translateViewDef reals ctx)
         |> List.ofSeq
@@ -305,6 +328,10 @@ module Translator =
     /// <param name="reals">
     ///     Whether to use Real instead of Int for integers.
     /// </param>
+    /// <param name="toVar">
+    ///     A function converting variables in the <c>BoolExpr</c> into
+    ///     <c>Var</c>s: for example, <c>constToString</c>.
+    /// </param>
     /// <param name="ctx">
     ///     The Z3 context to use to model the func.
     /// </param>
@@ -314,19 +341,25 @@ module Translator =
     /// <param name="_arg1">
     ///     The <c>VFunc</c> to model.
     /// </param>
+    /// <typeparam name="var">
+    ///     The meta-type of variables in the <c>VFunc</c>.
+    /// </typeparam>
     /// <returns>
     ///     A Z3 boolean expression relating to the <c>VFunc</c>.
-    ///     If <paramref name="_arg1"/> is in <paramref name="funcDecls"/>, 
+    ///     If <paramref name="_arg1"/> is in <paramref name="funcDecls"/>,
     ///     then the expression is an application of the <c>FuncDecl</c>
     ///     with the parameters in <paramref name="_arg1"/>.
     ///     Else, it is true.
     /// </returns>
-    let translateVFunc reals
-                       ctx
-                       (funcDecls : Map<string, Z3.FuncDecl>)
-                       { Name = n ; Params = ps } =
+    let translateVFunc
+      (reals : bool)
+      (toVar : 'var -> Var)
+      (ctx : Z3.Context)
+      (funcDecls : Map<string, Z3.FuncDecl>)
+      ( { Name = n ; Params = ps } : VFunc<'var>)
+      : Z3.BoolExpr =
         match funcDecls.TryFind n with
-        | Some fd -> applyFunc reals ctx fd ps
+        | Some fd -> applyFunc reals toVar ctx fd ps
         | None -> ctx.MkTrue ()
 
     /// <summary>
@@ -335,27 +368,39 @@ module Translator =
     /// <param name="reals">
     ///     Whether to use Real instead of Int for integers.
     /// </param>
+    /// <param name="toVar">
+    ///     A function converting variables in the <c>BoolExpr</c> into
+    ///     <c>Var</c>s: for example, <c>constToString</c>.
+    /// </param>
     /// <param name="ctx">
     ///     The Z3 context to use to model the func.
     /// </param>
     /// <param name="funcDecls">
     ///     The map of <c>FuncDecls</c> to use in the modelling.
     /// </param>
+    /// <typeparam name="var">
+    ///     The meta-type of variables in the <c>GView</c>.
+    /// </typeparam>
     /// <returns>
     ///     A function taking a <c>GView</c> and returning a Z3
     ///     Boolean expression characterising it.
     /// </returns>
-    let translateGView reals (ctx : Z3.Context) funcDecls =
+    let translateGView
+      (reals : bool)
+      (toVar : 'var -> Var)
+      (ctx : Z3.Context)
+      (funcDecls : Map<string, Z3.FuncDecl>)
+      : GView<'var> -> Z3.BoolExpr =
         Multiset.toFlatSeq
         >> Seq.choose
                (fun { Cond = g ; Item = v } ->
-                    let vZ = translateVFunc reals ctx funcDecls v
+                    let vZ = translateVFunc reals toVar ctx funcDecls v
                     if (vZ.IsTrue)
                     then None
                     else Some <|
                          if (isTrue g)
                          then vZ
-                         else (ctx.MkImplies (boolToZ3 reals ctx g, vZ)))
+                         else (ctx.MkImplies (boolToZ3 reals toVar ctx g, vZ)))
         >> Seq.toArray
         >> (fun a -> ctx.MkAnd a)
 
@@ -419,6 +464,10 @@ module Translator =
     /// <param name="reals">
     ///     Whether to use Real instead of Int for integers.
     /// </param>
+    /// <param name="toVar">
+    ///     A function converting variables in the <c>BoolExpr</c> into
+    ///     <c>Var</c>s: for example, <c>constToString</c>.
+    /// </param>
     /// <param name="ctx">
     ///     The Z3 context to use to model the rule.
     /// </param>
@@ -436,6 +485,9 @@ module Translator =
     /// <param name="head">
     ///     The <c>VFunc</c> making up the head.
     /// </param>
+    /// <typeparam name="var">
+    ///     The meta-type of variables in the body of the rule.
+    /// </typeparam>
     /// <returns>
     ///     An <c>Option</c>al rule, which is present only if <c>head</c> is defined
     ///     in <c>funcDecls</c>.
@@ -444,30 +496,49 @@ module Translator =
     ///     func))</c>, where <c>vars</c> is the union of the variables in
     ///     <c>body</c>, <c>gview</c> and <c>head</c>.
     /// </returns>
-    let mkRule reals (ctx : Z3.Context) funcDecls bodyExpr bodyView head =
+    let mkRule
+      (reals : bool)
+      (toVar : 'var -> Var)
+      (ctx : Z3.Context)
+      (funcDecls : Map<string, Z3.FuncDecl>)
+      (bodyExpr : BoolExpr<'var>)
+      (bodyView : GView<'var>)
+      (head : VFunc<'var>)
+      : Z3.BoolExpr option =
+        let vsub = onVars (liftVSubFun (Mapper.cmake toVar))
+
+        // First, make everything use string variables.
+        let bodyExpr' = Mapper.mapBool vsub bodyExpr
+        let bodyView' = subExprInGView vsub bodyView
+        let head' = subExprInVFunc vsub head
+
         let vars =
             seq {
-                yield! (varsInBool bodyExpr)
+                yield! (varsInBool bodyExpr')
 
-                for gfunc in Multiset.toFlatList bodyView do
+                for gfunc in Multiset.toFlatList bodyView' do
                     yield! (varsInGFunc gfunc)
 
-                yield! (varsInVFunc head)
+                yield! (varsInVFunc head')
             }
             // Make sure we don't quantify over a variable twice.
             |> Set.ofSeq
-            |> Set.map (fun (name, ty) ->
-                            ctx.MkConst (constToString name, typeToSort reals ctx ty))
+            |> Set.map (fun p ->
+                            ctx.MkConst (p |> valueOf,
+                                         p |> typeOf |> typeToSort reals ctx))
             |> Set.toArray
 
-        let bodyExprZ = boolToZ3 reals ctx bodyExpr
+        let bodyExprZ = boolToZ3 reals id ctx bodyExpr'
 
         let bodyZ =
             if (Multiset.length bodyView = 0)
             then bodyExprZ
-            else ctx.MkAnd [| bodyExprZ ; translateGView reals ctx funcDecls bodyView |]
+            else
+                ctx.MkAnd
+                    [| bodyExprZ
+                       translateGView reals id ctx funcDecls bodyView' |]
 
-        let headZ = translateVFunc reals ctx funcDecls head
+        let headZ = translateVFunc reals id ctx funcDecls head'
 
         mkQuantifiedEntailment ctx vars bodyZ headZ
 
@@ -499,7 +570,7 @@ module Translator =
         let vpars =
             svars
             |> Map.toList
-            |> List.map (uncurry (flip (mkVarExp Unmarked)))
+            |> List.map (fun (v, t) -> mkVarExp id (withType t v))
 
         // TODO(CaptainHayashi): actually get these initialisations from
         // somewhere.
@@ -508,13 +579,13 @@ module Translator =
             |> List.map
                    (fun v -> BEq (v,
                                   match v with
-                                  | AExpr _ -> AExpr (AInt 0L)
-                                  | BExpr _ -> BExpr (BFalse)))
+                                  | Expr.Int _ -> Expr.Int (AInt 0L)
+                                  | Expr.Bool _ -> Expr.Bool (BFalse)))
             |> mkAnd
 
         let head = { Name = "emp" ; Params = vpars }
 
-        mkRule reals ctx funcDecls body Multiset.empty head
+        mkRule reals id ctx funcDecls body Multiset.empty head
         |> function
            | Some x -> Seq.singleton ("init", x)
            | None -> Seq.empty
@@ -545,7 +616,7 @@ module Translator =
     ///     <c>BoolExpr</c> representing the rule form of the proof term.
     /// </returns>
     let translateTerm reals ctx funcDecls (name : string, {Cmd = c ; WPre = w ; Goal = g}) =
-        mkRule reals ctx funcDecls c w g |> Option.map (mkPair name)
+        mkRule reals unmarkVar ctx funcDecls c w g |> Option.map (mkPair name)
 
     /// <summary>
     ///     Constructs muZ3 rules and goals for a model.
@@ -564,7 +635,10 @@ module Translator =
     ///     used to prove the model, and the map of names to <c>FuncDecl</c>s
     ///     to use to start queries.
     /// </returns>
-    let translate reals ctx { Globals = svars ; ViewDefs = ds ; Axioms = xs } =
+    let translate
+      reals
+      (ctx : Z3.Context)
+      ( { Globals = svars ; ViewDefs = ds ; Axioms = xs } : IFModel<Term<MBoolExpr, MGView, MVFunc>> ) =
         let funcDecls, definites = translateViewDefs reals ctx ds
         let vrules = translateVariables reals ctx funcDecls svars
         let trules = xs |> Map.toSeq |> Seq.choose (translateTerm reals ctx funcDecls)
@@ -604,7 +678,7 @@ module Run =
 
         List.iter
             (fun (view, def) ->
-                 match (Translator.mkRule reals ctx fm def Multiset.empty view) with
+                 match (Translator.mkRule reals id ctx fm def Multiset.empty view) with
                  | Some rule -> fixedpoint.AddRule rule
                  | None -> ())
             ds
@@ -623,17 +697,18 @@ module Run =
                              yield! (varsIn param)
                      }
                      |> Set.ofSeq
-                     |> Set.map (fun (name, ty) ->
-                                     ctx.MkConst (constToString name,
-                                                  Translator.typeToSort reals ctx ty))
+                     |> Set.map
+                            (fun (var : CTyped<Var>) ->
+                                 ctx.MkConst (valueOf var,
+                                              Translator.typeToSort reals ctx (typeOf var)))
                      |> Set.toArray
 
                  // Introduce 'V ^ ¬D(V) -> unsafe'.
                  Translator.mkQuantifiedEntailment
                      ctx
                      vars
-                     (ctx.MkAnd [| def |> mkNot |> boolToZ3 reals ctx
-                                   Translator.translateVFunc reals ctx fm view |])
+                     (ctx.MkAnd [| def |> mkNot |> boolToZ3 reals id ctx
+                                   Translator.translateVFunc reals id ctx fm view |])
                      unsafeapp
                  |> Option.iter (fixedpoint.AddRule))
             ds

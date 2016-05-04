@@ -22,10 +22,15 @@ module Starling.Core.Instantiate
 open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Utils
+open Starling.Core.TypeSystem
+open Starling.Core.TypeSystem.Check
 open Starling.Core.Expr
 open Starling.Core.Model
 open Starling.Core.Var
 open Starling.Core.Sub
+open Starling.Core.Symbolic
+open Starling.Core.GuardedView
+open Starling.Core.GuardedView.Sub
 
 
 /// <summary>
@@ -55,12 +60,43 @@ module Types =
         ///     has been assigned to an argument of the incorrect type
         ///     <c>atype</c>.
         /// </summary>
-        | TypeMismatch of param: (Type * string) * atype: Type
+        | TypeMismatch of param: Param * atype: Type
         /// <summary>
         ///     The func looked up has <c>fn</c> arguments, but its
         ///     definition has <c>dn</c> parameters.
         /// </summary>
         | CountMismatch of fn: int * dn: int
+        /// <summary>
+        ///     We were given an indefinite constraint when trying to
+        ///     assert that all constraints are definite.
+        /// </summary>
+        | IndefiniteConstraint of view: DFunc
+        /// <summary>
+        ///     We found a symbolic variable somewhere we didn't expect
+        ///     one.
+        /// </summary>
+        | UnwantedSym of sym: string
+
+    (* TODO(CaptainHayashi): these two shouldn't be in here, but
+       they are, due to a cyclic dependency on Model and FuncTable. *)
+
+    /// <summary>
+    ///     A <c>Model</c> whose view definitions form an indefinite
+    ///     <c>FuncTable</c>.
+    /// </summary>
+    /// <typeparam name="axiom">
+    ///     Type of program axioms.
+    /// </typeparam>
+    type IFModel<'axiom> = Model<'axiom, FuncTable<VBoolExpr option>>
+
+    /// <summary>
+    ///     A <c>Model</c> whose view definitions form a definite
+    ///     <c>FuncTable</c>.
+    /// </summary>
+    /// <typeparam name="axiom">
+    ///     Type of program axioms.
+    /// </typeparam>
+    type DFModel<'axiom> = Model<'axiom, FuncTable<VBoolExpr>>
 
 
 /// <summary>
@@ -68,8 +104,52 @@ module Types =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
+    open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Var.Pretty
+    open Starling.Core.Expr.Pretty
+
+    /// <summary>
+    ///     Pretty-prints <c>FuncTable</c>s.
+    /// </summary>
+    /// <param name="pDefn">
+    ///     Pretty printer for definitions.
+    /// </param>
+    /// <param name="ft">
+    ///     The <c>FuncTable</c> to print.
+    /// </param>
+    /// <typeparam name="defn">
+    ///     The type of definitions in the <c>FuncTable</c>.
+    /// </typeparam>
+    /// <returns>
+    ///     A sequence of <c>Command</c>s representing the
+    ///     pretty-printed form of <paramref name="ft"/>.
+    /// </returns>
+    let printFuncTable
+      (pDefn : 'defn -> Command)
+      (ft : FuncTable<'defn>)
+      : Command seq =
+        ft
+        |> List.map (fun (v, d) -> colonSep [ printDFunc v; pDefn d ] )
+        |> List.toSeq
+
+    /// <summary>
+    ///     Pretty-prints a model view for a <c>DFModel</c>.
+    /// </summary>
+    /// <param name="pAxiom">
+    ///     Pretty printer for axioms.
+    /// </param>
+    /// <typeparam name="axiom">
+    ///     Type of axioms.
+    /// </typeparam>
+    /// <returns>
+    ///     A function, taking a <c>ModelView</c> and <c>DFModel</c>, and
+    ///     returning a <c>Command</c>.
+    /// </returns>
+    let printDFModelView
+      (pAxiom : 'axiom -> Command)
+      : ModelView -> DFModel<'axiom> -> Command =
+        printModelView pAxiom (printFuncTable printVBoolExpr)
 
     /// Pretty-prints instantiation errors.
     let printError =
@@ -80,6 +160,13 @@ module Pretty =
         | CountMismatch (fn, dn) ->
             fmt "view usage has {0} parameter(s), but its definition has {1}"
                 [ fn |> sprintf "%d" |> String; dn |> sprintf "%d" |> String ]
+        | IndefiniteConstraint (view) ->
+            fmt "indefinite 'constraint {0} -> ?' not allowed here"
+                [ printDFunc view ]
+        | UnwantedSym sym ->
+            // TODO(CaptainHayashi): this is a bit shoddy.
+            fmt "encountered uninterpreted symbol {0}"
+                [ String sym ]
 
 
 (*
@@ -118,10 +205,10 @@ let makeFuncTable fseq : FuncTable<'defn> =
 let funcTableFromViewDefs viewdefs =
     let rec buildLists definites indefinites viewdefs' =
         match viewdefs' with
-        | [] -> (definites, indefinites)
-        | { View = v ; Def = None } :: vs ->
+        | [] -> (makeFuncTable definites, indefinites)
+        | (Indefinite v) :: vs ->
             buildLists definites (v :: indefinites) vs
-        | { View = v ; Def = Some s } :: vs ->
+        | (Definite (v, s)) :: vs ->
             buildLists ((v, s) :: definites) indefinites vs
     buildLists [] [] viewdefs
 
@@ -217,9 +304,8 @@ let checkParamTypes func def =
     List.map2
         (curry
              (function
-              | (AExpr _, ((Bool, _) as param)) -> TypeMismatch (param, Int) |> fail
-              | (BExpr _, ((Int, _) as param)) -> TypeMismatch (param, Bool) |> fail
-              | _ -> ok ()))
+              | UnifyInt _ | UnifyBool _ -> ok ()
+              | UnifyFail (fp, dp) -> fail (TypeMismatch (dp, typeOf fp))))
         func.Params
         def.Params
     |> collect
@@ -227,88 +313,214 @@ let checkParamTypes func def =
 
 /// <summary>
 ///     Produces a <c>VSubFun</c> that substitutes the arguments of
-///     <c>_arg1</c> for their parameters in <c>_arg2</c>.
+///     <c>_arg1</c> for their parameters in <c>_arg2</c>, over
+///     symbolic variables.
+///
+///     <para>
+///         The function takes a pair of hooks for transforming various
+///         parts of the substitution function, because it is used
+///         for generating <c>VSubFun</c>s for both <c>MarkedVar</c>s
+///         and <c>Sym</c>s.
+///     </para>
 /// </summary>
 /// <param name="_arg1">
 ///     The func providing the arguments to substitute.
 /// </param>
-/// <param name="_arg2_">
+/// <param name="_arg2">
+///     The <c>DFunc</c> into which we are substituting.
+/// </param>
+/// <typeparam name="dstVar">
+///     The type of variables in the arguments being substituted.
+/// </typeparam>
+/// <returns>
+///     A <c>VSubFun</c> performing the above substitutions.
+/// </returns>
+let paramSubFun
+  ( { Params = fpars } : VFunc<'dstVar>)
+  ( { Params = dpars } : DFunc)
+  : VSubFun<Var, 'dstVar> =
+    let pmap =
+        Seq.map2 (fun par up -> valueOf par, up) dpars fpars
+        |> Map.ofSeq
+
+    Mapper.make
+        (fun srcV ->
+             match (pmap.TryFind srcV) with
+             | Some (Typed.Int expr) -> expr
+             | Some _ -> failwith "param substitution type error"
+             | None -> failwith "free variable in substitution")
+        (fun srcV ->
+             match (pmap.TryFind srcV) with
+             | Some (Typed.Bool expr) -> expr
+             | Some _ -> failwith "param substitution type error"
+             | None -> failwith "free variable in substitution")
+
+/// <summary>
+///     Produces a parameter substitution <c>VSubFun</c> from
+///     <c>SMVFunc</c>s.
+/// </summary>
+/// <param name="_arg1">
+///     The <c>SMVFunc</c> providing the arguments to substitute.
+/// </param>
+/// <param name="_arg2">
 ///     The <c>DFunc</c> into which we are substituting.
 /// </param>
 /// <returns>
 ///     A <c>VSubFun</c> performing the above substitutions.
 /// </returns>
-let paramSubFun {Params = fpars} {Params = dpars} =
-    let pmap =
-        Seq.map2 (fun (_, name) up -> name, up) dpars fpars
-        |> Map.ofSeq
-
-    // TODO(CaptainHayashi): make this type-safe.
-    // TODO(CaptainHayashi): maybe have a separate Const leg for params.
-    {AVSub =
-        function
-        | Unmarked p as up ->
-            match (Map.tryFind p pmap) with
-            | Some (AExpr e) -> e
-            | Some _ -> failwith "param substitution type error"
-            | None -> AConst up
-        | q -> AConst q
-     BVSub =
-        function
-        | Unmarked p as up ->
-            match (Map.tryFind p pmap) with
-            | Some (BExpr e) -> e
-            | Some _ -> failwith "param substitution type error"
-            | None -> BConst up
-        | q -> BConst q
-    }
-
-/// <summary>
-///     Given a func <c>func</c>, its prototype <c>dfunc</c>, and that
-///     prototype's Boolean interpretation <c>expr</c>, calculate the
-///     value of <c>expr</c> with the arguments of <c>func</c>
-///     substituted for the parameters of <c>dfunc</c>.
-/// </summary>
-/// <param name="func">
-///     The <c>VFunc</c> whose arguments are to be substituted into
-///     <c>expr</c>.
-/// </param>
-/// <param name="dfunc">
-///     The <c>VFunc</c> whose parameters in <c>expr</c> are to be
-///     replaced.
-/// </param>
-/// <param name="expr">
-///     The <c>BoolExpr</c> in which each instance of a parameter from
-///     <c>dfunc</c> is to be replaced with its argument in
-///     <c>func</c>.
-/// </param>
-/// <returns>
-///     <c>expr</c> with the substitutions above made.
-/// </returns>
-let substitute func dfunc expr =
-    paramSubFun func dfunc |> flip boolSubVars expr
+let smvParamSubFun
+  (smvfunc : SMVFunc)
+  (dfunc : DFunc)
+  : VSubFun<Sym<Var>, Sym<MarkedVar>> =
+    liftVToSym (paramSubFun smvfunc dfunc)
 
 /// <summary>
 ///     Look up <c>func</c> in <c>_arg1</c>, and instantiate the
 ///     resulting Boolean expression, substituting <c>func.Params</c>
 ///     for the parameters in the expression.
 /// </summary>
-/// <param name="func">
-///     The <c>VFunc</c> whose arguments are to be substituted into
-///     its definition in <c>_arg1</c>.
+/// <param name="psf">
+///     A function building the <c>VSubFun</c> used to map variables in
+///     the expression, either by substituting in the arguments of the
+///     func, or by transforming them to the correct variable type.
 /// </param>
-/// <param name="_arg1">
+/// <param name="ftab">
 ///     The <c>FuncTable</c> whose definition for <c>func</c> is to be
 ///     instantiated.
 /// </param>
+/// <param name="vfunc">
+///     The <c>VFunc</c> whose arguments are to be substituted into
+///     its definition in <c>_arg1</c>.
+/// </param>
+/// <typeparam name="srcVar">
+///     The type of the variables before substitution, ie in
+///     <paramref name="expr"/>.
+/// </typeparam>
+/// <typeparam name="dstVar">
+///     The type of the variables before substitution, ie in
+///     <paramref name="expr"/>.
+/// </typeparam>
 /// <returns>
 ///     The instantiation of <c>func</c> as an <c>Option</c>al
-///     <c>BoolExpr</c>.
+///     <c>SMBoolExpr</c> wrapped inside a Chessie result.
 /// </returns>
-let instantiate func =
-    lookup func
-    >> bind (function
-             | None -> ok None
-             | Some (def, snd) -> lift (fun _ -> Some (def, snd))
-                                       (checkParamTypes func def))
-    >> lift (Option.map (uncurry (substitute func)))
+let instantiate
+  (psf : VFunc<'dstVar> -> DFunc -> VSubFun<'srcVar, 'dstVar>)
+  (ftab : FuncTable<BoolExpr<'srcVar>>)
+  (vfunc : VFunc<'dstVar>)
+  : Result<BoolExpr<'dstVar> option, Error> =
+    ftab
+    |> lookup vfunc
+    |> bind
+           (function
+            | None -> ok None
+            | Some (dfunc, defn) ->
+                lift
+                    (fun _ -> Some (dfunc, defn))
+                    (checkParamTypes vfunc dfunc))
+    |> lift
+           (Option.map
+                (fun (dfunc, defn) ->
+                     Mapper.mapBool (onVars (psf vfunc dfunc)) defn))
+
+/// <summary>
+///     Functions for view definition filtering.
+/// </summary>
+module ViewDefFilter =
+    /// <summary>
+    ///     Tries to remove symbols from <c>ViewDef</c>s.
+    /// </summary>
+    let tryRemoveViewDefSymbols
+      (defs : FuncTable<SVBoolExpr>)
+      : Result<FuncTable<VBoolExpr>, Error> =
+        // TODO(CaptainHayashi): proper doc comment.
+        // TODO(CaptainHayashi): stop assuming FuncTable is a list.
+        defs
+        |> List.map
+               (fun (f, d) ->
+                    d
+                    |> Mapper.mapBool (tsfRemoveSym UnwantedSym)
+                    |> lift (mkPair f))
+        |> collect
+
+
+    /// <summary>
+    ///     Converts a <c>ViewDef</c> list into a <c>FuncTable</c> of possibly
+    ///     indefinite views.
+    /// </summary>
+    let filterIndefiniteViewDefs
+      (vds : SVBViewDef<DFunc> list)
+      : Result<FuncTable<VBoolExpr option>, Error> =
+        // TODO(CaptainHayashi): proper doc comment.
+        vds
+        |> funcTableFromViewDefs
+        (* TODO(CaptainHayashi): defs is already a func table, so
+           don't pretend it's just a list of tuples. *)
+        |> function
+           | (defs, indefs) ->
+               defs
+               |> tryRemoveViewDefSymbols
+               |> lift
+                      (fun defs' ->
+                           makeFuncTable
+                              (seq {
+                                   for (v, d) in defs' do
+                                       yield (v, Some d)
+                                   for v in indefs do
+                                       yield (v, None)
+                               } ))
+
+    /// <summary>
+    ///     Converts a <c>ViewDef</c> list into a <c>FuncTable</c> of only
+    ///     definite views.
+    /// </summary>
+    let filterDefiniteViewDefs
+      (vds : SVBViewDef<DFunc> list)
+      : Result<FuncTable<VBoolExpr>, Error> =
+        // TODO(CaptainHayashi): proper doc comment.
+        vds
+        |> funcTableFromViewDefs
+        |> function
+           | defs, [] ->
+               tryRemoveViewDefSymbols defs
+           | _, indefs ->
+               indefs |> List.map IndefiniteConstraint |> Bad
+
+    /// <summary>
+    ///     Tries to convert a <c>ViewDef</C> based model into one over
+    ///     definite or indefinite constraints.
+    /// </summary>
+    /// <param name="model">
+    ///     A model over <c>ViewDef</c>s.
+    /// </param>
+    /// <returns>
+    ///     A <c>Result</c> over <c>Error</c> containing the
+    ///     new model if the original contained only definite view
+    ///     definitions.  The new model is an <c>IFModel</c>.
+    /// </returns>
+    let filterModelIndefinite
+      (model : UFModel<Term<SMBoolExpr, SMGView, SMVFunc>> )
+      : Result<IFModel<Term<MBoolExpr, MGView, MVFunc>>, Error> =
+        model
+        |> tryMapAxioms (trySubExprInDTerm (tsfRemoveSym UnwantedSym))
+        |> bind (tryMapViewDefs filterIndefiniteViewDefs)
+
+    /// <summary>
+    ///     Tries to convert a <c>ViewDef</C> based model into a
+    ///     definite one.  The conversion fails if the model has any
+    ///     indefinite constraints.
+    /// </summary>
+    /// <param name="model">
+    ///     A model over <c>ViewDef</c>s.
+    /// </param>
+    /// <returns>
+    ///     A <c>Result</c> over <c>Error</c> containing the
+    ///     new model if the original contained only definite view
+    ///     definitions.  The new model is a <c>DFModel</c>.
+    /// </returns>
+    let filterModelDefinite
+      (model : UFModel<Term<SMBoolExpr, SMGView, SMVFunc>> )
+      : Result<DFModel<Term<MBoolExpr, MGView, MVFunc>>, Error> =
+        model
+        |> tryMapAxioms (trySubExprInDTerm (tsfRemoveSym UnwantedSym))
+        |> bind (tryMapViewDefs filterDefiniteViewDefs)

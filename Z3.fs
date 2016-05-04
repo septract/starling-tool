@@ -8,6 +8,7 @@ open Chessie.ErrorHandling
 open Starling
 open Starling.Collections
 open Starling.Core.Expr
+open Starling.Core.Var
 
 
 /// <summary>
@@ -33,38 +34,57 @@ module Pretty =
 /// </summary>
 module Expr =
     /// Converts a Starling arithmetic expression to a Z3 ArithExpr.
-    let rec arithToZ3 reals (ctx: Z3.Context) =
-        function
-        | AConst c when reals -> c |> constToString |> ctx.MkRealConst :> Z3.ArithExpr
-        | AConst c -> c |> constToString |> ctx.MkIntConst :> Z3.ArithExpr
-        | AInt i when reals -> (i |> ctx.MkReal) :> Z3.ArithExpr
-        | AInt i -> (i |> ctx.MkInt) :> Z3.ArithExpr
-        | AAdd xs -> ctx.MkAdd (xs |> Seq.map (arithToZ3 reals ctx) |> Seq.toArray)
-        | ASub xs -> ctx.MkSub (xs |> Seq.map (arithToZ3 reals ctx) |> Seq.toArray)
-        | AMul xs -> ctx.MkMul (xs |> Seq.map (arithToZ3 reals ctx) |> Seq.toArray)
-        | ADiv (x, y) -> ctx.MkDiv (arithToZ3 reals ctx x, arithToZ3 reals ctx y)
+    let rec arithToZ3
+      (reals : bool)
+      (toStr : 'var -> string)
+      (ctx: Z3.Context)
+      : IntExpr<'var> -> Z3.ArithExpr =
+        let rec az =
+            function
+            | AVar c when reals -> c |> toStr |> ctx.MkRealConst :> Z3.ArithExpr
+            | AVar c -> c |> toStr |> ctx.MkIntConst :> Z3.ArithExpr
+            | AInt i when reals -> (i |> ctx.MkReal) :> Z3.ArithExpr
+            | AInt i -> (i |> ctx.MkInt) :> Z3.ArithExpr
+            | AAdd xs -> ctx.MkAdd (xs |> Seq.map az |> Seq.toArray)
+            | ASub xs -> ctx.MkSub (xs |> Seq.map az |> Seq.toArray)
+            | AMul xs -> ctx.MkMul (xs |> Seq.map az |> Seq.toArray)
+            | ADiv (x, y) -> ctx.MkDiv (az x, az y)
+        az
 
     /// Converts a Starling Boolean expression to a Z3 ArithExpr.
-    and boolToZ3 reals (ctx : Z3.Context) =
-        function
-        | BConst c -> c |> constToString |> ctx.MkBoolConst
-        | BTrue -> ctx.MkTrue ()
-        | BFalse -> ctx.MkFalse ()
-        | BAnd xs -> ctx.MkAnd (xs |> Seq.map (boolToZ3 reals ctx) |> Seq.toArray)
-        | BOr xs -> ctx.MkOr (xs |> Seq.map (boolToZ3 reals ctx) |> Seq.toArray)
-        | BImplies (x, y) -> ctx.MkImplies (boolToZ3 reals ctx x, boolToZ3 reals ctx y)
-        | BEq (x, y) -> ctx.MkEq (exprToZ3 reals ctx x, exprToZ3 reals ctx y)
-        | BGt (x, y) -> ctx.MkGt (arithToZ3 reals ctx x, arithToZ3 reals ctx y)
-        | BGe (x, y) -> ctx.MkGe (arithToZ3 reals ctx x, arithToZ3 reals ctx y)
-        | BLe (x, y) -> ctx.MkLe (arithToZ3 reals ctx x, arithToZ3 reals ctx y)
-        | BLt (x, y) -> ctx.MkLt (arithToZ3 reals ctx x, arithToZ3 reals ctx y)
-        | BNot x -> x |> boolToZ3 reals ctx |> ctx.MkNot
+    and boolToZ3
+      (reals : bool)
+      (toStr : 'var -> string)
+      (ctx: Z3.Context)
+      : BoolExpr<'var> -> Z3.BoolExpr =
+        let az = arithToZ3 reals toStr ctx
+        let ez = exprToZ3 reals toStr ctx
+
+        let rec bz =
+            function
+            | BVar c -> c |> toStr |> ctx.MkBoolConst
+            | BTrue -> ctx.MkTrue ()
+            | BFalse -> ctx.MkFalse ()
+            | BAnd xs -> ctx.MkAnd (xs |> Seq.map bz |> Seq.toArray)
+            | BOr xs -> ctx.MkOr (xs |> Seq.map bz |> Seq.toArray)
+            | BImplies (x, y) -> ctx.MkImplies (bz x, bz y)
+            | BEq (x, y) -> ctx.MkEq (ez x, ez y)
+            | BGt (x, y) -> ctx.MkGt (az x, az y)
+            | BGe (x, y) -> ctx.MkGe (az x, az y)
+            | BLe (x, y) -> ctx.MkLe (az x, az y)
+            | BLt (x, y) -> ctx.MkLt (az x, az y)
+            | BNot x -> x |> bz |> ctx.MkNot
+        bz
 
     /// Converts a Starling expression to a Z3 Expr.
-    and exprToZ3 reals (ctx: Z3.Context) =
+    and exprToZ3
+      (reals : bool)
+      (toStr : 'var -> string)
+      (ctx: Z3.Context)
+      : Expr<'var> -> Z3.Expr =
         function
-        | BExpr b -> boolToZ3 reals ctx b :> Z3.Expr
-        | AExpr a -> arithToZ3 reals ctx a :> Z3.Expr
+        | Expr.Bool b -> boolToZ3 reals toStr ctx b :> Z3.Expr
+        | Expr.Int a -> arithToZ3 reals toStr ctx a :> Z3.Expr
 
 /// <summary>
 ///     Z3 invocation.

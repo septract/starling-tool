@@ -3,8 +3,12 @@
 /// </summary>
 module Starling.Core.Command
 
+open Starling.Utils
 open Starling.Collections
+open Starling.Core.TypeSystem
 open Starling.Core.Expr
+open Starling.Core.Var
+open Starling.Core.Symbolic
 open Starling.Core.Model
 
 
@@ -35,7 +39,7 @@ module Types =
     ///         the two concepts.
     ///     </para>
     /// </remarks>
-    type Command = VFunc list
+    type Command = SMVFunc list
 
     /// <summary>
     ///     A term over <c>Command</c>s.
@@ -69,12 +73,17 @@ module Queries =
                  (* We treat a func as a no-op if all variables it contains
                   * are in the pre-state.  Thus, it cannot be modifying the
                   * post-state, if it is well-formed.
+                  *
+                  * If we see any symbolic variables, err on the side of
+                  * caution and say it isn't a nop.  This is because the
+                  * symbol could mean _anything_, regardless of what we
+                  * put into it!
                   *)
                  Seq.forall (function
-                             | AExpr (AConst (Before _)) -> true
-                             | AExpr (AConst _) -> false
-                             | BExpr (BConst (Before _)) -> true
-                             | BExpr (BConst _) -> false
+                             | SMExpr.Int (AVar (Reg (Before _))) -> true
+                             | SMExpr.Int (AVar _) -> false
+                             | SMExpr.Bool (BVar (Reg (Before _))) -> true
+                             | SMExpr.Bool (BVar _) -> false
                              | _ -> true)
                             ps)
 
@@ -83,9 +92,81 @@ module Queries =
     /// </summary>
     let (|Assume|_|) =
         function
-        | [ { Name = n ; Params = [ BExpr b ] } ]
+        | [ { Name = n ; Params = [ SMExpr.Bool b ] } ]
           when n = "Assume" -> Some b
         | _ -> None
+
+
+/// <summary>
+///     Composition of Boolean expressions representing commands.
+/// </summary>
+module Compose =
+    /// <summary>
+    ///     Finds the highest intermediate stage number in an integral
+    ///     expression.
+    ///     Returns one higher.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>IntExpr</c> to investigate.
+    /// </param>
+    /// <returns>
+    ///     The next available intermediate stage number.
+    ///     If the expression has no intermediate stages, we return 0.
+    /// </returns>
+    let rec nextIntIntermediate =
+        function
+        | AVar (Reg (Intermediate (n, _))) -> n + 1I
+        | AVar (Sym { Params = xs } ) ->
+            xs |> Seq.map nextIntermediate |> Seq.fold (curry bigint.Max) 0I
+        | AVar _ | AInt _ -> 0I
+        | AAdd xs | ASub xs | AMul xs ->
+            xs |> Seq.map nextIntIntermediate |> Seq.fold (curry bigint.Max) 0I
+        | ADiv (x, y) ->
+            bigint.Max (nextIntIntermediate x, nextIntIntermediate y)
+
+    /// <summary>
+    ///     Finds the highest intermediate stage number in a Boolean expression.
+    ///     Returns one higher.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>BoolExpr</c> to investigate.
+    /// </param>
+    /// <returns>
+    ///     The next available intermediate stage number.
+    ///     If the expression has no intermediate stages, we return 0.
+    /// </returns>
+    and nextBoolIntermediate =
+        function
+        | BVar (Reg (Intermediate (n, _))) -> n + 1I
+        | BVar (Sym { Params = xs } ) ->
+            xs |> Seq.map nextIntermediate |> Seq.fold (curry bigint.Max) 0I
+        | BVar _ -> 0I
+        | BAnd xs | BOr xs ->
+            xs |> Seq.map nextBoolIntermediate |> Seq.fold (curry bigint.Max) 0I
+        | BImplies (x, y) ->
+            bigint.Max (nextBoolIntermediate x, nextBoolIntermediate y)
+        | BNot x -> nextBoolIntermediate x
+        | BGt (x, y) | BLt (x, y) | BGe (x, y) | BLe (x, y) ->
+            bigint.Max (nextIntIntermediate x, nextIntIntermediate y)
+        | BEq (x, y) ->
+            bigint.Max (nextIntermediate x, nextIntermediate y)
+        | BTrue | BFalse -> 0I
+
+    /// <summary>
+    ///     Finds the highest intermediate stage number in an expression.
+    ///     Returns one higher.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>Expr</c> to investigate.
+    /// </param>
+    /// <returns>
+    ///     The next available intermediate stage number.
+    ///     If the expression has no intermediate stages, we return 0.
+    /// </returns>
+    and nextIntermediate =
+        function
+        | Int x -> nextIntIntermediate x
+        | Bool x -> nextBoolIntermediate x
 
 
 /// <summary>
@@ -98,7 +179,7 @@ module Pretty =
     open Starling.Core.Model.Pretty
 
     /// Pretty-prints a Command.
-    let printCommand = List.map printVFunc >> semiSep
+    let printCommand = List.map printSMVFunc >> semiSep
 
     /// Pretty-prints a PTerm.
     let printPTerm pWPre pGoal = printTerm printCommand pWPre pGoal
@@ -121,19 +202,24 @@ module Tests =
             [ TestCaseData([] : Command)
                 .Returns(true)
                 .SetName("Classify [] as a no-op")
-              TestCaseData([ vfunc "Assume" [ BExpr (bBefore "x") ]])
+              TestCaseData([ smvfunc "Assume"
+                                 [ SMExpr.Bool (sbBefore "x") ]])
                 .Returns(true)
                 .SetName("Classify Assume(x!before) as a no-op")
-              TestCaseData([ vfunc "Assume" [ BExpr (bAfter "x") ]])
+              TestCaseData([ smvfunc "Assume"
+                                 [ SMExpr.Bool (sbAfter "x") ]])
                 .Returns(false)
                 .SetName("Reject Assume(x!after) as a no-op")
-              TestCaseData([ vfunc "Foo" [ AExpr (aBefore "bar")
-                                           AExpr (aAfter "bar") ]])
+              TestCaseData([ smvfunc "Foo"
+                                 [ SMExpr.Int (siBefore "bar")
+                                   SMExpr.Int (siAfter "bar") ]])
                 .Returns(false)
                 .SetName("Reject Foo(bar!before, bar!after) as a no-op")
-              TestCaseData([ vfunc "Foo" [ AExpr (aBefore "bar")
-                                           AExpr (aAfter "bar") ]
-                             vfunc "Assume" [ BExpr (bBefore "x") ]])
+              TestCaseData([ smvfunc "Foo"
+                                 [ SMExpr.Int (siBefore "bar")
+                                   SMExpr.Int (siAfter "bar") ]
+                             smvfunc "Assume"
+                                 [ SMExpr.Bool (sbBefore "x") ]])
                 .Returns(false)
                 .SetName("Reject Foo(bar!before, bar!after); Assume(x!before)\
                           as a no-op") ]
@@ -149,12 +235,14 @@ module Tests =
             [ TestCaseData([] : Command)
                 .Returns(false)
                 .SetName("Reject [] as an assume")
-              TestCaseData([ vfunc "Assume" [ BExpr (bBefore "x") ]])
+              TestCaseData([ smvfunc "Assume"
+                                 [ SMExpr.Bool (sbBefore "x") ]])
                 .Returns(true)
                 .SetName("Classify Assume(x!before) as an assume")
-              TestCaseData([ vfunc "Foo" [ AExpr (aBefore "bar")
-                                           AExpr (aAfter "bar") ]
-                             vfunc "Assume" [ BExpr (bBefore "x") ]])
+              TestCaseData([ smvfunc "Foo"
+                                 [ SMExpr.Int (siBefore "bar")
+                                   SMExpr.Int (siAfter "bar") ]
+                             smvfunc "Assume" [ SMExpr.Bool (sbBefore "x") ]])
                 .Returns(false)
                 .SetName("Reject Foo(bar!before, bar!after); Assume(x!before)\
                           as an assume") ]
@@ -167,3 +255,27 @@ module Tests =
             match c with
             | Queries.Assume _ -> true
             | _ -> false
+
+        /// Test cases for intermediate finding.
+        static member NextIntermediates =
+            [ TestCaseData(Expr.Bool (sbInter 5I "foo"))
+                .Returns(6I)
+                .SetName("nextIntermediate on Bool intermediate is one higher")
+              TestCaseData(Expr.Bool (BNot (sbInter 10I "bar")))
+                .Returns(11I)
+                .SetName("nextIntermediate on 'not' passes through")
+              TestCaseData(Expr.Bool (BImplies (sbInter 6I "a", sbInter 11I "b")))
+                .Returns(12I)
+                .SetName("nextIntermediate on 'implies' is one higher than max")
+              TestCaseData(Expr.Int
+                               (AAdd [ siInter 1I "a"
+                                       siAfter "b"
+                                       siBefore "c"
+                                       siInter 2I "d" ] ))
+                .Returns(3I)
+                .SetName("nextIntermediate on 'add' is one higher than max") ]
+
+        /// Tests whether nextIntermediate works.
+        [<TestCaseSource("NextIntermediates")>]
+        member x.``test whether nextIntermediate gets the correct level`` expr =
+            Compose.nextIntermediate expr

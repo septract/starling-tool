@@ -1,8 +1,13 @@
+/// <summary>
+///     Tests for the guarder.
+/// </summary>
 module Starling.Tests.Guarder
 
 open NUnit.Framework
 open Starling.Collections
 open Starling.Core.Expr
+open Starling.Core.Var
+open Starling.Core.Symbolic
 open Starling.Core.Model
 open Starling.Core.GuardedView
 open Starling.Lang.Modeller
@@ -14,80 +19,81 @@ type GuarderTests() =
     
     /// Test cases for converting CondViews to GuarViews
     static member CondViews = 
-        let msec : CView = Multiset.empty
-        let mseg : GView = Multiset.empty
-        [ TestCaseData(msec).Returns(mseg).SetName("Convert the empty CView to the empty GView")
-          
-          TestCaseData(Multiset.ofFlatList [ Func { Name = "foo"
-                                                    Params = [ AExpr(AConst(Unmarked "bar")) ] }
-                                             Func { Name = "bar"
-                                                    Params = [ AExpr(AConst(Unmarked "baz")) ] } ])
-              .Returns(Multiset.ofFlatList [ { Cond = BTrue
-                                               Item = 
-                                                   { Name = "foo"
-                                                     Params = [ AExpr(AConst(Unmarked "bar")) ] } }
-                                             { Cond = BTrue
-                                               Item = 
-                                                   { Name = "bar"
-                                                     Params = [ AExpr(AConst(Unmarked "baz")) ] } } ])
-              .SetName("Convert a flat CondView-list to a GuarView-list with no guards")
-          
-          TestCaseData(Multiset.ofFlatList [ CFunc.ITE((BConst(Unmarked "s")), 
-                                                       Multiset.ofFlatList [ Func { Name = "foo"
-                                                                                    Params = [ AExpr(AConst(Unmarked "bar")) ] } ], 
-                                                       Multiset.ofFlatList [ Func { Name = "bar"
-                                                                                    Params = [ AExpr(AConst(Unmarked "baz")) ] } ]) ])
-              .Returns(Multiset.ofFlatList [ { Cond = BConst(Unmarked "s")
-                                               Item = 
-                                                   { Name = "foo"
-                                                     Params = [ AExpr(AConst(Unmarked "bar")) ] } }
-                                             { Cond = BNot(BConst(Unmarked "s"))
-                                               Item = 
-                                                   { Name = "bar"
-                                                     Params = [ AExpr(AConst(Unmarked "baz")) ] } } ])
-              .SetName("Convert a singly-nested CondView-list to a GuarView-list with unit guards")
-          
+        [ TestCaseData(Multiset.empty : CView)
+              .Returns(Multiset.empty : SVGView)
+              .SetName("Convert the empty CView to the empty GView")
+
           TestCaseData(Multiset.ofFlatList
-                           [ CFunc.ITE(BConst(Unmarked "s"), 
-                                       Multiset.ofFlatList
-                                           [ CFunc.ITE(BConst(Unmarked "t"), 
-                                                       Multiset.ofFlatList [ Func { Name = "foo"
-                                                                                    Params = [ AExpr(AConst(Unmarked "bar")) ] }
-                                                                             Func { Name = "bar"
-                                                                                    Params = [ AExpr(AConst(Unmarked "baz")) ] } ], 
-                                                       Multiset.ofFlatList [ Func { Name = "fizz"
-                                                                                    Params = [ AExpr(AConst(Unmarked "buzz")) ] } ])
-                                             Func { Name = "in"
-                                                    Params = [ AExpr(AConst(Unmarked "out")) ] } ], 
-                                       Multiset.ofFlatList
-                                           [ Func { Name = "ding"
-                                                    Params = [ AExpr(AConst(Unmarked "dong")) ] } ]) ])
-              .Returns(Multiset.ofFlatList [ { Cond = 
-                                                   BAnd [ BConst(Unmarked "s")
-                                                          BConst(Unmarked "t") ]
-                                               Item = 
-                                                   { Name = "foo"
-                                                     Params = [ AExpr(AConst(Unmarked "bar")) ] } }
-                                             { Cond = 
-                                                   BAnd [ BConst(Unmarked "s")
-                                                          BConst(Unmarked "t") ]
-                                               Item = 
-                                                   { Name = "bar"
-                                                     Params = [ AExpr(AConst(Unmarked "baz")) ] } }
-                                             { Cond = 
-                                                   BAnd [ BConst(Unmarked "s")
-                                                          BNot(BConst(Unmarked "t")) ]
-                                               Item = 
-                                                   { Name = "fizz"
-                                                     Params = [ AExpr(AConst(Unmarked "buzz")) ] } }
-                                             { Cond = BConst(Unmarked "s")
-                                               Item = 
-                                                   { Name = "in"
-                                                     Params = [ AExpr(AConst(Unmarked "out")) ] } }
-                                             { Cond = BNot(BConst(Unmarked "s"))
-                                               Item = 
-                                                   { Name = "ding"
-                                                     Params = [ AExpr(AConst(Unmarked "dong")) ] } } ])
+                           [ Func <| svfunc "foo" [ Expr.Int (siVar "bar") ]
+                             Func <| svfunc "bar" [ Expr.Int (siVar "baz") ]] )
+              .Returns(Multiset.ofFlatList
+                           [ svgfunc BTrue "foo" [ Expr.Int (siVar "bar") ]
+                             svgfunc BTrue "bar" [ Expr.Int (siVar "baz") ]] )
+              .SetName("Convert a flat CondView-list to a GuarView-list with no guards")
+
+          TestCaseData(Multiset.ofFlatList
+                           [ CFunc.ITE
+                                 (sbVar "s", 
+                                  Multiset.ofFlatList
+                                      [ Func <| svfunc "foo" [ Expr.Int (siVar "bar") ]], 
+                                  Multiset.ofFlatList
+                                      [ Func <| svfunc "bar" [ Expr.Int (siVar "baz") ]] ) ] )
+              .Returns(Multiset.ofFlatList
+                           [ svgfunc
+                                (sbVar "s")
+                                "foo"
+                                [ Expr.Int (siVar "bar") ]
+                             svgfunc
+                                (BNot (sbVar "s"))
+                                "bar"
+                                [ Expr.Int (siVar "baz") ]] )
+              .SetName("Convert a singly-nested CondView-list to a GuarView-list with unit guards")
+
+          TestCaseData(Multiset.ofFlatList
+                           [ CFunc.ITE
+                                 (sbVar "s", 
+                                  Multiset.ofFlatList
+                                       [ CFunc.ITE
+                                             (sbVar "t", 
+                                              Multiset.ofFlatList
+                                                  [ Func <| svfunc
+                                                        "foo"
+                                                        [ Expr.Int (siVar "bar") ]
+                                                    Func <| svfunc
+                                                        "bar"
+                                                        [ Expr.Int (siVar "baz") ]], 
+                                              Multiset.ofFlatList
+                                                  [ Func <| svfunc
+                                                        "fizz"
+                                                        [ Expr.Int (siVar "buzz") ]])
+                                         Func <| svfunc
+                                             "in"
+                                               [ Expr.Int (siVar "out") ]], 
+                                  Multiset.ofFlatList
+                                      [ Func <| svfunc
+                                            "ding"
+                                            [ Expr.Int (siVar "dong") ]] ) ] )
+              .Returns(Multiset.ofFlatList
+                           [ svgfunc
+                                 (BAnd [ sbVar "s"; sbVar "t" ] )
+                                 "foo"
+                                 [ Expr.Int (siVar "bar") ]
+                             svgfunc
+                                 (BAnd [ sbVar "s"; sbVar "t" ] )
+                                 "bar"
+                                 [ Expr.Int (siVar "baz") ]
+                             svgfunc
+                                 (BAnd [ sbVar "s"; BNot (sbVar "t") ] )
+                                 "fizz"
+                                 [ Expr.Int (siVar "buzz") ]
+                             svgfunc
+                                 (sbVar "s")
+                                 "in"
+                                 [ Expr.Int (siVar "out") ]
+                             svgfunc
+                                 (BNot (sbVar "s"))
+                                 "ding"
+                                 [ Expr.Int (siVar "dong") ]] )
               .SetName("Convert a complex-nested CondView-list to a GuarView-list with complex guards") ]
     
     // Test conversion of CViews into GViews.

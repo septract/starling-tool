@@ -14,11 +14,16 @@
 /// </summary>
 module Starling.Core.GuardedView
 
+open Chessie.ErrorHandling
 open Starling.Collections
+open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.ExprEquiv
 open Starling.Core.Var
+open Starling.Core.Symbolic
+open Starling.Core.Sub
 open Starling.Core.Model
+open Starling.Core.Model.Sub
 
 
 /// <summary>
@@ -35,14 +40,17 @@ module Types =
     ///         <c>Cond</c> holds.
     ///     </para>
     /// </summary>
+    /// <typeparam name="var">
+    ///     The type of variables in the guard.
+    /// </typeparam>
     /// <typeparam name="item">
     ///     The type of the guarded item.
     /// </typeparam>
-    type Guarded<'item> =
+    type Guarded<'var, 'item> =
         { /// <summary>
           ///    The guard condition.
           /// </summary>
-          Cond : BoolExpr
+          Cond : BoolExpr<'var>
           /// <summary>
           ///    The guarded item.
           /// </summary>
@@ -56,22 +64,73 @@ module Types =
     /// <summary>
     ///     A guarded <c>VFunc</c>.
     /// </summary>
-    type GFunc = Guarded<VFunc>
+    /// <typeparam name="var">
+    ///     The type of variables in the guard.
+    /// </typeparam>
+    type GFunc<'var> = Guarded<'var, VFunc<'var>>
+
+    /// <summary>
+    ///     A <c>GFunc</c> over <c>MarkedVar</c>s.
+    /// </summary>
+    type MGFunc = GFunc<MarkedVar>
+
+    /// <summary>
+    ///     A <c>GFunc</c> over symbolic <c>Var</c>s.
+    /// </summary>
+    type SVGFunc = GFunc<Sym<Var>>
+
+    /// <summary>
+    ///     A <c>GFunc</c> over symbolic <c>MarkedVar</c>s.
+    /// </summary>
+    type SMGFunc = GFunc<Sym<MarkedVar>>
 
     /// <summary>
     ///     A guarded view.
     /// </summary>
+    /// <typeparam name="var">
+    ///     The type of variables in the guard.
+    /// </typeparam>
     /// <remarks>
     ///     These are the most common form of view in Starling internally,
     ///     although theoretically speaking they are equivalent to Views
     ///     with the guards lifting to proof case splits.
     /// </remarks>
-    type GView = Multiset<GFunc>
+    type GView<'var> when 'var : comparison =
+        Multiset<GFunc<'var>>
+
+    /// <summary>
+    ///     A <c>GView</c> over <c>MarkedVar</c>s.
+    /// </summary>
+    type MGView = GView<MarkedVar>
+
+    /// <summary>
+    ///     A <c>GView</c> over symbolic <c>Var</c>s.
+    /// </summary>
+    type SVGView = GView<Sym<Var>>
+
+    /// <summary>
+    ///     A <c>GView</c> over symbolic <c>MarkedVar</c>s.
+    /// </summary>
+    type SMGView = GView<Sym<MarkedVar>>
 
     /// <summary>
     ///     A multiset of guarded views, as produced by reification.
     /// </summary>
-    type ViewSet = Multiset<Guarded<OView>>
+    /// <typeparam name="var">
+    ///     The type of variables in the guard.
+    /// </typeparam>
+    type ViewSet<'var> when 'var : comparison =
+        Multiset<Guarded<'var, OView>>
+
+    /// <summary>
+    ///     A <c>ViewSet</c> over <c>MarkedVar</c>s.
+    /// </summary>
+    type MViewSet = ViewSet<MarkedVar>
+
+    /// <summary>
+    ///     A <c>ViewSet</c> over symbolic <c>MarkedVar</c>s.
+    /// </summary>
+    type SMViewSet = ViewSet<Sym<MarkedVar>>
 
 
 (*
@@ -90,10 +149,72 @@ module Types =
 /// <param name="pars">
 ///     The parameters of the <c>GFunc</c>, as a sequence.
 /// </param>
+/// <typeparam name="var">
+///     The type of variables in the <c>GFunc</c>'s parameters.
+/// </typeparam>
 /// <returns>
 ///     A new <c>GFunc</c> with the given guard, name, and parameters.
 /// </returns>
-let gfunc guard name pars = { Cond = guard ; Item = vfunc name pars }
+let gfunc
+  (guard : BoolExpr<'var>)
+  (name : string)
+  (pars : Expr<'var> seq)
+  : GFunc<'var> =
+    { Cond = guard ; Item = vfunc name pars }
+
+/// <summary>
+///     Creates a new <c>SVGFunc</c>.
+/// </summary>
+/// <param name="guard">
+///     The guard on which the <c>SVGFunc</c> is conditional.
+/// </param>
+/// <param name="name">
+///     The name of the <c>SVGFunc</c>.
+/// </param>
+/// <param name="pars">
+///     The parameters of the <c>SVGFunc</c>, as a sequence.
+/// </param>
+/// <returns>
+///     A new <c>SVGFunc</c> with the given guard, name, and parameters.
+/// </returns>
+let svgfunc (guard : SVBoolExpr) (name : string) (pars : SVExpr seq) : SVGFunc =
+    gfunc guard name pars
+
+/// <summary>
+///     Creates a new <c>MGFunc</c>.
+/// </summary>
+/// <param name="guard">
+///     The guard on which the <c>MGFunc</c> is conditional.
+/// </param>
+/// <param name="name">
+///     The name of the <c>MGFunc</c>.
+/// </param>
+/// <param name="pars">
+///     The parameters of the <c>MGFunc</c>, as a sequence.
+/// </param>
+/// <returns>
+///     A new <c>MGFunc</c> with the given guard, name, and parameters.
+/// </returns>
+let mgfunc (guard : MBoolExpr) (name : string) (pars : MExpr seq) : MGFunc =
+    gfunc guard name pars
+
+/// <summary>
+///     Creates a new <c>SMGFunc</c>.
+/// </summary>
+/// <param name="guard">
+///     The guard on which the <c>SMGFunc</c> is conditional.
+/// </param>
+/// <param name="name">
+///     The name of the <c>SMGFunc</c>.
+/// </param>
+/// <param name="pars">
+///     The parameters of the <c>SMGFunc</c>, as a sequence.
+/// </param>
+/// <returns>
+///     A new <c>SMGFunc</c> with the given guard, name, and parameters.
+/// </returns>
+let smgfunc (guard : SMBoolExpr) (name : string) (pars : SMExpr seq) : SMGFunc =
+    gfunc guard name pars
 
 
 (*
@@ -111,37 +232,6 @@ let (|Always|_|) { Cond = c ; Item = i } =
 /// </summary>
 let (|Never|_|) { Cond = c ; Item = i } =
     if isFalse c then Some i else None
-
-
-(*
- * Multiple-guard active patterns.
- *)
-
-/// <summary>
-///     Active pattern matching on if-then-else guard multisets.
-///
-///     <para>
-///         If-then-else guardsets contain two non-false guards, at least one
-///         of which is equal to the negation of the other.
-///     </para>
-///
-///     <para>
-///         The active pattern returns the guard and view of the first ITE
-///         guard, then the guard and view of the second.  The views are
-///         <c>GView</c>s, but with a <c>BTrue</c> guard.
-///     </para>
-/// </summary>
-let (|ITEGuards|_|) ms =
-    match (Multiset.toFlatList ms) with
-    | [ x ; y ] when (equivHolds (negates x.Cond y.Cond)) ->
-        Some (x.Cond, Multiset.singleton { Cond = BTrue; Item = x.Item },
-              y.Cond, Multiset.singleton { Cond = BTrue; Item = y.Item })
-    // {| G -> P |} is trivially equivalent to {| G -> P * ¬G -> emp |}.
-    | [ x ] ->
-        Some (x.Cond, Multiset.singleton { Cond = BTrue; Item = x.Item },
-              mkNot x.Cond, Multiset.empty)
-    | _ -> None
-
 
 (*
  * Variable querying.
@@ -262,6 +352,8 @@ let pruneGuardedSet gset =
 module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Expr.Pretty
+    open Starling.Core.Var.Pretty
+    open Starling.Core.Symbolic.Pretty
     open Starling.Core.Model.Pretty
 
     /// <summary>
@@ -275,7 +367,10 @@ module Pretty =
     ///         arrow to separate them.
     ///     </para>
     /// </summary>
-    /// <param name="pitem">
+    /// <param name="pVar">
+    ///     A pretty-printer for variables in the <c>Cond</c>.
+    /// </param>
+    /// <param name="pItem">
     ///     A pretty-printer for the <c>Item</c>.
     /// </param>
     /// <param name="_arg1">
@@ -284,48 +379,370 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer command to print the guarded item.
     /// </returns>
-    let printGuarded pitem =
+    let printGuarded pVar pItem =
         function
-        | Always i -> pitem i
-        | Never i -> ssurround "~" "~" (pitem i)
+        | Always i -> pItem i
+        | Never i -> ssurround "~" "~" (pItem i)
         | { Cond = c ; Item = i } ->
-            parened (HSep([ printBoolExpr c
-                            pitem i ], String " -> "))
+            parened (HSep([ printBoolExpr pVar c
+                            pItem i ], String " -> "))
+
+    /// <summary>
+    ///     Pretty-prints a guarded item over <c>MarkedVar</c>s.
+    /// </summary>
+    /// <param name="pItem">
+    ///     A pretty-printer for the <c>Item</c>.
+    /// </param>
+    /// <param name="_arg1">
+    ///     The guard to pretty-print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command to print the guarded item.
+    /// </returns>
+    let printMGuarded pItem = printGuarded printMarkedVar pItem
 
     /// <summary>
     ///     Pretty-prints a guarded <c>VFunc</c>.
     /// </summary>
+    /// <param name="pVar">
+    ///     A pretty-printer for variables in the <c>Cond</c>.
+    /// </param>
     /// <param name="_arg1">
     ///     The <c>GFunc</c> to print.
     /// </param>
     /// <returns>
     ///     A pretty-printer command to print the <c>GFunc</c>.
     /// </returns>
-    let printGFunc = printGuarded printVFunc
+    let printGFunc pVar = printGuarded pVar (printVFunc pVar)
+
+    /// <summary>
+    ///     Pretty-prints a guarded <c>VFunc</c> over <c>MarkedVar</c>s.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>MGFunc</c> to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command to print the <c>MGFunc</c>.
+    /// </returns>
+    let printMGFunc = printGFunc printMarkedVar
+
+    /// <summary>
+    ///     Pretty-prints a <c>GFunc</c> over symbolic <c>Var</c>s.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>SGFunc</c> to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command to print the <c>SGFunc</c>.
+    /// </returns>
+    let printSVGFunc = printGFunc (printSym String)
+
+    /// <summary>
+    ///     Pretty-prints a guarded <c>VFunc</c> over symbolic <c>MarkedVar</c>s.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>SMGFunc</c> to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command to print the <c>SMGFunc</c>.
+    /// </returns>
+    let printSMGFunc = printGFunc (printSym printMarkedVar)
 
     /// <summary>
     ///     Pretty-prints a guarded view.
     /// </summary>
+    /// <param name="pVar">
+    ///     A pretty-printer for variables in the <c>Cond</c>.
+    /// </param>
     /// <param name="_arg1">
     ///     The <c>GView</c> to print.
     /// </param>
     /// <returns>
     ///     A pretty-printer command to print the <c>GView</c>.
     /// </returns>
-    let printGView = printMultiset printGFunc >> ssurround "<|" "|>"
+    let printGView pVar =
+        printMultiset (printGFunc pVar)
+        >> ssurround "<|" "|>"
+
+    /// <summary>
+    ///     Pretty-prints a guarded view over <c>MarkedVar</c>s.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>MGView</c> to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command to print the <c>MGView</c>.
+    /// </returns>
+    let printMGView = printGView printMarkedVar
+
+    /// <summary>
+    ///     Pretty-prints a guarded view over symbolic <c>Var</c>s.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>SGView</c> to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command to print the <c>SGView</c>.
+    /// </returns>
+    let printSVGView : SVGView -> Command = printGView (printSym String)
+
+    /// <summary>
+    ///     Pretty-prints a guarded view over symbolic <c>MarkedVar</c>s.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>SMGView</c> to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command to print the <c>SMGView</c>.
+    /// </returns>
+    let printSMGView = printGView (printSym printMarkedVar)
 
     /// <summary>
     ///     Pretty-prints a guarded view set.
     /// </summary>
+    /// <param name="pVar">
+    ///     A pretty-printer for variables in the <c>Cond</c>.
+    /// </param>
     /// <param name="_arg1">
     ///     The <c>ViewSet</c> to print.
     /// </param>
     /// <returns>
     ///     A pretty-printer command to print the <c>ViewSet</c>.
     /// </returns>
-    let printViewSet =
-        printMultiset (printGuarded printOView >> ssurround "((" "))")
+    let printViewSet pVar =
+        printMultiset (printGuarded pVar printOView >> ssurround "((" "))")
         >> ssurround "(|" "|)"
+
+    /// <summary>
+    ///     Pretty-prints a guarded view set over <c>MarkedVar</c>s.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>MViewSet</c> to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command to print the <c>MViewSet</c>.
+    /// </returns>
+    let printMViewSet =
+        printViewSet printMarkedVar
+
+    /// <summary>
+    ///     Pretty-prints a guarded view set over symbolic <c>MarkedVar</c>s.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>SMViewSet</c> to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command to print the <c>SMViewSet</c>.
+    /// </returns>
+    let printSMViewSet = printViewSet (printSym printMarkedVar)
+
+/// <summary>
+///     Functions for substituting over guarded views.
+/// </summary>
+module Sub =
+    open Starling.Core.Sub
+
+    /// <summary>
+    ///   Maps a <c>SubFun</c> over all expressions in a <c>GFunc</c>.
+    /// </summary>
+    /// <param name="_arg1">
+    ///   The <c>GFunc</c> over which whose expressions are to be mapped.
+    /// </param>
+    /// <typeparam name="srcVar">
+    ///     The type of variables entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstVar">
+    ///     The type of variables leaving the map.
+    /// </typeparam>
+    /// <returns>
+    ///   The <c>GFunc</c> resulting from the mapping.
+    /// </returns>
+    /// <remarks>
+    ///   <para>
+    ///     The expressions in a <c>GFunc</c> are the guard itself, and
+    ///     the expressions of the enclosed <c>VFunc</c>.
+    ///   </para>
+    /// </remarks>
+    let subExprInGFunc
+      (sub : SubFun<'srcVar, 'dstVar>)
+      ( { Cond = cond ; Item = item } : GFunc<'srcVar> )
+      : GFunc<'dstVar> =
+        { Cond = Mapper.mapBool sub cond
+          Item = subExprInVFunc sub item }
+
+    /// <summary>
+    ///   Maps a <c>SubFun</c> over all expressions in a <c>GView</c>.
+    /// </summary>
+    /// <param name="sub">
+    ///   The <c>SubFun</c> to map over all expressions in the <c>GView</c>.
+    /// </param>
+    /// <param name="_arg1">
+    ///   The <c>GView</c> over which whose expressions are to be mapped.
+    /// </param>
+    /// <typeparam name="srcVar">
+    ///     The type of variables entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstVar">
+    ///     The type of variables leaving the map.
+    /// </typeparam>
+    /// <returns>
+    ///   The <c>GView</c> resulting from the mapping.
+    /// </returns>
+    /// <remarks>
+    ///   <para>
+    ///     The expressions in a <c>GView</c> are those of its constituent
+    ///     <c>GFunc</c>s.
+    ///   </para>
+    /// </remarks>
+    let subExprInGView
+      (sub : SubFun<'srcVar, 'dstVar>)
+      : GView<'srcVar>
+      -> GView<'dstVar> =
+        Multiset.map (subExprInGFunc sub)
+
+    /// <summary>
+    ///     Maps a <c>SubFun</c> over all expressions in an <c>Term</c>
+    ///     over a <c>GView</c> weakest-pre and <c>VFunc</c> goal.
+    /// </summary>
+    /// <param name="sub">
+    ///     The <c>SubFun</c> to map over all expressions in the <c>STerm</c>.
+    /// </param>
+    /// <param name="term">
+    ///     The <c>Term</c> over which whose expressions are to be mapped.
+    /// </param>
+    /// <typeparam name="srcVar">
+    ///     The type of variables entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstVar">
+    ///     The type of variables leaving the map.
+    /// </typeparam>
+    /// <returns>
+    ///     The <c>Term</c> resulting from the mapping.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         The expressions in the term are those of its
+    ///         constituent command (<c>BoolExpr</c>), its weakest
+    ///         precondition (<c>GView</c>), and its goal (<c>VFunc</c>).
+    ///     </para>
+    /// </remarks>
+    let subExprInDTerm
+      (sub : SubFun<'srcVar, 'dstVar>)
+      (term : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>)
+      : Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>> =
+        mapTerm
+            (Mapper.mapBool sub)
+            (subExprInGView sub)
+            (subExprInVFunc sub)
+            term
+
+    /// <summary>
+    ///     Maps a <c>TrySubFun</c> over all expressions in a <c>GFunc</c>.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>GFunc</c> over which whose expressions are to be mapped.
+    /// </param>
+    /// <typeparam name="srcVar">
+    ///     The type of variables entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstVar">
+    ///     The type of variables leaving the map.
+    /// </typeparam>
+    /// <typeparam name="err">
+    ///     The type of errors occurring in the map.
+    /// </typeparam>
+    /// <returns>
+    ///     The Chessie-wrapped <c>GFunc</c> resulting from the mapping.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         The expressions in a <c>GFunc</c> are the guard itself, and
+    ///         the expressions of the enclosed <c>VFunc</c>.
+    ///     </para>
+    /// </remarks>
+    let trySubExprInGFunc
+      (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
+      ( { Cond = cond ; Item = item } : GFunc<'srcVar> )
+      : Result<GFunc<'dstVar>, 'err> =
+        lift2
+            (fun cond' item' -> { Cond = cond' ; Item = item' } )
+            (Mapper.mapBool sub cond)
+            (trySubExprInVFunc sub item)
+
+    /// <summary>
+    ///     Maps a <c>TrySubFun</c> over all expressions in a <c>GView</c>.
+    /// </summary>
+    /// <param name="sub">
+    ///     The <c>TrySubFun</c> to map over all expressions in the
+    ///     <c>GView</c>.
+    /// </param>
+    /// <param name="_arg1">
+    ///     The <c>GView</c> over which whose expressions are to be mapped.
+    /// </param>
+    /// <typeparam name="srcVar">
+    ///     The type of variables entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstVar">
+    ///     The type of variables leaving the map.
+    /// </typeparam>
+    /// <typeparam name="err">
+    ///     The type of any returned errors.
+    /// </typeparam>
+    /// <returns>
+    ///     The Chessie-wrapped <c>GView</c> resulting from the mapping.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         The expressions in a <c>GView</c> are those of its
+    ///         constituent <c>GFunc</c>s.
+    ///     </para>
+    /// </remarks>
+    let trySubExprInGView
+      (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
+      : GView<'srcVar> -> Result<GView<'dstVar>, 'err> =
+        Multiset.toFlatList
+        >> List.map (trySubExprInGFunc sub)
+        >> collect
+        >> lift Multiset.ofFlatList
+
+    /// <summary>
+    ///     Maps a <c>TrySubFun</c> over all expressions in a <c>Term</c>
+    ///     over a <c>GView</c> weakest-pre and <c>VFunc</c> goal.
+    /// </summary>
+    /// <param name="sub">
+    ///     The <c>TrySubFun</c> to map over all expressions in the
+    ///     <c>Term</c>.
+    /// </param>
+    /// <param name="_arg1">
+    ///     The <c>Term</c> over which whose expressions are to be mapped.
+    /// </param>
+    /// <typeparam name="srcVar">
+    ///     The type of variables entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstVar">
+    ///     The type of variables leaving the map.
+    /// </typeparam>
+    /// <typeparam name="err">
+    ///     The type of any returned errors.
+    /// </typeparam>
+    /// <returns>
+    ///     The Chessie-wrapped <c>Term</c> resulting from the mapping.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         The expressions in the term are those of its
+    ///         constituent command (<c>BoolExpr</c>), its weakest
+    ///         precondition (<c>GView</c>), and its goal (<c>VFunc</c>).
+    ///     </para>
+    /// </remarks>
+    let trySubExprInDTerm
+      (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
+      : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>
+      -> Result<Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>>, 'err> =
+        tryMapTerm
+            (Mapper.mapBool sub)
+            (trySubExprInGView sub)
+            (trySubExprInVFunc sub)
 
 
 /// <summary>
@@ -333,6 +750,8 @@ module Pretty =
 /// </summary>
 module Tests =
     open NUnit.Framework
+
+    open Starling.Core.TypeSystem
 
     /// <summary>
     ///     NUnit tests for guarded views.
@@ -342,23 +761,24 @@ module Tests =
         ///     Test cases for extracting variables from <c>GFunc</c>s.
         /// </summary>
         static member VarsInGFuncCases =
-            [ TestCaseData(gfunc BTrue "foo" [])
-                  .Returns(Set.empty : Set<(Const * Type)>)
+            [ TestCaseData(mgfunc BTrue "foo" [])
+                  .Returns(Set.empty : Set<CTyped<MarkedVar>>)
                   .SetName("GFunc with no guard and no parameters has no variables")
-              TestCaseData(gfunc (bUnmarked "bar") "foo" [])
-                  .Returns((Set.singleton (Unmarked "bar", Bool)) : Set<(Const * Type)>)
+              TestCaseData(mgfunc (bBefore "bar") "foo" [])
+                  .Returns((Set.singleton (Typed.Bool (Before "bar"))) : Set<CTyped<MarkedVar>>)
                   .SetName("Variables in a GFunc's guard are returned by varsInGFunc")
-              TestCaseData(gfunc BTrue "foo" [ BExpr (bAfter "x")
-                                               AExpr (aBefore "y") ] )
+              TestCaseData(mgfunc BTrue "foo"
+                               [ Typed.Bool (bAfter "x")
+                                 Typed.Int (iBefore "y") ] )
                   .Returns((Set.ofArray
-                                [| (After "x", Bool)
-                                   (Before "y", Int) |]): Set<(Const * Type)>)
+                                [| (Typed.Bool (After "x"))
+                                   (Typed.Int (Before "y")) |]): Set<CTyped<MarkedVar>>)
                   .SetName("Variables in a GFunc's parameters are returned by varsInGFunc") ]
 
         /// <summary>
         ///     Tests <c>varsInGFunc</c>.
         /// </summary>
         [<TestCaseSource("VarsInGFuncCases")>]
-        member this.testVarsInGFunc gf =
+        member this.testVarsInGFunc (gf : MGFunc) =
             gf |> varsInGFunc |> Set.ofSeq
 

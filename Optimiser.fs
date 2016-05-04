@@ -11,15 +11,19 @@ module Starling.Optimiser
 
 open Chessie.ErrorHandling
 
+open Starling.Core.TypeSystem
 open Starling.Collections
 open Starling.Utils
 open Starling.Core.Expr
 open Starling.Core.ExprEquiv
+open Starling.Core.Var
+open Starling.Core.Symbolic
 open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.Command.Queries
 open Starling.Core.Sub
 open Starling.Core.GuardedView
+open Starling.Core.GuardedView.Sub
 
 
 /// <summary>
@@ -449,7 +453,7 @@ module Graph =
     ///     A function returning True only if (but not necessarily if)
     ///     the given command is local (uses only local variables).
     /// </returns>
-    let isLocalCommand tVars : Command -> bool =
+    let isLocalCommand (tVars : VarMap) : Command -> bool =
         // A command is local if, for all of its funcs...
         List.forall
             (fun { Params = ps } ->
@@ -460,11 +464,59 @@ module Graph =
                       >> Set.toSeq
                       >> Seq.forall
                              (// ...the variable is thread-local.
-                              fun (c, _) ->
-                                  match (Map.tryFind (stripMark c) tVars) with
-                                  | Some _ -> true
-                                  | _ -> false))
+                              valueOf
+                              >> function
+                                 | Sym _ -> false
+                                 | Reg (After x)
+                                 | Reg (Before x)
+                                 | Reg (Intermediate (_, x))
+                                 | Reg (Goal (_, x)) ->
+                                   x
+                                   |> tVars.TryFind
+                                   |> function
+                                      | Some _ -> true
+                                      | _ -> false))
                      ps)
+    /// <summary>
+    ///     Partial active pattern matching <c>Sym</c>-less expressions.
+    /// </summary>
+    let (|VNoSym|_|) : BoolExpr<Sym<Var>> -> BoolExpr<Var> option =
+        Mapper.mapBool (tsfRemoveSym (fun _ -> ())) >> okOption
+
+    /// <summary>
+    ///     Partial active pattern matching <c>Sym</c>-less expressions.
+    /// </summary>
+    let (|MNoSym|_|) : BoolExpr<Sym<MarkedVar>> -> BoolExpr<MarkedVar> option =
+        Mapper.mapBool (tsfRemoveSym (fun _ -> ())) >> okOption
+
+
+    /// <summary>
+    ///     Active pattern matching on if-then-else guard multisets.
+    ///
+    ///     <para>
+    ///         If-then-else guardsets contain two non-false guards, at least one
+    ///         of which is equal to the negation of the other.
+    ///         Neither guard can be symbolic.
+    ///     </para>
+    ///
+    ///     <para>
+    ///         The active pattern returns the guard and view of the first ITE
+    ///         guard, then the guard and view of the second.  The views are
+    ///         <c>GView</c>s, but with a <c>BTrue</c> guard.
+    ///     </para>
+    /// </summary>
+    let (|ITEGuards|_|) (ms: SVGView) =
+        match (Multiset.toFlatList ms) with
+        | [ { Cond = VNoSym xc; Item = xi }
+            { Cond = VNoSym yc; Item = yi } ]
+              when (equivHolds id (negates xc yc)) ->
+            Some (xc, Multiset.singleton { Cond = BTrue; Item = xi },
+                  yc, Multiset.singleton { Cond = BTrue; Item = yi })
+        // {| G -> P |} is trivially equivalent to {| G -> P * ¬G -> emp |}.
+        | [ { Cond = (VNoSym xc); Item = xi } ] ->
+            Some (xc, Multiset.singleton { Cond = BTrue; Item = xi },
+                  mkNot xc, Multiset.empty)
+        | _ -> None
 
     /// <summary>
     ///     Removes a node if it is an ITE-guarded view.
@@ -490,24 +542,28 @@ module Graph =
                 | InnerView(ITEGuards (xc, xv, yc, yv)) ->
                     (* Translate xc and yc to pre-state, to match the
                        commands. *)
-                    let xcPre = (liftMarker Before always).BSub xc
-                    let ycPre = (liftMarker Before always).BSub yc
+                    let xcPre = Mapper.mapBool vBefore xc
+                    let ycPre = Mapper.mapBool vBefore yc
 
                     match (Set.toList outEdges, Set.toList inEdges) with
                     (* Are there only two out edges, and only one in edge?
-                       Are the out edges assumes? *)
-                    | ( [ { Dest = out1D ; Command = Assume out1P } as out1
-                          { Dest = out2D ; Command = Assume out2P } as out2
+                       Are the out edges assumes, and are they non-symbolic? *)
+                    | ( [ { Dest = out1D
+                            Command = Assume (MNoSym out1P) } as out1
+                          { Dest = out2D
+                            Command = Assume (MNoSym out2P) } as out2
                         ],
                         [ inE ] )
                         when (// Is the first one x and the second y?
                               (equivHolds
+                                   unmarkVar
                                    (andEquiv (equiv out1P xcPre)
                                              (equiv out2P ycPre))
                                && nodeHasView out1D xv ctx.Graph
                                && nodeHasView out2D yv ctx.Graph)
                               // Or is the first one y and the second x?
                               || (equivHolds
+                                      unmarkVar
                                       (andEquiv (equiv out2P xcPre)
                                                 (equiv out1P ycPre))
                                   && nodeHasView out2D xv ctx.Graph
@@ -673,15 +729,15 @@ module Term =
      * After elimination
      *)
 
-    /// Finds all instances of the pattern `x!after = f(x!before)` in a
-    /// Boolean expression that is either an equality or conjunction, and
+    /// Finds all instances of the pattern `x!after = f(x!before)` in an
+    /// integral expression that is either an equality or conjunction, and
     /// where x is arithmetic.
     let rec findArithAfters =
         function
-        | BAEq(AConst(After x), (ConstantArithFunction (Before y) as fx))
+        | BAEq(AVar (Reg (After x)), (ConstantIntFunction (Reg (Before y)) as fx))
             when x = y
             -> [(x, fx)]
-        | BAEq(ConstantArithFunction (Before y) as fx, AConst(After x))
+        | BAEq(ConstantIntFunction (Reg (Before y)) as fx, AVar (Reg (After x)))
             when x = y
             -> [(x, fx)]
         | BAnd xs -> concatMap findArithAfters xs
@@ -692,10 +748,10 @@ module Term =
     /// where x is Boolean.
     let rec findBoolAfters =
         function
-        | BBEq(BConst(After x), (ConstantBoolFunction (Before y) as fx))
+        | BBEq(BVar (Reg (After x)), (ConstantBoolFunction (Reg (Before y)) as fx))
             when x = y
             -> [(x, fx)]
-        | BBEq(ConstantBoolFunction (Before y) as fx, BConst(After x))
+        | BBEq(ConstantBoolFunction (Reg (Before y)) as fx, BVar (Reg (After x)))
             when x = y
             -> [(x, fx)]
         | BAnd xs -> concatMap findBoolAfters xs
@@ -703,18 +759,22 @@ module Term =
 
     /// Lifts a pair of before/after maps to a SubFun.
     let afterSubs asubs bsubs =
-        { AVSub = function
-                  | After a -> Map.tryFind a asubs |> withDefault (aAfter a)
-                  | x -> AConst x
-          BVSub = function
-                  | After a -> Map.tryFind a bsubs |> withDefault (bAfter a)
-                  | x -> BConst x }
-        |> onVars
+        onVars
+            (liftVToSym
+                (Mapper.make
+                    (function
+                     | After a -> (Map.tryFind a asubs |> withDefault (siAfter a))
+                     | x -> AVar (Reg x))
+                    (function
+                     | After a -> (Map.tryFind a bsubs |> withDefault (sbAfter a))
+                     | x -> BVar (Reg x))))
 
     /// Eliminates bound before/after pairs in the term.
     /// If x!after = f(x!before) in the action, we replace x!after with
     /// f(x!before) in the precondition and postcondition.
-    let eliminateAfters term =
+    let eliminateAfters
+      (term : STerm<SMGView, SMVFunc> )
+      : STerm<SMGView, SMVFunc> =
         let sub = afterSubs (term.Cmd |> findArithAfters |> Map.ofList)
                             (term.Cmd |> findBoolAfters |> Map.ofList)
 
@@ -741,7 +801,7 @@ module Term =
         | x when Set.contains (mkNot x) fs -> BFalse
         | BAnd xs -> mkAnd (List.map (reduce fs) xs)
         | BOr xs -> mkOr (List.map (reduce fs) xs)
-        | BBEq (x, y) -> mkEq (reduce fs x |> BExpr) (reduce fs y |> BExpr)
+        | BBEq (x, y) -> mkEq (reduce fs x |> Expr.Bool) (reduce fs y |> Expr.Bool)
         | BNot x -> mkNot (reduce fs x)
         | x -> x
 
@@ -749,7 +809,10 @@ module Term =
     let reduceGView fs = mapConds (reduce fs) >> pruneGuardedSet
 
     /// Reduce the guards in a Term.
-    let guardReduce {Cmd = c; WPre = w; Goal = g} =
+    let guardReduce
+      ( {Cmd = c; WPre = w; Goal = g} : STerm<SMGView, SMVFunc> )
+      : STerm<SMGView, SMVFunc> =
+
         let fs = c |> facts |> Set.ofList
         {Cmd = c; WPre = reduceGView fs w; Goal = g}
 
@@ -758,7 +821,10 @@ module Term =
      *)
 
     /// Performs expression simplification on a term.
-    let simpTerm = subExprInDTerm { ASub = id; BSub = simp }
+    let simpTerm
+      : STerm<SMGView, SMVFunc>
+        -> STerm<SMGView, SMVFunc> =
+        subExprInDTerm (Mapper.make id simp)
 
     (*
      * Frontend
@@ -771,7 +837,9 @@ module Term =
                      "term-simplify-bools" ]
 
     /// Optimises a model's terms.
-    let optimise optR optA verbose =
+    let optimise optR optA verbose
+      : UFModel<STerm<SMGView, SMVFunc>>
+          -> UFModel<STerm<SMGView, SMVFunc>> =
         let optimiseTerm =
             Utils.optimiseWith optR optA verbose
                 [ ("term-remove-after", true, eliminateAfters)

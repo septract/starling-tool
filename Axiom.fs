@@ -14,6 +14,7 @@ open Starling.Collections
 open Starling.Utils
 open Starling.Core.Expr
 open Starling.Core.Var
+open Starling.Core.Symbolic
 open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.GuardedView
@@ -49,7 +50,7 @@ module Types =
     /// An axiom combined with a goal view.
     type GoalAxiom =
         { /// The axiom to be checked for soundness under Goal.
-          Axiom : Axiom<GView, Command>
+          Axiom : Axiom<SVGView, Command>
           /// The view representing the goal for any terms over Axiom.
           Goal : OView }
 
@@ -69,9 +70,9 @@ module Pretty =
         Surround(pre |> pView, cmd |> pCmd, post |> pView)
 
     /// Pretty-prints a goal axiom.
-    let printGoalAxiom {Axiom = a; Goal = f} =
+    let printGoalAxiom { Axiom = a; Goal = f } =
         vsep [ headed "Axiom"
-                      (a |> printAxiom printCommand printGView |> Seq.singleton)
+                      (a |> printAxiom printCommand printSVGView |> Seq.singleton)
                headed "Goal" (f |> printOView |> Seq.singleton) ]
 
 
@@ -84,16 +85,9 @@ let axiom p c q =
  * GoalAxioms
  *)
 
-/// Given a fresh generator, yields a function promoting a string to a
-/// goal variable.
-let goalVar (fg : FreshGen) = fg |> getFresh |> curry Goal
-
 /// Instantiates a view parameter.
-let instantiateParam fg (ty, name) =
-    goalVar fg name
-    |> match ty with
-       | Bool -> BConst >> BExpr
-       | Int -> AConst >> AExpr
+let instantiateParam fg =
+    mkVarExp (goalVar fg >> Reg) 
 
 /// Instantiates a defining view into a view expression.
 let instantiateGoal fg dvs =
@@ -108,11 +102,11 @@ let goalAddAxiom ds fg (name, axiom) =
     // where the 0 is the edge number.
     // This appends the viewdef number after the edge number.
     List.mapi
-        (fun i { View = vs } ->
-              (sprintf "%s_%d" name i,
-               { Axiom = axiom
-                 Goal = instantiateGoal fg vs }))
-         ds
+        (fun i (DefOver vs) ->
+            (sprintf "%s_%d" name i,
+             { Axiom = axiom
+               Goal = instantiateGoal fg vs }))
+        ds
 
 /// <summary>
 ///     Converts the axioms of a <c>Model</c> into <c>GoalAxiom</c>s.

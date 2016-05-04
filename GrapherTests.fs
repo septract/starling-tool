@@ -9,6 +9,7 @@ open NUnit.Framework
 open Starling.Collections
 open Starling.Utils
 open Starling.Core.Graph
+open Starling.Core.Graph.Tests.Studies
 open Starling.Lang.Grapher
 
 open Starling.Tests.Studies
