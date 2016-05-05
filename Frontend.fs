@@ -36,6 +36,9 @@ type Request =
     /// Parse, collate, model, guard, and graph a Starling script;
     /// return `Response.Graph`.
     | Graph
+    /// Parse, collate, model, guard, and graph a Starling script;
+    /// call continuation with Model<Graph, DView>.
+    | Continuation
 
 /// Type of responses from the Starling frontend.
 type Response =
@@ -113,13 +116,22 @@ let guard = lift Guarder.guard
 let graph = bind (Grapher.graph >> mapMessages Error.Graph)
 
 /// Runs the Starling frontend.
-/// Takes two arguments: the first is the `Response` telling the frontend what
-/// to output; the second is an optional filename from which the frontend
+/// Takes six arguments: the first is whether to output times; the second is the
+/// `Response` telling the frontend what
+/// to output; the third, and fourth, are functions to connect the successful, and
+/// error, output with the surrounding pipeline; the fifth is a continuation for the
+/// surrounding pipeline; and final is an optional filename from which the frontend
 /// should read (if empty, read from stdin).
-let run =
-    function
-    | Request.Parse -> parse >> lift Response.Parse
-    | Request.Collate -> parse >> collate >> lift Response.Collate
-    | Request.Model -> parse >> collate >> model >> lift Response.Model
-    | Request.Guard -> parse >> collate >> model >> guard >> lift Response.Guard
-    | Request.Graph -> parse >> collate >> model >> guard >> graph >> lift Response.Graph
+let run times request success error continuation =
+    let phase op test output continuation m =
+        let time = System.Diagnostics.Stopwatch.StartNew()
+        op m
+        |> (time.Stop(); (if times then printfn "Phase %A; Elapsed: %dms" test time.ElapsedMilliseconds); id)
+        |> if request = test then lift (output >> success) >> mapMessages error else continuation
+    let ( ** ) = ( <| )
+    phase    parse   Request.Parse   Response.Parse
+    ** phase collate Request.Collate Response.Collate
+    ** phase model   Request.Model   Response.Model
+    ** phase guard   Request.Guard   Response.Guard
+    ** phase graph   Request.Graph   Response.Graph
+    ** (mapMessages error >> continuation)

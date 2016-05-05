@@ -46,6 +46,8 @@ type Options =
       showModel : bool
       [<Option('O', HelpText = "Switches given optimisations on or off.")>]
       optimisers : string seq
+      [<Option("times", HelpText = "Print times for each phase.")>]
+      times : bool
       [<Option('v', HelpText = "Increases verbosity.")>]
       verbose : bool
       [<Value(
@@ -233,16 +235,11 @@ let z3 reals rq = bind (Backends.Z3.run reals rq >> mapMessages Error.Z3)
 let muz3 reals rq = lift (Backends.MuZ3.run reals rq)
 
 /// Shorthand for the frontend stage.
-let frontend rq = Lang.Frontend.run rq >> mapMessages Error.Frontend
+let frontend times rq = Lang.Frontend.run times rq Response.Frontend Error.Frontend
 
 /// Shorthand for the graph optimise stage.
 let graphOptimise optR optA verbose =
-    // graphOptimise implies the full frontend has run.
-    frontend Lang.Frontend.Request.Graph
-    >> bind (function
-             | Lang.Frontend.Response.Graph m -> m |> ok
-             | _ -> Other "internal error: bad frontend response" |> fail)
-    >> lift (Starling.Optimiser.Graph.optimise optR optA verbose)
+    lift (Starling.Optimiser.Graph.optimise optR optA verbose)
 
 /// Shorthand for the term optimise stage.
 let termOptimise optR optA verbose =
@@ -302,22 +299,31 @@ let filterDefinite =
 ///     taking a file containing request input and returning a
 ///     <c>Result</c> over <c>Response</c> and <c>Error</c>.
 /// </returns>
-let runStarling optS reals verbose request =
+let runStarling times optS reals verbose request =
     let optR, optA = Optimiser.Utils.parseOptString optS
 
-    let failPhase = fun _ -> fail (Error.Other "Internal")
-    let backend =
+    let backend m =
+            let phase op response =
+                let time = System.Diagnostics.Stopwatch.StartNew()
+                op m
+                |>  (time.Stop(); (if times then printfn "Phase Backend; Elapsed: %dms" time.ElapsedMilliseconds); id)
+                |> lift response
+
             match request with
-            | Request.HSF     -> filterIndefinite >> hsf >> lift Response.HSF
-            | Request.Z3 rq   -> filterDefinite >> z3 reals rq >> lift Response.Z3
-            | Request.MuZ3 rq -> filterIndefinite >> muz3 reals rq >> lift Response.MuZ3
-            | _               -> failPhase
+            | Request.HSF     -> phase (filterIndefinite >> hsf) Response.HSF
+            | Request.Z3 rq   -> phase (filterDefinite >> z3 reals rq) Response.Z3
+            | Request.MuZ3 rq -> phase (filterIndefinite >> muz3 reals rq) Response.MuZ3
+            | _               -> fail (Error.Other "Internal")
 
     //Build a phase with
     //  op as what to do
     //  if request is test, then we output the results
     //  otherwise we continue with the rest of the phases.
-    let phase op test output continuation = op >> if request = test then lift output else continuation
+    let phase op test output continuation m =
+        let time = System.Diagnostics.Stopwatch.StartNew()
+        op m
+        |> (time.Stop();(if times then printfn "Phase %A; Elapsed: %dms" test time.ElapsedMilliseconds); id)
+        |> if request = test then lift output else continuation
 
     // Left pipe is not right associative
     // so locally overload a right associative operator to be left pipe
@@ -330,28 +336,27 @@ let runStarling optS reals verbose request =
     let graphOptimise = graphOptimise optR optA verbose
     let termOptimise = termOptimise optR optA verbose
 
-    match request with
-    | Request.Frontend rq -> frontend rq >> lift Response.Frontend
-    | _ ->
-        phase     graphOptimise  Request.GraphOptimise  Response.GraphOptimise
-        ** phase  axiomatise     Request.Axiomatise     Response.Axiomatise
-        ** phase  goalAdd        Request.GoalAdd        Response.GoalAdd
-        ** phase  termGen        Request.TermGen        Response.TermGen
-        ** phase  reify          Request.Reify          Response.Reify
-        ** phase  flatten        Request.Flatten        Response.Flatten
-        ** phase  semantics      Request.Semantics      Response.Semantics
-        ** phase  termOptimise   Request.TermOptimise   Response.TermOptimise
-        ** backend
+    frontend times (match request with | Request.Frontend rq -> rq | _ -> Lang.Frontend.Request.Continuation)
+    ** phase  graphOptimise  Request.GraphOptimise  Response.GraphOptimise
+    ** phase  axiomatise     Request.Axiomatise     Response.Axiomatise
+    ** phase  goalAdd        Request.GoalAdd        Response.GoalAdd
+    ** phase  termGen        Request.TermGen        Response.TermGen
+    ** phase  reify          Request.Reify          Response.Reify
+    ** phase  flatten        Request.Flatten        Response.Flatten
+    ** phase  semantics      Request.Semantics      Response.Semantics
+    ** phase  termOptimise   Request.TermOptimise   Response.TermOptimise
+    ** backend
 
 /// Runs Starling with the given options, and outputs the results.
 let mainWithOptions opts =
     let optS = Seq.toList opts.optimisers
     let verbose = opts.verbose
     let reals = opts.reals
+    let times = opts.times
 
     let starlingR =
         match (requestFromStage opts.stage) with
-        | Some otype -> runStarling optS reals verbose otype opts.input
+        | Some otype -> runStarling times optS reals verbose otype opts.input
         | None -> fail Error.BadStage
 
     let mview =
