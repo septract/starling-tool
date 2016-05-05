@@ -847,7 +847,26 @@ module Sub =
 module Tests =
     open NUnit.Framework
 
+    open Starling.Utils.Testing
     open Starling.Core.TypeSystem
+
+    /// <summary>
+    ///     Test substitution function for position-based substitution.
+    /// </summary>
+    let positionTestSub =
+        (onVars
+             (Mapper.makeCtx
+                  (fun ctx _ ->
+                       (ctx,
+                        match ctx with
+                        | Positions (Positive::xs) -> AInt 1L
+                        | Positions (Negative::xs) -> AInt 0L
+                        | _ -> AInt -1L ))
+                  (fun ctx _ ->
+                       (ctx,
+                        match ctx with
+                        | Positions (x::xs) -> Position.overapprox x
+                        | _ -> BVar "?"))))
 
     /// <summary>
     ///     NUnit tests for guarded views.
@@ -878,3 +897,41 @@ module Tests =
         member this.testVarsInGFunc (gf : MGFunc) =
             gf |> varsInGFunc |> Set.ofSeq
 
+        /// <summary>
+        ///     Case studies for <c>testPositionSubExprInGFunc</c>.
+        /// </summary>
+        static member PositionSubExprInGFuncCases =
+            [ (tcd
+                   [| gfunc (BVar "foo") "bar"
+                          [ Typed.Int (AVar "baz")
+                            Typed.Bool (BVar "fizz") ]
+                      Position.positive |] )
+                  .Returns(
+                      (Position.positive,
+                       (gfunc BFalse "bar"
+                            [ Typed.Int (AInt 1L)
+                              Typed.Bool BTrue ] : GFunc<Var> )))
+                  .SetName("GFunc substitution in +ve case works properly")
+              (tcd
+                   [| gfunc (BVar "foo") "bar"
+                          [ Typed.Int (AVar "baz")
+                            Typed.Bool (BVar "fizz") ]
+                      Position.negative |] )
+                  .Returns(
+                      (Position.negative,
+                       (gfunc BTrue "bar"
+                            [ Typed.Int (AInt 0L)
+                              Typed.Bool BFalse ] : GFunc<Var> )))
+                  .SetName("GFunc substitution in -ve case works properly") ]
+
+        /// <summary>
+        ///     Tests <c>subExprInGFunc</c> on positional substitutions.
+        /// </summary>
+        [<TestCaseSource("PositionSubExprInGFuncCases")>]
+        member this.testPositionSubExprInGFunc
+          (gf : GFunc<Var>)
+          (pos : SubCtx) =
+            Sub.subExprInGFunc
+                positionTestSub
+                pos
+                gf
