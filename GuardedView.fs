@@ -575,7 +575,7 @@ module Sub =
       : (SubCtx * GFunc<'dstVar>) =
         let contextC, cond' =
             Position.changePos
-                id
+                Position.negate
                 (Mapper.mapBoolCtx sub)
                 context
                 cond
@@ -716,7 +716,7 @@ module Sub =
       : (SubCtx * Result<GFunc<'dstVar>, 'err> ) =
         let contextC, cond' =
             Position.changePos
-                id
+                Position.negate
                 (Mapper.mapBoolCtx sub)
                 context
                 cond
