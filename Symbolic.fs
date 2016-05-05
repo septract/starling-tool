@@ -20,7 +20,7 @@
 ///         or replaced with some other Starling construct.  The typemap
 ///         <c>tryRemoveSym</c> tries to remove all <c>Sym</c>s from
 ///         expressions, failing if any exist.  The function
-///         <c>approxSym</c> substitutes <c>true</c> and <c>false</c> for
+///         <c>approx</c> substitutes <c>true</c> and <c>false</c> for
 ///         symbols in Boolean positions, depending on whether they arise
 ///         in a positive or negative position.
 ///     </para>

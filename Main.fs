@@ -30,6 +30,11 @@ type Options =
                 "Dump results in raw format instead of pretty-printing.")>]
       raw : bool
       [<Option(
+            'A',
+            HelpText =
+                "(EXPERIMENTAL) Under-approximate symbols in Z3 proofs.")>]
+      approx : bool
+      [<Option(
             'R',
             HelpText =
                 "(TEMPORARY) Use reals instead of ints in Z3 proofs.")>]
@@ -290,6 +295,9 @@ let filterDefinite =
 /// <param name="reals">
 ///     (TEMPORARY) Whether to use reals instead of ints in MuZ proofs.
 /// </param>
+/// <param name="approx">
+///     (EXPERIMENTAL) Whether to try to approximate Boolean symbols.
+/// </param>
 /// <param name="verbose">
 ///     If true, dump some internal information to stderr.
 /// </param>
@@ -301,21 +309,32 @@ let filterDefinite =
 ///     taking a file containing request input and returning a
 ///     <c>Result</c> over <c>Response</c> and <c>Error</c>.
 /// </returns>
-let runStarling times optS reals verbose request =
+let runStarling times optS reals approx verbose request =
     let optR, optA = Optimiser.Utils.parseOptString optS
 
     let backend m =
-            let phase op response =
-                let time = System.Diagnostics.Stopwatch.StartNew()
-                op m
-                |>  (time.Stop(); (if times then printfn "Phase Backend; Elapsed: %dms" time.ElapsedMilliseconds); id)
-                |> lift response
+        let phase op response =
+            let time = System.Diagnostics.Stopwatch.StartNew()
+            op m
+            |>  (time.Stop(); (if times then printfn "Phase Backend; Elapsed: %dms" time.ElapsedMilliseconds); id)
+            |> lift response
 
-            match request with
-            | Request.HSF     -> phase (filterIndefinite >> hsf) Response.HSF
-            | Request.Z3 rq   -> phase (filterDefinite >> z3 reals rq) Response.Z3
-            | Request.MuZ3 rq -> phase (filterIndefinite >> muz3 reals rq) Response.MuZ3
-            | _               -> fail (Error.Other "Internal")
+        let maybeApprox =
+            lift
+                (if approx
+                 then id
+                 else
+                     mapAxioms
+                         (Sub.subExprInDTerm
+                              Starling.Core.Symbolic.Queries.approx
+                              Starling.Core.Sub.Position.positive
+                          >> snd))
+
+        match request with
+        | Request.HSF     -> phase (filterIndefinite >> hsf) Response.HSF
+        | Request.Z3 rq   -> phase (maybeApprox >> filterDefinite >> z3 reals rq) Response.Z3
+        | Request.MuZ3 rq -> phase (filterIndefinite >> muz3 reals rq) Response.MuZ3
+        | _               -> fail (Error.Other "Internal")
 
     //Build a phase with
     //  op as what to do
@@ -355,10 +374,11 @@ let mainWithOptions opts =
     let verbose = opts.verbose
     let reals = opts.reals
     let times = opts.times
+    let approx = opts.approx
 
     let starlingR =
         match (requestFromStage opts.stage) with
-        | Some otype -> runStarling times optS reals verbose otype opts.input
+        | Some otype -> runStarling times optS reals approx verbose otype opts.input
         | None -> fail Error.BadStage
 
     let mview =
