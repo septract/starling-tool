@@ -322,13 +322,17 @@ let runStarling times optS reals approx verbose request =
         let maybeApprox =
             lift
                 (if approx
-                 then id
-                 else
+                 then
                      mapAxioms
-                         (Sub.subExprInDTerm
+                         ((mapTerm
+                               Starling.Core.Command.SymRemove.removeSym
+                               id
+                               id)
+                          >> (Sub.subExprInDTerm
                               Starling.Core.Symbolic.Queries.approx
-                              Starling.Core.Sub.Position.positive
-                          >> snd))
+                              Starling.Core.Sub.Position.positive)
+                          >> snd)
+                 else id)
 
         match request with
         | Request.HSF     -> phase (filterIndefinite >> hsf) Response.HSF

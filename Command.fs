@@ -170,6 +170,51 @@ module Compose =
 
 
 /// <summary>
+///     Functions for removing symbols from commands.
+///
+///     <para>
+///         We take the approach that, for a command, whenever we see a
+///         statement <c>_ = %{sym}(...)</c> or <c>%{sym}(...) = _</c>,
+///         we can drop that statement (leaving the assignment
+///         non-deterministic).  This distributes through conjunctions,
+///         and the RHS of implications, but not through any other
+///         operations.  (It probably can, but for now we're being
+///         conservative.)
+///     </para>
+/// </para>
+module SymRemove =
+    /// <summary>
+    ///     Active pattern matching likely assignments to or from symbols.
+    /// </summary>
+    let (|SymAssign|_|) =
+        // TODO(CaptainHayashi): sound and/or complete?
+        function
+        | BEq ((Expr.Bool (BVar (Sym _)) as lhs),
+               (Expr.Bool _ as rhs))
+        | BEq ((Expr.Bool _ as lhs),
+               (Expr.Bool (BVar (Sym _)) as rhs))
+        | BEq ((Expr.Int (AVar (Sym _)) as lhs),
+               (Expr.Int _ as rhs))
+        | BEq ((Expr.Int _ as lhs),
+               (Expr.Int (AVar (Sym _)) as rhs)) -> Some (lhs, rhs)
+        | _ -> None
+
+    /// <summary>
+    ///     Tries to remove symbolic assignments from a command in
+    ///     Boolean expression form.
+    /// </summary>
+    let rec removeSym : SMBoolExpr -> SMBoolExpr =
+        function
+        | SymAssign (_, _) -> BTrue
+        // Distributivity.
+        // TODO(CaptainHayashi): distribute through more things?
+        | BAnd xs -> BAnd (List.map removeSym xs)
+        | BImplies (lhs, rhs) -> BImplies (lhs, removeSym rhs)
+        // Anything else passes through unchanged.
+        | x -> x
+
+
+/// <summary>
 ///     Pretty printers for commands.
 /// </summary>
 module Pretty =
