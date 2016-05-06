@@ -185,8 +185,8 @@ module Types =
           /// The weakest precondition of the Term.
           WPre : 'wpre
           /// The intended goal of the Term, ie the frame to preserve.
-          Goal : 'goal
-        }
+          Goal : 'goal }
+        override this.ToString() = sprintf "%A" this
 
     /// A term over semantic-relation commands.
     type STerm<'wpre, 'goal> = Term<SMBoolExpr, 'wpre, 'goal>
