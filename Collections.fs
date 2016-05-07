@@ -235,7 +235,7 @@ module Multiset =
         |> mapAccumL
                (fun acc (src, num) ->
                    let acc', dst = f acc src num
-                   (acc, (dst, num)))
+                   (acc', (dst, num)))
                init
         |> pairMap id (Map.ofList >> MSet)
 
