@@ -21,6 +21,7 @@ module Starling.Core.TypeSystem
 open Chessie.ErrorHandling
 open Starling.Utils
 
+
 /// <summary>
 ///     A typed item.
 /// </summary>

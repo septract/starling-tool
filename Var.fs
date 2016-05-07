@@ -5,7 +5,6 @@ module Starling.Core.Var
 
 open Chessie.ErrorHandling
 
-open Starling.Collections
 open Starling.Utils
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
@@ -256,7 +255,6 @@ let bInter i c = (i, c) |> Intermediate |> BVar
 /// </summary>
 module Tests =
     open NUnit.Framework
-    open Starling.Utils.Testing
 
     /// <summary>
     ///     NUnit tests for <c>Var</c>.

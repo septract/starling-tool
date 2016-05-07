@@ -3,7 +3,6 @@
 /// </summary>
 module Starling.Core.Expr
 
-open Starling.Collections
 open Starling.Utils
 open Starling.Core.TypeSystem
 
@@ -372,7 +371,6 @@ let rec (|ConstantIntFunction|_|) x =
 /// </summary>
 module Tests =
     open NUnit.Framework
-    open Starling.Utils.Testing
 
     /// <summary>
     ///     NUnit tests for <c>Expr</c>.

@@ -10,9 +10,9 @@ open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.GuardedView
 
+
 /// Calculate the multiset of ways that this View matches the pattern in dv and add to the assumulator.
 let reifySingleDef view accumulator (dv : SVBViewDef<DView>) =
-
     let rec matchMultipleViews
       (pattern : DFunc list)
       (view : SMGFunc list) accumulator result =

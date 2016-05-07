@@ -6,6 +6,7 @@ module Starling.Collections
 open Chessie.ErrorHandling
 open Starling.Utils
 
+
 /// <summary>
 ///     A function-like construct.
 /// </summary>
@@ -71,7 +72,7 @@ module Multiset =
     ///     Adds an element n times to a multiset
     /// </summary>
     let addn (MSet ms) k m =
-        let n = ms.TryFind k |> Option.fold (fun x y -> y) 0
+        let n = ms.TryFind k |> Option.fold (fun _ y -> y) 0
         MSet (ms.Add (k, n+m))
 
     /// <summary>
@@ -158,7 +159,7 @@ module Multiset =
     ///     The set of items in the multiset.
     /// </returns>
     let toSet (MSet ms) =
-        Map.fold (fun set k n -> Set.add k set) Set.empty ms
+        Map.fold (fun set k _ -> Set.add k set) Set.empty ms
 
     (*
      * Operations
@@ -258,22 +259,6 @@ module Multiset =
             | n -> repeat_add (add map (f k)) k (n-1)
         //Note that this is used with side-effecting f, so must be called n times for each addition.
         Map.fold repeat_add empty xs
-
-    /// Produces the power-multiset of a multiset, as a set of multisets.
-    let power msm =
-        (* Solve the problem using Boolean arithmetic on the index of the
-         * powerset item.
-         *)
-        let ms = toFlatList msm
-        seq {
-            for i in 0..(1 <<< List.length ms) - 1 do
-                yield (seq { 0..(List.length ms) - 1 } |> Seq.choose (fun j ->
-                                                              let cnd : int = i &&& (1 <<< j)
-                                                              if cnd <> 0 then Some ms.[j]
-                                                              else None))
-                      |> ofFlatSeq
-        }
-        |> Set.ofSeq
 
     /// <summary>
     ///     Collapses a multiset of results to a result on a multiset.

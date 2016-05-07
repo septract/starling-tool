@@ -24,11 +24,7 @@ open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.GuardedView
 open Starling.Core.Instantiate
-open Starling.Core.Instantiate.ViewDefFilter
-open Starling.Core.Sub
 open Starling.Core.Z3
-open Starling.Reifier
-open Starling.Optimiser
 
 
 /// <summary>

@@ -13,7 +13,7 @@ open Starling.Core.Sub
 open Starling.Core.Model
 open Starling.Core.Instantiate
 open Starling.Core.GuardedView
-open Starling.Reifier
+
 
 /// <summary>
 ///     Types for the Horn clause backend, including errors.
@@ -72,7 +72,6 @@ module Types =
 module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Model.Pretty
-    open Starling.Core.Expr.Pretty
     open Starling.Core.Var.Pretty
 
     /// Decides whether to put brackets over the expression emission x,

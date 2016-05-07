@@ -7,7 +7,6 @@ module Starling.Lang.Guarder
 open Starling.Collections
 open Starling.Utils
 open Starling.Core.Expr
-open Starling.Core.Var
 open Starling.Core.Symbolic
 open Starling.Core.Model
 open Starling.Core.GuardedView

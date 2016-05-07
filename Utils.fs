@@ -11,6 +11,7 @@ module Starling.Utils
 
 open Chessie.ErrorHandling
 
+
 /// Converts a list to an option that is Some iff it has exactly one item.
 let onlyOne s =
     s
