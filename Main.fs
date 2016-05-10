@@ -11,6 +11,8 @@ open Starling.Core.Graph.Pretty
 open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.Model.Pretty
+open Starling.Core.Symbolic
+open Starling.Core.Symbolic.Pretty
 open Starling.Core.Command
 open Starling.Core.Command.Pretty
 open Starling.Core.GuardedView
@@ -123,10 +125,10 @@ type Response =
     | Axiomatise of UVModel<Axiom<SVGView, Command>>
     /// The result of goal-axiom-pair generation.
     | GoalAdd of UVModel<GoalAxiom<Command>>
-    /// The result of term generation.
-    | TermGen of UVModel<PTerm<SMGView, OView>>
     /// The result of semantic expansion.
-    | Semantics of UVModel<STerm<SMGView, OView>>
+    | Semantics of UVModel<GoalAxiom<SMBoolExpr>>
+    /// The result of term generation.
+    | TermGen of UVModel<STerm<SMGView, OView>>
     /// The result of term reification.
     | Reify of UVModel<STerm<SMViewSet, OView>>
     /// The result of term flattening.
@@ -149,10 +151,10 @@ let printResponse mview =
     | Axiomatise m ->
         printUVModelView (printAxiom printCommand printSVGView) mview m
     | GoalAdd m ->
-        printUVModelView printGoalAxiom mview m
-    | TermGen m ->
-        printUVModelView (printPTerm printSMGView printOView) mview m
+        printUVModelView (printGoalAxiom printCommand) mview m
     | Semantics m ->
+        printUVModelView (printGoalAxiom printSMBoolExpr) mview m
+    | TermGen m ->
         printUVModelView (printSTerm printSMGView printOView) mview m
     | Reify m ->
         printUVModelView (printSTerm printSMViewSet printOView) mview m
@@ -340,8 +342,8 @@ let runStarling times optS reals verbose request =
     ** phase  graphOptimise  Request.GraphOptimise  Response.GraphOptimise
     ** phase  axiomatise     Request.Axiomatise     Response.Axiomatise
     ** phase  goalAdd        Request.GoalAdd        Response.GoalAdd
-    ** phase  termGen        Request.TermGen        Response.TermGen
     ** phase  semantics      Request.Semantics      Response.Semantics
+    ** phase  termGen        Request.TermGen        Response.TermGen
     ** phase  reify          Request.Reify          Response.Reify
     ** phase  flatten        Request.Flatten        Response.Flatten
     ** phase  termOptimise   Request.TermOptimise   Response.TermOptimise
