@@ -456,27 +456,19 @@ module Graph =
     let isLocalCommand (tVars : VarMap) : Command -> bool =
         // A command is local if, for all of its funcs...
         List.forall
-            (fun { Params = ps } ->
+            (fun { Arguments = ps; Results = rs } ->
                  // ...for all of the parameters in said funcs...
                  Seq.forall
                      (// ...for all of the variables in said parameters...
                       varsIn
                       >> Set.toSeq
-                      >> Seq.forall
-                             (// ...the variable is thread-local.
-                              valueOf
-                              >> function
-                                 | Sym _ -> false
-                                 | Reg (After x)
-                                 | Reg (Before x)
-                                 | Reg (Intermediate (_, x))
-                                 | Reg (Goal (_, x)) ->
-                                   x
-                                   |> tVars.TryFind
-                                   |> function
-                                      | Some _ -> true
-                                      | _ -> false))
-                     ps)
+                      >> Seq.forall (valueOf 
+                                     >> function
+                                        | Sym _ -> false
+                                        | Reg r -> tVars.ContainsKey r))
+                     ps
+                 && Seq.forall tVars.ContainsKey rs)
+
     /// <summary>
     ///     Partial active pattern matching <c>Sym</c>-less expressions.
     /// </summary>
@@ -486,7 +478,7 @@ module Graph =
     /// <summary>
     ///     Partial active pattern matching <c>Sym</c>-less expressions.
     /// </summary>
-    let (|MNoSym|_|) : BoolExpr<Sym<MarkedVar>> -> BoolExpr<MarkedVar> option =
+    let (|MNoSym|_|) : BoolExpr<Sym<Var>> -> BoolExpr<Var> option =
         Mapper.mapBool (tsfRemoveSym (fun _ -> ())) >> okOption
 
 
@@ -540,10 +532,6 @@ module Graph =
             fun node nView outEdges inEdges nk ->
                 match nView with
                 | InnerView(ITEGuards (xc, xv, yc, yv)) ->
-                    (* Translate xc and yc to pre-state, to match the
-                       commands. *)
-                    let xcPre = Mapper.mapBool vBefore xc
-                    let ycPre = Mapper.mapBool vBefore yc
 
                     match (Set.toList outEdges, Set.toList inEdges) with
                     (* Are there only two out edges, and only one in edge?
@@ -556,16 +544,16 @@ module Graph =
                         [ inE ] )
                         when (// Is the first one x and the second y?
                               (equivHolds
-                                   unmarkVar
-                                   (andEquiv (equiv out1P xcPre)
-                                             (equiv out2P ycPre))
+                                   id
+                                   (andEquiv (equiv out1P xc)
+                                             (equiv out2P yc))
                                && nodeHasView out1D xv ctx.Graph
                                && nodeHasView out2D yv ctx.Graph)
                               // Or is the first one y and the second x?
                               || (equivHolds
-                                      unmarkVar
-                                      (andEquiv (equiv out2P xcPre)
-                                                (equiv out1P ycPre))
+                                      id
+                                      (andEquiv (equiv out2P xc)
+                                                (equiv out1P yc))
                                   && nodeHasView out2D xv ctx.Graph
                                   && nodeHasView out1D yv ctx.Graph)) ->
                         let xforms =

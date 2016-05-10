@@ -638,6 +638,16 @@ let axiomatiseGraphs =
     >> Seq.concat
     >> Map.ofSeq
 
+let filterTrivial (axioms : Map<'a, Axiom<SVGView, Command>>)
+               : Map<'a, Axiom<SVGView, Command>> =
+    let filterAxiom k (a : Axiom<SVGView, Command>) =
+        //Check if Pre and Post are same view
+        a.Pre <> a.Post
+        //Check if Command only modifies locals not in the views.
+        || List.exists (fun (x : PrimCommand) -> x.CmdName <> "Assume" && x.CmdName <> "!ILoad") a.Cmd
+
+    let res = Map.filter filterAxiom axioms
+    res
 /// <summary>
 ///     Converts a CFG-based model into an axiom-based model.
 ///
@@ -654,7 +664,7 @@ let axiomatiseGraphs =
 /// </returns>
 let axiomatise (model : UVModel<Graph>)
                : UVModel<Axiom<SVGView, Command>> =
-    withAxioms (axiomatiseGraphs model.Axioms) model
+    withAxioms (axiomatiseGraphs model.Axioms |> filterTrivial) model
 
 
 /// <summary>
@@ -822,11 +832,7 @@ module Tests =
                               { OutEdge.Name = "lock_C0"
                                 OutEdge.Dest = "lock_V1"
                                 OutEdge.Command =
-                                    [ smvfunc "!ILoad++"
-                                           [ Typed.Int (siBefore "t")
-                                             Typed.Int (siAfter "t")
-                                             Typed.Int (siBefore "ticket")
-                                             Typed.Int (siAfter "ticket") ]] },
+                                    [ primCommand "!ILoad++" [ "t"; "ticket" ] ["ticket" |> Reg |> AVar |> Expr.Int ]] },
                            Set.empty,
                            Entry)))
                         ("lock_V1",
@@ -839,12 +845,8 @@ module Tests =
                               { Name = "lock_C0"
                                 Src = "lock_V0"
                                 Command =
-                                    [ smvfunc "!ILoad++"
-                                           [ Typed.Int (siBefore "t")
-                                             Typed.Int (siAfter "t")
-                                             Typed.Int (siBefore "ticket")
-                                             Typed.Int (siAfter "ticket") ]] },
-                          Normal ))
+                                    [ primCommand "!ILoad++" [ "t"; "ticket" ] [mkIVar "ticket"]] },
+                           Normal ))
                         ("lock_V2",
                          (Mandatory <| Multiset.singleton (gHoldLock BTrue),
                           Set.empty,
@@ -852,10 +854,10 @@ module Tests =
                               { Name = "lock_C3"
                                 Src = "lock_V4"
                                 Command =
-                                    [ smvfunc "Assume"
+                                    [ primCommand "Assume" []
                                            [ Typed.Bool
-                                                 (iEq (siBefore "s")
-                                                      (siBefore "t")) ]] },
+                                                 (iEq ("s" |> Reg |> AVar)
+                                                      ("t" |> Reg |> AVar)) ]] },
                            Exit))
                         ("lock_V3",
                          (Mandatory <| Multiset.singleton (gHoldTick BTrue),
@@ -863,19 +865,15 @@ module Tests =
                               { Name = "lock_C1"
                                 Dest = "lock_V4"
                                 Command =
-                                    [ smvfunc "!ILoad"
-                                           [ Typed.Int (siBefore "s")
-                                             Typed.Int (siAfter "s")
-                                             Typed.Int (siBefore "serving")
-                                             Typed.Int (siAfter "serving") ]] },
+                                    [ primCommand "!ILoad" ["s"] [mkIVar "Serving"]] },
                           Set.ofList
                               [ { Name = "lock_C2"
                                   Src = "lock_V4"
                                   Command =
-                                      [ smvfunc "Assume"
-                                             [ Typed.Bool
-                                                   (BNot (iEq (siBefore "s")
-                                                              (siBefore "t"))) ]] }
+                                    [ primCommand "Assume" []
+                                           [ Typed.Bool
+                                                 (iEq ("s" |> Reg |> AVar)
+                                                      ("t" |> Reg |> AVar)) ]] }
                                 { Name = "lock_C4"
                                   Src = "lock_V1"
                                   Command = [] } ],
@@ -889,26 +887,22 @@ module Tests =
                               [ { Name = "lock_C2"
                                   Dest = "lock_V3"
                                   Command =
-                                      [ smvfunc "Assume"
-                                             [ Typed.Bool
-                                                   (BNot (iEq (siBefore "s")
-                                                              (siBefore "t"))) ]] }
+                                      [ primCommand "Assume" []
+                                           [ Typed.Bool
+                                                 (iEq ("s" |> Reg |> AVar)
+                                                      ("t" |> Reg |> AVar)) ]] }
                                 { Name = "lock_C3"
                                   Dest = "lock_V2"
                                   Command =
-                                      [ smvfunc "Assume"
-                                             [ Typed.Bool
-                                                   (iEq (siBefore "s")
-                                                        (siBefore "t")) ]] } ],
+                                      [ primCommand "Assume" []
+                                           [ Typed.Bool
+                                                 (iEq ("s" |> Reg |> AVar)
+                                                      ("t" |> Reg |> AVar)) ]] } ],
                           Set.singleton
                               { Name = "lock_C1"
                                 Src = "lock_V3"
                                 Command =
-                                    [ smvfunc "!ILoad"
-                                           [ Typed.Int (siBefore "s")
-                                             Typed.Int (siAfter "s")
-                                             Typed.Int (siBefore "serving")
-                                             Typed.Int (siAfter "serving") ]] },
+                                    [ primCommand "!ILoad" ["s"] [mkIVar "Serving"]] },
                           Normal)) ] }
 
         /// The CFG for the ticket lock unlock method.
@@ -924,9 +918,7 @@ module Tests =
                               { Name = "unlock_C0"
                                 Dest = "unlock_V1"
                                 Command =
-                                    [ smvfunc "!I++"
-                                           [ Typed.Int (siBefore "serving")
-                                             Typed.Int (siAfter "serving") ]] },
+                                    [ primCommand "!I++" [ "serving" ] [ mkIVar "serving"]] },
                           Set.empty,
                           Entry))
                         ("unlock_V1",
@@ -936,9 +928,7 @@ module Tests =
                               { Name = "unlock_C0"
                                 Src = "unlock_V0"
                                 Command =
-                                    [ smvfunc "!I++"
-                                           [ Typed.Int (siBefore "serving")
-                                             Typed.Int (siAfter "serving") ]] },
+                                    [ primCommand "!I++" [ "serving" ] [ mkIVar "serving"]] },
                            Exit)) ] }
 
         /// The partial CFG for the ticket lock lock method.
@@ -959,33 +949,25 @@ module Tests =
                   Map.ofList
                       [ ("lock_C0",
                              edge "lock_V0"
-                                  [ func "!ILoad++"
-                                         [ Typed.Int (siBefore "t")
-                                           Typed.Int (siAfter "t")
-                                           Typed.Int (siBefore "ticket")
-                                           Typed.Int (siAfter "ticket") ]]
+                                    [ primCommand "!ILoad++" [ "t"; "ticket" ] [mkIVar "ticket"]]
                                   "lock_V1")
                         ("lock_C1",
                              edge "lock_V3"
-                                  [ func "!ILoad"
-                                         [ Typed.Int (siBefore "s")
-                                           Typed.Int (siAfter "s")
-                                           Typed.Int (siBefore "serving")
-                                           Typed.Int (siAfter "serving") ]]
+                                  [ primCommand "!ILoad" ["s"] [mkIVar "Serving"]]
                                   "lock_V4")
                         ("lock_C2",
                              edge "lock_V4"
-                                  [ func "Assume"
-                                         [ Typed.Bool
-                                               (BNot (iEq (siBefore "s")
-                                                          (siBefore "t"))) ]]
+                                  [ primCommand "Assume" []
+                                           [ Typed.Bool
+                                                 (iEq ("s" |> Reg |> AVar)
+                                                      ("t" |> Reg |> AVar)) ]]
                                   "lock_V3")
                         ("lock_C3",
                              edge "lock_V4"
-                                  [ func "Assume"
-                                         [ Typed.Bool
-                                               (iEq (siBefore "s")
-                                                    (siBefore "t")) ]]
+                                  [ primCommand "Assume" []
+                                           [ Typed.Bool
+                                                 (iEq ("s" |> Reg |> AVar)
+                                                      ("t" |> Reg |> AVar)) ]]
                                   "lock_V2")
                         ("lock_C4",
                              edge "lock_V1"
@@ -1005,9 +987,7 @@ module Tests =
                    Map.ofList
                       [ ("unlock_C0",
                              edge "unlock_V0"
-                                  [ smvfunc "!I++"
-                                         [ Typed.Int (siBefore "serving")
-                                           Typed.Int (siAfter "serving") ]]
+                                  [ primCommand "!I++" [ "serving" ] [ mkIVar "serving"]]
                                   "unlock_V1" ) ] }
 
 
@@ -1031,9 +1011,7 @@ module Tests =
                               { Name = "unlock_C0"
                                 Dest = "unlock_V1"
                                 Command =
-                                    [ smvfunc "!I++"
-                                           [ SMExpr.Int (siBefore "serving")
-                                             SMExpr.Int (siAfter "serving") ]] },
+                                     [ primCommand "!I++" [ "serving" ] [ mkIVar "serving"]]},
                           Set.singleton
                               { Name = "unlock_N0"
                                 Src = "unlock_V1"
@@ -1048,10 +1026,7 @@ module Tests =
                           Set.singleton
                               { Name = "unlock_C0"
                                 Src = "unlock_V0"
-                                Command =
-                                    [ smvfunc "!I++"
-                                           [ SMExpr.Int (siBefore "serving")
-                                             SMExpr.Int (siAfter "serving") ]] },
+                                Command = [ primCommand "!I++" [ "serving" ] [ mkIVar "serving"]] },
                           Exit)) ] )
                 .SetName("Adding a valid, unique edge to unlock works")]
 
@@ -1084,9 +1059,7 @@ module Tests =
                           Map.ofList
                               [ ("unlock_C0",
                                  edge "unlock_V0"
-                                      [ smvfunc "!I++"
-                                              [ SMExpr.Int (siBefore "serving")
-                                                SMExpr.Int (siAfter "serving") ]]
+                                      [ primCommand "!I++" [ "serving" ] [ mkIVar "serving"]]
                                       "unlock_V0" ) ] } )
                 .SetName("unify C1 into C0 on the ticket lock 'unlock'")
               TestCaseData(("unlock_V0", "unlock_V1"))
@@ -1100,9 +1073,7 @@ module Tests =
                           Map.ofList
                               [ ("unlock_C0",
                                  edge "unlock_V1"
-                                      [ smvfunc "!I++"
-                                              [ SMExpr.Int (siBefore "serving")
-                                                SMExpr.Int (siAfter "serving") ]]
+                                      [ primCommand "!I++" [ "serving" ] [ mkIVar "serving"]]
                                       "unlock_V1" ) ] } )
                 .SetName("unify C0 into C1 on the ticket lock 'unlock'")
               TestCaseData(("unlock_V0", "unlock_V2"))

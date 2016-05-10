@@ -307,6 +307,8 @@ module Pretty =
  * Starling imperative language semantics
  *)
 
+let commandSpec name rvs lvs body = {CmdName=name; RValues=rvs; LValues=lvs; Body=body}
+
 /// <summary>
 ///   The core semantic function for the imperative language.
 /// </summary>
@@ -325,91 +327,83 @@ let coreSemantics =
        *)
 
       // Integer CAS
-      (func "ICAS" [ Param.Int "destB"; Param.Int "destA"
-                     Param.Int "testB"; Param.Int "testA"
-                     Param.Int "set" ],
-       mkAnd [ mkImplies (iEq (siVar "destB") (siVar "testB"))
-                         (mkAnd [ iEq (siVar "destA") (siVar "set")
-                                  iEq (siVar "testA") (siVar "testB") ] )
-               mkImplies (mkNot (iEq (siVar "destB") (siVar "testB")))
-                         (mkAnd [ iEq (siVar "destA") (siVar "destB")
-                                  iEq (siVar "testA") (siVar "destB") ] ) ] )
+      (commandSpec "ICAS" [ Param.Int "destA"; Param.Int "testA"]
+           [ Param.Int "destB"; Param.Int "testB"; Param.Int "set" ]
+           (mkAnd [ mkImplies (iEq (siVar "destB") (siVar "testB"))
+                             (mkAnd [ iEq (siVar "destA") (siVar "set")
+                                      iEq (siVar "testA") (siVar "testB") ] )
+                    mkImplies (mkNot (iEq (siVar "destB") (siVar "testB")))
+                              (mkAnd [ iEq (siVar "destA") (siVar "destB")
+                                       iEq (siVar "testA") (siVar "destB") ] ) ] ))
       // Boolean CAS
-      (func "BCAS" [ Param.Bool "destB"; Param.Bool "destA"
-                     Param.Bool "testB"; Param.Bool "testA"
-                     Param.Bool "set" ],
-       mkAnd [ mkImplies (bEq (sbVar "destB") (sbVar "testB"))
-                         (mkAnd [ bEq (sbVar "destA") (sbVar "set")
-                                  bEq (sbVar "testA") (sbVar "testB") ] )
-               mkImplies (mkNot (bEq (sbVar "destB") (sbVar "testB")))
-                         (mkAnd [ bEq (sbVar "destA") (sbVar "destB")
-                                  bEq (sbVar "testA") (sbVar "destB") ] ) ] )
+      (commandSpec "BCAS" [ Param.Bool "destA"; Param.Bool "testA"]
+                          [ Param.Bool "destB"; Param.Bool "destB"; Param.Bool "set" ]
+           (mkAnd [ mkImplies (bEq (sbVar "destB") (sbVar "testB"))
+                              (mkAnd [ bEq (sbVar "destA") (sbVar "set")
+                                       bEq (sbVar "testA") (sbVar "testB") ] )
+                    mkImplies (mkNot (bEq (sbVar "destB") (sbVar "testB")))
+                              (mkAnd [ bEq (sbVar "destA") (sbVar "destB")
+                                       bEq (sbVar "testA") (sbVar "destB") ] ) ] ))
 
       (*
        * Atomic load
        *)
 
       // Integer load
-      (func "!ILoad" [ Param.Int "destB"; Param.Int "destA"
-                       Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ iEq (siVar "destA") (siVar "srcB")
-               iEq (siVar "srcA") (siVar "srcB") ] )
+      (commandSpec "!ILoad" 
+                    [ Param.Int "dest"] [ Param.Int "src"] 
+                    (iEq (siVar "dest") (siVar "src")))
       // Integer load-and-increment
-      (func "!ILoad++" [ Param.Int "destB"; Param.Int "destA"
-                         Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ iEq (siVar "destA") (siVar "srcB")
-               iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (AInt 1L)) ] )
+      (commandSpec "!ILoad++" 
+                    [ Param.Int "dest"; Param.Int "srcA" ]
+                    [ Param.Int "srcB" ]
+               (mkAnd [ iEq (siVar "dest") (siVar "srcB")
+                        iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (AInt 1L)) ] ))
       // Integer load-and-decrement
-      (func "!ILoad--" [ Param.Int "destB"; Param.Int "destA"
-                         Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ iEq (siVar "destA") (siVar "srcB")
-               iEq (siVar "srcA") (mkSub2 (siVar "srcB") (AInt 1L)) ] )
+      (commandSpec "!ILoad--" [ Param.Int "dest"; Param.Int "srcA"]
+                              [ Param.Int "srcB" ]
+               (mkAnd [ iEq (siVar "dest") (siVar "srcB")
+                        iEq (siVar "srcA") (mkSub2 (siVar "srcB") (AInt 1L)) ] ))
       // Integer increment
-      (func "!I++" [ Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (AInt 1L)) ] )
+      (commandSpec "!I++" [ Param.Int "srcA"] [Param.Int "srcB" ]
+           (mkAnd [ iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (AInt 1L)) ] ))
       // Integer decrement
-      (func "!I--" [ Param.Int "srcB"; Param.Int "srcA" ],
-       mkAnd [ iEq (siVar "srcA") (mkSub2 (siVar "srcB") (AInt 1L)) ] )
+      (commandSpec "!I--" [ Param.Int "srcA"] [Param.Int "srcB" ]
+           (mkAnd [ iEq (siVar "srcA") (mkSub2 (siVar "srcB") (AInt 1L)) ] ))
       // Boolean load
-      (func "!BLoad" [ Param.Bool "destB"; Param.Bool "destA"
-                       Param.Bool "srcB"; Param.Bool "srcA" ],
-       mkAnd [ bEq (sbVar "destA") (sbVar "srcB")
-               bEq (sbVar "srcA") (sbVar "srcB") ] )
+      (commandSpec "!BLoad" [ Param.Bool "dest"] [Param.Bool "src"]
+           (mkAnd [ bEq (sbVar "dest") (sbVar "src")] ))
 
       (*
        * Atomic store
        *)
 
       // Integer store
-      (func "!IStore" [ Param.Int "destB"; Param.Int "destA"
-                        Param.Int "src" ],
-       iEq (siVar "destA") (siVar "src"))
+      (commandSpec "!IStore" [ Param.Int "dest"] [Param.Int "src" ]
+           (iEq (siVar "destA") (siVar "src")))
       // Boolean store
-      (func "!BStore" [ Param.Bool "destB"; Param.Bool "destA"
-                        Param.Bool "src" ],
-       bEq (sbVar "destA") (sbVar "src"))
+      (commandSpec "!BStore" [ Param.Bool "dest"] [ Param.Bool "src" ]
+            (bEq (sbVar "dest") (sbVar "src")))
 
       (*
        * Local set
        *)
 
       // Integer local set
-      (func "!ILSet" [ Param.Int "destB"; Param.Int "destA"
-                       Param.Int "src" ],
-       iEq (siVar "destA") (siVar "src"))
+      (commandSpec "!ILSet" [ Param.Int "dest"] [ Param.Int "src" ]
+           (iEq (siVar "dest") (siVar "src")))
       // Boolean store
-      (func "!BLSet" [ Param.Bool "destB"; Param.Bool "destA"
-                       Param.Bool "src" ],
-       bEq (sbVar "destA") (sbVar "src"))
+      (commandSpec "!BLSet" [ Param.Bool "dest" ] [Param.Bool "src" ]
+           (bEq (sbVar "destA") (sbVar "src")))
 
       (*
        * Assumptions
        *)
-
+       
       // Identity
-      (func "Id" [], BTrue)
+      (commandSpec "Id" [] [] BTrue)
       // Assume
-      (func "Assume" [ Param.Bool "expr" ], sbVar "expr") ]
+      (commandSpec "Assume" [] [ Param.Bool "expr" ] (sbVar "expr")) ]
 
 (*
  * Expression translation
@@ -912,13 +906,7 @@ let modelBoolLoad svars dest srcExpr mode =
             let! src = wrapMessages BadSVar (lookupVar svars) srcLV
             match src, mode with
             | Typed.Bool s, Direct ->
-                return
-                    smvfunc
-                        "!BLoad"
-                            [ dest |> Before |> Reg |> BVar |> Expr.Bool
-                              dest |> After |> Reg |> BVar |> Expr.Bool
-                              s |> Before |> Reg |> BVar |> Expr.Bool
-                              s |> After |> Reg |> BVar |> Expr.Bool ]
+                return primCommand "!BLoad" [dest] [mkIVar s]
             | Typed.Bool s, Increment -> return! fail (IncBool srcExpr)
             | Typed.Bool s, Decrement -> return! fail (DecBool srcExpr)
             | _ -> return! fail (TypeMismatch (Type.Bool (), srcLV, typeOf src))
@@ -937,20 +925,13 @@ let modelIntLoad svars dest srcExpr mode =
             let! src = wrapMessages BadSVar (lookupVar svars) srcLV
             match src, mode with
             | Typed.Int s, Direct ->
-                return func "!ILoad" [ dest |> Before |> Reg |> AVar |> Expr.Int
-                                       dest |> After |> Reg |> AVar |> Expr.Int
-                                       s |> Before |> Reg |> AVar |> Expr.Int
-                                       s |> After |> Reg |> AVar |> Expr.Int ]
+                return primCommand "!ILoad" [ dest ] [mkIVar s]
             | Typed.Int s, Increment ->
-                return func "!ILoad++" [ dest |> Before |> Reg |> AVar |> Expr.Int
-                                         dest |> After |> Reg |> AVar |> Expr.Int
-                                         s |> Before |> Reg |> AVar |> Expr.Int
-                                         s |> After |> Reg |> AVar |> Expr.Int ]
+                return primCommand "!ILoad++" [ dest; s ] 
+                                [ mkIVar s ]
             | Typed.Int s, Decrement ->
-                return func "!ILoad--" [ dest |> Before |> Reg |> AVar |> Expr.Int
-                                         dest |> After |> Reg |> AVar |> Expr.Int
-                                         s |> Before |> Reg |> AVar |> Expr.Int
-                                         s |> After |> Reg |> AVar |> Expr.Int ]
+                return primCommand "!ILoad--"  [ dest; s ] 
+                                [ mkIVar s ]
             | _ -> return! fail (TypeMismatch (Type.Int (), srcLV, typeOf src))
         }
     | _ -> fail (LoadNonLV srcExpr)
@@ -962,15 +943,14 @@ let modelBoolStore locals dest src mode =
      *                     and the fetch mode must be Direct.
      *)
     trial {
-        let! sxp = wrapMessages BadExpr (modelBoolExpr locals Before) src
+        let! sxp = wrapMessages BadExpr (modelBoolExpr locals id) src
         match mode with
         | Direct ->
             return
-                smvfunc
+                primCommand
                     "!BStore"
-                    [ dest |> Before |> Reg |> BVar |> Expr.Bool
-                      dest |> After |> Reg |> BVar |> Expr.Bool
-                      sxp |> Expr.Bool ]
+                    [ dest ]
+                    [ sxp |> Expr.Bool ]
         | Increment -> return! fail (IncBool src)
         | Decrement -> return! fail (DecBool src)
     }
@@ -983,18 +963,16 @@ let modelIntStore locals dest src mode =
      *)
     trial {
         let! sxp =
-            wrapMessages BadExpr (modelIntExpr locals MarkedVar.Before) src
+            wrapMessages BadExpr (modelIntExpr locals id) src
         match mode with
-        | Direct -> return func "!IStore" [ dest |> Before |> Reg |> AVar |> Expr.Int
-                                            dest |> After |> Reg |> AVar |> Expr.Int
-                                            sxp |> Expr.Int ]
+        | Direct -> return primCommand "!IStore" [ dest ] [sxp |> Expr.Int ]
         | Increment -> return! fail (IncExpr src)
         | Decrement -> return! fail (DecExpr src)
     }
 
 /// Converts a CAS to part-commands.
 let modelCAS svars tvars destLV testLV set
-  : Result<SMVFunc, PrimError> =
+  : Result<PrimCommand, PrimError> =
     (* In a CAS, the destination must be SHARED;
      *           the test variable must be THREADLOCAL;
      *           and the to-set value must be a valid expression.
@@ -1008,26 +986,19 @@ let modelCAS svars tvars destLV testLV set
     >>= (function
          | UnifyBool (d, t) ->
              set
-             |> wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Before)
+             |> wrapMessages BadExpr (modelBoolExpr tvars id)
              |> lift
                     (fun s ->
-                         smvfunc "BCAS"
-                             [ d |> sbBefore |> Expr.Bool
-                               d |> sbAfter |> Expr.Bool
-                               t |> sbBefore |> Expr.Bool
-                               t |> sbAfter |> Expr.Bool
-                               s |> Expr.Bool ] )
+                         primCommand "BCAS" [d; t] 
+                                [mkBVar d; mkBVar t; Expr.Bool s]
+                    )
          | UnifyInt (d, t) ->
             set
-            |> wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Before)
+            |> wrapMessages BadExpr (modelIntExpr tvars id)
             |> lift
                    (fun s ->
-                        smvfunc "ICAS"
-                            [ d |> siBefore |> Expr.Int
-                              d |> siAfter |> Expr.Int
-                              t |> siBefore |> Expr.Int
-                              t |> siAfter |> Expr.Int
-                              s |> Expr.Int ] )
+                        primCommand "ICAS" [d; t]
+                            [ mkIVar d; mkIVar t; s |> Expr.Int] )
          | UnifyFail (d, t) ->
              // Oops, we have a type error.
              // Arbitrarily single out test as the cause of it.
@@ -1070,17 +1041,15 @@ let rec modelAtomic svars tvars =
             | Decrement, Typed.Bool _ ->
                 return! fail (DecBool (LV operand))
             | Increment, Typed.Int _ ->
-                return func "!I++" [op |> Before |> Reg |> AVar |> Expr.Int
-                                    op |> After |> Reg |> AVar |> Expr.Int]
+                return primCommand "!I++" [op] [mkIVar op]
             | Decrement, Typed.Int _ ->
-                return func "!I--" [op |> Before |> Reg |> AVar |> Expr.Int
-                                    op |> After |> Reg |> AVar |> Expr.Int]
+                return primCommand "!I--" [op] [mkIVar op]
         }
-    | Id -> ok (func "Id" [])
+    | Id -> ok (primCommand "Id" [] [])
     | Assume e ->
         e
-        |> wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Before)
-        |> lift (Expr.Bool >> Seq.singleton >> func "Assume")
+        |> wrapMessages BadExpr (modelBoolExpr tvars id)
+        |> lift (fun x -> primCommand "Assume" [] [x |> Expr.Bool])
 
 /// Converts a local variable assignment to a Prim.
 and modelAssign tvars lLV e =
@@ -1093,22 +1062,20 @@ and modelAssign tvars lLV e =
         match l with
         | Typed.Bool ls ->
             let! em =
-                wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Before) e
+                wrapMessages BadExpr (modelBoolExpr tvars id) e
             return
-                func
+                primCommand
                     "!BLSet"
-                    [ ls |> Before |> Reg |> BVar |> Expr.Bool
-                      ls |> After |> Reg |> BVar |> Expr.Bool
-                      em |> Expr.Bool ]
+                    [ ls ]
+                    [  em |> Expr.Bool ]
         | Typed.Int ls ->
             let! em =
-                wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Before) e
+                wrapMessages BadExpr (modelIntExpr tvars id) e
             return
-                func
+                primCommand
                     "!ILSet"
-                    [ ls |> Before |> Reg |> AVar |> Expr.Int
-                      ls |> After |> Reg |> AVar |> Expr.Int
-                      em |> Expr.Int ]
+                    [ ls ]
+                    [ em |> Expr.Int ]
     }
 
 /// Creates a partially resolved axiom for an if-then-else.

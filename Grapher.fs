@@ -24,9 +24,9 @@ let cId = List.empty
 (* TODO(CaptainHayashi): currently we're assuming Assumed expressions
    are in pre-state position.  When we move to type-safe renaming this
    change should happen *here*. *)
-let cAssume (expr : SMBoolExpr) : Command =
-    func "Assume" [ simp expr |> Expr.Bool ] |> List.singleton
-let cAssumeNot : SMBoolExpr -> Command = mkNot >> cAssume
+let cAssume (expr : SVBoolExpr) : Command =
+    primCommand "Assume" [] [ simp expr |> Expr.Bool ] |> List.singleton
+let cAssumeNot : SVBoolExpr -> Command = mkNot >> cAssume
 
 /// <summary>
 ///     Constructs a graph from a while loop.
@@ -56,11 +56,6 @@ let cAssumeNot : SMBoolExpr -> Command = mkNot >> cAssume
 ///     A Chessie result containing the graph of this if statement.
 /// </returns>
 let rec graphWhile vg cg oP oQ isDo (expr : SVBoolExpr) inner =
-    (* First, we need to convert the expression into an assert.
-       This means we cast it into the pre-state, as it is diverging the
-       program if its state _entering_ the loop condition makes expr go
-       false. *)
-    let exprB = Mapper.mapBool before expr
 
     (* If isDo:
      *   Translating [|oP|] do { [|iP|] [|iQ|] } while (C) [|oQ|].
@@ -79,10 +74,10 @@ let rec graphWhile vg cg oP oQ isDo (expr : SVBoolExpr) inner =
         // Outer edges common to do-while and while loops.
         let commonEdges =
             [ // {|iQ|} assume C {|iP|}: loop back.
-              (cg (), edge iQ (cAssume exprB) iP)
+              (cg (), edge iQ (cAssume expr) iP)
 
               // {|iQ|} assume ¬C {|oQ|}: fall out of loop.
-              (cg (), edge iQ (cAssumeNot exprB) oQ) ]
+              (cg (), edge iQ (cAssumeNot expr) oQ) ]
 
         // Outer edges different between do-while and while loops.
         let diffEdges =
@@ -92,9 +87,9 @@ let rec graphWhile vg cg oP oQ isDo (expr : SVBoolExpr) inner =
                   (cg (), edge oP cId iP) ]
             else
                 [ // {|oP|} assume C {|iP|} conditionally enter loop...
-                  (cg (), edge oP (cAssume exprB) iP)
+                  (cg (), edge oP (cAssume expr) iP)
                   // {|oP|} assume ¬C {|oQ|} ...otherwise skip it.
-                  (cg (), edge oP (cAssumeNot exprB) oQ) ]
+                  (cg (), edge oP (cAssumeNot expr) oQ) ]
 
         let cGraph = { Nodes = Map.empty
                        Edges = (Seq.append commonEdges diffEdges
@@ -130,12 +125,6 @@ let rec graphWhile vg cg oP oQ isDo (expr : SVBoolExpr) inner =
 ///     A Chessie result containing the graph of this if statement.
 /// </returns>
 and graphITE vg cg oP oQ expr inTrue inFalse =
-    (* First, we need to convert the expression into an assert.
-       This means we cast it into the pre-state, as it is diverging the
-       program if its state _entering_ the loop condition makes expr go
-       false. *)
-    let exprB = Mapper.mapBool before expr
-
     // Translating [|oP|] if (C) { [|tP|] [|tQ|] } else { [|fP|] [|fQ|] } [|oQ|].
     trial {
         (* We presume oP and oQ are added into the nodes list by the caller,
@@ -148,11 +137,11 @@ and graphITE vg cg oP oQ expr inTrue inFalse =
 
         let cEdges =
             [ // {|oP|} assume C {|tP|}: enter true block
-              (cg (), edge oP (cAssume exprB) tP)
+              (cg (), edge oP (cAssume expr) tP)
               // {|tQ|} id {|oQ|}: exit true block
               (cg (), edge tQ cId oQ)
               // {|oP|} assume ¬C {|fP|}: enter false block
-              (cg (), edge oP (cAssumeNot exprB) fP)
+              (cg (), edge oP (cAssumeNot expr) fP)
               // {|fQ|} id {|oQ|}: exit false block
               (cg (), edge fQ cId oQ) ]
 

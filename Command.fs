@@ -17,29 +17,34 @@ open Starling.Core.Model
 /// </summary>
 [<AutoOpen>]
 module Types =
+
     /// <summary>
     ///     A command.
     ///
     ///     <para>
     ///         A command is a list, representing a sequential composition
-    ///         of primitives represented as <c>VFunc</c>.
+    ///         of primitive commands.
     ///     </para>
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         Each <c>VFunc</c> element keys into a <c>Model</c>'s
-    ///         <c>Semantics</c> <c>FuncTable</c>.
-    ///         This table contains two-state Boolean
-    ///         expressions capturing the command's semantics in a
-    ///         sort-of-denotational way.
-    ///     </para>
-    ///     <para>
-    ///         Commands are implemented in terms of <c>VFunc</c>s for
-    ///         convenience, not because of any deep relationship between
-    ///         the two concepts.
+    ///         Results represents the variables assigned by the command
+    ///         Arguments represents the expressions the command depends upon
+    ///         CmdNane is a handle on what the command does, and ties into the 
+    ///         semantics of the model
     ///     </para>
     /// </remarks>
-    type Command = SMVFunc list
+    type PrimCommand = { Results : Var list;  Arguments : Expr<Sym<Var>> list; CmdName : string }
+
+    /// <summary>
+    ///     A command.
+    ///
+    ///     <para>
+    ///         A command is a list, representing a sequential composition
+    ///         of primitive commands.
+    ///     </para>
+    /// </summary>
+    type Command = PrimCommand list
 
     /// <summary>
     ///     A term over <c>Command</c>s.
@@ -69,7 +74,7 @@ module Queries =
     /// </returns>
     let isNop =
         List.forall
-            (fun { Params = ps } ->
+            (fun { Results = ps } ->
                  (* We treat a func as a no-op if all variables it contains
                   * are in the pre-state.  Thus, it cannot be modifying the
                   * post-state, if it is well-formed.
@@ -79,22 +84,23 @@ module Queries =
                   * symbol could mean _anything_, regardless of what we
                   * put into it!
                   *)
-                 Seq.forall (function
-                             | SMExpr.Int (AVar (Reg (Before _))) -> true
-                             | SMExpr.Int (AVar _) -> false
-                             | SMExpr.Bool (BVar (Reg (Before _))) -> true
-                             | SMExpr.Bool (BVar _) -> false
-                             | _ -> true)
-                            ps)
+                 ps = [])
 
     /// <summary>
     ///     Active pattern matching assume commands.
     /// </summary>
     let (|Assume|_|) =
         function
-        | [ { Name = n ; Params = [ SMExpr.Bool b ] } ]
+        | [ { CmdName = n ; Arguments = [ Expr.Bool b ]; Results=[] } ]
           when n = "Assume" -> Some b
         | _ -> None
+
+[<AutoOpen>]
+module Create =
+    let primCommand cmdname rvalues lvalues = {CmdName = cmdname; Results = rvalues; Arguments = lvalues}
+    let mkIVar a = a |> Reg |> AVar |> Expr.Int
+    let mkBVar b = b |> Reg |> BVar |> Expr.Bool
+
 
 
 /// <summary>
@@ -175,11 +181,14 @@ module Compose =
 module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Var.Pretty
+    open Starling.Core.Symbolic.Pretty
     open Starling.Core.Expr.Pretty
     open Starling.Core.Model.Pretty
 
+    let printPrimCommand (c : PrimCommand) =
+       hjoin [String c.CmdName; semiSep [(commaSep (Seq.map printVar c.Results)); (commaSep (Seq.map printSVExpr c.Arguments))] |> parened]
     /// Pretty-prints a Command.
-    let printCommand = List.map printSMVFunc >> semiSep
+    let printCommand = List.map printPrimCommand >> semiSep
 
     /// Pretty-prints a PTerm.
     let printPTerm pWPre pGoal = printTerm printCommand pWPre pGoal

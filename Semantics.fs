@@ -38,7 +38,7 @@ module Types =
         | Instantiate of prim: SMVFunc
                        * error: Starling.Core.Instantiate.Types.Error
         /// A primitive has a missing semantic definition.
-        | MissingDef of prim: SMVFunc
+        | MissingDef of prim: PrimCommand
 
 
 /// <summary>
@@ -46,6 +46,7 @@ module Types =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
+    open Starling.Core.Command.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Instantiate.Pretty
 
@@ -59,7 +60,7 @@ module Pretty =
                 Starling.Core.Instantiate.Pretty.printError error ]
         | MissingDef prim ->
             fmt "primitive '{0}' has no semantic definition"
-                [ printSMVFunc prim ]
+                [ printPrimCommand prim ]
 
 
 
@@ -146,10 +147,10 @@ let frame svars tvars expr =
 /// a set of framing terms forcing unbound variables to remain constant
 /// (through frame).
 let semanticsOfPrim
-  (semantics : FuncTable<SVBoolExpr>)
+  (semantics : PrimCommandSpec list)
   (svars : VarMap)
   (tvars : VarMap)
-  (prim : SMVFunc)
+  (prim : PrimCommand)
   : Result<SMBoolExpr, Error> =
     (* First, instantiate according to the semantics.
      * This can succeed but return None.  This means there is no
@@ -170,7 +171,7 @@ let semanticsOfPrim
 /// This is the sequential composition of the translations of each
 /// primitive inside it.
 let semanticsOfCommand
-  (semantics : FuncTable<SVBoolExpr>)
+  (semantics : PrimCommandSpec list)
   (svars : VarMap)
   (tvars : VarMap)
   : Command -> Result<SMBoolExpr, Error> =

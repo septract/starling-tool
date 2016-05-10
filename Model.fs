@@ -189,7 +189,8 @@ module Types =
         }
 
     /// A term over semantic-relation commands.
-    type STerm<'wpre, 'goal> = Term<SMBoolExpr, 'wpre, 'goal>
+    ///  WE store the post-state map, to represent the variable after the update
+    type STerm<'wpre, 'goal> = Term<(SMBoolExpr * Map<Var,MarkedVar>), 'wpre, 'goal>
 
     /// A term using only internal boolean expressions.
     type FTerm = Term<MBoolExpr, MBoolExpr, MBoolExpr>
@@ -197,6 +198,7 @@ module Types =
     (*
      * Models
      *)
+    type PrimCommandSpec = { CmdName : string; LValues : Param list; RValues : Param list; Body : SVBoolExpr }
 
     /// A parameterised model of a Starling program.
     type Model<'axiom, 'viewdefs> =
@@ -206,7 +208,7 @@ module Types =
           /// <summary>
           ///     The semantic function for this model.
           /// </summary>
-          Semantics : (DFunc * SVBoolExpr) list
+          Semantics : PrimCommandSpec list
           // This corresponds to the function D.
           ViewDefs : 'viewdefs }
 
@@ -288,7 +290,8 @@ module Pretty =
                headed "Goal" (g |> pGoal |> Seq.singleton) ]
 
     /// Pretty-prints an STerm.
-    let printSTerm pWPre pGoal = printTerm printSMBoolExpr pWPre pGoal
+    ///TODO mjp41: Fix this to display the Map as well
+    let printSTerm pWPre pGoal = printTerm (fst >> printSMBoolExpr) pWPre pGoal
 
     /// Pretty-prints model variables.
     let printModelVar (name, ty) =

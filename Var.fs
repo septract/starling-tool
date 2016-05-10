@@ -138,6 +138,8 @@ module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Expr.Pretty
 
+    let printVar = String 
+
     /// Pretty-prints variable conversion errors.
     let printVarMapError =
         function
@@ -155,7 +157,7 @@ module Pretty =
         | Goal (i, s) -> sexpr "goal" String [ (sprintf "%A" i); s ]
 
     /// Pretty-prints a VExpr.
-    let printVExpr = printExpr String
+    let printVExpr = printExpr printVar
     /// Pretty-prints a MExpr.
     let printMExpr = printExpr printMarkedVar
     /// Pretty-prints a VBoolExpr.
