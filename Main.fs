@@ -329,8 +329,8 @@ let runStarling times optS reals approx verbose request =
                                id
                                id)
                           >> (Sub.subExprInDTerm
-                              Starling.Core.Symbolic.Queries.approx
-                              Starling.Core.Sub.Position.positive)
+                                  Starling.Core.Symbolic.Queries.approx
+                                  Starling.Core.Sub.Position.positive)
                           >> snd)
                  else id)
 
