@@ -125,12 +125,12 @@ type Response =
     | GoalAdd of UVModel<GoalAxiom<Command>>
     /// The result of term generation.
     | TermGen of UVModel<PTerm<SMGView, OView>>
-    /// The result of term reification.
-    | Reify of UVModel<PTerm<SMViewSet, OView>>
-    /// The result of term flattening.
-    | Flatten of UFModel<PTerm<SMGView, SMVFunc>>
     /// The result of semantic expansion.
-    | Semantics of UFModel<STerm<SMGView, SMVFunc>>
+    | Semantics of UVModel<STerm<SMGView, OView>>
+    /// The result of term reification.
+    | Reify of UVModel<STerm<SMViewSet, OView>>
+    /// The result of term flattening.
+    | Flatten of UFModel<STerm<SMGView, SMVFunc>>
     /// The result of term optimisation.
     | TermOptimise of UFModel<STerm<SMGView, SMVFunc>>
     /// The result of Z3 backend processing.
@@ -152,11 +152,11 @@ let printResponse mview =
         printUVModelView printGoalAxiom mview m
     | TermGen m ->
         printUVModelView (printPTerm printSMGView printOView) mview m
-    | Reify m ->
-        printUVModelView (printPTerm printSMViewSet printOView) mview m
-    | Flatten m ->
-        printUFModelView (printPTerm printSMGView printSMVFunc) mview m
     | Semantics m ->
+        printUVModelView (printSTerm printSMGView printOView) mview m
+    | Reify m ->
+        printUVModelView (printSTerm printSMViewSet printOView) mview m
+    | Flatten m ->
         printUFModelView (printSTerm printSMGView printSMVFunc) mview m
     | TermOptimise m ->
         printUFModelView (printSTerm printSMGView printSMVFunc) mview m
@@ -341,9 +341,9 @@ let runStarling times optS reals verbose request =
     ** phase  axiomatise     Request.Axiomatise     Response.Axiomatise
     ** phase  goalAdd        Request.GoalAdd        Response.GoalAdd
     ** phase  termGen        Request.TermGen        Response.TermGen
+    ** phase  semantics      Request.Semantics      Response.Semantics
     ** phase  reify          Request.Reify          Response.Reify
     ** phase  flatten        Request.Flatten        Response.Flatten
-    ** phase  semantics      Request.Semantics      Response.Semantics
     ** phase  termOptimise   Request.TermOptimise   Response.TermOptimise
     ** backend
 
