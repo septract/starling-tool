@@ -189,6 +189,6 @@ let translateAxiom model =
 
 /// Translate a model over Prims to a model over semantic expressions.
 let translate
-  (model : UFModel<PTerm<SMGView, SMVFunc>>)
-  : Result<UFModel<STerm<SMGView, SMVFunc>>, Error> =
+  (model : Model<Term<Command, 'wpre, 'goal>, 'viewdef>)
+  : Result<Model<Term<SMBoolExpr, 'wpre, 'goal>, 'viewdef>, Error> =
     tryMapAxioms (translateAxiom model) model

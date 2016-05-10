@@ -81,7 +81,7 @@ let termGenFrame (r : OView) (q : SMGView) =
 
 /// Generates a (weakest) precondition from a framed axiom.
 let termGenPre
-  (gax : GoalAxiom)
+  (gax : GoalAxiom<'cmd>)
   : SMGView =
     (* Theoretically speaking, this is crunching an axiom {P} C {Q} and
      * goal view R into (P * (R \ Q)), where R \ Q is the weakest frame.
@@ -102,15 +102,15 @@ let termGenPre
 
 /// Generates a term from a goal axiom.
 let termGenAxiom
-  (gax : GoalAxiom)
-  : PTerm<SMGView, OView> =
+  (gax : GoalAxiom<'cmd>)
+  : Term<'cmd, SMGView, OView> =
     { WPre = termGenPre gax
       Goal = gax.Goal
       Cmd = gax.Axiom.Cmd }
 
 /// Converts a model's goal axioms to terms.
-let termGen : UVModel<GoalAxiom> -> UVModel<PTerm<SMGView, OView>> =
-    mapAxioms termGenAxiom
+let termGen  (mdl : UVModel<GoalAxiom<'cmd>>) :  UVModel<Term<'cmd, SMGView, OView>> =
+    mapAxioms termGenAxiom mdl
 
 
 /// <summary>

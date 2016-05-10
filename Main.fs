@@ -122,7 +122,7 @@ type Response =
     /// Stop at graph axiomatisation.
     | Axiomatise of UVModel<Axiom<SVGView, Command>>
     /// The result of goal-axiom-pair generation.
-    | GoalAdd of UVModel<GoalAxiom>
+    | GoalAdd of UVModel<GoalAxiom<Command>>
     /// The result of term generation.
     | TermGen of UVModel<PTerm<SMGView, OView>>
     /// The result of term reification.
