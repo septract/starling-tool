@@ -84,8 +84,8 @@ type Request =
     | Semantics
     /// Stop at term optimisation.
     | TermOptimise
-    /// Output a fully-instantiated proof.
-    | Proof
+    /// Output a fully-instantiated proof with symbols.
+    | SymProof
     /// Run the Z3 backend, with the given request.
     | Z3 of Backends.Z3.Types.Request
     /// Run the MuZ3 backend (experimental), with the given request.
@@ -108,7 +108,7 @@ let requestMap =
                  ("flatten", Request.Flatten)
                  ("semantics", Request.Semantics)
                  ("termOptimise", Request.TermOptimise)
-                 ("proof", Request.Proof)
+                 ("symproof", Request.SymProof)
                  ("reifyZ3", Request.Z3 Backends.Z3.Types.Request.Translate)
                  ("z3", Request.Z3 Backends.Z3.Types.Request.Combine)
                  ("sat", Request.Z3 Backends.Z3.Types.Request.Sat)
@@ -144,7 +144,7 @@ type Response =
     /// The result of term optimisation.
     | TermOptimise of UFModel<STerm<SMGView, SMVFunc>>
     /// Output a fully-instantiated proof.
-    | Proof of Model<SFTerm, unit>
+    | SymProof of Model<SFTerm, unit>
     /// The result of Z3 backend processing.
     | Z3 of Backends.Z3.Types.Response
     /// The result of MuZ3 backend processing.
@@ -172,7 +172,7 @@ let printResponse mview =
         printUFModelView (printSTerm printSMGView printSMVFunc) mview m
     | TermOptimise m ->
         printUFModelView (printSTerm printSMGView printSMVFunc) mview m
-    | Proof m ->
+    | SymProof m ->
         printModelView
             (printTerm printSMBoolExpr printSMBoolExpr printSMBoolExpr)
             (fun _ -> Seq.empty)
@@ -243,8 +243,8 @@ let printErr pBad =
 let printResult pOk pBad =
     either (printOk pOk pBad) (printErr pBad)
 
-/// Shorthand for the proof-output stage.
-let proof = bind (Core.Instantiate.Phase.run >> mapMessages Error.ModelFilterError)
+/// Shorthand for the symbolic proof output stage.
+let symproof = bind (Core.Instantiate.Phase.run >> mapMessages Error.ModelFilterError)
 
 /// Shorthand for the HSF stage.
 let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
@@ -349,11 +349,11 @@ let runStarling times optS reals approx verbose request =
                  else id)
 
         match request with
-        | Request.Proof   -> phase proof Response.Proof
-        | Request.HSF     -> phase (filterIndefinite >> hsf) Response.HSF
-        | Request.Z3 rq   -> phase (maybeApprox >> filterDefinite >> z3 reals rq) Response.Z3
-        | Request.MuZ3 rq -> phase (filterIndefinite >> muz3 reals rq) Response.MuZ3
-        | _               -> fail (Error.Other "Internal")
+        | Request.SymProof -> phase symproof Response.SymProof
+        | Request.HSF      -> phase (filterIndefinite >> hsf) Response.HSF
+        | Request.Z3 rq    -> phase (maybeApprox >> filterDefinite >> z3 reals rq) Response.Z3
+        | Request.MuZ3 rq  -> phase (filterIndefinite >> muz3 reals rq) Response.MuZ3
+        | _                -> fail (Error.Other "Internal")
 
     //Build a phase with
     //  op as what to do
