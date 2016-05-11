@@ -67,7 +67,7 @@ let addGlobalsToViewDef gs =
  *)
 
 /// Adds globals to the arguments of all views in a model.
-let flatten (mdl: UVModel<PTerm<SMViewSet, OView>>) =
+let flatten (mdl: UVModel<Term<'cmd, SMViewSet, OView>>) =
     /// Build a function making a list of global arguments, for view assertions.
     let gargs marker = varMapToExprs (marker >> Reg) mdl.Globals
 

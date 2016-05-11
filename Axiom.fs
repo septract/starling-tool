@@ -48,9 +48,9 @@ module Types =
           Cmd : 'cmd }
 
     /// An axiom combined with a goal view.
-    type GoalAxiom =
+    type GoalAxiom<'cmd> =
         { /// The axiom to be checked for soundness under Goal.
-          Axiom : Axiom<SVGView, Command>
+          Axiom : Axiom<SVGView, 'cmd>
           /// The view representing the goal for any terms over Axiom.
           Goal : OView }
 
@@ -70,9 +70,9 @@ module Pretty =
         Surround(pre |> pView, cmd |> pCmd, post |> pView)
 
     /// Pretty-prints a goal axiom.
-    let printGoalAxiom { Axiom = a; Goal = f } =
+    let printGoalAxiom printCmd { Axiom = a; Goal = f } =
         vsep [ headed "Axiom"
-                      (a |> printAxiom printCommand printSVGView |> Seq.singleton)
+                      (a |> printAxiom printCmd printSVGView |> Seq.singleton)
                headed "Goal" (f |> printOView |> Seq.singleton) ]
 
 

@@ -11,6 +11,8 @@ open Starling.Core.Graph.Pretty
 open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.Model.Pretty
+open Starling.Core.Symbolic
+open Starling.Core.Symbolic.Pretty
 open Starling.Core.Command
 open Starling.Core.Command.Pretty
 open Starling.Core.GuardedView
@@ -122,15 +124,15 @@ type Response =
     /// Stop at graph axiomatisation.
     | Axiomatise of UVModel<Axiom<SVGView, Command>>
     /// The result of goal-axiom-pair generation.
-    | GoalAdd of UVModel<GoalAxiom>
-    /// The result of term generation.
-    | TermGen of UVModel<PTerm<SMGView, OView>>
-    /// The result of term reification.
-    | Reify of UVModel<PTerm<SMViewSet, OView>>
-    /// The result of term flattening.
-    | Flatten of UFModel<PTerm<SMGView, SMVFunc>>
+    | GoalAdd of UVModel<GoalAxiom<Command>>
     /// The result of semantic expansion.
-    | Semantics of UFModel<STerm<SMGView, SMVFunc>>
+    | Semantics of UVModel<GoalAxiom<SMBoolExpr>>
+    /// The result of term generation.
+    | TermGen of UVModel<STerm<SMGView, OView>>
+    /// The result of term reification.
+    | Reify of UVModel<STerm<SMViewSet, OView>>
+    /// The result of term flattening.
+    | Flatten of UFModel<STerm<SMGView, SMVFunc>>
     /// The result of term optimisation.
     | TermOptimise of UFModel<STerm<SMGView, SMVFunc>>
     /// The result of Z3 backend processing.
@@ -149,14 +151,14 @@ let printResponse mview =
     | Axiomatise m ->
         printUVModelView (printAxiom printCommand printSVGView) mview m
     | GoalAdd m ->
-        printUVModelView printGoalAxiom mview m
-    | TermGen m ->
-        printUVModelView (printPTerm printSMGView printOView) mview m
-    | Reify m ->
-        printUVModelView (printPTerm printSMViewSet printOView) mview m
-    | Flatten m ->
-        printUFModelView (printPTerm printSMGView printSMVFunc) mview m
+        printUVModelView (printGoalAxiom printCommand) mview m
     | Semantics m ->
+        printUVModelView (printGoalAxiom printSMBoolExpr) mview m
+    | TermGen m ->
+        printUVModelView (printSTerm printSMGView printOView) mview m
+    | Reify m ->
+        printUVModelView (printSTerm printSMViewSet printOView) mview m
+    | Flatten m ->
         printUFModelView (printSTerm printSMGView printSMVFunc) mview m
     | TermOptimise m ->
         printUFModelView (printSTerm printSMGView printSMVFunc) mview m
@@ -340,10 +342,10 @@ let runStarling times optS reals verbose request =
     ** phase  graphOptimise  Request.GraphOptimise  Response.GraphOptimise
     ** phase  axiomatise     Request.Axiomatise     Response.Axiomatise
     ** phase  goalAdd        Request.GoalAdd        Response.GoalAdd
+    ** phase  semantics      Request.Semantics      Response.Semantics
     ** phase  termGen        Request.TermGen        Response.TermGen
     ** phase  reify          Request.Reify          Response.Reify
     ** phase  flatten        Request.Flatten        Response.Flatten
-    ** phase  semantics      Request.Semantics      Response.Semantics
     ** phase  termOptimise   Request.TermOptimise   Response.TermOptimise
     ** backend
 

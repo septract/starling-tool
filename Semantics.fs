@@ -180,15 +180,12 @@ let semanticsOfCommand
              | [] -> frame svars tvars BTrue |> List.ofSeq |> mkAnd
              | xs -> List.reduce composeBools xs)
 
-/// Translates a model axiom into an axiom over a semantic expression.
-let translateAxiom model =
-    tryMapTerm
-        (semanticsOfCommand model.Semantics model.Globals model.Locals)
-        ok
-        ok
-
+open Starling.Core.Axiom.Types
 /// Translate a model over Prims to a model over semantic expressions.
 let translate
-  (model : UFModel<PTerm<SMGView, SMVFunc>>)
-  : Result<UFModel<STerm<SMGView, SMVFunc>>, Error> =
-    tryMapAxioms (translateAxiom model) model
+  (model : Model<GoalAxiom<Command>, 'viewdef>)
+  : Result<Model<GoalAxiom<SMBoolExpr>, 'viewdef>, Error> =
+    let modelSemantics = semanticsOfCommand model.Semantics model.Globals model.Locals
+    let replaceCmd ga c = { Goal = ga.Goal; Axiom = {Pre = ga.Axiom.Pre; Post = ga.Axiom.Post; Cmd = c }}
+    let transSem ga = bind (replaceCmd ga >> ok) (modelSemantics ga.Axiom.Cmd)
+    tryMapAxioms transSem model
