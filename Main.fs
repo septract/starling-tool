@@ -191,7 +191,7 @@ let printResponse mview =
                  Core.Var.Pretty.printMBoolExpr)
             (fun _ -> Seq.empty)
             mview
-            m       
+            m
     | Z3 z -> Backends.Z3.Pretty.printResponse mview z
     | MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
     | HSF h -> Backends.Horn.Pretty.printHorns h
@@ -277,15 +277,15 @@ let proof approx v =
             >> snd
         else id
 
-    let sub = 
+    let sub =
         Core.TypeSystem.Mapper.mapBoolCtx
             (tsfRemoveSym Core.Instantiate.Types.UnwantedSym)
             Core.Sub.Types.SubCtx.NoCtx
         >> snd
-    
+
     let pos = Starling.Core.Sub.Position.positive
     let neg = Starling.Core.Sub.Position.negative
-    
+
     bind
         (tryMapAxioms
              (tryMapTerm
