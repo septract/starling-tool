@@ -61,6 +61,8 @@ type Options =
 
 /// Enumeration of possible requests to Starling.
 type Request =
+    /// List all available requests.
+    | List
     /// Run the language frontend only, with the given request.
     | Frontend of Lang.Frontend.Request
     /// Stop at graph optimisation.
@@ -92,37 +94,89 @@ type Request =
 
 /// Map of -s stage names to Request items.
 let requestMap =
-    Map.ofList [ ("parse", Request.Frontend Lang.Frontend.Request.Parse)
-                 ("collate", Request.Frontend Lang.Frontend.Request.Collate)
-                 ("model", Request.Frontend Lang.Frontend.Request.Model)
-                 ("guard", Request.Frontend Lang.Frontend.Request.Guard)
-                 ("graph", Request.Frontend Lang.Frontend.Request.Graph)
-                 ("graphOptimise", Request.GraphOptimise)
-                 ("axiomatise", Request.Axiomatise)
-                 ("goalAdd", Request.GoalAdd)
-                 ("termgen", Request.TermGen)
-                 ("reify", Request.Reify)
-                 ("flatten", Request.Flatten)
-                 ("semantics", Request.Semantics)
-                 ("termOptimise", Request.TermOptimise)
-                 ("symproof", Request.SymProof)
-                 ("proof", Request.Proof)
-                 ("reifyZ3", Request.Z3 Backends.Z3.Types.Request.Translate)
-                 ("z3", Request.Z3 Backends.Z3.Types.Request.Combine)
-                 ("sat", Request.Z3 Backends.Z3.Types.Request.Sat)
-                 ("mutranslate", Request.MuZ3 Backends.MuZ3.Types.Request.Translate)
-                 ("mufix", Request.MuZ3 Backends.MuZ3.Types.Request.Fix)
-                 ("musat", Request.MuZ3 Backends.MuZ3.Types.Request.Sat)
-                 ("hsf", Request.HSF) ]
+    Map.ofList
+        [ ("list",
+           ("Lists all available phases.",
+            Request.List))
+          ("parse",
+           ("Parses and formats a Starling file with no further processing.",
+            Request.Frontend Lang.Frontend.Request.Parse))
+          ("collate",
+           ("Stops Starling frontend processing at script collation.",
+            Request.Frontend Lang.Frontend.Request.Collate))
+          ("model",
+           ("Stops Starling frontend processing at initial modelling.",
+            Request.Frontend Lang.Frontend.Request.Model))
+          ("guard",
+           ("Stops Starling frontend processing at guarded view generation.",
+            Request.Frontend Lang.Frontend.Request.Guard))
+          ("graph",
+           ("Outputs an unoptimised control-flow graph series.",
+            Request.Frontend Lang.Frontend.Request.Graph))
+          ("graphoptimise",
+           ("Outputs an optimised control-flow graph series.",
+            Request.GraphOptimise))
+          ("axiomatise",
+           ("Stops Starling model generation at graph axiomatisation.",
+            Request.Axiomatise))
+          ("goaladd",
+           ("Stops Starling model generation at goal generation.",
+            Request.GoalAdd))
+          ("termgen",
+           ("Stops Starling model generation at proof term generation.",
+            Request.TermGen))
+          ("reify",
+           ("Stops Starling model generation at view reification.",
+            Request.Reify))
+          ("flatten",
+           ("Stops Starling model generation at view flattening.",
+            Request.Flatten))
+          ("semantics",
+           ("Stops Starling model generation at command semantics instantiation.",
+            Request.Semantics))
+          ("termoptimise",
+           ("Stops Starling model generation at term optimisation.",
+            Request.TermOptimise))
+          ("symproof",
+           ("Outputs a proof in Starling format, with all symbols intact.",
+            Request.SymProof))
+          ("proof",
+           ("Outputs a definite proof in Starling format, with all symbols removed.",
+            Request.Proof))
+          ("reifyz3",
+           ("Outputs a definite proof in structured Z3/SMTLIB format.",
+            Request.Z3 Backends.Z3.Types.Request.Translate))
+          ("z3",
+           ("Outputs a definite proof in unstructured Z3/SMTLIB format.",
+            Request.Z3 Backends.Z3.Types.Request.Combine))
+          ("sat",
+           ("Executes a definite proof using Z3 and reports the result.",
+            Request.Z3 Backends.Z3.Types.Request.Sat))
+          ("mutranslate",
+           ("Generates a proof using MuZ3 and outputs the individual terms.",
+            Request.MuZ3 Backends.MuZ3.Types.Request.Translate))
+          ("mufix",
+           ("Generates a proof using MuZ3 and outputs the fixed point.",
+            Request.MuZ3 Backends.MuZ3.Types.Request.Fix))
+          ("musat",
+           ("Executes a proof using MuZ3 and reports the result.",
+            Request.MuZ3 Backends.MuZ3.Types.Request.Sat))
+          ("hsf",
+           ("Outputs a proof in HSF format.",
+            Request.HSF)) ]
 
 /// Converts an optional -s stage name to a request item.
 /// If none is given, the latest stage is selected.
-let requestFromStage ostage =
-    Map.tryFind (withDefault "sat" ostage) requestMap
+let requestFromStage (ostage : string option) =
+    (withDefault "sat" ostage).ToLower()
+    |> requestMap.TryFind
+    |> Option.map snd
 
 /// Type of possible outputs from a Starling run.
 [<NoComparison>]
 type Response =
+    /// List all available requests.
+    | List of Map<string, string>
     /// The result of frontend processing.
     | Frontend of Lang.Frontend.Response
     /// Stop at graph optimisation.
@@ -155,6 +209,7 @@ type Response =
 /// Pretty-prints a response.
 let printResponse mview =
     function
+    | List l -> printMap Indented String String l
     | Frontend f -> Lang.Frontend.printResponse mview f
     | GraphOptimise g ->
         printUVModelView printGraph mview g
@@ -486,6 +541,10 @@ let mainWithOptions opts =
 
     let starlingR =
         match (requestFromStage opts.stage) with
+        // Handle pseudo-requests here, as it's cleaner than doing so in
+        // runStarling.
+        | Some Request.List ->
+            ok (Response.List (Map.map (fun _ -> fst) requestMap))
         | Some otype -> runStarling times optS backendS verbose otype opts.input
         | None -> fail Error.BadStage
 
