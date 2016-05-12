@@ -52,7 +52,7 @@ type Options =
       [<Option('m', HelpText = "Show full model in term-refinement stages.")>]
       showModel : bool
       [<Option('O', HelpText = "Switches given optimisations on or off.")>]
-      optimisers : string seq
+      optimisers : string option
       [<Option("times", HelpText = "Print times for each phase.")>]
       times : bool
       [<Option('v', HelpText = "Increases verbosity.")>]
@@ -363,7 +363,12 @@ let filterIndefinite =
 ///     <c>Result</c> over <c>Response</c> and <c>Error</c>.
 /// </returns>
 let runStarling times optS reals approx verbose request =
-    let optR, optA = Optimiser.Utils.parseOptString optS
+    let optR, optA =
+        optS
+        |> Option.map Utils.parseOptionString
+        |> withDefault (Seq.empty)
+        |> Seq.toList
+        |> Optimiser.Utils.parseOptString
 
     let backend m =
         let phase op response =
@@ -429,7 +434,7 @@ let runStarling times optS reals approx verbose request =
 
 /// Runs Starling with the given options, and outputs the results.
 let mainWithOptions opts =
-    let optS = Seq.toList opts.optimisers
+    let optS = opts.optimisers
     let verbose = opts.verbose
     let reals = opts.reals
     let times = opts.times

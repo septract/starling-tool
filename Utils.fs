@@ -12,6 +12,28 @@ module Starling.Utils
 open Chessie.ErrorHandling
 
 
+/// <summary>
+///     Parses an delimited option string.
+/// </summary>
+/// <param name="str">
+///     A string containing a comma or semicolon-separated list of words.
+/// </param>
+/// <returns>
+///     The sequence of split words, downcased and trimmed.
+///     A tuple of two sets of optimisation names.  The first is the
+///     set of optimisations force-disabled (-).  The second is the set of
+///     optimisations force-enabled (+ or no sign).  Each optimisation
+///     name is downcased.  The optimisation name 'all' is special, as it
+///     force-enables (or force-disables) all optimisations.
+/// </returns>
+let parseOptionString (str : string) =
+    str.ToLower()
+        .Split([| "," ; ";" |],
+               System.StringSplitOptions.RemoveEmptyEntries)
+    |> Seq.toList
+    |> Seq.map (fun x -> x.Trim())
+
+
 /// Converts a list to an option that is Some iff it has exactly one item.
 let onlyOne s =
     s
