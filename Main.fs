@@ -86,6 +86,8 @@ type Request =
     | TermOptimise
     /// Output a fully-instantiated proof with symbols.
     | SymProof
+    /// Output a fully-instantiated proof without symbols.
+    | Proof
     /// Run the Z3 backend, with the given request.
     | Z3 of Backends.Z3.Types.Request
     /// Run the MuZ3 backend (experimental), with the given request.
@@ -109,6 +111,7 @@ let requestMap =
                  ("semantics", Request.Semantics)
                  ("termOptimise", Request.TermOptimise)
                  ("symproof", Request.SymProof)
+                 ("proof", Request.Proof)
                  ("reifyZ3", Request.Z3 Backends.Z3.Types.Request.Translate)
                  ("z3", Request.Z3 Backends.Z3.Types.Request.Combine)
                  ("sat", Request.Z3 Backends.Z3.Types.Request.Sat)
@@ -143,8 +146,10 @@ type Response =
     | Flatten of UFModel<STerm<SMGView, SMVFunc>>
     /// The result of term optimisation.
     | TermOptimise of UFModel<STerm<SMGView, SMVFunc>>
-    /// Output a fully-instantiated proof.
+    /// Output a fully-instantiated symbolic proof.
     | SymProof of Model<SFTerm, unit>
+    /// Output a fully-instantiated non-symbolic proof.
+    | Proof of Model<FTerm, unit>
     /// The result of Z3 backend processing.
     | Z3 of Backends.Z3.Types.Response
     /// The result of MuZ3 backend processing.
@@ -178,6 +183,15 @@ let printResponse mview =
             (fun _ -> Seq.empty)
             mview
             m
+    | Proof m ->
+        printModelView
+            (printTerm
+                 Core.Var.Pretty.printMBoolExpr
+                 Core.Var.Pretty.printMBoolExpr
+                 Core.Var.Pretty.printMBoolExpr)
+            (fun _ -> Seq.empty)
+            mview
+            m       
     | Z3 z -> Backends.Z3.Pretty.printResponse mview z
     | MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
     | HSF h -> Backends.Horn.Pretty.printHorns h
@@ -245,6 +259,41 @@ let printResult pOk pBad =
 
 /// Shorthand for the symbolic proof output stage.
 let symproof = bind (Core.Instantiate.Phase.run >> mapMessages Error.ModelFilterError)
+
+/// Shorthand for the non-symbolic proof output stage.
+let proof approx v =
+    let aprC =
+        if approx
+        then
+            Starling.Core.Command.SymRemove.removeSym
+        else id
+
+    let apr position =
+        if approx
+        then
+            Core.TypeSystem.Mapper.mapBoolCtx
+                Starling.Core.Symbolic.Queries.approx
+                position
+            >> snd
+        else id
+
+    let sub = 
+        Core.TypeSystem.Mapper.mapBoolCtx
+            (tsfRemoveSym Core.Instantiate.Types.UnwantedSym)
+            Core.Sub.Types.SubCtx.NoCtx
+        >> snd
+    
+    let pos = Starling.Core.Sub.Position.positive
+    let neg = Starling.Core.Sub.Position.negative
+    
+    bind
+        (tryMapAxioms
+             (tryMapTerm
+                  (aprC >> (apr neg) >> sub)
+                  ((apr neg) >> sub)
+                  ((apr pos) >> sub))
+         >> mapMessages Error.ModelFilterError)
+        v
 
 /// Shorthand for the HSF stage.
 let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
@@ -350,6 +399,7 @@ let runStarling times optS reals approx verbose request =
 
         match request with
         | Request.SymProof -> phase symproof Response.SymProof
+        | Request.Proof    -> phase (symproof >> proof approx) Response.Proof
         | Request.HSF      -> phase (filterIndefinite >> hsf) Response.HSF
         | Request.Z3 rq    -> phase (maybeApprox >> filterDefinite >> z3 reals rq) Response.Z3
         | Request.MuZ3 rq  -> phase (filterIndefinite >> muz3 reals rq) Response.MuZ3
