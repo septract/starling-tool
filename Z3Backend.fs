@@ -44,14 +44,22 @@ module Types =
         /// Translate, combine, and run term Z3 expressions; return `Response.Sat`.
         | Sat
 
-    /// Type of responses from the Z3 backend.
+    /// <summary>
+    ///     Type of responses from the Z3 backend.
+    /// </summary>
     [<NoComparison>]
     type Response =
-        /// Output of the term translation step only.
+        /// <summary>
+        ///     Output of the term translation step only.
+        /// </summary>
         | Translate of Model<ZTerm, unit>
-        /// Output of the final Z3 terms only.
+        /// <summary>
+        ///     Output of the final Z3 terms only.
+        /// </summary>
         | Combine of Model<Z3.BoolExpr, unit>
-        /// Output of satisfiability reports for the Z3 terms.
+        /// <summary>
+        ///     Output of satisfiability reports for the Z3 terms.
+        /// </summary>
         | Sat of Map<string, Z3.Status>
 
 

@@ -340,13 +340,6 @@ let filterIndefinite =
           >> mapMessages ModelFilterError)
 
 /// <summary>
-///     Shorthand for the stage filtering a model to definite views only.
-/// </summary>
-let filterDefinite =
-    bind (Core.Instantiate.ViewDefFilter.filterModelDefinite
-          >> mapMessages ModelFilterError)
-
-/// <summary>
 ///     Runs a Starling request.
 /// </summary>
 /// <param name="optS">

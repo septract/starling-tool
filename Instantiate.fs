@@ -506,26 +506,6 @@ module ViewDefFilter =
         |> tryMapAxioms (trySubExprInDTerm (tsfRemoveSym UnwantedSym) NoCtx >> snd)
         |> bind (tryMapViewDefs filterIndefiniteViewDefs)
 
-    /// <summary>
-    ///     Tries to convert a <c>ViewDef</C> based model into a
-    ///     definite one.  The conversion fails if the model has any
-    ///     indefinite constraints.
-    /// </summary>
-    /// <param name="model">
-    ///     A model over <c>ViewDef</c>s.
-    /// </param>
-    /// <returns>
-    ///     A <c>Result</c> over <c>Error</c> containing the
-    ///     new model if the original contained only definite view
-    ///     definitions.  The new model is a <c>DFModel</c>.
-    /// </returns>
-    let filterModelDefinite
-      (model : UFModel<Term<SMBoolExpr, SMGView, SMVFunc>> )
-      : Result<DFModel<Term<MBoolExpr, MGView, MVFunc>>, Error> =
-        model
-        |> tryMapAxioms (trySubExprInDTerm (tsfRemoveSym UnwantedSym) NoCtx >> snd)
-        |> bind (tryMapViewDefs filterDefiniteViewDefs)
-
 
 /// <summary>
 ///     The instantiation phase.
