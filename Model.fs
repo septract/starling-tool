@@ -191,11 +191,14 @@ module Types =
     /// A term over semantic-relation commands.
     type STerm<'wpre, 'goal> = Term<SMBoolExpr, 'wpre, 'goal>
 
+    /// A term using the same representation for all parts.
+    type CTerm<'repr> = Term<'repr, 'repr, 'repr>
+
     /// A term using only internal symbolic boolean expressions.
-    type SFTerm = Term<SMBoolExpr, SMBoolExpr, SMBoolExpr>
+    type SFTerm = CTerm<SMBoolExpr>
 
     /// A term using only internal boolean expressions.
-    type FTerm = Term<MBoolExpr, MBoolExpr, MBoolExpr>
+    type FTerm = CTerm<MBoolExpr>
 
     (*
      * Models

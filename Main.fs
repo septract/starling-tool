@@ -83,8 +83,12 @@ type Request =
     | TermOptimise
     /// Output a fully-instantiated proof with symbols.
     | SymProof
+    /// Output a fully-instantiated unstructured proof with symbols.
+    | RawSymProof
     /// Output a fully-instantiated proof without symbols.
     | Proof
+    /// Output a fully-instantiated unstructured proof without symbols.
+    | RawProof
     /// Run the Z3 backend, with the given request.
     | Z3 of Backends.Z3.Types.Request
     /// Run the MuZ3 backend (experimental), with the given request.
@@ -140,13 +144,19 @@ let requestMap =
           ("symproof",
            ("Outputs a proof in Starling format, with all symbols intact.",
             Request.SymProof))
+          ("rawsymproof",
+           ("Outputs a definite proof in unstructured Starling format, with all symbols removed.",
+            Request.RawSymProof))
           ("proof",
            ("Outputs a definite proof in Starling format, with all symbols removed.",
             Request.Proof))
-          ("reifyz3",
+          ("rawproof",
+           ("Outputs a definite proof in unstructured Starling format, with all symbols removed.",
+            Request.RawProof))
+          ("z3",
            ("Outputs a definite proof in structured Z3/SMTLIB format.",
             Request.Z3 Backends.Z3.Types.Request.Translate))
-          ("z3",
+          ("rawz3",
            ("Outputs a definite proof in unstructured Z3/SMTLIB format.",
             Request.Z3 Backends.Z3.Types.Request.Combine))
           ("sat",
@@ -197,8 +207,12 @@ type Response =
     | TermOptimise of UFModel<STerm<SMGView, SMVFunc>>
     /// Output a fully-instantiated symbolic proof.
     | SymProof of Model<SFTerm, unit>
+    /// Output a fully-instantiated symbolic unstructured proof.
+    | RawSymProof of Model<SMBoolExpr, unit>
     /// Output a fully-instantiated non-symbolic proof.
     | Proof of Model<FTerm, unit>
+    /// Output a fully-instantiated non-symbolic unstructured proof.
+    | RawProof of Model<MBoolExpr, unit>
     /// The result of Z3 backend processing.
     | Z3 of Backends.Z3.Types.Response
     /// The result of MuZ3 backend processing.
@@ -233,12 +247,24 @@ let printResponse mview =
             (fun _ -> Seq.empty)
             mview
             m
+    | RawSymProof m ->
+        printModelView
+            Core.Symbolic.Pretty.printSMBoolExpr
+            (fun _ -> Seq.empty)
+            mview
+            m
     | Proof m ->
         printModelView
             (printTerm
                  Core.Var.Pretty.printMBoolExpr
                  Core.Var.Pretty.printMBoolExpr
                  Core.Var.Pretty.printMBoolExpr)
+            (fun _ -> Seq.empty)
+            mview
+            m
+    | RawProof m ->
+        printModelView
+            Core.Var.Pretty.printMBoolExpr
             (fun _ -> Seq.empty)
             mview
             m
@@ -303,6 +329,17 @@ let printErr pBad =
 /// case and failure messages.
 let printResult pOk pBad =
     either (printOk pOk pBad) (printErr pBad)
+
+/// Shorthand for the raw proof output stage.
+let rawproof
+  (res : Result<Model<CTerm<Core.Expr.Types.BoolExpr<'a>>, 'b>, Error>)
+  : Result<Model<Core.Expr.Types.BoolExpr<'a>, 'b>, Error> =
+    lift
+        (mapAxioms
+             (fun { Cmd = c; WPre = w; Goal = g } ->
+                  Core.Expr.mkImplies (Core.Expr.mkAnd2 c w) g))
+        res
+
 
 /// Shorthand for the symbolic proof output stage.
 let symproof = bind (Core.Instantiate.Phase.run >> mapMessages Error.ModelFilterError)
@@ -493,12 +530,14 @@ let runStarling times optS backendS verbose request =
                  else id)
 
         match request with
-        | Request.SymProof -> phase symproof Response.SymProof
-        | Request.Proof    -> phase (symproof >> proof approx) Response.Proof
-        | Request.Z3 rq    -> phase (symproof >> proof approx >> z3 reals rq) Response.Z3
-        | Request.HSF      -> phase (filterIndefinite >> hsf) Response.HSF
-        | Request.MuZ3 rq  -> phase (filterIndefinite >> muz3 reals rq) Response.MuZ3
-        | _                -> fail (Error.Other "Internal")
+        | Request.SymProof    -> phase symproof Response.SymProof
+        | Request.RawSymProof -> phase (symproof >> rawproof) Response.RawSymProof
+        | Request.Proof       -> phase (symproof >> proof approx) Response.Proof
+        | Request.RawProof    -> phase (symproof >> proof approx >> rawproof) Response.RawProof
+        | Request.Z3 rq       -> phase (symproof >> proof approx >> z3 reals rq) Response.Z3
+        | Request.HSF         -> phase (filterIndefinite >> hsf) Response.HSF
+        | Request.MuZ3 rq     -> phase (filterIndefinite >> muz3 reals rq) Response.MuZ3
+        | _                   -> fail (Error.Other "Internal")
 
     //Build a phase with
     //  op as what to do
