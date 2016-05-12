@@ -336,9 +336,9 @@ let proof approx v =
     bind
         (tryMapAxioms
              (tryMapTerm
-                  (aprC >> (apr neg) >> sub)
-                  ((apr neg) >> sub)
-                  ((apr pos) >> sub))
+                  (aprC >> (apr neg) >> sub >> lift Starling.Core.Expr.simp)
+                  ((apr neg) >> sub >> lift Starling.Core.Expr.simp)
+                  ((apr pos) >> sub >> lift Starling.Core.Expr.simp))
          >> mapMessages Error.ModelFilterError)
         v
 
