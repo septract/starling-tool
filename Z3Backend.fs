@@ -48,17 +48,11 @@ module Types =
     [<NoComparison>]
     type Response =
         /// Output of the term translation step only.
-        | Translate of DFModel<ZTerm>
+        | Translate of Model<ZTerm, unit>
         /// Output of the final Z3 terms only.
-        | Combine of DFModel<Z3.BoolExpr>
+        | Combine of Model<Z3.BoolExpr, unit>
         /// Output of satisfiability reports for the Z3 terms.
         | Sat of Map<string, Z3.Status>
-
-    /// A Z3 translation error.
-    type Error =
-        /// Instantiation of a view failed.
-        | InstantiationError of view: MVFunc
-                              * details: Starling.Core.Instantiate.Types.Error
 
 
 /// <summary>
@@ -75,17 +69,19 @@ module Pretty =
     let printResponse mview =
         function
         | Response.Translate m ->
-            printDFModelView (printTerm printZ3Exp printZ3Exp printZ3Exp) mview m
+            printModelView
+                (printTerm printZ3Exp printZ3Exp printZ3Exp)
+                (fun _ -> Seq.empty)
+                mview
+                m
         | Response.Combine m ->
-            printDFModelView printZ3Exp mview m
+            printModelView
+                printZ3Exp
+                (fun _ -> Seq.empty)
+                mview
+                m
         | Response.Sat s ->
             printMap Inline String printSat s
-
-    /// Pretty-prints Z3 translation errors.
-    let printError =
-        function
-        | InstantiationError (vfunc, err) ->
-            wrapped "view" (printMVFunc vfunc) (printError err)
 
 
 /// <summary>
@@ -93,54 +89,7 @@ module Pretty =
 /// </summary>
 module Translator =
     open Starling.Core.Z3.Expr
-
-    /// Produces the reification of an unguarded func.
-    /// This corresponds to D^ in the theory.
-    let interpretVFunc (ft : FuncTable<VBoolExpr>) func =
-        instantiate paramSubFun ft func
-        |> lift (withDefault BTrue)  // Undefined views go to True by metatheory
-        |> mapMessages (curry InstantiationError func)
-
-    let interpretGFunc (ft : FuncTable<VBoolExpr>) {Cond = c; Item = i} =
-        interpretVFunc ft i
-        |> lift (mkImplies c)
-
-    /// Interprets an entire view application over the given functable.
-    let interpretGView (ft : FuncTable<VBoolExpr>) =
-        Multiset.toFlatSeq
-        >> Seq.map (interpretGFunc ft)
-        >> collect
-        >> lift Seq.toList
-        >> lift mkAnd
-
-    /// Interprets all of the views in a term over the given functable.
-    let interpretTerm
-      (ft : FuncTable<VBoolExpr>)
-      : Term<MBoolExpr, MGView, MVFunc> -> Result<FTerm, Error> =
-        tryMapTerm ok (interpretGView ft) (interpretVFunc ft)
-
-    /// <summary>
-    ///   Interprets all views in a model, converting them to <c>FTerm</c>s.
-    /// </summary>
-    /// <param name="model">
-    ///   The model whose views are to be interpreted.
-    /// </param>
-    /// <returns>
-    ///   A Chessie result, which, when ok, contains a <c>Model</c> equivalent to
-    ///   <c>model</c> except that each view is replaced with the <c>BoolExpr</c>
-    ///   interpretation of it from <c>model</c>'s <c>ViewDefs</c>.
-    /// </returns>
-    /// <remarks>
-    ///   <para>
-    ///     This stage requires all views in <c>model.ViewDefs</c> to be definite,
-    ///     and will fail if any are not.
-    ///   </para>
-    /// </remarks>
-    let interpret
-      (model: DFModel<Term<MBoolExpr, MGView, MVFunc>>)
-      : Result<DFModel<FTerm>, Error> =
-        tryMapAxioms (interpretTerm model.ViewDefs) model
-
+    ///
     /// Combines the components of a reified term.
     let combineTerm reals (ctx: Z3.Context) {Cmd = c; WPre = w; Goal = g} =
         (* This is effectively asking Z3 to refute (c ^ w => g).
@@ -171,12 +120,10 @@ module Run =
     let run ctx = axioms >> Map.map (runTerm ctx)
 
 
-/// Shorthand for the translator stage of the Z3 pipeline.
-let translate = Translator.interpret
 /// Shorthand for the combination stage of the Z3 pipeline.
-let combine reals = Translator.combineTerms reals >> lift
+let combine reals = Translator.combineTerms reals
 /// Shorthand for the satisfiability stage of the Z3 pipeline.
-let sat = Run.run >> lift
+let sat = Run.run
 
 /// <summary>
 ///     The Starling Z3 backend driver.
@@ -191,14 +138,13 @@ let sat = Run.run >> lift
 /// <returns>
 ///     A function implementing the chosen Z3 backend process.
 /// </returns>
-let run reals req =
+let run reals req : Model<FTerm, unit> -> Response =
     use ctx = new Z3.Context()
     match req with
     | Request.Translate ->
-        translate
-        >> lift (mapAxioms (mapTerm (Expr.boolToZ3 reals unmarkVar ctx)
-                                    (Expr.boolToZ3 reals unmarkVar ctx)
-                                    (Expr.boolToZ3 reals unmarkVar ctx)))
-        >> lift Response.Translate
-    | Request.Combine -> translate >> combine reals ctx >> lift Response.Combine
-    | Request.Sat -> translate >> combine reals ctx >> sat ctx >> lift Response.Sat
+        (mapAxioms (mapTerm (Expr.boolToZ3 reals unmarkVar ctx)
+                            (Expr.boolToZ3 reals unmarkVar ctx)
+                            (Expr.boolToZ3 reals unmarkVar ctx)))
+        >> Response.Translate
+    | Request.Combine -> combine reals ctx >> Response.Combine
+    | Request.Sat -> combine reals ctx >> sat ctx >> Response.Sat

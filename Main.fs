@@ -202,8 +202,6 @@ type Error =
     | Frontend of Lang.Frontend.Error
     /// An error occurred in semantic translation.
     | Semantics of Semantics.Types.Error
-    /// An error occurred in the Z3 backend.
-    | Z3 of Backends.Z3.Types.Error
     /// An error occurred in the HSF backend.
     | HSF of Backends.Horn.Types.Error
     /// <summary>
@@ -221,7 +219,6 @@ let printError =
     function
     | Frontend e -> Lang.Frontend.printError e
     | Semantics e -> Semantics.Pretty.printSemanticsError e
-    | Z3 e -> Backends.Z3.Pretty.printError e
     | HSF e -> Backends.Horn.Pretty.printHornError e
     | ModelFilterError e ->
         headed "View definitions are incompatible with this backend"
@@ -299,7 +296,7 @@ let proof approx v =
 let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
 
 /// Shorthand for the Z3 stage.
-let z3 reals rq = bind (Backends.Z3.run reals rq >> mapMessages Error.Z3)
+let z3 reals rq = lift (Backends.Z3.run reals rq)
 
 /// Shorthand for the MuZ3 stage.
 let muz3 reals rq = lift (Backends.MuZ3.run reals rq)
@@ -400,8 +397,8 @@ let runStarling times optS reals approx verbose request =
         match request with
         | Request.SymProof -> phase symproof Response.SymProof
         | Request.Proof    -> phase (symproof >> proof approx) Response.Proof
+        | Request.Z3 rq    -> phase (symproof >> proof approx >> z3 reals rq) Response.Z3
         | Request.HSF      -> phase (filterIndefinite >> hsf) Response.HSF
-        | Request.Z3 rq    -> phase (maybeApprox >> filterDefinite >> z3 reals rq) Response.Z3
         | Request.MuZ3 rq  -> phase (filterIndefinite >> muz3 reals rq) Response.MuZ3
         | _                -> fail (Error.Other "Internal")
 
