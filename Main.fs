@@ -30,15 +30,10 @@ type Options =
                 "Dump results in raw format instead of pretty-printing.")>]
       raw : bool
       [<Option(
-            'A',
+            'B',
             HelpText =
-                "(EXPERIMENTAL) Under-approximate symbols in Z3 proofs.")>]
-      approx : bool
-      [<Option(
-            'R',
-            HelpText =
-                "(TEMPORARY) Use reals instead of ints in Z3 proofs.")>]
-      reals : bool
+                "Comma-delimited set of backend options (pass 'list' for details)")>]
+      backendOpts : string option
       [<Option(
             's',
             HelpText =
@@ -340,16 +335,51 @@ let filterIndefinite =
           >> mapMessages ModelFilterError)
 
 /// <summary>
+///     Type of the backend parameter structure.
+/// </summary>
+type BackendParams =
+    // TODO(CaptainHayashi): distribute into the target backends?
+    { /// <summary>
+      ///     Whether symbols are being approximated.
+      /// </summary>
+      Approx : bool
+      /// <summary>
+      ///     Whether reals are being substituted for integers in Z3 proofs.
+      /// </summary>
+      Reals : bool }
+
+/// <summary>
+///     Map of known backend parameters.
+/// </summary>
+let rec backendParams () =
+    Map.ofList
+        [ ("approx",
+           ("Replace all symbols in a proof with their under-approximation.\n\
+             Allows some symbol proofs to be run by the Z3 backend, but the \
+             resulting proof may be incomplete.",
+             fun ps -> { ps with Approx = true } ))
+          ("reals",
+           ("In Z3/muZ3 proofs, model integers as reals.\n\
+             This may speed up the proof at the cost of soundness.",
+             fun ps -> { ps with Reals = true } ))
+          ("list",
+           ("Lists all backend parameters.",
+            fun ps ->
+                eprintfn "Backend parameters:\n"
+                Map.iter
+                    (fun name (descr, _) -> eprintfn "%s: %s\n" name descr)
+                    (backendParams ())
+                eprintfn "--\n"
+                ps)) ]
+
+/// <summary>
 ///     Runs a Starling request.
 /// </summary>
 /// <param name="optS">
 ///     The string governing optimiser overrides.
 /// </param>
-/// <param name="reals">
-///     (TEMPORARY) Whether to use reals instead of ints in MuZ proofs.
-/// </param>
-/// <param name="approx">
-///     (EXPERIMENTAL) Whether to try to approximate Boolean symbols.
+/// <param name="backendS">
+///     The string governing backend options.
 /// </param>
 /// <param name="verbose">
 ///     If true, dump some internal information to stderr.
@@ -362,13 +392,28 @@ let filterIndefinite =
 ///     taking a file containing request input and returning a
 ///     <c>Result</c> over <c>Response</c> and <c>Error</c>.
 /// </returns>
-let runStarling times optS reals approx verbose request =
+let runStarling times optS backendS verbose request =
     let optR, optA =
         optS
         |> Option.map Utils.parseOptionString
         |> withDefault (Seq.empty)
         |> Seq.toList
         |> Optimiser.Utils.parseOptString
+
+    let bp = backendParams ()
+    let { Approx = approx; Reals = reals } =
+        backendS
+        |> Option.map Utils.parseOptionString
+        |> withDefault (Seq.empty)
+        |> Seq.fold
+               (fun opts str ->
+                    match (bp.TryFind str) with
+                    | Some (_, f) -> f opts
+                    | None ->
+                        eprintfn "unknown backend param %s ignored (try 'list')"
+                            str
+                        opts)
+               { Approx = false; Reals = false }
 
     let backend m =
         let phase op response =
@@ -435,14 +480,13 @@ let runStarling times optS reals approx verbose request =
 /// Runs Starling with the given options, and outputs the results.
 let mainWithOptions opts =
     let optS = opts.optimisers
+    let backendS = opts.backendOpts
     let verbose = opts.verbose
-    let reals = opts.reals
     let times = opts.times
-    let approx = opts.approx
 
     let starlingR =
         match (requestFromStage opts.stage) with
-        | Some otype -> runStarling times optS reals approx verbose otype opts.input
+        | Some otype -> runStarling times optS backendS verbose otype opts.input
         | None -> fail Error.BadStage
 
     let mview =
