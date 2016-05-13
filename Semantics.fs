@@ -129,9 +129,8 @@ let frame svars tvars expr =
     // Find all the bound post-variables in the expression...
     let evars =
         expr
-        |> varsInBool
-        |> Seq.map (valueOf >> varsInSym)
-        |> Seq.concat
+        |> mapOverSMVars Mapper.mapBoolCtx findSMVars
+        |> Seq.map valueOf
         |> Seq.choose (function After x -> Some x | _ -> None)
         |> Set.ofSeq
 

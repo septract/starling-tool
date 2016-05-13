@@ -290,49 +290,6 @@ let getFresh fg =
     result
 
 (*
- * Expression probing
- *)
-
-/// <summary>
-///     Returns a set of all variables used in an arithmetic expression,
-///     coupled with type.
-/// </summary>
-let rec varsInInt =
-    function
-    | AVar c -> Set.singleton (Typed.Int c)
-    | AInt _ -> Set.empty
-    | AAdd xs -> xs |> Seq.map varsInInt |> Set.unionMany
-    | ASub xs -> xs |> Seq.map varsInInt |> Set.unionMany
-    | AMul xs -> xs |> Seq.map varsInInt |> Set.unionMany
-    | ADiv (x, y) -> Set.union (varsInInt x) (varsInInt y)
-
-/// <summary>
-///     Returns a set of all variables used in a Boolean expression,
-///     coupled with type.
-/// </summary>
-and varsInBool =
-    function
-    | BVar c -> Set.singleton (Typed.Bool c)
-    | BTrue -> Set.empty
-    | BFalse -> Set.empty
-    | BAnd xs -> xs |> Seq.map varsInBool |> Set.unionMany
-    | BOr xs -> xs |> Seq.map varsInBool |> Set.unionMany
-    | BImplies (x, y) -> Set.union (varsInBool x) (varsInBool y)
-    | BEq (x, y) -> Set.union (varsIn x) (varsIn y)
-    | BGt (x, y) -> Set.union (varsInInt x) (varsInInt y)
-    | BGe (x, y) -> Set.union (varsInInt x) (varsInInt y)
-    | BLe (x, y) -> Set.union (varsInInt x) (varsInInt y)
-    | BLt (x, y) -> Set.union (varsInInt x) (varsInInt y)
-    | BNot x -> varsInBool x
-
-/// Returns a set of all variables used in an expression.
-and varsIn =
-    function
-    | Int a -> varsInInt a
-    | Bool b -> varsInBool b
-
-
-(*
  * Active patterns
  *)
 
@@ -354,17 +311,6 @@ let (|SimpleExpr|CompoundExpr|) =
     | Bool (SimpleBool) -> SimpleExpr
     | Int (SimpleInt) -> SimpleExpr
     | _ -> CompoundExpr
-
-/// Partial pattern that matches a Boolean expression in terms of exactly one /
-/// constant.
-let rec (|ConstantBoolFunction|_|) x =
-    x |> varsInBool |> Seq.map valueOf |> onlyOne
-
-/// Partial pattern that matches a Boolean expression in terms of exactly one /
-/// constant.
-let rec (|ConstantIntFunction|_|) x =
-    x |>varsInInt |> Seq.map valueOf |> onlyOne
-
 
 /// <summary>
 ///     Tests for <c>Expr</c>.

@@ -459,23 +459,28 @@ module Graph =
             (fun { Params = ps } ->
                  // ...for all of the parameters in said funcs...
                  Seq.forall
-                     (// ...for all of the variables in said parameters...
-                      varsIn
-                      >> Set.toSeq
-                      >> Seq.forall
-                             (// ...the variable is thread-local.
-                              valueOf
-                              >> function
-                                 | Sym _ -> false
-                                 | Reg (After x)
-                                 | Reg (Before x)
-                                 | Reg (Intermediate (_, x))
-                                 | Reg (Goal (_, x)) ->
-                                   x
-                                   |> tVars.TryFind
-                                   |> function
-                                      | Some _ -> true
-                                      | _ -> false))
+                     (fun p ->
+                          // ...there are no symbols, and...
+                          match (Mapper.tryMapCtx (tsfRemoveSym (fun _ -> ())) NoCtx p) with
+                          | _, Bad _ -> false
+                          | _, _ ->
+                              // ...for all of the variables in said parameters...
+                              p
+                              |> mapOverSMVars Mapper.mapCtx findSMVars
+                              |> Set.toSeq
+                              |> Seq.forall
+                                     (// ...the variable is thread-local.
+                                      valueOf
+                                      >> function
+                                         | (After x)
+                                         | (Before x)
+                                         | (Intermediate (_, x))
+                                         | (Goal (_, x)) ->
+                                           x
+                                           |> tVars.TryFind
+                                           |> function
+                                              | Some _ -> true
+                                              | _ -> false))
                      ps)
     /// <summary>
     ///     Partial active pattern matching <c>Sym</c>-less expressions.
@@ -729,15 +734,25 @@ module Term =
      * After elimination
      *)
 
+    /// Partial pattern that matches a Boolean expression in terms of exactly one /
+    /// constant.
+    let rec (|ConstantBoolFunction|_|) x =
+        x |> mapOverSMVars Mapper.mapBoolCtx findSMVars |> Seq.map valueOf |> onlyOne
+
+    /// Partial pattern that matches a Boolean expression in terms of exactly one /
+    /// constant.
+    let rec (|ConstantIntFunction|_|) x =
+        x |> mapOverSMVars Mapper.mapIntCtx findSMVars |> Seq.map valueOf |> onlyOne
+
     /// Finds all instances of the pattern `x!after = f(x!before)` in an
     /// integral expression that is either an equality or conjunction, and
     /// where x is arithmetic.
     let rec findArithAfters =
         function
-        | BAEq(AVar (Reg (After x)), (ConstantIntFunction (Reg (Before y)) as fx))
+        | BAEq(AVar (Reg (After x)), (ConstantIntFunction (Before y) as fx))
             when x = y
             -> [(x, fx)]
-        | BAEq(ConstantIntFunction (Reg (Before y)) as fx, AVar (Reg (After x)))
+        | BAEq(ConstantIntFunction (Before y) as fx, AVar (Reg (After x)))
             when x = y
             -> [(x, fx)]
         | BAnd xs -> concatMap findArithAfters xs
@@ -748,10 +763,10 @@ module Term =
     /// where x is Boolean.
     let rec findBoolAfters =
         function
-        | BBEq(BVar (Reg (After x)), (ConstantBoolFunction (Reg (Before y)) as fx))
+        | BBEq(BVar (Reg (After x)), (ConstantBoolFunction (Before y) as fx))
             when x = y
             -> [(x, fx)]
-        | BBEq(ConstantBoolFunction (Reg (Before y)) as fx, BVar (Reg (After x)))
+        | BBEq(ConstantBoolFunction (Before y) as fx, BVar (Reg (After x)))
             when x = y
             -> [(x, fx)]
         | BAnd xs -> concatMap findBoolAfters xs

@@ -475,8 +475,7 @@ module Var =
     ///     Substitution function for accumulating the <c>Var</c>s of an
     ///     expression.
     /// <summary>
-    let findVars
-      : SubFun<Var, Var> =
+    let findVars : SubFun<Var, Var> =
         Mapper.makeCtx
             (fun ctx x ->
                  match ctx with

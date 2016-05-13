@@ -233,27 +233,6 @@ let (|Always|_|) { Cond = c ; Item = i } =
 let (|Never|_|) { Cond = c ; Item = i } =
     if isFalse c then Some i else None
 
-(*
- * Variable querying.
- *)
-
-/// <summary>
-///     Extracts a sequence of all variables in a <c>GFunc</c>.
-/// </summary>
-/// <param name="_arg1">
-///     The <c>GFunc</c> to query.
-/// </param>
-/// <returns>
-///     A sequence of (<c>Const</c>, <c>Type</c>) pairs that represent all of
-///     the variables used in the <c>GFunc</c>.
-/// </returns>
-let varsInGFunc { Cond = guard ; Item = func } =
-    seq {
-        yield! (varsInBool guard)
-        for param in func.Params do
-            yield! (varsIn param)
-    }
-
 
 (*
  * Destructuring and mapping.
@@ -873,31 +852,6 @@ module Tests =
     ///     NUnit tests for guarded views.
     /// </summary>
     type NUnit () =
-        /// <summary>
-        ///     Test cases for extracting variables from <c>GFunc</c>s.
-        /// </summary>
-        static member VarsInGFuncCases =
-            [ TestCaseData(mgfunc BTrue "foo" [])
-                  .Returns(Set.empty : Set<CTyped<MarkedVar>>)
-                  .SetName("GFunc with no guard and no parameters has no variables")
-              TestCaseData(mgfunc (bBefore "bar") "foo" [])
-                  .Returns((Set.singleton (Typed.Bool (Before "bar"))) : Set<CTyped<MarkedVar>>)
-                  .SetName("Variables in a GFunc's guard are returned by varsInGFunc")
-              TestCaseData(mgfunc BTrue "foo"
-                               [ Typed.Bool (bAfter "x")
-                                 Typed.Int (iBefore "y") ] )
-                  .Returns((Set.ofArray
-                                [| (Typed.Bool (After "x"))
-                                   (Typed.Int (Before "y")) |]): Set<CTyped<MarkedVar>>)
-                  .SetName("Variables in a GFunc's parameters are returned by varsInGFunc") ]
-
-        /// <summary>
-        ///     Tests <c>varsInGFunc</c>.
-        /// </summary>
-        [<TestCaseSource("VarsInGFuncCases")>]
-        member this.testVarsInGFunc (gf : MGFunc) =
-            gf |> varsInGFunc |> Set.ofSeq
-
         /// <summary>
         ///     Case studies for <c>testPositionSubExprInGFunc</c>.
         /// </summary>

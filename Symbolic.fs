@@ -139,31 +139,6 @@ module Create =
 /// </summary>
 [<AutoOpen>]
 module Queries =
-    /// <summary>
-    ///     Extracts all of the regular variables in a symbolic variable.
-    /// </summary>
-    /// <param name="sym">
-    ///     The symbolic variable to destructure.
-    /// </param>
-    /// <typeparam name="var">
-    ///     The type of regular variables in the symbolic variable.
-    /// </typeparam>
-    /// <returns>
-    ///     A list of regular variables bound in a symbolic variable.
-    /// </returns>
-    let rec varsInSym
-      (sym : Sym<'var>)
-      : 'var list =
-        match sym with
-        | Reg x -> [x]
-        | Sym { Params = xs } ->
-            xs
-            |> List.map (varsIn
-                         >> Set.toList
-                         >> List.map (valueOf >> varsInSym)
-                         >> List.concat)
-            |> List.concat
-
     /// Lifts a VSubFun over MarkedVars to deal with symbolic vars.
     let rec liftVToSym
       (sf : VSubFun<'srcVar, Sym<'dstVar>>)
