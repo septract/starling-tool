@@ -56,6 +56,10 @@ module Types =
         ///     </para>
         /// </summary>
         | Positions of Position list
+        /// <summary>
+        ///     A context for searching for <c>Var</c>s.
+        /// </summary>
+        | Vars of CTyped<Var> list
         override this.ToString () = sprintf "%A" this
 
     /// <summary>
@@ -463,6 +467,22 @@ module Var =
       : SubFun<Var, MarkedVar> =
         After |> Mapper.cmake |> liftCToSub
 
+    /// <summary>
+    ///     Substitution function for accumulating the <c>Var</c>s of an
+    ///     expression.
+    /// <summary>
+    let findVars
+      : SubFun<Var, Var> =
+        Mapper.makeCtx
+            (fun ctx x ->
+                 match ctx with
+                 | Vars xs -> (Vars ((Typed.Int x)::xs), AVar x)
+                 | c -> (c, AVar x))
+            (fun ctx x ->
+                 match ctx with
+                 | Vars xs -> (Vars ((Typed.Bool x)::xs), BVar x)
+                 | c -> (c, BVar x))
+        |> onVars
 
 /// <summary>
 ///     Tests for <c>Sub</c>.
@@ -471,4 +491,74 @@ module Tests =
     open NUnit.Framework
     open Starling.Utils.Testing
 
-    // TODO(CaptainHayashi): put tests here.
+    /// <summary>
+    ///     NUnit tests for <c>Sub</c>.
+    /// </summary>
+    type NUnit () =
+        /// <summary>
+        ///     Test cases for finding variables in expressions.
+        /// </summary>
+        static member FindVarsCases =
+            [ (tcd
+                   [| Vars []
+                      Expr.Bool (BTrue : VBoolExpr) |] )
+                  .Returns(Set.empty)
+                  .SetName("Finding vars in a Boolean primitive returns empty")
+              (tcd
+                   [| Vars []
+                      Expr.Int (AInt 1L : VIntExpr) |] )
+                  .Returns(Set.empty)
+                  .SetName("Finding vars in an integer primitive returns empty")
+              (tcd
+                   [| Vars []
+                      Expr.Bool (BVar "foo") |] )
+                  .Returns(Set.singleton (CTyped.Bool "foo"))
+                  .SetName("Finding vars in a Boolean var returns that var")
+              (tcd
+                   [| Vars []
+                      Expr.Int (AVar "bar") |] )
+                  .Returns(Set.singleton (CTyped.Int "bar"))
+                  .SetName("Finding vars in an integer var returns that var")
+              (tcd
+                   [| Vars []
+                      Expr.Bool
+                          (BAnd
+                               [ BOr
+                                     [ BVar "foo"
+                                       BVar "baz" ]
+                                 BGt
+                                     ( AVar "foobar",
+                                       AVar "barbaz" ) ] ) |] )
+                  .Returns(
+                      Set.ofList
+                          [ CTyped.Bool "foo"
+                            CTyped.Bool "baz"
+                            CTyped.Int "foobar"
+                            CTyped.Int "barbaz" ])
+                  .SetName("Finding vars in a Boolean expression works correctly")
+              (tcd
+                   [| Vars []
+                      Expr.Int
+                         (AAdd
+                              [ ASub
+                                    [ AVar "foo"
+                                      AVar "bar" ]
+                                AMul
+                                    [ AVar "foobar"
+                                      AVar "barbaz" ]]) |])
+                  .Returns(
+                      Set.ofList
+                          [ CTyped.Int "foo"
+                            CTyped.Int "bar"
+                            CTyped.Int "foobar"
+                            CTyped.Int "barbaz" ])
+                  .SetName("Finding vars in an integer expression works correctly") ]
+
+        /// <summary>
+        ///     Tests finding variables in expressions.
+        /// </summary>
+        [<TestCaseSource("FindVarsCases")>]
+        member this.testFindVars ctx expr =
+            match (Mapper.mapCtx findVars ctx expr) with
+            | (Vars xs, _) -> Set.ofList xs
+            | _ -> Set.empty

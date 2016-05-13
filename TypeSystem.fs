@@ -37,6 +37,10 @@ type Typed<'int, 'bool> =
     /// </summary>
     | Int of 'int
     | Bool of 'bool
+    override this.ToString() =
+        match this with
+        | Int x -> sprintf "I(%A)" x
+        | Bool x -> sprintf "B(%A)" x
 
 /// <summary>
 ///     A typed item where every type leads to the same meta-type.
@@ -450,6 +454,29 @@ module Mapper =
       (bFun : 'srcBool -> 'dstBool)
       : Mapper<'context, 'srcInt, 'srcBool, 'dstInt, 'dstBool> =
         makeCtx (fun c i -> (c, iFun i)) (fun c b -> (c, bFun b))
+
+    /// <summary>
+    ///     Constructs a <c>Mapper</c> over <c>CTyped</c> that uses context.
+    /// </summary>
+    /// <param name="f">
+    ///     The function to apply on all values.
+    /// </param>
+    /// <typeparam name="context">
+    ///     The type of the context.  Context may be changed.
+    /// </typeparam>
+    /// <typeparam name="src">
+    ///     The type of values entering the map.
+    /// </typeparam>
+    /// <typeparam name="dst">
+    ///     The type of values leaving the map.
+    /// </typeparam>
+    /// <returns>
+    ///     A <c>CMapper</c> using <paramref name="f"/>, passing
+    ///     through the context unused.
+    /// </returns>
+    let cmakeCtx (f : 'context -> 'src -> ('context * 'dst))
+      : CMapper<'context, 'src, 'dst> =
+        makeCtx f f
 
     /// <summary>
     ///     Constructs a <c>Mapper</c> over <c>CTyped</c>.
