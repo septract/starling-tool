@@ -60,6 +60,10 @@ module Types =
         ///     A context for searching for <c>Var</c>s.
         /// </summary>
         | Vars of CTyped<Var> list
+        /// <summary>
+        ///     A context for searching for <c>MarkedVar</c>s.
+        /// </summary>
+        | MarkedVars of CTyped<MarkedVar> list
         override this.ToString () = sprintf "%A" this
 
     /// <summary>

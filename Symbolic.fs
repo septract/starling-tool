@@ -278,6 +278,51 @@ module Queries =
 
         sf
 
+    /// <summary>
+    ///     Substitution function for accumulating the <c>MarkedVar</c>s of
+    ///     a symbolic expression.
+    /// <summary>
+    let findSMVars : SubFun<Sym<MarkedVar>, Sym<MarkedVar>> =
+        Mapper.makeCtx
+            (fun ctx x ->
+                 match ctx with
+                 | MarkedVars xs -> (MarkedVars ((Typed.Int x)::xs), AVar (Reg x))
+                 | c -> (c, AVar (Reg x)))
+            (fun ctx x ->
+                 match ctx with
+                 | MarkedVars xs -> (MarkedVars ((Typed.Bool x)::xs), BVar (Reg x))
+                 | c -> (c, BVar (Reg x)))
+        |> liftVToSym
+        |> onVars
+
+    /// <summary>
+    ///     Wrapper for running a <see cref="findSMVars"/>-style function
+    ///     on a sub-able construct.
+    /// <summary>
+    /// <param name="r">
+    ///     The mapping function to wrap.
+    /// </param>
+    /// <param name="sf">
+    ///     The substitution function to run.
+    /// </param>
+    /// <param name="subject">
+    ///     The item in which to find vars.
+    /// </param>
+    /// <typeparam name="subject">
+    ///     The type of the item in which to find vars.
+    /// </typeparam>
+    /// <returns>
+    ///     The list of variables found in the expression.
+    /// </returns>
+    let mapOverSMVars
+      (r : SubFun<Sym<MarkedVar>, Sym<MarkedVar>> -> SubCtx -> 'subject -> (SubCtx * 'subject))
+      (sf : SubFun<Sym<MarkedVar>, Sym<MarkedVar>>)
+      (subject : 'subject)
+      : Set<CTyped<MarkedVar>> =
+        match (r sf (MarkedVars []) subject) with
+        | (MarkedVars xs, _) -> Set.ofList xs
+        | _ -> failwith "mapOverSMVars: did not get Vars context back"
+
 
 /// <summary>
 ///     Pretty printers for symbolics.
@@ -448,3 +493,87 @@ module Tests =
         [<TestCaseSource("BoolApprox")>]
         member this.testBoolApprox bl pos =
             bl |> Mapper.mapBoolCtx approx pos
+
+        /// <summary>
+        ///     Test cases for finding variables in expressions.
+        /// </summary>
+        static member FindSMVarsCases =
+            [ (tcd
+                   [| Expr.Bool (BTrue : SMBoolExpr) |] )
+                  .Returns(Set.empty)
+                  .SetName("Finding vars in a Boolean primitive returns empty")
+              (tcd
+                   [| Expr.Int (AInt 1L : SMIntExpr) |] )
+                  .Returns(Set.empty)
+                  .SetName("Finding vars in an integer primitive returns empty")
+              (tcd
+                   [| Expr.Bool (sbBefore "foo") |] )
+                  .Returns(Set.singleton (CTyped.Bool (Before "foo")))
+                  .SetName("Finding vars in a Boolean var returns that var")
+              (tcd
+                   [| Expr.Int (siAfter "bar") |] )
+                  .Returns(Set.singleton (CTyped.Int (After "bar")))
+                  .SetName("Finding vars in an integer var returns that var")
+              (tcd
+                   [| Expr.Bool
+                          (BAnd
+                               [ BOr
+                                     [ sbBefore "foo"
+                                       sbAfter "baz" ]
+                                 BGt
+                                     ( siBefore "foobar",
+                                       siAfter "barbaz" ) ] ) |] )
+                  .Returns(
+                      Set.ofList
+                          [ CTyped.Bool (Before "foo")
+                            CTyped.Bool (After "baz")
+                            CTyped.Int (Before "foobar")
+                            CTyped.Int (After "barbaz") ])
+                  .SetName("Finding vars in a Boolean expression works correctly")
+              (tcd
+                   [| Expr.Int
+                         (AAdd
+                              [ ASub
+                                    [ siBefore "foo"
+                                      siAfter "bar" ]
+                                AMul
+                                    [ siBefore "foobar"
+                                      siAfter "barbaz" ]]) |])
+                  .Returns(
+                      Set.ofList
+                          [ CTyped.Int (Before "foo")
+                            CTyped.Int (After "bar")
+                            CTyped.Int (Before "foobar")
+                            CTyped.Int (After "barbaz") ])
+                  .SetName("Finding vars in an integer expression works correctly")
+              (tcd
+                   [| Expr.Bool
+                         (BVar
+                             (Sym
+                                  (func "foo"
+                                       [ Expr.Int (siBefore "bar")
+                                         Expr.Bool (sbAfter "baz") ] ))) |])
+                  .Returns(
+                      Set.ofList
+                          [ CTyped.Int (Before "bar")
+                            CTyped.Bool (After "baz") ])
+                  .SetName("Finding vars in an Boolean symbol works correctly")
+              (tcd
+                   [| Expr.Int
+                         (AVar
+                             (Sym
+                                  (func "foo"
+                                       [ Expr.Int (siBefore "bar")
+                                         Expr.Bool (sbAfter "baz") ] ))) |])
+                  .Returns(
+                      Set.ofList
+                          [ CTyped.Int (Before "bar")
+                            CTyped.Bool (After "baz") ])
+                  .SetName("Finding vars in an integer symbol works correctly") ]
+
+        /// <summary>
+        ///     Tests finding variables in symbolic expressions.
+        /// </summary>
+        [<TestCaseSource("FindSMVarsCases")>]
+        member this.testFindSMVars expr =
+            mapOverSMVars Mapper.mapCtx findSMVars expr
