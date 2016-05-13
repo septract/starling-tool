@@ -514,12 +514,12 @@ module Translator =
 
         let vars =
             seq {
-                yield! (varsInBool bodyExpr')
+                yield! (mapOverVars Mapper.mapBoolCtx findVars bodyExpr')
 
                 for gfunc in Multiset.toFlatList bodyView' do
-                    yield! (varsInGFunc gfunc)
+                    yield! (mapOverVars Sub.subExprInGFunc findVars gfunc)
 
-                yield! (varsInVFunc head')
+                yield! (mapOverVars Sub.subExprInVFunc findVars head')
             }
             // Make sure we don't quantify over a variable twice.
             |> Set.ofSeq
@@ -692,9 +692,9 @@ module Run =
                  // TODO(CaptainHayashi): de-duplicate this with mkRule.
                  let vars =
                      seq {
-                         yield! (varsInBool def)
+                         yield! (mapOverVars Mapper.mapBoolCtx findVars def)
                          for param in view.Params do
-                             yield! (varsIn param)
+                             yield! (mapOverVars Mapper.mapCtx findVars param)
                      }
                      |> Set.ofSeq
                      |> Set.map

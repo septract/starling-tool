@@ -484,6 +484,34 @@ module Var =
                  | c -> (c, BVar x))
         |> onVars
 
+    /// <summary>
+    ///     Wrapper for running a <see cref="findVars"/>-style function
+    ///     on a sub-able construct.
+    /// <summary>
+    /// <param name="r">
+    ///     The mapping function to wrap.
+    /// </param>
+    /// <param name="sf">
+    ///     The substitution function to run.
+    /// </param>
+    /// <param name="subject">
+    ///     The item in which to find vars.
+    /// </param>
+    /// <typeparam name="subject">
+    ///     The type of the item in which to find vars.
+    /// </typeparam>
+    /// <returns>
+    ///     The list of variables found in the expression.
+    /// </returns>
+    let mapOverVars
+      (r : SubFun<Var, Var> -> SubCtx -> 'subject -> (SubCtx * 'subject))
+      (sf : SubFun<Var, Var>)
+      (subject : 'subject)
+      : Set<CTyped<Var>> =
+        match (r sf (Vars []) subject) with
+        | (Vars xs, _) -> Set.ofList xs
+        | _ -> failwith "mapOverVars: did not get Vars context back"
+
 /// <summary>
 ///     Tests for <c>Sub</c>.
 /// </summary>
@@ -500,28 +528,23 @@ module Tests =
         /// </summary>
         static member FindVarsCases =
             [ (tcd
-                   [| Vars []
-                      Expr.Bool (BTrue : VBoolExpr) |] )
+                   [| Expr.Bool (BTrue : VBoolExpr) |] )
                   .Returns(Set.empty)
                   .SetName("Finding vars in a Boolean primitive returns empty")
               (tcd
-                   [| Vars []
-                      Expr.Int (AInt 1L : VIntExpr) |] )
+                   [| Expr.Int (AInt 1L : VIntExpr) |] )
                   .Returns(Set.empty)
                   .SetName("Finding vars in an integer primitive returns empty")
               (tcd
-                   [| Vars []
-                      Expr.Bool (BVar "foo") |] )
+                   [| Expr.Bool (BVar "foo") |] )
                   .Returns(Set.singleton (CTyped.Bool "foo"))
                   .SetName("Finding vars in a Boolean var returns that var")
               (tcd
-                   [| Vars []
-                      Expr.Int (AVar "bar") |] )
+                   [| Expr.Int (AVar "bar") |] )
                   .Returns(Set.singleton (CTyped.Int "bar"))
                   .SetName("Finding vars in an integer var returns that var")
               (tcd
-                   [| Vars []
-                      Expr.Bool
+                   [| Expr.Bool
                           (BAnd
                                [ BOr
                                      [ BVar "foo"
@@ -537,8 +560,7 @@ module Tests =
                             CTyped.Int "barbaz" ])
                   .SetName("Finding vars in a Boolean expression works correctly")
               (tcd
-                   [| Vars []
-                      Expr.Int
+                   [| Expr.Int
                          (AAdd
                               [ ASub
                                     [ AVar "foo"
@@ -558,7 +580,5 @@ module Tests =
         ///     Tests finding variables in expressions.
         /// </summary>
         [<TestCaseSource("FindVarsCases")>]
-        member this.testFindVars ctx expr =
-            match (Mapper.mapCtx findVars ctx expr) with
-            | (Vars xs, _) -> Set.ofList xs
-            | _ -> Set.empty
+        member this.testFindVars expr =
+            mapOverVars Mapper.mapCtx findVars expr
