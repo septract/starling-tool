@@ -36,14 +36,14 @@ method unlock() {
 view holdTick(int t);
 view holdLock();
 
-// Invariant
-constraint emp                         -> ?;
-
-// Predicate definitions
-constraint holdTick(t)                 -> ?;
-constraint holdLock()                  -> ?;
-
-// Interactions
-constraint holdLock()   * holdTick(t)  -> ?;
-constraint holdTick(ta) * holdTick(tb) -> ?;
+// // Invariant
+// constraint emp                         -> ?;
+// 
+// // Predicate definitions
+// constraint holdTick(t)                 -> ?;
+// constraint holdLock()                  -> ?;
+// 
+// // Interactions
+// constraint holdLock()   * holdTick(t)  -> ?;
+// constraint holdTick(ta) * holdTick(tb) -> ?;
 constraint holdLock()   * holdLock()   -> false;
