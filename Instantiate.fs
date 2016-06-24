@@ -421,7 +421,7 @@ let instantiate
     |> lift
            (Option.map
                 (fun (dfunc, defn) ->
-                     Mapper.mapBool (onVars (psf vfunc dfunc)) defn))
+                     Mapper.mapBoolCtx (onVars (psf vfunc dfunc)) NoCtx defn |> snd))
 
 /// <summary>
 ///     Functions for view definition filtering.
@@ -439,7 +439,8 @@ module ViewDefFilter =
         |> List.map
                (fun (f, d) ->
                     d
-                    |> Mapper.mapBool (tsfRemoveSym UnwantedSym)
+                    |> Mapper.mapBoolCtx (tsfRemoveSym UnwantedSym) NoCtx
+                    |> snd
                     |> lift (mkPair f))
         |> collect
 
@@ -502,25 +503,99 @@ module ViewDefFilter =
       (model : UFModel<Term<SMBoolExpr, SMGView, SMVFunc>> )
       : Result<IFModel<Term<MBoolExpr, MGView, MVFunc>>, Error> =
         model
-        |> tryMapAxioms (trySubExprInDTerm (tsfRemoveSym UnwantedSym))
+        |> tryMapAxioms (trySubExprInDTerm (tsfRemoveSym UnwantedSym) NoCtx >> snd)
         |> bind (tryMapViewDefs filterIndefiniteViewDefs)
 
+
+/// <summary>
+///     The instantiation phase.
+///
+///     <para>
+///         This stage, which is used before predicate-based solvers
+///         such as Z3, instantiates all views in the model, substituting
+///         definitions for definite views and symbols for indefinite views.
+///     </para>
+/// </summary>
+module Phase =
+    /// Produces the reification of an unguarded func.
+    /// This corresponds to D^ in the theory.
+    let interpretVFunc (ft : FuncTable<SVBoolExpr>) func =
+        instantiate smvParamSubFun ft func
+        |> lift (withDefault BTrue)  // Undefined views go to True by metatheory
+
+    let interpretGFunc (ft : FuncTable<SVBoolExpr>) {Cond = c; Item = i} =
+        interpretVFunc ft i
+        |> lift (mkImplies c)
+
+    /// Interprets an entire view application over the given functable.
+    let interpretGView (ft : FuncTable<SVBoolExpr>) =
+        Multiset.toFlatSeq
+        >> Seq.map (interpretGFunc ft)
+        >> collect
+        >> lift Seq.toList
+        >> lift mkAnd
+
+    /// Interprets all of the views in a term over the given functable.
+    let interpretTerm
+      (ft : FuncTable<SVBoolExpr>)
+      : Term<SMBoolExpr, SMGView, SMVFunc> -> Result<SFTerm, Error> =
+        tryMapTerm ok (interpretGView ft) (interpretVFunc ft)
+
+
     /// <summary>
-    ///     Tries to convert a <c>ViewDef</C> based model into a
-    ///     definite one.  The conversion fails if the model has any
-    ///     indefinite constraints.
+    ///     Converts all indefinite viewdefs to symbols.
     /// </summary>
-    /// <param name="model">
-    ///     A model over <c>ViewDef</c>s.
+    /// <param name="vs">
+    ///     The view definitions to convert.
     /// </param>
     /// <returns>
-    ///     A <c>Result</c> over <c>Error</c> containing the
-    ///     new model if the original contained only definite view
-    ///     definitions.  The new model is a <c>DFModel</c>.
+    ///     A <c>FuncTable</c> mapping each view func to a
+    ///     <c>SVBoolExpr</c> giving its definition.  Indefinite
+    ///     viewdefs are represented by symbols.
     /// </returns>
-    let filterModelDefinite
-      (model : UFModel<Term<SMBoolExpr, SMGView, SMVFunc>> )
-      : Result<DFModel<Term<MBoolExpr, MGView, MVFunc>>, Error> =
-        model
-        |> tryMapAxioms (trySubExprInDTerm (tsfRemoveSym UnwantedSym))
-        |> bind (tryMapViewDefs filterDefiniteViewDefs)
+    let symboliseIndefinites vs =
+        // First, get the functable of all definite views.
+        let def, indef = funcTableFromViewDefs vs
+
+        // Then, convert the indefs to symbols.
+        let symconv =
+            Mapper.make (Reg >> AVar) (Reg >> BVar)
+
+        let idsym : FuncTable<SVBoolExpr> =
+            List.map
+                (fun { Name = n ; Params = ps } ->
+                    (func n ps,
+                     BVar
+                         (Sym
+                              (func
+                                   (sprintf "!UNDEF:%A" n)
+                                   (List.map
+                                       (Mapper.mapCtx symconv NoCtx >> snd)
+                                       ps)))))
+                indef
+
+        // TODO(CaptainHayashi): use functables properly.
+        def @ idsym
+
+
+    /// <summary>
+    ///     Run the instantiation phase.
+    ///
+    ///     <para>
+    ///         This consumes the view definitions.
+    ///     </para>
+    /// </summary>
+    /// <param name="model">
+    ///     The model to instantiate.
+    /// </param>
+    /// <returns>
+    ///     The model with all views instantiated.
+    /// </returns>
+    let run
+      (model : UFModel<STerm<SMGView, SMVFunc>>)
+      : Result<Model<SFTerm, unit>, Error> =
+      let vs = symboliseIndefinites model.ViewDefs
+
+      model
+      |> tryMapAxioms (interpretTerm vs)
+      |> lift (withViewDefs ())

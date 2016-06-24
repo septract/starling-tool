@@ -6,7 +6,6 @@ module Starling.Tests.Lang.Grapher
 open Chessie.ErrorHandling
 open NUnit.Framework
 
-open Starling.Collections
 open Starling.Utils
 open Starling.Core.Graph
 open Starling.Core.Graph.Tests.Studies

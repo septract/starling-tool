@@ -115,8 +115,8 @@ let composeBools x y =
         |> onVars
 
     mkAnd
-        [ Mapper.mapBool xRewrite x
-          Mapper.mapBool yRewrite y ]
+        [ Mapper.mapBoolCtx xRewrite NoCtx x |> snd
+          Mapper.mapBoolCtx yRewrite NoCtx y |> snd ]
 
 
 /// Generates a framing relation for a given variable.
@@ -129,9 +129,8 @@ let frame svars tvars expr =
     // Find all the bound post-variables in the expression...
     let evars =
         expr
-        |> varsInBool
-        |> Seq.map (valueOf >> varsInSym)
-        |> Seq.concat
+        |> mapOverSMVars Mapper.mapBoolCtx findSMVars
+        |> Seq.map valueOf
         |> Seq.choose (function After x -> Some x | _ -> None)
         |> Set.ofSeq
 

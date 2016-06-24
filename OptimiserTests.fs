@@ -94,9 +94,11 @@ type OptimiserTests() =
     /// Test after-elimination of Booleans.
     [<TestCaseSource("AfterBools")>]
     member x.``After-elimination of Booleans should operate correctly`` b =
-        Mapper.mapBool
-            (afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs)
-            b
+        b
+        |> Mapper.mapBoolCtx
+              (afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs)
+              NoCtx
+        |> snd
 
     /// Test cases for discovering Boolean after-before pairs.
     static member BoolAfterDiscoveries =
@@ -140,7 +142,7 @@ type OptimiserTests() =
     member x.``Afters in func params should be substituted correctly`` f =
         let sub = afterSubs OptimiserTests.AfterArithSubs
                             OptimiserTests.AfterBoolSubs
-        subExprInVFunc sub f
+        f |> subExprInVFunc sub NoCtx |> snd
 
     /// Test cases for simplification.
     static member ObviousBools =

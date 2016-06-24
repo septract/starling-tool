@@ -6,6 +6,7 @@ module Starling.Core.Pretty
 open Starling.Collections
 open Starling.Utils
 
+
 /// Type of pretty-printer commands.
 [<NoComparison>]
 type Command =

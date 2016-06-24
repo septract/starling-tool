@@ -185,14 +185,20 @@ module Types =
           /// The weakest precondition of the Term.
           WPre : 'wpre
           /// The intended goal of the Term, ie the frame to preserve.
-          Goal : 'goal
-        }
+          Goal : 'goal }
+        override this.ToString() = sprintf "%A" this
 
     /// A term over semantic-relation commands.
     type STerm<'wpre, 'goal> = Term<SMBoolExpr, 'wpre, 'goal>
 
+    /// A term using the same representation for all parts.
+    type CTerm<'repr> = Term<'repr, 'repr, 'repr>
+
+    /// A term using only internal symbolic boolean expressions.
+    type SFTerm = CTerm<SMBoolExpr>
+
     /// A term using only internal boolean expressions.
-    type FTerm = Term<MBoolExpr, MBoolExpr, MBoolExpr>
+    type FTerm = CTerm<MBoolExpr>
 
     (*
      * Models
@@ -588,24 +594,6 @@ let isAdvisory =
     | Mandatory _ -> false
 
 
-(*
- * Variable querying.
- *)
-
-/// <summary>
-///     Extracts a sequence of all variables in a <c>VFunc</c>.
-/// </summary>
-/// <param name="_arg1">
-///     The <c>VFunc</c> to query.
-/// </param>
-/// <returns>
-///     A sequence of (<c>Const</c>, <c>Type</c>) pairs that represent all of
-///     the variables used in the <c>VFunc</c>.
-/// </returns>
-let varsInVFunc { Params = ps } =
-    ps |> Seq.map varsIn |> Seq.concat
-
-
 /// <summary>
 ///     Functions for substituting over model elements.
 /// </summary>
@@ -617,6 +605,9 @@ module Sub =
     /// </summary>
     /// <param name="sub">
     ///   The <c>SubFun</c> to map over all expressions in the <c>VFunc</c>.
+    /// </param>
+    /// <param name="context">
+    ///     The context to pass to the <c>SubFun</c>.
     /// </param>
     /// <param name="_arg1">
     ///   The <c>VFunc</c> over which whose expressions are to be mapped.
@@ -637,15 +628,24 @@ module Sub =
     /// </remarks>
     let subExprInVFunc
       (sub : SubFun<'srcVar, 'dstVar>)
+      (context : SubCtx)
       ( { Name = n ; Params = ps } : VFunc<'srcVar> )
-      : VFunc<'dstVar> =
-        { Name = n ; Params = List.map (Mapper.map sub) ps }
+      : (SubCtx * VFunc<'dstVar> ) =
+        let context', ps' =
+            mapAccumL
+                (Position.changePos id (Mapper.mapCtx sub))
+                context
+                ps
+        (context', { Name = n; Params = ps' } )
 
     /// <summary>
     ///     Maps a <c>TrySubFun</c> over all expressions in a <c>VFunc</c>.
     /// </summary>
     /// <param name="sub">
     ///     The <c>TrySubFun</c> to map over all expressions in the <c>VFunc</c>.
+    /// </param>
+    /// <param name="context">
+    ///     The context to pass to the <c>SubFun</c>.
     /// </param>
     /// <param name="_arg1">
     ///     The <c>VFunc</c> over which whose expressions are to be mapped.
@@ -669,9 +669,15 @@ module Sub =
     /// </remarks>
     let trySubExprInVFunc
       (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
+      (context : SubCtx)
       ( { Name = n ; Params = ps } : VFunc<'srcVar> )
-      : Result<VFunc<'dstVar>, 'err> =
-        ps
-        |> List.map (Mapper.tryMap sub)
-        |> collect
-        |> lift (fun ps' -> { Name = n ; Params = ps' } )
+      : (SubCtx * Result<VFunc<'dstVar>, 'err>) =
+        let context', ps' =
+            mapAccumL
+                (Position.changePos id (Mapper.tryMapCtx sub))
+                context
+                ps
+        (context',
+         ps'
+         |> collect
+         |> lift (fun ps' -> { Name = n ; Params = ps' } ))

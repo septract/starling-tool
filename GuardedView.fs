@@ -16,12 +16,12 @@ module Starling.Core.GuardedView
 
 open Chessie.ErrorHandling
 open Starling.Collections
+open Starling.Utils
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
-open Starling.Core.ExprEquiv
 open Starling.Core.Var
-open Starling.Core.Symbolic
 open Starling.Core.Sub
+open Starling.Core.Symbolic
 open Starling.Core.Model
 open Starling.Core.Model.Sub
 
@@ -232,27 +232,6 @@ let (|Always|_|) { Cond = c ; Item = i } =
 /// </summary>
 let (|Never|_|) { Cond = c ; Item = i } =
     if isFalse c then Some i else None
-
-(*
- * Variable querying.
- *)
-
-/// <summary>
-///     Extracts a sequence of all variables in a <c>GFunc</c>.
-/// </summary>
-/// <param name="_arg1">
-///     The <c>GFunc</c> to query.
-/// </param>
-/// <returns>
-///     A sequence of (<c>Const</c>, <c>Type</c>) pairs that represent all of
-///     the variables used in the <c>GFunc</c>.
-/// </returns>
-let varsInGFunc { Cond = guard ; Item = func } =
-    seq {
-        yield! (varsInBool guard)
-        for param in func.Params do
-            yield! (varsIn param)
-    }
 
 
 (*
@@ -545,6 +524,12 @@ module Sub =
     /// <summary>
     ///   Maps a <c>SubFun</c> over all expressions in a <c>GFunc</c>.
     /// </summary>
+    /// <param name="sub">
+    ///     The <c>SubFun</c> to map.
+    /// </param>
+    /// <param name="context">
+    ///     The context to pass to the <c>SubFun</c>.
+    /// </param>
     /// <param name="_arg1">
     ///   The <c>GFunc</c> over which whose expressions are to be mapped.
     /// </param>
@@ -565,16 +550,32 @@ module Sub =
     /// </remarks>
     let subExprInGFunc
       (sub : SubFun<'srcVar, 'dstVar>)
+      (context : SubCtx)
       ( { Cond = cond ; Item = item } : GFunc<'srcVar> )
-      : GFunc<'dstVar> =
-        { Cond = Mapper.mapBool sub cond
-          Item = subExprInVFunc sub item }
+      : (SubCtx * GFunc<'dstVar>) =
+        let contextC, cond' =
+            Position.changePos
+                Position.negate
+                (Mapper.mapBoolCtx sub)
+                context
+                cond
+        let context', item' =
+            Position.changePos
+                id
+                (subExprInVFunc sub)
+                context
+                item
+
+        (context', { Cond = cond'; Item = item' } )
 
     /// <summary>
     ///   Maps a <c>SubFun</c> over all expressions in a <c>GView</c>.
     /// </summary>
     /// <param name="sub">
     ///   The <c>SubFun</c> to map over all expressions in the <c>GView</c>.
+    /// </param>
+    /// <param name="context">
+    ///     The context to pass to the <c>SubFun</c>.
     /// </param>
     /// <param name="_arg1">
     ///   The <c>GView</c> over which whose expressions are to be mapped.
@@ -596,9 +597,16 @@ module Sub =
     /// </remarks>
     let subExprInGView
       (sub : SubFun<'srcVar, 'dstVar>)
-      : GView<'srcVar>
-      -> GView<'dstVar> =
-        Multiset.map (subExprInGFunc sub)
+      (context : SubCtx)
+      : GView<'srcVar> -> (SubCtx * GView<'dstVar>) =
+        Multiset.mapAccum
+            (fun ctx f _ ->
+                 Position.changePos
+                     id
+                     (subExprInGFunc sub)
+                     ctx
+                     f)
+            context
 
     /// <summary>
     ///     Maps a <c>SubFun</c> over all expressions in an <c>Term</c>
@@ -607,8 +615,11 @@ module Sub =
     /// <param name="sub">
     ///     The <c>SubFun</c> to map over all expressions in the <c>STerm</c>.
     /// </param>
+    /// <param name="context">
+    ///     The context to pass to the <c>SubFun</c>.
+    /// </param>
     /// <param name="term">
-    ///     The <c>Term</c> over which whose expressions are to be mapped.
+    ///     The <c>Term</c> over which expressions are to be mapped.
     /// </param>
     /// <typeparam name="srcVar">
     ///     The type of variables entering the map.
@@ -628,19 +639,37 @@ module Sub =
     /// </remarks>
     let subExprInDTerm
       (sub : SubFun<'srcVar, 'dstVar>)
+      (context : SubCtx)
       (term : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>)
-      : Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>> =
-        mapTerm
-            (Mapper.mapBool sub)
-            (subExprInGView sub)
-            (subExprInVFunc sub)
-            term
+      : (SubCtx * Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>>) =
+        let contextT, cmd' =
+            Position.changePos
+                Position.negate
+                (Mapper.mapBoolCtx sub)
+                context
+                term.Cmd
+        let contextW, wpre' =
+            Position.changePos
+                Position.negate
+                (subExprInGView sub)
+                contextT
+                term.WPre
+        let context', goal' =
+            Position.changePos
+                id
+                (subExprInVFunc sub)
+                contextW
+                term.Goal
+        (context', { Cmd = cmd'; WPre = wpre'; Goal = goal' } )
 
     /// <summary>
     ///     Maps a <c>TrySubFun</c> over all expressions in a <c>GFunc</c>.
     /// </summary>
     /// <param name="_arg1">
     ///     The <c>GFunc</c> over which whose expressions are to be mapped.
+    /// </param>
+    /// <param name="context">
+    ///     The context to pass to the <c>SubFun</c>.
     /// </param>
     /// <typeparam name="srcVar">
     ///     The type of variables entering the map.
@@ -662,12 +691,27 @@ module Sub =
     /// </remarks>
     let trySubExprInGFunc
       (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
+      (context : SubCtx)
       ( { Cond = cond ; Item = item } : GFunc<'srcVar> )
-      : Result<GFunc<'dstVar>, 'err> =
-        lift2
-            (fun cond' item' -> { Cond = cond' ; Item = item' } )
-            (Mapper.mapBool sub cond)
-            (trySubExprInVFunc sub item)
+      : (SubCtx * Result<GFunc<'dstVar>, 'err> ) =
+        let contextC, cond' =
+            Position.changePos
+                Position.negate
+                (Mapper.mapBoolCtx sub)
+                context
+                cond
+        let context', item' =
+            Position.changePos
+                id
+                (trySubExprInVFunc sub)
+                context
+                item
+
+        (context',
+         lift2
+             (fun cond' item' -> { Cond = cond' ; Item = item' } )
+             cond'
+             item')
 
     /// <summary>
     ///     Maps a <c>TrySubFun</c> over all expressions in a <c>GView</c>.
@@ -675,6 +719,9 @@ module Sub =
     /// <param name="sub">
     ///     The <c>TrySubFun</c> to map over all expressions in the
     ///     <c>GView</c>.
+    /// </param>
+    /// <param name="context">
+    ///     The context to pass to the <c>SubFun</c>.
     /// </param>
     /// <param name="_arg1">
     ///     The <c>GView</c> over which whose expressions are to be mapped.
@@ -699,11 +746,16 @@ module Sub =
     /// </remarks>
     let trySubExprInGView
       (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
-      : GView<'srcVar> -> Result<GView<'dstVar>, 'err> =
-        Multiset.toFlatList
-        >> List.map (trySubExprInGFunc sub)
-        >> collect
-        >> lift Multiset.ofFlatList
+      (context : SubCtx)
+      : GView<'srcVar> -> (SubCtx * Result<GView<'dstVar>, 'err> ) =
+        Multiset.mapAccum
+            (fun ctx f _ ->
+                 Position.changePos
+                     id
+                     (trySubExprInGFunc sub)
+                     ctx f)
+            context
+        >> pairMap id Multiset.collect
 
     /// <summary>
     ///     Maps a <c>TrySubFun</c> over all expressions in a <c>Term</c>
@@ -713,8 +765,11 @@ module Sub =
     ///     The <c>TrySubFun</c> to map over all expressions in the
     ///     <c>Term</c>.
     /// </param>
-    /// <param name="_arg1">
-    ///     The <c>Term</c> over which whose expressions are to be mapped.
+    /// <param name="context">
+    ///     The context to pass to the <c>SubFun</c>.
+    /// </param>
+    /// <param name="term">
+    ///     The <c>Term</c> over which expressions are to be mapped.
     /// </param>
     /// <typeparam name="srcVar">
     ///     The type of variables entering the map.
@@ -737,12 +792,33 @@ module Sub =
     /// </remarks>
     let trySubExprInDTerm
       (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
-      : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>
-      -> Result<Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>>, 'err> =
-        tryMapTerm
-            (Mapper.mapBool sub)
-            (trySubExprInGView sub)
-            (trySubExprInVFunc sub)
+      (context : SubCtx)
+      (term : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>)
+      : (SubCtx * Result<Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>>, 'err> ) =
+        let contextT, cmd' =
+            Position.changePos
+                Position.negate
+                (Mapper.mapBoolCtx sub)
+                context
+                term.Cmd
+        let contextW, wpre' =
+            Position.changePos
+                Position.negate
+                (trySubExprInGView sub)
+                contextT
+                term.WPre
+        let context', goal' =
+            Position.changePos
+                id
+                (trySubExprInVFunc sub)
+                contextW
+                term.Goal
+        (context',
+         lift3
+             (fun c w g -> { Cmd = c; WPre = w; Goal = g } )
+             cmd'
+             wpre'
+             goal')
 
 
 /// <summary>
@@ -751,34 +827,258 @@ module Sub =
 module Tests =
     open NUnit.Framework
 
+    open Starling.Utils.Testing
     open Starling.Core.TypeSystem
+
+    /// <summary>
+    ///     Test substitution function for position-based substitution.
+    /// </summary>
+    let positionTestSub =
+        (onVars
+             (Mapper.makeCtx
+                  (fun ctx _ ->
+                       (ctx,
+                        match ctx with
+                        | Positions (Positive::xs) -> AInt 1L
+                        | Positions (Negative::xs) -> AInt 0L
+                        | _ -> AInt -1L ))
+                  (fun ctx _ ->
+                       (ctx,
+                        match ctx with
+                        | Positions (x::xs) -> Position.overapprox x
+                        | _ -> BVar "?"))))
 
     /// <summary>
     ///     NUnit tests for guarded views.
     /// </summary>
     type NUnit () =
         /// <summary>
-        ///     Test cases for extracting variables from <c>GFunc</c>s.
+        ///     Case studies for <c>testPositionSubExprInGFunc</c>.
         /// </summary>
-        static member VarsInGFuncCases =
-            [ TestCaseData(mgfunc BTrue "foo" [])
-                  .Returns(Set.empty : Set<CTyped<MarkedVar>>)
-                  .SetName("GFunc with no guard and no parameters has no variables")
-              TestCaseData(mgfunc (bBefore "bar") "foo" [])
-                  .Returns((Set.singleton (Typed.Bool (Before "bar"))) : Set<CTyped<MarkedVar>>)
-                  .SetName("Variables in a GFunc's guard are returned by varsInGFunc")
-              TestCaseData(mgfunc BTrue "foo"
-                               [ Typed.Bool (bAfter "x")
-                                 Typed.Int (iBefore "y") ] )
-                  .Returns((Set.ofArray
-                                [| (Typed.Bool (After "x"))
-                                   (Typed.Int (Before "y")) |]): Set<CTyped<MarkedVar>>)
-                  .SetName("Variables in a GFunc's parameters are returned by varsInGFunc") ]
+        static member PositionSubExprInGFuncCases =
+            [ (tcd
+                   [| gfunc (BVar "foo") "bar"
+                          [ Typed.Int (AVar "baz")
+                            Typed.Bool (BVar "fizz") ]
+                      Position.positive |] )
+                  .Returns(
+                      (Position.positive,
+                       (gfunc BFalse "bar"
+                            [ Typed.Int (AInt 1L)
+                              Typed.Bool BTrue ] : GFunc<Var> )))
+                  .SetName("GFunc substitution in +ve case works properly")
+              (tcd
+                   [| gfunc (BVar "foo") "bar"
+                          [ Typed.Int (AVar "baz")
+                            Typed.Bool (BVar "fizz") ]
+                      Position.negative |] )
+                  .Returns(
+                      (Position.negative,
+                       (gfunc BTrue "bar"
+                            [ Typed.Int (AInt 0L)
+                              Typed.Bool BFalse ] : GFunc<Var> )))
+                  .SetName("GFunc substitution in -ve case works properly") ]
 
         /// <summary>
-        ///     Tests <c>varsInGFunc</c>.
+        ///     Tests <c>subExprInGFunc</c> on positional substitutions.
         /// </summary>
-        [<TestCaseSource("VarsInGFuncCases")>]
-        member this.testVarsInGFunc (gf : MGFunc) =
-            gf |> varsInGFunc |> Set.ofSeq
+        [<TestCaseSource("PositionSubExprInGFuncCases")>]
+        member this.testPositionSubExprInGFunc
+          (gf : GFunc<Var>)
+          (pos : SubCtx) =
+            Sub.subExprInGFunc
+                positionTestSub
+                pos
+                gf
 
+        /// <summary>
+        ///     Case studies for <c>testPositionSubExprInGView</c>.
+        /// </summary>
+        static member PositionSubExprInGViewCases =
+            [ (tcd
+                   [| (Multiset.empty : GView<Var>)
+                      Position.positive |] )
+                  .Returns(
+                      (Position.positive,
+                       (Multiset.empty : GView<Var>)))
+                  .SetName("+ve empty GView substitution is a no-op")
+              (tcd
+                   [| (Multiset.empty : GView<Var>)
+                      Position.negative |] )
+                  .Returns(
+                      (Position.negative,
+                       (Multiset.empty : GView<Var>)))
+                  .SetName("-ve empty GView substitution is a no-op")
+              (tcd
+                   [| Multiset.singleton
+                          (gfunc (BVar "foo") "bar"
+                               [ Typed.Int (AVar "baz")
+                                 Typed.Bool (BVar "fizz") ] )
+                      Position.positive |] )
+                  .Returns(
+                      (Position.positive,
+                       (Multiset.singleton
+                            (gfunc BFalse "bar"
+                                 [ Typed.Int (AInt 1L)
+                                   Typed.Bool BTrue ] ) : GView<Var> )))
+                  .SetName("Singleton GView substitution in +ve case works properly")
+              (tcd
+                   [| Multiset.singleton
+                          (gfunc (BVar "foo") "bar"
+                               [ Typed.Int (AVar "baz")
+                                 Typed.Bool (BVar "fizz") ] )
+                      Position.negative |] )
+                  .Returns(
+                      (Position.negative,
+                       (Multiset.singleton
+                            (gfunc BTrue "bar"
+                                 [ Typed.Int (AInt 0L)
+                                   Typed.Bool BFalse ] ) : GView<Var> )))
+                  .SetName("Singleton GView substitution in -ve case works properly")
+              (tcd
+                   [| Multiset.ofFlatList
+                          [ gfunc (BVar "foo") "bar"
+                                [ Typed.Int (AVar "baz")
+                                  Typed.Bool (BVar "fizz") ]
+                            gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
+                                [ Typed.Int
+                                      (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ]
+                      Position.positive |] )
+                  .Returns(
+                      (Position.positive,
+                       (Multiset.ofFlatList
+                            [ gfunc BFalse "bar"
+                                  [ Typed.Int (AInt 1L)
+                                    Typed.Bool BTrue ]
+                              gfunc (BGt (AInt 0L, AInt 0L)) "barbaz"
+                                  [ Typed.Int
+                                        (AAdd [ AInt 1L; AInt 1L ]) ] ]
+                        : GView<Var>)))
+                  .SetName("Multi GView substitution in +ve case works properly")
+              (tcd
+                   [| Multiset.ofFlatList
+                          [ gfunc (BVar "foo") "bar"
+                                [ Typed.Int (AVar "baz")
+                                  Typed.Bool (BVar "fizz") ]
+                            gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
+                                [ Typed.Int
+                                      (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ]
+                      Position.negative |] )
+                  .Returns(
+                      (Position.negative,
+                       (Multiset.ofFlatList
+                            [ gfunc BTrue "bar"
+                                  [ Typed.Int (AInt 0L)
+                                    Typed.Bool BFalse ]
+                              gfunc (BGt (AInt 1L, AInt 1L)) "barbaz"
+                                  [ Typed.Int
+                                        (AAdd [ AInt 0L; AInt 0L ]) ] ]
+                        : GView<Var>)))
+                  .SetName("Multi GView substitution in -ve case works properly") ]
+
+        /// <summary>
+        ///     Tests <c>subExprInGView</c> on positional substitutions.
+        /// </summary>
+        [<TestCaseSource("PositionSubExprInGViewCases")>]
+        member this.testPositionSubExprInGView
+          (gv : GView<Var>)
+          (pos : SubCtx) =
+            Sub.subExprInGView
+                positionTestSub
+                pos
+                gv
+
+        /// <summary>
+        ///     Case studies for <c>testPositionSubExprInDTerm</c>.
+        /// </summary>
+        static member PositionSubExprInDTermCases =
+            [ (tcd
+                   [| ( { Cmd =
+                              BAnd
+                                  [ bEq (BVar "foo") (BVar "bar")
+                                    bEq (BVar "baz") (BNot (BVar "baz")) ]
+                          WPre =
+                              Multiset.ofFlatList
+                                  [ gfunc (BVar "foo") "bar"
+                                        [ Typed.Int (AVar "baz")
+                                          Typed.Bool (BVar "fizz") ]
+                                    gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
+                                        [ Typed.Int
+                                              (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ]
+                          Goal =
+                              (vfunc "bar"
+                                   [ Typed.Int (AVar "baz")
+                                     Typed.Bool (BVar "barbaz") ] : VFunc<Var> ) }
+                       : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>> )
+                      Position.positive |] )
+                  .Returns(
+                      (Position.positive,
+                       ( { Cmd =
+                               BAnd
+                                   [ bEq BFalse BFalse
+                                     bEq BFalse (BNot BTrue) ]
+                           WPre =
+                               Multiset.ofFlatList
+                                   [ gfunc BTrue "bar"
+                                         [ Typed.Int (AInt 0L)
+                                           Typed.Bool BFalse ]
+                                     gfunc (BGt (AInt 1L, AInt 1L)) "barbaz"
+                                         [ Typed.Int
+                                               (AAdd [ AInt 0L; AInt 0L ]) ] ]
+                           Goal =
+                               (vfunc "bar"
+                                    [ Typed.Int (AInt 1L)
+                                      Typed.Bool BTrue ] : VFunc<Var> ) }
+                        : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>> )))
+                  .SetName("Successfully translate a positive DTerm")
+              (tcd
+                   [| ( { Cmd =
+                              BAnd
+                                  [ bEq (BVar "foo") (BVar "bar")
+                                    bEq (BVar "baz") (BNot (BVar "baz")) ]
+                          WPre =
+                              Multiset.ofFlatList
+                                  [ gfunc (BVar "foo") "bar"
+                                        [ Typed.Int (AVar "baz")
+                                          Typed.Bool (BVar "fizz") ]
+                                    gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
+                                        [ Typed.Int
+                                              (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ]
+                          Goal =
+                              (vfunc "bar"
+                                   [ Typed.Int (AVar "baz")
+                                     Typed.Bool (BVar "barbaz") ] : VFunc<Var> ) }
+                       : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>> )
+                      Position.negative |] )
+                  .Returns(
+                      (Position.negative,
+                       ( { Cmd =
+                               BAnd
+                                   [ bEq BTrue BTrue
+                                     bEq BTrue (BNot BFalse) ]
+                           WPre =
+                               Multiset.ofFlatList
+                                   [ gfunc BFalse "bar"
+                                         [ Typed.Int (AInt 1L)
+                                           Typed.Bool BTrue ]
+                                     gfunc (BGt (AInt 0L, AInt 0L)) "barbaz"
+                                         [ Typed.Int
+                                               (AAdd [ AInt 1L; AInt 1L ]) ] ]
+                           Goal =
+                               (vfunc "bar"
+                                    [ Typed.Int (AInt 0L)
+                                      Typed.Bool BFalse ] : VFunc<Var> ) }
+                        : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>> )))
+                  .SetName("Successfully translate a negative DTerm") ]
+
+        /// <summary>
+        ///     Tests <c>subExprInDTerm</c> on positional substitutions.
+        /// </summary>
+        [<TestCaseSource("PositionSubExprInDTermCases")>]
+        member this.testPositionSubExprInDTerm
+          (t : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>>)
+          (pos : SubCtx) =
+            Sub.subExprInDTerm
+                positionTestSub
+                pos
+                t

@@ -13,7 +13,7 @@ open Starling.Core.Sub
 open Starling.Core.Model
 open Starling.Core.Instantiate
 open Starling.Core.GuardedView
-open Starling.Reifier
+
 
 /// <summary>
 ///     Types for the Horn clause backend, including errors.
@@ -72,7 +72,6 @@ module Types =
 module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Model.Pretty
-    open Starling.Core.Expr.Pretty
     open Starling.Core.Var.Pretty
 
     /// Decides whether to put brackets over the expression emission x,
@@ -256,7 +255,8 @@ let boolExpr
         | x ->
             x
             |> Expr.Bool
-            |> Mapper.map (onVars (liftVSubFun (Mapper.cmake toVar)))
+            |> Mapper.mapCtx (liftCToSub (Mapper.cmake toVar)) NoCtx
+            |> snd
             |> UnsupportedExpr
             |> fail
     be
@@ -271,7 +271,8 @@ let boolExpr
 ///     Boolean.
 /// </summary>
 let tryIntExpr : MExpr -> Result<VIntExpr, Error> =
-    Mapper.map (onVars (liftVSubFun (Mapper.cmake unmarkVar)))
+    Mapper.mapCtx (liftCToSub (Mapper.cmake unmarkVar)) NoCtx
+    >> snd
     >> function
        | Expr.Int x -> ok x
        | e -> e |> UnsupportedExpr |> fail

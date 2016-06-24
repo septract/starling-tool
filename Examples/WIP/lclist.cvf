@@ -1,74 +1,74 @@
-/* 
- * Viktor's lock-coupling example from his thesis. 
- * Sketched up in Starling syntax from WB discussion, 12/4/2016.
- *  
- * Some issues: 
- *   - don't define the low level domain anywhere, eg. endNode() 
- *   - not clear what the right set of constraints is. 
- *   - calls to lock / unlock are abstract, not clear what they mean.
- * / 
+/*
+ * Viktor's lock-coupling example from his thesis.
+ * Sketched up in Starling syntax from WB discussion, 12/4/2016
+ *
+ * Some issues:
+ *   - don't define the low level domain anywhere, eg. endNode()
+ *   - not clear what the right set of constraints is.
+ *   - calls to lock / unlock are abstract, not clear what they mean
+ */
 
-shared node *head; 
+shared node *head;
 
-view isList(); 
-view has1Lock(node *x, node *y); 
-view has2Lock(node *x, node *y); 
-view hasNode(node *x); 
+view isList();
+view has1Lock(node *x, node *y);
+view has2Lock(node *x, node *y);
+view hasNode(node *x);
 
-method deleteVal(int v) { 
-  {| isList() |} 
-    prev = x; 
-    <lock(prev.lk)>; 
-  {| has1Lock(prev, _) * prev = x |} 
-    <curr = prev.nxt>; 
-  {| has1Lock(prev, curr) * prev = x |} 
-    while (curr.val < v) { 
-      {| has1Lock(prev, curr) |} 
-        <lock(curr.lk)>; 
-      {| has2Lock(prev, curr) |} 
-        unlock(prev.lk); 
-      {| has1Lock(curr, _ ) |} 
-        prev = curr; 
-      {| has1Lock(prev, _ ) |} 
+method deleteVal(int v) {
+  {| isList() |}
+    prev = x;
+    <lock(prev.lk)>;
+  {| has1Lock(prev, _) * prev = x |}
+    <curr = prev.nxt>;
+  {| has1Lock(prev, curr) * prev = x |}
+    while (curr.val < v)
+      {| has1Lock(prev, curr) |}
+        <lock(curr.lk)>;
+      {| has2Lock(prev, curr) |}
+        unlock(prev.lk);
+      {| has1Lock(curr, _ ) |}
+        prev = curr;
+      {| has1Lock(prev, _ ) |}
         curr = prev.nxt;
-      {| has1Lock(prev, curr ) |} 
-    } 
-  {| has1Lock(prev, curr) |} 
-    if (curr.val == v) { 
-      {| has1Lock(prev, curr) |} 
-        lock(curr.lk); 
-      {| has2Lock(prev, curr) |} 
-        <prev.nxt = curr.nxt>; 
-      {| has1Lock(prev, _) * hasNode(curr) |} 
-        <disp(curr)>;  
-      {| has1Lock(prev, _) |} 
-    } 
-  {| has1Lock(prev, _) |} 
-    unlock(prev); 
-  {| isList() |} 
+      {| has1Lock(prev, curr ) |}
+    }
+  {| has1Lock(prev, curr) |}
+    if (curr.val == v) {
+      {| has1Lock(prev, curr) |}
+        lock(curr.lk);
+      {| has2Lock(prev, curr) |}
+        <prev.nxt = curr.nxt>;
+      {| has1Lock(prev, _) * hasNode(curr) |}
+        <disp(curr)>;
+      {| has1Lock(prev, _) |}
+    }
+  {| has1Lock(prev, _) |}
+    unlock(prev);
+  {| isList() |}
 }
 
 
-// Define list properties 
+// Define list properties
 
-constraint isList()  ->  lseg(head, e) * endNode(e); 
+constraint isList()  ->  lseg(head, e) * endNode(e);
 
-constraint has1Lock(a,b)  ->  
-  lseg(head, a) * nodeLocked(a,b) * lseg(b, e) * endNode(e); 
+constraint has1Lock(a,b)  ->
+  lseg(head, a) * nodeLocked(a,b) * lseg(b, e) * endNode(e);
 
-constraint has2Lock(a,b)  ->  
-  lseg(head, a) * nodeLocked(a,b) * nodeLocked(b,c) 
-     * lseg(c, e) * endNode(e); 
+constraint has2Lock(a,b)  ->
+  lseg(head, a) * nodeLocked(a,b) * nodeLocked(b,c)
+     * lseg(c, e) * endNode(e);
 
-constraint hasNode(a)  ->  nodeLocked(a); 
+constraint hasNode(a)  ->  nodeLocked(a);
 
 
-// Constraints on views 
-constraint has1Lock(a,_) * has1Lock(c,_)  ->  a!=c 
-constraint has1Lock(a,_) * has2Lock(c,d)  ->  a!=c * a!=d 
-constraint has2Lock(a,b) * has2Lock(c,d)  ->  a!=c * a!=d * b!=c * b!=d 
-constraint has1Lock(a,_) * hasNode(c)     ->  a!=c 
+// Constraints on views
+constraint has1Lock(a,_) * has1Lock(c,_)  ->  a!=c
+constraint has1Lock(a,_) * has2Lock(c,d)  ->  a!=c * a!=d
+constraint has2Lock(a,b) * has2Lock(c,d)  ->  a!=c * a!=d * b!=c * b!=d
+constraint has1Lock(a,_) * hasNode(c)     ->  a!=c
 constraint has2Lock(a,b) * hasNode(c)     ->  a!=c * b!=c
 
 // Could maybe replace some of the constraints above?
-constraint has2Lock(a,b)   ->   has1Lock(a,_) * has1Lock(b,_) 
+constraint has2Lock(a,b)   ->   has1Lock(a,_) * has1Lock(b,_)

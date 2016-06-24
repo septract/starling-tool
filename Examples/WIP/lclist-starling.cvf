@@ -1,111 +1,118 @@
 /* Currently as close to lclist.cvf as Starling can get. */
 
-shared int heap; 
-shared int head; 
+shared int heap;
+shared int head;
 thread int lheap;
 thread int prev;
 thread int curr;
 
 thread int v;
+thread int cv;
 thread int val;
 
 thread int _;
 
+view isVal(int v, int node);
 view isHead(int prev);
 view false();
-view isList(); 
-view has1Lock(int x, int y); 
-view has2Lock(int x, int y); 
-view hasNode(int x); 
+view isList();
+view has1Lock(int x, int y);
+view has2Lock(int x, int y);
+view hasNode(int x);
 
-method deleteVal() { 
-  {| isList() |} 
+method deleteVal() {
+  {| isList() |}
     <lheap = heap>;
     v = (%{ heap #1; return getV() }(lheap));
-  {| isList() |} 
+  {| isList() |}
     <prev = head>;
   {| isList() * isHead(prev) |}
     <{
        lheap = heap;
        heap  = (%{ heap #1; lock(#2); return heap; }(lheap, prev));
-     }>; 
+     }>;
     prev = (%{ heap #1; return lock(#2); }(lheap, prev));
-  {| has1Lock(prev, _) * isHead(prev) |} 
+  {| has1Lock(prev, _) * isHead(prev) |}
     <lheap = heap>;
-    curr = (%{ heap #1; return next(#2); }(lheap, curr)); 
-  {| has1Lock(prev, curr) * isHead(prev) |} 
+    curr = (%{ heap #1; return next(#2); }(lheap, curr));
+  {| has1Lock(prev, curr) * isHead(prev) |}
     // The 0+ forces the symbol to be read as an int.
     // Otherwise, the type is ambiguous.
-    // (We could probably do better than this, since v is known to be an
-    // int at this point.)
-    while (0 + %{val(#1)}(curr) < v) { 
-      {| has1Lock(prev, curr) |} 
+    // (We could probably do better than this.)
+    <lheap = heap>;
+    cv = (%{ heap #1; return val(#1); }(lheap, curr));
+  {| has1Lock(prev,curr) * isVal(cv, curr) |}
+    while (cv < v) {
+      {| has1Lock(prev, curr) * isVal(cv, curr) |}
         <{
            lheap = heap;
            heap  = (%{ heap #1; lock(#2); return heap; }(lheap, curr));
-         }>; 
+         }>;
         curr = (%{ heap #1; return lock(#2); }(lheap, curr));
-      {| has2Lock(prev, curr) |} 
+      {| has2Lock(prev, curr) * isVal(cv, curr) |}
         <{
            lheap = heap;
            heap  = (%{ heap #1; unlock(#2); return heap; }(lheap, prev));
-         }>; 
+         }>;
         prev = (%{ heap #1; return unlock(#2); }(lheap, prev));
-      {| has1Lock(curr, _) |} 
-        prev = curr; 
-      {| has1Lock(prev, _) |} 
+      {| has1Lock(curr, _) * isVal(cv, curr) |}
+        prev = curr;
+      {| has1Lock(prev, _) * isVal(cv, prev) |}
         <lheap = heap>;
         curr = (%{ heap #1; return next(#2); }(lheap, curr));
-      {| has1Lock(prev, curr) |} 
-    } 
-  {| has1Lock(prev, curr) |} 
+      {| has1Lock(prev, curr) * isVal(cv, prev) |}
+        <lheap = heap>;
+        cv = (%{ heap #1; return val(#1); }(lheap, curr));
+      {| has1Lock(prev, curr) * isVal(cv, curr) |}
+    }
+  {| has1Lock(prev, curr) |}
      <lheap = heap>;
      val = (%{ heap #1; return val(#2); }(lheap, curr));
-  {| has1Lock(prev, curr) |} 
-    if (val == v) { 
-      {| has1Lock(prev, curr) |} 
+  {| has1Lock(prev, curr) |}
+    if (val == v) {
+      {| has1Lock(prev, curr) |}
         <{
            lheap = heap;
            heap  = (%{ heap #1; lock(#2); return heap; }(lheap, curr));
-         }>; 
+         }>;
         curr = (%{ heap #1; return lock(#2); }(lheap, curr));
-      {| has2Lock(prev, curr) |} 
+      {| has2Lock(prev, curr) |}
         <{
            lheap = heap;
            heap  = (%{ heap #1; set_next(#2, next(#3)); return heap; }(lheap, prev, curr));
-         }>; 
+         }>;
         prev = (%{ heap #1; return set_next(#2, next(#3)); }(lheap, prev, curr));
-      {| has1Lock(prev, _) * hasNode(curr) |} 
+      {| has1Lock(prev, _) * hasNode(curr) |}
         <{
            lheap = heap;
            heap  = (%{ heap #1; dispose(#2); return heap; }(lheap, curr));
-         }>; 
-        curr = (%{ heap #1; return dispose(#2); }(lheap, curr));  
-      {| has1Lock(prev, _) |} 
+         }>;
+        curr = (%{ heap #1; return dispose(#2); }(lheap, curr));
+      {| has1Lock(prev, _) |}
     } else {
-      {| has1Lock(prev, curr) |} 
+      {| has1Lock(prev, curr) |}
       ;
-      {| has1Lock(prev, _) |} 
+      {| has1Lock(prev, _) |}
     }
-  {| has1Lock(prev, _) |} 
+  {| has1Lock(prev, _) |}
     <{
        lheap = heap;
        heap  = (%{ heap #1; unlock(#2); return heap; }(lheap, prev));
-     }>; 
+     }>;
     prev = (%{ heap #1; return unlock(#2); }(lheap, prev));
-  {| isList() |} 
+  {| isList() |}
 }
 
 constraint isHead(x) -> x == head;
 
-// Define list properties 
+// Define list properties
 // The (true &&) device is necessary to prevent type ambiguity.
 
 constraint isList() ->
   true &&
   %{ heap #2;
      exists e . lseg(#1, e)
-              * endNode(e) }(head, heap); 
+              * endNode(e) }(head, heap);
 
 constraint has1Lock(a,b) ->
   true &&
@@ -115,23 +122,25 @@ constraint has1Lock(a,b) ->
               * lseg(#3, e)
               * endNode(e) }(head, a, b, heap);
 
-constraint has2Lock(a,b)  ->  
+constraint has2Lock(a,b)  ->
   true &&
   %{ heap #4;
      exists c, e . lseg(#1, #2)
                  * nodeLocked(#2, #3)
-                 * nodeLocked(#3, c) 
-                 * lseg(c, e) * endNode(e) }(head, a, b, heap); 
+                 * nodeLocked(#3, c)
+                 * lseg(c, e) * endNode(e) }(head, a, b, heap);
 
-constraint hasNode(a) -> true && %{ heap #2; nodeLocked(#1) }(a, heap); 
+constraint hasNode(a) -> true && %{ heap #2; nodeLocked(#1) }(a, heap);
 
 
-// Constraints on views 
-constraint has1Lock(a,_) * has1Lock(c,__)  -> true && %{ heap #3; #1!=#2 }(a, c, heap);
-constraint has1Lock(a,_) * has2Lock(c,d)   -> true && %{ heap #4; #1!=#2 * #1!=#3 }(a, c, d, heap);
-constraint has2Lock(a,b) * has2Lock(c,d)   -> true && %{ heap #5; #1!=#2 * #1!=#4 * #2!=#3 * #2!=#4 }(a, b, c, d, heap);
-constraint has1Lock(a,_) * hasNode(c)      -> true && %{ heap #3; #1!=#2 }(a, c, heap);
-constraint has2Lock(a,b) * hasNode(c)      -> true && %{ heap #3; #1!=#2 * #2!=#3}(a, b, c, heap);
+// Constraints on views
+constraint has1Lock(a,b) * has1Lock(c,d)   -> a != c;
+constraint has1Lock(a,b) * has2Lock(c,d)   -> a != c && a != d;
+constraint has2Lock(a,b) * has2Lock(c,d)   -> a != c && a != d && b != c && b != d;
+constraint has1Lock(a,b) * hasNode(c)      -> a != c;
+constraint has2Lock(a,b) * hasNode(c)      -> a != c && b != c;
 
 // Could maybe replace some of the constraints above?
 constraint has2Lock(a,b) -> %{ heap #3; has1Lock(#1,_) * has1Lock(#2,_) }(a, b, heap);
+
+constraint isVal(v, node) -> true && %{ heap #3; #2.val = #1 }(v, node, heap);

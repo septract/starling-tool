@@ -7,15 +7,14 @@ open Starling
 open Starling.Collections
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
-open Starling.Core.Graph
 open Starling.Core.Symbolic
 open Starling.Core.Var
 open Starling.Core.Model
-open Starling.Core.Axiom
 open Starling.Core.GuardedView
 open Starling.Lang.AST
 open Starling.Lang.Collator
 open Starling.Lang.Modeller
+
 
 /// The raw form of the ticket lock.
 let ticketLock = """

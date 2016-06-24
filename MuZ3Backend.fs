@@ -505,21 +505,21 @@ module Translator =
       (bodyView : GView<'var>)
       (head : VFunc<'var>)
       : Z3.BoolExpr option =
-        let vsub = onVars (liftVSubFun (Mapper.cmake toVar))
+        let vsub = (liftCToSub (Mapper.cmake toVar))
 
         // First, make everything use string variables.
-        let bodyExpr' = Mapper.mapBool vsub bodyExpr
-        let bodyView' = subExprInGView vsub bodyView
-        let head' = subExprInVFunc vsub head
+        let _, bodyExpr' = Mapper.mapBoolCtx vsub NoCtx bodyExpr
+        let _, bodyView' = subExprInGView vsub NoCtx bodyView
+        let _, head' = subExprInVFunc vsub NoCtx head
 
         let vars =
             seq {
-                yield! (varsInBool bodyExpr')
+                yield! (mapOverVars Mapper.mapBoolCtx findVars bodyExpr')
 
                 for gfunc in Multiset.toFlatList bodyView' do
-                    yield! (varsInGFunc gfunc)
+                    yield! (mapOverVars Sub.subExprInGFunc findVars gfunc)
 
-                yield! (varsInVFunc head')
+                yield! (mapOverVars Sub.subExprInVFunc findVars head')
             }
             // Make sure we don't quantify over a variable twice.
             |> Set.ofSeq
@@ -692,9 +692,9 @@ module Run =
                  // TODO(CaptainHayashi): de-duplicate this with mkRule.
                  let vars =
                      seq {
-                         yield! (varsInBool def)
+                         yield! (mapOverVars Mapper.mapBoolCtx findVars def)
                          for param in view.Params do
-                             yield! (varsIn param)
+                             yield! (mapOverVars Mapper.mapCtx findVars param)
                      }
                      |> Set.ofSeq
                      |> Set.map

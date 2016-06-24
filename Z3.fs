@@ -4,11 +4,7 @@
 module Starling.Core.Z3
 
 open Microsoft
-open Chessie.ErrorHandling
-open Starling
-open Starling.Collections
 open Starling.Core.Expr
-open Starling.Core.Var
 
 
 /// <summary>

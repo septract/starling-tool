@@ -7,7 +7,6 @@ module Starling.TermGen
 open Starling.Collections
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
-open Starling.Core.Var
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Sub
 open Starling.Core.Sub
@@ -94,8 +93,8 @@ let termGenPre
      * stage, both sides only contain local variables.
      *)
     // TODO(CaptainHayashi): use something better than lists.
-    let pre = subExprInGView before gax.Axiom.Pre
-    let post = subExprInGView after gax.Axiom.Post
+    let _, pre = subExprInGView before NoCtx gax.Axiom.Pre
+    let _, post = subExprInGView after NoCtx gax.Axiom.Post
     let goal = gax.Goal
 
     Multiset.append pre (termGenFrame goal post)

@@ -3,7 +3,9 @@
 /// </summary>
 module Starling.Collections
 
+open Chessie.ErrorHandling
 open Starling.Utils
+
 
 /// <summary>
 ///     A function-like construct.
@@ -50,6 +52,8 @@ let func name pars = { Name = name; Params = List.ofSeq pars }
 type Multiset<'item> when 'item: comparison =
     | MSet of Map<'item, int>
     override this.ToString() = sprintf "%A" this
+
+
 /// <summary>
 ///     Operations on multisets.
 /// </summary>
@@ -68,7 +72,7 @@ module Multiset =
     ///     Adds an element n times to a multiset
     /// </summary>
     let addn (MSet ms) k m =
-        let n = ms.TryFind k |> Option.fold (fun x y -> y) 0
+        let n = ms.TryFind k |> Option.fold (fun _ y -> y) 0
         MSet (ms.Add (k, n+m))
 
     /// <summary>
@@ -155,7 +159,7 @@ module Multiset =
     ///     The set of items in the multiset.
     /// </returns>
     let toSet (MSet ms) =
-        Map.fold (fun set k n -> Set.add k set) Set.empty ms
+        Map.fold (fun set k _ -> Set.add k set) Set.empty ms
 
     (*
      * Operations
@@ -191,6 +195,51 @@ module Multiset =
         Map.fold addn xs ymap
 
     /// <summary>
+    ///     Maps <c>f</c> over the unique items of a multiset, passing
+    ///     an accumulator in some arbitrary order.
+    /// </summary>
+    /// <param name="f">
+    ///     The function to map over the multiset.  This takes the
+    ///     accumulator, the item, and the number of times that item
+    ///     appears in the multiset.  It should return the new item.  It
+    ///     is assumed the number of appearances does not change.
+    /// </param>
+    /// <param name="init">
+    ///     The initial value of the accumulator.
+    /// </param>
+    /// <typeparam name="acc">
+    ///     The type of the accumulator.
+    /// </typeparam>
+    /// <typeparam name="src">
+    ///     The type of variables in the list to map.
+    /// </typeparam>
+    /// <typeparam name="dst">
+    ///     The type of variables in the list after mapping.
+    /// </typeparam>
+    /// <returns>
+    ///     The pair of the final value of the accumulator, and the
+    ///     result of mapping <c>f</c> over the multiset.
+    /// </returns>
+    /// <remarks>
+    ///     Since multisets are ordered, mapping can change the position of
+    ///     items.
+    /// </remarks>
+    let mapAccum
+      (f : 'acc -> 'src -> int -> ('acc * 'dst))
+      (init : 'acc)
+      (MSet ms : Multiset<'src>)
+      : ('acc * Multiset<'dst>) =
+        // TODO(CaptainHayashi): convert map to a similar abstraction.
+        ms
+        |> Map.toList
+        |> mapAccumL
+               (fun acc (src, num) ->
+                   let acc', dst = f acc src num
+                   (acc', (dst, num)))
+               init
+        |> pairMap id (Map.ofList >> MSet)
+
+    /// <summary>
     ///     Maps <c>f</c> over a multiset.
     /// </summary>
     /// <remarks>
@@ -211,21 +260,34 @@ module Multiset =
         //Note that this is used with side-effecting f, so must be called n times for each addition.
         Map.fold repeat_add empty xs
 
-    /// Produces the power-multiset of a multiset, as a set of multisets.
-    let power msm =
-        (* Solve the problem using Boolean arithmetic on the index of the
-         * powerset item.
-         *)
-        let ms = toFlatList msm
-        seq {
-            for i in 0..(1 <<< List.length ms) - 1 do
-                yield (seq { 0..(List.length ms) - 1 } |> Seq.choose (fun j ->
-                                                              let cnd : int = i &&& (1 <<< j)
-                                                              if cnd <> 0 then Some ms.[j]
-                                                              else None))
-                      |> ofFlatSeq
-        }
-        |> Set.ofSeq
+    /// <summary>
+    ///     Collapses a multiset of results to a result on a multiset.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The multiset to collect.
+    /// </param>
+    /// <typeparam name="item">
+    ///     Type of items in the multiset.
+    /// </typeparam>
+    /// <typeparam name="err">
+    ///     Type of errors in the result.
+    /// </typeparam>
+    /// <returns>
+    ///     A result, containing the collected form of
+    ///     <paramref name="_arg1" />.
+    /// </returns>
+    let collect
+      (MSet ms : Multiset<Result<'item, 'err>>)
+      : Result<Multiset<'item>, 'err> =
+        // TODO(CaptainHayashi): unify with map?
+        let rec itr tos fros warns : Result<Multiset<'item>, 'err> =
+            match tos with
+            | [] -> ok (MSet (Map.ofList fros))
+            | ((Warn (x, ws), n)::xs) -> itr xs ((x, n)::fros) (ws@warns)
+            | ((Pass x, n)::xs) -> itr xs ((x, n)::fros) warns
+            | ((Fail e, n)::xs) -> Bad e
+        itr (Map.toList ms) [] []
+
 
 /// <summary>
 ///     Tests for collections.

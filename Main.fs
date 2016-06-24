@@ -30,10 +30,10 @@ type Options =
                 "Dump results in raw format instead of pretty-printing.")>]
       raw : bool
       [<Option(
-            'R',
+            'B',
             HelpText =
-                "(TEMPORARY) Use reals instead of ints in Z3 proofs.")>]
-      reals : bool
+                "Comma-delimited set of backend options (pass 'list' for details)")>]
+      backendOpts : string option
       [<Option(
             's',
             HelpText =
@@ -47,7 +47,7 @@ type Options =
       [<Option('m', HelpText = "Show full model in term-refinement stages.")>]
       showModel : bool
       [<Option('O', HelpText = "Switches given optimisations on or off.")>]
-      optimisers : string seq
+      optimisers : string option
       [<Option("times", HelpText = "Print times for each phase.")>]
       times : bool
       [<Option('v', HelpText = "Increases verbosity.")>]
@@ -61,6 +61,8 @@ type Options =
 
 /// Enumeration of possible requests to Starling.
 type Request =
+    /// List all available requests.
+    | List
     /// Run the language frontend only, with the given request.
     | Frontend of Lang.Frontend.Request
     /// Stop at graph optimisation.
@@ -79,6 +81,14 @@ type Request =
     | Semantics
     /// Stop at term optimisation.
     | TermOptimise
+    /// Output a fully-instantiated proof with symbols.
+    | SymProof
+    /// Output a fully-instantiated unstructured proof with symbols.
+    | RawSymProof
+    /// Output a fully-instantiated proof without symbols.
+    | Proof
+    /// Output a fully-instantiated unstructured proof without symbols.
+    | RawProof
     /// Run the Z3 backend, with the given request.
     | Z3 of Backends.Z3.Types.Request
     /// Run the MuZ3 backend (experimental), with the given request.
@@ -88,35 +98,95 @@ type Request =
 
 /// Map of -s stage names to Request items.
 let requestMap =
-    Map.ofList [ ("parse", Request.Frontend Lang.Frontend.Request.Parse)
-                 ("collate", Request.Frontend Lang.Frontend.Request.Collate)
-                 ("model", Request.Frontend Lang.Frontend.Request.Model)
-                 ("guard", Request.Frontend Lang.Frontend.Request.Guard)
-                 ("graph", Request.Frontend Lang.Frontend.Request.Graph)
-                 ("graphOptimise", Request.GraphOptimise)
-                 ("axiomatise", Request.Axiomatise)
-                 ("goalAdd", Request.GoalAdd)
-                 ("termgen", Request.TermGen)
-                 ("reify", Request.Reify)
-                 ("flatten", Request.Flatten)
-                 ("semantics", Request.Semantics)
-                 ("termOptimise", Request.TermOptimise)
-                 ("reifyZ3", Request.Z3 Backends.Z3.Types.Request.Translate)
-                 ("z3", Request.Z3 Backends.Z3.Types.Request.Combine)
-                 ("sat", Request.Z3 Backends.Z3.Types.Request.Sat)
-                 ("mutranslate", Request.MuZ3 Backends.MuZ3.Types.Request.Translate)
-                 ("mufix", Request.MuZ3 Backends.MuZ3.Types.Request.Fix)
-                 ("musat", Request.MuZ3 Backends.MuZ3.Types.Request.Sat)
-                 ("hsf", Request.HSF) ]
+    Map.ofList
+        [ ("list",
+           ("Lists all available phases.",
+            Request.List))
+          ("parse",
+           ("Parses and formats a Starling file with no further processing.",
+            Request.Frontend Lang.Frontend.Request.Parse))
+          ("collate",
+           ("Stops Starling frontend processing at script collation.",
+            Request.Frontend Lang.Frontend.Request.Collate))
+          ("model",
+           ("Stops Starling frontend processing at initial modelling.",
+            Request.Frontend Lang.Frontend.Request.Model))
+          ("guard",
+           ("Stops Starling frontend processing at guarded view generation.",
+            Request.Frontend Lang.Frontend.Request.Guard))
+          ("graph",
+           ("Outputs an unoptimised control-flow graph series.",
+            Request.Frontend Lang.Frontend.Request.Graph))
+          ("graphoptimise",
+           ("Outputs an optimised control-flow graph series.",
+            Request.GraphOptimise))
+          ("axiomatise",
+           ("Stops Starling model generation at graph axiomatisation.",
+            Request.Axiomatise))
+          ("goaladd",
+           ("Stops Starling model generation at goal generation.",
+            Request.GoalAdd))
+          ("termgen",
+           ("Stops Starling model generation at proof term generation.",
+            Request.TermGen))
+          ("reify",
+           ("Stops Starling model generation at view reification.",
+            Request.Reify))
+          ("flatten",
+           ("Stops Starling model generation at view flattening.",
+            Request.Flatten))
+          ("semantics",
+           ("Stops Starling model generation at command semantics instantiation.",
+            Request.Semantics))
+          ("termoptimise",
+           ("Stops Starling model generation at term optimisation.",
+            Request.TermOptimise))
+          ("symproof",
+           ("Outputs a proof in Starling format, with all symbols intact.",
+            Request.SymProof))
+          ("rawsymproof",
+           ("Outputs a definite proof in unstructured Starling format, with all symbols removed.",
+            Request.RawSymProof))
+          ("proof",
+           ("Outputs a definite proof in Starling format, with all symbols removed.",
+            Request.Proof))
+          ("rawproof",
+           ("Outputs a definite proof in unstructured Starling format, with all symbols removed.",
+            Request.RawProof))
+          ("z3",
+           ("Outputs a definite proof in structured Z3/SMTLIB format.",
+            Request.Z3 Backends.Z3.Types.Request.Translate))
+          ("rawz3",
+           ("Outputs a definite proof in unstructured Z3/SMTLIB format.",
+            Request.Z3 Backends.Z3.Types.Request.Combine))
+          ("sat",
+           ("Executes a definite proof using Z3 and reports the result.",
+            Request.Z3 Backends.Z3.Types.Request.Sat))
+          ("mutranslate",
+           ("Generates a proof using MuZ3 and outputs the individual terms.",
+            Request.MuZ3 Backends.MuZ3.Types.Request.Translate))
+          ("mufix",
+           ("Generates a proof using MuZ3 and outputs the fixed point.",
+            Request.MuZ3 Backends.MuZ3.Types.Request.Fix))
+          ("musat",
+           ("Executes a proof using MuZ3 and reports the result.",
+            Request.MuZ3 Backends.MuZ3.Types.Request.Sat))
+          ("hsf",
+           ("Outputs a proof in HSF format.",
+            Request.HSF)) ]
 
 /// Converts an optional -s stage name to a request item.
 /// If none is given, the latest stage is selected.
-let requestFromStage ostage =
-    Map.tryFind (withDefault "sat" ostage) requestMap
+let requestFromStage (ostage : string option) =
+    (withDefault "sat" ostage).ToLower()
+    |> requestMap.TryFind
+    |> Option.map snd
 
 /// Type of possible outputs from a Starling run.
 [<NoComparison>]
 type Response =
+    /// List all available requests.
+    | List of Map<string, string>
     /// The result of frontend processing.
     | Frontend of Lang.Frontend.Response
     /// Stop at graph optimisation.
@@ -135,6 +205,14 @@ type Response =
     | Flatten of UFModel<STerm<SMGView, SMVFunc>>
     /// The result of term optimisation.
     | TermOptimise of UFModel<STerm<SMGView, SMVFunc>>
+    /// Output a fully-instantiated symbolic proof.
+    | SymProof of Model<SFTerm, unit>
+    /// Output a fully-instantiated symbolic unstructured proof.
+    | RawSymProof of Model<SMBoolExpr, unit>
+    /// Output a fully-instantiated non-symbolic proof.
+    | Proof of Model<FTerm, unit>
+    /// Output a fully-instantiated non-symbolic unstructured proof.
+    | RawProof of Model<MBoolExpr, unit>
     /// The result of Z3 backend processing.
     | Z3 of Backends.Z3.Types.Response
     /// The result of MuZ3 backend processing.
@@ -145,6 +223,7 @@ type Response =
 /// Pretty-prints a response.
 let printResponse mview =
     function
+    | List l -> printMap Indented String String l
     | Frontend f -> Lang.Frontend.printResponse mview f
     | GraphOptimise g ->
         printUVModelView printGraph mview g
@@ -162,6 +241,33 @@ let printResponse mview =
         printUFModelView (printSTerm printSMGView printSMVFunc) mview m
     | TermOptimise m ->
         printUFModelView (printSTerm printSMGView printSMVFunc) mview m
+    | SymProof m ->
+        printModelView
+            (printTerm printSMBoolExpr printSMBoolExpr printSMBoolExpr)
+            (fun _ -> Seq.empty)
+            mview
+            m
+    | RawSymProof m ->
+        printModelView
+            Core.Symbolic.Pretty.printSMBoolExpr
+            (fun _ -> Seq.empty)
+            mview
+            m
+    | Proof m ->
+        printModelView
+            (printTerm
+                 Core.Var.Pretty.printMBoolExpr
+                 Core.Var.Pretty.printMBoolExpr
+                 Core.Var.Pretty.printMBoolExpr)
+            (fun _ -> Seq.empty)
+            mview
+            m
+    | RawProof m ->
+        printModelView
+            Core.Var.Pretty.printMBoolExpr
+            (fun _ -> Seq.empty)
+            mview
+            m
     | Z3 z -> Backends.Z3.Pretty.printResponse mview z
     | MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
     | HSF h -> Backends.Horn.Pretty.printHorns h
@@ -172,8 +278,6 @@ type Error =
     | Frontend of Lang.Frontend.Error
     /// An error occurred in semantic translation.
     | Semantics of Semantics.Types.Error
-    /// An error occurred in the Z3 backend.
-    | Z3 of Backends.Z3.Types.Error
     /// An error occurred in the HSF backend.
     | HSF of Backends.Horn.Types.Error
     /// <summary>
@@ -191,7 +295,6 @@ let printError =
     function
     | Frontend e -> Lang.Frontend.printError e
     | Semantics e -> Semantics.Pretty.printSemanticsError e
-    | Z3 e -> Backends.Z3.Pretty.printError e
     | HSF e -> Backends.Horn.Pretty.printHornError e
     | ModelFilterError e ->
         headed "View definitions are incompatible with this backend"
@@ -227,11 +330,60 @@ let printErr pBad =
 let printResult pOk pBad =
     either (printOk pOk pBad) (printErr pBad)
 
+/// Shorthand for the raw proof output stage.
+let rawproof
+  (res : Result<Model<CTerm<Core.Expr.Types.BoolExpr<'a>>, 'b>, Error>)
+  : Result<Model<Core.Expr.Types.BoolExpr<'a>, 'b>, Error> =
+    lift
+        (mapAxioms
+             (fun { Cmd = c; WPre = w; Goal = g } ->
+                  Core.Expr.mkImplies (Core.Expr.mkAnd2 c w) g))
+        res
+
+
+/// Shorthand for the symbolic proof output stage.
+let symproof = bind (Core.Instantiate.Phase.run >> mapMessages Error.ModelFilterError)
+
+/// Shorthand for the non-symbolic proof output stage.
+let proof approx v =
+    let aprC =
+        if approx
+        then
+            Starling.Core.Command.SymRemove.removeSym
+        else id
+
+    let apr position =
+        if approx
+        then
+            Core.TypeSystem.Mapper.mapBoolCtx
+                Starling.Core.Symbolic.Queries.approx
+                position
+            >> snd
+        else id
+
+    let sub =
+        Core.TypeSystem.Mapper.mapBoolCtx
+            (tsfRemoveSym Core.Instantiate.Types.UnwantedSym)
+            Core.Sub.Types.SubCtx.NoCtx
+        >> snd
+
+    let pos = Starling.Core.Sub.Position.positive
+    let neg = Starling.Core.Sub.Position.negative
+
+    bind
+        (tryMapAxioms
+             (tryMapTerm
+                  (aprC >> (apr neg) >> sub >> lift Starling.Core.Expr.simp)
+                  ((apr neg) >> sub >> lift Starling.Core.Expr.simp)
+                  ((apr pos) >> sub >> lift Starling.Core.Expr.simp))
+         >> mapMessages Error.ModelFilterError)
+        v
+
 /// Shorthand for the HSF stage.
 let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
 
 /// Shorthand for the Z3 stage.
-let z3 reals rq = bind (Backends.Z3.run reals rq >> mapMessages Error.Z3)
+let z3 reals rq = lift (Backends.Z3.run reals rq)
 
 /// Shorthand for the MuZ3 stage.
 let muz3 reals rq = lift (Backends.MuZ3.run reals rq)
@@ -275,11 +427,42 @@ let filterIndefinite =
           >> mapMessages ModelFilterError)
 
 /// <summary>
-///     Shorthand for the stage filtering a model to definite views only.
+///     Type of the backend parameter structure.
 /// </summary>
-let filterDefinite =
-    bind (Core.Instantiate.ViewDefFilter.filterModelDefinite
-          >> mapMessages ModelFilterError)
+type BackendParams =
+    // TODO(CaptainHayashi): distribute into the target backends?
+    { /// <summary>
+      ///     Whether symbols are being approximated.
+      /// </summary>
+      Approx : bool
+      /// <summary>
+      ///     Whether reals are being substituted for integers in Z3 proofs.
+      /// </summary>
+      Reals : bool }
+
+/// <summary>
+///     Map of known backend parameters.
+/// </summary>
+let rec backendParams () =
+    Map.ofList
+        [ ("approx",
+           ("Replace all symbols in a proof with their under-approximation.\n\
+             Allows some symbol proofs to be run by the Z3 backend, but the \
+             resulting proof may be incomplete.",
+             fun ps -> { ps with Approx = true } ))
+          ("reals",
+           ("In Z3/muZ3 proofs, model integers as reals.\n\
+             This may speed up the proof at the cost of soundness.",
+             fun ps -> { ps with Reals = true } ))
+          ("list",
+           ("Lists all backend parameters.",
+            fun ps ->
+                eprintfn "Backend parameters:\n"
+                Map.iter
+                    (fun name (descr, _) -> eprintfn "%s: %s\n" name descr)
+                    (backendParams ())
+                eprintfn "--\n"
+                ps)) ]
 
 /// <summary>
 ///     Runs a Starling request.
@@ -287,8 +470,8 @@ let filterDefinite =
 /// <param name="optS">
 ///     The string governing optimiser overrides.
 /// </param>
-/// <param name="reals">
-///     (TEMPORARY) Whether to use reals instead of ints in MuZ proofs.
+/// <param name="backendS">
+///     The string governing backend options.
 /// </param>
 /// <param name="verbose">
 ///     If true, dump some internal information to stderr.
@@ -301,21 +484,60 @@ let filterDefinite =
 ///     taking a file containing request input and returning a
 ///     <c>Result</c> over <c>Response</c> and <c>Error</c>.
 /// </returns>
-let runStarling times optS reals verbose request =
-    let optR, optA = Optimiser.Utils.parseOptString optS
+let runStarling times optS backendS verbose request =
+    let optR, optA =
+        optS
+        |> Option.map Utils.parseOptionString
+        |> withDefault (Seq.empty)
+        |> Seq.toList
+        |> Optimiser.Utils.parseOptString
+
+    let bp = backendParams ()
+    let { Approx = approx; Reals = reals } =
+        backendS
+        |> Option.map Utils.parseOptionString
+        |> withDefault (Seq.empty)
+        |> Seq.fold
+               (fun opts str ->
+                    match (bp.TryFind str) with
+                    | Some (_, f) -> f opts
+                    | None ->
+                        eprintfn "unknown backend param %s ignored (try 'list')"
+                            str
+                        opts)
+               { Approx = false; Reals = false }
 
     let backend m =
-            let phase op response =
-                let time = System.Diagnostics.Stopwatch.StartNew()
-                op m
-                |>  (time.Stop(); (if times then printfn "Phase Backend; Elapsed: %dms" time.ElapsedMilliseconds); id)
-                |> lift response
+        let phase op response =
+            let time = System.Diagnostics.Stopwatch.StartNew()
+            op m
+            |>  (time.Stop(); (if times then printfn "Phase Backend; Elapsed: %dms" time.ElapsedMilliseconds); id)
+            |> lift response
 
-            match request with
-            | Request.HSF     -> phase (filterIndefinite >> hsf) Response.HSF
-            | Request.Z3 rq   -> phase (filterDefinite >> z3 reals rq) Response.Z3
-            | Request.MuZ3 rq -> phase (filterIndefinite >> muz3 reals rq) Response.MuZ3
-            | _               -> fail (Error.Other "Internal")
+        let maybeApprox =
+            lift
+                (if approx
+                 then
+                     mapAxioms
+                         ((mapTerm
+                               Starling.Core.Command.SymRemove.removeSym
+                               id
+                               id)
+                          >> (Sub.subExprInDTerm
+                                  Starling.Core.Symbolic.Queries.approx
+                                  Starling.Core.Sub.Position.positive)
+                          >> snd)
+                 else id)
+
+        match request with
+        | Request.SymProof    -> phase symproof Response.SymProof
+        | Request.RawSymProof -> phase (symproof >> rawproof) Response.RawSymProof
+        | Request.Proof       -> phase (symproof >> proof approx) Response.Proof
+        | Request.RawProof    -> phase (symproof >> proof approx >> rawproof) Response.RawProof
+        | Request.Z3 rq       -> phase (symproof >> proof approx >> z3 reals rq) Response.Z3
+        | Request.HSF         -> phase (filterIndefinite >> hsf) Response.HSF
+        | Request.MuZ3 rq     -> phase (filterIndefinite >> muz3 reals rq) Response.MuZ3
+        | _                   -> fail (Error.Other "Internal")
 
     //Build a phase with
     //  op as what to do
@@ -351,14 +573,18 @@ let runStarling times optS reals verbose request =
 
 /// Runs Starling with the given options, and outputs the results.
 let mainWithOptions opts =
-    let optS = Seq.toList opts.optimisers
+    let optS = opts.optimisers
+    let backendS = opts.backendOpts
     let verbose = opts.verbose
-    let reals = opts.reals
     let times = opts.times
 
     let starlingR =
         match (requestFromStage opts.stage) with
-        | Some otype -> runStarling times optS reals verbose otype opts.input
+        // Handle pseudo-requests here, as it's cleaner than doing so in
+        // runStarling.
+        | Some Request.List ->
+            ok (Response.List (Map.map (fun _ -> fst) requestMap))
+        | Some otype -> runStarling times optS backendS verbose otype opts.input
         | None -> fail Error.BadStage
 
     let mview =
