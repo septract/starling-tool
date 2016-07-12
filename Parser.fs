@@ -64,7 +64,7 @@ let inParens p = inBrackets "(" ")" p
 /// Parser for items in {braces}.
 let inBraces p = inBrackets "{" "}" p
 /// Parser for items in {|view braces|}.
-let inViewBraces p = inBrackets "{|" "|}" p
+let inViewBraces p = inBrackets "{" "|}" p
 /// Parser for items in <angle brackets>.
 let inAngles p = inBrackets "<" ">" p
 
@@ -125,6 +125,14 @@ let parseParamList argp =
  * Expressions.
  *)
 
+/// Takes a Parser<'a, 'u> and gives back an annotated AST Node parser
+/// Parser<Node<'a>, 'u> which will annotate with extra information from
+/// the stream.
+let nodify v = 
+    getPosition 
+    >>= fun p ->
+        v |>> fun x -> { Position = p; Node = x }
+
 /// Parser for lvalues.
 let parseLValue, parseLValueRef = createParserForwardedToRef<LValue, unit> ()
 do parseLValueRef :=
@@ -148,20 +156,31 @@ let parseSymbolic =
 
 /// Parser for primary expressions.
 let parsePrimaryExpression =
-    choice [ pstring "true" >>% True
-             pstring "false" >>% False
-             pint64 |>> Int
-             parseLValue |>> LV
-             parseSymbolic |>> Symbolic
-             inParens parseExpression ] .>> ws
+    let expressions =  
+        (inParens parseExpression) :: List.map nodify [ 
+            pstring "true" >>% True
+            pstring "false" >>% False
+            pint64 |>> Int
+            parseLValue |>> LV
+            parseSymbolic |>> Symbolic
+    ]
+
+    choice expressions .>> ws
 
 /// Generic parser for tiers of binary expressions.
 /// Accepts the next precedence level parser, and a list of pairs of operator and AST representation.
 /// This generates a LEFT-associative precedence level.
 let parseBinaryExpressionLevel nextLevel expList =
+    let parse_bop (ops, op) = pstring ops .>> ws >>% curry3 Bop op
+    let update (n: Node<'a -> 'b -> 'c>) : 'a -> 'b -> Node<'c> = 
+        fun a -> fun b ->
+            match n.Node a b with
+                c -> { Node = c; Position = n.Position }
+    let parse_expr (ops, op) = parse_bop (ops, op) |> nodify |>> update
+
     chainl1 (nextLevel .>> ws)
             (choice
-                (List.map (fun (ops, op) -> (pstring ops .>> ws >>% curry3 Bop op)) expList)
+                (List.map parse_expr expList)
             )
 
 /// Parser for multiplicative expressions.
@@ -225,7 +244,7 @@ let parseFetchSigil =
 let parseFetchSrc =
     // We can't parse general expressions here, because they
     // eat the > at the end of the atomic and the sigil!
-    (parseLValue |>> LV)
+    (parseLValue |>> LV |> nodify)
     <|> inParens parseExpression
 
 /// Parser for fetch right-hand-sides.
@@ -442,7 +461,8 @@ let parseSkip
 
 /// Parser for simple commands (atomics, skips, and bracketed commands).
 do parseCommandRef :=
-    choice [ parseSkip
+    nodify <| 
+    (choice [parseSkip
              // ^- ;
              parseIf
              // ^- if ( <expression> ) <block> <block>
@@ -452,7 +472,7 @@ do parseCommandRef :=
              // ^- while ( <expression> ) <block>
              parseParSet
              // ^- <par-set>
-             parsePrimSet ]
+             parsePrimSet ])
              // ^- <prim-set>
 
 (*

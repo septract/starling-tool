@@ -8,12 +8,23 @@ open Starling.Collections
 open Starling.Core.Model
 open Starling.Core.Var.Types
 
+// re-use FParsec's Position data-type
+open FParsec
 
 /// <summary>
 ///     Types used in the AST.
 /// </summary>
 [<AutoOpen>]
 module Types =
+
+    /// A Node in the AST which annotates the data with information about position
+    //type Node<'a> = { lineno : int; Node : 'a; }
+    type Node<'a> = 
+        { Position: Position; Node: 'a }
+        static member (|>>) (n, f) = { Position = n.Position; Node = f n.Node }
+        static member (|=>) (n, b) = { Position = n.Position; Node = b }
+        override this.ToString() = sprintf "<%A: %A>" this.Position this.Node
+
     /// A Boolean operator.
     type Bop =
         | Mul // a * b
@@ -31,15 +42,16 @@ module Types =
 
     /// An untyped, raw expression.
     /// These currently cover all languages, but this may change later.
-    type Expression =
+    type Expressions =
         | True // true
         | False // false
         | Int of int64 // 42
         | LV of LValue // foobaz
         | Symbolic of string * Expression list // %{foo}(exprs)
         | Bop of Bop * Expression * Expression // a BOP b
+    and Expression = Node<Expressions>
 
-    /// An atomic action.
+    /// An atomic action.  
     type Atomic =
         | CompareAndSwap of LValue * LValue * Expression // <CAS(a, b, c)>
         | Fetch of LValue * Expression * FetchMode // <a = b??>
@@ -98,7 +110,7 @@ module Types =
           PostAssigns: (LValue * Expression) list }
 
     /// A statement in the command language.
-    type Command<'view> =
+    type Commands<'view> =
         /// A set of sequentially composed primitives.
         | Prim of PrimSet
         /// An if-then-else statement.
@@ -113,6 +125,7 @@ module Types =
                    * Expression // do { b } while (e)
         /// A list of parallel-composed blocks.
         | Blocks of Block<'view, Command<'view>> list
+    and Command<'view> = Node<Commands<'view>>
 
     /// A combination of a command and its postcondition view.
     and ViewedCommand<'view, 'cmd> =
@@ -142,8 +155,6 @@ module Types =
         | ViewProto of ViewProto // view name(int arg);
         | Constraint of ViewDef<DView, Expression> // constraint emp => true
         override this.ToString() = sprintf "%A" this
-
-
 /// <summary>
 ///     Pretty printers for the AST.
 /// </summary>
@@ -176,11 +187,11 @@ module Pretty =
 
     /// Pretty-prints expressions.
     /// This is not guaranteed to produce an optimal expression.
-    let rec printExpression =
+    let rec printExpressions =
         function
         | True -> String "true"
         | False -> String "false"
-        | Expression.Int i -> i.ToString() |> String
+        | Int i -> i.ToString() |> String
         | LV x -> printLValue x
         | Symbolic (sym, args) ->
             func (sprintf "%%{%s}" sym) (Seq.map printExpression args)
@@ -189,6 +200,8 @@ module Pretty =
                    printBop op
                    printExpression b ]
             |> parened
+
+    and printExpression e = printExpressions e.Node
 
     /// Pretty-prints views.
     let rec printView =
@@ -281,13 +294,13 @@ module Pretty =
                printBlock pView pCmd b ]
 
     /// Pretty-prints commands with the given indent level (in spaces).
-    let rec printCommand pView =
+    let rec printCommands pView =
         function
         (* The trick here is to make Prim [] appear as ;, but
            Prim [x; y; z] appear as x; y; z;, and to do the same with
            atomic lists. *)
-        | Prim { PreAssigns = ps
-                 Atomics = ts
+        | Commands.Prim { PreAssigns = ps;
+                 Atomics = ts;
                  PostAssigns = qs } ->
             seq { yield! Seq.map (uncurry printAssign) ps
                   yield (ts
@@ -295,20 +308,20 @@ module Pretty =
                          |> semiSep |> withSemi |> braced |> angled)
                   yield! Seq.map (uncurry printAssign) qs }
             |> semiSep |> withSemi
-        | If(c, t, f) ->
+        | Commands.If(c, t, f) ->
             hsep [ "if" |> String
                    c
                    |> printExpression
                    |> parened
                    t |> printBlock pView (printCommand pView)
                    f |> printBlock pView (printCommand pView)]
-        | While(c, b) ->
+        | Commands.While(c, b) ->
             hsep [ "while" |> String
                    c
                    |> printExpression
                    |> parened
                    b |> printBlock pView (printCommand pView) ]
-        | DoWhile(b, c) ->
+        | Commands.DoWhile(b, c) ->
             hsep [ "do" |> String
                    b |> printBlock pView (printCommand pView)
                    "while" |> String
@@ -316,10 +329,14 @@ module Pretty =
                    |> printExpression
                    |> parened ]
             |> withSemi
-        | Blocks bs ->
+        | Commands.Blocks bs ->
             bs
             |> List.map (printBlock pView (printCommand pView))
             |> hsepStr "||"
+
+    and printCommand pView cmd =
+        match cmd with
+        | { Node = n; Position = _ } -> printCommands pView n
 
     /// Pretty-prints a view prototype.
     let printViewProto { Name = n; Params = ps } =
@@ -376,7 +393,7 @@ let (|ArithIn|BoolIn|AnyIn|) =
 /// Active pattern classifying expressions as to whether they are
 /// arithmetic, Boolean, or indeterminate.
 let (|BoolExp|ArithExp|AnyExp|) e =
-    match e with
+    match e.Node with
     | LV _ -> AnyExp e
     | Symbolic _ -> AnyExp e
     | Int _ -> ArithExp e
@@ -387,6 +404,9 @@ let (|BoolExp|ArithExp|AnyExp|) e =
 (*
  * Misc
  *)
+let empty_position = Position("<unknown>", -1L, -1L, -1L)
+let fresh_node a = { Position = empty_position; Node = a }
+
 
 /// <summary>
 ///     Type-constrained version of <c>func</c> for <c>AFunc</c>s.
