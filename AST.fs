@@ -147,7 +147,7 @@ module Types =
     type CMethod<'view> = Method<'view, Command<'view>>
 
     /// A top-level item in a Starling script.
-    type ScriptItem =
+    type ScriptItems =
         | Global of VarDecl // global int name;
         | Local of VarDecl // local int name;
         | Method of CMethod<Marked<View>> // method main(argv, argc) { ... }
@@ -155,6 +155,8 @@ module Types =
         | ViewProto of ViewProto // view name(int arg);
         | Constraint of ViewDef<DView, Expression> // constraint emp => true
         override this.ToString() = sprintf "%A" this
+    and ScriptItem = Node<ScriptItems>
+
 /// <summary>
 ///     Pretty printers for the AST.
 /// </summary>
@@ -163,6 +165,10 @@ module Pretty =
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Var.Pretty
+
+    /// Some ANSI color codes for nice outputting
+    let line_info_fmt x = sprintf "\u001b[92m<[line %d]>\u001b[0m" x
+    let linecol_info_fmt x y = sprintf "\u001b[92m<[line %d, \u001b[36mcol %d\u001b[92m]>\u001b[0m" x y
 
     /// Pretty-prints lvalues.
     let rec printLValue = function
@@ -201,7 +207,9 @@ module Pretty =
                    printExpression b ]
             |> parened
 
-    and printExpression e = printExpressions e.Node
+    and printExpression e = 
+        match e with
+        | { Node = n; Position = p } -> hsep [linecol_info_fmt p.Line p.Column |> String; printExpressions n]
 
     /// Pretty-prints views.
     let rec printView =
@@ -336,7 +344,7 @@ module Pretty =
 
     and printCommand pView cmd =
         match cmd with
-        | { Node = n; Position = _ } -> printCommands pView n
+        | { Node = n; Position = p } -> hsep [line_info_fmt p.Line |> String; printCommands pView n]
 
     /// Pretty-prints a view prototype.
     let printViewProto { Name = n; Params = ps } =
@@ -354,7 +362,7 @@ module Pretty =
         hsep [ String cls; printCTyped String v ] |> withSemi
 
     /// Pretty-prints script lines.
-    let printScriptLine =
+    let printScriptLines =
         function
         | Global v -> printScriptVar "shared" v
         | Local v -> printScriptVar "thread" v
@@ -363,6 +371,10 @@ module Pretty =
         | ViewProto v -> printViewProto v
         | Search i -> printSearch i
         | Constraint c -> printConstraint c
+
+    let printScriptLine (s: ScriptItem) : Command = 
+        match s with
+        | { Node = n; Position = p } -> hsep [line_info_fmt p.Line |> String; printScriptLines n]
 
     /// Pretty-prints scripts.
     let printScript = List.map printScriptLine >> fun ls -> VSep(ls, vsep [ Nop; Nop ])

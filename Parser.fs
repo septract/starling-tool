@@ -555,7 +555,8 @@ let parseSearch =
 let parseScript =
     // TODO(CaptainHayashi): parse things that aren't methods:
     //   axioms definitions, etc
-    ws >>. manyTill (choice [parseMethod |>> Method
+    ws >>. manyTill (choice (List.map nodify 
+                            [parseMethod |>> Method
                              // ^- method <identifier> <arg-list> <block>
                              parseConstraint |>> Constraint
                              // ^- constraint <view> => <expression> ;
@@ -566,7 +567,7 @@ let parseScript =
                              // ^- search 0;
                              parseVar "shared" |>> Global
                              // ^- shared <type> <identifier> ;
-                             parseVar "thread" |>> Local] .>> ws ) eof
+                             parseVar "thread" |>> Local]) .>> ws ) eof
                              // ^- thread <type> <identifier> ;
 
 (*
