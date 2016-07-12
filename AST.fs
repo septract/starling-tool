@@ -52,12 +52,13 @@ module Types =
     and Expression = Node<Expressions>
 
     /// An atomic action.  
-    type Atomic =
+    type Atomics =
         | CompareAndSwap of LValue * LValue * Expression // <CAS(a, b, c)>
         | Fetch of LValue * Expression * FetchMode // <a = b??>
         | Postfix of LValue * FetchMode // <a++> or <a-->
         | Id // <id>
         | Assume of Expression // <assume(e)
+    and Atomic = Node<Atomics>
 
     /// A view prototype.
     type ViewProto = Func<Param>
@@ -167,8 +168,11 @@ module Pretty =
     open Starling.Core.Var.Pretty
 
     /// Some ANSI color codes for nice outputting
-    let line_info_fmt x = sprintf "\u001b[92m<[line %d]>\u001b[0m" x
-    let linecol_info_fmt x y = sprintf "\u001b[92m<[line %d, \u001b[36mcol %d\u001b[92m]>\u001b[0m" x y
+    /// wraps x as <[line n: x]> with color formats
+    let line_info_fmt x = sprintf "\u001b[92m<[line %d: \u001b[0m" x
+    let linecol_info_fmt x y = sprintf "\u001b[92m<[line %d, \u001b[36mcol %d: \u001b[0m" x y
+    let line_info f (x: Node<'a>) = hsep [ line_info_fmt x.Position.Line |> String; f x.Node; "\u001b[92m]>\u001b[0m" |> String ]
+    let linecol_info f (x: Node<'a>) = hsep [ linecol_info_fmt x.Position.Line x.Position.Column |> String; f x.Node; "\u001b[92m]>\u001b[0m" |> String ]
 
     /// Pretty-prints lvalues.
     let rec printLValue = function
@@ -206,10 +210,7 @@ module Pretty =
                    printBop op
                    printExpression b ]
             |> parened
-
-    and printExpression e = 
-        match e with
-        | { Node = n; Position = p } -> hsep [linecol_info_fmt p.Line p.Column |> String; printExpressions n]
+    and printExpression = linecol_info printExpressions
 
     /// Pretty-prints views.
     let rec printView =
@@ -262,7 +263,7 @@ module Pretty =
         equality (printLValue dest) (printExpression src)
 
     /// Pretty-prints atomic actions.
-    let printAtomic =
+    let printAtomics =
         function
         | CompareAndSwap(l, f, t) ->
             func "CAS" [ printLValue l
@@ -276,6 +277,7 @@ module Pretty =
                     printFetchMode m ]
         | Id -> String "id"
         | Assume e -> func "assume" [ printExpression e ]
+    let printAtomic = linecol_info printAtomics
 
     /// Pretty-prints viewed commands with the given indent level (in spaces).
     let printViewedCommand (pView : 'view -> Command)
@@ -341,10 +343,7 @@ module Pretty =
             bs
             |> List.map (printBlock pView (printCommand pView))
             |> hsepStr "||"
-
-    and printCommand pView cmd =
-        match cmd with
-        | { Node = n; Position = p } -> hsep [line_info_fmt p.Line |> String; printCommands pView n]
+    and printCommand pView = line_info (printCommands pView)
 
     /// Pretty-prints a view prototype.
     let printViewProto { Name = n; Params = ps } =
@@ -371,10 +370,7 @@ module Pretty =
         | ViewProto v -> printViewProto v
         | Search i -> printSearch i
         | Constraint c -> printConstraint c
-
-    let printScriptLine (s: ScriptItem) : Command = 
-        match s with
-        | { Node = n; Position = p } -> hsep [line_info_fmt p.Line |> String; printScriptLines n]
+    let printScriptLine = line_info printScriptLines
 
     /// Pretty-prints scripts.
     let printScript = List.map printScriptLine >> fun ls -> VSep(ls, vsep [ Nop; Nop ])

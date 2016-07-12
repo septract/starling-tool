@@ -280,6 +280,7 @@ let parseAtomic =
              parseAssume
              parseCAS
              parseFetchOrPostfix ]
+    |> nodify
 
 /// Parser for a collection of atomic actions.
 let parseAtomicSet =

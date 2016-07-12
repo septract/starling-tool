@@ -1049,8 +1049,8 @@ let modelFetch svars tvars destLV srcExpr mode =
     | lv -> fail (BadAVar(lv, NotFound (flattenLV lv)))
 
 /// Converts a single atomic command from AST to part-commands.
-let rec modelAtomic svars tvars =
-    function
+let rec modelAtomic svars tvars a =
+    match a.Node with
     | CompareAndSwap(dest, test, set) -> modelCAS svars tvars dest test set
     | Fetch(dest, src, mode) -> modelFetch svars tvars dest src mode
     | Postfix(operand, mode) ->
