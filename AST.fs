@@ -19,15 +19,8 @@ module Types =
 
     /// A Node in the AST which annotates the data with information about position
     //type Node<'a> = { lineno : int; Node : 'a; }
-    [<CustomEquality; NoComparison>]
-    type Node<'a> when 'a : equality = 
+    type Node<'a> = 
         { Position: SourcePosition; Node: 'a }
-
-        override this.Equals(x) = 
-            match x with 
-            | :? Node<'a> as n -> this.Node = n.Node
-            | _ -> false
-        override this.GetHashCode() = hash (this.Node)
         static member (|>>) (n, f) = { Position = n.Position; Node = f n.Node }
         static member (|=>) (n, b) = { Position = n.Position; Node = b }
         override this.ToString() = sprintf "<%A: %A>" this.Position this.Node
@@ -118,7 +111,7 @@ module Types =
           PostAssigns: (LValue * Expression) list }
 
     /// A statement in the command language.
-    type Commands<'view> when 'view : equality =
+    type Commands<'view> =
         /// A set of sequentially composed primitives.
         | Prim of PrimSet
         /// An if-then-else statement.
@@ -133,7 +126,7 @@ module Types =
                    * Expression // do { b } while (e)
         /// A list of parallel-composed blocks.
         | Blocks of Block<'view, Command<'view>> list
-    and Command<'view> when 'view : equality = Node<Commands<'view>>
+    and Command<'view> = Node<Commands<'view>>
 
     /// A combination of a command and its postcondition view.
     and ViewedCommand<'view, 'cmd> =
@@ -152,7 +145,7 @@ module Types =
           Body : Block<'view, 'cmd> } // ... { ... }
 
     /// Synonym for methods over Commands.
-    type CMethod<'view> when 'view : equality = Method<'view, Command<'view>>
+    type CMethod<'view> = Method<'view, Command<'view>>
 
     /// A top-level item in a Starling script.
     type ScriptItems =
