@@ -131,7 +131,8 @@ let parseParamList argp =
 let nodify v = 
     getPosition 
     >>= fun p ->
-        v |>> fun x -> { Position = p; Node = x }
+        v |>> fun x -> { Position = { StreamName = p.StreamName; Line = p.Line; Column = p.Column; }
+                         Node = x }
 
 /// Parser for lvalues.
 let parseLValue, parseLValueRef = createParserForwardedToRef<LValue, unit> ()
