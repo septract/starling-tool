@@ -421,6 +421,7 @@ let (|BoolExp|ArithExp|AnyExp|) e =
  *)
 let empty_position = { StreamName = ""; Line = 0L; Column = 0L; }
 let fresh_node a = { Position = empty_position; Node = a }
+let node streamname line column a = { Position = { StreamName=streamname; Line=line; Column=column }; Node = a }
 
 /// <summary>
 ///     Type-constrained version of <c>func</c> for <c>AFunc</c>s.

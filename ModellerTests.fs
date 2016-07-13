@@ -72,7 +72,7 @@ type ModellerTests() =
           TestCaseData(afunc "holdTick" [] |> View.Func)
              .Returns(Some [LookupError ("holdTick", CountMismatch(0, 1))])
              .SetName("Modelling a single view with bad parameter count returns an error")
-          TestCaseData(afunc "holdTick" [Expression.True] |> View.Func)
+          TestCaseData(afunc "holdTick" [fresh_node Expressions.True] |> View.Func)
              .Returns(Some [ LookupError
                                  ("holdTick",
                                   Error.TypeMismatch
@@ -91,7 +91,7 @@ type ModellerTests() =
 
     /// Arithmetic expression modelling tests.
     static member ArithmeticExprs =
-        [ TestCaseData(Bop(Add, Bop(Mul, Int 1L, Int 2L), Int 3L))
+        [ TestCaseData(fresh_node <| Bop(Add, fresh_node <| Bop(Mul, fresh_node <| Int 1L, fresh_node <| Int 2L), fresh_node <| Int 3L))
               .Returns(Some (AAdd [ AMul [ AInt 1L ; AInt 2L ] ; AInt 3L ]
                              : IntExpr<Sym<Var>>))
               .SetName("model (1 * 2) + 3") ]
@@ -105,7 +105,7 @@ type ModellerTests() =
     /// Boolean expression modelling tests.
     /// These all use the ticket lock model.
     static member BooleanExprs =
-        [ TestCaseData(Bop(And, Bop(Or, True, True), False))
+        [ TestCaseData(fresh_node <| Bop(And, fresh_node <| Bop(Or, fresh_node True, fresh_node True), fresh_node False))
               .Returns(Some (BFalse : BoolExpr<Sym<Var>>))
               .SetName("model and simplify (true || true) && false") ]
 
@@ -153,14 +153,15 @@ type ModellerTests() =
 
     /// Constructs a Command<View> containing one atomic.
     static member prim (ac : Atomic) : Command<ViewExpr<Starling.Lang.AST.Types.View>> =
-        Command.Prim { PreAssigns = []
-                       Atomics = [ ac ]
-                       PostAssigns = [] }
+        fresh_node
+        <| Commands.Prim { PreAssigns = []
+                           Atomics = [ ac ]
+                           PostAssigns = [] }
 
     /// Tests for the atomic primitive modeller.
     /// These use the ticket lock model.
     static member AtomicPrims =
-        [ TestCaseData(Fetch(LVIdent "t", LV(LVIdent "ticket"), Increment))
+        [ TestCaseData(Fetch(LVIdent "t", fresh_node <| LV(LVIdent "ticket"), Increment))
             .Returns(Some <|
                          smvfunc "!ILoad++"
                              [ "t" |> siBefore |> SMExpr.Int
@@ -181,8 +182,8 @@ type ModellerTests() =
     /// Tests for the command axiom modeller.
     /// These use the ticket lock model.
     static member CommandAxioms =
-        [ TestCaseData(ModellerTests.prim(Fetch(LVIdent "t",
-                                                LV(LVIdent "ticket"),
+        [ TestCaseData(ModellerTests.prim(fresh_node <| Fetch(LVIdent "t",
+                                                fresh_node <| LV(LVIdent "ticket"),
                                                 Increment)))
             .Returns(ModellerTests.mprim
                          [ func "!ILoad++" [ "t" |> siBefore |> SMExpr.Int
