@@ -176,10 +176,15 @@ module Pretty =
 
     /// Some ANSI color codes for nice outputting
     /// wraps x as <[line n: x]> with color formats
+    (*
     let line_info_fmt x = sprintf "\u001b[92m<[line %d: \u001b[0m" x
     let linecol_info_fmt x y = sprintf "\u001b[92m<[line %d, \u001b[36mcol %d: \u001b[0m" x y
     let line_info f (x: Node<'a>) = hsep [ line_info_fmt x.Position.Line |> String; f x.Node; "\u001b[92m]>\u001b[0m" |> String ]
     let linecol_info f (x: Node<'a>) = hsep [ linecol_info_fmt x.Position.Line x.Position.Column |> String; f x.Node; "\u001b[92m]>\u001b[0m" |> String ]
+    *)
+    // reset
+    let line_info f (x: Node<'a>) = f x.Node
+    let linecol_info f (x: Node<'a>) = f x.Node
 
     /// Pretty-prints lvalues.
     let rec printLValue = function
