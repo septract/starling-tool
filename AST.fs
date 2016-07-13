@@ -19,14 +19,21 @@ module Types =
 
     /// A Node in the AST which annotates the data with information about position
     //type Node<'a> = { lineno : int; Node : 'a; }
-    type Node<'a> = 
+    [<CustomEquality; NoComparison>]
+    type Node<'a> when 'a : equality = 
         { Position: SourcePosition; Node: 'a }
+
+        override this.Equals(x) = 
+            match x with 
+            | :? Node<'a> as n -> this.Node = n.Node
+            | _ -> false
+        override this.GetHashCode() = hash (this.Node)
         static member (|>>) (n, f) = { Position = n.Position; Node = f n.Node }
         static member (|=>) (n, b) = { Position = n.Position; Node = b }
         override this.ToString() = sprintf "<%A: %A>" this.Position this.Node
 
     /// A Boolean operator.
-    type Bop =
+    type BopTypes =
         | Mul // a * b
         | Div // a / b
         | Add // a + b
@@ -48,7 +55,7 @@ module Types =
         | Int of int64 // 42
         | LV of LValue // foobaz
         | Symbolic of string * Expression list // %{foo}(exprs)
-        | Bop of Bop * Expression * Expression // a BOP b
+        | Bop of BopTypes * Expression * Expression // a BOP b
     and Expression = Node<Expressions>
 
     /// An atomic action.  
@@ -111,7 +118,7 @@ module Types =
           PostAssigns: (LValue * Expression) list }
 
     /// A statement in the command language.
-    type Commands<'view> =
+    type Commands<'view> when 'view : equality =
         /// A set of sequentially composed primitives.
         | Prim of PrimSet
         /// An if-then-else statement.
@@ -126,7 +133,7 @@ module Types =
                    * Expression // do { b } while (e)
         /// A list of parallel-composed blocks.
         | Blocks of Block<'view, Command<'view>> list
-    and Command<'view> = Node<Commands<'view>>
+    and Command<'view> when 'view : equality = Node<Commands<'view>>
 
     /// A combination of a command and its postcondition view.
     and ViewedCommand<'view, 'cmd> =
@@ -145,7 +152,7 @@ module Types =
           Body : Block<'view, 'cmd> } // ... { ... }
 
     /// Synonym for methods over Commands.
-    type CMethod<'view> = Method<'view, Command<'view>>
+    type CMethod<'view> when 'view : equality = Method<'view, Command<'view>>
 
     /// A top-level item in a Starling script.
     type ScriptItems =
@@ -412,7 +419,7 @@ let (|BoolExp|ArithExp|AnyExp|) e =
 (*
  * Misc
  *)
-let empty_position = { StreamName = "<unknown>"; Line = -1L; Column = -1L; }
+let empty_position = { StreamName = ""; Line = 0L; Column = 0L; }
 let fresh_node a = { Position = empty_position; Node = a }
 
 /// <summary>

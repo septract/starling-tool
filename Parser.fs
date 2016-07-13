@@ -172,16 +172,11 @@ let parsePrimaryExpression =
 /// Accepts the next precedence level parser, and a list of pairs of operator and AST representation.
 /// This generates a LEFT-associative precedence level.
 let parseBinaryExpressionLevel nextLevel expList =
-    let parse_bop (ops, op) = pstring ops .>> ws >>% curry3 Bop op
-    let update (n: Node<'a -> 'b -> 'c>) : 'a -> 'b -> Node<'c> = 
-        fun a -> fun b ->
-            match n.Node a b with
-                c -> { Node = c; Position = n.Position }
-    let parse_expr (ops, op) = parse_bop (ops, op) |> nodify |>> update
+    let parse_bop (ops, op) = nodify (pstring ops) .>> ws |>> fun x -> fun a b -> { Node = Bop(op, a, b); Position = x.Position }
 
     chainl1 (nextLevel .>> ws)
             (choice
-                (List.map parse_expr expList)
+                (List.map parse_bop expList)
             )
 
 /// Parser for multiplicative expressions.
