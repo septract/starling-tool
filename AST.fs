@@ -42,23 +42,23 @@ module Types =
 
     /// An untyped, raw expression.
     /// These currently cover all languages, but this may change later.
-    type Expressions =
+    type ExpressionTypes =
         | True // true
         | False // false
         | Int of int64 // 42
         | LV of LValue // foobaz
         | Symbolic of string * Expression list // %{foo}(exprs)
         | Bop of BopTypes * Expression * Expression // a BOP b
-    and Expression = Node<Expressions>
+    and Expression = Node<ExpressionTypes>
 
     /// An atomic action.  
-    type Atomics =
+    type AtomicTypes =
         | CompareAndSwap of LValue * LValue * Expression // <CAS(a, b, c)>
         | Fetch of LValue * Expression * FetchMode // <a = b??>
         | Postfix of LValue * FetchMode // <a++> or <a-->
         | Id // <id>
         | Assume of Expression // <assume(e)
-    and Atomic = Node<Atomics>
+    and Atomic = Node<AtomicTypes>
 
     /// A view prototype.
     type ViewProto = Func<Param>
@@ -111,7 +111,7 @@ module Types =
           PostAssigns: (LValue * Expression) list }
 
     /// A statement in the command language.
-    type Commands<'view> =
+    type CommandTypes<'view> =
         /// A set of sequentially composed primitives.
         | Prim of PrimSet
         /// An if-then-else statement.
@@ -126,7 +126,7 @@ module Types =
                    * Expression // do { b } while (e)
         /// A list of parallel-composed blocks.
         | Blocks of Block<'view, Command<'view>> list
-    and Command<'view> = Node<Commands<'view>>
+    and Command<'view> = Node<CommandTypes<'view>>
 
     /// A combination of a command and its postcondition view.
     and ViewedCommand<'view, 'cmd> =
@@ -144,7 +144,7 @@ module Types =
         { Signature : Func<string> // main (argv, argc) ...
           Body : Block<'view, 'cmd> } // ... { ... }
 
-    /// Synonym for methods over Commands.
+    /// Synonym for methods over CommandTypes.
     type CMethod<'view> = Method<'view, Command<'view>>
 
     /// A top-level item in a Starling script.
@@ -309,12 +309,12 @@ module Pretty =
                printBlock pView pCmd b ]
 
     /// Pretty-prints commands with the given indent level (in spaces).
-    let rec printCommands pView =
+    let rec printCommandTypes pView =
         function
         (* The trick here is to make Prim [] appear as ;, but
            Prim [x; y; z] appear as x; y; z;, and to do the same with
            atomic lists. *)
-        | Commands.Prim { PreAssigns = ps;
+        | CommandTypes.Prim { PreAssigns = ps;
                  Atomics = ts;
                  PostAssigns = qs } ->
             seq { yield! Seq.map (uncurry printAssign) ps
@@ -323,20 +323,20 @@ module Pretty =
                          |> semiSep |> withSemi |> braced |> angled)
                   yield! Seq.map (uncurry printAssign) qs }
             |> semiSep |> withSemi
-        | Commands.If(c, t, f) ->
+        | CommandTypes.If(c, t, f) ->
             hsep [ "if" |> String
                    c
                    |> printExpression
                    |> parened
                    t |> printBlock pView (printCommand pView)
                    f |> printBlock pView (printCommand pView)]
-        | Commands.While(c, b) ->
+        | CommandTypes.While(c, b) ->
             hsep [ "while" |> String
                    c
                    |> printExpression
                    |> parened
                    b |> printBlock pView (printCommand pView) ]
-        | Commands.DoWhile(b, c) ->
+        | CommandTypes.DoWhile(b, c) ->
             hsep [ "do" |> String
                    b |> printBlock pView (printCommand pView)
                    "while" |> String
@@ -344,11 +344,11 @@ module Pretty =
                    |> printExpression
                    |> parened ]
             |> withSemi
-        | Commands.Blocks bs ->
+        | CommandTypes.Blocks bs ->
             bs
             |> List.map (printBlock pView (printCommand pView))
             |> hsepStr "||"
-    and printCommand pView = line_info (printCommands pView)
+    and printCommand pView = line_info (printCommandTypes pView)
 
     /// Pretty-prints a view prototype.
     let printViewProto { Name = n; Params = ps } =

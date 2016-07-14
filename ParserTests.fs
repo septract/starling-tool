@@ -33,22 +33,13 @@ module ExpressionTests =
     [<Test>]
     let ``Test order-of-operations on (1 + 2 * 3)``() =
         check parseExpression "1 + 2 * 3" <| Some
-        **  {Position = {StreamName = ""; Line = 1L; Column = 3L}
-             Node =
-              Bop (Add, 
-                   {Position = {StreamName = ""; Line = 1L; Column = 1L}
-                    Node = Int 1L},
-                   {Position = {StreamName = ""; Line = 1L; Column = 7L}
-                    Node = Bop (Mul,
-                                {Position = {StreamName = ""; Line = 1L; Column = 5L}
-                                 Node = Int 2L
-                                },
-                                {Position = {StreamName = ""; Line = 1L; Column = 9L}
-                                 Node = Int 3L})
-                                }
-                  )
-            }
-
+        ** node "" 1L 3L 
+            ** Bop (Add, 
+                    node "" 1L 1L (Int 1L),
+                    node "" 1L 7L 
+                        <| Bop (Mul,
+                                node "" 1L 5L (Int 2L),
+                                node "" 1L 9L (Int 3L)))
     [<Test>]
     let ``Test bracketing on (1 + 2) * 3``() =
         check parseExpression "(1 + 2) * 3"  <| Some
