@@ -1157,10 +1157,10 @@ and modelPrim svars tvars { PreAssigns = ps
 /// The list is enclosed in a Chessie result.
 and modelCommand protos svars tvars n =
     match n.Node with
-    | Commands.Prim p -> modelPrim svars tvars p
-    | Commands.If(i, t, e) -> modelITE protos svars tvars i t e
-    | Commands.While(e, b) -> modelWhile false protos svars tvars e b
-    | Commands.DoWhile(b, e) -> modelWhile true protos svars tvars e b
+    | CommandTypes.Prim p -> modelPrim svars tvars p
+    | CommandTypes.If(i, t, e) -> modelITE protos svars tvars i t e
+    | CommandTypes.While(e, b) -> modelWhile false protos svars tvars e b
+    | CommandTypes.DoWhile(b, e) -> modelWhile true protos svars tvars e b
     | _ -> fail (CommandNotImplemented n)
 
 /// Converts a view expression into a CView.

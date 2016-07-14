@@ -9,9 +9,7 @@ open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Symbolic
 open Starling.Core.Var
-open Starling.Core.Model
-open Starling.Core.GuardedView
-open Starling.Lang.AST
+open Starling.Core.Model open Starling.Core.GuardedView open Starling.Lang.AST
 open Starling.Lang.Collator
 open Starling.Lang.Modeller
 
@@ -64,7 +62,7 @@ let ticketLockLockMethodAST =
                               Line = 15L;
                               Column = 5L;};
                   Node =
-                   Commands.Prim
+                   CommandTypes.Prim
                      {PreAssigns = [];
                       Atomics =
                        [{Position =
@@ -113,7 +111,7 @@ let ticketLockLockMethodAST =
                               Line = 19L;
                               Column = 9L;};
                             Node =
-                             Commands.Prim
+                             CommandTypes.Prim
                                {PreAssigns = [];
                                 Atomics =
                                  [{Position =
@@ -196,7 +194,7 @@ let ticketLockUnlockMethodAST =
                           Line = 30L;
                           Column = 5L;};
               Node =
-               Commands.Prim
+               CommandTypes.Prim
                  {PreAssigns = [];
                   Atomics =
                    [{Position =
@@ -540,7 +538,7 @@ let ticketLockViewDefs =
           (Multiset.ofFlatList
                [ { Name = "holdLock"
                    Params = [] } ] |> Multiset.toFlatList,
-           BGt(siVar "ticket", siVar "serving"))
+           BNot (iEq (siVar "ticket") (siVar "serving")))
       Definite
           (Multiset.ofFlatList
                [ { Name = "holdLock"

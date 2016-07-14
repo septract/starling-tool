@@ -72,7 +72,7 @@ type ModellerTests() =
           TestCaseData(afunc "holdTick" [] |> View.Func)
              .Returns(Some [LookupError ("holdTick", CountMismatch(0, 1))])
              .SetName("Modelling a single view with bad parameter count returns an error")
-          TestCaseData(afunc "holdTick" [fresh_node Expressions.True] |> View.Func)
+          TestCaseData(afunc "holdTick" [fresh_node ExpressionTypes.True] |> View.Func)
              .Returns(Some [ LookupError
                                  ("holdTick",
                                   Error.TypeMismatch
@@ -154,14 +154,14 @@ type ModellerTests() =
     /// Constructs a Command<View> containing one atomic.
     static member prim (ac : Atomic) : Command<ViewExpr<Starling.Lang.AST.Types.View>> =
         fresh_node
-        <| Commands.Prim { PreAssigns = []
-                           Atomics = [ ac ]
-                           PostAssigns = [] }
+        <| CommandTypes.Prim {  PreAssigns = []
+                                Atomics = [ ac ]
+                                PostAssigns = [] }
 
     /// Tests for the atomic primitive modeller.
     /// These use the ticket lock model.
     static member AtomicPrims =
-        [ TestCaseData(Fetch(LVIdent "t", fresh_node <| LV(LVIdent "ticket"), Increment))
+        [ TestCaseData(fresh_node <| Fetch(LVIdent "t", fresh_node <| LV(LVIdent "ticket"), Increment))
             .Returns(Some <|
                          smvfunc "!ILoad++"
                              [ "t" |> siBefore |> SMExpr.Int
@@ -260,4 +260,3 @@ type ModellerTests() =
     /// Tests the whole modelling process.
     [<TestCaseSource("Models")>]
     member x.``case studies are modelled correctly`` col = model col |> okOption
-
