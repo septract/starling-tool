@@ -166,10 +166,10 @@ module Pretty =
                     (printMVFunc func)
                     (Starling.Core.Instantiate.Pretty.printError err)
         | NonArithParam p ->
-            fmt "parameter '{0}' is of type {1}: HSF only permits integers here"
+            fmt "invalid parameter '{0}': HSF only permits integers here"
                 [ printParam p ]
         | NonArithVar p ->
-            fmt "variable '{0}' is of type {1}: HSF only permits integers here"
+            fmt "invalid variable '{0}': HSF only permits integers here"
                 [ printParam p ]
         | UnsupportedExpr expr ->
             fmt "expression '{0}' is not supported in the HSF backend"
