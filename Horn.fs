@@ -82,7 +82,7 @@ module Pretty =
         | CompoundInt -> parened x
 
     /// Emits an integral expression in Datalog syntax.
-    let rec printInt : VIntExpr -> Command =
+    let rec printInt : VIntExpr -> Doc =
         function
         | AVar c -> String c
         | AInt i -> sprintf "%d" i |> String

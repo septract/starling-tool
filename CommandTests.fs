@@ -3,11 +3,7 @@
 /// </summary>
 module Starling.Tests.Core.Command
 
-(*
-open Starling.Utils
-*)
 open Starling.Core.TypeSystem
-
 open Starling.Core
 
 /// <summary>

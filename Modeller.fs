@@ -171,7 +171,7 @@ module Pretty =
     let printCView = printMultiset printCFunc >> ssurround "[|" "|]"
 
     /// Pretty-prints a part-cmd at the given indent level.
-    let rec printPartCmd (pView : 'view -> Command) : PartCmd<'view> -> Command =
+    let rec printPartCmd (pView : 'view -> Doc) : PartCmd<'view> -> Doc =
         function
         | PartCmd.Prim prim -> Command.Pretty.printCommand prim
         | PartCmd.While(isDo, expr, inner) ->
@@ -513,48 +513,48 @@ and modelBoolExpr
 
     let rec mb e =
         match e.Node with
-            | True -> BTrue |> ok
-            | False -> BFalse |> ok
-            | LV v ->
-                (* Look-up the variable to ensure it a) exists and b) is of a
-                 * Boolean type.
-                 *)
-                v
-                |> wrapMessages Var (lookupVar env)
-                |> bind (function
-                         | Typed.Bool vn -> vn |> varF |> Reg |> BVar |> ok
-                         | _ -> v |> VarNotBoolean |> fail)
-            | Symbolic (sym, args) ->
-                args
-                |> List.map me
-                |> collect
-                |> lift (func sym >> Sym >> BVar)
-            | Bop(BoolOp as op, l, r) ->
-                match op with
-                | ArithIn as o ->
-                    lift2 (match o with
-                           | Gt -> mkGt
-                           | Ge -> mkGe
-                           | Le -> mkLe
-                           | Lt -> mkLt
-                           | _ -> failwith "unreachable")
-                          (mi l)
-                          (mi r)
-                | BoolIn as o ->
-                    lift2 (match o with
-                           | And -> mkAnd2
-                           | Or -> mkOr2
-                           | _ -> failwith "unreachable")
-                          (mb l)
-                          (mb r)
-                | AnyIn as o ->
-                    lift2 (match o with
-                           | Eq -> mkEq
-                           | Neq -> mkNeq
-                           | _ -> failwith "unreachable")
-                          (me l)
-                          (me r)
-            | _ -> fail ExprNotBoolean
+        | True -> BTrue |> ok
+        | False -> BFalse |> ok
+        | LV v ->
+            (* Look-up the variable to ensure it a) exists and b) is of a
+             * Boolean type.
+             *)
+            v
+            |> wrapMessages Var (lookupVar env)
+            |> bind (function
+                     | Typed.Bool vn -> vn |> varF |> Reg |> BVar |> ok
+                     | _ -> v |> VarNotBoolean |> fail)
+        | Symbolic (sym, args) ->
+            args
+            |> List.map me
+            |> collect
+            |> lift (func sym >> Sym >> BVar)
+        | BopExpr(BoolOp as op, l, r) ->
+            match op with
+            | ArithIn as o ->
+                lift2 (match o with
+                       | Gt -> mkGt
+                       | Ge -> mkGe
+                       | Le -> mkLe
+                       | Lt -> mkLt
+                       | _ -> failwith "unreachable")
+                      (mi l)
+                      (mi r)
+            | BoolIn as o ->
+                lift2 (match o with
+                       | And -> mkAnd2
+                       | Or -> mkOr2
+                       | _ -> failwith "unreachable")
+                      (mb l)
+                      (mb r)
+            | AnyIn as o ->
+                lift2 (match o with
+                       | Eq -> mkEq
+                       | Neq -> mkNeq
+                       | _ -> failwith "unreachable")
+                      (me l)
+                      (me r)
+        | _ -> fail ExprNotBoolean
     mb
 
 /// <summary>
@@ -593,31 +593,31 @@ and modelIntExpr
 
     let rec mi e =
         match e.Node with
-            | Int i -> i |> AInt |> ok
-            | LV v ->
-                (* Look-up the variable to ensure it a) exists and b) is of an
-                 * arithmetic type.
-                 *)
-                v
-                |> wrapMessages Var (lookupVar env)
-                |> bind (function
-                         | Typed.Int vn -> vn |> varF |> Reg |> AVar |> ok
-                         | _ -> v |> VarNotInt |> fail)
-            | Symbolic (sym, args) ->
-                args
-                |> List.map me
-                |> collect
-                |> lift (func sym >> Sym >> AVar)
-            | Bop(ArithOp as op, l, r) ->
-                lift2 (match op with
-                       | Mul -> mkMul2
-                       | Div -> mkDiv
-                       | Add -> mkAdd2
-                       | Sub -> mkSub2
-                       | _ -> failwith "unreachable")
-                      (mi l)
-                      (mi r)
-            | _ -> fail ExprNotInt
+        | Int i -> i |> AInt |> ok
+        | LV v ->
+            (* Look-up the variable to ensure it a) exists and b) is of an
+             * arithmetic type.
+             *)
+            v
+            |> wrapMessages Var (lookupVar env)
+            |> bind (function
+                     | Typed.Int vn -> vn |> varF |> Reg |> AVar |> ok
+                     | _ -> v |> VarNotInt |> fail)
+        | Symbolic (sym, args) ->
+            args
+            |> List.map me
+            |> collect
+            |> lift (func sym >> Sym >> AVar)
+        | BopExpr(ArithOp as op, l, r) ->
+            lift2 (match op with
+                   | Mul -> mkMul2
+                   | Div -> mkDiv
+                   | Add -> mkAdd2
+                   | Sub -> mkSub2
+                   | _ -> failwith "unreachable")
+                  (mi l)
+                  (mi r)
+        | _ -> fail ExprNotInt
     mi
 
 (*
@@ -1066,9 +1066,9 @@ let rec modelAtomic svars tvars a =
             | Direct, _ ->
                 return! fail Useless
             | Increment, Typed.Bool _ ->
-                return! fail (IncBool (fresh_node <| LV operand))
+                return! fail (IncBool (freshNode <| LV operand))
             | Decrement, Typed.Bool _ ->
-                return! fail (DecBool (fresh_node <| LV operand))
+                return! fail (DecBool (freshNode <| LV operand))
             | Increment, Typed.Int _ ->
                 return func "!I++" [op |> Before |> Reg |> AVar |> Expr.Int
                                     op |> After |> Reg |> AVar |> Expr.Int]
@@ -1157,10 +1157,10 @@ and modelPrim svars tvars { PreAssigns = ps
 /// The list is enclosed in a Chessie result.
 and modelCommand protos svars tvars n =
     match n.Node with
-    | CommandTypes.Prim p -> modelPrim svars tvars p
-    | CommandTypes.If(i, t, e) -> modelITE protos svars tvars i t e
-    | CommandTypes.While(e, b) -> modelWhile false protos svars tvars e b
-    | CommandTypes.DoWhile(b, e) -> modelWhile true protos svars tvars e b
+    | Command'.Prim p -> modelPrim svars tvars p
+    | Command'.If(i, t, e) -> modelITE protos svars tvars i t e
+    | Command'.While(e, b) -> modelWhile false protos svars tvars e b
+    | Command'.DoWhile(b, e) -> modelWhile true protos svars tvars e b
     | _ -> fail (CommandNotImplemented n)
 
 /// Converts a view expression into a CView.
