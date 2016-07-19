@@ -39,7 +39,8 @@ module Types =
     ///         the two concepts.
     ///     </para>
     /// </remarks>
-    type Command = SMVFunc list
+    type PrimCommand = { Name : string; Args : SMExpr list; Results : Var list }
+    type Command = PrimCommand list
 
     /// <summary>
     ///     A term over <c>Command</c>s.
@@ -214,17 +215,24 @@ module SymRemove =
         | x -> x
 
 
+module Create = 
+    let command : string -> Var list -> SMExpr list -> PrimCommand =
+        fun name results args -> { Name = name; Results = results; Args = args }
+
+
 /// <summary>
 ///     Pretty printers for commands.
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Var.Pretty
-    open Starling.Core.Expr.Pretty
     open Starling.Core.Model.Pretty
+    open Starling.Core.Symbolic.Pretty
 
     /// Pretty-prints a Command.
-    let printCommand = List.map printSMVFunc >> semiSep
+    let printCommandType { Name = name; Args = xs; Results = ys } = 
+        hjoin [ commaSep <| Seq.map String ys; "<-" |> String; name |> String; commaSep <| Seq.map printSMExpr xs ]
 
+    let printCommand = List.map printCommandType >> semiSep
     /// Pretty-prints a PTerm.
     let printPTerm pWPre pGoal = printTerm printCommand pWPre pGoal

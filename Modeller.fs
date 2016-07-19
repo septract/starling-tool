@@ -15,6 +15,7 @@ open Starling.Core.Var
 open Starling.Core.Symbolic
 open Starling.Core.Model
 open Starling.Core.Command
+open Starling.Core.Command.Create
 open Starling.Core.Instantiate
 open Starling.Core.Sub
 open Starling.Lang.AST
@@ -713,7 +714,7 @@ let modelViewDef
 ///         caught them in the main defining view modeller.
 ///     </para>
 /// </remarks>
-let inViewDefs viewdefs dview =
+let inViewDefs (viewdefs : ViewDef<Func<'a> list, 'b> list) (dview : Func<'c> list) =
     List.exists
         (function
          | DefOver view ->
@@ -901,7 +902,8 @@ let rec modelCView protos ls =
 let (|VarIn|_|) env (lvalue : LValue) = tryLookupVar env lvalue
 
 /// Converts a Boolean load to a Prim.
-let modelBoolLoad svars dest srcExpr mode =
+let modelBoolLoad : VarMap -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
+    fun svars dest srcExpr mode ->
     (* In a Boolean load, the destination must be LOCAL and Boolean;
      *                    the source must be a GLOBAL Boolean lvalue;
      *                    and the fetch mode must be Direct.
@@ -913,12 +915,11 @@ let modelBoolLoad svars dest srcExpr mode =
             match src, mode with
             | Typed.Bool s, Direct ->
                 return
-                    smvfunc
+                    command
                         "!BLoad"
-                            [ dest |> Before |> Reg |> BVar |> Expr.Bool
-                              dest |> After |> Reg |> BVar |> Expr.Bool
-                              s |> Before |> Reg |> BVar |> Expr.Bool
-                              s |> After |> Reg |> BVar |> Expr.Bool ]
+                            [ dest ]
+                            [ s |> Before |> Reg |> BVar |> Expr.Bool ]
+                              
             | Typed.Bool s, Increment -> return! fail (IncBool srcExpr)
             | Typed.Bool s, Decrement -> return! fail (DecBool srcExpr)
             | _ -> return! fail (TypeMismatch (Type.Bool (), srcLV, typeOf src))
@@ -926,7 +927,8 @@ let modelBoolLoad svars dest srcExpr mode =
     | _ -> fail (LoadNonLV srcExpr)
 
 /// Converts an integer load to a Prim.
-let modelIntLoad svars dest srcExpr mode =
+let modelIntLoad : VarMap -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
+    fun svars dest srcExpr mode ->
     (* In an integer load, the destination must be LOCAL and integral;
      *                    the source must be a GLOBAL arithmetic lvalue;
      *                    and the fetch mode is unconstrained.
@@ -937,26 +939,21 @@ let modelIntLoad svars dest srcExpr mode =
             let! src = wrapMessages BadSVar (lookupVar svars) srcLV
             match src, mode with
             | Typed.Int s, Direct ->
-                return func "!ILoad" [ dest |> Before |> Reg |> AVar |> Expr.Int
-                                       dest |> After |> Reg |> AVar |> Expr.Int
-                                       s |> Before |> Reg |> AVar |> Expr.Int
-                                       s |> After |> Reg |> AVar |> Expr.Int ]
+                return command "!ILoad" [ dest ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
+
             | Typed.Int s, Increment ->
-                return func "!ILoad++" [ dest |> Before |> Reg |> AVar |> Expr.Int
-                                         dest |> After |> Reg |> AVar |> Expr.Int
-                                         s |> Before |> Reg |> AVar |> Expr.Int
-                                         s |> After |> Reg |> AVar |> Expr.Int ]
+                return command "ILoad++" [ dest; s ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
+
             | Typed.Int s, Decrement ->
-                return func "!ILoad--" [ dest |> Before |> Reg |> AVar |> Expr.Int
-                                         dest |> After |> Reg |> AVar |> Expr.Int
-                                         s |> Before |> Reg |> AVar |> Expr.Int
-                                         s |> After |> Reg |> AVar |> Expr.Int ]
+                return command "ILoad--" [ dest; s ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
+
             | _ -> return! fail (TypeMismatch (Type.Int (), srcLV, typeOf src))
         }
     | _ -> fail (LoadNonLV srcExpr)
 
 /// Converts a Boolean store to a Prim.
-let modelBoolStore locals dest src mode =
+let modelBoolStore : VarMap -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
+    fun locals dest src mode ->
     (* In a Boolean store, the destination must be GLOBAL and Boolean;
      *                     the source must be LOCAL and Boolean;
      *                     and the fetch mode must be Direct.
@@ -966,17 +963,17 @@ let modelBoolStore locals dest src mode =
         match mode with
         | Direct ->
             return
-                smvfunc
+                command
                     "!BStore"
-                    [ dest |> Before |> Reg |> BVar |> Expr.Bool
-                      dest |> After |> Reg |> BVar |> Expr.Bool
-                      sxp |> Expr.Bool ]
+                    [ dest ]
+                    [ sxp |> Expr.Bool ]
         | Increment -> return! fail (IncBool src)
         | Decrement -> return! fail (DecBool src)
     }
 
 /// Converts an integral store to a Prim.
-let modelIntStore locals dest src mode =
+let modelIntStore : VarMap -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
+    fun locals dest src mode ->
     (* In an integral store, the destination must be GLOBAL and integral;
      *                       the source must be LOCAL and integral;
      *                       and the fetch mode must be Direct.
@@ -985,16 +982,20 @@ let modelIntStore locals dest src mode =
         let! sxp =
             wrapMessages BadExpr (modelIntExpr locals MarkedVar.Before) src
         match mode with
-        | Direct -> return func "!IStore" [ dest |> Before |> Reg |> AVar |> Expr.Int
-                                            dest |> After |> Reg |> AVar |> Expr.Int
-                                            sxp |> Expr.Int ]
+        | Direct -> 
+            return
+                command
+                    "!IStore" 
+                    [ dest ] 
+                    [ sxp |> Expr.Int ]
+
         | Increment -> return! fail (IncExpr src)
         | Decrement -> return! fail (DecExpr src)
     }
 
 /// Converts a CAS to part-commands.
-let modelCAS svars tvars destLV testLV set
-  : Result<SMVFunc, PrimError> =
+let modelCAS : VarMap -> VarMap ->  LValue -> LValue -> Expression -> Result<PrimCommand, PrimError> =
+    fun svars tvars destLV testLV set ->
     (* In a CAS, the destination must be SHARED;
      *           the test variable must be THREADLOCAL;
      *           and the to-set value must be a valid expression.
@@ -1011,22 +1012,20 @@ let modelCAS svars tvars destLV testLV set
              |> wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Before)
              |> lift
                     (fun s ->
-                         smvfunc "BCAS"
-                             [ d |> sbBefore |> Expr.Bool
-                               d |> sbAfter |> Expr.Bool
-                               t |> sbBefore |> Expr.Bool
-                               t |> sbAfter |> Expr.Bool
-                               s |> Expr.Bool ] )
+                        command "BCAS"
+                            [ d; t ]
+                            [ d |> sbBefore |> Expr.Bool
+                              t |> sbBefore |> Expr.Bool
+                              s |> Expr.Bool ] )
          | UnifyInt (d, t) ->
             set
             |> wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Before)
             |> lift
                    (fun s ->
-                        smvfunc "ICAS"
+                        command "ICAS"
+                            [ d; t ]
                             [ d |> siBefore |> Expr.Int
-                              d |> siAfter |> Expr.Int
                               t |> siBefore |> Expr.Int
-                              t |> siAfter |> Expr.Int
                               s |> Expr.Int ] )
          | UnifyFail (d, t) ->
              // Oops, we have a type error.
@@ -1034,7 +1033,8 @@ let modelCAS svars tvars destLV testLV set
              fail (TypeMismatch (typeOf d, testLV, typeOf t)))
 
 /// Converts an atomic fetch to a model command.
-let modelFetch svars tvars destLV srcExpr mode =
+let modelFetch : VarMap -> VarMap -> LValue -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
+    fun svars tvars destLV srcExpr mode ->
     (* First, determine whether we have a fetch from shared to thread
      * (a load), or a fetch from thread to shared (a store).
      * Also figure out whether we have a Boolean or arithmetic
@@ -1049,7 +1049,8 @@ let modelFetch svars tvars destLV srcExpr mode =
     | lv -> fail (BadAVar(lv, NotFound (flattenLV lv)))
 
 /// Converts a single atomic command from AST to part-commands.
-let rec modelAtomic svars tvars a =
+let rec modelAtomic : VarMap -> VarMap -> Atomic -> Result<PrimCommand, PrimError> = 
+    fun svars tvars a ->
     match a.Node with
     | CompareAndSwap(dest, test, set) -> modelCAS svars tvars dest test set
     | Fetch(dest, src, mode) -> modelFetch svars tvars dest src mode
@@ -1070,20 +1071,19 @@ let rec modelAtomic svars tvars a =
             | Decrement, Typed.Bool _ ->
                 return! fail (DecBool (fresh_node <| LV operand))
             | Increment, Typed.Int _ ->
-                return func "!I++" [op |> Before |> Reg |> AVar |> Expr.Int
-                                    op |> After |> Reg |> AVar |> Expr.Int]
+                return command "!I++" [ op ] [op |> Before |> Reg |> AVar |> Expr.Int ]
             | Decrement, Typed.Int _ ->
-                return func "!I--" [op |> Before |> Reg |> AVar |> Expr.Int
-                                    op |> After |> Reg |> AVar |> Expr.Int]
+                return command "!I--" [ op ] [op |> Before |> Reg |> AVar |> Expr.Int ]
         }
-    | Id -> ok (func "Id" [])
+    | Id -> ok (command "Id" [] [])
     | Assume e ->
-        e
+        e 
         |> wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Before)
-        |> lift (Expr.Bool >> Seq.singleton >> func "Assume")
+        |> lift (Expr.Bool >> List.singleton >> command "Assume" [])
 
 /// Converts a local variable assignment to a Prim.
-and modelAssign tvars lLV e =
+and modelAssign : VarMap -> LValue -> Expression -> Result<PrimCommand, PrimError> = 
+    fun tvars lLV e ->
     (* We model assignments as !ILSet or !BLSet, depending on the
      * type of l, which _must_ be in the locals set..
      * We thus also have to make sure that e is the correct type.
@@ -1095,24 +1095,23 @@ and modelAssign tvars lLV e =
             let! em =
                 wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Before) e
             return
-                func
+                command
                     "!BLSet"
-                    [ ls |> Before |> Reg |> BVar |> Expr.Bool
-                      ls |> After |> Reg |> BVar |> Expr.Bool
-                      em |> Expr.Bool ]
+                    [ ls ]
+                    [ em |> Expr.Bool ]
         | Typed.Int ls ->
             let! em =
                 wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Before) e
             return
-                func
+                command
                     "!ILSet"
-                    [ ls |> Before |> Reg |> AVar |> Expr.Int
-                      ls |> After |> Reg |> AVar |> Expr.Int
-                      em |> Expr.Int ]
+                    [ ls ]
+                    [ em |> Expr.Int ]
     }
 
 /// Creates a partially resolved axiom for an if-then-else.
-and modelITE protos svars tvars i t f =
+and modelITE : seq<Func<Typed<string, string>> * unit> -> VarMap -> VarMap -> Expression -> Block<ViewExpr<View>, Command<ViewExpr<View>>> -> Block<ViewExpr<View>, Command<ViewExpr<View>>> -> Result<PartCmd<ViewExpr<Multiset<CFunc>>>, MethodError> =
+    fun protos svars tvars i t f ->
     trial { let! iM =
                 wrapMessages
                     BadITECondition
