@@ -9,7 +9,6 @@ open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
-open Starling.Core.Model
 
 
 /// <summary>
@@ -42,18 +41,6 @@ module Types =
     type PrimCommand = { Name : string; Args : SMExpr list; Results : Var list }
     type Command = PrimCommand list
 
-    /// <summary>
-    ///     A term over <c>Command</c>s.
-    /// </summary>
-    /// <typeparam name="wpre">
-    ///     The type of the weakest-precondition part of the term.
-    /// </typeparam>
-    /// <typeparam name="goal">
-    ///     The type of the goal part of the term.
-    /// </typeparam>
-    type PTerm<'wpre, 'goal> = Term<Command, 'wpre, 'goal>
-
-
 /// <summary>
 ///     Queries on commands.
 /// </summary>
@@ -70,30 +57,15 @@ module Queries =
     /// </returns>
     let isNop =
         List.forall
-            (fun { Params = ps } ->
-                 (* We treat a func as a no-op if all variables it contains
-                  * are in the pre-state.  Thus, it cannot be modifying the
-                  * post-state, if it is well-formed.
-                  *
-                  * If we see any symbolic variables, err on the side of
-                  * caution and say it isn't a nop.  This is because the
-                  * symbol could mean _anything_, regardless of what we
-                  * put into it!
-                  *)
-                 Seq.forall (function
-                             | SMExpr.Int (AVar (Reg (Before _))) -> true
-                             | SMExpr.Int (AVar _) -> false
-                             | SMExpr.Bool (BVar (Reg (Before _))) -> true
-                             | SMExpr.Bool (BVar _) -> false
-                             | _ -> true)
-                            ps)
+            (fun { Results = ps } ->
+                  ps = [])
 
     /// <summary>
     ///     Active pattern matching assume commands.
     /// </summary>
     let (|Assume|_|) =
         function
-        | [ { Name = n ; Params = [ SMExpr.Bool b ] } ]
+        | [ { Name = n ; Args = [ SMExpr.Bool b ] } ]
           when n = "Assume" -> Some b
         | _ -> None
 
@@ -204,7 +176,7 @@ module SymRemove =
     ///     Tries to remove symbolic assignments from a command in
     ///     Boolean expression form.
     /// </summary>
-    let rec removeSym : SMBoolExpr -> SMBoolExpr =
+    let rec removeSym : BoolExpr<Sym<'a>> -> BoolExpr<Sym<'a>> =
         function
         | SymAssign (_, _) -> BTrue
         // Distributivity.
@@ -226,13 +198,10 @@ module Create =
 module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Var.Pretty
-    open Starling.Core.Model.Pretty
     open Starling.Core.Symbolic.Pretty
 
     /// Pretty-prints a Command.
-    let printCommandType { Name = name; Args = xs; Results = ys } = 
+    let printPrimCommand { Name = name; Args = xs; Results = ys } = 
         hjoin [ commaSep <| Seq.map String ys; "<-" |> String; name |> String; commaSep <| Seq.map printSMExpr xs ]
 
-    let printCommand = List.map printCommandType >> semiSep
-    /// Pretty-prints a PTerm.
-    let printPTerm pWPre pGoal = printTerm printCommand pWPre pGoal
+    let printCommand = List.map printPrimCommand >> semiSep

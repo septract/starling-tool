@@ -23,7 +23,8 @@ open Starling.Lang.Collator
 
 
 /// <summary>
-///     Types used only in the modeller and adjacent pipeline stages.  /// </summary>
+///     Types used only in the modeller and adjacent pipeline stages.
+/// </summary>
 [<AutoOpen>]
 module Types =
     /// A conditional (flat or if-then-else) func.
@@ -174,12 +175,12 @@ module Pretty =
     /// Pretty-prints a part-cmd at the given indent level.
     let rec printPartCmd (pView : 'view -> Command) : PartCmd<'view> -> Command =
         function
-        | PartCmd.Prim prim -> Command.Pretty.printCommand prim
-        | PartCmd.While(isDo, expr, inner) ->
+        | Prim prim -> Command.Pretty.printCommand prim
+        | While(isDo, expr, inner) ->
             cmdHeaded (hsep [ String(if isDo then "Do-while" else "While")
                               (printSVBoolExpr expr) ])
                       [printBlock pView (printPartCmd pView) inner]
-        | PartCmd.ITE(expr, inTrue, inFalse) ->
+        | ITE(expr, inTrue, inFalse) ->
             cmdHeaded (hsep [String "begin if"
                              (printSVBoolExpr expr) ])
                       [headed "True" [printBlock pView (printPartCmd pView) inTrue]
@@ -306,8 +307,6 @@ module Pretty =
 (*
  * Starling imperative language semantics
  *)
-let prim : string -> Param list -> Param list -> SVBoolExpr -> PrimSemantics =  
-    fun name results args body -> { Name = name; Results = results; Args = args; Body = body }
 
 /// <summary>
 ///   The core semantic function for the imperative language.
@@ -318,93 +317,100 @@ let prim : string -> Param list -> Param list -> SVBoolExpr -> PrimSemantics =
 ///     imperative language.
 ///   </para>
 /// </remarks>
-let coreSemantics : PrimSemanticsMap =
+let coreSemantics =
     // TODO(CaptainHayashi): specify this in the language (standard library?).
     // TODO(CaptainHayashi): generic functions?
     // TODO(CaptainHayashi): add shared/local/expr qualifiers to parameters?
-    List.fold (fun m (a : PrimSemantics) -> Map.add a.Name a m) Map.empty
-    <| [ (*
+    [ (*
        * CAS
        *)
-      (prim "ICAS" [ Param.Int "destA"; Param.Int "testA"; ] [ Param.Int "destB"; Param.Int "testB"; Param.Int "setB"; ]
-           <| mkAnd [ mkImplies (iEq (siVar "destB") (siVar "testB"))
-                             (mkAnd [ iEq (siVar "destA") (siVar "set")
-                                      iEq (siVar "testA") (siVar "testB") ] )
-                      mkImplies (mkNot (iEq (siVar "destB") (siVar "testB")))
-                                (mkAnd [ iEq (siVar "destA") (siVar "destB")
-                                         iEq (siVar "testA") (siVar "destB") ] ) ] )
+
+      // Integer CAS
+      (func "ICAS" [ Param.Int "destB"; Param.Int "destA"
+                     Param.Int "testB"; Param.Int "testA"
+                     Param.Int "set" ],
+       mkAnd [ mkImplies (iEq (siVar "destB") (siVar "testB"))
+                         (mkAnd [ iEq (siVar "destA") (siVar "set")
+                                  iEq (siVar "testA") (siVar "testB") ] )
+               mkImplies (mkNot (iEq (siVar "destB") (siVar "testB")))
+                         (mkAnd [ iEq (siVar "destA") (siVar "destB")
+                                  iEq (siVar "testA") (siVar "destB") ] ) ] )
       // Boolean CAS
-      (prim "BCAS" [Param.Bool "destA"; Param.Bool "testA"; ] [Param.Bool "destB"; Param.Bool "testB"; Param.Bool "setB"; ]
-           <| mkAnd [ mkImplies (bEq (sbVar "destB") (sbVar "testB"))
-                                (mkAnd [ bEq (sbVar "destA") (sbVar "set")
-                                         bEq (sbVar "testA") (sbVar "testB") ] )
-                      mkImplies (mkNot (bEq (sbVar "destB") (sbVar "testB")))
-                                (mkAnd [ bEq (sbVar "destA") (sbVar "destB")
-                                         bEq (sbVar "testA") (sbVar "destB") ] ) ] )
+      (func "BCAS" [ Param.Bool "destB"; Param.Bool "destA"
+                     Param.Bool "testB"; Param.Bool "testA"
+                     Param.Bool "set" ],
+       mkAnd [ mkImplies (bEq (sbVar "destB") (sbVar "testB"))
+                         (mkAnd [ bEq (sbVar "destA") (sbVar "set")
+                                  bEq (sbVar "testA") (sbVar "testB") ] )
+               mkImplies (mkNot (bEq (sbVar "destB") (sbVar "testB")))
+                         (mkAnd [ bEq (sbVar "destA") (sbVar "destB")
+                                  bEq (sbVar "testA") (sbVar "destB") ] ) ] )
 
       (*
        * Atomic load
        *)
+
       // Integer load
-      (prim "!ILoad"  [ Param.Int "dest" ] [ Param.Int "src" ]
-           <| iEq (siVar "dest") (siVar "src"))
-
+      (func "!ILoad" [ Param.Int "destB"; Param.Int "destA"
+                       Param.Int "srcB"; Param.Int "srcA" ],
+       mkAnd [ iEq (siVar "destA") (siVar "srcB")
+               iEq (siVar "srcA") (siVar "srcB") ] )
       // Integer load-and-increment
-      (prim "!ILoad++"  [ Param.Int "dest"; Param.Int "srcA" ] [ Param.Int "srcB" ]
-           <| mkAnd [ iEq (siVar "dest") (siVar "srcB")
-                      iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (AInt 1L)) ])
-
+      (func "!ILoad++" [ Param.Int "destB"; Param.Int "destA"
+                         Param.Int "srcB"; Param.Int "srcA" ],
+       mkAnd [ iEq (siVar "destA") (siVar "srcB")
+               iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (AInt 1L)) ] )
       // Integer load-and-decrement
-      (prim "!ILoad--"  [ Param.Int "dest"; Param.Int "srcA" ] [ Param.Int "srcB" ]
-           <| mkAnd [ iEq (siVar "dest") (siVar "srcB")
-                      iEq (siVar "srcA") (mkSub2 (siVar "srcB") (AInt 1L)) ])
-
+      (func "!ILoad--" [ Param.Int "destB"; Param.Int "destA"
+                         Param.Int "srcB"; Param.Int "srcA" ],
+       mkAnd [ iEq (siVar "destA") (siVar "srcB")
+               iEq (siVar "srcA") (mkSub2 (siVar "srcB") (AInt 1L)) ] )
       // Integer increment
-      (prim "!I++"  [ Param.Int "srcA" ] [ Param.Int "srcB" ]
-           <| iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (AInt 1L)))
-
+      (func "!I++" [ Param.Int "srcB"; Param.Int "srcA" ],
+       mkAnd [ iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (AInt 1L)) ] )
       // Integer decrement
-      (prim "!I--"  [ Param.Int "srcA" ] [ Param.Int "srcB" ]
-           <| iEq (siVar "srcA") (mkSub2 (siVar "srcB") (AInt 1L)))
-
+      (func "!I--" [ Param.Int "srcB"; Param.Int "srcA" ],
+       mkAnd [ iEq (siVar "srcA") (mkSub2 (siVar "srcB") (AInt 1L)) ] )
       // Boolean load
-      (prim "!BLoad"  [ Param.Bool "dest" ] [ Param.Bool "src" ]
-           <| bEq (sbVar "dest") (sbVar "src"))
+      (func "!BLoad" [ Param.Bool "destB"; Param.Bool "destA"
+                       Param.Bool "srcB"; Param.Bool "srcA" ],
+       mkAnd [ bEq (sbVar "destA") (sbVar "srcB")
+               bEq (sbVar "srcA") (sbVar "srcB") ] )
 
       (*
        * Atomic store
        *)
 
       // Integer store
-      (prim "!IStore" [ Param.Int "dest" ] [ Param.Int "src" ]
-           <| iEq (siVar "dest") (siVar "src"))
-
+      (func "!IStore" [ Param.Int "destB"; Param.Int "destA"
+                        Param.Int "src" ],
+       iEq (siVar "destA") (siVar "src"))
       // Boolean store
-      (prim "!BStore" [ Param.Bool "dest" ] [ Param.Bool "src" ]
-           <| bEq (sbVar "dest") (sbVar "src"))
+      (func "!BStore" [ Param.Bool "destB"; Param.Bool "destA"
+                        Param.Bool "src" ],
+       bEq (sbVar "destA") (sbVar "src"))
 
       (*
        * Local set
        *)
 
       // Integer local set
-      (prim "!ILSet" [ Param.Int "dest" ] [ Param.Int "src" ] 
-           <| iEq (siVar "dest") (siVar "src"))
-
+      (func "!ILSet" [ Param.Int "destB"; Param.Int "destA"
+                       Param.Int "src" ],
+       iEq (siVar "destA") (siVar "src"))
       // Boolean store
-      (prim "!BLSet" [ Param.Bool "dest" ] [ Param.Bool "src" ] 
-           <| bEq (sbVar "dest") (sbVar "src"))
+      (func "!BLSet" [ Param.Bool "destB"; Param.Bool "destA"
+                       Param.Bool "src" ],
+       bEq (sbVar "destA") (sbVar "src"))
 
       (*
        * Assumptions
        *)
 
       // Identity
-      (prim "Id" [] [] BTrue)
-
+      (func "Id" [], BTrue)
       // Assume
-      (prim "Assume" [] [Param.Bool "expr"] <| sbVar "expr") ]
-
+      (func "Assume" [ Param.Bool "expr" ], sbVar "expr") ]
 
 (*
  * Expression translation
@@ -449,28 +455,27 @@ let coreSemantics : PrimSemanticsMap =
 let rec modelExpr
   (env : VarMap)
   (varF : Var -> 'var)
-  (e : Expression) : Result<Expr<Sym<'var>>, ExprError> =
-    match e.Node with
+  : Expression -> Result<Expr<Sym<'var>>, ExprError> =
+    function
     (* First, if we have a variable, the type of expression is
        determined by the type of the variable.  If the variable is
        symbolic, then we have ambiguity. *)
-        | LV v ->
-            v
-            |> wrapMessages Var (lookupVar env)
-            |> lift
-                   (Mapper.map
-                        (Mapper.compose
-                             (Mapper.cmake (varF >> Reg))
-                             (Mapper.make AVar BVar)))
-        | Symbolic (sym, exprs) ->
-            fail (AmbiguousSym sym)
-        (* We can use the active patterns above to figure out whether we
-         * need to treat this expression as arithmetic or Boolean.
-         *)
-        | _ -> match e with
-                | ArithExp expr -> expr |> modelIntExpr env varF |> lift Expr.Int
-                | BoolExp expr -> expr |> modelBoolExpr env varF |> lift Expr.Bool
-                | _ -> failwith "unreachable"
+    | LV v ->
+        v
+        |> wrapMessages Var (lookupVar env)
+        |> lift
+               (Mapper.map
+                    (Mapper.compose
+                         (Mapper.cmake (varF >> Reg))
+                         (Mapper.make AVar BVar)))
+    | Symbolic (sym, exprs) ->
+        fail (AmbiguousSym sym)
+    (* We can use the active patterns above to figure out whether we
+     * need to treat this expression as arithmetic or Boolean.
+     *)
+    | ArithExp expr -> expr |> modelIntExpr env varF |> lift Expr.Int
+    | BoolExp expr -> expr |> modelBoolExpr env varF |> lift Expr.Bool
+    | _ -> failwith "unreachable"
 
 /// <summary>
 ///     Models a Starling integral expression as a <c>BoolExpr</c>.
@@ -507,50 +512,50 @@ and modelBoolExpr
     let mi = modelIntExpr env varF
     let me = modelExpr env varF
 
-    let rec mb e =
-        match e.Node with
-            | True -> BTrue |> ok
-            | False -> BFalse |> ok
-            | LV v ->
-                (* Look-up the variable to ensure it a) exists and b) is of a
-                 * Boolean type.
-                 *)
-                v
-                |> wrapMessages Var (lookupVar env)
-                |> bind (function
-                         | Typed.Bool vn -> vn |> varF |> Reg |> BVar |> ok
-                         | _ -> v |> VarNotBoolean |> fail)
-            | Symbolic (sym, args) ->
-                args
-                |> List.map me
-                |> collect
-                |> lift (func sym >> Sym >> BVar)
-            | Bop(BoolOp as op, l, r) ->
-                match op with
-                | ArithIn as o ->
-                    lift2 (match o with
-                           | Gt -> mkGt
-                           | Ge -> mkGe
-                           | Le -> mkLe
-                           | Lt -> mkLt
-                           | _ -> failwith "unreachable")
-                          (mi l)
-                          (mi r)
-                | BoolIn as o ->
-                    lift2 (match o with
-                           | And -> mkAnd2
-                           | Or -> mkOr2
-                           | _ -> failwith "unreachable")
-                          (mb l)
-                          (mb r)
-                | AnyIn as o ->
-                    lift2 (match o with
-                           | Eq -> mkEq
-                           | Neq -> mkNeq
-                           | _ -> failwith "unreachable")
-                          (me l)
-                          (me r)
-            | _ -> fail ExprNotBoolean
+    let rec mb =
+        function
+        | True -> BTrue |> ok
+        | False -> BFalse |> ok
+        | LV v ->
+            (* Look-up the variable to ensure it a) exists and b) is of a
+             * Boolean type.
+             *)
+            v
+            |> wrapMessages Var (lookupVar env)
+            |> bind (function
+                     | Typed.Bool vn -> vn |> varF |> Reg |> BVar |> ok
+                     | _ -> v |> VarNotBoolean |> fail)
+        | Symbolic (sym, args) ->
+            args
+            |> List.map me
+            |> collect
+            |> lift (func sym >> Sym >> BVar)
+        | Bop(BoolOp as op, l, r) ->
+            match op with
+            | ArithIn as o ->
+                lift2 (match o with
+                       | Gt -> mkGt
+                       | Ge -> mkGe
+                       | Le -> mkLe
+                       | Lt -> mkLt
+                       | _ -> failwith "unreachable")
+                      (mi l)
+                      (mi r)
+            | BoolIn as o ->
+                lift2 (match o with
+                       | And -> mkAnd2
+                       | Or -> mkOr2
+                       | _ -> failwith "unreachable")
+                      (mb l)
+                      (mb r)
+            | AnyIn as o ->
+                lift2 (match o with
+                       | Eq -> mkEq
+                       | Neq -> mkNeq
+                       | _ -> failwith "unreachable")
+                      (me l)
+                      (me r)
+        | _ -> fail ExprNotBoolean
     mb
 
 /// <summary>
@@ -587,33 +592,33 @@ and modelIntExpr
   : Expression -> Result<IntExpr<Sym<'var>>, ExprError> =
     let me = modelExpr env varF
 
-    let rec mi e =
-        match e.Node with
-            | Int i -> i |> AInt |> ok
-            | LV v ->
-                (* Look-up the variable to ensure it a) exists and b) is of an
-                 * arithmetic type.
-                 *)
-                v
-                |> wrapMessages Var (lookupVar env)
-                |> bind (function
-                         | Typed.Int vn -> vn |> varF |> Reg |> AVar |> ok
-                         | _ -> v |> VarNotInt |> fail)
-            | Symbolic (sym, args) ->
-                args
-                |> List.map me
-                |> collect
-                |> lift (func sym >> Sym >> AVar)
-            | Bop(ArithOp as op, l, r) ->
-                lift2 (match op with
-                       | Mul -> mkMul2
-                       | Div -> mkDiv
-                       | Add -> mkAdd2
-                       | Sub -> mkSub2
-                       | _ -> failwith "unreachable")
-                      (mi l)
-                      (mi r)
-            | _ -> fail ExprNotInt
+    let rec mi =
+        function
+        | Int i -> i |> AInt |> ok
+        | LV v ->
+            (* Look-up the variable to ensure it a) exists and b) is of an
+             * arithmetic type.
+             *)
+            v
+            |> wrapMessages Var (lookupVar env)
+            |> bind (function
+                     | Typed.Int vn -> vn |> varF |> Reg |> AVar |> ok
+                     | _ -> v |> VarNotInt |> fail)
+        | Symbolic (sym, args) ->
+            args
+            |> List.map me
+            |> collect
+            |> lift (func sym >> Sym >> AVar)
+        | Bop(ArithOp as op, l, r) ->
+            lift2 (match op with
+                   | Mul -> mkMul2
+                   | Div -> mkDiv
+                   | Add -> mkAdd2
+                   | Sub -> mkSub2
+                   | _ -> failwith "unreachable")
+                  (mi l)
+                  (mi r)
+        | _ -> fail ExprNotInt
     mi
 
 (*
@@ -709,18 +714,18 @@ let modelViewDef
 ///         caught them in the main defining view modeller.
 ///     </para>
 /// </remarks>
-let inViewDefs : ViewDef<Func<'a> list, 'b> list -> Func<'c> list -> bool = 
-    fun viewdefs dview ->
+let inViewDefs (viewdefs : ViewDef<Func<'a>, 'b> list) (dview : Func<'c> list) =
     List.exists
-        (fun view ->
+        (function
+         | DefOver view ->
              if (List.length view = List.length dview)
              then
                  List.forall2
-                     (fun (vdfunc: Func<'a>) (dfunc : Func<'c>) -> vdfunc.Name = dfunc.Name)
+                     (fun vdfunc dfunc -> vdfunc.Name = dfunc.Name)
                      view
                      dview
              else false)
-        <| List.map viewOf viewdefs
+        viewdefs
 
 /// <summary>
 ///     Converts a <c>DView</c> to an indefinite <c>ViewDef</c>.
@@ -903,7 +908,7 @@ let modelBoolLoad : VarMap -> Var -> Expression -> FetchMode -> Result<PrimComma
      *                    the source must be a GLOBAL Boolean lvalue;
      *                    and the fetch mode must be Direct.
      *)
-    match srcExpr.Node with
+    match srcExpr with
     | LV srcLV ->
         trial {
             let! src = wrapMessages BadSVar (lookupVar svars) srcLV
@@ -928,7 +933,7 @@ let modelIntLoad : VarMap -> Var -> Expression -> FetchMode -> Result<PrimComman
      *                    the source must be a GLOBAL arithmetic lvalue;
      *                    and the fetch mode is unconstrained.
      *)
-    match srcExpr.Node with
+    match srcExpr with
     | LV srcLV ->
         trial {
             let! src = wrapMessages BadSVar (lookupVar svars) srcLV
@@ -1044,9 +1049,14 @@ let modelFetch : VarMap -> VarMap -> LValue -> Expression -> FetchMode -> Result
     | lv -> fail (BadAVar(lv, NotFound (flattenLV lv)))
 
 /// Converts a single atomic command from AST to part-commands.
+<<<<<<< Updated upstream
+let rec modelAtomic svars tvars =
+    function
+=======
 let rec modelAtomic : VarMap -> VarMap -> Atomic -> Result<PrimCommand, PrimError> = 
     fun svars tvars a ->
     match a.Node with
+>>>>>>> Stashed changes
     | CompareAndSwap(dest, test, set) -> modelCAS svars tvars dest test set
     | Fetch(dest, src, mode) -> modelFetch svars tvars dest src mode
     | Postfix(operand, mode) ->
@@ -1062,9 +1072,9 @@ let rec modelAtomic : VarMap -> VarMap -> Atomic -> Result<PrimCommand, PrimErro
             | Direct, _ ->
                 return! fail Useless
             | Increment, Typed.Bool _ ->
-                return! fail (IncBool (fresh_node <| LV operand))
+                return! fail (IncBool (LV operand))
             | Decrement, Typed.Bool _ ->
-                return! fail (DecBool (fresh_node <| LV operand))
+                return! fail (DecBool (LV operand))
             | Increment, Typed.Int _ ->
                 return command "!I++" [ op ] [op |> Before |> Reg |> AVar |> Expr.Int ]
             | Decrement, Typed.Int _ ->
@@ -1149,13 +1159,13 @@ and modelPrim svars tvars { PreAssigns = ps
 
 /// Converts a command to a PartCmd.
 /// The list is enclosed in a Chessie result.
-and modelCommand protos svars tvars n =
-    match n.Node with
-    | CommandTypes.Prim p -> modelPrim svars tvars p
-    | CommandTypes.If(i, t, e) -> modelITE protos svars tvars i t e
-    | CommandTypes.While(e, b) -> modelWhile false protos svars tvars e b
-    | CommandTypes.DoWhile(b, e) -> modelWhile true protos svars tvars e b
-    | _ -> fail (CommandNotImplemented n)
+and modelCommand protos svars tvars =
+    function
+    | AST.Types.Command.Prim p -> modelPrim svars tvars p
+    | If(i, t, e) -> modelITE protos svars tvars i t e
+    | Command.While(e, b) -> modelWhile false protos svars tvars e b
+    | DoWhile(b, e) -> modelWhile true protos svars tvars e b
+    | c -> fail (CommandNotImplemented c)
 
 /// Converts a view expression into a CView.
 and modelViewExpr protos ls =
