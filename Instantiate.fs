@@ -369,9 +369,14 @@ let paramSubFun
              | None -> failwith "free variable in substitution")
 
 let primParamSubFun
-  ( { Args = fpars } : PrimCommand )
-  ( { Args = dpars  } : PrimSemantics )
+  ( cmd : PrimCommand )
+  ( sem : PrimSemantics )
   : VSubFun<Var, Sym<MarkedVar>> =
+    /// merge the pre + post conditions
+    let fres = List.map (After >> Reg >> AVar >> Expr.Int) cmd.Results
+    let fpars = cmd.Args @ fres
+    let dpars = sem.Args @ sem.Results
+
     let pmap =
         Seq.map2 (fun par up -> valueOf par, up) dpars fpars
         |> Map.ofSeq

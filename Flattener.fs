@@ -24,7 +24,8 @@ let paramsOfView ms =
     |> Seq.concat
 
 /// Constructs a (hopefully) unique name for a func encompassing a view.
-let funcNameOfView ms =
+let funcNameOfView : Func<'a> seq ->  string =
+    fun ms ->
     ms
     // These two steps are to ensure we don't capture an existing name.
     |> Seq.map (fun { Name = n } -> n.Replace("_", "__"))

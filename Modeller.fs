@@ -405,7 +405,6 @@ let coreSemantics : PrimSemanticsMap =
       // Assume
       (prim "Assume" [] [Param.Bool "expr"] <| sbVar "expr") ]
 
-
 (*
  * Expression translation
  *)
@@ -937,10 +936,10 @@ let modelIntLoad : VarMap -> Var -> Expression -> FetchMode -> Result<PrimComman
                 return command "!ILoad" [ dest ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
 
             | Typed.Int s, Increment ->
-                return command "ILoad++" [ dest; s ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
+                return command "!ILoad++" [ dest; s ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
 
             | Typed.Int s, Decrement ->
-                return command "ILoad--" [ dest; s ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
+                return command "!ILoad--" [ dest; s ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
 
             | _ -> return! fail (TypeMismatch (Type.Int (), srcLV, typeOf src))
         }
