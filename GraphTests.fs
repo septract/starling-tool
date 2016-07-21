@@ -8,6 +8,7 @@ open Starling.Utils
 open Starling.Core.Model
 open Starling.Core.Axiom
 open Starling.Core.Command
+open Starling.Core.Command.Create
 open Starling.Core.GuardedView
 open Starling.Core.Var
 open Starling.Core.Symbolic
@@ -47,11 +48,10 @@ module Tests =
                               { OutEdge.Name = "lock_C0"
                                 OutEdge.Dest = "lock_V1"
                                 OutEdge.Command =
-                                    [ smvfunc "!ILoad++"
+                                    [ command "!ILoad++"
+                                           [ "t"; "ticket" ]
                                            [ Typed.Int (siBefore "t")
-                                             Typed.Int (siAfter "t")
-                                             Typed.Int (siBefore "ticket")
-                                             Typed.Int (siAfter "ticket") ]] },
+                                             Typed.Int (siBefore "ticket")]] },
                            Set.empty,
                            Entry)))
                         ("lock_V1",
@@ -64,11 +64,10 @@ module Tests =
                               { Name = "lock_C0"
                                 Src = "lock_V0"
                                 Command =
-                                    [ smvfunc "!ILoad++"
+                                    [ command "!ILoad++"
+                                           [ "t"; "ticket"; ]
                                            [ Typed.Int (siBefore "t")
-                                             Typed.Int (siAfter "t")
-                                             Typed.Int (siBefore "ticket")
-                                             Typed.Int (siAfter "ticket") ]] },
+                                             Typed.Int (siBefore "ticket") ]] },
                           Normal ))
                         ("lock_V2",
                          (Mandatory <| Multiset.singleton (gHoldLock BTrue),
@@ -77,7 +76,7 @@ module Tests =
                               { Name = "lock_C3"
                                 Src = "lock_V4"
                                 Command =
-                                    [ smvfunc "Assume"
+                                    [ command "Assume" []
                                            [ Typed.Bool
                                                  (iEq (siBefore "s")
                                                       (siBefore "t")) ]] },
@@ -88,16 +87,14 @@ module Tests =
                               { Name = "lock_C1"
                                 Dest = "lock_V4"
                                 Command =
-                                    [ smvfunc "!ILoad"
-                                           [ Typed.Int (siBefore "s")
-                                             Typed.Int (siAfter "s")
-                                             Typed.Int (siBefore "serving")
-                                             Typed.Int (siAfter "serving") ]] },
+                                    [ command "!ILoad" 
+                                           [ "s" ]
+                                           [ Typed.Int (siBefore "serving") ]] },
                           Set.ofList
                               [ { Name = "lock_C2"
                                   Src = "lock_V4"
                                   Command =
-                                      [ smvfunc "Assume"
+                                      [ command "Assume" []
                                              [ Typed.Bool
                                                    (BNot (iEq (siBefore "s")
                                                               (siBefore "t"))) ]] }
@@ -114,14 +111,14 @@ module Tests =
                               [ { Name = "lock_C2"
                                   Dest = "lock_V3"
                                   Command =
-                                      [ smvfunc "Assume"
+                                      [ command "Assume" []
                                              [ Typed.Bool
                                                    (BNot (iEq (siBefore "s")
                                                               (siBefore "t"))) ]] }
                                 { Name = "lock_C3"
                                   Dest = "lock_V2"
                                   Command =
-                                      [ smvfunc "Assume"
+                                      [ command "Assume" []
                                              [ Typed.Bool
                                                    (iEq (siBefore "s")
                                                         (siBefore "t")) ]] } ],
@@ -129,11 +126,10 @@ module Tests =
                               { Name = "lock_C1"
                                 Src = "lock_V3"
                                 Command =
-                                    [ smvfunc "!ILoad"
-                                           [ Typed.Int (siBefore "s")
-                                             Typed.Int (siAfter "s")
-                                             Typed.Int (siBefore "serving")
-                                             Typed.Int (siAfter "serving") ]] },
+                                    [ command "!ILoad"
+                                           [ "s" ]
+                                           [ Typed.Int (siBefore "serving") ]] },
+
                           Normal)) ] }
 
         /// The CFG for the ticket lock unlock method.
@@ -149,9 +145,9 @@ module Tests =
                               { Name = "unlock_C0"
                                 Dest = "unlock_V1"
                                 Command =
-                                    [ smvfunc "!I++"
-                                           [ Typed.Int (siBefore "serving")
-                                             Typed.Int (siAfter "serving") ]] },
+                                    [ command "!I++" 
+                                           [ "serving" ]
+                                           [ Typed.Int (siBefore "serving") ]] },
                           Set.empty,
                           Entry))
                         ("unlock_V1",
@@ -161,9 +157,9 @@ module Tests =
                               { Name = "unlock_C0"
                                 Src = "unlock_V0"
                                 Command =
-                                    [ smvfunc "!I++"
-                                           [ Typed.Int (siBefore "serving")
-                                             Typed.Int (siAfter "serving") ]] },
+                                    [ command "!I++"
+                                           [ "serving" ]
+                                           [ Typed.Int (siBefore "serving") ]] },
                            Exit)) ] }
 
         /// The partial CFG for the ticket lock lock method.
@@ -184,30 +180,29 @@ module Tests =
                   Map.ofList
                       [ ("lock_C0",
                              edge "lock_V0"
-                                  [ func "!ILoad++"
+                                  [ command "!ILoad++"
+                                         [ "t"; "ticket" ]
                                          [ Typed.Int (siBefore "t")
-                                           Typed.Int (siAfter "t")
-                                           Typed.Int (siBefore "ticket")
-                                           Typed.Int (siAfter "ticket") ]]
+                                           Typed.Int (siBefore "ticket") ]]
                                   "lock_V1")
                         ("lock_C1",
                              edge "lock_V3"
-                                  [ func "!ILoad"
-                                         [ Typed.Int (siBefore "s")
-                                           Typed.Int (siAfter "s")
-                                           Typed.Int (siBefore "serving")
-                                           Typed.Int (siAfter "serving") ]]
+                                  [ command "!ILoad"
+                                         [ "s" ]
+                                         [ Typed.Int (siBefore "serving") ]]
                                   "lock_V4")
                         ("lock_C2",
                              edge "lock_V4"
-                                  [ func "Assume"
+                                  [ command "Assume"
+                                         []
                                          [ Typed.Bool
                                                (BNot (iEq (siBefore "s")
                                                           (siBefore "t"))) ]]
                                   "lock_V3")
                         ("lock_C3",
                              edge "lock_V4"
-                                  [ func "Assume"
+                                  [ command "Assume"
+                                         []
                                          [ Typed.Bool
                                                (iEq (siBefore "s")
                                                     (siBefore "t")) ]]
@@ -230,9 +225,9 @@ module Tests =
                    Map.ofList
                       [ ("unlock_C0",
                              edge "unlock_V0"
-                                  [ smvfunc "!I++"
-                                         [ Typed.Int (siBefore "serving")
-                                           Typed.Int (siAfter "serving") ]]
+                                  [ command "!I++"
+                                         [ "serving" ] 
+                                         [ Typed.Int (siBefore "serving") ]]
                                   "unlock_V1" ) ] }
 
 
@@ -256,9 +251,9 @@ module Tests =
                               { Name = "unlock_C0"
                                 Dest = "unlock_V1"
                                 Command =
-                                    [ smvfunc "!I++"
-                                           [ SMExpr.Int (siBefore "serving")
-                                             SMExpr.Int (siAfter "serving") ]] },
+                                    [ command "!I++"
+                                           [ "serving" ]
+                                           [ SMExpr.Int (siBefore "serving") ]] },
                           Set.singleton
                               { Name = "unlock_N0"
                                 Src = "unlock_V1"
@@ -274,9 +269,9 @@ module Tests =
                               { Name = "unlock_C0"
                                 Src = "unlock_V0"
                                 Command =
-                                    [ smvfunc "!I++"
-                                           [ SMExpr.Int (siBefore "serving")
-                                             SMExpr.Int (siAfter "serving") ]] },
+                                    [ command "!I++"
+                                           [ "serving" ]
+                                           [ SMExpr.Int (siBefore "serving") ]] },
                           Exit)) ] )
                 .SetName("Adding a valid, unique edge to unlock works")]
 
@@ -309,9 +304,9 @@ module Tests =
                           Map.ofList
                               [ ("unlock_C0",
                                  edge "unlock_V0"
-                                      [ smvfunc "!I++"
-                                              [ SMExpr.Int (siBefore "serving")
-                                                SMExpr.Int (siAfter "serving") ]]
+                                      [ command "!I++"
+                                              [ "serving" ]
+                                              [ SMExpr.Int (siBefore "serving") ]]
                                       "unlock_V0" ) ] } )
                 .SetName("unify C1 into C0 on the ticket lock 'unlock'")
               TestCaseData(("unlock_V0", "unlock_V1"))
@@ -325,9 +320,9 @@ module Tests =
                           Map.ofList
                               [ ("unlock_C0",
                                  edge "unlock_V1"
-                                      [ smvfunc "!I++"
-                                              [ SMExpr.Int (siBefore "serving")
-                                                SMExpr.Int (siAfter "serving") ]]
+                                      [ command "!I++"
+                                              [ "serving" ] 
+                                              [ SMExpr.Int (siBefore "serving") ]]
                                       "unlock_V1" ) ] } )
                 .SetName("unify C0 into C1 on the ticket lock 'unlock'")
               TestCaseData(("unlock_V0", "unlock_V2"))

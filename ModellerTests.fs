@@ -11,6 +11,7 @@ open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
 open Starling.Core.Command
+open Starling.Core.Command.Create
 open Starling.Core.Instantiate
 open Starling.Lang.AST
 open Starling.Core.Model
@@ -163,11 +164,9 @@ type ModellerTests() =
     static member AtomicPrims =
         [ TestCaseData(fresh_node <| Fetch(LVIdent "t", fresh_node <| LV(LVIdent "ticket"), Increment))
             .Returns(Some <|
-                         smvfunc "!ILoad++"
-                             [ "t" |> siBefore |> SMExpr.Int
-                               "t" |> siAfter |> SMExpr.Int
-                               "ticket" |> siBefore |> SMExpr.Int
-                               "ticket" |> siAfter |> SMExpr.Int ] )
+                         command "!ILoad++"
+                                 [ "t"; "ticket" ] 
+                                 [ "ticket" |> siBefore |> SMExpr.Int ] )
             .SetName("model a valid integer load as a prim") ]
 
     /// Tests the atomic primitive modeller using the ticket lock.
@@ -186,10 +185,7 @@ type ModellerTests() =
                                                 fresh_node <| LV(LVIdent "ticket"),
                                                 Increment)))
             .Returns(ModellerTests.mprim
-                         [ func "!ILoad++" [ "t" |> siBefore |> SMExpr.Int
-                                             "t" |> siAfter |> SMExpr.Int
-                                             "ticket" |> siBefore |> SMExpr.Int
-                                             "ticket" |> siAfter |> SMExpr.Int ]]
+                         [ command "!ILoad++" ["t"; "ticket"] [ "ticket" |> siBefore |> SMExpr.Int ]]
                      |> Some)
             .SetName("model a valid integer load command as an axiom") ]
 

@@ -8,6 +8,8 @@ open Starling
 open Starling.Collections
 open Starling.Utils
 open Starling.Utils.Testing
+open Starling.Core.Command
+open Starling.Core.Command.Create
 open Starling.Core.Expr
 open Starling.Core.Symbolic
 open Starling.Core.Var
@@ -90,9 +92,7 @@ type SemanticsTests() =
 
     /// Test cases for full command semantic translation.
     static member Commands =
-        [ TestCaseData([ smvfunc "Assume"
-                             [ iEq (siBefore "s") (siBefore "t")
-                               |> Expr.Bool ]] )
+        [ TestCaseData([ command "Assume" [] [ Expr.Bool <| iEq (siBefore "s") (siBefore "t") ]] )
               .Returns(Some <| Set.ofList
                            [ iEq (siAfter "serving") (siBefore "serving")
                              iEq (siAfter "ticket") (siBefore "ticket")
@@ -100,9 +100,7 @@ type SemanticsTests() =
                              iEq (siAfter "t") (siBefore "t")
                              iEq (siBefore "s") (siBefore "t") ])
               .SetName("Semantically translate <assume(s == t)> using the ticket lock model")
-          TestCaseData([ smvfunc "!I++"
-                             [ "serving" |> siBefore |> Expr.Int
-                               "serving" |> siAfter |> Expr.Int ]] )
+          TestCaseData([ command "!I++" [ "serving" ] [ Expr.Int <| siBefore "serving" ] ] )
               .Returns(Some <| Set.ofList
                            [ iEq (siAfter "ticket") (siBefore "ticket")
                              iEq (siAfter "s") (siBefore "s")
