@@ -21,24 +21,18 @@ module Types =
     ///
     ///     <para>
     ///         A command is a list, representing a sequential composition
-    ///         of primitives represented as <c>VFunc</c>.
+    ///         of primitives represented as <c>PrimCommand</c>s.
     ///     </para>
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         Each <c>VFunc</c> element keys into a <c>Model</c>'s
-    ///         <c>Semantics</c> <c>FuncTable</c>.
-    ///         This table contains two-state Boolean
-    ///         expressions capturing the command's semantics in a
-    ///         sort-of-denotational way.
-    ///     </para>
-    ///     <para>
-    ///         Commands are implemented in terms of <c>VFunc</c>s for
-    ///         convenience, not because of any deep relationship between
-    ///         the two concepts.
+    ///         A PrimCommand is implemented as a triple of a name, the input arguments (the expressions that are evaluated and read)
+    ///         and the output results (the variable that are written)
+    ///
+    ///         for example <x = y++> is translated approximately to { Name = "!ILoad++"; Results = [ siVar "x"; siVar "y" ]; Args = [ siVar "y" ] }
     ///     </para>
     /// </remarks>
-    type PrimCommand = { Name : string; Args : SMExpr list; Results : Var list }
+    type PrimCommand = { Name : string; Results : Var list; Args : SMExpr list }
     type Command = PrimCommand list
 
 /// <summary>
@@ -68,7 +62,6 @@ module Queries =
         | [ { Name = n ; Args = [ SMExpr.Bool b ] } ]
           when n = "Assume" -> Some b
         | _ -> None
-
 
 /// <summary>
 ///     Composition of Boolean expressions representing commands.
