@@ -48,7 +48,18 @@ let syntaxLiteral d = Styled([Blue], d)
 let syntaxIdent d = Styled([Cyan], d)
 let syntaxView d = Styled([Yellow], d)
 
-/// Magic
+/// <summary>
+///     Styles a string with ANSI escape sequences.
+/// </summary>
+/// <param name="s">
+///     The list of styles to turn into ANSI codes and apply to the result.
+/// </param>
+/// <param name="d">
+///     The string to stylise.
+/// </param>
+/// <returns>
+///     The stylised (ANSI-escaped) string.
+/// </param>
 let stylise s d = 
     let colCode =
         function
@@ -61,29 +72,72 @@ let stylise s d =
         | Cyan -> 6 
         | White -> 7
 
-    let code c = (30 + colCode c).ToString ()
+    let code c = sprintf "%u" (30 + colCode c)
 
     let prefix = "\u001b[" + (String.concat ";" <| List.map code s) + "m"
     let suffix = "\u001b[0m"
     prefix + d + suffix
 
-let rec printLevel level =
+/// <summary>
+///     The current state of a pretty-printer run.
+/// </summary>
+type PrintState =
+    { /// <summary>
+      ///     The current indent level of the printer.
+      /// </summary>
+      Level : int
+
+      /// <summary>
+      ///     Whether or not styling is to be used.
+      /// </summary>
+      UseStyles : bool }
+
+/// <summary>
+///     The internal print function.
+/// </summary>
+/// <param name="state">
+///     The current state of the printer.
+/// </param>
+/// <returns>
+///     A function mapping <see cref="Doc"/>s to strings.
+/// </returns>
+let rec printState state =
     function
-    | Header(heading, incmd) -> printLevel level heading + ":" + lnIndent level + printLevel level incmd + lnIndent level
-    | Separator -> "----"
-    | Styled(s, d) -> stylise s <| printLevel level d
-    | VSkip -> lnIndent level
-    | String s -> s.Replace("\n", lnIndent level)
-    | Surround(left, Vertical mid, right) ->
-        printLevel level left + lnIndent level + printLevel level mid + lnIndent level + printLevel level right
-    | Surround(left, mid, right) -> printLevel level left + printLevel level mid + printLevel level right
-    | Indent incmd -> indent 1 + printLevel (level + 1) incmd
-    | VSep(cmds, separator) ->
-        Seq.map (printLevel level) cmds |> String.concat (printLevel level separator + lnIndent level)
-    | HSep(cmds, separator) -> Seq.map (printLevel level) cmds |> String.concat (printLevel level separator)
+    | Header (heading, incmd) ->
+        printState state heading + ":" + lnIndent state.Level + printState state incmd + lnIndent state.Level
+    | Separator ->
+        "----"
+    | Styled (s, d) when state.UseStyles ->
+        stylise s <| printState state d
+    | Styled (s, d) ->
+        printState state d
+    | VSkip ->
+        lnIndent state.Level
+    | String s ->
+        s.Replace("\n", lnIndent state.Level)
+    | Surround (left, Vertical mid, right) ->
+        printState state left + lnIndent state.Level + printState state mid + lnIndent state.Level + printState state right
+    | Surround (left, mid, right) ->
+        printState state left + printState state mid + printState state right
+    | Indent incmd ->
+        let state' = { state with Level = state.Level + 1 }
+        indent 1 + printState state' incmd
+    | VSep (cmds, separator) ->
+        Seq.map (printState state) cmds |> String.concat (printState state separator + lnIndent state.Level)
+    | HSep (cmds, separator) ->
+        Seq.map (printState state) cmds |> String.concat (printState state separator)
     | Nop -> ""
 
-let print = printLevel 0
+/// <summary>
+///     Prints a <see cref="Doc"/> with full styling.
+/// </summary>
+let print = printState { Level = 0; UseStyles = true }
+
+/// <summary>
+///     Prints a <see cref="Doc"/> with no styling.
+/// </summary>
+let printUnstyled = printState { Level = 0; UseStyles = false }
+
 
 (*
  * Shortcuts

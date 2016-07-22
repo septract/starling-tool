@@ -25,4 +25,4 @@ type PrettyTests() =
     member x.``printExpression correctly prints expressions`` expr =
         expr
         |> printExpression
-        |> Core.Pretty.print
+        |> Core.Pretty.printUnstyled
