@@ -4,127 +4,164 @@
 module Starling.Tests.Lang.Parser
 
 open NUnit.Framework
-open FParsec
+
 open Starling
 open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Lang.AST
 open Starling.Lang.Parser
 
-/// Tests for the parser.
-type ParserTests() =
+open FParsec
 
-    /// Helper method for building parser tests.
-    /// Adapts to Some/None.
-    static member ParseResultToOptional a =
-        match a with
-        | Success(result, _, _) -> Some result
-        | Failure _ -> None
+let get =
+    function
+    | Success(r, _, _) -> Some r
+    | Failure _ -> None
 
-    /// Test cases for testing the expression parser.
-    static member ExpressionParses =
-        [ TestCaseData("1 + 2 * 3").Returns(Some(Bop(Add, Int 1L, Bop(Mul, Int 2L, Int 3L))))
-          TestCaseData("(1 + 2) * 3").Returns(Some(Bop(Mul, Bop(Add, Int 1L, Int 2L), Int 3L)))
-
-          TestCaseData("1 + 2 < 3 * 4 && true || 5 / 6 > 7 - 8")
-              .Returns(Some
-                           ((Bop
-                                 (Or, Bop(And, Bop(Lt, Bop(Add, Int 1L, Int 2L), Bop(Mul, Int 3L, Int 4L)), True),
-                                  Bop(Gt, Bop(Div, Int 5L, Int 6L), Bop(Sub, Int 7L, Int 8L)))))) ]
-        |> List.map (fun d -> d.SetName(sprintf "Parse %A" d.OriginalArguments.[0]))
-
-    [<TestCaseSource("ExpressionParses")>]
-    /// Tests whether the expression parser works correctly.
-    member x.``the expression parser parses test case expressions correctly`` expr =
-        expr
-        |> run parseExpression
-        |> ParserTests.ParseResultToOptional
-
-    /// Test cases for testing the atomics parser.
-    static member AtomicParses =
-        [ TestCaseData("foo++").Returns(Some(Postfix(LVIdent "foo", Increment)))
-          TestCaseData("foo--").Returns(Some(Postfix(LVIdent "foo", Decrement)))
-          TestCaseData("foo = bar").Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Direct)))
-          TestCaseData("foo = bar++").Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Increment)))
-          TestCaseData("foo = bar--").Returns(Some(Fetch(LVIdent "foo", LV(LVIdent "bar"), Decrement)))
-          TestCaseData("CAS(foo, bar, 2)").Returns(Some(CompareAndSwap(LVIdent "foo", LVIdent "bar", Int 2L))) ]
-        |> List.map (fun d -> d.SetName(sprintf "Parse %A" d.OriginalArguments.[0]))
-
-    [<TestCaseSource("AtomicParses")>]
-    /// Tests whether the atomics parser works correctly.
-    member x.``the atomics parser parses test case prims correctly`` expr =
-        expr
-        |> run parseAtomic
-        |> ParserTests.ParseResultToOptional
+let check p str ast = 
+    let actual = run p str 
+    Assert.AreEqual (ast, get actual)
 
 
-    /// Test cases for testing the atomic collection parser.
-    static member AtomicSetParses =
-        [ TestCaseData("<foo++>")
-            .Returns(Some[ Postfix(LVIdent "foo", Increment) ])
-            .SetName("Parse one atomic in angle brackets correctly")
-          TestCaseData("<foo++; bar-->")
-            .Returns(None)
-            .SetName("Refuse more than one atomic outside a block")
-          TestCaseData("< { foo++; } >")
-            .Returns(Some [ Postfix(LVIdent "foo", Increment) ])
-            .SetName("Parse one atomic in an atomic block correctly")
-          TestCaseData("< { foo++; bar--; } >")
-            .Returns(Some [ Postfix(LVIdent "foo", Increment)
-                            Postfix(LVIdent "bar", Decrement) ])
-            .SetName("Parse two atomic in an atomic block correctly") ]
-
-    [<TestCaseSource("AtomicSetParses")>]
-    /// Tests whether the atomic set parser works correctly.
-    member x.``the atomic set parser parses sets correctly`` expr =
-        expr
-        |> run parseAtomicSet
-        |> ParserTests.ParseResultToOptional
+// Perform the same trick matt uses in Main.fs to overwrite a right-associative
+// operator with the correct behaviour
+let ( ** ) = ( <| )
 
 
-    /// Test cases for testing the constraint parser.
-    static member ConstraintParses =
-        [ TestCaseData("constraint emp -> true;")
-              .Returns(Some (Definite (DView.Unit, True)))
-          TestCaseData("constraint Func(a, b) -> c > a + b;")
-              .Returns(Some (Definite
-                                 (DView.Func { Name = "Func"
-                                               Params = [ "a"; "b" ] },
-                                  Bop (Gt,
-                                       LV(LVIdent "c"),
-                                       Bop(Add,
-                                           LV(LVIdent "a"),
-                                           LV(LVIdent "b"))))))
-          TestCaseData("constraint Func(a, b) -> ?;")
-              .Returns(Some (Indefinite
-                                 (DView.Func { Name = "Func"
-                                               Params = [ "a"; "b" ] } )
-                             : ViewDef<DView, Expression>))
-          TestCaseData("constraint Func(a, b) -> %{uninterpreted symbol}() == true;")
-              .Returns(Some (Definite
-                                 (DView.Func { Name = "Func"
-                                               Params = [ "a"; "b" ] },
-                                  Bop (Eq,
-                                       Symbolic("uninterpreted symbol", []),
-                                       True))
-                             : ViewDef<DView, Expression>)) ]
-        |> List.map (fun d -> d.SetName(sprintf "Parse %A" d.OriginalArguments.[0]))
+// Conversion of mattw's test cases into new system
+module ExpressionTests = 
+    [<Test>]
+    let ``Test order-of-operations on (1 + 2 * 3)``() =
+        check parseExpression "1 + 2 * 3" <| Some
+        ** node "" 1L 3L 
+            ** BopExpr (Add, 
+                    node "" 1L 1L (Int 1L),
+                    node "" 1L 7L 
+                        <| BopExpr (Mul,
+                                node "" 1L 5L (Int 2L),
+                                node "" 1L 9L (Int 3L)))
+    [<Test>]
+    let ``Test bracketing on (1 + 2) * 3``() =
+        check parseExpression "(1 + 2) * 3"  <| Some
+        ** node "" 1L 9L
+            ** BopExpr (Mul,
+                    node "" 1L 4L
+                    <| BopExpr (Add,
+                            node "" 1L 2L (Int 1L),
+                            node "" 1L 6L (Int 2L)),
+                    node "" 1L 11L (Int 3L))
 
-    [<TestCaseSource("ConstraintParses")>]
-    /// Tests whether the constraint parser works correctly.
-    member x.``the constraint parser parses valid constraints correctly`` cs =
-        cs
-        |> run parseConstraint
-        |> ParserTests.ParseResultToOptional
+    [<Test>]
+    let ``Complex expression 1 + 2 < 3 * 4 && true || 5 / 6 > 7 - 8``() =
+        check parseExpression "1 + 2 < 3 * 4 && true || 5 / 6 > 7 - 8"  <| Some
+        ** node "" 1L 23L
+            ** BopExpr (Or,
+                    node "" 1L 15L
+                    <| BopExpr (And,
+                            node "" 1L 7L
+                            <| BopExpr (Lt,
+                                    node "" 1L 3L
+                                    <| BopExpr (Add,
+                                            node "" 1L 1L (Int 1L),
+                                            node "" 1L 5L (Int 2L)),
+                                    node "" 1L 11L
+                                    <| BopExpr (Mul,
+                                            node "" 1L 9L (Int 3L),
+                                            node "" 1L 13L (Int 4L))),
+                            node "" 1L 18L True),
+                    node "" 1L 32L
+                    <| BopExpr (Gt,
+                            node "" 1L 28L
+                            <| BopExpr (Div,
+                                    node "" 1L 26L (Int 5L),
+                                    node "" 1L 30L (Int 6L)),
+                            node "" 1L 36L
+                            <| BopExpr (Sub,
+                                    node "" 1L 34L (Int 7L),
+                                    node "" 1L 38L (Int 8L))))
+module AtomicActionTests =
+    [<Test>]
+    let ``foo++``() =
+        check parseAtomic "foo++" <| Some ** node "" 1L 1L (Postfix(LVIdent "foo", Increment))
 
-    /// Test cases for testing the full parser.
-    static member ScriptParses =
-        [ TestCaseData(Starling.Tests.Studies.ticketLock).Returns(Some(Starling.Tests.Studies.ticketLockParsed))
-            .SetName("Parse the ticket lock") ]
+    [<Test>]
+    let ``foo--`` =
+        check parseAtomic "foo--" <| Some ** node "" 1L 1L (Postfix(LVIdent "foo", Decrement))
 
-    [<TestCaseSource("ScriptParses")>]
-    /// Tests whether the script parser works correctly.
-    member x.``the script parser parses full case studies correctly`` expr =
-        expr
-        |> run parseScript
-        |> ParserTests.ParseResultToOptional
+    [<Test>]
+    let ``foo = bar`` =
+        check parseAtomic "foo = bar"  <| Some
+        ** node "" 1L 1L (Fetch(LVIdent "foo", node "" 1L 7L <| LV(LVIdent "bar"), Direct))
+
+    [<Test>]
+    let ``foo = bar++`` =
+        check parseAtomic "foo = bar++" <| Some
+        ** node "" 1L 1L (Fetch(LVIdent "foo", node "" 1L 7L <| LV(LVIdent "bar"), Increment))
+
+    [<Test>]
+    let ``foo = bar--`` =
+        check parseAtomic "foo = bar--" <| Some
+        ** node "" 1L 1L (Fetch(LVIdent "foo", node "" 1L 7L <| LV(LVIdent "bar"), Decrement))
+
+    [<Test>]
+    let ``Compare and swap``() =
+        check parseAtomic "CAS(foo, bar, 2)" <| Some
+        ** node "" 1L 1L 
+           (CompareAndSwap( LVIdent "foo", 
+                            LVIdent "bar", 
+                            node "" 1L 15L (Int 2L)))
+
+module AtomicSetTests =
+    [<Test>]
+    let ``<foo++>``() =
+        check parseAtomicSet "<foo++>"
+        <| Some ** [
+            node "" 1L 2L (Postfix (LVIdent "foo", Increment))
+            ]
+
+    [<Test>]
+    let ``Multiple outside block invalid``() =
+        check parseAtomicSet "<foo++; bar-->" None
+
+    [<Test>]
+    let ``Single atomic block``() =
+        check parseAtomicSet "<{ foo++; }>"
+        <| Some [
+            node "" 1L 4L (Postfix (LVIdent "foo", Increment))
+            ]
+
+    [<Test>]
+    let ``Multiple in block valid``() =
+        check parseAtomicSet "<{ foo++; bar--; }>"
+        <| Some [
+            node "" 1L 4L (Postfix (LVIdent "foo", Increment))
+            node "" 1L 11L (Postfix (LVIdent "bar", Decrement))
+            ]
+
+module ConstraintTests =
+    [<Test>]
+    let ``emp -> true``() =
+        check parseConstraint "constraint emp -> true;"
+        <| Some (Definite (DView.Unit, node "" 1L 19L True))
+
+    [<Test>]
+    let ``Func(a,b) -> c > a + b``() =
+        check parseConstraint "constraint Func(a, b) -> c > a + b;"
+        <| Some (Definite
+                     (DView.Func { Name = "Func"
+                                   Params = [ "a"; "b" ] },
+                      node "" 1L 28L
+                        <| BopExpr (Gt,
+                                node "" 1L 26L (LV(LVIdent "c")),
+                                node "" 1L 32L
+                                <| BopExpr(Add,
+                                       node "" 1L 30L (LV(LVIdent "a")),
+                                       node "" 1L 34L (LV(LVIdent "b"))))))
+
+    [<Test>]
+    let ``Func(a,b) -> ?;``() =
+        check parseConstraint "constraint Func(a, b) -> ?;"
+        <| Some (Indefinite
+                    (DView.Func {   Name = "Func"
+                                    Params = [ "a"; "b" ] } )
+                     : ViewDef<DView, Expression>)

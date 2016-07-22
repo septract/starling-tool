@@ -100,7 +100,7 @@ let empty =
 ///     <paramref name="item" /> to <paramref name="cs" />.
 /// </returns>
 let collateStep item (cs : CollatedScript) =
-    match item with
+    match item.Node with
     | Global g -> { cs with Globals = g :: cs.Globals }
     | Local l -> { cs with Locals = l :: cs.Locals }
     | ViewProto v -> { cs with VProtos = v :: cs.VProtos }

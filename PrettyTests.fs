@@ -14,10 +14,10 @@ type PrettyTests() =
 
     /// Test cases for printExpression.
     static member Exprs =
-        [ TestCaseData(Int 5L).Returns("5")
-          TestCaseData(Bop(Div, Int 6L, LV(LVIdent "bar"))).Returns("(6 / bar)")
+        [ TestCaseData(freshNode <| Int 5L).Returns("5")
+          TestCaseData(freshNode <| BopExpr(Div, freshNode <| Int 6L, freshNode <| LV(LVIdent "bar"))).Returns("(6 / bar)")
 
-          TestCaseData(Bop(Mul, Bop(Add, Int 1L, Int 2L), Int 3L)).Returns("((1 + 2) * 3)") ]
+          TestCaseData(freshNode <| BopExpr(Mul, freshNode <| BopExpr(Add, freshNode <| Int 1L, freshNode <| Int 2L), freshNode <| Int 3L)).Returns("((1 + 2) * 3)") ]
         |> List.map (fun d -> d.SetName(sprintf "Print expression %A" d.ExpectedResult))
 
     [<TestCaseSource("Exprs")>]

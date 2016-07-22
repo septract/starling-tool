@@ -29,7 +29,7 @@ let makeFreshView tvars fg =
     let viewName =
         fg |> getFresh |> sprintf "%A"
     let viewArgs =
-        tvars |> Map.toSeq |> Seq.map (fst >> LVIdent >> LV)
+        tvars |> Map.toSeq |> Seq.map (fst >> LVIdent >> LV >> fun l -> freshNode l)
     let viewParams =
         tvars |> Map.toSeq |> Seq.map (fun (name, ty) -> withType ty name)
 
@@ -75,25 +75,28 @@ let desugarView tvars fg =
 ///     A pair of the desugared command and the view prototypes
 ///     generated inside it.
 /// </returns>
-let rec desugarCommand tvars fg =
-    function
-    | If (e, t, f) ->
-        let t', tv = desugarBlock tvars fg t
-        let f', fv = desugarBlock tvars fg f
-        (If (e, t', f'), Seq.append tv fv)
-    | While (e, b) ->
-        let b', bv = desugarBlock tvars fg b
-        (While (e, b'), bv)
-    | DoWhile (b, e) ->
-        let b', bv = desugarBlock tvars fg b
-        (DoWhile (b', e), bv)
-    | Blocks bs ->
-        let bs', bsvs =
-            bs
-            |> List.map (desugarBlock tvars fg)
-            |> List.unzip
-        (Blocks bs', Seq.concat bsvs)
-    | Prim ps -> (Prim ps, Seq.empty)
+let rec desugarCommand tvars fg (cmd: Command<Marked<View>>)
+    : Command<ViewExpr<View>> * seq<Func<CTyped<string>>> =
+    let f = fun (a, b) -> (cmd |=> a, b)
+    f <| match cmd.Node with
+            | If (e, t, f) ->
+                let t', tv = desugarBlock tvars fg t
+                let f', fv = desugarBlock tvars fg f
+                let ast = If (e, t', f')
+                (ast, Seq.append tv fv)
+            | While (e, b) ->
+                let b', bv = desugarBlock tvars fg b
+                (While (e, b'), bv)
+            | DoWhile (b, e) ->
+                let b', bv = desugarBlock tvars fg b
+                (DoWhile (b', e), bv)
+            | Blocks bs ->
+                let bs', bsvs =
+                    bs
+                    |> List.map (desugarBlock tvars fg)
+                    |> List.unzip
+                (Blocks bs', Seq.concat bsvs)
+            | Prim ps -> (Prim ps, Seq.empty)
 
 /// <summary>
 ///     Converts a viewed command whose views can be unknown into one
@@ -117,7 +120,6 @@ and desugarViewedCommand tvars fg { Command = c ; Post = q } =
     let q', qProtos = desugarView tvars fg q
 
     let block' = { Command = c' ; Post = q' }
-
     (block', Seq.append qProtos cProtos)
 
 /// <summary>
@@ -137,7 +139,9 @@ and desugarViewedCommand tvars fg { Command = c ; Post = q } =
 ///     A pair of the desugared block and the view prototypes generated
 ///     inside it.
 /// </returns>
-and desugarBlock tvars fg { Pre = p ; Contents = cs } =
+and desugarBlock (tvars: Map<string, Type>) (fg: bigint ref) (blk: Block<Marked<View>, Command<Marked<View>>>)
+    : Block<ViewExpr<View>, Command<ViewExpr<View>>> * seq<Func<CTyped<string>>> =  
+    let p, cs = blk.Pre, blk.Contents
     let p', pProtos = desugarView tvars fg p
     let cs', csProtos =
         cs
@@ -145,8 +149,8 @@ and desugarBlock tvars fg { Pre = p ; Contents = cs } =
         |> List.unzip
 
     let block' = { Pre = p' ; Contents = cs' }
-
-    (block', Seq.concat (pProtos :: csProtos))
+    let res = (block', Seq.concat (pProtos :: csProtos))
+    res
 
 /// <summary>
 ///     Converts a sequence of methods whose views can be unknown into
@@ -198,7 +202,7 @@ module Tests =
         static member ViewDesugars =
             [TestCaseData(Unknown : Marked<View>)
               .Returns((Func
-                            (func "0" [ LV (LVIdent "s") ; LV (LVIdent "t") ]),
+                            (func "0" [ freshNode <| LV (LVIdent "s") ; freshNode <| LV (LVIdent "t") ]),
                         Seq.singleton <| func "0" [ (Int, "s"), (Int, "t") ]))
               .SetName("Desugaring an unknown view creates a fresh view\
                         with a fresh name and all locals as parameters") ]

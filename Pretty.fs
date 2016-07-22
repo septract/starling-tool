@@ -6,18 +6,21 @@ module Starling.Core.Pretty
 open Starling.Collections
 open Starling.Utils
 
+type FontColor =
+    Black | Red | Green | Yellow | Blue | Magenta | Cyan | White
 
 /// Type of pretty-printer commands.
 [<NoComparison>]
-type Command =
-    | Header of heading : Command * Command
+type Doc =
+    | Header of heading : Doc * Doc
     | Separator
     | String of string
-    | Surround of left : Command * mid : Command * right : Command
-    | Indent of Command
+    | Styled of style: FontColor list * cmd : Doc
+    | Surround of left : Doc * mid : Doc * right : Doc
+    | Indent of Doc
     | VSkip
-    | VSep of cmds : Command seq * separator : Command
-    | HSep of cmds : Command seq * separator : Command
+    | VSep of cmds : Doc seq * separator : Doc
+    | HSep of cmds : Doc seq * separator : Doc
     | Nop
 
 
@@ -37,10 +40,38 @@ let indent level = new string(' ', level * 4)
 /// Enters a new line at the given indent level.
 let lnIndent level = "\n" + indent level
 
+/// Helpers for turning a Doc into a Styled
+/// for syntax highlighting keywords, literals, identifiers and view syntax
+/// respectively
+let syntax d = Styled([Magenta], d)
+let syntaxLiteral d = Styled([Blue], d)
+let syntaxIdent d = Styled([Cyan], d)
+let syntaxView d = Styled([Yellow], d)
+
+/// Magic
+let stylise s d = 
+    let colCode =
+        function
+        | Black -> 0
+        | Red -> 1
+        | Green -> 2
+        | Yellow -> 3
+        | Blue -> 4
+        | Magenta -> 5
+        | Cyan -> 6 
+        | White -> 7
+
+    let code c = (30 + colCode c).ToString ()
+
+    let prefix = "\u001b[" + (String.concat ";" <| List.map code s) + "m"
+    let suffix = "\u001b[0m"
+    prefix + d + suffix
+
 let rec printLevel level =
     function
     | Header(heading, incmd) -> printLevel level heading + ":" + lnIndent level + printLevel level incmd + lnIndent level
     | Separator -> "----"
+    | Styled(s, d) -> stylise s <| printLevel level d
     | VSkip -> lnIndent level
     | String s -> s.Replace("\n", lnIndent level)
     | Surround(left, Vertical mid, right) ->
@@ -106,7 +137,7 @@ let parened = ssurround "(" ")"
 let squared = ssurround "[" "]"
 
 /// Pretty-prints a function f(xs1, xs2, ...xsn)
-let func f xs = hjoin [String f; commaSep xs |> parened]
+let func f xs = hjoin [String f |> syntaxIdent; commaSep xs |> parened]
 
 /// Pretty-prints Funcs using pxs to print parameters.
 let printFunc pxs { Starling.Collections.Func.Name = f; Params = xs } = func f (Seq.map pxs xs)

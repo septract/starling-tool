@@ -22,8 +22,7 @@ open Starling.Lang.Collator
 
 
 /// <summary>
-///     Types used only in the modeller and adjacent pipeline stages.
-/// </summary>
+///     Types used only in the modeller and adjacent pipeline stages.  /// </summary>
 [<AutoOpen>]
 module Types =
     /// A conditional (flat or if-then-else) func.
@@ -172,14 +171,14 @@ module Pretty =
     let printCView = printMultiset printCFunc >> ssurround "[|" "|]"
 
     /// Pretty-prints a part-cmd at the given indent level.
-    let rec printPartCmd (pView : 'view -> Command) : PartCmd<'view> -> Command =
+    let rec printPartCmd (pView : 'view -> Doc) : PartCmd<'view> -> Doc =
         function
-        | Prim prim -> Command.Pretty.printCommand prim
-        | While(isDo, expr, inner) ->
+        | PartCmd.Prim prim -> Command.Pretty.printCommand prim
+        | PartCmd.While(isDo, expr, inner) ->
             cmdHeaded (hsep [ String(if isDo then "Do-while" else "While")
                               (printSVBoolExpr expr) ])
                       [printBlock pView (printPartCmd pView) inner]
-        | ITE(expr, inTrue, inFalse) ->
+        | PartCmd.ITE(expr, inTrue, inFalse) ->
             cmdHeaded (hsep [String "begin if"
                              (printSVBoolExpr expr) ])
                       [headed "True" [printBlock pView (printPartCmd pView) inTrue]
@@ -454,27 +453,28 @@ let coreSemantics =
 let rec modelExpr
   (env : VarMap)
   (varF : Var -> 'var)
-  : Expression -> Result<Expr<Sym<'var>>, ExprError> =
-    function
+  (e : Expression) : Result<Expr<Sym<'var>>, ExprError> =
+    match e.Node with
     (* First, if we have a variable, the type of expression is
        determined by the type of the variable.  If the variable is
        symbolic, then we have ambiguity. *)
-    | LV v ->
-        v
-        |> wrapMessages Var (lookupVar env)
-        |> lift
-               (Mapper.map
-                    (Mapper.compose
-                         (Mapper.cmake (varF >> Reg))
-                         (Mapper.make AVar BVar)))
-    | Symbolic (sym, exprs) ->
-        fail (AmbiguousSym sym)
-    (* We can use the active patterns above to figure out whether we
-     * need to treat this expression as arithmetic or Boolean.
-     *)
-    | ArithExp expr -> expr |> modelIntExpr env varF |> lift Expr.Int
-    | BoolExp expr -> expr |> modelBoolExpr env varF |> lift Expr.Bool
-    | _ -> failwith "unreachable"
+        | LV v ->
+            v
+            |> wrapMessages Var (lookupVar env)
+            |> lift
+                   (Mapper.map
+                        (Mapper.compose
+                             (Mapper.cmake (varF >> Reg))
+                             (Mapper.make AVar BVar)))
+        | Symbolic (sym, exprs) ->
+            fail (AmbiguousSym sym)
+        (* We can use the active patterns above to figure out whether we
+         * need to treat this expression as arithmetic or Boolean.
+         *)
+        | _ -> match e with
+                | ArithExp expr -> expr |> modelIntExpr env varF |> lift Expr.Int
+                | BoolExp expr -> expr |> modelBoolExpr env varF |> lift Expr.Bool
+                | _ -> failwith "unreachable"
 
 /// <summary>
 ///     Models a Starling integral expression as a <c>BoolExpr</c>.
@@ -511,8 +511,8 @@ and modelBoolExpr
     let mi = modelIntExpr env varF
     let me = modelExpr env varF
 
-    let rec mb =
-        function
+    let rec mb e =
+        match e.Node with
         | True -> BTrue |> ok
         | False -> BFalse |> ok
         | LV v ->
@@ -529,7 +529,7 @@ and modelBoolExpr
             |> List.map me
             |> collect
             |> lift (func sym >> Sym >> BVar)
-        | Bop(BoolOp as op, l, r) ->
+        | BopExpr(BoolOp as op, l, r) ->
             match op with
             | ArithIn as o ->
                 lift2 (match o with
@@ -591,8 +591,8 @@ and modelIntExpr
   : Expression -> Result<IntExpr<Sym<'var>>, ExprError> =
     let me = modelExpr env varF
 
-    let rec mi =
-        function
+    let rec mi e =
+        match e.Node with
         | Int i -> i |> AInt |> ok
         | LV v ->
             (* Look-up the variable to ensure it a) exists and b) is of an
@@ -608,7 +608,7 @@ and modelIntExpr
             |> List.map me
             |> collect
             |> lift (func sym >> Sym >> AVar)
-        | Bop(ArithOp as op, l, r) ->
+        | BopExpr(ArithOp as op, l, r) ->
             lift2 (match op with
                    | Mul -> mkMul2
                    | Div -> mkDiv
@@ -906,7 +906,7 @@ let modelBoolLoad svars dest srcExpr mode =
      *                    the source must be a GLOBAL Boolean lvalue;
      *                    and the fetch mode must be Direct.
      *)
-    match srcExpr with
+    match srcExpr.Node with
     | LV srcLV ->
         trial {
             let! src = wrapMessages BadSVar (lookupVar svars) srcLV
@@ -931,7 +931,7 @@ let modelIntLoad svars dest srcExpr mode =
      *                    the source must be a GLOBAL arithmetic lvalue;
      *                    and the fetch mode is unconstrained.
      *)
-    match srcExpr with
+    match srcExpr.Node with
     | LV srcLV ->
         trial {
             let! src = wrapMessages BadSVar (lookupVar svars) srcLV
@@ -1049,8 +1049,8 @@ let modelFetch svars tvars destLV srcExpr mode =
     | lv -> fail (BadAVar(lv, NotFound (flattenLV lv)))
 
 /// Converts a single atomic command from AST to part-commands.
-let rec modelAtomic svars tvars =
-    function
+let rec modelAtomic svars tvars a =
+    match a.Node with
     | CompareAndSwap(dest, test, set) -> modelCAS svars tvars dest test set
     | Fetch(dest, src, mode) -> modelFetch svars tvars dest src mode
     | Postfix(operand, mode) ->
@@ -1066,9 +1066,9 @@ let rec modelAtomic svars tvars =
             | Direct, _ ->
                 return! fail Useless
             | Increment, Typed.Bool _ ->
-                return! fail (IncBool (LV operand))
+                return! fail (IncBool (freshNode <| LV operand))
             | Decrement, Typed.Bool _ ->
-                return! fail (DecBool (LV operand))
+                return! fail (DecBool (freshNode <| LV operand))
             | Increment, Typed.Int _ ->
                 return func "!I++" [op |> Before |> Reg |> AVar |> Expr.Int
                                     op |> After |> Reg |> AVar |> Expr.Int]
@@ -1155,13 +1155,13 @@ and modelPrim svars tvars { PreAssigns = ps
 
 /// Converts a command to a PartCmd.
 /// The list is enclosed in a Chessie result.
-and modelCommand protos svars tvars =
-    function
-    | AST.Types.Command.Prim p -> modelPrim svars tvars p
-    | If(i, t, e) -> modelITE protos svars tvars i t e
-    | Command.While(e, b) -> modelWhile false protos svars tvars e b
-    | DoWhile(b, e) -> modelWhile true protos svars tvars e b
-    | c -> fail (CommandNotImplemented c)
+and modelCommand protos svars tvars n =
+    match n.Node with
+    | Command'.Prim p -> modelPrim svars tvars p
+    | Command'.If(i, t, e) -> modelITE protos svars tvars i t e
+    | Command'.While(e, b) -> modelWhile false protos svars tvars e b
+    | Command'.DoWhile(b, e) -> modelWhile true protos svars tvars e b
+    | _ -> fail (CommandNotImplemented n)
 
 /// Converts a view expression into a CView.
 and modelViewExpr protos ls =
