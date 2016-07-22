@@ -45,9 +45,3 @@ constraint holdLock()                  -> ticket != serving;
 constraint holdLock()   * holdTick(t)  -> serving != t;
 constraint holdTick(ta) * holdTick(tb) -> ta != tb;
 constraint holdLock()   * holdLock()   -> false;
-
-
-
-/* Comment
-   /* Nested Comment */
- */
