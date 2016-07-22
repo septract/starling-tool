@@ -5,6 +5,7 @@ module Starling.Lang.AST
 
 open Starling
 open Starling.Collections
+open Starling.Core.TypeSystem
 open Starling.Core.Model
 open Starling.Core.Var.Types
 open Starling.Core.View
@@ -53,7 +54,7 @@ module Types =
         | BopExpr of BinOp * Expression * Expression // a BOP b
     and Expression = Node<Expression'>
 
-    /// An atomic action.  
+    /// An atomic action.
     type Atomic' =
         | CompareAndSwap of LValue * LValue * Expression // <CAS(a, b, c)>
         | Fetch of LValue * Expression * FetchMode // <a = b??>
@@ -171,11 +172,12 @@ module Pretty =
     open Starling.Core.Var.Pretty
 
     /// Pretty-prints lvalues.
-    let rec printLValue = function
+    let rec printLValue : LValue -> Doc =
+        function
         | LVIdent i -> String i
 
     /// Pretty-prints Boolean operations.
-    let printBop : BinOp -> Doc =
+    let printBinOp : BinOp -> Doc =
         function
         | Mul -> "*"
         | Div -> "/"
@@ -193,7 +195,7 @@ module Pretty =
 
     /// Pretty-prints expressions.
     /// This is not guaranteed to produce an optimal expression.
-    let rec printExpressionType =
+    let rec printExpression' : Expression' -> Doc =
         function
         | True -> String "true" |> syntaxLiteral
         | False -> String "false" |> syntaxLiteral
@@ -203,13 +205,13 @@ module Pretty =
             func (sprintf "%%{%s}" sym) (Seq.map printExpression args)
         | BopExpr(op, a, b) ->
             hsep [ printExpression a
-                   printBop op
+                   printBinOp op
                    printExpression b ]
             |> parened
-    and printExpression x = printExpressionType x.Node
+    and printExpression (x : Expression) : Doc = printExpression' x.Node
 
     /// Pretty-prints views.
-    let rec printView =
+    let rec printView : View -> Doc =
         function
         | View.Func f -> printFunc printExpression f
         | View.Unit -> String "emp" |> syntaxView
@@ -223,7 +225,7 @@ module Pretty =
                    printView r ]
 
     /// Pretty-prints marked view lines.
-    let rec printMarkedView pView =
+    let rec printMarkedView (pView : 'view -> Doc) : Marked<'view> -> Doc =
         function
         | Unmarked v -> pView v
         | Questioned v -> hjoin [ pView v ; String "?" |> syntaxView ]
@@ -231,14 +233,14 @@ module Pretty =
         >> ssurround "{| " " |}"
 
     /// Pretty-prints view definitions.
-    let rec printDView =
+    let rec printDView : DView -> Doc =
         function
         | DView.Func f -> printFunc String f
         | DView.Unit -> String "emp" |> syntaxView
         | DView.Join(l, r) -> binop "*" (printDView l) (printDView r)
 
     /// Pretty-prints constraints.
-    let printConstraint (cs : ViewDef<DView, Expression>) =
+    let printConstraint (cs : ViewDef<DView, Expression>) : Doc =
         hsep [ String "constraint" |> syntax
                printDView (viewOf cs)
                String "->" |> syntax
@@ -248,18 +250,18 @@ module Pretty =
         |> withSemi
 
     /// Pretty-prints fetch modes.
-    let printFetchMode =
+    let printFetchMode : FetchMode -> Doc =
         function
         | Direct -> Nop
         | Increment -> String "++"
         | Decrement -> String "--"
 
     /// Pretty-prints local assignments.
-    let printAssign dest src =
+    let printAssign (dest : LValue) (src : Expression) : Doc =
         equality (printLValue dest) (printExpression src)
 
     /// Pretty-prints atomic actions.
-    let printAtomicType =
+    let printAtomic' : Atomic' -> Doc =
         function
         | CompareAndSwap(l, f, t) ->
             func "CAS" [ printLValue l
@@ -273,12 +275,13 @@ module Pretty =
                     printFetchMode m ]
         | Id -> String "id"
         | Assume e -> func "assume" [ printExpression e ]
-    let printAtomic x = printAtomicType x.Node
+    let printAtomic (x : Atomic) : Doc = printAtomic' x.Node
 
     /// Pretty-prints viewed commands with the given indent level (in spaces).
     let printViewedCommand (pView : 'view -> Doc)
                            (pCmd : 'cmd -> Doc)
-                           ({ Command = c; Post = p } : ViewedCommand<'view, 'cmd>) =
+                           ({ Command = c; Post = p } : ViewedCommand<'view, 'cmd>)
+                           : Doc =
         vsep [ pCmd c ; pView p ]
 
     /// Pretty-prints blocks with the given indent level (in spaces).
@@ -299,15 +302,13 @@ module Pretty =
                printFunc (String >> syntaxIdent) s
                printBlock pView pCmd b ]
 
-    /// Pretty-prints commands with the given indent level (in spaces).
-    let rec printCommandType pView =
+    /// Pretty-prints commands.
+    let rec printCommand' (pView : 'view -> Doc) : Command'<'view> -> Doc =
         function
         (* The trick here is to make Prim [] appear as ;, but
            Prim [x; y; z] appear as x; y; z;, and to do the same with
            atomic lists. *)
-        | Command'.Prim { PreAssigns = ps;
-                 Atomics = ts;
-                 PostAssigns = qs } ->
+        | Command'.Prim { PreAssigns = ps; Atomics = ts; PostAssigns = qs } ->
             seq { yield! Seq.map (uncurry printAssign) ps
                   yield (ts
                          |> Seq.map printAtomic
@@ -320,7 +321,7 @@ module Pretty =
                    |> printExpression
                    |> parened
                    t |> printBlock pView (printCommand pView)
-                   f |> printBlock pView (printCommand pView)]
+                   f |> printBlock pView (printCommand pView) ]
         | Command'.While(c, b) ->
             hsep [ "while" |> String |> syntax
                    c
@@ -339,40 +340,43 @@ module Pretty =
             bs
             |> List.map (printBlock pView (printCommand pView))
             |> hsepStr "||"
-    and printCommand pView x = printCommandType pView x.Node
+    and printCommand (pView : 'view -> Doc)
+                     (x : Command<'view>)
+                     : Doc =
+        printCommand' pView x.Node
 
     /// Pretty-prints a view prototype.
-    let printViewProto { Name = n; Params = ps } =
+    let printViewProto ({ Name = n; Params = ps } : ViewProto) : Doc =
         hsep [ "view" |> String |> syntax
                func n (List.map (printCTyped String) ps) ]
         |> withSemi
 
     /// Pretty-prints a search directive.
-    let printSearch i =
+    let printSearch (i : int) : Doc =
         hsep [ String "search" |> syntax
                sprintf "%d" i |> String ]
 
     /// Pretty-prints a script variable of the given class.
-    let printScriptVar cls v =
+    let printScriptVar (cls : string) (v : CTyped<Var>) : Doc =
         hsep [ String cls |> syntax; printCTyped String v ] |> withSemi
 
     /// Pretty-prints script lines.
-    let printScriptLineType =
+    let printScriptItem' : ScriptItem' -> Doc =
         function
         | Global v -> printScriptVar "shared" v
         | Local v -> printScriptVar "thread" v
         | Method m ->
             fun mdoc -> vsep [Nop; mdoc; Nop]
             <| printMethod (printMarkedView printView) (printCommand (printMarkedView printView)) m
-
         | ViewProto v -> printViewProto v
         | Search i -> printSearch i
         | Constraint c -> printConstraint c
-    let printScriptLine x = printScriptLineType x.Node
+    let printScriptItem (x : ScriptItem) : Doc = printScriptItem' x.Node
 
     /// Pretty-prints scripts.
     /// each line on its own line
-    let printScript xs = VSep(List.map printScriptLine xs, Nop)
+    let printScript (xs : ScriptItem list) : Doc =
+        VSep (List.map printScriptItem xs, Nop)
 
 
 (*
@@ -411,9 +415,16 @@ let (|BoolExp|ArithExp|AnyExp|) e =
 (*
  * Misc
  *)
-let emptyPosition = { StreamName = ""; Line = 0L; Column = 0L; }
-let freshNode a = { Position = emptyPosition; Node = a }
-let node streamname line column a = { Position = { StreamName=streamname; Line=line; Column=column }; Node = a }
+let emptyPosition : SourcePosition =
+    { StreamName = ""; Line = 0L; Column = 0L; }
+let freshNode (a : 'a) : Node<'a> =
+  { Position = emptyPosition; Node = a }
+let node (streamname : string)
+         (line : int64)
+         (column : int64)
+         (a : 'a)
+         : Node<'a> =
+    { Position = { StreamName = streamname; Line = line; Column = column }; Node = a }
 
 /// <summary>
 ///     Type-constrained version of <c>func</c> for <c>AFunc</c>s.
@@ -427,4 +438,4 @@ let node streamname line column a = { Position = { StreamName=streamname; Line=l
 /// <returns>
 ///   A new <c>AFunc</c> with the given name and parameters.
 /// </returns>
-let afunc name (pars : Expression list) : AFunc = func name pars
+let afunc (name : string) (pars : Expression list) : AFunc = func name pars
