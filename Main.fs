@@ -202,7 +202,7 @@ let printResponse mview =
     | GraphOptimise g ->
         printUVModelView printGraph mview g
     | Axiomatise m ->
-        printUVModelView (printAxiom printCommand printSVGView) mview m
+        printUVModelView (printAxiom printSVGView printCommand) mview m
     | GoalAdd m ->
         printUVModelView (printGoalAxiom printCommand) mview m
     | Semantics m ->

@@ -19,6 +19,7 @@ open Starling.Core.Symbolic
 open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.GuardedView
+open Starling.Core.TypeSystem
 
 
 /// <summary>
@@ -68,18 +69,24 @@ module Pretty =
 
     /// Pretty-prints an Axiom, given knowledge of how to print its views
     /// and command.
-    let printAxiom pCmd pView { Pre = pre; Post = post; Cmd = cmd } =
+    let printAxiom (pView : 'view -> Doc)
+                   (pCmd : 'cmd -> Doc)
+                   ({ Pre = pre; Post = post; Cmd = cmd } : Axiom<'view, 'cmd>)
+                   : Doc =
         Surround(pre |> pView, cmd |> pCmd, post |> pView)
 
     /// Pretty-prints a goal axiom.
-    let printGoalAxiom printCmd { Axiom = a; Goal = f } =
+    let printGoalAxiom (printCmd : 'cmd -> Doc)
+                       ({ Axiom = a; Goal = f } : GoalAxiom<'cmd>)
+                       : Doc =
         vsep [ headed "Axiom"
-                      (a |> printAxiom printCmd printSVGView |> Seq.singleton)
+                      (a |> printAxiom printSVGView printCmd |> Seq.singleton)
                headed "Goal" (f |> printOView |> Seq.singleton) ]
 
 
 /// Makes an axiom {p}c{q}.
-let axiom p c q =
+let axiom (p : 'view) (c : 'cmd) (q : 'view)
+          : Axiom<'view, 'cmd> =
     { Pre = p; Post = q; Cmd = c }
 
 
@@ -87,19 +94,22 @@ let axiom p c q =
  * GoalAxioms
  *)
 
-/// Instantiates a view parameter.
-let instantiateParam fg =
-    mkVarExp (goalVar fg >> Reg) 
-
 /// Instantiates a defining view into a view expression.
-let instantiateGoal fg dvs =
+let instantiateGoal (fg : FreshGen)
+                    (dvs : DView)
+                    : OView =
+    let instantiateParam = mkVarExp (goalVar fg >> Reg)
+
     dvs |> List.map (fun { Name = n; Params = ps } ->
                { Name = n
-                 Params = List.map (instantiateParam fg) ps })
+                 Params = List.map instantiateParam ps })
 
 /// Converts an axiom into a list of framed axioms, by combining it with the
 /// defining views of a model.
-let goalAddAxiom ds fg (name, axiom) =
+let goalAddAxiom (ds : ViewDef<DView, _> list)
+                 (fg : FreshGen)
+                 ((name, axiom) : (string * Axiom<SVGView, 'cmd>))
+                 : (string * GoalAxiom<'cmd>) list =
     // Each axiom comes in with a name like method_0,
     // where the 0 is the edge number.
     // This appends the viewdef number after the edge number.
@@ -109,29 +119,6 @@ let goalAddAxiom ds fg (name, axiom) =
              { Axiom = axiom
                Goal = instantiateGoal fg vs }))
         ds
-
-/// <summary>
-///     Converts the axioms of a <c>Model</c> into <c>GoalAxiom</c>s.
-///
-///     <para>
-///         <c>GoalAxiom</c>s are a Cartesian product of the existing axioms
-///         and the domain of the <c>ViewDefs</c> map.
-///     </para>
-/// </summary>
-/// <param name="_arg1">
-///     The <c>Model</c> to convert.
-/// </param>
-/// <returns>
-///     The new axiom map, over <c>GoalAxiom</c>s.
-/// </returns>
-let goalAddAxioms {ViewDefs = ds; Axioms = xs} =
-    // We use a fresh ID generator to ensure every goal variable is unique.
-    let fg = freshGen ()
-
-    xs
-    |> Map.toList
-    |> concatMap (goalAddAxiom ds fg)
-    |> Map.ofList
 
 /// <summary>
 ///     Converts a model into one over <c>GoalAxiom</c>s.
@@ -147,4 +134,13 @@ let goalAddAxioms {ViewDefs = ds; Axioms = xs} =
 /// <returns>
 ///     The new <c>Model</c>, over <c>GoalAxiom</c>s.
 /// </returns>
-let goalAdd mdl = withAxioms (goalAddAxioms mdl) mdl
+let goalAdd (mdl : UVModel<Axiom<SVGView, 'cmd>>)
+            : UVModel<GoalAxiom<'cmd>> =
+    // We use a fresh ID generator to ensure every goal variable is unique.
+    let fg = freshGen ()
+
+    let { ViewDefs = ds; Axioms = xs } = mdl
+    let xs' =
+        xs |> Map.toList |> concatMap (goalAddAxiom ds fg) |> Map.ofList
+
+    withAxioms xs' mdl

@@ -782,8 +782,8 @@ module Pretty =
         | EdgeOutOfBounds edge ->
             colonSep
                 [ String "edge out of bounds: "
-                  printAxiom printCommand
-                             (fun x -> String (x.ToString()))
+                  printAxiom (fun x -> String (x.ToString()))
+                             printCommand
                              edge ]
         | DuplicateNode node ->
             colonSep [ String "node duplicated: "; String node ]
