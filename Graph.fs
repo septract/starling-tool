@@ -69,7 +69,7 @@ module Types =
             /// <summary>
             ///     Set of nodes in the control-flow graph.
             /// </summary>
-            Nodes: Map<NodeID, ViewExpr<SVGView> * NodeKind>
+            Nodes: Map<NodeID, ViewExpr<GView<Sym<Var>>> * NodeKind>
 
             /// <summary>
             ///     Set of edges in the control-flow graph.
@@ -126,7 +126,7 @@ module Types =
           /// <summary>
           ///     The view of the source node.
           /// </summary>
-          SrcView : ViewExpr<SVGView>
+          SrcView : ViewExpr<GView<Sym<Var>>>
           /// <summary>
           ///     The name of the destination node.
           /// </summary>
@@ -134,7 +134,7 @@ module Types =
           /// <summary>
           ///     The view of the destination node.
           /// </summary>
-          DestView : ViewExpr<SVGView>
+          DestView : ViewExpr<GView<Sym<Var>>>
           /// <summary>
           ///      The command this edge represents.
           /// </summary>
@@ -157,7 +157,7 @@ module Types =
         /// </summary>
         Contents : Map<
             NodeID,
-            (ViewExpr<SVGView>
+            (ViewExpr<GView<Sym<Var>>>
              * Set<OutEdge>
              * Set<InEdge>
              * NodeKind)> }
@@ -617,7 +617,7 @@ let mapEdges (f : FullEdge -> 'result) (graph : Graph) : 'result seq =
 ///     <paramref name="graph" /> and its view is structurally equal
 ///     to <paramref name="nodeView" />.
 /// </returns>
-let nodeHasView (nodeName : NodeID) (nodeView : SVGView) (graph : Graph)
+let nodeHasView (nodeName : NodeID) (nodeView : GView<Sym<Var>>) (graph : Graph)
   : bool =
     match (Map.tryFind nodeName graph.Contents) with
     | Some (InnerView v, _, _, _) -> v = nodeView
@@ -637,7 +637,7 @@ let nodeHasView (nodeName : NodeID) (nodeView : SVGView) (graph : Graph)
 ///     The edges of <paramref name="_arg1" />, as name-edge pairs.
 ///     This is wrapped in a Chessie result over <c>Error</c>.
 /// </returns>
-let axiomatiseGraph : Graph -> (string * Axiom<SVGView, Command>) seq =
+let axiomatiseGraph : Graph -> (string * Axiom<GView<Sym<Var>>, Command>) seq =
     mapEdges
         (fun { Name = n; SrcView = s ; DestView = t ; Command = c } ->
             (n, { Pre = match s with InnerView v -> v
@@ -659,7 +659,7 @@ let axiomatiseGraph : Graph -> (string * Axiom<SVGView, Command>) seq =
 ///     A map of axioms characterising <paramref name="_arg1" />.
 /// </returns>
 let axiomatiseGraphs
-  : Map<string, Graph> -> Map<string, Axiom<SVGView, Command>> =
+  : Map<string, Graph> -> Map<string, Axiom<GView<Sym<Var>>, Command>> =
     // The map key is redundant, as we already have it inside the
     // graph iself.
     Map.toSeq
@@ -683,7 +683,7 @@ let axiomatiseGraphs
 /// </returns>
 let axiomatise
   (model : Model<Graph, _>)
-  : Model<Axiom<SVGView, Command>, _> =
+  : Model<Axiom<GView<Sym<Var>>, Command>, _> =
     withAxioms (axiomatiseGraphs model.Axioms) model
 
 
@@ -728,7 +728,7 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer <c>Command</c> representing the node.
     /// </returns>
-    let printNode (id : NodeID) (view : ViewExpr<SVGView>, nk : NodeKind)
+    let printNode (id : NodeID) (view : ViewExpr<GView<Sym<Var>>>, nk : NodeKind)
       : Doc =
         let list = match nk with Normal -> [] | Entry -> [String "(Entry)"] | Exit -> [String "(Exit)"] | EntryExit -> [String "(EntryExit)"]
         hsep [ id |> String
