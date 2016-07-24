@@ -54,7 +54,7 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer command for printing <paramref name="cs" />.
     /// </returns>
-    let printCollatedScript (cs: CollatedScript) =
+    let printCollatedScript (cs: CollatedScript) : Doc =
         let definites =
             [ vsep <| Seq.map printViewProto cs.VProtos
               vsep <| Seq.map (printScriptVar "shared") cs.Globals
@@ -78,7 +78,7 @@ module Pretty =
 /// <summary>
 ///     The empty collated script.
 /// </summary>
-let empty =
+let empty : CollatedScript =
     { Constraints = []
       Methods = []
       Search = None
@@ -87,37 +87,26 @@ let empty =
       Locals = [] }
 
 /// <summary>
-///     Files a script item into the appropriate bin in a collated script.
-/// </summary>
-/// <param name="item">
-///     The <c>ScriptItem</c> to place into <paramref name="cs" />.
-/// </param>
-/// <param name="cs">
-///     The <c>CollatedScript</c> to expand with <paramref name="item" />.
-/// </param>
-/// <returns>
-///     The <c>CollatedScript</c> resulting from adding
-///     <paramref name="item" /> to <paramref name="cs" />.
-/// </returns>
-let collateStep item (cs : CollatedScript) =
-    match item.Node with
-    | Global g -> { cs with Globals = g :: cs.Globals }
-    | Local l -> { cs with Locals = l :: cs.Locals }
-    | ViewProto v -> { cs with VProtos = v :: cs.VProtos }
-    | Search i -> { cs with Search = Some i }
-    | Method m -> { cs with Methods = m :: cs.Methods }
-    | Constraint c -> { cs with Constraints = c :: cs.Constraints }
-
-/// <summary>
 ///     Collates a script, grouping all like-typed items together.
 /// </summary>
 /// <param name="script">
-///     The <c>Script</c> to collate.
+///     The list of <c>ScriptItem</c>s to collate.
 /// </param>
 /// <returns>
 ///     The <c>CollatedScript</c> resulting from collating the
-///     <c>ScriptItems</c> in <paramref name="script" />.
+///     <c>ScriptItems</c> in <paramref name="script"/>.
 /// </returns>
-let collate script =
+let collate (script : ScriptItem list) : CollatedScript =
+    // TODO(CaptainHayashi): rewrite this into a recursion for perf?
+
+    let collateStep item (cs : CollatedScript) =
+        match item.Node with
+        | Global g -> { cs with Globals = g :: cs.Globals }
+        | Local l -> { cs with Locals = l :: cs.Locals }
+        | ViewProto v -> { cs with VProtos = v :: cs.VProtos }
+        | Search i -> { cs with Search = Some i }
+        | Method m -> { cs with Methods = m :: cs.Methods }
+        | Constraint c -> { cs with Constraints = c :: cs.Constraints }
+
     // We foldBack instead of fold to preserve the original order.
     List.foldBack collateStep script empty
