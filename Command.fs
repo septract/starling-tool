@@ -32,7 +32,7 @@ module Types =
     ///         for example <x = y++> is translated approximately to { Name = "!ILoad++"; Results = [ siVar "x"; siVar "y" ]; Args = [ siVar "y" ] }
     ///     </para>
     /// </remarks>
-    type PrimCommand = { Name : string; Results : Var list; Args : SMExpr list }
+    type PrimCommand = { Name : string; Results : Param list; Args : SMExpr list }
     type Command = PrimCommand list
 
 /// <summary>
@@ -181,7 +181,7 @@ module SymRemove =
 
 
 module Create = 
-    let command : string -> Var list -> SMExpr list -> PrimCommand =
+    let command : string -> Param list -> SMExpr list -> PrimCommand =
         fun name results args -> { Name = name; Results = results; Args = args }
 
 
@@ -191,10 +191,11 @@ module Create =
 module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Var.Pretty
+    open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Symbolic.Pretty
 
     /// Pretty-prints a Command.
     let printPrimCommand { Name = name; Args = xs; Results = ys } = 
-        hjoin [ commaSep <| Seq.map String ys; "<-" |> String; name |> String; commaSep <| Seq.map printSMExpr xs ]
+        hjoin [ commaSep <| Seq.map (printCTyped String) ys; "<-" |> String; name |> String; commaSep <| Seq.map printSMExpr xs ]
 
     let printCommand = List.map printPrimCommand >> semiSep

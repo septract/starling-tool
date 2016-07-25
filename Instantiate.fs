@@ -73,8 +73,7 @@ module Types =
     ///     <c>FuncTable</c>.
     /// </summary>
     /// <typeparam name="axiom">
-    ///     Type of program axioms.
-    /// </typeparam>
+    ///     Type of program axioms.  /// </typeparam>
     type IFModel<'axiom> = Model<'axiom, FuncTable<VBoolExpr option>>
 
     /// <summary>
@@ -368,12 +367,17 @@ let paramSubFun
              | Some _ -> failwith "param substitution type error"
              | None -> failwith "free variable in substitution")
 
+let paramToMExpr = 
+    function
+    | Param.Int  i -> After i |> Reg |> AVar |> Int
+    | Param.Bool b -> After b |> Reg |> BVar |> Bool
+
 let primParamSubFun
   ( cmd : PrimCommand )
   ( sem : PrimSemantics )
   : VSubFun<Var, Sym<MarkedVar>> =
     /// merge the pre + post conditions
-    let fres = List.map (After >> Reg >> AVar >> Expr.Int) cmd.Results
+    let fres = List.map paramToMExpr cmd.Results
     let fpars = cmd.Args @ fres
     let dpars = sem.Args @ sem.Results
 

@@ -165,7 +165,7 @@ type ModellerTests() =
         [ TestCaseData(fresh_node <| Fetch(LVIdent "t", fresh_node <| LV(LVIdent "ticket"), Increment))
             .Returns(Some <|
                          command "!ILoad++"
-                                 [ "t"; "ticket" ] 
+                                 [ Param.Int "t"; Param.Int "ticket" ] 
                                  [ "ticket" |> siBefore |> SMExpr.Int ] )
             .SetName("model a valid integer load as a prim") ]
 
@@ -185,7 +185,7 @@ type ModellerTests() =
                                                 fresh_node <| LV(LVIdent "ticket"),
                                                 Increment)))
             .Returns(ModellerTests.mprim
-                         [ command "!ILoad++" ["t"; "ticket"] [ "ticket" |> siBefore |> SMExpr.Int ]]
+                         [ command "!ILoad++" [Param.Int "t"; Param.Int "ticket"] [ "ticket" |> siBefore |> SMExpr.Int ]]
                      |> Some)
             .SetName("model a valid integer load command as an axiom") ]
 

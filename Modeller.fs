@@ -326,7 +326,7 @@ let coreSemantics : PrimSemanticsMap =
     <| [ (*
        * CAS
        *)
-      (prim "ICAS" [ Param.Int "destA"; Param.Int "testA"; ] [ Param.Int "destB"; Param.Int "testB"; Param.Int "setB"; ]
+      (prim "ICAS" [ Param.Int "destA"; Param.Int "testA"; ] [ Param.Int "destB"; Param.Int "testB"; Param.Int "set"; ]
            <| mkAnd [ mkImplies (iEq (siVar "destB") (siVar "testB"))
                              (mkAnd [ iEq (siVar "destA") (siVar "set")
                                       iEq (siVar "testA") (siVar "testB") ] )
@@ -334,7 +334,7 @@ let coreSemantics : PrimSemanticsMap =
                                 (mkAnd [ iEq (siVar "destA") (siVar "destB")
                                          iEq (siVar "testA") (siVar "destB") ] ) ] )
       // Boolean CAS
-      (prim "BCAS" [Param.Bool "destA"; Param.Bool "testA"; ] [Param.Bool "destB"; Param.Bool "testB"; Param.Bool "setB"; ]
+      (prim "BCAS" [Param.Bool "destA"; Param.Bool "testA"; ] [Param.Bool "destB"; Param.Bool "testB"; Param.Bool "set"; ]
            <| mkAnd [ mkImplies (bEq (sbVar "destB") (sbVar "testB"))
                                 (mkAnd [ bEq (sbVar "destA") (sbVar "set")
                                          bEq (sbVar "testA") (sbVar "testB") ] )
@@ -911,7 +911,7 @@ let modelBoolLoad : VarMap -> Var -> Expression -> FetchMode -> Result<PrimComma
                 return
                     command
                         "!BLoad"
-                            [ dest ]
+                            [ Param.Bool dest ]
                             [ s |> Before |> Reg |> BVar |> Expr.Bool ]
                               
             | Typed.Bool s, Increment -> return! fail (IncBool srcExpr)
@@ -933,13 +933,13 @@ let modelIntLoad : VarMap -> Var -> Expression -> FetchMode -> Result<PrimComman
             let! src = wrapMessages BadSVar (lookupVar svars) srcLV
             match src, mode with
             | Typed.Int s, Direct ->
-                return command "!ILoad" [ dest ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
+                return command "!ILoad" [ Param.Int dest ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
 
             | Typed.Int s, Increment ->
-                return command "!ILoad++" [ dest; s ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
+                return command "!ILoad++" [ Param.Int dest; Param.Int s ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
 
             | Typed.Int s, Decrement ->
-                return command "!ILoad--" [ dest; s ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
+                return command "!ILoad--" [ Param.Int dest; Param.Int s ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
 
             | _ -> return! fail (TypeMismatch (Type.Int (), srcLV, typeOf src))
         }
@@ -959,7 +959,7 @@ let modelBoolStore : VarMap -> Var -> Expression -> FetchMode -> Result<PrimComm
             return
                 command
                     "!BStore"
-                    [ dest ]
+                    [ Param.Bool dest ]
                     [ sxp |> Expr.Bool ]
         | Increment -> return! fail (IncBool src)
         | Decrement -> return! fail (DecBool src)
@@ -980,7 +980,7 @@ let modelIntStore : VarMap -> Var -> Expression -> FetchMode -> Result<PrimComma
             return
                 command
                     "!IStore" 
-                    [ dest ] 
+                    [ Param.Int dest ] 
                     [ sxp |> Expr.Int ]
 
         | Increment -> return! fail (IncExpr src)
@@ -1007,7 +1007,7 @@ let modelCAS : VarMap -> VarMap ->  LValue -> LValue -> Expression -> Result<Pri
              |> lift
                     (fun s ->
                         command "BCAS"
-                            [ d; t ]
+                            [ Param.Bool d; Param.Bool t ]
                             [ d |> sbBefore |> Expr.Bool
                               t |> sbBefore |> Expr.Bool
                               s |> Expr.Bool ] )
@@ -1017,7 +1017,7 @@ let modelCAS : VarMap -> VarMap ->  LValue -> LValue -> Expression -> Result<Pri
             |> lift
                    (fun s ->
                         command "ICAS"
-                            [ d; t ]
+                            [ Param.Int d; Param.Int t ]
                             [ d |> siBefore |> Expr.Int
                               t |> siBefore |> Expr.Int
                               s |> Expr.Int ] )
@@ -1065,9 +1065,9 @@ let rec modelAtomic : VarMap -> VarMap -> Atomic -> Result<PrimCommand, PrimErro
             | Decrement, Typed.Bool _ ->
                 return! fail (DecBool (fresh_node <| LV operand))
             | Increment, Typed.Int _ ->
-                return command "!I++" [ op ] [op |> Before |> Reg |> AVar |> Expr.Int ]
+                return command "!I++" [ Param.Int op ] [op |> Before |> Reg |> AVar |> Expr.Int ]
             | Decrement, Typed.Int _ ->
-                return command "!I--" [ op ] [op |> Before |> Reg |> AVar |> Expr.Int ]
+                return command "!I--" [ Param.Int op ] [op |> Before |> Reg |> AVar |> Expr.Int ]
         }
     | Id -> ok (command "Id" [] [])
     | Assume e ->
@@ -1091,7 +1091,7 @@ and modelAssign : VarMap -> LValue -> Expression -> Result<PrimCommand, PrimErro
             return
                 command
                     "!BLSet"
-                    [ ls ]
+                    [ Param.Bool ls ]
                     [ em |> Expr.Bool ]
         | Typed.Int ls ->
             let! em =
@@ -1099,7 +1099,7 @@ and modelAssign : VarMap -> LValue -> Expression -> Result<PrimCommand, PrimErro
             return
                 command
                     "!ILSet"
-                    [ ls ]
+                    [ Param.Int ls ]
                     [ em |> Expr.Int ]
     }
 

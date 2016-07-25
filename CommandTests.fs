@@ -13,6 +13,7 @@ open Starling.Core.Command
 open Starling.Core.Command.Create
 open Starling.Core.Command.Compose
 open Starling.Core.Model
+open Starling.Core.Var
 open Starling.Core.Symbolic
 open Starling.Core.Expr
 
@@ -30,13 +31,13 @@ module Nops =
 
     [<Test>]
     let ``Reject baz <- Foo(bar) as a no-op``() =
-        checkNot [ command "Foo" [ "baz" ] [ SMExpr.Int <| siBefore "bar" ] ]
+        checkNot [ command "Foo" [ Param.Int "baz" ] [ SMExpr.Int <| siBefore "bar" ] ]
 
     [<Test>]
     let ``Reject Assume (x!before); baz <- Foo(bar) as a no-op``() =
         checkNot
             [ command "Assume" [] [ SMExpr.Bool <| sbBefore "x" ] 
-              command "Foo" [ "baz" ] [ SMExpr.Int <| siBefore "bar" ] ]
+              command "Foo" [ Param.Int "baz" ] [ SMExpr.Int <| siBefore "bar" ] ]
 
 module Assumes =
     let isAssume c =
@@ -57,7 +58,7 @@ module Assumes =
 
     [<Test>]
     let ``Reject baz <- Foo(bar); Assume(x!before) as an Assume`` ()=
-        checkNot [ command "Foo" [ "baz" ] [ SMExpr.Int <| siBefore "bar" ]
+        checkNot [ command "Foo" [ Param.Int "baz" ] [ SMExpr.Int <| siBefore "bar" ]
                    command "Assume" [] [ SMExpr.Bool <| sbBefore "x" ] ]
 
 

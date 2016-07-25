@@ -442,7 +442,7 @@ let ticketLockLock =
           { Pre = Mandatory <| Multiset.empty
             Contents =
                 [ { Command =
-                        command "!ILoad++" [ "t"; "ticket" ]
+                        command "!ILoad++" [ Param.Int "t"; Param.Int "ticket" ]
                              [ SMExpr.Int (siBefore "ticket") ]
                         |> List.singleton |> Prim
                     Post = Mandatory <| sing holdTick }
@@ -453,7 +453,7 @@ let ticketLockLock =
                                    { Pre = Mandatory <| sing holdTick
                                      Contents =
                                          [ { Command =
-                                                 command "!ILoad" [ "s" ]
+                                                 command "!ILoad" [ Param.Int "s" ]
                                                       [ SMExpr.Int (siBefore "serving") ]
                                                  |> List.singleton |> Prim
                                              Post =
@@ -473,7 +473,7 @@ let ticketLockUnlock =
             // constraint holdTick(ta) * holdTick(tb) -> ta != tb;
             Contents =
                 [ { Command =
-                        command "!I++" [ "serving" ] [ SMExpr.Int (siBefore "serving") ]
+                        command "!I++" [ Param.Int "serving" ] [ SMExpr.Int (siBefore "serving") ]
                         |> List.singleton |> Prim
                     Post = Mandatory <| Multiset.empty }]}}
 
@@ -491,7 +491,7 @@ let ticketLockGuardedLock =
             Contents =
                 [ { Command =
                         command "!ILoad++"
-                             [ "t"; "ticket" ]
+                             [ Param.Int "t"; Param.Int "ticket" ]
                              [ SMExpr.Int (siBefore "t");
                                SMExpr.Int (siBefore "ticket"); ]
                         |> List.singleton |> Prim
@@ -504,7 +504,7 @@ let ticketLockGuardedLock =
                                      Contents =
                                          [ { Command =
                                                  command "!ILoad"
-                                                      [ "s" ]
+                                                      [ Param.Int "s" ]
                                                       [ SMExpr.Int (siBefore "serving"); ]
                                                  |> List.singleton |> Prim
                                              Post =
@@ -521,7 +521,7 @@ let ticketLockGuardedUnlock : PMethod<ViewExpr<SVGView>> =
           { Pre = Mandatory <| sing (gHoldLock BTrue)
             Contents =
                 [ { Command =
-                        command "!I++" [ "serving" ] [ Expr.Int (siBefore "serving") ]
+                        command "!I++" [ Param.Int "serving" ] [ Expr.Int (siBefore "serving") ]
                         |> List.singleton |> Prim
                     Post = Mandatory <| Multiset.empty } ] } }
 

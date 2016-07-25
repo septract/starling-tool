@@ -100,7 +100,7 @@ type SemanticsTests() =
                              iEq (siAfter "t") (siBefore "t")
                              iEq (siBefore "s") (siBefore "t") ])
               .SetName("Semantically translate <assume(s == t)> using the ticket lock model")
-          TestCaseData([ command "!I++" [ "serving" ] [ Expr.Int <| siBefore "serving" ] ] )
+          TestCaseData([ command "!I++" [ Param.Int "serving" ] [ Expr.Int <| siBefore "serving" ] ] )
               .Returns(Some <| Set.ofList
                            [ iEq (siAfter "ticket") (siBefore "ticket")
                              iEq (siAfter "s") (siBefore "s")
