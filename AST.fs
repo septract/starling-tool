@@ -8,6 +8,7 @@ open Starling.Collections
 open Starling.Core.Model
 open Starling.Core.Var.Types
 
+
 /// <summary>
 ///     Types used in the AST.
 /// </summary>
@@ -26,7 +27,7 @@ module Types =
         override this.ToString() = sprintf "<%A: %A>" this.Position this.Node
 
     /// A Boolean operator.
-    type BopTypes =
+    type BinOp =
         | Mul // a * b
         | Div // a / b
         | Add // a + b
@@ -42,23 +43,23 @@ module Types =
 
     /// An untyped, raw expression.
     /// These currently cover all languages, but this may change later.
-    type ExpressionTypes =
+    type Expression' =
         | True // true
         | False // false
         | Int of int64 // 42
         | LV of LValue // foobaz
         | Symbolic of string * Expression list // %{foo}(exprs)
-        | Bop of BopTypes * Expression * Expression // a BOP b
-    and Expression = Node<ExpressionTypes>
+        | BopExpr of BinOp * Expression * Expression // a BOP b
+    and Expression = Node<Expression'>
 
     /// An atomic action.  
-    type AtomicTypes =
+    type Atomic' =
         | CompareAndSwap of LValue * LValue * Expression // <CAS(a, b, c)>
         | Fetch of LValue * Expression * FetchMode // <a = b??>
         | Postfix of LValue * FetchMode // <a++> or <a-->
         | Id // <id>
         | Assume of Expression // <assume(e)
-    and Atomic = Node<AtomicTypes>
+    and Atomic = Node<Atomic'>
 
     /// A view prototype.
     type ViewProto = Func<Param>
@@ -111,7 +112,7 @@ module Types =
           PostAssigns: (LValue * Expression) list }
 
     /// A statement in the command language.
-    type CommandTypes<'view> =
+    type Command'<'view> =
         /// A set of sequentially composed primitives.
         | Prim of PrimSet
         /// An if-then-else statement.
@@ -126,7 +127,7 @@ module Types =
                    * Expression // do { b } while (e)
         /// A list of parallel-composed blocks.
         | Blocks of Block<'view, Command<'view>> list
-    and Command<'view> = Node<CommandTypes<'view>>
+    and Command<'view> = Node<Command'<'view>>
 
     /// A combination of a command and its postcondition view.
     and ViewedCommand<'view, 'cmd> =
@@ -148,7 +149,7 @@ module Types =
     type CMethod<'view> = Method<'view, Command<'view>>
 
     /// A top-level item in a Starling script.
-    type ScriptItems =
+    type ScriptItem' =
         | Global of VarDecl // global int name;
         | Local of VarDecl // local int name;
         | Method of CMethod<Marked<View>> // method main(argv, argc) { ... }
@@ -156,7 +157,7 @@ module Types =
         | ViewProto of ViewProto // view name(int arg);
         | Constraint of ViewDef<DView, Expression> // constraint emp => true
         override this.ToString() = sprintf "%A" this
-    and ScriptItem = Node<ScriptItems>
+    and ScriptItem = Node<ScriptItem'>
 
 /// <summary>
 ///     Pretty printers for the AST.
@@ -167,24 +168,12 @@ module Pretty =
     open Starling.Core.Model.Pretty
     open Starling.Core.Var.Pretty
 
-    /// Some ANSI color codes for nice outputting
-    /// wraps x as <[line n: x]> with color formats
-    (*
-    let line_info_fmt x = sprintf "\u001b[92m<[line %d: \u001b[0m" x
-    let linecol_info_fmt x y = sprintf "\u001b[92m<[line %d, \u001b[36mcol %d: \u001b[0m" x y
-    let line_info f (x: Node<'a>) = hsep [ line_info_fmt x.Position.Line |> String; f x.Node; "\u001b[92m]>\u001b[0m" |> String ]
-    let linecol_info f (x: Node<'a>) = hsep [ linecol_info_fmt x.Position.Line x.Position.Column |> String; f x.Node; "\u001b[92m]>\u001b[0m" |> String ]
-    *)
-    // reset
-    let line_info f (x: Node<'a>) = f x.Node
-    let linecol_info f (x: Node<'a>) = f x.Node
-
     /// Pretty-prints lvalues.
     let rec printLValue = function
         | LVIdent i -> String i
 
     /// Pretty-prints Boolean operations.
-    let printBop =
+    let printBop : BinOp -> Doc =
         function
         | Mul -> "*"
         | Div -> "/"
@@ -198,62 +187,62 @@ module Pretty =
         | Neq -> "!="
         | And -> "&&"
         | Or -> "||"
-        >> String
+        >> String >> syntax
 
     /// Pretty-prints expressions.
     /// This is not guaranteed to produce an optimal expression.
-    let rec printExpressions =
+    let rec printExpressionType =
         function
-        | True -> String "true"
-        | False -> String "false"
-        | Int i -> i.ToString() |> String
+        | True -> String "true" |> syntaxLiteral
+        | False -> String "false" |> syntaxLiteral
+        | Int i -> i.ToString() |> String |> syntaxLiteral
         | LV x -> printLValue x
         | Symbolic (sym, args) ->
             func (sprintf "%%{%s}" sym) (Seq.map printExpression args)
-        | Bop(op, a, b) ->
+        | BopExpr(op, a, b) ->
             hsep [ printExpression a
                    printBop op
                    printExpression b ]
             |> parened
-    and printExpression = linecol_info printExpressions
+    and printExpression x = printExpressionType x.Node
 
     /// Pretty-prints views.
     let rec printView =
         function
         | View.Func f -> printFunc printExpression f
-        | View.Unit -> String "emp"
+        | View.Unit -> String "emp" |> syntaxView
         | View.Join(l, r) -> binop "*" (printView l) (printView r)
         | View.If(e, l, r) ->
-            hsep [ String "if"
+            hsep [ String "if" |> syntaxView
                    printExpression e
-                   String "then"
+                   String "then" |> syntaxView
                    printView l
-                   String "else"
+                   String "else" |> syntaxView
                    printView r ]
 
     /// Pretty-prints marked view lines.
     let rec printMarkedView pView =
         function
         | Unmarked v -> pView v
-        | Questioned v -> hjoin [ pView v ; String "?" ]
-        | Unknown -> String "?"
-        >> ssurround "{|" "|}"
+        | Questioned v -> hjoin [ pView v ; String "?" |> syntaxView ]
+        | Unknown -> String "?" |> syntaxView
+        >> ssurround "{| " " |}"
 
     /// Pretty-prints view definitions.
     let rec printDView =
         function
         | DView.Func f -> printFunc String f
-        | DView.Unit -> String "emp"
+        | DView.Unit -> String "emp" |> syntaxView
         | DView.Join(l, r) -> binop "*" (printDView l) (printDView r)
 
     /// Pretty-prints constraints.
     let printConstraint (cs : ViewDef<DView, Expression>) =
-        hsep [ String "constraint"
+        hsep [ String "constraint" |> syntax
                printDView (viewOf cs)
-               String "->"
+               String "->" |> syntax
                (match cs with
                 | Definite (_, d) -> printExpression d
-                | Indefinite _ -> String "?") ]
+                | Indefinite _ -> String "?" |> syntax) ]
         |> withSemi
 
     /// Pretty-prints fetch modes.
@@ -268,7 +257,7 @@ module Pretty =
         equality (printLValue dest) (printExpression src)
 
     /// Pretty-prints atomic actions.
-    let printAtomics =
+    let printAtomicType =
         function
         | CompareAndSwap(l, f, t) ->
             func "CAS" [ printLValue l
@@ -282,39 +271,39 @@ module Pretty =
                     printFetchMode m ]
         | Id -> String "id"
         | Assume e -> func "assume" [ printExpression e ]
-    let printAtomic = linecol_info printAtomics
+    let printAtomic x = printAtomicType x.Node
 
     /// Pretty-prints viewed commands with the given indent level (in spaces).
-    let printViewedCommand (pView : 'view -> Command)
-                           (pCmd : 'cmd -> Command)
+    let printViewedCommand (pView : 'view -> Doc)
+                           (pCmd : 'cmd -> Doc)
                            ({ Command = c; Post = p } : ViewedCommand<'view, 'cmd>) =
         vsep [ pCmd c ; pView p ]
 
     /// Pretty-prints blocks with the given indent level (in spaces).
-    let printBlock (pView : 'view -> Command)
-                   (pCmd : 'cmd -> Command)
+    let printBlock (pView : 'view -> Doc)
+                   (pCmd : 'cmd -> Doc)
                    ({ Pre = p; Contents = c } : Block<'view, 'cmd>)
-                   : Command =
+                   : Doc =
         vsep ((p |> pView |> Indent)
               :: List.map (printViewedCommand pView pCmd >> Indent) c)
         |> braced
 
     /// Pretty-prints methods.
-    let printMethod (pView : 'view -> Command)
-                    (pCmd : 'cmd -> Command)
+    let printMethod (pView : 'view -> Doc)
+                    (pCmd : 'cmd -> Doc)
                     ({ Signature = s; Body = b } : Method<'view, 'cmd>)
-                    : Command =
-        hsep [ "method" |> String
-               printFunc String s
+                    : Doc =
+        hsep [ "method" |> String |> syntax
+               printFunc (String >> syntaxIdent) s
                printBlock pView pCmd b ]
 
     /// Pretty-prints commands with the given indent level (in spaces).
-    let rec printCommandTypes pView =
+    let rec printCommandType pView =
         function
         (* The trick here is to make Prim [] appear as ;, but
            Prim [x; y; z] appear as x; y; z;, and to do the same with
            atomic lists. *)
-        | CommandTypes.Prim { PreAssigns = ps;
+        | Command'.Prim { PreAssigns = ps;
                  Atomics = ts;
                  PostAssigns = qs } ->
             seq { yield! Seq.map (uncurry printAssign) ps
@@ -323,62 +312,65 @@ module Pretty =
                          |> semiSep |> withSemi |> braced |> angled)
                   yield! Seq.map (uncurry printAssign) qs }
             |> semiSep |> withSemi
-        | CommandTypes.If(c, t, f) ->
-            hsep [ "if" |> String
+        | Command'.If(c, t, f) ->
+            hsep [ "if" |> String |> syntax
                    c
                    |> printExpression
                    |> parened
                    t |> printBlock pView (printCommand pView)
                    f |> printBlock pView (printCommand pView)]
-        | CommandTypes.While(c, b) ->
-            hsep [ "while" |> String
+        | Command'.While(c, b) ->
+            hsep [ "while" |> String |> syntax
                    c
                    |> printExpression
                    |> parened
                    b |> printBlock pView (printCommand pView) ]
-        | CommandTypes.DoWhile(b, c) ->
-            hsep [ "do" |> String
+        | Command'.DoWhile(b, c) ->
+            hsep [ "do" |> String |> syntax
                    b |> printBlock pView (printCommand pView)
-                   "while" |> String
+                   "while" |> String |> syntax
                    c
                    |> printExpression
                    |> parened ]
             |> withSemi
-        | CommandTypes.Blocks bs ->
+        | Command'.Blocks bs ->
             bs
             |> List.map (printBlock pView (printCommand pView))
             |> hsepStr "||"
-    and printCommand pView = line_info (printCommandTypes pView)
+    and printCommand pView x = printCommandType pView x.Node
 
     /// Pretty-prints a view prototype.
     let printViewProto { Name = n; Params = ps } =
-        hsep [ "view" |> String
+        hsep [ "view" |> String |> syntax
                func n (List.map (printCTyped String) ps) ]
         |> withSemi
 
     /// Pretty-prints a search directive.
     let printSearch i =
-        hsep [ String "search"
+        hsep [ String "search" |> syntax
                sprintf "%d" i |> String ]
 
     /// Pretty-prints a script variable of the given class.
     let printScriptVar cls v =
-        hsep [ String cls; printCTyped String v ] |> withSemi
+        hsep [ String cls |> syntax; printCTyped String v ] |> withSemi
 
     /// Pretty-prints script lines.
-    let printScriptLines =
+    let printScriptLineType =
         function
         | Global v -> printScriptVar "shared" v
         | Local v -> printScriptVar "thread" v
-        | Method m -> printMethod (printMarkedView printView)
-                                  (printCommand (printMarkedView printView)) m
+        | Method m ->
+            fun mdoc -> vsep [Nop; mdoc; Nop]
+            <| printMethod (printMarkedView printView) (printCommand (printMarkedView printView)) m
+
         | ViewProto v -> printViewProto v
         | Search i -> printSearch i
         | Constraint c -> printConstraint c
-    let printScriptLine = line_info printScriptLines
+    let printScriptLine x = printScriptLineType x.Node
 
     /// Pretty-prints scripts.
-    let printScript = List.map printScriptLine >> fun ls -> VSep(ls, vsep [ Nop; Nop ])
+    /// each line on its own line
+    let printScript xs = VSep(List.map printScriptLine xs, Nop)
 
 
 (*
@@ -411,14 +403,14 @@ let (|BoolExp|ArithExp|AnyExp|) e =
     | Symbolic _ -> AnyExp e
     | Int _ -> ArithExp e
     | True | False -> BoolExp e
-    | Bop(BoolOp, _, _) -> BoolExp e
-    | Bop(ArithOp, _, _) -> ArithExp e
+    | BopExpr(BoolOp, _, _) -> BoolExp e
+    | BopExpr(ArithOp, _, _) -> ArithExp e
 
 (*
  * Misc
  *)
-let empty_position = { StreamName = ""; Line = 0L; Column = 0L; }
-let fresh_node a = { Position = empty_position; Node = a }
+let emptyPosition = { StreamName = ""; Line = 0L; Column = 0L; }
+let freshNode a = { Position = emptyPosition; Node = a }
 let node streamname line column a = { Position = { StreamName=streamname; Line=line; Column=column }; Node = a }
 
 /// <summary>

@@ -64,7 +64,7 @@ let ticketLockLockMethodAST =
                               Line = 15L;
                               Column = 5L;};
                   Node =
-                   CommandTypes.Prim
+                   Command'.Prim
                      {PreAssigns = [];
                       Atomics =
                        [{Position =
@@ -113,7 +113,7 @@ let ticketLockLockMethodAST =
                               Line = 19L;
                               Column = 9L;};
                             Node =
-                             CommandTypes.Prim
+                             Command'.Prim
                                {PreAssigns = [];
                                 Atomics =
                                  [{Position =
@@ -139,7 +139,7 @@ let ticketLockLockMethodAST =
                                     Line = 20L;
                                     Column = 15L;};
                                   Node =
-                                   Bop
+                                   BopExpr
                                      (Eq,
                                       {Position =
                                         {StreamName =
@@ -168,7 +168,7 @@ let ticketLockLockMethodAST =
                                    Line = 21L;
                                    Column = 16L;};
                        Node =
-                        Bop
+                        BopExpr
                           (Neq,
                            {Position =
                              {StreamName = "Examples/Pass/ticketLock.cvf";
@@ -196,7 +196,7 @@ let ticketLockUnlockMethodAST =
                           Line = 30L;
                           Column = 5L;};
               Node =
-               CommandTypes.Prim
+               Command'.Prim
                  {PreAssigns = [];
                   Atomics =
                    [{Position =
@@ -214,7 +214,7 @@ let ticketLockConstraint01 =
                    Line = 38L;
                    Column = 50L;};
        Node =
-        Bop
+        BopExpr
           (Ge,{Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                            Line = 38L;
                            Column = 43L;};
@@ -232,7 +232,7 @@ let ticketLockConstraint02 =
                    Line = 41L;
                    Column = 50L;};
        Node =
-        Bop
+        BopExpr
           (Gt,{Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                            Line = 41L;
                            Column = 43L;};
@@ -250,7 +250,7 @@ let ticketLockConstraint03 =
                    Line = 42L;
                    Column = 50L;};
        Node =
-        Bop
+        BopExpr
           (Neq,{Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                             Line = 42L;
                             Column = 43L;};
@@ -269,7 +269,7 @@ let ticketLockConstraint04 =
                    Line = 45L;
                    Column = 51L;};
        Node =
-        Bop
+        BopExpr
           (Neq,{Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                             Line = 45L;
                             Column = 43L;};
@@ -288,7 +288,7 @@ let ticketLockConstraint05 =
                    Line = 46L;
                    Column = 46L;};
        Node =
-        Bop
+        BopExpr
           (Neq,{Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                             Line = 46L;
                             Column = 43L;};

@@ -113,9 +113,9 @@ module Pretty =
     ///     pretty-printed form of <paramref name="ft"/>.
     /// </returns>
     let printFuncTable
-      (pDefn : 'defn -> Command)
+      (pDefn : 'defn -> Doc)
       (ft : FuncTable<'defn>)
-      : Command seq =
+      : Doc seq =
         ft
         |> List.map (fun (v, d) -> colonSep [ printDFunc v; pDefn d ] )
         |> List.toSeq
@@ -131,11 +131,11 @@ module Pretty =
     /// </typeparam>
     /// <returns>
     ///     A function, taking a <c>ModelView</c> and <c>DFModel</c>, and
-    ///     returning a <c>Command</c>.
+    ///     returning a <c>Doc</c>.
     /// </returns>
     let printDFModelView
-      (pAxiom : 'axiom -> Command)
-      : ModelView -> DFModel<'axiom> -> Command =
+      (pAxiom : 'axiom -> Doc)
+      : ModelView -> DFModel<'axiom> -> Doc =
         printModelView pAxiom (printFuncTable printVBoolExpr)
 
     /// Pretty-prints instantiation errors.

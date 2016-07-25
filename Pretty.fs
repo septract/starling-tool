@@ -6,18 +6,21 @@ module Starling.Core.Pretty
 open Starling.Collections
 open Starling.Utils
 
+type FontColor =
+    Black | Red | Green | Yellow | Blue | Magenta | Cyan | White
 
 /// Type of pretty-printer commands.
 [<NoComparison>]
-type Command =
-    | Header of heading : Command * Command
+type Doc =
+    | Header of heading : Doc * Doc
     | Separator
     | String of string
-    | Surround of left : Command * mid : Command * right : Command
-    | Indent of Command
+    | Styled of style: FontColor list * cmd : Doc
+    | Surround of left : Doc * mid : Doc * right : Doc
+    | Indent of Doc
     | VSkip
-    | VSep of cmds : Command seq * separator : Command
-    | HSep of cmds : Command seq * separator : Command
+    | VSep of cmds : Doc seq * separator : Doc
+    | HSep of cmds : Doc seq * separator : Doc
     | Nop
 
 
@@ -37,22 +40,104 @@ let indent level = new string(' ', level * 4)
 /// Enters a new line at the given indent level.
 let lnIndent level = "\n" + indent level
 
-let rec printLevel level =
+/// Helpers for turning a Doc into a Styled
+/// for syntax highlighting keywords, literals, identifiers and view syntax
+/// respectively
+let syntax d = Styled([Magenta], d)
+let syntaxLiteral d = Styled([Blue], d)
+let syntaxIdent d = Styled([Cyan], d)
+let syntaxView d = Styled([Yellow], d)
+
+/// <summary>
+///     Styles a string with ANSI escape sequences.
+/// </summary>
+/// <param name="s">
+///     The list of styles to turn into ANSI codes and apply to the result.
+/// </param>
+/// <param name="d">
+///     The string to stylise.
+/// </param>
+/// <returns>
+///     The stylised (ANSI-escaped) string.
+/// </param>
+let stylise s d = 
+    let colCode =
+        function
+        | Black -> 0
+        | Red -> 1
+        | Green -> 2
+        | Yellow -> 3
+        | Blue -> 4
+        | Magenta -> 5
+        | Cyan -> 6 
+        | White -> 7
+
+    let code c = sprintf "%u" (30 + colCode c)
+
+    let prefix = "\u001b[" + (String.concat ";" <| List.map code s) + "m"
+    let suffix = "\u001b[0m"
+    prefix + d + suffix
+
+/// <summary>
+///     The current state of a pretty-printer run.
+/// </summary>
+type PrintState =
+    { /// <summary>
+      ///     The current indent level of the printer.
+      /// </summary>
+      Level : int
+
+      /// <summary>
+      ///     Whether or not styling is to be used.
+      /// </summary>
+      UseStyles : bool }
+
+/// <summary>
+///     The internal print function.
+/// </summary>
+/// <param name="state">
+///     The current state of the printer.
+/// </param>
+/// <returns>
+///     A function mapping <see cref="Doc"/>s to strings.
+/// </returns>
+let rec printState state =
     function
-    | Header(heading, incmd) -> printLevel level heading + ":" + lnIndent level + printLevel level incmd + lnIndent level
-    | Separator -> "----"
-    | VSkip -> lnIndent level
-    | String s -> s.Replace("\n", lnIndent level)
-    | Surround(left, Vertical mid, right) ->
-        printLevel level left + lnIndent level + printLevel level mid + lnIndent level + printLevel level right
-    | Surround(left, mid, right) -> printLevel level left + printLevel level mid + printLevel level right
-    | Indent incmd -> indent 1 + printLevel (level + 1) incmd
-    | VSep(cmds, separator) ->
-        Seq.map (printLevel level) cmds |> String.concat (printLevel level separator + lnIndent level)
-    | HSep(cmds, separator) -> Seq.map (printLevel level) cmds |> String.concat (printLevel level separator)
+    | Header (heading, incmd) ->
+        printState state heading + ":" + lnIndent state.Level + printState state incmd + lnIndent state.Level
+    | Separator ->
+        "----"
+    | Styled (s, d) when state.UseStyles ->
+        stylise s <| printState state d
+    | Styled (s, d) ->
+        printState state d
+    | VSkip ->
+        lnIndent state.Level
+    | String s ->
+        s.Replace("\n", lnIndent state.Level)
+    | Surround (left, Vertical mid, right) ->
+        printState state left + lnIndent state.Level + printState state mid + lnIndent state.Level + printState state right
+    | Surround (left, mid, right) ->
+        printState state left + printState state mid + printState state right
+    | Indent incmd ->
+        let state' = { state with Level = state.Level + 1 }
+        indent 1 + printState state' incmd
+    | VSep (cmds, separator) ->
+        Seq.map (printState state) cmds |> String.concat (printState state separator + lnIndent state.Level)
+    | HSep (cmds, separator) ->
+        Seq.map (printState state) cmds |> String.concat (printState state separator)
     | Nop -> ""
 
-let print = printLevel 0
+/// <summary>
+///     Prints a <see cref="Doc"/> with full styling.
+/// </summary>
+let print = printState { Level = 0; UseStyles = true }
+
+/// <summary>
+///     Prints a <see cref="Doc"/> with no styling.
+/// </summary>
+let printUnstyled = printState { Level = 0; UseStyles = false }
+
 
 (*
  * Shortcuts
@@ -106,7 +191,7 @@ let parened = ssurround "(" ")"
 let squared = ssurround "[" "]"
 
 /// Pretty-prints a function f(xs1, xs2, ...xsn)
-let func f xs = hjoin [String f; commaSep xs |> parened]
+let func f xs = hjoin [String f |> syntaxIdent; commaSep xs |> parened]
 
 /// Pretty-prints Funcs using pxs to print parameters.
 let printFunc pxs { Starling.Collections.Func.Name = f; Params = xs } = func f (Seq.map pxs xs)

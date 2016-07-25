@@ -606,7 +606,7 @@ module Pretty =
     /// <summary>
     ///     Pretty-prints a type.
     /// </summary>
-    let printType : Type -> Command =
+    let printType : Type -> Doc =
         function
         | Int () -> "int" |> String
         | Bool () -> "bool" |> String
@@ -630,14 +630,14 @@ module Pretty =
     ///     The meta-type of ctyped values.
     /// </typeparam>
     /// <returns>
-    ///     A printer <c>Command</c> printing <paramref name="ctyped"/>.
+    ///     A printer <c>Doc</c> printing <paramref name="ctyped"/>.
     /// </returns>
     let printCTyped
-      (pItem : 'item -> Command)
+      (pItem : 'item -> Doc)
       (ctyped : CTyped<'item>)
-      : Command =
+      : Doc =
         hsep
-            [ printType (typeOf ctyped)
+            [ printType (typeOf ctyped) |> syntaxIdent
               pItem (valueOf ctyped) ]
 
     /// <summary>
@@ -665,10 +665,10 @@ module Pretty =
     /// </typeparam>
     /// <returns>
     ///     A function converting <c>Typed</c> items to printer
-    ///     <c>Command</c>s.
+    ///     <c>Doc</c>s.
     /// </returns>
     let printTyped
-      (pInt : 'int -> Command)
-      (pBool : 'bool -> Command)
-      : Typed<'int, 'bool> -> Command =
+      (pInt : 'int -> Doc)
+      (pBool : 'bool -> Doc)
+      : Typed<'int, 'bool> -> Doc =
         Mapper.map (Mapper.make pInt pBool) >> printCTyped id

@@ -463,7 +463,7 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer command to print the <c>SGView</c>.
     /// </returns>
-    let printSVGView : SVGView -> Command = printGView (printSym String)
+    let printSVGView : SVGView -> Doc = printGView (printSym String)
 
     /// <summary>
     ///     Pretty-prints a guarded view over symbolic <c>MarkedVar</c>s.

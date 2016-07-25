@@ -29,7 +29,7 @@ let makeFreshView tvars fg =
     let viewName =
         fg |> getFresh |> sprintf "%A"
     let viewArgs =
-        tvars |> Map.toSeq |> Seq.map (fst >> LVIdent >> LV >> fun l -> { Position = empty_position; Node = l} )
+        tvars |> Map.toSeq |> Seq.map (fst >> LVIdent >> LV >> fun l -> freshNode l)
     let viewParams =
         tvars |> Map.toSeq |> Seq.map (fun (name, ty) -> withType ty name)
 
@@ -202,7 +202,7 @@ module Tests =
         static member ViewDesugars =
             [TestCaseData(Unknown : Marked<View>)
               .Returns((Func
-                            (func "0" [ fresh_node <| LV (LVIdent "s") ; fresh_node <| LV (LVIdent "t") ]),
+                            (func "0" [ freshNode <| LV (LVIdent "s") ; freshNode <| LV (LVIdent "t") ]),
                         Seq.singleton <| func "0" [ (Int, "s"), (Int, "t") ]))
               .SetName("Desugaring an unknown view creates a fresh view\
                         with a fresh name and all locals as parameters") ]

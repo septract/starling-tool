@@ -34,19 +34,19 @@ module ExpressionTests =
     let ``Test order-of-operations on (1 + 2 * 3)``() =
         check parseExpression "1 + 2 * 3" <| Some
         ** node "" 1L 3L 
-            ** Bop (Add, 
+            ** BopExpr (Add, 
                     node "" 1L 1L (Int 1L),
                     node "" 1L 7L 
-                        <| Bop (Mul,
+                        <| BopExpr (Mul,
                                 node "" 1L 5L (Int 2L),
                                 node "" 1L 9L (Int 3L)))
     [<Test>]
     let ``Test bracketing on (1 + 2) * 3``() =
         check parseExpression "(1 + 2) * 3"  <| Some
         ** node "" 1L 9L
-            ** Bop (Mul,
+            ** BopExpr (Mul,
                     node "" 1L 4L
-                    <| Bop (Add,
+                    <| BopExpr (Add,
                             node "" 1L 2L (Int 1L),
                             node "" 1L 6L (Int 2L)),
                     node "" 1L 11L (Int 3L))
@@ -55,28 +55,28 @@ module ExpressionTests =
     let ``Complex expression 1 + 2 < 3 * 4 && true || 5 / 6 > 7 - 8``() =
         check parseExpression "1 + 2 < 3 * 4 && true || 5 / 6 > 7 - 8"  <| Some
         ** node "" 1L 23L
-            ** Bop (Or,
+            ** BopExpr (Or,
                     node "" 1L 15L
-                    <| Bop (And,
+                    <| BopExpr (And,
                             node "" 1L 7L
-                            <| Bop (Lt,
+                            <| BopExpr (Lt,
                                     node "" 1L 3L
-                                    <| Bop (Add,
+                                    <| BopExpr (Add,
                                             node "" 1L 1L (Int 1L),
                                             node "" 1L 5L (Int 2L)),
                                     node "" 1L 11L
-                                    <| Bop (Mul,
+                                    <| BopExpr (Mul,
                                             node "" 1L 9L (Int 3L),
                                             node "" 1L 13L (Int 4L))),
                             node "" 1L 18L True),
                     node "" 1L 32L
-                    <| Bop (Gt,
+                    <| BopExpr (Gt,
                             node "" 1L 28L
-                            <| Bop (Div,
+                            <| BopExpr (Div,
                                     node "" 1L 26L (Int 5L),
                                     node "" 1L 30L (Int 6L)),
                             node "" 1L 36L
-                            <| Bop (Sub,
+                            <| BopExpr (Sub,
                                     node "" 1L 34L (Int 7L),
                                     node "" 1L 38L (Int 8L))))
 module AtomicActionTests =
@@ -151,10 +151,10 @@ module ConstraintTests =
                      (DView.Func { Name = "Func"
                                    Params = [ "a"; "b" ] },
                       node "" 1L 28L
-                        <| Bop (Gt,
+                        <| BopExpr (Gt,
                                 node "" 1L 26L (LV(LVIdent "c")),
                                 node "" 1L 32L
-                                <| Bop(Add,
+                                <| BopExpr(Add,
                                        node "" 1L 30L (LV(LVIdent "a")),
                                        node "" 1L 34L (LV(LVIdent "b"))))))
 
