@@ -196,6 +196,6 @@ module Pretty =
 
     /// Pretty-prints a Command.
     let printPrimCommand { Name = name; Args = xs; Results = ys } = 
-        hjoin [ commaSep <| Seq.map (printCTyped String) ys; "<-" |> String; name |> String; commaSep <| Seq.map printSMExpr xs ]
+        hjoin [ commaSep <| Seq.map (printCTyped String) ys; " <- " |> String; name |> String; String " "; commaSep <| Seq.map printSMExpr xs ]
 
     let printCommand = List.map printPrimCommand >> semiSep
