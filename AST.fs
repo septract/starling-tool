@@ -46,7 +46,7 @@ module Types =
     type Expression' =
         | True // true
         | False // false
-        | Int of int64 // 42
+        | Num of int64 // 42
         | LV of LValue // foobaz
         | Symbolic of string * Expression list // %{foo}(exprs)
         | BopExpr of BinOp * Expression * Expression // a BOP b
@@ -62,7 +62,7 @@ module Types =
     and Atomic = Node<Atomic'>
 
     /// A view prototype.
-    type ViewProto = Func<Param>
+    type ViewProto = Func<TypedVar>
 
     /// A view as seen on the LHS of a ViewDef.
     type DView =
@@ -195,7 +195,7 @@ module Pretty =
         function
         | True -> String "true" |> syntaxLiteral
         | False -> String "false" |> syntaxLiteral
-        | Int i -> i.ToString() |> String |> syntaxLiteral
+        | Num i -> i.ToString() |> String |> syntaxLiteral
         | LV x -> printLValue x
         | Symbolic (sym, args) ->
             func (sprintf "%%{%s}" sym) (Seq.map printExpression args)
@@ -401,7 +401,7 @@ let (|BoolExp|ArithExp|AnyExp|) e =
     match e.Node with
     | LV _ -> AnyExp e
     | Symbolic _ -> AnyExp e
-    | Int _ -> ArithExp e
+    | Num _ -> ArithExp e
     | True | False -> BoolExp e
     | BopExpr(BoolOp, _, _) -> BoolExp e
     | BopExpr(ArithOp, _, _) -> ArithExp e

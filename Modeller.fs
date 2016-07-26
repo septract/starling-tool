@@ -306,7 +306,7 @@ module Pretty =
 (*
  * Starling imperative language semantics
  *)
-let prim : string -> Param list -> Param list -> SVBoolExpr -> PrimSemantics =  
+let prim : string -> TypedVar list -> TypedVar list -> SVBoolExpr -> PrimSemantics =  
     fun name results args body -> { Name = name; Results = results; Args = args; Body = body }
 
 /// <summary>
@@ -326,7 +326,7 @@ let coreSemantics : PrimSemanticsMap =
     <| [ (*
        * CAS
        *)
-      (prim "ICAS" [ Param.Int "destA"; Param.Int "testA"; ] [ Param.Int "destB"; Param.Int "testB"; Param.Int "set"; ]
+      (prim "ICAS" [ Int "destA"; Int "testA"; ] [ Int "destB"; Int "testB"; Int "set"; ]
            <| mkAnd [ mkImplies (iEq (siVar "destB") (siVar "testB"))
                              (mkAnd [ iEq (siVar "destA") (siVar "set")
                                       iEq (siVar "testA") (siVar "testB") ] )
@@ -334,7 +334,7 @@ let coreSemantics : PrimSemanticsMap =
                                 (mkAnd [ iEq (siVar "destA") (siVar "destB")
                                          iEq (siVar "testA") (siVar "destB") ] ) ] )
       // Boolean CAS
-      (prim "BCAS" [Param.Bool "destA"; Param.Bool "testA"; ] [Param.Bool "destB"; Param.Bool "testB"; Param.Bool "set"; ]
+      (prim "BCAS" [Bool "destA"; Bool "testA"; ] [Bool "destB"; Bool "testB"; Bool "set"; ]
            <| mkAnd [ mkImplies (bEq (sbVar "destB") (sbVar "testB"))
                                 (mkAnd [ bEq (sbVar "destA") (sbVar "set")
                                          bEq (sbVar "testA") (sbVar "testB") ] )
@@ -346,29 +346,29 @@ let coreSemantics : PrimSemanticsMap =
        * Atomic load
        *)
       // Integer load
-      (prim "!ILoad"  [ Param.Int "dest" ] [ Param.Int "src" ]
+      (prim "!ILoad"  [ Int "dest" ] [ Int "src" ]
            <| iEq (siVar "dest") (siVar "src"))
 
       // Integer load-and-increment
-      (prim "!ILoad++"  [ Param.Int "dest"; Param.Int "srcA" ] [ Param.Int "srcB" ]
+      (prim "!ILoad++"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
            <| mkAnd [ iEq (siVar "dest") (siVar "srcB")
                       iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (AInt 1L)) ])
 
       // Integer load-and-decrement
-      (prim "!ILoad--"  [ Param.Int "dest"; Param.Int "srcA" ] [ Param.Int "srcB" ]
+      (prim "!ILoad--"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
            <| mkAnd [ iEq (siVar "dest") (siVar "srcB")
                       iEq (siVar "srcA") (mkSub2 (siVar "srcB") (AInt 1L)) ])
 
       // Integer increment
-      (prim "!I++"  [ Param.Int "srcA" ] [ Param.Int "srcB" ]
+      (prim "!I++"  [ Int "srcA" ] [ Int "srcB" ]
            <| iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (AInt 1L)))
 
       // Integer decrement
-      (prim "!I--"  [ Param.Int "srcA" ] [ Param.Int "srcB" ]
+      (prim "!I--"  [ Int "srcA" ] [ Int "srcB" ]
            <| iEq (siVar "srcA") (mkSub2 (siVar "srcB") (AInt 1L)))
 
       // Boolean load
-      (prim "!BLoad"  [ Param.Bool "dest" ] [ Param.Bool "src" ]
+      (prim "!BLoad"  [ Bool "dest" ] [ Bool "src" ]
            <| bEq (sbVar "dest") (sbVar "src"))
 
       (*
@@ -376,11 +376,11 @@ let coreSemantics : PrimSemanticsMap =
        *)
 
       // Integer store
-      (prim "!IStore" [ Param.Int "dest" ] [ Param.Int "src" ]
+      (prim "!IStore" [ Int "dest" ] [ Int "src" ]
            <| iEq (siVar "dest") (siVar "src"))
 
       // Boolean store
-      (prim "!BStore" [ Param.Bool "dest" ] [ Param.Bool "src" ]
+      (prim "!BStore" [ Bool "dest" ] [ Bool "src" ]
            <| bEq (sbVar "dest") (sbVar "src"))
 
       (*
@@ -388,11 +388,11 @@ let coreSemantics : PrimSemanticsMap =
        *)
 
       // Integer local set
-      (prim "!ILSet" [ Param.Int "dest" ] [ Param.Int "src" ] 
+      (prim "!ILSet" [ Int "dest" ] [ Int "src" ] 
            <| iEq (siVar "dest") (siVar "src"))
 
       // Boolean store
-      (prim "!BLSet" [ Param.Bool "dest" ] [ Param.Bool "src" ] 
+      (prim "!BLSet" [ Bool "dest" ] [ Bool "src" ] 
            <| bEq (sbVar "dest") (sbVar "src"))
 
       (*
@@ -403,7 +403,7 @@ let coreSemantics : PrimSemanticsMap =
       (prim "Id" [] [] BTrue)
 
       // Assume
-      (prim "Assume" [] [Param.Bool "expr"] <| sbVar "expr") ]
+      (prim "Assume" [] [Bool "expr"] <| sbVar "expr") ]
 
 (*
  * Expression translation
@@ -588,7 +588,7 @@ and modelIntExpr
 
     let rec mi e =
         match e.Node with
-        | Int i -> i |> AInt |> ok
+        | Num i -> i |> AInt |> ok
         | LV v ->
             (* Look-up the variable to ensure it a) exists and b) is of an
              * arithmetic type.
@@ -911,7 +911,7 @@ let modelBoolLoad : VarMap -> Var -> Expression -> FetchMode -> Result<PrimComma
                 return
                     command
                         "!BLoad"
-                            [ Param.Bool dest ]
+                            [ Bool dest ]
                             [ s |> Before |> Reg |> BVar |> Expr.Bool ]
                               
             | Typed.Bool s, Increment -> return! fail (IncBool srcExpr)
@@ -933,13 +933,13 @@ let modelIntLoad : VarMap -> Var -> Expression -> FetchMode -> Result<PrimComman
             let! src = wrapMessages BadSVar (lookupVar svars) srcLV
             match src, mode with
             | Typed.Int s, Direct ->
-                return command "!ILoad" [ Param.Int dest ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
+                return command "!ILoad" [ Int dest ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
 
             | Typed.Int s, Increment ->
-                return command "!ILoad++" [ Param.Int dest; Param.Int s ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
+                return command "!ILoad++" [ Int dest; Int s ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
 
             | Typed.Int s, Decrement ->
-                return command "!ILoad--" [ Param.Int dest; Param.Int s ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
+                return command "!ILoad--" [ Int dest; Int s ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
 
             | _ -> return! fail (TypeMismatch (Type.Int (), srcLV, typeOf src))
         }
@@ -959,7 +959,7 @@ let modelBoolStore : VarMap -> Var -> Expression -> FetchMode -> Result<PrimComm
             return
                 command
                     "!BStore"
-                    [ Param.Bool dest ]
+                    [ Bool dest ]
                     [ sxp |> Expr.Bool ]
         | Increment -> return! fail (IncBool src)
         | Decrement -> return! fail (DecBool src)
@@ -980,7 +980,7 @@ let modelIntStore : VarMap -> Var -> Expression -> FetchMode -> Result<PrimComma
             return
                 command
                     "!IStore" 
-                    [ Param.Int dest ] 
+                    [ Int dest ] 
                     [ sxp |> Expr.Int ]
 
         | Increment -> return! fail (IncExpr src)
@@ -1007,7 +1007,7 @@ let modelCAS : VarMap -> VarMap ->  LValue -> LValue -> Expression -> Result<Pri
              |> lift
                     (fun s ->
                         command "BCAS"
-                            [ Param.Bool d; Param.Bool t ]
+                            [ Bool d; Bool t ]
                             [ d |> sbBefore |> Expr.Bool
                               t |> sbBefore |> Expr.Bool
                               s |> Expr.Bool ] )
@@ -1017,7 +1017,7 @@ let modelCAS : VarMap -> VarMap ->  LValue -> LValue -> Expression -> Result<Pri
             |> lift
                    (fun s ->
                         command "ICAS"
-                            [ Param.Int d; Param.Int t ]
+                            [ Int d; Int t ]
                             [ d |> siBefore |> Expr.Int
                               t |> siBefore |> Expr.Int
                               s |> Expr.Int ] )
@@ -1065,9 +1065,9 @@ let rec modelAtomic : VarMap -> VarMap -> Atomic -> Result<PrimCommand, PrimErro
             | Decrement, Typed.Bool _ ->
                 return! fail (DecBool (freshNode <| LV operand))
             | Increment, Typed.Int _ ->
-                return command "!I++" [ Param.Int op ] [op |> Before |> Reg |> AVar |> Expr.Int ]
+                return command "!I++" [ Int op ] [op |> Before |> Reg |> AVar |> Expr.Int ]
             | Decrement, Typed.Int _ ->
-                return command "!I--" [ Param.Int op ] [op |> Before |> Reg |> AVar |> Expr.Int ]
+                return command "!I--" [ Int op ] [op |> Before |> Reg |> AVar |> Expr.Int ]
         }
     | Id -> ok (command "Id" [] [])
     | Assume e ->
@@ -1091,7 +1091,7 @@ and modelAssign : VarMap -> LValue -> Expression -> Result<PrimCommand, PrimErro
             return
                 command
                     "!BLSet"
-                    [ Param.Bool ls ]
+                    [ Bool ls ]
                     [ em |> Expr.Bool ]
         | Typed.Int ls ->
             let! em =
@@ -1099,7 +1099,7 @@ and modelAssign : VarMap -> LValue -> Expression -> Result<PrimCommand, PrimErro
             return
                 command
                     "!ILSet"
-                    [ Param.Int ls ]
+                    [ Int ls ]
                     [ em |> Expr.Int ]
     }
 

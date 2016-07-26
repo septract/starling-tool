@@ -126,12 +126,12 @@ module Tests =
         static member DViewFuncs =
             let ms : DFunc list -> DView = Multiset.ofFlatList >> Multiset.toFlatList
             [ TestCaseData(ms [ { Name = "holdLock"; Params = [] }
-                                { Name = "holdTick"; Params = [ Param.Int "t" ] } ])
+                                { Name = "holdTick"; Params = [ Int "t" ] } ])
                  .Returns({ Name = "v_holdLock_holdTick"
                             Params =
-                                [ Param.Int "serving"
-                                  Param.Int "ticket"
-                                  Param.Int "t" ] })
+                                [ Int "serving"
+                                  Int "ticket"
+                                  Int "t" ] } : DFunc)
                 .SetName("Convert defining view 'holdLock() * holdTick(t)' to defining func") ]
 
         /// Tests the viewdef LHS translator.

@@ -32,7 +32,7 @@ module Types =
     ///         for example <x = y++> is translated approximately to { Name = "!ILoad++"; Results = [ siVar "x"; siVar "y" ]; Args = [ siVar "y" ] }
     ///     </para>
     /// </remarks>
-    type PrimCommand = { Name : string; Results : Param list; Args : SMExpr list }
+    type PrimCommand = { Name : string; Results : TypedVar list; Args : SMExpr list }
     type Command = PrimCommand list
 
 /// <summary>
@@ -181,7 +181,7 @@ module SymRemove =
 
 
 module Create = 
-    let command : string -> Param list -> SMExpr list -> PrimCommand =
+    let command : string -> TypedVar list -> SMExpr list -> PrimCommand =
         fun name results args -> { Name = name; Results = results; Args = args }
 
 

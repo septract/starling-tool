@@ -56,7 +56,7 @@ module Types =
               func : MVFunc
               * err : Starling.Core.Instantiate.Types.Error
         /// A viewdef has a non-arithmetic param.
-        | NonArithParam of Param
+        | NonArithParam of TypedVar
         /// A model has a non-arithmetic variable.
         | NonArithVar of VarDecl
         /// The expression given is not supported in the given position.
@@ -167,10 +167,10 @@ module Pretty =
                     (Starling.Core.Instantiate.Pretty.printError err)
         | NonArithParam p ->
             fmt "invalid parameter '{0}': HSF only permits integers here"
-                [ printParam p ]
+                [ printTypedVar p ]
         | NonArithVar p ->
             fmt "invalid variable '{0}': HSF only permits integers here"
-                [ printParam p ]
+                [ printTypedVar p ]
         | UnsupportedExpr expr ->
             fmt "expression '{0}' is not supported in the HSF backend"
                 [ printVExpr expr ]
@@ -287,7 +287,7 @@ let makeHSFVar = (+) "V"
 /// Ensures a param in a viewdef multiset is arithmetic.
 let ensureArith =
     function
-    | Param.Int x -> x |> makeHSFVar |> AVar |> ok
+    | Int x -> x |> makeHSFVar |> AVar |> ok
     | x -> x |> NonArithParam |> fail
 
 /// Constructs a pred from a Func, given a set of active globals,

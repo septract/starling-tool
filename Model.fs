@@ -60,7 +60,7 @@ module Types =
     type MVFunc = VFunc<MarkedVar>
 
     /// A view-definition func.
-    type DFunc = Func<Param>
+    type DFunc = Func<TypedVar>
 
     /// A func over symbolic var expressions.
     type SVFunc = VFunc<Sym<Var>>
@@ -229,7 +229,7 @@ module Types =
         // Would need to define equality on funcs very loosely.
         (DFunc * 'defn) list
 
-    type PrimSemantics = { Name: string; Results: Param list; Args: Param list; Body: SVBoolExpr }
+    type PrimSemantics = { Name: string; Results: TypedVar list; Args: TypedVar list; Body: SVBoolExpr }
     type SemanticsMap<'a> = Map<string, 'a>
     type PrimSemanticsMap = SemanticsMap<PrimSemantics>
 
@@ -280,7 +280,7 @@ module Pretty =
     open Starling.Core.Command.Pretty
 
     /// Pretty-prints a type-name parameter.
-    let printParam = printCTyped String
+    let printTypedVar = printCTyped String
 
     /// Pretty-prints a multiset given a printer for its contents.
     let printMultiset pItem =
@@ -301,7 +301,7 @@ module Pretty =
     let printSMVFunc = printFunc printSMExpr
 
     /// Pretty-prints a DFunc.
-    let printDFunc = printFunc printParam
+    let printDFunc = printFunc printTypedVar
 
     /// Pretty-prints a View.
     let printView pVar = printMultiset (printVFunc pVar)
@@ -471,7 +471,7 @@ module Pretty =
 /// <returns>
 ///     A new <c>DFunc</c> with the given name and parameters.
 /// </returns>
-let dfunc name (pars : Param seq) : DFunc = func name pars
+let dfunc name (pars : TypedVar seq) : DFunc = func name pars
 
 /// <summary>
 ///     Type-constrained version of <c>func</c> for <c>VFunc</c>s.

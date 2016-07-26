@@ -48,7 +48,7 @@ module Types =
         ///     has been assigned to an argument of the incorrect type
         ///     <c>atype</c>.
         /// </summary>
-        | TypeMismatch of param: Param * atype: Type
+        | TypeMismatch of param: TypedVar * atype: Type
         /// <summary>
         ///     The func looked up has <c>fn</c> arguments, but its
         ///     definition has <c>dn</c> parameters.
@@ -143,7 +143,7 @@ module Pretty =
         function
         | TypeMismatch (par, atype) ->
             fmt "parameter '{0}' conflicts with argument of type '{1}'"
-                [ printParam par; printType atype ]
+                [ printTypedVar par; printType atype ]
         | CountMismatch (fn, dn) ->
             fmt "view usage has {0} parameter(s), but its definition has {1}"
                 [ fn |> sprintf "%d" |> String; dn |> sprintf "%d" |> String ]
@@ -369,8 +369,8 @@ let paramSubFun
 
 let paramToMExpr = 
     function
-    | Param.Int  i -> After i |> Reg |> AVar |> Int
-    | Param.Bool b -> After b |> Reg |> BVar |> Bool
+    | Int  i -> After i |> Reg |> AVar |> Int
+    | Bool b -> After b |> Reg |> BVar |> Bool
 
 let primParamSubFun
   ( cmd : PrimCommand )

@@ -49,7 +49,7 @@ module Tests =
                                 OutEdge.Dest = "lock_V1"
                                 OutEdge.Command =
                                     [ command "!ILoad++"
-                                           [ Param.Int "t"; Param.Int "ticket" ]
+                                           [ Int "t"; Int "ticket" ]
                                            [ Typed.Int (siBefore "t")
                                              Typed.Int (siBefore "ticket")]] },
                            Set.empty,
@@ -65,7 +65,7 @@ module Tests =
                                 Src = "lock_V0"
                                 Command =
                                     [ command "!ILoad++"
-                                           [ Param.Int "t"; Param.Int "ticket"; ]
+                                           [ Int "t"; Int "ticket"; ]
                                            [ Typed.Int (siBefore "t")
                                              Typed.Int (siBefore "ticket") ]] },
                           Normal ))
@@ -88,7 +88,7 @@ module Tests =
                                 Dest = "lock_V4"
                                 Command =
                                     [ command "!ILoad" 
-                                           [ Param.Int "s" ]
+                                           [ Int "s" ]
                                            [ Typed.Int (siBefore "serving") ]] },
                           Set.ofList
                               [ { Name = "lock_C2"
@@ -127,7 +127,7 @@ module Tests =
                                 Src = "lock_V3"
                                 Command =
                                     [ command "!ILoad"
-                                           [ Param.Int "s" ]
+                                           [ Int "s" ]
                                            [ Typed.Int (siBefore "serving") ]] },
 
                           Normal)) ] }
@@ -146,7 +146,7 @@ module Tests =
                                 Dest = "unlock_V1"
                                 Command =
                                     [ command "!I++" 
-                                           [ Param.Int "serving" ]
+                                           [ Int "serving" ]
                                            [ Typed.Int (siBefore "serving") ]] },
                           Set.empty,
                           Entry))
@@ -158,7 +158,7 @@ module Tests =
                                 Src = "unlock_V0"
                                 Command =
                                     [ command "!I++"
-                                           [ Param.Int "serving" ]
+                                           [ Int "serving" ]
                                            [ Typed.Int (siBefore "serving") ]] },
                            Exit)) ] }
 
@@ -181,14 +181,14 @@ module Tests =
                       [ ("lock_C0",
                              edge "lock_V0"
                                   [ command "!ILoad++"
-                                         [ Param.Int "t"; Param.Int "ticket" ]
+                                         [ Int "t"; Int "ticket" ]
                                          [ Typed.Int (siBefore "t")
                                            Typed.Int (siBefore "ticket") ]]
                                   "lock_V1")
                         ("lock_C1",
                              edge "lock_V3"
                                   [ command "!ILoad"
-                                         [ Param.Int "s" ]
+                                         [ Int "s" ]
                                          [ Typed.Int (siBefore "serving") ]]
                                   "lock_V4")
                         ("lock_C2",
@@ -226,7 +226,7 @@ module Tests =
                       [ ("unlock_C0",
                              edge "unlock_V0"
                                   [ command "!I++"
-                                         [ Param.Int "serving" ] 
+                                         [ Int "serving" ] 
                                          [ Typed.Int (siBefore "serving") ]]
                                   "unlock_V1" ) ] }
 
@@ -252,7 +252,7 @@ module Tests =
                                 Dest = "unlock_V1"
                                 Command =
                                     [ command "!I++"
-                                           [ Param.Int "serving" ]
+                                           [ Int "serving" ]
                                            [ SMExpr.Int (siBefore "serving") ]] },
                           Set.singleton
                               { Name = "unlock_N0"
@@ -270,7 +270,7 @@ module Tests =
                                 Src = "unlock_V0"
                                 Command =
                                     [ command "!I++"
-                                           [ Param.Int "serving" ]
+                                           [ Int "serving" ]
                                            [ SMExpr.Int (siBefore "serving") ]] },
                           Exit)) ] )
                 .SetName("Adding a valid, unique edge to unlock works")]
@@ -305,7 +305,7 @@ module Tests =
                               [ ("unlock_C0",
                                  edge "unlock_V0"
                                       [ command "!I++"
-                                              [ Param.Int "serving" ]
+                                              [ Int "serving" ]
                                               [ SMExpr.Int (siBefore "serving") ]]
                                       "unlock_V0" ) ] } )
                 .SetName("unify C1 into C0 on the ticket lock 'unlock'")
@@ -321,7 +321,7 @@ module Tests =
                               [ ("unlock_C0",
                                  edge "unlock_V1"
                                       [ command "!I++"
-                                              [ Param.Int "serving" ] 
+                                              [ Int "serving" ] 
                                               [ SMExpr.Int (siBefore "serving") ]]
                                       "unlock_V1" ) ] } )
                 .SetName("unify C0 into C1 on the ticket lock 'unlock'")

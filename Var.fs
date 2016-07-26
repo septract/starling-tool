@@ -59,7 +59,7 @@ module Types =
     /// <summary>
     ///     A formal parameter.
     /// </summary>
-    type Param = CTyped<string>
+    type TypedVar = CTyped<Var>
 
     /// <summary>
     ///     A variable declaration.

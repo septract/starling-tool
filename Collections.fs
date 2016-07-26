@@ -28,6 +28,7 @@ type Func<'param> =
       Name : string
       /// The parameters of a Func.
       Params : 'param list }
+    override this.ToString () = sprintf "Func: %s(%A)" this.Name this.Params
 
 /// <summary>
 ///     Creates a new <c>Func</c>.

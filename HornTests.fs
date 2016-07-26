@@ -7,6 +7,7 @@ open Chessie.ErrorHandling
 open NUnit.Framework
 open Starling.Collections
 open Starling.Utils
+open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.Expr
 open Starling.Core.Model
@@ -25,37 +26,38 @@ type HornTests() =
     /// Test cases for the viewdef Horn clause modeller.
     /// These are in the form of models whose viewdefs are to be modelled.
     static member ViewDefModels =
-      [ TestCaseData(
+      let x : (DFunc * BoolExpr<string> option) list = 
           [ ( { Name = "emp"
-                Params = [ Param.Int "serving"
-                           Param.Int "ticket" ] },
+                Params = [ Int "serving"
+                           Int "ticket" ] },
               Some <| BGe(AVar "ticket", AVar "serving"))
             ( { Name = "v_holdTick"
-                Params = [ Param.Int "serving"
-                           Param.Int "ticket"
-                           Param.Int "t" ] },
+                Params = [ Int "serving"
+                           Int "ticket"
+                           Int "t" ] },
               Some <| BGt(AVar "ticket", AVar "t"))
             ( { Name = "v_holdLock"
-                Params = [ Param.Int "serving"
-                           Param.Int "ticket" ] },
+                Params = [ Int "serving"
+                           Int "ticket" ] },
               Some <| BGt(AVar "ticket", AVar "serving"))
             ( { Name = "v_holdLock_holdTick"
-                Params = [ Param.Int "serving"
-                           Param.Int "ticket"
-                           Param.Int "t" ] },
+                Params = [ Int "serving"
+                           Int "ticket"
+                           Int "t" ] },
               Some <| BNot(iEq (AVar "serving") (AVar "t")))
             ( { Name = "v_holdTick_holdTick"
-                Params = [ Param.Int "serving"
-                           Param.Int "ticket"
-                           Param.Int "ta"
-                           Param.Int "tb" ] },
+                Params = [ Int "serving"
+                           Int "ticket"
+                           Int "ta"
+                           Int "tb" ] },
               Some <| BNot(iEq (AVar "ta") (AVar "tb")))
             ( { Name = "v_holdLock_holdLock"
-                Params = [ Param.Int "serving"
-                           Param.Int "ticket" ] },
-              Some <| BFalse ) ] )
+                Params = [ Int "serving"
+                           Int "ticket" ] },
+              Some <| BFalse ) ]
+      [ TestCaseData(x)
           .Returns(
-              Set.ofList
+              (Set.ofList
                   [ Clause(Ge (AVar "Vticket", AVar "Vserving"),
                            [ Pred { Name = "emp"
                                     Params = [ AVar "Vserving"; AVar "Vticket" ] } ] )
@@ -101,7 +103,7 @@ type HornTests() =
                     QueryNaming {Name = "v_holdTick_holdTick"; Params = ["serving"; "ticket"; "ta"; "tb"]}
                     QueryNaming {Name = "v_holdLock_holdLock"; Params = ["serving"; "ticket"]}
                   ]
-              |> Some
+              |> Some) : Set<Horn> option
           ).SetName("Model the ticket lock's viewdefs as Horn clauses") ]
 
     /// Tests the model viewdef translator.
