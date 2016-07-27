@@ -1,5 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
@@ -23,6 +22,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <Optimize>false</Optimize>
     <OutputPath>bin\Release</OutputPath>
     <ErrorReport>prompt</ErrorReport>
     <Externalconsole>true</Externalconsole>
@@ -99,6 +99,7 @@
     <Compile Include="OptimiserTests.fs" />
     <Compile Include="HornTests.fs" />
     <Compile Include="CommandTests.fs" />
+    <Compile Include="Grasshopper.fs" />
     <Compile Include="Main.fs" />
     <None Include="packages.config" />
     <None Include="Examples\Pass\arc.cvf" />
