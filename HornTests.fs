@@ -19,8 +19,8 @@ type HornTests() =
     /// The globals environment used in the tests.
     static member Globals : VarMap =
         returnOrFail <| makeVarMap
-            [ VarDecl.Int "serving"
-              VarDecl.Int "ticket" ]
+            [ TypedVar.Int "serving"
+              TypedVar.Int "ticket" ]
 
 
     /// Test cases for the viewdef Horn clause modeller.

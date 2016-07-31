@@ -57,14 +57,10 @@ module Types =
         | LVIdent of string
 
     /// <summary>
-    ///     A formal parameter.
+    ///     A variable reference with an associated type.
+    ///     This is usually a formal parameter or variable declaration.
     /// </summary>
     type TypedVar = CTyped<Var>
-
-    /// <summary>
-    ///     A variable declaration.
-    /// </summary>
-    type VarDecl = CTyped<string>
 
     /// A variable map.
     type VarMap = Map<string, Type>

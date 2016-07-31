@@ -391,11 +391,11 @@ let ticketLockParsed =
 /// The collated form of the ticket lock.
 let ticketLockCollated =
     { CollatedScript.Globals =
-          [ (VarDecl.Int "ticket")
-            (VarDecl.Int "serving") ]
+          [ (TypedVar.Int "ticket")
+            (TypedVar.Int "serving") ]
       Locals =
-          [ (VarDecl.Int "t")
-            (VarDecl.Int "s") ]
+          [ (TypedVar.Int "t")
+            (TypedVar.Int "s") ]
       Search = None
       VProtos =
           [ { Name = "holdTick"

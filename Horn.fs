@@ -58,7 +58,7 @@ module Types =
         /// A viewdef has a non-arithmetic param.
         | NonArithParam of TypedVar
         /// A model has a non-arithmetic variable.
-        | NonArithVar of VarDecl
+        | NonArithVar of TypedVar
         /// The expression given is not supported in the given position.
         | UnsupportedExpr of VExpr
         /// The expression given is compound, but empty.

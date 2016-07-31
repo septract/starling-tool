@@ -20,8 +20,8 @@ module Types =
     ///     A script whose items have been partitioned by type.
     /// </summary>
     type CollatedScript =
-        { Globals : VarDecl list
-          Locals : VarDecl list
+        { Globals : TypedVar list
+          Locals : TypedVar list
           /// <summary>
           ///     The search depth, defaulting to <c>None</c> (no search).
           /// </summary>

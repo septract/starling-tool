@@ -146,7 +146,7 @@ type ModellerTests() =
 
     /// Tests the creation of var lists.
     [<TestCaseSource("VarLists")>]
-    member x.``valid var lists are accepted during mapping`` (vl: VarDecl list) =
+    member x.``valid var lists are accepted during mapping`` (vl: TypedVar list) =
         makeVarMap vl |> okOption
 
     /// Constructs a Prim of the correct type to come out of a modeller.

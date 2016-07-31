@@ -150,8 +150,8 @@ module Types =
 
     /// A top-level item in a Starling script.
     type ScriptItem' =
-        | Global of VarDecl // global int name;
-        | Local of VarDecl // local int name;
+        | Global of TypedVar // global int name;
+        | Local of TypedVar // local int name;
         | Method of CMethod<Marked<View>> // method main(argv, argc) { ... }
         | Search of int // search 0;
         | ViewProto of ViewProto // view name(int arg);
