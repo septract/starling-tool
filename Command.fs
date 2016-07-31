@@ -9,7 +9,6 @@ open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
-open Starling.Core.Model
 
 
 /// <summary>
@@ -22,36 +21,19 @@ module Types =
     ///
     ///     <para>
     ///         A command is a list, representing a sequential composition
-    ///         of primitives represented as <c>VFunc</c>.
+    ///         of primitives represented as <c>PrimCommand</c>s.
     ///     </para>
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         Each <c>VFunc</c> element keys into a <c>Model</c>'s
-    ///         <c>Semantics</c> <c>FuncTable</c>.
-    ///         This table contains two-state Boolean
-    ///         expressions capturing the command's semantics in a
-    ///         sort-of-denotational way.
-    ///     </para>
-    ///     <para>
-    ///         Commands are implemented in terms of <c>VFunc</c>s for
-    ///         convenience, not because of any deep relationship between
-    ///         the two concepts.
+    ///         A PrimCommand is implemented as a triple of a name, the input arguments (the expressions that are evaluated and read)
+    ///         and the output results (the variable that are written)
+    ///
+    ///         for example <x = y++> is translated approximately to { Name = "!ILoad++"; Results = [ siVar "x"; siVar "y" ]; Args = [ siVar "y" ] }
     ///     </para>
     /// </remarks>
-    type Command = SMVFunc list
-
-    /// <summary>
-    ///     A term over <c>Command</c>s.
-    /// </summary>
-    /// <typeparam name="wpre">
-    ///     The type of the weakest-precondition part of the term.
-    /// </typeparam>
-    /// <typeparam name="goal">
-    ///     The type of the goal part of the term.
-    /// </typeparam>
-    type PTerm<'wpre, 'goal> = Term<Command, 'wpre, 'goal>
-
+    type PrimCommand = { Name : string; Results : TypedVar list; Args : SMExpr list }
+    type Command = PrimCommand list
 
 /// <summary>
 ///     Queries on commands.
@@ -69,33 +51,17 @@ module Queries =
     /// </returns>
     let isNop =
         List.forall
-            (fun { Params = ps } ->
-                 (* We treat a func as a no-op if all variables it contains
-                  * are in the pre-state.  Thus, it cannot be modifying the
-                  * post-state, if it is well-formed.
-                  *
-                  * If we see any symbolic variables, err on the side of
-                  * caution and say it isn't a nop.  This is because the
-                  * symbol could mean _anything_, regardless of what we
-                  * put into it!
-                  *)
-                 Seq.forall (function
-                             | SMExpr.Int (AVar (Reg (Before _))) -> true
-                             | SMExpr.Int (AVar _) -> false
-                             | SMExpr.Bool (BVar (Reg (Before _))) -> true
-                             | SMExpr.Bool (BVar _) -> false
-                             | _ -> true)
-                            ps)
+            (fun { Results = ps } ->
+                  ps = [])
 
     /// <summary>
     ///     Active pattern matching assume commands.
     /// </summary>
     let (|Assume|_|) =
         function
-        | [ { Name = n ; Params = [ SMExpr.Bool b ] } ]
+        | [ { Name = n ; Args = [ SMExpr.Bool b ] } ]
           when n = "Assume" -> Some b
         | _ -> None
-
 
 /// <summary>
 ///     Composition of Boolean expressions representing commands.
@@ -203,7 +169,7 @@ module SymRemove =
     ///     Tries to remove symbolic assignments from a command in
     ///     Boolean expression form.
     /// </summary>
-    let rec removeSym : SMBoolExpr -> SMBoolExpr =
+    let rec removeSym : BoolExpr<Sym<'a>> -> BoolExpr<Sym<'a>> =
         function
         | SymAssign (_, _) -> BTrue
         // Distributivity.
@@ -214,17 +180,22 @@ module SymRemove =
         | x -> x
 
 
+module Create = 
+    let command : string -> TypedVar list -> SMExpr list -> PrimCommand =
+        fun name results args -> { Name = name; Results = results; Args = args }
+
+
 /// <summary>
 ///     Pretty printers for commands.
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Var.Pretty
-    open Starling.Core.Expr.Pretty
-    open Starling.Core.Model.Pretty
+    open Starling.Core.TypeSystem.Pretty
+    open Starling.Core.Symbolic.Pretty
 
     /// Pretty-prints a Command.
-    let printCommand = List.map printSMVFunc >> semiSep
+    let printPrimCommand { Name = name; Args = xs; Results = ys } = 
+        hjoin [ commaSep <| Seq.map (printCTyped String) ys; " <- " |> String; name |> String; String " "; commaSep <| Seq.map printSMExpr xs ]
 
-    /// Pretty-prints a PTerm.
-    let printPTerm pWPre pGoal = printTerm printCommand pWPre pGoal
+    let printCommand = List.map printPrimCommand >> semiSep

@@ -5,8 +5,7 @@ module Starling.Core.Sub
 
 open Chessie.ErrorHandling
 
-open Starling.Utils
-open Starling.Collections
+open Starling.Utils open Starling.Collections
 
 open Starling.Core.TypeSystem
 open Starling.Core.Var

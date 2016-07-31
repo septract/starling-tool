@@ -53,8 +53,8 @@
     <Compile Include="ExprEquiv.fs" />
     <Compile Include="Sub.fs" />
     <Compile Include="Symbolic.fs" />
-    <Compile Include="Model.fs" />
     <Compile Include="Command.fs" />
+    <Compile Include="Model.fs" />
     <Compile Include="GuardedView.fs" />
     <Compile Include="Axiom.fs" />
     <Compile Include="Graph.fs" />
@@ -76,6 +76,7 @@
     <Compile Include="Z3Backend.fs" />
     <Compile Include="MuZ3Backend.fs" />
     <Compile Include="TestStudies.fs" />
+    <Compile Include="GraphTests.fs" />
     <Compile Include="GrapherTests.fs" />
     <Compile Include="InstantiateTests.fs" />
     <Compile Include="PrettyTests.fs" />

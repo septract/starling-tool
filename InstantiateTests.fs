@@ -22,9 +22,9 @@ type InstantiateTests() =
     static member TestFuncs =
         [ (dfunc "foo" [],
            iEq (AInt 5L : VIntExpr) (AInt 6L))
-          (dfunc "bar" [ Param.Int "quux" ],
+          (dfunc "bar" [ Int "quux" ],
            iEq (AVar "quux") (AInt 6L))
-          (dfunc "baz" [ Param.Int "quux" ; Param.Bool "flop" ],
+          (dfunc "baz" [ Int "quux" ; Bool "flop" ],
            BAnd [BVar "flop"; BGt (AVar "quux", AVar "quux")]) ]
 
 
@@ -60,8 +60,8 @@ type InstantiateTests() =
             .Returns([CountMismatch(0, 1)] |> Some)
             .SetName("Instantiate func with too few arguments")
           TestCaseData(vfunc "baz" [BTrue |> Expr.Bool ; iAfter "burble" |> Expr.Int])
-            .Returns([TypeMismatch (Param.Int "quux", Type.Bool ())
-                      TypeMismatch (Param.Bool "flop", Type.Int ())] |> Some)
+            .Returns([TypeMismatch (Int "quux", Bool ())
+                      TypeMismatch (Bool "flop", Int ())] |> Some)
             .SetName("Instantiate func with two arguments of incorrect types") ]
 
     /// Tests whether invalid instantiations (don't) work.

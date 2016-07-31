@@ -14,10 +14,12 @@ open Starling.Core.Symbolic
 open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.Axiom
+open Starling.Core.Var
 
 
 /// Performs one step of a multiset minus of a GView.
-let termGenFrameStep (rdone, qstep) rnext =
+let termGenFrameStep : GFunc<'a> list * GFunc<'a> -> GFunc<'a> -> GFunc<'a> list * GFunc<'a> =
+    fun (rdone, qstep) rnext ->
     (* This is based on Matt Parkinson's schema:
      * [rdone * rnext@(B1, p xbar) * rrest] *- qstep@(B2, p xbar2)
      * = rdone2@[rdone * rnext2@(B1 && !(B2 && xbar = xbar2), p xbar)]
@@ -65,7 +67,8 @@ let termGenFrameView r q = List.fold termGenFrameStep ([], q) r |> fst
 let guard r = { Cond = BTrue; Item = r }
 
 /// Generates the frame part of the weakest precondition.
-let termGenFrame (r : OView) (q : SMGView) =
+let termGenFrame : OView -> SMGView -> Multiset<GFunc<Sym<MarkedVar>>> =
+    fun r q ->
     (* We iterate on multiset minus of each item in q:
      * A \ (B * C) = (A \ B) \ C
      *

@@ -11,6 +11,7 @@ open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
 open Starling.Core.Command
+open Starling.Core.Command.Create
 open Starling.Core.Instantiate
 open Starling.Lang.AST
 open Starling.Core.Model
@@ -29,7 +30,7 @@ type ModellerTests() =
     static member TicketLockProtos : FuncTable<unit> =
         makeFuncTable
             [ (func "holdLock" [], ())
-              (func "holdTick" [ Param.Int "t" ], ()) ]
+              (func "holdTick" [ Int "t" ], ()) ]
 
     /// Sample environment used in expression modelling tests.
     static member Env =
@@ -76,7 +77,7 @@ type ModellerTests() =
              .Returns(Some [ LookupError
                                  ("holdTick",
                                   Error.TypeMismatch
-                                      (Param.Int "t", Type.Bool ()))])
+                                      (Int "t", Type.Bool ()))])
              .SetName("Modelling a single view with bad parameter type returns an error") ]
 
     /// <summary>
@@ -91,7 +92,7 @@ type ModellerTests() =
 
     /// Arithmetic expression modelling tests.
     static member ArithmeticExprs =
-        [ TestCaseData(freshNode <| BopExpr(Add, freshNode <| BopExpr(Mul, freshNode <| Int 1L, freshNode <| Int 2L), freshNode <| Int 3L))
+        [ TestCaseData(freshNode <| BopExpr(Add, freshNode <| BopExpr(Mul, freshNode <| Num 1L, freshNode <| Num 2L), freshNode <| Num 3L))
               .Returns(Some (AAdd [ AMul [ AInt 1L ; AInt 2L ] ; AInt 3L ]
                              : IntExpr<Sym<Var>>))
               .SetName("model (1 * 2) + 3") ]
@@ -163,11 +164,9 @@ type ModellerTests() =
     static member AtomicPrims =
         [ TestCaseData(freshNode <| Fetch(LVIdent "t", freshNode <| LV(LVIdent "ticket"), Increment))
             .Returns(Some <|
-                         smvfunc "!ILoad++"
-                             [ "t" |> siBefore |> SMExpr.Int
-                               "t" |> siAfter |> SMExpr.Int
-                               "ticket" |> siBefore |> SMExpr.Int
-                               "ticket" |> siAfter |> SMExpr.Int ] )
+                         command "!ILoad++"
+                                 [ Int "t"; Int "ticket" ] 
+                                 [ "ticket" |> siBefore |> SMExpr.Int ] )
             .SetName("model a valid integer load as a prim") ]
 
     /// Tests the atomic primitive modeller using the ticket lock.
@@ -186,10 +185,7 @@ type ModellerTests() =
                                                 freshNode <| LV(LVIdent "ticket"),
                                                 Increment)))
             .Returns(ModellerTests.mprim
-                         [ func "!ILoad++" [ "t" |> siBefore |> SMExpr.Int
-                                             "t" |> siAfter |> SMExpr.Int
-                                             "ticket" |> siBefore |> SMExpr.Int
-                                             "ticket" |> siAfter |> SMExpr.Int ]]
+                         [ command "!ILoad++" [Int "t"; Int "ticket"] [ "ticket" |> siBefore |> SMExpr.Int ]]
                      |> Some)
             .SetName("model a valid integer load command as an axiom") ]
 
@@ -232,7 +228,7 @@ type ModellerTests() =
              .Returns(ModellerTests.indefinites
                           [ []
                             [ func "holdLock" [] ]
-                            [ func "holdTick" [ Param.Int "t0" ] ] ] )
+                            [ func "holdTick" [ Int "t0" ] ] ] )
              .SetName("Searching for size-1 viewdefs yields viewdefs for emp and the view prototypes")
           TestCaseData({ Search = Some 2; InitDefs = [] })
              .Returns(ModellerTests.indefinites
@@ -241,10 +237,10 @@ type ModellerTests() =
                             [ func "holdLock" []
                               func "holdLock" [] ]
                             [ func "holdLock" []
-                              func "holdTick" [ Param.Int "t0" ] ]
-                            [ func "holdTick" [ Param.Int "t0" ] ]
-                            [ func "holdTick" [ Param.Int "t0" ]
-                              func "holdTick" [ Param.Int "t1" ] ] ] )
+                              func "holdTick" [ Int "t0" ] ]
+                            [ func "holdTick" [ Int "t0" ] ]
+                            [ func "holdTick" [ Int "t0" ]
+                              func "holdTick" [ Int "t1" ] ] ] )
              .SetName("Searching for size-2 viewdefs yields the correct views") ]
 
     /// Tests viewdef searches.

@@ -456,7 +456,7 @@ module Graph =
     let isLocalCommand (tVars : VarMap) : Command -> bool =
         // A command is local if, for all of its funcs...
         List.forall
-            (fun { Params = ps } ->
+            (fun { Args = ps } ->
                  // ...for all of the parameters in said funcs...
                  Seq.forall
                      (fun p ->

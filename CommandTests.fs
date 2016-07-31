@@ -4,98 +4,78 @@
 module Starling.Tests.Core.Command
 
 open Starling.Core.TypeSystem
-open Starling.Core
+open NUnit.Framework
 
-/// <summary>
-///     Tests for command-related functions.
-/// </summary>
-module Tests =
-    open NUnit.Framework
+open Starling.Core.Command
+open Starling.Core.Command.Create
+open Starling.Core.Command.Compose
+open Starling.Core.Model
+open Starling.Core.Var
+open Starling.Core.Symbolic
+open Starling.Core.Expr
 
-    /// <summary>
-    ///     NUnit tests for command-related functions.
-    /// </summary>
-    type NUnit () =
-        /// <summary>
-        ///     Test cases for checking whether a command is a no-op.
-        /// </summary>
-        static member Nops =
-            [ TestCaseData([] : Command.Types.Command)
-                .Returns(true)
-                .SetName("Classify [] as a no-op")
-              TestCaseData([ Model.smvfunc "Assume" [ Symbolic.SymExprs.SMExpr.Bool (Symbolic.Create.sbBefore "x") ]])
-                .Returns(true)
-                .SetName("Classify Assume(x!before) as a no-op")
-              TestCaseData([ Model.smvfunc "Assume"
-                                 [ Symbolic.SymExprs.SMExpr.Bool (Symbolic.Create.sbAfter "x") ]])
-                .Returns(false)
-                .SetName("Reject Assume(x!after) as a no-op")
-              TestCaseData([ Model.smvfunc "Foo"
-                                 [ Symbolic.SymExprs.SMExpr.Int (Symbolic.Create.siBefore "bar")
-                                   Symbolic.SymExprs.SMExpr.Int (Symbolic.Create.siAfter "bar") ]])
-                .Returns(false)
-                .SetName("Reject Foo(bar!before, bar!after) as a no-op")
-              TestCaseData([ Model.smvfunc "Foo"
-                                 [ Symbolic.SymExprs.SMExpr.Int (Symbolic.Create.siBefore "bar")
-                                   Symbolic.SymExprs.SMExpr.Int (Symbolic.Create.siAfter "bar") ]
-                             Model.smvfunc "Assume"
-                                 [ Symbolic.SymExprs.SMExpr.Bool (Symbolic.Create.sbBefore "x") ]])
-                .Returns(false)
-                .SetName("Reject Foo(bar!before, bar!after); Assume(x!before)\
-                          as a no-op") ]
+module Nops =
+    let check a = Assert.IsTrue ( Queries.isNop [] )
+    let checkNot a = Assert.IsTrue ( Queries.isNop [] )
 
-        /// <summary>
-        ///     Tests <c>isNop</c>.
-        /// </summary>
-        [<TestCaseSource("Nops")>]
-        member x.``Tests whether isNop correctly identifies no-ops`` c =
-            Command.Queries.isNop c
+    [<Test>]
+    let ``Classify [] as a no-op``() =
+        check []
 
-        static member Assumes =
-            [ TestCaseData([] : Command.Types.Command)
-                .Returns(false)
-                .SetName("Reject [] as an assume")
-              TestCaseData([ Model.smvfunc "Assume"
-                                 [ Symbolic.SymExprs.SMExpr.Bool (Symbolic.Create.sbBefore "x") ]])
-                .Returns(true)
-                .SetName("Classify Assume(x!before) as an assume")
-              TestCaseData([ Model.smvfunc "Foo"
-                                 [ Symbolic.SymExprs.SMExpr.Int (Symbolic.Create.siBefore "bar")
-                                   Symbolic.SymExprs.SMExpr.Int (Symbolic.Create.siAfter "bar") ]
-                             Model.smvfunc "Assume" [ Symbolic.SymExprs.SMExpr.Bool (Symbolic.Create.sbBefore "x") ]])
-                .Returns(false)
-                .SetName("Reject Foo(bar!before, bar!after); Assume(x!before)\
-                          as an assume") ]
+    [<Test>]
+    let ``Classify Assume(x!before) as a no-op``() =
+        check [ command "Assume" [] [ SMExpr.Bool <| sbBefore "x" ] ]
 
-        /// <summary>
-        ///     Tests <c>Assume</c>.
-        /// </summary>
-        [<TestCaseSource("Assumes")>]
-        member x.``Tests whether Assume correctly identifies assumes`` c =
-            match c with
-            | Command.Queries.Assume _ -> true
-            | _ -> false
+    [<Test>]
+    let ``Reject baz <- Foo(bar) as a no-op``() =
+        checkNot [ command "Foo" [ Int "baz" ] [ SMExpr.Int <| siBefore "bar" ] ]
 
-        /// Test cases for intermediate finding.
-        static member NextIntermediates =
-            [ TestCaseData(Symbolic.SymExprs.SMExpr.Bool (Symbolic.Create.sbInter 5I "foo"))
-                .Returns(6I)
-                .SetName("nextIntermediate on Bool intermediate is one higher")
-              TestCaseData(Symbolic.SymExprs.SMExpr.Bool (Expr.Types.BNot (Symbolic.Create.sbInter 10I "bar")))
-                .Returns(11I)
-                .SetName("nextIntermediate on 'not' passes through")
-              TestCaseData(Symbolic.SymExprs.SMExpr.Bool (Expr.Types.BImplies (Symbolic.Create.sbInter 6I "a", Symbolic.Create.sbInter 11I "b")))
-                .Returns(12I)
-                .SetName("nextIntermediate on 'implies' is one higher than max")
-              TestCaseData(Symbolic.SymExprs.SMExpr.Int
-                               (Expr.Types.AAdd [ Symbolic.Create.siInter 1I "a";
-                                       Symbolic.Create.siAfter "b";
-                                       Symbolic.Create.siBefore "c";
-                                       Symbolic.Create.siInter 2I "d"; ] ))
-                .Returns(3I)
-                .SetName("nextIntermediate on 'add' is one higher than max") ]
+    [<Test>]
+    let ``Reject Assume (x!before); baz <- Foo(bar) as a no-op``() =
+        checkNot
+            [ command "Assume" [] [ SMExpr.Bool <| sbBefore "x" ] 
+              command "Foo" [ Int "baz" ] [ SMExpr.Int <| siBefore "bar" ] ]
 
-        /// Tests whether nextIntermediate works.
-        [<TestCaseSource("NextIntermediates")>]
-        member x.``test whether nextIntermediate gets the correct level`` expr =
-            Command.Compose.nextIntermediate expr
+module Assumes =
+    let isAssume c =
+        match c with
+        | Queries.Assume _ -> true
+        | _ -> false
+
+    let check a    = Assert.IsTrue  ( isAssume a )
+    let checkNot a = Assert.IsFalse ( isAssume a )
+
+    [<Test>]
+    let ``Reject [] as an assume``() =
+        checkNot []
+
+    [<Test>]
+    let ``Classify Assume(x!before) as an assume``() =
+        check [ command "Assume" [] [ SMExpr.Bool <| sbBefore "x" ] ]
+
+    [<Test>]
+    let ``Reject baz <- Foo(bar); Assume(x!before) as an Assume`` ()=
+        checkNot [ command "Foo" [ Int "baz" ] [ SMExpr.Int <| siBefore "bar" ]
+                   command "Assume" [] [ SMExpr.Bool <| sbBefore "x" ] ]
+
+
+    let checkIntermediate i e = Assert.AreEqual(i, nextIntermediate e)
+
+    [<Test>]
+    let ``nextIntermediate on Bool intermediate is one higher``() =
+        checkIntermediate 6I <| SMExpr.Bool (sbInter 5I "foo")
+
+    [<Test>]
+    let ``nextIntermediate on 'not' passes through``() =
+        checkIntermediate 11I <| SMExpr.Bool (BNot (sbInter 10I "bar"))
+
+    [<Test>]
+    let ``nextIntermediate on 'implies' is one higher than max``() =
+        checkIntermediate 12I <| SMExpr.Bool (BImplies (sbInter 6I "a", sbInter 11I "b"))
+
+    [<Test>]
+    let ``nextIntermediate on 'add' is one higher than max``() =
+        checkIntermediate 3I <| SMExpr.Int (AAdd [ siInter 1I "a";
+                                                   siAfter "b";
+                                                   siBefore "c";
+                                                   siInter 2I "d"; ])

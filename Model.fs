@@ -11,6 +11,7 @@ open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
+open Starling.Core.Command
 
 
 (*
@@ -29,8 +30,7 @@ open Starling.Core.Symbolic
  *
  * view-set: a multiset of guarded views.
  *
- * conds: a pair of view assertions.
- *
+ * conds: a pair of view assertions.  *
  * axiom: a Hoare triple, containing a pair of conds, and some
  *        representation of a command.
  *
@@ -60,7 +60,7 @@ module Types =
     type MVFunc = VFunc<MarkedVar>
 
     /// A view-definition func.
-    type DFunc = Func<Param>
+    type DFunc = Func<TypedVar>
 
     /// A func over symbolic var expressions.
     type SVFunc = VFunc<Sym<Var>>
@@ -188,6 +188,18 @@ module Types =
           Goal : 'goal }
         override this.ToString() = sprintf "%A" this
 
+    /// <summary>
+    ///     A term over <c>Command</c>s.
+    /// </summary>
+    /// <typeparam name="wpre">
+    ///     The type of the weakest-precondition part of the term.
+    /// </typeparam>
+    /// <typeparam name="goal">
+    ///     The type of the goal part of the term.
+    /// </typeparam>
+    type PTerm<'wpre, 'goal> = Term<Command, 'wpre, 'goal>
+
+
     /// A term over semantic-relation commands.
     type STerm<'wpre, 'goal> = Term<SMBoolExpr, 'wpre, 'goal>
 
@@ -201,6 +213,27 @@ module Types =
     type FTerm = CTerm<MBoolExpr>
 
     (*
+     * Func lookup
+     *)
+
+    /// <summary>
+    ///     Type of func instantiation tables.
+    /// </summary>
+    /// <typeparam name="defn">
+    ///     Type of definitions of <c>Func</c>s stored in the table.
+    ///     May be <c>unit</c>.
+    /// </typeparam>
+    type FuncTable<'defn> =
+        // TODO(CaptainHayashi): this should probably be a map,
+        // but translating it to one seems non-trivial.
+        // Would need to define equality on funcs very loosely.
+        (DFunc * 'defn) list
+
+    type PrimSemantics = { Name: string; Results: TypedVar list; Args: TypedVar list; Body: SVBoolExpr }
+    type SemanticsMap<'a> = Map<string, 'a>
+    type PrimSemanticsMap = SemanticsMap<PrimSemantics>
+
+    (*
      * Models
      *)
 
@@ -212,7 +245,7 @@ module Types =
           /// <summary>
           ///     The semantic function for this model.
           /// </summary>
-          Semantics : (DFunc * SVBoolExpr) list
+          Semantics : PrimSemanticsMap
           // This corresponds to the function D.
           ViewDefs : 'viewdefs }
 
@@ -244,9 +277,10 @@ module Pretty =
     open Starling.Core.Var.Pretty
     open Starling.Core.Expr.Pretty
     open Starling.Core.Symbolic.Pretty
+    open Starling.Core.Command.Pretty
 
     /// Pretty-prints a type-name parameter.
-    let printParam = printCTyped String
+    let printTypedVar = printCTyped String
 
     /// Pretty-prints a multiset given a printer for its contents.
     let printMultiset pItem =
@@ -267,7 +301,7 @@ module Pretty =
     let printSMVFunc = printFunc printSMExpr
 
     /// Pretty-prints a DFunc.
-    let printDFunc = printFunc printParam
+    let printDFunc = printFunc printTypedVar
 
     /// Pretty-prints a View.
     let printView pVar = printMultiset (printVFunc pVar)
@@ -292,6 +326,9 @@ module Pretty =
         vsep [ headed "Command" (c |> pCmd |> Seq.singleton)
                headed "W/Prec" (w |> pWPre |> Seq.singleton)
                headed "Goal" (g |> pGoal |> Seq.singleton) ]
+
+    /// Pretty-prints a PTerm.
+    let printPTerm pWPre pGoal = printTerm printCommand pWPre pGoal
 
     /// Pretty-prints an STerm.
     let printSTerm pWPre pGoal = printTerm printSMBoolExpr pWPre pGoal
@@ -434,7 +471,7 @@ module Pretty =
 /// <returns>
 ///     A new <c>DFunc</c> with the given name and parameters.
 /// </returns>
-let dfunc name (pars : Param seq) : DFunc = func name pars
+let dfunc name (pars : TypedVar seq) : DFunc = func name pars
 
 /// <summary>
 ///     Type-constrained version of <c>func</c> for <c>VFunc</c>s.

@@ -19,13 +19,14 @@ open Starling.Core.Graph
 open Starling.Lang.AST
 open Starling.Lang.Modeller
 open Starling.Core.Command
+open Starling.Core.Command.Create
 
 let cId = List.empty
 (* TODO(CaptainHayashi): currently we're assuming Assumed expressions
    are in pre-state position.  When we move to type-safe renaming this
    change should happen *here*. *)
 let cAssume (expr : SMBoolExpr) : Command =
-    func "Assume" [ simp expr |> Expr.Bool ] |> List.singleton
+    command "Assume" [] [ simp expr |> Expr.Bool ] |> List.singleton
 let cAssumeNot : SMBoolExpr -> Command = mkNot >> cAssume
 
 /// <summary>

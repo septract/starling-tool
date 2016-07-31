@@ -35,11 +35,11 @@ module ExpressionTests =
         check parseExpression "1 + 2 * 3" <| Some
         ** node "" 1L 3L 
             ** BopExpr (Add, 
-                    node "" 1L 1L (Int 1L),
+                    node "" 1L 1L (Num 1L),
                     node "" 1L 7L 
                         <| BopExpr (Mul,
-                                node "" 1L 5L (Int 2L),
-                                node "" 1L 9L (Int 3L)))
+                                node "" 1L 5L (Num 2L),
+                                node "" 1L 9L (Num 3L)))
     [<Test>]
     let ``Test bracketing on (1 + 2) * 3``() =
         check parseExpression "(1 + 2) * 3"  <| Some
@@ -47,9 +47,9 @@ module ExpressionTests =
             ** BopExpr (Mul,
                     node "" 1L 4L
                     <| BopExpr (Add,
-                            node "" 1L 2L (Int 1L),
-                            node "" 1L 6L (Int 2L)),
-                    node "" 1L 11L (Int 3L))
+                            node "" 1L 2L (Num 1L),
+                            node "" 1L 6L (Num 2L)),
+                    node "" 1L 11L (Num 3L))
 
     [<Test>]
     let ``Complex expression 1 + 2 < 3 * 4 && true || 5 / 6 > 7 - 8``() =
@@ -62,23 +62,23 @@ module ExpressionTests =
                             <| BopExpr (Lt,
                                     node "" 1L 3L
                                     <| BopExpr (Add,
-                                            node "" 1L 1L (Int 1L),
-                                            node "" 1L 5L (Int 2L)),
+                                            node "" 1L 1L (Num 1L),
+                                            node "" 1L 5L (Num 2L)),
                                     node "" 1L 11L
                                     <| BopExpr (Mul,
-                                            node "" 1L 9L (Int 3L),
-                                            node "" 1L 13L (Int 4L))),
+                                            node "" 1L 9L (Num 3L),
+                                            node "" 1L 13L (Num 4L))),
                             node "" 1L 18L True),
                     node "" 1L 32L
                     <| BopExpr (Gt,
                             node "" 1L 28L
                             <| BopExpr (Div,
-                                    node "" 1L 26L (Int 5L),
-                                    node "" 1L 30L (Int 6L)),
+                                    node "" 1L 26L (Num 5L),
+                                    node "" 1L 30L (Num 6L)),
                             node "" 1L 36L
                             <| BopExpr (Sub,
-                                    node "" 1L 34L (Int 7L),
-                                    node "" 1L 38L (Int 8L))))
+                                    node "" 1L 34L (Num 7L),
+                                    node "" 1L 38L (Num 8L))))
 module AtomicActionTests =
     [<Test>]
     let ``foo++``() =
@@ -109,7 +109,7 @@ module AtomicActionTests =
         ** node "" 1L 1L 
            (CompareAndSwap( LVIdent "foo", 
                             LVIdent "bar", 
-                            node "" 1L 15L (Int 2L)))
+                            node "" 1L 15L (Num 2L)))
 
 module AtomicSetTests =
     [<Test>]

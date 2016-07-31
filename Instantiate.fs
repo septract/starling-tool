@@ -25,6 +25,7 @@ open Starling.Utils
 open Starling.Core.TypeSystem
 open Starling.Core.TypeSystem.Check
 open Starling.Core.Expr
+open Starling.Core.Command
 open Starling.Core.Model
 open Starling.Core.Var
 open Starling.Core.Sub
@@ -39,19 +40,6 @@ open Starling.Core.GuardedView.Sub
 [<AutoOpen>]
 module Types =
     /// <summary>
-    ///     Type of func instantiation tables.
-    /// </summary>
-    /// <typeparam name="defn">
-    ///     Type of definitions of <c>Func</c>s stored in the table.
-    ///     May be <c>unit</c>.
-    /// </typeparam>
-    type FuncTable<'defn> =
-        // TODO(CaptainHayashi): this should probably be a map,
-        // but translating it to one seems non-trivial.
-        // Would need to define equality on funcs very loosely.
-        (DFunc * 'defn) list
-
-    /// <summary>
     ///     Type of Chessie errors arising from Instantiate.
     /// </summary>
     type Error =
@@ -60,7 +48,7 @@ module Types =
         ///     has been assigned to an argument of the incorrect type
         ///     <c>atype</c>.
         /// </summary>
-        | TypeMismatch of param: Param * atype: Type
+        | TypeMismatch of param: TypedVar * atype: Type
         /// <summary>
         ///     The func looked up has <c>fn</c> arguments, but its
         ///     definition has <c>dn</c> parameters.
@@ -85,8 +73,7 @@ module Types =
     ///     <c>FuncTable</c>.
     /// </summary>
     /// <typeparam name="axiom">
-    ///     Type of program axioms.
-    /// </typeparam>
+    ///     Type of program axioms.  /// </typeparam>
     type IFModel<'axiom> = Model<'axiom, FuncTable<VBoolExpr option>>
 
     /// <summary>
@@ -156,7 +143,7 @@ module Pretty =
         function
         | TypeMismatch (par, atype) ->
             fmt "parameter '{0}' conflicts with argument of type '{1}'"
-                [ printParam par; printType atype ]
+                [ printTypedVar par; printType atype ]
         | CountMismatch (fn, dn) ->
             fmt "view usage has {0} parameter(s), but its definition has {1}"
                 [ fn |> sprintf "%d" |> String; dn |> sprintf "%d" |> String ]
@@ -250,7 +237,7 @@ let funcsInTable (ftab : FuncTable<'defn>) =
 ///     prototype func and definition, and the failure value is a
 ///     <c>Starling.Instantiate.Error</c>.
 /// </returns>
-let checkParamCount func =
+let checkParamCount (func : Func<'a>) : (Func<'b> * 'c) option -> Result<(Func<'b> * 'c) option, Error> =
     function
     | None -> ok None
     | Some def ->
@@ -258,6 +245,14 @@ let checkParamCount func =
         let dn = List.length (fst def).Params
         if fn = dn then ok (Some def) else CountMismatch (fn, dn) |> fail
 
+let checkParamCountPrim : PrimCommand -> PrimSemantics option -> Result<PrimSemantics option, Error> =
+    fun prim opt ->
+    match opt with
+    | None -> ok None
+    | Some def ->
+        let fn = List.length prim.Args
+        let dn = List.length def.Args
+        if fn = dn then ok (Some def) else CountMismatch (fn, dn) |> fail
 /// <summary>
 ///     Look up <c>func</c> in <c>_arg1</c>.
 ///
@@ -280,10 +275,15 @@ let checkParamCount func =
 ///     <c>Starling.Instantiate.Error</c>.  If the <c>ok</c> value is
 ///     <c>None</c>, it means no (valid or otherwise) definition exists.
 /// </returns>
-let lookup func =
+let lookup (func : Func<'a>) : seq<DFunc * 'b> -> Result<(DFunc * 'b) option, Error> =
     // First, try to find a func whose name agrees with ours.
     Seq.tryFind (fun (dfunc, _) -> dfunc.Name = func.Name)
     >> checkParamCount func
+
+let lookupPrim : PrimCommand -> PrimSemanticsMap -> Result<PrimSemantics option, Error>  =
+    fun prim map ->
+    checkParamCountPrim prim
+    <| Map.tryFind prim.Name map
 
 /// <summary>
 ///     Checks whether <c>func</c> and <c>_arg1</c> agree on parameter
@@ -310,6 +310,18 @@ let checkParamTypes func def =
         def.Params
     |> collect
     |> lift (fun _ -> func)
+
+let checkParamTypesPrim : PrimCommand -> PrimSemantics -> Result<PrimCommand, Error> = 
+    fun prim sem -> 
+    List.map2
+        (curry
+             (function
+              | UnifyInt _ | UnifyBool _ -> ok ()
+              | UnifyFail (fp, dp) -> fail (TypeMismatch (dp, typeOf fp))))
+        prim.Args
+        sem.Args
+    |> collect
+    |> lift (fun _ -> prim)
 
 /// <summary>
 ///     Produces a <c>VSubFun</c> that substitutes the arguments of
@@ -355,6 +367,36 @@ let paramSubFun
              | Some _ -> failwith "param substitution type error"
              | None -> failwith "free variable in substitution")
 
+let paramToMExpr = 
+    function
+    | Int  i -> After i |> Reg |> AVar |> Int
+    | Bool b -> After b |> Reg |> BVar |> Bool
+
+let primParamSubFun
+  ( cmd : PrimCommand )
+  ( sem : PrimSemantics )
+  : VSubFun<Var, Sym<MarkedVar>> =
+    /// merge the pre + post conditions
+    let fres = List.map paramToMExpr cmd.Results
+    let fpars = cmd.Args @ fres
+    let dpars = sem.Args @ sem.Results
+
+    let pmap =
+        Seq.map2 (fun par up -> valueOf par, up) dpars fpars
+        |> Map.ofSeq
+
+    Mapper.make
+        (fun srcV ->
+             match (pmap.TryFind srcV) with
+             | Some (Typed.Int expr) -> expr
+             | Some _ -> failwith "param substitution type error"
+             | None -> failwith "free variable in substitution")
+        (fun srcV ->
+             match (pmap.TryFind srcV) with
+             | Some (Typed.Bool expr) -> expr
+             | Some _ -> failwith "param substitution type error"
+             | None -> failwith "free variable in substitution")
+
 /// <summary>
 ///     Produces a parameter substitution <c>VSubFun</c> from
 ///     <c>SMVFunc</c>s.
@@ -373,6 +415,8 @@ let smvParamSubFun
   (dfunc : DFunc)
   : VSubFun<Sym<Var>, Sym<MarkedVar>> =
     liftVToSym (paramSubFun smvfunc dfunc)
+
+let primSubFun prim sem = liftVToSym (primParamSubFun prim sem)
 
 /// <summary>
 ///     Look up <c>func</c> in <c>_arg1</c>, and instantiate the
@@ -422,6 +466,25 @@ let instantiate
            (Option.map
                 (fun (dfunc, defn) ->
                      Mapper.mapBoolCtx (onVars (psf vfunc dfunc)) NoCtx defn |> snd))
+
+let instantiatePrim
+  (psf : PrimCommand -> PrimSemantics -> VSubFun<Sym<Var>, Sym<MarkedVar>>)
+  (ftab : PrimSemanticsMap)
+  (vfunc : PrimCommand)
+  : Result<SMBoolExpr option, Error> =
+    lookupPrim vfunc ftab
+    |> bind
+           (function
+            | None -> ok None
+            | Some sem ->
+                lift
+                    (fun _ -> Some sem)
+                    (checkParamTypesPrim vfunc sem))
+    |> lift
+           (Option.map
+                (fun sem ->
+                     let mapper = onVars <| psf vfunc sem
+                     Mapper.mapBoolCtx mapper NoCtx sem.Body |> snd))
 
 /// <summary>
 ///     Functions for view definition filtering.

@@ -161,7 +161,7 @@ let parsePrimaryExpression =
         (inParens parseExpression) :: List.map nodify [ 
             pstring "true" >>% True
             pstring "false" >>% False
-            pint64 |>> Int
+            pint64 |>> Num
             parseLValue |>> LV
             parseSymbolic |>> Symbolic
     ]
@@ -313,7 +313,7 @@ let parseType =
     <|> stringReturn "bool" (Type.Bool ());
 
 /// Parses a pair of type identifier and parameter name.
-let parseTypedParam : Parser<Param, unit> =
+let parseTypedTypedVar : Parser<TypedVar, unit> =
     pipe2ws parseType parseIdentifier withType
     // ^ <type> <identifier>
 
@@ -397,7 +397,7 @@ do parseDViewRef := parseViewLike parseBasicDView DView.Join
 
 /// Parses a view prototype.
 let parseViewProto =
-    pstring "view" >>. ws >>. parseFunc parseTypedParam .>> wsSemi .>> ws
+    pstring "view" >>. ws >>. parseFunc parseTypedTypedVar .>> wsSemi .>> ws
 
 
 (*
@@ -533,7 +533,7 @@ let parseMethod =
 /// Parses a variable with the given initial keyword.
 let parseVar kw = pstring kw >>. ws
                   // ^- shared     ...
-                             >>. parseTypedParam
+                             >>. parseTypedTypedVar
                              // ^- ... <type> <identifier> ...
                              .>> pstring ";"
                              // ^-                         ... ;

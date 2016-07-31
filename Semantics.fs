@@ -35,10 +35,10 @@ module Types =
     /// Type of errors relating to semantics instantiation.
     type Error =
         /// There was an error instantiating a semantic definition.
-        | Instantiate of prim: SMVFunc
+        | Instantiate of prim: PrimCommand
                        * error: Starling.Core.Instantiate.Types.Error
         /// A primitive has a missing semantic definition.
-        | MissingDef of prim: SMVFunc
+        | MissingDef of prim: PrimCommand
 
 
 /// <summary>
@@ -46,6 +46,7 @@ module Types =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
+    open Starling.Core.Command.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Instantiate.Pretty
 
@@ -55,11 +56,11 @@ module Pretty =
         | Instantiate (prim, error) ->
           colonSep
               [ fmt "couldn't instantiate primitive '{0}'"
-                    [ printSMVFunc prim ]
+                    [ printPrimCommand prim ]
                 Starling.Core.Instantiate.Pretty.printError error ]
         | MissingDef prim ->
             fmt "primitive '{0}' has no semantic definition"
-                [ printSMVFunc prim ]
+                [ printPrimCommand prim ]
 
 
 
@@ -145,10 +146,10 @@ let frame svars tvars expr =
 /// a set of framing terms forcing unbound variables to remain constant
 /// (through frame).
 let semanticsOfPrim
-  (semantics : FuncTable<SVBoolExpr>)
+  (semantics : PrimSemanticsMap)
   (svars : VarMap)
   (tvars : VarMap)
-  (prim : SMVFunc)
+  (prim : PrimCommand)
   : Result<SMBoolExpr, Error> =
     (* First, instantiate according to the semantics.
      * This can succeed but return None.  This means there is no
@@ -158,18 +159,18 @@ let semanticsOfPrim
     let actions =
         prim
         |> wrapMessages Instantiate
-               (instantiate smvParamSubFun semantics)
+               (instantiatePrim primSubFun semantics)
         |> bind (failIfNone (MissingDef prim))
 
+    let f = frame svars tvars >> List.ofSeq >> mkAnd
     let aframe = lift (frame svars tvars >> List.ofSeq >> mkAnd) actions
-
     lift2 mkAnd2 actions aframe
 
 /// Translate a command to an expression characterising it.
 /// This is the sequential composition of the translations of each
 /// primitive inside it.
 let semanticsOfCommand
-  (semantics : FuncTable<SVBoolExpr>)
+  (semantics : PrimSemanticsMap)
   (svars : VarMap)
   (tvars : VarMap)
   : Command -> Result<SMBoolExpr, Error> =
