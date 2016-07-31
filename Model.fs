@@ -30,7 +30,8 @@ open Starling.Core.Command
  *
  * view-set: a multiset of guarded views.
  *
- * conds: a pair of view assertions.  *
+ * conds: a pair of view assertions.
+ *
  * axiom: a Hoare triple, containing a pair of conds, and some
  *        representation of a command.
  *
