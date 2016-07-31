@@ -103,7 +103,7 @@ let goalAddAxiom ds fg (name, axiom) =
     // This appends the viewdef number after the edge number.
     List.mapi
         (fun i (DefOver vs) ->
-            (sprintf "%s_%d" name i,
+            (sprintf "%s_%03d" name i,
              { Axiom = axiom
                Goal = instantiateGoal fg vs }))
         ds

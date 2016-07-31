@@ -265,9 +265,15 @@ and graphBlock topLevel vg cg {Pre = bPre; Contents = bContents} =
 /// </summary>
 let graphMethod { Signature = { Name = name }; Body = body } =
     let vgen = freshGen ()
-    let viewName () = getFresh vgen |> sprintf "%s_V%A" name
+    let viewName () = 
+       getFresh vgen 
+       |> fun y -> y.ToString().PadLeft(3,'0')  // pad string so sorting works. 
+       |> sprintf "%s_V%s" name
     let cgen = freshGen ()
-    let cmdName () = getFresh cgen |> sprintf "%s_C%A" name
+    let cmdName () = 
+       getFresh cgen 
+       |> fun y -> y.ToString().PadLeft(3,'0')  // pad string so sorting works. 
+       |> sprintf "%s_C%s" name
 
     body
     |> graphBlock true viewName cmdName
