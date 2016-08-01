@@ -79,14 +79,14 @@ module Pretty =
 
     /// Creates an S-expression from an operator string, operand print function, and
     /// sequence of operands.
-    let sexpr op pxs =
+    let sexpr (op : string) (pxs : 'x -> Doc) : 'x seq -> Doc =
         Seq.map pxs
         >> scons (String op)
         >> hsep
         >> parened
 
     /// Pretty-prints an arithmetic expression.
-    let rec printIntExpr pVar =
+    let rec printIntExpr (pVar : 'var -> Doc) : IntExpr<'var> -> Doc =
         function
         | AVar c -> pVar c
         | AInt i -> i |> sprintf "%i" |> String
@@ -96,7 +96,7 @@ module Pretty =
         | ADiv (x, y) -> sexpr "/" (printIntExpr pVar) [x; y]
 
     /// Pretty-prints a Boolean expression.
-    and printBoolExpr pVar =
+    and printBoolExpr (pVar : 'var -> Doc) : BoolExpr<'var> -> Doc =
         function
         | BVar c -> pVar c
         | BTrue -> String "true"
@@ -112,7 +112,7 @@ module Pretty =
         | BNot x -> sexpr "not" (printBoolExpr pVar) [x]
 
     /// Pretty-prints an expression.
-    and printExpr pVar =
+    and printExpr (pVar : 'var -> Doc) : Expr<'var> -> Doc =
         function
         | Int a -> printIntExpr pVar a
         | Bool b -> printBoolExpr pVar b
@@ -233,81 +233,94 @@ let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
 
 /// Returns true if the expression is definitely false.
 /// This is sound, but not complete.
-let isFalse expr =
+let isFalse (expr : BoolExpr<_>) : bool =
+    // NOTE: This is _not_ the same as (not isTrue).
     match (simp expr) with
     | BFalse -> true
     | _      -> false
 
-let isTrue expr =
+let isTrue (expr : BoolExpr<_>) : bool =
+    // NOTE: This is _not_ the same as (not isFalse).
     match (simp expr) with
     | BTrue -> true
     | _     -> false
 
 /// Converts a typed string to an expression.
-let mkVarExp marker (ts : CTyped<string>) =
+let mkVarExp (marker : string -> 'markedvar)
+             (ts : CTyped<string>)
+             : Expr<'markedvar> =
     match ts with
     | Int s -> s |> marker |> AVar |> Int
     | Bool s -> s |> marker |> BVar |> Bool
 
 /// Converts a VarMap to a sequence of expressions.
-let varMapToExprs marker vm =
+let varMapToExprs (marker : string -> 'markedvar)
+                  (vm : Map<string, Type>)
+                  : Expr<'markedvar> seq =
     vm |> Map.toSeq |> Seq.map (fun (name, ty) -> mkVarExp marker (withType ty name))
 
 (* The following are just curried versions of the usual constructors. *)
 
 /// Curried wrapper over BGt.
-let mkGt a b = BGt (a, b)
+let mkGt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> = BGt (a, b)
 /// Curried wrapper over BGe.
-let mkGe a b = BGe (a, b)
+let mkGe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> = BGe (a, b)
 /// Curried wrapper over BLt.
-let mkLt a b = BLt (a, b)
+let mkLt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> = BLt (a, b)
 /// Curried wrapper over BLe.
-let mkLe a b = BLe (a, b)
+let mkLe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> = BLe (a, b)
 
 /// Curried wrapper over BEq.
-let mkEq a b = BEq (a, b)
+let mkEq (a : Expr<'var>) (b : Expr<'var>) : BoolExpr<'var> = BEq (a, b)
 
 /// Makes an arithmetic equality.
-let iEq a b = BEq (Int a, Int b)
-///
-/// Makes an arithmetic addition
-let iAdd a b = AAdd [a ; b]
+let iEq (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
+    BEq (Int a, Int b)
+
+/// Makes an arithmetic addition.
+let iAdd (a : IntExpr<'var>) (b : IntExpr<'var>) : IntExpr<'var> =
+    AAdd [a ; b]
 
 /// Makes a Boolean equality.
-let bEq a b = BEq (Bool a, Bool b)
+let bEq (a : BoolExpr<'var>) (b : BoolExpr<'var>) : BoolExpr<'var> =
+    BEq (Bool a, Bool b)
 
 /// Curried wrapper over ADiv.
-let mkDiv a b = ADiv (a, b)
+let mkDiv (a : IntExpr<'var>) (b : IntExpr<'var>) : IntExpr<'var> = ADiv (a, b)
 
 /// Slightly optimised version of ctx.MkAnd.
 /// Returns true for the empty array, and x for the singleton set {x}.
-let mkAnd xs = simp (BAnd xs)
+let mkAnd (xs : BoolExpr<'var> list) : BoolExpr<'var> = simp (BAnd xs)
 
 /// Slightly optimised version of ctx.MkOr.
 /// Returns false for the empty set, and x for the singleton set {x}.
-let mkOr xs = simp (BOr xs)
+let mkOr (xs : BoolExpr<'var> list) : BoolExpr<'var> = simp (BOr xs)
 
 /// Makes an And from a pair of two expressions.
-let mkAnd2 l r = mkAnd [l ; r]
+let mkAnd2 (l : BoolExpr<'var>) (r : BoolExpr<'var>) : BoolExpr<'var> =
+    mkAnd [l ; r]
 
 /// Makes an Or from a pair of two expressions.
-let mkOr2 l r = mkOr [l ; r]
+let mkOr2 (l : BoolExpr<'var>) (r : BoolExpr<'var>) : BoolExpr<'var> =
+    mkOr [l ; r]
 
 /// Symbolically inverts a Boolean expression.
-let mkNot x = simp (BNot x)
+let mkNot (x : BoolExpr<'var>) : BoolExpr<'var> = simp (BNot x)
 
 /// Makes not-equals.
-let mkNeq l r = mkEq l r |> mkNot
+let mkNeq (l : Expr<'var>) (r : Expr<'var>) : BoolExpr<'var> =
+    mkEq l r |> mkNot
 
 /// Makes an implication from a pair of two expressions.
-let mkImplies l r = BImplies (l, r) |> simp
+let mkImplies (l : BoolExpr<'var>) (r : BoolExpr<'var>) : BoolExpr<'var> =
+    BImplies (l, r) |> simp
 
 /// Makes an Add out of a pair of two expressions.
-let mkAdd2 l r = AAdd [ l; r ]
+let mkAdd2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> = AAdd [ l; r ]
 /// Makes a Sub out of a pair of two expressions.
-let mkSub2 l r = ASub [ l; r ]
+let mkSub2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> = ASub [ l; r ]
 /// Makes a Mul out of a pair of two expressions.
-let mkMul2 l r = AMul [ l; r ]
+let mkMul2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> = AMul [ l; r ]
 
 
 (*
@@ -315,11 +328,11 @@ let mkMul2 l r = AMul [ l; r ]
  *)
 
 /// Creates a new fresh generator.
-let freshGen () = ref 0I
+let freshGen () : FreshGen = ref 0I
 
 /// Takes a fresh number out of the generator.
 /// This method is NOT thread-safe.
-let getFresh fg =
+let getFresh (fg : FreshGen) : bigint =
     let result = !fg
     fg := !fg + 1I
     result
