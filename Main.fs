@@ -5,6 +5,7 @@ open CommandLine
 open Chessie.ErrorHandling
 
 open Starling
+open Starling.Utils.Config
 open Starling.Core.Pretty
 open Starling.Core.Graph
 open Starling.Core.Graph.Pretty
@@ -20,44 +21,6 @@ open Starling.Core.GuardedView.Pretty
 open Starling.Core.Axiom
 open Starling.Core.Axiom.Pretty
 
-
-/// Command-line flags used in the Starling executable.
-[<NoComparison>]
-type Options =
-    { [<Option(
-            'r',
-            HelpText =
-                "Dump results in raw format instead of pretty-printing.")>]
-      raw : bool
-      [<Option(
-            'B',
-            HelpText =
-                "Comma-delimited set of backend options (pass 'list' for details)")>]
-      backendOpts : string option
-      [<Option(
-            's',
-            HelpText =
-                "The stage at which Starling should stop and output.")>]
-      stage : string option
-      [<Option(
-            't',
-            HelpText =
-                "Show specific axiom or term in term-refinement stages.")>]
-      term : string option
-      [<Option('m', HelpText = "Show full model in term-refinement stages.")>]
-      showModel : bool
-      [<Option('O', HelpText = "Switches given optimisations on or off.")>]
-      optimisers : string option
-      [<Option("times", HelpText = "Print times for each phase.")>]
-      times : bool
-      [<Option('v', HelpText = "Increases verbosity.")>]
-      verbose : bool
-      [<Value(
-            0,
-            MetaName = "input",
-            HelpText =
-                "The file to load (omit, or supply -, for standard input).")>]
-      input : string option }
 
 /// Enumeration of possible requests to Starling.
 type Request =
@@ -572,30 +535,28 @@ let runStarling times optS backendS verbose request =
     ** backend
 
 /// Runs Starling with the given options, and outputs the results.
-let mainWithOptions opts =
-    let optS = opts.optimisers
-    let backendS = opts.backendOpts
-    let verbose = opts.verbose
-    let times = opts.times
+let mainWithOptions options =
+    _configRef := options
+    let config = config ()
 
     let starlingR =
-        match (requestFromStage opts.stage) with
+        match (requestFromStage config.stage) with
         // Handle pseudo-requests here, as it's cleaner than doing so in
         // runStarling.
         | Some Request.List ->
             ok (Response.List (Map.map (fun _ -> fst) requestMap))
-        | Some otype -> runStarling times optS backendS verbose otype opts.input
+        | Some otype -> runStarling config.times config.optimisers config.backendOpts config.verbose otype config.input
         | None -> fail Error.BadStage
 
     let mview =
-        match opts.term, opts.showModel with
+        match config.term, config.showModel with
         | Some i, _ -> Term i
         | None, false -> Terms
         | _ -> Model
 
     let pfn =
-        if opts.raw then (sprintf "%A" >> String)
-                    else printResponse mview
+        if config.raw then (sprintf "%A" >> String)
+                      else printResponse mview
     printResult pfn (List.map printError) starlingR
     0
 

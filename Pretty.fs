@@ -5,6 +5,8 @@ module Starling.Core.Pretty
 
 open Starling.Collections
 open Starling.Utils
+open Starling.Utils.Config
+
 
 type FontColor =
     Black | Red | Green | Yellow | Blue | Magenta | Cyan | White
@@ -131,12 +133,18 @@ let rec printState state =
 /// <summary>
 ///     Prints a <see cref="Doc"/> with full styling.
 /// </summary>
-let print = printState { Level = 0; UseStyles = true }
+let printStyled = printState { Level = 0; UseStyles = true }
 
 /// <summary>
 ///     Prints a <see cref="Doc"/> with no styling.
 /// </summary>
 let printUnstyled = printState { Level = 0; UseStyles = false }
+
+
+/// <summary>
+///     Prints a <see cref="Doc"/>.
+/// </summary>
+let print = if config().color then printStyled else printUnstyled
 
 
 (*
