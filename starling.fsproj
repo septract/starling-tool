@@ -44,8 +44,8 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Utils.fs" />
-    <Compile Include="Collections.fs" />
     <Compile Include="Pretty.fs" />
+    <Compile Include="Collections.fs" />
     <Compile Include="TypeSystem.fs" />
     <Compile Include="Expr.fs" />
     <Compile Include="Var.fs" />

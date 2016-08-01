@@ -71,6 +71,7 @@ module Types =
 /// Pretty-prints HSF translation errors.
 module Pretty =
     open Starling.Core.Pretty
+    open Starling.Collections.Func.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Var.Pretty
 

@@ -3,7 +3,6 @@
 /// </summary>
 module Starling.Core.Pretty
 
-open Starling.Collections
 open Starling.Utils
 open Starling.Utils.Config
 
@@ -62,7 +61,7 @@ let syntaxView d = Styled([Yellow], d)
 /// <returns>
 ///     The stylised (ANSI-escaped) string.
 /// </param>
-let stylise s d = 
+let stylise s d =
     let colCode =
         function
         | Black -> 0
@@ -200,9 +199,6 @@ let squared = ssurround "[" "]"
 
 /// Pretty-prints a function f(xs1, xs2, ...xsn)
 let func f xs = hjoin [String f |> syntaxIdent; commaSep xs |> parened]
-
-/// Pretty-prints Funcs using pxs to print parameters.
-let printFunc pxs { Starling.Collections.Func.Name = f; Params = xs } = func f (Seq.map pxs xs)
 
 /// <summary>
 ///    Whether to separate keys and values by colons, or by indentation.

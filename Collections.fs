@@ -6,7 +6,6 @@ module Starling.Collections
 open Chessie.ErrorHandling
 open Starling.Utils
 
-
 /// <summary>
 ///     A function-like construct.
 /// </summary>
@@ -43,6 +42,13 @@ type Func<'param> =
 ///     A new <c>Func</c> with the given name and parameters.
 /// </returns>
 let func name pars = { Name = name; Params = List.ofSeq pars }
+
+module Func =
+    module Pretty =
+        open Starling.Core
+
+        /// Pretty-prints Funcs using pxs to print parameters.
+        let printFunc pxs { Name = f; Params = xs } = Pretty.func f (Seq.map pxs xs)
 
 /// <summary>
 ///     A multiset, or ordered list.
