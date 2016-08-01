@@ -43,11 +43,11 @@ module Tests =
             { Name = "lock"
               Contents =
                   Map.ofList
-                      [ ("lock_V0",
+                      [ ("lock_V000",
                          ((Mandatory <| Multiset.empty,
                            Set.singleton
-                              { OutEdge.Name = "lock_C0"
-                                OutEdge.Dest = "lock_V1"
+                              { OutEdge.Name = "lock_C000"
+                                OutEdge.Dest = "lock_V001"
                                 OutEdge.Command =
                                     [ command "!ILoad++"
                                            [ Int "t"; Int "ticket" ]
@@ -55,77 +55,77 @@ module Tests =
                                              Typed.Int (siBefore "ticket")]] },
                            Set.empty,
                            Entry)))
-                        ("lock_V1",
+                        ("lock_V001",
                          (Mandatory <| Multiset.singleton (gHoldTick BTrue),
                           Set.singleton
-                              { Name = "lock_C4"
-                                Dest = "lock_V3"
+                              { Name = "lock_C004"
+                                Dest = "lock_V003"
                                 Command = [] },
                           Set.singleton
-                              { Name = "lock_C0"
-                                Src = "lock_V0"
+                              { Name = "lock_C000"
+                                Src = "lock_V000"
                                 Command =
                                     [ command "!ILoad++"
                                            [ Int "t"; Int "ticket"; ]
                                            [ Typed.Int (siBefore "t")
                                              Typed.Int (siBefore "ticket") ]] },
                           Normal ))
-                        ("lock_V2",
+                        ("lock_V002",
                          (Mandatory <| Multiset.singleton (gHoldLock BTrue),
                           Set.empty,
                           Set.singleton
-                              { Name = "lock_C3"
-                                Src = "lock_V4"
+                              { Name = "lock_C003"
+                                Src = "lock_V004"
                                 Command =
                                     [ command "Assume" []
                                            [ Typed.Bool
                                                  (iEq (siBefore "s")
                                                       (siBefore "t")) ]] },
                            Exit))
-                        ("lock_V3",
+                        ("lock_V003",
                          (Mandatory <| Multiset.singleton (gHoldTick BTrue),
                           Set.singleton
-                              { Name = "lock_C1"
-                                Dest = "lock_V4"
+                              { Name = "lock_C001"
+                                Dest = "lock_V004"
                                 Command =
                                     [ command "!ILoad" 
                                            [ Int "s" ]
                                            [ Typed.Int (siBefore "serving") ]] },
                           Set.ofList
-                              [ { Name = "lock_C2"
-                                  Src = "lock_V4"
+                              [ { Name = "lock_C002"
+                                  Src = "lock_V004"
                                   Command =
                                       [ command "Assume" []
                                              [ Typed.Bool
                                                    (BNot (iEq (siBefore "s")
                                                               (siBefore "t"))) ]] }
-                                { Name = "lock_C4"
-                                  Src = "lock_V1"
+                                { Name = "lock_C004"
+                                  Src = "lock_V001"
                                   Command = [] } ],
                            Normal))
-                        ("lock_V4",
+                        ("lock_V004",
                          (Mandatory <|
                           Multiset.ofFlatList
                               [ gHoldLock (iEq (siVar "s") (siVar "t"))
                                 gHoldTick (BNot (iEq (siVar "s") (siVar "t"))) ],
                           Set.ofList
-                              [ { Name = "lock_C2"
-                                  Dest = "lock_V3"
+                              [ { Name = "lock_C002"
+                                  Dest = "lock_V003"
                                   Command =
                                       [ command "Assume" []
                                              [ Typed.Bool
                                                    (BNot (iEq (siBefore "s")
                                                               (siBefore "t"))) ]] }
-                                { Name = "lock_C3"
-                                  Dest = "lock_V2"
+                                { Name = "lock_C003"
+                                  Dest = "lock_V002"
                                   Command =
                                       [ command "Assume" []
                                              [ Typed.Bool
                                                    (iEq (siBefore "s")
                                                         (siBefore "t")) ]] } ],
                           Set.singleton
-                              { Name = "lock_C1"
-                                Src = "lock_V3"
+                              { Name = "lock_C001"
+                                Src = "lock_V003"
                                 Command =
                                     [ command "!ILoad"
                                            [ Int "s" ]
@@ -138,25 +138,25 @@ module Tests =
             { Name = "unlock"
               Contents =
                   Map.ofList
-                      [ ("unlock_V0",
+                      [ ("unlock_V000",
                          (Mandatory <|
                           Multiset.singleton
                                   (gfunc BTrue "holdLock" [] ),
                           Set.singleton
-                              { Name = "unlock_C0"
-                                Dest = "unlock_V1"
+                              { Name = "unlock_C000"
+                                Dest = "unlock_V001"
                                 Command =
                                     [ command "!I++" 
                                            [ Int "serving" ]
                                            [ Typed.Int (siBefore "serving") ]] },
                           Set.empty,
                           Entry))
-                        ("unlock_V1",
+                        ("unlock_V001",
                          (Mandatory <| Multiset.empty,
                           Set.empty,
                           Set.singleton
-                              { Name = "unlock_C0"
-                                Src = "unlock_V0"
+                              { Name = "unlock_C000"
+                                Src = "unlock_V000"
                                 Command =
                                     [ command "!I++"
                                            [ Int "serving" ]
@@ -167,69 +167,69 @@ module Tests =
         let ticketLockLockSubgraph : Subgraph =
             { Nodes =
                   Map.ofList
-                      [ ("lock_V0",
+                      [ ("lock_V000",
                              (Mandatory <| Multiset.empty, Entry))
-                        ("lock_V1", (Mandatory <| Multiset.singleton (gHoldTick BTrue), Normal))
-                        ("lock_V2", (Mandatory <| Multiset.singleton (gHoldLock BTrue), Exit))
-                        ("lock_V3", (Mandatory <| Multiset.singleton (gHoldTick BTrue), Normal))
-                        ("lock_V4",
+                        ("lock_V001", (Mandatory <| Multiset.singleton (gHoldTick BTrue), Normal))
+                        ("lock_V002", (Mandatory <| Multiset.singleton (gHoldLock BTrue), Exit))
+                        ("lock_V003", (Mandatory <| Multiset.singleton (gHoldTick BTrue), Normal))
+                        ("lock_V004",
                              (Mandatory <|
                               Multiset.ofFlatList
                                  [ gHoldLock (iEq (siVar "s") (siVar "t"))
                                    gHoldTick (BNot (iEq (siVar "s") (siVar "t"))) ], Normal)) ]
               Edges =
                   Map.ofList
-                      [ ("lock_C0",
-                             edge "lock_V0"
+                      [ ("lock_C000",
+                             edge "lock_V000"
                                   [ command "!ILoad++"
                                          [ Int "t"; Int "ticket" ]
                                          [ Typed.Int (siBefore "t")
                                            Typed.Int (siBefore "ticket") ]]
-                                  "lock_V1")
-                        ("lock_C1",
-                             edge "lock_V3"
+                                  "lock_V001")
+                        ("lock_C001",
+                             edge "lock_V003"
                                   [ command "!ILoad"
                                          [ Int "s" ]
                                          [ Typed.Int (siBefore "serving") ]]
-                                  "lock_V4")
-                        ("lock_C2",
-                             edge "lock_V4"
+                                  "lock_V004")
+                        ("lock_C002",
+                             edge "lock_V004"
                                   [ command "Assume"
                                          []
                                          [ Typed.Bool
                                                (BNot (iEq (siBefore "s")
                                                           (siBefore "t"))) ]]
-                                  "lock_V3")
-                        ("lock_C3",
-                             edge "lock_V4"
+                                  "lock_V003")
+                        ("lock_C003",
+                             edge "lock_V004"
                                   [ command "Assume"
                                          []
                                          [ Typed.Bool
                                                (iEq (siBefore "s")
                                                     (siBefore "t")) ]]
-                                  "lock_V2")
-                        ("lock_C4",
-                             edge "lock_V1"
+                                  "lock_V002")
+                        ("lock_C004",
+                             edge "lock_V001"
                                   []
-                                  "lock_V3") ] }
+                                  "lock_V003") ] }
 
         /// The partial CFG for the ticket lock unlock method.
         let ticketLockUnlockSubgraph : Subgraph =
             { Nodes =
                   Map.ofList
-                      [ ("unlock_V0",
+                      [ ("unlock_V000",
                              (Mandatory <|
                               Multiset.singleton
                                  (svgfunc BTrue "holdLock" [] ), Entry))
-                        ("unlock_V1", (Mandatory <| Multiset.empty, Exit)) ]
+                        ("unlock_V001", (Mandatory <| Multiset.empty, Exit)) ]
               Edges =
                    Map.ofList
-                      [ ("unlock_C0",
-                             edge "unlock_V0"
+                      [ ("unlock_C000",
+                             edge "unlock_V000"
                                   [ command "!I++"
                                          [ Int "serving" ] 
                                          [ Typed.Int (siBefore "serving") ]]
-                                  "unlock_V1" ) ] }
+                                  "unlock_V001" ) ] }
 
 
     /// <summary>
@@ -240,35 +240,35 @@ module Tests =
         ///     Test cases for checking edge addition.
         /// </summary>
         static member Adds =
-            [ TestCaseData(("unlock_N0", "unlock_V1", "unlock_V0"))
+            [ TestCaseData(("unlock_N0", "unlock_V001", "unlock_V000"))
                 .Returns(
                   Some <|
                   Map.ofList
-                      [ ("unlock_V0",
+                      [ ("unlock_V000",
                          (Mandatory <|
                           Multiset.singleton
                               (Studies.gHoldLock BTrue),
                           Set.singleton
-                              { Name = "unlock_C0"
-                                Dest = "unlock_V1"
+                              { Name = "unlock_C000"
+                                Dest = "unlock_V001"
                                 Command =
                                     [ command "!I++"
                                            [ Int "serving" ]
                                            [ SMExpr.Int (siBefore "serving") ]] },
                           Set.singleton
                               { Name = "unlock_N0"
-                                Src = "unlock_V1"
+                                Src = "unlock_V001"
                                 Command = [] },
                           Entry ))
-                        ("unlock_V1",
+                        ("unlock_V001",
                          (Mandatory <| Multiset.empty,
                           Set.singleton
                               { Name = "unlock_N0"
-                                Dest = "unlock_V0"
+                                Dest = "unlock_V000"
                                 Command = [] },
                           Set.singleton
-                              { Name = "unlock_C0"
-                                Src = "unlock_V0"
+                              { Name = "unlock_C000"
+                                Src = "unlock_V000"
                                 Command =
                                     [ command "!I++"
                                            [ Int "serving" ]
@@ -291,48 +291,48 @@ module Tests =
         ///     Test cases for checking unification.
         /// </summary>
         static member Unifies =
-            [ TestCaseData(("unlock_V1", "unlock_V0"))
+            [ TestCaseData(("unlock_V001", "unlock_V000"))
                 .Returns(
                     Some <|
                     { Nodes =
                           Map.ofList
-                              [ ("unlock_V0",
+                              [ ("unlock_V000",
                                  (Mandatory <|
                                   Multiset.singleton
                                      (gfunc BTrue "holdLock" [] ),
                                   EntryExit)) ]
                       Edges =
                           Map.ofList
-                              [ ("unlock_C0",
-                                 edge "unlock_V0"
+                              [ ("unlock_C000",
+                                 edge "unlock_V000"
                                       [ command "!I++"
                                               [ Int "serving" ]
                                               [ SMExpr.Int (siBefore "serving") ]]
-                                      "unlock_V0" ) ] } )
+                                      "unlock_V000" ) ] } )
                 .SetName("unify C1 into C0 on the ticket lock 'unlock'")
-              TestCaseData(("unlock_V0", "unlock_V1"))
+              TestCaseData(("unlock_V000", "unlock_V001"))
                 .Returns(
                     Some <|
                     { Nodes =
                           Map.ofList
-                              [ ("unlock_V1", (Mandatory <| Multiset.empty,
+                              [ ("unlock_V001", (Mandatory <| Multiset.empty,
                                                EntryExit)) ]
                       Edges =
                           Map.ofList
-                              [ ("unlock_C0",
-                                 edge "unlock_V1"
+                              [ ("unlock_C000",
+                                 edge "unlock_V001"
                                       [ command "!I++"
                                               [ Int "serving" ] 
                                               [ SMExpr.Int (siBefore "serving") ]]
-                                      "unlock_V1" ) ] } )
+                                      "unlock_V001" ) ] } )
                 .SetName("unify C0 into C1 on the ticket lock 'unlock'")
-              TestCaseData(("unlock_V0", "unlock_V2"))
+              TestCaseData(("unlock_V000", "unlock_V002"))
                 .Returns(None)
                 .SetName("unifying into non-existent nodes fails")
-              TestCaseData(("unlock_V2", "unlock_V0"))
+              TestCaseData(("unlock_V002", "unlock_V000"))
                 .Returns(None)
                 .SetName("unifying non-existent nodes fails")
-              TestCaseData(("unlock_V0", "unlock_V0"))
+              TestCaseData(("unlock_V000", "unlock_V000"))
                 .Returns(Some Studies.ticketLockUnlockSubgraph)
                 .SetName("unifying a node onto itself does nothing") ]
 
