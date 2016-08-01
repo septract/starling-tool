@@ -9,6 +9,7 @@ open Starling.Core.Model
 open Starling.Core.Axiom
 open Starling.Core.Command
 open Starling.Core.Command.Create
+open Starling.Core.View
 open Starling.Core.GuardedView
 open Starling.Core.Var
 open Starling.Core.Symbolic

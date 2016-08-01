@@ -9,6 +9,7 @@ open Starling.Utils
 open Starling.Core.Expr
 open Starling.Core.Symbolic
 open Starling.Core.Model
+open Starling.Core.View
 open Starling.Core.GuardedView
 open Starling.Lang.AST
 open Starling.Lang.Modeller

@@ -12,6 +12,7 @@ open Starling.Core.Var
 open Starling.Core.Command
 open Starling.Core.Command.Create
 open Starling.Core.Model
+open Starling.Core.View
 open Starling.Core.GuardedView
 open Starling.Lang.AST
 open Starling.Lang.Collator

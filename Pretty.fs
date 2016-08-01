@@ -3,8 +3,9 @@
 /// </summary>
 module Starling.Core.Pretty
 
-open Starling.Collections
 open Starling.Utils
+open Starling.Utils.Config
+
 
 type FontColor =
     Black | Red | Green | Yellow | Blue | Magenta | Cyan | White
@@ -60,7 +61,7 @@ let syntaxView d = Styled([Yellow], d)
 /// <returns>
 ///     The stylised (ANSI-escaped) string.
 /// </param>
-let stylise s d = 
+let stylise s d =
     let colCode =
         function
         | Black -> 0
@@ -131,12 +132,18 @@ let rec printState state =
 /// <summary>
 ///     Prints a <see cref="Doc"/> with full styling.
 /// </summary>
-let print = printState { Level = 0; UseStyles = true }
+let printStyled = printState { Level = 0; UseStyles = true }
 
 /// <summary>
 ///     Prints a <see cref="Doc"/> with no styling.
 /// </summary>
 let printUnstyled = printState { Level = 0; UseStyles = false }
+
+
+/// <summary>
+///     Prints a <see cref="Doc"/>.
+/// </summary>
+let print = if config().color then printStyled else printUnstyled
 
 
 (*
@@ -192,9 +199,6 @@ let squared = ssurround "[" "]"
 
 /// Pretty-prints a function f(xs1, xs2, ...xsn)
 let func f xs = hjoin [String f |> syntaxIdent; commaSep xs |> parened]
-
-/// Pretty-prints Funcs using pxs to print parameters.
-let printFunc pxs { Starling.Collections.Func.Name = f; Params = xs } = func f (Seq.map pxs xs)
 
 /// <summary>
 ///    Whether to separate keys and values by colons, or by indentation.

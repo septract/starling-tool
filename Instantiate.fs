@@ -24,10 +24,11 @@ open Starling.Collections
 open Starling.Utils
 open Starling.Core.TypeSystem
 open Starling.Core.TypeSystem.Check
+open Starling.Core.Var
 open Starling.Core.Expr
+open Starling.Core.View
 open Starling.Core.Command
 open Starling.Core.Model
-open Starling.Core.Var
 open Starling.Core.Sub
 open Starling.Core.Symbolic
 open Starling.Core.GuardedView
@@ -95,6 +96,7 @@ module Pretty =
     open Starling.Core.Model.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.Expr.Pretty
+    open Starling.Core.View.Pretty
 
     /// <summary>
     ///     Pretty-prints <c>FuncTable</c>s.

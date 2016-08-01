@@ -14,6 +14,7 @@ open Chessie.ErrorHandling
 open Starling.Core.TypeSystem
 open Starling.Collections
 open Starling.Utils
+open Starling.Utils.Config
 open Starling.Core.Expr
 open Starling.Core.ExprEquiv
 open Starling.Core.Var
@@ -22,6 +23,7 @@ open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.Command.Queries
 open Starling.Core.Sub
+open Starling.Core.View
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Sub
 
@@ -175,22 +177,20 @@ module Utils =
     ///     The set of optimisation names to adds.  If this contains 'all',
     ///     all optimisations will be permitted.
     /// </param>
-    /// <param name="verbose">
-    ///     If true, add warnings when a default optimisation is overridden.
-    /// </param>
     /// <returns>
     ///     A sequence of optimisers to run.
     /// </returns>
-    let mkOptimiserSet opts removes adds verbose =
+    let mkOptimiserSet opts removes adds =
+        let config = config()
         if Set.contains "all" removes
         then
-             if verbose
+             if config.verbose
              then eprintfn "note: all optimisations disabled"
 
              []
         else if Set.contains "all" adds
         then
-            if verbose
+            if config.verbose
             then eprintfn "note: all optimisations enabled"
 
             List.map (fun (_, _, ofun) -> ofun) opts
@@ -201,7 +201,7 @@ module Utils =
                         let on' = (on || optAllowed adds name)
                                   && (not (optAllowed removes name))
 
-                        if (verbose && (on' <> on))
+                        if (config.verbose && (on' <> on))
                         then eprintfn "note: optimisation %s forced %s"
                                       name
                                       (if on' then "on" else "off")
@@ -223,9 +223,6 @@ module Utils =
     ///     The set of optimisation names to add.  If this contains 'all',
     ///     all optimisations will be permitted.
     /// </param>
-    /// <param name="verbose">
-    ///     If true, add warnings when a default optimisation is overridden.
-    /// </param>
     /// <param name="opts">
     ///     A list of triples of optimiser name, whether it's enabled by
     ///     default, and function.
@@ -237,8 +234,9 @@ module Utils =
     ///     A function that, when applied to something, optimises it with
     ///     the selected optimisers.
     /// </returns>
-    let optimiseWith removes adds verbose opts =
-        let fs = mkOptimiserSet opts removes adds verbose
+    let optimiseWith : Set<string> -> Set<string> -> (string * bool * ('a -> 'a)) list -> ('a -> 'a) =
+        fun removes adds opts ->
+        let fs = mkOptimiserSet opts removes adds
 
         (* This would be much more readable if it wasn't pointfree...
            ...but would also cause fs to be evaluated every single time
@@ -694,9 +692,9 @@ module Graph =
     /// <returns>
     ///     An optimised equivalent of <paramref name="_arg1" />.
     /// </returns>
-    let optimiseGraph model optR optA verbose =
+    let optimiseGraph model optR optA =
         // TODO(CaptainHayashi): Use the model for something.
-        onNodes (Utils.optimiseWith optR optA verbose
+        onNodes (Utils.optimiseWith optR optA
                      [ ("graph-collapse-nops", true, collapseNops)
                        ("graph-collapse-ites", true, collapseITEs)
                        ("graph-drop-local-midview",
@@ -722,8 +720,8 @@ module Graph =
     /// <returns>
     ///     An optimised equivalent of <paramref name="mdl" />.
     /// </returns>
-    let optimise optR optA verbose mdl =
-        mapAxioms (optimiseGraph mdl optR optA verbose) mdl
+    let optimise optR optA mdl =
+        mapAxioms (optimiseGraph mdl optR optA) mdl
 
 
 /// <summary>
@@ -852,11 +850,11 @@ module Term =
                      "term-simplify-bools" ]
 
     /// Optimises a model's terms.
-    let optimise optR optA verbose
+    let optimise optR optA
       : UFModel<STerm<SMGView, SMVFunc>>
           -> UFModel<STerm<SMGView, SMVFunc>> =
         let optimiseTerm =
-            Utils.optimiseWith optR optA verbose
+            Utils.optimiseWith optR optA
                 [ ("term-remove-after", true, eliminateAfters)
                   ("term-reduce-guards", true, guardReduce)
                   ("term-simplify-bools", true, simpTerm) ]

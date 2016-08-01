@@ -9,6 +9,8 @@ open Starling.Core.Graph
 open Starling.Core.Graph.Pretty
 open Starling.Core.Model
 open Starling.Core.Model.Pretty
+open Starling.Core.View
+open Starling.Core.View.Pretty
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Pretty
 open Starling.Lang.AST.Pretty

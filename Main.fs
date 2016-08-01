@@ -5,6 +5,7 @@ open CommandLine
 open Chessie.ErrorHandling
 
 open Starling
+open Starling.Utils.Config
 open Starling.Core.Pretty
 open Starling.Core.Graph
 open Starling.Core.Graph.Pretty
@@ -15,49 +16,13 @@ open Starling.Core.Symbolic
 open Starling.Core.Symbolic.Pretty
 open Starling.Core.Command
 open Starling.Core.Command.Pretty
+open Starling.Core.View
+open Starling.Core.View.Pretty
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Pretty
 open Starling.Core.Axiom
 open Starling.Core.Axiom.Pretty
 
-
-/// Command-line flags used in the Starling executable.
-[<NoComparison>]
-type Options =
-    { [<Option(
-            'r',
-            HelpText =
-                "Dump results in raw format instead of pretty-printing.")>]
-      raw : bool
-      [<Option(
-            'B',
-            HelpText =
-                "Comma-delimited set of backend options (pass 'list' for details)")>]
-      backendOpts : string option
-      [<Option(
-            's',
-            HelpText =
-                "The stage at which Starling should stop and output.")>]
-      stage : string option
-      [<Option(
-            't',
-            HelpText =
-                "Show specific axiom or term in term-refinement stages.")>]
-      term : string option
-      [<Option('m', HelpText = "Show full model in term-refinement stages.")>]
-      showModel : bool
-      [<Option('O', HelpText = "Switches given optimisations on or off.")>]
-      optimisers : string option
-      [<Option("times", HelpText = "Print times for each phase.")>]
-      times : bool
-      [<Option('v', HelpText = "Increases verbosity.")>]
-      verbose : bool
-      [<Value(
-            0,
-            MetaName = "input",
-            HelpText =
-                "The file to load (omit, or supply -, for standard input).")>]
-      input : string option }
 
 /// Enumeration of possible requests to Starling.
 type Request =
@@ -392,12 +357,12 @@ let muz3 reals rq = lift (Backends.MuZ3.run reals rq)
 let frontend times rq = Lang.Frontend.run times rq Response.Frontend Error.Frontend
 
 /// Shorthand for the graph optimise stage.
-let graphOptimise optR optA verbose =
-    lift (Starling.Optimiser.Graph.optimise optR optA verbose)
+let graphOptimise optR optA =
+    lift (Starling.Optimiser.Graph.optimise optR optA)
 
 /// Shorthand for the term optimise stage.
-let termOptimise optR optA verbose =
-    lift (Starling.Optimiser.Term.optimise optR optA verbose)
+let termOptimise optR optA =
+    lift (Starling.Optimiser.Term.optimise optR optA)
 
 /// Shorthand for the flattening stage.
 let flatten = lift Starling.Flattener.flatten
@@ -467,15 +432,6 @@ let rec backendParams () =
 /// <summary>
 ///     Runs a Starling request.
 /// </summary>
-/// <param name="optS">
-///     The string governing optimiser overrides.
-/// </param>
-/// <param name="backendS">
-///     The string governing backend options.
-/// </param>
-/// <param name="verbose">
-///     If true, dump some internal information to stderr.
-/// </param>
 /// <param name="request">
 ///     The Starling request to run.
 /// </param>
@@ -484,9 +440,11 @@ let rec backendParams () =
 ///     taking a file containing request input and returning a
 ///     <c>Result</c> over <c>Response</c> and <c>Error</c>.
 /// </returns>
-let runStarling times optS backendS verbose request =
+let runStarling request =
+    let config = config()
+
     let optR, optA =
-        optS
+        config.optimisers
         |> Option.map Utils.parseOptionString
         |> withDefault (Seq.empty)
         |> Seq.toList
@@ -494,7 +452,7 @@ let runStarling times optS backendS verbose request =
 
     let bp = backendParams ()
     let { Approx = approx; Reals = reals } =
-        backendS
+        config.backendOpts
         |> Option.map Utils.parseOptionString
         |> withDefault (Seq.empty)
         |> Seq.fold
@@ -511,7 +469,7 @@ let runStarling times optS backendS verbose request =
         let phase op response =
             let time = System.Diagnostics.Stopwatch.StartNew()
             op m
-            |>  (time.Stop(); (if times then printfn "Phase Backend; Elapsed: %dms" time.ElapsedMilliseconds); id)
+            |>  (time.Stop(); (if config.times then printfn "Phase Backend; Elapsed: %dms" time.ElapsedMilliseconds); id)
             |> lift response
 
         let maybeApprox =
@@ -546,21 +504,21 @@ let runStarling times optS backendS verbose request =
     let phase op test output continuation m =
         let time = System.Diagnostics.Stopwatch.StartNew()
         op m
-        |> (time.Stop();(if times then printfn "Phase %A; Elapsed: %dms" test time.ElapsedMilliseconds); id)
+        |> (time.Stop(); (if config.times then printfn "Phase %A; Elapsed: %dms" test time.ElapsedMilliseconds); id)
         |> if request = test then lift output else continuation
 
     // Left pipe is not right associative
     // so locally overload a right associative operator to be left pipe
     let ( ** ) = ( <| )
 
-    if verbose
+    if config.verbose
     then
         eprintfn "Z3 version: %s" (Microsoft.Z3.Version.ToString ())
 
-    let graphOptimise = graphOptimise optR optA verbose
-    let termOptimise = termOptimise optR optA verbose
+    let graphOptimise = graphOptimise optR optA
+    let termOptimise = termOptimise optR optA
 
-    frontend times (match request with | Request.Frontend rq -> rq | _ -> Lang.Frontend.Request.Continuation)
+    frontend config.times (match request with | Request.Frontend rq -> rq | _ -> Lang.Frontend.Request.Continuation)
     ** phase  graphOptimise  Request.GraphOptimise  Response.GraphOptimise
     ** phase  axiomatise     Request.Axiomatise     Response.Axiomatise
     ** phase  goalAdd        Request.GoalAdd        Response.GoalAdd
@@ -572,30 +530,28 @@ let runStarling times optS backendS verbose request =
     ** backend
 
 /// Runs Starling with the given options, and outputs the results.
-let mainWithOptions opts =
-    let optS = opts.optimisers
-    let backendS = opts.backendOpts
-    let verbose = opts.verbose
-    let times = opts.times
+let mainWithOptions options =
+    _configRef := options
+    let config = config ()
 
     let starlingR =
-        match (requestFromStage opts.stage) with
+        match (requestFromStage config.stage) with
         // Handle pseudo-requests here, as it's cleaner than doing so in
         // runStarling.
         | Some Request.List ->
             ok (Response.List (Map.map (fun _ -> fst) requestMap))
-        | Some otype -> runStarling times optS backendS verbose otype opts.input
+        | Some otype -> runStarling otype config.input
         | None -> fail Error.BadStage
 
     let mview =
-        match opts.term, opts.showModel with
+        match config.term, config.showModel with
         | Some i, _ -> Term i
         | None, false -> Terms
         | _ -> Model
 
     let pfn =
-        if opts.raw then (sprintf "%A" >> String)
-                    else printResponse mview
+        if config.raw then (sprintf "%A" >> String)
+                      else printResponse mview
     printResult pfn (List.map printError) starlingR
     0
 

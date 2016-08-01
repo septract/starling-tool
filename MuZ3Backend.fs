@@ -32,7 +32,8 @@ open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
-open Starling.Core.Model.Sub
+open Starling.Core.View
+open Starling.Core.View.Sub
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Sub
 open Starling.Core.Instantiate
@@ -114,6 +115,7 @@ module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Expr.Pretty
     open Starling.Core.Var.Pretty
+    open Starling.Core.View.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Instantiate.Pretty
     open Starling.Core.Z3.Pretty

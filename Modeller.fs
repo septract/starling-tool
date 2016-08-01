@@ -13,6 +13,7 @@ open Starling.Core.TypeSystem.Check
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
+open Starling.Core.View
 open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.Command.Create
@@ -148,12 +149,14 @@ module Types =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
+    open Starling.Collections.Multiset.Pretty
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Expr.Pretty
     open Starling.Core.Command.Pretty
     open Starling.Core.Symbolic.Pretty
+    open Starling.Core.View.Pretty
     open Starling.Lang.AST.Pretty
 
     /// Pretty-prints a CFunc.
@@ -671,7 +674,7 @@ let modelViewDef
   svars
   (vprotos : FuncTable<unit>)
   avd
-  : Result<SVBViewDef<Model.Types.DView>, ModelError> =
+  : Result<SVBViewDef<View.Types.DView>, ModelError> =
     let av = viewOf avd
 
     trial {
@@ -736,7 +739,7 @@ let inViewDefs : ViewDef<Func<'a> list, 'b> list -> Func<'c> list -> bool =
 ///     An indefinite constraint over <paramref name="dview" />.
 /// </returns>
 let searchViewToConstraint
-  (dview : Model.Types.DView) =
+  (dview : View.Types.DView) =
     (* To ensure likewise-named parameters in separate DFuncs don't
        clash, append fresh identifiers to all of them.
 
@@ -772,7 +775,7 @@ let searchViewToConstraint
 ///     A set of all <c>View</c>s of maximum size <paramref name="depth" />,
 ///     whose <c>Func</c>s are taken from <paramref name="funcs" />
 /// </returns>
-let genAllViewsAt depth (funcs : DFunc seq) : Set<Model.Types.DView> =
+let genAllViewsAt depth (funcs : DFunc seq) : Set<View.Types.DView> =
     let rec f depth existing =
         match depth with
         // Multiset and set conversion removes duplicate views.
@@ -813,7 +816,7 @@ let genAllViewsAt depth (funcs : DFunc seq) : Set<Model.Types.DView> =
 let addSearchDefs
   (vprotos : FuncTable<unit>)
   depth
-  (viewdefs : SVBViewDef<Model.Types.DView> list) =
+  (viewdefs : SVBViewDef<View.Types.DView> list) =
     match depth with
     | None -> viewdefs
     | Some n ->

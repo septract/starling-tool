@@ -44,15 +44,16 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Utils.fs" />
-    <Compile Include="Collections.fs" />
     <Compile Include="Pretty.fs" />
+    <Compile Include="Collections.fs" />
     <Compile Include="TypeSystem.fs" />
     <Compile Include="Expr.fs" />
     <Compile Include="Var.fs" />
-    <Compile Include="Z3.fs" />
-    <Compile Include="ExprEquiv.fs" />
     <Compile Include="Sub.fs" />
     <Compile Include="Symbolic.fs" />
+    <Compile Include="View.fs" />
+    <Compile Include="Z3.fs" />
+    <Compile Include="ExprEquiv.fs" />
     <Compile Include="Command.fs" />
     <Compile Include="Model.fs" />
     <Compile Include="GuardedView.fs" />

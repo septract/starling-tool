@@ -9,6 +9,7 @@ open Starling.Utils
 open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.Expr
+open Starling.Core.View
 open Starling.Core.Sub
 open Starling.Core.Model
 open Starling.Core.Instantiate
@@ -71,8 +72,10 @@ module Types =
 /// Pretty-prints HSF translation errors.
 module Pretty =
     open Starling.Core.Pretty
-    open Starling.Core.Model.Pretty
+    open Starling.Collections.Func.Pretty
     open Starling.Core.Var.Pretty
+    open Starling.Core.View.Pretty
+    open Starling.Core.Model.Pretty
 
     /// Decides whether to put brackets over the expression emission x,
     /// given its expression as the second argument.

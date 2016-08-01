@@ -7,6 +7,7 @@ open Starling
 open Starling.Collections
 open Starling.Core.Model
 open Starling.Core.Var.Types
+open Starling.Core.View
 
 
 /// <summary>
@@ -14,13 +15,13 @@ open Starling.Core.Var.Types
 /// </summary>
 [<AutoOpen>]
 module Types =
-    type SourcePosition = 
+    type SourcePosition =
         { StreamName: string; Line: int64; Column: int64; }
         override this.ToString() = sprintf "SourcePosition { StreamName = \"%s\"; Line = %d; Column = %d; };" this.StreamName this.Line this.Column
 
     /// A Node in the AST which annotates the data with information about position
     //type Node<'a> = { lineno : int; Node : 'a; }
-    type Node<'a> = 
+    type Node<'a> =
         { Position: SourcePosition; Node: 'a }
         static member (|>>) (n, f) = { Position = n.Position; Node = f n.Node }
         static member (|=>) (n, b) = { Position = n.Position; Node = b }
@@ -164,6 +165,7 @@ module Types =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
+    open Starling.Collections.Func.Pretty
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Var.Pretty

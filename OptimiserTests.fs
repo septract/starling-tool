@@ -11,7 +11,8 @@ open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
 open Starling.Core.Model
-open Starling.Core.Model.Sub
+open Starling.Core.View
+open Starling.Core.View.Sub
 open Starling.Core.Command
 open Starling.Core.Sub
 open Starling.Optimiser.Graph

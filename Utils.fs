@@ -9,8 +9,66 @@
 [<AutoOpen>]
 module Starling.Utils
 
+open CommandLine
+
 open Chessie.ErrorHandling
 
+module Config =
+    /// Command-line flags used in the Starling executable.
+    [<NoComparison>]
+    type Options =
+        { [<Option(
+                'r',
+                HelpText =
+                    "Dump results in raw format instead of pretty-printing.")>]
+          raw : bool
+          [<Option(
+                'B',
+                HelpText =
+                    "Comma-delimited set of backend options (pass 'list' for details)")>]
+          backendOpts : string option
+          [<Option(
+                's',
+                HelpText =
+                    "The stage at which Starling should stop and output.")>]
+          stage : string option
+          [<Option(
+                't',
+                HelpText =
+                    "Show specific axiom or term in term-refinement stages.")>]
+          term : string option
+          [<Option('m', HelpText = "Show full model in term-refinement stages.")>]
+          showModel : bool
+          [<Option('O', HelpText = "Switches given optimisations on or off.")>]
+          optimisers : string option
+          [<Option("times", HelpText = "Print times for each phase.")>]
+          times : bool
+          [<Option('v', HelpText = "Increases verbosity.")>]
+          verbose : bool
+          [<Option('c', HelpText = "Enable color printing")>]
+          color : bool
+          [<Value(
+                0,
+                MetaName = "input",
+                HelpText =
+                    "The file to load (omit, or supply -, for standard input).")>]
+          input : string option }
+
+    let _emptyOpts = {
+        raw             = false;
+        backendOpts     = None;
+        stage           = None;
+        term            = None;
+        showModel       = false;
+        optimisers      = None;
+        times           = false;
+        verbose         = false;
+        input           = None;
+        color           = false;
+    }
+
+    let _configRef = ref _emptyOpts
+    let config () = ! _configRef
 
 /// <summary>
 ///     Parses an delimited option string.
