@@ -669,7 +669,8 @@ module Graph =
                             | InnerView pv, InnerView qv ->
                                 let vars = SVGViewVars pv
                                 let cmdVars = commandResults e.Command
-                                if p = q && disjoint cmdVars vars
+                                // TODO: Better equality?
+                                if pv = qv && disjoint cmdVars vars
                                     then
                                         (flip runTransforms) ctx
                                         <| seq {
