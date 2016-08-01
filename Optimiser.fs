@@ -482,6 +482,20 @@ module Graph =
                                               | Some _ -> true
                                               | _ -> false))
                      ps)
+
+
+    /// Determines if some given Command is local with respect to the given
+    /// map of thread-local variables
+    let isLocalResults : VarMap -> Command -> bool =
+        fun tvars ->
+        let localResults prim =
+            List.forall (fun v ->
+                match (tvars.TryFind <| valueOf v) with
+                | Some x -> typeOf v = x
+                | None   -> false
+                ) prim.Results
+        List.forall localResults
+
     /// <summary>
     ///     Partial active pattern matching <c>Sym</c>-less expressions.
     /// </summary>
@@ -639,6 +653,33 @@ module Graph =
                 else
                     ctx
 
+    /// Drops edges with local results that are disjoint from
+    /// the vars in the pre/post condition views
+    /// i.e. given {| p |} c {| p |} drop iff Vars(p) n Vars(c) = {}
+    let dropLocalEdges locals ctx =
+        expandNodeIn ctx <|
+            fun node nView outEdges inEdges nk ->
+                let disjoint (a : TypedVar list) (b : Set<TypedVar>) = List.forall (fun v -> not <| b.Contains v) a
+                let processEdge ctx (e : OutEdge) =
+                    if isLocalResults locals e.Command
+                        then
+                            let p = nView
+                            let q = (fun (a, _, _, _) -> a) <| ctx.Graph.Contents.[e.Dest]
+                            match (p, q) with
+                            | InnerView pv, InnerView qv ->
+                                let vars = SVGViewVars pv
+                                let cmdVars = commandResults e.Command
+                                if p = q && disjoint cmdVars vars
+                                    then
+                                        (flip runTransforms) ctx
+                                        <| seq {
+                                            yield RmOutEdge (node, e)
+                                        }
+                                    else ctx
+                        else ctx
+                Set.fold processEdge ctx outEdges
+
+
     /// <summary>
     ///     Performs a node-wise optimisation on every node in the graph.
     /// </summary>
@@ -699,9 +740,9 @@ module Graph =
         onNodes (Utils.optimiseWith optR optA verbose
                      [ ("graph-collapse-nops", true, collapseNops)
                        ("graph-collapse-ites", true, collapseITEs)
-                       ("graph-drop-local-midview",
-                        true,
-                        dropLocalMidView model.Locals) ] )
+                       ("graph-drop-local-edges", true, dropLocalEdges model.Locals)
+                       ("graph-drop-local-midview",true, dropLocalMidView model.Locals) 
+                     ] )
 
     /// <summary>
     ///     Optimises a model over graphs.
