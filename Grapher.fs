@@ -14,6 +14,7 @@ open Starling.Core.Var
 open Starling.Core.Sub
 open Starling.Core.Symbolic
 open Starling.Core.Model
+open Starling.Core.View
 open Starling.Core.GuardedView
 open Starling.Core.Graph
 open Starling.Lang.AST

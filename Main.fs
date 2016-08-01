@@ -16,6 +16,8 @@ open Starling.Core.Symbolic
 open Starling.Core.Symbolic.Pretty
 open Starling.Core.Command
 open Starling.Core.Command.Pretty
+open Starling.Core.View
+open Starling.Core.View.Pretty
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Pretty
 open Starling.Core.Axiom

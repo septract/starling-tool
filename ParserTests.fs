@@ -8,6 +8,7 @@ open NUnit.Framework
 open Starling
 open Starling.Core.Var
 open Starling.Core.Model
+open Starling.Core.View
 open Starling.Lang.AST
 open Starling.Lang.Parser
 

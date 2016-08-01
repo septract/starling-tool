@@ -35,7 +35,6 @@ open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Sub
 
-
 /// <summary>
 ///     Types for symbolic and variable maps.
 /// </summary>

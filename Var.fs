@@ -132,6 +132,10 @@ let unmarkVar : MarkedVar -> Var =
 module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Expr.Pretty
+    open Starling.Core.TypeSystem.Pretty
+
+    /// Pretty-prints a type-name parameter.
+    let printTypedVar = printCTyped String
 
     /// Pretty-prints variable conversion errors.
     let printVarMapError =

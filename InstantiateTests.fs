@@ -10,6 +10,7 @@ open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Model
 open Starling.Core.Var
+open Starling.Core.View
 open Starling.Core.Instantiate
 
 

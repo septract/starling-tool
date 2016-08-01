@@ -21,9 +21,10 @@ open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Sub
+open Starling.Core.View
+open Starling.Core.View.Sub
 open Starling.Core.Symbolic
 open Starling.Core.Model
-open Starling.Core.Model.Sub
 
 
 /// <summary>
@@ -330,10 +331,12 @@ let pruneGuardedSet gset =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
+    open Starling.Collections.Multiset.Pretty
     open Starling.Core.Expr.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.Symbolic.Pretty
     open Starling.Core.Model.Pretty
+    open Starling.Core.View.Pretty
 
     /// <summary>
     ///     Pretty-prints a guarded item.

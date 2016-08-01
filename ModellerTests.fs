@@ -6,10 +6,12 @@ module Starling.Tests.Modeller
 open NUnit.Framework
 open Starling
 open Starling.Collections
+open Starling.Core
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
+open Starling.Core.View
 open Starling.Core.Command
 open Starling.Core.Command.Create
 open Starling.Core.Instantiate
@@ -22,7 +24,7 @@ open Starling.Tests.Studies
 /// Mainly exists to persuade nUnit to use the correct types.
 type SearchViewDefEntry =
     { Search : int option
-      InitDefs : SVBViewDef<DView> list }
+      InitDefs : SVBViewDef<View.Types.DView> list }
 
 /// Tests for the modeller.
 type ModellerTests() =
@@ -200,11 +202,11 @@ type ModellerTests() =
 
 
     /// Type-constraining builder for viewdef sets.
-    static member viewDefSet (vs : SVBViewDef<DView> seq) : Set<SVBViewDef<DView>> =
+    static member viewDefSet (vs : SVBViewDef<View.Types.DView> seq) : Set<SVBViewDef<View.Types.DView>> =
         Set.ofSeq vs
 
     /// Type-constraining builder for indefinite viewdef sets.
-    static member indefinites (vs : DView seq) : Set<SVBViewDef<DView>> =
+    static member indefinites (vs : View.Types.DView seq) : Set<SVBViewDef<View.Types.DView>> =
         vs
         |> Seq.map Indefinite
         |> ModellerTests.viewDefSet

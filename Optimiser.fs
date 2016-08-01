@@ -23,6 +23,7 @@ open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.Command.Queries
 open Starling.Core.Sub
+open Starling.Core.View
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Sub
 

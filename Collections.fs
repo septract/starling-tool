@@ -295,6 +295,15 @@ module Multiset =
             | ((Fail e, n)::xs) -> Bad e
         itr (Map.toList ms) [] []
 
+    module Pretty =
+        open Starling.Core.Pretty
+        /// Pretty-prints a multiset given a printer for its contents.
+        let printMultiset pItem =
+            toFlatList
+            >> List.map pItem
+            >> semiSep
+
+
 
 /// <summary>
 ///     Tests for collections.

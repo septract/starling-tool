@@ -7,6 +7,7 @@ open Starling
 open Starling.Collections
 open Starling.Core.Model
 open Starling.Core.Var.Types
+open Starling.Core.View
 
 
 /// <summary>

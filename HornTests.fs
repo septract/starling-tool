@@ -10,6 +10,7 @@ open Starling.Utils
 open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.Expr
+open Starling.Core.View
 open Starling.Core.Model
 open Starling.Backends.Horn
 open Starling.Tests.Studies
