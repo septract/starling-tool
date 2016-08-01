@@ -277,10 +277,6 @@ let mkEq (a : Expr<'var>) (b : Expr<'var>) : BoolExpr<'var> = BEq (a, b)
 let iEq (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
     BEq (Int a, Int b)
 
-/// Makes an arithmetic addition.
-let iAdd (a : IntExpr<'var>) (b : IntExpr<'var>) : IntExpr<'var> =
-    AAdd [a ; b]
-
 /// Makes a Boolean equality.
 let bEq (a : BoolExpr<'var>) (b : BoolExpr<'var>) : BoolExpr<'var> =
     BEq (Bool a, Bool b)
