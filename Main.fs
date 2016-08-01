@@ -55,6 +55,8 @@ type Request =
     /// Output a fully-instantiated unstructured proof without symbols.
     | RawProof
     /// Run the Z3 backend, with the given request.
+    | SymZ3 of Backends.Z3.Types.Request
+    /// Run the Z3 backend, with the given request.
     | Z3 of Backends.Z3.Types.Request
     /// Run the MuZ3 backend (experimental), with the given request.
     | MuZ3 of Backends.MuZ3.Types.Request
@@ -127,6 +129,9 @@ let requestMap =
           ("sat",
            ("Executes a definite proof using Z3 and reports the result.",
             Request.Z3 Backends.Z3.Types.Request.Sat))
+          ("symsat",
+           ("Executes a symbolic proof using Z3 and reports failing clauses.",
+            Request.SymZ3 Backends.Z3.Types.Request.Sat))
           ("mutranslate",
            ("Generates a proof using MuZ3 and outputs the individual terms.",
             Request.MuZ3 Backends.MuZ3.Types.Request.Translate))
@@ -180,6 +185,8 @@ type Response =
     | RawProof of Model<MBoolExpr, unit>
     /// The result of Z3 backend processing.
     | Z3 of Backends.Z3.Types.Response
+    /// The result of Z3 backend processing.
+    | SymZ3 of Backends.Z3.Types.Response * Model<SFTerm, unit>
     /// The result of MuZ3 backend processing.
     | MuZ3 of Backends.MuZ3.Types.Response
     /// The result of HSF processing.
@@ -234,6 +241,13 @@ let printResponse mview =
             mview
             m
     | Z3 z -> Backends.Z3.Pretty.printResponse mview z
+    | SymZ3 (z, m) ->
+       headed "SymZ3 result:" [ Backends.Z3.Pretty.printResponse mview z ;  
+                      (printModelView
+                        (printTerm printSMBoolExpr printSMBoolExpr printSMBoolExpr)
+                        (fun _ -> Seq.empty)
+                        mview
+                        m) ] 
     | MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
     | HSF h -> Backends.Horn.Pretty.printHorns h
 
@@ -487,6 +501,10 @@ let runStarling request =
                           >> snd)
                  else id)
 
+
+        // TODO: make less horrible, i.e. by using some non-result-wrapped type from z3 
+        let tuplize f y = (y >>= fun x -> (lift (fun a -> (a,x)) (f y)) ) 
+
         match request with
         | Request.SymProof    -> phase symproof Response.SymProof
         | Request.RawSymProof -> phase (symproof >> rawproof) Response.RawSymProof
@@ -495,6 +513,7 @@ let runStarling request =
         | Request.Z3 rq       -> phase (symproof >> proof approx >> z3 reals rq) Response.Z3
         | Request.HSF         -> phase (filterIndefinite >> hsf) Response.HSF
         | Request.MuZ3 rq     -> phase (filterIndefinite >> muz3 reals rq) Response.MuZ3
+        | Request.SymZ3 rq    -> phase (symproof >> (tuplize (proof approx >> z3 reals rq))) Response.SymZ3 
         | _                   -> fail (Error.Other "Internal")
 
     //Build a phase with
