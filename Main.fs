@@ -192,6 +192,7 @@ type Response =
     /// The result of HSF processing.
     | HSF of Backends.Horn.Types.Horn list
 
+
 /// Pretty-prints a response.
 let printResponse mview =
     function
@@ -242,14 +243,15 @@ let printResponse mview =
             m
     | Z3 z -> Backends.Z3.Pretty.printResponse mview z
     | SymZ3 (z, m) ->
-       headed "SymZ3 result:" [ Backends.Z3.Pretty.printResponse mview z ;  
-                      (printModelView
-                        (printTerm printSMBoolExpr printSMBoolExpr printSMBoolExpr)
-                        (fun _ -> Seq.empty)
-                        mview
-                        m) ] 
+       vmerge (Backends.Z3.Pretty.printResponse mview z)
+              (printModelView
+                (printTerm printSMBoolExpr printSMBoolExpr printSMBoolExpr)
+                (fun _ -> Seq.empty)
+                mview
+                m) 
     | MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
     | HSF h -> Backends.Horn.Pretty.printHorns h
+
 
 /// A top-level program error.
 type Error =
@@ -502,7 +504,8 @@ let runStarling request =
                  else id)
 
 
-        // TODO: make less horrible, i.e. by using some non-result-wrapped type from z3 
+        // Magic function for unwrapping / wrapping Result types 
+        // TODO: make less horrible, e.g. by using some non-result-wrapped type from z3 
         let tuplize f y = (y >>= fun x -> (lift (fun a -> (a,x)) (f y)) ) 
 
         match request with
