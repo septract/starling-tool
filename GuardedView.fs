@@ -324,7 +324,10 @@ let pruneGuardedSet gset =
                    | _       -> true)
     |> Multiset.ofFlatSeq
 
-
+/// <summary>
+/// Given a guarded View over Symbolic Var's return the set of all
+/// variables and their types that are in the view definition.
+/// </summary>
 let SVGViewVars : SVGView -> Set<TypedVar> =
     fun v ->
         let l = Multiset.toSet v

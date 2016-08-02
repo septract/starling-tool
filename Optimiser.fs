@@ -663,14 +663,16 @@ module Graph =
                 let processEdge ctx (e : OutEdge) =
                     if isLocalResults locals e.Command
                         then
-                            let p = nView
-                            let q = (fun (a, _, _, _) -> a) <| ctx.Graph.Contents.[e.Dest]
-                            match (p, q) with
-                            | InnerView pv, InnerView qv ->
-                                let vars = SVGViewVars pv
+                            let pViewexpr = nView
+                            let qViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[e.Dest]
+                            // strip away mandatory/advisory and just look at the internal view
+                            // (TODO: do something with the ViewExpr annotations?)
+                            match (pViewexpr, qViewexpr) with
+                            | InnerView pView, InnerView qView ->
+                                let vars = SVGViewVars pView
                                 let cmdVars = commandResults e.Command
                                 // TODO: Better equality?
-                                if pv = qv && disjoint cmdVars vars
+                                if pView = qView && disjoint cmdVars vars
                                     then
                                         (flip runTransforms) ctx
                                         <| seq {
