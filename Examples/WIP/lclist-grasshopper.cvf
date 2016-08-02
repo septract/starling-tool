@@ -24,23 +24,23 @@ method deleteVal( ) {
   {| isList() |}
     <prev = head>;
   {| isList() * isHead(prev) |} 
-   <{ lheap = heap; heap = (%{ takeLock(#1) }(lheap, prev)); }>;
+   <{ lheap = heap; heap = (%{ takeLock(#2) }(lheap, prev)); }>;
   {| has1Lock(prev, _) * isHead(prev) |}
-   <lheap = heap>; curr = (%{ #1.next }(lheap, curr)); 
+   <lheap = heap>; curr = (%{ #2.next }(lheap, curr)); 
   {| has1Lock(prev, curr) * isHead(prev) |}
-   <lheap = heap>; cv = (%{ #1.val }(lheap, curr)); 
+   <lheap = heap>; cv = (%{ #2.val }(lheap, curr)); 
   {| has1Lock(prev,curr) * isVal(cv, curr) |}
     while (cv < v) {
       {| has1Lock(prev, curr) * isVal(cv, curr) |}
-        <{ lheap = heap; heap = (%{ takeLock(#1) }(lheap, curr)); }>; 
+        <{ lheap = heap; heap = (%{ takeLock(#2) }(lheap, curr)); }>; 
       {| has2Lock(prev, curr) * isVal(cv, curr) |}
-        <{ lheap = heap; heap = (%{ releaseLock(#1) }(lheap, prev)); }>;
+        <{ lheap = heap; heap = (%{ releaseLock(#2) }(lheap, prev)); }>;
       {| has1Lock(curr, _) * isVal(cv, curr) |}
         prev = curr;
       {| has1Lock(prev, _) * isVal(cv, prev) |}
-        <lheap = heap>; curr = (%{ #1->next }(lheap, curr));  
+        <lheap = heap>; curr = (%{ #2->next }(lheap, curr));  
       {| has1Lock(prev, curr) * isVal(cv, prev) |}
-        <lheap = heap>; cv = (%{ #1.val }(lheap, curr)); 
+        <lheap = heap>; cv = (%{ #2.val }(lheap, curr)); 
       {| has1Lock(prev, curr) * isVal(cv, curr) |}
     }
   {| has1Lock(prev, curr) * isVal(cv, curr) |}
@@ -48,9 +48,9 @@ method deleteVal( ) {
       {| has1Lock(prev, curr) |}
         <{ lheap = heap; heap = (%{ takeLock(#2) }(lheap, curr)); }>; 
       {| has2Lock(prev, curr) |}
-        <{ lheap = heap; heap = (%{ #1.next := #2 }(lheap, prev, curr)); }>;
+        <{ lheap = heap; heap = (%{ #2.next := #3 }(lheap, prev, curr)); }>;
       {| has1Lock(prev, _) * hasNode(curr) |}
-        <{ lheap = heap; heap = (%{ disposeNode(#1) }(lheap, curr)); }>; 
+        <{ lheap = heap; heap = (%{ disposeNode(#2) }(lheap, curr)); }>; 
       {| has1Lock(prev, _) |}
     } else {
       {| has1Lock(prev, curr) |}
@@ -58,7 +58,7 @@ method deleteVal( ) {
       {| has1Lock(prev, _) |}
     }
   {| has1Lock(prev, _) |}
-    <{ lheap = heap; heap = (%{ releaseLock(#1) }(lheap, prev)); }>; 
+    <{ lheap = heap; heap = (%{ releaseLock(#2) }(lheap, prev)); }>; 
   {| isList() |}
 }
 
@@ -83,7 +83,7 @@ constraint has2Lock(a,b)  ->
 
 constraint hasNode(a) -> %{ nodeLocked(#1) }(a);
 
-constraint isVal(v, node) -> %{ #2.val == #1 }(v, node);
+constraint isVal(v, node) -> %{ #1 == #2.val }(v, node);
 
 
 // Are the constraints below necessary? 
