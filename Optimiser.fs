@@ -680,6 +680,51 @@ module Graph =
                         else ctx
                 Set.fold processEdge ctx outEdges
 
+    /// Collapses edges {p}c{q}d{r} to {p}d{r} iff c is unobservable
+    let collapseUnoberservableEdges locals ctx =
+        expandNodeIn ctx <|
+            fun node nViewexpr outEdges inEdges nodeKind ->
+                let pViewexpr = nViewexpr
+                let disjoint a b = Set.empty = Set.filter (fun x -> Set.contains x b) a
+                let processCEdge c =
+                    let ds = (fun (_, outs, _, _) -> outs) <| ctx.Graph.Contents.[c.Dest]
+                    let processDEdge d =
+                        (pViewexpr, c, d)
+                    Set.map processDEdge ds
+
+                let processTriple ctx (pViewexpr, (cEdge : OutEdge), (dEdge : OutEdge)) =
+                    let c, d = cEdge.Command, dEdge.Command
+
+                    let qViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[cEdge.Dest]
+                    let rViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[dEdge.Dest]
+
+                    match (pViewexpr, qViewexpr, rViewexpr) with
+                    | InnerView pView, InnerView qView, InnerView rView ->
+                        let cResults = Set.ofList <| commandResults c
+                        let dResults = Set.ofList <| commandResults d
+                        let dArgs    = commandArgs d
+                        if Set.isSubset cResults dResults
+                            && disjoint cResults dArgs
+                            && isLocalResults locals c
+                            then
+                                (flip runTransforms) ctx
+                                <| seq {
+                                      // Remove the {p}c{q} edge
+                                      yield RmOutEdge (node, cEdge)
+                                      // Remove the {q}d{r} edge
+                                      yield RmOutEdge (cEdge.Dest, dEdge)
+                                      // Remove q
+                                      yield RmNode cEdge.Dest
+                                      // Then, add the new edges {p}d{q}
+                                      yield MkCombinedEdge
+                                          ({ Name = node;       Src = dEdge.Dest;   Command = d },
+                                          { Name = dEdge.Dest;  Dest = node;        Command = d })
+                                }
+                            else ctx
+
+                let triples = Set.fold (+) Set.empty <| Set.map processCEdge outEdges
+                Set.fold processTriple ctx triples
+
 
     /// <summary>
     ///     Performs a node-wise optimisation on every node in the graph.
@@ -742,6 +787,7 @@ module Graph =
                      [ ("graph-collapse-nops", true, collapseNops)
                        ("graph-collapse-ites", true, collapseITEs)
                        ("graph-drop-local-edges", true, dropLocalEdges model.Locals)
+                       ("graph-collapse-unobservable-edges", true, collapseUnoberservableEdges model.Locals)
                        ("graph-drop-local-midview",true, dropLocalMidView model.Locals) 
                      ] )
 
