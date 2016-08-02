@@ -1,6 +1,8 @@
 /* Revised lclist-starling.cvf to fit more nicely with GRASShopper. */
 
+shared int heap; 
 shared int head;
+thread int lheap; // local copy of the heap  
 thread int prev;
 thread int curr;
 
@@ -21,34 +23,34 @@ view hasNode(int x);
 method deleteVal( ) {
   {| isList() |}
     <prev = head>;
-  {| isList() * isHead(prev) |}
-    _ = %{ takeLock(#1) }(prev);
+  {| isList() * isHead(prev) |} 
+   <{ lheap = heap; heap = (%{ takeLock(#1) }(lheap, prev)); }>;
   {| has1Lock(prev, _) * isHead(prev) |}
-    curr = %{ #1.next }(curr);
+   <lheap = heap>; curr = (%{ #1.next }(lheap, curr)); 
   {| has1Lock(prev, curr) * isHead(prev) |}
-    cv = %{ #1.val }(curr);
+   <lheap = heap>; cv = (%{ #1.val }(lheap, curr)); 
   {| has1Lock(prev,curr) * isVal(cv, curr) |}
     while (cv < v) {
       {| has1Lock(prev, curr) * isVal(cv, curr) |}
-        curr = %{ takeLock(#1) }(curr);
+        <{ lheap = heap; heap = (%{ takeLock(#1) }(lheap, curr)); }>; 
       {| has2Lock(prev, curr) * isVal(cv, curr) |}
-        prev = %{ releaseLock(#1); }(prev);
+        <{ lheap = heap; heap = (%{ releaseLock(#1) }(lheap, prev)); }>;
       {| has1Lock(curr, _) * isVal(cv, curr) |}
         prev = curr;
       {| has1Lock(prev, _) * isVal(cv, prev) |}
-        curr = %{ #1.next }(curr);
+        <lheap = heap>; curr = (%{ #1->next }(lheap, curr));  
       {| has1Lock(prev, curr) * isVal(cv, prev) |}
-        cv = %{ #1.val }(curr);
+        <lheap = heap>; cv = (%{ #1.val }(lheap, curr)); 
       {| has1Lock(prev, curr) * isVal(cv, curr) |}
     }
   {| has1Lock(prev, curr) * isVal(cv, curr) |}
     if ( cv == v) {
       {| has1Lock(prev, curr) |}
-        curr = %{ #1.lock }(curr);
+        <{ lheap = heap; heap = (%{ takeLock(#2) }(lheap, curr)); }>; 
       {| has2Lock(prev, curr) |}
-        _ = %{ #1.next := #2 }(prev, curr); 
+        <{ lheap = heap; heap = (%{ #1.next := #2 }(lheap, prev, curr)); }>;
       {| has1Lock(prev, _) * hasNode(curr) |}
-        curr = %{ disposeNode(#1) }(curr);
+        <{ lheap = heap; heap = (%{ disposeNode(#1) }(lheap, curr)); }>; 
       {| has1Lock(prev, _) |}
     } else {
       {| has1Lock(prev, curr) |}
@@ -56,7 +58,7 @@ method deleteVal( ) {
       {| has1Lock(prev, _) |}
     }
   {| has1Lock(prev, _) |}
-    _ = %{ releaseLock(#1) }(prev);
+    <{ lheap = heap; heap = (%{ releaseLock(#1) }(lheap, prev)); }>; 
   {| isList() |}
 }
 
@@ -81,15 +83,17 @@ constraint has2Lock(a,b)  ->
 
 constraint hasNode(a) -> %{ nodeLocked(#1) }(a);
 
-
-// Constraints on views
-constraint has1Lock(a,b) * has1Lock(c,d)   -> a != c;
-constraint has1Lock(a,b) * has2Lock(c,d)   -> a != c && a != d;
-constraint has2Lock(a,b) * has2Lock(c,d)   -> a != c && a != d && b != c && b != d;
-constraint has1Lock(a,b) * hasNode(c)      -> a != c;
-constraint has2Lock(a,b) * hasNode(c)      -> a != c && b != c;
-
-// Could maybe replace some of the constraints above?
-constraint has2Lock(a,b) -> %{ has1Lock(#1,_) &*& has1Lock(#2,_) }(a, b);
-
 constraint isVal(v, node) -> %{ #2.val == #1 }(v, node);
+
+
+// Are the constraints below necessary? 
+
+// // Constraints on views
+// constraint has1Lock(a,b) * has1Lock(c,d)   -> a != c;
+// constraint has1Lock(a,b) * has2Lock(c,d)   -> a != c && a != d;
+// constraint has2Lock(a,b) * has2Lock(c,d)   -> a != c && a != d && b != c && b != d;
+// constraint has1Lock(a,b) * hasNode(c)      -> a != c;
+// constraint has2Lock(a,b) * hasNode(c)      -> a != c && b != c;
+
+// // Could maybe replace some of the constraints above?
+// constraint has2Lock(a,b) -> %{ has1Lock(#1,_) &*& has1Lock(#2,_) }(a, b);
