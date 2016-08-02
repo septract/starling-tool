@@ -89,11 +89,11 @@ constraint isVal(v, node) -> %{ #1 == #2.val }(v, node);
 // Are the constraints below necessary? 
 
 // // Constraints on views
-// constraint has1Lock(a,b) * has1Lock(c,d)   -> a != c;
-// constraint has1Lock(a,b) * has2Lock(c,d)   -> a != c && a != d;
-// constraint has2Lock(a,b) * has2Lock(c,d)   -> a != c && a != d && b != c && b != d;
-// constraint has1Lock(a,b) * hasNode(c)      -> a != c;
-// constraint has2Lock(a,b) * hasNode(c)      -> a != c && b != c;
+constraint has1Lock(a,b) * has1Lock(c,d)   -> a != c;
+constraint has1Lock(a,b) * has2Lock(c,d)   -> a != c && a != d;
+constraint has2Lock(a,b) * has2Lock(c,d)   -> a != c && a != d && b != c && b != d;
+constraint has1Lock(a,b) * hasNode(c)      -> a != c;
+constraint has2Lock(a,b) * hasNode(c)      -> a != c && b != c;
 
 // // Could maybe replace some of the constraints above?
 // constraint has2Lock(a,b) -> %{ has1Lock(#1,_) &*& has1Lock(#2,_) }(a, b);
