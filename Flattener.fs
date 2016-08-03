@@ -14,78 +14,117 @@ open Starling.Core.Var
 open Starling.Core.GuardedView
 
 
-(*
- * View-to-func flattening.
- *)
+/// <summary>
+///     Extracts a sequence of all of the parameters in an func sequence
+///     (OView or DView) in order.
+/// </summary>
+let paramsOfFuncSeq (funcs : Func<'var> seq) : 'var seq =
+    funcs |> Seq.map (fun v -> v.Params) |> Seq.concat
 
-/// Extracts a sequence of all of the parameters in a view in order.
-let paramsOfView ms =
-    ms
-    |> Seq.map (fun v -> v.Params)
-    |> Seq.concat
-
-/// Constructs a (hopefully) unique name for a func encompassing a view.
-let funcNameOfView : Func<'a> seq ->  string =
-    fun ms ->
-    ms
+/// <summary>
+///     Constructs a (hopefully) unique name for a Func resulting from
+///     the flattening of a func sequence (OView or DView).
+/// </summary>
+let genFlatFuncSeqName (funcs : Func<'var> seq) : string =
+    funcs
     // These two steps are to ensure we don't capture an existing name.
     |> Seq.map (fun { Name = n } -> n.Replace("_", "__"))
     |> scons "v"
     |> String.concat "_"
-    |> (fun s -> if s = "v" then "emp" else s)
+    // This step ensures that the empty view is named 'emp', not 'v'.
+    |> fun s -> if s = "v" then "emp" else s
 
-/// Constructs a Func from a View, given a set of active globals in the
-/// appropriate format for appending into the func's parameter list.
-/// and some transformer from the parameters to expressions.
-let funcOfView globals view =
-    { Name = view |> funcNameOfView
-      Params = view |> paramsOfView |> Seq.append globals |> List.ofSeq }
+/// <summary>
+///     Constructs a Func from a func sequence, appending global variables.
+/// </summary>
+/// <param name="globals">
+///     The set of active globals, in expression form, which will be appended
+///     into the Func's parameter list.
+/// </param>
+/// <param name="funcs">
+///     The Func sequence to flatten.
+/// </param>
+/// <returns>
+///     A new SMVFunc containing all of the parameters of the constituent
+///     funcs, as well as the globals list, and a new unique name.
+/// </returns>
+let flattenFuncSeq
+  (globals : 'var seq)
+  (oview : Func<'var> seq)
+  : Func<'var> =
+    { Name = genFlatFuncSeqName oview
+      Params = oview |> paramsOfFuncSeq |> Seq.append globals |> List.ofSeq }
 
-(*
- * View usages
- *)
-
-/// Adds the globals in gs to the argument lists of a view assertion.
-let addGlobalsToViewSet gs =
-   Seq.map (mapItem (funcOfView gs)) >> Multiset.ofFlatSeq
-
-/// Adds the globals in gs to the argument list of the assertions in a term.
-let addGlobalsToTerm gs _ =
+/// <summary>
+///     Flattens a term by converting all of its OViews into single funcs.
+/// </summary>
+/// <param name="globalsF">
+///     A function that takes a marker (Before, After, etc.) and returns
+///     a sequence of all global variables converted into symbolic marked
+///     expressions with said marker.
+/// </param>
+/// <returns>
+///     A function mapping terms over OViews to terms over SMVFuncs.
+/// </returns>
+let flattenTerm
+  (globalsF : (Var -> MarkedVar) -> SMExpr seq)
+  : Term<_, Set<GuardedSubview>, OView> -> Term<_, SMGView, SMVFunc> =
     mapTerm id
-            (addGlobalsToViewSet (gs Before))
-            (funcOfView (gs After))
+            (Seq.map (mapItem (flattenFuncSeq (globalsF Before)))
+             >> Multiset.ofFlatSeq)
+            (flattenFuncSeq (globalsF After))
 
-(*
- * View definitions
- *)
-
-/// Adds the globals in gs to a defining view.
-let addGlobalsToViewDef gs =
+/// <summary>
+///     Flattens a view definition by converting its DViews into single funcs.
+/// </summary>
+/// <param name="globalsP">
+///     A sequence of formal parameters, representing each global variable in
+///     the model, to append to the argument list of the flattened funcs.
+/// </param>
+/// <returns>
+///     A function mapping view definitions over DViews to definitions over
+///     SMVFuncs.
+/// </returns>
+let flattenViewDef
+  (globalsP : TypedVar seq)
+  : ViewDef<DView, _> -> ViewDef<DFunc, _> =
     function
-    | Definite (v, d) -> Definite (funcOfView gs v, d)
-    | Indefinite v -> Indefinite (funcOfView gs v)
+    | Definite (v, d) -> Definite (flattenFuncSeq globalsP v, d)
+    | Indefinite v -> Indefinite (flattenFuncSeq globalsP v)
 
-(*
- * Whole models
- *)
-
-/// Adds globals to the arguments of all views in a model.
-let flatten (mdl: UVModel<Term<'cmd, Set<GuardedSubview>, OView>>) =
+/// <summary>
+///    Flattens all func sequences in a model, turning them into funcs.
+///    <para>
+///        This allows each combination of views coming out of reification
+///        to be represented by a single uninterpreted function, which can
+///        then either be interpreted using the corresponding ViewDefs,
+///        or inferred by using a solver like HSF.
+///    </para>
+/// </summary>
+/// <param name="model">
+///     The model to flatten.
+/// </param>
+/// <returns>
+///     The flattened model.
+/// </returns>
+let flatten
+  (model : UVModel<Term<_, Set<GuardedSubview>, OView>>)
+  : UFModel<Term<_, SMGView, SMVFunc>> =
     /// Build a function making a list of global arguments, for view assertions.
-    let gargs marker = varMapToExprs (marker >> Reg) mdl.Globals
+    let globalsF marker = varMapToExprs (marker >> Reg) model.Globals
 
     /// Build a list of global parameters, for view definitions.
-    let gpars =
-        mdl.Globals
+    let globalsP =
+        model.Globals
         |> Map.toSeq
         |> Seq.map (fun (name, ty) -> withType ty name)
         |> List.ofSeq
 
-    {Globals = mdl.Globals
-     Locals = mdl.Locals
-     Axioms = Map.map (addGlobalsToTerm gargs) mdl.Axioms
-     ViewDefs = List.map (addGlobalsToViewDef gpars) mdl.ViewDefs
-     Semantics = mdl.Semantics}
+    { Globals = model.Globals
+      Locals = model.Locals
+      Axioms = Map.map (fun _ x -> flattenTerm globalsF x) model.Axioms
+      ViewDefs = List.map (flattenViewDef globalsP) model.ViewDefs
+      Semantics = model.Semantics }
 
 
 /// <summary>
@@ -120,8 +159,7 @@ module Tests =
         /// Tests the view predicate name generator.
         [<TestCaseSource("ViewFuncNamings")>]
         member x.``the flattened view name generator generates names correctly`` v =
-            let pn : OView -> string = funcNameOfView
-            pn v
+            (genFlatFuncSeqName : OView -> string) v
 
         /// Test cases for the full defining-view func converter.
         /// These all use the Globals environment above.
@@ -138,10 +176,12 @@ module Tests =
 
         /// Tests the viewdef LHS translator.
         [<TestCaseSource("DViewFuncs")>]
-        member x.``the defining view func translator works correctly`` (v: DView) =
-            v |> funcOfView (NUnit.Globals
-                             |> Map.toSeq
-                             |> Seq.map (fun (n, t) -> withType t n))
+        member x.``the defining view func translator works correctly`` (v : DView) =
+            v
+            |> flattenFuncSeq
+                   (NUnit.Globals
+                    |> Map.toSeq
+                    |> Seq.map (fun (n, t) -> withType t n))
 
         /// Test cases for the full view func converter.
         /// These all use the Globals environment above.
@@ -158,9 +198,12 @@ module Tests =
 
         /// Tests the viewdef LHS translator.
         [<TestCaseSource("ViewFuncs")>]
-        member x.``the view func translator works correctly`` (v: OView) =
-            v |> funcOfView (NUnit.Globals
-                             |> Map.toSeq
-                             |> Seq.map (function
-                                         | (x, Type.Int ()) -> x |> siBefore |> Expr.Int
-                                         | (x, Type.Bool ()) -> x |> sbBefore |> Expr.Bool))
+        member x.``the view func translator works correctly`` (v : OView) =
+            v
+            |> flattenFuncSeq
+                   (NUnit.Globals
+                    |> Map.toSeq
+                    |> Seq.map
+                           (function
+                            | (x, Type.Int ()) -> x |> siBefore |> Expr.Int
+                            | (x, Type.Bool ()) -> x |> sbBefore |> Expr.Bool))
