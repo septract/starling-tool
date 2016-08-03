@@ -385,7 +385,7 @@ module Pretty =
 
 /// Active pattern classifying bops as to whether they create
 /// arithmetic or Boolean expressions.
-let (|ArithOp|BoolOp|) =
+let (|ArithOp|BoolOp|) : BinOp -> Choice<unit, unit> =
     function
     | Mul | Div | Add | Sub -> ArithOp
     | Gt | Ge | Le | Lt -> BoolOp
@@ -394,7 +394,7 @@ let (|ArithOp|BoolOp|) =
 
 /// Active pattern classifying bops as to whether they take in
 /// arithmetic, Boolean, or indeterminate operands.
-let (|ArithIn|BoolIn|AnyIn|) =
+let (|ArithIn|BoolIn|AnyIn|) : BinOp -> Choice<unit, unit, unit> =
     function
     | Mul | Div | Add | Sub -> ArithIn
     | Gt | Ge | Le | Lt -> ArithIn
@@ -403,7 +403,8 @@ let (|ArithIn|BoolIn|AnyIn|) =
 
 /// Active pattern classifying expressions as to whether they are
 /// arithmetic, Boolean, or indeterminate.
-let (|BoolExp|ArithExp|AnyExp|) e =
+let (|BoolExp|ArithExp|AnyExp|) (e : Expression)
+  : Choice<Expression, Expression, Expression> =
     match e.Node with
     | LV _ -> AnyExp e
     | Symbolic _ -> AnyExp e

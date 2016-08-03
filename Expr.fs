@@ -119,13 +119,13 @@ module Pretty =
 
 
 /// Partial pattern that matches a Boolean equality on arithmetic expressions.
-let (|BAEq|_|) =
+let (|BAEq|_|) : BoolExpr<'var> -> (IntExpr<'var> * IntExpr<'var>) option =
     function
     | BEq (Int x, Int y) -> Some (x, y)
     | _ -> None
 
 /// Partial pattern that matches a Boolean equality on Boolean expressions.
-let (|BBEq|_|) =
+let (|BBEq|_|) : BoolExpr<'var> -> (BoolExpr<'var> * BoolExpr<'var>) option =
     function
     | BEq (Bool x, Bool y) -> Some (x, y)
     | _ -> None
@@ -342,19 +342,19 @@ let getFresh (fg : FreshGen) : bigint =
  *)
 
 /// Categorises integral expressions into simple or compound.
-let (|SimpleInt|CompoundInt|) =
+let (|SimpleInt|CompoundInt|) : IntExpr<_> -> Choice<unit, unit> =
     function
     | AVar _ | AInt _ -> SimpleInt
     | _ -> CompoundInt
 
 /// Categorises Boolean expressions into simple or compound.
-let (|SimpleBool|CompoundBool|) =
+let (|SimpleBool|CompoundBool|) : BoolExpr<_> -> Choice<unit, unit> =
     function
     | BVar _ | BTrue | BFalse -> SimpleBool
     | _ -> CompoundBool
 
 /// Categorises expressions into simple or compound.
-let (|SimpleExpr|CompoundExpr|) =
+let (|SimpleExpr|CompoundExpr|) : Expr<_> -> Choice<unit, unit> =
     function
     | Bool (SimpleBool) -> SimpleExpr
     | Int (SimpleInt) -> SimpleExpr

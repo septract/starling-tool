@@ -57,7 +57,7 @@ module Queries =
     /// <summary>
     ///     Active pattern matching assume commands.
     /// </summary>
-    let (|Assume|_|) =
+    let (|Assume|_|) : Command -> SMBoolExpr option =
         function
         | [ { Name = n ; Args = [ SMExpr.Bool b ] } ]
           when n = "Assume" -> Some b
@@ -215,7 +215,8 @@ module SymRemove =
     /// <summary>
     ///     Active pattern matching likely assignments to or from symbols.
     /// </summary>
-    let (|SymAssign|_|) =
+    let (|SymAssign|_|) : BoolExpr<Sym<'var>>
+      -> (Expr<Sym<'var>> * Expr<Sym<'var>>) option =
         // TODO(CaptainHayashi): sound and/or complete?
         function
         | BEq ((Expr.Bool (BVar (Sym _)) as lhs),
@@ -232,7 +233,7 @@ module SymRemove =
     ///     Tries to remove symbolic assignments from a command in
     ///     Boolean expression form.
     /// </summary>
-    let rec removeSym : BoolExpr<Sym<'a>> -> BoolExpr<Sym<'a>> =
+    let rec removeSym : BoolExpr<Sym<'var>> -> BoolExpr<Sym<'var>> =
         function
         | SymAssign (_, _) -> BTrue
         // Distributivity.
