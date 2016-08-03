@@ -28,6 +28,16 @@ open Starling.Core.Symbolic
 [<AutoOpen>]
 module Types =
     /// <summary>
+    ///     An edge identifier.
+    /// </summary>
+    type EdgeID = string
+
+    /// <summary>
+    ///     A node identifier.
+    /// </summary>
+    type NodeID = string
+
+    /// <summary>
     ///     Enumeration of node types.
     ///
     ///     <para>
@@ -44,7 +54,7 @@ module Types =
     ///         Hoare triples.
     ///     </para>
     /// </summary>
-    type Edge = Axiom<string, Command>
+    type Edge = Axiom<NodeID, Command>
 
     /// <summary>
     ///     The container for a partial control-flow graph.
@@ -59,12 +69,12 @@ module Types =
             /// <summary>
             ///     Set of nodes in the control-flow graph.
             /// </summary>
-            Nodes: Map<string, ViewExpr<SVGView> * NodeKind>
+            Nodes: Map<NodeID, ViewExpr<SVGView> * NodeKind>
 
             /// <summary>
             ///     Set of edges in the control-flow graph.
             /// </summary>
-            Edges: Map<string, Edge>
+            Edges: Map<EdgeID, Edge>
         }
 
     /// <summary>
@@ -74,11 +84,11 @@ module Types =
         { /// <summary>
           ///      The name of the edge.
           /// </summary>
-          Name : string
+          Name : EdgeID
           /// <summary>
           ///      The source of this edge.
           /// </summary>
-          Src : string
+          Src : NodeID
           /// <summary>
           ///      The command this edge represents.
           /// </summary>
@@ -91,11 +101,11 @@ module Types =
         { /// <summary>
           ///      The name of the edge.
           /// </summary>
-          Name : string
+          Name : EdgeID
           /// <summary>
           ///      The destination of this edge.
           /// </summary>
-          Dest : string
+          Dest : NodeID
           /// <summary>
           ///      The command this edge represents.
           /// </summary>
@@ -108,11 +118,11 @@ module Types =
         { /// <summary>
           ///     The name of the edge.
           /// </summary>
-          Name : string
+          Name : EdgeID
           /// <summary>
           ///     The name of the source node.
           /// </summary>
-          SrcName : string
+          SrcName : NodeID
           /// <summary>
           ///     The view of the source node.
           /// </summary>
@@ -120,7 +130,7 @@ module Types =
           /// <summary>
           ///     The name of the destination node.
           /// </summary>
-          DestName : string
+          DestName : NodeID
           /// <summary>
           ///     The view of the destination node.
           /// </summary>
@@ -146,7 +156,7 @@ module Types =
         ///     The contents of the graph.
         /// </summary>
         Contents : Map<
-            string,
+            NodeID,
             (ViewExpr<SVGView>
              * Set<OutEdge>
              * Set<InEdge>
@@ -163,11 +173,11 @@ module Types =
         /// <summary>
         ///     The given node was duplicated when trying to merge graphs.
         /// </summary>
-        | DuplicateNode of id: string
+        | DuplicateNode of id: NodeID
         /// <summary>
         ///     The given edge was duplicated when trying to merge graphs.
         /// </summary>
-        | DuplicateEdge of id: string
+        | DuplicateEdge of id: EdgeID
 
 
 /// <summary>
@@ -185,7 +195,7 @@ module Types =
 /// <returns>
 ///     An <c>Edge</c> with the above properties.
 /// </returns>
-let edge = axiom
+let edge : NodeID -> Command -> NodeID -> Edge = axiom
 
 /// <summary>
 ///     Converts a <c>Graph</c> to a <c>Subgraph</c>.
@@ -197,7 +207,7 @@ let edge = axiom
 ///     A <c>Subgraph</c> giving the same nodes and edges as
 ///     <paramref name="graph" />.
 /// </returns>
-let toSubgraph graph =
+let toSubgraph (graph : Graph) : Subgraph =
     { Nodes =
           graph.Contents
           |> Map.toSeq
@@ -229,7 +239,7 @@ let toSubgraph graph =
 ///     If the edges are valid (reference indices in <paramref
 ///     name="nodes" />), then the result will be <c>ok</c>.
 /// </returns>
-let graph name sg =
+let graph (name : string) (sg : Subgraph) : Result<Graph, Error> =
     // Are any of the node indices out of bounds?
     match (Map.filter
                (fun _ {Pre = s; Post = t} ->
@@ -287,8 +297,10 @@ let graph name sg =
 ///     The graph will contain the nodes and edges from <paramref
 ///     name="_arg1" /> and <paramref name="_arg2" />.
 /// </returns>
-let combine { Nodes = ans ; Edges = aes }
-            { Nodes = bns ; Edges = bes } =
+let combine
+  ({ Nodes = ans ; Edges = aes } : Subgraph)
+  ({ Nodes = bns ; Edges = bes } : Subgraph)
+  : Result<Subgraph, Error> =
     match (keyDuplicates ans bns |> Seq.toList,
            keyDuplicates aes bes |> Seq.toList) with
     | ([], []) -> { Nodes = mapAppend ans bns
@@ -323,7 +335,7 @@ let combine { Nodes = ans ; Edges = aes }
 ///     but with <paramref name="src" /> deleted, and all edges starting
 ///     and ending at it redirected to <paramref name="dest" />.
 /// </returns>
-let unify src dest graph =
+let unify (src : NodeID) (dest : NodeID) (graph : Graph) : Graph option =
     if (src = dest)
     then Some graph
     else if (not (Map.containsKey src graph.Contents))
@@ -407,7 +419,11 @@ let unify src dest graph =
 ///     <paramref name="x" /> and <paramref name="y" /> in
 ///     <paramref name="graph" />.
 /// </returns>
-let mapNodePair f x y graph =
+let mapNodePair
+  (f : Set<OutEdge> -> Set<InEdge> -> (Set<OutEdge> * Set<InEdge>))
+  (x : NodeID)
+  (y : NodeID)
+  (graph : Graph) =
     match (Map.tryFind x graph.Contents,
            Map.tryFind y graph.Contents) with
     | (Some (xv, xOut, xIn, xnk), Some (yv, yOut, yIn, ynk)) ->
@@ -450,7 +466,13 @@ let mapNodePair f x y graph =
 ///     <paramref name="src" /> to <paramref name="dest" />, with command
 ///     <paramref name="cmd"/>, to <paramref name="graph"/>.
 /// </returns>
-let mkEdgeBetween src dest name cmd graph =
+let mkEdgeBetween
+  (src : NodeID)
+  (dest : NodeID)
+  (name : EdgeID)
+  (cmd : Command)
+  (graph : Graph)
+  : Graph option =
     // TODO(CaptainHayashi): signal an error if name is taken.
     mapNodePair
         (fun srcOut destIn ->
@@ -497,7 +519,8 @@ let mkEdgeBetween src dest name cmd graph =
 ///     removed.  If either or both edges do not exist, the graph
 ///     is not changed.
 /// </returns>
-let rmEdgesBetween src dest pred =
+let rmEdgesBetween (src : NodeID) (dest : NodeID) (pred : EdgeID -> bool)
+  : Graph -> Graph option =
     (* The result will be a well-formed graph, because it cannot
      * create dangling edges.
      *)
@@ -529,7 +552,7 @@ let rmEdgesBetween src dest pred =
 ///     Else, the graph resulting from
 ///     removing <paramref name="node" /> from <paramref name="graph" />.
 /// </returns>
-let rmNode node graph =
+let rmNode (node : NodeID) (graph : Graph) : Graph option =
     // TODO(CaptainHayashi): Chessie-ise this and the other functions?
     match Map.tryFind node graph.Contents with
     | Some (_, outE, inE, _) when Set.isEmpty outE && Set.isEmpty inE ->
@@ -550,10 +573,13 @@ let rmNode node graph =
 /// <param name="graph">
 ///     A graph, the edges of which we will be mapping.
 /// </param>
+/// <typeparam name="result">
+///     The result of each iteration of the map.
+/// </typeparam>
 /// <returns>
 ///     A sequence collecting the results of the map.
 /// </returns>
-let mapEdges f graph =
+let mapEdges (f : FullEdge -> 'result) (graph : Graph) : 'result seq =
     let m = graph.Contents
 
     m
@@ -591,7 +617,8 @@ let mapEdges f graph =
 ///     <paramref name="graph" /> and its view is structurally equal
 ///     to <paramref name="nodeView" />.
 /// </returns>
-let nodeHasView nodeName nodeView graph =
+let nodeHasView (nodeName : NodeID) (nodeView : SVGView) (graph : Graph)
+  : bool =
     match (Map.tryFind nodeName graph.Contents) with
     | Some (InnerView v, _, _, _) -> v = nodeView
     | _ -> false
@@ -610,7 +637,7 @@ let nodeHasView nodeName nodeView graph =
 ///     The edges of <paramref name="_arg1" />, as name-edge pairs.
 ///     This is wrapped in a Chessie result over <c>Error</c>.
 /// </returns>
-let axiomatiseGraph =
+let axiomatiseGraph : Graph -> (string * Axiom<SVGView, Command>) seq =
     mapEdges
         (fun { Name = n; SrcView = s ; DestView = t ; Command = c } ->
             (n, { Pre = match s with InnerView v -> v
@@ -631,7 +658,8 @@ let axiomatiseGraph =
 /// <returns>
 ///     A map of axioms characterising <paramref name="_arg1" />.
 /// </returns>
-let axiomatiseGraphs =
+let axiomatiseGraphs
+  : Map<string, Graph> -> Map<string, Axiom<SVGView, Command>> =
     // The map key is redundant, as we already have it inside the
     // graph iself.
     Map.toSeq
@@ -681,7 +709,7 @@ module Pretty =
     ///     A pretty-printer command representing
     ///     [label = "<paramref name="labelCmd" />"].
     /// </returns>
-    let printLabel labelCmd =
+    let printLabel (labelCmd : Doc) : Doc =
         [ String "label"
           String "="
           labelCmd |> ssurround "\"" "\"" ]
@@ -699,7 +727,8 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer <c>Command</c> representing the node.
     /// </returns>
-    let printNode id (view : ViewExpr<SVGView>, nk : NodeKind) =
+    let printNode (id : NodeID) (view : ViewExpr<SVGView>, nk : NodeKind)
+      : Doc =
         let list = match nk with Normal -> [] | Entry -> [String "(Entry)"] | Exit -> [String "(Exit)"] | EntryExit -> [String "(EntryExit)"]
         hsep [ id |> String
                ([ id |> String
@@ -721,7 +750,8 @@ module Pretty =
     ///     A pretty-printer <c>Command</c> representing
     ///     <paramref name="_arg1" />.
     /// </returns>
-    let printEdge id { Pre = s; Post = t; Cmd = cmd } =
+    let printEdge (id : EdgeID) ({ Pre = s; Post = t; Cmd = cmd } : Edge)
+      : Doc =
         hsep [ s |> String
                String "->"
                t |> String
@@ -739,7 +769,8 @@ module Pretty =
     ///     A pretty-printer <c>Command</c> that prints
     ///     <paramref name="_arg1" />.
     /// </returns>
-    let printSubgraph { Nodes = nodes ; Edges = edges } =
+    let printSubgraph ({ Nodes = nodes ; Edges = edges } : Subgraph)
+      : Doc =
         Seq.append
             (nodes |> Map.toSeq |> Seq.map (uncurry printNode))
             (edges |> Map.toSeq |> Seq.map (uncurry printEdge))
@@ -759,10 +790,9 @@ module Pretty =
     ///     A pretty-printer <c>Command</c> that prints
     ///     <paramref name="graph" />.
     /// </returns>
-    let printGraph graph =
+    let printGraph (graph : Graph) : Doc =
         hsep [ String "digraph"
                String graph.Name
-
 
                // TODO(CaptainHayashi): don't convert here?
                graph |> toSubgraph |> printSubgraph ]
@@ -777,14 +807,12 @@ module Pretty =
     ///     A pretty-printer command that prints
     ///     <paramref name="_arg1" />.
     /// </returns>
-    let printError =
+    let printError : Error -> Doc =
         function
         | EdgeOutOfBounds edge ->
             colonSep
                 [ String "edge out of bounds: "
-                  printAxiom (fun x -> String (x.ToString()))
-                             printCommand
-                             edge ]
+                  printAxiom String printCommand edge ]
         | DuplicateNode node ->
             colonSep [ String "node duplicated: "; String node ]
         | DuplicateEdge edge ->
