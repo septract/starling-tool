@@ -101,8 +101,8 @@ module Pretty =
         | BTrue -> String "true"
         | BFalse -> String "false"
         | BAnd xs -> svexpr "and" (printBoolExpr pVar) xs
-        | BOr xs -> sexpr "or" (printBoolExpr pVar) xs
-        | BImplies (x, y) -> sexpr "=>" (printBoolExpr pVar) [x; y]
+        | BOr xs -> svexpr "or" (printBoolExpr pVar) xs
+        | BImplies (x, y) -> svexpr "=>" (printBoolExpr pVar) [x; y]
         | BEq (x, y) -> sexpr "=" (printExpr pVar) [x; y]
         | BGt (x, y) -> sexpr ">" (printIntExpr pVar) [x; y]
         | BGe (x, y) -> sexpr ">=" (printIntExpr pVar) [x; y]
