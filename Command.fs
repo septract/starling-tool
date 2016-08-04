@@ -63,6 +63,11 @@ module Queries =
           when n = "Assume" -> Some b
         | _ -> None
 
+
+    /// Combines the results of each command into a list of all results
+    let commandResults cs =
+        List.fold (fun a c -> a @ c.Results) [] cs
+
 /// <summary>
 ///     Composition of Boolean expressions representing commands.
 /// </summary>
@@ -183,7 +188,6 @@ module SymRemove =
 module Create = 
     let command : string -> TypedVar list -> SMExpr list -> PrimCommand =
         fun name results args -> { Name = name; Results = results; Args = args }
-
 
 /// <summary>
 ///     Pretty printers for commands.
