@@ -207,13 +207,13 @@ module Utils =
         opts
         |> Seq.filter
             (fun (name, on, _) ->
-                let on' = Set.contains name enabled_opts
+                let on' = Set.contains name enabled_opts || Set.exists (name.StartsWith) enabled_opts
                 if on' <> on then
                     eprintfn "note: optimisation %s forced %s"
                         <| name
                         <| if on' then "on" else "off"
                 on')
-        |> Seq.map (fun (n, _, f) -> eprintfn "running opt: %s" n; f)
+        |> Seq.map (fun (n, _, f) -> f)
         (* We use List instead of Seq to make sure the above evaluates
            only once. *)
         |> List.ofSeq
@@ -875,7 +875,7 @@ module Term =
         | BBEq (BVar (Reg (Intermediate(i, x))), (ConstantBoolFunction (Intermediate(k, y)) as fx))
         | BBEq (ConstantBoolFunction (Intermediate(k, y)) as fx, BVar (Reg (Intermediate(i, x))))
             when x = y
-            -> [((i, x), fx)]
+            -> if i < k then [((i, x), fx)] else []
         | BAnd xs -> concatMap findBoolInters xs
         | _ -> []
 
@@ -884,7 +884,7 @@ module Term =
         | BAEq (AVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Intermediate(k, y)) as fx))
         | BAEq (ConstantIntFunction (Intermediate(k, y)) as fx, AVar (Reg (Intermediate(i, x))))
             when x = y
-            -> [((i, x), fx)]
+            -> if i < k then [((i, x), fx)] else []
         | BAnd xs -> concatMap findArithInters xs
         | _ -> []
 
@@ -934,7 +934,7 @@ module Term =
             (liftVToSym
                 (Mapper.make
                     (function
-                     | Intermediate(i, a) -> (Map.tryFind (i, a) asubs |> withDefault (siInter i a))
+                     | Intermediate(i, a) as y -> (Map.tryFind (i, a) asubs |> withDefault (siInter i a))
                      | x -> AVar (Reg x))
                     (function
                      | Intermediate(i, a) -> (Map.tryFind (i, a) bsubs |> withDefault (sbInter i a))
