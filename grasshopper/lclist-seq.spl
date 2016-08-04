@@ -1,0 +1,151 @@
+// Derived from GRASShopper examples in 
+// https://github.com/wies/grasshopper/tree/master/tests/spl
+
+struct Node {
+  var next: Node;
+  var lock: Bool; 
+  var val: Int; 
+}
+ 
+
+// List segment definitions
+
+predicate lseg(x: Node, y: Node) {
+  acc({ z: Node :: Btwn(next, x, z, y) && z != y }) &*& Reach(next, x, y)
+}
+
+predicate lseg_upperbound(ub: Int, FP: Set<Node>)
+  requires acc(FP)
+{
+  forall z: Node :: (z in FP && z.next != null) ==> z.val <= ub
+}
+
+predicate lseg_sentinel (head: Node, ub: Int, FP: Set<Node>) 
+  requires acc(FP) 
+{ 
+  exists z: Node :: 
+    z in FP && z.next == null && z.val == ub && z != head 
+} 
+
+predicate llseg(h: Node, y: Node, ub: Int) {
+  lseg(h, y) && 
+  (exists X: Set<Node> :: 
+    acc(X) &*& lseg_upperbound(ub, X) &*& lseg_sentinel(h,ub,X)) 
+}
+
+predicate nodeUnlocked(x: Node, y: Node) { 
+  x.next == y &*& x.lock == false
+} 
+
+predicate nodeLocked(x: Node, y: Node) { 
+  x.next == y &*& x.lock == true  
+} 
+
+
+// Calls to helper procedures
+
+procedure takeLock(x: Node)
+  requires acc(x); 
+  ensures acc(x) &*& nodeLocked(x,x.next); 
+{ 
+  while (x.lock == true) {} 
+  x.lock := true; 
+}  
+
+procedure releaseLock(x: Node)
+  requires acc(x) &*& nodeLocked(x,x.next); 
+  ensures acc(x) &*& nodeUnlocked(x,x.next); 
+{ 
+  x.lock := false; 
+}  
+
+predicate endNode(x: Node, ub: Int) { 
+  acc(x) &*& x.next == null &*& x.val == ub
+} 
+
+procedure disposeNode(x: Node) 
+  requires acc(x); 
+  ensures emp; 
+{ 
+  free(x); 
+} 
+
+
+// Equivalents to Starling predicates. 
+
+predicate isListG (head: Node, ub: Int) { 
+  llseg(head, null, ub) &*& head != null
+} 
+
+predicate has1LockG(head: Node, a: Node, b: Node) 
+{ 
+  exists X: Set<Node> :: acc(X) &*& a in X &*& nodeLocked(a, b)
+} 
+
+predicate has2LockG(head: Node, a: Node, b: Node) { 
+  exists X: Set<Node>, c: Node :: 
+    acc(X) &*& a in X &*& b in X &*& nodeLocked(a, b) &*& nodeLocked(b,c)
+} 
+
+predicate dangleNodeG(x: Node) 
+{ 
+  acc(x)
+} 
+
+predicate isValG(head: Node, n: Node, v: Int) 
+  requires acc(n) 
+{ 
+  exists X: Set<Node> :: acc(X) &*& n.val == v
+} 
+
+
+// Proof of deleteVal in a pseudo-Starling style
+
+procedure deleteVal_seq (head: Node, ub: Int, prev: Node, curr: Node, cv: Int, v: Int) 
+  requires isListG(head, ub) &*& v < ub; 
+  ensures isListG(head, ub); 
+{ 
+  prev := head;
+    assert isListG(head, ub);  
+  takeLock(prev); 
+    assert isListG(head, ub) && (exists n : Node :: has1LockG(head,prev,n));
+  curr := prev.next; 
+    assert isListG(head, ub) && has1LockG(head,prev,curr); 
+  takeLock(curr); 
+    assert isListG(head, ub) && has2LockG(head,prev,curr); 
+  cv := curr.val; 
+   assert isListG(head, ub) && has2LockG(head,prev,curr) && isValG(head,curr,cv); 
+  while (cv < v) 
+    invariant isListG(head, ub) && has2LockG(head,prev,curr) && isValG(head,curr,cv) &*& v < ub; 
+  { 
+       assert isListG(head, ub) && has2LockG(head,prev,curr) && isValG(head,curr,cv);  
+     releaseLock(prev); 
+       assert isListG(head, ub) && has1LockG(head,curr,curr.next); 
+     prev := curr; 
+     curr := curr.next; 
+       assert isListG(head, ub) && has1LockG(head,prev,curr); 
+     takeLock(curr); 
+       assert isListG(head, ub) && has2LockG(head,prev,curr); 
+     cv := curr.val; 
+       assert isListG(head, ub) && has2LockG(head,prev,curr) && isValG(head,curr,cv); 
+  }  
+    assert isListG(head, ub) && has2LockG(head,prev,curr) && isValG(head,curr,cv); 
+  if (cv == v) { 
+      assert isListG(head, ub) && has2LockG(head,prev,curr); 
+    prev.next := curr.next; 
+      // TODO(@septract) Danger here for Starling: we're using star and conjunction together. 
+      // Need to work out how to handle garbage conjunctively. 
+      assert (isListG(head, ub) && has1LockG(head,prev,prev.next)) &*& dangleNodeG(curr); 
+    disposeNode(curr); 
+      assert isListG(head, ub) && has1LockG(head,prev,prev.next); 
+  } else { 
+      assert isListG(head, ub) && has2LockG(head,prev,curr); 
+    releaseLock(curr); 
+      assert isListG(head, ub) && has1LockG(head,prev,curr); 
+  }  
+    assert isListG(head, ub) && has1LockG(head,prev,prev.next); 
+  releaseLock(prev); 
+    assert isListG(head, ub); 
+}  
+
+
