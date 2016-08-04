@@ -1,0 +1,26 @@
+include "./lclist-module.spl";  
+
+// deleteVal_C000_001: fail
+// deleteVal_C000_001:
+//     Command:
+//         (= (after prev) (before head))
+//     
+//     W/Prec:
+//         (and
+//             %{isListG(head,ub,#1) }((before v))
+//             (=>
+//                 (not (= (goal 177 v) (before v)))
+//                 %{isListG(head,ub,#1) }((goal 177 v))
+//             )
+//         )
+//     
+//     Goal:
+//         %{isListG(head,ub,#1) }((goal 177 v))
+
+procedure deleteVal_C000_001 (head: Node, a_prev: Node, ub: Int, b_v: Int, g177_v: Int) 
+  requires isListG(head,ub,b_v); 
+  requires (g177_v != b_v)  ==>  isListG(head,ub,b_v);  
+  ensures isListG(head,ub,g177_v); 
+{
+  a_prev := head; 
+} 
