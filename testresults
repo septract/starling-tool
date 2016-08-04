@@ -9,6 +9,7 @@
 ./Examples/Pass/petersonInt.cvf: 
 ./Examples/Pass/petersonIntMissingSynthesised.cvf: 
 ./Examples/Pass/petersonMultiCmd.cvf: 
+./Examples/Pass/seqCmd.cvf: 
 ./Examples/Pass/spinLockAdvisory.cvf: 
 ./Examples/Pass/spinLock.cvf:
 ./Examples/Pass/spinLockInt.cvf: 
