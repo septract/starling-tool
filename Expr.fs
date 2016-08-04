@@ -70,6 +70,12 @@ module Types =
 module Pretty =
     open Starling.Core.Pretty
 
+    let svexpr op pxs x =
+      let mapped = Seq.map pxs x
+      let sep = ivsep mapped in 
+      let head = HSep([(String "("); (String op)], Nop) 
+      vsep [head; sep; (String ")")] 
+
     /// Creates an S-expression from an operator string, operand print function, and
     /// sequence of operands.
     let sexpr op pxs =
@@ -94,9 +100,9 @@ module Pretty =
         | BVar c -> pVar c
         | BTrue -> String "true"
         | BFalse -> String "false"
-        | BAnd xs -> sexpr "and" (printBoolExpr pVar)xs
-        | BOr xs -> sexpr "or" (printBoolExpr pVar) xs
-        | BImplies (x, y) -> sexpr "=>" (printBoolExpr pVar) [x; y]
+        | BAnd xs -> svexpr "and" (printBoolExpr pVar) xs
+        | BOr xs -> svexpr "or" (printBoolExpr pVar) xs
+        | BImplies (x, y) -> svexpr "=>" (printBoolExpr pVar) [x; y]
         | BEq (x, y) -> sexpr "=" (printExpr pVar) [x; y]
         | BGt (x, y) -> sexpr ">" (printIntExpr pVar) [x; y]
         | BGe (x, y) -> sexpr ">=" (printIntExpr pVar) [x; y]

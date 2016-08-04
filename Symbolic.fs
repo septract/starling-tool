@@ -269,6 +269,20 @@ module Queries =
         |> liftVToSym
         |> onVars
 
+    /// Substitution function for accumulating Vars from a symbolic expression
+    let findSymVars : SubFun<Sym<Var>, Sym<Var>> =
+        Mapper.makeCtx
+            (fun ctx x ->
+                 match ctx with
+                 | Vars xs -> (Vars ((Typed.Int x)::xs), AVar (Reg x))
+                 | c -> (c, AVar (Reg x)))
+            (fun ctx x ->
+                 match ctx with
+                 | Vars xs -> (Vars ((Typed.Bool x)::xs), BVar (Reg x))
+                 | c -> (c, BVar (Reg x)))
+        |> liftVToSym
+        |> onVars
+
     /// <summary>
     ///     Wrapper for running a <see cref="findSMVars"/>-style function
     ///     on a sub-able construct.
@@ -295,8 +309,16 @@ module Queries =
       : Set<CTyped<MarkedVar>> =
         match (r sf (MarkedVars []) subject) with
         | (MarkedVars xs, _) -> Set.ofList xs
-        | _ -> failwith "mapOverSMVars: did not get Vars context back"
+        | _ -> failwith "mapOverSMVars: did not get MarkedVars context back"
 
+    let mapOverSymVars
+      (r : SubFun<Sym<Var>, Sym<Var>> -> SubCtx -> 'subject -> (SubCtx * 'subject))
+      (sf : SubFun<Sym<Var>, Sym<Var>>)
+      (subject : 'subject)
+      : Set<CTyped<Var>> =
+        match (r sf (Vars []) subject) with
+        | (Vars xs, _) -> Set.ofList xs
+        | _ -> failwith "mapOverSymVars: did not get Vars context back"
 
 /// <summary>
 ///     Pretty printers for symbolics.
