@@ -73,8 +73,8 @@ procedure disposeNode(x: Node)
 
 // Equivalents to Starling predicates. 
 
-predicate isListG (head: Node, ub: Int) { 
-  llseg(head, null, ub) &*& head != null
+predicate isListG (head: Node, ub: Int, v: Int) { 
+  llseg(head, null, ub) &*& head != null &*& v < ub 
 } 
 
 predicate has1LockG(head: Node, a: Node, b: Node) 
@@ -102,50 +102,50 @@ predicate isValG(head: Node, n: Node, v: Int)
 // Proof of deleteVal in a pseudo-Starling style
 
 procedure deleteVal_seq (head: Node, ub: Int, prev: Node, curr: Node, cv: Int, v: Int) 
-  requires isListG(head, ub) &*& v < ub; 
-  ensures isListG(head, ub); 
+  requires isListG(head, ub, v) &*& v < ub; 
+  ensures isListG(head, ub, v); 
 { 
   prev := head;
-    assert isListG(head, ub);  
+    assert isListG(head, ub, v);  
   takeLock(prev); 
-    assert isListG(head, ub) && (exists n : Node :: has1LockG(head,prev,n));
+    assert isListG(head, ub, v) && has1LockG(head,prev,prev.next);
   curr := prev.next; 
-    assert isListG(head, ub) && has1LockG(head,prev,curr); 
+    assert isListG(head, ub, v) && has1LockG(head,prev,curr); 
   takeLock(curr); 
-    assert isListG(head, ub) && has2LockG(head,prev,curr); 
+    assert isListG(head, ub, v) && has2LockG(head,prev,curr); 
   cv := curr.val; 
-   assert isListG(head, ub) && has2LockG(head,prev,curr) && isValG(head,curr,cv); 
+   assert isListG(head, ub, v) && has2LockG(head,prev,curr) && isValG(head,curr,cv); 
   while (cv < v) 
-    invariant isListG(head, ub) && has2LockG(head,prev,curr) && isValG(head,curr,cv) &*& v < ub; 
+    invariant isListG(head, ub, v) && has2LockG(head,prev,curr) && isValG(head,curr,cv); 
   { 
-       assert isListG(head, ub) && has2LockG(head,prev,curr) && isValG(head,curr,cv);  
+       assert isListG(head, ub, v) && has2LockG(head,prev,curr) ;  
      releaseLock(prev); 
-       assert isListG(head, ub) && has1LockG(head,curr,curr.next); 
+       assert isListG(head, ub, v) && has1LockG(head,curr,curr.next); 
      prev := curr; 
      curr := curr.next; 
-       assert isListG(head, ub) && has1LockG(head,prev,curr); 
+       assert isListG(head, ub, v) && has1LockG(head,prev,curr); 
      takeLock(curr); 
-       assert isListG(head, ub) && has2LockG(head,prev,curr); 
+       assert isListG(head, ub, v) && has2LockG(head,prev,curr); 
      cv := curr.val; 
-       assert isListG(head, ub) && has2LockG(head,prev,curr) && isValG(head,curr,cv); 
+       assert isListG(head, ub, v) && has2LockG(head,prev,curr) && isValG(head,curr,cv); 
   }  
-    assert isListG(head, ub) && has2LockG(head,prev,curr) && isValG(head,curr,cv); 
+    assert isListG(head, ub, v) && has2LockG(head,prev,curr) && isValG(head,curr,cv); 
   if (cv == v) { 
-      assert isListG(head, ub) && has2LockG(head,prev,curr); 
+      assert isListG(head, ub, v) && has2LockG(head,prev,curr); 
     prev.next := curr.next; 
       // TODO(@septract) Danger here for Starling: we're using star and conjunction together. 
       // Need to work out how to handle garbage conjunctively. 
-      assert (isListG(head, ub) && has1LockG(head,prev,prev.next)) &*& dangleNodeG(curr); 
+      assert (isListG(head, ub, v) && has1LockG(head,prev,prev.next)) &*& dangleNodeG(curr); 
     disposeNode(curr); 
-      assert isListG(head, ub) && has1LockG(head,prev,prev.next); 
+      assert isListG(head, ub, v) && has1LockG(head,prev,prev.next); 
   } else { 
-      assert isListG(head, ub) && has2LockG(head,prev,curr); 
+      assert isListG(head, ub, v) && has2LockG(head,prev,curr); 
     releaseLock(curr); 
-      assert isListG(head, ub) && has1LockG(head,prev,curr); 
+      assert isListG(head, ub, v) && has1LockG(head,prev,curr); 
   }  
-    assert isListG(head, ub) && has1LockG(head,prev,prev.next); 
+    assert isListG(head, ub, v) && has1LockG(head,prev,prev.next); 
   releaseLock(prev); 
-    assert isListG(head, ub); 
+    assert isListG(head, ub, v); 
 }  
 
 
