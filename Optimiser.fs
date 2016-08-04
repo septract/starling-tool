@@ -934,7 +934,7 @@ module Term =
             (liftVToSym
                 (Mapper.make
                     (function
-                     | Intermediate(i, a) as y -> (Map.tryFind (i, a) asubs |> withDefault (siInter i a))
+                     | Intermediate(i, a) -> (Map.tryFind (i, a) asubs |> withDefault (siInter i a))
                      | x -> AVar (Reg x))
                     (function
                      | Intermediate(i, a) -> (Map.tryFind (i, a) bsubs |> withDefault (sbInter i a))
