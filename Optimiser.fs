@@ -867,8 +867,8 @@ module Term =
         | BAnd xs -> concatMap findBoolAfters xs
         | _ -> []
 
-    /// Finds any Intermediate variables in boolean functions
-    /// in the form x!inter i := f(x!inter k)
+    /// Finds any Intermediate variables in constant boolean functions
+    /// in the form x!inter i := f(x!_)
     /// and returns a list of ((intermediate:bigint * var: Var) * fx: BoolExpr)
     let rec findBoolInters =
         function
@@ -876,45 +876,32 @@ module Term =
         | BBEq (ConstantBoolFunction (Intermediate(k, y)) as fx, BVar (Reg (Intermediate(i, x))))
             when x = y
             -> if i < k then [((i, x), fx)] else []
-        | BAnd xs -> concatMap findBoolInters xs
-        | _ -> []
-
-    let rec findArithInters =
-        function
-        | BAEq (AVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Intermediate(k, y)) as fx))
-        | BAEq (ConstantIntFunction (Intermediate(k, y)) as fx, AVar (Reg (Intermediate(i, x))))
-            when x = y
-            -> if i < k then [((i, x), fx)] else []
-        | BAnd xs -> concatMap findArithInters xs
-        | _ -> []
-
-    /// Finds any intermediate assignments in boolean functions
-    /// in the form of x!inter i := f(x!before) or x!inter i := f(x!after)
-    let rec findBoolIntersBeforeAfter =
-        function
         | BBEq (BVar (Reg (Intermediate(i, x))), (ConstantBoolFunction (Before y) as fx))
         | BBEq (BVar (Reg (Intermediate(i, x))), (ConstantBoolFunction (After y) as fx))
         | BBEq (ConstantBoolFunction (Before y) as fx, BVar (Reg (Intermediate(i, x))))
         | BBEq (ConstantBoolFunction (After y) as fx, BVar (Reg (Intermediate(i, x))))
             when x = y
             -> [((i, x), fx)]
-        | BAnd xs -> concatMap findBoolIntersBeforeAfter xs
+        | BAnd xs -> concatMap findBoolInters xs
         | _ -> []
 
-    let rec findArithIntersBeforeAfter =
+    /// Finds any Intermediate variables in constant integer functions
+    /// in the form x!inter i := f(x!_)
+    /// and returns a list of ((intermediate:bigint * var: Var) * fx: BoolExpr)
+    let rec findArithInters =
         function
+        | BAEq (AVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Intermediate(k, y)) as fx))
+        | BAEq (ConstantIntFunction (Intermediate(k, y)) as fx, AVar (Reg (Intermediate(i, x))))
+            when x = y
+            -> if i < k then [((i, x), fx)] else []
         | BAEq (AVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Before y) as fx))
         | BAEq (AVar (Reg (Intermediate(i, x))), (ConstantIntFunction (After y) as fx))
         | BAEq (ConstantIntFunction (Before y) as fx, AVar (Reg (Intermediate(i, x))))
         | BAEq (ConstantIntFunction (After y) as fx, AVar (Reg (Intermediate(i, x))))
             when x = y
             -> [((i, x), fx)]
-        | BAEq (AVar (Reg (Intermediate(i, x))), y)
-        | BAEq (y, AVar (Reg (Intermediate(i, x))))
-            -> []
-        | BAnd xs -> concatMap findArithIntersBeforeAfter xs
+        | BAnd xs -> concatMap findArithInters xs
         | _ -> []
-
 
     /// Lifts a pair of before/after maps to a SubFun.
     let afterSubs asubs bsubs =
@@ -947,7 +934,7 @@ module Term =
       (term : STerm<SMGView, SMVFunc> )
       : STerm<SMGView, SMVFunc> =
         let sub = afterSubs (term.Cmd |> findArithAfters |> Map.ofList)
-                            (term.Cmd |> findBoolAfters |> Map.ofList)
+                            (term.Cmd |> findBoolAfters  |> Map.ofList)
 
         (* The substitution in term.Cmd will create a tautology
          * f(x!before) = f(x!before).
@@ -957,8 +944,8 @@ module Term =
 
     let eliminateInters : STerm<SMGView, SMVFunc> -> STerm<SMGView, SMVFunc> =
         fun term ->
-        let sub = interSubs (findArithInters term.Cmd @ findArithIntersBeforeAfter term.Cmd |> Map.ofList)
-                            (findBoolInters term.Cmd  @ findBoolIntersBeforeAfter  term.Cmd |> Map.ofList)
+        let sub = interSubs (term.Cmd |> findArithInters |> Map.ofList)
+                            (term.Cmd |> findBoolInters  |> Map.ofList)
 
         subExprInDTerm sub NoCtx term |> snd
 
