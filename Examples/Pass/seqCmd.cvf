@@ -1,0 +1,17 @@
+// test variable 
+shared int test;
+
+// Junk variables
+shared int foo; 
+shared int bar; 
+
+method testmeth() {
+  {| emp |}
+  <{ test++; 
+     test++; 
+     test++; }>; 
+  {| emp |}
+}
+
+constraint emp -> true;  
+
