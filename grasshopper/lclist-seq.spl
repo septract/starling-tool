@@ -1,5 +1,10 @@
-// Derived from GRASShopper examples in 
+// A Starling-style proof of the lclist delete operation 
+// Sequential only, but the predicates should be similar to the concurrent case. 
+
+// This proof is derived in part from the GRASShopper examples in 
 // https://github.com/wies/grasshopper/tree/master/tests/spl
+
+// Node data-structure 
 
 struct Node {
   var next: Node;
