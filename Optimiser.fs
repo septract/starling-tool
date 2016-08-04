@@ -860,6 +860,55 @@ module Term =
         | BAnd xs -> concatMap findBoolAfters xs
         | _ -> []
 
+    /// Finds any Intermediate variables in boolean functions
+    /// in the form x!inter i := f(x!inter k)
+    /// and returns a list of ((intermediate:bigint * var: Var) * fx: BoolExpr)
+    let rec findBoolInters =
+        function
+        | BBEq (BVar (Reg (Intermediate(i, x))), (ConstantBoolFunction (Intermediate(k, y)) as fx))
+        | BBEq (ConstantBoolFunction (Intermediate(k, y)) as fx, BVar (Reg (Intermediate(i, x))))
+            when x = y
+            -> [((i, x), fx)]
+        | BAnd xs -> concatMap findBoolInters xs
+        | _ -> []
+
+    let rec findArithInters =
+        function
+        | BAEq (AVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Intermediate(k, y)) as fx))
+        | BAEq (ConstantIntFunction (Intermediate(k, y)) as fx, AVar (Reg (Intermediate(i, x))))
+            when x = y
+            -> [((i, x), fx)]
+        | BAnd xs -> concatMap findArithInters xs
+        | _ -> []
+
+    /// Finds any intermediate assignments in boolean functions
+    /// in the form of x!inter i := f(x!before) or x!inter i := f(x!after)
+    let rec findBoolIntersBeforeAfter =
+        function
+        | BBEq (BVar (Reg (Intermediate(i, x))), (ConstantBoolFunction (Before y) as fx))
+        | BBEq (BVar (Reg (Intermediate(i, x))), (ConstantBoolFunction (After y) as fx))
+        | BBEq (ConstantBoolFunction (Before y) as fx, BVar (Reg (Intermediate(i, x))))
+        | BBEq (ConstantBoolFunction (After y) as fx, BVar (Reg (Intermediate(i, x))))
+            when x = y
+            -> [((i, x), fx)]
+        | BAnd xs -> concatMap findBoolIntersBeforeAfter xs
+        | _ -> []
+
+    let rec findArithIntersBeforeAfter =
+        function
+        | BAEq (AVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Before y) as fx))
+        | BAEq (AVar (Reg (Intermediate(i, x))), (ConstantIntFunction (After y) as fx))
+        | BAEq (ConstantIntFunction (Before y) as fx, AVar (Reg (Intermediate(i, x))))
+        | BAEq (ConstantIntFunction (After y) as fx, AVar (Reg (Intermediate(i, x))))
+            when x = y
+            -> [((i, x), fx)]
+        | BAEq (AVar (Reg (Intermediate(i, x))), y)
+        | BAEq (y, AVar (Reg (Intermediate(i, x))))
+            -> []
+        | BAnd xs -> concatMap findArithIntersBeforeAfter xs
+        | _ -> []
+
+
     /// Lifts a pair of before/after maps to a SubFun.
     let afterSubs asubs bsubs =
         onVars
@@ -870,6 +919,18 @@ module Term =
                      | x -> AVar (Reg x))
                     (function
                      | After a -> (Map.tryFind a bsubs |> withDefault (sbAfter a))
+                     | x -> BVar (Reg x))))
+
+    /// Creates a VSubFun from intermediate substitutions
+    let interSubs asubs bsubs =
+        onVars
+            (liftVToSym
+                (Mapper.make
+                    (function
+                     | Intermediate(i, a) -> (Map.tryFind (i, a) asubs |> withDefault (siInter i a))
+                     | x -> AVar (Reg x))
+                    (function
+                     | Intermediate(i, a) -> (Map.tryFind (i, a) bsubs |> withDefault (sbInter i a))
                      | x -> BVar (Reg x))))
 
     /// Eliminates bound before/after pairs in the term.
@@ -885,6 +946,13 @@ module Term =
          * f(x!before) = f(x!before).
          * We assume we can eliminate it later.
          *)
+        subExprInDTerm sub NoCtx term |> snd
+
+    let eliminateInters : STerm<SMGView, SMVFunc> -> STerm<SMGView, SMVFunc> =
+        fun term ->
+        let sub = interSubs (findArithInters term.Cmd @ findArithIntersBeforeAfter term.Cmd |> Map.ofList)
+                            (findBoolInters term.Cmd  @ findBoolIntersBeforeAfter  term.Cmd |> Map.ofList)
+
         subExprInDTerm sub NoCtx term |> snd
 
     (*
@@ -946,6 +1014,7 @@ module Term =
         let optimiseTerm =
             Utils.optimiseWith optR optA
                 [ ("term-remove-after", true, eliminateAfters)
+                  ("term-remove-inters", true, eliminateInters)
                   ("term-reduce-guards", true, guardReduce)
                   ("term-simplify-bools", true, simpTerm) ]
         mapAxioms optimiseTerm
