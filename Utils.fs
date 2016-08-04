@@ -280,6 +280,12 @@ let foldFastTerm (f : 'State -> 'T -> 'State option)
 
     fft f s
 
+/// Repeatedly apply f until a fixed point is reached
+let fix f v =
+    let rec fixiter f v0 v1 = 
+        if v0 = v1 then v0 else fixiter f v1 (f v1)
+    fixiter f v (f v)
+
 
 /// <summary>
 ///    Utilities for testing.

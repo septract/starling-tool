@@ -5,6 +5,7 @@ open CommandLine
 open Chessie.ErrorHandling
 
 open Starling
+open Starling.Utils
 open Starling.Utils.Config
 open Starling.Core.Pretty
 open Starling.Core.Graph
@@ -358,11 +359,11 @@ let frontend times rq = Lang.Frontend.run times rq Response.Frontend Error.Front
 
 /// Shorthand for the graph optimise stage.
 let graphOptimise optR optA =
-    lift (Starling.Optimiser.Graph.optimise optR optA)
+    lift (fix <| Starling.Optimiser.Graph.optimise optR optA)
 
 /// Shorthand for the term optimise stage.
 let termOptimise optR optA =
-    lift (Starling.Optimiser.Term.optimise optR optA)
+    lift (fix <| Starling.Optimiser.Term.optimise optR optA)
 
 /// Shorthand for the flattening stage.
 let flatten = lift Starling.Flattener.flatten
