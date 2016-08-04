@@ -179,37 +179,44 @@ module Utils =
     /// </param>
     /// <returns>
     ///     A sequence of optimisers to run.
+    ///
+    ///     This builds the optimisers starting with all enabled
+    ///     removes everything that's disabled
+    ///     then adds everything that's enabled
     /// </returns>
     let mkOptimiserSet opts removes adds =
         let config = config()
-        if Set.contains "all" removes
-        then
-             if config.verbose
-             then eprintfn "note: all optimisations disabled"
+        /// Construct set of currently constructed optimisers
+        let all_opts = (Set.ofList <| List.map (fun (optName, _, _) -> optName) opts)
+        let enabled_opts =
+            if Set.contains "all" removes then
+                if config.verbose then
+                    eprintfn "note: all optimisations disabled"
+                Set.empty
+            elif Set.contains "all" adds then
+                    if config.verbose then
+                        eprintfn "note: all optimisations enabled"
+                    all_opts
+            else
+                /// backwards compatability (no args == all)
+                all_opts
 
-             []
-        else if Set.contains "all" adds
-        then
-            if config.verbose
-            then eprintfn "note: all optimisations enabled"
+            - removes
+            + adds
 
-            List.map (fun (_, _, ofun) -> ofun) opts
-        else
-            opts
-            |> Seq.choose
-                   (fun (name, on, f) ->
-                        let on' = (on || optAllowed adds name)
-                                  && (not (optAllowed removes name))
-
-                        if (config.verbose && (on' <> on))
-                        then eprintfn "note: optimisation %s forced %s"
-                                      name
-                                      (if on' then "on" else "off")
-
-                        if on' then Some f else None)
-            (* We use List instead of Seq to make sure the above evaluates
-               only once. *)
-            |> List.ofSeq
+        opts
+        |> Seq.filter
+            (fun (name, on, _) ->
+                let on' = Set.contains name enabled_opts
+                if on' <> on then
+                    eprintfn "note: optimisation %s forced %s"
+                        <| name
+                        <| if on' then "on" else "off"
+                on')
+        |> Seq.map (fun (n, _, f) -> eprintfn "running opt: %s" n; f)
+        (* We use List instead of Seq to make sure the above evaluates
+           only once. *)
+        |> List.ofSeq
 
     /// <summary>
     ///     Discovers which optimisers to activate, and applies them in
