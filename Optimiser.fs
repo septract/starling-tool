@@ -878,7 +878,11 @@ module Term =
         | BBEq (BVar (Reg (Intermediate(i, x))), (ConstantBoolFunction (Intermediate(k, y)) as fx))
         | BBEq (ConstantBoolFunction (Intermediate(k, y)) as fx, BVar (Reg (Intermediate(i, x))))
             when x = y
-            -> if i < k then [((i, x), fx)] else []
+            ->
+                if i > k then
+                    [((i, x), fx)]
+                else
+                    []
         | BBEq (BVar (Reg (Intermediate(i, x))), (ConstantBoolFunction (Before y) as fx))
         | BBEq (BVar (Reg (Intermediate(i, x))), (ConstantBoolFunction (After y) as fx))
         | BBEq (ConstantBoolFunction (Before y) as fx, BVar (Reg (Intermediate(i, x))))
@@ -896,7 +900,11 @@ module Term =
         | BAEq (AVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Intermediate(k, y)) as fx))
         | BAEq (ConstantIntFunction (Intermediate(k, y)) as fx, AVar (Reg (Intermediate(i, x))))
             when x = y
-            -> if i < k then [((i, x), fx)] else []
+            ->
+                if i > k then
+                    [((i, x), fx)]
+                else
+                    []
         | BAEq (AVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Before y) as fx))
         | BAEq (AVar (Reg (Intermediate(i, x))), (ConstantIntFunction (After y) as fx))
         | BAEq (ConstantIntFunction (Before y) as fx, AVar (Reg (Intermediate(i, x))))
