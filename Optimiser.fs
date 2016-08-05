@@ -687,7 +687,10 @@ module Graph =
                         else ctx
                 Set.fold processEdge ctx outEdges
 
-    /// Collapses edges {p}c{q}d{r} to {p}d{r} iff c is unobservable
+    /// Collapses edges {p}c{q}d{r} to {p}d{r} iff c is uoberservable
+    /// i.e. c writes to local variables overwritten by d
+    /// d does not read outputs of c,
+    /// and there are no assumes adding information
     let collapseUnoberservableEdges locals ctx =
         expandNodeIn ctx <|
             fun node nViewexpr outEdges inEdges nodeKind ->
