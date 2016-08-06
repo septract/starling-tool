@@ -70,21 +70,16 @@ module Types =
        they are, due to a cyclic dependency on Model and FuncTable. *)
 
     /// <summary>
-    ///     A <c>Model</c> whose view definitions form an indefinite
-    ///     <c>FuncTable</c>.
+    ///     A view definition function implemented as an indefinite
+    ///     <c>FuncTable</c> with no symbols.
     /// </summary>
-    /// <typeparam name="axiom">
-    ///     Type of program axioms.  /// </typeparam>
-    type IFModel<'axiom> = Model<'axiom, FuncTable<VBoolExpr option>>
+    type FuncToIndefiniteBoolDefiner = FuncTable<VBoolExpr option>
 
     /// <summary>
-    ///     A <c>Model</c> whose view definitions form a definite
-    ///     <c>FuncTable</c>.
+    ///     A view definition function implemented as a definite
+    ///     <c>FuncTable</c> with no symbols.
     /// </summary>
-    /// <typeparam name="axiom">
-    ///     Type of program axioms.
-    /// </typeparam>
-    type DFModel<'axiom> = Model<'axiom, FuncTable<VBoolExpr>>
+    type FuncToBoolDefiner = FuncTable<VBoolExpr>
 
 
 /// <summary>
@@ -123,22 +118,17 @@ module Pretty =
         |> List.toSeq
 
     /// <summary>
-    ///     Pretty-prints a model view for a <c>DFModel</c>.
+    ///     Pretty-prints a <see cref="FuncToBoolDefiner"/>.
     /// </summary>
-    /// <param name="pAxiom">
-    ///     Pretty printer for axioms.
-    /// </param>
-    /// <typeparam name="axiom">
-    ///     Type of axioms.
-    /// </typeparam>
-    /// <returns>
-    ///     A function, taking a <c>ModelView</c> and <c>DFModel</c>, and
-    ///     returning a <c>Doc</c>.
-    /// </returns>
-    let printDFModelView
-      (pAxiom : 'axiom -> Doc)
-      : ModelView -> DFModel<'axiom> -> Doc =
-        printModelView pAxiom (printFuncTable printVBoolExpr)
+    let printFuncToBoolDefiner : FuncToBoolDefiner -> Doc seq =
+        printFuncTable printVBoolExpr
+
+    /// <summary>
+    ///     Pretty-prints a <see cref="FuncToIndefiniteBoolDefiner"/>.
+    /// </summary>
+    let printFuncToIndefiniteBoolDefiner : FuncToIndefiniteBoolDefiner -> Doc seq =
+        printFuncTable
+            (fun x -> withDefault (String "?") (Option.map printVBoolExpr x))
 
     /// Pretty-prints instantiation errors.
     let printError =
@@ -369,7 +359,7 @@ let paramSubFun
              | Some _ -> failwith "param substitution type error"
              | None -> failwith "free variable in substitution")
 
-let paramToMExpr = 
+let paramToMExpr =
     function
     | Int  i -> After i |> Reg |> AVar |> Int
     | Bool b -> After b |> Reg |> BVar |> Bool
@@ -516,7 +506,7 @@ module ViewDefFilter =
     /// </summary>
     let filterIndefiniteViewDefs
       (vds : SVBViewDef<DFunc> list)
-      : Result<FuncTable<VBoolExpr option>, Error> =
+      : Result<FuncToIndefiniteBoolDefiner, Error> =
         // TODO(CaptainHayashi): proper doc comment.
         vds
         |> funcTableFromViewDefs
@@ -542,7 +532,7 @@ module ViewDefFilter =
     /// </summary>
     let filterDefiniteViewDefs
       (vds : SVBViewDef<DFunc> list)
-      : Result<FuncTable<VBoolExpr>, Error> =
+      : Result<FuncToBoolDefiner, Error> =
         // TODO(CaptainHayashi): proper doc comment.
         vds
         |> funcTableFromViewDefs
@@ -562,11 +552,13 @@ module ViewDefFilter =
     /// <returns>
     ///     A <c>Result</c> over <c>Error</c> containing the
     ///     new model if the original contained only definite view
-    ///     definitions.  The new model is an <c>IFModel</c>.
+    ///     definitions.
     /// </returns>
     let filterModelIndefinite
-      (model : UFModel<Term<SMBoolExpr, SMGView, SMVFunc>> )
-      : Result<IFModel<Term<MBoolExpr, MGView, MVFunc>>, Error> =
+      (model : Model<Term<SMBoolExpr, SMGView, SMVFunc>,
+                     FuncToSymBoolDefiner> )
+      : Result<Model<Term<MBoolExpr, MGView, MVFunc>,
+                     FuncToIndefiniteBoolDefiner>, Error> =
         model
         |> tryMapAxioms (trySubExprInDTerm (tsfRemoveSym UnwantedSym) NoCtx >> snd)
         |> bind (tryMapViewDefs filterIndefiniteViewDefs)
@@ -657,7 +649,7 @@ module Phase =
     ///     The model with all views instantiated.
     /// </returns>
     let run
-      (model : UFModel<STerm<SMGView, SMVFunc>>)
+      (model : Model<STerm<SMGView, SMVFunc>, FuncToSymBoolDefiner>)
       : Result<Model<SFTerm, unit>, Error> =
       let vs = symboliseIndefinites model.ViewDefs
 

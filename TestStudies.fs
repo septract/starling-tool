@@ -566,7 +566,7 @@ let ticketLockViewDefs =
            BFalse) ]
 
 /// The model of the ticket lock.
-let ticketLockModel : UVModel<PMethod<ViewExpr<CView>>> =
+let ticketLockModel : Model<ModellerMethod, ViewToSymBoolDefiner> =
     { Globals =
           Map.ofList [ ("serving", Type.Int ())
                        ("ticket", Type.Int ()) ]

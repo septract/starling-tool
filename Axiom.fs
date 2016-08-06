@@ -134,8 +134,9 @@ let goalAddAxiom (ds : ViewDef<DView, _> list)
 /// <returns>
 ///     The new <c>Model</c>, over <c>GoalAxiom</c>s.
 /// </returns>
-let goalAdd (mdl : UVModel<Axiom<SVGView, 'cmd>>)
-            : UVModel<GoalAxiom<'cmd>> =
+let goalAdd
+  (mdl : Model<Axiom<SVGView, 'cmd>, _>)
+  : Model<GoalAxiom<'cmd>, _> =
     // We use a fresh ID generator to ensure every goal variable is unique.
     let fg = freshGen ()
 

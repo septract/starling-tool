@@ -108,8 +108,8 @@ let flattenViewDef
 ///     The flattened model.
 /// </returns>
 let flatten
-  (model : UVModel<Term<_, Set<GuardedSubview>, OView>>)
-  : UFModel<Term<_, SMGView, SMVFunc>> =
+  (model : Model<Term<_, Set<GuardedSubview>, OView>, ViewToSymBoolDefiner>)
+  : Model<Term<_, SMGView, SMVFunc>, FuncToSymBoolDefiner> =
     /// Build a function making a list of global arguments, for view assertions.
     let globalsF marker = varMapToExprs (marker >> Reg) model.Globals
 

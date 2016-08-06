@@ -435,7 +435,9 @@ let hsfModelTerms gs dvs =
 
 /// Constructs a HSF script for a model.
 let hsfModel
-  ( { Globals = gs; ViewDefs = dvs; Axioms = xs } : IFModel<Term<MBoolExpr, MGView, MVFunc>> ) =
+  ({ Globals = gs; ViewDefs = dvs; Axioms = xs }
+     : Model<Term<MBoolExpr, MGView, MVFunc>, FuncToIndefiniteBoolDefiner>)
+  : Result<Horn list, Error> =
     trial {
         let! vs = gs |> hsfModelVariables
         let! ds = hsfModelViewDefs gs dvs |> lift Set.toList

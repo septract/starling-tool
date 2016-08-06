@@ -23,10 +23,6 @@ open Starling.Lang.Guarder.Types
 open Starling.Core.Command
 open Starling.Core.Command.Create
 
-[<AutoOpen>]
-module Types =
-    type GrapherModel = UVModel<Graph>
-
 let cId : Command = List.empty
 (* TODO(CaptainHayashi): currently we're assuming Assumed expressions
    are in pre-state position.  When we move to type-safe renaming this
@@ -328,5 +324,12 @@ let graphMethod
 /// <summary>
 ///     Converts a model on method ASTs to one on method CFGs.
 /// </summary>
-let graph (model : UVModel<GuarderMethod>) : Result<UVModel<Graph>, Error> =
+/// <param name="model">
+///     The model to transform.
+/// </param>
+/// <returns>
+///     A model whose axioms are the graphs resulting from the
+///     methods of <paramref name="model"/>.
+/// </returns>
+let graph (model : Model<GuarderMethod, _>) : Result<Model<Graph, _>, Error> =
     tryMapAxioms graphMethod model

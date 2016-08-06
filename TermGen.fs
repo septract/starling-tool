@@ -105,16 +105,16 @@ let termGenPre
     Multiset.append pre (termGenFrame goal post)
 
 /// Generates a term from a goal axiom.
-let termGenAxiom
-  (gax : GoalAxiom<'cmd>)
+let termGenAxiom (gax : GoalAxiom<'cmd>)
   : Term<'cmd, SMGView, OView> =
     { WPre = termGenPre gax
       Goal = gax.Goal
       Cmd = gax.Axiom.Cmd }
 
 /// Converts a model's goal axioms to terms.
-let termGen  (mdl : UVModel<GoalAxiom<'cmd>>) :  UVModel<Term<'cmd, SMGView, OView>> =
-    mapAxioms termGenAxiom mdl
+let termGen (model : Model<GoalAxiom<'cmd>, _>)
+  : Model<Term<'cmd, SMGView, OView>, _> =
+    mapAxioms termGenAxiom model
 
 
 /// <summary>

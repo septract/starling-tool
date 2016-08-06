@@ -1227,7 +1227,9 @@ let modelViewProtos protos =
     |> lift Instantiate.makeFuncTable
 
 /// Converts a collated script to a model.
-let model collated : Result<UVModel<PMethod<ViewExpr<CView>>>, ModelError> =
+let model
+  (collated : CollatedScript)
+  : Result<Model<ModellerMethod, ViewToSymBoolDefiner>, ModelError> =
     trial {
         // Make variable maps out of the global and local variable definitions.
         let! globals = makeVarMap collated.Globals

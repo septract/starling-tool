@@ -76,6 +76,5 @@ let guardMethod { Signature = signature; Body = body } =
     { Signature = signature; Body = guardBlock body }
 
 /// Converts an entire model to guarded views.
-let guard : UVModel<ModellerMethod>
-         -> UVModel<GuarderMethod> =
-    mapAxioms guardMethod
+let guard (model : Model<ModellerMethod, _>) : Model<GuarderMethod, _> =
+    mapAxioms guardMethod model

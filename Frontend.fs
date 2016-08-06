@@ -17,6 +17,7 @@ open Starling.Core.GuardedView.Pretty
 open Starling.Lang.AST.Pretty
 open Starling.Lang.Modeller
 open Starling.Lang.Modeller.Pretty
+open Starling.Lang.Guarder
 
 
 (*
@@ -52,11 +53,11 @@ type Response =
     /// Output of the parsing and collation steps.
     | Collate of Collator.Types.CollatedScript
     /// Output of the parsing, collation, and modelling steps.
-    | Model of UVModel<PMethod<ViewExpr<CView>>>
+    | Model of Model<ModellerMethod, ViewToSymBoolDefiner>
     /// Output of the parsing, collation, modelling, and guarding stages.
-    | Guard of UVModel<PMethod<ViewExpr<SVGView>>>
+    | Guard of Model<GuarderMethod, ViewToSymBoolDefiner>
     /// Output of the parsing, collation, modelling, guarding and destructuring stages.
-    | Graph of UVModel<Graph>
+    | Graph of Model<Graph, ViewToSymBoolDefiner>
 
 (*
  * Error types
@@ -88,26 +89,24 @@ type Error =
 ///     A function converting Responses to Docs.
 /// </returns>
 let printResponse (mview : ModelView) : Response -> Doc =
+    let printVModel paxiom m =
+        printModelView paxiom printViewToSymBoolDefiner mview m
+
     function
     | Response.Parse s -> Lang.AST.Pretty.printScript s
     | Response.Collate c -> Lang.Collator.Pretty.printCollatedScript c
     | Response.Model m ->
-        printUVModelView
+        printVModel
             (printMethod (printViewExpr printCView)
                          (printPartCmd (printViewExpr printCView)))
-            mview
             m
     | Response.Guard m ->
-        printUVModelView
+        printVModel
             (printMethod (printViewExpr printSVGView)
                          (printPartCmd (printViewExpr printSVGView)))
-            mview
             m
     | Response.Graph m ->
-        printUVModelView
-            printGraph
-            mview
-            m
+        printVModel printGraph m
 
 /// <summary>
 ///     Pretty-prints an error.
@@ -134,7 +133,9 @@ let run
   (request : Request)
   (success : Response -> 'response)
   (error : Error -> 'error)
-  (continuation : Result<UVModel<Graph>, 'error> -> Result<'response, 'error>)
+  (continuation
+     : Result<Model<Graph, ViewToSymBoolDefiner>, 'error>
+     -> Result<'response, 'error>)
   : string option -> Result<'response, 'error> =
     let phase op test output continuation m =
         let time = System.Diagnostics.Stopwatch.StartNew()

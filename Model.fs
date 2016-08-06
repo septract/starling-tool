@@ -136,23 +136,16 @@ module Types =
           ViewDefs : 'viewdefs }
 
     /// <summary>
-    ///     A <c>Model</c> whose view definitions map <c>DView</c>s
-    ///     through <c>ViewDef</c>s.
-    ///     <c>Indefinite</c> bodies.
+    ///     A defining view function implemented as a list of mappings
+    ///     from <c>DView</c>s to <c>SVBoolExpr</c>s.
     /// </summary>
-    /// <typeparam name="axiom">
-    ///     Type of program axioms.
-    /// </typeparam>
-    type UVModel<'axiom> = Model<'axiom, SVBViewDef<DView> list>
+    type ViewToSymBoolDefiner = ViewDef<DView, SVBoolExpr> list
 
     /// <summary>
-    ///     A <c>Model</c> whose view definitions map <c>DFunc</c>s
-    ///     through <c>ViewDef</c>s.
+    ///     A defining view function implemented as a list of mappings
+    ///     from <c>DView</c>s to <c>SVBoolExpr</c>s.
     /// </summary>
-    /// <typeparam name="axiom">
-    ///     Type of program axioms.
-    /// </typeparam>
-    type UFModel<'axiom> = Model<'axiom, SVBViewDef<DFunc> list>
+    type FuncToSymBoolDefiner = ViewDef<DFunc, SVBoolExpr> list
 
 /// <summary>
 ///     Pretty printers for the model.
@@ -193,22 +186,6 @@ module Pretty =
     let printSymbol s =
         hjoin [ String "%" ; s |> String |> braced ]
 
-    /// Pretty-prints a model constraint.
-    let printViewDef pView pDef =
-        function
-        | Definite (vs, e) ->
-            printAssoc Inline
-                [ (String "View", pView vs)
-                  (String "Def", pDef e) ]
-        | Indefinite vs ->
-            printAssoc Inline
-                [ (String "View", pView vs)
-                  (String "Def", String "?") ]
-
-    /// Pretty-printer for BViewDefs.
-    let printSVBViewDef pView =
-        printViewDef pView printSVBoolExpr
-
     /// Pretty-prints the axiom map for a model.
     let printModelAxioms pAxiom model =
         printMap Indented String pAxiom model.Axioms
@@ -227,6 +204,17 @@ module Pretty =
               headed "Axioms" <|
                   Seq.singleton (printModelAxioms pAxiom model) ]
 
+    /// <summary>
+    ///     Pretty-prints a <see cref="ViewToSymBoolDefiner"/>.
+    /// </summary>
+    let printViewToSymBoolDefiner : ViewToSymBoolDefiner -> Doc seq =
+        Seq.map (printViewDef printDView printSVBoolExpr)
+
+    /// <summary>
+    ///     Pretty-prints a <see cref="FuncToSymBoolDefiner"/>.
+    /// </summary>
+    let printFuncToSymBoolDefiner : FuncToSymBoolDefiner -> Doc seq =
+        Seq.map (printViewDef printDFunc printSVBoolExpr)
 
     /// <summary>
     ///     Enumerations of ways to view part or all of a <c>Model</c>.
@@ -274,32 +262,6 @@ module Pretty =
             Map.tryFind termstr m.Axioms
             |> Option.map pAxiom
             |> withDefault (termstr |> sprintf "no term '%s'" |> String)
-
-    /// <summary>
-    ///     Pretty-prints a model view for an <c>UVModel</c>.
-    /// </summary>
-    /// <param name="pAxiom">
-    ///     Pretty printer for axioms.
-    /// </param>
-    /// <returns>
-    ///     A function, taking a <c>ModelView</c> and <c>UVModel</c>, and
-    ///     returning a <c>Command</c>.
-    /// </returns>
-    let printUVModelView pAxiom =
-        printModelView pAxiom (List.map (printSVBViewDef printDView))
-
-    /// <summary>
-    ///     Pretty-prints a model view for an <c>UFModel</c>.
-    /// </summary>
-    /// <param name="pAxiom">
-    ///     Pretty printer for axioms.
-    /// </param>
-    /// <returns>
-    ///     A function, taking a <c>ModelView</c> and <c>UFModel</c>, and
-    ///     returning a <c>Command</c>.
-    /// </returns>
-    let printUFModelView pAxiom =
-        printModelView pAxiom (List.map (printSVBViewDef printDFunc))
 
 
 /// <summary>

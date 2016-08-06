@@ -161,21 +161,21 @@ type Response =
     /// The result of frontend processing.
     | Frontend of Lang.Frontend.Response
     /// Stop at graph optimisation.
-    | GraphOptimise of UVModel<Graph>
+    | GraphOptimise of Model<Graph, ViewToSymBoolDefiner>
     /// Stop at graph axiomatisation.
-    | Axiomatise of UVModel<Axiom<SVGView, Command>>
+    | Axiomatise of Model<Axiom<SVGView, Command>, ViewToSymBoolDefiner>
     /// The result of goal-axiom-pair generation.
-    | GoalAdd of UVModel<GoalAxiom<Command>>
+    | GoalAdd of Model<GoalAxiom<Command>, ViewToSymBoolDefiner>
     /// The result of semantic expansion.
-    | Semantics of UVModel<GoalAxiom<SMBoolExpr>>
+    | Semantics of Model<GoalAxiom<SMBoolExpr>, ViewToSymBoolDefiner>
     /// The result of term generation.
-    | TermGen of UVModel<STerm<SMGView, OView>>
+    | TermGen of Model<STerm<SMGView, OView>, ViewToSymBoolDefiner>
     /// The result of term reification.
-    | Reify of UVModel<STerm<Set<GuardedSubview>, OView>>
+    | Reify of Model<STerm<Set<GuardedSubview>, OView>, ViewToSymBoolDefiner>
     /// The result of term flattening.
-    | Flatten of UFModel<STerm<SMGView, SMVFunc>>
+    | Flatten of Model<STerm<SMGView, SMVFunc>, FuncToSymBoolDefiner>
     /// The result of term optimisation.
-    | TermOptimise of UFModel<STerm<SMGView, SMVFunc>>
+    | TermOptimise of Model<STerm<SMGView, SMVFunc>, FuncToSymBoolDefiner>
     /// Output a fully-instantiated symbolic proof.
     | SymProof of Model<SFTerm, unit>
     /// Output a fully-instantiated symbolic unstructured proof.
@@ -196,59 +196,44 @@ type Response =
 
 /// Pretty-prints a response.
 let printResponse mview =
+    let printVModel paxiom m =
+        printModelView paxiom printViewToSymBoolDefiner mview m
+    let printFModel paxiom m =
+        printModelView paxiom printFuncToSymBoolDefiner mview m
+    let printUModel paxiom m =
+        printModelView paxiom (fun _ -> Seq.empty) mview m
+
     function
     | List l -> printMap Indented String String l
     | Frontend f -> Lang.Frontend.printResponse mview f
-    | GraphOptimise g ->
-        printUVModelView printGraph mview g
-    | Axiomatise m ->
-        printUVModelView (printAxiom printSVGView printCommand) mview m
-    | GoalAdd m ->
-        printUVModelView (printGoalAxiom printCommand) mview m
-    | Semantics m ->
-        printUVModelView (printGoalAxiom printSMBoolExpr) mview m
-    | TermGen m ->
-        printUVModelView (printSTerm printSMGView printOView) mview m
-    | Reify m ->
-        printUVModelView (printSTerm printGuardedSubviewSet printOView) mview m
-    | Flatten m ->
-        printUFModelView (printSTerm printSMGView printSMVFunc) mview m
-    | TermOptimise m ->
-        printUFModelView (printSTerm printSMGView printSMVFunc) mview m
+    | GraphOptimise g -> printVModel printGraph g
+    | Axiomatise m -> printVModel (printAxiom printSVGView printCommand) m
+    | GoalAdd m -> printVModel (printGoalAxiom printCommand) m
+    | Semantics m -> printVModel (printGoalAxiom printSMBoolExpr) m
+    | TermGen m -> printVModel (printSTerm printSMGView printOView) m
+    | Reify m -> printVModel (printSTerm printGuardedSubviewSet printOView) m
+    | Flatten m -> printFModel (printSTerm printSMGView printSMVFunc) m
+    | TermOptimise m -> printFModel (printSTerm printSMGView printSMVFunc) m
     | SymProof m ->
-        printModelView
+        printUModel
             (printTerm printSMBoolExpr printSMBoolExpr printSMBoolExpr)
-            (fun _ -> Seq.empty)
-            mview
             m
     | RawSymProof m ->
-        printModelView
-            Core.Symbolic.Pretty.printSMBoolExpr
-            (fun _ -> Seq.empty)
-            mview
-            m
+        printUModel Core.Symbolic.Pretty.printSMBoolExpr m
     | Proof m ->
-        printModelView
+        printUModel
             (printTerm
                  Core.Var.Pretty.printMBoolExpr
                  Core.Var.Pretty.printMBoolExpr
                  Core.Var.Pretty.printMBoolExpr)
-            (fun _ -> Seq.empty)
-            mview
             m
     | RawProof m ->
-        printModelView
-            Core.Var.Pretty.printMBoolExpr
-            (fun _ -> Seq.empty)
-            mview
-            m
+        printUModel Core.Var.Pretty.printMBoolExpr m
     | Z3 z -> Backends.Z3.Pretty.printResponse mview z
     | SymZ3 (z, m) ->
        vmerge (Backends.Z3.Pretty.printResponse mview z)
-              (printModelView
+              (printUModel
                 (printTerm printSMBoolExpr printSMBoolExpr printSMBoolExpr)
-                (fun _ -> Seq.empty)
-                mview
                 m)
     | MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
     | HSF h -> Backends.Horn.Pretty.printHorns h

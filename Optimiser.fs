@@ -1034,15 +1034,16 @@ module Term =
      *)
 
     /// Term optimisers switched on by default.
-    let defaultTermOpts =
+    let defaultTermOpts : Set<string> =
         Set.ofList [ "term-remove-after"
                      "term-reduce-guards"
                      "term-simplify-bools" ]
 
     /// Optimises a model's terms.
-    let optimise opts
-      : UFModel<STerm<SMGView, SMVFunc>>
-          -> UFModel<STerm<SMGView, SMVFunc>> =
+    let optimise
+      (opts : (string * bool) list)
+      : Model<STerm<SMGView, SMVFunc>, _>
+      -> Model<STerm<SMGView, SMVFunc>, _> =
         let optimiseTerm =
             Utils.optimiseWith opts
                 [ ("term-remove-after", true, eliminateAfters)

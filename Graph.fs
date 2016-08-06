@@ -681,8 +681,9 @@ let axiomatiseGraphs
 ///     An axiom-based model equivalent to <paramref name="model" />,
 ///     wrapped in a Chessie result.
 /// </returns>
-let axiomatise (model : UVModel<Graph>)
-               : UVModel<Axiom<SVGView, Command>> =
+let axiomatise
+  (model : Model<Graph, _>)
+  : Model<Axiom<SVGView, Command>, _> =
     withAxioms (axiomatiseGraphs model.Axioms) model
 
 
