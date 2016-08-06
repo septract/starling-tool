@@ -18,6 +18,7 @@ module Types =
     /// <typeparam name="var">
     ///     The type of variables in the expression.
     /// </typeparam>
+    
     type Expr<'var> = Typed<IntExpr<'var>, BoolExpr<'var>>
 
     /// <summary>
@@ -129,6 +130,27 @@ let (|BBEq|_|) =
     | BEq (Bool x, Bool y) -> Some (x, y)
     | _ -> None
 
+
+/// Define when two Boolean expressions are trivially equal 
+/// Eg: (= a b)  is equivalent ot (=b a)
+let rec eqBoolExpr (e1: BoolExpr<'var>) (e2:BoolExpr<'var>) : bool   = 
+  match e1, e2 with 
+  | BEq (a1,a2), BEq (b1,b2) -> 
+     ((a1=a2 && b1=b2) || (a1=b2 && b1=a2))
+  | BNot a, BNot b -> eqBoolExpr a b 
+  | _ -> false 
+
+
+/// Remove duplicate boolean expressions 
+/// TODO(@septract) This is stupid, should do it more cleverly 
+let rec remExprDup (xs: List<BoolExpr<'var>>) : List<BoolExpr<'var>> =   
+  match xs with 
+  | (x::xs) -> 
+      let xs2 = remExprDup xs in 
+      if (List.exists (eqBoolExpr x) xs) then xs2 else x::xs2
+  | x -> x 
+
+
 /// Recursively simplify a formula
 /// Note: this does _not_ simplify variables.
 let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
@@ -170,9 +192,11 @@ let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
                 )
                 []
                 xs with
-        | Some []  -> BFalse
-        | Some [x] -> x
-        | Some xs  -> BOr (List.rev xs)
+        | Some xs -> 
+           match remExprDup xs with 
+           | []  -> BFalse
+           | [x] -> x
+           | xs  -> BOr (List.rev xs)
         | None     -> BTrue
     // An and is always true if everything in it is always true.
     | BAnd xs ->
@@ -185,10 +209,12 @@ let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
                   | y       -> Some (y :: s)
                 )
                 []
-                xs with
-        | Some []  -> BTrue
-        | Some [x] -> x
-        | Some xs  -> BAnd (List.rev xs)
+                xs with 
+        | Some xs -> 
+           match remExprDup xs with 
+           | []  -> BTrue
+           | [x] -> x
+           | xs  -> BAnd (List.rev xs)
         | None     -> BFalse
     // A Boolean equality between two contradictions or tautologies is always true.
     | BBEq (x, y)  ->
