@@ -50,6 +50,9 @@ module Types =
     /// Methods over PartCmd.
     type PMethod<'view> = Method<'view, PartCmd<'view>>
 
+    type ModellerViewExpr = ViewExpr<CView>
+    type ModellerMethod = PMethod<ModellerViewExpr>
+
     // TODO(CaptainHayashi): more consistent constructor names
     /// Represents an error when converting an expression.
     type ExprError =

@@ -19,10 +19,15 @@ open Starling.Core.GuardedView
 open Starling.Core.Graph
 open Starling.Lang.AST
 open Starling.Lang.Modeller
+open Starling.Lang.Guarder.Types
 open Starling.Core.Command
 open Starling.Core.Command.Create
 
-let cId = List.empty
+[<AutoOpen>]
+module Types =
+    type GrapherModel = UVModel<Graph>
+
+let cId : Command = List.empty
 (* TODO(CaptainHayashi): currently we're assuming Assumed expressions
    are in pre-state position.  When we move to type-safe renaming this
    change should happen *here*. *)
@@ -57,7 +62,15 @@ let cAssumeNot : SMBoolExpr -> Command = mkNot >> cAssume
 /// <returns>
 ///     A Chessie result containing the graph of this if statement.
 /// </returns>
-let rec graphWhile vg cg oP oQ isDo (expr : SVBoolExpr) inner =
+let rec graphWhile
+  (vg : unit -> NodeID)
+  (cg : unit -> EdgeID)
+  (oP : NodeID)
+  (oQ : EdgeID)
+  (isDo : bool)
+  (expr : SVBoolExpr)
+  (inner : GuarderBlock)
+  : Result<Subgraph, Error> =
     (* First, we need to convert the expression into an assert.
        This means we cast it into the pre-state, as it is diverging the
        program if its state _entering_ the loop condition makes expr go
@@ -131,7 +144,15 @@ let rec graphWhile vg cg oP oQ isDo (expr : SVBoolExpr) inner =
 /// <returns>
 ///     A Chessie result containing the graph of this if statement.
 /// </returns>
-and graphITE vg cg oP oQ expr inTrue inFalse =
+and graphITE
+  (vg : unit -> NodeID)
+  (cg : unit -> EdgeID)
+  (oP : NodeID)
+  (oQ : NodeID)
+  (expr : SVBoolExpr)
+  (inTrue : GuarderBlock)
+  (inFalse : GuarderBlock)
+  : Result<Subgraph, Error> =
     (* First, we need to convert the expression into an assert.
        This means we cast it into the pre-state, as it is diverging the
        program if its state _entering_ the loop condition makes expr go
@@ -182,8 +203,12 @@ and graphITE vg cg oP oQ expr inTrue inFalse =
 /// <param name="_arg1">
 ///     The command to graph.
 /// </param>
-and graphCommand vg cg oP oQ : PartCmd<ViewExpr<SVGView>>
-                            -> Result<Subgraph, Error> =
+and graphCommand
+  (vg : unit -> NodeID)
+  (cg : unit -> EdgeID)
+  (oP : NodeID)
+  (oQ : NodeID)
+  : GuarderPartCmd -> Result<Subgraph, Error> =
     function
     | Prim cmd ->
         /// Each prim is an edge by itself, so just make a one-edge graph.
@@ -196,13 +221,23 @@ and graphCommand vg cg oP oQ : PartCmd<ViewExpr<SVGView>>
 /// <summary>
 ///     Performs one step in creating a control-flow graph from a block.
 /// </summary>
+/// <param name="last">
+///     Whether or not this is the last step in the block.
+/// </param>
 /// <param name="vg">
 ///     The fresh identifier generator to use for view IDs.
 /// </param>
 /// <param name="cg">
 ///     The fresh identifier generator to use for command IDs.
 /// </param>
-and graphBlockStep last vg cg (iP, oGraphR) {ViewedCommand.Command = cmd; Post = iQview} =
+and graphBlockStep
+  (last : bool)
+  (vg : unit -> NodeID)
+  (cg : unit -> EdgeID)
+  ((iP, oGraphR) : NodeID * Result<Subgraph, Error>)
+  ({ViewedCommand.Command = cmd; Post = iQview}
+     : ViewedCommand<GuarderViewExpr, GuarderPartCmd>)
+  : NodeID * Result<Subgraph, Error> =
     (* We already know the precondition's ID--it's in pre.
      * However, we now need to create an ID for the postcondition.
      *)
@@ -229,13 +264,21 @@ and graphBlockStep last vg cg (iP, oGraphR) {ViewedCommand.Command = cmd; Post =
 /// <summary>
 ///     Constructs a control-flow graph for a block.
 /// </summary>
+/// <param name="topLevel">
+///     Whether or not this is a top-level block.
+/// </param>
 /// <param name="vg">
 ///     The fresh identifier generator to use for view IDs.
 /// </param>
 /// <param name="cg">
 ///     The fresh identifier generator to use for command IDs.
 /// </param>
-and graphBlock topLevel vg cg {Pre = bPre; Contents = bContents} =
+and graphBlock
+  (topLevel : bool)
+  (vg : unit -> NodeID)
+  (cg : unit -> NodeID)
+  ({Pre = bPre; Contents = bContents} : GuarderBlock)
+  : Result<NodeID * NodeID * Subgraph, Error> =
     // First, generate the ID for the precondition.
     let oP = vg ()
 
@@ -264,7 +307,9 @@ and graphBlock topLevel vg cg {Pre = bPre; Contents = bContents} =
 /// <summary>
 ///     Constructs a control-flow graph for a method.
 /// </summary>
-let graphMethod { Signature = { Name = name }; Body = body } =
+let graphMethod
+  ({ Signature = { Name = name }; Body = body } : GuarderMethod)
+  : Result<Graph, Error> =
     let vgen = freshGen ()
     let viewName () = 
        getFresh vgen 
@@ -283,6 +328,5 @@ let graphMethod { Signature = { Name = name }; Body = body } =
 /// <summary>
 ///     Converts a model on method ASTs to one on method CFGs.
 /// </summary>
-let graph (model : UVModel<PMethod<ViewExpr<SVGView>>>)
-          : Result<UVModel<Graph>, Error> =
+let graph (model : UVModel<GuarderMethod>) : Result<UVModel<Graph>, Error> =
     tryMapAxioms graphMethod model

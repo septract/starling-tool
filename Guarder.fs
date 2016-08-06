@@ -14,6 +14,14 @@ open Starling.Core.GuardedView
 open Starling.Lang.AST
 open Starling.Lang.Modeller
 
+[<AutoOpen>]
+module Types =
+    type GuarderViewExpr = ViewExpr<SVGView>
+    type GuarderPartCmd = PartCmd<GuarderViewExpr>
+    type GuarderBlock = Block<GuarderViewExpr, GuarderPartCmd>
+    type GuarderMethod = Method<GuarderViewExpr, GuarderPartCmd>
+
+
 /// Converts a func from conditional to guarded form.
 /// This takes the set of all conditions forming the suffix of any guards
 /// generated from this view.
@@ -68,6 +76,6 @@ let guardMethod { Signature = signature; Body = body } =
     { Signature = signature; Body = guardBlock body }
 
 /// Converts an entire model to guarded views.
-let guard : UVModel<PMethod<ViewExpr<CView>>>
-         -> UVModel<PMethod<ViewExpr<SVGView>>> =
+let guard : UVModel<ModellerMethod>
+         -> UVModel<GuarderMethod> =
     mapAxioms guardMethod
