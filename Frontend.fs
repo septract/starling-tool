@@ -129,7 +129,13 @@ let printError : Error -> Doc =
 /// error, output with the surrounding pipeline; the fifth is a continuation for the
 /// surrounding pipeline; and final is an optional filename from which the frontend
 /// should read (if empty, read from stdin).
-let run times request success error continuation =
+let run
+  (times : bool)
+  (request : Request)
+  (success : Response -> 'response)
+  (error : Error -> 'error)
+  (continuation : Result<UVModel<Graph>, 'error> -> Result<'response, 'error>)
+  : string option -> Result<'response, 'error> =
     let phase op test output continuation m =
         let time = System.Diagnostics.Stopwatch.StartNew()
         op m
