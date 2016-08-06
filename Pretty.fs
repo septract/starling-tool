@@ -150,6 +150,21 @@ let print = if config().color then printStyled else printUnstyled
  * Shortcuts
  *)
 
+
+// Hacky merge between two VSep sequences 
+let vmerge a b = 
+  let rec interleave = function //same as: let rec interleave (xs, ys) = match xs, ys with
+    |([], ys) -> ys
+    |(xs, []) -> xs
+    |(x::xs, y::ys) -> x :: y :: interleave (xs,ys)
+
+  match a, b with 
+    | (VSep (xs, i), VSep (ys, j))  -> 
+           let xy = interleave (List.ofSeq xs, List.ofSeq ys) in 
+           VSep (Seq.ofList xy, Nop)
+    | _ -> Nop
+
+
 let fmt fstr xs =
     (* This weird casting dance is how we tell Format to use the obj[] overload.
      * Otherwise, it might try to print xss as if it's one argument!
