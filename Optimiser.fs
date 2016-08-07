@@ -553,7 +553,7 @@ module Graph =
     ///         <c>GView</c>s, but with a <c>BTrue</c> guard.
     ///     </para>
     /// </summary>
-    let (|ITEGuards|_|) (ms: SVGView) =
+    let (|ITEGuards|_|) (ms: GView<Sym<Var>>) =
         match (Multiset.toFlatList ms) with
         | [ { Cond = VNoSym xc; Item = xi }
             { Cond = VNoSym yc; Item = yi } ]
@@ -969,8 +969,8 @@ module Term =
     /// If x!after = f(x!before) in the action, we replace x!after with
     /// f(x!before) in the precondition and postcondition.
     let eliminateAfters
-      (term : STerm<SMGView, SMVFunc> )
-      : STerm<SMGView, SMVFunc> =
+      (term : STerm<GView<Sym<MarkedVar>>, SMVFunc> )
+      : STerm<GView<Sym<MarkedVar>>, SMVFunc> =
         let sub = afterSubs (term.Cmd |> findArithAfters |> Map.ofList)
                             (term.Cmd |> findBoolAfters  |> Map.ofList)
 
@@ -980,7 +980,9 @@ module Term =
          *)
         subExprInDTerm sub NoCtx term |> snd
 
-    let eliminateInters : STerm<SMGView, SMVFunc> -> STerm<SMGView, SMVFunc> =
+    let eliminateInters
+      : STerm<GView<Sym<MarkedVar>>, SMVFunc>
+        -> STerm<GView<Sym<MarkedVar>>, SMVFunc> =
         fun term ->
         let sub = interSubs (term.Cmd |> findArithInters |> Map.ofList)
                             (term.Cmd |> findBoolInters  |> Map.ofList)
@@ -1013,8 +1015,8 @@ module Term =
 
     /// Reduce the guards in a Term.
     let guardReduce
-      ( {Cmd = c; WPre = w; Goal = g} : STerm<SMGView, SMVFunc> )
-      : STerm<SMGView, SMVFunc> =
+      ({Cmd = c; WPre = w; Goal = g} : STerm<GView<Sym<MarkedVar>>, SMVFunc>)
+      : STerm<GView<Sym<MarkedVar>>, SMVFunc> =
 
         let fs = c |> facts |> Set.ofList
         {Cmd = c; WPre = reduceGView fs w; Goal = g}
@@ -1025,8 +1027,8 @@ module Term =
 
     /// Performs expression simplification on a term.
     let simpTerm
-      : STerm<SMGView, SMVFunc>
-        -> STerm<SMGView, SMVFunc> =
+      : STerm<GView<Sym<MarkedVar>>, SMVFunc>
+        -> STerm<GView<Sym<MarkedVar>>, SMVFunc> =
         subExprInDTerm (Mapper.make id simp) NoCtx >> snd
 
     (*
@@ -1042,8 +1044,8 @@ module Term =
     /// Optimises a model's terms.
     let optimise
       (opts : (string * bool) list)
-      : Model<STerm<SMGView, SMVFunc>, _>
-      -> Model<STerm<SMGView, SMVFunc>, _> =
+      : Model<STerm<GView<Sym<MarkedVar>>, SMVFunc>, _>
+      -> Model<STerm<GView<Sym<MarkedVar>>, SMVFunc>, _> =
         let optimiseTerm =
             Utils.optimiseWith opts
                 [ ("term-remove-after", true, eliminateAfters)

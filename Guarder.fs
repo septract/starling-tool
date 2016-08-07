@@ -9,6 +9,7 @@ open Starling.Utils
 open Starling.Core.Expr
 open Starling.Core.Symbolic
 open Starling.Core.Model
+open Starling.Core.Var
 open Starling.Core.View
 open Starling.Core.GuardedView
 open Starling.Lang.AST
@@ -16,7 +17,7 @@ open Starling.Lang.Modeller
 
 [<AutoOpen>]
 module Types =
-    type GuarderViewExpr = ViewExpr<SVGView>
+    type GuarderViewExpr = ViewExpr<GView<Sym<Var>>>
     type GuarderPartCmd = PartCmd<GuarderViewExpr>
     type GuarderBlock = Block<GuarderViewExpr, GuarderPartCmd>
     type GuarderMethod = Method<GuarderViewExpr, GuarderPartCmd>
@@ -41,14 +42,14 @@ let rec guardCFuncIn (suffix : Set<SVBoolExpr>) =
 and guardCViewIn suffix = concatMap (guardCFuncIn suffix)
 
 /// Resolves a full condition-view multiset into a guarded-view multiset.
-let guardCView : CView -> SVGView =
+let guardCView : CView -> GView<Sym<Var>> =
     // TODO(CaptainHayashi): woefully inefficient.
     Multiset.toFlatList
     >> guardCViewIn Set.empty
     >> Multiset.ofFlatList
 
 /// Resolves a full condition-view ViewExpr into a guarded-view multiset.
-let guardCViewExpr : ViewExpr<CView> -> ViewExpr<SVGView> =
+let guardCViewExpr : ModellerViewExpr -> GuarderViewExpr =
     function
     | Mandatory v -> Mandatory (guardCView v)
     | Advisory v -> Advisory (guardCView v)
@@ -63,7 +64,7 @@ and guardBlock {Pre = pre; Contents = contents} =
       Contents = List.map guardViewedCommand contents }
 
 /// Converts a PartCmd to guarded views.
-and guardPartCmd : PartCmd<ViewExpr<CView>> -> PartCmd<ViewExpr<SVGView>> =
+and guardPartCmd : ModellerPartCmd -> GuarderPartCmd =
     function
     | Prim p -> Prim p
     | While (isDo, expr, inner) ->

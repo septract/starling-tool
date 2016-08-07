@@ -7,11 +7,11 @@ module Starling.Reifier
 open Starling.Collections
 open Starling.Core.Expr
 open Starling.Core.View
+open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.GuardedView
 open Starling.Core.Symbolic
-open Starling.Core.Var
 
 
 /// Calculate the multiset of ways that this View matches the pattern in dv and add to the assumulator.
@@ -61,6 +61,8 @@ let reifyTerm dvs =
 
 /// Reifies all of the terms in a model's axiom list.
 let reify
-  (model : Model<Term<'a, SMGView, OView>, ViewToSymBoolDefiner>)
-  : Model<Term<'a, Set<GuardedSubview>, OView>, ViewToSymBoolDefiner> =
+  (model : Model<Term<'a, GView<Sym<MarkedVar>>, OView>,
+                 ViewToSymBoolDefiner>)
+  : Model<Term<'a, Set<GuardedSubview>, OView>,
+          ViewToSymBoolDefiner> =
       mapAxioms (reifyTerm model.ViewDefs) model

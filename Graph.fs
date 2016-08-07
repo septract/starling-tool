@@ -28,6 +28,11 @@ open Starling.Core.Symbolic
 [<AutoOpen>]
 module Types =
     /// <summary>
+    ///     A <see cref="ViewExpr"/> of the type permitted in a Graph.
+    /// </summary>
+    type GraphViewExpr = ViewExpr<GView<Sym<Var>>>
+
+    /// <summary>
     ///     An edge identifier.
     /// </summary>
     type EdgeID = string
@@ -69,7 +74,7 @@ module Types =
             /// <summary>
             ///     Set of nodes in the control-flow graph.
             /// </summary>
-            Nodes: Map<NodeID, ViewExpr<GView<Sym<Var>>> * NodeKind>
+            Nodes: Map<NodeID, GraphViewExpr * NodeKind>
 
             /// <summary>
             ///     Set of edges in the control-flow graph.
@@ -126,7 +131,7 @@ module Types =
           /// <summary>
           ///     The view of the source node.
           /// </summary>
-          SrcView : ViewExpr<GView<Sym<Var>>>
+          SrcView : GraphViewExpr
           /// <summary>
           ///     The name of the destination node.
           /// </summary>
@@ -134,7 +139,7 @@ module Types =
           /// <summary>
           ///     The view of the destination node.
           /// </summary>
-          DestView : ViewExpr<GView<Sym<Var>>>
+          DestView : GraphViewExpr
           /// <summary>
           ///      The command this edge represents.
           /// </summary>
@@ -157,7 +162,7 @@ module Types =
         /// </summary>
         Contents : Map<
             NodeID,
-            (ViewExpr<GView<Sym<Var>>>
+            (GraphViewExpr
              * Set<OutEdge>
              * Set<InEdge>
              * NodeKind)> }
@@ -617,7 +622,8 @@ let mapEdges (f : FullEdge -> 'result) (graph : Graph) : 'result seq =
 ///     <paramref name="graph" /> and its view is structurally equal
 ///     to <paramref name="nodeView" />.
 /// </returns>
-let nodeHasView (nodeName : NodeID) (nodeView : GView<Sym<Var>>) (graph : Graph)
+let nodeHasView
+  (nodeName : NodeID) (nodeView : GView<Sym<Var>>) (graph : Graph)
   : bool =
     match (Map.tryFind nodeName graph.Contents) with
     | Some (InnerView v, _, _, _) -> v = nodeView
@@ -637,7 +643,8 @@ let nodeHasView (nodeName : NodeID) (nodeView : GView<Sym<Var>>) (graph : Graph)
 ///     The edges of <paramref name="_arg1" />, as name-edge pairs.
 ///     This is wrapped in a Chessie result over <c>Error</c>.
 /// </returns>
-let axiomatiseGraph : Graph -> (string * Axiom<GView<Sym<Var>>, Command>) seq =
+let axiomatiseGraph
+  : Graph -> (string * Axiom<GView<Sym<Var>>, Command>) seq =
     mapEdges
         (fun { Name = n; SrcView = s ; DestView = t ; Command = c } ->
             (n, { Pre = match s with InnerView v -> v
@@ -723,12 +730,12 @@ module Pretty =
     ///     The unique ID of the node.
     /// </param>
     /// <param name="view">
-    ///     The <c>ViewExpr</c> contained in the node.
+    ///     The <c>GraphViewExpr</c> contained in the node.
     /// </param>
     /// <returns>
     ///     A pretty-printer <c>Command</c> representing the node.
     /// </returns>
-    let printNode (id : NodeID) (view : ViewExpr<GView<Sym<Var>>>, nk : NodeKind)
+    let printNode (id : NodeID) (view : GraphViewExpr, nk : NodeKind)
       : Doc =
         let list = match nk with Normal -> [] | Entry -> [String "(Entry)"] | Exit -> [String "(Exit)"] | EntryExit -> [String "(EntryExit)"]
         hsep [ id |> String

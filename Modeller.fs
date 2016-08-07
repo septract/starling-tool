@@ -47,11 +47,9 @@ module Types =
             * inTrue : Block<'view, PartCmd<'view>>
             * inFalse : Block<'view, PartCmd<'view>>
 
-    /// Methods over PartCmd.
-    type PMethod<'view> = Method<'view, PartCmd<'view>>
-
     type ModellerViewExpr = ViewExpr<CView>
-    type ModellerMethod = PMethod<ModellerViewExpr>
+    type ModellerPartCmd = PartCmd<ModellerViewExpr>
+    type ModellerMethod = Method<ModellerViewExpr, ModellerPartCmd>
 
     // TODO(CaptainHayashi): more consistent constructor names
     /// Represents an error when converting an expression.

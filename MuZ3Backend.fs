@@ -641,7 +641,8 @@ module Translator =
       reals
       (ctx : Z3.Context)
       ({ Globals = svars ; ViewDefs = ds ; Axioms = xs }
-         : Model<Term<MBoolExpr, MGView, MVFunc>, FuncToIndefiniteBoolDefiner> ) =
+         : Model<Term<MBoolExpr, GView<MarkedVar>, MVFunc>,
+                 FuncToIndefiniteBoolDefiner> ) =
         let funcDecls, definites = translateViewDefs reals ctx ds
         let vrules = translateVariables reals ctx funcDecls svars
         let trules = xs |> Map.toSeq |> Seq.choose (translateTerm reals ctx funcDecls)

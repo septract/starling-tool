@@ -52,7 +52,7 @@ module Types =
     /// An axiom combined with a goal view.
     type GoalAxiom<'cmd> =
         { /// The axiom to be checked for soundness under Goal.
-          Axiom : Axiom<SVGView, 'cmd>
+          Axiom : Axiom<GView<Sym<Var>>, 'cmd>
           /// The view representing the goal for any terms over Axiom.
           Goal : OView }
 
@@ -106,10 +106,11 @@ let instantiateGoal (fg : FreshGen)
 
 /// Converts an axiom into a list of framed axioms, by combining it with the
 /// defining views of a model.
-let goalAddAxiom (ds : ViewDef<DView, _> list)
-                 (fg : FreshGen)
-                 ((name, axiom) : (string * Axiom<SVGView, 'cmd>))
-                 : (string * GoalAxiom<'cmd>) list =
+let goalAddAxiom
+  (ds : ViewDef<DView, _> list)
+  (fg : FreshGen)
+  ((name, axiom) : (string * Axiom<GView<Sym<Var>>, 'cmd>))
+  : (string * GoalAxiom<'cmd>) list =
     // Each axiom comes in with a name like method_0,
     // where the 0 is the edge number.
     // This appends the viewdef number after the edge number.
@@ -135,7 +136,7 @@ let goalAddAxiom (ds : ViewDef<DView, _> list)
 ///     The new <c>Model</c>, over <c>GoalAxiom</c>s.
 /// </returns>
 let goalAdd
-  (mdl : Model<Axiom<SVGView, 'cmd>, _>)
+  (mdl : Model<Axiom<GView<Sym<Var>>, 'cmd>, _>)
   : Model<GoalAxiom<'cmd>, _> =
     // We use a fresh ID generator to ensure every goal variable is unique.
     let fg = freshGen ()

@@ -20,7 +20,7 @@ type GuarderTests() =
     /// Test cases for converting CondViews to GuarViews
     static member CondViews = 
         [ TestCaseData(Multiset.empty : CView)
-              .Returns(Multiset.empty : SVGView)
+              .Returns(Multiset.empty : GView<Sym<Var>>)
               .SetName("Convert the empty CView to the empty GView")
 
           TestCaseData(Multiset.ofFlatList

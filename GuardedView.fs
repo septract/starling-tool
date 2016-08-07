@@ -100,21 +100,6 @@ module Types =
         Multiset<GFunc<'var>>
 
     /// <summary>
-    ///     A <c>GView</c> over <c>MarkedVar</c>s.
-    /// </summary>
-    type MGView = GView<MarkedVar>
-
-    /// <summary>
-    ///     A <c>GView</c> over symbolic <c>Var</c>s.
-    /// </summary>
-    type SVGView = GView<Sym<Var>>
-
-    /// <summary>
-    ///     A <c>GView</c> over symbolic <c>MarkedVar</c>s.
-    /// </summary>
-    type SMGView = GView<Sym<MarkedVar>>
-
-    /// <summary>
     ///     A view produced by expanding a sub-view of an guarded view.
     ///     <para>
     ///         The entire view (not its individual funcs) is guarded, by the
@@ -319,7 +304,7 @@ let pruneGuardedSet gset =
 /// Given a guarded View over Symbolic Var's return the set of all
 /// variables and their types that are in the view definition.
 /// </summary>
-let SVGViewVars : SVGView -> Set<TypedVar> =
+let SVGViewVars : GView<Sym<Var>> -> Set<TypedVar> =
     fun v ->
         let l = Multiset.toSet v
 
@@ -471,23 +456,24 @@ module Pretty =
     ///     Pretty-prints a guarded view over symbolic <c>Var</c>s.
     /// </summary>
     /// <param name="_arg1">
-    ///     The <c>SGView</c> to print.
+    ///     The view to print.
     /// </param>
     /// <returns>
-    ///     A pretty-printer command to print the <c>SGView</c>.
+    ///     A pretty-printer command to print the view.
     /// </returns>
-    let printSVGView : SVGView -> Doc = printGView (printSym String)
+    let printSVGView : GView<Sym<Var>> -> Doc = printGView (printSym String)
 
     /// <summary>
     ///     Pretty-prints a guarded view over symbolic <c>MarkedVar</c>s.
     /// </summary>
     /// <param name="_arg1">
-    ///     The <c>SMGView</c> to print.
+    ///     The view to print.
     /// </param>
     /// <returns>
-    ///     A pretty-printer command to print the <c>SMGView</c>.
+    ///     A pretty-printer command to print the view.
     /// </returns>
-    let printSMGView = printGView (printSym printMarkedVar)
+    let printSMGView : GView<Sym<MarkedVar>> -> Doc =
+        printGView (printSym printMarkedVar)
 
     /// <summary>
     ///     Pretty-prints a guarded subview set over symbolic <c>MarkedVar</c>s.

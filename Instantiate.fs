@@ -555,9 +555,9 @@ module ViewDefFilter =
     ///     definitions.
     /// </returns>
     let filterModelIndefinite
-      (model : Model<Term<SMBoolExpr, SMGView, SMVFunc>,
+      (model : Model<Term<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
                      FuncToSymBoolDefiner> )
-      : Result<Model<Term<MBoolExpr, MGView, MVFunc>,
+      : Result<Model<Term<MBoolExpr, GView<MarkedVar>, MVFunc>,
                      FuncToIndefiniteBoolDefiner>, Error> =
         model
         |> tryMapAxioms (trySubExprInDTerm (tsfRemoveSym UnwantedSym) NoCtx >> snd)
@@ -595,7 +595,8 @@ module Phase =
     /// Interprets all of the views in a term over the given functable.
     let interpretTerm
       (ft : FuncTable<SVBoolExpr>)
-      : Term<SMBoolExpr, SMGView, SMVFunc> -> Result<SFTerm, Error> =
+      : Term<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>
+      -> Result<SFTerm, Error> =
         tryMapTerm ok (interpretGView ft) (interpretVFunc ft)
 
 
@@ -649,7 +650,8 @@ module Phase =
     ///     The model with all views instantiated.
     /// </returns>
     let run
-      (model : Model<STerm<SMGView, SMVFunc>, FuncToSymBoolDefiner>)
+      (model : Model<STerm<GView<Sym<MarkedVar>>, SMVFunc>,
+                     FuncToSymBoolDefiner>)
       : Result<Model<SFTerm, unit>, Error> =
       let vs = symboliseIndefinites model.ViewDefs
 

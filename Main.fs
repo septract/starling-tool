@@ -163,19 +163,23 @@ type Response =
     /// Stop at graph optimisation.
     | GraphOptimise of Model<Graph, ViewToSymBoolDefiner>
     /// Stop at graph axiomatisation.
-    | Axiomatise of Model<Axiom<SVGView, Command>, ViewToSymBoolDefiner>
+    | Axiomatise of Model<Axiom<GView<Sym<Var>>, Command>,
+                          ViewToSymBoolDefiner>
     /// The result of goal-axiom-pair generation.
     | GoalAdd of Model<GoalAxiom<Command>, ViewToSymBoolDefiner>
     /// The result of semantic expansion.
     | Semantics of Model<GoalAxiom<SMBoolExpr>, ViewToSymBoolDefiner>
     /// The result of term generation.
-    | TermGen of Model<STerm<SMGView, OView>, ViewToSymBoolDefiner>
+    | TermGen of Model<STerm<GView<Sym<MarkedVar>>, OView>,
+                       ViewToSymBoolDefiner>
     /// The result of term reification.
     | Reify of Model<STerm<Set<GuardedSubview>, OView>, ViewToSymBoolDefiner>
     /// The result of term flattening.
-    | Flatten of Model<STerm<SMGView, SMVFunc>, FuncToSymBoolDefiner>
+    | Flatten of Model<STerm<GView<Sym<MarkedVar>>, SMVFunc>,
+                       FuncToSymBoolDefiner>
     /// The result of term optimisation.
-    | TermOptimise of Model<STerm<SMGView, SMVFunc>, FuncToSymBoolDefiner>
+    | TermOptimise of Model<STerm<GView<Sym<MarkedVar>>, SMVFunc>,
+                            FuncToSymBoolDefiner>
     /// Output a fully-instantiated symbolic proof.
     | SymProof of Model<SFTerm, unit>
     /// Output a fully-instantiated symbolic unstructured proof.

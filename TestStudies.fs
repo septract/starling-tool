@@ -17,6 +17,7 @@ open Starling.Core.GuardedView
 open Starling.Lang.AST
 open Starling.Lang.Collator
 open Starling.Lang.Modeller
+open Starling.Lang.Guarder
 
 
 /// The raw form of the ticket lock.
@@ -518,7 +519,7 @@ let ticketLockGuardedLock =
                     Post = Mandatory <| sing (gHoldLock BTrue) } ] } }
 
 /// The ticket lock's unlock method, in guarded form.
-let ticketLockGuardedUnlock : PMethod<ViewExpr<SVGView>> =
+let ticketLockGuardedUnlock : GuarderMethod =
     { Signature = func "unlock" []
       Body =
           { Pre = Mandatory <| sing (gHoldLock BTrue)
