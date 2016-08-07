@@ -53,7 +53,7 @@ module Types =
     /// <typeparam name="var">
     ///     The non-symbolic variable <c>Sym</c> wraps.
     /// </typeparam>
-    type Sym<'var> =
+    type Sym<'var> when 'var : equality =
         /// <summary>
         ///     A symbolic variable, predicated over multiple expressions.
         ///     The symbol itself is the name inside the <c>Func</c>.

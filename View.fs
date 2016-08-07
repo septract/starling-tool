@@ -23,10 +23,10 @@ module Types =
      *)
 
     /// A func over expressions, used in view expressions.
-    type VFunc<'var> = Func<Expr<'var>>
+    type VFunc<'var> when 'var : equality = Func<Expr<'var>>
 
     /// A func over expressions, used in view expressions.
-    type ExprFunc<'var> = Func<Expr<'var>>
+    type ExprFunc<'var> when 'var : equality = Func<Expr<'var>>
 
     /// A func over marked-var expressions.
     type MVFunc = ExprFunc<MarkedVar>

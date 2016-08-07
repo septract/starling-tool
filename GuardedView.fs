@@ -47,7 +47,7 @@ module Types =
     /// <typeparam name="item">
     ///     The type of the guarded item.
     /// </typeparam>
-    type Guarded<'var, 'item> =
+    type Guarded<'var, 'item> when 'var : equality =
         { /// <summary>
           ///    The guard condition.
           /// </summary>
@@ -68,7 +68,7 @@ module Types =
     /// <typeparam name="var">
     ///     The type of variables in the guard.
     /// </typeparam>
-    type GFunc<'var> = Guarded<'var, VFunc<'var>>
+    type GFunc<'var> when 'var : equality = Guarded<'var, VFunc<'var>>
 
     /// <summary>
     ///     A <c>GFunc</c> over <c>MarkedVar</c>s.
@@ -200,13 +200,17 @@ let smgfunc (guard : SMBoolExpr) (name : string) (pars : SMExpr seq) : SMGFunc =
 /// <summary>
 ///     Active pattern matching on trivially true guards.
 /// </summary>
-let (|Always|_|) { Cond = c ; Item = i } =
+let (|Always|_|)
+  ({ Cond = c ; Item = i } : Guarded<'var, 'item>)
+  : 'item option =
     if isTrue c then Some i else None
 
 /// <summary>
 ///     Active pattern matching on trivially false guards.
 /// </summary>
-let (|Never|_|) { Cond = c ; Item = i } =
+let (|Never|_|)
+  ({ Cond = c ; Item = i } : Guarded<'var, 'item>)
+  : 'item option =
     if isFalse c then Some i else None
 
 
@@ -215,16 +219,18 @@ let (|Never|_|) { Cond = c ; Item = i } =
  *)
 
 /// <summary>
-///     Converts a <c>GFunc</c> to a tuple.
+///     Converts a <c>Guarded</c> to a tuple.
 /// </summary>
 /// <param name="_arg1">
-///     The <c>GFunc</c> to destructure.
+///     The <c>Guarded</c> to destructure.
 /// </param>
 /// <returns>
 ///     The tuple <c>(c, i)</c>, where <c>c</c> is the guard condition
 ///     of <paramref name="_arg1" />, and <c>i</c> its item.
 /// </returns>
-let gFuncTuple { Cond = c ; Item = i } = (c, i)
+let gFuncTuple
+  ({ Cond = c ; Item = i } : Guarded<'var, 'item>)
+  : BoolExpr<'var> * 'item = (c, i)
 
 /// <summary>
 ///     Maps over the condition of a guard.
@@ -238,7 +244,10 @@ let gFuncTuple { Cond = c ; Item = i } = (c, i)
 /// <returns>
 ///     The new <c>Guarded</c> resulting from the map.
 /// </returns>
-let mapCond f { Cond = c ; Item = i } = { Cond = f c ; Item = i }
+let mapCond
+  (f : BoolExpr<'varA> -> BoolExpr<'varB>)
+  ({ Cond = c ; Item = i } : Guarded<'varA, _>)
+  : Guarded<'varB, _ > = { Cond = f c ; Item = i }
 
 /// <summary>
 ///     Maps over the item of a guard.
@@ -252,7 +261,10 @@ let mapCond f { Cond = c ; Item = i } = { Cond = f c ; Item = i }
 /// <returns>
 ///     The new <c>Guarded</c> resulting from the map.
 /// </returns>
-let mapItem f { Cond = c ; Item = i } = { Cond = c ; Item = f i }
+let mapItem
+  (f : 'itemA -> 'itemB)
+  ({ Cond = c ; Item = i } : Guarded<_, 'itemA>)
+  : Guarded<_, 'itemB> = { Cond = c ; Item = f i }
 
 /// <summary>
 ///     Maps over the conditions of a guarded multiset (eg view).
@@ -266,7 +278,10 @@ let mapItem f { Cond = c ; Item = i } = { Cond = c ; Item = f i }
 /// <returns>
 ///     The multiset of <c>Guarded</c>s resulting from the map.
 /// </returns>
-let mapConds f = Multiset.map (mapCond f)
+let mapConds
+  (f : BoolExpr<'itemA> -> BoolExpr<'itemB>)
+  : Multiset<Guarded<'itemA, _>> -> Multiset<Guarded<'itemB, _>> =
+    Multiset.map (mapCond f)
 
 /// <summary>
 ///     Maps over the internal items of a guarded multiset (eg view).
@@ -280,7 +295,10 @@ let mapConds f = Multiset.map (mapCond f)
 /// <returns>
 ///     The multiset <c>Guarded</c>s resulting from the map.
 /// </returns>
-let mapItems f = Multiset.map (mapItem f)
+let mapItems
+  (f : 'itemA -> 'itemB)
+  : Multiset<Guarded<_, 'itemA>> -> Multiset<Guarded<_, 'itemB>> =
+    Multiset.map (mapItem f)
 
 /// <summary>
 ///     Removes false guards from a guarded multiset.
@@ -292,7 +310,8 @@ let mapItems f = Multiset.map (mapItem f)
 ///     The multiset of <c>Guarded</c>s after removing items with guards
 ///     that are always false.
 /// </returns>
-let pruneGuardedSet gset =
+let pruneGuardedSet (gset : Multiset<Guarded<_, _>>)
+  : Multiset<Guarded<_, _>> =
     gset
     |> Multiset.toFlatSeq
     |> Seq.filter (function
@@ -356,7 +375,8 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer command to print the guarded item.
     /// </returns>
-    let printGuarded pVar pItem =
+    let printGuarded (pVar : 'var -> Doc) (pItem : 'item -> Doc)
+      : Guarded<'var, 'item> -> Doc =
         function
         | Always i -> pItem i
         | Never i -> ssurround "~" "~" (pItem i)
@@ -376,7 +396,9 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer command to print the guarded item.
     /// </returns>
-    let printMGuarded pItem = printGuarded printMarkedVar pItem
+    let printMGuarded
+      (pItem : 'item -> Doc)
+      : Guarded<MarkedVar, 'item> -> Doc = printGuarded printMarkedVar pItem
 
     /// <summary>
     ///     Pretty-prints a guarded <c>VFunc</c>.
@@ -390,7 +412,8 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer command to print the <c>GFunc</c>.
     /// </returns>
-    let printGFunc pVar = printGuarded pVar (printVFunc pVar)
+    let printGFunc (pVar : 'var -> Doc) : GFunc<'var> -> Doc =
+        printGuarded pVar (printVFunc pVar)
 
     /// <summary>
     ///     Pretty-prints a guarded <c>VFunc</c> over <c>MarkedVar</c>s.
@@ -401,7 +424,7 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer command to print the <c>MGFunc</c>.
     /// </returns>
-    let printMGFunc = printGFunc printMarkedVar
+    let printMGFunc : GFunc<MarkedVar> -> Doc = printGFunc printMarkedVar
 
     /// <summary>
     ///     Pretty-prints a <c>GFunc</c> over symbolic <c>Var</c>s.
@@ -412,7 +435,7 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer command to print the <c>SGFunc</c>.
     /// </returns>
-    let printSVGFunc = printGFunc (printSym String)
+    let printSVGFunc : GFunc<Sym<Var>> -> Doc = printGFunc (printSym String)
 
     /// <summary>
     ///     Pretty-prints a guarded <c>VFunc</c> over symbolic <c>MarkedVar</c>s.
@@ -423,7 +446,8 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer command to print the <c>SMGFunc</c>.
     /// </returns>
-    let printSMGFunc = printGFunc (printSym printMarkedVar)
+    let printSMGFunc : GFunc<Sym<MarkedVar>> -> Doc =
+        printGFunc (printSym printMarkedVar)
 
     /// <summary>
     ///     Pretty-prints a guarded view.
@@ -437,7 +461,7 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer command to print the <c>GView</c>.
     /// </returns>
-    let printGView pVar =
+    let printGView (pVar : 'var -> Doc) : GView<'var> -> Doc =
         printMultiset (printGFunc pVar)
         >> ssurround "<|" "|>"
 
@@ -450,7 +474,7 @@ module Pretty =
     /// <returns>
     ///     A pretty-printer command to print the <c>MGView</c>.
     /// </returns>
-    let printMGView = printGView printMarkedVar
+    let printMGView : GView<MarkedVar> -> Doc = printGView printMarkedVar
 
     /// <summary>
     ///     Pretty-prints a guarded view over symbolic <c>Var</c>s.

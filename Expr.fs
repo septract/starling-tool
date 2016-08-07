@@ -18,8 +18,8 @@ module Types =
     /// <typeparam name="var">
     ///     The type of variables in the expression.
     /// </typeparam>
-    
-    type Expr<'var> = Typed<IntExpr<'var>, BoolExpr<'var>>
+    type Expr<'var> when 'var : equality =
+        Typed<IntExpr<'var>, BoolExpr<'var>>
 
     /// <summary>
     ///     An integral expression.
@@ -27,7 +27,7 @@ module Types =
     /// <typeparam name="var">
     ///     The type of variables in the expression.
     /// </typeparam>
-    and IntExpr<'var> =
+    and IntExpr<'var> when 'var : equality =
         | AVar of 'var
         | AInt of int64
         | AAdd of IntExpr<'var> list
@@ -42,7 +42,7 @@ module Types =
     /// <typeparam name="var">
     ///     The type of variables in the expression.
     /// </typeparam>
-    and BoolExpr<'var> =
+    and BoolExpr<'var> when 'var : equality =
         | BVar of 'var
         | BTrue
         | BFalse
