@@ -49,6 +49,7 @@ module Types =
 
     type ModellerViewExpr = ViewExpr<CView>
     type ModellerPartCmd = PartCmd<ModellerViewExpr>
+    type ModellerBlock = Block<ModellerViewExpr, ModellerPartCmd>
     type ModellerMethod = Method<ModellerViewExpr, ModellerPartCmd>
 
     // TODO(CaptainHayashi): more consistent constructor names
