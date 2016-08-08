@@ -221,6 +221,11 @@ module Utils =
     /// <summary>
     ///     Discovers which optimisers to activate, and applies them in
     ///     the specified order.
+    ///
+    ///     Each optimisation comes as a triple
+    ///         (optimisation-name : string, enabled-as-default? : bool, optimisation: ('a -> 'a))
+    ///
+    ///     Enabling or disabling them based off the command-line arguments and whether they're enabled by default
     /// </summary>
     /// <param name="removes">
     ///     The set of optimisation names to remove.  If this contains 'all',
@@ -704,12 +709,13 @@ module Graph =
         expandNodeIn ctx <|
             fun node nViewexpr outEdges inEdges nodeKind ->
                 let pViewexpr = nViewexpr
-                let disjoint a b = Set.empty = Set.filter (fun x -> Set.contains x b) a
-                let processCEdge c =
-                    let ds = (fun (_, outs, _, _) -> outs) <| ctx.Graph.Contents.[c.Dest]
-                    let processDEdge d =
-                        (pViewexpr, c, d)
-                    Set.map processDEdge ds
+                let disjoint (a : Set<'a>) (b : Set<'a>) =
+                    Set.empty = Set.filter b.Contains a
+                let processCEdge cEdge =
+                    let dEdges = (fun (_, outs, _, _) -> outs) <| ctx.Graph.Contents.[cEdge.Dest]
+                    let processDEdge dEdge =
+                        (pViewexpr, cEdge, dEdge)
+                    Set.map processDEdge dEdges
 
                 let processTriple ctx (pViewexpr, (cEdge : OutEdge), (dEdge : OutEdge)) =
                     let c, d = cEdge.Command, dEdge.Command
@@ -787,10 +793,10 @@ module Graph =
     ///     The model whence the graph came.
     /// </param>
     /// <param name="optR">
-    ///     Set of optimisations to suppress.
+    ///     Set of optimisation names to suppress.
     /// </param>
     /// <param name="optA">
-    ///     Set of optimisations to force.
+    ///     Set of optimisation names to force.
     /// </param>
     /// <param name="verbose">
     ///     Flag which, if enabled, causes non-default optimisation changes
