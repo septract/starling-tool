@@ -141,11 +141,10 @@ let frame svars tvars expr =
     |> Seq.filter (fun (name, _) -> not (Set.contains name evars))
     |> Seq.map (fun (name, ty) -> frameVar (withType ty name))
 
-/// Translate a primitive command to an expression characterising it.
-/// This is the combination of the Prim's action (via emitPrim) and
-/// a set of framing terms forcing unbound variables to remain constant
-/// (through frame).
-let semanticsOfPrim
+/// Translate a primitive command to an expression characterising it
+/// by instantiating the semantics from the core semantics map with
+/// the variables from the command
+let instantiateSemanticsOfPrim
   (semantics : PrimSemanticsMap)
   (svars : VarMap)
   (tvars : VarMap)
@@ -156,15 +155,10 @@ let semanticsOfPrim
      * entry (erroneous or otherwise) in the semantics for this prim.
      * Since this is an error in this case, make it one.
      *)
-    let actions =
-        prim
-        |> wrapMessages Instantiate
-               (instantiatePrim primSubFun semantics)
-        |> bind (failIfNone (MissingDef prim))
-
-    let f = frame svars tvars >> List.ofSeq >> mkAnd
-    let aframe = lift (frame svars tvars >> List.ofSeq >> mkAnd) actions
-    lift2 mkAnd2 actions aframe
+    prim
+    |> wrapMessages Instantiate
+           (instantiatePrim primSubFun semantics)
+    |> bind (failIfNone (MissingDef prim))
 
 /// Translate a command to an expression characterising it.
 /// This is the sequential composition of the translations of each
@@ -174,11 +168,18 @@ let semanticsOfCommand
   (svars : VarMap)
   (tvars : VarMap)
   : Command -> Result<SMBoolExpr, Error> =
-    Seq.map (semanticsOfPrim semantics svars tvars)
+    // Instantiate the semantic function of each primitive
+    Seq.map (instantiateSemanticsOfPrim semantics svars tvars)
     >> collect
-    >> lift (function
-             | [] -> frame svars tvars BTrue |> List.ofSeq |> mkAnd
-             | xs -> List.reduce composeBools xs)
+
+    // Compose them together with intermediates
+    >> lift (Seq.reduce composeBools)
+
+    // Add the frame
+    >> lift (
+        fun bexpr ->
+            mkAnd2 (frame svars tvars bexpr |> List.ofSeq |> mkAnd)
+                   bexpr)
 
 open Starling.Core.Axiom.Types
 /// Translate a model over Prims to a model over semantic expressions.
