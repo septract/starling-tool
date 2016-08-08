@@ -488,6 +488,15 @@ module Graph =
                                               | _ -> false))
                      ps)
 
+    /// Decides whether a given Command contains any `assume` command
+    /// in any of the sequentially composed primitives inside it
+    let hasAssume : Command -> bool =
+        fun c ->
+            c |>
+            List.forall (fun p ->
+                match p with
+                | { Name = "Assume" } -> true;
+                | _ -> false)
 
     /// Determines if some given Command is local with respect to the given
     /// map of thread-local variables
@@ -716,6 +725,8 @@ module Graph =
                         if Set.isSubset cResults dResults
                             && disjoint cResults dArgs
                             && isLocalResults locals c
+                            && not (hasAssume c)  // TODO: is this too broad?
+                            && not (hasAssume d)  // TODO: is this necessary?
                             then
                                 (flip runTransforms) ctx
                                 <| seq {
