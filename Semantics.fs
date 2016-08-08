@@ -173,7 +173,10 @@ let semanticsOfCommand
     >> collect
 
     // Compose them together with intermediates
-    >> lift (Seq.reduce composeBools)
+    >> lift (
+        function
+        | [] -> BTrue
+        | xs -> Seq.reduce composeBools xs)
 
     // Add the frame
     >> lift (
