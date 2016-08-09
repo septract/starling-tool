@@ -121,8 +121,8 @@ let composeBools x y =
 
 
 /// Generates a framing relation for a given variable.
-let frameVar par : SMBoolExpr =
-    BEq (mkVarExp (After >> Reg) par, mkVarExp (Before >> Reg) par)
+let frameVar ctor par : SMBoolExpr =
+    BEq (mkVarExp (After >> Reg) par, mkVarExp (ctor >> Reg) par)
 
 /// Generates a frame for a given expression.
 /// The frame is a relation a!after = a!before for every a not mentioned in the expression.
@@ -139,7 +139,12 @@ let frame svars tvars expr =
     Seq.append (Map.toSeq svars) (Map.toSeq tvars)
     // TODO(CaptainHayashi): this is fairly inefficient.
     |> Seq.filter (fun (name, _) -> not (Set.contains name evars))
-    |> Seq.map (fun (name, ty) -> frameVar (withType ty name))
+    |> Seq.choose (fun (name, ty) ->
+        let next = getBoolIntermediate name expr
+        match next with
+        | None   -> Some (name, ty, Before)
+        | Some i -> Some (name, ty, (fun x -> (Intermediate(i, x)))))
+    |> Seq.map (fun (name, ty, ctor) -> frameVar ctor (withType ty name))
 
 /// Translate a primitive command to an expression characterising it
 /// by instantiating the semantics from the core semantics map with
@@ -160,6 +165,59 @@ let instantiateSemanticsOfPrim
            (instantiatePrim primSubFun semantics)
     |> bind (failIfNone (MissingDef prim))
 
+/// Given some mapping Map<Var, bigint option> mapping names to intermediate values
+/// create the sequentially composed x, replacing before's and after's
+open Starling.Core.Pretty
+open Starling.Core.Expr.Pretty
+open Starling.Core.Var.Pretty
+open Starling.Core.Symbolic.Pretty
+let seqComposition xs =
+
+    // since we are trying to keep track of explicit state (where we are in terms of the intermediate variables)
+    // it's _okay_ to include actual mutable state here!
+    let mutable dict = System.Collections.Generic.Dictionary<Var, bigint>()
+
+    let mapper x =
+        let nLevel = nextBoolIntermediate x
+        let dict2 = System.Collections.Generic.Dictionary<Var, bigint>(dict)
+
+        let xRewrite =
+            function
+            | Before v as v' ->
+                if dict.ContainsKey (v) then
+                    let iv = dict.[v]
+                    Reg (Intermediate(iv, v))
+                else
+                    Reg v'
+            | After v ->
+                if dict2.ContainsKey(v) then
+                    ignore <| dict2.Remove(v)
+
+                dict2.Add(v, nLevel)
+                Reg (Intermediate (nLevel, v))
+            | v -> Reg v
+            |> (fun f ->
+                    Mapper.compose
+                        (Mapper.cmake f)
+                        (Mapper.make AVar BVar))
+            |> liftVToSym
+            |> onVars
+
+        let bexpr = Mapper.mapBoolCtx xRewrite NoCtx x |> snd
+        dict <- dict2
+        bexpr
+
+    let rec mapping =
+        function
+        | []        ->  BTrue
+        | x :: ys   ->  mkAnd2 (mapper x) (mapping ys)
+
+    mapping xs
+
+let addFrame svars tvars bexpr =
+    mkAnd2 (frame svars tvars bexpr |> List.ofSeq |> mkAnd)
+           bexpr
+
 /// Translate a command to an expression characterising it.
 /// This is the sequential composition of the translations of each
 /// primitive inside it.
@@ -173,16 +231,10 @@ let semanticsOfCommand
     >> collect
 
     // Compose them together with intermediates
-    >> lift (
-        function
-        | [] -> BTrue
-        | xs -> Seq.reduce composeBools xs)
+    >> lift seqComposition
 
     // Add the frame
-    >> lift (
-        fun bexpr ->
-            mkAnd2 (frame svars tvars bexpr |> List.ofSeq |> mkAnd)
-                   bexpr)
+    >> lift (addFrame svars tvars)
 
 open Starling.Core.Axiom.Types
 /// Translate a model over Prims to a model over semantic expressions.

@@ -95,6 +95,28 @@ module Compose =
         | ADiv (x, y) ->
             bigint.Max (nextIntIntermediate x, nextIntIntermediate y)
 
+    and maxOpt a b =
+        match a, b with
+        | Some a, Some b -> Some <| max a b
+        | None, Some b -> Some b
+        | Some a, None -> Some a
+        | None, None -> None
+
+
+    /// Gets the highest intermediate number for some variable in a given
+    /// int expression
+    and getIntIntermediate v =
+        function
+        | AVar (Reg (Intermediate (n, x))) when v = x-> Some n
+        | AVar (Sym { Params = xs } ) ->
+            Seq.fold maxOpt None <| (Seq.map (getIntermediate v) <| xs)
+        | AVar _ | AInt _ -> None
+        | AAdd xs | ASub xs | AMul xs ->
+            Seq.fold maxOpt None <| (Seq.map (getIntIntermediate v) <| xs)
+        | ADiv (x, y) ->
+            maxOpt (getIntIntermediate v x) (getIntIntermediate v y)
+        | _ -> None
+
     /// <summary>
     ///     Finds the highest intermediate stage number in a Boolean expression.
     ///     Returns one higher.
@@ -123,6 +145,28 @@ module Compose =
             bigint.Max (nextIntermediate x, nextIntermediate y)
         | BTrue | BFalse -> 0I
 
+    /// Gets the highest intermediate number for some variable in a given
+    /// boolean expression
+    and getBoolIntermediate v =
+        function
+        | BVar (Reg (Intermediate (n, name))) when name = v -> Some n
+        | BVar (Sym { Params = xs } ) ->
+            Seq.fold maxOpt None <| (Seq.map (getIntermediate v) <| xs)
+        | BVar (Reg (After x)) when x = v -> None
+        | BVar (Reg (Before x)) when x = v -> None
+        | BVar (Reg (Intermediate(i, x))) when x = v -> Some i
+        | BAnd xs | BOr xs ->
+            Seq.fold maxOpt None <| (Seq.map (getBoolIntermediate v) <| xs)
+        | BImplies (x, y) ->
+            maxOpt (getBoolIntermediate v x) (getBoolIntermediate v y)
+        | BNot x -> getBoolIntermediate v x
+        | BGt (x, y) | BLt (x, y) | BGe (x, y) | BLe (x, y) ->
+            maxOpt (getIntIntermediate v x) (getIntIntermediate v y)
+        | BEq (x, y) ->
+            maxOpt (getIntermediate v x) (getIntermediate v y)
+        | BTrue | BFalse -> None
+        | _ -> None
+
     /// <summary>
     ///     Finds the highest intermediate stage number in an expression.
     ///     Returns one higher.
@@ -138,6 +182,13 @@ module Compose =
         function
         | Int x -> nextIntIntermediate x
         | Bool x -> nextBoolIntermediate x
+
+    /// Gets the highest intermediate stage number for a given variable name
+    /// in some expression.
+    and getIntermediate v =
+        function
+        | Int x -> getIntIntermediate v x
+        | Bool x -> getBoolIntermediate v x
 
 
 /// <summary>
