@@ -32,10 +32,12 @@ procedure test_sharing (a: Node, b: Node)
   ensures (acc(a) &*& acc(b)) || acc(a); 
 {}
 
+
+// List tests 
+
 procedure test_list (head: Node, a: Node, b: Node) 
   requires has1LockG(head, a, b);
-  //ensures acc(a) -** has1LockG(head, a, b);  
-  // ensures true;
+  ensures acc(a) -** sTrue();  
 { 
   a.next := null; 
 } 
