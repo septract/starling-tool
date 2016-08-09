@@ -25,7 +25,7 @@ method deleteVal(v) {
     <prev = head>;
   {| isList(v) * isHead(prev) |} 
    <{ lheap = heap; heap = (%{ takeLock(#2) }(lheap, prev)); }>;
-  {| isList(v) * has1Lock(prev, _) |}
+  {| isList(v) * has1Lock(prev, _) * isHead(prev) |}
    <lheap = heap>; curr = (%{ #2.next }(lheap, curr)); 
   {| isList(v) * has1Lock(prev, curr) |}
    <{ lheap = heap; heap = (%{ takeLock(#2) }(lheap, curr)); }>;
@@ -38,7 +38,7 @@ method deleteVal(v) {
       {| isList(v) * has1Lock(curr, _) * isVal(curr, cv) |}
         prev = curr;
         <lheap = heap>; curr = (%{ #2->next }(lheap, curr));  
-      {| isList(v) * has1Lock(prev, curr) |}
+      {| isList(v) * has1Lock(prev, curr) * isVal(prev,cv) |}
         <{ lheap = heap; heap = (%{ takeLock(#2) }(lheap, curr)); }>; 
       {| isList(v) * has2Lock(prev, curr) |}
         <lheap = heap>; cv = (%{ #2.val }(lheap, curr)); 

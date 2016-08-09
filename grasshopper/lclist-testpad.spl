@@ -100,3 +100,66 @@ procedure deleteVal_C013_001 (
 } 
 
 
+// deleteVal_C007_003: fail
+// deleteVal_C007_003:
+//     Command:
+//         (and
+//             (= (after lheap) (before heap))
+//             (= (after heap) %{takeLock(#2) }((after lheap), (before curr)))
+//         )
+//     
+//     W/Prec:
+//         (and
+//             %{has1LockG(head,#1,#2) }((before prev), (before curr))
+//             %{isListG(head,ub,#1) }((before v))
+//             %{isValG(head, #1, #2) &*& #2 < ub }((before prev), (before cv))
+//             (=>
+//                 (or
+//                     (not (= (goal 91 b) (before curr)))
+//                     (not (= (goal 91 a) (before prev)))
+//                 )
+//                 (and
+//                     (not (= (before prev) (goal 91 a)))
+//                     (not (= (before prev) (goal 91 b)))
+//                 )
+//             )
+//             (=>
+//                 (or
+//                     (not (= (goal 91 b) (before curr)))
+//                     (not (= (goal 91 a) (before prev)))
+//                 )
+//                 %{has2LockG(head,#1,#2) }((goal 91 a), (goal 91 b))
+//             )
+//         )
+//     
+//     Goal:
+//         %{has2LockG(head,#1,#2) }((goal 91 a), (goal 91 b))
+
+
+    
+procedure deleteVal_C007_003 (
+      head: Node, 
+      ub: Int, 
+      b_prev: Node, 
+      b_curr: Node, 
+      b__: Node, 
+      b_v: Int, 
+      b_cv: Int,
+      g91_a: Node, 
+      g91_b: Node
+    ) 
+  requires 
+    has1LockG(head,b_prev,b_curr) &&
+    isListG(head,ub,b_v) &&
+    (isValG(head, b_prev, b_cv) &*& b_cv < ub) && 
+    ( (sTrue() &*& !(g91_b != b_curr || g91_a != b_prev)) 
+      || 
+      (has2LockG(head,g91_a,g91_b) &*& (g91_b != b_curr || g91_a != b_prev) )); 
+  pure requires 
+    ( (g91_b != b_curr || g91_a != b_prev) 
+       ==> 
+      (g91_a != b_prev || g91_b != b_prev) ); 
+  ensures has2LockG(head,g91_a, g91_b); 
+{ 
+  takeLock(b_curr); 
+} 
