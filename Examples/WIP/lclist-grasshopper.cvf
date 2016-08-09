@@ -46,7 +46,7 @@ method deleteVal(v) {
     }
   {| isList(v) * has2Lock(prev, curr) * isVal(curr, cv) |}
     if ( cv == v) {
-      {| isList(v) * has2Lock(prev, curr) |}
+      {| isList(v) * has2Lock(prev, curr) * isVal(curr, cv) |}
         // Merged these two to avoid dangling nodes. 
         <{ lheap = heap; 
            heap = (%{ #2.next := #3.next }(lheap, prev, curr)); 
@@ -71,7 +71,7 @@ constraint has1Lock(a,b) -> %{ has1LockG(head,#1,#2) }(a, b);
 
 constraint has2Lock(a,b)  -> %{ has2LockG(head,#1,#2) }(a, b);
 
-constraint isVal(node, v) -> %{ isValG(head, #1, #2) }(node, v);
+constraint isVal(node, v) -> %{ isValG(head, #1, #2) &*& #2 < ub }(node, v);
 
 // constraint dangleNode(a) -> 
 //  %{ dangleNodeG(#1) }(a);

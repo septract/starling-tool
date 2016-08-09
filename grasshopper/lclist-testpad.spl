@@ -1,26 +1,102 @@
 include "./lclist-module.spl";  
 
-// deleteVal_C000_001: fail
-// deleteVal_C000_001:
+// deleteVal_C005_003: fail
+// deleteVal_C005_003:
 //     Command:
-//         (= (after prev) (before head))
+//         (and
+//             (= (after lheap) (before heap))
+//             (= (after heap) %{releaseLock(#2) }((after lheap), (before prev)))
+//         )
 //     
 //     W/Prec:
 //         (and
+//             %{has2Lock(head,#1,#2) }((before prev), (before curr))
+//             %{has2Lock(head,#1,#2) }((goal 102 a), (goal 102 b))
+//             (not (= (before curr) (goal 102 b)))
+//             (not (= (before prev) (goal 102 b)))
+//             (not (= (before prev) (goal 102 a)))
+//             (not (= (before curr) (goal 102 a)))
+//             (not (= (goal 102 b) (before curr)))
+//             (not (= (goal 102 a) (before curr)))
+//             (not (= (goal 102 a) (before prev)))
+//             (not (= (goal 102 b) (before prev)))
 //             %{isListG(head,ub,#1) }((before v))
+//             %{isValG(head, #1, #2) }((before curr), (before cv))
+//         )
+//     
+//     Goal:
+//         %{has2Lock(head,#1,#2) }((goal 102 a), (goal 102 b))
+
+procedure deleteVal_C005_003 (
+     head: Node, 
+     ub: Int, 
+     b_prev: Node, 
+     b_curr: Node, 
+     b_v: Int, 
+     b_cv: Int, 
+     g102_a: Node, 
+     g102_b: Node 
+  )
+  // Note: multiple requires are treated spatially! 
+  requires has2LockG(head,b_prev,b_curr) 
+        && has2LockG(head,g102_a, g102_b) 
+        && isListG(head,ub,b_v) 
+        && isValG(head, b_curr, b_cv); 
+  requires b_prev != g102_a;  
+  requires b_prev != g102_b;  
+  requires b_curr != g102_a;  // redundant
+  requires b_curr != g102_b;  // redundant 
+  ensures has2LockG(head,g102_a,g102_b); 
+{
+  releaseLock(b_prev); 
+} 
+
+
+// deleteVal_C013_001: fail
+// deleteVal_C013_001:
+//     Command:
+//         (and
+//             (= (after lheap) (inter 1 heap))
+//             (= (inter 0 lheap) (before heap))
+//             (= (inter 1 heap) %{#2.next := #3.next }((inter 0 lheap), (before prev), (before curr)))
+//             (= (after heap) %{disposeNode(#2) }((after lheap), (before curr)))
+//         )
+//     
+//     W/Prec:
+//         (and
+//             %{has2LockG(head,#1,#2) }((before prev), (before curr))
+//             %{isListG(head,ub,#1) }((before v))
+//             %{isValG(head, #1, #2) &*& #2 < ub }((before curr), (before cv))
 //             (=>
-//                 (not (= (goal 177 v) (before v)))
-//                 %{isListG(head,ub,#1) }((goal 177 v))
+//                 (not (= (goal 45 v) (before v)))
+//                 %{isListG(head,ub,#1) }((goal 45 v))
 //             )
 //         )
 //     
 //     Goal:
-//         %{isListG(head,ub,#1) }((goal 177 v))
+//         %{isListG(head,ub,#1) }((goal 45 v))
 
-procedure deleteVal_C000_001 (head: Node, a_prev: Node, ub: Int, b_v: Int, g177_v: Int) 
-  requires isListG(head,ub,b_v); 
-  requires (g177_v != b_v)  ==>  isListG(head,ub,b_v);  
-  ensures isListG(head,ub,g177_v); 
-{
-  a_prev := head; 
+procedure deleteVal_C013_001 (
+      head: Node, 
+      ub: Int, 
+      b_prev: Node, 
+      b_curr: Node, 
+      b__: Node, 
+      b_v: Int, 
+      b_cv: Int, 
+      g56_v: Int
+    ) 
+  requires has2LockG(head,b_prev,b_curr) && 
+           isListG(head,ub,b_v) && 
+           (isValG(head,b_curr,b_cv) &*& b_cv < ub) && 
+           // Note encoding of entailment with spatial true sTrue().
+           ( (g56_v != b_v &*& isListG(head,ub,g56_v)) 
+               || 
+             (g56_v = b_v &*& sTrue()));  
+  ensures isListG(head,ub,g56_v); 
+{ 
+  b_prev.next := b_curr.next; 
+  disposeNode(b_curr); 
 } 
+
+

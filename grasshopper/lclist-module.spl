@@ -7,6 +7,46 @@ struct Node {
 }
  
 
+// Utility predicates 
+
+predicate sTrue () { 
+  exists X : Set<Node> :: acc(X) 
+} 
+
+procedure sTrue_test(a: Int, b:Int) 
+  requires ((a=b) &*& sTrue()) || ((a!=b) &*& sTrue()); 
+  ensures sTrue(); 
+{ }  
+
+procedure sTrue_test2(x: Node) 
+  requires acc(x) &*& sTrue(); 
+  ensures sTrue(); 
+{ }  
+
+// procedure sTrue_test3(x: Node) 
+//   requires sTrue() &*& sTrue(); 
+//   ensures sTrue() &*& sTrue(); 
+// { 
+// }  
+
+procedure test_inclusion (a: Node, X: Set<Node>) 
+  requires acc(X) &*& a in X; 
+  ensures acc(a) -** acc(X) ; 
+{} 
+
+procedure test_sharing (a: Node, b: Node) 
+  requires acc(a) &+& acc(b);
+  ensures (acc(a) &*& acc(b)) || acc(a); 
+{}
+
+procedure test_list (head: Node, a: Node, b: Node) 
+  requires has1LockG(head, a, b);
+  //ensures acc(a) -** has1LockG(head, a, b);  
+  // ensures true;
+{ 
+  a.next := null; 
+} 
+
 // List segment definitions
 
 predicate lseg(x: Node, y: Node) {
@@ -16,14 +56,13 @@ predicate lseg(x: Node, y: Node) {
 predicate lseg_upperbound(ub: Int, FP: Set<Node>)
   requires acc(FP)
 {
-  forall z: Node :: (z in FP && z.next != null) ==> z.val <= ub
+  forall z in FP :: (z.next != null) ==> z.val < ub
 }
 
 predicate lseg_sentinel (head: Node, ub: Int, FP: Set<Node>) 
   requires acc(FP) 
 { 
-  exists z: Node :: 
-    z in FP && z.next == null && z.val == ub && z != head 
+  exists z in FP :: z.next == null && z.val == ub && z != head 
 } 
 
 predicate llseg(h: Node, y: Node, ub: Int) {
