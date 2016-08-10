@@ -131,8 +131,8 @@ let seqComposition xs =
                 else
                     Reg v'
             | After v ->
-                if dict2.ContainsKey(v) then
-                    let nLevel = dict2.[v]
+                if dict.ContainsKey(v) then
+                    let nLevel = dict2.[v] + 1I
                     ignore <| dict2.Remove(v)
                     dict2.Add(v, nLevel)
                     Reg (Intermediate (nLevel, v))

@@ -58,6 +58,16 @@ module Compositions =
             <| [ bEq (sbInter 0I "t") (sbBefore "t")
                  bEq (sbInter 0I "g") (sbInter 0I "t") ]
 
+    [<Test>]
+    let ``Compose multi`` () =
+        check
+            <| [ iEq (siAfter "t") (iAdd (siBefore "t") (AInt 1L))
+                 iEq (siAfter "t") (iAdd (siBefore "t") (AInt 1L))
+                 iEq (siAfter "t") (iAdd (siBefore "t") (AInt 1L)) ]
+            <| [ iEq (siInter 0I "t") (iAdd (siBefore "t") (AInt 1L))
+                 iEq (siInter 1I "t") (iAdd (siInter 0I "t") (AInt 1L))
+                 iEq (siInter 2I "t") (iAdd (siInter 1I "t") (AInt 1L)) ]
+
 module Frames =
     let check var expectedFramedExpr =
         Assert.AreEqual(expectedFramedExpr, frameVar Before var)
