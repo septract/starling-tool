@@ -20,35 +20,47 @@ open Starling.Tests.Studies
 
 /// Tests for the semantic transformer.
 module Compositions =
-    let check x y expr =
-        Assert.AreEqual(composeBools x y, expr)
+    let check xs expectedExprList =
+        match seqComposition xs with
+        | BAnd ands ->
+            Assert.AreEqual (Set.ofList expectedExprList, Set.ofList ands)
+        | y -> Assert.Fail (sprintf "Expected %A but got %A" expectedExprList y)
 
     [<Test>]
     let ``Compose two basic assignments`` () =
         check
-            <| bEq (sbAfter "foo") (sbBefore "bar")
-            <| bEq (sbAfter "baz") (sbBefore "foo")
-            <| BAnd [ bEq (sbInter 0I "foo") (sbBefore "bar")
-                      bEq (sbAfter "baz") (sbInter 0I "foo") ]
+            <| [ bEq (sbAfter "foo") (sbBefore "bar")
+                 bEq (sbAfter "baz") (sbBefore "foo") ]
+            <| [ bEq (sbInter 0I "foo") (sbBefore "bar")
+                 bEq (sbInter 0I "baz") (sbInter 0I "foo") ]
 
     [<Test>]
     let ``Compose two compositions`` () =
         check
-            <| BAnd
+            <| [ BAnd
                   [ bEq (sbInter 0I "foo") (sbBefore "bar")
                     bEq (sbAfter "baz") (sbInter 0I "foo") ]
-            <| BAnd
+                 BAnd
                   [ bEq (sbInter 0I "flop") (sbBefore "baz")
-                    bEq (sbAfter "froz") (sbInter 0I "flop") ]
-            <| BAnd
-                   [ bEq (sbInter 1I "baz") (sbInter 0I "foo")
-                     bEq (sbInter 0I "foo") (sbBefore "bar")
-                     bEq (sbAfter "froz") (sbInter 2I "flop")
-                     bEq (sbInter 2I "flop") (sbInter 1I "baz") ]
+                    bEq (sbAfter "froz") (sbInter 0I "flop") ] ]
+            <| [
+                 bEq (sbInter 0I "foo") (sbBefore "bar")
+                 bEq (sbInter 0I "baz") (sbInter 0I "foo")
+                 bEq (sbInter 0I "flop") (sbInter 0I "baz")
+                 bEq (sbInter 0I "froz") (sbInter 0I "flop")
+               ]
+
+    [<Test>]
+    let ``Compose simple`` () =
+        check
+            <| [ bEq (sbAfter "t") (sbBefore "t")
+                 bEq (sbAfter "g") (sbBefore "t") ]
+            <| [ bEq (sbInter 0I "t") (sbBefore "t")
+                 bEq (sbInter 0I "g") (sbInter 0I "t") ]
 
 module Frames =
-    let check var framedExpr =
-        Assert.AreEqual(frameVar Before var, framedExpr)
+    let check var expectedFramedExpr =
+        Assert.AreEqual(expectedFramedExpr, frameVar Before var)
 
     let checkExpr expr framedExpr =
         let actualExpr =
@@ -88,8 +100,8 @@ module Frames =
                  iEq (siAfter "t") (siBefore "t") ]
 
 module CommandTests =
-    let check command values =
-        let vals =
+    let check command expectedValues =
+        let actualValues =
             command
             |> semanticsOfCommand
                    (Starling.Lang.Modeller.coreSemantics)
@@ -100,7 +112,7 @@ module CommandTests =
                             | BAnd xs -> xs |> Set.ofList |> Some
                             | _ -> None)
 
-        Assert.AreEqual(values, vals, message=sprintf "Expected: ``%A``, but got: ``%A``" vals values)
+        Assert.AreEqual(expectedValues, actualValues)
 
     [<Test>]
     let ``Semantically translate <assume(s == t)> using the ticket lock model`` () =

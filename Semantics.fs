@@ -120,7 +120,6 @@ let seqComposition xs =
     let mutable dict = System.Collections.Generic.Dictionary<Var, bigint>()
 
     let mapper x =
-        let nLevel = nextBoolIntermediate x
         let dict2 = System.Collections.Generic.Dictionary<Var, bigint>(dict)
 
         let xRewrite =
@@ -133,10 +132,13 @@ let seqComposition xs =
                     Reg v'
             | After v ->
                 if dict2.ContainsKey(v) then
+                    let nLevel = dict2.[v]
                     ignore <| dict2.Remove(v)
-
-                dict2.Add(v, nLevel)
-                Reg (Intermediate (nLevel, v))
+                    dict2.Add(v, nLevel)
+                    Reg (Intermediate (nLevel, v))
+                else
+                    dict2.Add(v, 0I)
+                    Reg (Intermediate (0I, v))
             | v -> Reg v
             |> (fun f ->
                     Mapper.compose
