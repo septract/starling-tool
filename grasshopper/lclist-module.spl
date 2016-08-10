@@ -52,7 +52,8 @@ procedure takeLock(x: Node)
   requires acc(x); 
   ensures acc(x) &*& nodeLocked(x,x.next); 
 { 
-  while (x.lock == true) {} 
+  // while (x.lock == true) {} 
+  assume x.lock == false; 
   x.lock := true; 
 }  
 
