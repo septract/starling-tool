@@ -130,7 +130,6 @@ let (|BBEq|_|) =
     | BEq (Bool x, Bool y) -> Some (x, y)
     | _ -> None
 
-
 /// Define when two Boolean expressions are trivially equal 
 /// Eg: (= a b)  is equivalent ot (=b a)
 let rec eqBoolExpr (e1: BoolExpr<'var>) (e2:BoolExpr<'var>) : bool   = 
@@ -140,23 +139,22 @@ let rec eqBoolExpr (e1: BoolExpr<'var>) (e2:BoolExpr<'var>) : bool   =
   | BNot a, BNot b -> eqBoolExpr a b 
   | _ -> false 
 
-
 /// Remove duplicate boolean expressions 
 /// TODO(@septract) This is stupid, should do it more cleverly 
-let rec remExprDup (xs: List<BoolExpr<'var>>) : List<BoolExpr<'var>> =   
+let rec remExprDup beq (xs: List<BoolExpr<'var>>) : List<BoolExpr<'var>> =   
   match xs with 
   | (x::xs) -> 
-      let xs2 = remExprDup xs in 
-      if (List.exists (eqBoolExpr x) xs) then xs2 else x::xs2
+      let xs2 = remExprDup beq xs in 
+      if (List.exists (beq x) xs) then xs2 else x::xs2
   | x -> x 
 
 
 /// Recursively simplify a formula
 /// Note: this does _not_ simplify variables.
-let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
+let rec simpRec beq (ax : BoolExpr<'var>) : BoolExpr<'var> =
     match ax with
     | BNot (x) ->
-        match simp x with
+        match simpRec beq x with
         | BTrue      -> BFalse
         | BFalse     -> BTrue
         | BNot x     -> x
@@ -165,9 +163,9 @@ let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
         | BLe (x, y) -> BGt (x, y)
         | BLt (x, y) -> BGe (x, y)
         //Following, all come from DeMorgan
-        | BAnd xs        -> simp (BOr (List.map BNot xs))
-        | BOr xs         -> simp (BAnd (List.map BNot xs))
-        | BImplies (x,y) -> simp (BAnd [x; BNot y])
+        | BAnd xs        -> simpRec beq (BOr (List.map BNot xs))
+        | BOr xs         -> simpRec beq (BAnd (List.map BNot xs))
+        | BImplies (x,y) -> simpRec beq (BAnd [x; BNot y])
         | y          -> BNot y
     // x = x is always true.
     | BEq (x, y) when x = y -> BTrue
@@ -175,16 +173,16 @@ let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
     | BGe (x, y)
     | BLe (x, y) when x = y -> BTrue
     | BImplies (x, y) ->
-        match simp x, simp y with
+        match simpRec beq x, simpRec beq y with
         | BFalse, _
         | _, BTrue      -> BTrue
         | BTrue, y      -> y
-        | x, BFalse     -> simp (BNot x)
+        | x, BFalse     -> simpRec beq (BNot x)
         | x, y          -> BImplies(x,y)
     | BOr xs ->
         match foldFastTerm
                 (fun s x ->
-                  match simp x with
+                  match simpRec beq x with
                   | BTrue  -> None
                   | BFalse -> Some s
                   | BOr ys -> Some (ys @ s)
@@ -193,7 +191,7 @@ let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
                 []
                 xs with
         | Some xs -> 
-           match remExprDup xs with 
+           match remExprDup beq xs with 
            | []  -> BFalse
            | [x] -> x
            | xs  -> BOr (List.rev xs)
@@ -202,7 +200,7 @@ let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
     | BAnd xs ->
         match foldFastTerm
                 (fun s x ->
-                  match simp x with
+                  match simpRec beq x with
                   | BFalse  -> None
                   | BTrue   -> Some s
                   | BAnd ys -> Some (ys @ s)
@@ -211,14 +209,14 @@ let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
                 []
                 xs with 
         | Some xs -> 
-           match remExprDup xs with 
+           match remExprDup beq xs with 
            | []  -> BTrue
            | [x] -> x
            | xs  -> BAnd (List.rev xs)
         | None     -> BFalse
     // A Boolean equality between two contradictions or tautologies is always true.
     | BBEq (x, y)  ->
-        match simp x, simp y with
+        match simpRec beq x, simpRec beq y with
         | BFalse, BFalse
         | BTrue, BTrue      -> BTrue
         | BTrue, BFalse
@@ -226,10 +224,13 @@ let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
         // A Boolean equality between something and True reduces to that something.
         | x, BTrue          -> x
         | BTrue, x          -> x
-        | x, BFalse         -> simp (BNot x)
-        | BFalse, x         -> simp (BNot x)
+        | x, BFalse         -> simpRec beq (BNot x)
+        | BFalse, x         -> simpRec beq (BNot x)
         | x, y              -> BEq(Bool x, Bool y)
     | x -> x
+
+let simp (ax : BoolExpr<'var>) : BoolExpr<'var> = 
+  simpRec eqBoolExpr ax
 
 /// Returns true if the expression is definitely false.
 /// This is sound, but not complete.

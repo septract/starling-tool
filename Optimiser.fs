@@ -877,11 +877,12 @@ module Term =
      * Boolean simplification
      *)
 
+
     /// Performs expression simplification on a term.
     let simpTerm
       : STerm<SMGView, SMVFunc>
         -> STerm<SMGView, SMVFunc> =
-        subExprInDTerm (Mapper.make id simp) NoCtx >> snd
+        subExprInDTerm (Mapper.make id (simpRec eqBoolExpr)) NoCtx >> snd
 
     (*
      * Frontend
