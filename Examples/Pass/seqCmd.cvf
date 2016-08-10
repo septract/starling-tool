@@ -5,13 +5,19 @@ shared int test;
 shared int foo; 
 shared int bar; 
 
-method testmeth() {
-  {| emp |}
+view isZero(); 
+view isThree(); 
+
+method addThree() {
+  {| isZero() |}
   <{ test++; 
      test++; 
      test++; }>; 
-  {| emp |}
+  {| isThree() |}
 }
 
-constraint emp -> true;  
+constraint isZero() -> test==0;  
+constraint isThree() -> test==3;  
 
+// No-one else is relying on test staying zero 
+constraint isZero() * isZero() -> false; 
