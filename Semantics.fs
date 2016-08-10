@@ -121,6 +121,7 @@ let seqComposition xs =
 
     let mapper x =
         let dict2 = System.Collections.Generic.Dictionary<Var, bigint>(dict)
+        let isSet = System.Collections.Generic.HashSet<Var>()
 
         let xRewrite =
             function
@@ -131,14 +132,20 @@ let seqComposition xs =
                 else
                     Reg v'
             | After v ->
-                if dict.ContainsKey(v) then
-                    let nLevel = dict2.[v] + 1I
-                    ignore <| dict2.Remove(v)
-                    dict2.Add(v, nLevel)
-                    Reg (Intermediate (nLevel, v))
+                /// Have not set After v to a new Intermediate yet
+                if not (isSet.Contains(v)) then
+                    ignore <| isSet.Add(v)
+
+                    if dict2.ContainsKey(v) then
+                        let nLevel = dict2.[v] + 1I
+                        ignore <| dict2.Remove(v)
+                        dict2.Add(v, nLevel)
+                        Reg (Intermediate (nLevel, v))
+                    else
+                        dict2.Add(v, 0I)
+                        Reg (Intermediate (0I, v))
                 else
-                    dict2.Add(v, 0I)
-                    Reg (Intermediate (0I, v))
+                    Reg (Intermediate (dict2.[v], v))
             | v -> Reg v
             |> (fun f ->
                     Mapper.compose

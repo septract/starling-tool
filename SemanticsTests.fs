@@ -67,6 +67,17 @@ module Compositions =
             <| [ iEq (siInter 0I "t") (iAdd (siBefore "t") (AInt 1L))
                  iEq (siInter 1I "t") (iAdd (siInter 0I "t") (AInt 1L))
                  iEq (siInter 2I "t") (iAdd (siInter 1I "t") (AInt 1L)) ]
+    [<Test>]
+    let ``Compose multi after`` () =
+        check
+            <| [ BAnd
+                    [ (iEq (siAfter "t") (iAdd (siBefore "t") (AInt 1L)))
+                      (iEq (siAfter "t") (iAdd (siBefore "t") (AInt 3L))) ]
+                 iEq (siAfter "t") (iAdd (siBefore "t") (AInt 1L)) ]
+            <| [ iEq (siInter 0I "t") (iAdd (siBefore "t") (AInt 1L))
+                 iEq (siInter 0I "t") (iAdd (siBefore "t" )(AInt 3L))
+                 iEq (siInter 1I "t") (iAdd (siInter 0I "t") (AInt 1L)) ]
+
 
 module Frames =
     let check var expectedFramedExpr =
