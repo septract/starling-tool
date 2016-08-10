@@ -62,64 +62,6 @@ module Pretty =
             fmt "primitive '{0}' has no semantic definition"
                 [ printPrimCommand prim ]
 
-
-
-/// <summary>
-///     Composes two Boolean expressions representing commands.
-///     <para>
-///         The pre-state of the first and post-state of the second become
-///         the pre- and post- state of the composition.  All of the
-///         intermediates (and pre-state) in the second are raised to the
-///         highest intermediate level in the first.  The post-state
-///         of the first then becomes the lowest intermediate level in the
-///         second.
-///     </para>
-/// </summary>
-/// <param name="x">
-///     The first expression to compose.
-/// </param>
-/// <param name="y">
-///     The second expression to compose.
-/// </param>
-/// <returns>
-///     The result of composing <paramref name="y" /> onto
-///     <paramref name="x" /> as above.
-/// </returns>
-let composeBools x y =
-    (* Find out what the next intermediate level is on x:
-     * this is going to replace !before in y, and each intermediate level
-     * in y will increase by this level plus one.
-     *)
-    let nLevel = nextBoolIntermediate x
-
-    let xRewrite =
-        function
-        | After v -> Reg (Intermediate (nLevel, v))
-        | v -> Reg v
-        |> (fun f ->
-                Mapper.compose
-                    (Mapper.cmake f)
-                    (Mapper.make AVar BVar))
-        |> liftVToSym
-        |> onVars
-
-    let yRewrite =
-        function
-        | Before v -> Reg (Intermediate (nLevel, v))
-        | Intermediate (i, v) -> Reg (Intermediate (i + nLevel + 1I, v))
-        | v -> Reg v
-        |> (fun f ->
-                Mapper.compose
-                    (Mapper.cmake f)
-                    (Mapper.make AVar BVar))
-        |> liftVToSym
-        |> onVars
-
-    mkAnd
-        [ Mapper.mapBoolCtx xRewrite NoCtx x |> snd
-          Mapper.mapBoolCtx yRewrite NoCtx y |> snd ]
-
-
 /// Generates a framing relation for a given variable.
 let frameVar ctor par : SMBoolExpr =
     BEq (mkVarExp (After >> Reg) par, mkVarExp (ctor >> Reg) par)
@@ -165,14 +107,14 @@ let instantiateSemanticsOfPrim
            (instantiatePrim primSubFun semantics)
     |> bind (failIfNone (MissingDef prim))
 
-/// Given some mapping Map<Var, bigint option> mapping names to intermediate values
-/// create the sequentially composed x, replacing before's and after's
-open Starling.Core.Pretty
-open Starling.Core.Expr.Pretty
-open Starling.Core.Var.Pretty
-open Starling.Core.Symbolic.Pretty
+/// Given a list of BoolExpr's it sequentially composes them together
+/// this works by taking each BoolExpr in turn,
+///     converting *all* After variables to (Intermediate i) variables
+///     converts any Before variables where an Intermediate exists, to that Intermediate
+///
+/// the frame can then be constructed by taking the BoolExpr and looking for the aforementioned Intermediate 
+/// variables and adding a (= (After v) (Intermediate maxInterValue v)) if it finds one
 let seqComposition xs =
-
     // since we are trying to keep track of explicit state (where we are in terms of the intermediate variables)
     // it's _okay_ to include actual mutable state here!
     let mutable dict = System.Collections.Generic.Dictionary<Var, bigint>()
@@ -214,6 +156,7 @@ let seqComposition xs =
 
     mapping xs
 
+/// Given a BoolExpr add the frame and return the new BoolExpr
 let addFrame svars tvars bexpr =
     mkAnd2 (frame svars tvars bexpr |> List.ofSeq |> mkAnd)
            bexpr
