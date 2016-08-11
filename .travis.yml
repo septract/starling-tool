@@ -11,7 +11,7 @@ install:
 
 cache:
     directories:
-        - $TRAVIS_BUILD_DIR/z3-z3-4.4.1/install
+        - $TRAVIS_BUILD_DIR/z3-z3-4.4.1/install/lib
         - $TRAVIS_BUILD_DIR/hsf/qarmc
 
 script:
