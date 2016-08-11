@@ -1,4 +1,4 @@
-if [[ ! -d z3-z3-4.4.1/install/lib ]]; then
+if [[ ! -e z3-z3-4.4.1/install/lib/libz3.so ]]; then
     wget https://github.com/Z3Prover/z3/archive/z3-4.4.1.zip
     unzip z3-4.4.1.zip
     cd z3-z3-4.4.1
