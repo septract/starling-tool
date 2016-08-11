@@ -1,0 +1,23 @@
+language: csharp
+solution: starling.sln
+
+before_install:
+    - sudo apt-get install -y python3
+    - ./install-z3.sh
+    - ./install-hsf.sh
+
+install:
+    - nuget restore starling.sln
+    - nuget install NUnit.Runners -OutputDirectory testrunner -Version 3.4.1
+
+cache:
+    directories:
+        - $TRAVIS_BUILD_DIR/z3-z3-4.4.1/install/lib
+        - $TRAVIS_BUILD_DIR/hsf/qarmc
+
+script:
+    - export PATH=$PATH:$TRAVIS_BUILD_DIR/hsf/qarmc/bin
+    - export LD_LIBRARY_PATH=$TRAVIS_BUILD_DIR/z3-z3-4.4.1/install/lib
+    - xbuild starling.sln
+    - mono ./testrunner/NUnit.ConsoleRunner.3.4.1/tools/nunit3-console.exe ./bin/Debug/starling.exe
+    - ./regress.py -v
