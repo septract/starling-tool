@@ -78,6 +78,19 @@ module Compositions =
                  iEq (siInter 0I "t") (iAdd (siBefore "t" )(AInt 3L))
                  iEq (siInter 1I "t") (iAdd (siInter 0I "t") (AInt 1L)) ]
 
+    [<Test>]
+    let ``Compose multiCmd list`` () =
+        check
+            <| [ BAnd
+                    [ (iEq (siAfter "t") (iAdd (siBefore "t") (AInt 1L)))
+                      (iEq (siAfter "t") (iAdd (siBefore "t") (AInt 2L))) ]
+                 iEq (siAfter "t") (iAdd (siBefore "t") (AInt 3L))
+                 iEq (siAfter "g") (siBefore "t") ]
+            <| [ iEq (siInter 0I "t") (iAdd (siBefore "t") (AInt 1L))
+                 iEq (siInter 0I "t") (iAdd (siBefore "t" )(AInt 2L))
+                 iEq (siInter 1I "t") (iAdd (siInter 0I "t" )(AInt 3L))
+                 iEq (siInter 0I "g") (siInter 1I "t") ]
+
 
 module Frames =
     let check var expectedFramedExpr =
