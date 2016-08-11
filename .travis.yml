@@ -2,7 +2,6 @@ language: csharp
 solution: starling.sln
 
 before_install:
-    - sudo apt-get install -y dos2unix
     - ./install-z3.sh
     - ./install-hsf.sh
 
@@ -19,5 +18,5 @@ script:
     - export PATH=$PATH:$TRAVIS_BUILD_DIR/hsf/qarmc/bin
     - export LD_LIBRARY_PATH=$TRAVIS_BUILD_DIR/z3-z3-4.4.1/install/lib
     - xbuild starling.sln
-    - mono ./testrunner/NUnit.ConsoleRunner.3.4.1/tools/nunit3-console.exe ./bin/Debug/starling.exe 
+    - mono ./testrunner/NUnit.ConsoleRunner.3.4.1/tools/nunit3-console.exe ./bin/Debug/starling.exe
     - ./regress.py -v
