@@ -124,14 +124,28 @@ module Run =
         solver.Assert [| term |]
         solver.Check [||]
 
+    //let runTermAsync ctx q = 
+    //   async { return runTerm ctx q } 
+
     /// Runs Z3 on a model.
-    let run ctx = axioms >> Map.map (runTerm ctx)
+    let runPar (ctx : Z3.Context) (xs: Model<#Z3.BoolExpr,'b>) 
+             : Map<string, Z3.Status>  = 
+       let quer = Map.toSeq (axioms xs) in 
+       seq { for (x,y) in quer -> async {return (x,runTerm ctx x y)} }
+       |> Async.Parallel 
+       |> Async.RunSynchronously 
+       |> Map.ofSeq 
+
+    let run ctx xs = 
+       let quer = axioms xs in 
+       Map.map (runTerm ctx) quer 
 
 
 /// Shorthand for the combination stage of the Z3 pipeline.
 let combine reals = Translator.combineTerms reals
 /// Shorthand for the satisfiability stage of the Z3 pipeline.
 let sat = Run.run
+let satPar = Run.runPar
 
 /// <summary>
 ///     The Starling Z3 backend driver.
@@ -155,4 +169,4 @@ let run reals req : Model<FTerm, unit> -> Response =
                             (Expr.boolToZ3 reals unmarkVar ctx)))
         >> Response.Translate
     | Request.Combine -> combine reals ctx >> Response.Combine
-    | Request.Sat -> combine reals ctx >> sat ctx >> Response.Sat
+    | Request.Sat -> combine reals ctx >> satPar ctx >> Response.Sat
