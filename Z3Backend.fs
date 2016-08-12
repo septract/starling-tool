@@ -134,17 +134,12 @@ module Run =
     /// Runs Z3 in parallel on a model.
     let runPar (ctx : Z3.Context) (xs: Model<Z3.BoolExpr,'b>) 
              : Map<string, Z3.Status>  = 
-       let quer = Map.toSeq (axioms xs) in 
-       seq { for (x,y) in quer -> 
-               async {
-                 let newctx = new Z3.Context() in 
-                 let copy = (y.Translate(newctx)) :?> Z3.BoolExpr in 
-                 return (x, runTerm newctx x copy) 
-               } 
-       }
-       |> Async.Parallel 
-       |> Async.RunSynchronously 
-       |> Map.ofSeq 
+       Map.toArray (axioms xs) 
+       |> Array.map (fun (x,y) -> 
+                      let nctx = new Z3.Context() 
+                      (nctx, x, y.Translate(nctx) :?> Z3.BoolExpr)) 
+       |> Array.Parallel.map (fun (ctx,x,y) -> (x, runTerm ctx x y))  
+       |> Map.ofArray 
 
 
 /// Shorthand for the combination stage of the Z3 pipeline.
