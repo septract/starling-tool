@@ -129,7 +129,10 @@ let requestMap =
           ("sat",
            ("Executes a definite proof using Z3 and reports the result.",
             Request.Z3 Backends.Z3.Types.Request.Sat))
-          ("symsat",
+          ("satpar",
+           ("Executes a definite proof using Z3 in parallel and reports the result.",
+            Request.Z3 Backends.Z3.Types.Request.SatPar))
+          ("satsym",
            ("Executes a symbolic proof using Z3 and reports failing clauses.",
             Request.SymZ3 Backends.Z3.Types.Request.Sat))
           ("mutranslate",

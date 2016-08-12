@@ -43,6 +43,8 @@ module Types =
         | Combine
         /// Translate, combine, and run term Z3 expressions; return `Response.Sat`.
         | Sat
+        /// Same, but in parallel; return `Response.Sat`.
+        | SatPar
 
     /// <summary>
     ///     Type of responses from the Z3 backend.
@@ -124,21 +126,25 @@ module Run =
         solver.Assert [| term |]
         solver.Check [||]
 
-    //let runTermAsync ctx q = 
-    //   async { return runTerm ctx q } 
-
     /// Runs Z3 on a model.
-    let runPar (ctx : Z3.Context) (xs: Model<#Z3.BoolExpr,'b>) 
-             : Map<string, Z3.Status>  = 
-       let quer = Map.toSeq (axioms xs) in 
-       seq { for (x,y) in quer -> async {return (x,runTerm ctx x y)} }
-       |> Async.Parallel 
-       |> Async.RunSynchronously 
-       |> Map.ofSeq 
-
     let run ctx xs = 
        let quer = axioms xs in 
        Map.map (runTerm ctx) quer 
+
+    /// Runs Z3 in parallel on a model.
+    let runPar (ctx : Z3.Context) (xs: Model<Z3.BoolExpr,'b>) 
+             : Map<string, Z3.Status>  = 
+       let quer = Map.toSeq (axioms xs) in 
+       seq { for (x,y) in quer -> async {
+                let newctx = new Z3.Context() in 
+                let copy = ((y.Translate(newctx)) :?> Z3.BoolExpr) in 
+                let res = (x,runTerm newctx x copy) in 
+                newctx.Dispose();  
+                return res 
+         } }
+       |> Async.Parallel 
+       |> Async.RunSynchronously 
+       |> Map.ofSeq 
 
 
 /// Shorthand for the combination stage of the Z3 pipeline.
@@ -169,4 +175,5 @@ let run reals req : Model<FTerm, unit> -> Response =
                             (Expr.boolToZ3 reals unmarkVar ctx)))
         >> Response.Translate
     | Request.Combine -> combine reals ctx >> Response.Combine
-    | Request.Sat -> combine reals ctx >> satPar ctx >> Response.Sat
+    | Request.Sat -> combine reals ctx >> sat ctx >> Response.Sat
+    | Request.SatPar -> combine reals ctx >> satPar ctx >> Response.Sat
