@@ -135,13 +135,13 @@ module Run =
     let runPar (ctx : Z3.Context) (xs: Model<Z3.BoolExpr,'b>) 
              : Map<string, Z3.Status>  = 
        let quer = Map.toSeq (axioms xs) in 
-       seq { for (x,y) in quer -> async {
-                let newctx = new Z3.Context() in 
-                let copy = ((y.Translate(newctx)) :?> Z3.BoolExpr) in 
-                let res = (x,runTerm newctx x copy) in 
-                newctx.Dispose();  
-                return res 
-         } }
+       seq { for (x,y) in quer -> 
+               async {
+                 let newctx = new Z3.Context() in 
+                 let copy = (y.Translate(newctx)) :?> Z3.BoolExpr in 
+                 return (x, runTerm newctx x copy) 
+               } 
+       }
        |> Async.Parallel 
        |> Async.RunSynchronously 
        |> Map.ofSeq 
