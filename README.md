@@ -1,4 +1,5 @@
-# Starling
+# Starling 
+[![Build Status](https://travis-ci.org/septract/starling-tool.svg?branch=master)](https://travis-ci.org/septract/starling-tool)
 
 _Starling_ is an automated verification tool for concurrent programs.
 It accepts programs written in a C-like language and annotated with
