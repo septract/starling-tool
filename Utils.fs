@@ -54,7 +54,7 @@ module Config =
                     "The file to load (omit, or supply -, for standard input).")>]
           input : string option }
 
-    let _emptyOpts = {
+    let _emptyOpts : Options = {
         raw             = false;
         backendOpts     = None;
         stage           = None;
@@ -67,8 +67,8 @@ module Config =
         color           = false;
     }
 
-    let _configRef = ref _emptyOpts
-    let config () = ! _configRef
+    let _configRef : Options ref = ref _emptyOpts
+    let config () : Options = ! _configRef
 
 /// <summary>
 ///     Parses an delimited option string.
@@ -84,7 +84,7 @@ module Config =
 ///     name is downcased.  The optimisation name 'all' is special, as it
 ///     force-enables (or force-disables) all optimisations.
 /// </returns>
-let parseOptionString (str : string) =
+let parseOptionString (str : string) : string seq =
     str.ToLower()
         .Split([| "," ; ";" |],
                System.StringSplitOptions.RemoveEmptyEntries)
@@ -92,8 +92,21 @@ let parseOptionString (str : string) =
     |> Seq.map (fun x -> x.Trim())
 
 
-/// Converts a list to an option that is Some iff it has exactly one item.
-let onlyOne s =
+/// <summary>
+///     Converts a sequence to an option that is <c>Some</c> iff it has exactly
+///     one item.
+/// </summary>
+/// <param name="s">
+///     The sequence to convert.
+/// </param>
+/// <typeparam name="a">
+///     The type of elements in the sequence.
+/// </typeparam>
+/// <returns>
+///     An <see cref="Option"/> that is <c>Some> iff <paramref name="s"/> has
+///     exactly one item.
+/// </returns>
+let onlyOne (s : 'A seq) : 'A option =
     s
     |> List.ofSeq
     |> function
@@ -101,60 +114,64 @@ let onlyOne s =
        | _ -> None
 
 /// Reverses a 2-argument function.
-let flip f x y = f y x
+let flip (f : 'A -> 'B -> 'C) (x : 'B) (y : 'A) : 'C = f y x
 
 /// Reverses a pair.
-let flipPair (x, y) = (y, x)
+let flipPair (x : 'A1, y : 'A2) : 'A2 * 'A1 = (y, x)
 
 /// A predicate that always returns true.
-let always _ = true
+let always (_ : _) : bool = true
 
 /// Applies f and g to x and returns (f x, g x).
-let splitThrough f g x = (f x, g x)
+let splitThrough (f : 'A -> 'B) (g : 'A -> 'C) (x : 'A) : 'B * 'C =
+    (f x, g x)
 
 /// Given f and x, returns (x, f x).
-let inAndOut f = splitThrough id f
+let inAndOut (f : 'A -> 'B) : 'A -> 'A * 'B = splitThrough id f
 
 /// Given f and (x, y), returns (x, f x y).
-let inAndOut2 f (x, y) = (x, f x y)
+let inAndOut2 (f : 'A -> 'B -> 'C) (x : 'A, y : 'B) : 'A * 'C =
+    (x, f x y)
 
 /// Passes fst through f, and snd through g.
-let pairMap f g = splitThrough (fst >> f) (snd >> g)
+let pairMap (f : 'A1 -> 'B1) (g : 'A2 -> 'B2) : 'A1 * 'A2 -> 'B1 * 'B2 =
+    splitThrough (fst >> f) (snd >> g)
 
 /// Converts a pairwise function to a function of two arguments.
-let curry f a b = f (a, b)
+let curry (f : 'A * 'B -> 'C) (a : 'A) (b : 'B) : 'C = f (a, b)
 
 /// Converts a triple-wise function to a function of three arguments.
-let curry3 f a b c = f (a, b, c)
+let curry3 (f : 'A * 'B * 'C -> 'D) (a : 'A) (b : 'B) (c : 'C) : 'D =
+    f (a, b, c)
 
 /// Converts a function of two arguments to a pairwise function.
-let uncurry f (a, b) = f a b
+let uncurry (f : 'A -> 'B -> 'C) (a : 'A, b : 'B) : 'C = f a b
 
 /// Constructs a pair from left to right.
-let mkPair x y = (x, y)
+let mkPair (a : 'A) (b : 'B) : 'A * 'B = (a, b)
 
 /// List cons (::) as a two-argument function.
-let cons a b = a :: b
+let cons (x : 'X) (xs : 'X list) : 'X list = x :: xs
 
 /// Puts a onto the top of a sequence b.
-let scons a = Seq.append (Seq.singleton a)
+let scons (x : 'X) : 'X seq -> 'X seq = Seq.append (Seq.singleton x)
 
 /// Returns `a` if the input is `Some a`, or `d` otherwise.
-let withDefault d =
+let withDefault (d : 'A) : 'A option -> 'A =
     function
     | Some a -> a
     | None -> d
 
 /// Maps a function f through a set, and concatenates the resulting
 /// list of lists into one set.
-let unionMap f =
+let unionMap (f : 'A -> Set<'B>) : Set<'A> -> Set<'B> =
     Set.toSeq
     >> Seq.map f
     >> Set.unionMany
 
 /// Maps a function f through a list, and concatenates the resulting
 /// list of lists into one list.
-let concatMap f xs =
+let concatMap (f : 'A -> 'B list) (xs : 'A list) : 'B list =
     (* Adapted from the GHC base implementation,
      * see http://hackage.haskell.org/package/base-4.8.1.0/docs/src/Data.Foldable.html
      * for source and copyright information.
@@ -165,10 +182,10 @@ let concatMap f xs =
  * Map data structure
  *)
 
-/// Tries to find duplicate entries in a list.
-/// Returns a list of the duplicates found.
-let findDuplicates lst =
-    lst
+/// Tries to find duplicate entries in a sequence.
+/// Returns a sequence of the duplicates found.
+let findDuplicates (s : 'A seq) : 'A seq =
+    s
     |> Seq.groupBy id
     |> Seq.choose
            // dupes now contains all of the appearances of x.
@@ -179,11 +196,11 @@ let findDuplicates lst =
             | _ -> None)
 
 /// Returns the keys of a map as a sequence.
-let keys mp =
+let keys (mp : Map<'Key, _>) : 'Key seq =
     mp |> Map.toSeq |> Seq.map fst
 
 /// Returns the duplicate keys across two maps.
-let keyDuplicates a b =
+let keyDuplicates (a : Map<'Key, _>) (b : Map<'Key, _>) : 'Key seq =
     findDuplicates (Seq.append (keys a) (keys b))
 
 /// <summary>
@@ -202,20 +219,20 @@ let keyDuplicates a b =
 /// <typeparam name="acc">
 ///     The type of the accumulator.
 /// </typeparam>
-/// <typeparam name="src">
+/// <typeparam name="Src">
 ///     The type of variables in the list to map.
 /// </typeparam>
-/// <typeparam name="dst">
+/// <typeparam name="Dst">
 ///     The type of variables in the list after mapping.
 /// </typeparam>
 /// <returns>
 ///     A tuple of the final accumulator and mapped list.
 /// </returns>
 let mapAccumL
-  (f : 'acc -> 'src -> ('acc * 'dst))
-  (init : 'acc)
-  (lst : 'src list)
-  : ('acc * 'dst list) =
+  (f : 'Acc -> 'Src -> ('Acc * 'Dst))
+  (init : 'Acc)
+  (lst : 'Src list)
+  : ('Acc * 'Dst list) =
     let rec it acc srcs dsts =
         match srcs with
         | [] -> (acc, List.rev dsts)
@@ -225,7 +242,8 @@ let mapAccumL
     it init lst []
 
 /// Joins two maps together.
-let mapAppend a b =
+let mapAppend (a : Map<'Key, 'Value>) (b : Map<'Key, 'Value>)
+  : Map<'Key, 'Value> =
     Map.ofSeq (Seq.append (Map.toSeq a) (Map.toSeq b))
 
 (*
@@ -233,42 +251,68 @@ let mapAppend a b =
  *)
 
 /// Extends lift to functions of 3 arguments.
-let lift3 f a b c =
+let lift3
+  (f: 'A -> 'B -> 'C -> 'Value)
+  (a : Result<'A, 'Error>)
+  (b : Result<'B, 'Error>)
+  (c : Result<'C, 'Error>)
+  : Result<'Value, 'Error> =
     trial { let! av = a
             let! bv = b
             let! cv = c
             return f av bv cv }
 
 /// Converts a Result into an option with Some x if the result was Ok x _.
-let okOption =
+let okOption : Result<'Value, _> -> 'Value option =
     function
     | Ok (x, _) -> Some x
     | _ -> None
 
 /// Converts a Result into an option with Some x if the result was Fail x _.
-let failOption =
+let failOption : Result<_, 'Error> -> 'Error list option =
     function
     | Fail xs -> Some xs
     | _ -> None
 
 /// Maps f over e's messages.
-let mapMessages f = either (fun (v, msgs) -> Ok(v, List.map f msgs)) (fun msgs -> List.map f msgs |> Bad)
+let mapMessages (f : 'Error1 -> 'Error2)
+  : Result<_, 'Error1> -> Result<_, 'Error2> =
+    either
+        (fun (v, msgs) -> Ok(v, List.map f msgs))
+        (fun msgs -> List.map f msgs |> Bad)
 
 /// Performs f on x, but wraps each failure e to g(x, e).
-let wrapMessages g f x = x |> f |> mapMessages (curry g x)
+let wrapMessages
+  (g : 'A * 'Error1 -> 'Error2)
+  (f : 'A -> Result<'Value, 'Error1>)
+  (x : 'A)
+  : Result<'Value, 'Error2> =
+    x |> f |> mapMessages (curry g x)
 
 /// Performs f on x and y, but wraps each failure e to g(x, y, e).
-let wrapMessages2 g f x y = f x y |> mapMessages (curry3 g x y)
+let wrapMessages2
+  (g : 'A * 'B * 'Error1 -> 'Error2)
+  (f : 'A -> 'B -> Result<'Value, 'Error1>)
+  (x : 'A)
+  (y : 'B)
+  : Result<'Value, 'Error2> =
+    f x y |> mapMessages (curry3 g x y)
 
 /// Like fold, but constantly binds the given function over a Chessie result.
 /// The initial state is wrapped in 'ok'.
-let seqBind f initialS = Seq.fold (fun s x -> bind (f x) s) (ok initialS)
+let seqBind
+  (f : 'T -> 'State -> Result<'State, 'Error>)
+  (initialS: 'State)
+  : 'T seq -> Result<'State, 'Error> =
+    Seq.fold (fun s x -> bind (f x) s) (ok initialS)
 
 
 /// Fold that can be terminated earlier by the step function f returning None.
 /// If Any step returns None, the whole fold returns None.
-let foldFastTerm (f : 'State -> 'T -> 'State option)
-                 (s : 'State) (l : 'T seq) =
+let foldFastTerm
+  (f : 'State -> 'T -> 'State option)
+  (s : 'State) (l : 'T seq)
+  : 'State option =
     let en = l.GetEnumerator()
 
     let rec fft f s' =
