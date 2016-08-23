@@ -182,12 +182,12 @@ module Utils =
     /// <returns>
     ///     A sequence of optimisers to run.
     /// </returns>
-    let mkOptimiserSet all_opts opts =
+    let mkOptimiserSet allOpts opts =
         let config = config()
         let optimisationSet = new HashSet<string>();
         // try add or remove from prefix
         let addFromPrefix prefix =
-            for (optName : string, _, _) in all_opts do
+            for (optName : string, _, _) in allOpts do
                 if optName.StartsWith(prefix) then
                     if config.verbose && not (optimisationSet.Contains(optName)) then
                         eprintfn "note: forced %s on" optName
@@ -195,14 +195,14 @@ module Utils =
                     ignore <| optimisationSet.Add(prefix)
 
         let removeFromPrefix prefix =
-            for (optName, _, _) in all_opts do
+            for (optName, _, _) in allOpts do
                 if optName.StartsWith(prefix) then
                     if config.verbose && optimisationSet.Contains(optName) then
                         eprintfn "note: forced %s off" optName
 
                     ignore <| optimisationSet.Remove(prefix)
 
-        for (optName, enabledByDefault, _) in all_opts do
+        for (optName, enabledByDefault, _) in allOpts do
             if enabledByDefault then
                 ignore <| optimisationSet.Add(optName)
 
@@ -211,7 +211,7 @@ module Utils =
                 if forceEnabled then
                     if config.verbose then
                         eprintfn "note: forced all optimisations on"
-                    for (optName, enabledByDefault, _) in all_opts do
+                    for (optName, enabledByDefault, _) in allOpts do
                         ignore <| optimisationSet.Add(optName)
                 else
                     if config.verbose then
@@ -225,7 +225,7 @@ module Utils =
                     removeFromPrefix optName
 
 
-        List.filter (fun (name, _, _) -> optimisationSet.Contains(name)) all_opts
+        List.filter (fun (name, _, _) -> optimisationSet.Contains(name)) allOpts
         |> List.map (fun (_, _, f) -> f)
 
     /// <summary>
@@ -508,8 +508,8 @@ module Graph =
     let hasAssume : Command -> bool =
         fun c ->
             c |>
-            List.forall (fun p ->
-                match p with
+            List.forall (
+                function
                 | { Name = "Assume" } -> true;
                 | _ -> false)
 
@@ -711,11 +711,11 @@ module Graph =
                         else ctx
                 Set.fold processEdge ctx outEdges
 
-    /// Collapses edges {p}c{q}d{r} to {p}d{r} iff c is uoberservable
+    /// Collapses edges {p}c{q}d{r} to {p}d{r} iff c is unobservable
     /// i.e. c writes to local variables overwritten by d
     /// d does not read outputs of c,
     /// and there are no assumes adding information
-    let collapseUnoberservableEdges locals ctx =
+    let collapseUnobservableEdges locals ctx =
         expandNodeIn ctx <|
             fun node nViewexpr outEdges inEdges nodeKind ->
                 let pViewexpr = nViewexpr
@@ -824,8 +824,8 @@ module Graph =
                      [ ("graph-collapse-nops", true, collapseNops)
                        ("graph-collapse-ites", true, collapseITEs)
                        ("graph-drop-local-edges", true, dropLocalEdges model.Locals)
-                       ("graph-collapse-unobservable-edges", true, collapseUnoberservableEdges model.Locals)
-                       ("graph-drop-local-midview",true, dropLocalMidView model.Locals) 
+                       ("graph-collapse-unobservable-edges", true, collapseUnobservableEdges model.Locals)
+                       ("graph-drop-local-midview",true, dropLocalMidView model.Locals)
                      ] )
 
     /// <summary>
