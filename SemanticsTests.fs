@@ -19,105 +19,154 @@ open Starling.Semantics
 open Starling.Tests.Studies
 
 /// Tests for the semantic transformer.
-type SemanticsTests() =
-    /// Test cases for composition.
-    static member Compositions =
-        [ (tcd
-               [| bEq (sbAfter "foo") (sbBefore "bar")
-                  bEq (sbAfter "baz") (sbBefore "foo") |])
-              .Returns(BAnd [ bEq (sbInter 0I "foo") (sbBefore "bar")
-                              bEq (sbAfter "baz") (sbInter 0I "foo") ] )
-              .SetName("Compose two basic assignments")
-          (tcd
-               [| BAnd
-                      [ bEq (sbInter 0I "foo") (sbBefore "bar")
-                        bEq (sbAfter "baz") (sbInter 0I "foo") ]
-                  BAnd
-                      [ bEq (sbInter 0I "flop") (sbBefore "baz")
-                        bEq (sbAfter "froz") (sbInter 0I "flop") ] |] )
-              // TODO(CaptainHayashi): make this not order-dependent... somehow
-              .Returns(BAnd
-                           [ bEq (sbInter 1I "baz") (sbInter 0I "foo")
-                             bEq (sbInter 0I "foo") (sbBefore "bar")
-                             bEq (sbAfter "froz") (sbInter 2I "flop")
-                             bEq (sbInter 2I "flop") (sbInter 1I "baz") ] )
-              .SetName("Compose two compositions") ]
+module Compositions =
+    let check xs expectedExprList =
+        match seqComposition xs with
+        | BAnd ands ->
+            Assert.AreEqual (Set.ofList expectedExprList, Set.ofList ands)
+        | y -> Assert.Fail (sprintf "Expected %A but got %A" expectedExprList y)
 
-    /// Tests whether composition behaves itself.
-    [<TestCaseSource("Compositions")>]
-    member this.``Boolean composition should work correctly`` x y =
-        composeBools x y
+    [<Test>]
+    let ``Compose two basic assignments`` () =
+        check
+            <| [ bEq (sbAfter "foo") (sbBefore "bar")
+                 bEq (sbAfter "baz") (sbBefore "foo") ]
+            <| [ bEq (sbInter 0I "foo") (sbBefore "bar")
+                 bEq (sbInter 0I "baz") (sbInter 0I "foo") ]
 
-    /// <summary>
-    ///     Test cases for the variable framer.
-    /// </summary>
-    static member FrameVars =
-        [ TestCaseData(TypedVar.Int "foo")
-              .Returns(iEq (siAfter "foo") (siBefore "foo"))
-              .SetName("Frame an integer variable")
-          TestCaseData(TypedVar.Bool "bar")
-              .Returns(bEq (sbAfter "bar") (sbBefore "bar"))
-              .SetName("Frame a Boolean variable") ]
+    [<Test>]
+    let ``Compose two compositions`` () =
+        check
+            <| [ BAnd
+                  [ bEq (sbInter 0I "foo") (sbBefore "bar")
+                    bEq (sbAfter "baz") (sbInter 0I "foo") ]
+                 BAnd
+                  [ bEq (sbInter 0I "flop") (sbBefore "baz")
+                    bEq (sbAfter "froz") (sbInter 0I "flop") ] ]
+            <| [
+                 bEq (sbInter 0I "foo") (sbBefore "bar")
+                 bEq (sbInter 0I "baz") (sbInter 0I "foo")
+                 bEq (sbInter 0I "flop") (sbInter 0I "baz")
+                 bEq (sbInter 0I "froz") (sbInter 0I "flop")
+               ]
 
-    /// <summary>
-    ///     Tests <c>frameVar</c>.
-    /// </summary>
-    [<TestCaseSource("FrameVars")>]
-    member x.``Test framing of individual variables`` var =
-        frameVar var
+    [<Test>]
+    let ``Compose simple`` () =
+        check
+            <| [ bEq (sbAfter "t") (sbBefore "t")
+                 bEq (sbAfter "g") (sbBefore "t") ]
+            <| [ bEq (sbInter 0I "t") (sbBefore "t")
+                 bEq (sbInter 0I "g") (sbInter 0I "t") ]
+
+    [<Test>]
+    let ``Compose multi`` () =
+        check
+            <| [ iEq (siAfter "t") (iAdd (siBefore "t") (AInt 1L))
+                 iEq (siAfter "t") (iAdd (siBefore "t") (AInt 1L))
+                 iEq (siAfter "t") (iAdd (siBefore "t") (AInt 1L)) ]
+            <| [ iEq (siInter 0I "t") (iAdd (siBefore "t") (AInt 1L))
+                 iEq (siInter 1I "t") (iAdd (siInter 0I "t") (AInt 1L))
+                 iEq (siInter 2I "t") (iAdd (siInter 1I "t") (AInt 1L)) ]
+    [<Test>]
+    let ``Compose multi after`` () =
+        check
+            <| [ BAnd
+                    [ (iEq (siAfter "t") (iAdd (siBefore "t") (AInt 1L)))
+                      (iEq (siAfter "t") (iAdd (siBefore "t") (AInt 3L))) ]
+                 iEq (siAfter "t") (iAdd (siBefore "t") (AInt 1L)) ]
+            <| [ iEq (siInter 0I "t") (iAdd (siBefore "t") (AInt 1L))
+                 iEq (siInter 0I "t") (iAdd (siBefore "t" )(AInt 3L))
+                 iEq (siInter 1I "t") (iAdd (siInter 0I "t") (AInt 1L)) ]
+
+    [<Test>]
+    let ``Compose multiCmd list`` () =
+        check
+            <| [ BAnd
+                    [ (iEq (siAfter "t") (iAdd (siBefore "t") (AInt 1L)))
+                      (iEq (siAfter "t") (iAdd (siBefore "t") (AInt 2L))) ]
+                 iEq (siAfter "t") (iAdd (siBefore "t") (AInt 3L))
+                 iEq (siAfter "g") (siBefore "t") ]
+            <| [ iEq (siInter 0I "t") (iAdd (siBefore "t") (AInt 1L))
+                 iEq (siInter 0I "t") (iAdd (siBefore "t" )(AInt 2L))
+                 iEq (siInter 1I "t") (iAdd (siInter 0I "t" )(AInt 3L))
+                 iEq (siInter 0I "g") (siInter 1I "t") ]
+
+
+module Frames =
+    let check var expectedFramedExpr =
+        Assert.AreEqual(expectedFramedExpr, frameVar Before var)
+
+    let checkExpr expr framedExpr =
+        let actualExpr =
+            frame
+                (ticketLockModel.Globals)
+                (ticketLockModel.Locals)
+                expr
+
+        Assert.AreEqual(actualExpr, framedExpr)
+
+    [<Test>]
+    let ``Frame an integer variable`` () =
+        check (Int "foo") (iEq (siAfter "foo") (siBefore "foo"))
+
+    [<Test>]
+    let ``Frame a boolean variable`` () =
+        check (Bool "bar") (bEq (sbAfter "bar") (sbBefore "bar"))
 
     // Test cases for the expression framer.
-    static member FrameExprs =
-        [ TestCaseData(BTrue : SMBoolExpr)
-              .Returns( [ iEq (siAfter "serving") (siBefore "serving")
-                          iEq (siAfter "ticket") (siBefore "ticket")
-                          iEq (siAfter "s") (siBefore "s")
-                          iEq (siAfter "t") (siBefore "t") ] )
-              .SetName("Frame id using the ticket lock model")
+    [<Test>]
+    let ``Frame id using the ticket lock model`` () =
+        checkExpr BTrue 
+              <| [ iEq (siAfter "serving") (siBefore "serving")
+                   iEq (siAfter "ticket") (siBefore "ticket")
+                   iEq (siAfter "s") (siBefore "s")
+                   iEq (siAfter "t") (siBefore "t") ]
 
-          TestCaseData(BAnd
-                           [ BGt(siAfter "ticket", siBefore "ticket")
-                             BLe(siAfter "serving", siBefore "serving")
-                             iEq (siBefore "s") (siBefore "t") ] )
-              .Returns( [ iEq (siAfter "s") (siBefore "s")
-                          iEq (siAfter "t") (siBefore "t") ] )
-              .SetName("Frame a simple command expression using the ticket lock model") ]
+    [<Test>]
+    let ``Frame a simple command expression using the ticket lock model`` () =
+          checkExpr
+            <| BAnd
+                   [ BGt(siAfter "ticket", siBefore "ticket")
+                     BLe(siAfter "serving", siBefore "serving")
+                     iEq (siBefore "s") (siBefore "t") ]
 
-    // Test framing of expressions.
-    [<TestCaseSource("FrameExprs")>]
-    member x.``Test framing of expressions using the ticket lock model`` expr =
-        frame
-            (ticketLockModel.Globals)
-            (ticketLockModel.Locals)
-            expr
+            <| [ iEq (siAfter "s") (siBefore "s")
+                 iEq (siAfter "t") (siBefore "t") ]
 
-    /// Test cases for full command semantic translation.
-    static member Commands =
-        [ TestCaseData([ command "Assume" [] [ Expr.Bool <| iEq (siBefore "s") (siBefore "t") ]] )
-              .Returns(Some <| Set.ofList
-                           [ iEq (siAfter "serving") (siBefore "serving")
-                             iEq (siAfter "ticket") (siBefore "ticket")
-                             iEq (siAfter "s") (siBefore "s")
-                             iEq (siAfter "t") (siBefore "t")
-                             iEq (siBefore "s") (siBefore "t") ])
-              .SetName("Semantically translate <assume(s == t)> using the ticket lock model")
-          TestCaseData([ command "!I++" [ Int "serving" ] [ Expr.Int <| siBefore "serving" ] ] )
-              .Returns(Some <| Set.ofList
-                           [ iEq (siAfter "ticket") (siBefore "ticket")
-                             iEq (siAfter "s") (siBefore "s")
-                             iEq (siAfter "t") (siBefore "t")
-                             iEq (siAfter "serving") (AAdd [ siBefore "serving"; AInt 1L ]) ])
-              .SetName("Semantically translate <serving++> using the ticket lock model") ]
+module CommandTests =
+    let check command expectedValues =
+        let actualValues =
+            command
+            |> semanticsOfCommand
+                   (Starling.Lang.Modeller.coreSemantics)
+                   (ticketLockModel.Globals)
+                   (ticketLockModel.Locals)
+            |> okOption
+            |> Option.bind (function
+                            | BAnd xs -> xs |> Set.ofList |> Some
+                            | _ -> None)
 
-    // Test semantic reification of commands.
-    [<TestCaseSource("Commands")>]
-    member x.``Test semantic translation of commands using the ticket lock model`` com =
-        com
-        |> semanticsOfCommand
-               (Starling.Lang.Modeller.coreSemantics)
-               (ticketLockModel.Globals)
-               (ticketLockModel.Locals)
-        |> okOption
-        |> Option.bind (function
-                        | BAnd xs -> xs |> Set.ofList |> Some
-                        | _ -> None)
+        Assert.AreEqual(expectedValues, actualValues)
+
+    [<Test>]
+    let ``Semantically translate <assume(s == t)> using the ticket lock model`` () =
+        check [ command "Assume" [] [ Expr.Bool <| iEq (siBefore "s") (siBefore "t") ]]
+        <| Some (Set.ofList
+                   [ iEq (siAfter "serving") (siBefore "serving")
+                     iEq (siAfter "ticket") (siBefore "ticket")
+                     iEq (siAfter "s") (siBefore "s")
+                     iEq (siAfter "t") (siBefore "t")
+                     iEq (siBefore "s") (siBefore "t") ])
+
+    [<Test>]
+    let ``Semantically translate <serving++> using the ticket lock model``() =
+        check [ command "!I++" [ Int "serving" ] [ Expr.Int <| siBefore "serving" ] ]
+        <| Some (Set.ofList
+            [
+                iEq (siAfter "s") (siBefore "s")
+                iEq (siAfter "serving") (siInter 0I "serving")
+                iEq (siAfter "t") (siBefore "t")
+                iEq (siAfter "ticket") (siBefore "ticket")
+                iEq (siAfter "ticket") (siBefore "ticket")
+                iEq (siInter 0I "serving") (iAdd (siBefore "serving") (AInt 1L))
+            ])

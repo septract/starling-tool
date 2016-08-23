@@ -269,6 +269,9 @@ let mkEq a b = BEq (a, b)
 
 /// Makes an arithmetic equality.
 let iEq a b = BEq (Int a, Int b)
+///
+/// Makes an arithmetic addition
+let iAdd a b = AAdd [a ; b]
 
 /// Makes a Boolean equality.
 let bEq a b = BEq (Bool a, Bool b)
