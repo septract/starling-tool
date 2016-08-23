@@ -212,8 +212,8 @@ let ticketLockUnlockMethodAST =
             Post = Unmarked Unit;}];};};
 
 let ticketLockConstraint01 = 
-  Definite
-     (DView.Unit,
+    (DView.Unit,
+     Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 38L;
                    Column = 50L;};
@@ -229,9 +229,9 @@ let ticketLockConstraint01 =
             Node = LV (LVIdent "serving");});})
 
 let ticketLockConstraint02 =
-  Definite
-     (DView.Func {Name = "holdTick";
+    (DView.Func {Name = "holdTick";
             Params = ["t"];},
+     Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 41L;
                    Column = 50L;};
@@ -247,9 +247,9 @@ let ticketLockConstraint02 =
             Node = LV (LVIdent "t");});})
 
 let ticketLockConstraint03 =
-  Definite
-     (DView.Func {Name = "holdLock";
+    (DView.Func {Name = "holdLock";
             Params = [];},
+     Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 42L;
                    Column = 50L;};
@@ -265,10 +265,11 @@ let ticketLockConstraint03 =
             Node = LV (LVIdent "serving");});})
 
 let ticketLockConstraint04 =
-  Definite
-     (DView.Join (DView.Func {Name = "holdLock";
-                  Params = [];},DView.Func {Name = "holdTick";
-                                      Params = ["t"];}),
+    (DView.Join (DView.Func {Name = "holdLock";
+                             Params = [];},
+                 DView.Func {Name = "holdTick";
+                             Params = ["t"];}),
+     Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 45L;
                    Column = 51L;};
@@ -284,10 +285,11 @@ let ticketLockConstraint04 =
             Node = LV (LVIdent "t");});})
 
 let ticketLockConstraint05 =
-  Definite
-     (DView.Join (DView.Func {Name = "holdTick";
-                  Params = ["ta"];}, DView.Func {Name = "holdTick";
-                                          Params = ["tb"];}),
+    (DView.Join (DView.Func {Name = "holdTick";
+                             Params = ["ta"];},
+                 DView.Func {Name = "holdTick";
+                             Params = ["tb"];}),
+     Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 46L;
                    Column = 46L;};
@@ -303,10 +305,11 @@ let ticketLockConstraint05 =
             Node = LV (LVIdent "tb");});})
 
 let ticketLockConstraint06 = 
-  Definite
-     (DView.Join (DView.Func {Name = "holdLock";
-                  Params = [];},DView.Func {Name = "holdLock";
-                                      Params = [];}),
+    (DView.Join (DView.Func {Name = "holdLock";
+                             Params = [];},
+                 DView.Func {Name = "holdLock";
+                             Params = [];}),
+     Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 47L;
                    Column = 43L;};
@@ -531,43 +534,37 @@ let ticketLockGuardedUnlock : GuarderMethod =
 
 /// The view definitions of the ticket lock model.
 let ticketLockViewDefs =
-    [ Definite
-          ([],
-           BGe(siVar "ticket", siVar "serving"))
-      Definite
-          (Multiset.ofFlatList
-               [ { Name = "holdTick"
-                   Params = [ Int "t" ] } ] |> Multiset.toFlatList,
-           BGt(siVar "ticket", siVar "t"))
-      Definite
-          (Multiset.ofFlatList
-               [ { Name = "holdLock"
-                   Params = [] } ] |> Multiset.toFlatList,
-           BNot (iEq (siVar "ticket") (siVar "serving")))
-      Definite
-          (Multiset.ofFlatList
-               [ { Name = "holdLock"
-                   Params = [] }
-                 { Name = "holdTick"
-                   Params = [ Int "t" ] } ] |> Multiset.toFlatList,
-           BNot(iEq (siVar "serving") (siVar "t")))
-      Definite
-          (Multiset.ofFlatList
-               [ { Name = "holdTick"
-                   Params = [ Int "ta" ] }
-                 { Name = "holdTick"
-                   Params = [ Int "tb" ] } ] |> Multiset.toFlatList,
-           BNot(iEq (siVar "ta") (siVar "tb")))
-      Definite
-          (Multiset.ofFlatList
-               [ { Name = "holdLock"
-                   Params = [] }
-                 { Name = "holdLock"
-                   Params = [] } ] |> Multiset.toFlatList,
-           BFalse) ]
+    [([],
+      Some <| BGe(siVar "ticket", siVar "serving"))
+     (Multiset.ofFlatList
+          [ { Name = "holdTick"
+              Params = [ Int "t" ] } ] |> Multiset.toFlatList,
+      Some <| BGt(siVar "ticket", siVar "t"))
+     (Multiset.ofFlatList
+          [ { Name = "holdLock"
+              Params = [] } ] |> Multiset.toFlatList,
+      Some <| BNot (iEq (siVar "ticket") (siVar "serving")))
+     (Multiset.ofFlatList
+          [ { Name = "holdLock"
+              Params = [] }
+            { Name = "holdTick"
+              Params = [ Int "t" ] } ] |> Multiset.toFlatList,
+      Some <| BNot(iEq (siVar "serving") (siVar "t")))
+     (Multiset.ofFlatList
+          [ { Name = "holdTick"
+              Params = [ Int "ta" ] }
+            { Name = "holdTick"
+              Params = [ Int "tb" ] } ] |> Multiset.toFlatList,
+      Some <| BNot(iEq (siVar "ta") (siVar "tb")))
+     (Multiset.ofFlatList
+          [ { Name = "holdLock"
+              Params = [] }
+            { Name = "holdLock"
+              Params = [] } ] |> Multiset.toFlatList,
+      Some BFalse) ]
 
 /// The model of the ticket lock.
-let ticketLockModel : Model<ModellerMethod, ViewToSymBoolDefiner> =
+let ticketLockModel : Model<ModellerMethod, ViewDefiner<SVBoolExpr option>> =
     { Globals =
           Map.ofList [ ("serving", Type.Int ())
                        ("ticket", Type.Int ()) ]

@@ -76,24 +76,6 @@ let flattenTerm
             (flattenFuncSeq (globalsF After))
 
 /// <summary>
-///     Flattens a view definition by converting its DViews into single funcs.
-/// </summary>
-/// <param name="globalsP">
-///     A sequence of formal parameters, representing each global variable in
-///     the model, to append to the argument list of the flattened funcs.
-/// </param>
-/// <returns>
-///     A function mapping view definitions over DViews to definitions over
-///     SMVFuncs.
-/// </returns>
-let flattenViewDef
-  (globalsP : TypedVar seq)
-  : ViewDef<DView, _> -> ViewDef<DFunc, _> =
-    function
-    | Definite (v, d) -> Definite (flattenFuncSeq globalsP v, d)
-    | Indefinite v -> Indefinite (flattenFuncSeq globalsP v)
-
-/// <summary>
 ///    Flattens all func sequences in a model, turning them into funcs.
 ///    <para>
 ///        This allows each combination of views coming out of reification
@@ -110,9 +92,9 @@ let flattenViewDef
 /// </returns>
 let flatten
   (model : Model<Term<_, Set<GuardedSubview>, OView>,
-                 ViewToSymBoolDefiner>)
+                 ViewDefiner<SVBoolExpr option>>)
   : Model<Term<_, GView<Sym<MarkedVar>>, SMVFunc>,
-          FuncToSymBoolDefiner> =
+          FuncDefiner<SVBoolExpr option>> =
     /// Build a function making a list of global arguments, for view assertions.
     let globalsF marker = varMapToExprs (marker >> Reg) model.Globals
 
@@ -126,7 +108,11 @@ let flatten
     { Globals = model.Globals
       Locals = model.Locals
       Axioms = Map.map (fun _ x -> flattenTerm globalsF x) model.Axioms
-      ViewDefs = List.map (flattenViewDef globalsP) model.ViewDefs
+      ViewDefs =
+          model.ViewDefs
+          |> ViewDefiner.toSeq
+          |> Seq.map (pairMap (flattenFuncSeq globalsP) id)
+          |> FuncDefiner.ofSeq
       Semantics = model.Semantics }
 
 

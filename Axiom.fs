@@ -107,7 +107,7 @@ let instantiateGoal (fg : FreshGen)
 /// Converts an axiom into a list of framed axioms, by combining it with the
 /// defining views of a model.
 let goalAddAxiom
-  (ds : ViewDef<DView, _> list)
+  (ds : ViewDefiner<_>)
   (fg : FreshGen)
   ((name, axiom) : (string * Axiom<GView<Sym<Var>>, 'cmd>))
   : (string * GoalAxiom<'cmd>) list =
@@ -115,7 +115,7 @@ let goalAddAxiom
     // where the 0 is the edge number.
     // This appends the viewdef number after the edge number.
     List.mapi
-        (fun i (DefOver vs) ->
+        (fun i (vs, _) ->
             (sprintf "%s_%03d" name i,
              { Axiom = axiom
                Goal = instantiateGoal fg vs }))

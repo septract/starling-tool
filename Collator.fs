@@ -33,7 +33,7 @@ module Types =
           /// </remarks>
           Search : int option
           VProtos : ViewProto list
-          Constraints : ViewDef<DView, Expression> list
+          Constraints : (DView * Expression option) list
           Methods : CMethod<Marked<View>> list }
 
 
@@ -59,7 +59,7 @@ module Pretty =
             [ vsep <| Seq.map printViewProto cs.VProtos
               vsep <| Seq.map (printScriptVar "shared") cs.Globals
               vsep <| Seq.map (printScriptVar "local") cs.Locals
-              vsep <| Seq.map printConstraint cs.Constraints
+              vsep <| Seq.map (uncurry printConstraint) cs.Constraints
               VSep(List.map (printMethod
                                  (printMarkedView printView)
                                  (printCommand (printMarkedView printView)))
@@ -101,12 +101,12 @@ let collate (script : ScriptItem list) : CollatedScript =
 
     let collateStep item (cs : CollatedScript) =
         match item.Node with
-        | Global g -> { cs with Globals = g :: cs.Globals }
+        | Global g -> { cs with Globals = g::cs.Globals }
         | Local l -> { cs with Locals = l :: cs.Locals }
-        | ViewProto v -> { cs with VProtos = v :: cs.VProtos }
+        | ViewProto v -> { cs with VProtos = v::cs.VProtos }
         | Search i -> { cs with Search = Some i }
-        | Method m -> { cs with Methods = m :: cs.Methods }
-        | Constraint c -> { cs with Constraints = c :: cs.Constraints }
+        | Method m -> { cs with Methods = m::cs.Methods }
+        | Constraint (v, d) -> { cs with Constraints = (v, d)::cs.Constraints }
 
     // We foldBack instead of fold to preserve the original order.
     List.foldBack collateStep script empty

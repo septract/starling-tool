@@ -501,24 +501,23 @@ do parseBlockRef :=
  *)
 
 /// Parses a constraint right-hand side.
-let parseConstraintRhs =
+let parseConstraintRhs : Parser<Expression option, unit> =
     choice [
-        (stringReturn "?" Indefinite)
-        (parseExpression
-         |>> (fun expr v -> Definite (v, expr))) ]
+        (stringReturn "?" None)
+        (parseExpression |>> Some) ]
     // ^ ?
     // ^ %{ <symbol> %}
     // ^ <expression>
 
 /// Parses a constraint.
-let parseConstraint =
+let parseConstraint : Parser<DView * Expression option, unit> =
     pstring "constraint" >>. ws >>.
     // ^- constraint ..
         pipe2ws parseDView
                 // ^- <view> ...
                 (pstring "->" >>. ws >>. parseConstraintRhs .>> ws .>> pstring ";")
                 // ^-        ... -> <constraint-rhs> ;
-                (|>)
+                (fun d v -> (d, v))
 
 /// Parses a single method, excluding leading or trailing whitespace.
 let parseMethod =

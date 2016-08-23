@@ -157,7 +157,7 @@ module Types =
         | Method of CMethod<Marked<View>> // method main(argv, argc) { ... }
         | Search of int // search 0;
         | ViewProto of ViewProto // view name(int arg);
-        | Constraint of ViewDef<DView, Expression> // constraint emp => true
+        | Constraint of DView * Expression option // constraint emp => true
         override this.ToString() = sprintf "%A" this
     and ScriptItem = Node<ScriptItem'>
 
@@ -240,13 +240,13 @@ module Pretty =
         | DView.Join(l, r) -> binop "*" (printDView l) (printDView r)
 
     /// Pretty-prints constraints.
-    let printConstraint (cs : ViewDef<DView, Expression>) : Doc =
+    let printConstraint (view : DView) (def : Expression option) : Doc =
         hsep [ String "constraint" |> syntax
-               printDView (viewOf cs)
+               printDView view
                String "->" |> syntax
-               (match cs with
-                | Definite (_, d) -> printExpression d
-                | Indefinite _ -> String "?" |> syntax) ]
+               (match def with
+                | Some d -> printExpression d
+                | None _ -> String "?" |> syntax) ]
         |> withSemi
 
     /// Pretty-prints fetch modes.
@@ -370,7 +370,7 @@ module Pretty =
             <| printMethod (printMarkedView printView) (printCommand (printMarkedView printView)) m
         | ViewProto v -> printViewProto v
         | Search i -> printSearch i
-        | Constraint c -> printConstraint c
+        | Constraint (view, def) -> printConstraint view def
     let printScriptItem (x : ScriptItem) : Doc = printScriptItem' x.Node
 
     /// Pretty-prints scripts.

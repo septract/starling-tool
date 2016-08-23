@@ -74,7 +74,7 @@ module Types =
         { /// <summary>
           ///     List of definite viewdefs, as (view, def) pairs, to check.
           /// </summary>
-          Definites : (VFunc<Var> * VBoolExpr) list
+          Definites : (VFunc<Var> * BoolExpr<Var>) list
           /// <summary>
           ///     Map of (view name, FuncDecl) bindings.
           /// </summary>
@@ -309,9 +309,9 @@ module Translator =
     let translateViewDefs
       (reals : bool)
       (ctx : Z3.Context)
-      (ds : FuncTable<VBoolExpr option>)
+      (ds : FuncDefiner<BoolExpr<Var> option>)
       : (Map<string, Z3.FuncDecl>
-         * (VFunc<Var> * VBoolExpr) seq) =
+         * (VFunc<Var> * BoolExpr<Var>) seq) =
         ds
         |> Seq.map (translateViewDef reals ctx)
         |> List.ofSeq
@@ -642,7 +642,7 @@ module Translator =
       (ctx : Z3.Context)
       ({ Globals = svars ; ViewDefs = ds ; Axioms = xs }
          : Model<Term<MBoolExpr, GView<MarkedVar>, MVFunc>,
-                 FuncToIndefiniteBoolDefiner> ) =
+                 FuncDefiner<BoolExpr<Var> option>> ) =
         let funcDecls, definites = translateViewDefs reals ctx ds
         let vrules = translateVariables reals ctx funcDecls svars
         let trules = xs |> Map.toSeq |> Seq.choose (translateTerm reals ctx funcDecls)

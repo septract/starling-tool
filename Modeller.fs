@@ -640,7 +640,7 @@ let lookupFunc protos func =
 
 /// Models part of a view definition as a DFunc.
 let modelDFunc
-  (protos : FuncTable<unit>)
+  (protos : FuncDefiner<unit>)
   func
   : Result<Multiset<DFunc>, ViewError> =
     func
@@ -650,7 +650,7 @@ let modelDFunc
                  |> Multiset.singleton)
 
 /// Tries to convert a view def into its model (multiset) form.
-let rec modelDView (protos : FuncTable<unit>) =
+let rec modelDView (protos : FuncDefiner<unit>) =
     function
     | DView.Unit -> ok Multiset.empty
     | DView.Func dfunc -> modelDFunc protos dfunc
@@ -673,37 +673,35 @@ let envOfViewDef svars =
 
 /// Converts a single constraint to its model form.
 let modelViewDef
-  svars
-  (vprotos : FuncTable<unit>)
-  avd
-  : Result<SVBViewDef<View.Types.DView>, ModelError> =
-    let av = viewOf avd
-
+  (svars : VarMap)
+  (vprotos : FuncDefiner<unit>)
+  (av : AST.Types.DView, ad : Expression option)
+  : Result<(View.Types.DView * SVBoolExpr option), ModelError> =
     trial {
         let! vms = wrapMessages CEView (modelDView vprotos) av
         let  v = vms |> Multiset.toFlatList
         let! e = envOfViewDef svars v |> mapMessages (curry CEView av)
-        return! (match avd with
-                 | Definite (_, dae) ->
-                    dae
-                    |> wrapMessages CEExpr (modelBoolExpr e id)
-                    |> lift (fun em -> Definite (v, em))
-                 | Indefinite _ ->
-                     ok (Indefinite v))
+        let! d = (match ad with
+                  | Some dad ->
+                      dad
+                      |> wrapMessages CEExpr (modelBoolExpr e id)
+                      |> lift Some
+                  | None _ -> ok None)
+        return (v, d)
     }
     |> mapMessages (curry BadConstraint av)
 
 /// <summary>
-///     Checks whether a <c>DView</c> can be found in a list of <c>ViewDef</c>s.
+///     Checks whether a <c>DView</c> can be found in a definer.
 /// </summary>
-/// <param name="viewdefs">
-///     The existing viewdef list.
+/// <param name="definer">
+///     The existing definer.
 /// </param>
 /// <param name="dview">
 ///     The <c>DView</c> to check.
 /// </param>
 /// <returns>
-///     <c>true</c> if the <c>DView</c> has been found in the <c>ViewDef</c>s.
+///     <c>true</c> if the <c>DView</c> has been found in the definer.
 ///     This is a weak equality based on view names: see the remarks.
 /// </returns>
 /// <remarks>
@@ -713,18 +711,21 @@ let modelViewDef
 ///         caught them in the main defining view modeller.
 ///     </para>
 /// </remarks>
-let inViewDefs : ViewDef<Func<'a> list, 'b> list -> Func<'c> list -> bool = 
-    fun viewdefs dview ->
-    List.exists
-        (fun view ->
-             if (List.length view = List.length dview)
-             then
-                 List.forall2
-                     (fun (vdfunc: Func<'a>) (dfunc : Func<'c>) -> vdfunc.Name = dfunc.Name)
-                     view
-                     dview
-             else false)
-        <| List.map viewOf viewdefs
+let inDefiner : ViewDefiner<SVBoolExpr option> -> Func<'c> list -> bool =
+    fun definer dview ->
+        definer
+        |> ViewDefiner.toSeq
+        |> Seq.toList
+        |> List.map fst
+        |> List.exists
+               (fun view ->
+                    if (List.length view = List.length dview)
+                    then
+                        List.forall2
+                            (fun (vdfunc: Func<TypedVar>) (dfunc : Func<'c>) -> vdfunc.Name = dfunc.Name)
+                            view
+                            dview
+                    else false)
 
 /// <summary>
 ///     Converts a <c>DView</c> to an indefinite <c>ViewDef</c>.
@@ -741,7 +742,8 @@ let inViewDefs : ViewDef<Func<'a> list, 'b> list -> Func<'c> list -> bool =
 ///     An indefinite constraint over <paramref name="dview" />.
 /// </returns>
 let searchViewToConstraint
-  (dview : View.Types.DView) =
+  (dview : View.Types.DView)
+  : (View.Types.DView * SVBoolExpr option) =
     (* To ensure likewise-named parameters in separate DFuncs don't
        clash, append fresh identifiers to all of them.
 
@@ -751,18 +753,20 @@ let searchViewToConstraint
        once for the entire function (!), ruining everything. *)
     let fg = freshGen ()
 
-    dview
-    |> List.map
-        (fun { Name = name; Params = ps } ->
-
-             let nps =
-                 List.map (fun p ->
-                               (withType
-                                    (typeOf p)
+    let dview' =
+        List.map
+            (fun { Name = name; Params = ps } ->
+                 let nps =
+                     List.map
+                         (fun p ->
+                             (withType
+                                 (typeOf p)
                                     (sprintf "%s%A" (valueOf p) (getFresh fg))))
-                          ps
-             { Name = name; Params = nps })
-    |> Indefinite
+                         ps
+                 { Name = name; Params = nps })
+            dview
+
+    (dview', None)
 
 /// <summary>
 ///     Generates all views of the given size, from the given funcs.
@@ -816,31 +820,34 @@ let genAllViewsAt depth (funcs : DFunc seq) : Set<View.Types.DView> =
 ///     generated from the views at <paramref name="vprotos" />.
 /// </returns>
 let addSearchDefs
-  (vprotos : FuncTable<unit>)
+  (vprotos : FuncDefiner<unit>)
   depth
-  (viewdefs : SVBViewDef<View.Types.DView> list) =
+  (definer : ViewDefiner<SVBoolExpr option>)
+    : ViewDefiner<SVBoolExpr option>=
     match depth with
-    | None -> viewdefs
+    | None -> definer
     | Some n ->
         vprotos
-        // Convert the func-table back into a func list.
-        |> Instantiate.funcsInTable
+        // Convert the definer back into a list of funcs.
+        |> FuncDefiner.toSeq
+        |> Seq.map fst
         // Then, generate the view that is the *-conjunction of all of the
         // view protos.
         |> genAllViewsAt n
         // Then, throw out any views that already exist in viewdefs...
-        |> Set.filter (inViewDefs viewdefs >> not)
+        |> Set.filter (inDefiner definer >> not)
         // Finally, convert the view to a constraint.
         |> Set.toList
-        |> List.map searchViewToConstraint
-        // And add the result to the original list.
-        |> List.append viewdefs
+        |> Seq.map searchViewToConstraint
+        // And add the result to the original definer.
+        |> Seq.append (ViewDefiner.toSeq definer)
+        |> ViewDefiner.ofSeq
 
 /// Extracts the view definitions from a CollatedScript, turning each into a
 /// ViewDef.
 let modelViewDefs
   svars
-  (vprotos : FuncTable<unit>)
+  (vprotos : FuncDefiner<unit>)
   { Search = s; Constraints = cs } =
     cs
     |> List.map (modelViewDef svars vprotos)
@@ -1223,12 +1230,12 @@ let modelViewProtos protos =
     protos
     |> Seq.map modelViewProto
     |> collect
-    |> lift Instantiate.makeFuncTable
+    |> lift FuncDefiner.ofSeq
 
 /// Converts a collated script to a model.
 let model
   (collated : CollatedScript)
-  : Result<Model<ModellerMethod, ViewToSymBoolDefiner>, ModelError> =
+  : Result<Model<ModellerMethod, ViewDefiner<SVBoolExpr option>>, ModelError> =
     trial {
         // Make variable maps out of the global and local variable definitions.
         let! globals = makeVarMap collated.Globals

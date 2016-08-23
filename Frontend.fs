@@ -6,6 +6,8 @@ module Starling.Lang.Frontend
 open Chessie.ErrorHandling
 open Starling
 open Starling.Core.Pretty
+open Starling.Core.Expr
+open Starling.Core.Expr.Pretty
 open Starling.Core.Graph
 open Starling.Core.Graph.Pretty
 open Starling.Core.Model
@@ -14,6 +16,10 @@ open Starling.Core.View
 open Starling.Core.View.Pretty
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Pretty
+open Starling.Core.Symbolic
+open Starling.Core.Symbolic.Pretty
+open Starling.Core.Var
+open Starling.Core.Var.Pretty
 open Starling.Lang.AST.Pretty
 open Starling.Lang.Modeller
 open Starling.Lang.Modeller.Pretty
@@ -53,11 +59,11 @@ type Response =
     /// Output of the parsing and collation steps.
     | Collate of Collator.Types.CollatedScript
     /// Output of the parsing, collation, and modelling steps.
-    | Model of Model<ModellerMethod, ViewToSymBoolDefiner>
+    | Model of Model<ModellerMethod, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// Output of the parsing, collation, modelling, and guarding stages.
-    | Guard of Model<GuarderMethod, ViewToSymBoolDefiner>
+    | Guard of Model<GuarderMethod, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// Output of the parsing, collation, modelling, guarding and destructuring stages.
-    | Graph of Model<Graph, ViewToSymBoolDefiner>
+    | Graph of Model<Graph, ViewDefiner<BoolExpr<Sym<Var>> option>>
 
 (*
  * Error types
@@ -90,7 +96,12 @@ type Error =
 /// </returns>
 let printResponse (mview : ModelView) : Response -> Doc =
     let printVModel paxiom m =
-        printModelView paxiom printViewToSymBoolDefiner mview m
+        printModelView
+            paxiom
+            (printViewDefiner
+                (Option.map (printBoolExpr (printSym printVar))
+                 >> withDefault (String "?")))
+            mview m
 
     function
     | Response.Parse s -> Lang.AST.Pretty.printScript s
@@ -134,7 +145,7 @@ let run
   (success : Response -> 'response)
   (error : Error -> 'error)
   (continuation
-     : Result<Model<Graph, ViewToSymBoolDefiner>, 'error>
+     : Result<Model<Graph, ViewDefiner<BoolExpr<Sym<Var>> option>>, 'error>
      -> Result<'response, 'error>)
   : string option -> Result<'response, 'error> =
     let phase op test output continuation m =

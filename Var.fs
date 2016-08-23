@@ -134,6 +134,9 @@ module Pretty =
     open Starling.Core.Expr.Pretty
     open Starling.Core.TypeSystem.Pretty
 
+    /// Pretty-prints a lone variable name.
+    let printVar : Var -> Doc = String
+
     /// Pretty-prints a type-name parameter.
     let printTypedVar = printCTyped String
 

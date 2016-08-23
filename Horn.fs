@@ -337,7 +337,7 @@ let hsfModelViewDef (sharedVars : VarMap)
 
 /// Constructs a set of Horn clauses for all definite viewdefs in a model.
 let hsfModelViewDefs (sharedVars : VarMap)
-  : FuncToIndefiniteBoolDefiner -> Result<Set<Horn>, Error> =
+  : FuncDefiner<BoolExpr<Var> option> -> Result<Set<Horn>, Error> =
     Seq.map (hsfModelViewDef sharedVars)
     >> collect
     >> lift (List.concat >> Set.ofSeq)
@@ -400,7 +400,7 @@ let ite (i : Literal) (t : Literal) (e : Literal) : Literal =
 
 /// Constructs a Horn literal for a Func.
 let hsfFunc
-  (definer : FuncToIndefiniteBoolDefiner)
+  (definer : FuncDefiner<BoolExpr<Var> option>)
   (sharedVars : VarMap)
   (func : MVFunc)
   : Result<Literal option, Error> =
@@ -415,7 +415,7 @@ let hsfFunc
 
 /// Constructs a Horn literal for a GFunc.
 let hsfGFunc
-  (definer : FuncToIndefiniteBoolDefiner)
+  (definer : FuncDefiner<BoolExpr<Var> option>)
   (sharedVars : VarMap)
   ({ Cond = c; Item = ms } : GFunc<MarkedVar>)
   : Result<Literal option, Error> =
@@ -426,7 +426,7 @@ let hsfGFunc
 /// Constructs the body for a set of condition pair Horn clauses,
 /// given the defining views, preconditions and semantics clause.
 let hsfConditionBody
-  (definer : FuncToIndefiniteBoolDefiner)
+  (definer : FuncDefiner<BoolExpr<Var> option>)
   (sharedVars : VarMap)
   (weakestPre : GView<MarkedVar>)
   (command : MBoolExpr)
@@ -445,7 +445,7 @@ let hsfConditionBody
 /// Constructs a series of Horn clauses for a term.
 /// Takes the environment of active global variables.
 let hsfTerm
-  (definer : FuncToIndefiniteBoolDefiner)
+  (definer : FuncDefiner<BoolExpr<Var> option>)
   (sharedVars : VarMap)
   (name : string,
    {Cmd = c; WPre = w ; Goal = g}
@@ -460,7 +460,7 @@ let hsfTerm
 /// Constructs a set of Horn clauses for all terms associated with a model.
 let hsfModelTerms
   (sharedVars : VarMap)
-  (definer : FuncToIndefiniteBoolDefiner)
+  (definer : FuncDefiner<BoolExpr<Var> option>)
   : Map<string, Term<MBoolExpr, GView<MarkedVar>, MVFunc>>
   -> Result<Horn list, Error> =
     Map.toSeq
@@ -472,7 +472,7 @@ let hsfModelTerms
 let hsfModel
   ({ Globals = sharedVars; ViewDefs = definer; Axioms = xs }
      : Model<Term<MBoolExpr, GView<MarkedVar>, MVFunc>,
-             FuncToIndefiniteBoolDefiner>)
+             FuncDefiner<BoolExpr<Var> option>>)
   : Result<Horn list, Error> =
     trial {
         let! vs = sharedVars |> hsfModelVariables

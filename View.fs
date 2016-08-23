@@ -71,63 +71,6 @@ module Types =
         /// </summary>
         | Advisory of 'view
 
-    (*
-     * View definitions
-     *)
-
-    /// <summary>
-    ///     A view definition.
-    /// </summary>
-    /// <typeparam name="view">
-    ///     The type of views.
-    /// </typeparam>
-    /// <typeparam name="def">
-    ///     The type of the definitions of said views.
-    /// </typeparam>
-    /// <remarks>
-    ///     The semantics of a ViewDef is that, if Def is present, then the
-    ///     view View is satisfied if, and only if, Def holds.
-    /// </remarks>
-    type ViewDef<'view, 'def> =
-          /// <summary>
-          ///     A definite <c>ViewDef</c>.
-          /// </summary>
-        | Definite of ('view * 'def)
-          /// <summary>
-          ///     An indefinite <c>ViewDef</c>.
-          /// </summary>
-        | Indefinite of 'view
-        override this.ToString() = sprintf "%A" this
-
-    /// <summary>
-    ///     A view definition over <c>MBoolExpr</c>s.
-    /// </summary>
-    /// <typeparam name="view">
-    ///     The type of views.
-    /// </typeparam>
-    type MBViewDef<'view> = ViewDef<'view, MBoolExpr>
-
-    /// <summary>
-    ///     A view definition over <c>SVBoolExpr</c>s.
-    /// </summary>
-    /// <typeparam name="view">
-    ///     The type of views.
-    /// </typeparam>
-    type SVBViewDef<'view> = ViewDef<'view, SVBoolExpr>
-
-    /// <summary>
-    ///     Extracts the view of a <c>ViewDef</c>.
-    /// </summary>
-    let viewOf =
-        function
-        | Definite (v, _)
-        | Indefinite v -> v
-
-    /// <summary>
-    ///     Active pattern extracting the view of a <c>ViewDef</c>.
-    /// </summary>
-    let (|DefOver|) = viewOf
-
 
 /// <summary>
 ///     Pretty printers for the model.
@@ -192,17 +135,6 @@ module Pretty =
     let printSymbol s =
         hjoin [ String "%" ; s |> String |> braced ]
 
-    /// Pretty-prints a model constraint.
-    let printViewDef pView pDef =
-        function
-        | Definite (vs, e) ->
-            printAssoc Inline
-                [ (String "View", pView vs)
-                  (String "Def", pDef e) ]
-        | Indefinite vs ->
-            printAssoc Inline
-                [ (String "View", pView vs)
-                  (String "Def", String "?") ]
 
 /// <summary>
 ///     Type-constrained version of <c>func</c> for <c>DFunc</c>s.

@@ -10,7 +10,10 @@ open Starling.Utils.Config
 open Starling.Core.Pretty
 open Starling.Core.Graph
 open Starling.Core.Graph.Pretty
+open Starling.Core.Expr
+open Starling.Core.Expr.Pretty
 open Starling.Core.Var
+open Starling.Core.Var.Pretty
 open Starling.Core.Model
 open Starling.Core.Model.Pretty
 open Starling.Core.Symbolic
@@ -161,25 +164,26 @@ type Response =
     /// The result of frontend processing.
     | Frontend of Lang.Frontend.Response
     /// Stop at graph optimisation.
-    | GraphOptimise of Model<Graph, ViewToSymBoolDefiner>
+    | GraphOptimise of Model<Graph, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// Stop at graph axiomatisation.
     | Axiomatise of Model<Axiom<GView<Sym<Var>>, Command>,
-                          ViewToSymBoolDefiner>
+                          ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of goal-axiom-pair generation.
-    | GoalAdd of Model<GoalAxiom<Command>, ViewToSymBoolDefiner>
+    | GoalAdd of Model<GoalAxiom<Command>, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of semantic expansion.
-    | Semantics of Model<GoalAxiom<SMBoolExpr>, ViewToSymBoolDefiner>
+    | Semantics of Model<GoalAxiom<SMBoolExpr>, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term generation.
     | TermGen of Model<STerm<GView<Sym<MarkedVar>>, OView>,
-                       ViewToSymBoolDefiner>
+                       ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term reification.
-    | Reify of Model<STerm<Set<GuardedSubview>, OView>, ViewToSymBoolDefiner>
+    | Reify of Model<STerm<Set<GuardedSubview>, OView>,
+                     ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term flattening.
     | Flatten of Model<STerm<GView<Sym<MarkedVar>>, SMVFunc>,
-                       FuncToSymBoolDefiner>
+                       FuncDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term optimisation.
     | TermOptimise of Model<STerm<GView<Sym<MarkedVar>>, SMVFunc>,
-                            FuncToSymBoolDefiner>
+                            FuncDefiner<BoolExpr<Sym<Var>> option>>
     /// Output a fully-instantiated symbolic proof.
     | SymProof of Model<SFTerm, unit>
     /// Output a fully-instantiated symbolic unstructured proof.
@@ -201,9 +205,18 @@ type Response =
 /// Pretty-prints a response.
 let printResponse mview =
     let printVModel paxiom m =
-        printModelView paxiom printViewToSymBoolDefiner mview m
+        printModelView
+            paxiom
+            (printViewDefiner
+                (Option.map (printBoolExpr (printSym printVar))
+                 >> withDefault (String "?")))
+            mview m
     let printFModel paxiom m =
-        printModelView paxiom printFuncToSymBoolDefiner mview m
+        printModelView paxiom
+            (printFuncDefiner
+                (Option.map (printBoolExpr (printSym printVar))
+                 >> withDefault (String "?")))
+            mview m
     let printUModel paxiom m =
         printModelView paxiom (fun _ -> Seq.empty) mview m
 
@@ -394,7 +407,7 @@ let axiomatise = lift Starling.Core.Graph.axiomatise
 ///     definite views.
 /// </summary>
 let filterIndefinite =
-    bind (Core.Instantiate.ViewDefFilter.filterModelIndefinite
+    bind (Core.Instantiate.DefinerFilter.filterModelIndefinite
           >> mapMessages ModelFilterError)
 
 /// <summary>

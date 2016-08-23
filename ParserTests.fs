@@ -143,16 +143,16 @@ module ConstraintTests =
     [<Test>]
     let ``emp -> true``() =
         check parseConstraint "constraint emp -> true;"
-        <| Some (Definite (DView.Unit, node "" 1L 19L True))
+        <| Some (DView.Unit, Some <| node "" 1L 19L True)
 
     [<Test>]
     let ``Func(a,b) -> c > a + b``() =
         check parseConstraint "constraint Func(a, b) -> c > a + b;"
-        <| Some (Definite
-                     (DView.Func { Name = "Func"
-                                   Params = [ "a"; "b" ] },
-                      node "" 1L 28L
-                        <| BopExpr (Gt,
+        <| Some (DView.Func { Name = "Func"
+                              Params = [ "a"; "b" ] },
+                 Some
+                   (node "" 1L 28L
+                    <| BopExpr (Gt,
                                 node "" 1L 26L (LV(LVIdent "c")),
                                 node "" 1L 32L
                                 <| BopExpr(Add,
@@ -162,7 +162,6 @@ module ConstraintTests =
     [<Test>]
     let ``Func(a,b) -> ?;``() =
         check parseConstraint "constraint Func(a, b) -> ?;"
-        <| Some (Indefinite
-                    (DView.Func {   Name = "Func"
-                                    Params = [ "a"; "b" ] } )
-                     : ViewDef<DView, Expression>)
+        <| Some (DView.Func { Name = "Func"
+                              Params = [ "a"; "b" ] },
+                 (None : Expression option))

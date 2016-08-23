@@ -24,13 +24,13 @@ open Starling.Tests.Studies
 /// Mainly exists to persuade nUnit to use the correct types.
 type SearchViewDefEntry =
     { Search : int option
-      InitDefs : SVBViewDef<View.Types.DView> list }
+      InitDefs : ViewDefiner<BoolExpr<Sym<Var>> option> }
 
 /// Tests for the modeller.
 type ModellerTests() =
     /// View prototypes for the ticket lock modeller.
-    static member TicketLockProtos : FuncTable<unit> =
-        makeFuncTable
+    static member TicketLockProtos : FuncDefiner<unit> =
+        FuncDefiner.ofSeq
             [ (func "holdLock" [], ())
               (func "holdTick" [ Int "t" ], ()) ]
 
@@ -202,13 +202,16 @@ type ModellerTests() =
 
 
     /// Type-constraining builder for viewdef sets.
-    static member viewDefSet (vs : SVBViewDef<View.Types.DView> seq) : Set<SVBViewDef<View.Types.DView>> =
+    static member viewDefSet
+      (vs : (View.Types.DView * BoolExpr<Sym<Var>> option) seq)
+      : Set<View.Types.DView * BoolExpr<Sym<Var>> option> =
         Set.ofSeq vs
 
     /// Type-constraining builder for indefinite viewdef sets.
-    static member indefinites (vs : View.Types.DView seq) : Set<SVBViewDef<View.Types.DView>> =
+    static member indefinites (vs : View.Types.DView seq)
+      : Set<View.Types.DView * BoolExpr<Sym<Var>> option> =
         vs
-        |> Seq.map Indefinite
+        |> Seq.map (fun v -> (v, None))
         |> ModellerTests.viewDefSet
 
     /// Tests for the search modeller.
@@ -249,7 +252,8 @@ type ModellerTests() =
     [<TestCaseSource("SearchViewDefs")>]
     member x.``viewdef searches are carried out correctly`` svd =
         addSearchDefs ModellerTests.TicketLockProtos svd.Search svd.InitDefs
-        |> Set.ofList
+        |> ViewDefiner.toSeq
+        |> Set.ofSeq
 
     /// Full case studies to model.
     static member Models =
