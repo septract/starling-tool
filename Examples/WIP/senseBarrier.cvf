@@ -12,22 +12,29 @@ view hasPos(int p, bool s);
 view currSense(bool s); 
 view oldSense(bool s); 
 
-method await(int i) { 
+method await(i) { 
  {| isBarrier(i) * currSense(mysense) |} 
   < pos = fetchAndDecr-- >; 
  {| hasPos(pos, mysense) |} 
   if ( pos == 1 ) { 
    {| hasPos(1, mysense) |} 
     <count = size>; 
+   {| ? |} 
     <sense = mysense>; 
    {| isBarrier(i+1) * oldSense(mysense) |} 
   } else { 
    {| hasPos(pos, mysense) |} 
-    while (sense != mysense) { } 
+    do { 
+     {| hasPos(pos, mysense) |} 
+      s = sense;  
+     {| if s == mysense 
+        then isBarrier(i+1) * oldSense(mysense)
+        else hasPos(pos, mysense) |} 
+    } while ( s != mysense ); 
    {| isBarrier(i+1) * oldSense(mysense) |} 
   } 
  {| isBarrier(i+1) * oldSense(mysense) |} 
-  mysense = ! mysense; 
+  mysense = !(mysense); 
  {| isBarrier(i+1) * currSense(mysense) |} 
   return mysense; 
 } 
