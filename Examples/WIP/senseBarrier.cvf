@@ -1,0 +1,54 @@
+// SenseBarrier implementation -- taken from Herlihy & Shavit p.400
+
+shared int count; 
+shared int size; 
+shared bool sense; 
+
+thread int pos; 
+thread bool mysense;  
+
+view isBarrier(int i); 
+view hasPos(int p, bool s); 
+view currSense(bool s); 
+view oldSense(bool s); 
+
+method await(int i) { 
+ {| isBarrier(i) * currSense(mysense) |} 
+  < pos = fetchAndDecr-- >; 
+ {| hasPos(pos, mysense) |} 
+  if ( pos == 1 ) { 
+   {| hasPos(1, mysense) |} 
+    <count = size>; 
+    <sense = mysense>; 
+   {| isBarrier(i+1) * oldSense(mysense) |} 
+  } else { 
+   {| hasPos(pos, mysense) |} 
+    while (sense != mysense) { } 
+   {| isBarrier(i+1) * oldSense(mysense) |} 
+  } 
+ {| isBarrier(i+1) * oldSense(mysense) |} 
+  mysense = ! mysense; 
+ {| isBarrier(i+1) * currSense(mysense) |} 
+  return mysense; 
+} 
+
+// Iterated views
+constraint isBarrier(_)[x]  ->  count + x <= size; 
+
+// Global invariant 
+constraint emp  ->  size >= count;  
+
+// Barrier mutual exclusion
+constraint isBarrier(i) * isBarrier(j)  ->  i = j;  
+
+// Position mutual exclusion
+constraint hasPos(i1,s1) * hasPos(i2,s2)  ->  i1 != i2  ||  s1 != s2; 
+
+// Either waiting or allowed to proceed
+constraint hasPos(i, mysense)  ->  count < i  ||  sense == mysense; 
+
+// need to update sense
+constraint oldSense(mysense)  ->  sense == mysense 
+
+// Translate phase to sense
+constraint isBarrier(i) * currSense(mysense)  ->  (i mod 2) == mysense
