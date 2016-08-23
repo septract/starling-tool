@@ -93,8 +93,6 @@ let frame svars tvars expr =
 /// the variables from the command
 let instantiateSemanticsOfPrim
   (semantics : PrimSemanticsMap)
-  (svars : VarMap)
-  (tvars : VarMap)
   (prim : PrimCommand)
   : Result<SMBoolExpr, Error> =
     (* First, instantiate according to the semantics.
@@ -103,8 +101,7 @@ let instantiateSemanticsOfPrim
      * Since this is an error in this case, make it one.
      *)
     prim
-    |> wrapMessages Instantiate
-           (instantiatePrim primSubFun semantics)
+    |> wrapMessages Instantiate (instantiatePrim semantics)
     |> bind (failIfNone (MissingDef prim))
 
 /// Given a list of BoolExpr's it sequentially composes them together
@@ -179,7 +176,7 @@ let semanticsOfCommand
   (tvars : VarMap)
   : Command -> Result<SMBoolExpr, Error> =
     // Instantiate the semantic function of each primitive
-    Seq.map (instantiateSemanticsOfPrim semantics svars tvars)
+    Seq.map (instantiateSemanticsOfPrim semantics)
     >> collect
 
     // Compose them together with intermediates

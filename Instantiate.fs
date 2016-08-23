@@ -79,7 +79,7 @@ module Pretty =
     open Starling.Core.View.Pretty
 
     /// Pretty-prints instantiation errors.
-    let printError =
+    let printError : Error -> Doc =
         function
         | TypeMismatch (par, atype) ->
             fmt "parameter '{0}' conflicts with argument of type '{1}'"
@@ -192,8 +192,8 @@ let checkParamTypes func def =
     |> collect
     |> lift (fun _ -> func)
 
-let checkParamTypesPrim : PrimCommand -> PrimSemantics -> Result<PrimCommand, Error> = 
-    fun prim sem -> 
+let checkParamTypesPrim : PrimCommand -> PrimSemantics -> Result<PrimCommand, Error> =
+    fun prim sem ->
     List.map2
         (curry
              (function
@@ -279,37 +279,11 @@ let primParamSubFun
              | None -> failwith "free variable in substitution")
 
 /// <summary>
-///     Produces a parameter substitution <c>VSubFun</c> from
-///     <c>SMVFunc</c>s.
-/// </summary>
-/// <param name="_arg1">
-///     The <c>SMVFunc</c> providing the arguments to substitute.
-/// </param>
-/// <param name="_arg2">
-///     The <c>DFunc</c> into which we are substituting.
-/// </param>
-/// <returns>
-///     A <c>VSubFun</c> performing the above substitutions.
-/// </returns>
-let smvParamSubFun
-  (smvfunc : SMVFunc)
-  (dfunc : DFunc)
-  : VSubFun<Sym<Var>, Sym<MarkedVar>> =
-    liftVToSym (paramSubFun smvfunc dfunc)
-
-let primSubFun prim sem = liftVToSym (primParamSubFun prim sem)
-
-/// <summary>
 ///     Look up <c>func</c> in <c>_arg1</c>, and instantiate the
 ///     resulting Boolean expression, substituting <c>func.Params</c>
 ///     for the parameters in the expression.
 /// </summary>
-/// <param name="psf">
-///     A function building the <c>VSubFun</c> used to map variables in
-///     the expression, either by substituting in the arguments of the
-///     func, or by transforming them to the correct variable type.
-/// </param>
-/// <param name="ftab">
+/// <param name="definer">
 ///     The <c>Definer</c> whose definition for <c>func</c> is to be
 ///     instantiated.
 /// </param>
@@ -317,23 +291,16 @@ let primSubFun prim sem = liftVToSym (primParamSubFun prim sem)
 ///     The <c>VFunc</c> whose arguments are to be substituted into
 ///     its definition in <c>_arg1</c>.
 /// </param>
-/// <typeparam name="srcVar">
-///     The type of the variables before substitution, ie in
-///     <paramref name="expr"/>.
-/// </typeparam>
-/// <typeparam name="dstVar">
-///     The type of the variables before substitution, ie in
-///     <paramref name="expr"/>.
-/// </typeparam>
 /// <returns>
 ///     The instantiation of <c>func</c> as an <c>Option</c>al
-///     <c>SMBoolExpr</c> wrapped inside a Chessie result.
+///     symbolic marked Boolean expression wrapped inside a Chessie result.
 /// </returns>
 let instantiate
-  (psf : VFunc<'dstVar> -> DFunc -> VSubFun<'srcVar, 'dstVar>)
-  (definer : FuncDefiner<BoolExpr<'srcVar>>)
-  (vfunc : VFunc<'dstVar>)
-  : Result<BoolExpr<'dstVar> option, Error> =
+  (definer : FuncDefiner<BoolExpr<Sym<Var>>>)
+  (vfunc : VFunc<Sym<MarkedVar>>)
+  : Result<BoolExpr<Sym<MarkedVar>> option, Error> =
+    let subfun dfunc = paramSubFun vfunc dfunc |> liftVToSym |> onVars
+
     definer
     |> lookup vfunc
     |> bind
@@ -346,26 +313,25 @@ let instantiate
     |> lift
            (Option.map
                 (fun (dfunc, defn) ->
-                     Mapper.mapBoolCtx (onVars (psf vfunc dfunc)) NoCtx defn |> snd))
+                     defn |> Mapper.mapBoolCtx (subfun dfunc) NoCtx |> snd))
 
 let instantiatePrim
-  (psf : PrimCommand -> PrimSemantics -> VSubFun<Sym<Var>, Sym<MarkedVar>>)
   (smap : PrimSemanticsMap)
-  (vfunc : PrimCommand)
+  (prim : PrimCommand)
   : Result<SMBoolExpr option, Error> =
-    lookupPrim vfunc smap
+    lookupPrim prim smap
     |> bind
            (function
             | None -> ok None
             | Some sem ->
                 lift
                     (fun _ -> Some sem)
-                    (checkParamTypesPrim vfunc sem))
+                    (checkParamTypesPrim prim sem))
     |> lift
            (Option.map
                 (fun sem ->
-                     let mapper = onVars <| psf vfunc sem
-                     Mapper.mapBoolCtx mapper NoCtx sem.Body |> snd))
+                    let mapper = onVars (liftVToSym (primParamSubFun prim sem))
+                    Mapper.mapBoolCtx mapper NoCtx sem.Body |> snd))
 
 /// <summary>
 ///     Partitions a <see cref="FuncDefiner"/> into a definite
@@ -422,18 +388,16 @@ module DefinerFilter =
       : Result<FuncDefiner<VBoolExpr option>, Error> =
         // TODO(CaptainHayashi): proper doc comment.
         vds
-        (* TODO(CaptainHayashi): defs is already a func table, so
-           don't pretend it's just a list of tuples. *)
         |> partitionDefiner
         |> function
            | (defs, indefs) ->
                defs
                |> tryRemoveFuncDefinerSymbols
                |> lift
-                      (fun defs' ->
+                      (fun remdefs ->
                            FuncDefiner.ofSeq
                               (seq {
-                                   for (v, d) in FuncDefiner.toSeq defs' do
+                                   for (v, d) in FuncDefiner.toSeq remdefs do
                                        yield (v, Some d)
                                    for (v, _) in FuncDefiner.toSeq indefs do
                                        yield (v, None)
@@ -491,29 +455,40 @@ module DefinerFilter =
 ///     </para>
 /// </summary>
 module Phase =
-    /// Produces the reification of an unguarded func.
+    /// Produces the predicate representation of an unguarded func.
     /// This corresponds to D^ in the theory.
-    let interpretVFunc (definer : FuncDefiner<SVBoolExpr>) func =
-        instantiate smvParamSubFun definer func
+    let interpretVFunc
+      (definer : FuncDefiner<BoolExpr<Sym<Var>>>)
+      (func : VFunc<Sym<MarkedVar>>)
+      : Result<BoolExpr<Sym<MarkedVar>>, Error> =
+        instantiate definer func
         |> lift (withDefault BTrue)  // Undefined views go to True by metatheory
 
-    let interpretGFunc (definer : FuncDefiner<SVBoolExpr>) {Cond = c; Item = i} =
+    let interpretGFunc
+      (definer : FuncDefiner<SVBoolExpr>)
+      ({Cond = c; Item = i} : GFunc<Sym<MarkedVar>>)
+      : Result<BoolExpr<Sym<MarkedVar>>, Error> =
         interpretVFunc definer i
         |> lift (mkImplies c)
 
-    /// Interprets an entire view application over the given functable.
-    let interpretGView (definer : FuncDefiner<SVBoolExpr>) =
+    /// Interprets an entire view application over the given definer.
+    let interpretGView
+      (definer : FuncDefiner<SVBoolExpr>)
+      : GView<Sym<MarkedVar>>
+      -> Result<BoolExpr<Sym<MarkedVar>>, Error> =
         Multiset.toFlatSeq
         >> Seq.map (interpretGFunc definer)
         >> collect
         >> lift Seq.toList
         >> lift mkAnd
 
-    /// Interprets all of the views in a term over the given functable.
+    /// Interprets all of the views in a term over the given definer.
     let interpretTerm
       (definer : FuncDefiner<SVBoolExpr>)
-      : Term<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>
-      -> Result<SFTerm, Error> =
+      : Term<BoolExpr<Sym<MarkedVar>>, GView<Sym<MarkedVar>>,
+             VFunc<Sym<MarkedVar>>>
+      -> Result<Term<BoolExpr<Sym<MarkedVar>>, BoolExpr<Sym<MarkedVar>>,
+                     BoolExpr<Sym<MarkedVar>>>, Error> =
         tryMapTerm ok (interpretGView definer) (interpretVFunc definer)
 
 

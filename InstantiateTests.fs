@@ -11,63 +11,76 @@ open Starling.Core.Expr
 open Starling.Core.Model
 open Starling.Core.Var
 open Starling.Core.View
+open Starling.Core.Symbolic
 open Starling.Core.Instantiate
 
-
-let none : Option<MBoolExpr> = None
-
 /// Tests for the func instantiation functions.
-type InstantiateTests() =
-
+module Tests =
     /// Environment of test funcs.
-    static member TestFuncs =
+    let TestFuncs =
         [ (dfunc "foo" [],
-           iEq (AInt 5L : VIntExpr) (AInt 6L))
+           iEq (AInt 5L : SVIntExpr) (AInt 6L))
           (dfunc "bar" [ Int "quux" ],
-           iEq (AVar "quux") (AInt 6L))
+           iEq (siVar "quux") (AInt 6L))
           (dfunc "baz" [ Int "quux" ; Bool "flop" ],
-           BAnd [BVar "flop"; BGt (AVar "quux", AVar "quux")]) ]
+           BAnd [sbVar "flop"; BGt (siVar "quux", siVar "quux")]) ]
 
+    let testInstantiate =
+        instantiate TestFuncs >> okOption
+    let testInstantiateFail =
+        instantiate TestFuncs >> failOption
 
-    /// Test cases for testing valid instantiation.
-    static member ValidInstantiations =
-        [ TestCaseData(mvfunc "nope" [])
-            .Returns(none |> Some)
-            .SetName("Instantiate undefined func")
-          TestCaseData(mvfunc "foo" [])
-            .Returns(iEq (AInt 5L : MIntExpr) (AInt 6L : MIntExpr) |> Some |> Some)
-            .SetName("Instantiate func with no arguments")
-          TestCaseData(mvfunc "bar" [AInt 101L |> Expr.Int])
-            .Returns(iEq (AInt 101L) (AInt 6L : MIntExpr) |> Some |> Some)
-            .SetName("Instantiate func with one int argument")
-          TestCaseData(mvfunc "baz" [iAfter "burble" |> Expr.Int ; BTrue |> Expr.Bool])
-            .Returns(BAnd [BTrue; BGt (iAfter "burble", iAfter "burble")] |> Some |> Some)
-            .SetName("Instantiate func with two arguments of different types") ]
+    let none : Option<BoolExpr<Sym<MarkedVar>>> = None
 
-    /// Tests whether valid instantiations work.
-    [<TestCaseSource("ValidInstantiations")>]
-    member x.``Valid instantiations are executed correctly`` (func : MVFunc) =
-        func
-        |> instantiate paramSubFun InstantiateTests.TestFuncs
-        |> okOption
+    [<Test>]
+    let ``Instantiate undefined func``() =
+        Assert.That
+            (testInstantiate (smvfunc "nope" []),
+             Is.EqualTo (Some none))
+    [<Test>]
+    let ``Instantiate func with no arguments``() =
+        Assert.That
+            (testInstantiate (smvfunc "foo" []),
+             Is.EqualTo
+                (iEq (AInt 5L : SMIntExpr) (AInt 6L : SMIntExpr)
+                 |> Some |> Some))
+    [<Test>]
+    let ``Instantiate func with one integer argument``() =
+        Assert.That
+            (testInstantiate (smvfunc "bar" [ AInt 101L |> Expr.Int ]),
+             Is.EqualTo
+                (iEq (AInt 101L) (AInt 6L : SMIntExpr)
+                 |> Some |> Some))
+    [<Test>]
+    let ``Instantiate func with two arguments of different types``() =
+        Assert.That
+            (testInstantiate
+                (smvfunc "baz"
+                    [ siAfter "burble" |> Expr.Int
+                      BTrue |> Expr.Bool ]),
+             Is.EqualTo
+                (BAnd [ BTrue; BGt (siAfter "burble", siAfter "burble") ]
+                 |> Some |> Some))
 
-
-    /// Test cases for testing invalid instantiation.
-    static member InvalidInstantiations =
-        [ TestCaseData(mvfunc "foo" [AInt 101L |> Expr.Int])
-            .Returns([CountMismatch(1, 0)] |> Some)
-            .SetName("Instantiate func with too many arguments")
-          TestCaseData(mvfunc "bar" [])
-            .Returns([CountMismatch(0, 1)] |> Some)
-            .SetName("Instantiate func with too few arguments")
-          TestCaseData(vfunc "baz" [BTrue |> Expr.Bool ; iAfter "burble" |> Expr.Int])
-            .Returns([TypeMismatch (Int "quux", Bool ())
-                      TypeMismatch (Bool "flop", Int ())] |> Some)
-            .SetName("Instantiate func with two arguments of incorrect types") ]
-
-    /// Tests whether invalid instantiations (don't) work.
-    [<TestCaseSource("InvalidInstantiations")>]
-    member x.``Invalid instantiations raise correct errors`` (func : MVFunc) =
-        func
-        |> instantiate paramSubFun InstantiateTests.TestFuncs
-        |> failOption
+    [<Test>]
+    let ``Instantiate func with too many arguments``() =
+        Assert.That
+            (testInstantiateFail (smvfunc "foo" [ AInt 101L |> Expr.Int ]),
+             Is.EqualTo
+                ([ CountMismatch(1, 0) ] |> Some))
+    [<Test>]
+    let ``Instantiate func with too few arguments``() =
+        Assert.That
+            (testInstantiateFail (smvfunc "bar" []),
+             Is.EqualTo
+                ([ CountMismatch(0, 1) ] |> Some))
+    [<Test>]
+    let ``Instantiate func with two arguments of incorrect types``() =
+        Assert.That
+            (testInstantiateFail
+                (smvfunc "baz"
+                    [ BTrue |> Expr.Bool
+                      siAfter "burble" |> Expr.Int ]),
+             Is.EqualTo
+                ([ TypeMismatch (Int "quux", Bool ())
+                   TypeMismatch (Bool "flop", Int ()) ] |> Some))
