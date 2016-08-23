@@ -68,6 +68,13 @@ module Queries =
     let commandResults cs =
         List.fold (fun a c -> a @ c.Results) [] cs
 
+    /// Retrieves the type annotated vars from the arguments to a
+    /// command as a list
+    let commandArgs cmd =
+        let f c = List.map SMExprVars c.Args
+        let vars = List.fold (@) [] <| List.map f cmd
+        Set.fold (+) Set.empty (Set.ofList vars)
+
 /// <summary>
 ///     Composition of Boolean expressions representing commands.
 /// </summary>

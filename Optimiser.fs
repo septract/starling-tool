@@ -9,6 +9,8 @@
 /// </summary>
 module Starling.Optimiser
 
+open System.Collections.Generic
+
 open Chessie.ErrorHandling
 
 open Starling.Core.TypeSystem
@@ -120,11 +122,9 @@ module Utils =
     /// </param>
     /// <returns>
     ///     <para>
-    ///         A tuple of two sets of optimisation prefixes.
-    ///         The first is the set of optimisations force-disabled (names
-    ///         beginning with no-).
-    ///         The second is the set of optimisations force-enabled.
-    ///         Each optimisation name is downcased.
+    ///         A list of tuples of (optimisation prefixes * enabled boolean)
+    ///         If the optimisation is force enabled, the enabled boolean is true
+    ///         otherwise it's false when force disabled.
     ///     </para>
     ///     <para>
     ///         As these strings are prefixes, 'graph' will switch on
@@ -138,9 +138,11 @@ module Utils =
     /// </returns>
     let parseOptString (opts : string list) =
         opts
-        |> List.partition (fun str -> str.StartsWith("no-"))
-        |> pairMap (Seq.map (fun s -> s.Remove(0, 3)) >> Set.ofSeq)
-                   (Set.ofSeq)
+        |> List.map (fun (str : string) ->
+            if str.StartsWith("no-") then
+                (str.Remove(0, 3), false)
+            else
+                (str, true))
 
     /// <summary>
     ///     Decides whether an optimisation name matches an allowed
@@ -180,40 +182,60 @@ module Utils =
     /// <returns>
     ///     A sequence of optimisers to run.
     /// </returns>
-    let mkOptimiserSet opts removes adds =
+    let mkOptimiserSet allOpts opts =
         let config = config()
-        if Set.contains "all" removes
-        then
-             if config.verbose
-             then eprintfn "note: all optimisations disabled"
+        let optimisationSet = new HashSet<string>();
+        // try add or remove from prefix
+        let addFromPrefix prefix =
+            for (optName : string, _, _) in allOpts do
+                if optName.StartsWith(prefix) then
+                    if config.verbose && not (optimisationSet.Contains(optName)) then
+                        eprintfn "note: forced %s on" optName
 
-             []
-        else if Set.contains "all" adds
-        then
-            if config.verbose
-            then eprintfn "note: all optimisations enabled"
+                    ignore <| optimisationSet.Add(prefix)
 
-            List.map (fun (_, _, ofun) -> ofun) opts
-        else
-            opts
-            |> Seq.choose
-                   (fun (name, on, f) ->
-                        let on' = (on || optAllowed adds name)
-                                  && (not (optAllowed removes name))
+        let removeFromPrefix prefix =
+            for (optName, _, _) in allOpts do
+                if optName.StartsWith(prefix) then
+                    if config.verbose && optimisationSet.Contains(optName) then
+                        eprintfn "note: forced %s off" optName
 
-                        if (config.verbose && (on' <> on))
-                        then eprintfn "note: optimisation %s forced %s"
-                                      name
-                                      (if on' then "on" else "off")
+                    ignore <| optimisationSet.Remove(prefix)
 
-                        if on' then Some f else None)
-            (* We use List instead of Seq to make sure the above evaluates
-               only once. *)
-            |> List.ofSeq
+        for (optName, enabledByDefault, _) in allOpts do
+            if enabledByDefault then
+                ignore <| optimisationSet.Add(optName)
+
+        for (optName, forceEnabled) in opts do
+            if optName = "all" then
+                if forceEnabled then
+                    if config.verbose then
+                        eprintfn "note: forced all optimisations on"
+                    for (optName, enabledByDefault, _) in allOpts do
+                        ignore <| optimisationSet.Add(optName)
+                else
+                    if config.verbose then
+                        eprintfn "note: forced all optimisations off"
+                    optimisationSet.Clear()
+            else
+
+                if forceEnabled then
+                    addFromPrefix optName
+                else
+                    removeFromPrefix optName
+
+
+        List.filter (fun (name, _, _) -> optimisationSet.Contains(name)) allOpts
+        |> List.map (fun (_, _, f) -> f)
 
     /// <summary>
     ///     Discovers which optimisers to activate, and applies them in
     ///     the specified order.
+    ///
+    ///     Each optimisation comes as a triple
+    ///         (optimisation-name : string, enabled-as-default? : bool, optimisation: ('a -> 'a))
+    ///
+    ///     Enabling or disabling them based off the command-line arguments and whether they're enabled by default
     /// </summary>
     /// <param name="removes">
     ///     The set of optimisation names to remove.  If this contains 'all',
@@ -234,9 +256,9 @@ module Utils =
     ///     A function that, when applied to something, optimises it with
     ///     the selected optimisers.
     /// </returns>
-    let optimiseWith : Set<string> -> Set<string> -> (string * bool * ('a -> 'a)) list -> ('a -> 'a) =
-        fun removes adds opts ->
-        let fs = mkOptimiserSet opts removes adds
+    let optimiseWith : (string * bool) list -> (string * bool * ('a -> 'a)) list -> ('a -> 'a) =
+        fun args opts ->
+        let fs = mkOptimiserSet opts args
 
         (* This would be much more readable if it wasn't pointfree...
            ...but would also cause fs to be evaluated every single time
@@ -481,6 +503,15 @@ module Graph =
                                               | _ -> false))
                      ps)
 
+    /// Decides whether a given Command contains any `assume` command
+    /// in any of the sequentially composed primitives inside it
+    let hasAssume : Command -> bool =
+        fun c ->
+            c |>
+            List.forall (
+                function
+                | { Name = "Assume" } -> true;
+                | _ -> false)
 
     /// Determines if some given Command is local with respect to the given
     /// map of thread-local variables
@@ -680,6 +711,57 @@ module Graph =
                         else ctx
                 Set.fold processEdge ctx outEdges
 
+    /// Collapses edges {p}c{q}d{r} to {p}d{r} iff c is unobservable
+    /// i.e. c writes to local variables overwritten by d
+    /// d does not read outputs of c,
+    /// and there are no assumes adding information
+    let collapseUnobservableEdges locals ctx =
+        expandNodeIn ctx <|
+            fun node nViewexpr outEdges inEdges nodeKind ->
+                let pViewexpr = nViewexpr
+                let disjoint (a : Set<'a>) (b : Set<'a>) =
+                    Set.empty = Set.filter b.Contains a
+                let processCEdge cEdge =
+                    let dEdges = (fun (_, outs, _, _) -> outs) <| ctx.Graph.Contents.[cEdge.Dest]
+                    let processDEdge dEdge =
+                        (pViewexpr, cEdge, dEdge)
+                    Set.map processDEdge dEdges
+
+                let processTriple ctx (pViewexpr, (cEdge : OutEdge), (dEdge : OutEdge)) =
+                    let c, d = cEdge.Command, dEdge.Command
+
+                    let qViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[cEdge.Dest]
+                    let rViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[dEdge.Dest]
+
+                    match (pViewexpr, qViewexpr, rViewexpr) with
+                    | InnerView pView, InnerView qView, InnerView rView ->
+                        let cResults = Set.ofList <| commandResults c
+                        let dResults = Set.ofList <| commandResults d
+                        let dArgs    = commandArgs d
+                        if Set.isSubset cResults dResults
+                            && disjoint cResults dArgs
+                            && isLocalResults locals c
+                            && not (hasAssume c)  // TODO: is this too broad?
+                            && not (hasAssume d)  // TODO: is this necessary?
+                            then
+                                (flip runTransforms) ctx
+                                <| seq {
+                                      // Remove the {p}c{q} edge
+                                      yield RmOutEdge (node, cEdge)
+                                      // Remove the {q}d{r} edge
+                                      yield RmOutEdge (cEdge.Dest, dEdge)
+                                      // Remove q
+                                      yield RmNode cEdge.Dest
+                                      // Then, add the new edges {p}d{q}
+                                      yield MkCombinedEdge
+                                          ({ Name = node;       Src = dEdge.Dest;   Command = d },
+                                          { Name = dEdge.Dest;  Dest = node;        Command = d })
+                                }
+                            else ctx
+
+                let triples = Set.fold (+) Set.empty <| Set.map processCEdge outEdges
+                Set.fold processTriple ctx triples
+
 
     /// <summary>
     ///     Performs a node-wise optimisation on every node in the graph.
@@ -721,10 +803,10 @@ module Graph =
     ///     The model whence the graph came.
     /// </param>
     /// <param name="optR">
-    ///     Set of optimisations to suppress.
+    ///     Set of optimisation names to suppress.
     /// </param>
     /// <param name="optA">
-    ///     Set of optimisations to force.
+    ///     Set of optimisation names to force.
     /// </param>
     /// <param name="verbose">
     ///     Flag which, if enabled, causes non-default optimisation changes
@@ -736,13 +818,14 @@ module Graph =
     /// <returns>
     ///     An optimised equivalent of <paramref name="_arg1" />.
     /// </returns>
-    let optimiseGraph model optR optA =
+    let optimiseGraph model opts =
         // TODO(CaptainHayashi): Use the model for something.
-        onNodes (Utils.optimiseWith optR optA
+        onNodes (Utils.optimiseWith opts
                      [ ("graph-collapse-nops", true, collapseNops)
                        ("graph-collapse-ites", true, collapseITEs)
                        ("graph-drop-local-edges", true, dropLocalEdges model.Locals)
-                       ("graph-drop-local-midview",true, dropLocalMidView model.Locals) 
+                       ("graph-collapse-unobservable-edges", true, collapseUnobservableEdges model.Locals)
+                       ("graph-drop-local-midview",true, dropLocalMidView model.Locals)
                      ] )
 
     /// <summary>
@@ -764,8 +847,8 @@ module Graph =
     /// <returns>
     ///     An optimised equivalent of <paramref name="mdl" />.
     /// </returns>
-    let optimise optR optA mdl =
-        mapAxioms (optimiseGraph mdl optR optA) mdl
+    let optimise opts mdl =
+        mapAxioms (optimiseGraph mdl opts) mdl
 
 
 /// <summary>
@@ -814,6 +897,50 @@ module Term =
         | BAnd xs -> concatMap findBoolAfters xs
         | _ -> []
 
+    /// Finds any Intermediate variables in constant boolean functions
+    /// in the form x!inter i := f(x!_)
+    /// and returns a list of ((intermediate:bigint * var: Var) * fx: BoolExpr)
+    let rec findBoolInters =
+        function
+        | BBEq (BVar (Reg (Intermediate(i, x))), (ConstantBoolFunction (Intermediate(k, y)) as fx))
+        | BBEq (ConstantBoolFunction (Intermediate(k, y)) as fx, BVar (Reg (Intermediate(i, x))))
+            when x = y
+            ->
+                if i > k then
+                    [((i, x), fx)]
+                else
+                    []
+        | BBEq (BVar (Reg (Intermediate(i, x))), (ConstantBoolFunction (Before y) as fx))
+        | BBEq (BVar (Reg (Intermediate(i, x))), (ConstantBoolFunction (After y) as fx))
+        | BBEq (ConstantBoolFunction (Before y) as fx, BVar (Reg (Intermediate(i, x))))
+        | BBEq (ConstantBoolFunction (After y) as fx, BVar (Reg (Intermediate(i, x))))
+            when x = y
+            -> [((i, x), fx)]
+        | BAnd xs -> concatMap findBoolInters xs
+        | _ -> []
+
+    /// Finds any Intermediate variables in constant integer functions
+    /// in the form x!inter i := f(x!_)
+    /// and returns a list of ((intermediate:bigint * var: Var) * fx: BoolExpr)
+    let rec findArithInters =
+        function
+        | BAEq (AVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Intermediate(k, y)) as fx))
+        | BAEq (ConstantIntFunction (Intermediate(k, y)) as fx, AVar (Reg (Intermediate(i, x))))
+            when x = y
+            ->
+                if i > k then
+                    [((i, x), fx)]
+                else
+                    []
+        | BAEq (AVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Before y) as fx))
+        | BAEq (AVar (Reg (Intermediate(i, x))), (ConstantIntFunction (After y) as fx))
+        | BAEq (ConstantIntFunction (Before y) as fx, AVar (Reg (Intermediate(i, x))))
+        | BAEq (ConstantIntFunction (After y) as fx, AVar (Reg (Intermediate(i, x))))
+            when x = y
+            -> [((i, x), fx)]
+        | BAnd xs -> concatMap findArithInters xs
+        | _ -> []
+
     /// Lifts a pair of before/after maps to a SubFun.
     let afterSubs asubs bsubs =
         onVars
@@ -826,6 +953,18 @@ module Term =
                      | After a -> (Map.tryFind a bsubs |> withDefault (sbAfter a))
                      | x -> BVar (Reg x))))
 
+    /// Creates a VSubFun from intermediate substitutions
+    let interSubs asubs bsubs =
+        onVars
+            (liftVToSym
+                (Mapper.make
+                    (function
+                     | Intermediate(i, a) -> (Map.tryFind (i, a) asubs |> withDefault (siInter i a))
+                     | x -> AVar (Reg x))
+                    (function
+                     | Intermediate(i, a) -> (Map.tryFind (i, a) bsubs |> withDefault (sbInter i a))
+                     | x -> BVar (Reg x))))
+
     /// Eliminates bound before/after pairs in the term.
     /// If x!after = f(x!before) in the action, we replace x!after with
     /// f(x!before) in the precondition and postcondition.
@@ -833,12 +972,19 @@ module Term =
       (term : STerm<SMGView, SMVFunc> )
       : STerm<SMGView, SMVFunc> =
         let sub = afterSubs (term.Cmd |> findArithAfters |> Map.ofList)
-                            (term.Cmd |> findBoolAfters |> Map.ofList)
+                            (term.Cmd |> findBoolAfters  |> Map.ofList)
 
         (* The substitution in term.Cmd will create a tautology
          * f(x!before) = f(x!before).
          * We assume we can eliminate it later.
          *)
+        subExprInDTerm sub NoCtx term |> snd
+
+    let eliminateInters : STerm<SMGView, SMVFunc> -> STerm<SMGView, SMVFunc> =
+        fun term ->
+        let sub = interSubs (term.Cmd |> findArithInters |> Map.ofList)
+                            (term.Cmd |> findBoolInters  |> Map.ofList)
+
         subExprInDTerm sub NoCtx term |> snd
 
     (*
@@ -894,12 +1040,13 @@ module Term =
                      "term-simplify-bools" ]
 
     /// Optimises a model's terms.
-    let optimise optR optA
+    let optimise opts
       : UFModel<STerm<SMGView, SMVFunc>>
           -> UFModel<STerm<SMGView, SMVFunc>> =
         let optimiseTerm =
-            Utils.optimiseWith optR optA
+            Utils.optimiseWith opts
                 [ ("term-remove-after", true, eliminateAfters)
+                  ("term-remove-inters", true, eliminateInters)
                   ("term-reduce-guards", true, guardReduce)
                   ("term-simplify-bools", true, simpTerm) ]
         mapAxioms optimiseTerm

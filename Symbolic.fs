@@ -353,6 +353,33 @@ module Pretty =
     /// Pretty-prints a SMBoolExpr.
     let printSMBoolExpr = printBoolExpr (printSym printMarkedVar)
 
+/// Strip the marked part of the annotation
+/// and return just the internal 'var
+let unmarkMarkedVar =
+    function
+    | Before s            -> s
+    | After s             -> s
+    | Goal(_, s)          -> s
+    | Intermediate(_, s)  -> s
+
+/// Takes a type annotated MarkedVar and strips away the Marked part of the Var
+/// i.e. (Int (Before s)) => (Int s)
+let unmark : CTyped<MarkedVar> -> TypedVar =
+    function
+    | Int a  -> Int <| unmarkMarkedVar a
+    | Bool a -> Bool <| unmarkMarkedVar a
+
+let markedSymExprVars =
+    function
+    | Bool e -> mapOverSMVars Mapper.mapBoolCtx findSMVars e
+    | Int e -> mapOverSMVars Mapper.mapIntCtx findSMVars e
+
+/// Returns the set of all variables annotated with their types
+/// contained within the SMExpr
+let SMExprVars : SMExpr -> Set<TypedVar> =
+    fun expr ->
+        let smvars = markedSymExprVars expr
+        Set.map unmark smvars
 
 /// <summary>
 ///     Tests for <c>Symbolic</c>.
