@@ -308,7 +308,6 @@ let ensureArith : TypedVar -> Result<IntExpr<Var>, Error> =
 /// Constructs a pred from a Func, given a set of active globals,
 /// and some validator on the parameters.
 let predOfFunc
-  (svars : VarMap)
   (parT : 'par -> Result<VIntExpr, Error>)
   ({ Name = n; Params = pars } : Func<'par>)
   : Result<Literal, Error> =
@@ -325,22 +324,15 @@ let queryNaming ({ Name = n ; Params = ps } : DFunc) : Horn =
 /// Constructs a full constraint in HSF.
 /// The map of active globals should be passed as sharedVars.
 /// Some is returned if the constraint is definite; None otherwise.
-let hsfModelViewDef (sharedVars : VarMap)
+let hsfModelViewDef
   : (DFunc * VBoolExpr option) -> Result<Horn list, Error> =
     function
     | (vs, Some ex) ->
         lift2 (fun hd bd -> [Clause (hd, [bd]); Clause (bd, [hd])])
               (boolExpr makeHSFVar ex)
-              (predOfFunc sharedVars ensureArith vs)
+              (predOfFunc ensureArith vs)
         |> lift (fun c -> queryNaming vs :: c)
     | (vs, None) -> ok [ queryNaming vs ]
-
-/// Constructs a set of Horn clauses for all definite viewdefs in a model.
-let hsfModelViewDefs (sharedVars : VarMap)
-  : FuncDefiner<BoolExpr<Var> option> -> Result<Set<Horn>, Error> =
-    Seq.map (hsfModelViewDef sharedVars)
-    >> collect
-    >> lift (List.concat >> Set.ofSeq)
 
 (*
  * Variables
@@ -363,7 +355,6 @@ let hsfModelVariables (sharedVars : VarMap) : Result<Horn, Error> =
     let head =
         bind
             (fun vp -> predOfFunc
-                           sharedVars
                            ok
                            { Name = "emp"; Params = vp })
             vpars
@@ -401,7 +392,6 @@ let ite (i : Literal) (t : Literal) (e : Literal) : Literal =
 /// Constructs a Horn literal for a Func.
 let hsfFunc
   (definer : FuncDefiner<BoolExpr<Var> option>)
-  (sharedVars : VarMap)
   (func : MVFunc)
   : Result<Literal option, Error> =
     // We check the defining views here, because anything not in the
@@ -410,16 +400,15 @@ let hsfFunc
     definer
     |> (lookup func >> mapMessages (curry InconsistentFunc func))
     |> bind (function
-             | Some df -> lift Some (predOfFunc sharedVars tryIntExpr func)
+             | Some df -> lift Some (predOfFunc tryIntExpr func)
              | None -> ok None)
 
 /// Constructs a Horn literal for a GFunc.
 let hsfGFunc
   (definer : FuncDefiner<BoolExpr<Var> option>)
-  (sharedVars : VarMap)
   ({ Cond = c; Item = ms } : GFunc<MarkedVar>)
   : Result<Literal option, Error> =
-    hsfFunc definer sharedVars ms
+    hsfFunc definer ms
     |> (lift2 (fun cR -> Option.map (fun m -> ite cR m True))
               (boolExpr unmarkVar c))
 
@@ -427,14 +416,13 @@ let hsfGFunc
 /// given the defining views, preconditions and semantics clause.
 let hsfConditionBody
   (definer : FuncDefiner<BoolExpr<Var> option>)
-  (sharedVars : VarMap)
   (weakestPre : GView<MarkedVar>)
   (command : MBoolExpr)
   : Result<Literal list, Error> =
     let weakestPreH =
         weakestPre
         |> Multiset.toFlatSeq
-        |> Seq.map (hsfGFunc definer sharedVars)
+        |> Seq.map (hsfGFunc definer)
         |> collect
         |> lift (Seq.choose id >> List.ofSeq)
 
@@ -446,7 +434,6 @@ let hsfConditionBody
 /// Takes the environment of active global variables.
 let hsfTerm
   (definer : FuncDefiner<BoolExpr<Var> option>)
-  (sharedVars : VarMap)
   (name : string,
    {Cmd = c; WPre = w ; Goal = g}
      : Term<MBoolExpr, GView<MarkedVar>, MVFunc>)
@@ -454,19 +441,8 @@ let hsfTerm
     lift2 (fun head body ->
            [ Comment (sprintf "term %s" name)
              Clause (Option.get head, body) ])
-          (hsfFunc definer sharedVars g)
-          (hsfConditionBody definer sharedVars w c)
-
-/// Constructs a set of Horn clauses for all terms associated with a model.
-let hsfModelTerms
-  (sharedVars : VarMap)
-  (definer : FuncDefiner<BoolExpr<Var> option>)
-  : Map<string, Term<MBoolExpr, GView<MarkedVar>, MVFunc>>
-  -> Result<Horn list, Error> =
-    Map.toSeq
-    >> Seq.map (hsfTerm definer sharedVars)
-    >> collect
-    >> lift List.concat
+          (hsfFunc definer g)
+          (hsfConditionBody definer w c)
 
 /// Constructs a HSF script for a model.
 let hsfModel
@@ -474,9 +450,23 @@ let hsfModel
      : Model<Term<MBoolExpr, GView<MarkedVar>, MVFunc>,
              FuncDefiner<BoolExpr<Var> option>>)
   : Result<Horn list, Error> =
+    let uniquify = Set.ofList >> Set.toList
+    let collectMap f = Seq.map f >> collect
+
     trial {
-        let! vs = sharedVars |> hsfModelVariables
-        let! ds = hsfModelViewDefs sharedVars definer |> lift Set.toList
-        let! xs = hsfModelTerms sharedVars definer xs
-        return vs :: List.append ds xs
+        let! varHorn = hsfModelVariables sharedVars
+
+        let! defHorns =
+            definer
+            |> FuncDefiner.toSeq
+            |> collectMap hsfModelViewDef
+            |> lift (List.concat >> uniquify)
+
+        let! axHorns =
+            xs
+            |> Map.toSeq
+            |> collectMap (hsfTerm definer)
+            |> lift (List.concat >> uniquify)
+
+        return varHorn :: List.append defHorns axHorns
     }
