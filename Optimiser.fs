@@ -9,6 +9,8 @@
 /// </summary>
 module Starling.Optimiser
 
+open System.Collections.Generic
+
 open Chessie.ErrorHandling
 
 open Starling.Core.TypeSystem
@@ -120,11 +122,9 @@ module Utils =
     /// </param>
     /// <returns>
     ///     <para>
-    ///         A tuple of two sets of optimisation prefixes.
-    ///         The first is the set of optimisations force-disabled (names
-    ///         beginning with no-).
-    ///         The second is the set of optimisations force-enabled.
-    ///         Each optimisation name is downcased.
+    ///         A list of tuples of (optimisation prefixes * enabled boolean)
+    ///         If the optimisation is force enabled, the enabled boolean is true
+    ///         otherwise it's false when force disabled.
     ///     </para>
     ///     <para>
     ///         As these strings are prefixes, 'graph' will switch on
@@ -138,9 +138,11 @@ module Utils =
     /// </returns>
     let parseOptString (opts : string list) =
         opts
-        |> List.partition (fun str -> str.StartsWith("no-"))
-        |> pairMap (Seq.map (fun s -> s.Remove(0, 3)) >> Set.ofSeq)
-                   (Set.ofSeq)
+        |> List.map (fun (str : string) ->
+            if str.StartsWith("no-") then
+                (str.Remove(0, 3), false)
+            else
+                (str, true))
 
     /// <summary>
     ///     Decides whether an optimisation name matches an allowed
@@ -179,44 +181,52 @@ module Utils =
     /// </param>
     /// <returns>
     ///     A sequence of optimisers to run.
-    ///
-    ///     This builds the optimisers starting with all enabled
-    ///     removes everything that's disabled
-    ///     then adds everything that's enabled
     /// </returns>
-    let mkOptimiserSet opts removes adds =
+    let mkOptimiserSet all_opts opts =
         let config = config()
-        /// Construct set of currently constructed optimisers
-        let all_opts = (Set.ofList <| List.map (fun (optName, _, _) -> optName) opts)
-        let enabled_opts =
-            if Set.contains "all" removes then
-                if config.verbose then
-                    eprintfn "note: all optimisations disabled"
-                Set.empty
-            elif Set.contains "all" adds then
+        let optimisationSet = new HashSet<string>();
+        // try add or remove from prefix
+        let addFromPrefix prefix =
+            for (optName : string, _, _) in all_opts do
+                if optName.StartsWith(prefix) then
+                    if config.verbose && not (optimisationSet.Contains(optName)) then
+                        eprintfn "note: forced %s on" optName
+
+                    ignore <| optimisationSet.Add(prefix)
+
+        let removeFromPrefix prefix =
+            for (optName, _, _) in all_opts do
+                if optName.StartsWith(prefix) then
+                    if config.verbose && optimisationSet.Contains(optName) then
+                        eprintfn "note: forced %s off" optName
+
+                    ignore <| optimisationSet.Remove(prefix)
+
+        for (optName, enabledByDefault, _) in all_opts do
+            if enabledByDefault then
+                ignore <| optimisationSet.Add(optName)
+
+        for (optName, forceEnabled) in opts do
+            if optName = "all" then
+                if forceEnabled then
                     if config.verbose then
-                        eprintfn "note: all optimisations enabled"
-                    all_opts
+                        eprintfn "note: forced all optimisations on"
+                    for (optName, enabledByDefault, _) in all_opts do
+                        ignore <| optimisationSet.Add(optName)
+                else
+                    if config.verbose then
+                        eprintfn "note: forced all optimisations off"
+                    optimisationSet.Clear()
             else
-                /// backwards compatability (no args == all)
-                all_opts
 
-            - removes
-            + adds
+                if forceEnabled then
+                    addFromPrefix optName
+                else
+                    removeFromPrefix optName
 
-        opts
-        |> Seq.filter
-            (fun (name, on, _) ->
-                let on' = Set.contains name enabled_opts || Set.exists (name.StartsWith) enabled_opts
-                if on' <> on then
-                    eprintfn "note: optimisation %s forced %s"
-                        <| name
-                        <| if on' then "on" else "off"
-                on')
-        |> Seq.map (fun (n, _, f) -> f)
-        (* We use List instead of Seq to make sure the above evaluates
-           only once. *)
-        |> List.ofSeq
+
+        List.filter (fun (name, _, _) -> optimisationSet.Contains(name)) all_opts
+        |> List.map (fun (_, _, f) -> f)
 
     /// <summary>
     ///     Discovers which optimisers to activate, and applies them in
@@ -246,9 +256,9 @@ module Utils =
     ///     A function that, when applied to something, optimises it with
     ///     the selected optimisers.
     /// </returns>
-    let optimiseWith : Set<string> -> Set<string> -> (string * bool * ('a -> 'a)) list -> ('a -> 'a) =
-        fun removes adds opts ->
-        let fs = mkOptimiserSet opts removes adds
+    let optimiseWith : (string * bool) list -> (string * bool * ('a -> 'a)) list -> ('a -> 'a) =
+        fun args opts ->
+        let fs = mkOptimiserSet opts args
 
         (* This would be much more readable if it wasn't pointfree...
            ...but would also cause fs to be evaluated every single time
@@ -808,9 +818,9 @@ module Graph =
     /// <returns>
     ///     An optimised equivalent of <paramref name="_arg1" />.
     /// </returns>
-    let optimiseGraph model optR optA =
+    let optimiseGraph model opts =
         // TODO(CaptainHayashi): Use the model for something.
-        onNodes (Utils.optimiseWith optR optA
+        onNodes (Utils.optimiseWith opts
                      [ ("graph-collapse-nops", true, collapseNops)
                        ("graph-collapse-ites", true, collapseITEs)
                        ("graph-drop-local-edges", true, dropLocalEdges model.Locals)
@@ -837,8 +847,8 @@ module Graph =
     /// <returns>
     ///     An optimised equivalent of <paramref name="mdl" />.
     /// </returns>
-    let optimise optR optA mdl =
-        mapAxioms (optimiseGraph mdl optR optA) mdl
+    let optimise opts mdl =
+        mapAxioms (optimiseGraph mdl opts) mdl
 
 
 /// <summary>
@@ -1030,11 +1040,11 @@ module Term =
                      "term-simplify-bools" ]
 
     /// Optimises a model's terms.
-    let optimise optR optA
+    let optimise opts
       : UFModel<STerm<SMGView, SMVFunc>>
           -> UFModel<STerm<SMGView, SMVFunc>> =
         let optimiseTerm =
-            Utils.optimiseWith optR optA
+            Utils.optimiseWith opts
                 [ ("term-remove-after", true, eliminateAfters)
                   ("term-remove-inters", true, eliminateInters)
                   ("term-reduce-guards", true, guardReduce)

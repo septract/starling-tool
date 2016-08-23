@@ -358,12 +358,12 @@ let muz3 reals rq = lift (Backends.MuZ3.run reals rq)
 let frontend times rq = Lang.Frontend.run times rq Response.Frontend Error.Frontend
 
 /// Shorthand for the graph optimise stage.
-let graphOptimise optR optA =
-    lift (fix <| Starling.Optimiser.Graph.optimise optR optA)
+let graphOptimise opts =
+    lift (fix <| Starling.Optimiser.Graph.optimise opts)
 
 /// Shorthand for the term optimise stage.
-let termOptimise optR optA =
-    lift (fix <| Starling.Optimiser.Term.optimise optR optA)
+let termOptimise opts =
+    lift (fix <| Starling.Optimiser.Term.optimise opts)
 
 /// Shorthand for the flattening stage.
 let flatten = lift Starling.Flattener.flatten
@@ -444,7 +444,7 @@ let rec backendParams () =
 let runStarling request =
     let config = config()
 
-    let optR, optA =
+    let opts =
         config.optimisers
         |> Option.map Utils.parseOptionString
         |> withDefault (Seq.empty)
@@ -516,8 +516,8 @@ let runStarling request =
     then
         eprintfn "Z3 version: %s" (Microsoft.Z3.Version.ToString ())
 
-    let graphOptimise = graphOptimise optR optA
-    let termOptimise = termOptimise optR optA
+    let graphOptimise = graphOptimise opts
+    let termOptimise = termOptimise opts
 
     frontend config.times (match request with | Request.Frontend rq -> rq | _ -> Lang.Frontend.Request.Continuation)
     ** phase  graphOptimise  Request.GraphOptimise  Response.GraphOptimise
