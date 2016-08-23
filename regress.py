@@ -1,4 +1,6 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
+from __future__ import print_function
+
 import os
 import re
 import sys
@@ -11,10 +13,16 @@ CVF_RE = re.compile('^\S*\.cvf$')
 ARGS = None
 
 def verbose(fmt, *args):
+    ''' printf
+
+    Only prints in verbose mod
+    '''
     if ARGS.verbose:
         print(fmt.format(*args))
 
 def err(fmt, *args):
+    ''' printfe
+    '''
     print(fmt.format(*args), file=sys.stderr)
 
 def starling(file_name):
@@ -25,7 +33,7 @@ def starling(file_name):
 
     # outputs in form
     # "clause_name: (success | fail)
-    for line in str(stdout, encoding='utf-8').split('\n'):
+    for line in stdout.decode('utf-8').split('\n'):
         name, _, status = line.partition(':')
         name, status = name.strip(), status.strip()
         if status == 'fail':
