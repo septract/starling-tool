@@ -77,15 +77,27 @@ module Pretty =
     open Starling.Core.View.Pretty
     open Starling.Core.Model.Pretty
 
-    /// Decides whether to put brackets over the expression emission x,
-    /// given its expression as the second argument.
-    let maybeBracket xe x =
+    /// <summary>
+    ///     Given an expression and its Doc, potentially wrap the Doc
+    ///     in brackets.
+    /// </summary>
+    /// <param name="xe">
+    ///     The expression for which <paramref name="x"/> is a Doc.
+    /// </param>
+    /// <param name="x">
+    ///     The document form of <paramref name="xe"/>.
+    /// </param>
+    /// <returns>
+    ///     The Doc deriving from potentially bracketing
+    ///     <paramref name="x"/>.
+    /// </returns>
+    let maybeBracket (xe : IntExpr<Var>) (x : Doc) : Doc =
         match xe with
         | SimpleInt -> x
         | CompoundInt -> parened x
 
     /// Emits an integral expression in Datalog syntax.
-    let rec printInt : VIntExpr -> Doc =
+    let rec printInt : IntExpr<Var> -> Doc =
         function
         | AVar c -> String c
         | AInt i -> sprintf "%d" i |> String
@@ -105,14 +117,14 @@ module Pretty =
         | AMul(x :: y :: xs) -> printInt (AMul((AMul [ x; y ]) :: xs))
         | ADiv(x, y) -> printBop "/" x y
 
-    and printBop op x y =
+    and printBop (op : string) (x : IntExpr<Var>) (y : IntExpr<Var>) =
         binop
             op
             (x |> printInt |> maybeBracket x)
             (y |> printInt |> maybeBracket y)
 
     /// Emits a Horn literal.
-    let rec printLiteral =
+    let rec printLiteral : Literal -> Doc =
         function
         | Pred p -> printFunc printInt p
         | And xs ->
@@ -142,7 +154,7 @@ module Pretty =
         | Lt(x, y) -> printBop "<" x y
 
     /// Emits a Horn clause.
-    let printHorn =
+    let printHorn : Horn -> Doc =
         function
         | Clause (hd, bd) ->
             vsep [ hsep [ printLiteral hd
@@ -160,9 +172,9 @@ module Pretty =
                     String "." ]
 
     /// Emits a Horn clause list.
-    let printHorns hs = hs |> List.map printHorn |> vsep
+    let printHorns (hs : Horn list) : Doc = hs |> List.map printHorn |> vsep
 
-    let printHornError =
+    let printHornError : Error -> Doc =
         function
         | InconsistentFunc (func, err) ->
             wrapped "view func"
@@ -269,11 +281,11 @@ let boolExpr
  *)
 
 /// <summary>
-///     Tries to convert a <c>MExpr</c> to a <c>VIntExpr</c>.
+///     Tries to convert a <c>MExpr</c> to a <c>IntExpr</c>.
 ///     Fails with <c>UnsupportedExpr</c> if the expression is
 ///     Boolean.
 /// </summary>
-let tryIntExpr : MExpr -> Result<VIntExpr, Error> =
+let tryIntExpr : MExpr -> Result<IntExpr<Var>, Error> =
     Mapper.mapCtx (liftCToSub (Mapper.cmake unmarkVar)) NoCtx
     >> snd
     >> function
@@ -285,10 +297,10 @@ let tryIntExpr : MExpr -> Result<VIntExpr, Error> =
 ///     so we prepend a "V".  This is also done in unmarkVar.
 ///     @mjp41: TODO: We should consider consolidating this.
 ///</summary>
-let makeHSFVar = (+) "V"
+let makeHSFVar : string -> string = (+) "V"
 
 /// Ensures a param in a viewdef multiset is arithmetic.
-let ensureArith =
+let ensureArith : TypedVar -> Result<IntExpr<Var>, Error> =
     function
     | Int x -> x |> makeHSFVar |> AVar |> ok
     | x -> x |> NonArithParam |> fail
@@ -298,7 +310,7 @@ let ensureArith =
 let predOfFunc
   (svars : VarMap)
   (parT : 'par -> Result<VIntExpr, Error>)
-  ( { Name = n; Params = pars } : Func<'par>)
+  ({ Name = n; Params = pars } : Func<'par>)
   : Result<Literal, Error> =
     lift (fun parR -> Pred { Name = n; Params = parR })
          (pars |> Seq.map parT |> collect)
@@ -307,26 +319,26 @@ let predOfFunc
  *)
 
 /// Generates a query_naming clause for a viewdef.
-let queryNaming { Name = n ; Params = ps } =
+let queryNaming ({ Name = n ; Params = ps } : DFunc) : Horn =
     QueryNaming { Name = n ; Params = List.map valueOf ps }
 
 /// Constructs a full constraint in HSF.
-/// The map of active globals should be passed as gs.
+/// The map of active globals should be passed as sharedVars.
 /// Some is returned if the constraint is definite; None otherwise.
-let hsfModelViewDef svars
+let hsfModelViewDef (sharedVars : VarMap)
   : (DFunc * VBoolExpr option) -> Result<Horn list, Error> =
     function
     | (vs, Some ex) ->
         lift2 (fun hd bd -> [Clause (hd, [bd]); Clause (bd, [hd])])
               (boolExpr makeHSFVar ex)
-              (predOfFunc svars ensureArith vs)
+              (predOfFunc sharedVars ensureArith vs)
         |> lift (fun c -> queryNaming vs :: c)
     | (vs, None) -> ok [ queryNaming vs ]
 
 /// Constructs a set of Horn clauses for all definite viewdefs in a model.
-let hsfModelViewDefs svars
-  : FuncTable<VBoolExpr option> -> Result<Set<Horn>, Error> =
-    Seq.map (hsfModelViewDef svars)
+let hsfModelViewDefs (sharedVars : VarMap)
+  : FuncToIndefiniteBoolDefiner -> Result<Set<Horn>, Error> =
+    Seq.map (hsfModelViewDef sharedVars)
     >> collect
     >> lift (List.concat >> Set.ofSeq)
 
@@ -338,9 +350,9 @@ let hsfModelViewDefs svars
 /// Returns an error if the variable is not an integer.
 /// Returns no clause if the variable is not initialised.
 /// Takes the environment of active global variables.
-let hsfModelVariables (svars : VarMap) : Result<Horn, Error> =
+let hsfModelVariables (sharedVars : VarMap) : Result<Horn, Error> =
     let vpars =
-        svars
+        sharedVars
         |> Map.toSeq
         |> Seq.map
             (function
@@ -351,7 +363,7 @@ let hsfModelVariables (svars : VarMap) : Result<Horn, Error> =
     let head =
         bind
             (fun vp -> predOfFunc
-                           svars
+                           sharedVars
                            ok
                            { Name = "emp"; Params = vp })
             vpars
@@ -369,7 +381,7 @@ let hsfModelVariables (svars : VarMap) : Result<Horn, Error> =
  *)
 
 /// Converts a top-level Boolean expression to a list of Horn literals.
-let topLevelExpr =
+let topLevelExpr : BoolExpr<MarkedVar> -> Result<Literal list, Error> =
     // The main difference here is that we model conjunctions directly as a
     // Horn literal list.
     function
@@ -380,68 +392,91 @@ let topLevelExpr =
     >> lift List.ofSeq
 
 /// Generates an if-then-else, collapsing automatically in the case of true or false.
-let ite i t e =
+let ite (i : Literal) (t : Literal) (e : Literal) : Literal =
     match i with
     | True -> t
     | False -> e
     | _ -> ITE(i,t,e)
 
 /// Constructs a Horn literal for a Func.
-let hsfFunc dvs env (func : MVFunc) =
+let hsfFunc
+  (definer : FuncToIndefiniteBoolDefiner)
+  (sharedVars : VarMap)
+  (func : MVFunc)
+  : Result<Literal option, Error> =
     // We check the defining views here, because anything not in the
     // defining views is to be held true.
     // Now that we're at the func level, finding the view is easy!
-    dvs
+    definer
     |> (lookup func >> mapMessages (curry InconsistentFunc func))
     |> bind (function
-             | Some df -> lift Some (predOfFunc env tryIntExpr func)
+             | Some df -> lift Some (predOfFunc sharedVars tryIntExpr func)
              | None -> ok None)
 
 /// Constructs a Horn literal for a GFunc.
-let hsfGFunc dvs env { Cond = c; Item = ms } =
-    hsfFunc dvs env ms
+let hsfGFunc
+  (definer : FuncToIndefiniteBoolDefiner)
+  (sharedVars : VarMap)
+  ({ Cond = c; Item = ms } : GFunc<MarkedVar>)
+  : Result<Literal option, Error> =
+    hsfFunc definer sharedVars ms
     |> (lift2 (fun cR -> Option.map (fun m -> ite cR m True))
               (boolExpr unmarkVar c))
 
 /// Constructs the body for a set of condition pair Horn clauses,
 /// given the defining views, preconditions and semantics clause.
-let hsfConditionBody dvs env ps sem =
-    let psH =
-        ps
+let hsfConditionBody
+  (definer : FuncToIndefiniteBoolDefiner)
+  (sharedVars : VarMap)
+  (weakestPre : GView<MarkedVar>)
+  (command : MBoolExpr)
+  : Result<Literal list, Error> =
+    let weakestPreH =
+        weakestPre
         |> Multiset.toFlatSeq
-        |> Seq.map (hsfGFunc dvs env)
+        |> Seq.map (hsfGFunc definer sharedVars)
         |> collect
         |> lift (Seq.choose id >> List.ofSeq)
 
-    let semH = topLevelExpr sem
+    let commandH = topLevelExpr command
 
-    lift2 List.append psH semH
+    lift2 List.append weakestPreH commandH
 
 /// Constructs a series of Horn clauses for a term.
 /// Takes the environment of active global variables.
-let hsfTerm dvs env (name, {Cmd = c; WPre = w ; Goal = g}) =
+let hsfTerm
+  (definer : FuncToIndefiniteBoolDefiner)
+  (sharedVars : VarMap)
+  (name : string,
+   {Cmd = c; WPre = w ; Goal = g}
+     : Term<MBoolExpr, GView<MarkedVar>, MVFunc>)
+  : Result<Horn list, Error> =
     lift2 (fun head body ->
            [ Comment (sprintf "term %s" name)
              Clause (Option.get head, body) ])
-          (hsfFunc dvs env g)
-          (hsfConditionBody dvs env w c)
+          (hsfFunc definer sharedVars g)
+          (hsfConditionBody definer sharedVars w c)
 
 /// Constructs a set of Horn clauses for all terms associated with a model.
-let hsfModelTerms gs dvs =
+let hsfModelTerms
+  (sharedVars : VarMap)
+  (definer : FuncToIndefiniteBoolDefiner)
+  : Map<string, Term<MBoolExpr, GView<MarkedVar>, MVFunc>>
+  -> Result<Horn list, Error> =
     Map.toSeq
-    >> Seq.map (hsfTerm dvs gs)
+    >> Seq.map (hsfTerm definer sharedVars)
     >> collect
     >> lift List.concat
 
 /// Constructs a HSF script for a model.
 let hsfModel
-  ({ Globals = gs; ViewDefs = dvs; Axioms = xs }
+  ({ Globals = sharedVars; ViewDefs = definer; Axioms = xs }
      : Model<Term<MBoolExpr, GView<MarkedVar>, MVFunc>,
              FuncToIndefiniteBoolDefiner>)
   : Result<Horn list, Error> =
     trial {
-        let! vs = gs |> hsfModelVariables
-        let! ds = hsfModelViewDefs gs dvs |> lift Set.toList
-        let! xs = hsfModelTerms gs dvs xs
+        let! vs = sharedVars |> hsfModelVariables
+        let! ds = hsfModelViewDefs sharedVars definer |> lift Set.toList
+        let! xs = hsfModelTerms sharedVars definer xs
         return vs :: List.append ds xs
     }
