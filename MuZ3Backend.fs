@@ -121,7 +121,7 @@ module Pretty =
     open Starling.Core.Z3.Pretty
 
     /// Pretty-prints a MuSat.
-    let printMuSat =
+    let printMuSat : MuSat -> Doc =
         function
         | MuSat.Sat ex -> vsep [ String "Proof FAILED."
                                  headed "Counter-example" [ printZ3Exp ex ] ]
@@ -131,7 +131,9 @@ module Pretty =
                                              String reason ]
 
     /// Pretty-prints a MuModel.
-    let printMuModel { Definites = ds ; Rules = rs ; FuncDecls = fdm } =
+    let printMuModel
+      ({ Definites = ds ; Rules = rs ; FuncDecls = fdm } : MuModel)
+      : Doc =
         printAssoc
             Indented
             [ (String "Definites",
@@ -150,7 +152,7 @@ module Pretty =
                printMap Inline String (fun s -> String (s.ToString())) fdm) ]
 
     /// Pretty-prints a response.
-    let printResponse mview =
+    let printResponse (mview : ModelView) : Response -> Doc =
         function
         | Response.Translate mm ->
             printMuModel mm
@@ -178,7 +180,7 @@ module Translator =
     /// <returns>
     ///     A function mapping types to sorts.
     /// </returns>
-    let typeToSort reals (ctx : Z3.Context) =
+    let typeToSort (reals : bool) (ctx : Z3.Context) : Type -> Z3.Sort =
         function
         | Type.Int _ when reals -> ctx.MkRealSort () :> Z3.Sort
         | Type.Int _ -> ctx.MkIntSort () :> Z3.Sort
@@ -203,7 +205,11 @@ module Translator =
     /// <returns>
     ///     A <c>FuncDecl</c> modelling the <c>DFunc</c>.
     /// </returns>
-    let funcDeclOfDFunc reals (ctx : Z3.Context) { Name = n ; Params = pars } =
+    let funcDeclOfDFunc
+      (reals : bool)
+      (ctx : Z3.Context)
+      ({ Name = n ; Params = pars } : DFunc)
+      : Z3.FuncDecl =
         ctx.MkFuncDecl(
             n,
             pars |> Seq.map (typeOf >> typeToSort reals ctx) |> Seq.toArray,
@@ -432,12 +438,14 @@ module Translator =
     ///     implication is thrown away.
     /// </param>
     /// <returns>
-    ///     A Z3 expression implementing the quantified implication.
+    ///     An optional Z3 expression implementing the quantified implication.
     /// </returns>
-    let mkQuantifiedEntailment (ctx : Z3.Context)
-                               vars
-                               (body : Z3.BoolExpr)
-                               (head : Z3.BoolExpr) =
+    let mkQuantifiedEntailment
+      (ctx : Z3.Context)
+      (vars : Z3.Expr[])
+      (body : Z3.BoolExpr)
+      (head : Z3.BoolExpr)
+      : Z3.BoolExpr option =
         (* Don't emit if the head is true: not only is the result true,
            trivial, but MuZ3 will complain about interpreted heads later.
            Also don't emit if the body is false: these are also always true. *)
@@ -568,7 +576,11 @@ module Translator =
     ///     A sequence containing at most one pair of <c>string</c> and
     ///     Z3 <c>BoolExpr</c> representing the variable initialisation rule.
     /// </returns>
-    let translateVariables reals ctx funcDecls svars =
+    let translateVariables
+      (reals : bool)
+      (ctx : Z3.Context)
+      (funcDecls : Map<string, Z3.FuncDecl>)
+      (svars : VarMap) =
         let vpars =
             svars
             |> Map.toList
@@ -617,7 +629,12 @@ module Translator =
     ///     An <c>Option</c> containing a pair of the term name and the Z3
     ///     <c>BoolExpr</c> representing the rule form of the proof term.
     /// </returns>
-    let translateTerm reals ctx funcDecls (name : string, {Cmd = c ; WPre = w ; Goal = g}) =
+    let translateTerm
+      (reals : bool)
+      (ctx : Z3.Context)
+      (funcDecls : Map<string, Z3.FuncDecl>)
+      (name : string, {Cmd = c ; WPre = w ; Goal = g})
+      : (string * Z3.BoolExpr) option =
         mkRule reals unmarkVar ctx funcDecls c w g |> Option.map (mkPair name)
 
     /// <summary>
@@ -638,7 +655,7 @@ module Translator =
     ///     to use to start queries.
     /// </returns>
     let translate
-      reals
+      (reals : bool)
       (ctx : Z3.Context)
       ({ Globals = svars ; ViewDefs = ds ; Axioms = xs }
          : Model<Term<MBoolExpr, GView<MarkedVar>, MVFunc>,
@@ -673,7 +690,11 @@ module Run =
     /// <returns>
     ///     The pair of Z3 <c>Fixedpoint</c> and unsafeness <c>FuncDecl</c>.
     /// </returns>
-    let fixgen reals (ctx : Z3.Context) { Definites = ds; Rules = rs ; FuncDecls = fm } =
+    let fixgen
+      (reals : bool)
+      (ctx : Z3.Context)
+      ({ Definites = ds; Rules = rs ; FuncDecls = fm } : MuModel)
+      : (Z3.Fixedpoint * Z3.FuncDecl) =
         let fixedpoint = ctx.MkFixedpoint ()
 
         let pars = ctx.MkParams ()
@@ -734,7 +755,7 @@ module Run =
     /// <returns>
     ///     A <c>MuResult</c>.
     /// </returns>
-    let run (fixedpoint : Z3.Fixedpoint) unsafe =
+    let run (fixedpoint : Z3.Fixedpoint) (unsafe : Z3.FuncDecl) : MuSat =
         match (fixedpoint.Query [| unsafe |]) with
         | Z3.Status.SATISFIABLE ->
              MuSat.Sat (fixedpoint.GetAnswer ())
@@ -743,14 +764,6 @@ module Run =
         | Z3.Status.UNKNOWN ->
              MuSat.Unknown (fixedpoint.GetReasonUnknown ())
          | _ -> MuSat.Unknown "query result out of bounds"
-
-
-/// Shorthand for the translator stage of the MuZ3 pipeline.
-let translate = Translator.translate
-/// Shorthand for the fixpoint generation stage of the MuZ3 pipeline.
-let fix = Run.fixgen
-/// Shorthand for the satisfiability stage of the MuZ3 pipeline.
-let sat = uncurry Run.run
 
 /// <summary>
 ///     The Starling MuZ3 backend driver.
@@ -765,18 +778,21 @@ let sat = uncurry Run.run
 /// <returns>
 ///     A function implementing the chosen MuZ3 backend process.
 /// </returns>
-let run reals req =
+let run (reals : bool) (req : Request)
+  : Model<Term<MBoolExpr, GView<MarkedVar>, MVFunc>,
+          FuncDefiner<BoolExpr<Var> option>>
+    -> Response =
     use ctx = new Z3.Context()
     match req with
     | Request.Translate ->
-        translate reals ctx
+        Translator.translate reals ctx
         >> Response.Translate
     | Request.Fix ->
-        translate reals ctx
-        >> fix reals ctx
+        Translator.translate reals ctx
+        >> Run.fixgen reals ctx
         >> Response.Fix
     | Request.Sat ->
-        translate reals ctx
-        >> fix reals ctx
-        >> sat
+        Translator.translate reals ctx
+        >> Run.fixgen reals ctx
+        >> uncurry Run.run
         >> Response.Sat
