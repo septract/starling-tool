@@ -28,20 +28,20 @@ let (>>=) = FParsec.Primitives.(>>=)
 //   TODO(CaptainHayashi): is some of this redundant?
 
 /// Parser for skipping line comments.
-let lcom = skipString "//" .>> skipRestOfLine true
+let lcom : Parser<unit, unit> = skipString "//" .>> skipRestOfLine true
 
 /// Parser for skipping block comments.
 let bcom, bcomImpl = createParserForwardedToRef()
 do bcomImpl := skipString "/*" .>> skipManyTill (bcom <|> skipAnyChar) (skipString "*/")
 
 /// Parser for skipping comments.
-let com = (lcom <|> bcom) <?> "comment"
+let com : Parser<unit, unit> = (lcom <|> bcom) <?> "comment"
 
 /// Parser for skipping zero or more whitespace characters.
-let ws = skipMany (com <|> spaces1)
+let ws : Parser<unit, unit> = skipMany (com <|> spaces1)
 
 /// Parser accepting whitespace followed by a semicolon.
-let wsSemi = ws .>> pstring ";"
+let wsSemi : Parser<unit, unit> = ws .>> pstring ";"
 
 /// As pipe2, but with automatic whitespace parsing after each parser.
 let pipe2ws x y f = pipe2 (x .>> ws) (y .>> ws) f
@@ -128,8 +128,8 @@ let parseParamList argp =
 /// Takes a Parser<'a, 'u> and gives back an annotated AST Node parser
 /// Parser<Node<'a>, 'u> which will annotate with extra information from
 /// the stream.
-let nodify v = 
-    getPosition 
+let nodify v =
+    getPosition
     >>= fun p ->
         v |>> fun x -> { Position = { StreamName = p.StreamName; Line = p.Line; Column = p.Column; }
                          Node = x }
@@ -157,8 +157,8 @@ let parseSymbolic =
 
 /// Parser for primary expressions.
 let parsePrimaryExpression =
-    let expressions =  
-        (inParens parseExpression) :: List.map nodify [ 
+    let expressions =
+        (inParens parseExpression) :: List.map nodify [
             pstring "true" >>% True
             pstring "false" >>% False
             pint64 |>> Num
@@ -457,7 +457,7 @@ let parseSkip
 
 /// Parser for simple commands (atomics, skips, and bracketed commands).
 do parseCommandRef :=
-    nodify <| 
+    nodify <|
     (choice [parseSkip
              // ^- ;
              parseIf
@@ -550,7 +550,7 @@ let parseSearch =
 let parseScript =
     // TODO(CaptainHayashi): parse things that aren't methods:
     //   axioms definitions, etc
-    ws >>. manyTill (choice (List.map nodify 
+    ws >>. manyTill (choice (List.map nodify
                             [parseMethod |>> Method
                              // ^- method <identifier> <arg-list> <block>
                              parseConstraint |>> Constraint

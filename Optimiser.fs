@@ -496,7 +496,7 @@ module Graph =
                  Seq.forall
                      (fun p ->
                           // ...there are no symbols, and...
-                          match (Mapper.tryMapCtx (tsfRemoveSym (fun _ -> ())) NoCtx p) with
+                          match (Mapper.tryMapCtx (tsfRemoveSym ignore) NoCtx p) with
                           | _, Bad _ -> false
                           | _, _ ->
                               // ...for all of the variables in said parameters...
@@ -707,7 +707,7 @@ module Graph =
       : TransformContext =
         expandNodeIn ctx <|
             fun node nView outEdges inEdges nk ->
-                let disjoint (a : TypedVar list) (b : Set<TypedVar>) = List.forall (fun v -> not <| b.Contains v) a
+                let disjoint (a : TypedVar list) (b : Set<TypedVar>) = List.forall (b.Contains >> not) a
                 let processEdge ctx (e : OutEdge) =
                     if isLocalResults locals e.Command
                         then

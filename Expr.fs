@@ -71,11 +71,11 @@ module Types =
 module Pretty =
     open Starling.Core.Pretty
 
-    let svexpr op pxs x =
+    let svexpr (op : string) (pxs : 'x -> Doc) (x : 'x seq) : Doc =
       let mapped = Seq.map pxs x
-      let sep = ivsep mapped in 
-      let head = HSep([(String "("); (String op)], Nop) 
-      vsep [head; sep; (String ")")] 
+      let sep = ivsep mapped in
+      let head = HSep([(String "("); (String op)], Nop)
+      vsep [head; sep; (String ")")]
 
     /// Creates an S-expression from an operator string, operand print function, and
     /// sequence of operands.
@@ -131,24 +131,24 @@ let (|BBEq|_|) : BoolExpr<'var> -> (BoolExpr<'var> * BoolExpr<'var>) option =
     | _ -> None
 
 
-/// Define when two Boolean expressions are trivially equal 
+/// Define when two Boolean expressions are trivially equal
 /// Eg: (= a b)  is equivalent ot (=b a)
-let rec eqBoolExpr (e1: BoolExpr<'var>) (e2:BoolExpr<'var>) : bool   = 
-  match e1, e2 with 
-  | BEq (a1,a2), BEq (b1,b2) -> 
+let rec eqBoolExpr (e1: BoolExpr<'var>) (e2:BoolExpr<'var>) : bool   =
+  match e1, e2 with
+  | BEq (a1,a2), BEq (b1,b2) ->
      ((a1=a2 && b1=b2) || (a1=b2 && b1=a2))
-  | BNot a, BNot b -> eqBoolExpr a b 
-  | _ -> false 
+  | BNot a, BNot b -> eqBoolExpr a b
+  | _ -> false
 
 
-/// Remove duplicate boolean expressions 
-/// TODO(@septract) This is stupid, should do it more cleverly 
-let rec remExprDup (xs: List<BoolExpr<'var>>) : List<BoolExpr<'var>> =   
-  match xs with 
-  | (x::xs) -> 
-      let xs2 = remExprDup xs in 
+/// Remove duplicate boolean expressions
+/// TODO(@septract) This is stupid, should do it more cleverly
+let rec remExprDup (xs: List<BoolExpr<'var>>) : List<BoolExpr<'var>> =
+  match xs with
+  | (x::xs) ->
+      let xs2 = remExprDup xs in
       if (List.exists (eqBoolExpr x) xs) then xs2 else x::xs2
-  | x -> x 
+  | x -> x
 
 
 /// Recursively simplify a formula
@@ -192,8 +192,8 @@ let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
                 )
                 []
                 xs with
-        | Some xs -> 
-           match remExprDup xs with 
+        | Some xs ->
+           match remExprDup xs with
            | []  -> BFalse
            | [x] -> x
            | xs  -> BOr (List.rev xs)
@@ -209,9 +209,9 @@ let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
                   | y       -> Some (y :: s)
                 )
                 []
-                xs with 
-        | Some xs -> 
-           match remExprDup xs with 
+                xs with
+        | Some xs ->
+           match remExprDup xs with
            | []  -> BTrue
            | [x] -> x
            | xs  -> BAnd (List.rev xs)
@@ -254,10 +254,10 @@ let mkVarExp (marker : string -> 'markedvar)
     | Bool s -> s |> marker |> BVar |> Bool
 
 /// Converts a VarMap to a sequence of expressions.
-let varMapToExprs (marker : string -> 'markedvar)
-                  (vm : Map<string, Type>)
-                  : Expr<'markedvar> seq =
-    vm |> Map.toSeq |> Seq.map (fun (name, ty) -> mkVarExp marker (withType ty name))
+let varMapToExprs
+  (marker : string -> 'markedvar)
+  : Map<string, Type> -> Expr<'markedvar> seq =
+    Map.toSeq >> Seq.map (fun (name, ty) -> mkVarExp marker (withType ty name))
 
 (* The following are just curried versions of the usual constructors. *)
 
