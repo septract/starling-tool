@@ -156,9 +156,11 @@ let checkParamCountPrim : PrimCommand -> PrimSemantics option -> Result<PrimSema
 ///     <c>Starling.Instantiate.Error</c>.  If the <c>ok</c> value is
 ///     <c>None</c>, it means no (valid or otherwise) definition exists.
 /// </returns>
-let lookup (func : Func<'a>) : seq<DFunc * 'b> -> Result<(DFunc * 'b) option, Error> =
+let lookup (func : Func<_>)
+  : FuncDefiner<'b> -> Result<(DFunc * 'b) option, Error> =
     // First, try to find a func whose name agrees with ours.
-    Seq.tryFind (fun (dfunc, _) -> dfunc.Name = func.Name)
+    FuncDefiner.toSeq
+    >> Seq.tryFind (fun (dfunc, _) -> dfunc.Name = func.Name)
     >> checkParamCount func
 
 let lookupPrim : PrimCommand -> PrimSemanticsMap -> Result<PrimSemantics option, Error>  =

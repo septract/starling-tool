@@ -47,9 +47,27 @@ module Types =
             * inTrue : Block<'view, PartCmd<'view>>
             * inFalse : Block<'view, PartCmd<'view>>
 
+    /// <summary>
+    ///     Internal context for the method modeller.
+    /// </summary>
+    type MethodContext =
+        { /// <summary>
+          ///     The environment of visible shared variables.
+          /// </summary>
+          SharedVars : VarMap
+          /// <summary>
+          ///     The environment of visible thread-local variables.
+          /// </summary>
+          ThreadVars : VarMap
+          /// <summary>
+          ///     A definer containing the visible view prototypes.
+          /// </summary>
+          ViewProtos : FuncDefiner<unit> }
+
     type ModellerViewExpr = ViewExpr<CView>
     type ModellerPartCmd = PartCmd<ModellerViewExpr>
     type ModellerBlock = Block<ModellerViewExpr, ModellerPartCmd>
+    type ModellerViewedCommand = ViewedCommand<ModellerViewExpr, ModellerPartCmd>
     type ModellerMethod = Method<ModellerViewExpr, ModellerPartCmd>
 
     // TODO(CaptainHayashi): more consistent constructor names
@@ -162,7 +180,7 @@ module Pretty =
     open Starling.Lang.AST.Pretty
 
     /// Pretty-prints a CFunc.
-    let rec printCFunc =
+    let rec printCFunc : CFunc -> Doc =
         function
         | CFunc.ITE(i, t, e) ->
             hsep [ String "if"
@@ -174,7 +192,8 @@ module Pretty =
         | Func v -> printSVFunc v
 
     /// Pretty-prints a CView.
-    let printCView = printMultiset printCFunc >> ssurround "[|" "|]"
+    let printCView : CView -> Doc =
+        printMultiset printCFunc >> ssurround "[|" "|]"
 
     /// Pretty-prints a part-cmd at the given indent level.
     let rec printPartCmd (pView : 'view -> Doc) : PartCmd<'view> -> Doc =
@@ -191,7 +210,7 @@ module Pretty =
                        headed "False" [printBlock pView (printPartCmd pView) inFalse]]
 
     /// Pretty-prints expression conversion errors.
-    let printExprError =
+    let printExprError : ExprError -> Doc =
         function
         | ExprNotBoolean ->
             "expression is not suitable for use in a Boolean position" |> String
@@ -209,7 +228,7 @@ module Pretty =
                 [ printSymbol sym ]
 
     /// Pretty-prints view conversion errors.
-    let printViewError =
+    let printViewError : ViewError -> Doc =
         function
         | ViewError.BadExpr(expr, err) ->
             wrapped "expression" (printExpression expr) (printExprError err)
@@ -223,7 +242,7 @@ module Pretty =
                        err |> printVarMapError ]
 
     /// Pretty-prints constraint conversion errors.
-    let printConstraintError =
+    let printConstraintError : ConstraintError -> Doc =
         function
         | CEView(vdef, err) ->
             wrapped "view definition" (printDView vdef) (printViewError err)
@@ -231,14 +250,14 @@ module Pretty =
             wrapped "expression" (printExpression expr) (printExprError err)
 
     /// Pretty-prints view prototype conversion errors
-    let printViewProtoError =
+    let printViewProtoError : ViewProtoError -> Doc =
         function
         | VPEDuplicateParam(vp, param) ->
             fmt "view proto '{0} has duplicate param {1}" [ printViewProto vp
                                                             String param ]
 
     /// Pretty-prints prim errors.
-    let printPrimError =
+    let printPrimError : PrimError -> Doc =
         function
         | BadSVar (var, err : VarMapError) ->
             wrapped "shared lvalue" (printLValue var)
@@ -274,7 +293,7 @@ module Pretty =
         | Useless -> String "command has no effect"
 
     /// Pretty-prints method errors.
-    let printMethodError =
+    let printMethodError : MethodError -> Doc =
         function
         | BadAssign (dest, src, err) ->
             wrapped "local assign" (printAssign dest src) (printPrimError err)
@@ -294,7 +313,7 @@ module Pretty =
                 [ printCommand (printViewExpr printView) cmd ]
 
     /// Pretty-prints model conversion errors.
-    let printModelError =
+    let printModelError : ModelError -> Doc =
         function
         | BadConstraint(constr, err) ->
             wrapped "constraint" (printDView constr)
@@ -453,7 +472,8 @@ let coreSemantics : PrimSemanticsMap =
 let rec modelExpr
   (env : VarMap)
   (varF : Var -> 'var)
-  (e : Expression) : Result<Expr<Sym<'var>>, ExprError> =
+  (e : Expression)
+  : Result<Expr<Sym<'var>>, ExprError> =
     match e.Node with
     (* First, if we have a variable, the type of expression is
        determined by the type of the variable.  If the variable is
@@ -626,11 +646,13 @@ and modelIntExpr
 
 /// Merges a list of prototype and definition parameters into one list,
 /// binding the types from the former to the names from the latter.
-let funcViewParMerge ppars dpars =
+let funcViewParMerge (ppars : TypedVar list) (dpars : Var list)
+  : TypedVar list =
     List.map2 (fun ppar dpar -> withType (typeOf ppar) dpar) ppars dpars
 
 /// Adapts Instantiate.lookup to the modeller's needs.
-let lookupFunc protos func =
+let lookupFunc (protos : FuncDefiner<unit>) (func : Func<_>)
+  : Result<DFunc, ViewError> =
     protos
     |> Instantiate.lookup func
     |> mapMessages (curry LookupError func.Name)
@@ -641,7 +663,7 @@ let lookupFunc protos func =
 /// Models part of a view definition as a DFunc.
 let modelDFunc
   (protos : FuncDefiner<unit>)
-  func
+  (func : Func<Var>)
   : Result<Multiset<DFunc>, ViewError> =
     func
     |> lookupFunc protos
@@ -859,7 +881,9 @@ let modelViewDefs
 //
 
 /// Models an AFunc as a CFunc.
-let modelCFunc protos env afunc =
+let modelCFunc
+  ({ ViewProtos = protos; ThreadVars = env } : MethodContext)
+  (afunc : Func<Expression>) =
     // First, make sure this AFunc actually has a prototype
     // and the correct number of parameters.
     afunc
@@ -885,31 +909,32 @@ let modelCFunc protos env afunc =
 
 /// Tries to flatten a view AST into a CView.
 /// Takes an environment of local variables, and the AST itself.
-let rec modelCView protos ls =
+let rec modelCView (ctx : MethodContext) =
     function
     | View.Func afunc ->
-        modelCFunc protos ls afunc |> lift Multiset.singleton
+        modelCFunc ctx afunc |> lift Multiset.singleton
     | View.If(e, l, r) ->
         lift3 (fun em lm rm -> CFunc.ITE(em, lm, rm) |> Multiset.singleton)
-              (e |> modelBoolExpr ls id
+              (e |> modelBoolExpr ctx.ThreadVars id
                  |> mapMessages (curry ViewError.BadExpr e))
-              (modelCView protos ls l)
-              (modelCView protos ls r)
+              (modelCView ctx l)
+              (modelCView ctx r)
     | Unit -> Multiset.empty |> ok
     | Join(l, r) ->
         lift2 (Multiset.append)
-              (modelCView protos ls l)
-              (modelCView protos ls r)
+              (modelCView ctx l)
+              (modelCView ctx r)
 
 //
 // Axioms
 //
 
-let (|VarIn|_|) env (lvalue : LValue) = tryLookupVar env lvalue
+let (|Shared|_|) ctx (lvalue : LValue) = tryLookupVar ctx.SharedVars lvalue
+let (|Thread|_|) ctx (lvalue : LValue) = tryLookupVar ctx.ThreadVars lvalue
 
 /// Converts a Boolean load to a Prim.
-let modelBoolLoad : VarMap -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
-    fun svars dest srcExpr mode ->
+let modelBoolLoad : MethodContext -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
+    fun { SharedVars = svars } dest srcExpr mode ->
     (* In a Boolean load, the destination must be LOCAL and Boolean;
      *                    the source must be a GLOBAL Boolean lvalue;
      *                    and the fetch mode must be Direct.
@@ -933,8 +958,8 @@ let modelBoolLoad : VarMap -> Var -> Expression -> FetchMode -> Result<PrimComma
     | _ -> fail (LoadNonLV srcExpr)
 
 /// Converts an integer load to a Prim.
-let modelIntLoad : VarMap -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
-    fun svars dest srcExpr mode ->
+let modelIntLoad : MethodContext -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
+    fun { SharedVars = svars } dest srcExpr mode ->
     (* In an integer load, the destination must be LOCAL and integral;
      *                    the source must be a GLOBAL arithmetic lvalue;
      *                    and the fetch mode is unconstrained.
@@ -958,14 +983,14 @@ let modelIntLoad : VarMap -> Var -> Expression -> FetchMode -> Result<PrimComman
     | _ -> fail (LoadNonLV srcExpr)
 
 /// Converts a Boolean store to a Prim.
-let modelBoolStore : VarMap -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
-    fun locals dest src mode ->
+let modelBoolStore : MethodContext -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
+    fun { ThreadVars = tvars } dest src mode ->
     (* In a Boolean store, the destination must be GLOBAL and Boolean;
      *                     the source must be LOCAL and Boolean;
      *                     and the fetch mode must be Direct.
      *)
     trial {
-        let! sxp = wrapMessages BadExpr (modelBoolExpr locals Before) src
+        let! sxp = wrapMessages BadExpr (modelBoolExpr tvars Before) src
         match mode with
         | Direct ->
             return
@@ -978,21 +1003,21 @@ let modelBoolStore : VarMap -> Var -> Expression -> FetchMode -> Result<PrimComm
     }
 
 /// Converts an integral store to a Prim.
-let modelIntStore : VarMap -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
-    fun locals dest src mode ->
+let modelIntStore : MethodContext -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
+    fun { ThreadVars = tvars } dest src mode ->
     (* In an integral store, the destination must be GLOBAL and integral;
      *                       the source must be LOCAL and integral;
      *                       and the fetch mode must be Direct.
      *)
     trial {
         let! sxp =
-            wrapMessages BadExpr (modelIntExpr locals MarkedVar.Before) src
+            wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Before) src
         match mode with
-        | Direct -> 
+        | Direct ->
             return
                 command
-                    "!IStore" 
-                    [ Int dest ] 
+                    "!IStore"
+                    [ Int dest ]
                     [ sxp |> Expr.Int ]
 
         | Increment -> return! fail (IncExpr src)
@@ -1000,8 +1025,8 @@ let modelIntStore : VarMap -> Var -> Expression -> FetchMode -> Result<PrimComma
     }
 
 /// Converts a CAS to part-commands.
-let modelCAS : VarMap -> VarMap ->  LValue -> LValue -> Expression -> Result<PrimCommand, PrimError> =
-    fun svars tvars destLV testLV set ->
+let modelCAS : MethodContext -> LValue -> LValue -> Expression -> Result<PrimCommand, PrimError> =
+    fun { SharedVars = svars; ThreadVars = tvars } destLV testLV set ->
     (* In a CAS, the destination must be SHARED;
      *           the test variable must be THREADLOCAL;
      *           and the to-set value must be a valid expression.
@@ -1039,8 +1064,8 @@ let modelCAS : VarMap -> VarMap ->  LValue -> LValue -> Expression -> Result<Pri
              fail (TypeMismatch (typeOf d, testLV, typeOf t)))
 
 /// Converts an atomic fetch to a model command.
-let modelFetch : VarMap -> VarMap -> LValue -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
-    fun svars tvars destLV srcExpr mode ->
+let modelFetch : MethodContext -> LValue -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
+    fun ctx destLV srcExpr mode ->
     (* First, determine whether we have a fetch from shared to thread
      * (a load), or a fetch from thread to shared (a store).
      * Also figure out whether we have a Boolean or arithmetic
@@ -1048,25 +1073,25 @@ let modelFetch : VarMap -> VarMap -> LValue -> Expression -> FetchMode -> Result
      * We figure this out by looking at dest.
      *)
     match destLV with
-    | VarIn svars (Typed.Int dest) -> modelIntStore tvars dest srcExpr mode
-    | VarIn svars (Typed.Bool dest) -> modelBoolStore tvars dest srcExpr mode
-    | VarIn tvars (Typed.Int dest) -> modelIntLoad svars dest srcExpr mode
-    | VarIn tvars (Typed.Bool dest) -> modelBoolLoad svars dest srcExpr mode
+    | Shared ctx (Typed.Int dest) -> modelIntStore ctx dest srcExpr mode
+    | Shared ctx (Typed.Bool dest) -> modelBoolStore ctx dest srcExpr mode
+    | Thread ctx (Typed.Int dest) -> modelIntLoad ctx dest srcExpr mode
+    | Thread ctx (Typed.Bool dest) -> modelBoolLoad ctx dest srcExpr mode
     | lv -> fail (BadAVar(lv, NotFound (flattenLV lv)))
 
 /// Converts a single atomic command from AST to part-commands.
-let rec modelAtomic : VarMap -> VarMap -> Atomic -> Result<PrimCommand, PrimError> = 
-    fun svars tvars a ->
+let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> = 
+    fun ctx a ->
     match a.Node with
-    | CompareAndSwap(dest, test, set) -> modelCAS svars tvars dest test set
-    | Fetch(dest, src, mode) -> modelFetch svars tvars dest src mode
+    | CompareAndSwap(dest, test, set) -> modelCAS ctx dest test set
+    | Fetch(dest, src, mode) -> modelFetch ctx dest src mode
     | Postfix(operand, mode) ->
         (* A Postfix is basically a Fetch with no destination, at this point.
          * Thus, the source must be SHARED.
          * We don't allow the Direct fetch mode, as it is useless.
          *)
         trial {
-            let! stype = wrapMessages BadSVar (lookupVar svars) operand
+            let! stype = wrapMessages BadSVar (lookupVar ctx.SharedVars) operand
             // TODO(CaptainHayashi): sort out lvalues...
             let op = flattenLV operand
             match mode, stype with
@@ -1084,12 +1109,12 @@ let rec modelAtomic : VarMap -> VarMap -> Atomic -> Result<PrimCommand, PrimErro
     | Id -> ok (command "Id" [] [])
     | Assume e ->
         e 
-        |> wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Before)
+        |> wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars MarkedVar.Before)
         |> lift (Expr.Bool >> List.singleton >> command "Assume" [])
 
 /// Converts a local variable assignment to a Prim.
-and modelAssign : VarMap -> LValue -> Expression -> Result<PrimCommand, PrimError> = 
-    fun tvars lLV e ->
+and modelAssign : MethodContext -> LValue -> Expression -> Result<PrimCommand, PrimError> = 
+    fun { ThreadVars = tvars } lLV e ->
     (* We model assignments as !ILSet or !BLSet, depending on the
      * type of l, which _must_ be in the locals set..
      * We thus also have to make sure that e is the correct type.
@@ -1116,24 +1141,34 @@ and modelAssign : VarMap -> LValue -> Expression -> Result<PrimCommand, PrimErro
     }
 
 /// Creates a partially resolved axiom for an if-then-else.
-and modelITE : seq<Func<Typed<string, string>> * unit> -> VarMap -> VarMap -> Expression -> Block<ViewExpr<View>, Command<ViewExpr<View>>> -> Block<ViewExpr<View>, Command<ViewExpr<View>>> -> Result<PartCmd<ViewExpr<Multiset<CFunc>>>, MethodError> =
-    fun protos svars tvars i t f ->
-    trial { let! iM =
-                wrapMessages
-                    BadITECondition
-                    (modelBoolExpr tvars id)
-                    i
-            (* We need to calculate the recursive axioms first, because we
-             * need the inner cpairs for each to store the ITE placeholder.
-             *)
-            let! tM = modelBlock protos svars tvars t
-            let! fM = modelBlock protos svars tvars f
-            return ITE(iM, tM, fM) }
+and modelITE
+  : MethodContext
+    -> Expression
+    -> Block<ViewExpr<View>, Command<ViewExpr<View>>>
+    -> Block<ViewExpr<View>, Command<ViewExpr<View>>>
+    -> Result<ModellerPartCmd, MethodError> =
+    fun ctx i t f ->
+        trial { let! iM =
+                    wrapMessages
+                        BadITECondition
+                        (modelBoolExpr ctx.ThreadVars id)
+                        i
+                (* We need to calculate the recursive axioms first, because we
+                 * need the inner cpairs for each to store the ITE placeholder.
+                 *)
+                let! tM = modelBlock ctx t
+                let! fM = modelBlock ctx f
+                return ITE(iM, tM, fM) }
 
 /// Converts a while or do-while to a PartCmd.
 /// Which is being modelled is determined by the isDo parameter.
 /// The list is enclosed in a Chessie result.
-and modelWhile isDo protos gs ls e b =
+and modelWhile
+  (isDo : bool)
+  (ctx : MethodContext)
+  (e : Expression)
+  (b : Block<ViewExpr<View>, Command<ViewExpr<View>>>)
+  : Result<ModellerPartCmd, MethodError> =
     (* A while is also not fully resolved.
      * Similarly, we convert the condition, recursively find the axioms,
      * inject a placeholder, and add in the recursive axioms.
@@ -1141,17 +1176,18 @@ and modelWhile isDo protos gs ls e b =
     lift2 (fun eM bM -> PartCmd.While(isDo, eM, bM))
           (wrapMessages
                BadWhileCondition
-               (modelBoolExpr ls id)
+               (modelBoolExpr ctx.ThreadVars id)
                e)
-          (modelBlock protos gs ls b)
+          (modelBlock ctx b)
 
 /// Converts a PrimSet to a PartCmd.
-and modelPrim svars tvars { PreAssigns = ps
-                            Atomics = ts ;
-                            PostAssigns = qs } =
+and modelPrim
+  (ctx : MethodContext)
+  ({ PreAssigns = ps; Atomics = ts; PostAssigns = qs } : PrimSet)
+  : Result<ModellerPartCmd, MethodError> =
 
-    let mAssign = uncurry (wrapMessages2 BadAssign (modelAssign tvars))
-    let mAtomic = wrapMessages BadAtomic (modelAtomic svars tvars)
+    let mAssign = uncurry (wrapMessages2 BadAssign (modelAssign ctx))
+    let mAtomic = wrapMessages BadAtomic (modelAtomic ctx)
 
     [ Seq.map mAssign ps ; Seq.map mAtomic ts ; Seq.map mAssign qs ]
     |> Seq.concat
@@ -1160,56 +1196,63 @@ and modelPrim svars tvars { PreAssigns = ps
 
 /// Converts a command to a PartCmd.
 /// The list is enclosed in a Chessie result.
-and modelCommand protos svars tvars n =
+and modelCommand
+  (ctx : MethodContext)
+  (n : Command<ViewExpr<View>>)
+  : Result<ModellerPartCmd, MethodError> =
     match n.Node with
-    | Command'.Prim p -> modelPrim svars tvars p
-    | Command'.If(i, t, e) -> modelITE protos svars tvars i t e
-    | Command'.While(e, b) -> modelWhile false protos svars tvars e b
-    | Command'.DoWhile(b, e) -> modelWhile true protos svars tvars e b
+    | Command'.Prim p -> modelPrim ctx p
+    | Command'.If(i, t, e) -> modelITE ctx i t e
+    | Command'.While(e, b) -> modelWhile false ctx e b
+    | Command'.DoWhile(b, e) -> modelWhile true ctx e b
     | _ -> fail (CommandNotImplemented n)
 
 /// Converts a view expression into a CView.
-and modelViewExpr protos ls =
+and modelViewExpr (ctx : MethodContext)
+  : ViewExpr<View> -> Result<ModellerViewExpr, ViewError> =
     function
-    | Mandatory v -> modelCView protos ls v |> lift Mandatory
-    | Advisory v -> modelCView protos ls v |> lift Advisory
+    | Mandatory v -> modelCView ctx v |> lift Mandatory
+    | Advisory v -> modelCView ctx v |> lift Advisory
 
 /// Converts the view and command in a ViewedCommand.
-and modelViewedCommand protos gs ls {Post = post; Command = command} =
+and modelViewedCommand
+  (ctx : MethodContext)
+  ({Post = post; Command = command}
+     : ViewedCommand<ViewExpr<View>, Command<ViewExpr<View>>>)
+  : Result<ModellerViewedCommand, MethodError> =
     lift2 (fun postM commandM -> {Post = postM; Command = commandM})
-          (post |> modelViewExpr protos ls
+          (post |> modelViewExpr ctx
                 |> mapMessages (curry MethodError.BadView post))
-          (command |> modelCommand protos gs ls)
-
-/// Converts the views and commands in a list of ViewedCommands.
-and modelViewedCommands protos gs ls =
-    Seq.map (modelViewedCommand protos gs ls) >> collect
+          (command |> modelCommand ctx)
 
 /// Converts the views and commands in a block.
 /// The converted block is enclosed in a Chessie result.
-and modelBlock protos gs ls {Pre = bPre; Contents = bContents} =
+and modelBlock
+  (ctx : MethodContext)
+  ({Pre = bPre; Contents = bContents} :
+       Block<ViewExpr<View>, Command<ViewExpr<View>>>)
+  : Result<ModellerBlock, MethodError> =
     lift2 (fun bPreM bContentsM -> {Pre = bPreM; Contents = bContentsM})
-          (bPre |> modelViewExpr protos ls
+          (bPre |> modelViewExpr ctx
                 |> mapMessages (curry MethodError.BadView bPre))
-          (bContents |> modelViewedCommands protos gs ls)
+          (bContents |> Seq.map (modelViewedCommand ctx) |> collect)
 
 /// Converts a method's views and commands.
 /// The converted method is enclosed in a Chessie result.
-let modelMethod protos gs ls { Signature = sg ; Body = b } =
+let modelMethod
+  (ctx : MethodContext)
+  ({ Signature = sg ; Body = b }
+     : Method<ViewExpr<View>, Command<ViewExpr<View>>>)
+  : Result<string * ModellerMethod, ModelError> =
     // TODO(CaptainHayashi): method parameters
     b
-    |> modelBlock protos gs ls
+    |> modelBlock ctx
     |> lift (fun c -> (sg.Name, { Signature = sg ; Body = c }))
     |> mapMessages (curry BadMethod sg.Name)
 
-/// Converts a list of methods.
-/// The resulting map is enclosed in a Chessie result.
-let modelMethods protos gs ls =
-    // TODO(CaptainHayashi): method parameters
-    Seq.map (modelMethod protos gs ls) >> collect >> lift Map.ofSeq
-
 /// Checks a view prototype to see if it contains duplicate parameters.
-let checkViewProtoDuplicates (proto : ViewProto) =
+let checkViewProtoDuplicates (proto : ViewProto)
+  : Result<ViewProto, ViewProtoError> =
     proto.Params
     |> Seq.map valueOf
     |> findDuplicates
@@ -1219,14 +1262,15 @@ let checkViewProtoDuplicates (proto : ViewProto) =
        | ds -> List.map (fun d -> VPEDuplicateParam(proto, d)) ds |> Bad
 
 /// Checks a view prototype and converts it to an associative pair.
-let modelViewProto proto =
+let modelViewProto (proto : ViewProto) : Result<DFunc * unit, ModelError> =
     proto
     |> checkViewProtoDuplicates
     |> lift (fun pro -> (pro, ()))
     |> mapMessages (curry BadVProto proto)
 
 /// Checks view prototypes and converts them to func-table form.
-let modelViewProtos protos =
+let modelViewProtos (protos : #(ViewProto seq))
+  : Result<FuncDefiner<unit>, ModelError> =
     protos
     |> Seq.map modelViewProto
     |> collect
@@ -1250,7 +1294,17 @@ let model
                            (Seq.append collated.VProtos unknownProtos)
 
         let! constraints = modelViewDefs globals vprotos collated
-        let! axioms = modelMethods vprotos globals locals desugaredMethods
+
+        let mctx =
+            { ViewProtos = vprotos
+              SharedVars = globals
+              ThreadVars = locals }
+        let! axioms =
+            desugaredMethods
+            |> Seq.map (modelMethod mctx)
+            |> collect
+            |> lift Map.ofSeq
+
         return
             { Globals = globals
               Locals = locals

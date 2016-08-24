@@ -41,6 +41,18 @@ type ModellerTests() =
                      ("baz", Type.Bool ())
                      ("emp", Type.Bool ()) ]
 
+    // Method context containing a small amount of variables.
+    static member Context =
+        { ViewProtos = ModellerTests.TicketLockProtos
+          SharedVars = Map.empty
+          ThreadVars = ModellerTests.Env }
+
+    // Method context containing all of the ticket lock variables.
+    static member TicketLockContext =
+        { ViewProtos = ModellerTests.TicketLockProtos
+          SharedVars = ticketLockModel.Globals
+          ThreadVars = ticketLockModel.Locals }
+
     static member EmptyCView : CView = Multiset.empty
 
     /// <summary>
@@ -61,7 +73,7 @@ type ModellerTests() =
     [<TestCaseSource("ViewExprsGood")>]
     member x.``View modelling on correct view expressions succeeds`` vex =
         vex
-        |> modelCView ModellerTests.TicketLockProtos ModellerTests.Env
+        |> modelCView ModellerTests.Context
         |> okOption
 
 
@@ -88,7 +100,7 @@ type ModellerTests() =
     [<TestCaseSource("ViewExprsBad")>]
     member x.``View modelling on incorrect view expressions fails`` vex =
         vex
-        |> modelCView ModellerTests.TicketLockProtos ModellerTests.Env
+        |> modelCView ModellerTests.Context
         |> failOption
 
 
@@ -175,7 +187,7 @@ type ModellerTests() =
     [<TestCaseSource("AtomicPrims")>]
     member x.``atomic primitives are modelled correctly as prims`` a =
         a
-        |> modelAtomic ticketLockModel.Globals ticketLockModel.Locals
+        |> modelAtomic ModellerTests.TicketLockContext
         |> okOption
 
 
@@ -195,9 +207,7 @@ type ModellerTests() =
     [<TestCaseSource("CommandAxioms")>]
     member x.``commands are modelled correctly as part-commands`` c =
         c
-        |> modelCommand ModellerTests.TicketLockProtos
-                        ticketLockModel.Globals
-                        ticketLockModel.Locals
+        |> modelCommand ModellerTests.TicketLockContext
         |> okOption
 
 
