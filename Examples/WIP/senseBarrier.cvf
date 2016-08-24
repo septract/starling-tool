@@ -6,6 +6,9 @@ shared bool sense;
 
 thread int pos; 
 thread bool mysense;  
+thread int i; 
+thread int c; 
+thread bool s; 
 
 view isBarrier(int i); 
 view hasPos(int p, bool s); 
@@ -14,11 +17,13 @@ view oldSense(bool s);
 
 method await(i) { 
  {| isBarrier(i) * currSense(mysense) |} 
-  < pos = fetchAndDecr-- >; 
+  < pos = count-- >; 
  {| hasPos(pos, mysense) |} 
   if ( pos == 1 ) { 
    {| hasPos(1, mysense) |} 
-    <count = size>; 
+    <c = size>; 
+   {| ? |}
+    <count = c>; 
    {| ? |} 
     <sense = mysense>; 
    {| isBarrier(i+1) * oldSense(mysense) |} 
@@ -26,7 +31,7 @@ method await(i) {
    {| hasPos(pos, mysense) |} 
     do { 
      {| hasPos(pos, mysense) |} 
-      s = sense;  
+      <s = sense>;  
      {| if s == mysense 
         then isBarrier(i+1) * oldSense(mysense)
         else hasPos(pos, mysense) |} 
@@ -34,19 +39,18 @@ method await(i) {
    {| isBarrier(i+1) * oldSense(mysense) |} 
   } 
  {| isBarrier(i+1) * oldSense(mysense) |} 
-  mysense = !(mysense); 
+  mysense = (mysense != true); 
  {| isBarrier(i+1) * currSense(mysense) |} 
-  return mysense; 
 } 
 
-// Iterated views
-constraint isBarrier(_)[x]  ->  count + x <= size; 
+// // Iterated views
+// constraint isBarrier(a)[x]  ->  count + x <= size; 
 
 // Global invariant 
 constraint emp  ->  size >= count;  
 
 // Barrier mutual exclusion
-constraint isBarrier(i) * isBarrier(j)  ->  i = j;  
+constraint isBarrier(i) * isBarrier(j)  ->  i == j;  
 
 // Position mutual exclusion
 constraint hasPos(i1,s1) * hasPos(i2,s2)  ->  i1 != i2  ||  s1 != s2; 
@@ -55,7 +59,9 @@ constraint hasPos(i1,s1) * hasPos(i2,s2)  ->  i1 != i2  ||  s1 != s2;
 constraint hasPos(i, mysense)  ->  count < i  ||  sense == mysense; 
 
 // need to update sense
-constraint oldSense(mysense)  ->  sense == mysense 
+constraint oldSense(mysense)  ->  sense == mysense; 
 
 // Translate phase to sense
-constraint isBarrier(i) * currSense(mysense)  ->  (i mod 2) == mysense
+constraint isBarrier(i) * currSense(mysense)  ->  %{(= (mod #1 2) #2)}(i, mysense); 
+
+
