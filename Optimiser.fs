@@ -136,7 +136,7 @@ module Utils =
     ///         optimisations.
     ///     </para>
     /// </returns>
-    let parseOptString (opts : string list) =
+    let parseOptimisationString (opts : string list) : (string * bool) list =
         opts
         |> List.map (fun (str : string) ->
             if str.StartsWith("no-") then
@@ -158,7 +158,7 @@ module Utils =
     ///     True if <paramref name="opt" /> is allowed, according to
     ///     <paramref name="prefixes" />.
     /// </returns>
-    let optAllowed prefixes (opt : string) =
+    let optAllowed (prefixes : Set<string>) (opt : string) : bool =
         // Check for the most obvious (and O(1)) case first.
         Set.contains opt prefixes ||
         Set.exists opt.StartsWith prefixes
@@ -179,10 +179,16 @@ module Utils =
     ///     The set of optimisation names to adds.  If this contains 'all',
     ///     all optimisations will be permitted.
     /// </param>
+    /// <typeparam name="Fun">
+    ///     The optimisation function type.
+    /// </typeparam>
     /// <returns>
-    ///     A sequence of optimisers to run.
+    ///     A list of optimisers to run.
     /// </returns>
-    let mkOptimiserSet allOpts opts =
+    let mkOptimiserList
+      (allOpts : (string * bool * 'Fun) list)
+      (opts : (string * bool) seq)
+      : 'Fun list =
         let config = config()
         let optimisationSet = new HashSet<string>();
         // try add or remove from prefix
@@ -256,9 +262,10 @@ module Utils =
     ///     A function that, when applied to something, optimises it with
     ///     the selected optimisers.
     /// </returns>
-    let optimiseWith : (string * bool) list -> (string * bool * ('a -> 'a)) list -> ('a -> 'a) =
+    let optimiseWith
+      : (string * bool) list -> (string * bool * ('a -> 'a)) list -> ('a -> 'a) =
         fun args opts ->
-        let fs = mkOptimiserSet opts args
+        let fs = mkOptimiserList opts args
 
         (* This would be much more readable if it wasn't pointfree...
            ...but would also cause fs to be evaluated every single time
@@ -285,7 +292,7 @@ module Graph =
     /// <returns>
     ///     A name for any edge replacing both above edges.
     /// </returns>
-    let glueNames { InEdge.Name = a } { OutEdge.Name = b } =
+    let glueNames ({ Name = a } : InEdge) ({ Name = b } : OutEdge) : string =
         String.concat "__" [ a ; b ]
 
     /// <summary>
@@ -301,7 +308,8 @@ module Graph =
     ///     An Option.  If None, the transformation did not apply.
     ///     Otherwise, the Option contains the new transformation context.
     /// </returns>
-    let runTransform (ctx : TransformContext) xform =
+    let runTransform (ctx : TransformContext) (xform : Transform)
+      : TransformContext option =
         let f =
             match xform with
             | RmNode node -> rmNode node
@@ -349,7 +357,10 @@ module Graph =
     ///     If the list of transformations has not changed from
     ///     <paramref name="initial" />, the transformation list was rewound.
     /// </returns>
-    let runTransforms xforms initial =
+    let runTransforms
+      (xforms : Transform seq)
+      (initial : TransformContext)
+      : TransformContext =
         match (foldFastTerm runTransform initial xforms) with
         | Some final -> final
         | None -> initial
@@ -374,7 +385,7 @@ module Graph =
     ///     and <paramref name="y" /> have different names, have the same
     ///     view, and are connected, but only by no-op commands.
     /// </returns>
-    let nopConnected graph x y =
+    let nopConnected (graph : Graph) (x : NodeID) (y : NodeID) : bool =
         let xView, xOut, xIn, xnk = graph.Contents.[x]
         let yView, _, _, ynk = graph.Contents.[y]
 
@@ -415,7 +426,11 @@ module Graph =
     ///     If <paramref name="node" /> exists in the graph, the result of
     ///     calling <paramref name="f" />.  Else, the original context.
     /// </returns>
-    let expandNodeIn ctx f =
+    let expandNodeIn
+      (ctx : TransformContext)
+      (f : NodeID -> GraphViewExpr -> Set<OutEdge> -> Set<InEdge>
+           -> NodeKind -> TransformContext)
+      : TransformContext =
         match (Option.bind (fun n -> Map.tryFind n ctx.Graph.Contents
                                      |> Option.map (fun r -> (n, r)))
                            ctx.Node) with
@@ -436,7 +451,7 @@ module Graph =
     ///     nodes merged into the named node if they are
     ///     equivalent and connected only by no-op commands.
     /// </returns>
-    let collapseNops ctx =
+    let collapseNops (ctx : TransformContext) : TransformContext =
         expandNodeIn ctx <|
             fun node nView outEdges inEdges nk ->
                 let outNodes = outEdges
@@ -553,7 +568,9 @@ module Graph =
     ///         <c>GView</c>s, but with a <c>BTrue</c> guard.
     ///     </para>
     /// </summary>
-    let (|ITEGuards|_|) (ms: GView<Sym<Var>>) =
+    let (|ITEGuards|_|) (ms: GView<Sym<Var>>)
+      : (BoolExpr<Var> * GView<Sym<Var>>
+         * BoolExpr<Var> * GView<Sym<Var>>) option =
         match (Multiset.toFlatList ms) with
         | [ { Cond = VNoSym xc; Item = xi }
             { Cond = VNoSym yc; Item = yi } ]
@@ -583,7 +600,7 @@ module Graph =
     ///     optimised graph, and an Option containing the node name if it was
     ///     not removed.
     /// </returns>
-    let collapseITEs ctx =
+    let collapseITEs (ctx : TransformContext) : TransformContext =
         expandNodeIn ctx <|
             fun node nView outEdges inEdges nk ->
                 match nView with
@@ -646,7 +663,8 @@ module Graph =
     ///     optimised graph, and an Option containing the node name if it was
     ///     not removed.
     /// </returns>
-    let dropLocalMidView locals ctx =
+    let dropLocalMidView (locals : VarMap) (ctx : TransformContext)
+      : TransformContext =
         expandNodeIn ctx <|
             fun nName nView outEdges inEdges nk ->
                 (* TODO @mjp41: Need to check nView is not something with a real definition *)
@@ -685,7 +703,8 @@ module Graph =
     /// Drops edges with local results that are disjoint from
     /// the vars in the pre/post condition views
     /// i.e. given {| p |} c {| p |} drop iff Vars(p) n Vars(c) = {}
-    let dropLocalEdges locals ctx =
+    let dropLocalEdges (locals : VarMap) (ctx : TransformContext)
+      : TransformContext =
         expandNodeIn ctx <|
             fun node nView outEdges inEdges nk ->
                 let disjoint (a : TypedVar list) (b : Set<TypedVar>) = List.forall (fun v -> not <| b.Contains v) a
@@ -715,7 +734,8 @@ module Graph =
     /// i.e. c writes to local variables overwritten by d
     /// d does not read outputs of c,
     /// and there are no assumes adding information
-    let collapseUnobservableEdges locals ctx =
+    let collapseUnobservableEdges (locals : VarMap) (ctx : TransformContext)
+      : TransformContext =
         expandNodeIn ctx <|
             fun node nViewexpr outEdges inEdges nodeKind ->
                 let pViewexpr = nViewexpr
@@ -779,7 +799,10 @@ module Graph =
     ///     node optimisation <paramref name="opt" /> performed as many times
     ///     as possible.
     /// </returns>
-    let rec onNodes opt graph =
+    let rec onNodes
+      (opt : TransformContext -> TransformContext)
+      (graph : Graph)
+      : Graph =
         // TODO(CaptainHayashi): do a proper depth-first search instead.
 
         let { Graph = newGraph ; Transforms = xs } =
@@ -799,18 +822,11 @@ module Graph =
     /// <summary>
     ///     Optimises a graph.
     /// </summary>
-    /// <param name="model">
-    ///     The model whence the graph came.
+    /// <param name="tvars">
+    ///     The map of thread-local variables in action.
     /// </param>
-    /// <param name="optR">
-    ///     Set of optimisation names to suppress.
-    /// </param>
-    /// <param name="optA">
-    ///     Set of optimisation names to force.
-    /// </param>
-    /// <param name="verbose">
-    ///     Flag which, if enabled, causes non-default optimisation changes
-    ///     to be reported to stderr.
+    /// <param name="opts">
+    ///     Set of optimisation toggles in action.
     /// </param>
     /// <param name="_arg1">
     ///     The graph to optimise.
@@ -818,27 +834,24 @@ module Graph =
     /// <returns>
     ///     An optimised equivalent of <paramref name="_arg1" />.
     /// </returns>
-    let optimiseGraph model opts =
-        // TODO(CaptainHayashi): Use the model for something.
+    let optimiseGraph (tvars : VarMap) (opts : (string * bool) list)
+      : Graph -> Graph =
         onNodes (Utils.optimiseWith opts
                      [ ("graph-collapse-nops", true, collapseNops)
                        ("graph-collapse-ites", true, collapseITEs)
-                       ("graph-drop-local-edges", true, dropLocalEdges model.Locals)
-                       ("graph-collapse-unobservable-edges", true, collapseUnobservableEdges model.Locals)
-                       ("graph-drop-local-midview",true, dropLocalMidView model.Locals)
+                       ("graph-drop-local-edges", true, dropLocalEdges tvars)
+                       ("graph-collapse-unobservable-edges", true, collapseUnobservableEdges tvars)
+                       ("graph-drop-local-midview",true, dropLocalMidView tvars)
                      ] )
 
     /// <summary>
     ///     Optimises a model over graphs.
     /// </summary>
+    /// <param name="opts">
+    ///     Set of optimisation toggles in action.
+    /// </param>
     /// <param name="mdl">
     ///     The model to optimise.
-    /// </param>
-    /// <param name="optR">
-    ///     Set of optimisations to suppress.
-    /// </param>
-    /// <param name="optA">
-    ///     Set of optimisations to force.
     /// </param>
     /// <param name="verbose">
     ///     Flag which, if enabled, causes non-default optimisation changes
@@ -847,8 +860,9 @@ module Graph =
     /// <returns>
     ///     An optimised equivalent of <paramref name="mdl" />.
     /// </returns>
-    let optimise opts mdl =
-        mapAxioms (optimiseGraph mdl opts) mdl
+    let optimise (opts : (string * bool) list) (mdl : Model<Graph, _>)
+      : Model<Graph, _> =
+        mapAxioms (optimiseGraph mdl.Locals opts) mdl
 
 
 /// <summary>
@@ -861,18 +875,21 @@ module Term =
 
     /// Partial pattern that matches a Boolean expression in terms of exactly one /
     /// constant.
-    let rec (|ConstantBoolFunction|_|) x =
+    let rec (|ConstantBoolFunction|_|) (x : BoolExpr<Sym<MarkedVar>>)
+      : MarkedVar option =
         x |> mapOverSMVars Mapper.mapBoolCtx findSMVars |> Seq.map valueOf |> onlyOne
 
     /// Partial pattern that matches a Boolean expression in terms of exactly one /
     /// constant.
-    let rec (|ConstantIntFunction|_|) x =
+    let rec (|ConstantIntFunction|_|) (x : IntExpr<Sym<MarkedVar>>)
+      : MarkedVar option =
         x |> mapOverSMVars Mapper.mapIntCtx findSMVars |> Seq.map valueOf |> onlyOne
 
     /// Finds all instances of the pattern `x!after = f(x!before)` in an
-    /// integral expression that is either an equality or conjunction, and
+    /// Boolean expression that is either an equality or conjunction, and
     /// where x is arithmetic.
-    let rec findArithAfters =
+    let rec findArithAfters
+      : BoolExpr<Sym<MarkedVar>> -> (Var * IntExpr<Sym<MarkedVar>>) list =
         function
         | BAEq(AVar (Reg (After x)), (ConstantIntFunction (Before y) as fx))
             when x = y
@@ -886,7 +903,8 @@ module Term =
     /// Finds all instances of the pattern `x!after = f(x!before)` in a
     /// Boolean expression that is either an equality or conjunction, and
     /// where x is Boolean.
-    let rec findBoolAfters =
+    let rec findBoolAfters
+      : BoolExpr<Sym<MarkedVar>> -> (Var * BoolExpr<Sym<MarkedVar>>) list =
         function
         | BBEq(BVar (Reg (After x)), (ConstantBoolFunction (Before y) as fx))
             when x = y
@@ -900,7 +918,9 @@ module Term =
     /// Finds any Intermediate variables in constant boolean functions
     /// in the form x!inter i := f(x!_)
     /// and returns a list of ((intermediate:bigint * var: Var) * fx: BoolExpr)
-    let rec findBoolInters =
+    let rec findBoolInters
+      : BoolExpr<Sym<MarkedVar>>
+        -> ((bigint * Var) * BoolExpr<Sym<MarkedVar>>) list =
         function
         | BBEq (BVar (Reg (Intermediate(i, x))), (ConstantBoolFunction (Intermediate(k, y)) as fx))
         | BBEq (ConstantBoolFunction (Intermediate(k, y)) as fx, BVar (Reg (Intermediate(i, x))))
@@ -921,8 +941,10 @@ module Term =
 
     /// Finds any Intermediate variables in constant integer functions
     /// in the form x!inter i := f(x!_)
-    /// and returns a list of ((intermediate:bigint * var: Var) * fx: BoolExpr)
-    let rec findArithInters =
+    /// and returns a list of ((intermediate:bigint * var: Var) * fx: IntExpr)
+    let rec findArithInters
+      : BoolExpr<Sym<MarkedVar>>
+        -> ((bigint * Var) * IntExpr<Sym<MarkedVar>>) list =
         function
         | BAEq (AVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Intermediate(k, y)) as fx))
         | BAEq (ConstantIntFunction (Intermediate(k, y)) as fx, AVar (Reg (Intermediate(i, x))))
@@ -942,24 +964,30 @@ module Term =
         | _ -> []
 
     /// Lifts a pair of before/after maps to a SubFun.
-    let afterSubs asubs bsubs =
+    let afterSubs
+      (isubs : Map<Var, IntExpr<Sym<MarkedVar>>>)
+      (bsubs : Map<Var, BoolExpr<Sym<MarkedVar>>>)
+      : SubFun<Sym<MarkedVar>, Sym<MarkedVar>> =
         onVars
             (liftVToSym
                 (Mapper.make
                     (function
-                     | After a -> (Map.tryFind a asubs |> withDefault (siAfter a))
+                     | After a -> (Map.tryFind a isubs |> withDefault (siAfter a))
                      | x -> AVar (Reg x))
                     (function
                      | After a -> (Map.tryFind a bsubs |> withDefault (sbAfter a))
                      | x -> BVar (Reg x))))
 
-    /// Creates a VSubFun from intermediate substitutions
-    let interSubs asubs bsubs =
+    /// Creates a SubFun from intermediate substitutions
+    let interSubs
+      (isubs : Map<bigint * Var, IntExpr<Sym<MarkedVar>>>)
+      (bsubs : Map<bigint * Var, BoolExpr<Sym<MarkedVar>>>)
+      : SubFun<Sym<MarkedVar>, Sym<MarkedVar>> =
         onVars
             (liftVToSym
                 (Mapper.make
                     (function
-                     | Intermediate(i, a) -> (Map.tryFind (i, a) asubs |> withDefault (siInter i a))
+                     | Intermediate(i, a) -> (Map.tryFind (i, a) isubs |> withDefault (siInter i a))
                      | x -> AVar (Reg x))
                     (function
                      | Intermediate(i, a) -> (Map.tryFind (i, a) bsubs |> withDefault (sbInter i a))
@@ -994,13 +1022,15 @@ module Term =
      *)
 
     /// Return all known facts inside a conjunctive Boolean expression.
-    let rec facts =
+    let rec facts
+      : BoolExpr<Sym<MarkedVar>> -> BoolExpr<Sym<MarkedVar>> list =
         function
         | BAnd xs -> concatMap facts xs
         | x -> [x]
 
     /// Reduce a Boolean expression, given some known facts.
-    let rec reduce fs =
+    let rec reduce (fs : Set<BoolExpr<Sym<MarkedVar>>>)
+      : BoolExpr<Sym<MarkedVar>> -> BoolExpr<Sym<MarkedVar>> =
         function
         | x when Set.contains x fs -> BTrue
         | x when Set.contains (mkNot x) fs -> BFalse
@@ -1011,7 +1041,10 @@ module Term =
         | x -> x
 
     /// Reduce a GView, given some known facts.
-    let reduceGView fs = mapConds (reduce fs) >> pruneGuardedSet
+    let reduceGView
+      (fs : Set<BoolExpr<Sym<MarkedVar>>>)
+      : GView<Sym<MarkedVar>> -> GView<Sym<MarkedVar>> =
+      mapConds (reduce fs) >> pruneGuardedSet
 
     /// Reduce the guards in a Term.
     let guardReduce

@@ -386,7 +386,7 @@ let runStarling (request : Request)
         |> Option.map Utils.parseOptionString
         |> withDefault (Seq.empty)
         |> Seq.toList
-        |> Optimiser.Utils.parseOptString
+        |> Optimiser.Utils.parseOptimisationString
 
     let bp = backendParams ()
     let { Approx = approx; Reals = reals } =
