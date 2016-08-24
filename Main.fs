@@ -293,9 +293,9 @@ let printError : Error -> Doc =
     | Other e -> String e
 
 /// Prints an ok result to stdout.
-let printOk (pOk : 'Ok -> Doc) (pBad : 'Warn list -> Doc list)
+let printOk (pOk : 'Ok -> Doc) (pBad : 'Warn -> Doc)
   : ('Ok * 'Warn list) -> unit =
-    pairMap pOk pBad
+    pairMap pOk (List.map pBad)
     >> function
        | (ok, []) -> ok
        | (ok, ws) -> vsep [ ok
@@ -307,12 +307,12 @@ let printOk (pOk : 'Ok -> Doc) (pBad : 'Warn list -> Doc list)
     >> printfn "%s"
 
 /// Prints an err result to stderr.
-let printErr (pBad : 'Error list -> Doc list) : 'Error list -> unit =
-    pBad >> headed "Errors" >> print >> eprintfn "%s"
+let printErr (pBad : 'Error -> Doc) : 'Error list -> unit =
+    List.map pBad >> headed "Errors" >> print >> eprintfn "%s"
 
 /// Pretty-prints a Chessie result, given printers for the successful
 /// case and failure messages.
-let printResult (pOk : 'Ok -> Doc) (pBad : 'Error list -> Doc list)
+let printResult (pOk : 'Ok -> Doc) (pBad : 'Error -> Doc)
   : Result<'Ok, 'Error> -> unit =
     either (printOk pOk pBad) (printErr pBad)
 
@@ -552,7 +552,7 @@ let mainWithOptions (options : Options) : int =
     let pfn =
         if config.raw then (sprintf "%A" >> String)
                       else printResponse mview
-    printResult pfn (List.map printError) starlingR
+    printResult pfn printError starlingR
     0
 
 [<EntryPoint>]
