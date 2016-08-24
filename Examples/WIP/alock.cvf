@@ -1,0 +1,42 @@
+// Array-lock implementation -- taken from Herlihy & Shavit p.150
+
+shared int tail; 
+shared array<bool> flag; 
+
+thread int slot; 
+thread bool f; 
+
+method lock() { 
+ {| emp |} 
+  <slot = tail++>; 
+ {| holdSlot(slot) |} 
+  do { 
+   {| holdSlot(slot) |} 
+    <f = flag[slot]>; 
+   {| if f == false then holdSlot(slot) else holdLock(slot) |} 
+  } while ( f != true );
+ {| holdLock(slot) |} 
+} 
+
+method unlock( slot ) { 
+ {| holdLock(slot) |} 
+  flag[slot] = false; 
+ {| holdLock(slot) |} 
+  flag[slot + 1] = true;    // Note I've removed the size bound. 
+ {| emp |} 
+} 
+
+constraint emp  ->  
+  flag[tail] != true  * 
+  ( forall a, b : Int :: 
+     (flag[a] == flag[b]) * (flag[a] == true)  ==>  (a == b) )
+
+constraint holdSlot(a)  ->  a != tail; 
+constraint holdLock(a)  ->
+  ( forall x : Int ::  (x != a) ==> (flag[x] == false) ) 
+
+
+constraint holdLock(a) * holdLock(b)  ->  false;
+constraint holdSlot(a) * holdSlot(b)  ->  a != b;  
+constraint holdLock(a) * holdSlot(b)  ->  a < b; 
+
