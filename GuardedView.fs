@@ -115,24 +115,14 @@ module Types =
     type SMGView = GView<Sym<MarkedVar>>
 
     /// <summary>
-    ///     A multiset of guarded views, as produced by reification.
+    ///     A view produced by expanding a sub-view of an guarded view.
+    ///     <para>
+    ///         The entire view (not its individual funcs) is guarded, by the
+    ///         conjunction of the guards over the sub-view's original guarded
+    ///         funcs.
+    ///     </para>
     /// </summary>
-    /// <typeparam name="var">
-    ///     The type of variables in the guard.
-    /// </typeparam>
-    type ViewSet<'var> when 'var : comparison =
-        Multiset<Guarded<'var, OView>>
-
-    /// <summary>
-    ///     A <c>ViewSet</c> over <c>MarkedVar</c>s.
-    /// </summary>
-    type MViewSet = ViewSet<MarkedVar>
-
-    /// <summary>
-    ///     A <c>ViewSet</c> over symbolic <c>MarkedVar</c>s.
-    /// </summary>
-    type SMViewSet = ViewSet<Sym<MarkedVar>>
-
+    type GuardedSubview = Guarded<Sym<MarkedVar>, OView>
 
 (*
  * Constructors.
@@ -500,43 +490,22 @@ module Pretty =
     let printSMGView = printGView (printSym printMarkedVar)
 
     /// <summary>
-    ///     Pretty-prints a guarded view set.
+    ///     Pretty-prints a guarded subview set over symbolic <c>MarkedVar</c>s.
     /// </summary>
-    /// <param name="pVar">
-    ///     A pretty-printer for variables in the <c>Cond</c>.
-    /// </param>
     /// <param name="_arg1">
-    ///     The <c>ViewSet</c> to print.
+    ///     The <see cref="GuardedSubview"/> set to print.
     /// </param>
     /// <returns>
-    ///     A pretty-printer command to print the <c>ViewSet</c>.
+    ///     A pretty-printer command to print the <see cref="GuardedSubview"/>
+    ///     set.
     /// </returns>
-    let printViewSet pVar =
-        printMultiset (printGuarded pVar printOView >> ssurround "((" "))")
-        >> ssurround "(|" "|)"
+    let printGuardedSubviewSet : Set<GuardedSubview> -> Doc =
+        Set.toSeq
+        >> Seq.map (printGuarded (printSym printMarkedVar) printOView
+                    >> ssurround "((" "))")
+        >> commaSep
+        >> ssurround "[" "]"
 
-    /// <summary>
-    ///     Pretty-prints a guarded view set over <c>MarkedVar</c>s.
-    /// </summary>
-    /// <param name="_arg1">
-    ///     The <c>MViewSet</c> to print.
-    /// </param>
-    /// <returns>
-    ///     A pretty-printer command to print the <c>MViewSet</c>.
-    /// </returns>
-    let printMViewSet =
-        printViewSet printMarkedVar
-
-    /// <summary>
-    ///     Pretty-prints a guarded view set over symbolic <c>MarkedVar</c>s.
-    /// </summary>
-    /// <param name="_arg1">
-    ///     The <c>SMViewSet</c> to print.
-    /// </param>
-    /// <returns>
-    ///     A pretty-printer command to print the <c>SMViewSet</c>.
-    /// </returns>
-    let printSMViewSet = printViewSet (printSym printMarkedVar)
 
 /// <summary>
 ///     Functions for substituting over guarded views.

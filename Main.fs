@@ -171,7 +171,7 @@ type Response =
     /// The result of term generation.
     | TermGen of UVModel<STerm<SMGView, OView>>
     /// The result of term reification.
-    | Reify of UVModel<STerm<SMViewSet, OView>>
+    | Reify of UVModel<STerm<Set<GuardedSubview>, OView>>
     /// The result of term flattening.
     | Flatten of UFModel<STerm<SMGView, SMVFunc>>
     /// The result of term optimisation.
@@ -210,7 +210,7 @@ let printResponse mview =
     | TermGen m ->
         printUVModelView (printSTerm printSMGView printOView) mview m
     | Reify m ->
-        printUVModelView (printSTerm printSMViewSet printOView) mview m
+        printUVModelView (printSTerm printGuardedSubviewSet printOView) mview m
     | Flatten m ->
         printUFModelView (printSTerm printSMGView printSMVFunc) mview m
     | TermOptimise m ->
@@ -249,7 +249,7 @@ let printResponse mview =
                 (printTerm printSMBoolExpr printSMBoolExpr printSMBoolExpr)
                 (fun _ -> Seq.empty)
                 mview
-                m) 
+                m)
     | MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
     | HSF h -> Backends.Horn.Pretty.printHorns h
 
@@ -505,9 +505,9 @@ let runStarling request =
                  else id)
 
 
-        // Magic function for unwrapping / wrapping Result types 
-        // TODO: make less horrible, e.g. by using some non-result-wrapped type from z3 
-        let tuplize f y = (y >>= fun x -> (lift (fun a -> (a,x)) (f y)) ) 
+        // Magic function for unwrapping / wrapping Result types
+        // TODO: make less horrible, e.g. by using some non-result-wrapped type from z3
+        let tuplize f y = (y >>= fun x -> (lift (fun a -> (a,x)) (f y)) )
 
         match request with
         | Request.SymProof    -> phase symproof Response.SymProof
@@ -517,7 +517,7 @@ let runStarling request =
         | Request.Z3 rq       -> phase (symproof >> proof approx >> z3 reals rq) Response.Z3
         | Request.HSF         -> phase (filterIndefinite >> hsf) Response.HSF
         | Request.MuZ3 rq     -> phase (filterIndefinite >> muz3 reals rq) Response.MuZ3
-        | Request.SymZ3 rq    -> phase (symproof >> (tuplize (proof approx >> z3 reals rq))) Response.SymZ3 
+        | Request.SymZ3 rq    -> phase (symproof >> (tuplize (proof approx >> z3 reals rq))) Response.SymZ3
         | _                   -> fail (Error.Other "Internal")
 
     //Build a phase with
