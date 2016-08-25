@@ -69,6 +69,7 @@ module Types =
         | Unit
         | Join of DView * DView
         | Func of Func<string>
+        | Iterated of Func<string> * Expression
 
     /// <summary>
     ///     A view, annotated with additional syntax.
@@ -235,6 +236,7 @@ module Pretty =
         | DView.Func f -> printFunc String f
         | DView.Unit -> String "emp" |> syntaxView
         | DView.Join(l, r) -> binop "*" (printDView l) (printDView r)
+        | DView.Iterated(f, e) -> hsep [String "iterated" |> syntax; printFunc String f; String "[" |> syntaxView; printExpression e; String "]" |> syntaxView]
 
     /// Pretty-prints constraints.
     let printConstraint (view : DView) (def : Expression option) : Doc =

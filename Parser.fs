@@ -60,6 +60,8 @@ let parseIdentifier = many1Chars2 (pchar '_' <|> asciiLetter)
 let inBrackets bra ket = between (pstring bra .>> ws) (ws >>. pstring ket)
 /// Parser for items in (parentheses).
 let inParens p = inBrackets "(" ")" p
+/// Parser for items in [brackets].
+let inSquareBrackets p = inBrackets "[" "]" p
 /// Parser for items in {braces}.
 let inBraces p = inBrackets "{" "}" p
 /// Parser for items in {|view braces|}.
@@ -82,6 +84,7 @@ let parseView, parseViewRef =
 /// Parser for view definitions.
 let parseDView, parseDViewRef =
     createParserForwardedToRef<DView, unit> ()
+
 /// Parser for commands.
 let parseCommand, parseCommandRef =
     createParserForwardedToRef<Command<Marked<View>>, unit> ()
@@ -377,6 +380,13 @@ let parseDFuncView = parseFunc parseIdentifier |>> DView.Func
 /// Parses the unit view definition.
 let parseDUnit = stringReturn "emp" DView.Unit
 
+/// Parses an iterated view definition.
+let parseDIterated =
+    pstring "iterated" >>. ws >>.
+    pipe2ws (parseFunc parseIdentifier)
+            (inSquareBrackets parseExpression)
+            (fun f e -> DView.Iterated(f, e))
+
 /// Parses a `basic` view definition (unit, if, named, or bracketed).
 let parseBasicDView =
     choice [ parseDUnit
@@ -387,7 +397,11 @@ let parseBasicDView =
              inParens parseDView ]
              // ( <view> )
 
-do parseDViewRef := parseViewLike parseBasicDView DView.Join
+let parseBasicIteratedDView =
+    choice [ parseDIterated
+             parseBasicDView ]
+
+do parseDViewRef         := parseViewLike parseBasicDView DView.Join
 
 
 (*
@@ -508,8 +522,19 @@ let parseConstraintRhs : Parser<Expression option, unit> =
     // ^ %{ <symbol> %}
     // ^ <expression>
 
-/// Parses a constraint.
-let parseConstraint : Parser<DView * Expression option, unit> =
+/// Parses an iterated constraint
+/// i.e. a constraint with an iterated view as its lhs
+let parseIteratedConstraint : Parser<DView * Expression option, unit> =
+    pstring "constraint" >>. ws
+    >>. pipe3ws parseBasicIteratedDView
+                (pstring "->")
+                parseConstraintRhs
+                (fun d _ v -> (d, v))
+    .>> pstring ";"
+
+
+/// Parses a bare (non-iterated) constraint
+let parseNonIteratedConstraint : Parser<DView * Expression option, unit> =
     pstring "constraint" >>. ws >>.
     // ^- constraint ..
         pipe2ws parseDView
@@ -517,6 +542,11 @@ let parseConstraint : Parser<DView * Expression option, unit> =
                 (pstring "->" >>. ws >>. parseConstraintRhs .>> ws .>> pstring ";")
                 // ^-        ... -> <constraint-rhs> ;
                 (fun d v -> (d, v))
+
+/// Parses a constraint.
+let parseConstraint : Parser<DView * Expression option, unit> =
+    choice [ parseIteratedConstraint
+             parseNonIteratedConstraint ]
 
 /// Parses a single method, excluding leading or trailing whitespace.
 let parseMethod =
