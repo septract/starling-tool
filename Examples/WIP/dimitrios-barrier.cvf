@@ -2,7 +2,7 @@
 
 shared int no_threads; 
 shared int thr_cnt; 
-// shared array<bool> ok; 
+shared array<bool> ok; 
 
 thread int tid; 
 thread int ph; 
@@ -21,13 +21,13 @@ view isSet(int tid);
 method barrier (tid, ph) { 
  {| isBarrier(ph) * isThr(tid) |} 
   if (tid == 0) { 
-   {| isBarrier(ph) * isMaster(0) |} 
+   {| isBarrier(ph) * isMaster(0, ph) |} 
     do { 
-     {| isBarrier(ph) * isMaster(0) |} 
+     {| isBarrier(ph) * isMaster(0, ph) |} 
       <c = tid_cnt>; 
      {| if (c == (no_tideads -1)) 
-          then isInterior(ph) * isMaster(0) 
-          else isBarrier(ph) * isMaster(0) |} 
+          then isInterior(ph) * isMaster(0, ph) 
+          else isBarrier(ph) * isMaster(0, ph) |} 
     } while (c < (no_tideads - 1)); 
    {| isMaster(0, ph) |} 
     i = 0; 
@@ -52,7 +52,7 @@ method barrier (tid, ph) {
     do { 
      {| isInterior(ph) * isSet(tid) |} 
       b = ok[tid];  
-     {| if b == true 
+     {| if b != true 
           then isBarrier(ph+1) * isThr(tid) 
           else isInterior(ph) * isSet(tid) |} 
     } while (b != true); 
