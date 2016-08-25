@@ -36,7 +36,7 @@ constraint holdLock(a)  ->
   ( forall x : Int ::  (x != a) ==> (flag[x] == false) ) 
 
 
-constraint holdLock(a) * holdLock(b)  ->  false;
 constraint holdSlot(a) * holdSlot(b)  ->  a != b;  
-constraint holdLock(a) * holdSlot(b)  ->  a < b; 
+constraint holdLock(a) * holdSlot(b)  ->  a != b; 
+constraint holdLock(a) * holdLock(b)  ->  false;
 
