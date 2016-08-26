@@ -23,9 +23,6 @@ module Types =
      *)
 
     /// A func over expressions, used in view expressions.
-    type VFunc<'var> when 'var : equality = Func<Expr<'var>>
-
-    /// A func over expressions, used in view expressions.
     type ExprFunc<'var> when 'var : equality = Func<Expr<'var>>
 
     /// A func over marked-var expressions.
@@ -163,12 +160,12 @@ let dfunc name (pars : TypedVar seq) : DFunc = func name pars
 ///     The type of variables in the <c>VFunc</c>'s parameters.
 /// </typeparam>
 /// <returns>
-///     A new <c>VFunc</c> with the given name and parameters.
+///     A new <c>ExprFunc</c> with the given name and parameters.
 /// </returns>
-let vfunc name (pars : Expr<'var> seq) : VFunc<'var> = func name pars
+let exprfunc name (pars : Expr<'var> seq) : Func<Expr<'var>> = func name pars
 
 /// <summary>
-///     Type-constrained version of <c>vfunc</c> for <c>MVFunc</c>s.
+///     Type-constrained version of <c>exprfunc</c> for marked-var expressions.
 /// </summary>
 /// <param name="name">
 ///     The name of the <c>MVFunc</c>.
@@ -179,10 +176,11 @@ let vfunc name (pars : Expr<'var> seq) : VFunc<'var> = func name pars
 /// <returns>
 ///     A new <c>MVFunc</c> with the given name and parameters.
 /// </returns>
-let mvfunc name (pars : MExpr seq) : MVFunc = vfunc name pars
+let mexprfunc name (pars : Expr<MarkedVar> seq) : Func<Expr<MarkedVar>> =
+    exprfunc name pars
 
 /// <summary>
-///     Type-constrained version of <c>vfunc</c> for <c>SVFunc</c>s.
+///     Type-constrained version of <c>exprfunc</c> for symbolic expressions.
 /// </summary>
 /// <param name="name">
 ///     The name of the <c>SVFunc</c>.
@@ -193,11 +191,12 @@ let mvfunc name (pars : MExpr seq) : MVFunc = vfunc name pars
 /// <returns>
 ///     A new <c>SVFunc</c> with the given name and parameters.
 /// </returns>
-let svfunc name (pars : SVExpr seq) : SVFunc = vfunc name pars
-
+let sexprfunc name (pars : Expr<Sym<Var>> seq) : Func<Expr<Sym<Var>>> =
+    exprfunc name pars
 
 /// <summary>
-///     Type-constrained version of <c>vfunc</c> for <c>SMVFunc</c>s.
+///     Type-constrained version of <c>exprfunc</c> for symbolic marked-var
+///     expressions.
 /// </summary>
 /// <param name="name">
 ///     The name of the <c>SMVFunc</c>.
@@ -208,7 +207,9 @@ let svfunc name (pars : SVExpr seq) : SVFunc = vfunc name pars
 /// <returns>
 ///     A new <c>SMVFunc</c> with the given name and parameters.
 /// </returns>
-let smvfunc name (pars : SMExpr seq) : SMVFunc = vfunc name pars
+let smexprfunc name (pars : Expr<Sym<MarkedVar>> seq)
+  : Func<Expr<Sym<MarkedVar>>> =
+    exprfunc name pars
 
 /// <summary>
 ///     Active pattern extracting a View from a ViewExpr.
@@ -243,16 +244,16 @@ module Sub =
     open Starling.Core.Sub
 
     /// <summary>
-    ///   Maps a <c>SubFun</c> over all expressions in a <c>VFunc</c>.
+    ///   Maps a <c>SubFun</c> over all expressions in a <c>Func</c>.
     /// </summary>
     /// <param name="sub">
-    ///   The <c>SubFun</c> to map over all expressions in the <c>VFunc</c>.
+    ///   The <c>SubFun</c> to map over all expressions in the <c>Func</c>.
     /// </param>
     /// <param name="context">
     ///     The context to pass to the <c>SubFun</c>.
     /// </param>
     /// <param name="_arg1">
-    ///   The <c>VFunc</c> over which whose expressions are to be mapped.
+    ///   The <c>Func</c> over which whose expressions are to be mapped.
     /// </param>
     /// <typeparam name="srcVar">
     ///     The type of variables entering the map.
@@ -261,18 +262,18 @@ module Sub =
     ///     The type of variables leaving the map.
     /// </typeparam>
     /// <returns>
-    ///   The <c>VFunc</c> resulting from the mapping.
+    ///   The <c>Func</c> resulting from the mapping.
     /// </returns>
     /// <remarks>
     ///   <para>
-    ///     The expressions in a <c>VFunc</c> are its parameters.
+    ///     The expressions in a <c>Func</c> are its parameters.
     ///   </para>
     /// </remarks>
-    let subExprInVFunc
+    let subExprInExprFunc
       (sub : SubFun<'srcVar, 'dstVar>)
       (context : SubCtx)
-      ( { Name = n ; Params = ps } : VFunc<'srcVar> )
-      : (SubCtx * VFunc<'dstVar> ) =
+      ( { Name = n ; Params = ps } : Func<Expr<'srcVar>> )
+      : (SubCtx * Func<Expr<'dstVar>> ) =
         let context', ps' =
             mapAccumL
                 (Position.changePos id (Mapper.mapCtx sub))
@@ -281,16 +282,16 @@ module Sub =
         (context', { Name = n; Params = ps' } )
 
     /// <summary>
-    ///     Maps a <c>TrySubFun</c> over all expressions in a <c>VFunc</c>.
+    ///     Maps a <c>TrySubFun</c> over all expressions in an expression func.
     /// </summary>
     /// <param name="sub">
-    ///     The <c>TrySubFun</c> to map over all expressions in the <c>VFunc</c>.
+    ///     The <c>TrySubFun</c> to map over all expressions in the <c>Func</c>.
     /// </param>
     /// <param name="context">
     ///     The context to pass to the <c>SubFun</c>.
     /// </param>
     /// <param name="_arg1">
-    ///     The <c>VFunc</c> over which whose expressions are to be mapped.
+    ///     The <c>Func</c> over which whose expressions are to be mapped.
     /// </param>
     /// <typeparam name="srcVar">
     ///     The type of variables entering the map.
@@ -302,18 +303,18 @@ module Sub =
     ///     The type of any returned errors.
     /// </typeparam>
     /// <returns>
-    ///     The Chessie-wrapped <c>VFunc</c> resulting from the mapping.
+    ///     The Chessie-wrapped <c>Func</c> resulting from the mapping.
     /// </returns>
     /// <remarks>
     ///     <para>
     ///         The expressions in a <c>VFunc</c> are its parameters.
     ///     </para>
     /// </remarks>
-    let trySubExprInVFunc
+    let trySubExprInExprFunc
       (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
       (context : SubCtx)
-      ( { Name = n ; Params = ps } : VFunc<'srcVar> )
-      : (SubCtx * Result<VFunc<'dstVar>, 'err>) =
+      ( { Name = n ; Params = ps } : Func<Expr<'srcVar>> )
+      : (SubCtx * Result<Func<Expr<'dstVar>>, 'err>) =
         let context', ps' =
             mapAccumL
                 (Position.changePos id (Mapper.tryMapCtx sub))

@@ -216,7 +216,7 @@ let checkParamTypes func def =
 ///     A <c>VSubFun</c> performing the above substitutions.
 /// </returns>
 let paramSubFun
-  ( { Params = fpars } : VFunc<'dstVar>)
+  ( { Params = fpars } : Func<Expr<'dstVar>>)
   ( { Params = dpars } : DFunc)
   : VSubFun<Var, 'dstVar> =
     let pmap =
@@ -244,7 +244,7 @@ let paramSubFun
 ///     The <c>Definer</c> whose definition for <c>func</c> is to be
 ///     instantiated.
 /// </param>
-/// <param name="vfunc">
+/// <param name="exprfunc">
 ///     The <c>VFunc</c> whose arguments are to be substituted into
 ///     its definition in <c>_arg1</c>.
 /// </param>
@@ -254,19 +254,19 @@ let paramSubFun
 /// </returns>
 let instantiate
   (definer : FuncDefiner<BoolExpr<Sym<Var>>>)
-  (vfunc : VFunc<Sym<MarkedVar>>)
+  (exprfunc : Func<Expr<Sym<MarkedVar>>>)
   : Result<BoolExpr<Sym<MarkedVar>> option, Error> =
-    let subfun dfunc = paramSubFun vfunc dfunc |> liftVToSym |> onVars
+    let subfun dfunc = paramSubFun exprfunc dfunc |> liftVToSym |> onVars
 
     definer
-    |> lookup vfunc
+    |> lookup exprfunc
     |> bind
            (function
             | None -> ok None
             | Some (dfunc, defn) ->
                 lift
                     (fun _ -> Some (dfunc, defn))
-                    (checkParamTypes vfunc dfunc))
+                    (checkParamTypes exprfunc dfunc))
     |> lift
            (Option.map
                 (fun (dfunc, defn) ->
@@ -397,7 +397,7 @@ module Phase =
     /// This corresponds to D^ in the theory.
     let interpretVFunc
       (definer : FuncDefiner<BoolExpr<Sym<Var>>>)
-      (func : VFunc<Sym<MarkedVar>>)
+      (func : Func<Expr<Sym<MarkedVar>>>)
       : Result<BoolExpr<Sym<MarkedVar>>, Error> =
         instantiate definer func
         |> lift (withDefault BTrue)  // Undefined views go to True by metatheory
@@ -423,9 +423,9 @@ module Phase =
     /// Interprets all of the views in a term over the given definer.
     let interpretTerm
       (definer : FuncDefiner<SVBoolExpr>)
-      : CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>,
-                VFunc<Sym<MarkedVar>>>
-      -> Result<CmdTerm<SMBoolExpr, BoolExpr<Sym<MarkedVar>>,
+      : CmdTerm<BoolExpr<Sym<MarkedVar>>, GView<Sym<MarkedVar>>,
+                Func<Expr<Sym<MarkedVar>>>>
+      -> Result<CmdTerm<BoolExpr<Sym<MarkedVar>>, BoolExpr<Sym<MarkedVar>>,
                         BoolExpr<Sym<MarkedVar>>>, Error> =
         tryMapTerm ok (interpretGView definer) (interpretVFunc definer)
 

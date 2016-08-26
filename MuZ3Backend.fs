@@ -75,7 +75,7 @@ module Types =
         { /// <summary>
           ///     List of definite viewdefs, as (view, def) pairs, to check.
           /// </summary>
-          Definites : (VFunc<Var> * BoolExpr<Var>) list
+          Definites : (Func<Expr<Var>> * BoolExpr<Var>) list
           /// <summary>
           ///     Map of (view name, FuncDecl) bindings.
           /// </summary>
@@ -272,7 +272,7 @@ module Translator =
       (reals : bool)
       (ctx : Z3.Context)
       (vs : DFunc, ex)
-      : ((string * Z3.FuncDecl) * ((VFunc<Var> * VBoolExpr) option))=
+      : ((string * Z3.FuncDecl) * ((Func<Expr<Var>> * VBoolExpr) option))=
         let funcDecl = funcDeclOfDFunc reals ctx vs
         let mapEntry = (vs.Name, funcDecl)
 
@@ -290,9 +290,9 @@ module Translator =
                         which we need to convert to expression format first.
                         dex uses Unmarked constants, so we do too. *)
                      let eparams = List.map (mkVarExp id) vs.Params
-                     let vfunc = { Name = vs.Name ; Params = eparams }
+                     let exprfunc = { Name = vs.Name ; Params = eparams }
 
-                     (vfunc, dex))
+                     (exprfunc, dex))
                 ex
 
         (mapEntry, rule)
@@ -318,7 +318,7 @@ module Translator =
       (ctx : Z3.Context)
       (ds : FuncDefiner<BoolExpr<Var> option>)
       : (Map<string, Z3.FuncDecl>
-         * (VFunc<Var> * BoolExpr<Var>) seq) =
+         * (Func<Expr<Var>> * BoolExpr<Var>) seq) =
         ds
         |> Seq.map (translateViewDef reals ctx)
         |> List.ofSeq
@@ -365,7 +365,7 @@ module Translator =
       (toVar : 'var -> Var)
       (ctx : Z3.Context)
       (funcDecls : Map<string, Z3.FuncDecl>)
-      ( { Name = n ; Params = ps } : VFunc<'var>)
+      ( { Name = n ; Params = ps } : Func<Expr<'var>>)
       : Z3.BoolExpr =
         match funcDecls.TryFind n with
         | Some fd -> applyFunc reals toVar ctx fd ps
@@ -514,14 +514,14 @@ module Translator =
       (funcDecls : Map<string, Z3.FuncDecl>)
       (bodyExpr : BoolExpr<'var>)
       (bodyView : GView<'var>)
-      (head : VFunc<'var>)
+      (head : Func<Expr<'var>>)
       : Z3.BoolExpr option =
         let vsub = (liftCToSub (Mapper.cmake toVar))
 
         // First, make everything use string variables.
         let _, bodyExpr' = Mapper.mapBoolCtx vsub NoCtx bodyExpr
         let _, bodyView' = subExprInGView vsub NoCtx bodyView
-        let _, head' = subExprInVFunc vsub NoCtx head
+        let _, head' = subExprInExprFunc vsub NoCtx head
 
         let vars =
             seq {
@@ -530,7 +530,7 @@ module Translator =
                 for gfunc in Multiset.toFlatList bodyView' do
                     yield! (mapOverVars Sub.subExprInGFunc findVars gfunc)
 
-                yield! (mapOverVars Sub.subExprInVFunc findVars head')
+                yield! (mapOverVars Sub.subExprInExprFunc findVars head')
             }
             // Make sure we don't quantify over a variable twice.
             |> Set.ofSeq

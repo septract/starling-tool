@@ -59,7 +59,7 @@ module ViewPass =
     let ``test correct func``() =
         check
             (View.Func <| afunc "holdLock" [])
-            (Multiset.singleton (CFunc.Func (vfunc "holdLock" [])))
+            (Multiset.singleton (CFunc.Func (exprfunc "holdLock" [])))
 
 module ViewFail =
     let check (view : View) (expectedFailures : ViewError list) =

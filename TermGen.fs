@@ -141,7 +141,7 @@ module Tests =
                            smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
                   .SetName("Removing emp from a func yields the original func")
               (tcd [| (List.singleton <|
-                           smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
+                           smexprfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
                       (Multiset.singleton <|
                            smgfunc BTrue "foo" [ Expr.Bool (sbAfter "baz") ] ) |] )
                   .Returns(Multiset.singleton <|
@@ -151,7 +151,7 @@ module Tests =
                                "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
                   .SetName("Removing a func from itself generates a !x=y-guarded view")
               (tcd [| (List.singleton <|
-                           smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
+                           smexprfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
                       (Multiset.singleton <|
                            smgfunc BTrue "blop" [ Expr.Bool (sbAfter "baz") ] ) |] )
                   .Returns(Multiset.singleton <|
@@ -159,8 +159,8 @@ module Tests =
                   .SetName("Removing a func from itself is inert")
               (tcd [| (Multiset.ofFlatList>>Multiset.toFlatList
                        <|
-                           [ smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ]
-                             smvfunc "foo" [ Expr.Bool (sbGoal 1I "bar") ] ] )
+                           [ smexprfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ]
+                             smexprfunc "foo" [ Expr.Bool (sbGoal 1I "bar") ] ] )
                       (Multiset.singleton <|
                            smgfunc BTrue "foo" [ Expr.Bool (sbAfter "baz") ] ) |] )
                   .Returns(Multiset.ofFlatList <|
@@ -180,7 +180,7 @@ module Tests =
                                  [ Typed.Bool (sbGoal 1I "bar") ]] )
                   .SetName("Removing a func from two copies of itself works correctly")
               (tcd [| (List.singleton <|
-                           smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
+                           smexprfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
                       (Multiset.singleton <|
                            smgfunc
                                (BGt (siAfter "x",
