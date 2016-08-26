@@ -29,12 +29,12 @@ open Starling.Lang.Collator
 module Types =
     /// A conditional (flat or if-then-else) func.
     type CFunc =
-        | ITE of SVBoolExpr * Multiset<CFunc> * Multiset<CFunc>
+        | ITE of SVBoolExpr * CView * CView
         | Func of SVFunc
         override this.ToString() = sprintf "CFunc(%A)" this
 
     /// A conditional view, or multiset of CFuncs.
-    type CView = Multiset<CFunc>
+    and CView = Multiset<IteratedContainer<CFunc>>
 
     /// A partially resolved command.
     type PartCmd<'view> =
