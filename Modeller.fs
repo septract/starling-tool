@@ -109,7 +109,7 @@ module Types =
     /// Represents an error when converting a constraint.
     type ConstraintError =
         /// The view definition in the constraint generated a `ViewError`.
-        | CEView of vdef : AST.Types.DView * err : ViewError
+        | CEView of vdef : AST.Types.ViewSignature * err : ViewError
         /// The expression in the constraint generated an `ExprError`.
         | CEExpr of expr : AST.Types.Expression * err : ExprError
 
@@ -159,7 +159,7 @@ module Types =
         /// A view prototype in the program generated a `ViewProtoError`.
         | BadVProto of proto : AST.Types.ViewProto * err : ViewProtoError
         /// A constraint in the program generated a `ConstraintError`.
-        | BadConstraint of constr : AST.Types.DView * err : ConstraintError
+        | BadConstraint of constr : AST.Types.ViewSignature * err : ConstraintError
         /// A method in the program generated an `MethodError`.
         | BadMethod of methname : string * err : MethodError
         /// A variable in the program generated a `VarMapError`.
@@ -247,7 +247,7 @@ module Pretty =
     let printConstraintError : ConstraintError -> Doc =
         function
         | CEView(vdef, err) ->
-            wrapped "view definition" (printDView vdef) (printViewError err)
+            wrapped "view definition" (printViewSignature vdef) (printViewError err)
         | CEExpr(expr, err) ->
             wrapped "expression" (printExpression expr) (printExprError err)
 
@@ -318,7 +318,7 @@ module Pretty =
     let printModelError : ModelError -> Doc =
         function
         | BadConstraint(constr, err) ->
-            wrapped "constraint" (printDView constr)
+            wrapped "constraint" (printViewSignature constr)
                                  (printConstraintError err)
         | BadVar(scope, err) ->
             wrapped "variables in scope" (String scope) (printVarMapError err)
@@ -674,14 +674,14 @@ let modelDFunc
                  |> Multiset.singleton)
 
 /// Tries to convert a view def into its model (multiset) form.
-let rec modelDView (svars : VarMap) (protos : FuncDefiner<unit>) =
+let rec modelViewSignature (protos : FuncDefiner<unit>) =
     function
-    | DView.Unit -> ok Multiset.empty
-    | DView.Func dfunc -> Multiset.map (fun f -> { Func = f; Iterator = None }) <!> (modelDFunc protos dfunc)
-    | DView.Join(l, r) -> trial { let! lM = modelDView svars protos l
-                                  let! rM = modelDView svars protos r
-                                  return Multiset.append lM rM }
-    | DView.Iterated(dfunc, e) ->
+    | ViewSignature.Unit -> ok Multiset.empty
+    | ViewSignature.Func dfunc -> Multiset.map (fun f -> { Func = f; Iterator = None }) <!> (modelDFunc protos dfunc)
+    | ViewSignature.Join(l, r) -> trial { let! lM = modelViewSignature protos l
+                                          let! rM = modelViewSignature protos r
+                                          return Multiset.append lM rM }
+    | ViewSignature.Iterated(dfunc, e) ->
         let updateFunc (s : string) f = { Func = f; Iterator = Some (withType (Int()) s) }
         let modelledDFunc = modelDFunc protos dfunc
         (Multiset.map (updateFunc e)) <!> modelledDFunc
@@ -696,17 +696,17 @@ let rec localEnvOfViewDef vds =
     |> mapMessages ViewError.BadVar
 
 /// Produces the variable environment for the constraint whose viewdef is v.
-let envOfViewDef : VarMap -> Starling.Core.View.Types.DView -> Result<VarMap, ViewError> =
+let envOfViewDef : VarMap -> DView -> Result<VarMap, ViewError> =
     fun svars -> localEnvOfViewDef >> bind (combineMaps svars >> mapMessages SVarConflict)
 
 /// Converts a single constraint to its model form.
 let modelViewDef
   (svars : VarMap)
   (vprotos : FuncDefiner<unit>)
-  (av : AST.Types.DView, ad : Expression option)
-  : Result<(View.Types.DView * SVBoolExpr option), ModelError> =
+  (av : ViewSignature, ad : Expression option)
+  : Result<(DView * SVBoolExpr option), ModelError> =
     trial {
-        let! vms = wrapMessages CEView (modelDView svars vprotos) av
+        let! vms = wrapMessages CEView (modelViewSignature vprotos) av
         let  v = vms |> Multiset.toFlatList
         let! e = envOfViewDef svars v |> mapMessages (curry CEView av)
         let! d = (match ad with
@@ -750,7 +750,7 @@ let inDefiner : ViewDefiner<SVBoolExpr option> -> DView -> bool =
                     if (List.length view = List.length dview)
                     then
                         List.forall2
-                            (fun (vdfunc: Func<TypedVar>) (dfunc : Func<'c>) -> vdfunc.Name = dfunc.Name)
+                            (fun vdfunc dfunc -> vdfunc.Func.Name = dfunc.Func.Name)
                             view
                             dview
                     else false)
@@ -770,8 +770,8 @@ let inDefiner : ViewDefiner<SVBoolExpr option> -> DView -> bool =
 ///     An indefinite constraint over <paramref name="dview" />.
 /// </returns>
 let searchViewToConstraint
-  (dview : View.Types.DView)
-  : (View.Types.DView * SVBoolExpr option) =
+  (dview : DView)
+  : (DView * SVBoolExpr option) =
     (* To ensure likewise-named parameters in separate DFuncs don't
        clash, append fresh identifiers to all of them.
 
@@ -783,7 +783,7 @@ let searchViewToConstraint
 
     let dview' =
         List.map
-            (fun { Name = name; Params = ps } ->
+            (fun { Func = { Name = name; Params = ps }; Iterator = it } ->
                  let nps =
                      List.map
                          (fun p ->
@@ -791,7 +791,7 @@ let searchViewToConstraint
                                  (typeOf p)
                                     (sprintf "%s%A" (valueOf p) (getFresh fg))))
                          ps
-                 { Name = name; Params = nps })
+                 { Func = { Name = name; Params = nps }; Iterator = it })
             dview
 
     (dview', None)
@@ -809,7 +809,7 @@ let searchViewToConstraint
 ///     A set of all <c>View</c>s of maximum size <paramref name="depth" />,
 ///     whose <c>Func</c>s are taken from <paramref name="funcs" />
 /// </returns>
-let genAllViewsAt depth (funcs : DFunc seq) : Set<View.Types.DView> =
+let genAllViewsAt depth (funcs : DFunc seq) : Set<DView> =
     let rec f depth existing =
         match depth with
         // Multiset and set conversion removes duplicate views.
@@ -823,7 +823,7 @@ let genAllViewsAt depth (funcs : DFunc seq) : Set<View.Types.DView> =
                 seq { yield []
                       for f in funcs do
                           for e in existing do
-                              yield f :: e }
+                              yield {Iterator = None; Func = f} :: e }
             f (depth - 1) existing'
     f depth (Seq.singleton [])
 

@@ -100,9 +100,11 @@ let instantiateGoal (fg : FreshGen)
                     : OView =
     let instantiateParam = mkVarExp (goalVar fg >> Reg)
 
-    dvs |> List.map (fun { Name = n; Params = ps } ->
+    dvs |> List.map (function
+        | { Iterator = None; Func = { Name = n; Params = ps } } ->
                { Name = n
-                 Params = List.map instantiateParam ps })
+                 Params = List.map instantiateParam ps }
+        | _ -> failwith "Unexpected iterator in defining view")
 
 /// Converts an axiom into a list of framed axioms, by combining it with the
 /// defining views of a model.

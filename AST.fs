@@ -65,9 +65,9 @@ module Types =
     type ViewProto = Func<TypedVar>
 
     /// A view as seen on the LHS of a ViewDef.
-    type DView =
+    type ViewSignature =
         | Unit
-        | Join of DView * DView
+        | Join of ViewSignature * ViewSignature
         | Func of Func<string>
         | Iterated of Func<string> * string
 
@@ -156,7 +156,7 @@ module Types =
         | Method of CMethod<Marked<View>> // method main(argv, argc) { ... }
         | Search of int // search 0;
         | ViewProto of ViewProto // view name(int arg);
-        | Constraint of DView * Expression option // constraint emp => true
+        | Constraint of ViewSignature * Expression option // constraint emp => true
         override this.ToString() = sprintf "%A" this
     and ScriptItem = Node<ScriptItem'>
 
@@ -231,17 +231,17 @@ module Pretty =
         >> ssurround "{| " " |}"
 
     /// Pretty-prints view definitions.
-    let rec printDView : DView -> Doc =
+    let rec printViewSignature : ViewSignature -> Doc =
         function
-        | DView.Func f -> printFunc String f
-        | DView.Unit -> String "emp" |> syntaxView
-        | DView.Join(l, r) -> binop "*" (printDView l) (printDView r)
-        | DView.Iterated(f, e) -> hsep [String "iterated" |> syntax; printFunc String f; String "[" |> syntaxView; printExpression e; String "]" |> syntaxView]
+        | ViewSignature.Func f -> printFunc String f
+        | ViewSignature.Unit -> String "emp" |> syntaxView
+        | ViewSignature.Join(l, r) -> binop "*" (printViewSignature l) (printViewSignature r)
+        | ViewSignature.Iterated(f, e) -> hsep [String "iterated" |> syntax; printFunc String f; String "[" |> syntaxView; String e; String "]" |> syntaxView]
 
     /// Pretty-prints constraints.
-    let printConstraint (view : DView) (def : Expression option) : Doc =
+    let printConstraint (view : ViewSignature) (def : Expression option) : Doc =
         hsep [ String "constraint" |> syntax
-               printDView view
+               printViewSignature view
                String "->" |> syntax
                (match def with
                 | Some d -> printExpression d

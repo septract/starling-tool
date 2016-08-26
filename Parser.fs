@@ -82,8 +82,8 @@ let inAngles p = inBrackets "<" ">" p
 let parseView, parseViewRef =
     createParserForwardedToRef<View, unit> ()
 /// Parser for view definitions.
-let parseDView, parseDViewRef =
-    createParserForwardedToRef<DView, unit> ()
+let parseViewSignature, parseViewSignatureRef =
+    createParserForwardedToRef<ViewSignature, unit> ()
 
 /// Parser for commands.
 let parseCommand, parseCommandRef =
@@ -375,33 +375,29 @@ let parseViewExpr = between
  *)
 
 /// Parses a functional view definition.
-let parseDFuncView = parseFunc parseIdentifier |>> DView.Func
+let parseDFuncView = parseFunc parseIdentifier |>> ViewSignature.Func
 
 /// Parses the unit view definition.
-let parseDUnit = stringReturn "emp" DView.Unit
+let parseDUnit = stringReturn "emp" ViewSignature.Unit
 
 /// Parses an iterated view definition.
 let parseDIterated =
     pstring "iterated" >>. ws >>.
     pipe2ws (parseFunc parseIdentifier)
             (inSquareBrackets parseIdentifier)
-            (fun f e -> DView.Iterated(f, e))
+            (fun f e -> ViewSignature.Iterated(f, e))
 
 /// Parses a `basic` view definition (unit, if, named, or bracketed).
-let parseBasicDView =
+let parseBasicViewSignature =
     choice [ parseDUnit
              // ^- `emp'
              parseDFuncView
              // ^- <identifier>
              //  | <identifier> <arg-list>
-             inParens parseDView ]
+             inParens parseViewSignature ]
              // ( <view> )
 
-let parseBasicIteratedDView =
-    choice [ parseDIterated
-             parseBasicDView ]
-
-do parseDViewRef         := parseViewLike parseBasicDView DView.Join
+do parseViewSignatureRef := parseViewLike parseBasicViewSignature ViewSignature.Join
 
 
 (*
@@ -522,31 +518,17 @@ let parseConstraintRhs : Parser<Expression option, unit> =
     // ^ %{ <symbol> %}
     // ^ <expression>
 
-/// Parses an iterated constraint
-/// i.e. a constraint with an iterated view as its lhs
-let parseIteratedConstraint : Parser<DView * Expression option, unit> =
-    pstring "constraint" >>. ws
-    >>. pipe3ws parseBasicIteratedDView
-                (pstring "->")
-                parseConstraintRhs
-                (fun d _ v -> (d, v))
-    .>> pstring ";"
-
-
-/// Parses a bare (non-iterated) constraint
-let parseNonIteratedConstraint : Parser<DView * Expression option, unit> =
-    pstring "constraint" >>. ws >>.
-    // ^- constraint ..
-        pipe2ws parseDView
-                // ^- <view> ...
-                (pstring "->" >>. ws >>. parseConstraintRhs .>> ws .>> pstring ";")
-                // ^-        ... -> <constraint-rhs> ;
-                (fun d v -> (d, v))
-
 /// Parses a constraint.
-let parseConstraint : Parser<DView * Expression option, unit> =
-    choice [ parseIteratedConstraint
-             parseNonIteratedConstraint ]
+let parseConstraint : Parser<ViewSignature * Expression option, unit> =
+    pstring "constraint" >>. ws
+    // ^- constraint ..
+    >>. pipe3ws
+            (parseDIterated <|> parseViewSignature)
+            // ^- <view> ...
+            (pstring "->")
+            parseConstraintRhs
+            (fun d _ v -> (d, v))
+    .>> pstring ";"
 
 /// Parses a single method, excluding leading or trailing whitespace.
 let parseMethod =

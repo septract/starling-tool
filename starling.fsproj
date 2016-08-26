@@ -77,7 +77,8 @@
     <Compile Include="Z3Backend.fs" />
     <Compile Include="MuZ3Backend.fs" />
     <Compile Include="TestStudies.fs" />
-    <Compile Include="ExprTests.fs" /> 
+    <Compile Include="FlattenerTests.fs" />
+    <Compile Include="ExprTests.fs" />
     <Compile Include="GraphTests.fs" />
     <Compile Include="GrapherTests.fs" />
     <Compile Include="InstantiateTests.fs" />
