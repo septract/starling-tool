@@ -104,7 +104,9 @@ let instantiateGoal (fg : FreshGen)
         | { Iterator = None; Func = { Name = n; Params = ps } } ->
                { Name = n
                  Params = List.map instantiateParam ps }
-        | _ -> failwith "Unexpected iterator in defining view")
+        | {Iterator = Some it; Func = { Name = n; Params = ps } } ->
+               { Name = n
+                 Params = instantiateParam it :: List.map instantiateParam ps })
 
 /// Converts an axiom into a list of framed axioms, by combining it with the
 /// defining views of a model.

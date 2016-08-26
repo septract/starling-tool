@@ -686,12 +686,18 @@ let rec modelViewSignature (protos : FuncDefiner<unit>) =
         let modelledDFunc = modelDFunc protos dfunc
         (Multiset.map (updateFunc e)) <!> modelledDFunc
 
+let makeIteratorMap : TypedVar option -> VarMap =
+    function
+    | None         -> Map.empty
+    | Some (Int v) -> Map.add v (Type.Int ()) Map.empty
+    | _            -> failwith "Iterator in iterated views must be Int type"
+
 /// Produces the environment created by interpreting the viewdef vds using the
 /// view prototype map vpm.
 let rec localEnvOfViewDef vds =
     vds
     |> Seq.ofList
-    |> Seq.map (fun { Func = {Params = ps} } -> makeVarMap ps)
+    |> Seq.map (fun { Func = {Params = ps}; Iterator = it } -> makeVarMap ps >>= (combineMaps (makeIteratorMap it)))
     |> seqBind (fun xR s -> bind (combineMaps s) xR) Map.empty
     |> mapMessages ViewError.BadVar
 
