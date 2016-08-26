@@ -45,15 +45,6 @@ module Types =
      * Views
      *)
 
-    /// <summary>
-    ///     A basic view, as a multiset of VFuncs.
-    /// </summary>
-    /// <remarks>
-    ///     Though View is the canonical Concurrent Views Framework view,
-    ///     we actually seldom use it.
-    /// </remarks>
-    type View = Multiset<SMVFunc>
-
     /// A view definition.
     type DView = List<DFunc>
 

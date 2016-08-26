@@ -46,7 +46,8 @@ let funcOfView globals view =
  *)
 
 /// Adds the globals in gs to the argument lists of a view assertion.
-let addGlobalsToViewSet gs = mapItems (funcOfView gs)
+let addGlobalsToViewSet gs =
+   Seq.map (mapItem (funcOfView gs)) >> Multiset.ofFlatSeq
 
 /// Adds the globals in gs to the argument list of the assertions in a term.
 let addGlobalsToTerm gs _ =
@@ -69,7 +70,7 @@ let addGlobalsToViewDef gs =
  *)
 
 /// Adds globals to the arguments of all views in a model.
-let flatten (mdl: UVModel<Term<'cmd, SMViewSet, OView>>) =
+let flatten (mdl: UVModel<Term<'cmd, Set<GuardedSubview>, OView>>) =
     /// Build a function making a list of global arguments, for view assertions.
     let gargs marker = varMapToExprs (marker >> Reg) mdl.Globals
 
