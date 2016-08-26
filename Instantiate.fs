@@ -66,26 +66,6 @@ module Types =
         /// </summary>
         | UnwantedSym of sym: string
 
-    (* TODO(CaptainHayashi): these two shouldn't be in here, but
-       they are, due to a cyclic dependency on Model and FuncTable. *)
-
-    /// <summary>
-    ///     A <c>Model</c> whose view definitions form an indefinite
-    ///     <c>FuncTable</c>.
-    /// </summary>
-    /// <typeparam name="axiom">
-    ///     Type of program axioms.  /// </typeparam>
-    type IFModel<'axiom> = Model<'axiom, FuncTable<VBoolExpr option>>
-
-    /// <summary>
-    ///     A <c>Model</c> whose view definitions form a definite
-    ///     <c>FuncTable</c>.
-    /// </summary>
-    /// <typeparam name="axiom">
-    ///     Type of program axioms.
-    /// </typeparam>
-    type DFModel<'axiom> = Model<'axiom, FuncTable<VBoolExpr>>
-
 
 /// <summary>
 ///     Pretty printers used in func instantiation.
@@ -98,50 +78,8 @@ module Pretty =
     open Starling.Core.Expr.Pretty
     open Starling.Core.View.Pretty
 
-    /// <summary>
-    ///     Pretty-prints <c>FuncTable</c>s.
-    /// </summary>
-    /// <param name="pDefn">
-    ///     Pretty printer for definitions.
-    /// </param>
-    /// <param name="ft">
-    ///     The <c>FuncTable</c> to print.
-    /// </param>
-    /// <typeparam name="defn">
-    ///     The type of definitions in the <c>FuncTable</c>.
-    /// </typeparam>
-    /// <returns>
-    ///     A sequence of <c>Command</c>s representing the
-    ///     pretty-printed form of <paramref name="ft"/>.
-    /// </returns>
-    let printFuncTable
-      (pDefn : 'defn -> Doc)
-      (ft : FuncTable<'defn>)
-      : Doc seq =
-        ft
-        |> List.map (fun (v, d) -> colonSep [ printDFunc v; pDefn d ] )
-        |> List.toSeq
-
-    /// <summary>
-    ///     Pretty-prints a model view for a <c>DFModel</c>.
-    /// </summary>
-    /// <param name="pAxiom">
-    ///     Pretty printer for axioms.
-    /// </param>
-    /// <typeparam name="axiom">
-    ///     Type of axioms.
-    /// </typeparam>
-    /// <returns>
-    ///     A function, taking a <c>ModelView</c> and <c>DFModel</c>, and
-    ///     returning a <c>Doc</c>.
-    /// </returns>
-    let printDFModelView
-      (pAxiom : 'axiom -> Doc)
-      : ModelView -> DFModel<'axiom> -> Doc =
-        printModelView pAxiom (printFuncTable printVBoolExpr)
-
     /// Pretty-prints instantiation errors.
-    let printError =
+    let printError : Error -> Doc =
         function
         | TypeMismatch (par, atype) ->
             fmt "parameter '{0}' conflicts with argument of type '{1}'"
@@ -156,65 +94,6 @@ module Pretty =
             // TODO(CaptainHayashi): this is a bit shoddy.
             fmt "encountered uninterpreted symbol {0}"
                 [ String sym ]
-
-
-(*
- * Building FuncTables
- *)
-
-/// <summary>
-///     Builds a <c>FuncTable</c> from a sequence of pairs of <c>Func</c>
-///     and definition.
-/// </summary>
-/// <param name="fseq">
-///     The sequence of (<c>Func</c>, <c>'defn</c>) pairs.
-/// </param>
-/// <typeparam name="defn">
-///     The type of <c>Func</c> definitions.  May be <c>unit</c>.
-/// </typeparam>
-/// <returns>
-///     A <c>FuncTable</c> allowing the <c>'defn</c>s of the given <c>Func</c>s
-///     to be looked up.
-/// </returns>
-let makeFuncTable fseq : FuncTable<'defn> =
-    // This function exists to smooth over any changes in FuncTable
-    // representation we make later (eg. to maps).
-    Seq.toList fseq
-
-/// <summary>
-///     Creates a <c>FuncTable</c> from a sequence of <c>ViewDef</c>s.
-/// </summary>
-/// <param name="viewdefs">
-///     The view definitions to use to create the <c>FuncTable</c>.
-/// </param>
-/// <returns>
-///     A tuple of a <c>FuncTable</c>, and a list of <c>DFunc</c>s with
-///     indefinite constraints.
-/// </returns>
-let funcTableFromViewDefs viewdefs =
-    let rec buildLists definites indefinites viewdefs' =
-        match viewdefs' with
-        | [] -> (makeFuncTable definites, indefinites)
-        | (Indefinite v) :: vs ->
-            buildLists definites (v :: indefinites) vs
-        | (Definite (v, s)) :: vs ->
-            buildLists ((v, s) :: definites) indefinites vs
-    buildLists [] [] viewdefs
-
-/// <summary>
-///     Returns the <c>Func</c>s contained in a <c>FuncTable</c>.
-/// </summary>
-/// <param name="ftab">
-///     The <c>FuncTable</c> to break apart.
-/// </param>
-/// <typeparam name="defn">
-///     The type of <c>Func</c> definitions.  May be <c>unit</c>.
-/// </typeparam>
-/// <returns>
-///     A sequence of <c>Func</c>s contained in <paramref name="ftab" />.
-/// </returns>
-let funcsInTable (ftab : FuncTable<'defn>) =
-    Seq.map fst ftab
 
 
 (*
@@ -277,9 +156,11 @@ let checkParamCountPrim : PrimCommand -> PrimSemantics option -> Result<PrimSema
 ///     <c>Starling.Instantiate.Error</c>.  If the <c>ok</c> value is
 ///     <c>None</c>, it means no (valid or otherwise) definition exists.
 /// </returns>
-let lookup (func : Func<'a>) : seq<DFunc * 'b> -> Result<(DFunc * 'b) option, Error> =
+let lookup (func : Func<_>)
+  : FuncDefiner<'b> -> Result<(DFunc * 'b) option, Error> =
     // First, try to find a func whose name agrees with ours.
-    Seq.tryFind (fun (dfunc, _) -> dfunc.Name = func.Name)
+    FuncDefiner.toSeq
+    >> Seq.tryFind (fun (dfunc, _) -> dfunc.Name = func.Name)
     >> checkParamCount func
 
 let lookupPrim : PrimCommand -> PrimSemanticsMap -> Result<PrimSemantics option, Error>  =
@@ -313,8 +194,8 @@ let checkParamTypes func def =
     |> collect
     |> lift (fun _ -> func)
 
-let checkParamTypesPrim : PrimCommand -> PrimSemantics -> Result<PrimCommand, Error> = 
-    fun prim sem -> 
+let checkParamTypesPrim : PrimCommand -> PrimSemantics -> Result<PrimCommand, Error> =
+    fun prim sem ->
     List.map2
         (curry
              (function
@@ -369,7 +250,7 @@ let paramSubFun
              | Some _ -> failwith "param substitution type error"
              | None -> failwith "free variable in substitution")
 
-let paramToMExpr = 
+let paramToMExpr =
     function
     | Int  i -> After i |> Reg |> AVar |> Int
     | Bool b -> After b |> Reg |> BVar |> Bool
@@ -400,62 +281,29 @@ let primParamSubFun
              | None -> failwith "free variable in substitution")
 
 /// <summary>
-///     Produces a parameter substitution <c>VSubFun</c> from
-///     <c>SMVFunc</c>s.
-/// </summary>
-/// <param name="_arg1">
-///     The <c>SMVFunc</c> providing the arguments to substitute.
-/// </param>
-/// <param name="_arg2">
-///     The <c>DFunc</c> into which we are substituting.
-/// </param>
-/// <returns>
-///     A <c>VSubFun</c> performing the above substitutions.
-/// </returns>
-let smvParamSubFun
-  (smvfunc : SMVFunc)
-  (dfunc : DFunc)
-  : VSubFun<Sym<Var>, Sym<MarkedVar>> =
-    liftVToSym (paramSubFun smvfunc dfunc)
-
-let primSubFun prim sem = liftVToSym (primParamSubFun prim sem)
-
-/// <summary>
 ///     Look up <c>func</c> in <c>_arg1</c>, and instantiate the
 ///     resulting Boolean expression, substituting <c>func.Params</c>
 ///     for the parameters in the expression.
 /// </summary>
-/// <param name="psf">
-///     A function building the <c>VSubFun</c> used to map variables in
-///     the expression, either by substituting in the arguments of the
-///     func, or by transforming them to the correct variable type.
-/// </param>
-/// <param name="ftab">
-///     The <c>FuncTable</c> whose definition for <c>func</c> is to be
+/// <param name="definer">
+///     The <c>Definer</c> whose definition for <c>func</c> is to be
 ///     instantiated.
 /// </param>
 /// <param name="vfunc">
 ///     The <c>VFunc</c> whose arguments are to be substituted into
 ///     its definition in <c>_arg1</c>.
 /// </param>
-/// <typeparam name="srcVar">
-///     The type of the variables before substitution, ie in
-///     <paramref name="expr"/>.
-/// </typeparam>
-/// <typeparam name="dstVar">
-///     The type of the variables before substitution, ie in
-///     <paramref name="expr"/>.
-/// </typeparam>
 /// <returns>
 ///     The instantiation of <c>func</c> as an <c>Option</c>al
-///     <c>SMBoolExpr</c> wrapped inside a Chessie result.
+///     symbolic marked Boolean expression wrapped inside a Chessie result.
 /// </returns>
 let instantiate
-  (psf : VFunc<'dstVar> -> DFunc -> VSubFun<'srcVar, 'dstVar>)
-  (ftab : FuncTable<BoolExpr<'srcVar>>)
-  (vfunc : VFunc<'dstVar>)
-  : Result<BoolExpr<'dstVar> option, Error> =
-    ftab
+  (definer : FuncDefiner<BoolExpr<Sym<Var>>>)
+  (vfunc : VFunc<Sym<MarkedVar>>)
+  : Result<BoolExpr<Sym<MarkedVar>> option, Error> =
+    let subfun dfunc = paramSubFun vfunc dfunc |> liftVToSym |> onVars
+
+    definer
     |> lookup vfunc
     |> bind
            (function
@@ -467,39 +315,63 @@ let instantiate
     |> lift
            (Option.map
                 (fun (dfunc, defn) ->
-                     Mapper.mapBoolCtx (onVars (psf vfunc dfunc)) NoCtx defn |> snd))
+                     defn |> Mapper.mapBoolCtx (subfun dfunc) NoCtx |> snd))
 
 let instantiatePrim
-  (psf : PrimCommand -> PrimSemantics -> VSubFun<Sym<Var>, Sym<MarkedVar>>)
-  (ftab : PrimSemanticsMap)
-  (vfunc : PrimCommand)
+  (smap : PrimSemanticsMap)
+  (prim : PrimCommand)
   : Result<SMBoolExpr option, Error> =
-    lookupPrim vfunc ftab
+    lookupPrim prim smap
     |> bind
            (function
             | None -> ok None
             | Some sem ->
                 lift
                     (fun _ -> Some sem)
-                    (checkParamTypesPrim vfunc sem))
+                    (checkParamTypesPrim prim sem))
     |> lift
            (Option.map
                 (fun sem ->
-                     let mapper = onVars <| psf vfunc sem
-                     Mapper.mapBoolCtx mapper NoCtx sem.Body |> snd))
+                    let mapper = onVars (liftVToSym (primParamSubFun prim sem))
+                    Mapper.mapBoolCtx mapper NoCtx sem.Body |> snd))
 
 /// <summary>
-///     Functions for view definition filtering.
+///     Partitions a <see cref="FuncDefiner"/> into a definite
+///     definer and an indefinite definer.
 /// </summary>
-module ViewDefFilter =
+/// <param name="definer">
+///     The definer to partition.
+/// </param>
+/// <returns>
+///     A pair of definers: one gives definite definitions; the other
+///     maps each indefinite definition to unit.
+/// </returns>
+let partitionDefiner
+  (definer : FuncDefiner<SVBoolExpr option>)
+  : (FuncDefiner<SVBoolExpr> * FuncDefiner<unit>) =
+    definer
+    |> FuncDefiner.toSeq
+    |> Seq.fold
+         (fun (defs, indefs) (func, def) ->
+              match def with
+              | Some d -> ((func, d)::defs, indefs)
+              | None -> (defs, (func, ())::indefs))
+         ([], [])
+    |> pairMap FuncDefiner.ofSeq FuncDefiner.ofSeq
+
+/// <summary>
+///     Functions for definer filtering.
+/// </summary>
+module DefinerFilter =
     /// <summary>
-    ///     Tries to remove symbols from <c>ViewDef</c>s.
+    ///     Tries to remove symbols from the definitions in a
+    ///     <c>FuncDefiner</c>.
     /// </summary>
-    let tryRemoveViewDefSymbols
-      (defs : FuncTable<SVBoolExpr>)
-      : Result<FuncTable<VBoolExpr>, Error> =
+    let tryRemoveFuncDefinerSymbols
+      (defs : FuncDefiner<SVBoolExpr>)
+      : Result<FuncDefiner<VBoolExpr>, Error> =
         // TODO(CaptainHayashi): proper doc comment.
-        // TODO(CaptainHayashi): stop assuming FuncTable is a list.
+        // TODO(CaptainHayashi): stop assuming Definer is a list.
         defs
         |> List.map
                (fun (f, d) ->
@@ -509,48 +381,49 @@ module ViewDefFilter =
                     |> lift (mkPair f))
         |> collect
 
-
     /// <summary>
-    ///     Converts a <c>ViewDef</c> list into a <c>FuncTable</c> of possibly
-    ///     indefinite views.
+    ///     Filters a symbolic, indefinite definer into one containing only
+    ///     non-symbolic views, which may be indefinite.
     /// </summary>
     let filterIndefiniteViewDefs
-      (vds : SVBViewDef<DFunc> list)
-      : Result<FuncTable<VBoolExpr option>, Error> =
+      (vds : FuncDefiner<SVBoolExpr option>)
+      : Result<FuncDefiner<VBoolExpr option>, Error> =
         // TODO(CaptainHayashi): proper doc comment.
         vds
-        |> funcTableFromViewDefs
-        (* TODO(CaptainHayashi): defs is already a func table, so
-           don't pretend it's just a list of tuples. *)
+        |> partitionDefiner
         |> function
            | (defs, indefs) ->
                defs
-               |> tryRemoveViewDefSymbols
+               |> tryRemoveFuncDefinerSymbols
                |> lift
-                      (fun defs' ->
-                           makeFuncTable
+                      (fun remdefs ->
+                           FuncDefiner.ofSeq
                               (seq {
-                                   for (v, d) in defs' do
+                                   for (v, d) in FuncDefiner.toSeq remdefs do
                                        yield (v, Some d)
-                                   for v in indefs do
+                                   for (v, _) in FuncDefiner.toSeq indefs do
                                        yield (v, None)
                                } ))
 
     /// <summary>
-    ///     Converts a <c>ViewDef</c> list into a <c>FuncTable</c> of only
-    ///     definite views.
+    ///     Filters a symbolic, indefinite definer into one containing only
+    ///     definite, non-symbolic views.
     /// </summary>
     let filterDefiniteViewDefs
-      (vds : SVBViewDef<DFunc> list)
-      : Result<FuncTable<VBoolExpr>, Error> =
+      (vds : FuncDefiner<SVBoolExpr option>)
+      : Result<FuncDefiner<VBoolExpr>, Error> =
         // TODO(CaptainHayashi): proper doc comment.
         vds
-        |> funcTableFromViewDefs
+        |> partitionDefiner
         |> function
            | defs, [] ->
-               tryRemoveViewDefSymbols defs
+               tryRemoveFuncDefinerSymbols defs
            | _, indefs ->
-               indefs |> List.map IndefiniteConstraint |> Bad
+               indefs
+               |> FuncDefiner.toSeq
+               |> Seq.toList
+               |> List.map (fst >> IndefiniteConstraint)
+               |> Bad
 
     /// <summary>
     ///     Tries to convert a <c>ViewDef</C> based model into one over
@@ -562,11 +435,13 @@ module ViewDefFilter =
     /// <returns>
     ///     A <c>Result</c> over <c>Error</c> containing the
     ///     new model if the original contained only definite view
-    ///     definitions.  The new model is an <c>IFModel</c>.
+    ///     definitions.
     /// </returns>
     let filterModelIndefinite
-      (model : UFModel<Term<SMBoolExpr, SMGView, SMVFunc>> )
-      : Result<IFModel<Term<MBoolExpr, MGView, MVFunc>>, Error> =
+      (model : Model<Term<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
+                     FuncDefiner<SVBoolExpr option>> )
+      : Result<Model<Term<MBoolExpr, GView<MarkedVar>, MVFunc>,
+                     FuncDefiner<VBoolExpr option>>, Error> =
         model
         |> tryMapAxioms (trySubExprInDTerm (tsfRemoveSym UnwantedSym) NoCtx >> snd)
         |> bind (tryMapViewDefs filterIndefiniteViewDefs)
@@ -582,53 +457,68 @@ module ViewDefFilter =
 ///     </para>
 /// </summary>
 module Phase =
-    /// Produces the reification of an unguarded func.
+    /// Produces the predicate representation of an unguarded func.
     /// This corresponds to D^ in the theory.
-    let interpretVFunc (ft : FuncTable<SVBoolExpr>) func =
-        instantiate smvParamSubFun ft func
+    let interpretVFunc
+      (definer : FuncDefiner<BoolExpr<Sym<Var>>>)
+      (func : VFunc<Sym<MarkedVar>>)
+      : Result<BoolExpr<Sym<MarkedVar>>, Error> =
+        instantiate definer func
         |> lift (withDefault BTrue)  // Undefined views go to True by metatheory
 
-    let interpretGFunc (ft : FuncTable<SVBoolExpr>) {Cond = c; Item = i} =
-        interpretVFunc ft i
+    let interpretGFunc
+      (definer : FuncDefiner<SVBoolExpr>)
+      ({Cond = c; Item = i} : GFunc<Sym<MarkedVar>>)
+      : Result<BoolExpr<Sym<MarkedVar>>, Error> =
+        interpretVFunc definer i
         |> lift (mkImplies c)
 
-    /// Interprets an entire view application over the given functable.
-    let interpretGView (ft : FuncTable<SVBoolExpr>) =
+    /// Interprets an entire view application over the given definer.
+    let interpretGView
+      (definer : FuncDefiner<SVBoolExpr>)
+      : GView<Sym<MarkedVar>>
+      -> Result<BoolExpr<Sym<MarkedVar>>, Error> =
         Multiset.toFlatSeq
-        >> Seq.map (interpretGFunc ft)
+        >> Seq.map (interpretGFunc definer)
         >> collect
         >> lift Seq.toList
         >> lift mkAnd
 
-    /// Interprets all of the views in a term over the given functable.
+    /// Interprets all of the views in a term over the given definer.
     let interpretTerm
-      (ft : FuncTable<SVBoolExpr>)
-      : Term<SMBoolExpr, SMGView, SMVFunc> -> Result<SFTerm, Error> =
-        tryMapTerm ok (interpretGView ft) (interpretVFunc ft)
+      (definer : FuncDefiner<SVBoolExpr>)
+      : Term<BoolExpr<Sym<MarkedVar>>, GView<Sym<MarkedVar>>,
+             VFunc<Sym<MarkedVar>>>
+      -> Result<Term<BoolExpr<Sym<MarkedVar>>, BoolExpr<Sym<MarkedVar>>,
+                     BoolExpr<Sym<MarkedVar>>>, Error> =
+        tryMapTerm ok (interpretGView definer) (interpretVFunc definer)
 
 
     /// <summary>
     ///     Converts all indefinite viewdefs to symbols.
     /// </summary>
-    /// <param name="vs">
-    ///     The view definitions to convert.
+    /// <param name="definer">
+    ///     The view definer to convert.
     /// </param>
     /// <returns>
-    ///     A <c>FuncTable</c> mapping each view func to a
+    ///     A <c>Definer</c> mapping each view func to a
     ///     <c>SVBoolExpr</c> giving its definition.  Indefinite
     ///     viewdefs are represented by symbols.
     /// </returns>
-    let symboliseIndefinites vs =
-        // First, get the functable of all definite views.
-        let def, indef = funcTableFromViewDefs vs
+    let symboliseIndefinites
+      (definer : FuncDefiner<SVBoolExpr option>)
+      : FuncDefiner<SVBoolExpr> =
+        let def, indef = partitionDefiner definer
 
         // Then, convert the indefs to symbols.
         let symconv =
             Mapper.make (Reg >> AVar) (Reg >> BVar)
 
-        let idsym : FuncTable<SVBoolExpr> =
-            List.map
-                (fun { Name = n ; Params = ps } ->
+        let idsym : FuncDefiner<SVBoolExpr> =
+            indef
+            |> FuncDefiner.toSeq
+            |> Seq.map
+                (fun ({ Name = n ; Params = ps }, _) ->
                     (func n ps,
                      BVar
                          (Sym
@@ -637,7 +527,7 @@ module Phase =
                                    (List.map
                                        (Mapper.mapCtx symconv NoCtx >> snd)
                                        ps)))))
-                indef
+            |> FuncDefiner.ofSeq
 
         // TODO(CaptainHayashi): use functables properly.
         def @ idsym
@@ -657,7 +547,8 @@ module Phase =
     ///     The model with all views instantiated.
     /// </returns>
     let run
-      (model : UFModel<STerm<SMGView, SMVFunc>>)
+      (model : Model<STerm<GView<Sym<MarkedVar>>, SMVFunc>,
+                     FuncDefiner<SVBoolExpr option>>)
       : Result<Model<SFTerm, unit>, Error> =
       let vs = symboliseIndefinites model.ViewDefs
 

@@ -41,7 +41,10 @@ type Func<'param> =
 /// <returns>
 ///     A new <c>Func</c> with the given name and parameters.
 /// </returns>
-let func name pars = { Name = name; Params = List.ofSeq pars }
+let func (name : string)
+         (pars : 'param seq)
+         : Func<'param> =
+    { Name = name; Params = List.ofSeq pars }
 
 module Func =
     module Pretty =
@@ -73,19 +76,28 @@ module Multiset =
     /// <summary>
     ///     The empty multiset.
     /// </summary>
-    let empty = MSet (Map.empty)
+    /// <typeparam name="item">
+    ///     The type of items in the multiset.
+    /// </typeparam>
+    let empty : Multiset<'item> = MSet (Map.empty)
 
     /// <summary>
     ///     Adds an element n times to a multiset
     /// </summary>
-    let addn (MSet ms) k m =
+    /// <typeparam name="item">
+    ///     The type of items in the multiset.
+    /// </typeparam>
+    let addn (MSet ms : Multiset<'item>)
+             (k : 'item)
+             (m : int)
+             : Multiset<'item> =
         let n = ms.TryFind k |> Option.fold (fun _ y -> y) 0
         MSet (ms.Add (k, n+m))
 
     /// <summary>
     ///     Adds an element to a multiset
     /// </summary>
-    let add ms k = addn ms k 1
+    let add (ms : Multiset<'item>) (k : 'item) : Multiset<'item> = addn ms k 1
 
     /// <summary>
     ///     Creates a multiset with the given flat sequence as its contents.
@@ -93,10 +105,13 @@ module Multiset =
     /// <param name="xs">
     ///     The flat sequence to use to create the multiset.
     /// </param>
+    /// <typeparam name="item">
+    ///     The type of items in the multiset.
+    /// </typeparam>
     /// <returns>
     ///     A multiset containing the given items.
     /// </returns>
-    let ofFlatSeq xs =
+    let ofFlatSeq (xs : 'item seq) : Multiset<'item> =
         Seq.fold add empty xs
 
     /// <summary>
@@ -105,10 +120,13 @@ module Multiset =
     /// <param name="xs">
     ///     The flat list to use to create the multiset.
     /// </param>
+    /// <typeparam name="item">
+    ///     The type of items in the multiset.
+    /// </typeparam>
     /// <returns>
     ///     A multiset containing the given items.
     /// </returns>
-    let ofFlatList (xs : List<_>) =
+    let ofFlatList (xs : 'item list) : Multiset<'item> =
         xs |> ofFlatSeq
 
     /// <summary>
@@ -117,10 +135,13 @@ module Multiset =
     /// <param name="x">
     ///     The item to place in the multiset.
     /// </param>
+    /// <typeparam name="item">
+    ///     The type of items in the multiset.
+    /// </typeparam>
     /// <returns>
     ///     A singleton multiset.
     /// </returns>
-    let singleton x = add empty x
+    let singleton (x : 'item) : Multiset<'item> = add empty x
 
 
     (*
@@ -133,10 +154,14 @@ module Multiset =
     /// <param name="ms">
     ///     The multiset to convert.
     /// </param>
+    /// <typeparam name="item">
+    ///     The type of items in the multiset.
+    /// </typeparam>
     /// <returns>
     ///     The sorted, flattened sequence.
     /// </returns>
-    let toFlatSeq (MSet ms) =
+    let toFlatSeq (MSet ms : Multiset<'item>) : 'item seq =
+        // TODO(CaptainHayashi): this will be removed when itviews land.
         ms
         |> Map.toSeq
         |> Seq.map (fun (k, amount) -> Seq.replicate amount k)
@@ -148,10 +173,14 @@ module Multiset =
     /// <param name="ms">
     ///     The multiset to convert.
     /// </param>
+    /// <typeparam name="item">
+    ///     The type of items in the multiset.
+    /// </typeparam>
     /// <returns>
     ///     The sorted, flattened list.
     /// </returns>
-    let toFlatList ms =
+    let toFlatList (ms : Multiset<'item>) : 'item list =
+        // TODO(CaptainHayashi): this will be removed when itviews land.
         ms
         |> toFlatSeq
         |> List.ofSeq
@@ -162,10 +191,16 @@ module Multiset =
     /// <param name="ms">
     ///     The multiset to convert.
     /// </param>
+    /// <typeparam name="item">
+    ///     The type of items in the multiset.
+    /// </typeparam>
     /// <returns>
     ///     The set of items in the multiset.
     /// </returns>
-    let toSet (MSet ms) =
+    let toSet (MSet ms : Multiset<'item>) : Set<'item> =
+        // TODO(CaptainHayashi): this _may_ be removed when itviews land,
+        // as it will be impossible to decide whether, if something is in
+        // the list an unknown amount of times, that amount > 0.
         Map.fold (fun set k _ -> Set.add k set) Set.empty ms
 
     (*
@@ -181,7 +216,8 @@ module Multiset =
     /// <returns>
     ///     The number of elements in <paramref name="_arg1" />.
     /// </returns>
-    let length (MSet mset) =
+    let length (MSet mset : Multiset<_>) : int =
+        // TODO(CaptainHayashi): this will be removed when itviews land.
         mset |> Map.fold (fun count _ n -> count + n) 0
 
     /// <summary>
@@ -191,14 +227,17 @@ module Multiset =
     ///     Since multisets are ordered, the resulting multiset may not
     ///     necessarily be <c>xs</c> followed by <c>ys</c>.
     /// </remarks>
-    ///
     /// <param name="xs">The first multiset to append.</param>
     /// <param name="ys">The second multiset to append.</param>
-    ///
+    /// <typeparam name="item">
+    ///     The type of items in the multiset.
+    /// </typeparam>
     /// <returns>
     ///     The result of appending <c>xs</c> to <c>ys</c>.
     /// </returns>
-    let append xs (MSet ymap) =
+    let append (xs : Multiset<'item>)
+               (MSet ymap : Multiset<'item>)
+               : Multiset<'item> =
         Map.fold addn xs ymap
 
     /// <summary>
@@ -253,13 +292,19 @@ module Multiset =
     ///     Since multisets are ordered, mapping can change the position of
     ///     items.
     /// </remarks>
-    ///
     /// <param name="f">The function to map over the multiset.</param>
-    ///
+    /// <typeparam name="src">
+    ///     The type of variables in the list to map.
+    /// </typeparam>
+    /// <typeparam name="dst">
+    ///     The type of variables in the list after mapping.
+    /// </typeparam>
     /// <returns>
     ///     The result of mapping <c>f</c> over the multiset.
     /// </returns>
-    let map f (MSet xs)=
+    let map (f : 'src -> 'dst)
+            (MSet xs : Multiset<'src>)
+            : Multiset<'dst> =
         let rec repeat_add map k n =
             match n with
             | 0 -> map

@@ -24,13 +24,13 @@ open Starling.Tests.Studies
 /// Mainly exists to persuade nUnit to use the correct types.
 type SearchViewDefEntry =
     { Search : int option
-      InitDefs : SVBViewDef<View.Types.DView> list }
+      InitDefs : ViewDefiner<BoolExpr<Sym<Var>> option> }
 
 /// Tests for the modeller.
 type ModellerTests() =
     /// View prototypes for the ticket lock modeller.
-    static member TicketLockProtos : FuncTable<unit> =
-        makeFuncTable
+    static member TicketLockProtos : FuncDefiner<unit> =
+        FuncDefiner.ofSeq
             [ (func "holdLock" [], ())
               (func "holdTick" [ Int "t" ], ()) ]
 
@@ -40,6 +40,18 @@ type ModellerTests() =
                      ("bar", Type.Int ())
                      ("baz", Type.Bool ())
                      ("emp", Type.Bool ()) ]
+
+    // Method context containing a small amount of variables.
+    static member Context =
+        { ViewProtos = ModellerTests.TicketLockProtos
+          SharedVars = Map.empty
+          ThreadVars = ModellerTests.Env }
+
+    // Method context containing all of the ticket lock variables.
+    static member TicketLockContext =
+        { ViewProtos = ModellerTests.TicketLockProtos
+          SharedVars = ticketLockModel.Globals
+          ThreadVars = ticketLockModel.Locals }
 
     static member EmptyCView : CView = Multiset.empty
 
@@ -61,7 +73,7 @@ type ModellerTests() =
     [<TestCaseSource("ViewExprsGood")>]
     member x.``View modelling on correct view expressions succeeds`` vex =
         vex
-        |> modelCView ModellerTests.TicketLockProtos ModellerTests.Env
+        |> modelCView ModellerTests.Context
         |> okOption
 
 
@@ -88,7 +100,7 @@ type ModellerTests() =
     [<TestCaseSource("ViewExprsBad")>]
     member x.``View modelling on incorrect view expressions fails`` vex =
         vex
-        |> modelCView ModellerTests.TicketLockProtos ModellerTests.Env
+        |> modelCView ModellerTests.Context
         |> failOption
 
 
@@ -175,7 +187,7 @@ type ModellerTests() =
     [<TestCaseSource("AtomicPrims")>]
     member x.``atomic primitives are modelled correctly as prims`` a =
         a
-        |> modelAtomic ticketLockModel.Globals ticketLockModel.Locals
+        |> modelAtomic ModellerTests.TicketLockContext
         |> okOption
 
 
@@ -195,20 +207,21 @@ type ModellerTests() =
     [<TestCaseSource("CommandAxioms")>]
     member x.``commands are modelled correctly as part-commands`` c =
         c
-        |> modelCommand ModellerTests.TicketLockProtos
-                        ticketLockModel.Globals
-                        ticketLockModel.Locals
+        |> modelCommand ModellerTests.TicketLockContext
         |> okOption
 
 
     /// Type-constraining builder for viewdef sets.
-    static member viewDefSet (vs : SVBViewDef<View.Types.DView> seq) : Set<SVBViewDef<View.Types.DView>> =
+    static member viewDefSet
+      (vs : (View.Types.DView * BoolExpr<Sym<Var>> option) seq)
+      : Set<View.Types.DView * BoolExpr<Sym<Var>> option> =
         Set.ofSeq vs
 
     /// Type-constraining builder for indefinite viewdef sets.
-    static member indefinites (vs : View.Types.DView seq) : Set<SVBViewDef<View.Types.DView>> =
+    static member indefinites (vs : View.Types.DView seq)
+      : Set<View.Types.DView * BoolExpr<Sym<Var>> option> =
         vs
-        |> Seq.map Indefinite
+        |> Seq.map (fun v -> (v, None))
         |> ModellerTests.viewDefSet
 
     /// Tests for the search modeller.
@@ -249,7 +262,8 @@ type ModellerTests() =
     [<TestCaseSource("SearchViewDefs")>]
     member x.``viewdef searches are carried out correctly`` svd =
         addSearchDefs ModellerTests.TicketLockProtos svd.Search svd.InitDefs
-        |> Set.ofList
+        |> ViewDefiner.toSeq
+        |> Set.ofSeq
 
     /// Full case studies to model.
     static member Models =

@@ -61,34 +61,34 @@ module Compositions =
     [<Test>]
     let ``Compose multi`` () =
         check
-            <| [ iEq (siAfter "t") (iAdd (siBefore "t") (AInt 1L))
-                 iEq (siAfter "t") (iAdd (siBefore "t") (AInt 1L))
-                 iEq (siAfter "t") (iAdd (siBefore "t") (AInt 1L)) ]
-            <| [ iEq (siInter 0I "t") (iAdd (siBefore "t") (AInt 1L))
-                 iEq (siInter 1I "t") (iAdd (siInter 0I "t") (AInt 1L))
-                 iEq (siInter 2I "t") (iAdd (siInter 1I "t") (AInt 1L)) ]
+            <| [ iEq (siAfter "t") (mkAdd2 (siBefore "t") (AInt 1L))
+                 iEq (siAfter "t") (mkAdd2 (siBefore "t") (AInt 1L))
+                 iEq (siAfter "t") (mkAdd2 (siBefore "t") (AInt 1L)) ]
+            <| [ iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (AInt 1L))
+                 iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (AInt 1L))
+                 iEq (siInter 2I "t") (mkAdd2 (siInter 1I "t") (AInt 1L)) ]
     [<Test>]
     let ``Compose multi after`` () =
         check
             <| [ BAnd
-                    [ (iEq (siAfter "t") (iAdd (siBefore "t") (AInt 1L)))
-                      (iEq (siAfter "t") (iAdd (siBefore "t") (AInt 3L))) ]
-                 iEq (siAfter "t") (iAdd (siBefore "t") (AInt 1L)) ]
-            <| [ iEq (siInter 0I "t") (iAdd (siBefore "t") (AInt 1L))
-                 iEq (siInter 0I "t") (iAdd (siBefore "t" )(AInt 3L))
-                 iEq (siInter 1I "t") (iAdd (siInter 0I "t") (AInt 1L)) ]
+                    [ (iEq (siAfter "t") (mkAdd2 (siBefore "t") (AInt 1L)))
+                      (iEq (siAfter "t") (mkAdd2 (siBefore "t") (AInt 3L))) ]
+                 iEq (siAfter "t") (mkAdd2 (siBefore "t") (AInt 1L)) ]
+            <| [ iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (AInt 1L))
+                 iEq (siInter 0I "t") (mkAdd2 (siBefore "t" )(AInt 3L))
+                 iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (AInt 1L)) ]
 
     [<Test>]
     let ``Compose multiCmd list`` () =
         check
             <| [ BAnd
-                    [ (iEq (siAfter "t") (iAdd (siBefore "t") (AInt 1L)))
-                      (iEq (siAfter "t") (iAdd (siBefore "t") (AInt 2L))) ]
-                 iEq (siAfter "t") (iAdd (siBefore "t") (AInt 3L))
+                    [ (iEq (siAfter "t") (mkAdd2 (siBefore "t") (AInt 1L)))
+                      (iEq (siAfter "t") (mkAdd2 (siBefore "t") (AInt 2L))) ]
+                 iEq (siAfter "t") (mkAdd2 (siBefore "t") (AInt 3L))
                  iEq (siAfter "g") (siBefore "t") ]
-            <| [ iEq (siInter 0I "t") (iAdd (siBefore "t") (AInt 1L))
-                 iEq (siInter 0I "t") (iAdd (siBefore "t" )(AInt 2L))
-                 iEq (siInter 1I "t") (iAdd (siInter 0I "t" )(AInt 3L))
+            <| [ iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (AInt 1L))
+                 iEq (siInter 0I "t") (mkAdd2 (siBefore "t" )(AInt 2L))
+                 iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t" )(AInt 3L))
                  iEq (siInter 0I "g") (siInter 1I "t") ]
 
 
@@ -168,5 +168,5 @@ module CommandTests =
                 iEq (siAfter "t") (siBefore "t")
                 iEq (siAfter "ticket") (siBefore "ticket")
                 iEq (siAfter "ticket") (siBefore "ticket")
-                iEq (siInter 0I "serving") (iAdd (siBefore "serving") (AInt 1L))
+                iEq (siInter 0I "serving") (mkAdd2 (siBefore "serving") (AInt 1L))
             ])

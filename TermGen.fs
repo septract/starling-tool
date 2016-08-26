@@ -69,7 +69,8 @@ let termGenFrameView r q = List.fold termGenFrameStep ([], q) r |> fst
 let guard r = { Cond = BTrue; Item = r }
 
 /// Generates the frame part of the weakest precondition.
-let termGenFrame : OView -> SMGView -> Multiset<GFunc<Sym<MarkedVar>>> =
+let termGenFrame
+  : OView -> GView<Sym<MarkedVar>> -> GView<Sym<MarkedVar>> =
     fun r q ->
     (* We iterate on multiset minus of each item in q:
      * A \ (B * C) = (A \ B) \ C
@@ -86,7 +87,7 @@ let termGenFrame : OView -> SMGView -> Multiset<GFunc<Sym<MarkedVar>>> =
 /// Generates a (weakest) precondition from a framed axiom.
 let termGenPre
   (gax : GoalAxiom<'cmd>)
-  : SMGView =
+  : GView<Sym<MarkedVar>> =
     (* Theoretically speaking, this is crunching an axiom {P} C {Q} and
      * goal view R into (P * (R \ Q)), where R \ Q is the weakest frame.
      * Remember that * is multiset union.
@@ -105,16 +106,16 @@ let termGenPre
     Multiset.append pre (termGenFrame goal post)
 
 /// Generates a term from a goal axiom.
-let termGenAxiom
-  (gax : GoalAxiom<'cmd>)
-  : Term<'cmd, SMGView, OView> =
+let termGenAxiom (gax : GoalAxiom<'cmd>)
+  : Term<'cmd, GView<Sym<MarkedVar>>, OView> =
     { WPre = termGenPre gax
       Goal = gax.Goal
       Cmd = gax.Axiom.Cmd }
 
 /// Converts a model's goal axioms to terms.
-let termGen  (mdl : UVModel<GoalAxiom<'cmd>>) :  UVModel<Term<'cmd, SMGView, OView>> =
-    mapAxioms termGenAxiom mdl
+let termGen (model : Model<GoalAxiom<'cmd>, _>)
+  : Model<Term<'cmd, GView<Sym<MarkedVar>>, OView>, _> =
+    mapAxioms termGenAxiom model
 
 
 /// <summary>
@@ -135,7 +136,7 @@ module Tests =
         static member FrameSubtracts =
             [ (tcd [| (List.singleton <|
                            func "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
-                      (Multiset.empty : SMGView) |] )
+                      (Multiset.empty : GView<Sym<MarkedVar>>) |] )
                   .Returns(Multiset.singleton <|
                            smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
                   .SetName("Removing emp from a func yields the original func")
@@ -198,7 +199,7 @@ module Tests =
               (tcd [| (List.empty : OView)
                       (Multiset.singleton <|
                            smgfunc BTrue "foo" [ Expr.Bool (sbBefore "bar") ] ) |] )
-                  .Returns(Multiset.empty : SMGView)
+                  .Returns(Multiset.empty : GView<Sym<MarkedVar>>)
                   .SetName("Removing a func from emp yields emp") ]
 
         /// <summary>

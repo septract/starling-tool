@@ -77,7 +77,8 @@ module Types =
     /// </typeparam>
     [<NoComparison>]
     [<NoEquality>]
-    type SubFun<'srcVar, 'dstVar> =
+    type SubFun<'srcVar, 'dstVar>
+      when 'srcVar : equality and 'dstVar : equality =
         Mapper<
             SubCtx,
             IntExpr<'srcVar>, BoolExpr<'srcVar>,
@@ -97,7 +98,8 @@ module Types =
     /// </typeparam>
     [<NoComparison>]
     [<NoEquality>]
-    type TrySubFun<'srcVar, 'dstVar, 'err> =
+    type TrySubFun<'srcVar, 'dstVar, 'err>
+      when 'srcVar : equality and 'dstVar : equality =
         Mapper<
             SubCtx,
             IntExpr<'srcVar>, BoolExpr<'srcVar>,
@@ -115,7 +117,8 @@ module Types =
     /// </typeparam>
     [<NoComparison>]
     [<NoEquality>]
-    type VSubFun<'srcVar, 'dstVar> =
+    type VSubFun<'srcVar, 'dstVar>
+      when 'srcVar : equality and 'dstVar : equality =
         Mapper<SubCtx, 'srcVar, 'srcVar, IntExpr<'dstVar>, BoolExpr<'dstVar>>
 
     /// <summary>
@@ -132,7 +135,8 @@ module Types =
     /// </typeparam>
     [<NoComparison>]
     [<NoEquality>]
-    type VTrySubFun<'srcVar, 'dstVar, 'err> =
+    type VTrySubFun<'srcVar, 'dstVar, 'err>
+      when 'srcVar : equality and 'dstVar : equality =
         Mapper<
             SubCtx,
             'srcVar, 'srcVar,

@@ -391,5 +391,5 @@ module Tests =
         /// </summary>
         [<TestCaseSource("ViewExprFlattens")>]
         member x.``View expressions can be flattened into views``
-            (ve : ViewExpr<SMGView>) =
+            (ve : ViewExpr<GView<Sym<MarkedVar>>>) =
             match ve with InnerView v -> v

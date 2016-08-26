@@ -49,7 +49,7 @@ module Queries =
     ///     <c>true</c> if the command is a no-op;
     ///     <c>false</c> otherwise.
     /// </returns>
-    let isNop =
+    let isNop : Command -> bool =
         List.forall
             (fun { Results = ps } ->
                   ps = [])
@@ -57,7 +57,7 @@ module Queries =
     /// <summary>
     ///     Active pattern matching assume commands.
     /// </summary>
-    let (|Assume|_|) =
+    let (|Assume|_|) : Command -> SMBoolExpr option =
         function
         | [ { Name = n ; Args = [ SMExpr.Bool b ] } ]
           when n = "Assume" -> Some b
@@ -91,7 +91,7 @@ module Compose =
     ///     The next available intermediate stage number.
     ///     If the expression has no intermediate stages, we return 0.
     /// </returns>
-    let rec nextIntIntermediate =
+    let rec nextIntIntermediate : IntExpr<Sym<_>> -> bigint =
         function
         | AVar (Reg (Intermediate (n, _))) -> n + 1I
         | AVar (Sym { Params = xs } ) ->
@@ -135,7 +135,7 @@ module Compose =
     ///     The next available intermediate stage number.
     ///     If the expression has no intermediate stages, we return 0.
     /// </returns>
-    and nextBoolIntermediate =
+    and nextBoolIntermediate : BoolExpr<Sym<_>> -> bigint =
         function
         | BVar (Reg (Intermediate (n, _))) -> n + 1I
         | BVar (Sym { Params = xs } ) ->
@@ -185,7 +185,7 @@ module Compose =
     ///     The next available intermediate stage number.
     ///     If the expression has no intermediate stages, we return 0.
     /// </returns>
-    and nextIntermediate =
+    and nextIntermediate : Expr<Sym<_>> -> bigint =
         function
         | Int x -> nextIntIntermediate x
         | Bool x -> nextBoolIntermediate x
@@ -215,7 +215,8 @@ module SymRemove =
     /// <summary>
     ///     Active pattern matching likely assignments to or from symbols.
     /// </summary>
-    let (|SymAssign|_|) =
+    let (|SymAssign|_|) : BoolExpr<Sym<'var>>
+      -> (Expr<Sym<'var>> * Expr<Sym<'var>>) option =
         // TODO(CaptainHayashi): sound and/or complete?
         function
         | BEq ((Expr.Bool (BVar (Sym _)) as lhs),
@@ -232,7 +233,7 @@ module SymRemove =
     ///     Tries to remove symbolic assignments from a command in
     ///     Boolean expression form.
     /// </summary>
-    let rec removeSym : BoolExpr<Sym<'a>> -> BoolExpr<Sym<'a>> =
+    let rec removeSym : BoolExpr<Sym<'var>> -> BoolExpr<Sym<'var>> =
         function
         | SymAssign (_, _) -> BTrue
         // Distributivity.
@@ -260,4 +261,4 @@ module Pretty =
     let printPrimCommand { Name = name; Args = xs; Results = ys } = 
         hjoin [ commaSep <| Seq.map (printCTyped String) ys; " <- " |> String; name |> String; String " "; commaSep <| Seq.map printSMExpr xs ]
 
-    let printCommand = List.map printPrimCommand >> semiSep
+    let printCommand : Command -> Doc = List.map printPrimCommand >> semiSep

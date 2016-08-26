@@ -10,7 +10,10 @@ open Starling.Utils.Config
 open Starling.Core.Pretty
 open Starling.Core.Graph
 open Starling.Core.Graph.Pretty
+open Starling.Core.Expr
+open Starling.Core.Expr.Pretty
 open Starling.Core.Var
+open Starling.Core.Var.Pretty
 open Starling.Core.Model
 open Starling.Core.Model.Pretty
 open Starling.Core.Symbolic
@@ -65,7 +68,7 @@ type Request =
     | HSF
 
 /// Map of -s stage names to Request items.
-let requestMap =
+let requestMap : Map<string, string * Request> =
     Map.ofList
         [ ("list",
            ("Lists all available phases.",
@@ -148,7 +151,7 @@ let requestMap =
 
 /// Converts an optional -s stage name to a request item.
 /// If none is given, the latest stage is selected.
-let requestFromStage (ostage : string option) =
+let requestFromStage (ostage : string option) : Request option =
     (withDefault "sat" ostage).ToLower()
     |> requestMap.TryFind
     |> Option.map snd
@@ -161,21 +164,26 @@ type Response =
     /// The result of frontend processing.
     | Frontend of Lang.Frontend.Response
     /// Stop at graph optimisation.
-    | GraphOptimise of UVModel<Graph>
+    | GraphOptimise of Model<Graph, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// Stop at graph axiomatisation.
-    | Axiomatise of UVModel<Axiom<SVGView, Command>>
+    | Axiomatise of Model<Axiom<GView<Sym<Var>>, Command>,
+                          ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of goal-axiom-pair generation.
-    | GoalAdd of UVModel<GoalAxiom<Command>>
+    | GoalAdd of Model<GoalAxiom<Command>, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of semantic expansion.
-    | Semantics of UVModel<GoalAxiom<SMBoolExpr>>
+    | Semantics of Model<GoalAxiom<SMBoolExpr>, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term generation.
-    | TermGen of UVModel<STerm<SMGView, OView>>
+    | TermGen of Model<STerm<GView<Sym<MarkedVar>>, OView>,
+                       ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term reification.
-    | Reify of UVModel<STerm<Set<GuardedSubview>, OView>>
+    | Reify of Model<STerm<Set<GuardedSubview>, OView>,
+                     ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term flattening.
-    | Flatten of UFModel<STerm<SMGView, SMVFunc>>
+    | Flatten of Model<STerm<GView<Sym<MarkedVar>>, SMVFunc>,
+                       FuncDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term optimisation.
-    | TermOptimise of UFModel<STerm<SMGView, SMVFunc>>
+    | TermOptimise of Model<STerm<GView<Sym<MarkedVar>>, SMVFunc>,
+                            FuncDefiner<BoolExpr<Sym<Var>> option>>
     /// Output a fully-instantiated symbolic proof.
     | SymProof of Model<SFTerm, unit>
     /// Output a fully-instantiated symbolic unstructured proof.
@@ -195,60 +203,54 @@ type Response =
 
 
 /// Pretty-prints a response.
-let printResponse mview =
+let printResponse (mview : ModelView) : Response -> Doc =
+    let printVModel paxiom m =
+        printModelView
+            paxiom
+            (printViewDefiner
+                (Option.map (printBoolExpr (printSym printVar))
+                 >> withDefault (String "?")))
+            mview m
+    let printFModel paxiom m =
+        printModelView paxiom
+            (printFuncDefiner
+                (Option.map (printBoolExpr (printSym printVar))
+                 >> withDefault (String "?")))
+            mview m
+    let printUModel paxiom m =
+        printModelView paxiom (fun _ -> Seq.empty) mview m
+
     function
     | List l -> printMap Indented String String l
     | Frontend f -> Lang.Frontend.printResponse mview f
-    | GraphOptimise g ->
-        printUVModelView printGraph mview g
-    | Axiomatise m ->
-        printUVModelView (printAxiom printCommand printSVGView) mview m
-    | GoalAdd m ->
-        printUVModelView (printGoalAxiom printCommand) mview m
-    | Semantics m ->
-        printUVModelView (printGoalAxiom printSMBoolExpr) mview m
-    | TermGen m ->
-        printUVModelView (printSTerm printSMGView printOView) mview m
-    | Reify m ->
-        printUVModelView (printSTerm printGuardedSubviewSet printOView) mview m
-    | Flatten m ->
-        printUFModelView (printSTerm printSMGView printSMVFunc) mview m
-    | TermOptimise m ->
-        printUFModelView (printSTerm printSMGView printSMVFunc) mview m
+    | GraphOptimise g -> printVModel printGraph g
+    | Axiomatise m -> printVModel (printAxiom printSVGView printCommand) m
+    | GoalAdd m -> printVModel (printGoalAxiom printCommand) m
+    | Semantics m -> printVModel (printGoalAxiom printSMBoolExpr) m
+    | TermGen m -> printVModel (printSTerm printSMGView printOView) m
+    | Reify m -> printVModel (printSTerm printGuardedSubviewSet printOView) m
+    | Flatten m -> printFModel (printSTerm printSMGView printSMVFunc) m
+    | TermOptimise m -> printFModel (printSTerm printSMGView printSMVFunc) m
     | SymProof m ->
-        printModelView
+        printUModel
             (printTerm printSMBoolExpr printSMBoolExpr printSMBoolExpr)
-            (fun _ -> Seq.empty)
-            mview
             m
     | RawSymProof m ->
-        printModelView
-            Core.Symbolic.Pretty.printSMBoolExpr
-            (fun _ -> Seq.empty)
-            mview
-            m
+        printUModel Core.Symbolic.Pretty.printSMBoolExpr m
     | Proof m ->
-        printModelView
+        printUModel
             (printTerm
                  Core.Var.Pretty.printMBoolExpr
                  Core.Var.Pretty.printMBoolExpr
                  Core.Var.Pretty.printMBoolExpr)
-            (fun _ -> Seq.empty)
-            mview
             m
     | RawProof m ->
-        printModelView
-            Core.Var.Pretty.printMBoolExpr
-            (fun _ -> Seq.empty)
-            mview
-            m
+        printUModel Core.Var.Pretty.printMBoolExpr m
     | Z3 z -> Backends.Z3.Pretty.printResponse mview z
     | SymZ3 (z, m) ->
        vmerge (Backends.Z3.Pretty.printResponse mview z)
-              (printModelView
+              (printUModel
                 (printTerm printSMBoolExpr printSMBoolExpr printSMBoolExpr)
-                (fun _ -> Seq.empty)
-                mview
                 m)
     | MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
     | HSF h -> Backends.Horn.Pretty.printHorns h
@@ -273,7 +275,7 @@ type Error =
     | Other of string
 
 /// Prints a top-level program error.
-let printError =
+let printError : Error -> Doc =
     function
     | Frontend e -> Lang.Frontend.printError e
     | Semantics e -> Semantics.Pretty.printSemanticsError e
@@ -291,8 +293,9 @@ let printError =
     | Other e -> String e
 
 /// Prints an ok result to stdout.
-let printOk pOk pBad =
-    pairMap pOk pBad
+let printOk (pOk : 'Ok -> Doc) (pBad : 'Warn -> Doc)
+  : ('Ok * 'Warn list) -> unit =
+    pairMap pOk (List.map pBad)
     >> function
        | (ok, []) -> ok
        | (ok, ws) -> vsep [ ok
@@ -304,12 +307,13 @@ let printOk pOk pBad =
     >> printfn "%s"
 
 /// Prints an err result to stderr.
-let printErr pBad =
-    pBad >> headed "Errors" >> print >> eprintfn "%s"
+let printErr (pBad : 'Error -> Doc) : 'Error list -> unit =
+    List.map pBad >> headed "Errors" >> print >> eprintfn "%s"
 
 /// Pretty-prints a Chessie result, given printers for the successful
 /// case and failure messages.
-let printResult pOk pBad =
+let printResult (pOk : 'Ok -> Doc) (pBad : 'Error -> Doc)
+  : Result<'Ok, 'Error> -> unit =
     either (printOk pOk pBad) (printErr pBad)
 
 /// Shorthand for the raw proof output stage.
@@ -321,92 +325,6 @@ let rawproof
              (fun { Cmd = c; WPre = w; Goal = g } ->
                   Core.Expr.mkImplies (Core.Expr.mkAnd2 c w) g))
         res
-
-
-/// Shorthand for the symbolic proof output stage.
-let symproof = bind (Core.Instantiate.Phase.run >> mapMessages Error.ModelFilterError)
-
-/// Shorthand for the non-symbolic proof output stage.
-let proof approx v =
-    let aprC =
-        if approx
-        then
-            Starling.Core.Command.SymRemove.removeSym
-        else id
-
-    let apr position =
-        if approx
-        then
-            Core.TypeSystem.Mapper.mapBoolCtx
-                Starling.Core.Symbolic.Queries.approx
-                position
-            >> snd
-        else id
-
-    let sub =
-        Core.TypeSystem.Mapper.mapBoolCtx
-            (tsfRemoveSym Core.Instantiate.Types.UnwantedSym)
-            Core.Sub.Types.SubCtx.NoCtx
-        >> snd
-
-    let pos = Starling.Core.Sub.Position.positive
-    let neg = Starling.Core.Sub.Position.negative
-
-    bind
-        (tryMapAxioms
-             (tryMapTerm
-                  (aprC >> (apr neg) >> sub >> lift Starling.Core.Expr.simp)
-                  ((apr neg) >> sub >> lift Starling.Core.Expr.simp)
-                  ((apr pos) >> sub >> lift Starling.Core.Expr.simp))
-         >> mapMessages Error.ModelFilterError)
-        v
-
-/// Shorthand for the HSF stage.
-let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
-
-/// Shorthand for the Z3 stage.
-let z3 reals rq = lift (Backends.Z3.run reals rq)
-
-/// Shorthand for the MuZ3 stage.
-let muz3 reals rq = lift (Backends.MuZ3.run reals rq)
-
-/// Shorthand for the frontend stage.
-let frontend times rq = Lang.Frontend.run times rq Response.Frontend Error.Frontend
-
-/// Shorthand for the graph optimise stage.
-let graphOptimise opts =
-    lift (fix <| Starling.Optimiser.Graph.optimise opts)
-
-/// Shorthand for the term optimise stage.
-let termOptimise opts =
-    lift (fix <| Starling.Optimiser.Term.optimise opts)
-
-/// Shorthand for the flattening stage.
-let flatten = lift Starling.Flattener.flatten
-
-/// Shorthand for the reify stage.
-let reify = lift Starling.Reifier.reify
-
-/// Shorthand for the term generation stage.
-let termGen = lift Starling.TermGen.termGen
-
-/// Shorthand for the goal adding stage.
-let goalAdd = lift Starling.Core.Axiom.goalAdd
-
-/// Shorthand for the semantics stage.
-let semantics = bind (Starling.Semantics.translate
-                      >> mapMessages Error.Semantics)
-
-/// Shorthand for the axiomatisation stage.
-let axiomatise = lift Starling.Core.Graph.axiomatise
-
-/// <summary>
-///     Shorthand for the stage filtering a model to indefinite and
-///     definite views.
-/// </summary>
-let filterIndefinite =
-    bind (Core.Instantiate.ViewDefFilter.filterModelIndefinite
-          >> mapMessages ModelFilterError)
 
 /// <summary>
 ///     Type of the backend parameter structure.
@@ -425,7 +343,8 @@ type BackendParams =
 /// <summary>
 ///     Map of known backend parameters.
 /// </summary>
-let rec backendParams () =
+let rec backendParams ()
+  : Map<string, string * (BackendParams -> BackendParams)> =
     Map.ofList
         [ ("approx",
            ("Replace all symbols in a proof with their under-approximation.\n\
@@ -457,7 +376,9 @@ let rec backendParams () =
 ///     taking a file containing request input and returning a
 ///     <c>Result</c> over <c>Response</c> and <c>Error</c>.
 /// </returns>
-let runStarling request =
+let runStarling (request : Request)
+  : string option -> Result<Response, Error> =
+
     let config = config()
 
     let opts =
@@ -465,7 +386,7 @@ let runStarling request =
         |> Option.map Utils.parseOptionString
         |> withDefault (Seq.empty)
         |> Seq.toList
-        |> Optimiser.Utils.parseOptString
+        |> Optimiser.Utils.parseOptimisationString
 
     let bp = backendParams ()
     let { Approx = approx; Reals = reals } =
@@ -481,6 +402,62 @@ let runStarling request =
                             str
                         opts)
                { Approx = false; Reals = false }
+
+    // Shorthand for the various stages available.
+    let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
+    let z3 reals rq = lift (Backends.Z3.run reals rq)
+    let muz3 reals rq = lift (Backends.MuZ3.run reals rq)
+    let frontend times rq =
+        Lang.Frontend.run times rq Response.Frontend Error.Frontend
+    let graphOptimise opts =
+        lift (fix <| Starling.Optimiser.Graph.optimise opts)
+    let termOptimise opts =
+        lift (fix <| Starling.Optimiser.Term.optimise opts)
+    let flatten = lift Starling.Flattener.flatten
+    let reify = lift Starling.Reifier.reify
+    let termGen = lift Starling.TermGen.termGen
+    let goalAdd = lift Starling.Core.Axiom.goalAdd
+    let semantics =
+        bind (Starling.Semantics.translate
+              >> mapMessages Error.Semantics)
+    let axiomatise = lift Starling.Core.Graph.axiomatise
+    let filterIndefinite =
+        bind (Core.Instantiate.DefinerFilter.filterModelIndefinite
+              >> mapMessages ModelFilterError)
+    let symproof =
+        bind (Core.Instantiate.Phase.run
+              >> mapMessages Error.ModelFilterError)
+
+    let proof v =
+        let aprC =
+            if approx then Starling.Core.Command.SymRemove.removeSym else id
+
+        let apr position =
+            if approx
+            then
+                Core.TypeSystem.Mapper.mapBoolCtx
+                    Starling.Core.Symbolic.Queries.approx
+                    position
+                >> snd
+            else id
+
+        let sub =
+            Core.TypeSystem.Mapper.mapBoolCtx
+                (tsfRemoveSym Core.Instantiate.Types.UnwantedSym)
+                Core.Sub.Types.SubCtx.NoCtx
+            >> snd
+
+        let pos = Starling.Core.Sub.Position.positive
+        let neg = Starling.Core.Sub.Position.negative
+
+        bind
+            (tryMapAxioms
+                 (tryMapTerm
+                      (aprC >> (apr neg) >> sub >> lift Starling.Core.Expr.simp)
+                      ((apr neg) >> sub >> lift Starling.Core.Expr.simp)
+                      ((apr pos) >> sub >> lift Starling.Core.Expr.simp))
+             >> mapMessages Error.ModelFilterError)
+            v
 
     let backend m =
         let phase op response =
@@ -512,12 +489,12 @@ let runStarling request =
         match request with
         | Request.SymProof    -> phase symproof Response.SymProof
         | Request.RawSymProof -> phase (symproof >> rawproof) Response.RawSymProof
-        | Request.Proof       -> phase (symproof >> proof approx) Response.Proof
-        | Request.RawProof    -> phase (symproof >> proof approx >> rawproof) Response.RawProof
-        | Request.Z3 rq       -> phase (symproof >> proof approx >> z3 reals rq) Response.Z3
+        | Request.Proof       -> phase (symproof >> proof) Response.Proof
+        | Request.RawProof    -> phase (symproof >> proof >> rawproof) Response.RawProof
+        | Request.Z3 rq       -> phase (symproof >> proof >> z3 reals rq) Response.Z3
         | Request.HSF         -> phase (filterIndefinite >> hsf) Response.HSF
         | Request.MuZ3 rq     -> phase (filterIndefinite >> muz3 reals rq) Response.MuZ3
-        | Request.SymZ3 rq    -> phase (symproof >> (tuplize (proof approx >> z3 reals rq))) Response.SymZ3
+        | Request.SymZ3 rq    -> phase (symproof >> (tuplize (proof >> z3 reals rq))) Response.SymZ3
         | _                   -> fail (Error.Other "Internal")
 
     //Build a phase with
@@ -553,7 +530,7 @@ let runStarling request =
     ** backend
 
 /// Runs Starling with the given options, and outputs the results.
-let mainWithOptions options =
+let mainWithOptions (options : Options) : int =
     _configRef := options
     let config = config ()
 
@@ -575,11 +552,11 @@ let mainWithOptions options =
     let pfn =
         if config.raw then (sprintf "%A" >> String)
                       else printResponse mview
-    printResult pfn (List.map printError) starlingR
+    printResult pfn printError starlingR
     0
 
 [<EntryPoint>]
-let main argv =
+let main (argv : string[]) : int =
     match CommandLine.Parser.Default.ParseArguments<Options> argv with
     | :? Parsed<Options> as parsed -> mainWithOptions parsed.Value
     | :? NotParsed<Options> as notParsed ->
