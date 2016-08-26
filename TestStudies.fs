@@ -211,7 +211,7 @@ let ticketLockUnlockMethodAST =
                   PostAssigns = [];};};
             Post = Unmarked Unit;}];};};
 
-let ticketLockConstraint01 = 
+let ticketLockConstraint01 =
     (DView.Unit,
      Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
@@ -304,7 +304,7 @@ let ticketLockConstraint05 =
                         Column = 49L;};
             Node = LV (LVIdent "tb");});})
 
-let ticketLockConstraint06 = 
+let ticketLockConstraint06 =
     (DView.Join (DView.Func {Name = "holdLock";
                              Params = [];},
                  DView.Func {Name = "holdLock";
@@ -317,7 +317,7 @@ let ticketLockConstraint06 =
 
 /// The parsed form of the ticket lock.
 let ticketLockParsed =
-      [ 
+      [
       { Position = { StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 34L;
                    Column = 1L; };
@@ -333,7 +333,7 @@ let ticketLockParsed =
                    Line = 38L;
                    Column = 1L;};
        Node =
-        Constraint ticketLockConstraint01} 
+        Constraint ticketLockConstraint01}
 
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 41L;
@@ -380,8 +380,8 @@ let ticketLockParsed =
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 8L;
                    Column = 1L;};
-       Node = Local (Int "s");}; 
-        
+       Node = Local (Int "s");};
+
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 13L;
                    Column = 1L;};
@@ -427,17 +427,17 @@ let sing = Multiset.singleton
 
 /// The conditional holdLock view.
 let holdLock =
-    svfunc "holdLock" [] |> Func
+    sexprfunc "holdLock" [] |> Func
 
 /// The conditional holdTick view.
 let holdTick =
-    svfunc "holdTick" [SVExpr.Int (siVar "t")] |> Func
+    sexprfunc "holdTick" [SVExpr.Int (siVar "t")] |> Func
 
 /// The guarded holdLock view.
-let gHoldLock cnd : SVGFunc = svgfunc cnd "holdLock" []
+let gHoldLock cnd : GFunc<Sym<Var>> = svgfunc cnd "holdLock" []
 
 /// The guarded holdTick view.
-let gHoldTick cnd : SVGFunc = svgfunc cnd "holdTick" [SVExpr.Int (siVar "t")]
+let gHoldTick cnd : GFunc<Sym<Var>> = svgfunc cnd "holdTick" [SVExpr.Int (siVar "t")]
 
 /// Produces the expression 's!before == t!before'.
 let sIsT = iEq (siVar "s") (siVar "t")

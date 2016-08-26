@@ -143,7 +143,7 @@ type OptimiserTests() =
     member x.``Afters in func params should be substituted correctly`` f =
         let sub = afterSubs OptimiserTests.AfterArithSubs
                             OptimiserTests.AfterBoolSubs
-        f |> subExprInVFunc sub NoCtx |> snd
+        f |> subExprInExprFunc sub NoCtx |> snd
 
     /// Test cases for simplification.
     static member ObviousBools =

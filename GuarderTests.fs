@@ -12,20 +12,21 @@ open Starling.Core.Model
 open Starling.Core.GuardedView
 open Starling.Lang.Modeller
 open Starling.Lang.Guarder
+open Starling.Core.View
 
 
 /// Tests for the view guarder.
-type GuarderTests() = 
-    
+type GuarderTests() =
+
     /// Test cases for converting CondViews to GuarViews
-    static member CondViews = 
+    static member CondViews =
         [ TestCaseData(Multiset.empty : CView)
               .Returns(Multiset.empty : GView<Sym<Var>>)
               .SetName("Convert the empty CView to the empty GView")
 
           TestCaseData(Multiset.ofFlatList
-                           [ Func <| svfunc "foo" [ Expr.Int (siVar "bar") ]
-                             Func <| svfunc "bar" [ Expr.Int (siVar "baz") ]] )
+                           [ Func <| sexprfunc "foo" [ Expr.Int (siVar "bar") ]
+                             Func <| sexprfunc "bar" [ Expr.Int (siVar "baz") ]] )
               .Returns(Multiset.ofFlatList
                            [ svgfunc BTrue "foo" [ Expr.Int (siVar "bar") ]
                              svgfunc BTrue "bar" [ Expr.Int (siVar "baz") ]] )
@@ -33,11 +34,11 @@ type GuarderTests() =
 
           TestCaseData(Multiset.ofFlatList
                            [ CFunc.ITE
-                                 (sbVar "s", 
+                                 (sbVar "s",
                                   Multiset.ofFlatList
-                                      [ Func <| svfunc "foo" [ Expr.Int (siVar "bar") ]], 
+                                      [ Func <| sexprfunc "foo" [ Expr.Int (siVar "bar") ]],
                                   Multiset.ofFlatList
-                                      [ Func <| svfunc "bar" [ Expr.Int (siVar "baz") ]] ) ] )
+                                      [ Func <| sexprfunc "bar" [ Expr.Int (siVar "baz") ]] ) ] )
               .Returns(Multiset.ofFlatList
                            [ svgfunc
                                 (sbVar "s")
@@ -51,26 +52,26 @@ type GuarderTests() =
 
           TestCaseData(Multiset.ofFlatList
                            [ CFunc.ITE
-                                 (sbVar "s", 
+                                 (sbVar "s",
                                   Multiset.ofFlatList
                                        [ CFunc.ITE
-                                             (sbVar "t", 
+                                             (sbVar "t",
                                               Multiset.ofFlatList
-                                                  [ Func <| svfunc
+                                                  [ Func <| sexprfunc
                                                         "foo"
                                                         [ Expr.Int (siVar "bar") ]
-                                                    Func <| svfunc
+                                                    Func <| sexprfunc
                                                         "bar"
-                                                        [ Expr.Int (siVar "baz") ]], 
+                                                        [ Expr.Int (siVar "baz") ]],
                                               Multiset.ofFlatList
-                                                  [ Func <| svfunc
+                                                  [ Func <| sexprfunc
                                                         "fizz"
                                                         [ Expr.Int (siVar "buzz") ]])
-                                         Func <| svfunc
+                                         Func <| sexprfunc
                                              "in"
-                                               [ Expr.Int (siVar "out") ]], 
+                                               [ Expr.Int (siVar "out") ]],
                                   Multiset.ofFlatList
-                                      [ Func <| svfunc
+                                      [ Func <| sexprfunc
                                             "ding"
                                             [ Expr.Int (siVar "dong") ]] ) ] )
               .Returns(Multiset.ofFlatList
@@ -95,7 +96,7 @@ type GuarderTests() =
                                  "ding"
                                  [ Expr.Int (siVar "dong") ]] )
               .SetName("Convert a complex-nested CondView-list to a GuarView-list with complex guards") ]
-    
+
     // Test conversion of CViews into GViews.
     [<TestCaseSource("CondViews")>]
     member x.``Test converting CViews into GViews`` cv = guardCView cv

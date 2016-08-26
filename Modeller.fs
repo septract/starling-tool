@@ -897,13 +897,13 @@ let modelCFunc
                              |> mapMessages (curry ViewError.BadExpr e))
              |> collect
              // Then, put them into a VFunc.
-             |> lift (vfunc afunc.Name)
+             |> lift (exprfunc afunc.Name)
              // Now, we can use Instantiate's type checker to ensure
              // the params in the VFunc are of the types mentioned
              // in proto.
-             |> bind (fun vfunc ->
-                          Instantiate.checkParamTypes vfunc proto
-                          |> mapMessages (curry LookupError vfunc.Name)))
+             |> bind (fun exprfunc ->
+                          Instantiate.checkParamTypes exprfunc proto
+                          |> mapMessages (curry LookupError exprfunc.Name)))
     // Finally, lift to CFunc.
     |> lift CFunc.Func
 

@@ -63,7 +63,7 @@ type ModellerTests() =
              .Returns(Some (ModellerTests.EmptyCView))
              .SetName("Modelling the unit view returns the empty multiset")
           TestCaseData(afunc "holdLock" [] |> View.Func)
-             .Returns(Some (Multiset.singleton (CFunc.Func (vfunc "holdLock" []))))
+             .Returns(Some (Multiset.singleton (CFunc.Func (exprfunc "holdLock" []))))
              .SetName("Modelling a valid single view returns a singleton multiset")
         ]
 

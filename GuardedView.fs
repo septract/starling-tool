@@ -68,22 +68,7 @@ module Types =
     /// <typeparam name="var">
     ///     The type of variables in the guard.
     /// </typeparam>
-    type GFunc<'var> when 'var : equality = Guarded<'var, VFunc<'var>>
-
-    /// <summary>
-    ///     A <c>GFunc</c> over <c>MarkedVar</c>s.
-    /// </summary>
-    type MGFunc = GFunc<MarkedVar>
-
-    /// <summary>
-    ///     A <c>GFunc</c> over symbolic <c>Var</c>s.
-    /// </summary>
-    type SVGFunc = GFunc<Sym<Var>>
-
-    /// <summary>
-    ///     A <c>GFunc</c> over symbolic <c>MarkedVar</c>s.
-    /// </summary>
-    type SMGFunc = GFunc<Sym<MarkedVar>>
+    type GFunc<'var> when 'var : equality = Guarded<'var, Func<Expr<'var>>>
 
     /// <summary>
     ///     A guarded view.
@@ -96,8 +81,7 @@ module Types =
     ///     although theoretically speaking they are equivalent to Views
     ///     with the guards lifting to proof case splits.
     /// </remarks>
-    type GView<'var> when 'var : comparison =
-        Multiset<GFunc<'var>>
+    type GView<'var> when 'var : comparison = Multiset<GFunc<'var>>
 
     /// <summary>
     ///     A view produced by expanding a sub-view of an guarded view.
@@ -136,60 +120,74 @@ let gfunc
   (name : string)
   (pars : Expr<'var> seq)
   : GFunc<'var> =
-    { Cond = guard ; Item = vfunc name pars }
+    { Cond = guard ; Item = exprfunc name pars }
 
 /// <summary>
-///     Creates a new <c>SVGFunc</c>.
+///     Creates a new symbolic guarded func.
 /// </summary>
 /// <param name="guard">
-///     The guard on which the <c>SVGFunc</c> is conditional.
+///     The guard on which the <c>GFunc</c> is conditional.
 /// </param>
 /// <param name="name">
-///     The name of the <c>SVGFunc</c>.
+///     The name of the <c>GFunc</c>.
 /// </param>
 /// <param name="pars">
-///     The parameters of the <c>SVGFunc</c>, as a sequence.
+///     The parameters of the <c>GFunc</c>, as a sequence.
 /// </param>
 /// <returns>
-///     A new <c>SVGFunc</c> with the given guard, name, and parameters.
+///     A new symbolic <c>GFunc</c> with the given guard, name, and parameters.
 /// </returns>
-let svgfunc (guard : SVBoolExpr) (name : string) (pars : SVExpr seq) : SVGFunc =
+let svgfunc
+  (guard : BoolExpr<Sym<Var>>)
+  (name : string)
+  (pars : Expr<Sym<Var>> seq)
+  : GFunc<Sym<Var>> =
     gfunc guard name pars
 
 /// <summary>
-///     Creates a new <c>MGFunc</c>.
+///     Creates a new marked-var <c>GFunc</c>.
 /// </summary>
 /// <param name="guard">
-///     The guard on which the <c>MGFunc</c> is conditional.
+///     The guard on which the <c>GFunc</c> is conditional.
 /// </param>
 /// <param name="name">
-///     The name of the <c>MGFunc</c>.
+///     The name of the <c>GFunc</c>.
 /// </param>
 /// <param name="pars">
-///     The parameters of the <c>MGFunc</c>, as a sequence.
+///     The parameters of the <c>GFunc</c>, as a sequence.
 /// </param>
 /// <returns>
-///     A new <c>MGFunc</c> with the given guard, name, and parameters.
+///     A new marked-var <c>GFunc</c> with the given guard, name, and
+///     parameters.
 /// </returns>
-let mgfunc (guard : MBoolExpr) (name : string) (pars : MExpr seq) : MGFunc =
+let mgfunc
+  (guard : BoolExpr<MarkedVar>)
+  (name : string)
+  (pars : MExpr seq)
+  : GFunc<MarkedVar> =
     gfunc guard name pars
 
 /// <summary>
-///     Creates a new <c>SMGFunc</c>.
+///     Creates a new symbolic marked-var <c>GFunc</c>.
 /// </summary>
 /// <param name="guard">
-///     The guard on which the <c>SMGFunc</c> is conditional.
+///     The guard on which the <c>GFunc</c> is conditional.
 /// </param>
 /// <param name="name">
-///     The name of the <c>SMGFunc</c>.
+///     The name of the <c>GFunc</c>.
 /// </param>
 /// <param name="pars">
-///     The parameters of the <c>SMGFunc</c>, as a sequence.
+///     The parameters of the <c>GFunc</c>, as a sequence.
 /// </param>
 /// <returns>
-///     A new <c>SMGFunc</c> with the given guard, name, and parameters.
+///     A new symbolic marked-var <c>GFunc</c> with the given guard, name, and
+///     parameters.
 /// </returns>
-let smgfunc (guard : SMBoolExpr) (name : string) (pars : SMExpr seq) : SMGFunc =
+let smgfunc
+  (guard : BoolExpr<Sym<MarkedVar>>)
+  (name : string)
+  (pars : Expr<Sym<MarkedVar>> seq)
+  : GFunc<Sym<MarkedVar>> =
     gfunc guard name pars
 
 
@@ -564,7 +562,7 @@ module Sub =
         let context', item' =
             Position.changePos
                 id
-                (subExprInVFunc sub)
+                (subExprInExprFunc sub)
                 context
                 item
 
@@ -642,8 +640,8 @@ module Sub =
     let subExprInDTerm
       (sub : SubFun<'srcVar, 'dstVar>)
       (context : SubCtx)
-      (term : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>)
-      : (SubCtx * Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>>) =
+      (term : Term<BoolExpr<'srcVar>, GView<'srcVar>, Func<Expr<'srcVar>>>)
+      : SubCtx * Term<BoolExpr<'dstVar>, GView<'dstVar>, Func<Expr<'dstVar>>> =
         let contextT, cmd' =
             Position.changePos
                 Position.negate
@@ -659,7 +657,7 @@ module Sub =
         let context', goal' =
             Position.changePos
                 id
-                (subExprInVFunc sub)
+                (subExprInExprFunc sub)
                 contextW
                 term.Goal
         (context', { Cmd = cmd'; WPre = wpre'; Goal = goal' } )
@@ -705,7 +703,7 @@ module Sub =
         let context', item' =
             Position.changePos
                 id
-                (trySubExprInVFunc sub)
+                (trySubExprInExprFunc sub)
                 context
                 item
 
@@ -795,8 +793,10 @@ module Sub =
     let trySubExprInDTerm
       (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
       (context : SubCtx)
-      (term : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>)
-      : (SubCtx * Result<Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>>, 'err> ) =
+      (term : Term<BoolExpr<'srcVar>, GView<'srcVar>, Func<Expr<'srcVar>>>)
+      : SubCtx
+        * Result<Term<BoolExpr<'dstVar>, GView<'dstVar>, Func<Expr<'dstVar>>>,
+                 'err> =
         let contextT, cmd' =
             Position.changePos
                 Position.negate
@@ -812,7 +812,7 @@ module Sub =
         let context', goal' =
             Position.changePos
                 id
-                (trySubExprInVFunc sub)
+                (trySubExprInExprFunc sub)
                 contextW
                 term.Goal
         (context',
@@ -1008,10 +1008,10 @@ module Tests =
                                         [ Typed.Int
                                               (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ]
                           Goal =
-                              (vfunc "bar"
+                              (exprfunc "bar"
                                    [ Typed.Int (AVar "baz")
-                                     Typed.Bool (BVar "barbaz") ] : VFunc<Var> ) }
-                       : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>> )
+                                     Typed.Bool (BVar "barbaz") ] : Func<Expr<Var>> ) }
+                       : Term<BoolExpr<Var>, GView<Var>, Func<Expr<Var>>> )
                       Position.positive |] )
                   .Returns(
                       (Position.positive,
@@ -1028,10 +1028,10 @@ module Tests =
                                          [ Typed.Int
                                                (AAdd [ AInt 0L; AInt 0L ]) ] ]
                            Goal =
-                               (vfunc "bar"
+                               (exprfunc "bar"
                                     [ Typed.Int (AInt 1L)
-                                      Typed.Bool BTrue ] : VFunc<Var> ) }
-                        : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>> )))
+                                      Typed.Bool BTrue ] : Func<Expr<Var>> ) }
+                        : Term<BoolExpr<Var>, GView<Var>, Func<Expr<Var>>> )))
                   .SetName("Successfully translate a positive DTerm")
               (tcd
                    [| ( { Cmd =
@@ -1047,10 +1047,10 @@ module Tests =
                                         [ Typed.Int
                                               (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ]
                           Goal =
-                              (vfunc "bar"
+                              (exprfunc "bar"
                                    [ Typed.Int (AVar "baz")
-                                     Typed.Bool (BVar "barbaz") ] : VFunc<Var> ) }
-                       : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>> )
+                                     Typed.Bool (BVar "barbaz") ] : Func<Expr<Var>> ) }
+                       : Term<BoolExpr<Var>, GView<Var>, Func<Expr<Var>>> )
                       Position.negative |] )
                   .Returns(
                       (Position.negative,
@@ -1067,10 +1067,10 @@ module Tests =
                                          [ Typed.Int
                                                (AAdd [ AInt 1L; AInt 1L ]) ] ]
                            Goal =
-                               (vfunc "bar"
+                               (exprfunc "bar"
                                     [ Typed.Int (AInt 0L)
-                                      Typed.Bool BFalse ] : VFunc<Var> ) }
-                        : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>> )))
+                                      Typed.Bool BFalse ] : Func<Expr<Var>> ) }
+                        : Term<BoolExpr<Var>, GView<Var>, Func<Expr<Var>>> )))
                   .SetName("Successfully translate a negative DTerm") ]
 
         /// <summary>
@@ -1078,7 +1078,7 @@ module Tests =
         /// </summary>
         [<TestCaseSource("PositionSubExprInDTermCases")>]
         member this.testPositionSubExprInDTerm
-          (t : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>>)
+          (t : Term<BoolExpr<Var>, GView<Var>, Func<Expr<Var>>>)
           (pos : SubCtx) =
             Sub.subExprInDTerm
                 positionTestSub

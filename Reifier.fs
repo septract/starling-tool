@@ -18,7 +18,7 @@ open Starling.Core.Symbolic
 let reifySingleDef view accumulator (dv : DView, _) =
     let rec matchMultipleViews
       (pattern : DFunc list)
-      (view : SMGFunc list) accumulator result =
+      (view : GFunc<Sym<MarkedVar>> list) accumulator result =
         match pattern with
         | [] ->
                 //Pull out the set of guards used in this match, and add to the set
@@ -32,7 +32,7 @@ let reifySingleDef view accumulator (dv : DView, _) =
                     Item = List.rev views }
                     accumulator
         | p :: pattern ->
-            let rec matchSingleView (view : SMGFunc list) rview accumulator =
+            let rec matchSingleView (view : GFunc<Sym<MarkedVar>> list) rview accumulator =
                match view with
                | [] -> accumulator
                | v :: view ->
