@@ -17,7 +17,7 @@ open Starling.Core.Symbolic
 /// Calculate the multiset of ways that this View matches the pattern in dv and add to the assumulator.
 let reifySingleDef view accumulator (dv : DView, _) =
     let rec matchMultipleViews
-      (pattern : DFunc list)
+      (pattern : IteratedFuncContainer list)
       (view : SMGFunc list) accumulator result =
         match pattern with
         | [] ->
@@ -37,7 +37,7 @@ let reifySingleDef view accumulator (dv : DView, _) =
                | [] -> accumulator
                | v :: view ->
                   let accumulator =
-                    if p.Name = v.Item.Name && p.Params.Length = v.Item.Params.Length then
+                    if p.Func.Name = v.Item.Name && p.Func.Params.Length = v.Item.Params.Length then
                         matchMultipleViews pattern (rview @ view) accumulator (v::result)
                     else
                         accumulator

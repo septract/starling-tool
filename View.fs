@@ -40,13 +40,16 @@ module Types =
     /// A func over symbolic-marked-var expressions.
     type SMVFunc = ExprFunc<Sym<MarkedVar>>
 
+    type IteratedFuncContainer =
+        { Func : DFunc; Iterator : TypedVar option }
+
 
     (*
      * Views
      *)
 
     /// A view definition.
-    type DView = List<DFunc>
+    type DView = List<IteratedFuncContainer>
 
     /// <summary>
     ///     A basic view, as an ordered list of VFuncs.
@@ -108,8 +111,18 @@ module Pretty =
     /// Pretty-prints an OView.
     let printOView = List.map printSMVFunc >> semiSep >> squared
 
+    /// Pretty-prints an IteratedFuncContainer.
+    let printIteratedFuncContainer
+      ( { Func = f ; Iterator = i } : IteratedFuncContainer)
+      : Doc =
+        let printIterator =
+            function
+            | None -> Nop
+            | Some i -> squared (printTypedVar i)
+        hsep [printDFunc f; printIterator i]
+
     /// Pretty-prints a DView.
-    let printDView = List.map printDFunc >> semiSep >> squared
+    let printDView = List.map printIteratedFuncContainer >> semiSep >> squared
 
     /// Pretty-prints view expressions.
     let rec printViewExpr pView =

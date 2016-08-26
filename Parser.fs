@@ -384,7 +384,7 @@ let parseDUnit = stringReturn "emp" DView.Unit
 let parseDIterated =
     pstring "iterated" >>. ws >>.
     pipe2ws (parseFunc parseIdentifier)
-            (inSquareBrackets parseExpression)
+            (inSquareBrackets parseIdentifier)
             (fun f e -> DView.Iterated(f, e))
 
 /// Parses a `basic` view definition (unit, if, named, or bracketed).

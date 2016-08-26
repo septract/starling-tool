@@ -13,8 +13,8 @@ open Starling.Core.TypeSystem.Check
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
-open Starling.Core.View
 open Starling.Core.Model
+open Starling.Core.View
 open Starling.Core.Command
 open Starling.Core.Command.Create
 open Starling.Core.Instantiate
@@ -674,26 +674,30 @@ let modelDFunc
                  |> Multiset.singleton)
 
 /// Tries to convert a view def into its model (multiset) form.
-let rec modelDView (protos : FuncDefiner<unit>) =
+let rec modelDView (svars : VarMap) (protos : FuncDefiner<unit>) =
     function
     | DView.Unit -> ok Multiset.empty
-    | DView.Func dfunc -> modelDFunc protos dfunc
-    | DView.Join(l, r) -> trial { let! lM = modelDView protos l
-                                  let! rM = modelDView protos r
+    | DView.Func dfunc -> Multiset.map (fun f -> { Func = f; Iterator = None }) <!> (modelDFunc protos dfunc)
+    | DView.Join(l, r) -> trial { let! lM = modelDView svars protos l
+                                  let! rM = modelDView svars protos r
                                   return Multiset.append lM rM }
+    | DView.Iterated(dfunc, e) ->
+        let updateFunc (s : string) f = { Func = f; Iterator = Some (withType (Int()) s) }
+        let modelledDFunc = modelDFunc protos dfunc
+        (Multiset.map (updateFunc e)) <!> modelledDFunc
 
 /// Produces the environment created by interpreting the viewdef vds using the
 /// view prototype map vpm.
 let rec localEnvOfViewDef vds =
     vds
     |> Seq.ofList
-    |> Seq.map (fun {Params = ps} -> makeVarMap ps)
+    |> Seq.map (fun { Func = {Params = ps} } -> makeVarMap ps)
     |> seqBind (fun xR s -> bind (combineMaps s) xR) Map.empty
     |> mapMessages ViewError.BadVar
 
 /// Produces the variable environment for the constraint whose viewdef is v.
-let envOfViewDef svars =
-    localEnvOfViewDef >> bind (combineMaps svars >> mapMessages SVarConflict)
+let envOfViewDef : VarMap -> Starling.Core.View.Types.DView -> Result<VarMap, ViewError> =
+    fun svars -> localEnvOfViewDef >> bind (combineMaps svars >> mapMessages SVarConflict)
 
 /// Converts a single constraint to its model form.
 let modelViewDef
@@ -702,7 +706,7 @@ let modelViewDef
   (av : AST.Types.DView, ad : Expression option)
   : Result<(View.Types.DView * SVBoolExpr option), ModelError> =
     trial {
-        let! vms = wrapMessages CEView (modelDView vprotos) av
+        let! vms = wrapMessages CEView (modelDView svars vprotos) av
         let  v = vms |> Multiset.toFlatList
         let! e = envOfViewDef svars v |> mapMessages (curry CEView av)
         let! d = (match ad with
@@ -735,7 +739,7 @@ let modelViewDef
 ///         caught them in the main defining view modeller.
 ///     </para>
 /// </remarks>
-let inDefiner : ViewDefiner<SVBoolExpr option> -> Func<'c> list -> bool =
+let inDefiner : ViewDefiner<SVBoolExpr option> -> DView -> bool =
     fun definer dview ->
         definer
         |> ViewDefiner.toSeq

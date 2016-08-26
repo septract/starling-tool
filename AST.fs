@@ -69,7 +69,7 @@ module Types =
         | Unit
         | Join of DView * DView
         | Func of Func<string>
-        | Iterated of Func<string> * Expression
+        | Iterated of Func<string> * string
 
     /// <summary>
     ///     A view, annotated with additional syntax.
