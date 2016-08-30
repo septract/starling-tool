@@ -76,6 +76,7 @@
     <Compile Include="Frontend.fs" />
     <Compile Include="Z3Backend.fs" />
     <Compile Include="MuZ3Backend.fs" />
+    <!--
     <Compile Include="TestStudies.fs" />
     <Compile Include="FlattenerTests.fs" />
     <Compile Include="ExprTests.fs" />
@@ -86,10 +87,12 @@
     <Compile Include="ParserTests.fs" />
     <Compile Include="ModellerTests.fs" />
     <Compile Include="GuarderTests.fs" />
+    <Compile Include="GuardedViewTests.fs" />
     <Compile Include="SemanticsTests.fs" />
     <Compile Include="OptimiserTests.fs" />
     <Compile Include="HornTests.fs" />
     <Compile Include="CommandTests.fs" />
+    -->
     <Compile Include="Main.fs" />
     <None Include="packages.config" />
     <None Include="Examples\Pass\ticketLock.cvf" />

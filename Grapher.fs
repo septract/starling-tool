@@ -307,14 +307,14 @@ let graphMethod
   ({ Signature = { Name = name }; Body = body } : GuarderMethod)
   : Result<Graph, Error> =
     let vgen = freshGen ()
-    let viewName () = 
-       getFresh vgen 
-       |> fun y -> y.ToString().PadLeft(3,'0')  // pad string so sorting works. 
+    let viewName () =
+       getFresh vgen
+       |> fun y -> y.ToString().PadLeft(3,'0')  // pad string so sorting works.
        |> sprintf "%s_V%s" name
     let cgen = freshGen ()
-    let cmdName () = 
-       getFresh cgen 
-       |> fun y -> y.ToString().PadLeft(3,'0')  // pad string so sorting works. 
+    let cmdName () =
+       getFresh cgen
+       |> fun y -> y.ToString().PadLeft(3,'0')  // pad string so sorting works.
        |> sprintf "%s_C%s" name
 
     body

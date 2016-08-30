@@ -188,14 +188,14 @@ module Pretty =
             hsep [ String "if"
                    printSVBoolExpr i
                    String "then"
-                   t |> printMultiset printCFunc |> ssurround "[" "]"
+                   t |> printCView |> ssurround "[" "]"
                    String "else"
-                   e |> printMultiset printCFunc |> ssurround "[" "]" ]
+                   e |> printCView |> ssurround "[" "]" ]
         | Func v -> printSVFunc v
 
     /// Pretty-prints a CView.
-    let printCView : CView -> Doc =
-        printMultiset printCFunc >> ssurround "[|" "|]"
+    and printCView : CView -> Doc =
+        printMultiset (printIteratedContainer printCFunc) >> ssurround "[|" "|]"
 
     /// Pretty-prints a part-cmd at the given indent level.
     let rec printPartCmd (pView : 'view -> Doc) : PartCmd<'view> -> Doc =
@@ -756,7 +756,7 @@ let inDefiner : ViewDefiner<SVBoolExpr option> -> DView -> bool =
                     if (List.length view = List.length dview)
                     then
                         List.forall2
-                            (fun vdfunc dfunc -> vdfunc.Func.Name = dfunc.Func.Name)
+                            (fun (vdfunc : IteratedContainer<DFunc>) (dfunc : IteratedContainer<DFunc>) -> vdfunc.Func.Name = dfunc.Func.Name)
                             view
                             dview
                     else false)
@@ -921,12 +921,13 @@ let modelCFunc
 
 /// Tries to flatten a view AST into a CView.
 /// Takes an environment of local variables, and the AST itself.
-let rec modelCView (ctx : MethodContext) =
+let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
+    let mkCView cfunc = Multiset.singleton ({ Func = cfunc; Iterator = None })
     function
     | View.Func afunc ->
-        modelCFunc ctx afunc |> lift Multiset.singleton
+        modelCFunc ctx afunc |> lift mkCView
     | View.If(e, l, r) ->
-        lift3 (fun em lm rm -> CFunc.ITE(em, lm, rm) |> Multiset.singleton)
+        lift3 (fun em lm rm -> CFunc.ITE(em, lm, rm) |> mkCView)
               (e |> modelBoolExpr ctx.ThreadVars id
                  |> mapMessages (curry ViewError.BadExpr e))
               (modelCView ctx l)
@@ -962,7 +963,7 @@ let modelBoolLoad : MethodContext -> Var -> Expression -> FetchMode -> Result<Pr
                         "!BLoad"
                             [ Bool dest ]
                             [ s |> Before |> Reg |> BVar |> Expr.Bool ]
-                              
+
             | Typed.Bool s, Increment -> return! fail (IncBool srcExpr)
             | Typed.Bool s, Decrement -> return! fail (DecBool srcExpr)
             | _ -> return! fail (TypeMismatch (Type.Bool (), srcLV, typeOf src))

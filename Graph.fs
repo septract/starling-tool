@@ -30,7 +30,7 @@ module Types =
     /// <summary>
     ///     A <see cref="ViewExpr"/> of the type permitted in a Graph.
     /// </summary>
-    type GraphViewExpr = ViewExpr<GView<Sym<Var>>>
+    type GraphViewExpr = ViewExpr<IteratedGView<Sym<Var>>>
 
     /// <summary>
     ///     An edge identifier.

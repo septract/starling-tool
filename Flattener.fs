@@ -15,15 +15,14 @@ open Starling.Core.GuardedView
 
 
 /// <summary>
-///     Extracts a sequence of all of the parameters in an func sequence
-///     (OView or DView) in order.
+///     Extracts a sequence of all of the parameters in a func sequence
 /// </summary>
 let paramsOfFuncSeq (funcs : Func<'var> seq) : 'var seq =
     funcs |> Seq.map (fun v -> v.Params) |> Seq.concat
 
 /// <summary>
 ///     Constructs a (hopefully) unique name for a Func resulting from
-///     the flattening of a func sequence (OView or DView).
+///     the flattening of a func sequence
 /// </summary>
 let genFlatFuncSeqName (funcs : Func<'var> seq) : string =
     funcs

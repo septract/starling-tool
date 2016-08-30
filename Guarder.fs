@@ -17,18 +17,20 @@ open Starling.Lang.Modeller
 
 [<AutoOpen>]
 module Types =
-    type GuarderViewExpr = ViewExpr<GView<Sym<Var>>>
+    type GuarderView = IteratedGView<Sym<Var>>
+    type GuarderViewExpr = ViewExpr<GuarderView>
     type GuarderPartCmd = PartCmd<GuarderViewExpr>
     type GuarderBlock = Block<GuarderViewExpr, GuarderPartCmd>
     type GuarderMethod = Method<GuarderViewExpr, GuarderPartCmd>
 
 /// Resolves a full condition-view multiset into a guarded-view multiset.
-let guardCView : CView -> GView<Sym<Var>> =
-    let rec guardCFuncIn suffix =
-        function
+let guardCView : CView -> GuarderView =
+    let rec guardCFuncIn suffix cview =
+        match cview.Func with
         | CFunc.Func v ->
-            [ { Cond = suffix |> Set.toList |> mkAnd
-                Item = v } ]
+            [ { Func = { Cond = suffix |> Set.toList |> mkAnd
+                         Item = v };
+                Iterator = cview.Iterator } ]
         | CFunc.ITE(expr, tviews, fviews) ->
             List.concat
                 [ guardCViewIn (suffix.Add expr) (Multiset.toFlatList tviews)
@@ -77,5 +79,5 @@ let guardMethod
     { Signature = signature; Body = guardBlock body }
 
 /// Converts an entire model to guarded views.
-let guard (model : Model<ModellerMethod, _>) : Model<GuarderMethod, _> =
+let guard (model : Model<ModellerMethod, ViewDefiner<SVBoolExpr option>>) : Model<GuarderMethod, ViewDefiner<SVBoolExpr option>> =
     mapAxioms guardMethod model

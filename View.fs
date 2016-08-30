@@ -110,14 +110,15 @@ module Pretty =
     /// Pretty-prints an OView.
     let printOView = List.map printSMVFunc >> semiSep >> squared
 
-    /// Pretty-prints an IteratedFuncContainer.
-    let printIteratedFuncContainer : IteratedFuncContainer -> Doc =
+    /// Prints an IteratedContainer
+    let printIteratedContainer (pFunc : 'Func -> Doc)
+      : IteratedContainer<'Func> -> Doc =
         function
-        | { Iterator = None; Func = dfunc } -> printDFunc dfunc
-        | { Iterator = Some var; Func = dfunc }   -> hjoin [ printDFunc dfunc; String "["; printTypedVar var; String "]" ]
+        | { Iterator = None; Func = func } -> pFunc func
+        | { Iterator = Some var; Func = func }   -> hjoin [ pFunc func; String "["; printTypedVar var; String "]" ]
 
     /// Pretty-prints a DView.
-    let printDView = List.map printIteratedFuncContainer >> semiSep >> squared
+    let printDView = List.map (printIteratedContainer printDFunc) >> semiSep >> squared
 
     /// Pretty-prints view expressions.
     let rec printViewExpr pView =
