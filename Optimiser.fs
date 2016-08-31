@@ -569,18 +569,18 @@ module Graph =
     ///         <c>GView</c>s, but with a <c>BTrue</c> guard.
     ///     </para>
     /// </summary>
-    let (|ITEGuards|_|) (ms: GView<Sym<Var>>)
-      : (BoolExpr<Var> * GView<Sym<Var>>
-         * BoolExpr<Var> * GView<Sym<Var>>) option =
+    let (|ITEGuards|_|) (ms: IteratedGView<Sym<Var>>)
+      : (BoolExpr<Var> * IteratedGView<Sym<Var>>
+         * BoolExpr<Var> * IteratedGView<Sym<Var>>) option =
         match (Multiset.toFlatList ms) with
-        | [ { Cond = VNoSym xc; Item = xi }
-            { Cond = VNoSym yc; Item = yi } ]
+        | [ { Func = { Cond = VNoSym xc; Item = xi }; Iterator = xit }
+            { Func = { Cond = VNoSym yc; Item = yi }; Iterator = yit } ]
               when (equivHolds id (negates xc yc)) ->
-            Some (xc, Multiset.singleton { Cond = BTrue; Item = xi },
-                  yc, Multiset.singleton { Cond = BTrue; Item = yi })
+            Some (xc, Multiset.singleton { Func = { Cond = BTrue; Item = xi }; Iterator = xit },
+                  yc, Multiset.singleton { Func = { Cond = BTrue; Item = yi }; Iterator = yit })
         // {| G -> P |} is trivially equivalent to {| G -> P * ¬G -> emp |}.
-        | [ { Cond = (VNoSym xc); Item = xi } ] ->
-            Some (xc, Multiset.singleton { Cond = BTrue; Item = xi },
+        | [ { Func = { Cond = (VNoSym xc); Item = xi }; Iterator = it } ] ->
+            Some (xc, Multiset.singleton { Func = { Cond = BTrue; Item = xi }; Iterator = it },
                   mkNot xc, Multiset.empty)
         | _ -> None
 
@@ -718,7 +718,7 @@ module Graph =
                             // (TODO: do something with the ViewExpr annotations?)
                             match (pViewexpr, qViewexpr) with
                             | InnerView pView, InnerView qView ->
-                                let vars = SVGViewVars pView
+                                let vars = IteratedSVGViewVars pView
                                 let cmdVars = commandResults e.Command
                                 // TODO: Better equality?
                                 if pView = qView && disjoint cmdVars vars
