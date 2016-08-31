@@ -28,9 +28,14 @@ open Starling.Core.Symbolic
 [<AutoOpen>]
 module Types =
     /// <summary>
+    ///     A view of the type permitted in a Graph.
+    /// </summary>
+    type GraphView = IteratedGView<Sym<Var>>
+
+    /// <summary>
     ///     A <see cref="ViewExpr"/> of the type permitted in a Graph.
     /// </summary>
-    type GraphViewExpr = ViewExpr<IteratedGView<Sym<Var>>>
+    type GraphViewExpr = ViewExpr<GraphView>
 
     /// <summary>
     ///     An edge identifier.
@@ -623,7 +628,7 @@ let mapEdges (f : FullEdge -> 'result) (graph : Graph) : 'result seq =
 ///     to <paramref name="nodeView" />.
 /// </returns>
 let nodeHasView
-  (nodeName : NodeID) (nodeView : GView<Sym<Var>>) (graph : Graph)
+  (nodeName : NodeID) (nodeView : GraphView) (graph : Graph)
   : bool =
     match (Map.tryFind nodeName graph.Contents) with
     | Some (InnerView v, _, _, _) -> v = nodeView
@@ -644,7 +649,7 @@ let nodeHasView
 ///     This is wrapped in a Chessie result over <c>Error</c>.
 /// </returns>
 let axiomatiseGraph
-  : Graph -> (string * Axiom<GView<Sym<Var>>, Command>) seq =
+  : Graph -> (string * Axiom<GraphView, Command>) seq =
     mapEdges
         (fun { Name = n; SrcView = s ; DestView = t ; Command = c } ->
             (n, { Pre = match s with InnerView v -> v
@@ -666,7 +671,7 @@ let axiomatiseGraph
 ///     A map of axioms characterising <paramref name="_arg1" />.
 /// </returns>
 let axiomatiseGraphs
-  : Map<string, Graph> -> Map<string, Axiom<GView<Sym<Var>>, Command>> =
+  : Map<string, Graph> -> Map<string, Axiom<GraphView, Command>> =
     // The map key is redundant, as we already have it inside the
     // graph iself.
     Map.toSeq
@@ -690,7 +695,7 @@ let axiomatiseGraphs
 /// </returns>
 let axiomatise
   (model : Model<Graph, _>)
-  : Model<Axiom<GView<Sym<Var>>, Command>, _> =
+  : Model<Axiom<GraphView, Command>, _> =
     withAxioms (axiomatiseGraphs model.Axioms) model
 
 
@@ -705,6 +710,8 @@ module Pretty =
     open Starling.Core.Axiom.Pretty
     open Starling.Core.View.Pretty
     open Starling.Core.GuardedView.Pretty
+    open Starling.Core.Symbolic.Pretty
+    open Starling.Core.Var.Pretty
 
 
     /// <summary>
@@ -740,7 +747,7 @@ module Pretty =
         let list = match nk with Normal -> [] | Entry -> [String "(Entry)"] | Exit -> [String "(Exit)"] | EntryExit -> [String "(EntryExit)"]
         hsep [ id |> String
                ([ id |> String
-                  view |> printViewExpr printSVGView ] @ list)
+                  view |> printViewExpr (printIteratedGView (printSym printVar)) ] @ list)
                 |> colonSep |> printLabel
              ]
         |> withSemi
