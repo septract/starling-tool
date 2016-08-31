@@ -71,6 +71,14 @@ module Types =
     type GFunc<'var> when 'var : equality = Guarded<'var, VFunc<'var>>
 
     /// <summary>
+    ///     A guarded iterated <c>VFunc</c>.
+    /// </summary>
+    /// <typeparam name="var">
+    ///     The type of variables in the guard.
+    /// </typeparam>
+    type IteratedGFunc<'var> when 'var : equality = IteratedContainer<Guarded<'var, VFunc<'var>>>
+
+    /// <summary>
     ///     A <c>GFunc</c> over <c>MarkedVar</c>s.
     /// </summary>
     type MGFunc = GFunc<MarkedVar>
@@ -102,7 +110,7 @@ module Types =
     /// An iterated GView
     /// i.e. a GView but containing Iterated forms of the GFunc's
     type IteratedGView<'var> when 'var : comparison =
-        Multiset<IteratedContainer<GFunc<'var>>>
+        Multiset<IteratedGFunc<'var>>
 
     /// <summary>
     ///     A view produced by expanding a sub-view of an guarded view.
