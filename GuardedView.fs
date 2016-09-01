@@ -77,7 +77,7 @@ module Types =
     ///     The type of variables in the guard.
     /// </typeparam>
     type IteratedGFunc<'Var> when 'Var : equality =
-        IteratedContainer<Guarded<'Var, VFunc<'Var>>, 'Var>
+        IteratedContainer<Guarded<'Var, VFunc<'Var>>, IntExpr<'Var>>
 
     /// <summary>
     ///     A <c>GFunc</c> over <c>MarkedVar</c>s.
@@ -505,7 +505,8 @@ module Pretty =
         >> ssurround "<|" "|>"
 
     let printIteratedGView (pVar : 'var -> Doc) : IteratedGView<'var> -> Doc =
-        printMultiset (printIteratedContainer (printGFunc pVar) pVar)
+        printMultiset
+            (printIteratedContainer (printGFunc pVar) (printIntExpr pVar))
         >> ssurround "<|" "|>"
 
     /// <summary>
