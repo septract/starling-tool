@@ -41,7 +41,19 @@ module Types =
     type SMVFunc = ExprFunc<Sym<MarkedVar>>
 
     type IteratedContainer<'a> =
-        { Func : 'a; Iterator : TypedVar option }
+        { Func : 'a; Iterator : IntExpr<Var> option }
+
+    /// Maps over the item inside an IteratedContainer.
+    let mapIterated (f : 'A -> 'B)
+      ({ Func = v; Iterator = i } : IteratedContainer<'A>)
+      : IteratedContainer<'B> =
+        { Func = f v; Iterator = i }
+
+    /// Maps over the item inside an IteratedContainer.
+    let mapIterator (f : IntExpr<Var> -> IntExpr<Var>)
+      ({ Func = v; Iterator = i } : IteratedContainer<'A>)
+      : IteratedContainer<'A> =
+        { Func = v; Iterator = Option.map f i }
 
     (*
      * Views
@@ -115,7 +127,8 @@ module Pretty =
       : IteratedContainer<'Func> -> Doc =
         function
         | { Iterator = None; Func = func } -> pFunc func
-        | { Iterator = Some var; Func = func }   -> hjoin [ pFunc func; String "["; printTypedVar var; String "]" ]
+        | { Iterator = Some i; Func = func } ->
+            hjoin [ pFunc func; String "["; printIntExpr printVar i; String "]" ]
 
     /// Pretty-prints a DView.
     let printDView = List.map (printIteratedContainer printDFunc) >> semiSep >> squared
