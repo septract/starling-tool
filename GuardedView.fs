@@ -73,10 +73,11 @@ module Types =
     /// <summary>
     ///     A guarded iterated <c>VFunc</c>.
     /// </summary>
-    /// <typeparam name="var">
+    /// <typeparam name="Var">
     ///     The type of variables in the guard.
     /// </typeparam>
-    type IteratedGFunc<'var> when 'var : equality = IteratedContainer<Guarded<'var, VFunc<'var>>>
+    type IteratedGFunc<'Var> when 'Var : equality =
+        IteratedContainer<Guarded<'Var, VFunc<'Var>>, 'Var>
 
     /// <summary>
     ///     A <c>GFunc</c> over <c>MarkedVar</c>s.
@@ -504,7 +505,7 @@ module Pretty =
         >> ssurround "<|" "|>"
 
     let printIteratedGView (pVar : 'var -> Doc) : IteratedGView<'var> -> Doc =
-        printMultiset (printIteratedContainer (printGFunc pVar))
+        printMultiset (printIteratedContainer (printGFunc pVar) pVar)
         >> ssurround "<|" "|>"
 
     /// <summary>
@@ -568,7 +569,7 @@ module Sub =
     open Starling.Core.View.Sub
 
     /// <summary>
-    ///   Maps a <c>SubFun</c> over all expressions in an iterated <c>GFunc</c>.
+    ///   Maps a <c>SubFun</c> over all expressions in a <c>GFunc</c>.
     /// </summary>
     /// <param name="sub">
     ///     The <c>SubFun</c> to map.
@@ -586,7 +587,7 @@ module Sub =
     ///     The type of variables leaving the map.
     /// </typeparam>
     /// <returns>
-    ///   The iterated <c>GFunc</c> resulting from the mapping.
+    ///   The <c>GFunc</c> resulting from the mapping.
     /// </returns>
     /// <remarks>
     ///   <para>
@@ -613,6 +614,49 @@ module Sub =
                 item
 
         (context', { Cond = cond'; Item = item' } )
+
+    /// <summary>
+    ///   Maps a <c>SubFun</c> over all expressions in an iterated <c>GFunc</c>.
+    /// </summary>
+    /// <param name="sub">
+    ///     The <c>SubFun</c> to map.
+    /// </param>
+    /// <param name="context">
+    ///     The context to pass to the <c>SubFun</c>.
+    /// </param>
+    /// <param name="_arg1">
+    ///   The <c>IteratedGFunc</c> over which whose expressions are to be
+    ///   mapped.
+    /// </param>
+    /// <typeparam name="SrcVar">
+    ///     The type of variables entering the map.
+    /// </typeparam>
+    /// <typeparam name="DstVar">
+    ///     The type of variables leaving the map.
+    /// </typeparam>
+    /// <returns>
+    ///   The <c>IteratedGFunc</c> resulting from the mapping.
+    /// </returns>
+    /// <remarks>
+    ///   <para>
+    ///     The expressions in an <c>IteratedGFunc</c> are the guard itself, the
+    ///     iterator if it exists, and the expressions of the enclosed
+    ///     <c>VFunc</c>.
+    ///   </para>
+    /// </remarks>
+    let subExprInIteratedGFunc
+      (sub : SubFun<'SrcVar, 'DstVar>)
+      (context : SubCtx)
+      ( { Iterator = iter ; Func = func } : IteratedGFunc<'SrcVar> )
+      : (SubCtx * IteratedGFunc<'DstVar>) =
+        let contextI, iter' =
+            iter
+            |> Option.map (Mapper.mapIntCtx sub context >> pairMap id Some)
+            |> withDefault (context, None)
+
+        let context', func' = subExprInGFunc sub contextI func
+
+        (context', { Iterator = iter'; Func = func' } )
 
     /// <summary>
     ///   Maps a <c>SubFun</c> over all expressions in a <c>GView</c>.
@@ -650,6 +694,49 @@ module Sub =
                  Position.changePos
                      id
                      (subExprInGFunc sub)
+                     ctx
+                     f)
+            context
+
+    /// <summary>
+    ///   Maps a <c>SubFun</c> over all expressions in an <c>IteratedGView</c>.
+    /// </summary>
+    /// <param name="sub">
+    ///   The <c>SubFun</c> to map over all expressions in the
+    ///   <c>IteratedGView</c>.
+    /// </param>
+    /// <param name="context">
+    ///     The context to pass to the <c>SubFun</c>.
+    /// </param>
+    /// <param name="_arg1">
+    ///   The <c>IteratedGView</c> over which whose expressions are to be
+    ///   mapped.
+    /// </param>
+    /// <typeparam name="srcVar">
+    ///     The type of variables entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstVar">
+    ///     The type of variables leaving the map.
+    /// </typeparam>
+    /// <returns>
+    ///   The <c>IteratedGView</c> resulting from the mapping.
+    /// </returns>
+    /// <remarks>
+    ///   <para>
+    ///     The expressions in an <c>IteratedGView</c> are those of its
+    ///     constituent <c>IteratedGFunc</c>s.
+    ///   </para>
+    /// </remarks>
+    let subExprInIteratedGView
+      (sub : SubFun<'SrcVar, 'DstVar>)
+      (context : SubCtx)
+      : IteratedGView<'SrcVar> -> (SubCtx * IteratedGView<'DstVar>) =
+        // TODO(CaptainHayashi): De-duplicate this from above.
+        Multiset.mapAccum
+            (fun ctx f _ ->
+                 Position.changePos
+                     id
+                     (subExprInIteratedGFunc sub)
                      ctx
                      f)
             context

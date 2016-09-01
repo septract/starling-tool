@@ -40,19 +40,19 @@ module Types =
     /// A func over symbolic-marked-var expressions.
     type SMVFunc = ExprFunc<Sym<MarkedVar>>
 
-    type IteratedContainer<'a> =
-        { Func : 'a; Iterator : IntExpr<Var> option }
+    type IteratedContainer<'Func, 'Var> when 'Var : equality =
+        { Func : 'Func; Iterator : IntExpr<'Var> option }
 
     /// Maps over the item inside an IteratedContainer.
-    let mapIterated (f : 'A -> 'B)
-      ({ Func = v; Iterator = i } : IteratedContainer<'A>)
-      : IteratedContainer<'B> =
+    let mapIterated (f : 'FuncA -> 'FuncB)
+      ({ Func = v; Iterator = i } : IteratedContainer<'FuncA, 'Var>)
+      : IteratedContainer<'FuncB, 'Var> =
         { Func = f v; Iterator = i }
 
     /// Maps over the item inside an IteratedContainer.
-    let mapIterator (f : IntExpr<Var> -> IntExpr<Var>)
-      ({ Func = v; Iterator = i } : IteratedContainer<'A>)
-      : IteratedContainer<'A> =
+    let mapIterator (f : IntExpr<'VarA> -> IntExpr<'VarB>)
+      ({ Func = v; Iterator = i } : IteratedContainer<'Func, 'VarA>)
+      : IteratedContainer<'Func, 'VarB> =
         { Func = v; Iterator = Option.map f i }
 
     (*
@@ -60,12 +60,12 @@ module Types =
      *)
 
     /// A view definition.
-    type DView = List<IteratedContainer<DFunc>>
+    type DView = List<IteratedContainer<DFunc, Var>>
 
     /// <summary>
     ///     A basic view, as an ordered list of VFuncs.
     /// </summary>
-    type OView = List<SMVFunc>
+    type OView = IteratedContainer<SMVFunc, Sym<MarkedVar>> list
 
     /// <summary>
     ///     A view expression, combining a view with its kind.
@@ -119,19 +119,23 @@ module Pretty =
     /// Pretty-prints a MView.
     let printMView = printMultiset printMVFunc
 
-    /// Pretty-prints an OView.
-    let printOView = List.map printSMVFunc >> semiSep >> squared
-
     /// Prints an IteratedContainer
-    let printIteratedContainer (pFunc : 'Func -> Doc)
-      : IteratedContainer<'Func> -> Doc =
+    let printIteratedContainer (pFunc : 'Func -> Doc) (pVar : 'Var -> Doc)
+      : IteratedContainer<'Func, 'Var> -> Doc =
         function
         | { Iterator = None; Func = func } -> pFunc func
         | { Iterator = Some i; Func = func } ->
-            hjoin [ pFunc func; String "["; printIntExpr printVar i; String "]" ]
+            hjoin [ pFunc func; String "["; printIntExpr pVar i; String "]" ]
+
+    /// Pretty-prints an OView.
+    let printOView =
+        List.map (printIteratedContainer printSMVFunc (printSym printMarkedVar))
+        >> semiSep
+        >> squared
+
 
     /// Pretty-prints a DView.
-    let printDView = List.map (printIteratedContainer printDFunc) >> semiSep >> squared
+    let printDView = List.map (printIteratedContainer printDFunc printVar) >> semiSep >> squared
 
     /// Pretty-prints view expressions.
     let rec printViewExpr pView =
