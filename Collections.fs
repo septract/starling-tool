@@ -241,6 +241,35 @@ module Multiset =
         Map.fold addn xs ymap
 
     /// <summary>
+    ///     Folds <c>f</c> over the unique items of a multiset in some
+    ///     arbitrary order.
+    /// </summary>
+    /// <param name="f">
+    ///     The function to fold over the multiset.  This takes the current
+    ///     state, the item, and the number of times that item
+    ///     appears in the multiset.  It should return the new state.
+    /// </param>
+    /// <param name="init">
+    ///     The initial value of the state.
+    /// </param>
+    /// <typeparam name="State">
+    ///     The type of the accumulator.
+    /// </typeparam>
+    /// <typeparam name="Item">
+    ///     The type of items in the multiset.
+    /// </typeparam>
+    /// <returns>
+    ///     The final value of the state.
+    /// </returns>
+    let fold (f : 'State -> 'Item -> int -> 'State)
+      (init : 'State)
+      (MSet ms : Multiset<'Item>)
+      : 'State =
+        ms
+        |> Map.toSeq
+        |> Seq.fold (fun state (item, num) -> f state item num) init
+
+    /// <summary>
     ///     Maps <c>f</c> over the unique items of a multiset, passing
     ///     an accumulator in some arbitrary order.
     /// </summary>
@@ -339,6 +368,28 @@ module Multiset =
             | ((Pass x, n)::xs) -> itr xs ((x, n)::fros) warns
             | ((Fail e, n)::xs) -> Bad e
         itr (Map.toList ms) [] []
+
+    /// <summary>
+    ///     Pulls an arbitrary item out of the multiset.
+    /// </summary>
+    /// <param name="ms">
+    ///     The multiset.
+    /// </param>
+    /// <typeparam name="Item">
+    ///     The type of items in the multiset's lists.
+    /// </typeparam>
+    /// <returns>
+    ///     An option: <c>None</c> if the multiset is empty; else
+    ///     <c>Some (i, m, n)</c> where <c>i</c> is an item in the multiset,
+    ///     <c>m</c> is the multiset less <c>i</c>, and
+    ///     <c>n</c> is the number of times it occurs.
+    /// </returns>
+    let pop (MSet ms : Multiset<'Item>)
+      : ('Item * Multiset<'Item> * int) option =
+        // TODO(CaptainHayashi): tests.
+        match (Map.toList ms) with
+        | [] -> None
+        | (i, n)::xs -> Some (i, MSet (Map.ofList xs), n)
 
     module Pretty =
         open Starling.Core.Pretty
