@@ -683,7 +683,7 @@ let rec modelViewSignature (protos : FuncDefiner<unit>) =
                                           let! rM = modelViewSignature protos r
                                           return Multiset.append lM rM }
     | ViewSignature.Iterated(dfunc, e) ->
-        let updateFunc (s : string) f = { Func = f; Iterator = Some (AVar s) }
+        let updateFunc (s : string) f = { Func = f; Iterator = Some (Int s) }
         let modelledDFunc = modelDFunc protos dfunc
         (Multiset.map (updateFunc e)) <!> modelledDFunc
 
@@ -757,7 +757,7 @@ let inDefiner : ViewDefiner<SVBoolExpr option> -> DView -> bool =
                     if (List.length view = List.length dview)
                     then
                         List.forall2
-                            (fun (vdfunc : IteratedContainer<DFunc, Var>) (dfunc : IteratedContainer<DFunc, Var>) -> vdfunc.Func.Name = dfunc.Func.Name)
+                            (fun (vdfunc : IteratedContainer<DFunc, TypedVar>) (dfunc : IteratedContainer<DFunc, TypedVar>) -> vdfunc.Func.Name = dfunc.Func.Name)
                             view
                             dview
                     else false)

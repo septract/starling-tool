@@ -100,16 +100,10 @@ let instantiateGoal (fg : FreshGen)
                     (dvs : DView)
                     : OView =
     let instantiateParam = mkVarExp (goalVar fg >> Reg)
-    let instantiateIterator =
-        Sub.Var.intSubVars
-            (Mapper.make (goalVar fg >> Reg >> AVar)
-                         (goalVar fg >> Reg >> BVar))
-            Sub.Types.NoCtx
-        >> snd
 
     dvs |> List.map (function
         | { Iterator = i; Func = { Name = n; Params = ps } } ->
-            { Iterator = Option.map instantiateIterator i
+            { Iterator = Option.map (AVar << Reg << goalVar fg << valueOf) i
               Func = { Name = n; Params = List.map instantiateParam ps } } )
 
 /// Converts an axiom into a list of framed axioms, by combining it with the

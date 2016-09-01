@@ -33,6 +33,16 @@ let genFlatFuncSeqName (funcs : Func<'var> seq) : string =
     // This step ensures that the empty view is named 'emp', not 'v'.
     |> fun s -> if s = "v" then "emp" else s
 
+let genFlatIteratedFuncName ifcs =
+    let funcs = Seq.map (fun ifc -> ifc.Func) ifcs
+    genFlatFuncSeqName funcs
+
+let paramsFromIteratedFunc funcContainer =
+    let funcParams = funcContainer.Func.Params
+    match funcContainer.Iterator with
+    | None -> Seq.ofList funcParams
+    | Some v -> Seq.append (seq {yield v;}) funcParams
+
 /// <summary>
 ///     Constructs a Func from a DView
 /// </summary>
@@ -48,25 +58,21 @@ let genFlatFuncSeqName (funcs : Func<'var> seq) : string =
 /// </returns>
 let flattenDView : TypedVar seq -> DView -> Func<TypedVar> =
     fun globals dview ->
-        let funcs = Seq.map (fun ifc -> ifc.Func) dview
-        let name = genFlatFuncSeqName funcs
-
-        let paramsFromIteratedFunc funcContainer =
-            match funcContainer.Iterator with
-            | None -> Seq.ofList <| funcContainer.Func.Params
-            | Some v -> Seq.append (seq {yield v;}) funcContainer.Func.Params
-
         // TODO: What if iterators share names? e.g. iterated A [n] * iterated B [n]
         let paramsNoShared = Seq.concat <| Seq.map paramsFromIteratedFunc dview
         let paramsShared = Seq.toList <| Seq.append paramsNoShared globals
-        { Name = name
+        { Name = genFlatIteratedFuncName dview
           Params = paramsShared }
 
 /// Flattens an OView into an SMVFunc given the set of globals
 let flattenOView : Expr<Sym<MarkedVar>> seq -> OView -> SMVFunc =
     fun globals oview ->
-        { Name = genFlatFuncSeqName oview
-          Params = Seq.toList <| Seq.append (paramsOfFuncSeq oview) globals }
+        let funcs = Seq.map (fun ifc -> ifc.Func) oview
+        let paramFromOViewFunc f = paramsFromIteratedFunc (mapIterator Int f)
+        let paramsNoShared = Seq.concat <| Seq.map paramFromOViewFunc oview
+        let paramsShared = Seq.toList <| Seq.append paramsNoShared globals
+        { Name = genFlatIteratedFuncName oview
+          Params = Seq.toList <| Seq.append (paramsOfFuncSeq funcs) globals }
 
 /// <summary>
 ///     Flattens a term by converting all of its OViews into single funcs.

@@ -6,6 +6,7 @@ module Starling.Lang.Guarder
 
 open Starling.Collections
 open Starling.Utils
+open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Symbolic
 open Starling.Core.Model
@@ -30,7 +31,7 @@ let guardCView : CView -> GuarderView =
         | CFunc.Func v ->
             [ { Func = { Cond = suffix |> Set.toList |> mkAnd
                          Item = v };
-                Iterator = cview.Iterator } ]
+                Iterator = Option.map AVar cview.Iterator } ]
         | CFunc.ITE(expr, tviews, fviews) ->
             List.concat
                 [ guardCViewIn (suffix.Add expr) (Multiset.toFlatList tviews)
@@ -39,6 +40,7 @@ let guardCView : CView -> GuarderView =
     and guardCViewIn suffix = concatMap (guardCFuncIn suffix)
 
     // TODO(CaptainHayashi): woefully inefficient.
+    let x v =  Multiset.toFlatList v |> guardCViewIn Set.empty
     Multiset.toFlatList
     >> guardCViewIn Set.empty
     >> Multiset.ofFlatList
