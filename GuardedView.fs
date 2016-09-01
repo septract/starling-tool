@@ -364,15 +364,13 @@ let IteratedSVGViewVars : IteratedGView<Sym<Var>> -> Set<TypedVar> =
     fun v ->
         let l = Multiset.toSet v
 
-        let symVarExprs =
-            function
-            | Bool e -> mapOverSymVars Mapper.mapBoolCtx findSymVars e
-            | Int e -> mapOverSymVars Mapper.mapIntCtx findSymVars e
+        let findVarsInBool e = mapOverSymVars Mapper.mapBoolCtx findSymVars e
+        let findVarsInInt e = mapOverSymVars Mapper.mapIntCtx findSymVars e
 
         let vars { Func = {Cond = g; Item = gf}; Iterator = it} =
-            let condvars = mapOverSymVars Mapper.mapBoolCtx findSymVars g
+            let condvars = findVarsInBool g
             let itemvars = gfuncVars gf
-            let iteratorvars = Option.map Set.singleton it
+            let iteratorvars = Option.map findVarsInInt it
 
             condvars
             + itemvars
