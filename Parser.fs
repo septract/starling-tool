@@ -382,10 +382,11 @@ let parseDUnit = stringReturn "emp" ViewSignature.Unit
 
 /// Parses an iterated view definition.
 let parseDIterated =
-    pstring "iterated" >>. ws >>.
-    pipe2ws (parseFunc parseIdentifier)
+    pstring "iter" >>. ws >>.
+    pipe2ws
             (inSquareBrackets parseIdentifier)
-            (fun f e -> ViewSignature.Iterated(f, e))
+            (parseFunc parseIdentifier)
+            (fun e f -> ViewSignature.Iterated(f, e))
 
 /// Parses a `basic` view definition (unit, if, named, or bracketed).
 let parseBasicViewSignature =

@@ -236,7 +236,7 @@ module Pretty =
         | ViewSignature.Func f -> printFunc String f
         | ViewSignature.Unit -> String "emp" |> syntaxView
         | ViewSignature.Join(l, r) -> binop "*" (printViewSignature l) (printViewSignature r)
-        | ViewSignature.Iterated(f, e) -> hsep [String "iterated" |> syntax; printFunc String f; String "[" |> syntaxView; String e; String "]" |> syntaxView]
+        | ViewSignature.Iterated(f, e) -> hsep [String "iter" |> syntaxView; hjoin [String "[" |> syntaxView; String e; String "]" |> syntaxView]; printFunc String f]
 
     /// Pretty-prints constraints.
     let printConstraint (view : ViewSignature) (def : Expression option) : Doc =
