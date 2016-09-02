@@ -263,6 +263,10 @@ let printAssoc mapSep =
 let printMap mapSep pK pV =
     Map.toSeq >> Seq.map (pairMap pK pV) >> printAssoc mapSep
 
+/// Pretty-prints a list
+let printList pItem lst =
+    hsep [String "["; hsepStr ", " (List.map pItem lst); String "]"]
+
 /// Formats an error that is wrapping another error.
 let wrapped wholeDesc whole err =
     headed (sprintf "In %s '%s'" wholeDesc (print whole)) [ err ]
