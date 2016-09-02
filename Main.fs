@@ -281,6 +281,10 @@ type Error =
     /// An error occurred in the HSF backend.
     | HSF of Backends.Horn.Types.Error
     /// <summary>
+    ///     An error occurred during iterator lowering.
+    /// </summary>
+    | IterLowerError of TermGen.Iter.Error
+    /// <summary>
     ///     A backend required the model to be filtered for indefinite
     ///     and/or uninterpreted viewdefs, but the filter failed.
     /// </summary>
@@ -296,6 +300,9 @@ let printError : Error -> Doc =
     | Frontend e -> Lang.Frontend.printError e
     | Semantics e -> Semantics.Pretty.printSemanticsError e
     | HSF e -> Backends.Horn.Pretty.printHornError e
+    | IterLowerError e ->
+        headed "Iterator lowering failed"
+               [ TermGen.Iter.printError e ]
     | ModelFilterError e ->
         headed "View definitions are incompatible with this backend"
                [ Core.Instantiate.Pretty.printError e ]
@@ -432,7 +439,8 @@ let runStarling (request : Request)
     let flatten = lift Starling.Flattener.flatten
     let reify = lift Starling.Reifier.reify
     let termGen = lift Starling.TermGen.termGen
-    let iterLower = lift Starling.TermGen.Iter.flatten
+    let iterLower =
+        bind (Starling.TermGen.Iter.flatten >> mapMessages IterLowerError)
     let goalAdd = lift Starling.Core.Axiom.goalAdd
     let semantics =
         bind (Starling.Semantics.translate

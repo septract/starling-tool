@@ -410,7 +410,7 @@ do parseViewSignatureRef := parseViewLike parseBasicViewSignature ViewSignature.
 
 /// Parses the LHS of a view prototype.
 let parseViewProtoLhs =
-    pstring "view" >>. ws >>. parseFunc parseTypedTypedVar .>> wsSemi .>> ws
+    pstring "view" >>. ws >>. parseFunc parseTypedTypedVar
 
 /// Parses a view prototype (a LHS followed optionally by an iterator).
 let parseViewProto =
@@ -418,6 +418,7 @@ let parseViewProto =
     >>= fun lhs ->
             (wsSemi >>% NoIterator (lhs, false)) <|>
             (parseIteratorDef .>> wsSemi |>> curry WithIterator lhs)
+    .>> ws
 
 
 (*

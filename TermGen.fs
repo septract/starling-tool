@@ -4,6 +4,8 @@
 /// </summary>
 module Starling.TermGen
 
+open Chessie.ErrorHandling
+
 open Starling.Collections
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
@@ -218,48 +220,202 @@ let termGen (model : Model<GoalAxiom<'cmd>, _>)
 
 /// Stage that flattens the Iterator's from GuardedFunc's
 module Iter =
-    /// Lowers an IteratedGFunc to a GFunc, moving the Iterator expression to the parameter
-    let lowerIterGFunc : IteratedGFunc<Sym<MarkedVar>> -> GFunc<Sym<MarkedVar>> =
-        fun { Func = guardedfunc; Iterator = it } ->
-            match guardedfunc with
-            | { Cond = cond; Item = gfunc } ->
-                let vfunc =
-                    // TODO: Better system for matching
-                    // the "None" condition is not sufficient after TermGen
-                    match it with
-                    | Some x -> func gfunc.Name (Int x :: gfunc.Params)
-                    | None   -> gfunc
-                { Cond = cond; Item = vfunc }
+    open Starling.Core.Instantiate
 
-    /// Lowers an IteratedSMVFunc into an SMVFunc moving the Iterator Expression into the params
-    let lowerIterSMVFunc : IteratedContainer<SMVFunc, IntExpr<Sym<MarkedVar>>> -> SMVFunc =
-        fun { Func = vfunc; Iterator = it } ->
-            // TODO: See lowerIterGFunc
-            match it with
-            | Some x -> func vfunc.Name (Int x :: vfunc.Params)
-            | None   -> vfunc
+    /// <summary>
+    ///     Type of errors that can occur during iterator lowering.
+    /// </summary>
+    type Error =
+        /// <summary>
+        ///     A func was lowered that doesn't have a valid prototype.
+        /// </summary>
+        | ProtoLookupError of Func : Func<Expr<Sym<MarkedVar>>>
+                            * Error : Starling.Core.Instantiate.Types.Error
+        /// <summary>
+        ///     A func was lowered that doesn't have a prototype at all.
+        /// </summary>
+        | ProtoMissing of Func : Func<Expr<Sym<MarkedVar>>>
+        /// <summary>
+        ///     A non-iterated func had a symbolic iterator.
+        /// </summary>
+        | CannotEvalIterator of Func : Func<Expr<Sym<MarkedVar>>>
+                              * Iterator : IntExpr<Sym<MarkedVar>>
+
+    /// <summary>
+    ///     Pretty-prints an iterator lowering error.
+    /// </summary>
+    /// <param name="error">
+    ///     The error to print.
+    /// </param>
+    /// <returns>
+    ///     The <see cref="Doc"/> representing the error.
+    /// </returns>
+    let printError : Error -> Core.Pretty.Doc =
+        function
+        | ProtoLookupError (func, error) ->
+            Core.Pretty.wrapped
+                "prototype lookup for func"
+                (Core.View.Pretty.printSMVFunc func)
+                (Core.Instantiate.Pretty.printError error)
+        | ProtoMissing func ->
+            Core.Pretty.fmt
+                "prototype missing for func '{0}'"
+                [ Core.View.Pretty.printSMVFunc func ]
+        | CannotEvalIterator (func, iterator) ->
+            Core.Pretty.fmt
+                "non-iterated func '{0}' is used with iterator '{1}', which
+                 cannot be resolved to an integer"
+                [ Core.View.Pretty.printSMVFunc func
+                  Core.Expr.Pretty.printIntExpr
+                      (Core.Symbolic.Pretty.printSym
+                           Core.Var.Pretty.printMarkedVar)
+                      iterator ]
+
+    /// <summary>
+    ///     Decides whether a func should be interpreted as iterated by looking
+    ///     at its prototype.
+    /// </summary>
+    /// <param name="protos">
+    ///     The prototype definer used to check the iterated status.
+    /// </param>
+    /// <param name="func">
+    ///     The func to check.
+    /// </param>
+    /// <returns>
+    ///     Whether the func is iterated, wrapped in an error because lookup
+    ///     in the prototypes can fail.
+    /// </returns>
+    let checkIterated
+      (protos : FuncDefiner<ProtoInfo>)
+      (func : Func<Expr<Sym<MarkedVar>>>)
+      : Result<bool, Error> =
+            func
+            |> wrapMessages ProtoLookupError (fun f -> lookup f protos)
+            |> bind
+                (function
+                 | None -> fail (ProtoMissing func)
+                 | Some (_, { IsIterated = isIterated }) -> ok isIterated)
+
+    /// <summary>
+    ///     Decides whether a func should be interpreted as iterated by looking
+    ///     at its prototype, and then tries to calculate the number of times
+    ///     it should be inserted into its parent view if not.
+    /// </summary>
+    /// <param name="protos">
+    ///     The prototype definer used to check the iterated status.
+    /// </param>
+    /// <param name="func">
+    ///     The func to check.
+    /// </param>
+    /// <param name="iterator">
+    ///     The iterator expression that was attached to the func.  The presence
+    ///     of this does not necessarily mean the func is supposed to be
+    ///     iterated.  This is because previous stages can combine multiple
+    ///     copies of a non-iterated func into one 'pseudo-iterated' func for
+    ///     simplicity.
+    /// </param>
+    /// <returns>
+    ///     None if the func is iterated (and should thus be lowered); Some n
+    ///     if the func is not iterated (and should instead just be replicated
+    ///     n times, where n was the value of the iterator).
+    ///     Wrapped in an error because lookup in the prototypes, and
+    ///     evaluating the func's iterator, can fail.
+    /// </returns>
+    let evalIteratorIfFuncNotIterated
+      (protos : FuncDefiner<ProtoInfo>)
+      (func : Func<Expr<Sym<MarkedVar>>>)
+      (iterator : IntExpr<Sym<MarkedVar>>)
+      : Result<int64 option, Error> =
+        func
+        |> checkIterated protos
+        |> bind
+            (function
+             | true -> ok None
+             | false ->
+                // TODO(CaptainHayashi): evaluate this properly.
+                match iterator with
+                | AInt n -> ok (Some n)
+                | i -> fail (CannotEvalIterator (func, i)))
+
+    /// <summary>
+    ///     Lowers an iterated GFunc, folding it into an accumulating view.
+    ///     <para>
+    ///         If the func matches an iterated prototype, we move the Iterator
+    ///         Expression into the params; else, we try to expand it.
+    ///     </para>
+    /// </summary>
+    let lowerIterGFunc
+      : FuncDefiner<ProtoInfo>
+      -> IteratedGFunc<Sym<MarkedVar>>
+      -> GView<Sym<MarkedVar>>
+      -> Result<GView<Sym<MarkedVar>>, Error> =
+        fun protos { Func = guardedfunc; Iterator = it } m ->
+            match guardedfunc with
+            | { Cond = cond; Item = innerfunc } ->
+                let it' = withDefault (AInt 1L) it
+                evalIteratorIfFuncNotIterated protos innerfunc it'
+                |> lift
+                    (function
+                     // TODO(CaptainHayashi): this is a messy cast!
+                     | Some k -> Multiset.addn m guardedfunc (int k)
+                     | None ->
+                        Multiset.add m
+                            (gfunc guardedfunc.Cond innerfunc.Name (Int it' :: innerfunc.Params)))
+
+
+    /// <summary>
+    ///     Lowers an iterated SMVFunc into a list of SMVFuncs.
+    ///     <para>
+    ///         If the func matches an iterated prototype, we move the Iterator
+    ///         Expression into the params; else, we try to expand it.
+    ///     </para>
+    /// </summary>
+    let lowerIterSMVFunc
+      : FuncDefiner<ProtoInfo>
+      -> IteratedContainer<Func<Expr<Sym<MarkedVar>>>, IntExpr<Sym<MarkedVar>>>
+      -> Result<Func<Expr<Sym<MarkedVar>>> list, Error> =
+        fun protos { Func = vfunc; Iterator = it } ->
+            let it' = withDefault (AInt 1L) it
+            evalIteratorIfFuncNotIterated protos vfunc it'
+            |> lift
+                (function
+                     | Some k -> [ for i in 1L .. k -> vfunc ]
+                     | None ->
+                        [ func vfunc.Name (Int it' :: vfunc.Params) ])
 
     /// flattens an entire IteratedGView into a flat GView
-    let lowerIteratedGView : IteratedGView<Sym<MarkedVar>> -> GView<Sym<MarkedVar>> =
-        fun itergview -> Multiset.map lowerIterGFunc itergview
+    let lowerIteratedGView
+      : FuncDefiner<ProtoInfo>
+      -> IteratedGView<Sym<MarkedVar>> -> Result<GView<Sym<MarkedVar>>, Error> =
+        fun protos itergview ->
+            Multiset.fold
+                (fun m gf i -> bind (lowerIterGFunc protos (normalise gf i)) m)
+                (ok Multiset.empty)
+                itergview
 
     /// flattens an entire IteratedOView into a flat OView
     /// with no iterators
-    let lowerIteratedOView : IteratedOView -> OView =
-        fun iteroview -> List.map lowerIterSMVFunc iteroview
+    let lowerIteratedOView : FuncDefiner<ProtoInfo> -> IteratedOView
+      -> Result<OView, Error> =
+        fun protos iteroview ->
+            iteroview
+            |> List.map (lowerIterSMVFunc protos)
+            |> collect
+            |> lift List.concat
 
     /// Flattens both the W/Pre and the Goal of a Term, removing the Iterators
     /// and returning the new flattened Term
-    let lowerIteratedTerm : Term<_, IteratedGView<Sym<MarkedVar>>, IteratedOView> -> Term<_, GView<Sym<MarkedVar>>, OView> =
-        fun term ->
-        { WPre = lowerIteratedGView term.WPre
-          Cmd = term.Cmd
-          Goal = lowerIteratedOView term.Goal }
+    let lowerIteratedTerm :
+      FuncDefiner<ProtoInfo>
+      -> Term<_, IteratedGView<Sym<MarkedVar>>, IteratedOView>
+      -> Result<Term<_, GView<Sym<MarkedVar>>, OView>, Error> =
+        fun proto ->
+            tryMapTerm ok (lowerIteratedGView proto) (lowerIteratedOView proto)
 
     /// Flattens iterated guarded views in a model's terms down to guarded views
     /// taking iter[n] g(xbar...) to g(n, xbar...)
     /// and returning that new model
     let flatten
         (model : Model<Term<_, IteratedGView<Sym<MarkedVar>>, _>, _>)
-            : Model<Term<_, GView<Sym<MarkedVar>>, _>, _> =
-        mapAxioms lowerIteratedTerm model
+            : Result<Model<Term<_, GView<Sym<MarkedVar>>, _>, _>, Error> =
+        tryMapAxioms (lowerIteratedTerm model.ViewProtos) model
