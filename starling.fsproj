@@ -78,8 +78,8 @@
     <Compile Include="MuZ3Backend.fs" />
     <Compile Include="CollectionsTests.fs" />
     <Compile Include="TermGenTests.fs" />
-    <!--
     <Compile Include="TestStudies.fs" />
+    <!--
     <Compile Include="FlattenerTests.fs" />
     <Compile Include="ExprTests.fs" />
     <Compile Include="GraphTests.fs" />

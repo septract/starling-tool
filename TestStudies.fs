@@ -296,7 +296,7 @@ let ticketLockConstraint05 =
                         Column = 49L;};
             Node = LV (LVIdent "tb");});})
 
-let ticketLockConstraint06 = 
+let ticketLockConstraint06 =
     (ViewSignature.Join (ViewSignature.Func {Name = "holdLock";
                              Params = [];},
                  ViewSignature.Func {Name = "holdLock";
@@ -309,23 +309,23 @@ let ticketLockConstraint06 =
 
 /// The parsed form of the ticket lock.
 let ticketLockParsed =
-      [ 
-      { Position = { StreamName = "Examples/Pass/ticketLock.cvf";
-                   Line = 34L;
-                   Column = 1L; };
-        Node = ViewProto {Name = "holdTick";
-                         Params = [Int "t"];};};
+    [ { Position =
+            { StreamName = "Examples/Pass/ticketLock.cvf"
+              Line = 34L; Column = 1L }
+        Node =
+            ViewProto <|
+                NoIterator ({ Name = "holdTick"; Params = [Int "t"] }, false) }
+      { Position =
+            { StreamName = "Examples/Pass/ticketLock.cvf"
+              Line = 35L; Column = 1L }
+        Node =
+            ViewProto <|
+                NoIterator ({ Name = "holdLock"; Params = [] }, false) }
       { Position = {StreamName = "Examples/Pass/ticketLock.cvf";
-                   Line = 35L;
-                   Column = 1L;};
-        Node = ViewProto {Name = "holdLock";
-                         Params = []} }
-
-      {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 38L;
                    Column = 1L;};
        Node =
-        Constraint ticketLockConstraint01} 
+        Constraint ticketLockConstraint01}
 
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 41L;
@@ -372,8 +372,8 @@ let ticketLockParsed =
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 8L;
                    Column = 1L;};
-       Node = Local (Int "s");}; 
-        
+       Node = Local (Int "s");};
+
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 13L;
                    Column = 1L;};
@@ -395,10 +395,8 @@ let ticketLockCollated =
             (TypedVar.Int "s") ]
       Search = None
       VProtos =
-          [ { Name = "holdTick"
-              Params = [ (Int "t") ] }
-            { Name = "holdLock"
-              Params = [] } ]
+          [ NoIterator ({ Name = "holdTick"; Params = [ (Int "t") ] }, false)
+            NoIterator ({ Name = "holdLock"; Params = [] }, false) ]
       Constraints =
           [ // constraint emp -> ticket >= serving;
             ticketLockConstraint01
@@ -419,11 +417,13 @@ let sing = Multiset.singleton
 
 /// The conditional holdLock view.
 let holdLock =
-    svfunc "holdLock" [] |> Func
+    { Func = Func (svfunc "holdLock" [])
+      Iterator = None }
 
 /// The conditional holdTick view.
 let holdTick =
-    svfunc "holdTick" [SVExpr.Int (siVar "t")] |> Func
+    { Func = Func (svfunc "holdTick" [SVExpr.Int (siVar "t")])
+      Iterator = None }
 
 /// The guarded holdLock view.
 let gHoldLock cnd : SVGFunc = svgfunc cnd "holdLock" []
@@ -438,31 +438,34 @@ let sIsT = iEq (siVar "s") (siVar "t")
 let ticketLockLock =
     { Signature = func "lock" []
       Body =
-          { Pre = Mandatory <| Multiset.empty
-            Contents =
-                [ { Command =
-                        command "!ILoad++" [ Int "t"; Int "ticket" ]
-                             [ SMExpr.Int (siBefore "ticket") ]
-                        |> List.singleton |> Prim
-                    Post = Mandatory <| sing holdTick }
-                  { Command =
-                        While (isDo = true,
-                               expr = BNot sIsT,
-                               inner =
-                                   { Pre = Mandatory <| sing holdTick
-                                     Contents =
-                                         [ { Command =
-                                                 command "!ILoad" [ Int "s" ]
-                                                      [ SMExpr.Int (siBefore "serving") ]
-                                                 |> List.singleton |> Prim
-                                             Post =
+        { Pre = Mandatory <| Multiset.empty
+          Contents =
+            [ { Command =
+                    command "!ILoad++"
+                        [ Int "t"; Int "ticket" ]
+                        [ SMExpr.Int (siBefore "ticket") ]
+                    |> List.singleton |> Prim
+                Post = Mandatory <| sing holdTick }
+              { Command =
+                    While (isDo = true,
+                           expr = BNot sIsT,
+                           inner =
+                               { Pre = Mandatory <| sing holdTick
+                                 Contents =
+                                     [ { Command =
+                                             command "!ILoad" [ Int "s" ]
+                                                  [ SMExpr.Int (siBefore "serving") ]
+                                             |> List.singleton |> Prim
+                                         Post =
+                                            { Func =
+                                                CFunc.ITE
                                                  (sIsT,
                                                   sing holdLock,
                                                   sing holdTick)
-                                                 |> CFunc.ITE
-                                                 |> Multiset.singleton
-                                                 |> Mandatory } ] } )
-                    Post = Mandatory <| sing holdLock } ] } }
+                                              Iterator = None }
+                                             |> Multiset.singleton
+                                             |> Mandatory } ] } )
+                Post = Mandatory <| sing holdLock } ] } }
 
 /// The ticket lock's unlock method.
 let ticketLockUnlock =
@@ -517,7 +520,7 @@ let ticketLockGuardedLock =
 let ticketLockGuardedUnlock : GuarderMethod =
     { Signature = func "unlock" []
       Body =
-          { Pre = Mandatory <| sing (gHoldLock BTrue)
+          { Pre = Mandatory <| sing { Func = gHoldLock BTrue; Iterator = None }
             Contents =
                 [ { Command =
                         command "!I++" [ Int "serving" ] [ Expr.Int (siBefore "serving") ]
@@ -528,32 +531,34 @@ let ticketLockGuardedUnlock : GuarderMethod =
 let ticketLockViewDefs =
     [([],
       Some <| BGe(siVar "ticket", siVar "serving"))
-     (Multiset.ofFlatList
-          [ { Name = "holdTick"
-              Params = [ Int "t" ] } ] |> Multiset.toFlatList,
+     ([ { Func = { Name = "holdTick"; Params = [ Int "t" ] }
+          Iterator = None } ],
       Some <| BGt(siVar "ticket", siVar "t"))
-     (Multiset.ofFlatList
-          [ { Name = "holdLock"
-              Params = [] } ] |> Multiset.toFlatList,
+     ([ { Func = { Name = "holdLock"; Params = [] }
+          Iterator = None } ],
       Some <| BNot (iEq (siVar "ticket") (siVar "serving")))
-     (Multiset.ofFlatList
-          [ { Name = "holdLock"
-              Params = [] }
-            { Name = "holdTick"
-              Params = [ Int "t" ] } ] |> Multiset.toFlatList,
+     ([ { Func = { Name = "holdLock"; Params = [] }
+          Iterator = None }
+        { Func = { Name = "holdTick"; Params = [ Int "t" ] }
+          Iterator = None } ],
       Some <| BNot(iEq (siVar "serving") (siVar "t")))
-     (Multiset.ofFlatList
-          [ { Name = "holdTick"
-              Params = [ Int "ta" ] }
-            { Name = "holdTick"
-              Params = [ Int "tb" ] } ] |> Multiset.toFlatList,
+     ([ { Func = { Name = "holdTick"; Params = [ Int "ta" ] }
+          Iterator = None }
+        { Func = { Name = "holdTick"; Params = [ Int "tb" ] }
+          Iterator = None } ],
       Some <| BNot(iEq (siVar "ta") (siVar "tb")))
-     (Multiset.ofFlatList
-          [ { Name = "holdLock"
-              Params = [] }
-            { Name = "holdLock"
-              Params = [] } ] |> Multiset.toFlatList,
+     ([ { Func = { Name = "holdLock"; Params = [] }
+          Iterator = None }
+        { Func = { Name = "holdLock"; Params = [] }
+          Iterator = None } ],
       Some BFalse) ]
+
+let ticketLockViewProtos : FuncDefiner<ProtoInfo> =
+    FuncDefiner.ofSeq
+        [ ({ Name = "holdTick"; Params = [ Int "t" ] },
+           { IsIterated = false; IsAnonymous = false })
+          ({ Name = "holdLock"; Params = [] },
+           { IsIterated = false; IsAnonymous = false }) ]
 
 /// The model of the ticket lock.
 let ticketLockModel : Model<ModellerMethod, ViewDefiner<SVBoolExpr option>> =
@@ -565,4 +570,5 @@ let ticketLockModel : Model<ModellerMethod, ViewDefiner<SVBoolExpr option>> =
                        ("t", Type.Int ()) ]
       Axioms = ticketLockMethods
       ViewDefs = ticketLockViewDefs
+      ViewProtos = ticketLockViewProtos
       Semantics = Starling.Lang.Modeller.coreSemantics }
