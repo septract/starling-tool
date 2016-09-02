@@ -261,14 +261,33 @@ let varMapToExprs
 
 (* The following are just curried versions of the usual constructors. *)
 
+// TODO(CaptainHayashi): move these optimisations into an integer simplification
+// function and hook it up to simp.
+
 /// Curried wrapper over BGt.
-let mkGt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> = BGt (a, b)
+let mkGt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
+    match (a, b) with
+    | AInt x, AInt y when x >  y -> BTrue
+    | AInt x, AInt y when x <= y -> BFalse
+    | _ -> BGt (a, b)
 /// Curried wrapper over BGe.
-let mkGe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> = BGe (a, b)
+let mkGe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
+    match (a, b) with
+    | AInt x, AInt y when x >= y -> BTrue
+    | AInt x, AInt y when x <  y -> BFalse
+    | _ -> BGe (a, b)
 /// Curried wrapper over BLt.
-let mkLt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> = BLt (a, b)
+let mkLt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
+    match (a, b) with
+    | AInt x, AInt y when x <  y -> BTrue
+    | AInt x, AInt y when x >= y -> BFalse
+    | _ -> BLt (a, b)
 /// Curried wrapper over BLe.
-let mkLe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> = BLe (a, b)
+let mkLe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
+    match (a, b) with
+    | AInt x, AInt y when x <= y -> BTrue
+    | AInt x, AInt y when x >  y -> BFalse
+    | _ -> BLe (a, b)
 
 /// Curried wrapper over BEq.
 let mkEq (a : Expr<'var>) (b : Expr<'var>) : BoolExpr<'var> = BEq (a, b)
@@ -312,11 +331,20 @@ let mkImplies (l : BoolExpr<'var>) (r : BoolExpr<'var>) : BoolExpr<'var> =
     BImplies (l, r) |> simp
 
 /// Makes an Add out of a pair of two expressions.
-let mkAdd2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> = AAdd [ l; r ]
+let mkAdd2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
+    match (l, r) with
+    | (AInt x, AInt y) -> AInt (x + y)
+    | _                -> AAdd [ l; r ]
 /// Makes a Sub out of a pair of two expressions.
-let mkSub2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> = ASub [ l; r ]
+let mkSub2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
+    match (l, r) with
+    | (AInt x, AInt y) -> AInt (x - y)
+    | _                -> ASub [ l; r ]
 /// Makes a Mul out of a pair of two expressions.
-let mkMul2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> = AMul [ l; r ]
+let mkMul2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
+    match (l, r) with
+    | (AInt x, AInt y) -> AInt (x * y)
+    | _                -> AMul [ l; r ]
 
 
 (*
