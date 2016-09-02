@@ -60,16 +60,19 @@ module Tests =
 
     module TestIterFlatten =
         module TestLowerGuards =
+            [<Test>]
             let ``Drop iterated GFunc down to non-iterated GFunc`` ()=
                 Assert.AreEqual
                     ((iterated (gfunc BTrue "f" [Bool BTrue]) (Some (Int <| AInt 3L))),
                     (gfunc BTrue "f" [Int <| AInt 3L; Bool BTrue]))
 
+            [<Test>]
             let ``Drop iterated SMVFunc down to non-iterated SMVFunc`` ()=
                 Assert.AreEqual
                     ((iterated (smvfunc "f" [Bool BTrue]) (Some (Int <| AInt 3L))),
                     (smvfunc "f" [Int <| AInt 3L; Bool BTrue]))
 
+            [<Test>]
             let ``Drop non-iterated IteratedSMVFunc's down to non-iterated SMVFunc`` ()=
                 Assert.AreEqual
                     ((iterated (smvfunc "f" [Bool BTrue]) None),

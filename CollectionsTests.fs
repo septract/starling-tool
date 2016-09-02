@@ -71,14 +71,28 @@ module Tests =
                 let appendMset = Multiset.ofFlatList appendList
                 Assert.AreEqual(Multiset.append mset appendMset, finalMSet)
 
+            [<Test>]
             let ``Multiset.append empty lhs`` () =
                 check [] [1] [ (1, 1) ]
 
+            [<Test>]
             let ``Multiset.append empty rhs`` () =
                 check [ (1, 1) ] [] [ (1, 1) ]
 
+            [<Test>]
             let ``Multiset.append increment`` () =
                 check [ (1, 1) ] [1] [ (1, 2) ]
 
+            [<Test>]
             let ``Multiset.append big`` () =
                 check [ (1, 2); (1, 1); (3, 4) ] [1] [ (1, 3); (1, 1); (3, 4) ]
+
+        module TestMultisetFold =
+            let check inputFolderFunc inputMapList initial expectedOutput =
+                let mset = MSet <| Map.ofList inputMapList
+                let output = Multiset.fold inputFolderFunc initial mset
+                Assert.AreEqual(output, expectedOutput)
+
+            [<Test>]
+            let ``Multiset.append empty lhs`` () =
+                check (fun s _ _-> s) [] [] []
