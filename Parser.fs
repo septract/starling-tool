@@ -380,11 +380,14 @@ let parseDFuncView = parseFunc parseIdentifier |>> ViewSignature.Func
 /// Parses the unit view definition.
 let parseDUnit = stringReturn "emp" ViewSignature.Unit
 
+/// Parses a view iterator definition.
+let parseIteratorDef = inSquareBrackets parseIdentifier
+
 /// Parses an iterated view definition.
 let parseDIterated =
     pstring "iter" >>. ws >>.
     pipe2ws
-            (inSquareBrackets parseIdentifier)
+            parseIteratorDef
             (parseFunc parseIdentifier)
             (fun e f -> ViewSignature.Iterated(f, e))
 
@@ -405,9 +408,16 @@ do parseViewSignatureRef := parseViewLike parseBasicViewSignature ViewSignature.
  * View prototypes.
  *)
 
-/// Parses a view prototype.
-let parseViewProto =
+/// Parses the LHS of a view prototype.
+let parseViewProtoLhs =
     pstring "view" >>. ws >>. parseFunc parseTypedTypedVar .>> wsSemi .>> ws
+
+/// Parses a view prototype (a LHS followed optionally by an iterator).
+let parseViewProto =
+    parseViewProtoLhs
+    >>= fun lhs ->
+            (wsSemi >>% NoIterator (lhs, false)) <|>
+            (parseIteratorDef .>> wsSemi |>> curry WithIterator lhs)
 
 
 (*

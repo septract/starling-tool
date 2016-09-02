@@ -62,7 +62,15 @@ module Types =
     and Atomic = Node<Atomic'>
 
     /// A view prototype.
-    type ViewProto = Func<TypedVar>
+    type ViewProto =
+        /// <summary>
+        ///     A non-iterated view prototype; can be anonymous.
+        /// </summary>
+        | NoIterator of Func : Func<TypedVar> * IsAnonymous : bool
+        /// <summary>
+        ///     An iterated view prototype; cannot be anonymous
+        /// </summary>
+        | WithIterator of Func: Func<TypedVar> * Iterator: string
 
     /// A view as seen on the LHS of a ViewDef.
     type ViewSignature =
@@ -345,10 +353,17 @@ module Pretty =
         printCommand' pView x.Node
 
     /// Pretty-prints a view prototype.
-    let printViewProto ({ Name = n; Params = ps } : ViewProto) : Doc =
-        hsep [ "view" |> String |> syntax
-               func n (List.map (printCTyped String) ps) ]
-        |> withSemi
+    let printViewProto : ViewProto -> Doc =
+        function
+        | NoIterator (Func = { Name = n; Params = ps }; IsAnonymous = _) ->
+            hsep [ "view" |> String |> syntax
+                   func n (List.map (printCTyped String) ps) ]
+            |> withSemi
+        | WithIterator (Func = { Name = n; Params = ps }; Iterator = i) ->
+            hsep [ "view" |> String |> syntax
+                   func n (List.map (printCTyped String) ps)
+                   squared (String i)]
+            |> withSemi
 
     /// Pretty-prints a search directive.
     let printSearch (i : int) : Doc =

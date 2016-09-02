@@ -25,7 +25,7 @@ open Starling.Lang.AST
 /// <returns>
 ///     A pair of a fresh <c>View</c>, and its corresponding <c>ViewProto</c>.
 /// </returns>
-let makeFreshView tvars fg =
+let makeFreshView (tvars : VarMap) (fg : FreshGen) : View * ViewProto =
     let viewName =
         fg |> getFresh |> sprintf "%A"
     let viewArgs =
@@ -33,7 +33,7 @@ let makeFreshView tvars fg =
     let viewParams =
         tvars |> Map.toSeq |> Seq.map (fun (name, ty) -> withType ty name)
 
-    (Func (func viewName viewArgs), func viewName viewParams)
+    (Func (func viewName viewArgs), NoIterator (func viewName viewParams, false))
 
 /// <summary>
 ///     Converts a possibly-unknown view into a block over known views.
@@ -51,7 +51,8 @@ let makeFreshView tvars fg =
 ///     A pair of the desugared view and the view prototypes generated
 ///     inside it.
 /// </returns>
-let desugarView tvars fg =
+let desugarView (tvars : VarMap) (fg : FreshGen)
+  : Marked<View> -> ViewExpr<View> * ViewProto seq =
     function
     | Unmarked v -> (Mandatory v, Seq.empty)
     | Questioned v -> (Advisory v, Seq.empty)
@@ -75,8 +76,9 @@ let desugarView tvars fg =
 ///     A pair of the desugared command and the view prototypes
 ///     generated inside it.
 /// </returns>
-let rec desugarCommand tvars fg (cmd: Command<Marked<View>>)
-    : Command<ViewExpr<View>> * seq<Func<CTyped<string>>> =
+let rec desugarCommand (tvars : VarMap) (fg : FreshGen)
+  (cmd : Command<Marked<View>>)
+    : Command<ViewExpr<View>> * ViewProto seq =
     let f = fun (a, b) -> (cmd |=> a, b)
     f <| match cmd.Node with
             | If (e, t, f) ->
@@ -115,7 +117,10 @@ let rec desugarCommand tvars fg (cmd: Command<Marked<View>>)
 ///     A pair of the desugared viewed command and the view prototypes
 ///     generated inside it.
 /// </returns>
-and desugarViewedCommand tvars fg { Command = c ; Post = q } =
+and desugarViewedCommand (tvars : VarMap) (fg : FreshGen)
+  ({ Command = c ; Post = q }
+     : ViewedCommand<Marked<View>, Command<Marked<View>>>)
+  : ViewedCommand<ViewExpr<View>, Command<ViewExpr<View>>> * ViewProto seq =
     let c', cProtos = desugarCommand tvars fg c
     let q', qProtos = desugarView tvars fg q
 
@@ -140,7 +145,7 @@ and desugarViewedCommand tvars fg { Command = c ; Post = q } =
 ///     inside it.
 /// </returns>
 and desugarBlock (tvars: Map<string, Type>) (fg: bigint ref) (blk: Block<Marked<View>, Command<Marked<View>>>)
-    : Block<ViewExpr<View>, Command<ViewExpr<View>>> * seq<Func<CTyped<string>>> =  
+    : Block<ViewExpr<View>, Command<ViewExpr<View>>> * ViewProto seq =
     let p, cs = blk.Pre, blk.Contents
     let p', pProtos = desugarView tvars fg p
     let cs', csProtos =

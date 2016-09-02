@@ -64,7 +64,7 @@ module Types =
           /// <summary>
           ///     A definer containing the visible view prototypes.
           /// </summary>
-          ViewProtos : FuncDefiner<unit> }
+          ViewProtos : FuncDefiner<ProtoInfo> }
 
     type ModellerViewExpr = ViewExpr<CView>
     type ModellerPartCmd = PartCmd<ModellerViewExpr>
@@ -654,18 +654,18 @@ let funcViewParMerge (ppars : TypedVar list) (dpars : Var list)
     List.map2 (fun ppar dpar -> withType (typeOf ppar) dpar) ppars dpars
 
 /// Adapts Instantiate.lookup to the modeller's needs.
-let lookupFunc (protos : FuncDefiner<unit>) (func : Func<_>)
+let lookupFunc (protos : FuncDefiner<ProtoInfo>) (func : Func<_>)
   : Result<DFunc, ViewError> =
     protos
     |> Instantiate.lookup func
     |> mapMessages (curry LookupError func.Name)
     |> bind (function
-             | Some (proto, ()) -> proto |> ok
+             | Some (proto, _) -> proto |> ok
              | None -> func.Name |> NoSuchView |> fail)
 
 /// Models part of a view definition as a DFunc.
 let modelDFunc
-  (protos : FuncDefiner<unit>)
+  (protos : FuncDefiner<ProtoInfo>)
   (func : Func<Var>)
   : Result<Multiset<DFunc>, ViewError> =
     func
@@ -675,7 +675,7 @@ let modelDFunc
                  |> Multiset.singleton)
 
 /// Tries to convert a view def into its model (multiset) form.
-let rec modelViewSignature (protos : FuncDefiner<unit>) =
+let rec modelViewSignature (protos : FuncDefiner<ProtoInfo>) =
     function
     | ViewSignature.Unit -> ok Multiset.empty
     | ViewSignature.Func dfunc -> Multiset.map (fun f -> { Func = f; Iterator = None }) <!> (modelDFunc protos dfunc)
@@ -709,7 +709,7 @@ let envOfViewDef : VarMap -> DView -> Result<VarMap, ViewError> =
 /// Converts a single constraint to its model form.
 let modelViewDef
   (svars : VarMap)
-  (vprotos : FuncDefiner<unit>)
+  (vprotos : FuncDefiner<ProtoInfo>)
   (av : ViewSignature, ad : Expression option)
   : Result<(DView * SVBoolExpr option), ModelError> =
     trial {
@@ -855,7 +855,7 @@ let genAllViewsAt depth (funcs : DFunc seq) : Set<DView> =
 ///     generated from the views at <paramref name="vprotos" />.
 /// </returns>
 let addSearchDefs
-  (vprotos : FuncDefiner<unit>)
+  (vprotos : FuncDefiner<ProtoInfo>)
   depth
   (definer : ViewDefiner<SVBoolExpr option>)
     : ViewDefiner<SVBoolExpr option>=
@@ -882,7 +882,7 @@ let addSearchDefs
 /// ViewDef.
 let modelViewDefs
   svars
-  (vprotos : FuncDefiner<unit>)
+  (vprotos : FuncDefiner<ProtoInfo>)
   { Search = s; Constraints = cs } =
     cs
     |> List.map (modelViewDef svars vprotos)
@@ -1269,24 +1269,30 @@ let modelMethod
 /// Checks a view prototype to see if it contains duplicate parameters.
 let checkViewProtoDuplicates (proto : ViewProto)
   : Result<ViewProto, ViewProtoError> =
-    proto.Params
-    |> Seq.map valueOf
-    |> findDuplicates
-    |> Seq.toList
-    |> function
-       | [] -> ok proto
-       | ds -> List.map (fun d -> VPEDuplicateParam(proto, d)) ds |> Bad
-
-/// Checks a view prototype and converts it to an associative pair.
-let modelViewProto (proto : ViewProto) : Result<DFunc * unit, ModelError> =
-    proto
-    |> checkViewProtoDuplicates
-    |> lift (fun pro -> (pro, ()))
-    |> mapMessages (curry BadVProto proto)
+    match proto with
+    | NoIterator (f, _) | WithIterator (f, _) ->
+        f.Params
+        |> Seq.map valueOf
+        |> findDuplicates
+        |> Seq.toList
+        |> function
+           | [] -> ok proto
+           | ds -> List.map (fun d -> VPEDuplicateParam(proto, d)) ds |> Bad
 
 /// Checks view prototypes and converts them to func-table form.
 let modelViewProtos (protos : #(ViewProto seq))
-  : Result<FuncDefiner<unit>, ModelError> =
+  : Result<FuncDefiner<ProtoInfo>, ModelError> =
+    let modelViewProto proto =
+        proto
+        |> checkViewProtoDuplicates
+        |> lift
+               (function
+                | NoIterator (f, isAnonymous) ->
+                    (f, { IsIterated = false; IsAnonymous = isAnonymous; } )
+                | WithIterator (f, _) ->
+                    (f, { IsIterated = true; IsAnonymous = false; } ))
+        |> mapMessages (curry BadVProto proto)
+
     protos
     |> Seq.map modelViewProto
     |> collect
@@ -1306,8 +1312,8 @@ let model
         let desugaredMethods, unknownProtos =
             Starling.Lang.ViewDesugar.desugar locals collated.Methods
 
-        let! vprotos = modelViewProtos
-                           (Seq.append collated.VProtos unknownProtos)
+        let! vprotos =
+            modelViewProtos (Seq.append collated.VProtos unknownProtos)
 
         let! constraints = modelViewDefs globals vprotos collated
 
@@ -1326,5 +1332,6 @@ let model
               Locals = locals
               ViewDefs = constraints
               Semantics = coreSemantics
-              Axioms = axioms }
+              Axioms = axioms
+              ViewProtos = vprotos }
     }
