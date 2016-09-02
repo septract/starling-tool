@@ -65,7 +65,12 @@ module Types =
     /// <summary>
     ///     A basic view, as an ordered list of VFuncs.
     /// </summary>
-    type OView = IteratedContainer<SMVFunc, IntExpr<Sym<MarkedVar>>> list
+    type IteratedOView = IteratedContainer<SMVFunc, IntExpr<Sym<MarkedVar>>> list
+
+    /// <summary>
+    ///     A basic view, as an ordered list of VFuncs.
+    /// </summary>
+    type OView = SMVFunc list
 
     /// <summary>
     ///     A view expression, combining a view with its kind.
@@ -128,7 +133,7 @@ module Pretty =
             hjoin [ pFunc func; String "["; pIterator i; String "]" ]
 
     /// Pretty-prints an OView.
-    let printOView : OView -> Doc =
+    let printIteratedOView : IteratedOView -> Doc =
         List.map
             (printIteratedContainer
                  printSMVFunc
@@ -136,6 +141,10 @@ module Pretty =
         >> semiSep
         >> squared
 
+    let printOView : OView -> Doc =
+        List.map printSMVFunc
+        >> semiSep
+        >> squared
 
     /// Pretty-prints a DView.
     let printDView : DView -> Doc =

@@ -54,7 +54,7 @@ module Types =
         { /// The axiom to be checked for soundness under Goal.
           Axiom : Axiom<IteratedGView<Sym<Var>>, 'cmd>
           /// The view representing the goal for any terms over Axiom.
-          Goal : OView }
+          Goal : IteratedOView }
 
 /// <summary>
 ///     Pretty printers for axioms.
@@ -82,7 +82,7 @@ module Pretty =
                        : Doc =
         vsep [ headed "Axiom"
                       (a |> printAxiom (printIteratedGView (printSym String)) printCmd |> Seq.singleton)
-               headed "Goal" (f |> printOView |> Seq.singleton) ]
+               headed "Goal" (f |> printIteratedOView |> Seq.singleton) ]
 
 
 /// Makes an axiom {p}c{q}.
@@ -98,7 +98,7 @@ let axiom (p : 'view) (c : 'cmd) (q : 'view)
 /// Instantiates a defining view into a view expression.
 let instantiateGoal (fg : FreshGen)
                     (dvs : DView)
-                    : OView =
+                    : IteratedOView =
     let instantiateParam = mkVarExp (goalVar fg >> Reg)
 
     dvs |> List.map (function

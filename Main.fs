@@ -181,7 +181,10 @@ type Response =
     /// The result of semantic expansion.
     | Semantics of Model<GoalAxiom<CommandSemantics<SMBoolExpr>>, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term generation.
-    | TermGen of Model<CmdTerm<SMBoolExpr, IteratedGView<Sym<MarkedVar>>, OView>, ViewDefiner<SVBoolExpr option>>
+    | TermGen of Model<CmdTerm<SMBoolExpr, IteratedGView<Sym<MarkedVar>>, IteratedOView>, ViewDefiner<SVBoolExpr option>>
+    /// The result of term generation.
+    | IterLower of Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, OView>,
+                         ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term reification.
     | Reify of Model<CmdTerm<SMBoolExpr, Set<GuardedSubview>, OView>,
                      ViewDefiner<BoolExpr<Sym<Var>> option>>
@@ -231,9 +234,7 @@ let printResponse (mview : ModelView) : Response -> Doc =
     | List l -> printList String l
     | Frontend f -> Lang.Frontend.printResponse mview f
     | GraphOptimise g -> printVModel printGraph g
-    | Axiomatise m ->
-        printVModel
-            (printAxiom (printIteratedGView (printSym printVar)) printCommand) m
+    | Axiomatise m -> printVModel (printAxiom printIteratedSVGView printCommand) m
     | GoalAdd m -> printVModel (printGoalAxiom printCommand) m
     | Semantics m -> printVModel (printGoalAxiom (printCommandSemantics printSMBoolExpr)) m
     | TermGen m ->
@@ -241,7 +242,8 @@ let printResponse (mview : ModelView) : Response -> Doc =
             (printCmdTerm
                 printSMBoolExpr
                 (printIteratedGView (printSym printMarkedVar))
-                printOView) m
+                printIteratedOView) m
+    | IterLower m -> printVModel (printCmdTerm printSMBoolExpr printSMGView printOView) m
     | Reify m -> printVModel (printCmdTerm printSMBoolExpr printGuardedSubviewSet printOView) m
     | Flatten m -> printFModel (printCmdTerm printSMBoolExpr printSMGView printSMVFunc) m
     | TermOptimise m -> printFModel (printCmdTerm printSMBoolExpr printSMGView printSMVFunc) m
@@ -427,6 +429,7 @@ let runStarling (request : Request)
     let flatten = lift Starling.Flattener.flatten
     let reify = lift Starling.Reifier.reify
     let termGen = lift Starling.TermGen.termGen
+    let iterLower = lift Starling.TermGen.Iter.flatten
     let goalAdd = lift Starling.Core.Axiom.goalAdd
     let semantics =
         bind (Starling.Semantics.translate
@@ -544,6 +547,7 @@ let runStarling (request : Request)
     ** phase  goalAdd        Request.GoalAdd        Response.GoalAdd
     ** phase  semantics      Request.Semantics      Response.Semantics
     ** phase  termGen        Request.TermGen        Response.TermGen
+    ** phase  iterLower      Request.IterLower      Response.IterLower
     ** phase  reify          Request.Reify          Response.Reify
     ** phase  flatten        Request.Flatten        Response.Flatten
     ** phase  termOptimise   Request.TermOptimise   Response.TermOptimise

@@ -158,7 +158,7 @@ let rec minusViewByFunc (qstep : IteratedGFunc<TermGenVar>)
 ///     The subtracted frame view.
 /// </returns>
 let termGenFrame
-  (r : OView)
+  (r : IteratedOView)
   (q : IteratedGView<Sym<MarkedVar>>)
   : IteratedGView<Sym<MarkedVar>> =
     (* Since R is unguarded and ordered at the start of the minus, we lift
@@ -203,16 +203,63 @@ let termGenPre
 
 /// Generates a term from a goal axiom.
 let termGenAxiom (gax : GoalAxiom<'cmd>)
-  : Term<'cmd, IteratedGView<Sym<MarkedVar>>, OView> =
+  : Term<'cmd, IteratedGView<Sym<MarkedVar>>, IteratedOView> =
     { WPre = termGenPre gax
       Goal = gax.Goal
       Cmd = gax.Axiom.Cmd }
 
 /// Converts a model's goal axioms to terms.
 let termGen (model : Model<GoalAxiom<'cmd>, _>)
-  : Model<Term<'cmd, IteratedGView<Sym<MarkedVar>>, OView>, _> =
+  : Model<Term<'cmd, IteratedGView<Sym<MarkedVar>>, IteratedOView>, _> =
     mapAxioms termGenAxiom model
 
+/// Stage that flattens the Iterator's from GuardedFunc's
+module Iter =
+    /// Lowers an IteratedGFunc to a GFunc, moving the Iterator expression to the parameter
+    let lowerIterGFunc : IteratedGFunc<Sym<MarkedVar>> -> GFunc<Sym<MarkedVar>> =
+        fun { Func = guardedfunc; Iterator = it } ->
+            match guardedfunc with
+            | { Cond = cond; Item = gfunc } ->
+                let vfunc =
+                    // TODO: Better system for matching
+                    // the "None" condition is not sufficient after TermGen
+                    match it with
+                    | Some x -> func gfunc.Name (Int x :: gfunc.Params)
+                    | None   -> gfunc
+                { Cond = cond; Item = vfunc }
+
+    /// Lowers an IteratedSMVFunc into an SMVFunc moving the Iterator Expression into the params
+    let lowerIterSMVFunc : IteratedContainer<SMVFunc, IntExpr<Sym<MarkedVar>>> -> SMVFunc =
+        fun { Func = vfunc; Iterator = it } ->
+            // TODO: See lowerIterGFunc
+            match it with
+            | Some x -> func vfunc.Name (Int x :: vfunc.Params)
+            | None   -> vfunc
+
+    /// flattens an entire IteratedGView into a flat GView
+    let lowerIteratedGView : IteratedGView<Sym<MarkedVar>> -> GView<Sym<MarkedVar>> =
+        fun itergview -> Multiset.map lowerIterGFunc itergview
+
+    /// flattens an entire IteratedOView into a flat OView
+    /// with no iterators
+    let lowerIteratedOView : IteratedOView -> OView =
+        fun iteroview -> List.map lowerIterSMVFunc iteroview
+
+    /// Flattens both the W/Pre and the Goal of a Term, removing the Iterators
+    /// and returning the new flattened Term
+    let lowerIteratedTerm : Term<_, IteratedGView<Sym<MarkedVar>>, IteratedOView> -> Term<_, GView<Sym<MarkedVar>>, OView> =
+        fun term ->
+        { WPre = lowerIteratedGView term.WPre
+          Cmd = term.Cmd
+          Goal = lowerIteratedOView term.Goal }
+
+    /// Flattens iterated guarded views in a model's terms down to guarded views
+    /// taking iter[n] g(xbar...) to g(n, xbar...)
+    /// and returning that new model
+    let flatten
+        (model : Model<Term<_, IteratedGView<Sym<MarkedVar>>, _>, _>)
+            : Model<Term<_, GView<Sym<MarkedVar>>, _>, _> =
+        mapAxioms lowerIteratedTerm model
 
 /// <summary>
 ///     Tests for <c>TermGen</c>.
@@ -292,7 +339,7 @@ module Tests =
                                "foo"
                                [ Expr.Bool (sbGoal 0I "bar") ] )
                   .SetName("Removing a guarded func from itself works correctly")
-              (tcd [| ([] : OView)
+              (tcd [| ([] : IteratedOView)
                       (Multiset.singleton <|
                            smgfunc BTrue "foo" [ Expr.Bool (sbBefore "bar") ] ) |] )
                   .Returns(Multiset.empty : GView<Sym<MarkedVar>>)

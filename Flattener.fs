@@ -67,11 +67,8 @@ let flattenDView : TypedVar seq -> DView -> Func<TypedVar> =
 /// Flattens an OView into an SMVFunc given the set of globals
 let flattenOView : Expr<Sym<MarkedVar>> seq -> OView -> SMVFunc =
     fun globals oview ->
-        let paramFromOViewFunc f = paramsFromIteratedFunc (mapIterator Int f)
-        let paramsNoShared = Seq.concat <| Seq.map paramFromOViewFunc oview
-        let paramsShared = Seq.toList <| Seq.append paramsNoShared globals
-        { Name = genFlatIteratedFuncName oview
-          Params = paramsShared }
+        { Name = genFlatFuncSeqName oview
+          Params = Seq.toList <| Seq.append (paramsOfFuncSeq oview) globals }
 
 /// <summary>
 ///     Flattens a term by converting all of its OViews into single funcs.

@@ -532,6 +532,17 @@ module Pretty =
     let printSVGView : GView<Sym<Var>> -> Doc = printGView (printSym String)
 
     /// <summary>
+    ///     Pretty-prints an iterated guarded view over symbolic <c>Var</c>s.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The view to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command to print the view.
+    /// </returns>
+    let printIteratedSVGView : IteratedGView<Sym<Var>> -> Doc = printIteratedGView (printSym String)
+
+    /// <summary>
     ///     Pretty-prints a guarded view over symbolic <c>MarkedVar</c>s.
     /// </summary>
     /// <param name="_arg1">
