@@ -9,6 +9,8 @@ open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.View
 open Starling.Core.GuardedView
+open Starling.Core.Symbolic
+open Starling.Core.Var
 
 /// <summary>
 ///     Tests for <c>TermGen</c>.
@@ -20,8 +22,32 @@ module Tests =
         module TestNormalise =
 
             [<Test>]
-            let ``TODO`` () =
-                Assert.Fail ()
+            let ``normalise converts 3 instances of A(x)[4] to A(x)[12]`` () =
+                Assert.That(
+                    normalise
+                        (iterated
+                            (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
+                            (Some (AInt 4L : IntExpr<Sym<MarkedVar>>)))
+                        3,
+                    Is.EqualTo(
+                        (iterated
+                            (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
+                            (Some (AInt 12L : IntExpr<Sym<MarkedVar>>)))))
+
+
+            [<Test>]
+            let ``normalise converts 6 instances of A(x)[n] to A(x)[6*n]`` () =
+                Assert.That(
+                    normalise
+                        (iterated
+                            (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
+                            (Some (siBefore "n")))
+                        6,
+                    Is.EqualTo(
+                        (iterated
+                            (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
+                            (Some (AMul [ siBefore "n"; AInt 6L ])))))
+
 
         module TestWPreCreation =
             [<Test>]
