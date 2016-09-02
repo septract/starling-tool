@@ -171,14 +171,14 @@ type Response =
     /// Stop at graph optimisation.
     | GraphOptimise of Model<Graph, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// Stop at graph axiomatisation.
-    | Axiomatise of Model<Axiom<GView<Sym<Var>>, Command>,
+    | Axiomatise of Model<Axiom<IteratedGView<Sym<Var>>, Command>,
                           ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of goal-axiom-pair generation.
     | GoalAdd of Model<GoalAxiom<Command>, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of semantic expansion.
     | Semantics of Model<GoalAxiom<CommandSemantics<SMBoolExpr>>, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term generation.
-    | TermGen of Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, OView>, ViewDefiner<SVBoolExpr option>>
+    | TermGen of Model<CmdTerm<SMBoolExpr, IteratedGView<Sym<MarkedVar>>, OView>, ViewDefiner<SVBoolExpr option>>
     /// The result of term reification.
     | Reify of Model<CmdTerm<SMBoolExpr, Set<GuardedSubview>, OView>,
                      ViewDefiner<BoolExpr<Sym<Var>> option>>
@@ -228,10 +228,17 @@ let printResponse (mview : ModelView) : Response -> Doc =
     | List l -> printMap Indented String String l
     | Frontend f -> Lang.Frontend.printResponse mview f
     | GraphOptimise g -> printVModel printGraph g
-    | Axiomatise m -> printVModel (printAxiom printSVGView printCommand) m
+    | Axiomatise m ->
+        printVModel
+            (printAxiom (printIteratedGView (printSym printVar)) printCommand) m
     | GoalAdd m -> printVModel (printGoalAxiom printCommand) m
     | Semantics m -> printVModel (printGoalAxiom (printCommandSemantics printSMBoolExpr)) m
-    | TermGen m -> printVModel (printCmdTerm printSMBoolExpr printSMGView printOView) m
+    | TermGen m ->
+        printVModel
+            (printCmdTerm
+                printSMBoolExpr
+                (printIteratedGView (printSym printMarkedVar))
+                printOView) m
     | Reify m -> printVModel (printCmdTerm printSMBoolExpr printGuardedSubviewSet printOView) m
     | Flatten m -> printFModel (printCmdTerm printSMBoolExpr printSMGView printSMVFunc) m
     | TermOptimise m -> printFModel (printCmdTerm printSMBoolExpr printSMGView printSMVFunc) m
