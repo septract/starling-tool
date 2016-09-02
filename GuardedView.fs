@@ -77,7 +77,7 @@ module Types =
     ///     The type of variables in the guard.
     /// </typeparam>
     type IteratedGFunc<'Var> when 'Var : equality =
-        IteratedContainer<Guarded<'Var, VFunc<'Var>>, IntExpr<'Var>>
+        IteratedContainer<GFunc<'Var>, IntExpr<'Var>>
 
     /// <summary>
     ///     A <c>GFunc</c> over <c>MarkedVar</c>s.
@@ -206,6 +206,10 @@ let mgfunc (guard : MBoolExpr) (name : string) (pars : MExpr seq) : MGFunc =
 let smgfunc (guard : SMBoolExpr) (name : string) (pars : SMExpr seq) : SMGFunc =
     gfunc guard name pars
 
+
+/// IteratedContainer constructor
+let iterated f it = { Func = f; Iterator = it }
+let emptyIterated f = { Func = f; Iterator = None }
 
 (*
  * Single-guard active patterns.

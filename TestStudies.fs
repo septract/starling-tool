@@ -56,6 +56,12 @@ method unlock() {
 }
 """
 
+let pos l c node =
+    { Position = { StreamName = "Examples/Pass/ticketLock.cvf"
+                   Line = l
+                   Column = c }
+      Node = node }
+
 /// The correct parsing of the ticket lock's lock method.
 let ticketLockLockMethodAST =
     {Signature = {Name = "lock";
@@ -64,36 +70,22 @@ let ticketLockLockMethodAST =
             {Pre = Unmarked Unit;
              Contents =
               [{Command =
-                 {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
-                              Line = 15L;
-                              Column = 5L;};
-                  Node =
-                   Command'.Prim
+                 pos 15L 5L
+                 <| Command'.Prim
                      {PreAssigns = [];
                       Atomics =
-                       [{Position =
-                          {StreamName = "Examples/Pass/ticketLock.cvf";
-                           Line = 15L;
-                           Column = 6L;};
-                         Node =
+                       [pos 15L 6L <|
                           Fetch
                             (LVIdent "t",
-                             {Position =
-                               {StreamName = "Examples/Pass/ticketLock.cvf";
-                                Line = 15L;
-                                Column = 10L;};
-                              Node = LV (LVIdent "ticket");},Increment);}];
-                      PostAssigns = [];};};
+                             pos 15L 10L <| LV (LVIdent "ticket"), Increment);];
+                      PostAssigns = [];};
                 Post =
                  Unmarked
                    (View.Func
                       {Name = "holdTick";
                        Params =
-                        [{Position =
-                           {StreamName = "Examples/Pass/ticketLock.cvf";
-                            Line = 16L;
-                            Column = 15L;};
-                          Node = LV (LVIdent "t");}];});};
+                        [pos 16L 15L <| LV (LVIdent "t")] })};
+
                {Command =
                  {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                               Line = 17L;
@@ -211,8 +203,8 @@ let ticketLockUnlockMethodAST =
                   PostAssigns = [];};};
             Post = Unmarked Unit;}];};};
 
-let ticketLockConstraint01 = 
-    (DView.Unit,
+let ticketLockConstraint01 =
+    (ViewSignature.Unit,
      Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 38L;
@@ -229,7 +221,7 @@ let ticketLockConstraint01 =
             Node = LV (LVIdent "serving");});})
 
 let ticketLockConstraint02 =
-    (DView.Func {Name = "holdTick";
+    (ViewSignature.Func {Name = "holdTick";
             Params = ["t"];},
      Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
@@ -247,7 +239,7 @@ let ticketLockConstraint02 =
             Node = LV (LVIdent "t");});})
 
 let ticketLockConstraint03 =
-    (DView.Func {Name = "holdLock";
+    (ViewSignature.Func {Name = "holdLock";
             Params = [];},
      Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
@@ -265,9 +257,9 @@ let ticketLockConstraint03 =
             Node = LV (LVIdent "serving");});})
 
 let ticketLockConstraint04 =
-    (DView.Join (DView.Func {Name = "holdLock";
+    (ViewSignature.Join (ViewSignature.Func {Name = "holdLock";
                              Params = [];},
-                 DView.Func {Name = "holdTick";
+                 ViewSignature.Func {Name = "holdTick";
                              Params = ["t"];}),
      Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
@@ -285,9 +277,9 @@ let ticketLockConstraint04 =
             Node = LV (LVIdent "t");});})
 
 let ticketLockConstraint05 =
-    (DView.Join (DView.Func {Name = "holdTick";
+    (ViewSignature.Join (ViewSignature.Func {Name = "holdTick";
                              Params = ["ta"];},
-                 DView.Func {Name = "holdTick";
+                 ViewSignature.Func {Name = "holdTick";
                              Params = ["tb"];}),
      Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
@@ -305,9 +297,9 @@ let ticketLockConstraint05 =
             Node = LV (LVIdent "tb");});})
 
 let ticketLockConstraint06 = 
-    (DView.Join (DView.Func {Name = "holdLock";
+    (ViewSignature.Join (ViewSignature.Func {Name = "holdLock";
                              Params = [];},
-                 DView.Func {Name = "holdLock";
+                 ViewSignature.Func {Name = "holdLock";
                              Params = [];}),
      Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";

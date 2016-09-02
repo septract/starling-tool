@@ -43,11 +43,11 @@ type TermGenVar = Sym<MarkedVar>
 /// </returns>
 let normalise (func : IteratedGFunc<TermGenVar>) (i : int)
   : IteratedGFunc<TermGenVar> =
-    // TODO(CaptainHayashi): hack.
-    let func' =
-        { func with Iterator = Some (withDefault (AInt 1L) func.Iterator) }
-    // TODO(CaptainHayashi): simplify multiplication if 1 or 0.
-    mapIterator (mkMul2 (AInt (int64 i))) func'
+    mapIterator'
+        (function
+         | None -> Some <| AInt (int64 i)
+         | Some x -> Some <| mkMul2 x (AInt (int64 i)))
+        func
 
 /// <summary>
 ///     Performs view minus of a view by a single func.

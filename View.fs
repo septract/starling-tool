@@ -55,6 +55,12 @@ module Types =
       : IteratedContainer<'Func, 'IteratorB> =
         { Func = v; Iterator = Option.map f i }
 
+    /// Maps over the item inside an IteratedContainer.
+    let mapIterator' (f : 'IteratorA option -> 'IteratorB option)
+      ({ Func = v; Iterator = i } : IteratedContainer<'Func, 'IteratorA>)
+      : IteratedContainer<'Func, 'IteratorB> =
+        { Func = v; Iterator = f i }
+
     (*
      * Views
      *)
@@ -130,7 +136,7 @@ module Pretty =
         function
         | { Iterator = None; Func = func } -> pFunc func
         | { Iterator = Some i; Func = func } ->
-            hjoin [ pFunc func; String "["; pIterator i; String "]" ]
+            hjoin [ String "iter["; pIterator i; String "]"; pFunc func ]
 
     /// Pretty-prints an OView.
     let printIteratedOView : IteratedOView -> Doc =
