@@ -105,6 +105,9 @@ let requestList : (string * (string * Request)) list =
       ("termgen",
        ("Stops Starling model generation at proof term generation.",
         Request.TermGen))
+      ("iterlower",
+       ("Flattens the iterated views in the Starling model",
+        Request.IterLower))
       ("reify",
        ("Stops Starling model generation at view reification.",
         Request.Reify))
