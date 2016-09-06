@@ -75,7 +75,7 @@ module Pretty =
 
 /// Generates a framing relation for a given variable.
 let frameVar ctor par : SMBoolExpr =
-    BEq (mkVarExp (After >> Reg) par, mkVarExp (ctor >> Reg) par)
+    BEq (par |> After |> Reg |> mkVarExp, par |> ctor |> Reg |> mkVarExp)
 
 /// Generates a frame for a given expression.
 /// The frame is a relation a!after = a!before for every a not mentioned in the expression.
@@ -196,7 +196,7 @@ let instantiateSemanticsOfPrim
 ///     converting *all* After variables to (Intermediate i) variables
 ///     converts any Before variables where an Intermediate exists, to that Intermediate
 ///
-/// the frame can then be constructed by taking the BoolExpr and looking for the aforementioned Intermediate 
+/// the frame can then be constructed by taking the BoolExpr and looking for the aforementioned Intermediate
 /// variables and adding a (= (After v) (Intermediate maxInterValue v)) if it finds one
 let seqComposition xs =
     // since we are trying to keep track of explicit state (where we are in terms of the intermediate variables)

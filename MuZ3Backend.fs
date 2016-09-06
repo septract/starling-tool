@@ -289,7 +289,7 @@ module Translator =
                         The parameters of a DFunc are in parameter format,
                         which we need to convert to expression format first.
                         dex uses Unmarked constants, so we do too. *)
-                     let eparams = List.map (mkVarExp id) vs.Params
+                     let eparams = List.map mkVarExp vs.Params
                      let vfunc = { Name = vs.Name ; Params = eparams }
 
                      (vfunc, dex))
