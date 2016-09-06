@@ -28,7 +28,7 @@ open Starling.Core.Model
 open Starling.Core.Sub
 open Starling.Core.Symbolic
 open Starling.Core.GuardedView
-open Starling.Core.GuardedView.Sub
+open Starling.Core.GuardedView.Traversal
 
 
 /// <summary>
@@ -67,6 +67,16 @@ module Types =
         ///     one.
         /// </summary>
         | UnwantedSym of sym: string
+        /// <summary>
+        ///     We tried to substitute parameters, but one parameter was free
+        ///     (not bound to an expression) somehow.
+        /// </summary>
+        | FreeVarInSub of param: TypedVar
+        /// <summary>
+        ///     An error occurred during traversal.
+        ///     This error may contain nested instantiation errors!
+        /// </summary>
+        | Traversal of SubError<Error>
 
     /// Terms in a Proof are boolean expression pre/post conditions with Command's
     type SymProofTerm =
@@ -101,7 +111,7 @@ module Pretty =
     open Starling.Core.View.Pretty
 
     /// Pretty-prints instantiation errors.
-    let printError : Error -> Doc =
+    let rec printError : Error -> Doc =
         function
         | BadFuncLookup (func, err) ->
             wrapped "resolution of func"
@@ -114,6 +124,14 @@ module Pretty =
             // TODO(CaptainHayashi): this is a bit shoddy.
             fmt "encountered uninterpreted symbol {0}"
                 [ String sym ]
+        | FreeVarInSub var ->
+            // TODO(CaptainHayashi): this is a bit shoddy.
+            error
+                (hsep
+                    [ String "parameter '"
+                      printTypedVar var
+                      String "' has no substitution" ])
+        | Traversal err -> Sub.Pretty.printSubError printError err
 
     let printSymProofTerm (sterm : SymProofTerm) : Doc =
         vsep
@@ -145,7 +163,7 @@ module Pretty =
 
 /// <summary>
 ///     Produces a <c>VSubFun</c> that substitutes the arguments of
-///     <c>_arg1</c> for their parameters in <c>_arg2</c>, over
+///     <c>vfunc</c> for their parameters in <c>dfunc</c>, over
 ///     symbolic variables.
 ///
 ///     <para>
@@ -155,37 +173,30 @@ module Pretty =
 ///         and <c>Sym</c>s.
 ///     </para>
 /// </summary>
-/// <param name="_arg1">
+/// <param name="vfunc">
 ///     The func providing the arguments to substitute.
 /// </param>
-/// <param name="_arg2">
+/// <param name="dfunc">
 ///     The <c>DFunc</c> into which we are substituting.
 /// </param>
-/// <typeparam name="dstVar">
-///     The type of variables in the arguments being substituted.
-/// </typeparam>
 /// <returns>
-///     A <c>VSubFun</c> performing the above substitutions.
+///     A <see cref="Traversal"/> performing the above substitutions.
 /// </returns>
 let paramSubFun
-  ( { Params = fpars } : VFunc<'dstVar>)
-  ( { Params = dpars } : DFunc)
-  : VSubFun<Var, 'dstVar> =
-    let pmap =
-        Seq.map2 (fun par up -> valueOf par, up) dpars fpars
-        |> Map.ofSeq
+  (vfunc : VFunc<Sym<MarkedVar>>)
+  (dfunc : DFunc)
+  : Traversal<TypedVar, Expr<Sym<MarkedVar>>, Error> =
+    let dpars = dfunc.Params
+    let fpars = vfunc.Params
+    let pmap = Map.ofSeq (Seq.map2 (fun par up -> valueOf par, up) dpars fpars)
 
-    Mapper.make
-        (fun srcV ->
-             match (pmap.TryFind srcV) with
-             | Some (Typed.Int expr) -> expr
-             | Some _ -> failwith "param substitution type error"
-             | None -> failwith "free variable in substitution")
-        (fun srcV ->
-             match (pmap.TryFind srcV) with
-             | Some (Typed.Bool expr) -> expr
-             | Some _ -> failwith "param substitution type error"
-             | None -> failwith "free variable in substitution")
+    ignoreContext
+        (function
+         | WithType (var, vtype) as v ->
+            match pmap.TryFind var with
+            | Some expr when vtype = typeOf expr -> ok expr
+            | Some expr -> fail (Inner (BadFuncLookup (vfunc, TypeMismatch (v, typeOf expr))))
+            | None -> fail (Inner (FreeVarInSub v)))
 
 /// <summary>
 ///     Look up <c>func</c> in <c>_arg1</c>, and instantiate the
@@ -208,17 +219,26 @@ let instantiate
   (definer : FuncDefiner<BoolExpr<Sym<Var>>>)
   (vfunc : VFunc<Sym<MarkedVar>>)
   : Result<BoolExpr<Sym<MarkedVar>> option, Error> =
-    let subfun dfunc = paramSubFun vfunc dfunc |> liftVToSym |> onVars
+    // TODO(CaptainHayashi): this symbolic code is horrific.
 
-    let checkedLookup =
+    let dfuncResult =
         wrapMessages BadFuncLookup
             (flip FuncDefiner.lookupWithTypeCheck definer) vfunc
 
-    lift
-        (Option.map
-            (fun (dfunc, defn) ->
-                 defn |> Mapper.mapBoolCtx (subfun dfunc) NoCtx |> snd))
-        checkedLookup
+    let subInTypedSym dfunc =
+        liftTraversalToTypedSymVarSrc (paramSubFun vfunc dfunc)
+    let subInBool dfunc = boolSubVars (subInTypedSym dfunc)
+
+    let result =
+        bind
+            (function
+             | None -> ok None
+             | Some (dfunc, defn) ->
+                lift Some (withoutContext (subInBool dfunc) defn))
+            (mapMessages Inner dfuncResult)
+
+    mapMessages Traversal result
+
 /// <summary>
 ///     Partitions a <see cref="FuncDefiner"/> into a definite
 ///     definer and an indefinite definer.
@@ -253,16 +273,15 @@ module DefinerFilter =
     /// </summary>
     let tryRemoveFuncDefinerSymbols
       (defs : FuncDefiner<SVBoolExpr>)
-      : Result<FuncDefiner<VBoolExpr>, Error> =
+      : Result<FuncDefiner<VBoolExpr>, SubError<Error>> =
         // TODO(CaptainHayashi): proper doc comment.
         // TODO(CaptainHayashi): stop assuming Definer is a list.
         defs
         |> List.map
                (fun (f, d) ->
-                    d
-                    |> Mapper.mapBoolCtx (tsfRemoveSym UnwantedSym) NoCtx
-                    |> snd
-                    |> lift (mkPair f))
+                    let trav = removeSymFromBoolExpr UnwantedSym
+                    let result = withoutContext trav d
+                    lift (mkPair f) result)
         |> collect
 
     /// <summary>
@@ -273,21 +292,21 @@ module DefinerFilter =
       (vds : FuncDefiner<SVBoolExpr option>)
       : Result<FuncDefiner<VBoolExpr option>, Error> =
         // TODO(CaptainHayashi): proper doc comment.
-        vds
-        |> partitionDefiner
-        |> function
-           | (defs, indefs) ->
-               defs
-               |> tryRemoveFuncDefinerSymbols
-               |> lift
-                      (fun remdefs ->
-                           FuncDefiner.ofSeq
-                              (seq {
-                                   for (v, d) in FuncDefiner.toSeq remdefs do
-                                       yield (v, Some d)
-                                   for (v, _) in FuncDefiner.toSeq indefs do
-                                       yield (v, None)
-                               } ))
+        let partitionResult = partitionDefiner vds
+
+        let assembleDefiniteDefiner indefs remdefs =
+            let defseq = seq {
+                for (v, d) in FuncDefiner.toSeq remdefs do yield (v, Some d)
+                for (v, _) in FuncDefiner.toSeq indefs do yield (v, None) }
+            FuncDefiner.ofSeq defseq
+
+        let handlePartition (defs, indefs) =
+            let removeResult = tryRemoveFuncDefinerSymbols defs
+            let defResult = lift (assembleDefiniteDefiner indefs) removeResult
+            // defResult has SubError errors, we need to lift them
+            mapMessages Traversal defResult
+
+        handlePartition partitionResult
 
     /// <summary>
     ///     Filters a symbolic, indefinite definer into one containing only
@@ -297,17 +316,17 @@ module DefinerFilter =
       (vds : FuncDefiner<SVBoolExpr option>)
       : Result<FuncDefiner<VBoolExpr>, Error> =
         // TODO(CaptainHayashi): proper doc comment.
-        vds
-        |> partitionDefiner
-        |> function
-           | defs, [] ->
-               tryRemoveFuncDefinerSymbols defs
-           | _, indefs ->
-               indefs
-               |> FuncDefiner.toSeq
-               |> Seq.toList
-               |> List.map (fst >> IndefiniteConstraint)
-               |> Bad
+        let partitionResult = partitionDefiner vds
+
+        let handlePartition (defs, indefs) =
+            // Complain if we have _any_ indefinite constraints.
+            if List.isEmpty indefs
+            then mapMessages Traversal (tryRemoveFuncDefinerSymbols defs)
+            else
+                let xs = Seq.toList (FuncDefiner.toSeq indefs)
+                Bad (List.map (fst >> IndefiniteConstraint) xs)
+
+        handlePartition partitionResult
 
     /// <summary>
     ///     Tries to convert a <c>ViewDef</C> based model into one over
@@ -326,9 +345,15 @@ module DefinerFilter =
                      FuncDefiner<SVBoolExpr option>> )
       : Result<Model<CmdTerm<MBoolExpr, GView<MarkedVar>, MVFunc>,
                      FuncDefiner<VBoolExpr option>>, Error> =
-        model
-        |> tryMapAxioms (trySubExprInCmdTerm (tsfRemoveSym UnwantedSym) NoCtx >> snd)
-        |> bind (tryMapViewDefs filterIndefiniteViewDefs)
+        let stripSymbolT =
+            liftTraversalOverCmdTerm
+                (liftTraversalOverExpr
+                    (liftTraversalOverCTyped (removeSymFromVar UnwantedSym)))
+
+        let stripSymbols = withoutContext stripSymbolT >> mapMessages Traversal
+        let axiomFilterResult = tryMapAxioms stripSymbols model
+
+        bind (tryMapViewDefs filterIndefiniteViewDefs) axiomFilterResult
 
 
 /// <summary>
@@ -369,26 +394,33 @@ module Phase =
     /// Given a symbolic-boolean term, calculate the non-symbolic approximation.
     let approxTerm (symterm : Term<SMBoolExpr, SMBoolExpr, SMBoolExpr>)
       : Result<Term<MBoolExpr, MBoolExpr, MBoolExpr>, Error> =
+        (* This is needed to adapt approx's SubError<unit> into SubError<Error>.
+           It's horrible and I hate it. *)
+        let toError =
+            mapMessages
+                (function
+                 | Inner () -> failwith "toError: somehow approx returned Inner ()"
+                 | BadType (x, y) -> BadType (x, y)
+                 | ContextMismatch (x, y) -> ContextMismatch (x, y))
+
         let tryApproxInBool position boolExpr =
             (* First, try to replace symbols with Boolean approximates.
-               This returns a pair of (useless) context and neq expression. *)
-            let _, approxBoolExpr =
-                Mapper.mapBoolCtx
-                    Starling.Core.Symbolic.Queries.approx
-                    position
-                    boolExpr
+               This returns a pair of (useless) context and neq expression.
+               Throw away the context with snd. *)
+            let approxBoolExprR =
+                lift snd
+                    (toError
+                        (boolSubVars Starling.Core.Symbolic.Queries.approx
+                            position
+                            boolExpr))
+
             (* The above might have left some symbols, eg in integer position.
                Try to remove them, and fail if we can't. *)
-            let _, elimBoolExprR =
-                Mapper.mapBoolCtx
-                    (tsfRemoveSym UnwantedSym)
-                    Sub.Types.SubCtx.NoCtx
-                    approxBoolExpr
+            let elimBoolExprR =
+                bind (withoutContext (removeSymFromBoolExpr UnwantedSym))
+                    approxBoolExprR
             // Finally, tidy up the resulting expression.
-            lift simp elimBoolExprR
-
-        let pos = Starling.Core.Sub.Position.positive
-        let neg = Starling.Core.Sub.Position.negative
+            mapMessages Traversal (lift simp elimBoolExprR)
 
         // Now work out how to approximate the individual bits of a Term.
 
@@ -397,13 +429,13 @@ module Phase =
                approximated by removing certain part-symbolic parts of them.
 
                Commands appear on the LHS of a term, thus in -ve position. *)
-            tryApproxInBool neg
+            tryApproxInBool Context.negative
               (Starling.Core.Command.SymRemove.removeSym cmdSemantics)
 
         // Weakest precondition is on the LHS of a term, thus in -ve position.
-        let mapWPre wPre = tryApproxInBool neg wPre
+        let mapWPre wPre = tryApproxInBool Context.negative wPre
         // Goal is on the RHS of a term, thus in +ve position.
-        let mapGoal goal = tryApproxInBool pos goal
+        let mapGoal goal = tryApproxInBool Context.positive goal
 
         tryMapTerm mapCmd mapWPre mapGoal symterm
 
@@ -445,29 +477,31 @@ module Phase =
     /// </returns>
     let symboliseIndefinites
       (definer : FuncDefiner<SVBoolExpr option>)
-      : FuncDefiner<SVBoolExpr> =
+      : Result<FuncDefiner<SVBoolExpr>, Error> =
         let def, indef = partitionDefiner definer
 
         // Then, convert the indefs to symbols.
-        let symconv = Mapper.make (Reg >> AVar) (Reg >> BVar)
+        let symconv =
+            withoutContext
+                (liftTraversalToExprDest
+                    (liftTraversalOverCTyped (ignoreContext (Reg >> ok))))
 
-        let idsym : FuncDefiner<SVBoolExpr> =
-            indef
-            |> FuncDefiner.toSeq
-            |> Seq.map
-                (fun ({ Name = n ; Params = ps }, _) ->
-                    (func n ps,
-                     BVar
-                         (Sym
-                              (func
-                                   (sprintf "!UNDEF:%A" n)
-                                   (List.map
-                                       (Mapper.mapCtx symconv NoCtx >> snd)
-                                       ps)))))
-            |> FuncDefiner.ofSeq
+        let indefSeq = FuncDefiner.toSeq indef
+
+        let symbolise ({ Name = n ; Params = ps }, _) =
+            let convParamsResult = collect (List.map symconv ps)
+
+            let defResult =
+                lift (func (sprintf "!UNDEF:%A" n) >> Sym >> BVar)
+                    convParamsResult
+
+            lift (mkPair (func n ps)) defResult
+
+        let symbolisedResult = collect (Seq.map symbolise indefSeq)
+        let idsymResult = lift FuncDefiner.ofSeq symbolisedResult
 
         // TODO(CaptainHayashi): use functables properly.
-        def @ idsym
+        lift (fun idsym -> def @ idsym) (mapMessages Traversal idsymResult)
 
 
     /// <summary>
@@ -487,5 +521,5 @@ module Phase =
       (model : Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
                      FuncDefiner<SVBoolExpr option>>)
       : Result<Model<SymProofTerm, FuncDefiner<SVBoolExpr option>>, Error> =
-      let vs = symboliseIndefinites model.ViewDefs
-      tryMapAxioms (interpretTerm vs shouldApprox) model
+      let vsR = symboliseIndefinites model.ViewDefs
+      bind (fun vs -> tryMapAxioms (interpretTerm vs shouldApprox) model) vsR

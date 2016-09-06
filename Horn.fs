@@ -80,6 +80,10 @@ module Types =
         ///     HSF can't check the given deferred check.
         /// </summary>
         | CannotCheckDeferred of check : DeferredCheck * why : string
+        /// <summary>
+        ///     A traversal blew up somewhere.
+        /// </summary>
+        | Traversal of err : SubError<Error>
 
 
 /// <summary>
@@ -92,6 +96,8 @@ module Pretty =
     open Starling.Core.Model.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.View.Pretty
+    open Starling.Core.Model.Pretty
+    open Starling.Core.Sub.Pretty
 
     /// <summary>
     ///     Given an expression and its Doc, potentially wrap the Doc
@@ -198,7 +204,7 @@ module Pretty =
     /// <returns>
     ///     A <see cref="Doc"/> representing <paramref name="err"/>.
     /// </returns>
-    let printError (err : Error) : Doc =
+    let rec printError (err : Error) : Doc =
         match err with
         | InconsistentFunc (func, err) ->
             wrapped "view func"
@@ -230,6 +236,7 @@ module Pretty =
                  <-> printDeferredCheck check
                  <-> String "' failed:"
                  <+> String why)
+        | Traversal err -> printSubError printError err
 
 
 (*
@@ -268,12 +275,16 @@ let checkArith
         | AMul xs -> xs |> List.map ca |> collect |> lift AMul
         | ADiv (x, y) -> lift2 (curry ADiv) (ca x) (ca y)
         | x ->
-            x
-            |> Expr.Int
-            |> Mapper.mapCtx (liftCToSub (Mapper.cmake toVar)) NoCtx
-            |> snd
-            |> UnsupportedExpr
-            |> fail
+            (* Need to convert this expression into an Expr<Var> for the
+               error message, which is somewhat painful and can itself fail! *)
+            let xExpr = Expr.Int x
+            let xVarExprR =
+                liftWithoutContext
+                    (toVar >> ok) (liftTraversalOverCTyped >> liftTraversalOverExpr)
+                    xExpr
+            bind
+                (fun xVarExpr -> fail (UnsupportedExpr xVarExpr))
+                (mapMessages Traversal xVarExprR)
     ca
 
 /// <summary>
@@ -313,12 +324,11 @@ let boolExpr
         | BLe(x, y) -> lift2 (curry Le) (ca x) (ca y)
         | BLt(x, y) -> lift2 (curry Lt) (ca x) (ca y)
         | x ->
-            x
-            |> Expr.Bool
-            |> Mapper.mapCtx (liftCToSub (Mapper.cmake toVar)) NoCtx
-            |> snd
-            |> UnsupportedExpr
-            |> fail
+            let everythingToVar =
+                liftWithoutContext (toVar >> ok)
+                    (liftTraversalOverCTyped >> liftTraversalOverExpr)
+                >> mapMessages Traversal
+            bind (UnsupportedExpr >> fail) (everythingToVar (Bool x))
     be
 
 (*
@@ -326,16 +336,26 @@ let boolExpr
  *)
 
 /// <summary>
-///     Tries to convert a <c>MExpr</c> to a <c>IntExpr</c>.
-///     Fails with <c>UnsupportedExpr</c> if the expression is
-///     Boolean.
+///     Tries to convert a marked expression into an unmarked integer
+///     expression by mangling the marks into unique names.
 /// </summary>
-let tryIntExpr : MExpr -> Result<IntExpr<Var>, Error> =
-    Mapper.mapCtx (liftCToSub (Mapper.cmake unmarkVar)) NoCtx
-    >> snd
-    >> function
-       | Expr.Int x -> ok x
-       | e -> e |> UnsupportedExpr |> fail
+/// <param name="expr">The expression to convert.</param>
+/// <returns>
+///     If successful, the resulting integer expression.
+///     Fails with <see cref="UnsupportedExpr"/> if the expression is
+///     Boolean.
+/// </returns>
+let tryIntExpr (expr : MExpr) : Result<IntExpr<Var>, Error> =
+    let mapper =
+        liftWithoutContext (unmarkVar >> ok)
+            (liftTraversalOverCTyped >> liftTraversalOverExpr)
+
+    let filterExpr =
+        function
+        | Expr.Int x -> ok x
+        | e -> fail (UnsupportedExpr e)
+
+    bind filterExpr (mapMessages Traversal (mapper expr))
 
 ///<summary>
 ///     HSF requires variables to start with a capital letter.

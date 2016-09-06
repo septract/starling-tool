@@ -22,7 +22,7 @@ open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Sub
 open Starling.Core.View
-open Starling.Core.View.Sub
+open Starling.Core.View.Traversal
 open Starling.Core.Symbolic
 open Starling.Core.Model
 
@@ -363,25 +363,6 @@ let pruneGuardedSet (gset : Multiset<Guarded<_, _>>)
                    | _       -> true)
     |> Multiset.ofFlatSeq
 
-/// Gets a Set of TypedVar's from an Expr
-let varsFromExpr : Expr<Sym<Var>> -> Set<TypedVar> =
-    function
-    | Bool e -> mapOverSymVars Mapper.mapBoolCtx findSymVars e
-    | Int e -> mapOverSymVars Mapper.mapIntCtx findSymVars e
-
-/// Gets set of TypedVar's from a GFunc
-let gFuncVars ({ Cond = g; Item = f} : GFunc<Sym<Var>>) : Set<TypedVar> =
-    let condvars = mapOverSymVars Mapper.mapBoolCtx findSymVars g
-    let itemvars = Set.unionMany (List.map varsFromExpr f.Params)
-    condvars + itemvars
-
-/// Gets set of TypedVars from an IteratedGFunc
-let iteratedGFuncVars ({ Func = f; Iterator = it } : IteratedGFunc<Sym<Var>>)
-  : Set<TypedVar> =
-    let funcvars = gFuncVars f
-    let iteratorvars = mapOverSymVars Mapper.mapIntCtx findSymVars it
-    funcvars + iteratorvars
-
 /// <summary>
 ///     Pretty printers for guarded items.
 /// </summary>
@@ -589,446 +570,142 @@ module Pretty =
         printGuarded (printSym printMarkedVar) printOView
 
 /// <summary>
-///     Functions for substituting over guarded views.
+///     Functions for traversing guarded views.
 /// </summary>
-module Sub =
+module Traversal =
     open Starling.Core.Sub
     open Starling.Core.View
-    open Starling.Core.View.Sub
+    open Starling.Core.View.Traversal
+    open Starling.Core.Command.Traversal
 
     /// <summary>
-    ///   Maps a <c>SubFun</c> over all expressions in a <c>GFunc</c>.
+    ///     Lifts a <c>Traversal</c> over all expressions in a guarded func.
     /// </summary>
-    /// <param name="sub">
-    ///     The <c>SubFun</c> to map.
-    /// </param>
-    /// <param name="context">
-    ///     The context to pass to the <c>SubFun</c>.
-    /// </param>
-    /// <param name="_arg1">
-    ///   The iterated <c>GFunc</c> over which whose expressions are to be mapped.
-    /// </param>
-    /// <typeparam name="srcVar">
-    ///     The type of variables entering the map.
-    /// </typeparam>
-    /// <typeparam name="dstVar">
-    ///     The type of variables leaving the map.
-    /// </typeparam>
-    /// <returns>
-    ///   The <c>GFunc</c> resulting from the mapping.
-    /// </returns>
-    /// <remarks>
-    ///   <para>
-    ///     The expressions in a <c>GFunc</c> are the guard itself, and
-    ///     the expressions of the enclosed <c>VFunc</c>.
-    ///   </para>
-    /// </remarks>
-    let subExprInGFunc
-      (sub : SubFun<'srcVar, 'dstVar>)
-      (context : SubCtx)
-      ( { Cond = cond ; Item = item } : GFunc<'srcVar> )
-      : (SubCtx * GFunc<'dstVar>) =
-        let contextC, cond' =
-            Position.changePos
-                Position.negate
-                (Mapper.mapBoolCtx sub)
-                context
-                cond
-        let context', item' =
-            Position.changePos
-                id
-                (subExprInVFunc sub)
-                contextC
-                item
-
-        (context', { Cond = cond'; Item = item' } )
-
-    /// <summary>
-    ///   Maps a <c>SubFun</c> over all expressions in an iterated <c>GFunc</c>.
-    /// </summary>
-    /// <param name="sub">
-    ///     The <c>SubFun</c> to map.
-    /// </param>
-    /// <param name="context">
-    ///     The context to pass to the <c>SubFun</c>.
-    /// </param>
-    /// <param name="_arg1">
-    ///   The <c>IteratedGFunc</c> over which whose expressions are to be
-    ///   mapped.
+    /// <param name="traversal">
+    ///     The <c>Traversal</c> to map over all expressions in the guarded
+    ///     func.  This should map from expressions to expressions.
     /// </param>
     /// <typeparam name="SrcVar">
-    ///     The type of variables entering the map.
+    ///     The type of variables before traversal.
     /// </typeparam>
     /// <typeparam name="DstVar">
-    ///     The type of variables leaving the map.
+    ///     The type of variables after traversal.
     /// </typeparam>
-    /// <returns>
-    ///   The <c>IteratedGFunc</c> resulting from the mapping.
-    /// </returns>
-    /// <remarks>
-    ///   <para>
-    ///     The expressions in an <c>IteratedGFunc</c> are the guard itself, the
-    ///     iterator if it exists, and the expressions of the enclosed
-    ///     <c>VFunc</c>.
-    ///   </para>
-    /// </remarks>
-    let subExprInIteratedGFunc
-      (sub : SubFun<'SrcVar, 'DstVar>)
-      (context : SubCtx)
-      ( { Iterator = iter ; Func = func } : IteratedGFunc<'SrcVar> )
-      : (SubCtx * IteratedGFunc<'DstVar>) =
-        let contextI, iter' = Mapper.mapIntCtx sub context iter
-        let context', func' = subExprInGFunc sub contextI func
-
-        (context', { Iterator = iter'; Func = func' } )
-
-    /// <summary>
-    ///   Maps a <c>SubFun</c> over all expressions in a <c>GView</c>.
-    /// </summary>
-    /// <param name="sub">
-    ///   The <c>SubFun</c> to map over all expressions in the <c>GView</c>.
-    /// </param>
-    /// <param name="context">
-    ///     The context to pass to the <c>SubFun</c>.
-    /// </param>
-    /// <param name="_arg1">
-    ///   The <c>GView</c> over which whose expressions are to be mapped.
-    /// </param>
-    /// <typeparam name="srcVar">
-    ///     The type of variables entering the map.
-    /// </typeparam>
-    /// <typeparam name="dstVar">
-    ///     The type of variables leaving the map.
-    /// </typeparam>
-    /// <returns>
-    ///   The <c>GView</c> resulting from the mapping.
-    /// </returns>
-    /// <remarks>
-    ///   <para>
-    ///     The expressions in a <c>GView</c> are those of its constituent
-    ///     <c>GFunc</c>s.
-    ///   </para>
-    /// </remarks>
-    let subExprInGView
-      (sub : SubFun<'srcVar, 'dstVar>)
-      (context : SubCtx)
-      : GView<'srcVar> -> (SubCtx * GView<'dstVar>) =
-        Multiset.mapAccum
-            (fun ctx f _ ->
-                 Position.changePos
-                     id
-                     (subExprInGFunc sub)
-                     ctx
-                     f)
-            context
-
-    /// <summary>
-    ///   Maps a <c>SubFun</c> over all expressions in an <c>IteratedGView</c>.
-    /// </summary>
-    /// <param name="sub">
-    ///   The <c>SubFun</c> to map over all expressions in the
-    ///   <c>IteratedGView</c>.
-    /// </param>
-    /// <param name="context">
-    ///     The context to pass to the <c>SubFun</c>.
-    /// </param>
-    /// <param name="_arg1">
-    ///   The <c>IteratedGView</c> over which whose expressions are to be
-    ///   mapped.
-    /// </param>
-    /// <typeparam name="srcVar">
-    ///     The type of variables entering the map.
-    /// </typeparam>
-    /// <typeparam name="dstVar">
-    ///     The type of variables leaving the map.
-    /// </typeparam>
-    /// <returns>
-    ///   The <c>IteratedGView</c> resulting from the mapping.
-    /// </returns>
-    /// <remarks>
-    ///   <para>
-    ///     The expressions in an <c>IteratedGView</c> are those of its
-    ///     constituent <c>IteratedGFunc</c>s.
-    ///   </para>
-    /// </remarks>
-    let subExprInIteratedGView
-      (sub : SubFun<'SrcVar, 'DstVar>)
-      (context : SubCtx)
-      : IteratedGView<'SrcVar> -> (SubCtx * IteratedGView<'DstVar>) =
-        // TODO(CaptainHayashi): De-duplicate this from above.
-        Multiset.mapAccum
-            (fun ctx f _ ->
-                 Position.changePos
-                     id
-                     (subExprInIteratedGFunc sub)
-                     ctx
-                     f)
-            context
-
-    /// <summary>
-    ///     Maps a <c>SubFun</c> over all expressions in an <c>Term</c>
-    ///     over a <c>GView</c> weakest-pre and <c>VFunc</c> goal.
-    /// </summary>
-    /// <param name="sub">
-    ///     The <c>SubFun</c> to map over all expressions in the <c>STerm</c>.
-    /// </param>
-    /// <param name="context">
-    ///     The context to pass to the <c>SubFun</c>.
-    /// </param>
-    /// <param name="term">
-    ///     The <c>Term</c> over which expressions are to be mapped.
-    /// </param>
-    /// <typeparam name="srcVar">
-    ///     The type of variables entering the map.
-    /// </typeparam>
-    /// <typeparam name="dstVar">
-    ///     The type of variables leaving the map.
-    /// </typeparam>
-    /// <returns>
-    ///     The <c>Term</c> resulting from the mapping.
-    /// </returns>
-    /// <remarks>
-    ///     <para>
-    ///         The expressions in the term are those of its
-    ///         constituent command (<c>BoolExpr</c>), its weakest
-    ///         precondition (<c>GView</c>), and its goal (<c>VFunc</c>).
-    ///     </para>
-    /// </remarks>
-    let subExprInDTerm
-      (sub : SubFun<'srcVar, 'dstVar>)
-      (context : SubCtx)
-      (term : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>)
-      : (SubCtx * Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>>) =
-        let contextT, cmd' =
-            Position.changePos
-                Position.negate
-                (Mapper.mapBoolCtx sub)
-                context
-                term.Cmd
-        let contextW, wpre' =
-            Position.changePos
-                Position.negate
-                (subExprInGView sub)
-                contextT
-                term.WPre
-        let context', goal' =
-            Position.changePos
-                id
-                (subExprInVFunc sub)
-                contextW
-                term.Goal
-        (context', { Cmd = cmd'; WPre = wpre'; Goal = goal' } )
-
-    /// <summary>
-    ///     Maps a <c>TrySubFun</c> over all expressions in a <c>GFunc</c>.
-    /// </summary>
-    /// <param name="_arg1">
-    ///     The <c>GFunc</c> over which whose expressions are to be mapped.
-    /// </param>
-    /// <param name="context">
-    ///     The context to pass to the <c>SubFun</c>.
-    /// </param>
-    /// <typeparam name="srcVar">
-    ///     The type of variables entering the map.
-    /// </typeparam>
-    /// <typeparam name="dstVar">
-    ///     The type of variables leaving the map.
-    /// </typeparam>
-    /// <typeparam name="err">
-    ///     The type of errors occurring in the map.
-    /// </typeparam>
-    /// <returns>
-    ///     The Chessie-wrapped <c>GFunc</c> resulting from the mapping.
-    /// </returns>
-    /// <remarks>
-    ///     <para>
-    ///         The expressions in a <c>GFunc</c> are the guard itself, and
-    ///         the expressions of the enclosed <c>VFunc</c>.
-    ///     </para>
-    /// </remarks>
-    let trySubExprInGFunc
-      (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
-      (context : SubCtx)
-      ( { Cond = cond ; Item = item } : GFunc<'srcVar> )
-      : (SubCtx * Result<GFunc<'dstVar>, 'err> ) =
-        let contextC, cond' =
-            Position.changePos
-                Position.negate
-                (Mapper.mapBoolCtx sub)
-                context
-                cond
-        let context', item' =
-            Position.changePos
-                id
-                (trySubExprInVFunc sub)
-                context
-                item
-
-        (context',
-         lift2
-             (fun cond' item' -> { Cond = cond' ; Item = item' } )
-             cond'
-             item')
-
-    /// <summary>
-    ///     Maps a <c>TrySubFun</c> over all expressions in a <c>GView</c>.
-    /// </summary>
-    /// <param name="sub">
-    ///     The <c>TrySubFun</c> to map over all expressions in the
-    ///     <c>GView</c>.
-    /// </param>
-    /// <param name="context">
-    ///     The context to pass to the <c>SubFun</c>.
-    /// </param>
-    /// <param name="_arg1">
-    ///     The <c>GView</c> over which whose expressions are to be mapped.
-    /// </param>
-    /// <typeparam name="srcVar">
-    ///     The type of variables entering the map.
-    /// </typeparam>
-    /// <typeparam name="dstVar">
-    ///     The type of variables leaving the map.
-    /// </typeparam>
-    /// <typeparam name="err">
+    /// <typeparam name="Error">
     ///     The type of any returned errors.
     /// </typeparam>
-    /// <returns>
-    ///     The Chessie-wrapped <c>GView</c> resulting from the mapping.
-    /// </returns>
-    /// <remarks>
-    ///     <para>
-    ///         The expressions in a <c>GView</c> are those of its
-    ///         constituent <c>GFunc</c>s.
-    ///     </para>
-    /// </remarks>
-    let trySubExprInGView
-      (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
-      (context : SubCtx)
-      : GView<'srcVar> -> (SubCtx * Result<GView<'dstVar>, 'err> ) =
-        Multiset.mapAccum
-            (fun ctx f _ ->
-                 Position.changePos
-                     id
-                     (trySubExprInGFunc sub)
-                     ctx f)
-            context
-        >> pairMap id Multiset.collect
+    /// <returns>The lifted <see cref="Traversal"/>.</returns>
+    let liftTraversalOverGFunc
+      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
+      : Traversal<GFunc<'SrcVar>, GFunc<'DstVar>, 'Error> =
+        fun ctx { Cond = cond; Item = item } ->
+            let tBool = traverseBoolAsExpr traversal
+            let tFunc = liftTraversalOverFunc traversal
+            tchain2 tBool tFunc
+                (fun (cond', item') -> { Cond = cond'; Item = item' })
+                ctx
+                (cond, item)
 
     /// <summary>
-    ///     Maps a <c>TrySubFun</c> over all expressions in a <c>Term</c>
-    ///     over a <c>GView</c> weakest-pre and <c>VFunc</c> goal.
+    ///     Lifts a <c>Traversal</c> over all expressions in an iterated
+    ///     guarded func.
     /// </summary>
-    /// <param name="sub">
-    ///     The <c>TrySubFun</c> to map over all expressions in the
-    ///     <c>Term</c>.
+    /// <param name="traversal">
+    ///     The <c>Traversal</c> to map over all expressions in the guarded
+    ///     func.  This should map from expressions to expressions.
     /// </param>
-    /// <param name="context">
-    ///     The context to pass to the <c>SubFun</c>.
-    /// </param>
-    /// <param name="term">
-    ///     The <c>Term</c> over which expressions are to be mapped.
-    /// </param>
-    /// <typeparam name="srcVar">
-    ///     The type of variables entering the map.
+    /// <typeparam name="SrcVar">
+    ///     The type of variables before traversal.
     /// </typeparam>
-    /// <typeparam name="dstVar">
-    ///     The type of variables leaving the map.
+    /// <typeparam name="DstVar">
+    ///     The type of variables after traversal.
     /// </typeparam>
-    /// <typeparam name="err">
+    /// <typeparam name="Error">
     ///     The type of any returned errors.
     /// </typeparam>
-    /// <returns>
-    ///     The Chessie-wrapped <c>Term</c> resulting from the mapping.
-    /// </returns>
-    /// <remarks>
-    ///     <para>
-    ///         The expressions in the term are those of its
-    ///         constituent command (<c>BoolExpr</c>), its weakest
-    ///         precondition (<c>GView</c>), and its goal (<c>VFunc</c>).
-    ///     </para>
-    /// </remarks>
-    let trySubExprInDTerm
-      (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
-      (context : SubCtx)
-      (term : Term<BoolExpr<'srcVar>, GView<'srcVar>, VFunc<'srcVar>>)
-      : (SubCtx * Result<Term<BoolExpr<'dstVar>, GView<'dstVar>, VFunc<'dstVar>>, 'err> ) =
-        let contextT, cmd' =
-            Position.changePos
-                Position.negate
-                (Mapper.mapBoolCtx sub)
-                context
-                term.Cmd
-        let contextW, wpre' =
-            Position.changePos
-                Position.negate
-                (trySubExprInGView sub)
-                contextT
-                term.WPre
-        let context', goal' =
-            Position.changePos
-                id
-                (trySubExprInVFunc sub)
-                contextW
-                term.Goal
-        (context',
-         lift3
-             (fun c w g -> { Cmd = c; WPre = w; Goal = g } )
-             cmd'
-             wpre'
-             goal')
+    /// <returns>The lifted <see cref="Traversal"/>.</returns>
+    let liftTraversalOverIteratedGFunc
+      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
+      : Traversal<IteratedGFunc<'SrcVar>, IteratedGFunc<'DstVar>, 'Error> =
+        fun ctx { Iterator = iter ; Func = func } ->
+            let tInt = traverseIntAsExpr traversal
+            let tGFunc = liftTraversalOverGFunc traversal
+            tchain2 tInt tGFunc
+                (fun (iter', func') -> { Iterator = iter'; Func = func' })
+                ctx
+                (iter, func)
 
-    /// Maps over a CmdTerm and does substitution
-    let subExprInCmdTerm
-      (sub : SubFun<'src, 'dest>)
-      (context : SubCtx)
-      (term : CmdTerm<BoolExpr<'src>, GView<'src>, VFunc<'src>>)
-      : (SubCtx * CmdTerm<BoolExpr<'dest>, GView<'dest>, VFunc<'dest>>) =
-        let contextT, cmd' =
-            Position.changePos
-                Position.negate
-                (Mapper.mapBoolCtx sub)
-                context
-                term.Cmd.Semantics
-        let contextW, wpre' =
-            Position.changePos
-                Position.negate
-                (subExprInGView sub)
-                contextT
-                term.WPre
-        let context', goal' =
-            Position.changePos
-                id
-                (subExprInVFunc sub)
-                contextW
-                term.Goal
-        (context', { Cmd = { Cmd = term.Cmd.Cmd; Semantics = cmd'} ; WPre = wpre'; Goal = goal' } )
+    /// <summary>
+    ///     Lifts a <c>Traversal</c> over all variables in a <see cref="Term"/>.
+    /// </summary>
+    /// <param name="traversal">
+    ///     The <c>Traversal</c> to map over all variables in the term.
+    ///     This should map from typed variables to expressions.
+    /// </param>
+    /// <typeparam name="SrcVar">
+    ///     The type of variables before traversal.
+    /// </typeparam>
+    /// <typeparam name="DstVar">
+    ///     The type of variables after traversal.
+    /// </typeparam>
+    /// <typeparam name="Error">
+    ///     The type of any returned errors.
+    /// </typeparam>
+    /// <returns>The lifted <see cref="Traversal"/>.</returns>
+    let liftTraversalOverTerm
+      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
+      : Traversal<Term<BoolExpr<'SrcVar>, GView<'SrcVar>, VFunc<'SrcVar>>,
+                  Term<BoolExpr<'DstVar>, GView<'DstVar>, VFunc<'DstVar>>,
+                  'Error> =
+        fun ctx { Cmd = c ; WPre = w; Goal = g } ->
+            let tCmd = traverseBoolAsExpr traversal
+            let tWPre = tchainM (liftTraversalOverGFunc traversal) id
+            let tGoal = liftTraversalOverFunc traversal
+            tchain3 tCmd tWPre tGoal
+                (fun (c', w', g') -> { Cmd = c'; WPre = w'; Goal = g' })
+                ctx
+                (c, w, g)
 
-    let trySubExprInCmdTerm
-      (sub : TrySubFun<'src, 'dest, 'err>)
-      (context : SubCtx)
-      (term : CmdTerm<BoolExpr<'src>, GView<'src>, VFunc<'src>>)
-      : (SubCtx * Result<CmdTerm<BoolExpr<'dest>, GView<'dest>, VFunc<'dest>>, 'err>) =
-        let contextT, cmd' =
-            Position.changePos
-                Position.negate
-                (Mapper.mapBoolCtx sub)
-                context
-                term.Cmd.Semantics
-        let contextW, wpre' =
-            Position.changePos
-                Position.negate
-                (trySubExprInGView sub)
-                contextT
-                term.WPre
-        let context', goal' =
-            Position.changePos
-                id
-                (trySubExprInVFunc sub)
-                contextW
-                term.Goal
-        (context',
-         lift3
-             (fun c w g -> { Cmd = { Cmd = term.Cmd.Cmd; Semantics = c }; WPre = w; Goal = g } )
-             cmd'
-             wpre'
-             goal')
+    /// <summary>
+    ///     Lifts a <c>Traversal</c> over all variables in a
+    ///     <see cref="CmdTerm"/>.
+    /// </summary>
+    /// <param name="traversal">
+    ///     The <c>Traversal</c> to map over all variables in the term.
+    ///     This should map from typed variables to expressions.
+    /// </param>
+    /// <typeparam name="SrcVar">
+    ///     The type of variables before traversal.
+    /// </typeparam>
+    /// <typeparam name="DstVar">
+    ///     The type of variables after traversal.
+    /// </typeparam>
+    /// <typeparam name="Error">
+    ///     The type of any returned errors.
+    /// </typeparam>
+    /// <returns>The lifted <see cref="Traversal"/>.</returns>
+    let liftTraversalOverCmdTerm
+      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
+      : Traversal<CmdTerm<BoolExpr<'SrcVar>, GView<'SrcVar>, VFunc<'SrcVar>>,
+                  CmdTerm<BoolExpr<'DstVar>, GView<'DstVar>, VFunc<'DstVar>>,
+                  'Error> =
+        fun ctx { Cmd = c ; WPre = w; Goal = g } ->
+            let tCmd = liftTraversalOverCommandSemantics traversal
+            let tWPre = tchainM (liftTraversalOverGFunc traversal) id
+            let tGoal = liftTraversalOverFunc traversal
+            tchain3 tCmd tWPre tGoal
+                (fun (c', w', g') -> { Cmd = c'; WPre = w'; Goal = g' })
+                ctx
+                (c, w, g)
+
+/// Gets set of TypedVar's from a GFunc
+let gFuncVars (gfunc : GFunc<Sym<Var>>)
+  : Result<Set<TypedVar>, SubError<'Error>> =
+    let tVars = liftTraversalOverExpr collectSymVars
+    findVars (Traversal.liftTraversalOverGFunc tVars) gfunc
+
+/// Gets set of TypedVars from an IteratedGFunc
+let iteratedGFuncVars (itgfunc : IteratedGFunc<Sym<Var>>)
+  : Result<Set<TypedVar>, SubError<'Error>> =
+    let tVars = liftTraversalOverExpr collectSymVars
+    findVars (Traversal.liftTraversalOverIteratedGFunc tVars) itgfunc

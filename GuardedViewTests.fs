@@ -10,12 +10,13 @@ open Starling.Utils
 open Starling.Collections
 
 open Starling.Core.GuardedView
+open Starling.Core.GuardedView.Traversal
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Sub
 open Starling.Core.View
-open Starling.Core.View.Sub
+open Starling.Core.View.Traversal
 open Starling.Core.Symbolic
 open Starling.Core.Model
 
@@ -26,22 +27,25 @@ module Tests =
     open Starling.Core.TypeSystem
 
     /// <summary>
-    ///     Test substitution function for position-based substitution.
+    ///     Test traversal for position-based substitution.
     /// </summary>
-    let positionTestSub =
-        (onVars
-             (Mapper.makeCtx
-                  (fun ctx _ ->
-                       (ctx,
-                        match ctx with
-                        | Positions (Positive::xs) -> AInt 1L
-                        | Positions (Negative::xs) -> AInt 0L
-                        | _ -> AInt -1L ))
-                  (fun ctx _ ->
-                       (ctx,
-                        match ctx with
-                        | Positions (x::xs) -> Position.overapprox x
-                        | _ -> BVar "?"))))
+    let positionTestSub : Traversal<Expr<Var>, Expr<Var>, unit> =
+        let ptsVar ctx tv =
+            let exp =
+                match (typeOf tv) with
+                | Int () ->
+                    match ctx with
+                    | Positions (Positive::xs) -> AInt 1L
+                    | Positions (Negative::xs) -> AInt 0L
+                    | _ -> AInt -1L
+                    |> Int
+                | Bool () ->
+                    match ctx with
+                    | Positions (x::xs) -> Context.overapprox x
+                    | _ -> BVar "?"
+                    |> Bool
+            ok (ctx, exp)
+        liftTraversalToExprSrc ptsVar
 
     /// <summary>
     ///     NUnit tests for guarded views.
@@ -55,9 +59,10 @@ module Tests =
                    [| gfunc (BVar "foo") "bar"
                           [ Typed.Int (AVar "baz")
                             Typed.Bool (BVar "fizz") ]
-                      Position.positive |] )
+                      Context.positive |] )
                   .Returns(
-                      (Position.positive,
+                      ok <|
+                      (Context.positive,
                        (gfunc BFalse "bar"
                             [ Typed.Int (AInt 1L)
                               Typed.Bool BTrue ] : GFunc<Var> )))
@@ -66,9 +71,10 @@ module Tests =
                    [| gfunc (BVar "foo") "bar"
                           [ Typed.Int (AVar "baz")
                             Typed.Bool (BVar "fizz") ]
-                      Position.negative |] )
+                      Context.negative |] )
                   .Returns(
-                      (Position.negative,
+                      ok <|
+                      (Context.negative,
                        (gfunc BTrue "bar"
                             [ Typed.Int (AInt 0L)
                               Typed.Bool BFalse ] : GFunc<Var> )))
@@ -80,11 +86,10 @@ module Tests =
         [<TestCaseSource("PositionSubExprInGFuncCases")>]
         member this.testPositionSubExprInGFunc
           (gf : GFunc<Var>)
-          (pos : SubCtx) =
-            Sub.subExprInGFunc
-                positionTestSub
-                pos
-                gf
+          (pos : TraversalContext) =
+            let trav = liftTraversalOverGFunc positionTestSub
+            let result = trav pos gf
+            okOption result
 
         /// <summary>
         ///     Case studies for <c>testPositionSubExprInGView</c>.
@@ -92,16 +97,18 @@ module Tests =
         static member PositionSubExprInGViewCases =
             [ (tcd
                    [| (Multiset.empty : GView<Var>)
-                      Position.positive |] )
+                      Context.positive |] )
                   .Returns(
-                      (Position.positive,
+                      ok <|
+                      (Context.positive,
                        (Multiset.empty : GView<Var>)))
                   .SetName("+ve empty GView substitution is a no-op")
               (tcd
                    [| (Multiset.empty : GView<Var>)
-                      Position.negative |] )
+                      Context.negative |] )
                   .Returns(
-                      (Position.negative,
+                      ok <|
+                      (Context.negative,
                        (Multiset.empty : GView<Var>)))
                   .SetName("-ve empty GView substitution is a no-op")
               (tcd
@@ -109,9 +116,10 @@ module Tests =
                           (gfunc (BVar "foo") "bar"
                                [ Typed.Int (AVar "baz")
                                  Typed.Bool (BVar "fizz") ] )
-                      Position.positive |] )
+                      Context.positive |] )
                   .Returns(
-                      (Position.positive,
+                      ok <|
+                      (Context.positive,
                        (Multiset.singleton
                             (gfunc BFalse "bar"
                                  [ Typed.Int (AInt 1L)
@@ -122,9 +130,10 @@ module Tests =
                           (gfunc (BVar "foo") "bar"
                                [ Typed.Int (AVar "baz")
                                  Typed.Bool (BVar "fizz") ] )
-                      Position.negative |] )
+                      Context.negative |] )
                   .Returns(
-                      (Position.negative,
+                      ok <|
+                      (Context.negative,
                        (Multiset.singleton
                             (gfunc BTrue "bar"
                                  [ Typed.Int (AInt 0L)
@@ -138,9 +147,10 @@ module Tests =
                             gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
                                 [ Typed.Int
                                       (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ]
-                      Position.positive |] )
+                      Context.positive |] )
                   .Returns(
-                      (Position.positive,
+                      ok <|
+                      (Context.positive,
                        (Multiset.ofFlatList
                             [ gfunc BFalse "bar"
                                   [ Typed.Int (AInt 1L)
@@ -158,9 +168,10 @@ module Tests =
                             gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
                                 [ Typed.Int
                                       (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ]
-                      Position.negative |] )
+                      Context.negative |] )
                   .Returns(
-                      (Position.negative,
+                      ok <|
+                      (Context.negative,
                        (Multiset.ofFlatList
                             [ gfunc BTrue "bar"
                                   [ Typed.Int (AInt 0L)
@@ -177,11 +188,10 @@ module Tests =
         [<TestCaseSource("PositionSubExprInGViewCases")>]
         member this.testPositionSubExprInGView
           (gv : GView<Var>)
-          (pos : SubCtx) =
-            Sub.subExprInGView
-                positionTestSub
-                pos
-                gv
+          (pos : TraversalContext) =
+            let trav = tchainM (liftTraversalOverGFunc positionTestSub) id
+            let result = trav pos gv
+            okOption result
 
         /// <summary>
         ///     Case studies for <c>testPositionSubExprInDTerm</c>.
@@ -205,9 +215,10 @@ module Tests =
                                    [ Typed.Int (AVar "baz")
                                      Typed.Bool (BVar "barbaz") ] : VFunc<Var> ) }
                        : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>> )
-                      Position.positive |] )
+                      Context.positive |] )
                   .Returns(
-                      (Position.positive,
+                      ok <|
+                      (Context.positive,
                        ( { Cmd =
                                BAnd
                                    [ bEq BFalse BFalse
@@ -244,9 +255,10 @@ module Tests =
                                    [ Typed.Int (AVar "baz")
                                      Typed.Bool (BVar "barbaz") ] : VFunc<Var> ) }
                        : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>> )
-                      Position.negative |] )
+                      Context.negative |] )
                   .Returns(
-                      (Position.negative,
+                      ok <|
+                      (Context.negative,
                        ( { Cmd =
                                BAnd
                                    [ bEq BTrue BTrue
@@ -272,8 +284,7 @@ module Tests =
         [<TestCaseSource("PositionSubExprInDTermCases")>]
         member this.testPositionSubExprInDTerm
           (t : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>>)
-          (pos : SubCtx) =
-            Sub.subExprInDTerm
-                positionTestSub
-                pos
-                t
+          (pos : TraversalContext) =
+            let trav = liftTraversalOverTerm positionTestSub
+            let result = trav pos t
+            okOption result

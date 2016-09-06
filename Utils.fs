@@ -249,6 +249,28 @@ let mapAppend (a : Map<'Key, 'Value>) (b : Map<'Key, 'Value>)
  * Chessie-related functions.
  *)
 
+/// Extends bind to functions of 2 arguments.
+let bind2
+  (f: 'A -> 'B -> Result<'Value, 'Error>)
+  (a : Result<'A, 'Error>)
+  (b : Result<'B, 'Error>)
+  : Result<'Value, 'Error> =
+    trial { let! av = a
+            let! bv = b
+            return! f av bv }
+
+/// Extends bind to functions of 3 arguments.
+let bind3
+  (f: 'A -> 'B -> 'C -> Result<'Value, 'Error>)
+  (a : Result<'A, 'Error>)
+  (b : Result<'B, 'Error>)
+  (c : Result<'C, 'Error>)
+  : Result<'Value, 'Error> =
+    trial { let! av = a
+            let! bv = b
+            let! cv = c
+            return! f av bv cv }
+
 /// Extends lift to functions of 3 arguments.
 let lift3
   (f: 'A -> 'B -> 'C -> 'Value)

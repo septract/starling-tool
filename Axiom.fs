@@ -100,7 +100,7 @@ let axiom (p : 'view) (c : 'cmd) (q : 'view)
 let instantiateGoal (fg : FreshGen)
                     (dvs : DView)
                     : IteratedOView =
-    let instantiateParam = mkVarExp (goalVar fg >> Reg)
+    let instantiateParam = mapCTyped (goalVar fg >> Reg) >> mkVarExp
 
     dvs |> List.map (function
         | { Iterator = i; Func = { Name = n; Params = ps } } ->

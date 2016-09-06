@@ -247,19 +247,17 @@ let isTrue (expr : BoolExpr<_>) : bool =
     | BTrue -> true
     | _     -> false
 
-/// Converts a typed string to an expression.
-let mkVarExp (marker : string -> 'markedvar)
-             (ts : CTyped<string>)
-             : Expr<'markedvar> =
-    match ts with
-    | Int s -> s |> marker |> AVar |> Int
-    | Bool s -> s |> marker |> BVar |> Bool
+/// Converts a typed variable to an expression.
+let mkVarExp (var : CTyped<'Var>) : Expr<'Var> =
+    match var with
+    | Int s -> s |> AVar |> Int
+    | Bool s -> s |> BVar |> Bool
 
 /// Converts a VarMap to a sequence of expressions.
 let varMapToExprs
   (marker : string -> 'markedvar)
   : Map<string, Type> -> Expr<'markedvar> seq =
-    Map.toSeq >> Seq.map (fun (name, ty) -> mkVarExp marker (withType ty name))
+    Map.toSeq >> Seq.map (fun (name, ty) -> name |> withType ty |> mapCTyped marker |> mkVarExp)
 
 (* The following are just curried versions of the usual constructors. *)
 

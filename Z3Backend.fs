@@ -260,8 +260,8 @@ let runZ3OnModel (shouldUseRealsForInts : bool)
        Suppress the Chessie error that happens if we can't, because in that case
        we just return a 'Z3 can't prove this' result. *)
     let removeSym bexp =
-        let _, res = Mapper.mapBoolCtx (tsfRemoveSym id) NoCtx bexp
-        okOption res
+        let result = withoutContext (removeSymFromBoolExpr ignore) bexp
+        okOption result
 
     let z3Term (term : SymProofTerm) : ZTerm =
         (* If the user asked for approximation, then, instead of taking the
