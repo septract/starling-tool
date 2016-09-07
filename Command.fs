@@ -35,7 +35,8 @@ module Types =
     /// </remarks>
     type PrimCommand = { Name : string
                          Results : TypedVar list
-                         Args : SMExpr list }
+                         Args : SMExpr list
+                         Node : AST.Types.Atomic option }
 
     type Command = PrimCommand list
 
@@ -248,9 +249,9 @@ module SymRemove =
         | x -> x
 
 
-module Create = 
+module Create =
     let command : string -> TypedVar list -> SMExpr list -> PrimCommand =
-        fun name results args -> { Name = name; Results = results; Args = args }
+        fun name results args -> { Name = name; Results = results; Args = args; Node = None }
 
 /// <summary>
 ///     Pretty printers for commands.
