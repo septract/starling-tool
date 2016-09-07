@@ -12,7 +12,6 @@ open Starling
 open Starling.Collections
 open Starling.Core.TypeSystem
 open Starling.Core.Var
-open Starling.Core.View
 open Starling.Lang.AST
 
 

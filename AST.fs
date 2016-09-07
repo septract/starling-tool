@@ -6,9 +6,7 @@ module Starling.Lang.AST
 open Starling
 open Starling.Collections
 open Starling.Core.TypeSystem
-open Starling.Core.Model
 open Starling.Core.Var.Types
-open Starling.Core.View
 
 
 /// <summary>
@@ -168,7 +166,6 @@ module Pretty =
     open Starling.Core.Pretty
     open Starling.Collections.Func.Pretty
     open Starling.Core.TypeSystem.Pretty
-    open Starling.Core.Model.Pretty
     open Starling.Core.Var.Pretty
 
     /// Pretty-prints lvalues.

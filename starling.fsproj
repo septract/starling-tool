@@ -49,6 +49,8 @@
     <Compile Include="TypeSystem.fs" />
     <Compile Include="Expr.fs" />
     <Compile Include="Var.fs" />
+    <Compile Include="AST.fs" />
+    <Compile Include="Parser.fs" />
     <Compile Include="Sub.fs" />
     <Compile Include="Symbolic.fs" />
     <Compile Include="View.fs" />
@@ -60,13 +62,11 @@
     <Compile Include="Axiom.fs" />
     <Compile Include="Graph.fs" />
     <Compile Include="Instantiate.fs" />
-    <Compile Include="AST.fs" />
     <Compile Include="Collator.fs" />
     <Compile Include="ViewDesugar.fs" />
     <Compile Include="Modeller.fs" />
     <Compile Include="Guarder.fs" />
     <Compile Include="Grapher.fs" />
-    <Compile Include="Parser.fs" />
     <Compile Include="Semantics.fs" />
     <Compile Include="TermGen.fs" />
     <Compile Include="Reifier.fs" />

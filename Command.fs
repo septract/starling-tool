@@ -5,6 +5,7 @@ module Starling.Core.Command
 
 open Starling.Utils
 open Starling.Collections
+open Starling.Lang
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
@@ -32,7 +33,10 @@ module Types =
     ///         for example <x = y++> is translated approximately to { Name = "!ILoad++"; Results = [ siVar "x"; siVar "y" ]; Args = [ siVar "y" ] }
     ///     </para>
     /// </remarks>
-    type PrimCommand = { Name : string; Results : TypedVar list; Args : SMExpr list }
+    type PrimCommand = { Name : string
+                         Results : TypedVar list
+                         Args : SMExpr list }
+
     type Command = PrimCommand list
 
 /// <summary>
