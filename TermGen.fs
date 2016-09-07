@@ -229,12 +229,12 @@ module Iter =
         /// <summary>
         ///     A func was lowered that doesn't have a valid prototype.
         /// </summary>
-        | ProtoLookupError of Func : Func<Expr<Sym<MarkedVar>>>
+        | ProtoLookupError of FuncName : string
                             * Error : Starling.Core.Instantiate.Types.Error
         /// <summary>
         ///     A func was lowered that doesn't have a prototype at all.
         /// </summary>
-        | ProtoMissing of Func : Func<Expr<Sym<MarkedVar>>>
+        | ProtoMissing of FuncName : string
         /// <summary>
         ///     A non-iterated func had a symbolic iterator.
         /// </summary>
@@ -255,12 +255,12 @@ module Iter =
         | ProtoLookupError (func, error) ->
             Core.Pretty.wrapped
                 "prototype lookup for func"
-                (Core.View.Pretty.printSMVFunc func)
+                (Core.Pretty.String func)
                 (Core.Instantiate.Pretty.printError error)
         | ProtoMissing func ->
             Core.Pretty.fmt
                 "prototype missing for func '{0}'"
-                [ Core.View.Pretty.printSMVFunc func ]
+                [ Core.Pretty.String func ]
         | CannotEvalIterator (func, iterator) ->
             Core.Pretty.fmt
                 "non-iterated func '{0}' is used with iterator '{1}', which
@@ -287,13 +287,13 @@ module Iter =
     /// </returns>
     let checkIterated
       (protos : FuncDefiner<ProtoInfo>)
-      (func : Func<Expr<Sym<MarkedVar>>>)
+      (func : Func<'Param>)
       : Result<bool, Error> =
-            func
-            |> wrapMessages ProtoLookupError (fun f -> lookup f protos)
+            lookup func protos
+            |> mapMessages (fun f -> ProtoLookupError (func.Name, f))
             |> bind
                 (function
-                 | None -> fail (ProtoMissing func)
+                 | None -> fail (ProtoMissing func.Name)
                  | Some (_, { IsIterated = isIterated }) -> ok isIterated)
 
     /// <summary>
@@ -336,6 +336,26 @@ module Iter =
                 match iterator with
                 | AInt n -> ok (Some n)
                 | i -> fail (CannotEvalIterator (func, i)))
+
+    /// <summary>
+    ///     Lowers an iterated DFunc, folding it into an accumulating view.
+    ///     <para>
+    ///         If the func matches an iterated prototype, we move the Iterator
+    ///         Expression into the params; else, we try to expand it.
+    ///     </para>
+    /// </summary>
+    let lowerIterDFunc
+      : FuncDefiner<ProtoInfo>
+      -> IteratedContainer<DFunc, TypedVar>
+      -> Result<DFunc, Error> =
+        fun protos { Func = dfunc; Iterator = it } ->
+            dfunc
+            |> checkIterated protos
+            |> lift
+                (function
+                 // TODO(CaptainHayashi): assuming n here is silly
+                 | true -> func dfunc.Name (withDefault (Int "n") it :: dfunc.Params) 
+                 | false -> dfunc)
 
     /// <summary>
     ///     Lowers an iterated GFunc, folding it into an accumulating view.
@@ -416,6 +436,6 @@ module Iter =
     /// taking iter[n] g(xbar...) to g(n, xbar...)
     /// and returning that new model
     let flatten
-        (model : Model<Term<_, IteratedGView<Sym<MarkedVar>>, _>, _>)
-            : Result<Model<Term<_, GView<Sym<MarkedVar>>, _>, _>, Error> =
+        (model : Model<Term<_, IteratedGView<Sym<MarkedVar>>, IteratedOView>, _>)
+            : Result<Model<Term<_, GView<Sym<MarkedVar>>, OView>, _>, Error> =
         tryMapAxioms (lowerIteratedTerm model.ViewProtos) model

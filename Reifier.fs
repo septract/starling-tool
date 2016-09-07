@@ -13,9 +13,10 @@ open Starling.Core.Command
 open Starling.Core.GuardedView
 open Starling.Core.Symbolic
 
-
 /// Calculate the multiset of ways that this View matches the pattern in dv and add to the assumulator.
-let reifySingleDef view accumulator (dv : DView, _) =
+let reifySingleDef
+  (protos : FuncDefiner<ProtoInfo>)
+  view accumulator (dv : DView, _) =
     let rec matchMultipleViews
       (pattern : DView)
       (view : SMGFunc list) accumulator result =
@@ -32,12 +33,18 @@ let reifySingleDef view accumulator (dv : DView, _) =
                     Item = List.rev views }
                     accumulator
         | p :: pattern ->
+            // TODO(CaptainHayashi): this is a nasty hack.  Fix ASAP.
+            let p =
+                match (TermGen.Iter.lowerIterDFunc protos p) with
+                | Chessie.ErrorHandling.Ok (pp, _) -> pp
+                | _ -> failwith "FIXME: iterator dfunc lowering failed"
+
             let rec matchSingleView (view : SMGFunc list) rview accumulator =
                match view with
                | [] -> accumulator
                | v :: view ->
                   let accumulator =
-                    if p.Func.Name = v.Item.Name && p.Func.Params.Length = v.Item.Params.Length then
+                    if p.Name = v.Item.Name && p.Params.Length = v.Item.Params.Length then
                         matchMultipleViews pattern (rview @ view) accumulator (v::result)
                     else
                         accumulator
@@ -48,13 +55,14 @@ let reifySingleDef view accumulator (dv : DView, _) =
 
 /// Reifies an dvs entire view application.
 let reifyView
+  (protos : FuncDefiner<ProtoInfo>)
   (definer : ViewDefiner<SVBoolExpr option>)
   (vap : GView<Sym<MarkedVar>>)
   : Set<GuardedSubview> =
     let goal = Multiset.toFlatList vap
     definer
     |> ViewDefiner.toSeq
-    |> Seq.fold (reifySingleDef goal) Set.empty
+    |> Seq.fold (reifySingleDef protos goal) Set.empty
 
 /// Reifies all of the terms in a model's axiom list.
 let reify
@@ -62,4 +70,4 @@ let reify
                  ViewDefiner<SVBoolExpr option>>)
   : Model<Term<'a, Set<GuardedSubview>, OView>,
           ViewDefiner<SVBoolExpr option>> =
-      mapAxioms (mapTerm id (reifyView model.ViewDefs) id) model
+      mapAxioms (mapTerm id (reifyView model.ViewProtos model.ViewDefs) id) model
