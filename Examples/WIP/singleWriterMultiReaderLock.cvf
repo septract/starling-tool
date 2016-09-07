@@ -21,8 +21,15 @@ method readAcquire() {
       {| if s == t then holdInnerLock() else holdTick(t) |}
     } while (s != t);
   {| holdInnerLock() |}
+    do {
+      {| holdInnerLock() |}
+      <r = readCount>;
+      {| if r > 3 then holdInnerLock() else canHoldReadLock() |}
+    } while (r > 3);
+   {| canHoldReadLock() |}
   //Proof should fail here as we currently restrict the 
   //views to forbid five readers, but the code does not respect this.
+  
   <readCount++>;
   {| holdInnerLock() * holdReadLock() |}
   < serving ++ >;
@@ -73,7 +80,8 @@ constraint Lift(b)                              -> b;
 view holdTick(int t);
 view holdInnerLock();
 view holdWriteLock();
-view holdReadLock();
+view canHoldReadLock();
+view holdReadLock()[n];
 
 // Invariant
 constraint emp                                  -> ticket >= serving && readCount >= 0;
@@ -82,7 +90,9 @@ constraint emp                                  -> ticket >= serving && readCoun
 constraint holdTick(t)                          -> ticket > t;
 constraint holdInnerLock()                      -> ticket != serving;
 constraint holdWriteLock()                      -> ticket != serving && readCount == 0;
-constraint holdReadLock()                       -> readCount > 0;
+//constraint holdReadLock()                       -> readCount > 0;
+constraint canHoldReadLock()                       -> ticket != serving && readCount <= 3;
+
 
 // Interactions
 constraint holdInnerLock()   * holdTick(t)      -> serving != t;
@@ -92,10 +102,18 @@ constraint holdInnerLock()   * holdInnerLock()  -> false;
 constraint holdInnerLock()   * holdWriteLock()  -> false;
 constraint holdWriteLock()   * holdWriteLock()  -> false;
 
+constraint canHoldReadLock() * holdTick(t)      -> serving != t;
+constraint canHoldReadLock() * holdInnerLock() -> false;
+constraint canHoldReadLock() * canHoldReadLock() -> false;
+constraint canHoldReadLock() * holdWriteLock() -> false;
+
 //Only allow four readers for this example!
 //This needs improving
+/*
 constraint holdReadLock() * holdReadLock()      -> readCount > 1;
 constraint holdReadLock() * holdReadLock() * holdReadLock() ->  readCount > 2; 
 constraint holdReadLock() * holdReadLock() * holdReadLock() * holdReadLock() ->  readCount > 3; 
 constraint holdReadLock() * holdReadLock() * holdReadLock() * holdReadLock() * holdReadLock() -> false; 
+*/
 
+constraint iter[n] holdReadLock() -> n <= readCount && n <= 4;
