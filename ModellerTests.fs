@@ -5,6 +5,7 @@ module Starling.Tests.Modeller
 
 open NUnit.Framework
 open Starling
+open Starling.Utils.Testing
 open Starling.Collections
 open Starling.Core
 open Starling.Core.TypeSystem
@@ -20,255 +21,238 @@ open Starling.Core.Model
 open Starling.Lang.Modeller
 open Starling.Tests.Studies
 
-/// Wrapper for search modeller tests.
-/// Mainly exists to persuade nUnit to use the correct types.
-type SearchViewDefEntry =
-    { Search : int option
-      InitDefs : ViewDefiner<BoolExpr<Sym<Var>> option> }
+let ticketLockProtos: FuncDefiner<unit> =
+    FuncDefiner.ofSeq
+        [ (func "holdLock" [], ())
+          (func "holdTick" [ Int "t" ], ()) ]
 
-/// Tests for the modeller.
-type ModellerTests() =
-    /// View prototypes for the ticket lock modeller.
-    static member TicketLockProtos : FuncDefiner<unit> =
-        FuncDefiner.ofSeq
-            [ (func "holdLock" [], ())
-              (func "holdTick" [ Int "t" ], ()) ]
+let environ =
+    Map.ofList [ ("foo", Type.Int ())
+                 ("bar", Type.Int ())
+                 ("baz", Type.Bool ())
+                 ("emp", Type.Bool ()) ]
 
-    /// Sample environment used in expression modelling tests.
-    static member Env =
-        Map.ofList [ ("foo", Type.Int ())
-                     ("bar", Type.Int ())
-                     ("baz", Type.Bool ())
-                     ("emp", Type.Bool ()) ]
+let shared =
+    Map.ofList [ ("x", Type.Int ())
+                 ("y", Type.Bool ()) ]
 
-    // Method context containing a small amount of variables.
-    static member Context =
-        { ViewProtos = ModellerTests.TicketLockProtos
-          SharedVars = Map.empty
-          ThreadVars = ModellerTests.Env }
+let context =
+    { ViewProtos = ticketLockProtos
+      SharedVars = Map.empty
+      ThreadVars = environ }
 
-    // Method context containing all of the ticket lock variables.
-    static member TicketLockContext =
-        { ViewProtos = ModellerTests.TicketLockProtos
-          SharedVars = ticketLockModel.Globals
-          ThreadVars = ticketLockModel.Locals }
+let sharedContext =
+    { ViewProtos = ticketLockProtos
+      SharedVars = shared
+      ThreadVars = environ }
 
-    static member EmptyCView : CView = Multiset.empty
+module ViewPass =
+    let check (view : View) (expectedCView : CView) =
+        let actualCView = okOption <| modelCView context view
+        AssertAreEqual(Some expectedCView, actualCView)
 
-    /// <summary>
-    ///     Test cases for checking view modelling on correct view exprs.
-    /// </summary>
-    static member ViewExprsGood =
-        [ TestCaseData(View.Unit)
-             .Returns(Some (ModellerTests.EmptyCView))
-             .SetName("Modelling the unit view returns the empty multiset")
-          TestCaseData(afunc "holdLock" [] |> View.Func)
-             .Returns(Some (Multiset.singleton (CFunc.Func (vfunc "holdLock" []))))
-             .SetName("Modelling a valid single view returns a singleton multiset")
-        ]
+    [<Test>]
+    let ``check emp`` () =
+        check View.Unit Multiset.empty
 
-    /// <summary>
-    ///     Tests view modelling on correct view exprs.
-    /// </summary>
-    [<TestCaseSource("ViewExprsGood")>]
-    member x.``View modelling on correct view expressions succeeds`` vex =
-        vex
-        |> modelCView ModellerTests.Context
-        |> okOption
+    [<Test>]
+    let ``test correct func``() =
+        check
+            (View.Func <| afunc "holdLock" [])
+            (Multiset.singleton (CFunc.Func (vfunc "holdLock" [])))
 
+module ViewFail =
+    let check (view : View) (expectedFailures : ViewError list) =
+        let actualErrors = failOption <| modelCView context view
+        AssertAreEqual(Some expectedFailures, actualErrors)
 
-    /// <summary>
-    ///     Test cases for checking view modelling on incorrect view exprs.
-    /// </summary>
-    static member ViewExprsBad =
-        [ TestCaseData(afunc "badfunc" [] |> View.Func)
-             .Returns(Some [NoSuchView "badfunc"])
-             .SetName("Modelling an unknown single view returns an error")
-          TestCaseData(afunc "holdTick" [] |> View.Func)
-             .Returns(Some [LookupError ("holdTick", CountMismatch(0, 1))])
-             .SetName("Modelling a single view with bad parameter count returns an error")
-          TestCaseData(afunc "holdTick" [freshNode Expression'.True] |> View.Func)
-             .Returns(Some [ LookupError
-                                 ("holdTick",
-                                  Error.TypeMismatch
-                                      (Int "t", Type.Bool ()))])
-             .SetName("Modelling a single view with bad parameter type returns an error") ]
+    [<Test>]
+    let ``test unknown func``() =
+        check
+            (View.Func <| afunc "badfunc" [])
+            ([ NoSuchView "badfunc" ])
 
-    /// <summary>
-    ///     Tests view modelling on correct view exprs.
-    /// </summary>
-    [<TestCaseSource("ViewExprsBad")>]
-    member x.``View modelling on incorrect view expressions fails`` vex =
-        vex
-        |> modelCView ModellerTests.Context
-        |> failOption
+    [<Test>]
+    let ``test missing parameter``() =
+        check
+            (View.Func <| afunc "holdTick" [])
+            ([ LookupError ("holdTick", CountMismatch(0, 1)) ])
 
+    [<Test>]
+    let ``test bad parameter type``() =
+        check
+          (View.Func <| afunc "holdTick" [freshNode Expression'.True])
+          ([ LookupError
+               ( "holdTick",
+                 Error.TypeMismatch
+                   (Int "t", Type.Bool ())) ])
 
-    /// Arithmetic expression modelling tests.
-    static member ArithmeticExprs =
-        [ TestCaseData(freshNode <| BopExpr(Add, freshNode <| BopExpr(Mul, freshNode <| Num 1L, freshNode <| Num 2L), freshNode <| Num 3L))
-              .Returns(Some (AAdd [ AMul [ AInt 1L ; AInt 2L ] ; AInt 3L ]
-                             : IntExpr<Sym<Var>>))
-              .SetName("model (1 * 2) + 3") ]
+module ArithmeticExprs =
+    let check (ast : Expression) (expectedExpr : IntExpr<Sym<Var>>) =
+        let actualIntExpr = okOption <| modelIntExpr environ id ast
+        AssertAreEqual(Some expectedExpr, actualIntExpr)
 
-    /// Tests whether the arithmetic expression modeller works.
-    [<TestCaseSource("ArithmeticExprs")>]
-    member x.``test the arithmetic expression modeller`` ast =
-        modelIntExpr ModellerTests.Env id ast |> okOption
+    [<Test>]
+    let ``test modelling (1 * 2) + 3`` ()=
+        check
+            (freshNode <| BopExpr( Add,
+                                   freshNode <| BopExpr(Mul, freshNode (Num 1L), freshNode (Num 2L)),
+                                   freshNode (Num 3L) ))
+            (AAdd [ AMul [ AInt 1L; AInt 2L ] ; AInt 3L ])
 
+module BooleanExprs =
+    let check (ast : Expression) (expectedExpr : BoolExpr<Sym<Var>>) =
+        let actualBoolExpr = okOption <| modelBoolExpr environ id ast
+        AssertAreEqual(Some expectedExpr, actualBoolExpr)
 
-    /// Boolean expression modelling tests.
-    /// These all use the ticket lock model.
-    static member BooleanExprs =
-        [ TestCaseData(freshNode <| BopExpr(And, freshNode <| BopExpr(Or, freshNode True, freshNode True), freshNode False))
-              .Returns(Some (BFalse : BoolExpr<Sym<Var>>))
-              .SetName("model and simplify (true || true) && false") ]
+    [<Test>]
+    let ``model (true || true) && false`` () =
+        check
+            (freshNode <| BopExpr(And, freshNode <| BopExpr(Or, freshNode True, freshNode True), freshNode False))
+            (BFalse : BoolExpr<Sym<Var>>)
 
-    /// Tests whether the arithmetic expression modeller works.
-    [<TestCaseSource("BooleanExprs")>]
-    member x.``test the Boolean expression modeller`` ast =
-        ast
-        |> modelBoolExpr ModellerTests.Env id
-        |> okOption
+module VarLists =
+    let checkFail (vars : TypedVar list) (expectedErrs : VarMapError list) =
+        let varmap = failOption <| makeVarMap vars
+        AssertAreEqual(Some expectedErrs, varmap)
 
+    let checkPass (vars : TypedVar list) (expectedMap : Map<string, CTyped<unit>>) =
+        let varmap = okOption <| makeVarMap vars
+        AssertAreEqual(Some expectedMap, varmap)
 
-    /// Tests for modelling bad variable lists.
-    static member BadVarLists =
-        [ TestCaseData([ (CTyped.Bool "foo")
-                         (CTyped.Bool "foo") ]).Returns(Some <| [ VarMapError.Duplicate "foo" ])
-              .SetName("disallow var lists with duplicates of same type")
+    [<Test>]
+    let ``valid empty list makes var map`` () =
+        checkPass
+            []
+            Map.empty
 
-          TestCaseData([ (CTyped.Int "bar")
-                         (CTyped.Bool "bar") ]).Returns(Some <| [ VarMapError.Duplicate "bar" ])
-              .SetName("disallow var lists with duplicates of different type") ]
+    [<Test>]
+    let ``valid singleton list makes var map`` () =
+        checkPass
+            [ Int "bar" ]
+            (Map.ofList [ ("bar", Int ()) ])
 
+    [<Test>]
+    let ``valid multi list makes var map`` () =
+        checkPass
+            [ Int "bar"; Bool "baz" ]
+            (Map.ofList [ ("bar", Int ())
+                          ("baz", Bool ()) ])
 
-    /// Tests the creation of var lists.
-    [<TestCaseSource("BadVarLists")>]
-    member x.``invalid var lists are rejected during mapping`` vl = makeVarMap vl |> failOption
+    [<Test>]
+    let ``duplicate vars of same type fail in makeVarMap`` () =
+        checkFail
+            ([ Bool "foo"
+               Bool "foo" ])
+            ([ VarMapError.Duplicate "foo" ])
 
-    /// Tests for modelling valid variable lists.
-    static member VarLists =
-        let emp : CTyped<string> list = []
-        let empm : VarMap = Map.empty
-        [ TestCaseData([ (CTyped.Int "baz")
-                         (CTyped.Bool "emp") ])
-              .Returns(Some <| Map.ofList [ ("baz", Type.Int ())
-                                            ("emp", Type.Bool ()) ])
-              .SetName("allow var lists with no duplicate variables")
-          TestCaseData(emp).Returns(Some <| empm).SetName("allow empty var lists") ]
+    [<Test>]
+    let ``duplicate var with different type fails in makeVarMap`` () =
+        checkFail
+            ([ Bool "foo"
+               Int  "foo" ])
+            ([ VarMapError.Duplicate "foo" ])
 
-    /// Tests the creation of var lists.
-    [<TestCaseSource("VarLists")>]
-    member x.``valid var lists are accepted during mapping`` (vl: TypedVar list) =
-        makeVarMap vl |> okOption
+module Atomics =
+    let check (ast : Atomic) (cmd : PrimCommand) =
+        let actualCmd = okOption <| modelAtomic sharedContext ast
+        AssertAreEqual(Some cmd, actualCmd)
 
-    /// Constructs a Prim of the correct type to come out of a modeller.
-    static member mprim (cmd : Command) : PartCmd<ViewExpr<CView>> = Prim cmd
+    [<Test>]
+    let ``model integer load primitive <foo = x++>`` ()=
+        let ast = freshNode (Fetch((LVIdent "foo"), freshNode (LV(LVIdent "x")), Increment))
+        check
+            ast
+            <| command' "!ILoad++"
+                ast
+                [ Int "foo"; Int "x" ]
+                [ "x" |> siBefore |> SMExpr.Int ]
 
-    /// Constructs a Command<View> containing one atomic.
-    static member prim (ac : Atomic) : Command<ViewExpr<Starling.Lang.AST.Types.View>> =
+module CommandAxioms =
+    let check (c : Command<ViewExpr<View>>) (cmd : ModellerPartCmd) =
+        let actualCmd = okOption <| modelCommand sharedContext c
+        AssertAreEqual(Some cmd, actualCmd)
+
+    let prim (atom : Atomic) : Command<ViewExpr<View>> =
         freshNode
         <| Command'.Prim { PreAssigns = []
-                           Atomics = [ ac ]
+                           Atomics = [ atom ]
                            PostAssigns = [] }
 
-    /// Tests for the atomic primitive modeller.
-    /// These use the ticket lock model.
-    static member AtomicPrims =
-        [ TestCaseData(freshNode <| Fetch(LVIdent "t", freshNode <| LV(LVIdent "ticket"), Increment))
-            .Returns(Some <|
-                         command "!ILoad++"
-                                 [ Int "t"; Int "ticket" ] 
-                                 [ "ticket" |> siBefore |> SMExpr.Int ] )
-            .SetName("model a valid integer load as a prim") ]
-
-    /// Tests the atomic primitive modeller using the ticket lock.
-    [<TestCaseSource("AtomicPrims")>]
-    member x.``atomic primitives are modelled correctly as prims`` a =
-        a
-        |> modelAtomic ModellerTests.TicketLockContext
-        |> okOption
+    [<Test>]
+    let ``modelling command <foo = x++> passes`` () =
+        let ast = freshNode (Fetch((LVIdent "foo"), freshNode (LV(LVIdent "x")), Increment))
+        check
+            (prim <| ast)
+            <| Prim ([ command' "!ILoad++"
+                        ast
+                        [ Int "foo"; Int "x" ]
+                        [ "x" |> siBefore |> SMExpr.Int ] ])
 
 
 
-    /// Tests for the command axiom modeller.
-    /// These use the ticket lock model.
-    static member CommandAxioms =
-        [ TestCaseData(ModellerTests.prim(freshNode <| Fetch(LVIdent "t",
-                                                freshNode <| LV(LVIdent "ticket"),
-                                                Increment)))
-            .Returns(ModellerTests.mprim
-                         [ command "!ILoad++" [Int "t"; Int "ticket"] [ "ticket" |> siBefore |> SMExpr.Int ]]
-                     |> Some)
-            .SetName("model a valid integer load command as an axiom") ]
-
-    /// Tests the command modeller using the ticket lock.
-    [<TestCaseSource("CommandAxioms")>]
-    member x.``commands are modelled correctly as part-commands`` c =
-        c
-        |> modelCommand ModellerTests.TicketLockContext
-        |> okOption
-
+module ViewDefs =
+    let check (search : int option) (defs : ViewDefiner<BoolExpr<Sym<Var>> option>) expected =
+        let viewdef = addSearchDefs ticketLockProtos search defs
+        let actual = Set.ofSeq <| ViewDefiner.toSeq viewdef
+        AssertAreEqual(expected, actual)
 
     /// Type-constraining builder for viewdef sets.
-    static member viewDefSet
+    let viewDefSet
       (vs : (View.Types.DView * BoolExpr<Sym<Var>> option) seq)
       : Set<View.Types.DView * BoolExpr<Sym<Var>> option> =
         Set.ofSeq vs
 
     /// Type-constraining builder for indefinite viewdef sets.
-    static member indefinites (vs : View.Types.DView seq)
+    let indefinites (vs : View.Types.DView seq)
       : Set<View.Types.DView * BoolExpr<Sym<Var>> option> =
         vs
         |> Seq.map (fun v -> (v, None))
-        |> ModellerTests.viewDefSet
+        |> viewDefSet
 
-    /// Tests for the search modeller.
-    /// These use TicketLockProtos.
-    static member SearchViewDefs =
-        [ TestCaseData({ Search = None; InitDefs = []})
-             .Returns(ModellerTests.indefinites [])
-             .SetName("Searching for no viewdefs does not change an empty viewdef set")
-          TestCaseData({ Search = None; InitDefs = ticketLockViewDefs })
-             .Returns(ModellerTests.viewDefSet ticketLockViewDefs)
-             .SetName("Searching for no viewdefs does not change a full viewdef set")
-          TestCaseData({ Search = Some 0; InitDefs = []})
-             .Returns(ModellerTests.indefinites [ [] ] )
-             .SetName("Searching for size-0 viewdefs adds emp to an empty viewdef set")
-          TestCaseData({ Search = Some 0; InitDefs = ticketLockViewDefs })
-             .Returns(ModellerTests.viewDefSet ticketLockViewDefs)
-             .SetName("Searching for size-0 viewdefs does not change a full viewdef set")
-          TestCaseData({ Search = Some 1; InitDefs = [] })
-             .Returns(ModellerTests.indefinites
-                          [ []
-                            [ func "holdLock" [] ]
-                            [ func "holdTick" [ Int "t0" ] ] ] )
-             .SetName("Searching for size-1 viewdefs yields viewdefs for emp and the view prototypes")
-          TestCaseData({ Search = Some 2; InitDefs = [] })
-             .Returns(ModellerTests.indefinites
-                          [ []
-                            [ func "holdLock" [] ]
-                            [ func "holdLock" []
-                              func "holdLock" [] ]
-                            [ func "holdLock" []
-                              func "holdTick" [ Int "t0" ] ]
-                            [ func "holdTick" [ Int "t0" ] ]
-                            [ func "holdTick" [ Int "t0" ]
-                              func "holdTick" [ Int "t1" ] ] ] )
-             .SetName("Searching for size-2 viewdefs yields the correct views") ]
+    [<Test>]
+    let ``Search for no viewdefs does not change empty viewdef set``() =
+        check None []
+            (indefinites [])
 
-    /// Tests viewdef searches.
-    [<TestCaseSource("SearchViewDefs")>]
-    member x.``viewdef searches are carried out correctly`` svd =
-        addSearchDefs ModellerTests.TicketLockProtos svd.Search svd.InitDefs
-        |> ViewDefiner.toSeq
-        |> Set.ofSeq
+    [<Test>]
+    let ``Search for no viewdef does not alter full viewdef set``() =
+        check None ticketLockViewDefs
+            (viewDefSet ticketLockViewDefs)
 
-    /// Full case studies to model.
-    static member Models =
-        [ TestCaseData(ticketLockCollated).Returns(Some ticketLockModel).SetName("model the ticket lock") ]
+    [<Test>]
+    let ``search for size-0 viewdefs adds emp to empty``() =
+        check (Some 0) []
+            (indefinites [ [] ])
 
-    /// Tests the whole modelling process.
-    [<TestCaseSource("Models")>]
-    member x.``case studies are modelled correctly`` col = model col |> okOption
+    [<Test>]
+    let ``search for size-0 viewdefs does not change full``() =
+        check (Some 0) ticketLockViewDefs
+            (viewDefSet ticketLockViewDefs)
+
+    [<Test>]
+    let ``Search for size-1 viewdefs yields viewdefs for emp and single view protos``() =
+        check (Some 1) []
+            (indefinites
+                [ []
+                  [ func "holdLock" [] ]
+                  [ func "holdTick" [ Int "t0" ] ] ])
+
+    [<Test>]
+    let ``Search for size-2 viewdefs yields viewdefs up to size 2``() =
+        check (Some 2) []
+            (indefinites
+                [ []
+                  [ func "holdLock" [] ]
+                  [ func "holdLock" []
+                    func "holdLock" [] ]
+                  [ func "holdLock" []
+                    func "holdTick" [ Int "t0" ] ]
+                  [ func "holdTick" [ Int "t0" ] ]
+                  [ func "holdTick" [ Int "t0" ]
+                    func "holdTick" [ Int "t1" ] ] ] )
+
+module TicketLockModel =
+    [<Test>]
+    let ``ticket lock models to correct model``() =
+        AssertAreEqual(okOption <| model ticketLockCollated, Some ticketLockModel)

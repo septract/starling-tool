@@ -338,6 +338,9 @@ let fix f v =
 module Testing =
     open NUnit.Framework
 
+    let assertEqual (a : 'a) (b : 'a) = Assert.AreEqual(a, b)
+    let AssertAreEqual(a, b) = assertEqual a b
+
     /// <summary>
     ///     A more F#-friendly overload of <c>TestCaseData</c>.
     /// </summary>

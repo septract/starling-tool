@@ -31,6 +31,7 @@ module Types =
     type CFunc =
         | ITE of SVBoolExpr * Multiset<CFunc> * Multiset<CFunc>
         | Func of SVFunc
+        override this.ToString() = sprintf "CFunc(%A)" this
 
     /// A conditional view, or multiset of CFuncs.
     type CView = Multiset<CFunc>
@@ -46,6 +47,7 @@ module Types =
             expr : SVBoolExpr
             * inTrue : Block<'view, PartCmd<'view>>
             * inFalse : Block<'view, PartCmd<'view>>
+        override this.ToString() = sprintf "PartCmd(%A)" this
 
     /// <summary>
     ///     Internal context for the method modeller.

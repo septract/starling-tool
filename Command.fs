@@ -33,10 +33,12 @@ module Types =
     ///         for example <x = y++> is translated approximately to { Name = "!ILoad++"; Results = [ siVar "x"; siVar "y" ]; Args = [ siVar "y" ] }
     ///     </para>
     /// </remarks>
-    type PrimCommand = { Name : string
-                         Results : TypedVar list
-                         Args : SMExpr list
-                         Node : AST.Types.Atomic option }
+    type PrimCommand =
+        { Name : string
+          Results : TypedVar list
+          Args : SMExpr list
+          Node : AST.Types.Atomic option }
+        override this.ToString() = sprintf "%A" this
 
     type Command = PrimCommand list
 
@@ -252,6 +254,9 @@ module SymRemove =
 module Create =
     let command : string -> TypedVar list -> SMExpr list -> PrimCommand =
         fun name results args -> { Name = name; Results = results; Args = args; Node = None }
+
+    let command' : string -> AST.Types.Atomic -> TypedVar list -> SMExpr list -> PrimCommand =
+        fun name ast results args -> { Name = name; Results = results; Args = args; Node = Some ast }
 
 /// <summary>
 ///     Pretty printers for commands.
