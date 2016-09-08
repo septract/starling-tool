@@ -72,10 +72,14 @@ module Types =
     type DView = IteratedDFunc list
     // TODO(CaptainHayashi): rename DView?
 
+    /// An iterated non-D func.
+    type IteratedFunc<'Var> when 'Var : equality =
+        IteratedContainer<Func<Expr<'Var>>, IntExpr<'Var>>
+
     /// <summary>
     ///     A basic view, as an ordered list of VFuncs.
     /// </summary>
-    type IteratedOView = IteratedContainer<SMVFunc, IntExpr<Sym<MarkedVar>>> list
+    type IteratedOView = IteratedFunc<Sym<MarkedVar>> list
 
     /// <summary>
     ///     A basic view, as an ordered list of VFuncs.
