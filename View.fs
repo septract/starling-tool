@@ -61,12 +61,16 @@ module Types =
       : IteratedContainer<'Func, 'IteratorB> =
         { Func = v; Iterator = f i }
 
+    /// An iterated view-definition func.
+    type IteratedDFunc = IteratedContainer<DFunc, TypedVar>
+
     (*
      * Views
      *)
 
     /// A view definition.
-    type DView = IteratedContainer<DFunc, TypedVar> list
+    type DView = IteratedDFunc list
+    // TODO(CaptainHayashi): rename DView?
 
     /// <summary>
     ///     A basic view, as an ordered list of VFuncs.
