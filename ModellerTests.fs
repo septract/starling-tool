@@ -251,8 +251,3 @@ module ViewDefs =
                   [ func "holdTick" [ Int "t0" ] ]
                   [ func "holdTick" [ Int "t0" ]
                     func "holdTick" [ Int "t1" ] ] ] )
-
-module TicketLockModel =
-    [<Test>]
-    let ``ticket lock models to correct model``() =
-        AssertAreEqual(okOption <| model ticketLockCollated, Some ticketLockModel)
