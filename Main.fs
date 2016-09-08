@@ -46,10 +46,10 @@ type Request =
     | GoalAdd
     /// Stop at term generation.
     | TermGen
-    /// IterLower
-    | IterLower
     /// Stop at view reification.
     | Reify
+    /// Stop at iterator lowering.
+    | IterLower
     /// Stop at term flattening.
     | Flatten
     /// Stop at semantic transformation.
@@ -106,7 +106,7 @@ let requestList : (string * (string * Request)) list =
        ("Stops Starling model generation at proof term generation.",
         Request.TermGen))
       ("iterlower",
-       ("Flattens the iterated views in the Starling model",
+       ("Stops Starling model generation at iterator flattening.",
         Request.IterLower))
       ("reify",
        ("Stops Starling model generation at view reification.",
@@ -184,13 +184,14 @@ type Response =
     /// The result of semantic expansion.
     | Semantics of Model<GoalAxiom<CommandSemantics<SMBoolExpr>>, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term generation.
-    | TermGen of Model<CmdTerm<SMBoolExpr, IteratedGView<Sym<MarkedVar>>, IteratedOView>, ViewDefiner<SVBoolExpr option>>
-    /// The result of term generation.
-    | IterLower of Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, OView>,
-                         ViewDefiner<BoolExpr<Sym<Var>> option>>
+    | TermGen of Model<CmdTerm<SMBoolExpr, IteratedGView<Sym<MarkedVar>>, IteratedOView>,
+                       ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term reification.
-    | Reify of Model<CmdTerm<SMBoolExpr, Set<GuardedSubview>, OView>,
+    | Reify of Model<CmdTerm<SMBoolExpr, Set<GuardedIteratedSubview>, IteratedOView>,
                      ViewDefiner<BoolExpr<Sym<Var>> option>>
+    /// The result of term generation.
+    | IterLower of Model<CmdTerm<SMBoolExpr, Set<GuardedSubview>, OView>,
+                         ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term flattening.
     | Flatten of Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
                        FuncDefiner<BoolExpr<Sym<Var>> option>>
@@ -246,8 +247,8 @@ let printResponse (mview : ModelView) : Response -> Doc =
                 printSMBoolExpr
                 (printIteratedGView (printSym printMarkedVar))
                 printIteratedOView) m
-    | IterLower m -> printVModel (printCmdTerm printSMBoolExpr printSMGView printOView) m
-    | Reify m -> printVModel (printCmdTerm printSMBoolExpr printGuardedSubviewSet printOView) m
+    | Reify m -> printVModel (printCmdTerm printSMBoolExpr (printSubviewSet printGuardedIteratedSubview) printIteratedOView) m
+    | IterLower m -> printVModel (printCmdTerm printSMBoolExpr (printSubviewSet printGuardedSubview) printOView) m
     | Flatten m -> printFModel (printCmdTerm printSMBoolExpr printSMGView printSMVFunc) m
     | TermOptimise m -> printFModel (printCmdTerm printSMBoolExpr printSMGView printSMVFunc) m
     | SymProof m ->
@@ -558,8 +559,8 @@ let runStarling (request : Request)
     ** phase  goalAdd        Request.GoalAdd        Response.GoalAdd
     ** phase  semantics      Request.Semantics      Response.Semantics
     ** phase  termGen        Request.TermGen        Response.TermGen
-    ** phase  iterLower      Request.IterLower      Response.IterLower
     ** phase  reify          Request.Reify          Response.Reify
+    ** phase  iterLower      Request.IterLower      Response.IterLower
     ** phase  flatten        Request.Flatten        Response.Flatten
     ** phase  termOptimise   Request.TermOptimise   Response.TermOptimise
     ** backend

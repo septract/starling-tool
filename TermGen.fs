@@ -354,7 +354,7 @@ module Iter =
             |> lift
                 (function
                  // TODO(CaptainHayashi): assuming n here is silly
-                 | true -> func dfunc.Name (withDefault (Int "n") it :: dfunc.Params) 
+                 | true -> func dfunc.Name (withDefault (Int "n") it :: dfunc.Params)
                  | false -> dfunc)
 
     /// <summary>
@@ -436,6 +436,6 @@ module Iter =
     /// taking iter[n] g(xbar...) to g(n, xbar...)
     /// and returning that new model
     let flatten
-        (model : Model<Term<_, IteratedGView<Sym<MarkedVar>>, IteratedOView>, _>)
-            : Result<Model<Term<_, GView<Sym<MarkedVar>>, OView>, _>, Error> =
+        (model : Model<Term<_, Set<GuardedIteratedSubview>, IteratedOView>, _>)
+            : Result<Model<Term<_, Set<GuardedSubview>, OView>, _>, Error> =
         tryMapAxioms (lowerIteratedTerm model.ViewProtos) model

@@ -121,6 +121,17 @@ module Types =
     ///         funcs.
     ///     </para>
     /// </summary>
+    type GuardedIteratedSubview = Guarded<Sym<MarkedVar>, IteratedOView>
+
+    /// <summary>
+    ///     A view produced by iter-lowering a
+    ///     <see cref="GuardedIteratedSubView"/>.
+    ///     <para>
+    ///         The entire view (not its individual funcs) is guarded, by the
+    ///         conjunction of the guards over the sub-view's original guarded
+    ///         funcs.
+    ///     </para>
+    /// </summary>
     type GuardedSubview = Guarded<Sym<MarkedVar>, OView>
 
 (*
@@ -559,22 +570,35 @@ module Pretty =
         printGView (printSym printMarkedVar)
 
     /// <summary>
-    ///     Pretty-prints a guarded subview set over symbolic <c>MarkedVar</c>s.
+    ///     Pretty-prints a set of subviews.
     /// </summary>
-    /// <param name="_arg1">
-    ///     The <see cref="GuardedSubview"/> set to print.
+    /// <param name="pSubview">
+    ///     A pretty-printer for the subview.
     /// </param>
+    /// <typeparam name="Subview">
+    ///     The type of subviews in the set.
+    /// </typeparam>
     /// <returns>
-    ///     A pretty-printer command to print the <see cref="GuardedSubview"/>
-    ///     set.
+    ///     A function printing subview sets.
     /// </returns>
-    let printGuardedSubviewSet : Set<GuardedSubview> -> Doc =
+    let printSubviewSet (pSubview : 'Subview -> Doc) : Set<'Subview> -> Doc =
         Set.toSeq
-        >> Seq.map (printGuarded (printSym printMarkedVar) printOView
-                    >> ssurround "((" "))")
+        >> Seq.map (pSubview >> ssurround "((" "))")
         >> commaSep
         >> ssurround "[" "]"
 
+    /// <summary>
+    ///     Pretty-prints a guarded iterated subview over symbolic
+    ///     <c>MarkedVar</c>s.
+    /// </summary>
+    let printGuardedIteratedSubview : GuardedIteratedSubview -> Doc =
+        printGuarded (printSym printMarkedVar) printIteratedOView
+
+    /// <summary>
+    ///     Pretty-prints a guarded subview over symbolic <c>MarkedVar</c>s.
+    /// </summary>
+    let printGuardedSubview : GuardedSubview -> Doc =
+        printGuarded (printSym printMarkedVar) printOView
 
 /// <summary>
 ///     Functions for substituting over guarded views.

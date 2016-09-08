@@ -57,8 +57,8 @@ let reifySingleDef
 let reifyView
   (protos : FuncDefiner<ProtoInfo>)
   (definer : ViewDefiner<SVBoolExpr option>)
-  (vap : GView<Sym<MarkedVar>>)
-  : Set<GuardedSubview> =
+  (vap : IteratedGView<Sym<MarkedVar>>)
+  : Set<GuardedIteratedSubview> =
     let goal = Multiset.toFlatList vap
     definer
     |> ViewDefiner.toSeq
@@ -66,8 +66,8 @@ let reifyView
 
 /// Reifies all of the terms in a model's axiom list.
 let reify
-  (model : Model<Term<'a, GView<Sym<MarkedVar>>, OView>,
+  (model : Model<Term<'a, IteratedGView<Sym<MarkedVar>>, OView>,
                  ViewDefiner<SVBoolExpr option>>)
-  : Model<Term<'a, Set<GuardedSubview>, OView>,
+  : Model<Term<'a, Set<GuardedIteratedSubview>, OView>,
           ViewDefiner<SVBoolExpr option>> =
       mapAxioms (mapTerm id (reifyView model.ViewProtos model.ViewDefs) id) model
