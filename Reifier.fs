@@ -95,7 +95,9 @@ let preprocessView
         then (ns, Map.add nname (norm::ic.[nname]) ic)
         else (norm::ns, ic)
 
-    let nlist, iclasses = Multiset.fold expandFuncToReify ([], Map.empty) view
+    // Have to make sure each class exists first; else exceptions happen.
+    let icempty = ifuncs |> Seq.map (fun name -> (name, [])) |> Map.ofSeq
+    let nlist, iclasses = Multiset.fold expandFuncToReify ([], icempty) view
 
     (* Now, go through the equivalence classes to calculate their case-split
        expansion.  We do this by working out every single possible set of
@@ -218,9 +220,34 @@ let reifySingleDef
                   matchSingleView view (v :: rview) accumulator
             matchSingleView view [] accumulator
         (* Iterated pattern:
-              ??? *)
+              Because the pattern is basically existential on x, and we
+              preprocessed the view such that every possible thing it can match
+              is inside the view, we can just case split on matching each
+              iteration wholesale. *)
         | { Iterator = Some x; Func = p } :: pattern ->
-            failwith "unimplemented"
+            let rec matchSingleItView (view : IteratedGFunc<Sym<MarkedVar>> list) rview accumulator =
+               match view with
+               | [] -> accumulator
+               | v :: view ->
+                  let accumulator =
+                    if p.Name = v.Func.Item.Name && p.Params.Length = v.Func.Item.Params.Length then
+                        (* How many times does an iterated func A(x)[i]
+                           iterated func A(y)[n]?  As above, all of them.
+                           Thus, no remnant is put onto the view, and the entire
+                           func is put onto the result. *)
+                        let result = v :: result
+
+                        (* We also now match against all of the funcs we
+                           refused earlier (rview). *)
+                        matchMultipleViews pattern (rview @ view) accumulator result
+                    else
+                        // The view doesn't match, so this match is dead.
+                        accumulator
+                  (* Now consider the case where we didn't choose the match.
+                     This function now goes onto the set of refused funcs that
+                     are placed back into any match we do choose. *)
+                  matchSingleItView view (v :: rview) accumulator
+            matchSingleItView view [] accumulator
 
     matchMultipleViews dv view accumulator []
 
