@@ -92,8 +92,7 @@ module Types =
     /// A term using the same representation for all parts.
     type CTerm<'repr> = Term<'repr, 'repr, 'repr>
 
-    /// A term using only internal symbolic boolean expressions.
-    type SFTerm = CTerm<SMBoolExpr>
+    type CmdTerm<'Semantics, 'WPre, 'Goal> = Term<CommandSemantics<'Semantics>, 'WPre, 'Goal>
 
     /// A term using only internal boolean expressions.
     type FTerm = CTerm<MBoolExpr>
@@ -320,6 +319,10 @@ module Pretty =
             |> Option.map pAxiom
             |> withDefault (termstr |> sprintf "no term '%s'" |> String)
 
+
+    /// Prints a Term<CommandSemantics, 'WPre, 'Goal> using the WPre and Goal printers provided
+    let printCmdTerm pSemantics pWPre pGoal =
+        printTerm (printCommandSemantics pSemantics) pWPre pGoal
 
 /// <summary>
 ///     Type-constrained version of <c>func</c> for <c>DFunc</c>s.

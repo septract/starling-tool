@@ -42,6 +42,12 @@ module Types =
 
     type Command = PrimCommand list
 
+    /// The Semantics of a Command is a pair of the original command and its boolean expr
+    type CommandSemantics<'Semantics> =
+        { Cmd : Command; Semantics : 'Semantics }
+        override this.ToString() = sprintf "%A" this
+
+
 /// <summary>
 ///     Queries on commands.
 /// </summary>
@@ -272,3 +278,8 @@ module Pretty =
         hjoin [ commaSep <| Seq.map (printCTyped String) ys; " <- " |> String; name |> String; String " "; commaSep <| Seq.map printSMExpr xs ]
 
     let printCommand : Command -> Doc = List.map printPrimCommand >> semiSep
+
+    /// Printing a CommandSemantics prints just the semantic boolexpr associated with it
+    let printCommandSemantics pSem sem =
+        pSem sem.Semantics
+

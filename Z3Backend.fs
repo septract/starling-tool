@@ -99,7 +99,7 @@ module Translator =
     open Starling.Core.Z3.Expr
     ///
     /// Combines the components of a reified term.
-    let combineTerm reals (ctx: Z3.Context) {Cmd = c; WPre = w; Goal = g} =
+    let combineTerm reals (ctx: Z3.Context) ({Cmd = c; WPre = w; Goal = g} : CmdTerm<MBoolExpr, MBoolExpr, MBoolExpr>) =
         (* This is effectively asking Z3 to refute (c ^ w => g).
          *
          * This arranges to:
@@ -108,7 +108,7 @@ module Translator =
          *   - ((c^w) ^ ¬g) deMorgan
          *   - (c^w^¬g) associativity.
          *)
-        boolToZ3 reals unmarkVar ctx (mkAnd [c ; w; mkNot g] )
+        boolToZ3 reals unmarkVar ctx (mkAnd [c.Semantics ; w; mkNot g] )
 
     /// Combines reified terms into a list of Z3 terms.
     let combineTerms reals ctx = mapAxioms (combineTerm reals ctx)
@@ -146,11 +146,11 @@ let sat = Run.run
 /// <returns>
 ///     A function implementing the chosen Z3 backend process.
 /// </returns>
-let run reals req : Model<FTerm, unit> -> Response =
+let run reals req : Model<ProofTerm, unit> -> Response =
     use ctx = new Z3.Context()
     match req with
     | Request.Translate ->
-        (mapAxioms (mapTerm (Expr.boolToZ3 reals unmarkVar ctx)
+        (mapAxioms (mapTerm (fun c -> Expr.boolToZ3 reals unmarkVar ctx c.Semantics)
                             (Expr.boolToZ3 reals unmarkVar ctx)
                             (Expr.boolToZ3 reals unmarkVar ctx)))
         >> Response.Translate

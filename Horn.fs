@@ -5,6 +5,7 @@ module Starling.Backends.Horn
 
 open Chessie.ErrorHandling
 open Starling.Collections
+open Starling.Semantics
 open Starling.Utils
 open Starling.Core.TypeSystem
 open Starling.Core.Var
@@ -436,18 +437,18 @@ let hsfTerm
   (definer : FuncDefiner<BoolExpr<Var> option>)
   (name : string,
    {Cmd = c; WPre = w ; Goal = g}
-     : Term<MBoolExpr, GView<MarkedVar>, MVFunc>)
+     : CmdTerm<MBoolExpr, GView<MarkedVar>, MVFunc>)
   : Result<Horn list, Error> =
     lift2 (fun head body ->
            [ Comment (sprintf "term %s" name)
              Clause (Option.get head, body) ])
           (hsfFunc definer g)
-          (hsfConditionBody definer w c)
+          (hsfConditionBody definer w c.Semantics) // TODO: keep around Command?
 
 /// Constructs a HSF script for a model.
 let hsfModel
   ({ Globals = sharedVars; ViewDefs = definer; Axioms = xs }
-     : Model<Term<MBoolExpr, GView<MarkedVar>, MVFunc>,
+     : Model<CmdTerm<MBoolExpr, GView<MarkedVar>, MVFunc>,
              FuncDefiner<BoolExpr<Var> option>>)
   : Result<Horn list, Error> =
     let uniquify = Set.ofList >> Set.toList

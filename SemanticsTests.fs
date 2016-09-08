@@ -143,7 +143,7 @@ module CommandTests =
                    (ticketLockModel.Locals)
             |> okOption
             |> Option.bind (function
-                            | BAnd xs -> xs |> Set.ofList |> Some
+                            | { Semantics = BAnd xs } -> xs |> Set.ofList |> Some
                             | _ -> None)
 
         Assert.AreEqual(expectedValues, actualValues)
