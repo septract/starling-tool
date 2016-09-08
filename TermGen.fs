@@ -358,32 +358,6 @@ module Iter =
                  | false -> dfunc)
 
     /// <summary>
-    ///     Lowers an iterated GFunc, folding it into an accumulating view.
-    ///     <para>
-    ///         If the func matches an iterated prototype, we move the Iterator
-    ///         Expression into the params; else, we try to expand it.
-    ///     </para>
-    /// </summary>
-    let lowerIterGFunc
-      : FuncDefiner<ProtoInfo>
-      -> IteratedGFunc<Sym<MarkedVar>>
-      -> GView<Sym<MarkedVar>>
-      -> Result<GView<Sym<MarkedVar>>, Error> =
-        fun protos { Func = guardedfunc; Iterator = it } m ->
-            match guardedfunc with
-            | { Cond = cond; Item = innerfunc } ->
-                let it' = withDefault (AInt 1L) it
-                evalIteratorIfFuncNotIterated protos innerfunc it'
-                |> lift
-                    (function
-                     // TODO(CaptainHayashi): this is a messy cast!
-                     | Some k -> Multiset.addn m guardedfunc (int k)
-                     | None ->
-                        Multiset.add m
-                            (gfunc guardedfunc.Cond innerfunc.Name (Int it' :: innerfunc.Params)))
-
-
-    /// <summary>
     ///     Lowers an iterated SMVFunc into a list of SMVFuncs.
     ///     <para>
     ///         If the func matches an iterated prototype, we move the Iterator
@@ -403,15 +377,15 @@ module Iter =
                      | None ->
                         [ func vfunc.Name (Int it' :: vfunc.Params) ])
 
-    /// flattens an entire IteratedGView into a flat GView
-    let lowerIteratedGView
+    /// flattens an entire IteratedSubview into a flat GView
+    let lowerIteratedSubview
       : FuncDefiner<ProtoInfo>
-      -> IteratedGView<Sym<MarkedVar>> -> Result<GView<Sym<MarkedVar>>, Error> =
-        fun protos itergview ->
-            Multiset.fold
-                (fun m gf i -> bind (lowerIterGFunc protos (normalise gf i)) m)
-                (ok Multiset.empty)
-                itergview
+      -> GuardedIteratedSubview -> Result<GuardedSubview, Error> =
+        fun protos { Cond = c; Item = iterview } ->
+            iterview
+            |> List.map (lowerIterSMVFunc protos)
+            |> collect
+            |> lift (List.concat >> (fun m -> { Cond = c; Item = m }))
 
     /// flattens an entire IteratedOView into a flat OView
     /// with no iterators
@@ -427,10 +401,16 @@ module Iter =
     /// and returning the new flattened Term
     let lowerIteratedTerm :
       FuncDefiner<ProtoInfo>
-      -> Term<_, IteratedGView<Sym<MarkedVar>>, IteratedOView>
-      -> Result<Term<_, GView<Sym<MarkedVar>>, OView>, Error> =
+      -> Term<_, Set<GuardedIteratedSubview>, IteratedOView>
+      -> Result<Term<_, Set<GuardedSubview>, OView>, Error> =
         fun proto ->
-            tryMapTerm ok (lowerIteratedGView proto) (lowerIteratedOView proto)
+            let lowerIteratedSubviewSet =
+                Set.toSeq
+                >> Seq.map (lowerIteratedSubview proto)
+                >> collect
+                >> lift Set.ofSeq
+
+            tryMapTerm ok (lowerIteratedSubviewSet) (lowerIteratedOView proto)
 
     /// Flattens iterated guarded views in a model's terms down to guarded views
     /// taking iter[n] g(xbar...) to g(n, xbar...)
