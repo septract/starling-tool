@@ -85,7 +85,7 @@ module Tests =
 
             [<Test>]
             let ``Multiset.append big`` () =
-                check [ (1, 2); (1, 1); (3, 4) ] [1] [ (1, 3); (1, 1); (3, 4) ]
+                check [ (1, 2); (2, 1); (3, 4) ] [1] [ (1, 3); (2, 1); (3, 4) ]
 
         module TestMultisetFold =
             let check inputFolderFunc inputMapList initial expectedOutput =

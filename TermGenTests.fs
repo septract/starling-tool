@@ -5,8 +5,10 @@ module Starling.Tests.TermGen
 
 open Starling.TermGen
 
+open Starling.Utils
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
+open Starling.Core.Model
 open Starling.Core.View
 open Starling.Core.GuardedView
 open Starling.Core.Symbolic
@@ -48,6 +50,20 @@ module Tests =
                             (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
                             (Some (AMul [ siBefore "n"; AInt 6L ])))))
 
+            [<Test>]
+            let ``normalise converts 1 instances of A(x)[n] to A(x)[n]`` () =
+                Assert.That(
+                    normalise
+                        (iterated
+                            (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
+                            (Some (siBefore "n")))
+                        1,
+                    Is.EqualTo(
+                        (iterated
+                            (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
+                            (Some (siBefore "n")))))
+
+
 
         module TestWPreCreation =
             [<Test>]
@@ -59,24 +75,57 @@ module Tests =
                 Assert.Fail ()
 
     module TestIterFlatten =
+        open Starling.TermGen.Iter
+
         module TestLowerGuards =
+            let protos =
+                FuncDefiner.ofSeq
+                    [ (dfunc "f" [Bool "x"], { IsIterated = true; IsAnonymous = false })
+                      (dfunc "g" [Bool "x"], { IsIterated = false; IsAnonymous = false }) ]
+
             [<Test>]
-            let ``Drop iterated GFunc down to non-iterated GFunc`` ()=
-                Assert.AreEqual
-                    ((iterated (gfunc BTrue "f" [Bool BTrue]) (Some (Int <| AInt 3L))),
-                    (gfunc BTrue "f" [Int <| AInt 3L; Bool BTrue]))
+            let ``Drop iterated subview down to non-iterated subview`` ()=
+                Assert.That(
+                    okOption <|
+                    lowerIteratedSubview
+                        protos
+                        { Cond = BTrue
+                          Item =
+                            [ iterated
+                                (smvfunc "f" [Bool BTrue])
+                                (Some (AInt 3L)) ] },
+                    Is.EqualTo(
+                        Some <|
+                        { Cond = (BTrue : BoolExpr<Sym<MarkedVar>>)
+                          Item = [ smvfunc "f" [Int (AInt 3L); Bool BTrue] ] }))
 
             [<Test>]
             let ``Drop iterated SMVFunc down to non-iterated SMVFunc`` ()=
-                Assert.AreEqual
-                    ((iterated (smvfunc "f" [Bool BTrue]) (Some (Int <| AInt 3L))),
-                    (smvfunc "f" [Int <| AInt 3L; Bool BTrue]))
+                Assert.That(
+                    okOption <|
+                    lowerIterSMVFunc
+                        protos
+                        (iterated
+                            (smvfunc "f" [Bool (sbAfter "x")])
+                            (Some (mkMul2 (AInt 2L) (siBefore "n")))),
+                    Is.EqualTo(
+                        Some <|
+                        [ smvfunc "f"
+                            [ Int <| mkMul2 (AInt 2L) (siBefore "n")
+                              Bool (sbAfter "x") ]]))
 
             [<Test>]
             let ``Drop non-iterated IteratedSMVFunc's down to non-iterated SMVFunc`` ()=
-                Assert.AreEqual
-                    ((iterated (smvfunc "f" [Bool BTrue]) None),
-                    (smvfunc "f" [Bool BTrue]))
+                Assert.That(
+                    okOption <|
+                    lowerIterSMVFunc
+                        protos
+                        (iterated
+                            (smvfunc "g" [Bool (sbAfter "z")])
+                            (Some (AInt 4L))),
+                    Is.EqualTo(
+                        Some <|
+                        [ for x in 1..4 -> smvfunc "g" [ Bool (sbAfter "z") ]]))
 (*
  *  old termgen test before iterated views were added
  *
