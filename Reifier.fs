@@ -146,101 +146,96 @@ let reifySingleDef
   (protos : FuncDefiner<ProtoInfo>)
   (view : IteratedGFunc<Sym<MarkedVar>> list)
   accumulator (dv : DView, _) =
-    let rec matchMultipleViews
+    (* When we finish, we need to pull all of the guards out of the funcs
+       we've matched, conjoin them, and use them to guard the iterated view
+       the funcs now form.  These are then added to the accumulator. *)
+    let mergeResults results accumulator =
+        let guars, views = results |> List.map iterGFuncTuple |> List.unzip
+        let cond = mkAnd guars
+
+        if (isFalse cond)
+        then accumulator
+        else Set.add { Cond = cond; Item = List.rev views } accumulator
+
+    (* First, we define what it means to match a view against a single pattern
+       func p, given the rest of the pattern is in 'pattern'. *)
+    let rec matchSingleView
+      (p: IteratedDFunc)
+      pattern
+      (view : IteratedGFunc<Sym<MarkedVar>> list)
+      rview
+      accumulator
+      result =
+        match view with
+        | [] -> accumulator
+        | v :: view ->
+            (* This pattern matches if, and only if, the funcs match. *)
+            let pMatchesV =
+                p.Func.Name = v.Func.Item.Name
+                && p.Func.Params.Length = v.Func.Item.Params.Length
+
+            (* Reification works by building up an accumulator of results from
+               performing multiple possible pattern matches.  Because each
+               single view match case-splits based on whether or not we take
+               the match, we have to push lots of recursive match results into
+               our own accumulator. *)
+            let accumulator =
+                match p.Iterator, pMatchesV with
+                | (_, false) ->
+                    // The view doesn't match, so this match is dead.
+                    accumulator
+                | (None, true) ->
+                    (* How many times does a non-iterated func A(x) match an
+                       iterated func (G1->A(y)[n])?  Once, becoming
+                       (G1 && n>0 -> A(y)[1]).  We then have to put
+                       (G1 && n>0 -> A(y)[n-1]) back onto the view to match.
+
+                       But what if n is always 0?  Then this pattern match
+                       gets a false guard and, because we conjoin all the
+                       pattern match guards above, it short-circuits to
+                       false and kills off the entire view. *)
+
+                    let iter = withDefault (AInt 1L) v.Iterator
+                    let nIsPos = mkGt iter (AInt 0L)
+                    let func = { v.Func with Cond = mkAnd2 v.Func.Cond nIsPos }
+
+                    let result =
+                        { Func = func; Iterator = Some (AInt 1L) } :: result
+
+                    let view =
+                        { Func = func; Iterator = Some (mkSub2 iter (AInt 1L)) }
+                        :: view
+
+                    matchMultipleViews pattern (rview @ view) accumulator result
+                | (Some n, true) ->
+                    (* How many times does an iterated func A(x)[i]
+                       iterated func A(y)[n]?  As above, all of them.
+                       Thus, no remnant is put onto the view, and the entire
+                       func is put onto the result. *)
+                    let result = v :: result
+
+                    (* We also now match against all of the funcs we
+                       refused earlier (rview). *)
+                    matchMultipleViews pattern (rview @ view) accumulator result
+            (* Now consider the case where we didn't choose the match.
+               This function now goes onto the set of refused funcs that
+               are placed back into any match we do choose. *)
+            matchSingleView p pattern view (v :: rview) accumulator result
+    (* We can now specify what it means to reify a view against an entire
+       view pattern. *)
+    and matchMultipleViews
       (pattern : DView)
       (view : IteratedGFunc<Sym<MarkedVar>> list) accumulator result =
         // TODO(CaptainHayashi): pattern vetting.
         match pattern with
-        | [] ->
-                //Pull out the set of guards used in this match, and add to the set
-                let guars, views =
-                    result
-                    |> List.map iterGFuncTuple
-                    |> List.unzip
-                let cond = mkAnd guars
-                if (isFalse cond)
-                then accumulator
-                else
-                    Set.add { Cond = cond; Item = List.rev views }
-                            accumulator
-        (* Flat pattern:
-              simply traverse the view from left to right, and, every time we
-              find something matching the pattern, split on whether we accept
-              it or not.  Run the case where we do and feed its results into
-              the accumulator, then run the case where we don't with that
-              accumulator. *)
-        | { Iterator = None; Func = p } :: pattern ->
-            // TODO(CaptainHayashi): if the iterator is None, we assume the
-            // func 'p' is non-iterated.  This needs to turn into a check on
-            // the view protos.
-            let rec matchSingleView (view : IteratedGFunc<Sym<MarkedVar>> list) rview accumulator =
-               match view with
-               | [] -> accumulator
-               | v :: view ->
-                  let accumulator =
-                    if p.Name = v.Func.Item.Name && p.Params.Length = v.Func.Item.Params.Length then
-                        (* How many times does a non-iterated func A(x) match an
-                           iterated func (G1->A(y)[n])?  Once, becoming
-                           (G1 && n>0 -> A(y)[1]).  We then have to put
-                           (G1 && n>0 -> A(y)[n-1]) back onto the view to match.
-
-                           But what if n is always 0?  Then this pattern match
-                           gets a false guard and, because we conjoin all the
-                           pattern match guards above, it short-circuits to
-                           false and kills off the entire view.
-                        *)
-
-                        let iter = withDefault (AInt 1L) v.Iterator
-                        let nNotZero = mkGt iter (AInt 0L)
-                        let func = { v.Func
-                                     with Cond = mkAnd2 v.Func.Cond nNotZero }
-
-                        let result =
-                            { Func = func; Iterator = Some (AInt 1L) } :: result
-
-                        let view =
-                            { Func = func
-                              Iterator = Some (mkSub2 iter (AInt 1L)) }
-                            :: view
-
-                        matchMultipleViews pattern (rview @ view) accumulator result
-                    else
-                        // The view doesn't match, so this match is dead.
-                        accumulator
-                  (* Now consider the case where we didn't choose the match.
-                     This function now goes onto the set of refused funcs that
-                     are placed back into any match we do choose. *)
-                  matchSingleView view (v :: rview) accumulator
-            matchSingleView view [] accumulator
-        (* Iterated pattern:
-              Because the pattern is basically existential on x, and we
-              preprocessed the view such that every possible thing it can match
-              is inside the view, we can just case split on matching each
-              iteration wholesale. *)
-        | { Iterator = Some x; Func = p } :: pattern ->
-            let rec matchSingleItView (view : IteratedGFunc<Sym<MarkedVar>> list) rview accumulator =
-               match view with
-               | [] -> accumulator
-               | v :: view ->
-                  let accumulator =
-                    if p.Name = v.Func.Item.Name && p.Params.Length = v.Func.Item.Params.Length then
-                        (* How many times does an iterated func A(x)[i]
-                           iterated func A(y)[n]?  As above, all of them.
-                           Thus, no remnant is put onto the view, and the entire
-                           func is put onto the result. *)
-                        let result = v :: result
-
-                        (* We also now match against all of the funcs we
-                           refused earlier (rview). *)
-                        matchMultipleViews pattern (rview @ view) accumulator result
-                    else
-                        // The view doesn't match, so this match is dead.
-                        accumulator
-                  (* Now consider the case where we didn't choose the match.
-                     This function now goes onto the set of refused funcs that
-                     are placed back into any match we do choose. *)
-                  matchSingleItView view (v :: rview) accumulator
-            matchSingleItView view [] accumulator
+        | [] -> mergeResults result accumulator
+        (* Because we preprocessed the view, in both iterated and non-iterated
+           cases we can simply traverse the view from left to right, and,
+           every time we find something matching the pattern, split on whether
+           we accept it.
+           Run the case where we do and feed its results into the accumulator,
+           then run the case where we don't with that accumulator. *)
+        | p :: pattern -> matchSingleView p pattern view [] accumulator result
 
     matchMultipleViews dv view accumulator []
 
