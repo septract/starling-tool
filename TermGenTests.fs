@@ -6,6 +6,7 @@ module Starling.Tests.TermGen
 open Starling.TermGen
 
 open Starling.Utils
+open Starling.Utils.Testing
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Model
@@ -25,43 +26,40 @@ module Tests =
 
             [<Test>]
             let ``normalise converts 3 instances of A(x)[4] to A(x)[12]`` () =
-                Assert.That(
-                    normalise
+                assertEqual
+                    (normalise
                         (iterated
                             (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
                             (Some (AInt 4L : IntExpr<Sym<MarkedVar>>)))
-                        3,
-                    Is.EqualTo(
-                        (iterated
-                            (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
-                            (Some (AInt 12L : IntExpr<Sym<MarkedVar>>)))))
+                        3)
+                    (iterated
+                        (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
+                        (Some (AInt 12L : IntExpr<Sym<MarkedVar>>)))
 
 
             [<Test>]
             let ``normalise converts 6 instances of A(x)[n] to A(x)[6*n]`` () =
-                Assert.That(
-                    normalise
+                assertEqual
+                    (normalise
                         (iterated
                             (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
                             (Some (siBefore "n")))
-                        6,
-                    Is.EqualTo(
-                        (iterated
-                            (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
-                            (Some (AMul [ siBefore "n"; AInt 6L ])))))
+                        6)
+                    (iterated
+                        (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
+                        (Some (AMul [ siBefore "n"; AInt 6L ])))
 
             [<Test>]
             let ``normalise converts 1 instances of A(x)[n] to A(x)[n]`` () =
-                Assert.That(
-                    normalise
+                assertEqual
+                    (normalise
                         (iterated
                             (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
                             (Some (siBefore "n")))
-                        1,
-                    Is.EqualTo(
-                        (iterated
-                            (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
-                            (Some (siBefore "n")))))
+                        1)
+                    (iterated
+                        (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
+                        (Some (siBefore "n")))
 
 
 
