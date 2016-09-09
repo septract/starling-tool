@@ -346,8 +346,9 @@ let mkSub2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
 /// Makes a Mul out of a pair of two expressions.
 let mkMul2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
     match (l, r) with
-    | (AInt x, AInt y) -> AInt (x * y)
-    | _                -> AMul [ l; r ]
+    | (AInt x, AInt y)            -> AInt (x * y)
+    | (AInt 1L, x) | (x, AInt 1L) -> x
+    | _                           -> AMul [ l; r ]
 
 
 (*
