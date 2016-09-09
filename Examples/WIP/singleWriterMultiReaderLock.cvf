@@ -3,13 +3,16 @@
  * Adapted to allow several readers
  */
 
-shared int ticket;  // The next ticket to hand out.
-shared int serving; // The current ticket holding the lock.
-shared int readCount; // Number of readers in the lock
-thread int t;  // The thread's current ticket.
-thread int s;  // The thread's current view of serving.
-thread int r;  // The thread's current view of readCount.
+shared int ticket;    // The next ticket to hand out.
+shared int serving;   // The current ticket holding the lock.
+shared int readCount; // Number of readers in the lock.
+thread int t;         // The thread's current ticket.
+thread int s;         // The thread's current view of serving.
+thread int r;         // The thread's current view of readCount.
 
+// TODO: this should be a constant.
+shared int maxCount;  // The maximum number of threads.
+thread int m;         // Hack used to make maxCount thread-local.
 
 method readAcquire() {
   {| emp |}
@@ -22,23 +25,23 @@ method readAcquire() {
     } while (s != t);
   {| holdInnerLock() |}
     do {
+      // Diverge if there are too many readers.
+      // TODO: rescind the inner lock before spinning?
       {| holdInnerLock() |}
-      <r = readCount>;
-      {| if r > 3 then holdInnerLock() else canHoldReadLock() |}
-    } while (r > 3);
-   {| canHoldReadLock() |}
-  //Proof should fail here as we currently restrict the 
-  //views to forbid five readers, but the code does not respect this.
+        <{r = readCount; m = maxCount;}>;
+      {| if r > (m - 1) then holdInnerLock() else canHoldReadLock() |}
+    } while (r > (m - 1));
+  {| canHoldReadLock() |}
   
   <readCount++>;
   {| holdInnerLock() * holdReadLock() |}
-  < serving ++ >;
+    <serving++>;
   {| holdReadLock() |}
 }
 
 method readRelease() {
   {| holdReadLock() |}
-  < readCount -- >;
+    <readCount-->;
   {| emp |}
 }
 
@@ -54,9 +57,11 @@ method writeAcquire() {
     } while (s != t);
   {| holdInnerLock() |}
    do {
+      // Diverge if there are any readers.
+      // TODO: rescind the inner lock before spinning?
      {| holdInnerLock() |}
-     <r = readCount>;
-	 {| if r == 0 then holdWriteLock() else holdInnerLock() |}
+       <r = readCount>;
+     {| if r == 0 then holdWriteLock() else holdInnerLock() |}
    } while (r != 0);
   {| holdWriteLock() |}
 }
@@ -84,14 +89,13 @@ view canHoldReadLock();
 view holdReadLock()[n];
 
 // Invariant
-constraint emp                                  -> ticket >= serving && readCount >= 0;
+constraint emp                                  -> ticket >= serving && readCount >= 0 && maxCount > 0;
 
 // Predicate definitions
 constraint holdTick(t)                          -> ticket > t;
 constraint holdInnerLock()                      -> ticket != serving;
 constraint holdWriteLock()                      -> ticket != serving && readCount == 0;
-//constraint holdReadLock()                       -> readCount > 0;
-constraint canHoldReadLock()                       -> ticket != serving && readCount <= 3;
+constraint canHoldReadLock()                       -> ticket != serving && readCount <= (maxCount - 1);
 
 
 // Interactions
@@ -107,13 +111,4 @@ constraint canHoldReadLock() * holdInnerLock() -> false;
 constraint canHoldReadLock() * canHoldReadLock() -> false;
 constraint canHoldReadLock() * holdWriteLock() -> false;
 
-//Only allow four readers for this example!
-//This needs improving
-/*
-constraint holdReadLock() * holdReadLock()      -> readCount > 1;
-constraint holdReadLock() * holdReadLock() * holdReadLock() ->  readCount > 2; 
-constraint holdReadLock() * holdReadLock() * holdReadLock() * holdReadLock() ->  readCount > 3; 
-constraint holdReadLock() * holdReadLock() * holdReadLock() * holdReadLock() * holdReadLock() -> false; 
-*/
-
-constraint iter[n] holdReadLock() -> n <= readCount && n <= 4;
+constraint iter[n] holdReadLock() -> n <= readCount && n <= maxCount;
