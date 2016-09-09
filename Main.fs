@@ -433,9 +433,9 @@ let runStarling (request : Request)
     let muz3 reals rq = lift (Backends.MuZ3.run reals rq)
     let frontend times rq =
         Lang.Frontend.run times rq Response.Frontend Error.Frontend
-    let graphOptimise opts =
+    let graphOptimise =
         lift (fix <| Starling.Optimiser.Graph.optimise opts)
-    let termOptimise opts =
+    let termOptimise =
         lift (fix <| Starling.Optimiser.Term.optimise opts)
     let flatten = lift Starling.Flattener.flatten
     let reify = lift Starling.Reifier.reify
@@ -549,9 +549,6 @@ let runStarling (request : Request)
     if config.verbose
     then
         eprintfn "Z3 version: %s" (Microsoft.Z3.Version.ToString ())
-
-    let graphOptimise = graphOptimise opts
-    let termOptimise = termOptimise opts
 
     frontend config.times (match request with | Request.Frontend rq -> rq | _ -> Lang.Frontend.Request.Continuation)
     ** phase  graphOptimise  Request.GraphOptimise  Response.GraphOptimise
