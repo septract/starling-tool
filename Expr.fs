@@ -311,6 +311,9 @@ let mkAnd (xs : BoolExpr<'var> list) : BoolExpr<'var> = simp (BAnd xs)
 /// Returns false for the empty set, and x for the singleton set {x}.
 let mkOr (xs : BoolExpr<'var> list) : BoolExpr<'var> = simp (BOr xs)
 
+/// Makes a BImplies
+let mkImpl (a : BoolExpr<'var>) (b : BoolExpr<'var>) : BoolExpr<'var> = simp (BImplies(a, b))
+
 /// Makes an And from a pair of two expressions.
 let mkAnd2 (l : BoolExpr<'var>) (r : BoolExpr<'var>) : BoolExpr<'var> =
     mkAnd [l ; r]

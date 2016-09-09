@@ -34,8 +34,9 @@ module Types =
         | Sub // a - b
         | Gt // a > b
         | Ge // a >= b
-        | Le // a < b
-        | Lt // a <= b
+        | Le // a <= b
+        | Lt // a < b
+        | Imp // a => b
         | Eq // a == b
         | Neq // a != b
         | And // a && b
@@ -193,6 +194,7 @@ module Pretty =
         | Ge -> ">="
         | Le -> "<"
         | Lt -> "<="
+        | Imp -> "=>"
         | Eq -> "=="
         | Neq -> "!="
         | And -> "&&"
@@ -402,7 +404,7 @@ module Pretty =
 let (|ArithOp|BoolOp|) : BinOp -> Choice<unit, unit> =
     function
     | Mul | Div | Add | Sub -> ArithOp
-    | Gt | Ge | Le | Lt -> BoolOp
+    | Gt | Ge | Le | Lt | Imp -> BoolOp
     | Eq | Neq -> BoolOp
     | And | Or -> BoolOp
 
@@ -413,7 +415,7 @@ let (|ArithIn|BoolIn|AnyIn|) : BinOp -> Choice<unit, unit, unit> =
     | Mul | Div | Add | Sub -> ArithIn
     | Gt | Ge | Le | Lt -> ArithIn
     | Eq | Neq -> AnyIn
-    | And | Or -> BoolIn
+    | And | Or | Imp -> BoolIn
 
 /// Active pattern classifying expressions as to whether they are
 /// arithmetic, Boolean, or indeterminate.

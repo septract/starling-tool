@@ -497,7 +497,7 @@ let rec modelExpr
         | _ -> match e with
                 | ArithExp expr -> expr |> modelIntExpr env varF |> lift Expr.Int
                 | BoolExp expr -> expr |> modelBoolExpr env varF |> lift Expr.Bool
-                | _ -> failwith "unreachable"
+                | _ -> failwith "unreachable[modelExpr]"
 
 /// <summary>
 ///     Models a Starling integral expression as a <c>BoolExpr</c>.
@@ -560,21 +560,22 @@ and modelBoolExpr
                        | Ge -> mkGe
                        | Le -> mkLe
                        | Lt -> mkLt
-                       | _ -> failwith "unreachable")
+                       | _ -> failwith "unreachable[modelBoolExpr::ArithIn]")
                       (mi l)
                       (mi r)
             | BoolIn as o ->
                 lift2 (match o with
                        | And -> mkAnd2
                        | Or -> mkOr2
-                       | _ -> failwith "unreachable")
+                       | Imp -> mkImpl
+                       | _ -> failwith "unreachable[modelBoolExpr::BoolIn]")
                       (mb l)
                       (mb r)
             | AnyIn as o ->
                 lift2 (match o with
                        | Eq -> mkEq
                        | Neq -> mkNeq
-                       | _ -> failwith "unreachable")
+                       | _ -> failwith "unreachable[modelBoolExpr::AnyIn]")
                       (me l)
                       (me r)
         | _ -> fail ExprNotBoolean
@@ -637,7 +638,7 @@ and modelIntExpr
                    | Div -> mkDiv
                    | Add -> mkAdd2
                    | Sub -> mkSub2
-                   | _ -> failwith "unreachable")
+                   | _ -> failwith "unreachable[modelIntExpr]")
                   (mi l)
                   (mi r)
         | _ -> fail ExprNotInt

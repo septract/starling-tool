@@ -206,9 +206,14 @@ let parseEqualityExpression =
         [ ("==", Eq)
           ("!=", Neq) ]
 
+/// Parser for logical IMPL expressions.
+let parseImplExpression =
+    parseBinaryExpressionLevel parseEqualityExpression
+        [ ("=>", Imp) ]
+
 /// Parser for logical AND expressions.
 let parseAndExpression =
-    parseBinaryExpressionLevel parseEqualityExpression
+    parseBinaryExpressionLevel parseImplExpression
         [ ("&&", And) ]
 
 /// Parser for logical OR expressions.
@@ -577,7 +582,7 @@ let parseScript =
                             [parseMethod |>> Method
                              // ^- method <identifier> <arg-list> <block>
                              parseConstraint |>> Constraint
-                             // ^- constraint <view> => <expression> ;
+                             // ^- constraint <view> -> <expression> ;
                              parseViewProto |>> ViewProto
                              // ^- view <identifier> ;
                              //  | view <identifier> <view-proto-param-list> ;
