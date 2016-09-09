@@ -157,11 +157,12 @@ let reifySingleDef
                     result
                     |> List.map iterGFuncTuple
                     |> List.unzip
-                Set.add
-                    { // Then, separately add them into a ReView.
-                    Cond = mkAnd guars
-                    Item = List.rev views }
-                    accumulator
+                let cond = mkAnd guars
+                if (isFalse cond)
+                then accumulator
+                else
+                    Set.add { Cond = cond; Item = List.rev views }
+                            accumulator
         (* Flat pattern:
               simply traverse the view from left to right, and, every time we
               find something matching the pattern, split on whether we accept
@@ -179,38 +180,30 @@ let reifySingleDef
                   let accumulator =
                     if p.Name = v.Func.Item.Name && p.Params.Length = v.Func.Item.Params.Length then
                         (* How many times does a non-iterated func A(x) match an
-                           iterated func A(y)[n]?
+                           iterated func (G1->A(y)[n])?  Once, becoming
+                           (G1 && n>0 -> A(y)[1]).  We then have to put
+                           (G1 && n>0 -> A(y)[n-1]) back onto the view to match.
 
-                           Since A is non-iterated, we can assume that any view
-                           Starling constructs contains A a finite, known
-                           number of times.  Thus, what we do is evaluate the
-                           iterator, try to peel 1 off it, and split on that. *)
-                        let iter =
-                            match v.Iterator with
-                            | None -> 1L
-                            | Some (AInt n) -> n
-                            | Some _ -> failwith "expected to be able to eval this iterator"
+                           But what if n is always 0?  Then this pattern match
+                           gets a false guard and, because we conjoin all the
+                           pattern match guards above, it short-circuits to
+                           false and kills off the entire view.
+                        *)
 
-                        if (iter > 0L)
-                        then
-                            (* We only matched against _one_ of the parts of
-                               A(y)[n], so put A(y)[n-1] back on the list. *)
-                            let view =
-                                { Func = v.Func
-                                  Iterator = Some (AInt (iter - 1L)) }
-                                :: view
+                        let iter = withDefault (AInt 1L) v.Iterator
+                        let nNotZero = mkGt iter (AInt 0L)
+                        let func = { v.Func
+                                     with Cond = mkAnd2 v.Func.Cond nNotZero }
 
-                            // And push A(y)[1] onto the result.
-                            let result =
-                                { Func = v.Func; Iterator = Some (AInt 1L) }
-                                :: result
+                        let result =
+                            { Func = func; Iterator = Some (AInt 1L) } :: result
 
-                            (* We also now match against all of the funcs we
-                               refused earlier (rview). *)
-                            matchMultipleViews pattern (rview @ view) accumulator result
-                        else
-                            // The iterator is 0, so this match is dead.
-                            accumulator
+                        let view =
+                            { Func = func
+                              Iterator = Some (mkSub2 iter (AInt 1L)) }
+                            :: view
+
+                        matchMultipleViews pattern (rview @ view) accumulator result
                     else
                         // The view doesn't match, so this match is dead.
                         accumulator
