@@ -258,29 +258,24 @@ let bInter i c = (i, c) |> Intermediate |> BVar
 /// </summary>
 module Tests =
     open NUnit.Framework
+    open Starling.Utils.Testing
 
-    /// <summary>
-    ///     NUnit tests for <c>Var</c>.
-    /// </summary>
-    type NUnit () =
-        /// Test cases for testing goal rewriting.
-        static member GoalConstants =
-            [ TestCaseData( [ "foo"; "foo"; "foo"] )
-                  .Returns( [ Goal (0I, "foo")
-                              Goal (1I, "foo")
-                              Goal (2I, "foo") ] )
-              TestCaseData( ["foo"; "bar"; "baz"] )
-                  .Returns( [ Goal (0I, "foo")
-                              Goal (1I, "bar")
-                              Goal (2I, "baz") ] ) ]
+    [<Test>]
+    let ``goal generation on one variable uses fresh variables properly`` () =
+        let fg = freshGen ()
 
-        /// Tests that the frame name generator works fine.
-        [<TestCaseSource("GoalConstants")>]
-        member x.``goal generation uses fresh variables properly`` xs =
-            // TODO(CaptainHayashi): move this to AxiomTests.
-            let fg = freshGen ()
+        // The fun x boilerplate seems to be necessary.
+        // Otherwise, mutations to fg apparently don't propagate!
+        assertEqual
+            (List.map (fun x -> goalVar fg x) [ "foo"; "foo"; "foo" ])
+            [ Goal (0I, "foo"); Goal (1I, "foo"); Goal (2I, "foo") ]
 
-            // The fun x boilerplate seems to be necessary.
-            // Otherwise, mutations to fg apparently don't propagate!
-            List.map (fun x -> goalVar fg x) xs
+    [<Test>]
+    let ``goal generation on multiple variables uses fresh variables properly`` () =
+        let fg = freshGen ()
 
+        // The fun x boilerplate seems to be necessary.
+        // Otherwise, mutations to fg apparently don't propagate!
+        assertEqual
+            (List.map (fun x -> goalVar fg x) [ "foo"; "bar"; "baz" ])
+            [ Goal (0I, "foo"); Goal (1I, "bar"); Goal (2I, "baz") ]
