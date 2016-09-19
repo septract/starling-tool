@@ -8,13 +8,11 @@ open Starling.Collections
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.View
-open Starling.Core.View.Sub
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Sub
 open Starling.Core.Sub
 open Starling.Core.Symbolic
 open Starling.Core.Model
-open Starling.Core.Command
 open Starling.Core.Axiom
 open Starling.Core.Var
 

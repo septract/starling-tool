@@ -14,12 +14,10 @@
 module Starling.Semantics
 
 open Chessie.ErrorHandling
-open Starling.Collections
 open Starling.Core.TypeSystem
 open Starling.Core.TypeSystem.Check
 open Starling.Core.Command
 open Starling.Core.Command.Compose
-open Starling.Core.GuardedView
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
@@ -52,8 +50,6 @@ module Pretty =
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.Command.Pretty
-    open Starling.Core.Symbolic.Pretty
-    open Starling.Core.Model.Pretty
 
     /// Pretty-prints semantics errors.
     let rec printSemanticsError =

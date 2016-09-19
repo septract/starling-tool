@@ -28,7 +28,6 @@ module Starling.Backends.MuZ3
 open Microsoft
 open Starling
 open Starling.Collections
-open Starling.Semantics
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
@@ -37,11 +36,8 @@ open Starling.Core.View
 open Starling.Core.View.Sub
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Sub
-open Starling.Core.Instantiate
 open Starling.Core.Sub
 open Starling.Core.Z3
-open Starling.Reifier
-open Starling.Optimiser
 
 
 /// <summary>
@@ -114,11 +110,9 @@ module Types =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
-    open Starling.Core.Expr.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.View.Pretty
     open Starling.Core.Model.Pretty
-    open Starling.Core.Instantiate.Pretty
     open Starling.Core.Z3.Pretty
 
     /// Pretty-prints a MuSat.
@@ -153,7 +147,7 @@ module Pretty =
                printMap Inline String (fun s -> String (s.ToString())) fdm) ]
 
     /// Pretty-prints a response.
-    let printResponse (mview : ModelView) : Response -> Doc =
+    let printResponse (_ : ModelView) : Response -> Doc =
         function
         | Response.Translate mm ->
             printMuModel mm

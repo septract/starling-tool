@@ -17,9 +17,7 @@ open Starling.Core.Var
 open Starling.Core.View
 open Starling.Core.Symbolic
 open Starling.Core.Model
-open Starling.Core.Command
 open Starling.Core.GuardedView
-open Starling.Core.TypeSystem
 
 
 /// <summary>
@@ -61,9 +59,6 @@ module Types =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
-
-    open Starling.Core.Model.Pretty
-    open Starling.Core.Command.Pretty
     open Starling.Core.View.Pretty
     open Starling.Core.GuardedView.Pretty
 

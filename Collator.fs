@@ -6,8 +6,6 @@ module Starling.Lang.Collator
 
 open Starling.Utils
 open Starling.Core.Var
-open Starling.Core.View
-
 open Starling.Lang.AST
 
 

@@ -9,7 +9,6 @@ open Starling.Core.Expr
 open Starling.Core.View
 open Starling.Core.Var
 open Starling.Core.Model
-open Starling.Core.Command
 open Starling.Core.GuardedView
 open Starling.Core.Symbolic
 

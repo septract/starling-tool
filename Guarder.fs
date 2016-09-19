@@ -15,12 +15,14 @@ open Starling.Core.GuardedView
 open Starling.Lang.AST
 open Starling.Lang.Modeller
 
+
 [<AutoOpen>]
 module Types =
     type GuarderViewExpr = ViewExpr<GView<Sym<Var>>>
     type GuarderPartCmd = PartCmd<GuarderViewExpr>
     type GuarderBlock = Block<GuarderViewExpr, GuarderPartCmd>
     type GuarderMethod = Method<GuarderViewExpr, GuarderPartCmd>
+
 
 /// Resolves a full condition-view multiset into a guarded-view multiset.
 let guardCView : CView -> GView<Sym<Var>> =

@@ -110,7 +110,7 @@ let rec printState state =
         "----"
     | Styled (s, d) when state.UseStyles ->
         stylise s <| printState state d
-    | Styled (s, d) ->
+    | Styled (_, d) ->
         printState state d
     | VSkip ->
         lnIndent state.Level
@@ -159,7 +159,7 @@ let vmerge a b =
     |(x::xs, y::ys) -> x :: y :: interleave (xs,ys)
 
   match a, b with 
-    | (VSep (xs, i), VSep (ys, j))  -> 
+    | (VSep (xs, _), VSep (ys, _))  -> 
            let xy = interleave (List.ofSeq xs, List.ofSeq ys) in 
            VSep (Seq.ofList xy, Nop)
     | _ -> Nop

@@ -5,10 +5,8 @@ module Starling.Core.Model
 
 open Chessie.ErrorHandling
 
-open Starling.Collections
 open Starling.Utils
 open Starling.Core.TypeSystem
-open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
 open Starling.Core.View

@@ -9,7 +9,6 @@ open Starling.Core.Expr
 open Starling.Core.View
 open Starling.Core.Symbolic
 open Starling.Core.Model
-open Starling.Core.Command
 open Starling.Core.Var
 open Starling.Core.GuardedView
 
@@ -122,8 +121,6 @@ let flatten
 module Tests =
     open NUnit.Framework
     open Chessie.ErrorHandling
-    open Starling.Utils.Testing
-
 
     /// <summary>
     ///     NUnit tests for <c>Flattener</c>.

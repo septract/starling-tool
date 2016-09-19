@@ -16,13 +16,11 @@
 module Starling.Backends.Z3
 
 open Microsoft
-open Chessie.ErrorHandling
+
 open Starling
-open Starling.Collections
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
-open Starling.Core.GuardedView
 open Starling.Core.Instantiate
 open Starling.Core.Z3
 
@@ -68,9 +66,7 @@ module Types =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
-    open Starling.Core.Expr.Pretty
     open Starling.Core.Model.Pretty
-    open Starling.Core.Instantiate.Pretty
     open Starling.Core.Z3.Pretty
 
     /// Pretty-prints a response.

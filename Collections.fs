@@ -337,7 +337,7 @@ module Multiset =
             | [] -> ok (MSet (Map.ofList fros))
             | ((Warn (x, ws), n)::xs) -> itr xs ((x, n)::fros) (ws@warns)
             | ((Pass x, n)::xs) -> itr xs ((x, n)::fros) warns
-            | ((Fail e, n)::xs) -> Bad e
+            | ((Fail e, _)::_) -> Bad e
         itr (Map.toList ms) [] []
 
     module Pretty =

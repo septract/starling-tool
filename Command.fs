@@ -4,7 +4,6 @@
 module Starling.Core.Command
 
 open Starling.Utils
-open Starling.Collections
 open Starling.Lang
 open Starling.Core.TypeSystem
 open Starling.Core.Expr

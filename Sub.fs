@@ -6,8 +6,6 @@ module Starling.Core.Sub
 open Chessie.ErrorHandling
 
 open Starling.Utils
-open Starling.Collections
-
 open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.Expr
@@ -208,7 +206,7 @@ module Position =
     let pop : SubCtx -> SubCtx =
         function
         | Positions [] -> failwith "empty position stack"
-        | Positions (x::xs) -> Positions xs
+        | Positions (_::xs) -> Positions xs
         | x -> x
 
     /// <summary>
@@ -400,7 +398,6 @@ module Var =
             Position.changePos id (Mapper.mapIntCtx vfun) ctx x
         | AInt i -> (ctx, ok (AInt i))
         | AAdd xs ->
-            let ctx', xs' = mapAccumL (isv id) ctx xs
             let ctx', xs' = mapAccumL (Position.push id >> tryIntSubVars vfun) ctx xs
             (ctx', lift AAdd (collect xs'))
         | ASub xs ->

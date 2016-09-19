@@ -17,14 +17,13 @@ open Starling.Core.View
 open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.Command.Create
-open Starling.Core.Instantiate
-open Starling.Core.Sub
 open Starling.Lang.AST
 open Starling.Lang.Collator
 
 
 /// <summary>
-///     Types used only in the modeller and adjacent pipeline stages.  /// </summary>
+///     Types used only in the modeller and adjacent pipeline stages.
+/// </summary>
 [<AutoOpen>]
 module Types =
     /// A conditional (flat or if-then-else) func.
@@ -174,9 +173,6 @@ module Pretty =
     open Starling.Collections.Multiset.Pretty
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Var.Pretty
-    open Starling.Core.Model.Pretty
-    open Starling.Core.Expr.Pretty
-    open Starling.Core.Command.Pretty
     open Starling.Core.Symbolic.Pretty
     open Starling.Core.View.Pretty
     open Starling.Lang.AST.Pretty
@@ -488,7 +484,7 @@ let rec modelExpr
                         (Mapper.compose
                              (Mapper.cmake (varF >> Reg))
                              (Mapper.make AVar BVar)))
-        | Symbolic (sym, exprs) ->
+        | Symbolic (sym, _) ->
             fail (AmbiguousSym sym)
         (* We can use the active patterns above to figure out whether we
          * need to treat this expression as arithmetic or Boolean.
@@ -814,7 +810,7 @@ let genAllViewsAt depth (funcs : DFunc seq) : Set<View.Types.DView> =
             existing
             |> Seq.map (Multiset.ofFlatList >> Multiset.toFlatList)
             |> Set.ofSeq
-        | n ->
+        | _ ->
             let existing' =
                 seq { yield []
                       for f in funcs do
@@ -953,8 +949,8 @@ let modelBoolLoad : MethodContext -> Var -> Expression -> FetchMode -> Result<Pr
                             [ Bool dest ]
                             [ s |> Before |> Reg |> BVar |> Expr.Bool ]
                               
-            | Typed.Bool s, Increment -> return! fail (IncBool srcExpr)
-            | Typed.Bool s, Decrement -> return! fail (DecBool srcExpr)
+            | Typed.Bool _, Increment -> return! fail (IncBool srcExpr)
+            | Typed.Bool _, Decrement -> return! fail (DecBool srcExpr)
             | _ -> return! fail (TypeMismatch (Type.Bool (), srcLV, typeOf src))
         }
     | _ -> fail (LoadNonLV srcExpr)

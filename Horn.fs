@@ -5,7 +5,6 @@ module Starling.Backends.Horn
 
 open Chessie.ErrorHandling
 open Starling.Collections
-open Starling.Semantics
 open Starling.Utils
 open Starling.Core.TypeSystem
 open Starling.Core.Var
@@ -76,7 +75,6 @@ module Pretty =
     open Starling.Collections.Func.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.View.Pretty
-    open Starling.Core.Model.Pretty
 
     /// <summary>
     ///     Given an expression and its Doc, potentially wrap the Doc
@@ -401,7 +399,7 @@ let hsfFunc
     definer
     |> (lookup func >> mapMessages (curry InconsistentFunc func))
     |> bind (function
-             | Some df -> lift Some (predOfFunc tryIntExpr func)
+             | Some _ -> lift Some (predOfFunc tryIntExpr func)
              | None -> ok None)
 
 /// Constructs a Horn literal for a GFunc.

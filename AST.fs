@@ -166,7 +166,6 @@ module Pretty =
     open Starling.Core.Pretty
     open Starling.Collections.Func.Pretty
     open Starling.Core.TypeSystem.Pretty
-    open Starling.Core.Var.Pretty
 
     /// Pretty-prints lvalues.
     let rec printLValue : LValue -> Doc =

@@ -17,7 +17,6 @@ open Starling.Core.TypeSystem
 open Starling.Collections
 open Starling.Utils
 open Starling.Utils.Config
-open Starling.Semantics
 open Starling.Core.Expr
 open Starling.Core.ExprEquiv
 open Starling.Core.Var
@@ -218,7 +217,7 @@ module Utils =
                 if forceEnabled then
                     if config.verbose then
                         eprintfn "note: forced all optimisations on"
-                    for (optName, enabledByDefault, _) in allOpts do
+                    for (optName, _, _) in allOpts do
                         ignore <| optimisationSet.Add(optName)
                 else
                     if config.verbose then
@@ -278,7 +277,6 @@ module Utils =
 ///     Graph optimisation.
 /// </summary>
 module Graph =
-    open Starling.Core.Axiom
     open Starling.Core.Graph
 
     /// <summary>
@@ -387,8 +385,8 @@ module Graph =
     ///     view, and are connected, but only by no-op commands.
     /// </returns>
     let nopConnected (graph : Graph) (x : NodeID) (y : NodeID) : bool =
-        let xView, xOut, xIn, xnk = graph.Contents.[x]
-        let yView, _, _, ynk = graph.Contents.[y]
+        let xView, xOut, xIn, _ = graph.Contents.[x]
+        let yView, _, _, _ = graph.Contents.[y]
 
         let xToY =
             xOut |> Set.toSeq |> Seq.filter (fun { Dest = d } -> d = y)
@@ -454,7 +452,7 @@ module Graph =
     /// </returns>
     let collapseNops (ctx : TransformContext) : TransformContext =
         expandNodeIn ctx <|
-            fun node nView outEdges inEdges nk ->
+            fun node _ outEdges inEdges _ ->
                 let outNodes = outEdges
                                |> Set.toSeq
                                |> Seq.map (fun { Dest = d } -> d)
@@ -603,7 +601,7 @@ module Graph =
     /// </returns>
     let collapseITEs (ctx : TransformContext) : TransformContext =
         expandNodeIn ctx <|
-            fun node nView outEdges inEdges nk ->
+            fun node nView outEdges inEdges _ ->
                 match nView with
                 | InnerView(ITEGuards (xc, xv, yc, yv)) ->
                     (* Translate xc and yc to pre-state, to match the
@@ -707,7 +705,7 @@ module Graph =
     let dropLocalEdges (locals : VarMap) (ctx : TransformContext)
       : TransformContext =
         expandNodeIn ctx <|
-            fun node nView outEdges inEdges nk ->
+            fun node nView outEdges _ _ ->
                 let disjoint (a : TypedVar list) (b : Set<TypedVar>) = List.forall (b.Contains >> not) a
                 let processEdge ctx (e : OutEdge) =
                     if isLocalResults locals e.Command
@@ -738,7 +736,7 @@ module Graph =
     let collapseUnobservableEdges (locals : VarMap) (ctx : TransformContext)
       : TransformContext =
         expandNodeIn ctx <|
-            fun node nViewexpr outEdges inEdges nodeKind ->
+            fun node nViewexpr outEdges _ _ ->
                 let pViewexpr = nViewexpr
                 let disjoint (a : Set<'a>) (b : Set<'a>) =
                     Set.empty = Set.filter b.Contains a
@@ -755,7 +753,7 @@ module Graph =
                     let rViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[dEdge.Dest]
 
                     match (pViewexpr, qViewexpr, rViewexpr) with
-                    | InnerView pView, InnerView qView, InnerView rView ->
+                    | InnerView _, InnerView _, InnerView _ ->
                         let cResults = Set.ofList <| commandResults c
                         let dResults = Set.ofList <| commandResults d
                         let dArgs    = commandArgs d

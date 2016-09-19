@@ -27,7 +27,6 @@ open Starling.Core.TypeSystem.Check
 open Starling.Core.Var
 open Starling.Core.Expr
 open Starling.Core.View
-open Starling.Core.Command
 open Starling.Core.Model
 open Starling.Core.Sub
 open Starling.Core.Symbolic
@@ -81,7 +80,6 @@ module Pretty =
     open Starling.Core.Model.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.Symbolic.Pretty
-    open Starling.Core.Expr.Pretty
     open Starling.Core.View.Pretty
 
     /// Pretty-prints instantiation errors.
@@ -428,7 +426,6 @@ module Phase =
       -> Result<CmdTerm<BoolExpr<Sym<MarkedVar>>, BoolExpr<Sym<MarkedVar>>,
                         BoolExpr<Sym<MarkedVar>>>, Error> =
         tryMapTerm ok (interpretGView definer) (interpretVFunc definer)
-
 
     /// <summary>
     ///     Converts all indefinite viewdefs to symbols.
