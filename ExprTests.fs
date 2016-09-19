@@ -3,7 +3,6 @@
 /// </summary>
 module Starling.Tests.Core.Expr
 
-open Starling.Utils
 open Starling.Core.TypeSystem
 open NUnit.Framework
 
