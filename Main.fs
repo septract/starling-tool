@@ -18,6 +18,10 @@ open Starling.Core.Model
 open Starling.Core.Model.Pretty
 open Starling.Core.Symbolic
 open Starling.Core.Symbolic.Pretty
+open Starling.Semantics
+open Starling.Semantics.Pretty
+open Starling.Core.Instantiate
+open Starling.Core.Instantiate.Pretty
 open Starling.Core.Command
 open Starling.Core.Command.Pretty
 open Starling.Core.View
@@ -156,6 +160,7 @@ let requestFromStage (ostage : string option) : Request option =
     |> requestMap.TryFind
     |> Option.map snd
 
+
 /// Type of possible outputs from a Starling run.
 [<NoComparison>]
 type Response =
@@ -171,31 +176,30 @@ type Response =
     /// The result of goal-axiom-pair generation.
     | GoalAdd of Model<GoalAxiom<Command>, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of semantic expansion.
-    | Semantics of Model<GoalAxiom<SMBoolExpr>, ViewDefiner<BoolExpr<Sym<Var>> option>>
+    | Semantics of Model<GoalAxiom<CommandSemantics<SMBoolExpr>>, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term generation.
-    | TermGen of Model<STerm<GView<Sym<MarkedVar>>, OView>,
-                       ViewDefiner<BoolExpr<Sym<Var>> option>>
+    | TermGen of Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, OView>, ViewDefiner<SVBoolExpr option>>
     /// The result of term reification.
-    | Reify of Model<STerm<Set<GuardedSubview>, OView>,
+    | Reify of Model<CmdTerm<SMBoolExpr, Set<GuardedSubview>, OView>,
                      ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term flattening.
-    | Flatten of Model<STerm<GView<Sym<MarkedVar>>, SMVFunc>,
+    | Flatten of Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
                        FuncDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term optimisation.
-    | TermOptimise of Model<STerm<GView<Sym<MarkedVar>>, SMVFunc>,
+    | TermOptimise of Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
                             FuncDefiner<BoolExpr<Sym<Var>> option>>
     /// Output a fully-instantiated symbolic proof.
-    | SymProof of Model<SFTerm, unit>
+    | SymProof of Model<SymProofTerm, unit>
     /// Output a fully-instantiated symbolic unstructured proof.
     | RawSymProof of Model<SMBoolExpr, unit>
     /// Output a fully-instantiated non-symbolic proof.
-    | Proof of Model<FTerm, unit>
+    | Proof of Model<ProofTerm, unit>
     /// Output a fully-instantiated non-symbolic unstructured proof.
     | RawProof of Model<MBoolExpr, unit>
     /// The result of Z3 backend processing.
     | Z3 of Backends.Z3.Types.Response
     /// The result of Z3 backend processing.
-    | SymZ3 of Backends.Z3.Types.Response * Model<SFTerm, unit>
+    | SymZ3 of Backends.Z3.Types.Response * Model<SymProofTerm, unit>
     /// The result of MuZ3 backend processing.
     | MuZ3 of Backends.MuZ3.Types.Response
     /// The result of HSF processing.
@@ -226,23 +230,20 @@ let printResponse (mview : ModelView) : Response -> Doc =
     | GraphOptimise g -> printVModel printGraph g
     | Axiomatise m -> printVModel (printAxiom printSVGView printCommand) m
     | GoalAdd m -> printVModel (printGoalAxiom printCommand) m
-    | Semantics m -> printVModel (printGoalAxiom printSMBoolExpr) m
-    | TermGen m -> printVModel (printSTerm printSMGView printOView) m
-    | Reify m -> printVModel (printSTerm printGuardedSubviewSet printOView) m
-    | Flatten m -> printFModel (printSTerm printSMGView printSMVFunc) m
-    | TermOptimise m -> printFModel (printSTerm printSMGView printSMVFunc) m
+    | Semantics m -> printVModel (printGoalAxiom (printCommandSemantics printSMBoolExpr)) m
+    | TermGen m -> printVModel (printCmdTerm printSMBoolExpr printSMGView printOView) m
+    | Reify m -> printVModel (printCmdTerm printSMBoolExpr printGuardedSubviewSet printOView) m
+    | Flatten m -> printFModel (printCmdTerm printSMBoolExpr printSMGView printSMVFunc) m
+    | TermOptimise m -> printFModel (printCmdTerm printSMBoolExpr printSMGView printSMVFunc) m
     | SymProof m ->
         printUModel
-            (printTerm printSMBoolExpr printSMBoolExpr printSMBoolExpr)
+            printSymProofTerm
             m
     | RawSymProof m ->
         printUModel Core.Symbolic.Pretty.printSMBoolExpr m
     | Proof m ->
         printUModel
-            (printTerm
-                 Core.Var.Pretty.printMBoolExpr
-                 Core.Var.Pretty.printMBoolExpr
-                 Core.Var.Pretty.printMBoolExpr)
+            printProofTerm
             m
     | RawProof m ->
         printUModel Core.Var.Pretty.printMBoolExpr m
@@ -250,7 +251,7 @@ let printResponse (mview : ModelView) : Response -> Doc =
     | SymZ3 (z, m) ->
        vmerge (Backends.Z3.Pretty.printResponse mview z)
               (printUModel
-                (printTerm printSMBoolExpr printSMBoolExpr printSMBoolExpr)
+                printSymProofTerm
                 m)
     | MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
     | HSF h -> Backends.Horn.Pretty.printHorns h
@@ -317,13 +318,14 @@ let printResult (pOk : 'Ok -> Doc) (pBad : 'Error -> Doc)
     either (printOk pOk pBad) (printErr pBad)
 
 /// Shorthand for the raw proof output stage.
+/// TODO: Keep around the CommandSemantics types longer
 let rawproof
-  (res : Result<Model<CTerm<Core.Expr.Types.BoolExpr<'a>>, 'b>, Error>)
-  : Result<Model<Core.Expr.Types.BoolExpr<'a>, 'b>, Error> =
+  (res : Result<Model<Term<CommandSemantics<BoolExpr<'a>>, BoolExpr<'a>, BoolExpr<'a>>, unit>, Error>)
+  : Result<Model<BoolExpr<'a>, unit>, Error> =
     lift
         (mapAxioms
              (fun { Cmd = c; WPre = w; Goal = g } ->
-                  Core.Expr.mkImplies (Core.Expr.mkAnd2 c w) g))
+                  Core.Expr.mkImplies (Core.Expr.mkAnd2 c.Semantics w) g))
         res
 
 /// <summary>
@@ -428,6 +430,7 @@ let runStarling (request : Request)
         bind (Core.Instantiate.Phase.run
               >> mapMessages Error.ModelFilterError)
 
+    // TODO: keep around CommandSemantics longer
     let proof v =
         let aprC =
             if approx then Starling.Core.Command.SymRemove.removeSym else id
@@ -450,10 +453,18 @@ let runStarling (request : Request)
         let pos = Starling.Core.Sub.Position.positive
         let neg = Starling.Core.Sub.Position.negative
 
+        let mapCmd cmdSemantics =
+          cmdSemantics.Semantics
+          |> aprC
+          |> (apr neg)
+          |> sub
+          |> lift simp
+          |> lift (fun bexpr -> { Semantics = bexpr; Cmd = cmdSemantics.Cmd })
+
         bind
             (tryMapAxioms
                  (tryMapTerm
-                      (aprC >> (apr neg) >> sub >> lift Starling.Core.Expr.simp)
+                      mapCmd
                       ((apr neg) >> sub >> lift Starling.Core.Expr.simp)
                       ((apr pos) >> sub >> lift Starling.Core.Expr.simp))
              >> mapMessages Error.ModelFilterError)

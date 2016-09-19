@@ -15,7 +15,7 @@ open Starling.Core.Symbolic
 open Starling.Core.Instantiate
 
 /// Tests for the func instantiation functions.
-module Tests =
+module FuncInstantiate =
     /// Environment of test funcs.
     let TestFuncs =
         [ (dfunc "foo" [],

@@ -31,6 +31,7 @@ module Types =
     type CFunc =
         | ITE of SVBoolExpr * Multiset<CFunc> * Multiset<CFunc>
         | Func of SVFunc
+        override this.ToString() = sprintf "CFunc(%A)" this
 
     /// A conditional view, or multiset of CFuncs.
     type CView = Multiset<CFunc>
@@ -46,6 +47,7 @@ module Types =
             expr : SVBoolExpr
             * inTrue : Block<'view, PartCmd<'view>>
             * inFalse : Block<'view, PartCmd<'view>>
+        override this.ToString() = sprintf "PartCmd(%A)" this
 
     /// <summary>
     ///     Internal context for the method modeller.
@@ -1082,35 +1084,37 @@ let modelFetch : MethodContext -> LValue -> Expression -> FetchMode -> Result<Pr
 /// Converts a single atomic command from AST to part-commands.
 let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> = 
     fun ctx a ->
-    match a.Node with
-    | CompareAndSwap(dest, test, set) -> modelCAS ctx dest test set
-    | Fetch(dest, src, mode) -> modelFetch ctx dest src mode
-    | Postfix(operand, mode) ->
-        (* A Postfix is basically a Fetch with no destination, at this point.
-         * Thus, the source must be SHARED.
-         * We don't allow the Direct fetch mode, as it is useless.
-         *)
-        trial {
-            let! stype = wrapMessages BadSVar (lookupVar ctx.SharedVars) operand
-            // TODO(CaptainHayashi): sort out lvalues...
-            let op = flattenLV operand
-            match mode, stype with
-            | Direct, _ ->
-                return! fail Useless
-            | Increment, Typed.Bool _ ->
-                return! fail (IncBool (freshNode <| LV operand))
-            | Decrement, Typed.Bool _ ->
-                return! fail (DecBool (freshNode <| LV operand))
-            | Increment, Typed.Int _ ->
-                return command "!I++" [ Int op ] [op |> Before |> Reg |> AVar |> Expr.Int ]
-            | Decrement, Typed.Int _ ->
-                return command "!I--" [ Int op ] [op |> Before |> Reg |> AVar |> Expr.Int ]
-        }
-    | Id -> ok (command "Id" [] [])
-    | Assume e ->
-        e 
-        |> wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars MarkedVar.Before)
-        |> lift (Expr.Bool >> List.singleton >> command "Assume" [])
+    let prim = 
+        match a.Node with
+        | CompareAndSwap(dest, test, set) -> modelCAS ctx dest test set
+        | Fetch(dest, src, mode) -> modelFetch ctx dest src mode
+        | Postfix(operand, mode) ->
+            (* A Postfix is basically a Fetch with no destination, at this point.
+             * Thus, the source must be SHARED.
+             * We don't allow the Direct fetch mode, as it is useless.
+             *)
+            trial {
+                let! stype = wrapMessages BadSVar (lookupVar ctx.SharedVars) operand
+                // TODO(CaptainHayashi): sort out lvalues...
+                let op = flattenLV operand
+                match mode, stype with
+                | Direct, _ ->
+                    return! fail Useless
+                | Increment, Typed.Bool _ ->
+                    return! fail (IncBool (freshNode <| LV operand))
+                | Decrement, Typed.Bool _ ->
+                    return! fail (DecBool (freshNode <| LV operand))
+                | Increment, Typed.Int _ ->
+                    return command "!I++" [ Int op ] [op |> Before |> Reg |> AVar |> Expr.Int ]
+                | Decrement, Typed.Int _ ->
+                    return command "!I--" [ Int op ] [op |> Before |> Reg |> AVar |> Expr.Int ]
+            }
+        | Id -> ok (command "Id" [] [])
+        | Assume e ->
+            e 
+            |> wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars MarkedVar.Before)
+            |> lift (Expr.Bool >> List.singleton >> command "Assume" [])
+    lift (fun cmd -> { cmd with Node = Some a }) prim
 
 /// Converts a local variable assignment to a Prim.
 and modelAssign : MethodContext -> LValue -> Expression -> Result<PrimCommand, PrimError> = 

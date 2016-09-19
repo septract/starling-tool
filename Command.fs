@@ -5,6 +5,7 @@ module Starling.Core.Command
 
 open Starling.Utils
 open Starling.Collections
+open Starling.Lang
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
@@ -32,8 +33,20 @@ module Types =
     ///         for example <x = y++> is translated approximately to { Name = "!ILoad++"; Results = [ siVar "x"; siVar "y" ]; Args = [ siVar "y" ] }
     ///     </para>
     /// </remarks>
-    type PrimCommand = { Name : string; Results : TypedVar list; Args : SMExpr list }
+    type PrimCommand =
+        { Name : string
+          Results : TypedVar list
+          Args : SMExpr list
+          Node : AST.Types.Atomic option }
+        override this.ToString() = sprintf "%A" this
+
     type Command = PrimCommand list
+
+    /// The Semantics of a Command is a pair of the original command and its boolean expr
+    type CommandSemantics<'Semantics> =
+        { Cmd : Command; Semantics : 'Semantics }
+        override this.ToString() = sprintf "%A" this
+
 
 /// <summary>
 ///     Queries on commands.
@@ -244,9 +257,12 @@ module SymRemove =
         | x -> x
 
 
-module Create = 
+module Create =
     let command : string -> TypedVar list -> SMExpr list -> PrimCommand =
-        fun name results args -> { Name = name; Results = results; Args = args }
+        fun name results args -> { Name = name; Results = results; Args = args; Node = None }
+
+    let command' : string -> AST.Types.Atomic -> TypedVar list -> SMExpr list -> PrimCommand =
+        fun name ast results args -> { Name = name; Results = results; Args = args; Node = Some ast }
 
 /// <summary>
 ///     Pretty printers for commands.
@@ -262,3 +278,8 @@ module Pretty =
         hjoin [ commaSep <| Seq.map (printCTyped String) ys; " <- " |> String; name |> String; String " "; commaSep <| Seq.map printSMExpr xs ]
 
     let printCommand : Command -> Doc = List.map printPrimCommand >> semiSep
+
+    /// Printing a CommandSemantics prints just the semantic boolexpr associated with it
+    let printCommandSemantics pSem sem =
+        pSem sem.Semantics
+

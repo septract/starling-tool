@@ -66,6 +66,11 @@ module Types =
         /// </summary>
         | UnwantedSym of sym: string
 
+    /// Terms in a Proof are boolean expression pre/post conditions with Command's
+    type SymProofTerm = CmdTerm<SMBoolExpr, SMBoolExpr, SMBoolExpr>
+
+    /// Terms in a Proof are over boolean expressions
+    type ProofTerm = CmdTerm<MBoolExpr, MBoolExpr, MBoolExpr>
 
 /// <summary>
 ///     Pretty printers used in func instantiation.
@@ -75,6 +80,7 @@ module Pretty =
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Var.Pretty
+    open Starling.Core.Symbolic.Pretty
     open Starling.Core.Expr.Pretty
     open Starling.Core.View.Pretty
 
@@ -95,7 +101,11 @@ module Pretty =
             fmt "encountered uninterpreted symbol {0}"
                 [ String sym ]
 
+    let printSymProofTerm : SymProofTerm -> Doc =
+        printCmdTerm printSMBoolExpr printSMBoolExpr printSMBoolExpr
 
+    let printProofTerm : ProofTerm -> Doc =
+        printCmdTerm printMBoolExpr printMBoolExpr printMBoolExpr
 (*
  * Func lookup
  *)
@@ -126,14 +136,6 @@ let checkParamCount (func : Func<'a>) : (Func<'b> * 'c) option -> Result<(Func<'
         let dn = List.length (fst def).Params
         if fn = dn then ok (Some def) else CountMismatch (fn, dn) |> fail
 
-let checkParamCountPrim : PrimCommand -> PrimSemantics option -> Result<PrimSemantics option, Error> =
-    fun prim opt ->
-    match opt with
-    | None -> ok None
-    | Some def ->
-        let fn = List.length prim.Args
-        let dn = List.length def.Args
-        if fn = dn then ok (Some def) else CountMismatch (fn, dn) |> fail
 /// <summary>
 ///     Look up <c>func</c> in <c>_arg1</c>.
 ///
@@ -163,11 +165,6 @@ let lookup (func : Func<_>)
     >> Seq.tryFind (fun (dfunc, _) -> dfunc.Name = func.Name)
     >> checkParamCount func
 
-let lookupPrim : PrimCommand -> PrimSemanticsMap -> Result<PrimSemantics option, Error>  =
-    fun prim map ->
-    checkParamCountPrim prim
-    <| Map.tryFind prim.Name map
-
 /// <summary>
 ///     Checks whether <c>func</c> and <c>_arg1</c> agree on parameter
 ///     types.
@@ -193,18 +190,6 @@ let checkParamTypes func def =
         def.Params
     |> collect
     |> lift (fun _ -> func)
-
-let checkParamTypesPrim : PrimCommand -> PrimSemantics -> Result<PrimCommand, Error> =
-    fun prim sem ->
-    List.map2
-        (curry
-             (function
-              | UnifyInt _ | UnifyBool _ -> ok ()
-              | UnifyFail (fp, dp) -> fail (TypeMismatch (dp, typeOf fp))))
-        prim.Args
-        sem.Args
-    |> collect
-    |> lift (fun _ -> prim)
 
 /// <summary>
 ///     Produces a <c>VSubFun</c> that substitutes the arguments of
@@ -234,36 +219,6 @@ let paramSubFun
   ( { Params = fpars } : VFunc<'dstVar>)
   ( { Params = dpars } : DFunc)
   : VSubFun<Var, 'dstVar> =
-    let pmap =
-        Seq.map2 (fun par up -> valueOf par, up) dpars fpars
-        |> Map.ofSeq
-
-    Mapper.make
-        (fun srcV ->
-             match (pmap.TryFind srcV) with
-             | Some (Typed.Int expr) -> expr
-             | Some _ -> failwith "param substitution type error"
-             | None -> failwith "free variable in substitution")
-        (fun srcV ->
-             match (pmap.TryFind srcV) with
-             | Some (Typed.Bool expr) -> expr
-             | Some _ -> failwith "param substitution type error"
-             | None -> failwith "free variable in substitution")
-
-let paramToMExpr =
-    function
-    | Int  i -> After i |> Reg |> AVar |> Int
-    | Bool b -> After b |> Reg |> BVar |> Bool
-
-let primParamSubFun
-  ( cmd : PrimCommand )
-  ( sem : PrimSemantics )
-  : VSubFun<Var, Sym<MarkedVar>> =
-    /// merge the pre + post conditions
-    let fres = List.map paramToMExpr cmd.Results
-    let fpars = cmd.Args @ fres
-    let dpars = sem.Args @ sem.Results
-
     let pmap =
         Seq.map2 (fun par up -> valueOf par, up) dpars fpars
         |> Map.ofSeq
@@ -316,25 +271,6 @@ let instantiate
            (Option.map
                 (fun (dfunc, defn) ->
                      defn |> Mapper.mapBoolCtx (subfun dfunc) NoCtx |> snd))
-
-let instantiatePrim
-  (smap : PrimSemanticsMap)
-  (prim : PrimCommand)
-  : Result<SMBoolExpr option, Error> =
-    lookupPrim prim smap
-    |> bind
-           (function
-            | None -> ok None
-            | Some sem ->
-                lift
-                    (fun _ -> Some sem)
-                    (checkParamTypesPrim prim sem))
-    |> lift
-           (Option.map
-                (fun sem ->
-                    let mapper = onVars (liftVToSym (primParamSubFun prim sem))
-                    Mapper.mapBoolCtx mapper NoCtx sem.Body |> snd))
-
 /// <summary>
 ///     Partitions a <see cref="FuncDefiner"/> into a definite
 ///     definer and an indefinite definer.
@@ -438,12 +374,12 @@ module DefinerFilter =
     ///     definitions.
     /// </returns>
     let filterModelIndefinite
-      (model : Model<Term<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
+      (model : Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
                      FuncDefiner<SVBoolExpr option>> )
-      : Result<Model<Term<MBoolExpr, GView<MarkedVar>, MVFunc>,
+      : Result<Model<CmdTerm<MBoolExpr, GView<MarkedVar>, MVFunc>,
                      FuncDefiner<VBoolExpr option>>, Error> =
         model
-        |> tryMapAxioms (trySubExprInDTerm (tsfRemoveSym UnwantedSym) NoCtx >> snd)
+        |> tryMapAxioms (trySubExprInCmdTerm (tsfRemoveSym UnwantedSym) NoCtx >> snd)
         |> bind (tryMapViewDefs filterIndefiniteViewDefs)
 
 
@@ -487,10 +423,10 @@ module Phase =
     /// Interprets all of the views in a term over the given definer.
     let interpretTerm
       (definer : FuncDefiner<SVBoolExpr>)
-      : Term<BoolExpr<Sym<MarkedVar>>, GView<Sym<MarkedVar>>,
-             VFunc<Sym<MarkedVar>>>
-      -> Result<Term<BoolExpr<Sym<MarkedVar>>, BoolExpr<Sym<MarkedVar>>,
-                     BoolExpr<Sym<MarkedVar>>>, Error> =
+      : CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>,
+                VFunc<Sym<MarkedVar>>>
+      -> Result<CmdTerm<SMBoolExpr, BoolExpr<Sym<MarkedVar>>,
+                        BoolExpr<Sym<MarkedVar>>>, Error> =
         tryMapTerm ok (interpretGView definer) (interpretVFunc definer)
 
 
@@ -547,9 +483,9 @@ module Phase =
     ///     The model with all views instantiated.
     /// </returns>
     let run
-      (model : Model<STerm<GView<Sym<MarkedVar>>, SMVFunc>,
+      (model : Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
                      FuncDefiner<SVBoolExpr option>>)
-      : Result<Model<SFTerm, unit>, Error> =
+      : Result<Model<SymProofTerm, unit>, Error> =
       let vs = symboliseIndefinites model.ViewDefs
 
       model

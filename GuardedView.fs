@@ -522,6 +522,8 @@ module Pretty =
 /// </summary>
 module Sub =
     open Starling.Core.Sub
+    open Starling.Core.View
+    open Starling.Core.View.Sub
 
     /// <summary>
     ///   Maps a <c>SubFun</c> over all expressions in a <c>GFunc</c>.
@@ -822,6 +824,61 @@ module Sub =
              wpre'
              goal')
 
+    /// Maps over a CmdTerm and does substitution
+    let subExprInCmdTerm
+      (sub : SubFun<'src, 'dest>)
+      (context : SubCtx)
+      (term : CmdTerm<BoolExpr<'src>, GView<'src>, VFunc<'src>>)
+      : (SubCtx * CmdTerm<BoolExpr<'dest>, GView<'dest>, VFunc<'dest>>) =
+        let contextT, cmd' =
+            Position.changePos
+                Position.negate
+                (Mapper.mapBoolCtx sub)
+                context
+                term.Cmd.Semantics
+        let contextW, wpre' =
+            Position.changePos
+                Position.negate
+                (subExprInGView sub)
+                contextT
+                term.WPre
+        let context', goal' =
+            Position.changePos
+                id
+                (subExprInVFunc sub)
+                contextW
+                term.Goal
+        (context', { Cmd = { Cmd = term.Cmd.Cmd; Semantics = cmd'} ; WPre = wpre'; Goal = goal' } )
+
+    let trySubExprInCmdTerm
+      (sub : TrySubFun<'src, 'dest, 'err>)
+      (context : SubCtx)
+      (term : CmdTerm<BoolExpr<'src>, GView<'src>, VFunc<'src>>)
+      : (SubCtx * Result<CmdTerm<BoolExpr<'dest>, GView<'dest>, VFunc<'dest>>, 'err>) =
+        let contextT, cmd' =
+            Position.changePos
+                Position.negate
+                (Mapper.mapBoolCtx sub)
+                context
+                term.Cmd.Semantics
+        let contextW, wpre' =
+            Position.changePos
+                Position.negate
+                (trySubExprInGView sub)
+                contextT
+                term.WPre
+        let context', goal' =
+            Position.changePos
+                id
+                (trySubExprInVFunc sub)
+                contextW
+                term.Goal
+        (context',
+         lift3
+             (fun c w g -> { Cmd = { Cmd = term.Cmd.Cmd; Semantics = c }; WPre = w; Goal = g } )
+             cmd'
+             wpre'
+             goal')
 
 /// <summary>
 ///     Tests for guarded views.

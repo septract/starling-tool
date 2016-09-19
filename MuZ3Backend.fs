@@ -28,6 +28,7 @@ module Starling.Backends.MuZ3
 open Microsoft
 open Starling
 open Starling.Collections
+open Starling.Semantics
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
@@ -633,9 +634,9 @@ module Translator =
       (reals : bool)
       (ctx : Z3.Context)
       (funcDecls : Map<string, Z3.FuncDecl>)
-      (name : string, {Cmd = c ; WPre = w ; Goal = g})
+      (name : string, {Cmd = c ; WPre = w ; Goal = g} : CmdTerm<MBoolExpr, GView<MarkedVar>, MVFunc>)
       : (string * Z3.BoolExpr) option =
-        mkRule reals unmarkVar ctx funcDecls c w g |> Option.map (mkPair name)
+        mkRule reals unmarkVar ctx funcDecls c.Semantics w g |> Option.map (mkPair name)  // TODO: keep around Command?
 
     /// <summary>
     ///     Constructs muZ3 rules and goals for a model.
@@ -658,7 +659,7 @@ module Translator =
       (reals : bool)
       (ctx : Z3.Context)
       ({ Globals = svars ; ViewDefs = ds ; Axioms = xs }
-         : Model<Term<MBoolExpr, GView<MarkedVar>, MVFunc>,
+         : Model<CmdTerm<MBoolExpr, GView<MarkedVar>, MVFunc>,
                  FuncDefiner<BoolExpr<Var> option>> ) =
         let funcDecls, definites = translateViewDefs reals ctx ds
         let vrules = translateVariables reals ctx funcDecls svars
@@ -779,7 +780,7 @@ module Run =
 ///     A function implementing the chosen MuZ3 backend process.
 /// </returns>
 let run (reals : bool) (req : Request)
-  : Model<Term<MBoolExpr, GView<MarkedVar>, MVFunc>,
+  : Model<CmdTerm<MBoolExpr, GView<MarkedVar>, MVFunc>,
           FuncDefiner<BoolExpr<Var> option>>
     -> Response =
     use ctx = new Z3.Context()
