@@ -214,12 +214,9 @@ module Queries =
     /// </summary>
     let before (expr : Expr<Sym<Var>>)
       : Result<Expr<Sym<MarkedVar>>, SubError<'Error>> =
-        ((Before >> ok)
-         |> ignoreContext
-         |> liftTraversalOverSym
-         |> liftTraversalOverCTyped
-         |> liftTraversalOverExpr
-         |> withoutContext)
+        liftWithoutContext
+            (Before >> ok)
+            (liftTraversalOverSym >> liftTraversalOverCTyped >> liftTraversalOverExpr)
             expr
 
     /// <summary>
@@ -227,12 +224,9 @@ module Queries =
     /// </summary>
     let after (expr : Expr<Sym<Var>>)
       : Result<Expr<Sym<MarkedVar>>, SubError<'Error>> =
-        ((After >> ok)
-         |> ignoreContext
-         |> liftTraversalOverSym
-         |> liftTraversalOverCTyped
-         |> liftTraversalOverExpr
-         |> withoutContext)
+        liftWithoutContext
+            (After >> ok)
+            (liftTraversalOverSym >> liftTraversalOverCTyped >> liftTraversalOverExpr)
             expr
 
     /// <summary>
@@ -240,7 +234,7 @@ module Queries =
     ///     under-approximation.
     /// </summary>
     let approx
-      : Traversal<CTyped<Sym<MarkedVar>>, Expr<Sym<MarkedVar>>, 'Error> =
+      : Traversal<CTyped<Sym<MarkedVar>>, Expr<Sym<MarkedVar>>, unit> =
         let rec sub ctx =
             function
             | Bool (Sym x) ->
@@ -381,8 +375,8 @@ module Tests =
 
         [<TestCaseSource("IntConstantPostStates")>]
         /// Tests whether rewriting constants in arithmetic expressions to post-state works.
-        member x.``constants in arithmetic expressions can be rewritten to post-state`` (expr : IntExpr<Sym<MarkedVar>>) =
-            expr |> after |> Mapper.mapIntCtx after NoCtx |> snd
+        member x.``constants in arithmetic expressions can be rewritten to post-state`` (expr : IntExpr<Sym<Var>>) =
+            expr |> Int |> after |> bind expectInt
 
         /// <summary>
         ///     Test cases for testing underapproximation of Booleans.
@@ -395,7 +389,7 @@ module Tests =
                                 (sbAfter "bar")
                             BGt
                                 (siBefore "baz", AInt 1L) ]
-                      Position.positive |])
+                      Context.positive |])
                   .Returns(
                     (Positions [ Positive ],
                      ((BAnd
@@ -410,7 +404,7 @@ module Tests =
                           (Sym
                                { Name = "test"
                                  Params = ([] : SMExpr list) } )
-                      Position.positive |])
+                      Context.positive |])
                   .Returns(
                       Some <| (Positions [ Positive ], (BFalse : SMBoolExpr)))
                   .SetName("Rewrite +ve param-less Bool symbol to false")
@@ -419,7 +413,7 @@ module Tests =
                           (Sym
                                { Name = "test"
                                  Params = ([] : SMExpr list) } )
-                      Position.negative |])
+                      Context.negative |])
                   .Returns(
                       Some <| (Positions [ Negative ], (BTrue : SMBoolExpr)))
                   .SetName("Rewrite -ve param-less Bool symbol to true")
@@ -429,7 +423,7 @@ module Tests =
                                  Params =
                                      ([ Expr.Int (siBefore "foo")
                                         Expr.Bool (sbAfter "bar") ] : SMExpr list) } )
-                      Position.positive |])
+                      Context.positive |])
                   .Returns(
                       Some <| (Positions [ Positive ], (BFalse : SMBoolExpr)))
                   .SetName("Rewrite +ve Reg-params Bool symbol to false")
@@ -439,7 +433,7 @@ module Tests =
                                  Params =
                                      ([ Expr.Int (siBefore "foo")
                                         Expr.Bool (sbAfter "bar") ] : SMExpr list) } )
-                      Position.negative |])
+                      Context.negative |])
                   .Returns(
                        Some <| (Positions [ Negative ], (BTrue : SMBoolExpr)))
                   .SetName("Rewrite -ve Reg-params Bool symbol to true")
@@ -455,10 +449,10 @@ module Tests =
                                       Params =
                                           ([ Expr.Int (siBefore "baz")
                                              Expr.Bool (sbAfter "barbaz") ] : SMExpr list) } ))
-                      Position.positive |])
+                      Context.positive |])
                   .Returns(
                       Some <|
-                     t (Positions [ Positive ],
+                      (Positions [ Positive ],
                        BImplies
                            ((BTrue : SMBoolExpr),
                             (BFalse : SMBoolExpr))))
@@ -475,7 +469,7 @@ module Tests =
                                       Params =
                                           ([ Expr.Int (siBefore "baz")
                                              Expr.Bool (sbAfter "barbaz") ] : SMExpr list) } ))
-                      Position.negative |])
+                      Context.negative |])
                   .Returns(
                       Some <|
                       (Positions [ Negative ],
@@ -488,8 +482,14 @@ module Tests =
         ///     Tests whether Boolean underapproximation works.
         /// </summary>
         [<TestCaseSource("BoolApprox")>]
-        member this.testBoolApprox bl pos =
-            bl |> Mapper.mapBoolCtx approx pos
+        member this.testBoolApprox (bl : BoolExpr<Sym<MarkedVar>>)
+          (pos : TraversalContext)
+          : (TraversalContext * BoolExpr<Sym<MarkedVar>>) option =
+            bl
+            |> Expr.Bool
+            |> liftTraversalToExprSrc approx pos
+            |> bind (fun (ctx, e) -> expectBool e |> lift (mkPair ctx))
+            |> okOption
 
         /// <summary>
         ///     Test cases for finding variables in expressions.
@@ -573,4 +573,4 @@ module Tests =
         /// </summary>
         [<TestCaseSource("FindSMVarsCases")>]
         member this.testFindSMVars expr =
-            mapOverSMVars Mapper.mapCtx findSMVars expr
+            expr |> findMarkedVars collectSymMarkedVars |> okOption
