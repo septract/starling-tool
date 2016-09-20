@@ -173,67 +173,6 @@ module Context =
 
 
 /// <summary>
-///     A generic traversal.
-/// </summary>
-/// <typeparam name="Src">
-///     The type of items before the traversal.
-/// </typeparam>
-/// <typeparam name="Dst">
-///     The type of items after the traversal.
-/// </typeparam>
-/// <typeparam name="Error">
-///     The type of errors that can occur during traversal.
-/// </typeparam>
-type Traversal<'Src, 'Dst, 'Error> =
-    TraversalContext -> 'Src -> Result<TraversalContext * 'Dst, 'Error>
-
-/// <summary>
-///     Lifts a traversal to a context-less function.
-/// </summary>
-/// <param name="f">
-///     The traversal to lift.
-/// </param>
-/// <typeparam name="Src">
-///     The type of items before the traversal.
-/// </typeparam>
-/// <typeparam name="Dst">
-///     The type of items after the traversal.
-/// </typeparam>
-/// <typeparam name="Error">
-///     The type of errors that can occur during traversal.
-/// </typeparam>
-/// <returns>
-///     The traversal <paramref name="f"/> lifted such that it accepts
-///     <see cref="NoCtx"/> (and then discards it).
-/// </returns>
-let withoutContext
-  (f : Traversal<'Src, 'Dst, 'Error>) : 'Src -> Result<'Dst, 'Error> =
-    f NoCtx >> lift snd
-
-/// <summary>
-///     Lifts a function to a context-preserving traversal.
-/// </summary>
-/// <param name="f">
-///     The function to lift.
-/// </param>
-/// <typeparam name="Src">
-///     The type of items before the traversal.
-/// </typeparam>
-/// <typeparam name="Dst">
-///     The type of items after the traversal.
-/// </typeparam>
-/// <typeparam name="Error">
-///     The type of errors that can occur during traversal.
-/// </typeparam>
-/// <returns>
-///     The function <paramref name="f"/> lifted such that it can be used
-///     in a traversal.
-/// </returns>
-let ignoreContext
-  (f : 'Src -> Result<'Dst, 'Error>) : Traversal<'Src, 'Dst, 'Error> =
-    fun ctx -> f >> lift (mkPair ctx)
-
-/// <summary>
 ///     Error type for variable substitutions.
 /// </summary>
 /// <typeparam name="Inner">
@@ -256,10 +195,85 @@ type SubError<'Inner> =
 
 
 /// <summary>
+///     A generic traversal.
+/// </summary>
+/// <typeparam name="Src">
+///     The type of items before the traversal.
+/// </typeparam>
+/// <typeparam name="Dst">
+///     The type of items after the traversal.
+/// </typeparam>
+/// <typeparam name="Error">
+///     The type of inner errors that can occur during traversal.
+/// </typeparam>
+type Traversal<'Src, 'Dst, 'Error> =
+    TraversalContext -> 'Src ->
+        Result<TraversalContext * 'Dst, SubError<'Error>>
+
+/// <summary>
+///     Lifts a traversal to a context-less function.
+/// </summary>
+/// <param name="f">
+///     The traversal to lift.
+/// </param>
+/// <typeparam name="Src">
+///     The type of items before the traversal.
+/// </typeparam>
+/// <typeparam name="Dst">
+///     The type of items after the traversal.
+/// </typeparam>
+/// <typeparam name="Error">
+///     The type of errors that can occur during traversal.
+/// </typeparam>
+/// <returns>
+///     The traversal <paramref name="f"/> lifted such that it accepts
+///     <see cref="NoCtx"/> (and then discards it).
+/// </returns>
+let withoutContext
+  (f : Traversal<'Src, 'Dst, 'Error>) : 'Src -> Result<'Dst, SubError<'Error>> =
+    f NoCtx >> lift snd
+
+/// <summary>
+///     Lifts a function to a context-preserving traversal.
+/// </summary>
+/// <param name="f">
+///     The function to lift.
+/// </param>
+/// <typeparam name="Src">
+///     The type of items before the traversal.
+/// </typeparam>
+/// <typeparam name="Dst">
+///     The type of items after the traversal.
+/// </typeparam>
+/// <typeparam name="Error">
+///     The type of errors that can occur during traversal.
+/// </typeparam>
+/// <returns>
+///     The function <paramref name="f"/> lifted such that it can be used
+///     in a traversal.
+/// </returns>
+let ignoreContext
+  (f : 'Src -> Result<'Dst, SubError<'Error>>) : Traversal<'Src, 'Dst, 'Error> =
+    fun ctx -> f >> lift (mkPair ctx)
+
+/// <summary>
+///     Lifts a traversal over <see cref="CTyped"/>.
+/// </summary>
+let liftTraversalOverCTyped
+  (sub : Traversal<'Src, 'Dest, 'Error>)
+  : Traversal<CTyped<'Src>, CTyped<'Dest>, 'Error> =
+    // TODO(CaptainHayashi): proper doc comment.
+    fun ctx ->
+        function
+        | Int i -> lift (pairMap id Int) (sub ctx i)
+        | Bool b -> lift (pairMap id Bool) (sub ctx b)
+
+/// <summary>
 ///     Tries to extract an <see cref="IntExpr"/> out of an
 ///     <see cref="Expr"/>, failing if the expression is not of that type.
 /// </summary>
 let expectInt : Expr<'Var> -> Result<IntExpr<'Var>, SubError<_>> =
+    // TODO(CaptainHayashi): proper doc comment.
     function
     | Int x -> ok x
     | tx -> fail (BadType (expected = Type.Int (), got = typeOf tx))
@@ -269,6 +283,7 @@ let expectInt : Expr<'Var> -> Result<IntExpr<'Var>, SubError<_>> =
 ///     <see cref="Expr"/>, failing if the expression is not of that type.
 /// </summary>
 let expectBool : Expr<'Var> -> Result<BoolExpr<'Var>, SubError<_>> =
+    // TODO(CaptainHayashi): proper doc comment.
     function
     | Bool x -> ok x
     | tx -> fail (BadType (expected = Type.Bool (), got = typeOf tx))
@@ -322,7 +337,7 @@ let tchain2
 /// </summary>
 let rec boolSubVars
     (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
-    : Traversal<BoolExpr<'SrcVar>, BoolExpr<'DstVar>, SubError<'Error>> =
+    : Traversal<BoolExpr<'SrcVar>, BoolExpr<'DstVar>, 'Error> =
     // TODO(CaptainHayashi): proper doc comment.
 
     // We do some tricky inserting and removing of positions on the stack
@@ -330,7 +345,7 @@ let rec boolSubVars
     // is removed when we pop back up the expression stack.
     let bsv f = Context.changePos f (boolSubVars sub)
     let isv = Context.changePos id (intSubVars sub)
-    let esv = Context.changePos id (exprSubVars sub)
+    let esv = Context.changePos id (liftTraversalToExprSrc sub)
 
     let neg = Context.negate
 
@@ -340,7 +355,6 @@ let rec boolSubVars
             x
             |> CTyped.Bool
             |> Context.changePos id sub ctx
-            |> mapMessages Inner
             |> bind (uncurry (ignoreContext expectBool))
         | BTrue -> ok (ctx, BTrue)
         | BFalse -> ok (ctx, BFalse)
@@ -359,7 +373,7 @@ let rec boolSubVars
 /// for the given arithmetic expression.
 and intSubVars
   (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
-  : Traversal<IntExpr<'SrcVar>, IntExpr<'DstVar>, SubError<'Error>> =
+  : Traversal<IntExpr<'SrcVar>, IntExpr<'DstVar>, 'Error> =
     let isv = Context.changePos id (intSubVars sub)
     // TODO(CaptainHayashi): proper doc comment.
 
@@ -369,7 +383,6 @@ and intSubVars
             x
             |> CTyped.Int
             |> Context.changePos id sub ctx
-            |> mapMessages Inner
             |> bind (uncurry (ignoreContext expectInt))
         | AInt i -> ok (ctx, AInt i)
         | AAdd xs -> tchainL isv AAdd ctx xs
@@ -378,11 +391,12 @@ and intSubVars
         | ADiv (x, y) -> tchain2 isv isv ADiv ctx (x, y)
 
 /// <summary>
-///   Creates an expression traversal from a variable traversal.
+///   Converts a traversal from typed variables to expressions to one from
+///   expressions to expressions.
 /// </summary>
-and exprSubVars
+and liftTraversalToExprSrc
   (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
-  : Traversal<Expr<'SrcVar>, Expr<'DstVar>, SubError<'Error>> =
+  : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error> =
     // TODO(CaptainHayashi): proper doc comment.
     fun ctx ->
         function
@@ -390,7 +404,7 @@ and exprSubVars
         | Int i -> i |> intSubVars sub ctx |> lift (pairMap id Int)
 
 /// <summary>
-///     Converts a traversal from variables to variables to one from
+///     Converts a traversal from typed variables to typed variables to one from
 ///     variables to expressions.
 /// </summary>
 /// <param name="sub">
@@ -403,21 +417,42 @@ and exprSubVars
 ///     The type of variables leaving the traversal.
 /// </typeparam>
 /// <returns>
-///     <paramref name="mapper">, lifted into a <C>VSubFun</c>.
+///     <paramref name="sub">, lifted to return expressions.
 /// </returns>
-let liftToExprDest
+let liftTraversalToExprDest
   (sub : Traversal<CTyped<'SrcVar>, CTyped<'DstVar>, 'Error>)
   : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error> =
     fun ctx -> sub ctx >> lift (pairMap id mkVarExp)
 
 /// <summary>
+///     Converts a traversal from typed variables to typed variables to one from
+///     expressions to expressions.
+/// </summary>
+/// <param name="sub">
+///     The traversal to lift.
+/// </param>
+/// <typeparam name="SrcVar">
+///     The type of variables entering the traversal.
+/// </typeparam>
+/// <typeparam name="DstVar">
+///     The type of variables leaving the traversal.
+/// </typeparam>
+/// <returns>
+///     <paramref name="sub">, lifted over expressions.
+/// </returns>
+let liftTraversalOverExpr
+  (sub : Traversal<CTyped<'SrcVar>, CTyped<'DstVar>, 'Error>)
+  : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error> =
+    sub |> liftTraversalToExprDest |> liftTraversalToExprSrc
+
+/// <summary>
 ///     Converts a non-symbolic expression to its pre-state.
 /// </summary>
 let vBefore (expr : Expr<Var>) : Result<Expr<MarkedVar>, SubError<'Error>> =
-    ((mapCTyped Before >> ok)
+    ((Before >> ok)
     |> ignoreContext
-    |> liftToExprDest
-    |> exprSubVars
+    |> liftTraversalOverCTyped
+    |> liftTraversalOverExpr
     |> withoutContext)
         expr
 
@@ -425,27 +460,46 @@ let vBefore (expr : Expr<Var>) : Result<Expr<MarkedVar>, SubError<'Error>> =
 ///     Converts a non-symbolic expression to its post-state.
 /// </summary>
 let vAfter (expr : Expr<Var>) : Result<Expr<MarkedVar>, SubError<'Error>> =
-    ((mapCTyped After >> ok)
+    ((After >> ok)
     |> ignoreContext
-    |> liftToExprDest
-    |> exprSubVars
+    |> liftTraversalOverCTyped
+    |> liftTraversalOverExpr
     |> withoutContext)
         expr
 
 /// <summary>
-///     Traversal for accumulating the <c>Var</c>s of an expression.
+///     Updates a context with a new variable.
 /// <summary>
-let findVars : Traversal<Expr<Var>, Expr<Var>, SubError<'Error>>  =
-    fun ctx ->
-        let addVar =
-            fun ctx v ->
-                match ctx with
-                | Vars vs -> ok (Vars (v::vs), v)
-                | c -> ok (c, v)
-        (addVar |> liftToExprDest |> exprSubVars) ctx
+let pushVar (ctx : TraversalContext) (v : TypedVar)
+  : Result<TraversalContext, SubError<'Error>>=
+    match ctx with
+    | Vars vs -> ok (Vars (v::vs))
+    | c -> fail (ContextMismatch ("vars context", c))
 
 /// <summary>
-///     Wrapper for running a <see cref="findVars"/>-style traversal
+///     Traversal for accumulating <c>Var</c>s.
+/// <summary>
+let collectVars : Traversal<TypedVar, TypedVar, 'Error>  =
+    fun ctx v -> lift (fun ctx -> (ctx, v)) (pushVar ctx v)
+
+/// <summary>
+///     Updates a context with a new marked variable.
+/// <summary>
+let pushMarkedVar (ctx : TraversalContext) (v : CTyped<MarkedVar>)
+  : Result<TraversalContext, SubError<'Error>>=
+    match ctx with
+    | MarkedVars vs -> ok (MarkedVars (v::vs))
+    | c -> fail (ContextMismatch ("markedvars context", c))
+
+/// <summary>
+///     Traversal for accumulating <c>MarkedVar</c>s.
+/// <summary>
+let collectMarkedVars
+  : Traversal<CTyped<MarkedVar>, CTyped<MarkedVar>, 'Error> =
+    fun ctx v -> lift (fun ctx -> (ctx, v)) (pushMarkedVar ctx v)
+
+/// <summary>
+///     Wrapper for running a <see cref="collectVars"/>-style traversal
 ///     on a traversable construct.
 /// <summary>
 /// <param name="t">
@@ -463,8 +517,8 @@ let findVars : Traversal<Expr<Var>, Expr<Var>, SubError<'Error>>  =
 /// <returns>
 ///     The set of variables found in the expression.
 /// </returns>
-let mapOverVars
-  (t : Traversal<'Subject, 'Subject, SubError<'Error>>)
+let findVars
+  (t : Traversal<'Subject, 'Subject, 'Error>)
   (subject : 'Subject)
   : Result<Set<CTyped<Var>>, SubError<'Error>> =
     subject
@@ -473,6 +527,36 @@ let mapOverVars
         (function
          | (Vars xs, _) -> ok (Set.ofList xs)
          | (x, _) -> fail (ContextMismatch ("variable list", x)))
+
+/// <summary>
+///     Wrapper for running a <see cref="collectMarkedVars"/>-style traversal
+///     on a traversable construct.
+/// <summary>
+/// <param name="t">
+///     The traversal to wrap.
+/// </param>
+/// <param name="subject">
+///     The item in which to find marked vars.
+/// </param>
+/// <typeparam name="Subject">
+///     The type of the item in which to find marked vars.
+/// </typeparam>
+/// <typeparam name="Errors">
+///     The type of errors that can occur in the traversal.
+/// </typeparam>
+/// <returns>
+///     The set of variables found in the expression.
+/// </returns>
+let findMarkedVars
+  (t : Traversal<'Subject, 'Subject, 'Error>)
+  (subject : 'Subject)
+  : Result<Set<CTyped<MarkedVar>>, SubError<'Error>> =
+    subject
+    |> t (Vars [])
+    |> bind
+        (function
+         | (MarkedVars xs, _) -> ok (Set.ofList xs)
+         | (x, _) -> fail (ContextMismatch ("marked variable list", x)))
 
 /// <summary>
 ///     Tests for <c>Sub</c>.

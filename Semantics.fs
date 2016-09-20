@@ -74,8 +74,9 @@ module Pretty =
                 [ fn |> sprintf "%d" |> String; dn |> sprintf "%d" |> String ]
 
 /// Generates a framing relation for a given variable.
-let frameVar ctor par : SMBoolExpr =
-    BEq (par |> After |> Reg |> mkVarExp, par |> ctor |> Reg |> mkVarExp)
+let frameVar ctor (par : CTyped<Var>) : SMBoolExpr =
+    BEq (par |> mapCTyped (After >> Reg) |> mkVarExp,
+         par |> mapCTyped (ctor >> Reg) |> mkVarExp)
 
 /// Generates a frame for a given expression.
 /// The frame is a relation a!after = a!before for every a not mentioned in the expression.

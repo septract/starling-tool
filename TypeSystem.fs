@@ -142,6 +142,12 @@ module Typed =
         match typed with
         | Int a | Bool a -> a
 
+    /// <summary>
+    ///     Active pattern splitting a CTyped item into its item and type.
+    /// </summary>
+    let (|WithType|) x = (valueOf x, typeOf x)
+
+
 /// <summary>
 ///     Pretty printers for the type system.
 /// </summary>

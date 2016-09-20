@@ -585,7 +585,7 @@ module Translator =
         let vpars =
             svars
             |> Map.toList
-            |> List.map (fun (v, t) -> mkVarExp id (withType t v))
+            |> List.map (fun (v, t) -> mkVarExp (withType t v))
 
         // TODO(CaptainHayashi): actually get these initialisations from
         // somewhere.
