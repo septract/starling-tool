@@ -257,6 +257,46 @@ let ignoreContext
     fun ctx -> f >> lift (mkPair ctx)
 
 /// <summary>
+///     Allows a context-less function to be lifted by traversal lifter
+///     functions.
+///
+///     <para>
+///         This allows, for example, simple functions from one variable type
+///         to another to be converted into functions over expressions by using
+///         <see cref="liftTraversalOverExpr"/> as <paramref name="lifter"/>.
+///     </para>
+/// </summary>
+/// <param name="f">The function to lift.</param>
+/// <param name="lift">The traversal lifter to use.</param>
+/// <typeparam name="SrcA">
+///     The type of items before the original function.
+/// </typeparam>
+/// <typeparam name="DstA">
+///     The type of items after the original function.
+/// </typeparam>
+/// <typeparam name="ErrorA">
+///     The type of errors that can occur during the original function.
+/// </typeparam>
+/// <typeparam name="SrcB">
+///     The type of items before the lifted function.
+/// </typeparam>
+/// <typeparam name="DstB">
+///     The type of items after the lifted function.
+/// </typeparam>
+/// <typeparam name="ErrorB">
+///     The type of errors that can occur during the lifted function, to be
+///     wrapped in <see cref="SubError"/>.
+/// </typeparam>
+/// <returns>
+///     The function <paramref name="f"/> lifted over <paramref name="lift"/>.
+/// </returns>
+let liftWithoutContext
+  (f : 'SrcA -> Result<'DstA, 'ErrorA>)
+  (lift : Traversal<'SrcA, 'DstA, 'ErrorA> -> Traversal<'SrcB, 'DstB, 'ErrorB>)
+  : 'SrcB -> Result<'DstB, SubError<'ErrorB>> =
+    withoutContext (lift (ignoreContext (f >> mapMessages Inner)))
+
+/// <summary>
 ///     Lifts a traversal over <see cref="CTyped"/>.
 /// </summary>
 let liftTraversalOverCTyped
@@ -559,6 +599,53 @@ let findMarkedVars
          | (x, _) -> fail (ContextMismatch ("marked variable list", x)))
 
 /// <summary>
+///     Pretty printers for <c>Sub</c>.
+/// </summary>
+module Pretty =
+    open Starling.Core.Pretty
+    open Starling.Core.TypeSystem.Pretty
+    open Starling.Core.Var.Pretty
+
+
+    /// <summary>
+    ///     Pretty-prints a <see cref="TraversalContext"/>.
+    /// </summary>
+    let printTraversalContext : TraversalContext -> Doc =
+        let printPosition =
+            function
+            | Positive -> String "+"
+            | Negative -> String "-"
+
+        function
+        | NoCtx -> String "(no context)"
+        | Positions [] -> String "(empty position stack)"
+        | Positions xs -> colonSep [ String "position stack"
+                                     hjoin (List.map printPosition xs) ]
+        | Vars xs -> colonSep [ String "variables"
+                                commaSep (List.map printTypedVar xs) ]
+        | MarkedVars xs -> colonSep [ String "marked variables"
+                                      commaSep (List.map (printCTyped printMarkedVar) xs) ]
+
+    /// <summary>
+    ///     Pretty-prints a <see cref="SubError"/>.
+    /// </summary>
+    /// <param name="pInner">Pretty-printer for wrapped errors.</param>
+    /// <typeparam name="Inner">Type for wrapped errors.</typeparam>
+    /// <returns>
+    ///     A function pretty-printing <see cref="SubError"/>s.
+    /// </returns>
+    let printSubError (pInner : 'Inner -> Doc) : SubError<'Inner> -> Doc =
+        function
+        | Inner e -> pInner e
+        | BadType (expected, got) ->
+            fmt "Type mismatch after substitution: expected {0}, got {1}"
+                [ printType expected; printType got ]
+        | ContextMismatch (expected, got) ->
+            fmt "Internal context mismatch: expected {0}, got {1}"
+                [ String expected; printTraversalContext got ]
+
+
+/// <summary>
 ///     Tests for <c>Sub</c>.
 /// </summary>
 module Tests =
@@ -627,4 +714,4 @@ module Tests =
         /// </summary>
         [<TestCaseSource("FindVarsCases")>]
         member this.testFindVars expr =
-            expr |> mapOverVars findVars |> okOption
+            expr |> findVars collectVars |> okOption
