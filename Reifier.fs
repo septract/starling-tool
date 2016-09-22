@@ -145,7 +145,9 @@ let preprocessView
 let reifySingleDef
   (protos : FuncDefiner<ProtoInfo>)
   (view : IteratedGFunc<Sym<MarkedVar>> list)
-  accumulator (dv : DView, _) =
+  (accumulator : Set<GuardedIteratedSubview>)
+  (dv : DView, _)
+  : Set<GuardedIteratedSubview> =
     (* When we finish, we need to pull all of the guards out of the funcs
        we've matched, conjoin them, and use them to guard the iterated view
        the funcs now form.  These are then added to the accumulator. *)
