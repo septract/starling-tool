@@ -142,10 +142,23 @@ let rec minusViewByFunc (qstep : IteratedGFunc<TermGenVar>)
                 // No need to check whether qSuccG/qFailG are trivially false:
                 // it's the first thing we'll do in each recursive call.
                 let innerMinus = minusViewByFunc qSucc rnext Multiset.empty
+
+                (* rSucc and rFail now get added to rdone for the tail call,
+                   but we can optimise here by not doing so if their guards are
+                   trivially false or their iterators are zero.
+
+                   Iterators can become negative here, but the n>k guards
+                   will always evaluate to false in this case, so they don't
+                   ever make it past here. *)
+                let optAdd rdoneSoFar rToAddG rToAdd =
+                    if isFalse rToAddG || rToAdd.Iterator = (Some (AInt 0L))
+                    then rdoneSoFar
+                    else Multiset.add rdoneSoFar rToAdd
+
                 minusViewByFunc
                     qFail
                     innerMinus
-                    (Multiset.add (Multiset.add rdone rSucc) rFail)
+                    (optAdd (optAdd rdone rSuccG rSucc) rFailG rFail)
 
 /// <summary>
 ///     Generates the frame part of the weakest precondition.
