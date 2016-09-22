@@ -6,6 +6,7 @@ module Starling.Reifier
 
 open Chessie.ErrorHandling
 open Starling.Collections
+open Starling.Utils
 open Starling.Core.Expr
 open Starling.Core.View
 open Starling.Core.Var
@@ -54,6 +55,10 @@ module Types =
         /// </summary>
         | TooManyIteratedFuncs of view : DView * amount : int
         /// <summary>
+        ///     An non-iterated func is being used in an iterated manner.
+        /// </summary>
+        | IteratorOnNonIterated of func : IteratedDFunc
+        /// <summary>
         ///     A definition contains both iterated and non-iterated funcs.
         ///
         ///     <para>
@@ -62,6 +67,24 @@ module Types =
         ///     </para>
         /// </summary>
         | MixedFuncType of view : DView
+        /// <summary>
+        ///     A view occurred in a constraint that does not exist.
+        ///
+        ///     <para>
+        ///         Usually this will be caught earlier on, but this is here
+        ///         to make sure.
+        ///     </para>
+        /// </summary>
+        | NoSuchView of name : string
+        /// <summary>
+        ///     A view lookup failed during downclosure checking.
+        ///
+        ///     <para>
+        ///         Usually this will be caught earlier on, but this is here
+        ///         to make sure.
+        ///     </para>
+        /// </summary>
+        | LookupError of name : string * err : Core.Instantiate.Types.Error
 
 
 /// <summary>
@@ -73,14 +96,86 @@ module Types =
 ///     </para>
 /// </summary>
 module Downclosure =
+    /// Adapts Instantiate.lookup to the downclosure checker's needs.
+    let lookupFunc (protos : FuncDefiner<ProtoInfo>) (func : Func<_>)
+      : Result<ProtoInfo, Error> =
+        // TODO(CaptainHayashi): proper doc comment
+        // TODO(CaptainHayashi): merge with Modeller.lookupFunc?
+        protos
+        |> Core.Instantiate.lookup func
+        |> mapMessages (curry LookupError func.Name)
+        |> bind (function
+                 | Some (_, info) -> info |> ok
+                 | None -> func.Name |> NoSuchView |> fail)
+
+    /// TODO
+    let checkDownclosure (func : IteratedDFunc) (defn : BoolExpr<Sym<Var>> option)
+        : Result<DView * BoolExpr<Sym<Var>> option, Error> =
+        // TODO(CaptainHayashi): implement this.
+        ok ([func], defn)
+
+    /// <summary>
+    ///     Performs iterated view well-formedness checking on the left of a
+    ///     view definition.
+    /// </summary>
+    /// <param name="def">The definition being checked.</param>
+    /// <returns>
+    ///     The view definition if all checks passed; errors otherwise.
+    /// </returns>
+    let checkDef
+      (vprotos : FuncDefiner<ProtoInfo>)
+      (def : DView * BoolExpr<Sym<Var>> option)
+      : Result<DView * BoolExpr<Sym<Var>> option, Error> =
+        let (lhs, rhs) = def
+
+        trial {
+            (* First, we check the prototypes of the views in the lhs to see which
+               are iterated. *)
+
+            let iterprotos, normprotos =
+                List.partition (fun func -> func.Iterator <> None) lhs
+
+            match (iterprotos, normprotos) with
+            (* Correct non-iterated view definition.
+               No more checking necessary. *)
+            | [], _ -> return def
+            (* Correct iterated view definition, as long as i is actually an
+               iterated func.
+               Need to check inductive and base downclosure. *)
+            | [i], [] ->
+                let! iInfo = lookupFunc vprotos i.Func
+                if iInfo.IsIterated
+                then return! (checkDownclosure i rhs)
+                else return! fail (IteratorOnNonIterated i)
+
+            // Over-large iterated view definition (for now, anyway).
+            | xs, [] -> return! fail (TooManyIteratedFuncs (lhs, List.length xs))
+            // Mixed view definition (currently not allowed).
+            | _, _ -> return! fail (MixedFuncType lhs)
+        }
+
     /// <summary>
     ///     Performs all downclosure and well-formedness checking on iterated
     ///     constraints.
     /// </summary>
-    let check (definer : ViewDefiner<BoolExpr<Sym<Var>> option>)
+    /// <param name="definer">
+    ///     The definer whose constraints are being checked.
+    /// </param>
+    /// <returns>
+    ///     The definer if all checks passed; errors otherwise.
+    /// </returns>
+    let check
+      (vprotos : FuncDefiner<ProtoInfo>)
+      (definer : ViewDefiner<BoolExpr<Sym<Var>> option>)
         : Result<ViewDefiner<BoolExpr<Sym<Var>> option>, Error> =
-        // TODO (CaptainHayashi): implement
-        ok definer
+
+        (* Currently, we don't actually modify the definer, but this may
+           change in future. *)
+
+        let checkEach def definer =
+            ok def >>= checkDef vprotos >>= (fun _ -> ok definer)
+
+        definer |> ViewDefiner.toSeq |> seqBind checkEach definer
 
 /// Splits an iterated GFunc into a pair of guard and iterated func.
 let iterGFuncTuple
@@ -327,7 +422,7 @@ let reify
                  ViewDefiner<SVBoolExpr option>>, Error> =
     model
     |> mapAxioms (mapTerm id (reifyView model.ViewProtos model.ViewDefs) id)
-    |> tryMapViewDefs Downclosure.check
+    |> tryMapViewDefs (Downclosure.check model.ViewProtos)
 
 
 /// <summary>
@@ -361,3 +456,11 @@ module Pretty =
         | MixedFuncType view ->
             fmt "constraint '{0}' mixes iterated and non-iterated views"
                 [ printDView view ]
+        | NoSuchView name -> fmt "no view prototype for '{0}'" [ String name ]
+        | LookupError(name, err) -> wrapped "lookup for view" (name |> String) (err |> Core.Instantiate.Pretty.printError)
+        | IteratorOnNonIterated func ->
+            fmt "view '{0}' is not iterated, but used in an iterated constraint"
+                [ printIteratedContainer
+                    printDFunc
+                    (Option.map printTypedVar >> withDefault Nop)
+                    func ]
