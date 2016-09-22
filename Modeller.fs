@@ -34,7 +34,7 @@ module Types =
         override this.ToString() = sprintf "CFunc(%A)" this
 
     /// A conditional view, or multiset of CFuncs.
-    and CView = Multiset<IteratedContainer<CFunc, Sym<Var>>>
+    and CView = Multiset<IteratedContainer<CFunc, Sym<Var> option>>
 
     /// A partially resolved command.
     type PartCmd<'view> =
@@ -195,7 +195,10 @@ module Pretty =
 
     /// Pretty-prints a CView.
     and printCView : CView -> Doc =
-        printMultiset (printIteratedContainer printCFunc (printSym printVar))
+        printMultiset
+            (printIteratedContainer
+                printCFunc
+                (Option.map (printSym printVar) >> withDefault Nop))
         >> ssurround "[|" "|]"
 
     /// Pretty-prints a part-cmd at the given indent level.
@@ -748,6 +751,11 @@ let modelViewDef
 ///     </para>
 /// </remarks>
 let inDefiner : ViewDefiner<SVBoolExpr option> -> DView -> bool =
+    let namesEqual
+      (vdfunc : IteratedContainer<DFunc, TypedVar option>)
+      (dfunc : IteratedContainer<DFunc, TypedVar option>) =
+        vdfunc.Func.Name = dfunc.Func.Name
+
     fun definer dview ->
         definer
         |> ViewDefiner.toSeq
@@ -755,13 +763,8 @@ let inDefiner : ViewDefiner<SVBoolExpr option> -> DView -> bool =
         |> List.map fst
         |> List.exists
                (fun view ->
-                    if (List.length view = List.length dview)
-                    then
-                        List.forall2
-                            (fun (vdfunc : IteratedContainer<DFunc, TypedVar>) (dfunc : IteratedContainer<DFunc, TypedVar>) -> vdfunc.Func.Name = dfunc.Func.Name)
-                            view
-                            dview
-                    else false)
+                    (List.length view = List.length dview)
+                    && List.forall2 namesEqual view dview)
 
 /// <summary>
 ///     Converts a <c>DView</c> to an indefinite <c>ViewDef</c>.

@@ -386,11 +386,9 @@ let IteratedSVGViewVars : IteratedGView<Sym<Var>> -> Set<TypedVar> =
         let vars { Func = {Cond = g; Item = gf}; Iterator = it} =
             let condvars = findVarsInBool g
             let itemvars = gfuncVars gf
-            let iteratorvars = Option.map findVarsInInt it
+            let iteratorvars = findVarsInInt it
 
-            condvars
-            + itemvars
-            + withDefault (Set.empty) iteratorvars
+            condvars + itemvars + iteratorvars
 
         Set.fold (+) Set.empty (Set.map vars l)
 
@@ -689,11 +687,7 @@ module Sub =
       (context : SubCtx)
       ( { Iterator = iter ; Func = func } : IteratedGFunc<'SrcVar> )
       : (SubCtx * IteratedGFunc<'DstVar>) =
-        let contextI, iter' =
-            iter
-            |> Option.map (Mapper.mapIntCtx sub context >> pairMap id Some)
-            |> withDefault (context, None)
-
+        let contextI, iter' = Mapper.mapIntCtx sub context iter
         let context', func' = subExprInGFunc sub contextI func
 
         (context', { Iterator = iter'; Func = func' } )

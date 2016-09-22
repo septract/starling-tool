@@ -29,9 +29,11 @@ let guardCView : CView -> GuarderView =
     let rec guardCFuncIn suffix cview =
         match cview.Func with
         | CFunc.Func v ->
+            (* Treat non-iterated views as if they have the iterator [1].
+               This means we don't need to special-case them elsewhere. *)
             [ { Func = { Cond = suffix |> Set.toList |> mkAnd
                          Item = v };
-                Iterator = Option.map AVar cview.Iterator } ]
+                Iterator = cview.Iterator |> Option.map AVar |> withDefault (AInt 1L) } ]
         | CFunc.ITE(expr, tviews, fviews) ->
             List.concat
                 [ guardCViewIn (suffix.Add expr) (Multiset.toFlatList tviews)

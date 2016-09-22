@@ -29,11 +29,11 @@ module Tests =
                 assertEqual
                     (iterated
                         (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
-                        (Some (AInt 12L : IntExpr<Sym<MarkedVar>>)))
+                        (AInt 12L : IntExpr<Sym<MarkedVar>>))
                     (normalise
                         (iterated
                             (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
-                            (Some (AInt 4L : IntExpr<Sym<MarkedVar>>)))
+                            (AInt 4L : IntExpr<Sym<MarkedVar>>))
                         3)
 
 
@@ -42,11 +42,11 @@ module Tests =
                 assertEqual
                     (iterated
                         (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
-                        (Some (AMul [ siBefore "n"; AInt 6L ])))
+                        (AMul [ siBefore "n"; AInt 6L ]))
                     (normalise
                         (iterated
                             (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
-                            (Some (siBefore "n")))
+                            (siBefore "n"))
                         6)
 
             [<Test>]
@@ -54,11 +54,11 @@ module Tests =
                 assertEqual
                     (iterated
                         (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
-                        (Some (siBefore "n")))
+                        (siBefore "n"))
                     (normalise
                         (iterated
                             (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
-                            (Some (siBefore "n")))
+                            (siBefore "n"))
                         1)
 
 
@@ -71,15 +71,15 @@ module Tests =
                     (Multiset.singleton <|
                         iterated
                             (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                            (Some (AInt 1L)))
+                            (AInt 1L))
                     (termGenFrame
                         [ iterated
                             (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                            None ]
+                            (AInt 1L) ]
                         (Multiset.singleton
                             (iterated
                                 (smgfunc BTrue "blop" [ Expr.Bool (sbGoal 0I "bar") ])
-                                (Some (AInt 11L)))))
+                                (AInt 11L))))
 
             [<Test>]
             let ``Subtracting emp from a single func yields the original func`` () =
@@ -87,11 +87,11 @@ module Tests =
                     (Multiset.singleton <|
                         iterated
                             (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                            None)
+                            (AInt 1L))
                     (termGenFrame
                         [ iterated
                             (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                            None ]
+                            (AInt 1L) ]
                         Multiset.empty)
 
             [<Test>]
@@ -103,7 +103,7 @@ module Tests =
                         (Multiset.singleton
                             (iterated
                                 (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                                None)))
+                                (AInt 1L))))
 
             [<Test>]
             let ``Subtracting emp from an iterated func yields the original func`` () =
@@ -111,11 +111,11 @@ module Tests =
                     (Multiset.singleton <|
                         iterated
                             (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                            (Some (AInt 10L)))
+                            (AInt 10L))
                     (termGenFrame
                         [ iterated
                             (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                            (Some (AInt 10L)) ]
+                            (AInt 10L) ]
                         Multiset.empty)
 
             [<Test>]
@@ -125,11 +125,11 @@ module Tests =
                     (termGenFrame
                         [ iterated
                             (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                            (Some (AInt 9L)) ]
+                            (AInt 9L) ]
                         (Multiset.singleton
                             (iterated
                                 (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                                (Some (AInt 9L)))))
+                                (AInt 9L))))
 
             [<Test>]
             let ``Over-subtracting an iterated func from itself truncates`` () =
@@ -138,11 +138,11 @@ module Tests =
                     (termGenFrame
                         [ iterated
                             (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                            (Some (AInt 10L)) ]
+                            (AInt 10L) ]
                         (Multiset.singleton
                             (iterated
                                 (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                                (Some (AInt 11L)))))
+                                (AInt 11L))))
 
             [<Test>]
             let ``Under-subtracting an iterated func from itself leaves a remainder`` () =
@@ -150,15 +150,15 @@ module Tests =
                     (Multiset.singleton <|
                         iterated
                             (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                            (Some (AInt 4L)))
+                            (AInt 4L))
                     (termGenFrame
                         [ iterated
                             (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                            (Some (AInt 10L)) ]
+                            (AInt 10L) ]
                         (Multiset.singleton
                             (iterated
                                 (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                                (Some (AInt 6L)))))
+                                (AInt 6L))))
 
             [<Test>]
             let ``Subtraction normalises the subtracted view correctly`` () =
@@ -166,18 +166,18 @@ module Tests =
                     (Multiset.singleton <|
                         iterated
                             (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                            (Some (AInt 2L)))
+                            (AInt 2L))
                     (termGenFrame
                         [ iterated
                             (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                            (Some (AInt 5L))
+                            (AInt 5L)
                           iterated
                             (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                            (Some (AInt 3L)) ]
+                            (AInt 3L) ]
                         (Multiset.singleton
                             (iterated
                                 (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                                (Some (AInt 6L)))))
+                                (AInt 6L))))
 
             [<Test>]
             let ``Subtraction normalises the subtracting view correctly`` () =
@@ -185,18 +185,18 @@ module Tests =
                     (Multiset.singleton <|
                         iterated
                             (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                            (Some (AInt 2L)))
+                            (AInt 2L))
                     (termGenFrame
                         [ iterated
                             (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                            (Some (AInt 10L)) ]
+                            (AInt 10L) ]
                         (Multiset.ofFlatList
                             [ iterated
                                 (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                                (Some (AInt 5L))
+                                (AInt 5L)
                               iterated
                                 (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                                (Some (AInt 3L)) ] ))
+                                (AInt 3L) ] ))
 
 
             [<Test>]
@@ -208,15 +208,15 @@ module Tests =
                                (BNot (bEq (sbGoal 0I "bar")
                                           (sbAfter "baz")))
                                "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                            (Some (AInt 1L))))
+                            (AInt 1L)))
                     (termGenFrame
                         [ iterated
                             (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
-                            None ]
+                            (AInt 1L) ]
                         (Multiset.singleton
                             (iterated
                                 (smgfunc BTrue "foo" [ Expr.Bool (sbAfter "baz") ])
-                                None)))
+                                (AInt 1L))))
 
             [<Test>]
             let ``General-case subtraction on one func produces the correct rewrite`` () =
@@ -229,7 +229,7 @@ module Tests =
                                         [ sbBefore "G"
                                           bEq (sbAfter "x") (sbAfter "y") ]))
                                "A" [ Expr.Bool (sbAfter "x") ])
-                            (Some (siAfter "n")))
+                            (siAfter "n"))
                           (iterated
                             (smgfunc
                                 (BAnd
@@ -237,15 +237,15 @@ module Tests =
                                       bEq (sbAfter "x") (sbAfter "y")
                                       mkGt (siAfter "n") (siAfter "k") ])
                                "A" [ Expr.Bool (sbAfter "x") ])
-                            (Some (mkSub2 (siAfter "n") (siAfter "k")))) ])
+                            (mkSub2 (siAfter "n") (siAfter "k"))) ])
                     (termGenFrame
                         [ iterated
                             (smvfunc "A" [ Expr.Bool (sbAfter "x") ])
-                            (Some (siAfter "n")) ]
+                            (siAfter "n") ]
                         (Multiset.singleton
                             (iterated
                                 (smgfunc (sbBefore "G") "A" [ Expr.Bool (sbAfter "y") ])
-                                (Some (siAfter "k")))))
+                                (siAfter "k"))))
 
 
     module TestIterFlatten =
@@ -267,7 +267,7 @@ module Tests =
                           Item =
                             [ iterated
                                 (smvfunc "f" [Bool BTrue])
-                                (Some (AInt 3L)) ] },
+                                (AInt 3L) ] },
                     Is.EqualTo(
                         Some <|
                         { Cond = (BTrue : BoolExpr<Sym<MarkedVar>>)
@@ -281,7 +281,7 @@ module Tests =
                         protos
                         (iterated
                             (smvfunc "f" [Bool (sbAfter "x")])
-                            (Some (mkMul2 (AInt 2L) (siBefore "n")))),
+                            (mkMul2 (AInt 2L) (siBefore "n"))),
                     Is.EqualTo(
                         Some <|
                         [ smvfunc "f"
@@ -296,7 +296,7 @@ module Tests =
                         protos
                         (iterated
                             (smvfunc "g" [Bool (sbAfter "z")])
-                            (Some (AInt 4L))),
+                            (AInt 4L)),
                     Is.EqualTo(
                         Some <|
                         [ for x in 1..4 -> smvfunc "g" [ Bool (sbAfter "z") ]]))

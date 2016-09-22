@@ -103,7 +103,10 @@ let instantiateGoal (fg : FreshGen)
 
     dvs |> List.map (function
         | { Iterator = i; Func = { Name = n; Params = ps } } ->
-            { Iterator = Option.map (AVar << Reg << goalVar fg << valueOf) i
+            { Iterator =
+                i
+                |> Option.map (AVar << Reg << goalVar fg << valueOf)
+                |> withDefault (AInt 1L)
               Func = { Name = n; Params = List.map instantiateParam ps } } )
 
 /// Converts an axiom into a list of framed axioms, by combining it with the

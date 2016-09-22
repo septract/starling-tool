@@ -45,11 +45,7 @@ type TermGenVar = Sym<MarkedVar>
 /// </returns>
 let normalise (func : IteratedGFunc<TermGenVar>) (i : int)
   : IteratedGFunc<TermGenVar> =
-    mapIterator'
-        (function
-         | None -> Some <| AInt (int64 i)
-         | Some x -> Some <| mkMul2 x (AInt (int64 i)))
-        func
+    mapIterator (fun x -> mkMul2 x (AInt (int64 i))) func
 
 /// <summary>
 ///     Performs view minus of a view by a single func.
@@ -75,8 +71,7 @@ let rec minusViewByFunc (qstep : IteratedGFunc<TermGenVar>)
   : IteratedGView<TermGenVar> =
     // Let qstep = (g2 -> w(ybar)^k).
     let { Func = { Cond = g2; Item = { Name = w; Params = ybar } }
-          Iterator = ko } = qstep
-    let k = withDefault (AInt 1L) ko
+          Iterator = k } = qstep
 
     // If g2 is never true, then _nothing_ in r can ever be minused by it.
     if isFalse g2 then Multiset.append r rdone
@@ -90,8 +85,7 @@ let rec minusViewByFunc (qstep : IteratedGFunc<TermGenVar>)
 
             // Let rstep = (g1 -> v(xbar)^n),
             let { Func = { Cond = g1; Item = { Name = v; Params = xbar } }
-                  Iterator = no } = rstep
-            let n = withDefault (AInt 1L) no
+                  Iterator = n } = rstep
 
             (* If v <> w, then the two funcs are disjoint, minusing does
                nothing, and we continue to the next element in r with no
@@ -119,19 +113,19 @@ let rec minusViewByFunc (qstep : IteratedGFunc<TermGenVar>)
                 let rSuccG = mkAnd [ g1; g2; barEq; mkGt n k ]
                 let rSucc =
                     { Func = { Cond = rSuccG; Item = func v xbar };
-                      Iterator = Some <| mkSub2 n k }
+                      Iterator = mkSub2 n k }
                 let rFailG = mkAnd [ g1; mkNot (mkAnd2 g2 barEq) ]
                 let rFail =
                     { Func = { Cond = rFailG; Item = func v xbar }
-                      Iterator = Some n }
+                      Iterator = n }
                 let qSuccG = mkAnd [ g2; g1; barEq; mkGt k n ]
                 let qSucc =
                     { Func = { Cond = qSuccG; Item = func v ybar }
-                      Iterator = Some <| mkSub2 k n }
+                      Iterator = mkSub2 k n }
                 let qFailG = mkAnd [ g2; mkNot (mkAnd2 g1 barEq) ]
                 let qFail =
                     { Func = { Cond = qFailG; Item = func v ybar }
-                      Iterator = Some k }
+                      Iterator = k }
 
                 (* Now, we have to minus qSucc and qFail from rnext.  The first
                    one is done in isolation (because eg. if we added rdone we'd
@@ -151,7 +145,7 @@ let rec minusViewByFunc (qstep : IteratedGFunc<TermGenVar>)
                    will always evaluate to false in this case, so they don't
                    ever make it past here. *)
                 let optAdd rdoneSoFar rToAddG rToAdd =
-                    if isFalse rToAddG || rToAdd.Iterator = (Some (AInt 0L))
+                    if isFalse rToAddG || rToAdd.Iterator = AInt 0L
                     then rdoneSoFar
                     else Multiset.add rdoneSoFar rToAdd
 
@@ -358,9 +352,7 @@ module Iter =
     ///     </para>
     /// </summary>
     let lowerIterDFunc
-      : FuncDefiner<ProtoInfo>
-      -> IteratedContainer<DFunc, TypedVar>
-      -> Result<DFunc, Error> =
+      : FuncDefiner<ProtoInfo> -> IteratedDFunc -> Result<DFunc, Error> =
         fun protos { Func = dfunc; Iterator = it } ->
             dfunc
             |> checkIterated protos
@@ -382,13 +374,12 @@ module Iter =
       -> IteratedContainer<Func<Expr<Sym<MarkedVar>>>, IntExpr<Sym<MarkedVar>>>
       -> Result<Func<Expr<Sym<MarkedVar>>> list, Error> =
         fun protos { Func = vfunc; Iterator = it } ->
-            let it' = withDefault (AInt 1L) it
-            evalIteratorIfFuncNotIterated protos vfunc it'
+            evalIteratorIfFuncNotIterated protos vfunc it
             |> lift
                 (function
-                     | Some k -> [ for i in 1L .. k -> vfunc ]
-                     | None ->
-                        [ func vfunc.Name (Int it' :: vfunc.Params) ])
+                 | Some k -> [ for i in 1L .. k -> vfunc ]
+                 | None ->
+                    [ func vfunc.Name (Int it :: vfunc.Params) ])
 
     /// flattens an entire IteratedSubview into a flat GView
     let lowerIteratedSubview

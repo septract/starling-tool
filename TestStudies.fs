@@ -520,7 +520,7 @@ let ticketLockGuardedLock =
 let ticketLockGuardedUnlock : GuarderMethod =
     { Signature = func "unlock" []
       Body =
-          { Pre = Mandatory <| sing { Func = gHoldLock BTrue; Iterator = None }
+          { Pre = Mandatory <| sing { Func = gHoldLock BTrue; Iterator = AInt 1L }
             Contents =
                 [ { Command =
                         command "!I++" [ Int "serving" ] [ Expr.Int (siBefore "serving") ]

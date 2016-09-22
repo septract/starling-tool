@@ -132,10 +132,10 @@ let preprocessView
             // And the new iterator i+j+k+...
             let iter =
                 funcs
-                |> List.map (fun f -> withDefault (AInt 1L) f.Iterator)
+                |> List.map (fun f -> f.Iterator)
                 |> List.fold mkAdd2 (AInt 0L)
 
-            { Iterator = Some iter
+            { Iterator = iter
               Func = { Cond = nguard; Item = (List.head funcs).Func }}
             :: xs
 
@@ -197,15 +197,14 @@ let reifySingleDef
                        pattern match guards above, it short-circuits to
                        false and kills off the entire view. *)
 
-                    let iter = withDefault (AInt 1L) v.Iterator
-                    let nIsPos = mkGt iter (AInt 0L)
+                    let nIsPos = mkGt v.Iterator (AInt 0L)
                     let func = { v.Func with Cond = mkAnd2 v.Func.Cond nIsPos }
 
                     let result =
-                        { Func = func; Iterator = Some (AInt 1L) } :: result
+                        { Func = func; Iterator = AInt 1L } :: result
 
                     let view =
-                        { Func = func; Iterator = Some (mkSub2 iter (AInt 1L)) }
+                        { Func = func; Iterator = mkSub2 v.Iterator (AInt 1L) }
                         :: view
 
                     matchMultipleViews pattern (rview @ view) accumulator result

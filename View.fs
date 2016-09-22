@@ -41,7 +41,7 @@ module Types =
     type SMVFunc = ExprFunc<Sym<MarkedVar>>
 
     type IteratedContainer<'Func, 'Iterator> =
-        { Func : 'Func; Iterator : 'Iterator option }
+        { Func : 'Func; Iterator : 'Iterator }
 
     /// Maps over the item inside an IteratedContainer.
     let mapIterated (f : 'FuncA -> 'FuncB)
@@ -53,16 +53,10 @@ module Types =
     let mapIterator (f : 'IteratorA -> 'IteratorB)
       ({ Func = v; Iterator = i } : IteratedContainer<'Func, 'IteratorA>)
       : IteratedContainer<'Func, 'IteratorB> =
-        { Func = v; Iterator = Option.map f i }
-
-    /// Maps over the item inside an IteratedContainer.
-    let mapIterator' (f : 'IteratorA option -> 'IteratorB option)
-      ({ Func = v; Iterator = i } : IteratedContainer<'Func, 'IteratorA>)
-      : IteratedContainer<'Func, 'IteratorB> =
         { Func = v; Iterator = f i }
 
     /// An iterated view-definition func.
-    type IteratedDFunc = IteratedContainer<DFunc, TypedVar>
+    type IteratedDFunc = IteratedContainer<DFunc, TypedVar option>
 
     (*
      * Views
@@ -138,20 +132,31 @@ module Pretty =
     /// Pretty-prints a MView.
     let printMView = printMultiset printMVFunc
 
-    /// Prints an IteratedContainer
-    let printIteratedContainer (pFunc : 'Func -> Doc) (pIterator : 'Iterator -> Doc)
-      : IteratedContainer<'Func, 'Iterator> -> Doc =
+    /// Prints an IteratedContainer.
+    /// Iterator is suppressed if its pretty-printer returns a Nop.
+    let printIteratedContainer (pFunc : 'Func -> Doc)
+      (pIterator : 'Iterator -> Doc)
+      ({ Iterator = i; Func = func } : IteratedContainer<'Func, 'Iterator>)
+      : Doc =
+        match (pIterator i) with
+        | Nop -> pFunc func
+        | it ->
+            hjoin [ String "iter["; it; String "]"; pFunc func ]
+
+    /// Pretty-prints an expression iterator.
+    /// Yields Nop if the expression evaluates to 1.
+    let printExprIterator (pVar : 'Var -> Doc)
+      : IntExpr<'Var> -> Doc =
         function
-        | { Iterator = None; Func = func } -> pFunc func
-        | { Iterator = Some i; Func = func } ->
-            hjoin [ String "iter["; pIterator i; String "]"; pFunc func ]
+        | AInt 1L -> Nop
+        | e -> printIntExpr pVar e
 
     /// Pretty-prints an OView.
     let printIteratedOView : IteratedOView -> Doc =
         List.map
             (printIteratedContainer
                  printSMVFunc
-                 (printIntExpr (printSym printMarkedVar)))
+                 (printExprIterator (printSym printMarkedVar)))
         >> semiSep
         >> squared
 
@@ -162,7 +167,10 @@ module Pretty =
 
     /// Pretty-prints a DView.
     let printDView : DView -> Doc =
-        List.map (printIteratedContainer printDFunc printTypedVar)
+        List.map
+            (printIteratedContainer
+                printDFunc
+                (Option.map printTypedVar >> withDefault Nop))
         >> semiSep >> squared
 
     /// Pretty-prints view expressions.
