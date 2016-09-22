@@ -27,50 +27,226 @@ module Tests =
             [<Test>]
             let ``normalise converts 3 instances of A(x)[4] to A(x)[12]`` () =
                 assertEqual
+                    (iterated
+                        (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
+                        (Some (AInt 12L : IntExpr<Sym<MarkedVar>>)))
                     (normalise
                         (iterated
                             (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
                             (Some (AInt 4L : IntExpr<Sym<MarkedVar>>)))
                         3)
-                    (iterated
-                        (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
-                        (Some (AInt 12L : IntExpr<Sym<MarkedVar>>)))
 
 
             [<Test>]
             let ``normalise converts 6 instances of A(x)[n] to A(x)[6*n]`` () =
                 assertEqual
+                    (iterated
+                        (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
+                        (Some (AMul [ siBefore "n"; AInt 6L ])))
                     (normalise
                         (iterated
                             (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
                             (Some (siBefore "n")))
                         6)
-                    (iterated
-                        (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
-                        (Some (AMul [ siBefore "n"; AInt 6L ])))
 
             [<Test>]
             let ``normalise converts 1 instances of A(x)[n] to A(x)[n]`` () =
                 assertEqual
+                    (iterated
+                        (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
+                        (Some (siBefore "n")))
                     (normalise
                         (iterated
                             (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
                             (Some (siBefore "n")))
                         1)
-                    (iterated
-                        (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
-                        (Some (siBefore "n")))
-
 
 
         module TestWPreCreation =
-            [<Test>]
-            let ``TODO Test MinusViewByFunc`` () =
-                Assert.Fail ()
+            open Starling.Collections
 
             [<Test>]
-            let ``TODO Test TermGenPre`` () =
-                Assert.Fail ()
+            let ``Subtracting different funcs yields the original func`` () =
+                assertEqual
+                    (Multiset.singleton <|
+                        iterated
+                            (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (Some (AInt 1L)))
+                    (termGenFrame
+                        [ iterated
+                            (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            None ]
+                        (Multiset.singleton
+                            (iterated
+                                (smgfunc BTrue "blop" [ Expr.Bool (sbGoal 0I "bar") ])
+                                (Some (AInt 11L)))))
+
+            [<Test>]
+            let ``Subtracting emp from a single func yields the original func`` () =
+                assertEqual
+                    (Multiset.singleton <|
+                        iterated
+                            (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            None)
+                    (termGenFrame
+                        [ iterated
+                            (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            None ]
+                        Multiset.empty)
+
+            [<Test>]
+            let ``Subtracting a single func from emp yields emp`` () =
+                assertEqual
+                    Multiset.empty
+                    (termGenFrame
+                        []
+                        (Multiset.singleton
+                            (iterated
+                                (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                                None)))
+
+            [<Test>]
+            let ``Subtracting emp from an iterated func yields the original func`` () =
+                assertEqual
+                    (Multiset.singleton <|
+                        iterated
+                            (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (Some (AInt 10L)))
+                    (termGenFrame
+                        [ iterated
+                            (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (Some (AInt 10L)) ]
+                        Multiset.empty)
+
+            [<Test>]
+            let ``Exact-subtracting an iterated func from itself cancels out`` () =
+                assertEqual
+                    Multiset.empty
+                    (termGenFrame
+                        [ iterated
+                            (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (Some (AInt 9L)) ]
+                        (Multiset.singleton
+                            (iterated
+                                (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                                (Some (AInt 9L)))))
+
+            [<Test>]
+            let ``Over-subtracting an iterated func from itself truncates`` () =
+                assertEqual
+                    Multiset.empty
+                    (termGenFrame
+                        [ iterated
+                            (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (Some (AInt 10L)) ]
+                        (Multiset.singleton
+                            (iterated
+                                (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                                (Some (AInt 11L)))))
+
+            [<Test>]
+            let ``Under-subtracting an iterated func from itself leaves a remainder`` () =
+                assertEqual
+                    (Multiset.singleton <|
+                        iterated
+                            (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (Some (AInt 4L)))
+                    (termGenFrame
+                        [ iterated
+                            (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (Some (AInt 10L)) ]
+                        (Multiset.singleton
+                            (iterated
+                                (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                                (Some (AInt 6L)))))
+
+            [<Test>]
+            let ``Subtraction normalises the subtracted view correctly`` () =
+                assertEqual
+                    (Multiset.singleton <|
+                        iterated
+                            (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (Some (AInt 2L)))
+                    (termGenFrame
+                        [ iterated
+                            (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (Some (AInt 5L))
+                          iterated
+                            (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (Some (AInt 3L)) ]
+                        (Multiset.singleton
+                            (iterated
+                                (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                                (Some (AInt 6L)))))
+
+            [<Test>]
+            let ``Subtraction normalises the subtracting view correctly`` () =
+                assertEqual
+                    (Multiset.singleton <|
+                        iterated
+                            (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (Some (AInt 2L)))
+                    (termGenFrame
+                        [ iterated
+                            (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (Some (AInt 10L)) ]
+                        (Multiset.ofFlatList
+                            [ iterated
+                                (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                                (Some (AInt 5L))
+                              iterated
+                                (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                                (Some (AInt 3L)) ] ))
+
+
+            [<Test>]
+            let ``Subtracting a func from one with the same name generates an x!=y guard`` () =
+                assertEqual
+                    (Multiset.singleton
+                        (iterated
+                            (smgfunc
+                               (BNot (bEq (sbGoal 0I "bar")
+                                          (sbAfter "baz")))
+                               "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (Some (AInt 1L))))
+                    (termGenFrame
+                        [ iterated
+                            (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            None ]
+                        (Multiset.singleton
+                            (iterated
+                                (smgfunc BTrue "foo" [ Expr.Bool (sbAfter "baz") ])
+                                None)))
+
+            [<Test>]
+            let ``General-case subtraction on one func produces the correct rewrite`` () =
+                assertEqual
+                    (Multiset.ofFlatList
+                        [ (iterated
+                            (smgfunc
+                                (mkNot
+                                    (mkAnd
+                                        [ sbBefore "G"
+                                          bEq (sbAfter "x") (sbAfter "y") ]))
+                               "A" [ Expr.Bool (sbAfter "x") ])
+                            (Some (siAfter "n")))
+                          (iterated
+                            (smgfunc
+                                (BAnd
+                                    [ sbBefore "G"
+                                      bEq (sbAfter "x") (sbAfter "y")
+                                      mkGt (siAfter "n") (siAfter "k") ])
+                               "A" [ Expr.Bool (sbAfter "x") ])
+                            (Some (mkSub2 (siAfter "n") (siAfter "k")))) ])
+                    (termGenFrame
+                        [ iterated
+                            (smvfunc "A" [ Expr.Bool (sbAfter "x") ])
+                            (Some (siAfter "n")) ]
+                        (Multiset.singleton
+                            (iterated
+                                (smgfunc (sbBefore "G") "A" [ Expr.Bool (sbAfter "y") ])
+                                (Some (siAfter "k")))))
+
 
     module TestIterFlatten =
         open Starling.TermGen.Iter
@@ -134,74 +310,6 @@ module Tests =
         /// <summary>
         ///     Test cases for <c>termGenFrame</c>.
         /// </summary>
-        static member FrameSubtracts =
-            [ (tcd [| (List.singleton <|
-                           func "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
-                      (Multiset.empty : GView<Sym<MarkedVar>>) |] )
-                  .Returns(Multiset.singleton <|
-                           smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
-                  .SetName("Removing emp from a func yields the original func")
-              (tcd [| (List.singleton <|
-                           smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
-                      (Multiset.singleton <|
-                           smgfunc BTrue "foo" [ Expr.Bool (sbAfter "baz") ] ) |] )
-                  .Returns(Multiset.singleton <|
-                           smgfunc
-                               (BNot (bEq (sbGoal 0I "bar")
-                                          (sbAfter "baz")))
-                               "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
-                  .SetName("Removing a func from itself generates a !x=y-guarded view")
-              (tcd [| (List.singleton <|
-                           smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
-                      (Multiset.singleton <|
-                           smgfunc BTrue "blop" [ Expr.Bool (sbAfter "baz") ] ) |] )
-                  .Returns(Multiset.singleton <|
-                           smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
-                  .SetName("Removing a func from itself is inert")
-              (tcd [| (Multiset.ofFlatList>>Multiset.toFlatList
-                       <|
-                           [ smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ]
-                             smvfunc "foo" [ Expr.Bool (sbGoal 1I "bar") ] ] )
-                      (Multiset.singleton <|
-                           smgfunc BTrue "foo" [ Expr.Bool (sbAfter "baz") ] ) |] )
-                  .Returns(Multiset.ofFlatList <|
-                           [ smgfunc
-                                 (BNot (bEq (sbGoal 0I "bar")
-                                            (sbAfter "baz")))
-                                 "foo"
-                                 [ Expr.Bool (sbGoal 0I "bar") ]
-                             smgfunc
-                                 (mkNot
-                                      (mkAnd
-                                           [ (mkNot (bEq (sbGoal 0I "bar")
-                                                         (sbAfter "baz")))
-                                             (bEq (sbGoal 1I "bar")
-                                                  (sbAfter "baz")) ] ))
-                                 "foo"
-                                 [ Typed.Bool (sbGoal 1I "bar") ]] )
-                  .SetName("Removing a func from two copies of itself works correctly")
-              (tcd [| (List.singleton <|
-                           smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ] )
-                      (Multiset.singleton <|
-                           smgfunc
-                               (BGt (siAfter "x",
-                                     siAfter "y"))
-                               "foo"
-                               [ Expr.Bool (sbAfter "baz") ] ) |] )
-                  .Returns(Multiset.singleton <|
-                           smgfunc
-                               (mkNot (BAnd [ (BGt (siAfter "x",
-                                                    siAfter "y"))
-                                              (bEq (sbGoal 0I "bar")
-                                                   (sbAfter "baz")) ] ))
-                               "foo"
-                               [ Expr.Bool (sbGoal 0I "bar") ] )
-                  .SetName("Removing a guarded func from itself works correctly")
-              (tcd [| ([] : IteratedOView)
-                      (Multiset.singleton <|
-                           smgfunc BTrue "foo" [ Expr.Bool (sbBefore "bar") ] ) |] )
-                  .Returns(Multiset.empty : GView<Sym<MarkedVar>>)
-                  .SetName("Removing a func from emp yields emp") ]
 
         /// <summary>
         ///     Tests <c>termGenFrame</c>.
