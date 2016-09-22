@@ -282,6 +282,10 @@ type Error =
     /// An error occurred in the HSF backend.
     | HSF of Backends.Horn.Types.Error
     /// <summary>
+    ///     An error occurred during reifying.
+    /// </summary>
+    | Reify of Reifier.Types.Error
+    /// <summary>
     ///     An error occurred during iterator lowering.
     /// </summary>
     | IterLowerError of TermGen.Iter.Error
@@ -301,6 +305,9 @@ let printError : Error -> Doc =
     | Frontend e -> Lang.Frontend.printError e
     | Semantics e -> Semantics.Pretty.printSemanticsError e
     | HSF e -> Backends.Horn.Pretty.printHornError e
+    | Reify e ->
+        headed "Reification failed"
+               [ Reifier.Pretty.printError e ]
     | IterLowerError e ->
         headed "Iterator lowering failed"
                [ TermGen.Iter.printError e ]
@@ -438,7 +445,7 @@ let runStarling (request : Request)
     let termOptimise =
         lift (fix <| Starling.Optimiser.Term.optimise opts)
     let flatten = lift Starling.Flattener.flatten
-    let reify = lift Starling.Reifier.reify
+    let reify = bind (Starling.Reifier.reify >> mapMessages Error.Reify)
     let termGen = lift Starling.TermGen.termGen
     let iterLower =
         bind (Starling.TermGen.Iter.flatten >> mapMessages IterLowerError)

@@ -4,6 +4,7 @@
 /// </summary>
 module Starling.Reifier
 
+open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Core.Expr
 open Starling.Core.View
@@ -13,6 +14,73 @@ open Starling.Core.Command
 open Starling.Core.GuardedView
 open Starling.Core.Symbolic
 open Starling.TermGen.Iter
+
+[<AutoOpen>]
+module Types =
+    /// <summary>
+    ///     Errors that can be returned by the reifier.
+    /// </summary>
+    type Error =
+        /// <summary>
+        ///     An iterated view definition failed the inductive downclosure
+        ///     property.
+        ///
+        ///     <para>
+        ///         This is the property that, if a view definition holds for
+        ///         a given iterator <c>n + 1</c>, it holds for the iterator
+        ///         <c>n</c>.
+        ///     </para>
+        /// </summary>
+        | InductiveDownclosureError of view : DView * def : BoolExpr<Sym<Var>>
+        /// <summary>
+        ///     An iterated view definition failed the base downclosure
+        ///     property.
+        ///
+        ///     <para>
+        ///         This is the property that a view definition, when
+        ///         instantiated with iterator <c>0</c>, is no stronger than
+        ///         the definition for <c>emp</c> if any.
+        ///     </para>
+        /// </summary>
+        | BaseDownclosureError of view : DView * def : BoolExpr<Sym<Var>>
+        /// <summary>
+        ///     An iterated view definition contains more than one iterated
+        ///     func.
+        ///
+        ///     <para>
+        ///         This restriction is very conservative, and will probably
+        ///         be relaxed in the future.
+        ///     </para>
+        /// </summary>
+        | TooManyIteratedFuncs of view : DView * amount : int
+        /// <summary>
+        ///     A definition contains both iterated and non-iterated funcs.
+        ///
+        ///     <para>
+        ///         This restriction is very conservative, and will probably
+        ///         be relaxed in the future.
+        ///     </para>
+        /// </summary>
+        | MixedFuncType of view : DView
+
+
+/// <summary>
+///     Downclosure checking.
+///
+///     <para>
+///         The presence of this in the reifier is a marriage of convenience.
+///         Later, we might separate it.
+///     </para>
+/// </summary>
+module Downclosure =
+    /// <summary>
+    ///     Performs all downclosure and well-formedness checking on iterated
+    ///     constraints.
+    /// </summary>
+    let check (definer : ViewDefiner<BoolExpr<Sym<Var>> option>)
+        : Result<ViewDefiner<BoolExpr<Sym<Var>> option>, Error> =
+        // TODO (CaptainHayashi): implement
+        ok definer
 
 /// Splits an iterated GFunc into a pair of guard and iterated func.
 let iterGFuncTuple
@@ -255,6 +323,41 @@ let reifyView
 let reify
   (model : Model<Term<'a, IteratedGView<Sym<MarkedVar>>, IteratedOView>,
                  ViewDefiner<SVBoolExpr option>>)
-  : Model<Term<'a, Set<GuardedIteratedSubview>, IteratedOView>,
-          ViewDefiner<SVBoolExpr option>> =
-      mapAxioms (mapTerm id (reifyView model.ViewProtos model.ViewDefs) id) model
+  : Result<Model<Term<'a, Set<GuardedIteratedSubview>, IteratedOView>,
+                 ViewDefiner<SVBoolExpr option>>, Error> =
+    model
+    |> mapAxioms (mapTerm id (reifyView model.ViewProtos model.ViewDefs) id)
+    |> tryMapViewDefs Downclosure.check
+
+
+/// <summary>
+///     Pretty printers for the reifier types.
+/// </summary>
+module Pretty =
+    open Starling.Core.Pretty
+    open Starling.Core.Expr.Pretty
+    open Starling.Core.Symbolic.Pretty
+    open Starling.Core.Var.Pretty
+    open Starling.Core.View.Pretty
+
+    /// <summary>
+    ///     Pretty-prints an <see cref="Error"/>.
+    /// </summary>
+    let printError : Error -> Doc =
+        function
+        | InductiveDownclosureError (view, def) ->
+            fmt "definition of '{0}', {1}, does not satisfy inductive downclosure"
+                [ printDView view
+                  printBoolExpr (printSym printVar) def ]
+        | BaseDownclosureError (view, def) ->
+            fmt "definition of '{0}', {1}, does not satisfy base downclosure"
+                [ printDView view
+                  printBoolExpr (printSym printVar) def ]
+        | TooManyIteratedFuncs (view, count) ->
+            fmt "constraint '{0}' contains {1} iterated funcs, but iterated\
+                 definitions can only contain at most one"
+                [ printDView view
+                  String (sprintf "%i" count) ]
+        | MixedFuncType view ->
+            fmt "constraint '{0}' mixes iterated and non-iterated views"
+                [ printDView view ]
