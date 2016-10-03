@@ -43,6 +43,8 @@ module Types =
         | Combine
         /// Translate, combine, and run term Z3 expressions; return `Response.Sat`.
         | Sat
+        /// Same, but in parallel; return `Response.Sat`.
+        | SatPar
 
     /// <summary>
     ///     Type of responses from the Z3 backend.
@@ -125,13 +127,26 @@ module Run =
         solver.Check [||]
 
     /// Runs Z3 on a model.
-    let run ctx = axioms >> Map.map (runTerm ctx)
+    let run ctx xs = 
+       let quer = axioms xs in 
+       Map.map (runTerm ctx) quer 
+
+    /// Runs Z3 in parallel on a model.
+    let runPar (ctx : Z3.Context) (xs: Model<Z3.BoolExpr,'b>) 
+             : Map<string, Z3.Status>  = 
+       Map.toArray (axioms xs) 
+       |> Array.map (fun (x,y) -> 
+                      let nctx = new Z3.Context() 
+                      (nctx, x, y.Translate(nctx) :?> Z3.BoolExpr)) 
+       |> Array.Parallel.map (fun (ctx,x,y) -> (x, runTerm ctx x y))  
+       |> Map.ofArray 
 
 
 /// Shorthand for the combination stage of the Z3 pipeline.
 let combine reals = Translator.combineTerms reals
 /// Shorthand for the satisfiability stage of the Z3 pipeline.
 let sat = Run.run
+let satPar = Run.runPar
 
 /// <summary>
 ///     The Starling Z3 backend driver.
@@ -156,3 +171,4 @@ let run reals req : Model<ProofTerm, unit> -> Response =
         >> Response.Translate
     | Request.Combine -> combine reals ctx >> Response.Combine
     | Request.Sat -> combine reals ctx >> sat ctx >> Response.Sat
+    | Request.SatPar -> combine reals ctx >> satPar ctx >> Response.Sat
