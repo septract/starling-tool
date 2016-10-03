@@ -228,14 +228,8 @@ module Downclosure =
             | Some (Int v) -> ok v
             | Some v -> fail (BadIteratorType ([func], typeOf v))
 
-        (* No point checking base downclosure if 'emp' is undefined.
-           This is because the downclosure property would become
-             D(V[0](x)) => true
-           which is trivially true. *)
-        let checkBase i (f, d) =
-            match empDefn with
-            | Some e -> checkBaseDownclosure e i f d
-            | None -> ok (f, d)
+        // If empDefn is undefined, it becomes true by the theory.
+        let empDefnT = withDefault BTrue empDefn
 
         (* No point checking downclosure of an indefinite viewdef.
            This job is delegated to the indefinite-proof backends, like HSF and
@@ -248,7 +242,7 @@ module Downclosure =
             |> checkIterator
             |> bind
                 (fun i ->
-                    checkBase i (func, d)
+                    checkBaseDownclosure empDefnT i func d
                     >>= uncurry (checkInductiveDownclosure i))
             |> lift (fun (f, d) -> f, Some d)
 
