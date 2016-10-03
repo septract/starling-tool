@@ -612,10 +612,11 @@ module Pretty =
                   errorInfo <|
                     headed "Constraint failing base downclosure"
                         [ printBoolExpr (printSym printVar) def ]
-                  headed "Constraint must be no stronger than 'emp'"
+                  headed "Constraint must be no stronger than 'emp' when \
+                          iterator is zero"
                     [ errorInfo <| printBoolExpr (printSym printVar) emp ] ]
         | TooManyIteratedFuncs (view, count) ->
-            fmt "constraint '{0}' contains {1} iterated funcs, but iterated\
+            fmt "constraint '{0}' contains {1} iterated funcs, but iterated \
                  definitions can only contain at most one"
                 [ printDView view
                   String (sprintf "%i" count) ]
