@@ -125,10 +125,10 @@ module Types =
     type Command'<'view> =
         /// A set of sequentially composed primitives.
         | Prim of PrimSet
-        /// An if-then-else statement.
-        | If of Expression
-              * Block<'view, Command<'view>>
-              * Block<'view, Command<'view>>
+        /// An if-then-else statement, with optional else.
+        | If of ifCond : Expression
+              * thenBlock : Block<'view, Command<'view>>
+              * elseBlock : Block<'view, Command<'view>> option
         /// A while loop.
         | While of Expression
                  * Block<'view, Command<'view>>
@@ -324,26 +324,26 @@ module Pretty =
                          |> semiSep |> withSemi |> braced |> angled)
                   yield! Seq.map (uncurry printAssign) qs }
             |> semiSep |> withSemi
-        | Command'.If(c, t, f) ->
+        | Command'.If(c, t, fo) ->
             hsep [ "if" |> String |> syntax
-                   c
-                   |> printExpression
-                   |> parened
+                   c |> printExpression |> parened
                    t |> printBlock pView (printCommand pView)
-                   f |> printBlock pView (printCommand pView) ]
+                   (withDefault Nop
+                        (Option.map
+                            (fun f ->
+                                hsep
+                                    [ "else" |> String |> syntax
+                                      printBlock pView (printCommand pView) f ])
+                            fo)) ]
         | Command'.While(c, b) ->
             hsep [ "while" |> String |> syntax
-                   c
-                   |> printExpression
-                   |> parened
+                   c |> printExpression |> parened
                    b |> printBlock pView (printCommand pView) ]
         | Command'.DoWhile(b, c) ->
             hsep [ "do" |> String |> syntax
                    b |> printBlock pView (printCommand pView)
                    "while" |> String |> syntax
-                   c
-                   |> printExpression
-                   |> parened ]
+                   c |> printExpression |> parened ]
             |> withSemi
         | Command'.Blocks bs ->
             bs

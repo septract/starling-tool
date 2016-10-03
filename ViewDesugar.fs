@@ -81,9 +81,12 @@ let rec desugarCommand (tvars : VarMap) (fg : FreshGen)
     : Command<ViewExpr<View>> * ViewProto seq =
     let f = fun (a, b) -> (cmd |=> a, b)
     f <| match cmd.Node with
-            | If (e, t, f) ->
+            | If (e, t, fo) ->
                 let t', tv = desugarBlock tvars fg t
-                let f', fv = desugarBlock tvars fg f
+                let f', fv =
+                    match fo with
+                    | None -> None, Seq.empty
+                    | Some f -> f |> desugarBlock tvars fg |> pairMap Some id
                 let ast = If (e, t', f')
                 (ast, Seq.append tv fv)
             | While (e, b) ->

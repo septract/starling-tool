@@ -22,8 +22,6 @@ method print() {
     // Test for disposal
     if (f == true) {
       {| error() |} ; {| error() |}
-    } else {
-      {| arc() |} ; {| arc() |}
     }
   {| arc() |}
 }
@@ -36,8 +34,6 @@ method drop() {
       {| noCnt() |}
         <free = (true)>;
       {| emp |}
-    } else {
-      {| emp |} ; {| emp |}
     }
   {| emp |}
 }

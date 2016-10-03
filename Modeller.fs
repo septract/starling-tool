@@ -46,7 +46,7 @@ module Types =
         | ITE of
             expr : SVBoolExpr
             * inTrue : Block<'view, PartCmd<'view>>
-            * inFalse : Block<'view, PartCmd<'view>>
+            * inFalse : Block<'view, PartCmd<'view>> option
         override this.ToString() = sprintf "PartCmd(%A)" this
 
     /// <summary>
@@ -213,7 +213,11 @@ module Pretty =
             cmdHeaded (hsep [String "begin if"
                              (printSVBoolExpr expr) ])
                       [headed "True" [printBlock pView (printPartCmd pView) inTrue]
-                       headed "False" [printBlock pView (printPartCmd pView) inFalse]]
+                       withDefault Nop
+                            (Option.map
+                                (fun f ->
+                                    headed "False" [printBlock pView (printPartCmd pView) f])
+                                inFalse) ]
 
     /// Pretty-prints expression conversion errors.
     let printExprError : ExprError -> Doc =
@@ -1170,9 +1174,9 @@ and modelITE
   : MethodContext
     -> Expression
     -> Block<ViewExpr<View>, Command<ViewExpr<View>>>
-    -> Block<ViewExpr<View>, Command<ViewExpr<View>>>
+    -> Block<ViewExpr<View>, Command<ViewExpr<View>>> option
     -> Result<ModellerPartCmd, MethodError> =
-    fun ctx i t f ->
+    fun ctx i t fo ->
         trial { let! iM =
                     wrapMessages
                         BadITECondition
@@ -1182,7 +1186,10 @@ and modelITE
                  * need the inner cpairs for each to store the ITE placeholder.
                  *)
                 let! tM = modelBlock ctx t
-                let! fM = modelBlock ctx f
+                let! fM =
+                    match fo with
+                    | Some f -> modelBlock ctx f |> lift Some
+                    | None -> ok None
                 return ITE(iM, tM, fM) }
 
 /// Converts a while or do-while to a PartCmd.

@@ -462,8 +462,8 @@ let parseDoWhile =
 /// Parser for if (expr) block else block.
 let parseIf =
     pipe3ws (pstring "if" >>. ws >>. inParens parseExpression)
-            (parseBlock .>> ws .>> pstring "else")
             parseBlock
+            (opt (pstring "else" >>. ws >>. parseBlock))
             (curry3 If)
 
 /// Parser for prim compositions.
