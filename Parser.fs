@@ -65,7 +65,7 @@ let inSquareBrackets p = inBrackets "[" "]" p
 /// Parser for items in {braces}.
 let inBraces p = inBrackets "{" "}" p
 /// Parser for items in {|view braces|}.
-let inViewBraces p = inBrackets "{" "|}" p
+let inViewBraces p = inBrackets "{|" "|}" p
 /// Parser for items in <angle brackets>.
 let inAngles p = inBrackets "<" ">" p
 
@@ -360,19 +360,19 @@ let parseBasicView =
 do parseViewRef := parseViewLike parseBasicView Join
 
 /// Parser for view expressions.
-let parseViewExpr = between
-                        (pstring "{|" .>> ws)
-                        (pstring "|}")
-                        ((stringReturn "?" Unknown .>> ws)
-                         <|> pipe2ws parseView
-                                     (opt (stringReturn "?" ()))
-                                     (fun v qm ->
-                                          match qm with
-                                          | Some () -> Questioned v
-                                          | None -> Unmarked v))
-                    // ^- {| <view> |}
-                    //  | {| <view> ? |}
-                    //  | {| ? |}
+let parseViewExpr =
+    inViewBraces
+        ((stringReturn "?" Unknown .>> ws)
+        <|> pipe2ws
+                parseView
+                (opt (stringReturn "?" ()))
+                (fun v qm ->
+                     match qm with
+                     | Some () -> Questioned v
+                     | None -> Unmarked v))
+        // ^- {| <view> |}
+        //  | {| <view> ? |}
+        //  | {| ? |}
 
 
 (*
