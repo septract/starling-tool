@@ -30,10 +30,12 @@ module Types =
         ///     <para>
         ///         This is the property that, if a view definition holds for
         ///         a given iterator <c>n + 1</c>, it holds for the iterator
-        ///         <c>n</c>.
+        ///         <c>n</c>.  These two instances of the definition are called
+        ///         <c>sdef</> and <c>bdef</c> below.
         ///     </para>
         /// </summary>
-        | InductiveDownclosureError of view : DView * def : BoolExpr<Sym<Var>>
+        | InductiveDownclosureError of view : DView * sdef : BoolExpr<Sym<Var>>
+                                     * bdef : BoolExpr<Sym<Var>>
         /// <summary>
         ///     An iterated view definition failed the base downclosure
         ///     property with regards to the given definition of 'emp'.
@@ -173,7 +175,37 @@ module Downclosure =
       (func : IteratedDFunc)
       (defn : BoolExpr<Sym<Var>>)
       : Result<IteratedDFunc * BoolExpr<Sym<Var>>, Error> =
-        ok (func, defn)
+        (* To do the inductive downclosure, we need to replace all instances of
+           the iterator in the definition with (iterator + 1) in one version. *)
+        let increment v =
+            if v = iterator
+            then mkAdd2 (AVar (Reg v)) (AInt 1L)
+            else AVar (Reg v)
+
+        let succDefn = downclosureMap increment defn
+
+        (* Base downclosure for a view V[n](x):
+             (0 <= n) => (D(V[n+1](x)) => D(V[n](x)))
+           That is, the definition of V when the iterator is n+1 implies the
+           definition of V when the iterator is n, for all positive n. *)
+        let check =
+            mkImplies
+                (mkLe (AInt 0L) (AVar (Reg iterator)))
+                (mkImplies succDefn defn)
+
+        // Expression equivalence cannot handle symbols, so try remove them.
+        // TODO(CaptainHayashi): is it sound to approximate here?
+        bind
+            (fun chk ->
+                // Pose that the check is a tautology, and use Z3 to check it.
+                let closed = equivHolds id (equiv chk BTrue)
+
+                if closed
+                then ok (func, defn)
+                else fail (InductiveDownclosureError ([func], succDefn, defn)))
+            (check
+             |> Mapper.mapBoolCtx (tsfRemoveSym SymInIteratedConstraint) NoCtx
+             |> snd)
 
     /// <summary>
     ///     Checks the base and inductive downclosure properties on a given
@@ -562,10 +594,16 @@ module Pretty =
     /// </summary>
     let printError : Error -> Doc =
         function
-        | InductiveDownclosureError (view, def) ->
-            fmt "definition of '{0}', {1}, does not satisfy inductive downclosure"
-                [ printDView view
-                  printBoolExpr (printSym printVar) def ]
+        | InductiveDownclosureError (view, sdef, bdef) ->
+            headed "Iterated view does not satisfy inductive downclosure property"
+                [ errorInfo <|
+                    headed "View being constrained"
+                        [ printDView view ]
+                  errorInfo <|
+                    headed "Constraint failing inductive downclosure"
+                        [ printBoolExpr (printSym printVar) bdef ]
+                  headed "Constraint must be implied by the following"
+                    [ errorInfo <| printBoolExpr (printSym printVar) sdef ] ]
         | BaseDownclosureError (view, def, emp) ->
             headed "Iterated view does not satisfy base downclosure property"
                 [ errorInfo <|
