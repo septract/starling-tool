@@ -14,6 +14,7 @@ open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.GuardedView
 open Starling.Core.Symbolic
+open Starling.Core.TypeSystem
 open Starling.TermGen.Iter
 
 [<AutoOpen>]
@@ -35,7 +36,7 @@ module Types =
         | InductiveDownclosureError of view : DView * def : BoolExpr<Sym<Var>>
         /// <summary>
         ///     An iterated view definition failed the base downclosure
-        ///     property.
+        ///     property with regards to the given definition of 'emp'.
         ///
         ///     <para>
         ///         This is the property that a view definition, when
@@ -44,6 +45,7 @@ module Types =
         ///     </para>
         /// </summary>
         | BaseDownclosureError of view : DView * def : BoolExpr<Sym<Var>>
+                                * emp : BoolExpr<Sym<Var>>
         /// <summary>
         ///     An iterated view definition contains more than one iterated
         ///     func.
@@ -85,6 +87,24 @@ module Types =
         ///     </para>
         /// </summary>
         | LookupError of name : string * err : Core.Instantiate.Types.Error
+        /// <summary>
+        ///     An iterator had the wrong type.
+        /// </summary>
+        | BadIteratorType of view : DView * ty : Type
+        /// <summary>
+        ///     An iterator was missing where there should have been one.
+        /// </summary>
+        | MissingIterator of view : DView
+        /// <summary>
+        ///     An iterated view constraint contained a symbol where we didn't
+        ///     expect one.
+        ///
+        ///     <para>
+        ///         This is a fairly restrictive error and may be relaxed
+        ///         later on.
+        ///     </para>
+        /// </summary>
+        | SymInIteratedConstraint of sym : string
 
 
 /// <summary>
@@ -96,33 +116,122 @@ module Types =
 ///     </para>
 /// </summary>
 module Downclosure =
+    open Starling.Core.ExprEquiv
+    open Starling.Core.Sub
+
     /// Adapts Instantiate.lookup to the downclosure checker's needs.
     let lookupFunc (protos : FuncDefiner<ProtoInfo>) (func : Func<_>)
-      : Result<ProtoInfo, Error> =
+      : Result<ProtoInfo option, Error> =
         // TODO(CaptainHayashi): proper doc comment
         // TODO(CaptainHayashi): merge with Modeller.lookupFunc?
         protos
         |> Core.Instantiate.lookup func
         |> mapMessages (curry LookupError func.Name)
-        |> bind (function
-                 | Some (_, info) -> info |> ok
-                 | None -> func.Name |> NoSuchView |> fail)
+        |> lift (Option.map snd)
 
-    /// TODO
-    let checkDownclosure (func : IteratedDFunc) (defn : BoolExpr<Sym<Var>> option)
-        : Result<DView * BoolExpr<Sym<Var>> option, Error> =
-        // TODO(CaptainHayashi): implement this.
-        ok ([func], defn)
+    let downclosureMap (f : Var -> IntExpr<Sym<Var>>)
+      : BoolExpr<Sym<Var>> -> BoolExpr<Sym<Var>> =
+        let m = Mapper.make f (Reg >> BVar) |> liftVToSym |> onVars
+        Mapper.mapBoolCtx m NoCtx >> snd
+
+    let checkBaseDownclosure
+      (empDefn : BoolExpr<Sym<Var>>)
+      (iterator : Var)
+      (func : IteratedDFunc)
+      (defn : BoolExpr<Sym<Var>>)
+      : Result<IteratedDFunc * BoolExpr<Sym<Var>>, Error> =
+        (* To do the base downclosure, we need to replace all instances of the
+           iterator in the definition with 0. *)
+        let subZero v = if v = iterator then AInt 0L else AVar (Reg v)
+
+        let baseDefn = downclosureMap subZero defn
+
+        (* Base downclosure for a view V[n](x):
+             D(emp) => D(V[0](x))
+           That is, the definition of V when the iterator is 0 can be no
+           stricter than the definition of emp.
+
+           The definition of emp can only mention global variables, so it does
+           not need to be freshened. *)
+        let check = mkImplies empDefn baseDefn
+
+        // Expression equivalence cannot handle symbols, so try remove them.
+        // TODO(CaptainHayashi): is it sound to approximate here?
+        bind
+            (fun chk ->
+                // Pose that the check is a tautology, and use Z3 to check it.
+                let closed = equivHolds id (equiv chk BTrue)
+
+                if closed
+                then ok (func, defn)
+                else fail (BaseDownclosureError ([func], defn, empDefn)))
+            (check
+             |> Mapper.mapBoolCtx (tsfRemoveSym SymInIteratedConstraint) NoCtx
+             |> snd)
+
+    let checkInductiveDownclosure (iterator : Var)
+      (func : IteratedDFunc)
+      (defn : BoolExpr<Sym<Var>>)
+      : Result<IteratedDFunc * BoolExpr<Sym<Var>>, Error> =
+        ok (func, defn)
+
+    /// <summary>
+    ///     Checks the base and inductive downclosure properties on a given
+    ///     arity-1 view definition.
+    /// </summary>
+    /// <param name="func">The view definition's lone defined func.</param>
+    /// <param name="empDefn">The definition of 'emp', if one exists.</param>
+    /// <param name="defn">The definition of <paramref name="func"/>.</param>
+    /// <returns>
+    ///     The view definition itself, if it obeys downclosure; an error
+    ///     stating which property failed, otherwise.
+    /// </returns>
+    let checkDownclosure (func : IteratedDFunc)
+        (empDefn : BoolExpr<Sym<Var>> option)
+        (defn : BoolExpr<Sym<Var>> option)
+        : Result<IteratedDFunc * BoolExpr<Sym<Var>> option, Error> =
+        let checkIterator =
+            function
+            | None -> fail (MissingIterator [func])
+            | Some (Int v) -> ok v
+            | Some v -> fail (BadIteratorType ([func], typeOf v))
+
+        (* No point checking base downclosure if 'emp' is undefined.
+           This is because the downclosure property would become
+             D(V[0](x)) => true
+           which is trivially true. *)
+        let checkBase i (f, d) =
+            match empDefn with
+            | Some e -> checkBaseDownclosure e i f d
+            | None -> ok (f, d)
+
+        (* No point checking downclosure of an indefinite viewdef.
+           This job is delegated to the indefinite-proof backends, like HSF and
+           MuZ3, which must make sure their synthesised definitions are
+           downclosed. *)
+        match defn with
+        | None -> ok (func, None)
+        | Some d ->
+            func.Iterator
+            |> checkIterator
+            |> bind
+                (fun i ->
+                    checkBase i (func, d)
+                    >>= uncurry (checkInductiveDownclosure i))
+            |> lift (fun (f, d) -> f, Some d)
 
     /// <summary>
     ///     Performs iterated view well-formedness checking on the left of a
     ///     view definition.
     /// </summary>
+    /// <param name="empDefn">The definition, if any, of 'emp'.</param>
+    /// <param name="vprotos">The view prototypes in use.</param>
     /// <param name="def">The definition being checked.</param>
     /// <returns>
     ///     The view definition if all checks passed; errors otherwise.
     /// </returns>
     let checkDef
+      (empDefn : BoolExpr<Sym<Var>> option)
       (vprotos : FuncDefiner<ProtoInfo>)
       (def : DView * BoolExpr<Sym<Var>> option)
       : Result<DView * BoolExpr<Sym<Var>> option, Error> =
@@ -144,10 +253,14 @@ module Downclosure =
                Need to check inductive and base downclosure. *)
             | [i], [] ->
                 let! iInfo = lookupFunc vprotos i.Func
-                if iInfo.IsIterated
-                then return! (checkDownclosure i rhs)
-                else return! fail (IteratorOnNonIterated i)
-
+                return!
+                    (match iInfo with
+                     | Some { IsIterated = true } ->
+                        (lift
+                            (fun (v, r) -> ([v], r))
+                            (checkDownclosure i empDefn rhs))
+                     | Some { IsIterated = _ } -> fail (IteratorOnNonIterated i)
+                     | None -> fail (NoSuchView (i.Func.Name)))
             // Over-large iterated view definition (for now, anyway).
             | xs, [] -> return! fail (TooManyIteratedFuncs (lhs, List.length xs))
             // Mixed view definition (currently not allowed).
@@ -172,8 +285,16 @@ module Downclosure =
         (* Currently, we don't actually modify the definer, but this may
            change in future. *)
 
+        (* This is needed for base downclosure checking.
+           If it doesn't exist, then we don't do those checks. *)
+        let empDefn =
+            definer
+            |> ViewDefiner.toSeq
+            |> Seq.tryFind (fst >> List.isEmpty)
+            |> Option.bind snd
+
         let checkEach def definer =
-            ok def >>= checkDef vprotos >>= (fun _ -> ok definer)
+            ok def >>= checkDef empDefn vprotos >>= (fun _ -> ok definer)
 
         definer |> ViewDefiner.toSeq |> seqBind checkEach definer
 
@@ -432,6 +553,7 @@ module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Expr.Pretty
     open Starling.Core.Symbolic.Pretty
+    open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.View.Pretty
 
@@ -444,10 +566,16 @@ module Pretty =
             fmt "definition of '{0}', {1}, does not satisfy inductive downclosure"
                 [ printDView view
                   printBoolExpr (printSym printVar) def ]
-        | BaseDownclosureError (view, def) ->
-            fmt "definition of '{0}', {1}, does not satisfy base downclosure"
-                [ printDView view
-                  printBoolExpr (printSym printVar) def ]
+        | BaseDownclosureError (view, def, emp) ->
+            headed "Iterated view does not satisfy base downclosure property"
+                [ errorInfo <|
+                    headed "View being constrained"
+                        [ printDView view ]
+                  errorInfo <|
+                    headed "Constraint failing base downclosure"
+                        [ printBoolExpr (printSym printVar) def ]
+                  headed "Constraint must be no stronger than 'emp'"
+                    [ errorInfo <| printBoolExpr (printSym printVar) emp ] ]
         | TooManyIteratedFuncs (view, count) ->
             fmt "constraint '{0}' contains {1} iterated funcs, but iterated\
                  definitions can only contain at most one"
@@ -464,3 +592,14 @@ module Pretty =
                     printDFunc
                     (Option.map printTypedVar >> withDefault Nop)
                     func ]
+        | BadIteratorType (view, ty) ->
+            fmt "iterator on constraint '{0}' is of type {1}, should be int"
+                [ printDView view
+                  printType ty ]
+        | MissingIterator view ->
+            fmt "constraint '{0}' should have an iterator, but does not"
+                [ printDView view ]
+        | SymInIteratedConstraint sym ->
+            fmt "symbol '{0}' not allowed in an iterated constraint"
+                [ String sym ]
+        >> error
