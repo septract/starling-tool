@@ -388,13 +388,21 @@ let parseDUnit = stringReturn "emp" ViewSignature.Unit
 /// Parses a view iterator definition.
 let parseIteratorDef = inSquareBrackets parseIdentifier
 
+/// Parses an iterated item, feeding the two results to another function.
+let parseIteratedContainer
+  (parseInner : Parser<'Inner, unit>)
+  (comb : string -> 'Inner -> 'Outer)
+  : Parser<'Outer, unit> =
+    pipe2ws
+        (pstring "iter" >>. ws >>. parseIteratorDef)
+        (parseInner)
+        comb
+
 /// Parses an iterated view definition.
 let parseDIterated =
-    pstring "iter" >>. ws >>.
-    pipe2ws
-            parseIteratorDef
-            (parseFunc parseIdentifier)
-            (fun e f -> ViewSignature.Iterated(f, e))
+    parseIteratedContainer
+        (parseFunc parseIdentifier)
+        (fun e f -> ViewSignature.Iterated(f, e))
 
 /// Parses a `basic` view definition (unit, if, named, or bracketed).
 let parseBasicViewSignature =
@@ -413,17 +421,17 @@ do parseViewSignatureRef := parseViewLike parseBasicViewSignature ViewSignature.
  * View prototypes.
  *)
 
-/// Parses the LHS of a view prototype.
-let parseViewProtoLhs =
-    pstring "view" >>. ws >>. parseFunc parseTypedTypedVar
 
 /// Parses a view prototype (a LHS followed optionally by an iterator).
 let parseViewProto =
-    parseViewProtoLhs
-    >>= fun lhs ->
-            (wsSemi >>% NoIterator (lhs, false)) <|>
-            (parseIteratorDef .>> wsSemi |>> curry WithIterator lhs)
-    .>> ws
+    // TODO (CaptainHayashi): so much backtracking...
+    pstring "view" >>. ws
+    >>. (parseIteratedContainer
+            (parseFunc parseTypedTypedVar)
+            (fun i f -> WithIterator (f, i))
+         <|> (parseFunc parseTypedTypedVar
+              |>> (fun lhs -> NoIterator (lhs, false))))
+    .>> wsSemi
 
 
 (*
