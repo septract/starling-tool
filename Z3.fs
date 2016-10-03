@@ -19,10 +19,9 @@ module Pretty =
     /// Pretty-prints a satisfiability result.
     let printSat =
         function
-        | Z3.Status.SATISFIABLE -> "fail"
-        | Z3.Status.UNSATISFIABLE -> "success"
-        | _ -> "unknown"
-        >> String
+        | Z3.Status.SATISFIABLE -> Styled ([Red], String "fail")
+        | Z3.Status.UNSATISFIABLE -> Styled ([Green], String "success")
+        | _ -> Styled ([Yellow], String "unknown")
 
 
 /// <summary>
