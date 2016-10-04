@@ -39,6 +39,25 @@ module Types =
     open Starling.Core.Graph
 
     /// <summary>
+    ///     A type of unification used with the <c>Unify</c> leg of
+    ///     <see cref="Transform"/>.
+    /// <summary>
+    type UnifyMode =
+        /// <summary>
+        ///     Only unify if there are no edges between the two nodes to
+        ///     unify.
+        /// </summary>
+        | OnlyIfNoConnections
+        /// <summary>
+        ///     Always unify, but make any connecting edges into cycles.
+        /// </summary>
+        | MakeConnectionsCycles
+        /// <summary>
+        ///     Always unify, and remove any connecting edges.
+        /// </summary>
+        | RemoveConnections
+
+    /// <summary>
     ///     A graph transformer command.
     /// </summary>
     type Transform =
@@ -83,10 +102,11 @@ module Types =
         /// <summary>
         ///    Merges the node <c>src</c> into <c>dest</c>,
         ///    substituting the latter for the former in all edges.
-        ///    All edges between the two become cycles on <c>dest</c>.
+        ///    How the unification handles edges is specified by
+        ///    <see cref="UnifyType"/>.
         ///    Abort transformation if the nodes do not exist.
         /// </summary>
-        | Unify of src : string * dest : string
+        | Unify of src : string * dest : string * mode : UnifyMode
 
     /// <summary>
     ///     A node-centric graph transformation context.
@@ -297,6 +317,27 @@ module Graph =
         String.concat "__" [ a ; b ]
 
     /// <summary>
+    ///     Selects all of the connecting out-edges between two nodes.
+    /// </summary>
+    /// <param name="x">The first node to check.</param>
+    /// <param name="y">The second node to check.</param>
+    /// <param name="graph">The graph to check.</param>
+    /// <returns>
+    ///     The set of <see cref="OutEdge"/c>s connecting <paramref name="x"/>
+    ///     to <paramref name="y"/> and <paramref name="y"/> to
+    ///     <paramref name="x"/>.
+    /// </returns>
+    let connections (x : NodeID) (y : NodeID) (graph : Graph) : OutEdge seq =
+        let xView, xOut, _, xnk = graph.Contents.[x]
+        let yView, yOut, _, ynk = graph.Contents.[y]
+
+        let xToY = xOut |> Set.toSeq |> Seq.filter (fun { Dest = d } -> d = y)
+        let yToX = yOut |> Set.toSeq |> Seq.filter (fun { Dest = d } -> d = x)
+
+        Seq.append xToY yToX
+
+
+    /// <summary>
     ///     Runs a graph transformation.
     /// </summary>
     /// <param name="ctx">
@@ -327,7 +368,19 @@ module Graph =
                               (inE.Command @ outE.Command)
             | MkEdgeBetween (src, dest, name, cmd) ->
                 mkEdgeBetween src dest name cmd
-            | Unify (src, dest) -> unify src dest
+            | Unify (src, dest, mode) ->
+                match mode with
+                | MakeConnectionsCycles -> unify src dest
+                | RemoveConnections ->
+                    // NB: rmEdgesBetween only removes in one direction!
+                    rmEdgesBetween src dest always
+                    >> Option.bind (rmEdgesBetween dest src always)
+                    >> Option.bind (unify src dest)
+                | OnlyIfNoConnections ->
+                    fun graph ->
+                        if Seq.isEmpty (connections src dest graph)
+                        then unify src dest graph
+                        else Some graph
 
         let node' =
             match xform with
@@ -387,25 +440,18 @@ module Graph =
     ///     view, and are connected, but only by no-op commands.
     /// </returns>
     let nopConnected (graph : Graph) (x : NodeID) (y : NodeID) : bool =
-        let xView, xOut, xIn, xnk = graph.Contents.[x]
-        let yView, _, _, ynk = graph.Contents.[y]
-
-        let xToY =
-            xOut |> Set.toSeq |> Seq.filter (fun { Dest = d } -> d = y)
-
-        let yToX =
-            xIn |> Set.toSeq |> Seq.filter (fun { Src = s } -> s = y)
+        let xView, _, _, _ = graph.Contents.[x]
+        let yView, _, _, _ = graph.Contents.[y]
+        let cons = connections x y graph
 
         // Different names?
         (x <> y)
         // Same view?
         && (xView = yView)
         // Connected?
-        && not (Seq.isEmpty xToY && Seq.isEmpty yToX)
-        // All edges from x to y are nop?
-        && Seq.forall (fun { OutEdge.Command = c } -> isNop c) xToY
-        // All edges from y to x are nop?
-        && Seq.forall (fun { InEdge.Command = c } -> isNop c) yToX
+        && not (Seq.isEmpty cons)
+        // All edges from x to y and y to x are nop?
+        && Seq.forall (fun { OutEdge.Command = c } -> isNop c) cons
 
     /// <summary>
     ///     Plumbs a function over various properties of a graph and
@@ -467,15 +513,9 @@ module Graph =
                     // Then, find out which ones are nop-connected.
                     |> Seq.filter (nopConnected ctx.Graph node)
                     (* If we found any nodes, then unify them.
-                               We must also remove the edges between the nodes. *)
+                       We must also remove the edges between the nodes. *)
                     |> Seq.map
-                            (fun other ->
-                                seq {
-                                    yield RmAllEdgesBetween (node, other)
-                                    yield RmAllEdgesBetween (other, node)
-                                    yield Unify (other, node)
-                                } )
-                    |> Seq.concat
+                        (fun other -> Unify (other, node, RemoveConnections))
 
                 runTransforms xforms ctx
 
@@ -711,24 +751,25 @@ module Graph =
                 let disjoint (a : TypedVar list) (b : Set<TypedVar>) = List.forall (b.Contains >> not) a
                 let processEdge ctx (e : OutEdge) =
                     if isLocalResults locals e.Command
-                        then
-                            let pViewexpr = nView
-                            let qViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[e.Dest]
-                            // strip away mandatory/advisory and just look at the internal view
-                            // (TODO: do something with the ViewExpr annotations?)
-                            match (pViewexpr, qViewexpr) with
-                            | InnerView pView, InnerView qView ->
-                                let vars = unionMap iteratedGFuncVars (Multiset.toSet pView)
-                                let cmdVars = commandResults e.Command
-                                // TODO: Better equality?
-                                if pView = qView && disjoint cmdVars vars
-                                    then
-                                        (flip runTransforms) ctx
-                                        <| seq {
-                                            yield RmOutEdge (node, e)
-                                        }
-                                    else ctx
-                        else ctx
+                    then
+                        let pViewexpr = nView
+                        let qViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[e.Dest]
+                        // strip away mandatory/advisory and just look at the internal view
+                        // (TODO: do something with the ViewExpr annotations?)
+                        match (pViewexpr, qViewexpr) with
+                        | InnerView pView, InnerView qView ->
+                            let vars = unionMap iteratedGFuncVars (Multiset.toSet pView)
+                            let cmdVars = commandResults e.Command
+                            // TODO: Better equality?
+                            if pView = qView && disjoint cmdVars vars
+                            then
+                                (flip runTransforms) ctx
+                                <| seq {
+                                    yield RmOutEdge (node, e)
+                                    yield Unify (node, e.Dest, OnlyIfNoConnections)
+                                }
+                            else ctx
+                    else ctx
                 Set.fold processEdge ctx outEdges
 
     /// Collapses edges {p}c{q}d{r} to {p}d{r} iff c is unobservable
