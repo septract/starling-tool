@@ -348,7 +348,7 @@ let rec powerset (xs : 'A list) : 'A list seq =
 /// <summary>
 ///     Given a series of iterated funcs
 ///     <c>A(a)[i] * A(b)[j] * A(c)[k] * ...</c>, generate the equalities
-///     <c>i==j, i==k, ...</c>.
+///     <c>a==b, a==c, ...</c>.
 /// </summary>
 /// <param name="flist">The NON-EMPTY list of funcs to generate over.</param>
 /// <returns>The series of parameter equalities described above.</returns>
@@ -405,9 +405,17 @@ let preprocessView
         then (ns, Map.add nname (norm::ic.[nname]) ic)
         else (norm::ns, ic)
 
-    // Have to make sure each class exists first; else exceptions happen.
-    let icempty = ifuncs |> Seq.map (fun name -> (name, [])) |> Map.ofSeq
-    let nlist, iclasses = Multiset.fold expandFuncToReify ([], icempty) view
+    (* Have to make sure each class exists first; else exceptions happen.
+       This is the role of icempty, which creates a map with each equivalence
+       class present but empty. *)
+    let emptyClasses = ifuncs |> Seq.map (fun name -> (name, [])) |> Map.ofSeq
+
+    (* Now we collect into nlist the non-iterated funcs in the view, and
+       simultaneously populate the empty equivalence classes such that each
+       instance of a func with a specific name is collected into the same
+       class. *)
+    let nlist, iclasses =
+        Multiset.fold expandFuncToReify ([], emptyClasses) view
 
     (* Now, go through the equivalence classes to calculate their case-split
        expansion.  We do this by working out every single possible set of
@@ -419,16 +427,22 @@ let preprocessView
        to be the powerset of the class, less the empty set, where each element
        of the powerset denotes equality between the members' parameters.
        We don't need the map keys at this stage. *)
-    let ipsets : (IteratedGFunc<Sym<MarkedVar>> list) seq =
-        iclasses |> Map.toSeq |> Seq.map (snd >> powerset) |> Seq.concat
+    let iclassSeq = Map.toSeq iclasses
+    let iclassPowersets = Seq.map (snd >> powerset) iclassSeq
+    let ipsets = Seq.concat iclassPowersets
 
     (* Finally, we need to convert those equivalence powersets into a list of
-       funcs. *)
-    let mergeEqualitySet xs =
-        function
+       funcs. Each func represents an instance of one of the iterated funcs
+       in the original view where a number of funcs sharing that name have
+       been combined into one with the assertion that all of their parameters
+       are the same. *)
+    let mergeEqualitySet
+      (mergedSoFar : IteratedGFunc<Sym<MarkedVar>> list)
+      (equalitySet : IteratedGFunc<Sym<MarkedVar>> list) =
+        match equalitySet with
         // Trivial cases first.
-        | [] -> xs
-        | [func] -> func::xs
+        | [] -> mergedSoFar
+        | [func] -> func::mergedSoFar
         (* Now we have a set of func G1->A(a)[i], G2->A(b)[j], G3->A(c)[k]...
            first, calculate the new guard G1^G2^G3^a=b^a=c^... *)
         | gfuncs ->
@@ -440,18 +454,16 @@ let preprocessView
             let nguard = mkAnd (guards @ equalities)
 
             // And the new iterator i+j+k+...
-            let iter =
-                funcs
-                |> List.map (fun f -> f.Iterator)
-                |> List.fold mkAdd2 (AInt 0L)
+            let iter = mkAdd (List.map (fun f -> f.Iterator) funcs)
 
             { Iterator = iter
               Func = { Cond = nguard; Item = (List.head funcs).Func }}
-            :: xs
+            :: mergedSoFar
 
     Seq.fold mergeEqualitySet nlist ipsets
 
-/// Calculate the multiset of ways that this View matches the pattern in dv and add to the assumulator.
+/// Calculate the multiset of ways that this View matches the pattern in dv and
+/// add to the accumulator.
 let reifySingleDef
   (protos : FuncDefiner<ProtoInfo>)
   (view : IteratedGFunc<Sym<MarkedVar>> list)
@@ -497,9 +509,12 @@ let reifySingleDef
                     // The view doesn't match, so this match is dead.
                     accumulator
                 | (None, true) ->
-                    (* How many times does a non-iterated func A(x) match an
-                       iterated func (G1->A(y)[n])?  Once, becoming
-                       (G1 && n>0 -> A(y)[1]).  We then have to put
+                    (* How many times does a non-iterated pattern A(x) match an
+                       func (G1->A(y)[n])?  (Note that the presence of an
+                       iterator in that func does NOT necessarily make it an
+                       iterated func: n could be 1, or 4, or 0, etc.)
+
+                       Once, becoming (G1 && n>0 -> A(y)[1]).  We must then put
                        (G1 && n>0 -> A(y)[n-1]) back onto the view to match.
 
                        But what if n is always 0?  Then this pattern match
@@ -519,8 +534,8 @@ let reifySingleDef
 
                     matchMultipleViews pattern (rview @ view) accumulator result
                 | (Some n, true) ->
-                    (* How many times does an iterated func A(x)[i]
-                       iterated func A(y)[n]?  As above, all of them.
+                    (* How many times does an ITERATED pattern A(x)[i] match the
+                       func (G1 -> A(y)[n])?  As above, the answer is n.
                        Thus, no remnant is put onto the view, and the entire
                        func is put onto the result. *)
                     let result = v :: result
@@ -550,13 +565,25 @@ let reifySingleDef
 
     matchMultipleViews dv view accumulator []
 
-/// Reifies an dvs entire view application.
+/// <summary>
+///     Reifies a given view using the given view prototypes and definer.
+/// </summary>
+/// <param name="protos">The view prototype definer in use.</param>
+/// <param name="definer">The set of view definitions to reify against.</param>
+/// <param name="view">The view to reify.</param>
+/// <returns>
+///     The set of all 'subviews' of the <paramref name="view"/>: views that
+///     both match a constraint in <paramref name="definer"/> and are a
+///     sub-multiset of <paramref name="view"/>, guarded by the conjunction of
+///     all of the original guards of each func inside the subview as well as
+///     any additional conditions for the pattern match to succeed.
+/// </returns>
 let reifyView
   (protos : FuncDefiner<ProtoInfo>)
   (definer : ViewDefiner<SVBoolExpr option>)
-  (vap : IteratedGView<Sym<MarkedVar>>)
+  (view : IteratedGView<Sym<MarkedVar>>)
   : Set<GuardedIteratedSubview> =
-    let goal = preprocessView protos vap
+    let goal = preprocessView protos view
     definer
     |> ViewDefiner.toSeq
     |> Seq.fold (reifySingleDef protos goal) Set.empty

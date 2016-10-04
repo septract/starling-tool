@@ -46,29 +46,27 @@ let paramsFromIteratedFunc funcContainer =
 /// <summary>
 ///     Constructs a Func from a DView
 /// </summary>
-/// <param name="globals">
-///     Seq of names of active globals
+/// <param name="svars">
+///     The set of shared variables in use, to be merged into the func.
 /// </param>
 /// <param name="dview">
-///     The DView
+///     The DView to use in construction.
 /// </param>
 /// <returns>
 ///     A new Func containing all parameters of the individuals as well as their iterators
 ///     with the shared variables appended
 /// </returns>
-let flattenDView : TypedVar seq -> DView -> Func<TypedVar> =
-    fun globals dview ->
-        // TODO: What if iterators share names? e.g. iterated A [n] * iterated B [n]
-        let paramsNoShared = Seq.concat <| Seq.map paramsFromIteratedFunc dview
-        let paramsShared = Seq.toList <| Seq.append paramsNoShared globals
-        { Name = genFlatIteratedFuncName dview
-          Params = paramsShared }
+let flattenDView (svars : TypedVar seq) (dview : DView) : DFunc =
+    // TODO: What if iterators share names? e.g. iterated A [n] * iterated B [n]
+    let paramsNoShared = Seq.concat <| Seq.map paramsFromIteratedFunc dview
+    let allParams = Seq.toList <| Seq.append paramsNoShared svars
+    { Name = genFlatIteratedFuncName dview ; Params = allParams }
 
 /// Flattens an OView into an SMVFunc given the set of globals
-let flattenOView : Expr<Sym<MarkedVar>> seq -> OView -> SMVFunc =
-    fun globals oview ->
-        { Name = genFlatFuncSeqName oview
-          Params = Seq.toList <| Seq.append (paramsOfFuncSeq oview) globals }
+let flattenOView (svarExprs : Expr<Sym<MarkedVar>> seq) (oview : OView)
+  : SMVFunc =
+    { Name = genFlatFuncSeqName oview
+      Params = Seq.toList <| Seq.append (paramsOfFuncSeq oview) svarExprs }
 
 /// <summary>
 ///     Flattens a term by converting all of its OViews into single funcs.

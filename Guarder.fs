@@ -25,15 +25,15 @@ module Types =
     type GuarderMethod = Method<GuarderViewExpr, GuarderPartCmd>
 
 /// Resolves a full condition-view multiset into a guarded-view multiset.
-let guardCView : CView -> GuarderView =
-    let rec guardCFuncIn suffix cview =
-        match cview.Func with
+let guardCView (cview : CView) : GuarderView =
+    let rec guardCFuncIn suffix cv =
+        match cv.Func with
         | CFunc.Func v ->
+            let itVar = Option.map AVar cv.Iterator
             (* Treat non-iterated views as if they have the iterator [1].
                This means we don't need to special-case them elsewhere. *)
-            [ { Func = { Cond = suffix |> Set.toList |> mkAnd
-                         Item = v };
-                Iterator = cview.Iterator |> Option.map AVar |> withDefault (AInt 1L) } ]
+            [ { Func = { Cond = mkAnd (Set.toList suffix); Item = v };
+                Iterator = withDefault (AInt 1L) itVar } ]
         | CFunc.ITE(expr, tviews, fviews) ->
             List.concat
                 [ guardCViewIn (suffix.Add expr) (Multiset.toFlatList tviews)
@@ -42,10 +42,8 @@ let guardCView : CView -> GuarderView =
     and guardCViewIn suffix = concatMap (guardCFuncIn suffix)
 
     // TODO(CaptainHayashi): woefully inefficient.
-    let x v =  Multiset.toFlatList v |> guardCViewIn Set.empty
-    Multiset.toFlatList
-    >> guardCViewIn Set.empty
-    >> Multiset.ofFlatList
+    let guarded = guardCViewIn Set.empty (Multiset.toFlatList cview)
+    Multiset.ofFlatList guarded
 
 /// Resolves a full condition-view ViewExpr into a guarded-view multiset.
 let guardCViewExpr : ModellerViewExpr -> GuarderViewExpr =

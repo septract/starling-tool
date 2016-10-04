@@ -106,26 +106,24 @@ let rec minusViewByFunc (qstep : IteratedGFunc<TermGenVar>)
                         \  (g2 ^ !(g1 ^ xbar=ybar)    -> v(ybar)^k)))   =qfail
 
                    Our first task is to decide what each guarded func
-                   (rsucc, rfail, qsucc, qfail) is. *)
+                   (rsucc, rfail, qsucc, qfail) is.  Each has a similar format,
+                   which is captured by mkfunc. *)
+                let mkfunc guard args iter =
+                    iterated (gfunc guard v args) iter
 
                 let barEq = List.map2 mkEq xbar ybar |> mkAnd
 
                 let rSuccG = mkAnd [ g1; g2; barEq; mkGt n k ]
-                let rSucc =
-                    { Func = { Cond = rSuccG; Item = func v xbar };
-                      Iterator = mkSub2 n k }
+                let rSucc = mkfunc rSuccG xbar (mkSub2 n k)
+
                 let rFailG = mkAnd [ g1; mkNot (mkAnd2 g2 barEq) ]
-                let rFail =
-                    { Func = { Cond = rFailG; Item = func v xbar }
-                      Iterator = n }
+                let rFail = mkfunc rFailG xbar n
+
                 let qSuccG = mkAnd [ g2; g1; barEq; mkGt k n ]
-                let qSucc =
-                    { Func = { Cond = qSuccG; Item = func v ybar }
-                      Iterator = mkSub2 k n }
+                let qSucc = mkfunc qSuccG ybar (mkSub2 k n)
+
                 let qFailG = mkAnd [ g2; mkNot (mkAnd2 g1 barEq) ]
-                let qFail =
-                    { Func = { Cond = qFailG; Item = func v ybar }
-                      Iterator = k }
+                let qFail = mkfunc qFailG ybar k
 
                 (* Now, we have to minus qSucc and qFail from rnext.  The first
                    one is done in isolation (because eg. if we added rdone we'd
@@ -169,7 +167,7 @@ let rec minusViewByFunc (qstep : IteratedGFunc<TermGenVar>)
 /// <returns>
 ///     The subtracted frame view.
 /// </returns>
-let termGenFrame
+let termGenWPreMinus
   (r : IteratedOView)
   (q : IteratedGView<Sym<MarkedVar>>)
   : IteratedGView<Sym<MarkedVar>> =
@@ -194,7 +192,7 @@ let termGenFrame
         q
 
 /// Generates a (weakest) precondition from a framed axiom.
-let termGenPre
+let termGenWPre
   (gax : GoalAxiom<'cmd>)
   : IteratedGView<Sym<MarkedVar>> =
     (* Theoretically speaking, this is crunching an axiom {P} C {Q} and
@@ -211,12 +209,12 @@ let termGenPre
     let _, post = subExprInIteratedGView after NoCtx gax.Axiom.Post
     let goal = gax.Goal
 
-    Multiset.append pre (termGenFrame goal post)
+    Multiset.append pre (termGenWPreMinus goal post)
 
 /// Generates a term from a goal axiom.
 let termGenAxiom (gax : GoalAxiom<'cmd>)
   : Term<'cmd, IteratedGView<Sym<MarkedVar>>, IteratedOView> =
-    { WPre = termGenPre gax
+    { WPre = termGenWPre gax
       Goal = gax.Goal
       Cmd = gax.Axiom.Cmd }
 

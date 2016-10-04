@@ -162,12 +162,10 @@ let withDefault (d : 'A) : 'A option -> 'A =
     | Some a -> a
     | None -> d
 
-/// Maps a function f through a set, and concatenates the resulting
+/// Maps a function f through a sequence, and concatenates the resulting
 /// list of lists into one set.
-let unionMap (f : 'A -> Set<'B>) : Set<'A> -> Set<'B> =
-    Set.toSeq
-    >> Seq.map f
-    >> Set.unionMany
+let unionMap (f : 'A -> Set<'B>) : 'A seq -> Set<'B> =
+    Seq.map f >> Set.unionMany
 
 /// Maps a function f through a list, and concatenates the resulting
 /// list of lists into one list.

@@ -217,11 +217,6 @@ let mgfunc (guard : MBoolExpr) (name : string) (pars : MExpr seq) : MGFunc =
 let smgfunc (guard : SMBoolExpr) (name : string) (pars : SMExpr seq) : SMGFunc =
     gfunc guard name pars
 
-
-/// IteratedContainer constructor
-let iterated f it = { Func = f; Iterator = it }
-let emptyIterated f = { Func = f; Iterator = None }
-
 (*
  * Single-guard active patterns.
  *)
@@ -355,42 +350,18 @@ let varsFromExpr : Expr<Sym<Var>> -> Set<TypedVar> =
     | Bool e -> mapOverSymVars Mapper.mapBoolCtx findSymVars e
     | Int e -> mapOverSymVars Mapper.mapIntCtx findSymVars e
 
-/// Gets set of TypedVar's from a SVFunc
-let gfuncVars : SVFunc -> Set<TypedVar> =
-    fun gf -> Set.fold (+) Set.empty (Set.ofList (List.map varsFromExpr gf.Params))
+/// Gets set of TypedVar's from a GFunc
+let gFuncVars ({ Cond = g; Item = f} : GFunc<Sym<Var>>) : Set<TypedVar> =
+    let condvars = mapOverSymVars Mapper.mapBoolCtx findSymVars g
+    let itemvars = Set.unionMany (List.map varsFromExpr f.Params)
+    condvars + itemvars
 
-/// <summary>
-/// Given a guarded View over Symbolic Var's return the set of all
-/// variables and their types that are in the view definition.
-/// </summary>
-let SVGViewVars : GView<Sym<Var>> -> Set<TypedVar> =
-    fun v ->
-        let l = Multiset.toSet v
-
-        let vars {Cond = g; Item = gf} =
-            let condvars = mapOverSymVars Mapper.mapBoolCtx findSymVars g
-            let itemvars = gfuncVars gf
-
-            condvars
-            + itemvars
-
-        Set.fold (+) Set.empty (Set.map vars l)
-
-let IteratedSVGViewVars : IteratedGView<Sym<Var>> -> Set<TypedVar> =
-    fun v ->
-        let l = Multiset.toSet v
-
-        let findVarsInBool e = mapOverSymVars Mapper.mapBoolCtx findSymVars e
-        let findVarsInInt e = mapOverSymVars Mapper.mapIntCtx findSymVars e
-
-        let vars { Func = {Cond = g; Item = gf}; Iterator = it} =
-            let condvars = findVarsInBool g
-            let itemvars = gfuncVars gf
-            let iteratorvars = findVarsInInt it
-
-            condvars + itemvars + iteratorvars
-
-        Set.fold (+) Set.empty (Set.map vars l)
+/// Gets set of TypedVars from an IteratedGFunc
+let iteratedGFuncVars ({ Func = f; Iterator = it } : IteratedGFunc<Sym<Var>>)
+  : Set<TypedVar> =
+    let funcvars = gFuncVars f
+    let iteratorvars = mapOverSymVars Mapper.mapIntCtx findSymVars it
+    funcvars + iteratorvars
 
 /// <summary>
 ///     Pretty printers for guarded items.

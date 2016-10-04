@@ -338,6 +338,12 @@ let mkAdd2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
     match (l, r) with
     | (AInt x, AInt y) -> AInt (x + y)
     | _                -> AAdd [ l; r ]
+
+/// Makes an Add out of a sequence of expressions.
+let mkAdd (xs : IntExpr<'var> seq) : IntExpr<'var> =
+    // TODO(CaptainHayashi): produce a trimmed list, instead of mkAdd2ing.
+    Seq.fold mkAdd2 (AInt 0L) xs
+
 /// Makes a Sub out of a pair of two expressions.
 let mkSub2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
     match (l, r) with

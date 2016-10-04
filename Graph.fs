@@ -713,6 +713,15 @@ module Pretty =
     open Starling.Core.Symbolic.Pretty
     open Starling.Core.Var.Pretty
 
+    /// <summary>
+    ///     Pretty-prints a <see cref="GraphView"/>.
+    /// </summary>
+    /// <param name="view">The <see cref="GraphView"/> to print.</param>
+    /// <returns>
+    ///     The resulting <see cref="Doc"/> from <paramref name="view"/>.
+    /// </returns>
+    let printGraphView (view : GraphView) : Doc =
+        printIteratedGView (printSym printVar) view
 
     /// <summary>
     ///     Prints a GraphViz label directive.
@@ -745,9 +754,8 @@ module Pretty =
     let printNode (id : NodeID) (view : GraphViewExpr, nk : NodeKind)
       : Doc =
         let list = match nk with Normal -> [] | Entry -> [String "(Entry)"] | Exit -> [String "(Exit)"] | EntryExit -> [String "(EntryExit)"]
-        hsep [ id |> String
-               ([ id |> String
-                  view |> printViewExpr (printIteratedGView (printSym printVar)) ] @ list)
+        hsep [ String id
+               ([ String id; printViewExpr printGraphView view ] @ list)
                 |> colonSep |> printLabel
              ]
         |> withSemi

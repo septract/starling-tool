@@ -72,7 +72,7 @@ module Tests =
                         iterated
                             (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
                             (AInt 1L))
-                    (termGenFrame
+                    (termGenWPreMinus
                         [ iterated
                             (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
                             (AInt 1L) ]
@@ -88,7 +88,7 @@ module Tests =
                         iterated
                             (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
                             (AInt 1L))
-                    (termGenFrame
+                    (termGenWPreMinus
                         [ iterated
                             (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
                             (AInt 1L) ]
@@ -98,7 +98,7 @@ module Tests =
             let ``Subtracting a single func from emp yields emp`` () =
                 assertEqual
                     Multiset.empty
-                    (termGenFrame
+                    (termGenWPreMinus
                         []
                         (Multiset.singleton
                             (iterated
@@ -112,7 +112,7 @@ module Tests =
                         iterated
                             (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
                             (AInt 10L))
-                    (termGenFrame
+                    (termGenWPreMinus
                         [ iterated
                             (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
                             (AInt 10L) ]
@@ -122,7 +122,7 @@ module Tests =
             let ``Exact-subtracting an iterated func from itself cancels out`` () =
                 assertEqual
                     Multiset.empty
-                    (termGenFrame
+                    (termGenWPreMinus
                         [ iterated
                             (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
                             (AInt 9L) ]
@@ -135,7 +135,7 @@ module Tests =
             let ``Over-subtracting an iterated func from itself truncates`` () =
                 assertEqual
                     Multiset.empty
-                    (termGenFrame
+                    (termGenWPreMinus
                         [ iterated
                             (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
                             (AInt 10L) ]
@@ -151,7 +151,7 @@ module Tests =
                         iterated
                             (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
                             (AInt 4L))
-                    (termGenFrame
+                    (termGenWPreMinus
                         [ iterated
                             (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
                             (AInt 10L) ]
@@ -167,7 +167,7 @@ module Tests =
                         iterated
                             (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
                             (AInt 2L))
-                    (termGenFrame
+                    (termGenWPreMinus
                         [ iterated
                             (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
                             (AInt 5L)
@@ -186,7 +186,7 @@ module Tests =
                         iterated
                             (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
                             (AInt 2L))
-                    (termGenFrame
+                    (termGenWPreMinus
                         [ iterated
                             (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
                             (AInt 10L) ]
@@ -209,7 +209,7 @@ module Tests =
                                           (sbAfter "baz")))
                                "foo" [ Expr.Bool (sbGoal 0I "bar") ])
                             (AInt 1L)))
-                    (termGenFrame
+                    (termGenWPreMinus
                         [ iterated
                             (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
                             (AInt 1L) ]
@@ -238,7 +238,7 @@ module Tests =
                                       mkGt (siAfter "n") (siAfter "k") ])
                                "A" [ Expr.Bool (sbAfter "x") ])
                             (mkSub2 (siAfter "n") (siAfter "k"))) ])
-                    (termGenFrame
+                    (termGenWPreMinus
                         [ iterated
                             (smvfunc "A" [ Expr.Bool (sbAfter "x") ])
                             (siAfter "n") ]
@@ -308,13 +308,13 @@ module Tests =
     /// </summary>
     type NUnit () =
         /// <summary>
-        ///     Test cases for <c>termGenFrame</c>.
+        ///     Test cases for <c>termGenWPreMinus</c>.
         /// </summary>
 
         /// <summary>
-        ///     Tests <c>termGenFrame</c>.
+        ///     Tests <c>termGenWPreMinus</c>.
         /// </summary>
         [<TestCaseSource("FrameSubtracts")>]
-        member x.``termGenFrame performs multiset minus correctly`` r q =
-            termGenFrame r q
+        member x.``termGenWPreMinus performs multiset minus correctly`` r q =
+            termGenWPreMinus r q
 *)

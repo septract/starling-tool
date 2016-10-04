@@ -682,33 +682,38 @@ let modelDFunc
 let rec modelViewSignature (protos : FuncDefiner<ProtoInfo>) =
     function
     | ViewSignature.Unit -> ok Multiset.empty
-    | ViewSignature.Func dfunc -> Multiset.map (fun f -> { Func = f; Iterator = None }) <!> (modelDFunc protos dfunc)
+    | ViewSignature.Func dfunc ->
+        let uniterated = modelDFunc protos dfunc
+        lift (Multiset.map (fun f -> { Func = f; Iterator = None })) uniterated
     | ViewSignature.Join(l, r) -> trial { let! lM = modelViewSignature protos l
                                           let! rM = modelViewSignature protos r
                                           return Multiset.append lM rM }
     | ViewSignature.Iterated(dfunc, e) ->
         let updateFunc (s : string) f = { Func = f; Iterator = Some (Int s) }
         let modelledDFunc = modelDFunc protos dfunc
-        (Multiset.map (updateFunc e)) <!> modelledDFunc
+        lift (Multiset.map (updateFunc e)) modelledDFunc
 
 let makeIteratorMap : TypedVar option -> VarMap =
     function
     | None         -> Map.empty
-    | Some (Int v) -> Map.add v (Type.Int ()) Map.empty
+    | Some (Int v) -> Map.ofList [ v, Type.Int () ]
     | _            -> failwith "Iterator in iterated views must be Int type"
 
 /// Produces the environment created by interpreting the viewdef vds using the
 /// view prototype map vpm.
-let rec localEnvOfViewDef vds =
-    vds
-    |> Seq.ofList
-    |> Seq.map (fun { Func = {Params = ps}; Iterator = it } -> makeVarMap ps >>= (combineMaps (makeIteratorMap it)))
-    |> seqBind (fun xR s -> bind (combineMaps s) xR) Map.empty
-    |> mapMessages ViewError.BadVar
+let rec localEnvOfViewDef (vds : DView) : Result<VarMap, ViewError> =
+    let makeFuncMap { Func = {Params = ps}; Iterator = it } =
+        makeVarMap ps >>= (combineMaps (makeIteratorMap it))
+
+    let funcMaps = Seq.map makeFuncMap vds
+    let singleMap =
+        seqBind (fun xR s -> bind (combineMaps s) xR) Map.empty funcMaps
+
+    mapMessages ViewError.BadVar singleMap
 
 /// Produces the variable environment for the constraint whose viewdef is v.
-let envOfViewDef : VarMap -> DView -> Result<VarMap, ViewError> =
-    fun svars -> localEnvOfViewDef >> bind (combineMaps svars >> mapMessages SVarConflict)
+let envOfViewDef (svars : VarMap) : DView -> Result<VarMap, ViewError> =
+    localEnvOfViewDef >> bind (combineMaps svars >> mapMessages SVarConflict)
 
 /// Converts a single constraint to its model form.
 let modelViewDef
@@ -1053,8 +1058,8 @@ let modelCAS : MethodContext -> LValue -> LValue -> Expression -> Result<PrimCom
      *)
     wrapMessages BadSVar (lookupVar svars) destLV
     >>= (fun dest ->
-             mkPair dest
-             <!> wrapMessages BadTVar (lookupVar tvars) testLV)
+             let v = wrapMessages BadTVar (lookupVar tvars) testLV
+             lift (mkPair dest) v)
     >>= (function
          | UnifyBool (d, t) ->
              set

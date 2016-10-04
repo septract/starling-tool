@@ -40,19 +40,59 @@ module Types =
     /// A func over symbolic-marked-var expressions.
     type SMVFunc = ExprFunc<Sym<MarkedVar>>
 
+    /// <summary>
+    ///     A wrapper over funcs that adds an iterator.
+    /// </summary>
+    /// <typeparam name="Func">The type of wrapped funcs.</typeparam>
+    /// <typeparam name="Iterator">The type of the iterator.</typeparam>
     type IteratedContainer<'Func, 'Iterator> =
         { Func : 'Func; Iterator : 'Iterator }
 
-    /// Maps over the item inside an IteratedContainer.
+    /// <summary>
+    ///     Constructs an iterated container.
+    /// </summary>
+    /// <param name="f">The func to iterate.</param>
+    /// <param name="it">The iterator to use.</param>
+    /// <typeparam name="Func">The type of func to iterate.</typeparam>
+    /// <typeparam name="Iterator type of iterator to use.</typeparam>
+    /// <returns>
+    ///     The <see cref="IteratedContainer"/> iterating over
+    ///     <paramref name="f"/> <paramref name="it"/> times.
+    /// </returns>
+    let iterated (f : 'Func) (it : 'Iterator)
+      : IteratedContainer<'Func, 'Iterator> =
+        { Func = f; Iterator = it }
+
+    /// <summary>
+    ///     Maps over the func inside an iterated container.
+    /// </summary>
+    /// <param name="f">The mapping function to use.</param>
+    /// <typeparam name="FuncA">The type of func before the map.</typeparam>
+    /// <typeparam name="FuncB">The type of func after the map.</typeparam>
+    /// <typeparam name="Iterator">The type of iterator.</typeparam>
+    /// <returns>
+    ///     A function mapping <paramref name="f"/> over the func of an
+    ///     <see cref="IteratedContainer"/>.
+    // </returns>
     let mapIterated (f : 'FuncA -> 'FuncB)
-      ({ Func = v; Iterator = i } : IteratedContainer<'FuncA, 'Var>)
-      : IteratedContainer<'FuncB, 'Var> =
+      ({ Func = v; Iterator = i } : IteratedContainer<'FuncA, 'Iterator>)
+      : IteratedContainer<'FuncB, 'Iterator> =
         { Func = f v; Iterator = i }
 
-    /// Maps over the item inside an IteratedContainer.
-    let mapIterator (f : 'IteratorA -> 'IteratorB)
-      ({ Func = v; Iterator = i } : IteratedContainer<'Func, 'IteratorA>)
-      : IteratedContainer<'Func, 'IteratorB> =
+    /// <summary>
+    ///     Maps over the iterator an iterated container.
+    /// </summary>
+    /// <param name="f">The mapping function to use.</param>
+    /// <typeparam name="Func">The type of func.</typeparam>
+    /// <typeparam name="IterA">The iterator type before the map.</typeparam>
+    /// <typeparam name="IterB">The iterator type after the map.</typeparam>
+    /// <returns>
+    ///     A function mapping <paramref name="f"/> over the iterator of an
+    ///     <see cref="IteratedContainer"/>.
+    // </returns>
+    let mapIterator (f : 'IterA -> 'IterB)
+      ({ Func = v; Iterator = i } : IteratedContainer<'Func, 'IterA>)
+      : IteratedContainer<'Func, 'IterB> =
         { Func = v; Iterator = f i }
 
     /// An iterated view-definition func.
@@ -175,7 +215,6 @@ module Pretty =
 
     /// Pretty-prints view expressions.
     let rec printViewExpr pView =
-
         function
         | Mandatory v -> pView v
         | Advisory v -> hjoin [ pView v ; String "?" ]

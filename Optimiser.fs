@@ -718,7 +718,7 @@ module Graph =
                             // (TODO: do something with the ViewExpr annotations?)
                             match (pViewexpr, qViewexpr) with
                             | InnerView pView, InnerView qView ->
-                                let vars = IteratedSVGViewVars pView
+                                let vars = unionMap iteratedGFuncVars (Multiset.toSet pView)
                                 let cmdVars = commandResults e.Command
                                 // TODO: Better equality?
                                 if pView = qView && disjoint cmdVars vars
