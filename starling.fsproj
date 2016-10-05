@@ -97,6 +97,7 @@
     -->
     <Compile Include="Main.fs" />
     <None Include="packages.config" />
+    <None Include="Examples\Pass\arc.cvf" />
     <None Include="Examples\Pass\ticketLock.cvf" />
     <None Include="Examples\Pass\ticketLockNoIf.cvf" />
     <None Include="Examples\Pass\ticketLockNonAtomicRelease.cvf" />
