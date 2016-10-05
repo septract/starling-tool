@@ -425,11 +425,19 @@ let holdTick =
     { Func = Func (svfunc "holdTick" [SVExpr.Int (siVar "t")])
       Iterator = None }
 
+
+let oneGFunc (cnd : BoolExpr<Sym<Var>>) (name : string)
+  (ps : Expr<Sym<Var>> list)
+  : IteratedGFunc<Sym<Var>> =
+    iterated (svgfunc cnd name ps) (AInt 1L)
+
 /// The guarded holdLock view.
-let gHoldLock cnd : SVGFunc = svgfunc cnd "holdLock" []
+let gHoldLock cnd : IteratedGFunc<Sym<Var>> =
+    oneGFunc cnd "holdLock" []
 
 /// The guarded holdTick view.
-let gHoldTick cnd : SVGFunc = svgfunc cnd "holdTick" [SVExpr.Int (siVar "t")]
+let gHoldTick cnd : IteratedGFunc<Sym<Var>> =
+    oneGFunc cnd "holdTick" [SVExpr.Int (siVar "t")]
 
 /// Produces the expression 's!before == t!before'.
 let sIsT = iEq (siVar "s") (siVar "t")
@@ -486,7 +494,7 @@ let ticketLockMethods =
 
 
 /// The ticket lock's lock method, in guarded form.
-let ticketLockGuardedLock =
+let ticketLockGuardedLock : GuarderMethod =
     { Signature = func "lock" []
       Body =
           { Pre = Mandatory <| Multiset.empty
@@ -520,7 +528,7 @@ let ticketLockGuardedLock =
 let ticketLockGuardedUnlock : GuarderMethod =
     { Signature = func "unlock" []
       Body =
-          { Pre = Mandatory <| sing { Func = gHoldLock BTrue; Iterator = AInt 1L }
+          { Pre = Mandatory <| sing (gHoldLock BTrue)
             Contents =
                 [ { Command =
                         command "!I++" [ Int "serving" ] [ Expr.Int (siBefore "serving") ]

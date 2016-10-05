@@ -82,8 +82,8 @@
     <Compile Include="FlattenerTests.fs" />
     <Compile Include="ExprTests.fs" />
     <Compile Include="GraphTests.fs" />
-    <!--
     <Compile Include="GrapherTests.fs" />
+    <!--
     <Compile Include="InstantiateTests.fs" />
     <Compile Include="PrettyTests.fs" />
     <Compile Include="ParserTests.fs" />
