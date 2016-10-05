@@ -86,8 +86,8 @@
     <Compile Include="InstantiateTests.fs" />
     <Compile Include="PrettyTests.fs" />
     <Compile Include="ParserTests.fs" />
-    <!--
     <Compile Include="ModellerTests.fs" />
+    <!--
     <Compile Include="GuarderTests.fs" />
     <Compile Include="GuardedViewTests.fs" />
     <Compile Include="SemanticsTests.fs" />
