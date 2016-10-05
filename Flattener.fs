@@ -58,15 +58,15 @@ let paramsFromIteratedFunc funcContainer =
 /// </returns>
 let flattenDView (svars : TypedVar seq) (dview : DView) : DFunc =
     // TODO: What if iterators share names? e.g. iterated A [n] * iterated B [n]
-    let paramsNoShared = Seq.concat <| Seq.map paramsFromIteratedFunc dview
-    let allParams = Seq.toList <| Seq.append paramsNoShared svars
-    { Name = genFlatIteratedFuncName dview ; Params = allParams }
+    let ownParams = Seq.concat <| Seq.map paramsFromIteratedFunc dview
+    let allParams = Seq.append svars ownParams
+    { Name = genFlatIteratedFuncName dview ; Params = Seq.toList allParams }
 
 /// Flattens an OView into an SMVFunc given the set of globals
 let flattenOView (svarExprs : Expr<Sym<MarkedVar>> seq) (oview : OView)
   : SMVFunc =
     { Name = genFlatFuncSeqName oview
-      Params = Seq.toList <| Seq.append (paramsOfFuncSeq oview) svarExprs }
+      Params = Seq.toList <| Seq.append svarExprs (paramsOfFuncSeq oview) }
 
 /// <summary>
 ///     Flattens a term by converting all of its OViews into single funcs.
