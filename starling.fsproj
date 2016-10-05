@@ -83,10 +83,10 @@
     <Compile Include="ExprTests.fs" />
     <Compile Include="GraphTests.fs" />
     <Compile Include="GrapherTests.fs" />
-    <!--
     <Compile Include="InstantiateTests.fs" />
     <Compile Include="PrettyTests.fs" />
     <Compile Include="ParserTests.fs" />
+    <!--
     <Compile Include="ModellerTests.fs" />
     <Compile Include="GuarderTests.fs" />
     <Compile Include="GuardedViewTests.fs" />
