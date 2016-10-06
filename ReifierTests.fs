@@ -11,6 +11,30 @@ open Starling.Core.TypeSystem
 open Starling.Core.View
 open Starling.Reifier
 
+
+/// <summary>
+///     Tests for powerset generation.
+/// </summary>
+module Powerset =
+    [<Test>]
+    let ``The powerset of the empty set is the set of the empty-set`` () =
+        List.sort <| [[]]
+        ?=?
+        (List.sort <| List.ofSeq (powerset []))
+
+    [<Test>]
+    let ``The powerset of singleton is the set of empty-set and singleton`` () =
+        List.sort <| [[]; [1]]
+        ?=?
+        (List.sort <| List.ofSeq (powerset [1]))
+
+    [<Test>]
+    let ``The powerset of a non-singleton set is calculated properly`` () =
+        List.sort <| [[]; [1]; [2]; [3]; [1; 2]; [1; 3]; [2; 3]; [1; 2; 3]]
+        ?=?
+        (List.sort <| List.ofSeq (powerset [1; 2; 3]))
+
+
 /// <summary>
 ///     Tests for parameter equality calculation.
 /// </summary>

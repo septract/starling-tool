@@ -294,13 +294,14 @@ module Downclosure =
         match defn with
         | None -> ok (func, None)
         | Some d ->
-            func.Iterator
-            |> checkIterator
-            |> bind
-                (fun i ->
-                    checkBaseDownclosure empDefnT i func d
-                    >>= uncurry (checkInductiveDownclosure i))
-            |> lift (fun (f, d) -> f, Some d)
+            let checkedIterR = checkIterator func.Iterator
+            let checkedDefnR =
+                bind
+                    (fun i ->
+                        checkBaseDownclosure empDefnT i func d
+                        >>= uncurry (checkInductiveDownclosure i))
+                    checkedIterR
+            lift (pairMap id Some) checkedDefnR
 
     /// <summary>
     ///     Performs iterated view well-formedness checking on the left of a
