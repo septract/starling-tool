@@ -79,7 +79,7 @@ module Types =
         ///         to make sure.
         ///     </para>
         /// </summary>
-        | NoSuchView of name : string
+        | NoSuchView of func : DFunc
         /// <summary>
         ///     A view lookup failed during downclosure checking.
         ///
@@ -88,7 +88,7 @@ module Types =
         ///         to make sure.
         ///     </para>
         /// </summary>
-        | LookupError of name : string * err : Core.Instantiate.Types.Error
+        | LookupError of func : DFunc * err : Core.Instantiate.Types.Error
         /// <summary>
         ///     An iterator had the wrong type.
         /// </summary>
@@ -121,21 +121,80 @@ module Downclosure =
     open Starling.Core.ExprEquiv
     open Starling.Core.Sub
 
-    /// Adapts Instantiate.lookup to the downclosure checker's needs.
-    let lookupFunc (protos : FuncDefiner<ProtoInfo>) (func : Func<_>)
+    /// <summary>
+    ///     Adapts Instantiate.lookup to the downclosure checker's needs.
+    /// </summary>
+    /// <param name="protos">The set of prototypes to look-up.</param>
+    /// <param name="func">The func to look up in the definer.</param>
+    /// <returns>
+    ///     If the lookup was successful, a result containing the prototype info
+    ///     of <paramref name="func"/> if it exists; an <see cref="Error"/>
+    ///     otherwise.
+    /// </returns>
+    let lookupFunc (protos : FuncDefiner<ProtoInfo>) (func : DFunc)
       : Result<ProtoInfo option, Error> =
         // TODO(CaptainHayashi): proper doc comment
         // TODO(CaptainHayashi): merge with Modeller.lookupFunc?
-        protos
-        |> Core.Instantiate.lookup func
-        |> mapMessages (curry LookupError func.Name)
-        |> lift (Option.map snd)
+        let look func = Core.Instantiate.lookup func protos
+        let record = wrapMessages LookupError look func
+        lift (Option.map snd) record
 
-    let downclosureMap (f : Var -> IntExpr<Sym<Var>>)
-      : BoolExpr<Sym<Var>> -> BoolExpr<Sym<Var>> =
-        let m = Mapper.make f (Reg >> BVar) |> liftVToSym |> onVars
-        Mapper.mapBoolCtx m NoCtx >> snd
+    /// <summary>
+    ///     Maps a substitution function over all of the uses of an iterator
+    ///     variable in a view definition.
+    /// </summary>
+    /// <param name="f">
+    ///     The function used to substitute expressions for instances of the
+    ///     iterator.
+    /// </param>
+    /// <param name="iterator">The variable representing the iterator.</param>
+    /// <param name="defn">The view definition to transform.</param>
+    /// <returns>
+    ///     The result of transforming every occurrence of the integer variable
+    ///     <paramref name="iterator"/> using <paramref name="f"/>.
+    /// </returns>
+    let mapOverIteratorUses (f : Var -> IntExpr<Sym<Var>>)
+      (iterator : Var)
+      (defn : BoolExpr<Sym<Var>>)
+      : BoolExpr<Sym<Var>> =
+        let fOnIter var = if var = iterator then f var else AVar (Reg var)
+        let m = onVars (liftVToSym (Mapper.make fOnIter (Reg >> BVar)))
+        snd (Mapper.mapBoolCtx m NoCtx defn)
 
+    /// <summary>
+    ///     Runs a downclosure check using Z3.
+    /// </summary>
+    /// <param name="check">The check to run.</param>
+    /// <returns>
+    ///     True if <paramref name="check"/> succeeds (is a tautology);
+    ///     false if not; an error if <paramref name="check"/> contains
+    ///     symbols or otherwise cannot be decided by Z3.
+    /// </returns>
+    let runDownclosureCheck (check : BoolExpr<Sym<Var>>) : Result<bool, Error> =
+        // Expression equivalence cannot handle symbols, so try remove them.
+        // TODO(CaptainHayashi): is it sound to approximate here?
+        let _, removeResult =
+            Mapper.mapBoolCtx (tsfRemoveSym SymInIteratedConstraint) NoCtx check
+        // If check is a tautology, it will be equivalent to 'true'.
+        lift (equiv BTrue >> equivHolds id) removeResult
+
+    /// <summary>
+    ///     Checks the base downclosure property.
+    ///     <para>
+    ///         This states that, for all iterated views <c>A(x)[n]</c>,
+    ///         <c>D(emp) => D(A(x)[0])</c>: their definitions are no stronger
+    ///         than that of the empty view.  If there is no <c>D(emp)</c>, we
+    ///         instead must prove <c>D(A(x)[0])</c> is a tautology.
+    ///     </para>
+    /// </summary>
+    /// <param name="empDefn">The empty-view definition, <c>D(emp)</c>.</param>
+    /// <param name="iterator">The iterator variable, <c>n</c>.</param>
+    /// <param name="func">The iterated func to check, <c>A(x)[n]</c>.</param>
+    /// <param name="defn">The definition to check, <c>D(A(x)[n])</c>.</param>
+    /// <returns>
+    ///     The original definition if base downclosure holds; an error
+    ///     otherwise.
+    /// </returns>
     let checkBaseDownclosure
       (empDefn : BoolExpr<Sym<Var>>)
       (iterator : Var)
@@ -144,9 +203,7 @@ module Downclosure =
       : Result<IteratedDFunc * BoolExpr<Sym<Var>>, Error> =
         (* To do the base downclosure, we need to replace all instances of the
            iterator in the definition with 0. *)
-        let subZero v = if v = iterator then AInt 0L else AVar (Reg v)
-
-        let baseDefn = downclosureMap subZero defn
+        let baseDefn = mapOverIteratorUses (fun _ -> AInt 0L) iterator defn
 
         (* Base downclosure for a view V[n](x):
              D(emp) => D(V[0](x))
@@ -156,35 +213,42 @@ module Downclosure =
            The definition of emp can only mention global variables, so it does
            not need to be freshened. *)
         let check = mkImplies empDefn baseDefn
-
-        // Expression equivalence cannot handle symbols, so try remove them.
-        // TODO(CaptainHayashi): is it sound to approximate here?
         bind
-            (fun chk ->
-                // Pose that the check is a tautology, and use Z3 to check it.
-                let closed = equivHolds id (equiv chk BTrue)
-
-                if closed
+            (fun baseHolds ->
+                if baseHolds
                 then ok (func, defn)
                 else fail (BaseDownclosureError ([func], defn, empDefn)))
-            (check
-             |> Mapper.mapBoolCtx (tsfRemoveSym SymInIteratedConstraint) NoCtx
-             |> snd)
+            (runDownclosureCheck check)
 
+    /// <summary>
+    ///     Checks the inductive downclosure property.
+    ///     <para>
+    ///         This states that, for all iterated views <c>A(x)[n]</c>,
+    ///         for all positive <c>n</c>, <c>D(A(x)[n+1]) => D(A(x)[n])</c>:
+    ///         iterated view definitions must be monotonic over the iterator.
+    ///         This, coupled with base downclosure, allows us to consider only
+    ///         the highest iterator of an iterated func during reification,
+    ///         instead of needing to take all funcs with an iterator less than
+    ///         or equal to it.
+    ///     </para>
+    /// </summary>
+    /// <param name="iterator">The iterator variable, <c>n</c>.</param>
+    /// <param name="func">The iterated func to check, <c>A(x)[n]</c>.</param>
+    /// <param name="defn">The definition to check, <c>D(A(x)[n])</c>.</param>
+    /// <returns>
+    ///     The original definition if inductive downclosure holds; an error
+    ///     otherwise.
+    /// </returns>
     let checkInductiveDownclosure (iterator : Var)
       (func : IteratedDFunc)
       (defn : BoolExpr<Sym<Var>>)
       : Result<IteratedDFunc * BoolExpr<Sym<Var>>, Error> =
         (* To do the inductive downclosure, we need to replace all instances of
            the iterator in the definition with (iterator + 1) in one version. *)
-        let increment v =
-            if v = iterator
-            then mkAdd2 (AVar (Reg v)) (AInt 1L)
-            else AVar (Reg v)
+        let increment v = mkAdd2 (AVar (Reg v)) (AInt 1L)
+        let succDefn = mapOverIteratorUses increment iterator defn
 
-        let succDefn = downclosureMap increment defn
-
-        (* Base downclosure for a view V[n](x):
+        (* Inductive downclosure for a view V[n](x):
              (0 <= n) => (D(V[n+1](x)) => D(V[n](x)))
            That is, the definition of V when the iterator is n+1 implies the
            definition of V when the iterator is n, for all positive n. *)
@@ -192,20 +256,12 @@ module Downclosure =
             mkImplies
                 (mkLe (AInt 0L) (AVar (Reg iterator)))
                 (mkImplies succDefn defn)
-
-        // Expression equivalence cannot handle symbols, so try remove them.
-        // TODO(CaptainHayashi): is it sound to approximate here?
         bind
-            (fun chk ->
-                // Pose that the check is a tautology, and use Z3 to check it.
-                let closed = equivHolds id (equiv chk BTrue)
-
-                if closed
+            (fun indHolds ->
+                if indHolds
                 then ok (func, defn)
                 else fail (InductiveDownclosureError ([func], succDefn, defn)))
-            (check
-             |> Mapper.mapBoolCtx (tsfRemoveSym SymInIteratedConstraint) NoCtx
-             |> snd)
+            (runDownclosureCheck check)
 
     /// <summary>
     ///     Checks the base and inductive downclosure properties on a given
@@ -286,7 +342,7 @@ module Downclosure =
                             (fun (v, r) -> ([v], r))
                             (checkDownclosure i empDefn rhs))
                      | Some { IsIterated = _ } -> fail (IteratorOnNonIterated i)
-                     | None -> fail (NoSuchView (i.Func.Name)))
+                     | None -> fail (NoSuchView i.Func))
             // Over-large iterated view definition (for now, anyway).
             | xs, [] -> return! fail (TooManyIteratedFuncs (lhs, List.length xs))
             // Mixed view definition (currently not allowed).
@@ -313,16 +369,13 @@ module Downclosure =
 
         (* This is needed for base downclosure checking.
            If it doesn't exist, then we don't do those checks. *)
-        let empDefn =
-            definer
-            |> ViewDefiner.toSeq
-            |> Seq.tryFind (fst >> List.isEmpty)
-            |> Option.bind snd
+        let defSeq = ViewDefiner.toSeq definer
+        let empDefn = Option.bind snd (Seq.tryFind (fst >> List.isEmpty) defSeq)
 
-        let checkEach def definer =
-            ok def >>= checkDef empDefn vprotos >>= (fun _ -> ok definer)
-
-        definer |> ViewDefiner.toSeq |> seqBind checkEach definer
+        // TODO (CaptainHayashi): actually use the result here
+        let checkEach def definerSoFar =
+            ok def >>= checkDef empDefn vprotos >>= (fun _ -> ok definerSoFar)
+        seqBind checkEach definer defSeq
 
 /// Splits an iterated GFunc into a pair of guard and iterated func.
 let iterGFuncTuple
@@ -644,8 +697,12 @@ module Pretty =
         | MixedFuncType view ->
             fmt "constraint '{0}' mixes iterated and non-iterated views"
                 [ printDView view ]
-        | NoSuchView name -> fmt "no view prototype for '{0}'" [ String name ]
-        | LookupError(name, err) -> wrapped "lookup for view" (name |> String) (err |> Core.Instantiate.Pretty.printError)
+        | NoSuchView name
+            -> fmt "no view prototype for '{0}'" [ printDFunc name ]
+        | LookupError(func, err) ->
+            wrapped "lookup for view"
+                (printDFunc func)
+                (err |> Core.Instantiate.Pretty.printError)
         | IteratorOnNonIterated func ->
             fmt "view '{0}' is not iterated, but used in an iterated constraint"
                 [ printIteratedContainer
