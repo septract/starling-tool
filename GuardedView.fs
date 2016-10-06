@@ -217,6 +217,25 @@ let mgfunc (guard : MBoolExpr) (name : string) (pars : MExpr seq) : MGFunc =
 let smgfunc (guard : SMBoolExpr) (name : string) (pars : SMExpr seq) : SMGFunc =
     gfunc guard name pars
 
+/// <summary>
+///     Constructs an iterated guarded func.
+/// </summary>
+/// <param name="guard">The guard on which the func is conditional.</param>
+/// <param name="name">The name of the func.</param>
+/// <param name="pars">The parameters of the func, as a sequence.</param>
+/// <param name="iter">The iterator.</param>
+/// <typeparam name="Var">The type of expression variables.</typeparam>
+/// <returns>
+///     The <see cref="IteratedGFunc"/> iterating over the func with name
+///     <paramref name="name"/> and params <paramref name="pars"/>
+///     <paramref name="it"/> times, subject to <paramref name="guard"/>
+///     holding.
+/// </returns>
+let iteratedGFunc (guard : BoolExpr<'Var>) (name : string)
+  (pars : Expr<'Var> seq) (iter : IntExpr<'Var>)
+  : IteratedGFunc<'Var> =
+    iterated (gfunc guard name pars) iter
+
 (*
  * Single-guard active patterns.
  *)

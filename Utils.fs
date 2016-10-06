@@ -339,6 +339,8 @@ module Testing =
     let assertEqual (a : 'a) (b : 'a) = Assert.AreEqual(a, b)
     let AssertAreEqual(a, b) = assertEqual a b
 
+    let inline (?=?) a b = assertEqual a b
+
     /// <summary>
     ///     A more F#-friendly overload of <c>TestCaseData</c>.
     /// </summary>

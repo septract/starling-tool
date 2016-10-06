@@ -336,8 +336,9 @@ let mkImplies (l : BoolExpr<'var>) (r : BoolExpr<'var>) : BoolExpr<'var> =
 /// Makes an Add out of a pair of two expressions.
 let mkAdd2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
     match (l, r) with
-    | (AInt x, AInt y) -> AInt (x + y)
-    | _                -> AAdd [ l; r ]
+    | (AInt 0L, x) | (x, AInt 0L) -> x
+    | (AInt x, AInt y)            -> AInt (x + y)
+    | _                           -> AAdd [ l; r ]
 
 /// Makes an Add out of a sequence of expressions.
 let mkAdd (xs : IntExpr<'var> seq) : IntExpr<'var> =

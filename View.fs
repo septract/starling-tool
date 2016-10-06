@@ -47,6 +47,8 @@ module Types =
     /// <typeparam name="Iterator">The type of the iterator.</typeparam>
     type IteratedContainer<'Func, 'Iterator> =
         { Func : 'Func; Iterator : 'Iterator }
+        override this.ToString () =
+            sprintf "iter[%A](%A)" this.Iterator this.Func
 
     /// <summary>
     ///     Constructs an iterated container.
@@ -108,7 +110,23 @@ module Types =
 
     /// An iterated non-D func.
     type IteratedFunc<'Var> when 'Var : equality =
+        // TODO(CaptainHayashi): sort out this type mess.
         IteratedContainer<Func<Expr<'Var>>, IntExpr<'Var>>
+
+    /// <summary>
+    ///     Construct an iterated func.
+    /// </summary>
+    /// <param name="name">The name of the iterated func.</param>
+    /// <param name="pars">The parameters of the iterated func.</param>
+    /// <param name="iterator">The iterator of the iterated func.</param>
+    /// <typeparam name="Var">The type of variables in the func.</typeparam>
+    /// <returns>
+    ///     An <see cref="IteratedFunc"/> with the given parameters.
+    /// </returns>
+    let iteratedFunc
+      (name : string) (pars : Expr<'Var> seq) (iterator : IntExpr<'Var>)
+      : IteratedFunc<'Var> =
+      iterated (func name pars) iterator
 
     /// <summary>
     ///     A basic view, as an ordered list of VFuncs.
