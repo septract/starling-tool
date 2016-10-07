@@ -8,6 +8,7 @@ open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Utils
 open Starling.Core.TypeSystem
+open Starling.Core.Definer
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
@@ -96,36 +97,6 @@ module Types =
 
     /// A term using only internal boolean expressions.
     type FTerm = CTerm<MBoolExpr>
-
-    (*
-     * Func lookup
-     *)
-
-    /// <summary>
-    ///     A definer function mapping views to their meanings.
-    /// </summary>
-    /// <typeparam name="defn">
-    ///     Type of definitions of <c>View</c>s stored in the table.
-    ///     May be <c>unit</c>.
-    /// </typeparam>
-    type ViewDefiner<'defn> =
-        // TODO(CaptainHayashi): this should probably be a map,
-        // but translating it to one seems non-trivial.
-        // Would need to define equality on funcs very loosely.
-        (DView * 'defn) list
-
-    /// <summary>
-    ///     A definer function mapping funcs to their meanings.
-    /// </summary>
-    /// <typeparam name="defn">
-    ///     Type of definitions of <c>Func</c>s stored in the table.
-    ///     May be <c>unit</c>.
-    /// </typeparam>
-    type FuncDefiner<'defn> =
-        // TODO(CaptainHayashi): this should probably be a map,
-        // but translating it to one seems non-trivial.
-        // Would need to define equality on funcs very loosely.
-        (DFunc * 'defn) list
 
     type PrimSemantics = { Name: string; Results: TypedVar list; Args: TypedVar list; Body: SVBoolExpr }
     type SemanticsMap<'a> = Map<string, 'a>
@@ -497,83 +468,3 @@ let mapViewDefs (f : 'x -> 'y) (model : Model<'axiom, 'x>) : Model<'axiom, 'y> =
 let tryMapViewDefs (f : 'x -> Result<'y, 'e>) (model : Model<'axiom, 'x>)
     : Result<Model<'axiom, 'y>, 'e> =
     lift (fun x -> withViewDefs x model) (model |> viewDefs |> f)
-
-module FuncDefiner =
-    /// <summary>
-    ///     Converts a <c>FuncDefiner</c> to a sequence of pairs of
-    ///     <c>Func</c> and definition.
-    /// </summary>
-    /// <param name="definer">
-    ///     A <see cref="FuncDefiner"/> to convert to a sequence.
-    /// </param>
-    /// <typeparam name="defn">
-    ///     The type of <c>Func</c> definitions.  May be <c>unit</c>.
-    /// </typeparam>
-    /// <returns>
-    ///     The sequence of (<c>Func</c>, <c>'defn</c>) pairs.
-    ///     A <c>FuncDefiner</c> allowing the <c>'defn</c>s of the given
-    ///     <c>Func</c> to be looked up.
-    /// </returns>
-    let toSeq (definer : FuncDefiner<'defn>) : (DFunc * 'defn) seq =
-        // This function exists to smooth over any changes in Definer
-        // representation we make later (eg. to maps).
-        List.toSeq definer
-
-    /// <summary>
-    ///     Builds a <c>FuncDefiner</c> from a sequence of pairs of
-    ///     <c>Func</c> and definition.
-    /// </summary>
-    /// <param name="fseq">
-    ///     The sequence of (<c>Func</c>, <c>'defn</c>) pairs.
-    /// </param>
-    /// <typeparam name="defn">
-    ///     The type of <c>Func</c> definitions.  May be <c>unit</c>.
-    /// </typeparam>
-    /// <returns>
-    ///     A <c>FuncDefiner</c> allowing the <c>'defn</c>s of the given
-    ///     <c>Func</c> to be looked up.
-    /// </returns>
-    let ofSeq (fseq : #((DFunc * 'defn) seq)) : FuncDefiner<'defn> =
-        // This function exists to smooth over any changes in Definer
-        // representation we make later (eg. to maps).
-        Seq.toList fseq
-
-module ViewDefiner =
-    /// <summary>
-    ///     Converts a <c>ViewDefiner</c> to a sequence of pairs of
-    ///     <c>View</c> and definition.
-    /// </summary>
-    /// <param name="definer">
-    ///     A <see cref="ViewDefiner"/> to convert to a sequence.
-    /// </param>
-    /// <typeparam name="defn">
-    ///     The type of <c>View</c> definitions.  May be <c>unit</c>.
-    /// </typeparam>
-    /// <returns>
-    ///     The sequence of (<c>View</c>, <c>'defn</c>) pairs.
-    ///     A <c>ViewDefiner</c> allowing the <c>'defn</c>s of the given
-    ///     <c>View</c> to be looked up.
-    /// </returns>
-    let toSeq (definer : ViewDefiner<'defn>) : (DView * 'defn) seq =
-        // This function exists to smooth over any changes in Definer
-        // representation we make later (eg. to maps).
-        List.toSeq definer
-
-    /// <summary>
-    ///     Builds a <c>ViewDefiner</c> from a sequence of pairs of
-    ///     <c>View</c> and definition.
-    /// </summary>
-    /// <param name="fseq">
-    ///     The sequence of (<c>Func</c>, <c>'defn</c>) pairs.
-    /// </param>
-    /// <typeparam name="defn">
-    ///     The type of <c>Func</c> definitions.  May be <c>unit</c>.
-    /// </typeparam>
-    /// <returns>
-    ///     A <c>ViewDefiner</c> allowing the <c>'defn</c>s of the given
-    ///     <c>View</c>s to be looked up.
-    /// </returns>
-    let ofSeq (fseq : #((DView * 'defn) seq)) : ViewDefiner<'defn> =
-        // This function exists to smooth over any changes in Definer
-        // representation we make later (eg. to maps).
-        Seq.toList fseq

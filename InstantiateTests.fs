@@ -6,7 +6,9 @@ module Starling.Tests.Instantiate
 open NUnit.Framework
 open Starling.Collections
 open Starling.Utils
+open Starling.Utils.Testing
 open Starling.Core.TypeSystem
+open Starling.Core.Definer
 open Starling.Core.Expr
 open Starling.Core.Model
 open Starling.Core.Var
@@ -64,23 +66,32 @@ module FuncInstantiate =
 
     [<Test>]
     let ``Instantiate func with too many arguments``() =
-        Assert.That
-            (testInstantiateFail (smvfunc "foo" [ AInt 101L |> Expr.Int ]),
-             Is.EqualTo
-                ([ CountMismatch(1, 0) ] |> Some))
-    [<Test>]
+        Some
+            [ BadFuncLookup
+                (smvfunc "foo" [ AInt 101L |> Expr.Int ],
+                 CountMismatch(1, 0)) ]
+        ?=? testInstantiateFail (smvfunc "foo" [ AInt 101L |> Expr.Int ])
     let ``Instantiate func with too few arguments``() =
-        Assert.That
-            (testInstantiateFail (smvfunc "bar" []),
-             Is.EqualTo
-                ([ CountMismatch(0, 1) ] |> Some))
+        Some
+            [ BadFuncLookup
+                (smvfunc "bar" [],
+                 CountMismatch(0, 1)) ]
+        ?=? testInstantiateFail (smvfunc "bar" [])
     [<Test>]
     let ``Instantiate func with two arguments of incorrect types``() =
-        Assert.That
-            (testInstantiateFail
+        Some
+            [ BadFuncLookup
                 (smvfunc "baz"
                     [ BTrue |> Expr.Bool
-                      siAfter "burble" |> Expr.Int ]),
-             Is.EqualTo
-                ([ TypeMismatch (Int "quux", Bool ())
-                   TypeMismatch (Bool "flop", Int ()) ] |> Some))
+                      siAfter "burble" |> Expr.Int ],
+                 TypeMismatch (Int "quux", Bool ()))
+              BadFuncLookup
+                (smvfunc "baz"
+                    [ BTrue |> Expr.Bool
+                      siAfter "burble" |> Expr.Int ],
+                 TypeMismatch (Bool "flop", Int ())) ]
+        ?=?
+            testInstantiateFail
+                (smvfunc "baz"
+                    [ BTrue |> Expr.Bool
+                      siAfter "burble" |> Expr.Int ])

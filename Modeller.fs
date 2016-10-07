@@ -8,6 +8,7 @@ open Chessie.ErrorHandling
 open Starling
 open Starling.Collections
 open Starling.Core
+open Starling.Core.Definer
 open Starling.Core.TypeSystem
 open Starling.Core.TypeSystem.Check
 open Starling.Core.Expr
@@ -100,7 +101,7 @@ module Types =
         /// A view was requested that does not exist.
         | NoSuchView of name : string
         /// A view lookup failed.
-        | LookupError of name : string * err : Instantiate.Types.Error
+        | LookupError of name : string * err : Core.Definer.Error
         /// A view used variables in incorrect ways, eg by duplicating.
         | BadVar of err : VarMapError
         /// A viewdef conflicted with the shared variables.
@@ -243,7 +244,10 @@ module Pretty =
         | ViewError.BadExpr(expr, err) ->
             wrapped "expression" (printExpression expr) (printExprError err)
         | NoSuchView name -> fmt "no view prototype for '{0}'" [ String name ]
-        | LookupError(name, err) -> wrapped "lookup for view" (name |> String) (err |> Instantiate.Pretty.printError)
+        | LookupError(name, err) ->
+            wrapped "lookup for view"
+                (String name)
+                (Definer.Pretty.printError err)
         | ViewError.BadVar err ->
             colonSep [ "invalid variable usage" |> String
                        err |> printVarMapError ]
@@ -661,11 +665,11 @@ let funcViewParMerge (ppars : TypedVar list) (dpars : Var list)
   : TypedVar list =
     List.map2 (fun ppar dpar -> withType (typeOf ppar) dpar) ppars dpars
 
-/// Adapts Instantiate.lookup to the modeller's needs.
+/// Adapts Definer.lookup to the modeller's needs.
 let lookupFunc (protos : FuncDefiner<ProtoInfo>) (func : Func<_>)
   : Result<DFunc, ViewError> =
     protos
-    |> Instantiate.lookup func
+    |> FuncDefiner.lookup func
     |> mapMessages (curry LookupError func.Name)
     |> bind (function
              | Some (proto, _) -> proto |> ok
@@ -924,11 +928,11 @@ let modelCFunc
              |> collect
              // Then, put them into a VFunc.
              |> lift (vfunc afunc.Name)
-             // Now, we can use Instantiate's type checker to ensure
+             // Now, we can use Definer's type checker to ensure
              // the params in the VFunc are of the types mentioned
              // in proto.
              |> bind (fun vfunc ->
-                          Instantiate.checkParamTypes vfunc proto
+                          FuncDefiner.checkParamTypes vfunc proto
                           |> mapMessages (curry LookupError vfunc.Name)))
     // Finally, lift to CFunc.
     |> lift CFunc.Func

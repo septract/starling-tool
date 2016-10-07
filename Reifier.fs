@@ -7,6 +7,7 @@ module Starling.Reifier
 open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Utils
+open Starling.Core.Definer
 open Starling.Core.Expr
 open Starling.Core.View
 open Starling.Core.Var
@@ -88,7 +89,7 @@ module Types =
         ///         to make sure.
         ///     </para>
         /// </summary>
-        | LookupError of func : DFunc * err : Core.Instantiate.Types.Error
+        | LookupError of func : DFunc * err : Core.Definer.Error
         /// <summary>
         ///     An iterator had the wrong type.
         /// </summary>
@@ -135,7 +136,7 @@ module Downclosure =
       : Result<ProtoInfo option, Error> =
         // TODO(CaptainHayashi): proper doc comment
         // TODO(CaptainHayashi): merge with Modeller.lookupFunc?
-        let look func = Core.Instantiate.lookup func protos
+        let look func = Core.Definer.FuncDefiner.lookup func protos
         let record = wrapMessages LookupError look func
         lift (Option.map snd) record
 
@@ -703,7 +704,7 @@ module Pretty =
         | LookupError(func, err) ->
             wrapped "lookup for view"
                 (printDFunc func)
-                (err |> Core.Instantiate.Pretty.printError)
+                (err |> Core.Definer.Pretty.printError)
         | IteratorOnNonIterated func ->
             fmt "view '{0}' is not iterated, but used in an iterated constraint"
                 [ printIteratedContainer

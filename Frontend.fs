@@ -6,6 +6,7 @@ module Starling.Lang.Frontend
 open Chessie.ErrorHandling
 open Starling
 open Starling.Core.Pretty
+open Starling.Core.Definer
 open Starling.Core.Expr
 open Starling.Core.Expr.Pretty
 open Starling.Core.Graph

@@ -12,6 +12,7 @@ module Starling.Core.Axiom
 
 open Starling.Collections
 open Starling.Utils
+open Starling.Core.Definer
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.View

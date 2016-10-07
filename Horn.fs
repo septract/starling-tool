@@ -7,6 +7,7 @@ open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Semantics
 open Starling.Utils
+open Starling.Core.Definer
 open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.Expr
@@ -54,9 +55,7 @@ module Types =
     /// An error caused when emitting a Horn clause.
     type Error =
         /// A Func is inconsistent with its definition.
-        | InconsistentFunc of
-              func : MVFunc
-              * err : Starling.Core.Instantiate.Types.Error
+        | InconsistentFunc of func : MVFunc * err : Starling.Core.Definer.Error
         /// A viewdef has a non-arithmetic param.
         | NonArithParam of TypedVar
         /// A model has a non-arithmetic variable.
@@ -180,7 +179,7 @@ module Pretty =
         | InconsistentFunc (func, err) ->
             wrapped "view func"
                     (printMVFunc func)
-                    (Starling.Core.Instantiate.Pretty.printError err)
+                    (Starling.Core.Definer.Pretty.printError err)
         | NonArithParam p ->
             fmt "invalid parameter '{0}': HSF only permits integers here"
                 [ printTypedVar p ]
@@ -399,7 +398,7 @@ let hsfFunc
     // defining views is to be held true.
     // Now that we're at the func level, finding the view is easy!
     definer
-    |> (lookup func >> mapMessages (curry InconsistentFunc func))
+    |> (FuncDefiner.lookup func >> mapMessages (curry InconsistentFunc func))
     |> bind (function
              | Some df -> lift Some (predOfFunc tryIntExpr func)
              | None -> ok None)
