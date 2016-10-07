@@ -225,11 +225,11 @@ module Pretty =
         | ExprNotBoolean ->
             "expression is not suitable for use in a Boolean position" |> String
         | VarNotBoolean lv ->
-            fmt "lvalue '{0}' is not a suitable type for use in a Boolean expressio    n" [ printLValue lv ]
+            fmt "lvalue '{0}' is not a suitable type for use in a Boolean expression" [ printLValue lv ]
         | ExprNotInt ->
             "expression is not suitable for use in an integral position" |> String
         | VarNotInt lv ->
-            fmt "lvalue '{0}' is not a suitable type for use in an integral expre    ssion" [ printLValue lv ]
+            fmt "lvalue '{0}' is not a suitable type for use in an integral expression" [ printLValue lv ]
         | Var(var, err) -> wrapped "variable" (var |> printLValue) (err |> printVarMapError)
         | AmbiguousSym sym ->
             fmt
