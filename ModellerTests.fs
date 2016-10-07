@@ -9,6 +9,7 @@ open Starling.Utils.Testing
 open Starling.Collections
 open Starling.Core
 open Starling.Core.TypeSystem
+open Starling.Core.Definer
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic

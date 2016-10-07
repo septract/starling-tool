@@ -22,6 +22,7 @@ module Starling.Core.Instantiate
 open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Utils
+open Starling.Core.Definer
 open Starling.Core.TypeSystem
 open Starling.Core.TypeSystem.Check
 open Starling.Core.Var
@@ -45,16 +46,9 @@ module Types =
     /// </summary>
     type Error =
         /// <summary>
-        ///     The func looked up has a parameter <c>param</c>, which
-        ///     has been assigned to an argument of the incorrect type
-        ///     <c>atype</c>.
+        ///     An error occurred during func lookup.
         /// </summary>
-        | TypeMismatch of param: TypedVar * atype: Type
-        /// <summary>
-        ///     The func looked up has <c>fn</c> arguments, but its
-        ///     definition has <c>dn</c> parameters.
-        /// </summary>
-        | CountMismatch of fn: int * dn: int
+        | BadFuncLookup of func : VFunc<Sym<MarkedVar>> * err : Definer.Error
         /// <summary>
         ///     We were given an indefinite constraint when trying to
         ///     assert that all constraints are definite.
@@ -87,12 +81,10 @@ module Pretty =
     /// Pretty-prints instantiation errors.
     let printError : Error -> Doc =
         function
-        | TypeMismatch (par, atype) ->
-            fmt "parameter '{0}' conflicts with argument of type '{1}'"
-                [ printTypedVar par; printType atype ]
-        | CountMismatch (fn, dn) ->
-            fmt "view usage has {0} parameter(s), but its definition has {1}"
-                [ fn |> sprintf "%d" |> String; dn |> sprintf "%d" |> String ]
+        | BadFuncLookup (func, err) ->
+            wrapped "resolution of func"
+                (printVFunc (printSym printMarkedVar) func)
+                (Starling.Core.Definer.Pretty.printError err)
         | IndefiniteConstraint (view) ->
             fmt "indefinite 'constraint {0} -> ?' not allowed here"
                 [ printDFunc view ]
@@ -106,90 +98,7 @@ module Pretty =
 
     let printProofTerm : ProofTerm -> Doc =
         printCmdTerm printMBoolExpr printMBoolExpr printMBoolExpr
-(*
- * Func lookup
- *)
 
-/// <summary>
-///     Checks whether <c>func</c> and <c>_arg1</c> agree on parameter
-///     count.
-/// </summary>
-/// <param name="func">
-///     The func being looked up, the process of which this check is part.
-/// </param>
-/// <param name="_arg1">
-///     An <c>Option</c>al pair of <c>DFunc</c> and its defining
-///     <c>BoolExpr</c>.
-///     The value <c>None</c> suggests that <c>func</c> has no definition,
-///     which can be ok (eg. if the <c>func</c> is a non-defining view).
-/// </param>
-/// <returns>
-///     A Chessie result, where the <c>ok</c> value is the optional pair of
-///     prototype func and definition, and the failure value is a
-///     <c>Starling.Instantiate.Error</c>.
-/// </returns>
-let checkParamCount (func : Func<'a>) : (Func<'b> * 'c) option -> Result<(Func<'b> * 'c) option, Error> =
-    function
-    | None -> ok None
-    | Some def ->
-        let fn = List.length func.Params
-        let dn = List.length (fst def).Params
-        if fn = dn then ok (Some def) else CountMismatch (fn, dn) |> fail
-
-/// <summary>
-///     Look up <c>func</c> in <c>_arg1</c>.
-///
-///     <para>
-///         This checks that the use of <c>func</c> agrees on the number of
-///         parameters, but not necessarily types.  You will need to add
-///         type checking if needed.
-///     </para>
-/// </summary>
-/// <param name="func">
-///     The func to look up in <c>_arg1</c>.
-/// </param>
-/// <param name="_arg1">
-///     An associative sequence mapping <c>Func</c>s to some definition.
-/// </param>
-/// <returns>
-///     A Chessie result, where the <c>ok</c> value is an <c>Option</c>
-///     containing the pair of
-///     prototype func and definition, and the failure value is a
-///     <c>Starling.Instantiate.Error</c>.  If the <c>ok</c> value is
-///     <c>None</c>, it means no (valid or otherwise) definition exists.
-/// </returns>
-let lookup (func : Func<_>)
-  : FuncDefiner<'b> -> Result<(DFunc * 'b) option, Error> =
-    // First, try to find a func whose name agrees with ours.
-    FuncDefiner.toSeq
-    >> Seq.tryFind (fun (dfunc, _) -> dfunc.Name = func.Name)
-    >> checkParamCount func
-
-/// <summary>
-///     Checks whether <c>func</c> and <c>_arg1</c> agree on parameter
-///     types.
-/// </summary>
-/// <param name="func">
-///     The func being looked up, the process of which this check is part.
-/// </param>
-/// <param name="def">
-///     The <c>DFunc</c> that <paramref name="func" /> has matched.
-/// </param>
-/// <returns>
-///     A Chessie result, where the <c>ok</c> value is
-///     <paramref name="func" />, and the failure value is a
-///     <c>Starling.Instantiate.Error</c>.
-/// </returns>
-let checkParamTypes func def =
-    List.map2
-        (curry
-             (function
-              | UnifyInt _ | UnifyBool _ -> ok ()
-              | UnifyFail (fp, dp) -> fail (TypeMismatch (dp, typeOf fp))))
-        func.Params
-        def.Params
-    |> collect
-    |> lift (fun _ -> func)
 
 /// <summary>
 ///     Produces a <c>VSubFun</c> that substitutes the arguments of
@@ -258,19 +167,15 @@ let instantiate
   : Result<BoolExpr<Sym<MarkedVar>> option, Error> =
     let subfun dfunc = paramSubFun vfunc dfunc |> liftVToSym |> onVars
 
-    definer
-    |> lookup vfunc
-    |> bind
-           (function
-            | None -> ok None
-            | Some (dfunc, defn) ->
-                lift
-                    (fun _ -> Some (dfunc, defn))
-                    (checkParamTypes vfunc dfunc))
-    |> lift
-           (Option.map
-                (fun (dfunc, defn) ->
-                     defn |> Mapper.mapBoolCtx (subfun dfunc) NoCtx |> snd))
+    let checkedLookup =
+        wrapMessages BadFuncLookup
+            (flip FuncDefiner.lookupWithTypeCheck definer) vfunc
+
+    lift
+        (Option.map
+            (fun (dfunc, defn) ->
+                 defn |> Mapper.mapBoolCtx (subfun dfunc) NoCtx |> snd))
+        checkedLookup
 /// <summary>
 ///     Partitions a <see cref="FuncDefiner"/> into a definite
 ///     definer and an indefinite definer.

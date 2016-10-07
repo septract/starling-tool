@@ -6,6 +6,7 @@ module Starling.Lang.Guarder
 
 open Starling.Collections
 open Starling.Utils
+open Starling.Core.Definer
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Symbolic

@@ -30,6 +30,7 @@ open Starling
 open Starling.Collections
 open Starling.Semantics
 open Starling.Core.TypeSystem
+open Starling.Core.Definer
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model

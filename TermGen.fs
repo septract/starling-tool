@@ -7,6 +7,7 @@ module Starling.TermGen
 open Chessie.ErrorHandling
 
 open Starling.Collections
+open Starling.Core.Definer
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.View
@@ -235,7 +236,7 @@ module Iter =
         ///     A func was lowered that doesn't have a valid prototype.
         /// </summary>
         | ProtoLookupError of FuncName : string
-                            * Error : Starling.Core.Instantiate.Types.Error
+                            * Error : Starling.Core.Definer.Error
         /// <summary>
         ///     A func was lowered that doesn't have a prototype at all.
         /// </summary>
@@ -261,7 +262,7 @@ module Iter =
             Core.Pretty.wrapped
                 "prototype lookup for func"
                 (Core.Pretty.String func)
-                (Core.Instantiate.Pretty.printError error)
+                (Core.Definer.Pretty.printError error)
         | ProtoMissing func ->
             Core.Pretty.fmt
                 "prototype missing for func '{0}'"
@@ -294,7 +295,7 @@ module Iter =
       (protos : FuncDefiner<ProtoInfo>)
       (func : Func<'Param>)
       : Result<bool, Error> =
-            lookup func protos
+            FuncDefiner.lookup func protos
             |> mapMessages (fun f -> ProtoLookupError (func.Name, f))
             |> bind
                 (function
