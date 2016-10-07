@@ -118,25 +118,65 @@ module Types =
           /// </summary>
           IsAnonymous : bool }
 
+    /// <summary>
+    ///     Record of a sanity check that has been postponed to the backend due
+    ///     to missing information.
+    ///
+    ///     <para>
+    ///         Starling tries to check certain aspects of a proof for sanity
+    ///         before handing off to a backend, but sometimes there is
+    ///         information missing that the backend itself can give.  In these
+    ///         cases, it forces the backend to add the check as a proof term,
+    ///         which offers less immediate 'your proof is wrong' feedback but
+    ///         ensures as many proofs as possible are sound.
+    ///     </para>
+    /// </summary>
+    type DeferredCheck =
+        /// <summary>
+        ///     The given iterated func needs its definition checking for base
+        ///     downclosure.
+        /// </summary>
+        | NeedsBaseDownclosure of func : DFunc
+        /// <summary>
+        ///     The given iterated func needs its definition checking for
+        ///     inductive downclosure.
+        /// </summary>
+        | NeedsInductiveDownclosure of func : DFunc
+
     (*
      * Models
      *)
 
     /// A parameterised model of a Starling program.
     type Model<'axiom, 'viewdefs> =
-        { SharedVars : VarMap
+        { /// <summary>
+          ///     The shared variable environment.
+          /// </summary>
+          SharedVars : VarMap
+          /// <summary>
+          ///     The thread-local variable environment.
+          /// </summary>
           ThreadVars : VarMap
+          /// <summary>
+          ///     The set of proof terms in the model.
+          /// </summary>
           Axioms : Map<string, 'axiom>
           /// <summary>
           ///     The semantic function for this model.
           /// </summary>
           Semantics : PrimSemanticsMap
-          // This corresponds to the function D.
+          /// <summary>
+          ///     This corresponds to the function D.
+          /// </summary>
           ViewDefs : 'viewdefs
           /// <summary>
           ///     The view prototypes defined in this model.
           /// </summary>
-          ViewProtos : FuncDefiner<ProtoInfo> }
+          ViewProtos : FuncDefiner<ProtoInfo>
+          /// <summary>
+          ///     A log of any deferred checks the backend must do.
+          /// </summary>
+          DeferredChecks : DeferredCheck list }
 
 
 /// <summary>
@@ -428,7 +468,8 @@ let withAxioms (xs : Map<string, 'y>) (model : Model<'x, 'dview>)
       ViewDefs = model.ViewDefs
       Semantics = model.Semantics
       Axioms = xs
-      ViewProtos = model.ViewProtos }
+      ViewProtos = model.ViewProtos
+      DeferredChecks = model.DeferredChecks }
 
 /// Maps a pure function f over the axioms of a model.
 let mapAxioms (f : 'x -> 'y) (model : Model<'x, 'dview>) : Model<'y, 'dview> =
@@ -458,7 +499,8 @@ let withViewDefs (ds : 'Definer2)
       ViewDefs = ds
       Semantics = model.Semantics
       Axioms = model.Axioms
-      ViewProtos = model.ViewProtos }
+      ViewProtos = model.ViewProtos
+      DeferredChecks = model.DeferredChecks }
 
 /// Maps a pure function f over the viewdef database of a model.
 let mapViewDefs (f : 'x -> 'y) (model : Model<'axiom, 'x>) : Model<'axiom, 'y> =

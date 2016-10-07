@@ -128,4 +128,5 @@ let flatten
           |> Seq.map (pairMap (flattenDView globalsP) id)
           |> FuncDefiner.ofSeq
       Semantics = model.Semantics
-      ViewProtos = model.ViewProtos }
+      ViewProtos = model.ViewProtos
+      DeferredChecks = model.DeferredChecks }
