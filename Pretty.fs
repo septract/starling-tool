@@ -53,6 +53,7 @@ let syntaxView d = Styled([Yellow], d)
 let error d = Styled([Red], d)
 let errorContext d = Styled([Cyan], d)
 let errorInfo d = Styled([Magenta], d)
+let warning d = Styled([Yellow], d)
 
 /// <summary>
 ///     Styles a string with ANSI escape sequences.
@@ -85,6 +86,8 @@ let stylise s l d =
 
     let codify = List.map code >> String.concat ";"
 
+    printfn "%A (previous %A)" s l
+
     let prefix = "\u001b[" + codify s + "m"
     let suffix = "\u001b[" + withDefault "0" (Option.map codify l) + "m"
     prefix + d + suffix
@@ -111,20 +114,20 @@ type PrintState =
 /// <summary>
 ///     The internal print function.
 /// </summary>
-/// <param name="state">
-///     The current state of the printer.
-/// </param>
+/// <param name="state">The current state of the printer.</param>
+/// <param name="doc">The document to print.</param>
 /// <returns>
 ///     A function mapping <see cref="Doc"/>s to strings.
 /// </returns>
-let rec printState state =
-    function
+let rec printState (state : PrintState) (doc : Doc) : string =
+    match doc with
     | Header (heading, incmd) ->
         printState state heading + ":" + lnIndent state.Level + printState state incmd + lnIndent state.Level
     | Separator ->
         "----"
     | Styled (s, d) when state.UseStyles ->
-        stylise s state.CurrentStyle <| printState { state with CurrentStyle = Some s } d
+        let state' = { state with CurrentStyle = Some s }
+        stylise s state.CurrentStyle (printState state' d)
     | Styled (s, d) ->
         printState state d
     | VSkip ->
