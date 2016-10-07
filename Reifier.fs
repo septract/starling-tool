@@ -197,7 +197,7 @@ module Downclosure =
     ///     otherwise.
     /// </returns>
     let checkBaseDownclosure
-      (empDefn : BoolExpr<Sym<Var>>)
+      (empDefn : BoolExpr<Sym<Var>> option)
       (iterator : Var)
       (func : IteratedDFunc)
       (defn : BoolExpr<Sym<Var>>)
@@ -205,6 +205,9 @@ module Downclosure =
         (* To do the base downclosure, we need to replace all instances of the
            iterator in the definition with 0. *)
         let baseDefn = mapOverIteratorUses (fun _ -> AInt 0L) iterator defn
+
+        // TODO(CaptainHayashi): defer check here.
+        let empDefn = match empDefn with | None -> failwith "TODO: defer" | Some e -> e
 
         (* Base downclosure for a view V[n](x):
              D(emp) => D(V[0](x))
@@ -285,9 +288,6 @@ module Downclosure =
             | Some (Int v) -> ok v
             | Some v -> fail (BadIteratorType ([func], typeOf v))
 
-        // If empDefn is undefined, it becomes true by the theory.
-        let empDefnT = withDefault BTrue empDefn
-
         (* No point checking downclosure of an indefinite viewdef.
            This job is delegated to the indefinite-proof backends, like HSF and
            MuZ3, which must make sure their synthesised definitions are
@@ -299,7 +299,7 @@ module Downclosure =
             let checkedDefnR =
                 bind
                     (fun i ->
-                        checkBaseDownclosure empDefnT i func d
+                        checkBaseDownclosure empDefn i func d
                         >>= uncurry (checkInductiveDownclosure i))
                     checkedIterR
             lift (pairMap id Some) checkedDefnR
@@ -369,10 +369,19 @@ module Downclosure =
         (* Currently, we don't actually modify the definer, but this may
            change in future. *)
 
-        (* This is needed for base downclosure checking.
-           If it doesn't exist, then we don't do those checks. *)
+        (* Get the definition of 'emp'.
+           This is needed for base downclosure checking.
+
+           There are three possibilities here:
+           1) emp is defined, in which case we use the definition;
+           2) emp is not defined, in which case we assume 'true' by the theory;
+           3) emp is indefinite, in which case we pass None to 'checkDef' and
+              'checkDef' then has to defer any base downclosure checks. *)
         let defSeq = ViewDefiner.toSeq definer
-        let empDefn = Option.bind snd (Seq.tryFind (fst >> List.isEmpty) defSeq)
+        let empDefIfDefined =
+            Option.map snd (Seq.tryFind (fst >> List.isEmpty) defSeq)
+        // Deal with case 2).
+        let empDefn = withDefault (Some BTrue) empDefIfDefined
 
         // TODO (CaptainHayashi): actually use the result here
         let checkEach def definerSoFar =
