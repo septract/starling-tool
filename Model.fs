@@ -185,6 +185,7 @@ module Types =
 module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Symbolic.Pretty
+    open Starling.Core.Var.Pretty
     open Starling.Core.View.Pretty
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Command.Pretty
@@ -226,6 +227,29 @@ module Pretty =
       : Doc =
         printMap Indented String pAxiom model.Axioms
 
+    /// <summary>
+    ///     Pretty-prints a deferred check.
+    /// </summary>
+    /// <param name="check">The deferred check to print.</param>
+    /// <returns>A <see cref="Doc"/> capturing the deferred check.</returns>
+    let printDeferredCheck (check : DeferredCheck) : Doc =
+        warning <|
+            match check with
+            | NeedsBaseDownclosure (func, why) ->
+                colonSep
+                    [ hsep
+                        [ String "iterated func"
+                          printIteratedDFunc func
+                          String "needs base downclosure check" ]
+                      String why ]
+            | NeedsInductiveDownclosure (func, why) ->
+                colonSep
+                    [ hsep
+                        [ String "iterated func"
+                          printIteratedDFunc func
+                          String "needs inductive downclosure check" ]
+                      String why ]
+
     /// Pretty-prints a model given axiom and defining-view printers.
     let printModel
       (pAxiom : 'Axiom -> Doc)
@@ -242,7 +266,9 @@ module Pretty =
               headed "ViewDefs" <|
                   pDefiner model.ViewDefs
               headed "Axioms" <|
-                  Seq.singleton (printModelAxioms pAxiom model) ]
+                  Seq.singleton (printModelAxioms pAxiom model)
+              headed "Deferred checks" <|
+                  Seq.map printDeferredCheck model.DeferredChecks ]
 
     /// <summary>
     ///     Pretty-prints <see cref="FuncDefiner"/>s.
