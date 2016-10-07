@@ -136,12 +136,12 @@ module Types =
         ///     The given iterated func needs its definition checking for base
         ///     downclosure.
         /// </summary>
-        | NeedsBaseDownclosure of func : DFunc
+        | NeedsBaseDownclosure of func : IteratedDFunc * why : string
         /// <summary>
         ///     The given iterated func needs its definition checking for
         ///     inductive downclosure.
         /// </summary>
-        | NeedsInductiveDownclosure of func : DFunc
+        | NeedsInductiveDownclosure of func : IteratedDFunc * why : string
 
     (*
      * Models
