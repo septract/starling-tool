@@ -1353,5 +1353,6 @@ let model
               ViewDefs = constraints
               Semantics = coreSemantics
               Axioms = axioms
-              ViewProtos = vprotos }
+              ViewProtos = vprotos
+              DeferredChecks = [] }
     }
