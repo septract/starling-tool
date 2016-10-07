@@ -104,19 +104,23 @@ module FuncDefiner =
     /// <param name="func">
     ///     The func being looked up, the process of which this check is part.
     /// </param>
-    /// <param name="_arg1">
+    /// <param name="defn">
     ///     An <c>Option</c>al pair of <c>DFunc</c> and its defining
     ///     <c>BoolExpr</c>.
     ///     The value <c>None</c> suggests that <c>func</c> has no definition,
     ///     which can be ok (eg. if the <c>func</c> is a non-defining view).
     /// </param>
+    /// <typeparam name="Par">The type of func-signature parameters.</typeparam>
+    /// <typeparam name="Arg">The type of func arguments.</typeparam>
+    /// <typeparam name="Defn">The type of func definitions.</typeparam>
     /// <returns>
     ///     A Chessie result, where the <c>ok</c> value is the optional pair of
     ///     prototype func and definition, and the failure value is a
     ///     <c>Starling.Core.Definer.Error</c>.
     /// </returns>
-    let checkParamCount (func : Func<'a>) : (Func<'b> * 'c) option -> Result<(Func<'b> * 'c) option, Error> =
-        function
+    let checkParamCount (func : Func<'Arg>) (defn : (Func<'Par> * 'Defn) option)
+       : Result<(Func<'Par> * 'Defn) option, Error> =
+        match defn with
         | None -> ok None
         | Some def ->
             let fn = List.length func.Params
@@ -124,28 +128,32 @@ module FuncDefiner =
             if fn = dn then ok (Some def) else CountMismatch (fn, dn) |> fail
 
     /// <summary>
-    ///     Checks whether <c>func</c> and <c>_arg1</c> agree on parameter
+    ///     Checks whether <c>func</c> and <c>defn</c> agree on parameter
     ///     types.
     /// </summary>
     /// <param name="func">
     ///     The func being looked up, the process of which this check is part.
     /// </param>
-    /// <param name="def">
+    /// <param name="defn">
     ///     The <c>DFunc</c> that <paramref name="func" /> has matched.
     /// </param>
+    /// <typeparam name="Var">
+    ///     The type of variables in <paramref name="func"/>.
+    /// </typeparam>
     /// <returns>
     ///     A Chessie result, where the <c>ok</c> value is
     ///     <paramref name="func" />, and the failure value is a
     ///     <c>Starling.Core.Definer.Error</c>.
     /// </returns>
-    let checkParamTypes func def =
+    let checkParamTypes (func : Func<Expr<'Var>>) (defn : Func<TypedVar>)
+       : Result<Func<Expr<'Var>>, Error> =
         List.map2
             (curry
                  (function
                   | UnifyInt _ | UnifyBool _ -> ok ()
                   | UnifyFail (fp, dp) -> fail (TypeMismatch (dp, typeOf fp))))
             func.Params
-            def.Params
+            defn.Params
         |> collect
         |> lift (fun _ -> func)
 
