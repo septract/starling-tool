@@ -1319,24 +1319,24 @@ let model
   (collated : CollatedScript)
   : Result<Model<ModellerMethod, ViewDefiner<SVBoolExpr option>>, ModelError> =
     trial {
-        // Make variable maps out of the global and local variable definitions.
-        let! globals = makeVarMap collated.Globals
+        // Make variable maps out of the shared and thread variable definitions.
+        let! svars = makeVarMap collated.SharedVars
                        |> mapMessages (curry BadVar "shared")
-        let! locals = makeVarMap collated.Locals
+        let! tvars = makeVarMap collated.ThreadVars
                       |> mapMessages (curry BadVar "thread-local")
 
         let desugaredMethods, unknownProtos =
-            Starling.Lang.ViewDesugar.desugar locals collated.Methods
+            Starling.Lang.ViewDesugar.desugar tvars collated.Methods
 
         let! vprotos =
             modelViewProtos (Seq.append collated.VProtos unknownProtos)
 
-        let! constraints = modelViewDefs globals vprotos collated
+        let! constraints = modelViewDefs svars vprotos collated
 
         let mctx =
             { ViewProtos = vprotos
-              SharedVars = globals
-              ThreadVars = locals }
+              SharedVars = svars
+              ThreadVars = tvars }
         let! axioms =
             desugaredMethods
             |> Seq.map (modelMethod mctx)
@@ -1344,8 +1344,8 @@ let model
             |> lift Map.ofSeq
 
         return
-            { Globals = globals
-              Locals = locals
+            { SharedVars = svars
+              ThreadVars = tvars
               ViewDefs = constraints
               Semantics = coreSemantics
               Axioms = axioms

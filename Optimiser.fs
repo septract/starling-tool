@@ -904,7 +904,7 @@ module Graph =
     /// </returns>
     let optimise (opts : (string * bool) list) (mdl : Model<Graph, _>)
       : Model<Graph, _> =
-        mapAxioms (optimiseGraph mdl.Locals opts) mdl
+        mapAxioms (optimiseGraph mdl.ThreadVars opts) mdl
 
 
 /// <summary>

@@ -447,7 +447,7 @@ let hsfTerm
 
 /// Constructs a HSF script for a model.
 let hsfModel
-  ({ Globals = sharedVars; ViewDefs = definer; Axioms = xs }
+  ({ SharedVars = sharedVars; ViewDefs = definer; Axioms = xs }
      : Model<CmdTerm<MBoolExpr, GView<MarkedVar>, MVFunc>,
              FuncDefiner<BoolExpr<Var> option>>)
   : Result<Horn list, Error> =

@@ -565,13 +565,10 @@ let parseMethod =
                 // ^-                             ... <block>
                 (fun s b -> {Signature = s ; Body = b} )
 
-/// Parses a variable with the given initial keyword.
-let parseVar kw = pstring kw >>. ws
-                  // ^- shared     ...
-                             >>. parseTypedTypedVar
-                             // ^- ... <type> <identifier> ...
-                             .>> pstring ";"
-                             // ^-                         ... ;
+/// Parses a variable set with the given initial keyword and AST type.
+let parseVars kw atype =
+    let parseList = parseParams parseIdentifier .>> wsSemi
+    pstring kw >>. ws >>. pipe2ws parseType parseList (fun t v -> atype (t, v))
 
 /// Parses a search directive.
 let parseSearch =
@@ -579,8 +576,7 @@ let parseSearch =
     // ^- search
                      >>. pint32
                      // ^- ... <depth>
-                     .>> ws
-                     .>> pstring ";"
+                     .>> wsSemi
 
 /// Parses a script of zero or more methods, including leading and trailing whitespace.
 let parseScript =
@@ -596,9 +592,9 @@ let parseScript =
                              //  | view <identifier> <view-proto-param-list> ;
                              parseSearch |>> Search
                              // ^- search 0;
-                             parseVar "shared" |>> Global
+                             parseVars "shared" SharedVars
                              // ^- shared <type> <identifier> ;
-                             parseVar "thread" |>> Local]) .>> ws ) eof
+                             parseVars "thread" ThreadVars]) .>> ws ) eof
                              // ^- thread <type> <identifier> ;
 
 (*

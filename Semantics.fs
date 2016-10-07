@@ -196,7 +196,7 @@ let instantiateSemanticsOfPrim
 ///     converting *all* After variables to (Intermediate i) variables
 ///     converts any Before variables where an Intermediate exists, to that Intermediate
 ///
-/// the frame can then be constructed by taking the BoolExpr and looking for the aforementioned Intermediate 
+/// the frame can then be constructed by taking the BoolExpr and looking for the aforementioned Intermediate
 /// variables and adding a (= (After v) (Intermediate maxInterValue v)) if it finds one
 let seqComposition xs =
     // since we are trying to keep track of explicit state (where we are in terms of the intermediate variables)
@@ -278,7 +278,7 @@ open Starling.Core.Axiom.Types
 let translate
   (model : Model<GoalAxiom<Command>, 'viewdef>)
   : Result<Model<GoalAxiom<CommandSemantics<SMBoolExpr>>, 'viewdef>, Error> =
-    let modelSemantics = semanticsOfCommand model.Semantics model.Globals model.Locals
+    let modelSemantics = semanticsOfCommand model.Semantics model.SharedVars model.ThreadVars
     let replaceCmd ga c = { Goal = ga.Goal; Axiom = {Pre = ga.Axiom.Pre; Post = ga.Axiom.Post; Cmd = c }}
     let transSem ga = bind (replaceCmd ga >> ok) (modelSemantics ga.Axiom.Cmd)
     tryMapAxioms transSem model

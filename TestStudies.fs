@@ -360,19 +360,19 @@ let ticketLockParsed =
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 5L;
                    Column = 1L;};
-       Node = Global (Int "ticket");};
+       Node = SharedVars (Int (), ["ticket"]);};
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 6L;
                    Column = 1L;};
-       Node = Global (Int "serving");};
+       Node = SharedVars (Int (), ["serving"]);};
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 7L;
                    Column = 1L;};
-       Node = Local (Int "t");};
+       Node = ThreadVars (Int (), ["t"]);};
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 8L;
                    Column = 1L;};
-       Node = Local (Int "s");};
+       Node = ThreadVars (Int (), ["s"]);};
 
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 13L;
@@ -387,10 +387,10 @@ let ticketLockParsed =
 
 /// The collated form of the ticket lock.
 let ticketLockCollated =
-    { CollatedScript.Globals =
+    { CollatedScript.SharedVars =
           [ (TypedVar.Int "ticket")
             (TypedVar.Int "serving") ]
-      Locals =
+      ThreadVars =
           [ (TypedVar.Int "t")
             (TypedVar.Int "s") ]
       Search = None
@@ -570,10 +570,10 @@ let ticketLockViewProtos : FuncDefiner<ProtoInfo> =
 
 /// The model of the ticket lock.
 let ticketLockModel : Model<ModellerMethod, ViewDefiner<SVBoolExpr option>> =
-    { Globals =
+    { SharedVars =
           Map.ofList [ ("serving", Type.Int ())
                        ("ticket", Type.Int ()) ]
-      Locals =
+      ThreadVars =
           Map.ofList [ ("s", Type.Int ())
                        ("t", Type.Int ()) ]
       Axioms = ticketLockMethods

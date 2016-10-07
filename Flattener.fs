@@ -109,17 +109,17 @@ let flatten
   : Model<Term<_, GView<Sym<MarkedVar>>, SMVFunc>,
           FuncDefiner<SVBoolExpr option>> =
     /// Build a function making a list of global arguments, for view assertions.
-    let globalsF marker = varMapToExprs (marker >> Reg) model.Globals
+    let globalsF marker = varMapToExprs (marker >> Reg) model.SharedVars
 
     /// Build a list of global parameters, for view definitions.
     let globalsP =
-        model.Globals
+        model.SharedVars
         |> Map.toSeq
         |> Seq.map (fun (name, ty) -> withType ty name)
         |> List.ofSeq
 
-    { Globals = model.Globals
-      Locals = model.Locals
+    { SharedVars = model.SharedVars
+      ThreadVars = model.ThreadVars
       Axioms = Map.map (fun _ x -> flattenTerm globalsF x) model.Axioms
       ViewDefs =
           model.ViewDefs

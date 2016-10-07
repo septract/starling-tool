@@ -5,6 +5,7 @@
 module Starling.Lang.Collator
 
 open Starling.Utils
+open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.View
 
@@ -20,8 +21,8 @@ module Types =
     ///     A script whose items have been partitioned by type.
     /// </summary>
     type CollatedScript =
-        { Globals : TypedVar list
-          Locals : TypedVar list
+        { SharedVars : TypedVar list
+          ThreadVars : TypedVar list
           /// <summary>
           ///     The search depth, defaulting to <c>None</c> (no search).
           /// </summary>
@@ -42,6 +43,7 @@ module Types =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
+    open Starling.Core.Var.Pretty
 
     open Starling.Lang.AST.Pretty
 
@@ -55,10 +57,13 @@ module Pretty =
     ///     A pretty-printer command for printing <paramref name="cs" />.
     /// </returns>
     let printCollatedScript (cs: CollatedScript) : Doc =
+        let printScriptVar cls v =
+            withSemi (hsep [ String cls |> syntax; printTypedVar v ])
+
         let definites =
             [ vsep <| Seq.map printViewProto cs.VProtos
-              vsep <| Seq.map (printScriptVar "shared") cs.Globals
-              vsep <| Seq.map (printScriptVar "local") cs.Locals
+              vsep <| Seq.map (printScriptVar "shared") cs.SharedVars
+              vsep <| Seq.map (printScriptVar "thread") cs.ThreadVars
               vsep <| Seq.map (uncurry printConstraint) cs.Constraints
               VSep(List.map (printMethod
                                  (printMarkedView printView)
@@ -83,8 +88,8 @@ let empty : CollatedScript =
       Methods = []
       Search = None
       VProtos = []
-      Globals = []
-      Locals = [] }
+      SharedVars = []
+      ThreadVars = [] }
 
 /// <summary>
 ///     Collates a script, grouping all like-typed items together.
@@ -101,8 +106,14 @@ let collate (script : ScriptItem list) : CollatedScript =
 
     let collateStep item (cs : CollatedScript) =
         match item.Node with
-        | Global g -> { cs with Globals = g::cs.Globals }
-        | Local l -> { cs with Locals = l :: cs.Locals }
+        | SharedVars (t, vs) ->
+            // Flatten eg. 'int x, y, z' into 'int x; int y; int z'.
+            let s = List.map (withType t) vs
+            { cs with SharedVars = s @ cs.SharedVars }
+        | ThreadVars (t, vs) ->
+            // Flatten eg. 'int x, y, z' into 'int x; int y; int z'.
+            let s = List.map (withType t) vs
+            { cs with ThreadVars = s @ cs.ThreadVars }
         | ViewProto v -> { cs with VProtos = v::cs.VProtos }
         | Search i -> { cs with Search = Some i }
         | Method m -> { cs with Methods = m::cs.Methods }

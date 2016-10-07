@@ -153,8 +153,8 @@ module Types =
 
     /// A parameterised model of a Starling program.
     type Model<'axiom, 'viewdefs> =
-        { Globals : VarMap
-          Locals : VarMap
+        { SharedVars : VarMap
+          ThreadVars : VarMap
           Axioms : Map<string, 'axiom>
           /// <summary>
           ///     The semantic function for this model.
@@ -224,10 +224,10 @@ module Pretty =
         headed "Model"
             [ headed "Shared variables" <|
                   Seq.singleton
-                      (printMap Inline String printType model.Globals)
+                      (printMap Inline String printType model.SharedVars)
               headed "Thread variables" <|
                   Seq.singleton
-                      (printMap Inline String printType model.Locals)
+                      (printMap Inline String printType model.ThreadVars)
               headed "ViewDefs" <|
                   pDefiner model.ViewDefs
               headed "Axioms" <|
@@ -452,8 +452,8 @@ let axioms ({Axioms = xs} : Model<'Axiom, _>) : Map<string, 'Axiom> = xs
 /// The axiom set may be of a different type.
 let withAxioms (xs : Map<string, 'y>) (model : Model<'x, 'dview>)
     : Model<'y, 'dview> =
-    { Globals = model.Globals
-      Locals = model.Locals
+    { SharedVars = model.SharedVars
+      ThreadVars = model.ThreadVars
       ViewDefs = model.ViewDefs
       Semantics = model.Semantics
       Axioms = xs
@@ -482,8 +482,8 @@ let viewDefs ({ViewDefs = ds} : Model<_, 'Definer>) : 'Definer = ds
 let withViewDefs (ds : 'Definer2)
                  (model : Model<'Axiom, 'Definer1>)
                  : Model<'Axiom, 'Definer2> =
-    { Globals = model.Globals
-      Locals = model.Locals
+    { SharedVars = model.SharedVars
+      ThreadVars = model.ThreadVars
       ViewDefs = ds
       Semantics = model.Semantics
       Axioms = model.Axioms
