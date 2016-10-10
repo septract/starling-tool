@@ -42,6 +42,19 @@ open Starling.Core.GuardedView.Sub
 [<AutoOpen>]
 module Types =
     /// <summary>
+    ///     Type of terms going into instantiation.
+    /// </summary>
+    type FinalTerm =
+        CmdTerm<BoolExpr<Sym<MarkedVar>>,
+                GView<Sym<MarkedVar>>,
+                Func<Expr<Sym<MarkedVar>>>>
+
+    /// <summary>
+    ///     Type of models going into instantiation.
+    /// </summary>
+    type FinalModel = Model<FinalTerm, FuncDefiner<Sym<Var>>>
+
+    /// <summary>
     ///     Type of Chessie errors arising from Instantiate.
     /// </summary>
     type Error =
@@ -61,7 +74,15 @@ module Types =
         | UnwantedSym of sym: string
 
     /// Terms in a Proof are boolean expression pre/post conditions with Command's
-    type SymProofTerm = CmdTerm<SMBoolExpr, SMBoolExpr, SMBoolExpr>
+    type SymProofTerm =
+        { /// <summary>
+          ///    The proof term before symbolic conversion.
+          /// </summary>
+          Original: FinalTerm
+          /// <summary>
+          ///     The proof term after symbolic conversion.
+          /// </summary>
+          SymBool: CmdTerm<SMBoolExpr, SMBoolExpr, SMBoolExpr> }
 
     /// Terms in a Proof are over boolean expressions
     type ProofTerm = CmdTerm<MBoolExpr, MBoolExpr, MBoolExpr>
@@ -71,6 +92,7 @@ module Types =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
+    open Starling.Core.GuardedView.Pretty
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Var.Pretty
@@ -93,8 +115,20 @@ module Pretty =
             fmt "encountered uninterpreted symbol {0}"
                 [ String sym ]
 
-    let printSymProofTerm : SymProofTerm -> Doc =
-        printCmdTerm printSMBoolExpr printSMBoolExpr printSMBoolExpr
+    let printSymProofTerm (sterm : SymProofTerm) : Doc =
+        vsep
+            [ headed "Original term" <|
+                [ printCmdTerm
+                    (printBoolExpr (printSym printMarkedVar))
+                    (printGView (printSym printMarkedVar))
+                    (printVFunc (printSym printMarkedVar))
+                    sterm.Original ]
+              headed "Symbolic conversion" <|
+                [ printCmdTerm
+                    (printBoolExpr (printSym printMarkedVar))
+                    (printBoolExpr (printSym printMarkedVar))
+                    (printBoolExpr (printSym printMarkedVar))
+                    sterm.SymBool ] ]
 
     let printProofTerm : ProofTerm -> Doc =
         printCmdTerm printMBoolExpr printMBoolExpr printMBoolExpr
@@ -328,11 +362,11 @@ module Phase =
     /// Interprets all of the views in a term over the given definer.
     let interpretTerm
       (definer : FuncDefiner<SVBoolExpr>)
-      : CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>,
-                VFunc<Sym<MarkedVar>>>
-      -> Result<CmdTerm<SMBoolExpr, BoolExpr<Sym<MarkedVar>>,
-                        BoolExpr<Sym<MarkedVar>>>, Error> =
-        tryMapTerm ok (interpretGView definer) (interpretVFunc definer)
+      (term : FinalTerm)
+      : Result<SymProofTerm, Error> =
+        let symboolResult =
+            tryMapTerm ok (interpretGView definer) (interpretVFunc definer) term
+        lift (fun s -> { Original = term; SymBool = s }) symboolResult
 
 
     /// <summary>
@@ -390,9 +424,6 @@ module Phase =
     let run
       (model : Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
                      FuncDefiner<SVBoolExpr option>>)
-      : Result<Model<SymProofTerm, unit>, Error> =
+      : Result<Model<SymProofTerm, FuncDefiner<SVBoolExpr option>>, Error> =
       let vs = symboliseIndefinites model.ViewDefs
-
-      model
-      |> tryMapAxioms (interpretTerm vs)
-      |> lift (withViewDefs ())
+      tryMapAxioms (interpretTerm vs) model
