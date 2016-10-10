@@ -82,7 +82,12 @@ module Types =
           /// <summary>
           ///     The proof term after symbolic conversion.
           /// </summary>
-          SymBool: CmdTerm<SMBoolExpr, SMBoolExpr, SMBoolExpr> }
+          SymBool: Term<SMBoolExpr, SMBoolExpr, SMBoolExpr>
+          /// <summary>
+          ///     An approximate of the proof term with all symbols removed.
+          ///     Only appears if approximation was requested.
+          /// </summary>
+          Approx : Term<MBoolExpr, MBoolExpr, MBoolExpr> option }
 
     /// Terms in a Proof are over boolean expressions
     type ProofTerm = CmdTerm<MBoolExpr, MBoolExpr, MBoolExpr>
@@ -124,11 +129,20 @@ module Pretty =
                     (printVFunc (printSym printMarkedVar))
                     sterm.Original ]
               headed "Symbolic conversion" <|
-                [ printCmdTerm
+                [ printTerm
                     (printBoolExpr (printSym printMarkedVar))
                     (printBoolExpr (printSym printMarkedVar))
                     (printBoolExpr (printSym printMarkedVar))
-                    sterm.SymBool ] ]
+                    sterm.SymBool ]
+              (match sterm.Approx with
+               | None -> String "No approximation requested"
+               | Some a ->
+                headed "Approximate" <|
+                    [ printTerm
+                        (printBoolExpr printMarkedVar)
+                        (printBoolExpr printMarkedVar)
+                        (printBoolExpr printMarkedVar)
+                        a ]) ]
 
     let printProofTerm : ProofTerm -> Doc =
         printCmdTerm printMBoolExpr printMBoolExpr printMBoolExpr
@@ -359,14 +373,58 @@ module Phase =
         >> lift Seq.toList
         >> lift mkAnd
 
+    /// Given a symbolic-boolean term, calculate the non-symbolic approximation.
+    let approxTerm (symterm : Term<SMBoolExpr, SMBoolExpr, SMBoolExpr>) =
+        let apr position =
+            Mapper.mapBoolCtx
+                Starling.Core.Symbolic.Queries.approx
+                position
+            >> snd
+
+        let sub =
+            Mapper.mapBoolCtx (tsfRemoveSym UnwantedSym) Sub.Types.SubCtx.NoCtx
+            >> snd
+
+        let pos = Starling.Core.Sub.Position.positive
+        let neg = Starling.Core.Sub.Position.negative
+
+        let mapCmd cmdSemantics =
+          cmdSemantics
+          |> Starling.Core.Command.SymRemove.removeSym
+          |> (apr neg)
+          |> sub
+          |> lift simp
+
+        tryMapTerm
+            mapCmd
+            ((apr neg) >> sub >> lift Starling.Core.Expr.simp)
+            ((apr pos) >> sub >> lift Starling.Core.Expr.simp)
+                symterm
+
     /// Interprets all of the views in a term over the given definer.
     let interpretTerm
       (definer : FuncDefiner<SVBoolExpr>)
+      (approx : bool)
       (term : FinalTerm)
       : Result<SymProofTerm, Error> =
         let symboolResult =
-            tryMapTerm ok (interpretGView definer) (interpretVFunc definer) term
-        lift (fun s -> { Original = term; SymBool = s }) symboolResult
+            tryMapTerm
+                (fun { CommandSemantics.Semantics = c } -> ok c)
+                (interpretGView definer)
+                (interpretVFunc definer)
+                term
+
+        // TODO(CaptainHayashi): don't do this unless the user requested it?
+        let approxResult =
+            if approx
+            then lift Some (bind approxTerm symboolResult)
+            else ok None
+
+        lift2
+            (fun s a ->
+                { Original = term; SymBool = s; Approx = a })
+            symboolResult
+            approxResult
 
 
     /// <summary>
@@ -415,15 +473,15 @@ module Phase =
     ///         This consumes the view definitions.
     ///     </para>
     /// </summary>
-    /// <param name="model">
-    ///     The model to instantiate.
-    /// </param>
+    /// <param name="approx">Whether to build approximates.</param>
+    /// <param name="model">The model to instantiate.</param>
     /// <returns>
     ///     The model with all views instantiated.
     /// </returns>
     let run
+      (approx : bool)
       (model : Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
                      FuncDefiner<SVBoolExpr option>>)
       : Result<Model<SymProofTerm, FuncDefiner<SVBoolExpr option>>, Error> =
       let vs = symboliseIndefinites model.ViewDefs
-      tryMapAxioms (interpretTerm vs) model
+      tryMapAxioms (interpretTerm vs approx) model

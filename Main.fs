@@ -59,8 +59,6 @@ type Request =
     | TermOptimise
     /// Stop at symbolic proof translation.
     | SymProof
-    /// Convert the symbolic proof to a proof and return that.
-    | Proof
     /// Stop at SMT term elimination.
     | Eliminate
     /// Output the results of using SMT elimination as a proof, if possible.
@@ -119,9 +117,6 @@ let requestList : (string * (string * Request)) list =
         Request.TermOptimise))
       ("symproof",
        ("Emits the entire proof with symbolic variables.",
-        Request.SymProof))
-      ("proof",
-       ("Emits the entire proof after removing symbols.",
         Request.SymProof))
       ("eliminate",
        ("Stops Starling model generation at SMT elimination.",
@@ -199,8 +194,6 @@ type Response =
     (*
      * Proof backends
      *)
-    /// Output a fully-instantiated non-symbolic proof.
-    | Proof of Model<ProofTerm, FuncDefiner<BoolExpr<Sym<Var>> option>>
     /// Output the results of using SMT elimination as a proof, if possible.
     | SMTProof of Backends.Z3.Types.Response
     /// The result of MuZ3 backend processing.
@@ -246,7 +239,6 @@ let printResponse (mview : ModelView) : Response -> Doc =
     | TermOptimise m -> printFModel (printCmdTerm printSMBoolExpr printSMGView printSMVFunc) m
     | SymProof m -> printUModel printSymProofTerm m
     | Eliminate m -> printUModel Backends.Z3.Pretty.printZTerm m
-    | Proof m -> printUModel printProofTerm m
     | SMTProof z -> Backends.Z3.Pretty.printResponse mview z
     | MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
     | HSF h -> Backends.Horn.Pretty.printHorns h
@@ -415,8 +407,8 @@ let runStarling (request : Request)
 
     // Shorthand for the various stages available.
     let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
-    let smt reals rq = lift (Backends.Z3.backend reals rq)
-    let muz3 reals rq = lift (Backends.MuZ3.run reals rq)
+    let smt rq = lift (Backends.Z3.backend rq)
+    let muz3 rq = lift (Backends.MuZ3.run reals rq)
     let frontend times rq =
         Lang.Frontend.run times rq Response.Frontend Error.Frontend
     let graphOptimise =
@@ -452,52 +444,10 @@ let runStarling (request : Request)
                 mapMessages ModelFilterError npmIndefinite)
 
     let symproof : Result<Model<_, _>, Error> -> Result<Model<_, _>, Error> =
-        bind (Core.Instantiate.Phase.run
+        bind (Core.Instantiate.Phase.run approx
               >> mapMessages Error.ModelFilterError)
     let eliminate : Result<Model<_, _>, Error> -> Result<Model<_, _>, Error>  =
         lift (Backends.Z3.eliminate reals)
-
-    // TODO: keep around CommandSemantics longer
-    let proof (v: Result<Model<Backends.Z3.Types.ZTerm, _>, _>) =
-        let aprC =
-            if approx then Starling.Core.Command.SymRemove.removeSym else id
-
-        let apr position =
-            if approx
-            then
-                Core.TypeSystem.Mapper.mapBoolCtx
-                    Starling.Core.Symbolic.Queries.approx
-                    position
-                >> snd
-            else id
-
-        let sub =
-            Core.TypeSystem.Mapper.mapBoolCtx
-                (tsfRemoveSym Core.Instantiate.Types.UnwantedSym)
-                Core.Sub.Types.SubCtx.NoCtx
-            >> snd
-
-        let pos = Starling.Core.Sub.Position.positive
-        let neg = Starling.Core.Sub.Position.negative
-
-        let mapCmd cmdSemantics =
-          cmdSemantics.Semantics
-          |> aprC
-          |> (apr neg)
-          |> sub
-          |> lift simp
-          |> lift (fun bexpr -> { Semantics = bexpr; Cmd = cmdSemantics.Cmd })
-
-        let proofifyTerm { Backends.Z3.Types.ZTerm.SymBool = s } =
-            tryMapTerm
-                mapCmd
-                ((apr neg) >> sub >> lift Starling.Core.Expr.simp)
-                ((apr pos) >> sub >> lift Starling.Core.Expr.simp)
-                s
-
-        bind
-            (tryMapAxioms proofifyTerm >> mapMessages Error.ModelFilterError)
-            v
 
     let backend m =
         let phase op response =
@@ -506,28 +456,11 @@ let runStarling (request : Request)
             |>  (time.Stop(); (if config.times then printfn "Phase Backend; Elapsed: %dms" time.ElapsedMilliseconds); id)
             |> lift response
 
-        // TODO(CaptainHayashi): use this again.
-        let maybeApprox =
-            lift
-                (if approx
-                 then
-                     mapAxioms
-                         ((mapTerm
-                               Starling.Core.Command.SymRemove.removeSym
-                               id
-                               id)
-                          >> (Sub.subExprInDTerm
-                                  Starling.Core.Symbolic.Queries.approx
-                                  Starling.Core.Sub.Position.positive)
-                          >> snd)
-                 else id)
-
         match request with
-        | Request.Proof       -> phase proof Response.Proof
-        | Request.SMTProof rq -> phase (smt reals rq) Response.SMTProof
+        | Request.SMTProof rq -> phase (smt rq) Response.SMTProof
         // TODO: plug eliminate into HSF
         | Request.HSF         -> phase (prepareForHorn >> hsf) Response.HSF
-        | Request.MuZ3 rq     -> phase (prepareForHorn >> muz3 reals rq) Response.MuZ3
+        | Request.MuZ3 rq     -> phase (prepareForHorn >> muz3 rq) Response.MuZ3
         | _                   -> fail (Error.Other "Internal")
 
     //Build a phase with
