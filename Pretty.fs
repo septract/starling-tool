@@ -86,8 +86,6 @@ let stylise s l d =
 
     let codify = List.map code >> String.concat ";"
 
-    printfn "%A (previous %A)" s l
-
     let prefix = "\u001b[" + codify s + "m"
     let suffix = "\u001b[" + withDefault "0" (Option.map codify l) + "m"
     prefix + d + suffix
@@ -196,6 +194,17 @@ let hsepStr s c = HSep(c, String s)
 let hjoin c = HSep(c, Nop)
 /// Horizontally separates a list of commands with a space separator.
 let hsep c = hsepStr " " c
+/// Binary version of hsep.
+let hsep2 sep x y =
+    // Do a bit of optimisation in case we get long chains of hsep2s.
+    match (x, y) with
+    | HSep (xs, sx), HSep (ys, sy) when sx = sep && sy = sep ->
+        HSep (Seq.append xs ys, sep)
+    | HSep (xs, sx), y when sx = sep -> HSep (Seq.append xs (Seq.singleton y), sep)
+    | x, HSep (ys, sy) when sy = sep -> HSep (Seq.append (Seq.singleton x) ys, sep)
+    | x, y -> HSep (Seq.ofList [ x; y ], sep)
+/// Infix version of hsep.
+let (<+>) x y = hsep2 (String " ") x y
 /// Horizontally separates a list of commands with commas.
 let commaSep c = hsepStr ", " c
 /// Horizontally separates a list of commands with semicolons.

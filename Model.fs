@@ -237,17 +237,14 @@ module Pretty =
             match check with
             | NeedsBaseDownclosure (func, why) ->
                 colonSep
-                    [ hsep
-                        [ String "iterated func"
-                          printIteratedDFunc func
-                          String "needs base downclosure check" ]
+                    [ String "base downclosure check for iterated func"
+                        <+> printIteratedDFunc func
                       String why ]
             | NeedsInductiveDownclosure (func, why) ->
                 colonSep
                     [ hsep
-                        [ String "iterated func"
-                          printIteratedDFunc func
-                          String "needs inductive downclosure check" ]
+                        [ String "inductive downclosure check for iterated func"
+                            <+> printIteratedDFunc func ]
                       String why ]
 
     /// Pretty-prints a model given axiom and defining-view printers.
