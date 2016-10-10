@@ -57,18 +57,14 @@ type Request =
     | Semantics
     /// Stop at term optimisation.
     | TermOptimise
-    /// Output a fully-instantiated proof with symbols.
+    /// Stop at symbolic proof translation.
     | SymProof
-    /// Output a fully-instantiated unstructured proof with symbols.
-    | RawSymProof
-    /// Output a fully-instantiated proof without symbols.
+    /// Convert the symbolic proof to a proof and return that.
     | Proof
-    /// Output a fully-instantiated unstructured proof without symbols.
-    | RawProof
-    /// Run the Z3 backend, with the given request.
-    | SymZ3 of Backends.Z3.Types.Request
-    /// Run the Z3 backend, with the given request.
-    | Z3 of Backends.Z3.Types.Request
+    /// Stop at SMT term elimination.
+    | Eliminate
+    /// Output the results of using SMT elimination as a proof, if possible.
+    | SMTProof of Backends.Z3.Types.Request
     /// Run the MuZ3 backend (experimental), with the given request.
     | MuZ3 of Backends.MuZ3.Types.Request
     /// Run the HSF backend (experimental).
@@ -122,29 +118,26 @@ let requestList : (string * (string * Request)) list =
        ("Stops Starling model generation at term optimisation.",
         Request.TermOptimise))
       ("symproof",
-       ("Outputs a proof in Starling format, with all symbols intact.",
+       ("Emits the entire proof with symbolic variables.",
         Request.SymProof))
-      ("rawsymproof",
-       ("Outputs a definite proof in unstructured Starling format, with all symbols removed.",
-        Request.RawSymProof))
       ("proof",
-       ("Outputs a definite proof in Starling format, with all symbols removed.",
-        Request.Proof))
-      ("rawproof",
-       ("Outputs a definite proof in unstructured Starling format, with all symbols removed.",
-        Request.RawProof))
-      ("z3",
-       ("Outputs a definite proof in structured Z3/SMTLIB format.",
-        Request.Z3 Backends.Z3.Types.Request.Translate))
-      ("rawz3",
-       ("Outputs a definite proof in unstructured Z3/SMTLIB format.",
-        Request.Z3 Backends.Z3.Types.Request.Combine))
-      ("sat",
-       ("Executes a definite proof using Z3 and reports the result.",
-        Request.Z3 Backends.Z3.Types.Request.Sat))
-      ("symsat",
-       ("Executes a symbolic proof using Z3 and reports failing clauses.",
-        Request.SymZ3 Backends.Z3.Types.Request.Sat))
+       ("Emits the entire proof after removing symbols.",
+        Request.SymProof))
+      ("eliminate",
+       ("Stops Starling model generation at SMT elimination.",
+        Request.Eliminate))
+      ("smt-sat",
+       ("Tries to prove the input using SMT, and returns the term results.",
+        Request.SMTProof Backends.Z3.Types.Request.SatMap))
+      ("smt-failures",
+       ("Tries to prove the input using SMT, and returns the failures.",
+        Request.SMTProof Backends.Z3.Types.Request.Failures))
+      ("smt-allterms",
+       ("Tries to prove the input using SMT, and returns detailed results.",
+        Request.SMTProof Backends.Z3.Types.Request.AllTerms))
+      ("smt-remaining",
+       ("Proves as much as possible using SMT, returning the remaining proof.",
+        Request.SMTProof Backends.Z3.Types.Request.RemainingSymBools))
       ("mutranslate",
        ("Generates a proof using MuZ3 and outputs the individual terms.",
         Request.MuZ3 Backends.MuZ3.Types.Request.Translate))
@@ -163,7 +156,7 @@ let requestList : (string * (string * Request)) list =
 let requestFromStage (ostage : string option) : Request option =
     let pickStage stageName = List.tryFind (fun (x, _) -> x = stageName) requestList
 
-    (withDefault "sat" ostage).ToLower()
+    (withDefault "smt-sat" ostage).ToLower()
     |> pickStage
     |> Option.map (snd >> snd)
 
@@ -199,18 +192,17 @@ type Response =
     /// The result of term optimisation.
     | TermOptimise of Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
                             FuncDefiner<BoolExpr<Sym<Var>> option>>
-    /// Output a fully-instantiated symbolic proof.
-    | SymProof of Model<SymProofTerm, unit>
-    /// Output a fully-instantiated symbolic unstructured proof.
-    | RawSymProof of Model<SMBoolExpr, unit>
+    /// Stop at symbolic proof calculation.
+    | SymProof of Model<SymProofTerm, FuncDefiner<BoolExpr<Sym<Var>> option>>
+    /// Stop at SMT term elimination.
+    | Eliminate of Backends.Z3.Types.ZModel
+    (*
+     * Proof backends
+     *)
     /// Output a fully-instantiated non-symbolic proof.
-    | Proof of Model<ProofTerm, unit>
-    /// Output a fully-instantiated non-symbolic unstructured proof.
-    | RawProof of Model<MBoolExpr, unit>
-    /// The result of Z3 backend processing.
-    | Z3 of Backends.Z3.Types.Response
-    /// The result of Z3 backend processing.
-    | SymZ3 of Backends.Z3.Types.Response * Model<SymProofTerm, unit>
+    | Proof of Model<ProofTerm, FuncDefiner<BoolExpr<Sym<Var>> option>>
+    /// Output the results of using SMT elimination as a proof, if possible.
+    | SMTProof of Backends.Z3.Types.Response
     /// The result of MuZ3 backend processing.
     | MuZ3 of Backends.MuZ3.Types.Response
     /// The result of HSF processing.
@@ -252,24 +244,10 @@ let printResponse (mview : ModelView) : Response -> Doc =
     | IterLower m -> printVModel (printCmdTerm printSMBoolExpr (printSubviewSet printGuardedSubview) printOView) m
     | Flatten m -> printFModel (printCmdTerm printSMBoolExpr printSMGView printSMVFunc) m
     | TermOptimise m -> printFModel (printCmdTerm printSMBoolExpr printSMGView printSMVFunc) m
-    | SymProof m ->
-        printUModel
-            printSymProofTerm
-            m
-    | RawSymProof m ->
-        printUModel Core.Symbolic.Pretty.printSMBoolExpr m
-    | Proof m ->
-        printUModel
-            printProofTerm
-            m
-    | RawProof m ->
-        printUModel Core.Var.Pretty.printMBoolExpr m
-    | Z3 z -> Backends.Z3.Pretty.printResponse mview z
-    | SymZ3 (z, m) ->
-       vmerge (Backends.Z3.Pretty.printResponse mview z)
-              (printUModel
-                printSymProofTerm
-                m)
+    | SymProof m -> printUModel printSymProofTerm m
+    | Eliminate m -> printUModel Backends.Z3.Pretty.printZTerm m
+    | Proof m -> printUModel printProofTerm m
+    | SMTProof z -> Backends.Z3.Pretty.printResponse mview z
     | MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
     | HSF h -> Backends.Horn.Pretty.printHorns h
 
@@ -437,7 +415,7 @@ let runStarling (request : Request)
 
     // Shorthand for the various stages available.
     let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
-    let z3 reals rq = lift (Backends.Z3.run reals rq)
+    let smt reals rq = lift (Backends.Z3.backend reals rq)
     let muz3 reals rq = lift (Backends.MuZ3.run reals rq)
     let frontend times rq =
         Lang.Frontend.run times rq Response.Frontend Error.Frontend
@@ -455,15 +433,32 @@ let runStarling (request : Request)
         bind (Starling.Semantics.translate
               >> mapMessages Error.Semantics)
     let axiomatise = lift Starling.Core.Graph.axiomatise
-    let filterIndefinite =
-        bind (Core.Instantiate.DefinerFilter.filterModelIndefinite
-              >> mapMessages ModelFilterError)
-    let symproof =
+
+    // Prepares a model for insertion into a Horn clause solver, by trying to
+    // throw away symbols and removing already-proven-by-Z3 clauses.
+    let prepareForHorn =
+        bind
+            (fun model ->
+                let nonProvenZTerms = Backends.Z3.extractFailures model
+                // TODO(CaptainHayashi): maybe don't lose information here.
+                let nonProvenAxioms =
+                    Map.map
+                        (fun _ { Backends.Z3.Types.ZTerm.Original = a } -> a)
+                        nonProvenZTerms
+                let nonProvenModel = withAxioms nonProvenAxioms model
+                let npmIndefinite =
+                    Core.Instantiate.DefinerFilter.filterModelIndefinite
+                        nonProvenModel
+                mapMessages ModelFilterError npmIndefinite)
+
+    let symproof : Result<Model<_, _>, Error> -> Result<Model<_, _>, Error> =
         bind (Core.Instantiate.Phase.run
               >> mapMessages Error.ModelFilterError)
+    let eliminate : Result<Model<_, _>, Error> -> Result<Model<_, _>, Error>  =
+        lift (Backends.Z3.eliminate reals)
 
     // TODO: keep around CommandSemantics longer
-    let proof v =
+    let proof (v: Result<Model<Backends.Z3.Types.ZTerm, _>, _>) =
         let aprC =
             if approx then Starling.Core.Command.SymRemove.removeSym else id
 
@@ -493,13 +488,15 @@ let runStarling (request : Request)
           |> lift simp
           |> lift (fun bexpr -> { Semantics = bexpr; Cmd = cmdSemantics.Cmd })
 
+        let proofifyTerm { Backends.Z3.Types.ZTerm.SymBool = s } =
+            tryMapTerm
+                mapCmd
+                ((apr neg) >> sub >> lift Starling.Core.Expr.simp)
+                ((apr pos) >> sub >> lift Starling.Core.Expr.simp)
+                s
+
         bind
-            (tryMapAxioms
-                 (tryMapTerm
-                      mapCmd
-                      ((apr neg) >> sub >> lift Starling.Core.Expr.simp)
-                      ((apr pos) >> sub >> lift Starling.Core.Expr.simp))
-             >> mapMessages Error.ModelFilterError)
+            (tryMapAxioms proofifyTerm >> mapMessages Error.ModelFilterError)
             v
 
     let backend m =
@@ -509,6 +506,7 @@ let runStarling (request : Request)
             |>  (time.Stop(); (if config.times then printfn "Phase Backend; Elapsed: %dms" time.ElapsedMilliseconds); id)
             |> lift response
 
+        // TODO(CaptainHayashi): use this again.
         let maybeApprox =
             lift
                 (if approx
@@ -524,20 +522,12 @@ let runStarling (request : Request)
                           >> snd)
                  else id)
 
-
-        // Magic function for unwrapping / wrapping Result types
-        // TODO: make less horrible, e.g. by using some non-result-wrapped type from z3
-        let tuplize f y = (y >>= fun x -> (lift (fun a -> (a,x)) (f y)) )
-
         match request with
-        | Request.SymProof    -> phase symproof Response.SymProof
-        | Request.RawSymProof -> phase (symproof >> rawproof) Response.RawSymProof
-        | Request.Proof       -> phase (symproof >> proof) Response.Proof
-        | Request.RawProof    -> phase (symproof >> proof >> rawproof) Response.RawProof
-        | Request.Z3 rq       -> phase (symproof >> proof >> z3 reals rq) Response.Z3
-        | Request.HSF         -> phase (filterIndefinite >> hsf) Response.HSF
-        | Request.MuZ3 rq     -> phase (filterIndefinite >> muz3 reals rq) Response.MuZ3
-        | Request.SymZ3 rq    -> phase (symproof >> (tuplize (proof >> z3 reals rq))) Response.SymZ3
+        | Request.Proof       -> phase proof Response.Proof
+        | Request.SMTProof rq -> phase (smt reals rq) Response.SMTProof
+        // TODO: plug eliminate into HSF
+        | Request.HSF         -> phase (prepareForHorn >> hsf) Response.HSF
+        | Request.MuZ3 rq     -> phase (prepareForHorn >> muz3 reals rq) Response.MuZ3
         | _                   -> fail (Error.Other "Internal")
 
     //Build a phase with
@@ -568,6 +558,8 @@ let runStarling (request : Request)
     ** phase  iterLower      Request.IterLower      Response.IterLower
     ** phase  flatten        Request.Flatten        Response.Flatten
     ** phase  termOptimise   Request.TermOptimise   Response.TermOptimise
+    ** phase  symproof       Request.SymProof       Response.SymProof
+    ** phase  eliminate      Request.Eliminate      Response.Eliminate
     ** backend
 
 /// Runs Starling with the given options, and outputs the results.

@@ -54,6 +54,8 @@ let error d = Styled([Red], d)
 let errorContext d = Styled([Cyan], d)
 let errorInfo d = Styled([Magenta], d)
 let warning d = Styled([Yellow], d)
+let success d = Styled([Green], d)
+let inconclusive d = Styled([Blue], d)
 
 /// <summary>
 ///     Styles a string with ANSI escape sequences.
