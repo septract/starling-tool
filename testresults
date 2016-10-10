@@ -4,18 +4,20 @@
 ./Examples/Fail/ticketLockBad.cvf: unlock_C000_002 unlock_C000_003
 ./Examples/Fail/ticketLockBad2.cvf: lock_C000_000 lock_C000_002 unlock_C000_000
 ./Examples/Fail/ticketLockFlippedLoop.cvf: lock_C002_001 lock_C002_004 lock_C003_002 lock_C003_003 lock_C003_005
-./Examples/Pass/multicounter.cvf: 
+./Examples/Pass/arc.cvf:
+./Examples/Pass/multicounter.cvf:
 ./Examples/Pass/peterson.cvf:
-./Examples/Pass/petersonInt.cvf: 
-./Examples/Pass/petersonIntMissingSynthesised.cvf: 
-./Examples/Pass/petersonMultiCmd.cvf: 
-./Examples/Pass/seqCmd.cvf: 
-./Examples/Pass/spinLockAdvisory.cvf: 
+./Examples/Pass/petersonInt.cvf:
+./Examples/Pass/petersonIntMissingSynthesised.cvf:
+./Examples/Pass/petersonMultiCmd.cvf:
+./Examples/Pass/seqCmd.cvf:
+./Examples/Pass/singleWriterMultiReaderLock.cvf: 
+./Examples/Pass/spinLockAdvisory.cvf:
 ./Examples/Pass/spinLock.cvf:
-./Examples/Pass/spinLockInt.cvf: 
-./Examples/Pass/spinLockMultiCmd.cvf: 
-./Examples/Pass/ticketLock.cvf: 
-./Examples/Pass/ticketLockNoIf.cvf: 
-./Examples/Pass/ticketLockNoInvariant.cvf: 
-./Examples/Pass/ticketLockNonAtomicRelease2.cvf: 
-./Examples/Pass/ticketLockNonAtomicRelease.cvf: 
+./Examples/Pass/spinLockInt.cvf:
+./Examples/Pass/spinLockMultiCmd.cvf:
+./Examples/Pass/ticketLock.cvf:
+./Examples/Pass/ticketLockNoIf.cvf:
+./Examples/Pass/ticketLockNoInvariant.cvf:
+./Examples/Pass/ticketLockNonAtomicRelease2.cvf:
+./Examples/Pass/ticketLockNonAtomicRelease.cvf:

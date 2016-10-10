@@ -48,6 +48,8 @@ type Request =
     | TermGen
     /// Stop at view reification.
     | Reify
+    /// Stop at iterator lowering.
+    | IterLower
     /// Stop at term flattening.
     | Flatten
     /// Stop at semantic transformation.
@@ -72,116 +74,124 @@ type Request =
     | HSF
 
 /// Map of -s stage names to Request items.
-let requestMap : Map<string, string * Request> =
-    Map.ofList
-        [ ("list",
-           ("Lists all available phases.",
-            Request.List))
-          ("parse",
-           ("Parses and formats a Starling file with no further processing.",
-            Request.Frontend Lang.Frontend.Request.Parse))
-          ("collate",
-           ("Stops Starling frontend processing at script collation.",
-            Request.Frontend Lang.Frontend.Request.Collate))
-          ("model",
-           ("Stops Starling frontend processing at initial modelling.",
-            Request.Frontend Lang.Frontend.Request.Model))
-          ("guard",
-           ("Stops Starling frontend processing at guarded view generation.",
-            Request.Frontend Lang.Frontend.Request.Guard))
-          ("graph",
-           ("Outputs an unoptimised control-flow graph series.",
-            Request.Frontend Lang.Frontend.Request.Graph))
-          ("graphoptimise",
-           ("Outputs an optimised control-flow graph series.",
-            Request.GraphOptimise))
-          ("axiomatise",
-           ("Stops Starling model generation at graph axiomatisation.",
-            Request.Axiomatise))
-          ("goaladd",
-           ("Stops Starling model generation at goal generation.",
-            Request.GoalAdd))
-          ("termgen",
-           ("Stops Starling model generation at proof term generation.",
-            Request.TermGen))
-          ("reify",
-           ("Stops Starling model generation at view reification.",
-            Request.Reify))
-          ("flatten",
-           ("Stops Starling model generation at view flattening.",
-            Request.Flatten))
-          ("semantics",
-           ("Stops Starling model generation at command semantics instantiation.",
-            Request.Semantics))
-          ("termoptimise",
-           ("Stops Starling model generation at term optimisation.",
-            Request.TermOptimise))
-          ("symproof",
-           ("Outputs a proof in Starling format, with all symbols intact.",
-            Request.SymProof))
-          ("rawsymproof",
-           ("Outputs a definite proof in unstructured Starling format, with all symbols removed.",
-            Request.RawSymProof))
-          ("proof",
-           ("Outputs a definite proof in Starling format, with all symbols removed.",
-            Request.Proof))
-          ("rawproof",
-           ("Outputs a definite proof in unstructured Starling format, with all symbols removed.",
-            Request.RawProof))
-          ("z3",
-           ("Outputs a definite proof in structured Z3/SMTLIB format.",
-            Request.Z3 Backends.Z3.Types.Request.Translate))
-          ("rawz3",
-           ("Outputs a definite proof in unstructured Z3/SMTLIB format.",
-            Request.Z3 Backends.Z3.Types.Request.Combine))
-          ("sat",
-           ("Executes a definite proof using Z3 and reports the result.",
-            Request.Z3 Backends.Z3.Types.Request.Sat))
-          ("symsat",
-           ("Executes a symbolic proof using Z3 and reports failing clauses.",
-            Request.SymZ3 Backends.Z3.Types.Request.Sat))
-          ("mutranslate",
-           ("Generates a proof using MuZ3 and outputs the individual terms.",
-            Request.MuZ3 Backends.MuZ3.Types.Request.Translate))
-          ("mufix",
-           ("Generates a proof using MuZ3 and outputs the fixed point.",
-            Request.MuZ3 Backends.MuZ3.Types.Request.Fix))
-          ("musat",
-           ("Executes a proof using MuZ3 and reports the result.",
-            Request.MuZ3 Backends.MuZ3.Types.Request.Sat))
-          ("hsf",
-           ("Outputs a proof in HSF format.",
-            Request.HSF)) ]
+let requestList : (string * (string * Request)) list =
+    [ ("list",
+       ("Lists all available phases.",
+        Request.List))
+      ("parse",
+       ("Parses and formats a Starling file with no further processing.",
+        Request.Frontend Lang.Frontend.Request.Parse))
+      ("collate",
+       ("Stops Starling frontend processing at script collation.",
+        Request.Frontend Lang.Frontend.Request.Collate))
+      ("model",
+       ("Stops Starling frontend processing at initial modelling.",
+        Request.Frontend Lang.Frontend.Request.Model))
+      ("guard",
+       ("Stops Starling frontend processing at guarded view generation.",
+        Request.Frontend Lang.Frontend.Request.Guard))
+      ("graph",
+       ("Outputs an unoptimised control-flow graph series.",
+        Request.Frontend Lang.Frontend.Request.Graph))
+      ("graphoptimise",
+       ("Outputs an optimised control-flow graph series.",
+        Request.GraphOptimise))
+      ("axiomatise",
+       ("Stops Starling model generation at graph axiomatisation.",
+        Request.Axiomatise))
+      ("goaladd",
+       ("Stops Starling model generation at goal generation.",
+        Request.GoalAdd))
+      ("termgen",
+       ("Stops Starling model generation at proof term generation.",
+        Request.TermGen))
+      ("iterlower",
+       ("Stops Starling model generation at iterator flattening.",
+        Request.IterLower))
+      ("reify",
+       ("Stops Starling model generation at view reification.",
+        Request.Reify))
+      ("flatten",
+       ("Stops Starling model generation at view flattening.",
+        Request.Flatten))
+      ("semantics",
+       ("Stops Starling model generation at command semantics instantiation.",
+        Request.Semantics))
+      ("termoptimise",
+       ("Stops Starling model generation at term optimisation.",
+        Request.TermOptimise))
+      ("symproof",
+       ("Outputs a proof in Starling format, with all symbols intact.",
+        Request.SymProof))
+      ("rawsymproof",
+       ("Outputs a definite proof in unstructured Starling format, with all symbols removed.",
+        Request.RawSymProof))
+      ("proof",
+       ("Outputs a definite proof in Starling format, with all symbols removed.",
+        Request.Proof))
+      ("rawproof",
+       ("Outputs a definite proof in unstructured Starling format, with all symbols removed.",
+        Request.RawProof))
+      ("z3",
+       ("Outputs a definite proof in structured Z3/SMTLIB format.",
+        Request.Z3 Backends.Z3.Types.Request.Translate))
+      ("rawz3",
+       ("Outputs a definite proof in unstructured Z3/SMTLIB format.",
+        Request.Z3 Backends.Z3.Types.Request.Combine))
+      ("sat",
+       ("Executes a definite proof using Z3 and reports the result.",
+        Request.Z3 Backends.Z3.Types.Request.Sat))
+      ("symsat",
+       ("Executes a symbolic proof using Z3 and reports failing clauses.",
+        Request.SymZ3 Backends.Z3.Types.Request.Sat))
+      ("mutranslate",
+       ("Generates a proof using MuZ3 and outputs the individual terms.",
+        Request.MuZ3 Backends.MuZ3.Types.Request.Translate))
+      ("mufix",
+       ("Generates a proof using MuZ3 and outputs the fixed point.",
+        Request.MuZ3 Backends.MuZ3.Types.Request.Fix))
+      ("musat",
+       ("Executes a proof using MuZ3 and reports the result.",
+        Request.MuZ3 Backends.MuZ3.Types.Request.Sat))
+      ("hsf",
+       ("Outputs a proof in HSF format.",
+        Request.HSF)) ]
 
 /// Converts an optional -s stage name to a request item.
 /// If none is given, the latest stage is selected.
 let requestFromStage (ostage : string option) : Request option =
+    let pickStage stageName = List.tryFind (fun (x, _) -> x = stageName) requestList
+
     (withDefault "sat" ostage).ToLower()
-    |> requestMap.TryFind
-    |> Option.map snd
+    |> pickStage
+    |> Option.map (snd >> snd)
 
 
 /// Type of possible outputs from a Starling run.
 [<NoComparison>]
 type Response =
     /// List all available requests.
-    | List of Map<string, string>
+    | List of string list
     /// The result of frontend processing.
     | Frontend of Lang.Frontend.Response
     /// Stop at graph optimisation.
     | GraphOptimise of Model<Graph, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// Stop at graph axiomatisation.
-    | Axiomatise of Model<Axiom<GView<Sym<Var>>, Command>,
+    | Axiomatise of Model<Axiom<IteratedGView<Sym<Var>>, Command>,
                           ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of goal-axiom-pair generation.
     | GoalAdd of Model<GoalAxiom<Command>, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of semantic expansion.
     | Semantics of Model<GoalAxiom<CommandSemantics<SMBoolExpr>>, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term generation.
-    | TermGen of Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, OView>, ViewDefiner<SVBoolExpr option>>
+    | TermGen of Model<CmdTerm<SMBoolExpr, IteratedGView<Sym<MarkedVar>>, IteratedOView>,
+                       ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term reification.
-    | Reify of Model<CmdTerm<SMBoolExpr, Set<GuardedSubview>, OView>,
+    | Reify of Model<CmdTerm<SMBoolExpr, Set<GuardedIteratedSubview>, IteratedOView>,
                      ViewDefiner<BoolExpr<Sym<Var>> option>>
+    /// The result of term generation.
+    | IterLower of Model<CmdTerm<SMBoolExpr, Set<GuardedSubview>, OView>,
+                         ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term flattening.
     | Flatten of Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
                        FuncDefiner<BoolExpr<Sym<Var>> option>>
@@ -225,14 +235,20 @@ let printResponse (mview : ModelView) : Response -> Doc =
         printModelView paxiom (fun _ -> Seq.empty) mview m
 
     function
-    | List l -> printMap Indented String String l
+    | List l -> printList String l
     | Frontend f -> Lang.Frontend.printResponse mview f
     | GraphOptimise g -> printVModel printGraph g
-    | Axiomatise m -> printVModel (printAxiom printSVGView printCommand) m
+    | Axiomatise m -> printVModel (printAxiom printIteratedSVGView printCommand) m
     | GoalAdd m -> printVModel (printGoalAxiom printCommand) m
     | Semantics m -> printVModel (printGoalAxiom (printCommandSemantics printSMBoolExpr)) m
-    | TermGen m -> printVModel (printCmdTerm printSMBoolExpr printSMGView printOView) m
-    | Reify m -> printVModel (printCmdTerm printSMBoolExpr printGuardedSubviewSet printOView) m
+    | TermGen m ->
+        printVModel
+            (printCmdTerm
+                printSMBoolExpr
+                (printIteratedGView (printSym printMarkedVar))
+                printIteratedOView) m
+    | Reify m -> printVModel (printCmdTerm printSMBoolExpr (printSubviewSet printGuardedIteratedSubview) printIteratedOView) m
+    | IterLower m -> printVModel (printCmdTerm printSMBoolExpr (printSubviewSet printGuardedSubview) printOView) m
     | Flatten m -> printFModel (printCmdTerm printSMBoolExpr printSMGView printSMVFunc) m
     | TermOptimise m -> printFModel (printCmdTerm printSMBoolExpr printSMGView printSMVFunc) m
     | SymProof m ->
@@ -266,6 +282,14 @@ type Error =
     /// An error occurred in the HSF backend.
     | HSF of Backends.Horn.Types.Error
     /// <summary>
+    ///     An error occurred during reifying.
+    /// </summary>
+    | Reify of Reifier.Types.Error
+    /// <summary>
+    ///     An error occurred during iterator lowering.
+    /// </summary>
+    | IterLowerError of TermGen.Iter.Error
+    /// <summary>
     ///     A backend required the model to be filtered for indefinite
     ///     and/or uninterpreted viewdefs, but the filter failed.
     /// </summary>
@@ -281,15 +305,20 @@ let printError : Error -> Doc =
     | Frontend e -> Lang.Frontend.printError e
     | Semantics e -> Semantics.Pretty.printSemanticsError e
     | HSF e -> Backends.Horn.Pretty.printHornError e
+    | Reify e ->
+        headed "Reification failed"
+               [ Reifier.Pretty.printError e ]
+    | IterLowerError e ->
+        headed "Iterator lowering failed"
+               [ TermGen.Iter.printError e ]
     | ModelFilterError e ->
         headed "View definitions are incompatible with this backend"
                [ Core.Instantiate.Pretty.printError e ]
     | BadStage ->
         colonSep [ String "Bad stage"
                    String "try"
-                   requestMap
-                   |> Map.toSeq
-                   |> Seq.map (fst >> String)
+                   requestList
+                   |> List.map (fst >> String)
                    |> commaSep ]
     | Other e -> String e
 
@@ -411,13 +440,15 @@ let runStarling (request : Request)
     let muz3 reals rq = lift (Backends.MuZ3.run reals rq)
     let frontend times rq =
         Lang.Frontend.run times rq Response.Frontend Error.Frontend
-    let graphOptimise opts =
+    let graphOptimise =
         lift (fix <| Starling.Optimiser.Graph.optimise opts)
-    let termOptimise opts =
+    let termOptimise =
         lift (fix <| Starling.Optimiser.Term.optimise opts)
     let flatten = lift Starling.Flattener.flatten
-    let reify = lift Starling.Reifier.reify
+    let reify = bind (Starling.Reifier.reify >> mapMessages Error.Reify)
     let termGen = lift Starling.TermGen.termGen
+    let iterLower =
+        bind (Starling.TermGen.Iter.flatten >> mapMessages IterLowerError)
     let goalAdd = lift Starling.Core.Axiom.goalAdd
     let semantics =
         bind (Starling.Semantics.translate
@@ -526,9 +557,6 @@ let runStarling (request : Request)
     then
         eprintfn "Z3 version: %s" (Microsoft.Z3.Version.ToString ())
 
-    let graphOptimise = graphOptimise opts
-    let termOptimise = termOptimise opts
-
     frontend config.times (match request with | Request.Frontend rq -> rq | _ -> Lang.Frontend.Request.Continuation)
     ** phase  graphOptimise  Request.GraphOptimise  Response.GraphOptimise
     ** phase  axiomatise     Request.Axiomatise     Response.Axiomatise
@@ -536,6 +564,7 @@ let runStarling (request : Request)
     ** phase  semantics      Request.Semantics      Response.Semantics
     ** phase  termGen        Request.TermGen        Response.TermGen
     ** phase  reify          Request.Reify          Response.Reify
+    ** phase  iterLower      Request.IterLower      Response.IterLower
     ** phase  flatten        Request.Flatten        Response.Flatten
     ** phase  termOptimise   Request.TermOptimise   Response.TermOptimise
     ** backend
@@ -550,7 +579,7 @@ let mainWithOptions (options : Options) : int =
         // Handle pseudo-requests here, as it's cleaner than doing so in
         // runStarling.
         | Some Request.List ->
-            ok (Response.List (Map.map (fun _ -> fst) requestMap))
+            ok (Response.List (List.map fst requestList))
         | Some otype -> runStarling otype config.input
         | None -> fail Error.BadStage
 

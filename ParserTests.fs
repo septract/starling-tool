@@ -19,8 +19,8 @@ let get =
     | Success(r, _, _) -> Some r
     | Failure _ -> None
 
-let check p str ast = 
-    let actual = run p str 
+let check p str ast =
+    let actual = run p str
     Assert.AreEqual (ast, get actual)
 
 
@@ -30,14 +30,14 @@ let ( ** ) = ( <| )
 
 
 // Conversion of mattw's test cases into new system
-module ExpressionTests = 
+module ExpressionTests =
     [<Test>]
     let ``Test order-of-operations on (1 + 2 * 3)``() =
         check parseExpression "1 + 2 * 3" <| Some
-        ** node "" 1L 3L 
-            ** BopExpr (Add, 
+        ** node "" 1L 3L
+            ** BopExpr (Add,
                     node "" 1L 1L (Num 1L),
-                    node "" 1L 7L 
+                    node "" 1L 7L
                         <| BopExpr (Mul,
                                 node "" 1L 5L (Num 2L),
                                 node "" 1L 9L (Num 3L)))
@@ -107,9 +107,9 @@ module AtomicActionTests =
     [<Test>]
     let ``Compare and swap``() =
         check parseAtomic "CAS(foo, bar, 2)" <| Some
-        ** node "" 1L 1L 
-           (CompareAndSwap( LVIdent "foo", 
-                            LVIdent "bar", 
+        ** node "" 1L 1L
+           (CompareAndSwap( LVIdent "foo",
+                            LVIdent "bar",
                             node "" 1L 15L (Num 2L)))
 
 module AtomicSetTests =
@@ -143,13 +143,12 @@ module ConstraintTests =
     [<Test>]
     let ``emp -> true``() =
         check parseConstraint "constraint emp -> true;"
-        <| Some (DView.Unit, Some <| node "" 1L 19L True)
+        <| Some (ViewSignature.Unit, Some <| node "" 1L 19L True)
 
     [<Test>]
     let ``Func(a,b) -> c > a + b``() =
         check parseConstraint "constraint Func(a, b) -> c > a + b;"
-        <| Some (DView.Func { Name = "Func"
-                              Params = [ "a"; "b" ] },
+        <| Some (ViewSignature.Func { Name = "Func"; Params = [ "a"; "b" ] },
                  Some
                    (node "" 1L 28L
                     <| BopExpr (Gt,
@@ -162,6 +161,5 @@ module ConstraintTests =
     [<Test>]
     let ``Func(a,b) -> ?;``() =
         check parseConstraint "constraint Func(a, b) -> ?;"
-        <| Some (DView.Func { Name = "Func"
-                              Params = [ "a"; "b" ] },
+        <| Some (ViewSignature.Func { Name = "Func"; Params = [ "a"; "b" ] },
                  (None : Expression option))

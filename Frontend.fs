@@ -113,8 +113,8 @@ let printResponse (mview : ModelView) : Response -> Doc =
             m
     | Response.Guard m ->
         printVModel
-            (printMethod (printViewExpr printSVGView)
-                         (printPartCmd (printViewExpr printSVGView)))
+            (printMethod (printViewExpr (printIteratedGView (printSym String)))
+                         (printPartCmd (printViewExpr (printIteratedGView (printSym String)))))
             m
     | Response.Graph m ->
         printVModel printGraph m

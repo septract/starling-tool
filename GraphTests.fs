@@ -29,15 +29,22 @@ module Tests =
     /// </summary>
     let npset : (string * string) list -> Set<(string * string)> = Set.ofList
 
+    let oneGFunc (cnd : BoolExpr<Sym<Var>>) (name : string)
+      (ps : Expr<Sym<Var>> list)
+      : IteratedGFunc<Sym<Var>> =
+        iterated (svgfunc cnd name ps) (AInt 1L)
+
     /// <summary>
     ///     Case studies for testing <c>Graph</c>.
     /// </summary>
     module Studies =
         /// The guarded holdLock view.
-        let gHoldLock cnd : SVGFunc = svgfunc cnd "holdLock" []
+        let gHoldLock cnd : IteratedGFunc<Sym<Var>> =
+            oneGFunc cnd "holdLock" []
 
         /// The guarded holdTick view.
-        let gHoldTick cnd : SVGFunc = svgfunc cnd "holdTick" [SVExpr.Int (siVar "t")]
+        let gHoldTick cnd : IteratedGFunc<Sym<Var>> =
+            oneGFunc cnd "holdTick" [SVExpr.Int (siVar "t")]
 
         let ticketLockLockGraph : Graph =
             { Name = "lock"
@@ -88,7 +95,7 @@ module Tests =
                               { Name = "lock_C001"
                                 Dest = "lock_V004"
                                 Command =
-                                    [ command "!ILoad" 
+                                    [ command "!ILoad"
                                            [ Int "s" ]
                                            [ Typed.Int (siBefore "serving") ]] },
                           Set.ofList
@@ -141,12 +148,12 @@ module Tests =
                       [ ("unlock_V000",
                          (Mandatory <|
                           Multiset.singleton
-                                  (gfunc BTrue "holdLock" [] ),
+                                  (oneGFunc BTrue "holdLock" [] ),
                           Set.singleton
                               { Name = "unlock_C000"
                                 Dest = "unlock_V001"
                                 Command =
-                                    [ command "!I++" 
+                                    [ command "!I++"
                                            [ Int "serving" ]
                                            [ Typed.Int (siBefore "serving") ]] },
                           Set.empty,
@@ -220,14 +227,14 @@ module Tests =
                       [ ("unlock_V000",
                              (Mandatory <|
                               Multiset.singleton
-                                 (svgfunc BTrue "holdLock" [] ), Entry))
+                                 (oneGFunc BTrue "holdLock" [] ), Entry))
                         ("unlock_V001", (Mandatory <| Multiset.empty, Exit)) ]
               Edges =
                    Map.ofList
                       [ ("unlock_C000",
                              edge "unlock_V000"
                                   [ command "!I++"
-                                         [ Int "serving" ] 
+                                         [ Int "serving" ]
                                          [ Typed.Int (siBefore "serving") ]]
                                   "unlock_V001" ) ] }
 
@@ -299,7 +306,7 @@ module Tests =
                               [ ("unlock_V000",
                                  (Mandatory <|
                                   Multiset.singleton
-                                     (gfunc BTrue "holdLock" [] ),
+                                     (oneGFunc BTrue "holdLock" [] ),
                                   EntryExit)) ]
                       Edges =
                           Map.ofList
@@ -322,7 +329,7 @@ module Tests =
                               [ ("unlock_C000",
                                  edge "unlock_V001"
                                       [ command "!I++"
-                                              [ Int "serving" ] 
+                                              [ Int "serving" ]
                                               [ SMExpr.Int (siBefore "serving") ]]
                                       "unlock_V001" ) ] } )
                 .SetName("unify C0 into C1 on the ticket lock 'unlock'")

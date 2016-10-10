@@ -6,6 +6,7 @@ module Starling.Lang.Guarder
 
 open Starling.Collections
 open Starling.Utils
+open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Symbolic
 open Starling.Core.Model
@@ -17,18 +18,22 @@ open Starling.Lang.Modeller
 
 [<AutoOpen>]
 module Types =
-    type GuarderViewExpr = ViewExpr<GView<Sym<Var>>>
+    type GuarderView = IteratedGView<Sym<Var>>
+    type GuarderViewExpr = ViewExpr<GuarderView>
     type GuarderPartCmd = PartCmd<GuarderViewExpr>
     type GuarderBlock = Block<GuarderViewExpr, GuarderPartCmd>
     type GuarderMethod = Method<GuarderViewExpr, GuarderPartCmd>
 
 /// Resolves a full condition-view multiset into a guarded-view multiset.
-let guardCView : CView -> GView<Sym<Var>> =
-    let rec guardCFuncIn suffix =
-        function
+let guardCView (cview : CView) : GuarderView =
+    let rec guardCFuncIn suffix cv =
+        match cv.Func with
         | CFunc.Func v ->
-            [ { Cond = suffix |> Set.toList |> mkAnd
-                Item = v } ]
+            let itVar = Option.map AVar cv.Iterator
+            (* Treat non-iterated views as if they have the iterator [1].
+               This means we don't need to special-case them elsewhere. *)
+            [ { Func = { Cond = mkAnd (Set.toList suffix); Item = v };
+                Iterator = withDefault (AInt 1L) itVar } ]
         | CFunc.ITE(expr, tviews, fviews) ->
             List.concat
                 [ guardCViewIn (suffix.Add expr) (Multiset.toFlatList tviews)
@@ -37,9 +42,8 @@ let guardCView : CView -> GView<Sym<Var>> =
     and guardCViewIn suffix = concatMap (guardCFuncIn suffix)
 
     // TODO(CaptainHayashi): woefully inefficient.
-    Multiset.toFlatList
-    >> guardCViewIn Set.empty
-    >> Multiset.ofFlatList
+    let guarded = guardCViewIn Set.empty (Multiset.toFlatList cview)
+    Multiset.ofFlatList guarded
 
 /// Resolves a full condition-view ViewExpr into a guarded-view multiset.
 let guardCViewExpr : ModellerViewExpr -> GuarderViewExpr =
@@ -77,5 +81,5 @@ let guardMethod
     { Signature = signature; Body = guardBlock body }
 
 /// Converts an entire model to guarded views.
-let guard (model : Model<ModellerMethod, _>) : Model<GuarderMethod, _> =
+let guard (model : Model<ModellerMethod, ViewDefiner<SVBoolExpr option>>) : Model<GuarderMethod, ViewDefiner<SVBoolExpr option>> =
     mapAxioms guardMethod model

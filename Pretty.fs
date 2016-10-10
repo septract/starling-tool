@@ -49,11 +49,19 @@ let syntaxLiteral d = Styled([Blue], d)
 let syntaxIdent d = Styled([Cyan], d)
 let syntaxView d = Styled([Yellow], d)
 
+(* Helpers for styling Docs for errors. *)
+let error d = Styled([Red], d)
+let errorContext d = Styled([Cyan], d)
+let errorInfo d = Styled([Magenta], d)
+
 /// <summary>
 ///     Styles a string with ANSI escape sequences.
 /// </summary>
 /// <param name="s">
 ///     The list of styles to turn into ANSI codes and apply to the result.
+/// </param>
+/// <param name="l">
+///     The optional list of styles previously in effect.
 /// </param>
 /// <param name="d">
 ///     The string to stylise.
@@ -61,7 +69,7 @@ let syntaxView d = Styled([Yellow], d)
 /// <returns>
 ///     The stylised (ANSI-escaped) string.
 /// </param>
-let stylise s d =
+let stylise s l d =
     let colCode =
         function
         | Black -> 0
@@ -70,13 +78,15 @@ let stylise s d =
         | Yellow -> 3
         | Blue -> 4
         | Magenta -> 5
-        | Cyan -> 6 
+        | Cyan -> 6
         | White -> 7
 
     let code c = sprintf "%u" (30 + colCode c)
 
-    let prefix = "\u001b[" + (String.concat ";" <| List.map code s) + "m"
-    let suffix = "\u001b[0m"
+    let codify = List.map code >> String.concat ";"
+
+    let prefix = "\u001b[" + codify s + "m"
+    let suffix = "\u001b[" + withDefault "0" (Option.map codify l) + "m"
     prefix + d + suffix
 
 /// <summary>
@@ -87,6 +97,11 @@ type PrintState =
       ///     The current indent level of the printer.
       /// </summary>
       Level : int
+
+      /// <summary>
+      ///     The current style in use.
+      /// </summary>
+      CurrentStyle : (FontColor list) option
 
       /// <summary>
       ///     Whether or not styling is to be used.
@@ -109,7 +124,7 @@ let rec printState state =
     | Separator ->
         "----"
     | Styled (s, d) when state.UseStyles ->
-        stylise s <| printState state d
+        stylise s state.CurrentStyle <| printState { state with CurrentStyle = Some s } d
     | Styled (s, d) ->
         printState state d
     | VSkip ->
@@ -132,12 +147,12 @@ let rec printState state =
 /// <summary>
 ///     Prints a <see cref="Doc"/> with full styling.
 /// </summary>
-let printStyled = printState { Level = 0; UseStyles = true }
+let printStyled = printState { Level = 0; CurrentStyle = None; UseStyles = true }
 
 /// <summary>
 ///     Prints a <see cref="Doc"/> with no styling.
 /// </summary>
-let printUnstyled = printState { Level = 0; UseStyles = false }
+let printUnstyled = printState { Level = 0; CurrentStyle = None; UseStyles = false }
 
 
 /// <summary>
@@ -151,16 +166,16 @@ let print = if config().color then printStyled else printUnstyled
  *)
 
 
-// Hacky merge between two VSep sequences 
-let vmerge a b = 
+// Hacky merge between two VSep sequences
+let vmerge a b =
   let rec interleave = function //same as: let rec interleave (xs, ys) = match xs, ys with
     |([], ys) -> ys
     |(xs, []) -> xs
     |(x::xs, y::ys) -> x :: y :: interleave (xs,ys)
 
-  match a, b with 
-    | (VSep (xs, i), VSep (ys, j))  -> 
-           let xy = interleave (List.ofSeq xs, List.ofSeq ys) in 
+  match a, b with
+    | (VSep (xs, i), VSep (ys, j))  ->
+           let xy = interleave (List.ofSeq xs, List.ofSeq ys) in
            VSep (Seq.ofList xy, Nop)
     | _ -> Nop
 
@@ -262,6 +277,10 @@ let printAssoc mapSep =
 /// </returns>
 let printMap mapSep pK pV =
     Map.toSeq >> Seq.map (pairMap pK pV) >> printAssoc mapSep
+
+/// Pretty-prints a list
+let printList pItem lst =
+    hsep [String "["; hsepStr ", " (List.map pItem lst); String "]"]
 
 /// Formats an error that is wrapping another error.
 let wrapped wholeDesc whole err =

@@ -261,14 +261,33 @@ let varMapToExprs
 
 (* The following are just curried versions of the usual constructors. *)
 
+// TODO(CaptainHayashi): move these optimisations into an integer simplification
+// function and hook it up to simp.
+
 /// Curried wrapper over BGt.
-let mkGt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> = BGt (a, b)
+let mkGt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
+    match (a, b) with
+    | AInt x, AInt y when x >  y -> BTrue
+    | AInt x, AInt y when x <= y -> BFalse
+    | _ -> BGt (a, b)
 /// Curried wrapper over BGe.
-let mkGe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> = BGe (a, b)
+let mkGe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
+    match (a, b) with
+    | AInt x, AInt y when x >= y -> BTrue
+    | AInt x, AInt y when x <  y -> BFalse
+    | _ -> BGe (a, b)
 /// Curried wrapper over BLt.
-let mkLt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> = BLt (a, b)
+let mkLt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
+    match (a, b) with
+    | AInt x, AInt y when x <  y -> BTrue
+    | AInt x, AInt y when x >= y -> BFalse
+    | _ -> BLt (a, b)
 /// Curried wrapper over BLe.
-let mkLe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> = BLe (a, b)
+let mkLe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
+    match (a, b) with
+    | AInt x, AInt y when x <= y -> BTrue
+    | AInt x, AInt y when x >  y -> BFalse
+    | _ -> BLe (a, b)
 
 /// Curried wrapper over BEq.
 let mkEq (a : Expr<'var>) (b : Expr<'var>) : BoolExpr<'var> = BEq (a, b)
@@ -292,6 +311,9 @@ let mkAnd (xs : BoolExpr<'var> list) : BoolExpr<'var> = simp (BAnd xs)
 /// Returns false for the empty set, and x for the singleton set {x}.
 let mkOr (xs : BoolExpr<'var> list) : BoolExpr<'var> = simp (BOr xs)
 
+/// Makes a BImplies
+let mkImpl (a : BoolExpr<'var>) (b : BoolExpr<'var>) : BoolExpr<'var> = simp (BImplies(a, b))
+
 /// Makes an And from a pair of two expressions.
 let mkAnd2 (l : BoolExpr<'var>) (r : BoolExpr<'var>) : BoolExpr<'var> =
     mkAnd [l ; r]
@@ -312,11 +334,28 @@ let mkImplies (l : BoolExpr<'var>) (r : BoolExpr<'var>) : BoolExpr<'var> =
     BImplies (l, r) |> simp
 
 /// Makes an Add out of a pair of two expressions.
-let mkAdd2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> = AAdd [ l; r ]
+let mkAdd2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
+    match (l, r) with
+    | (AInt 0L, x) | (x, AInt 0L) -> x
+    | (AInt x, AInt y)            -> AInt (x + y)
+    | _                           -> AAdd [ l; r ]
+
+/// Makes an Add out of a sequence of expressions.
+let mkAdd (xs : IntExpr<'var> seq) : IntExpr<'var> =
+    // TODO(CaptainHayashi): produce a trimmed list, instead of mkAdd2ing.
+    Seq.fold mkAdd2 (AInt 0L) xs
+
 /// Makes a Sub out of a pair of two expressions.
-let mkSub2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> = ASub [ l; r ]
+let mkSub2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
+    match (l, r) with
+    | (AInt x, AInt y) -> AInt (x - y)
+    | _                -> ASub [ l; r ]
 /// Makes a Mul out of a pair of two expressions.
-let mkMul2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> = AMul [ l; r ]
+let mkMul2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
+    match (l, r) with
+    | (AInt x, AInt y)            -> AInt (x * y)
+    | (AInt 1L, x) | (x, AInt 1L) -> x
+    | _                           -> AMul [ l; r ]
 
 
 (*

@@ -52,9 +52,9 @@ module Types =
     /// An axiom combined with a goal view.
     type GoalAxiom<'cmd> =
         { /// The axiom to be checked for soundness under Goal.
-          Axiom : Axiom<GView<Sym<Var>>, 'cmd>
+          Axiom : Axiom<IteratedGView<Sym<Var>>, 'cmd>
           /// The view representing the goal for any terms over Axiom.
-          Goal : OView }
+          Goal : IteratedOView }
 
 /// <summary>
 ///     Pretty printers for axioms.
@@ -64,6 +64,7 @@ module Pretty =
 
     open Starling.Core.Model.Pretty
     open Starling.Core.Command.Pretty
+    open Starling.Core.Symbolic.Pretty
     open Starling.Core.View.Pretty
     open Starling.Core.GuardedView.Pretty
 
@@ -80,8 +81,8 @@ module Pretty =
                        ({ Axiom = a; Goal = f } : GoalAxiom<'cmd>)
                        : Doc =
         vsep [ headed "Axiom"
-                      (a |> printAxiom printSVGView printCmd |> Seq.singleton)
-               headed "Goal" (f |> printOView |> Seq.singleton) ]
+                      (a |> printAxiom (printIteratedGView (printSym String)) printCmd |> Seq.singleton)
+               headed "Goal" (f |> printIteratedOView |> Seq.singleton) ]
 
 
 /// Makes an axiom {p}c{q}.
@@ -97,19 +98,23 @@ let axiom (p : 'view) (c : 'cmd) (q : 'view)
 /// Instantiates a defining view into a view expression.
 let instantiateGoal (fg : FreshGen)
                     (dvs : DView)
-                    : OView =
+                    : IteratedOView =
     let instantiateParam = mkVarExp (goalVar fg >> Reg)
 
-    dvs |> List.map (fun { Name = n; Params = ps } ->
-               { Name = n
-                 Params = List.map instantiateParam ps })
+    dvs |> List.map (function
+        | { Iterator = i; Func = { Name = n; Params = ps } } ->
+            { Iterator =
+                i
+                |> Option.map (AVar << Reg << goalVar fg << valueOf)
+                |> withDefault (AInt 1L)
+              Func = { Name = n; Params = List.map instantiateParam ps } } )
 
 /// Converts an axiom into a list of framed axioms, by combining it with the
 /// defining views of a model.
 let goalAddAxiom
   (ds : ViewDefiner<_>)
   (fg : FreshGen)
-  ((name, axiom) : (string * Axiom<GView<Sym<Var>>, 'cmd>))
+  ((name, axiom) : (string * Axiom<IteratedGView<Sym<Var>>, 'cmd>))
   : (string * GoalAxiom<'cmd>) list =
     // Each axiom comes in with a name like method_0,
     // where the 0 is the edge number.
@@ -136,7 +141,7 @@ let goalAddAxiom
 ///     The new <c>Model</c>, over <c>GoalAxiom</c>s.
 /// </returns>
 let goalAdd
-  (mdl : Model<Axiom<GView<Sym<Var>>, 'cmd>, _>)
+  (mdl : Model<Axiom<IteratedGView<Sym<Var>>, 'cmd>, _>)
   : Model<GoalAxiom<'cmd>, _> =
     // We use a fresh ID generator to ensure every goal variable is unique.
     let fg = freshGen ()

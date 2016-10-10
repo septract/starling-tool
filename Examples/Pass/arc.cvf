@@ -1,0 +1,77 @@
+/* Atomic reference counter
+ * Example taken from Derek: http://www.mpi-sws.org/~dreyer/talks/talk-dagstuhl16.pdf
+ */
+
+shared bool free;
+shared int count;
+
+thread bool f;
+thread int c;
+
+thread bool dummy; // used in dummy skips
+
+// Assumption: clone() cannot be called when there are no references
+method clone() {
+  {| arc() |}
+    < count++ >;
+  {| arc() * arc() |}
+}
+
+// Try to prove that print() when holding a reference is always valid
+// i.e. free can never be true when {| arc() |} is held
+method print() {
+  {| arc() |}
+    <f = free>;
+  {| arc() * specialViewForFree(f) |}
+    // Test for disposal
+    if (f == true) {
+      {| error() |}
+        dummy = dummy; // skip;
+      {| error() |}
+    } else {
+      {| arc() |}
+        dummy = dummy; // skip;
+      {| arc() |}
+    }
+  {| arc() |}
+}
+
+method drop() {
+  {| arc() |}
+    < c = count-- >;
+  {| specialViewForC(c) |}
+    if (c == 1) {
+      {| noCnt() |}
+        <free = (true)>;
+      {| emp |}
+    } else {
+      {| emp |}
+        dummy = dummy; // skip;
+      {| emp |}
+    }
+  {| emp |}
+}
+
+view error();
+view arc()[n];
+view noCnt();
+
+// These views just add free=f and count=c to the final proof predicates
+view specialViewForC(int c);
+view specialViewForFree(bool f);
+
+constraint emp -> count >= 0;
+constraint noCnt() -> count == 0;
+
+constraint specialViewForC(c) -> c == 1 => count == 0;
+
+// specialViewForFree(f) * arc() -> f = free;
+constraint specialViewForFree(f) -> count > 0 => f == free;
+
+// holds less than count arc()'s
+//  and if holding at least 1 then it can't have been freed
+constraint iter[n] arc() -> n <= count
+                            && (n > 0 => (free == false));
+
+// goal
+constraint error() -> false;

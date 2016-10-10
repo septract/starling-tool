@@ -9,21 +9,20 @@ open Starling.Core.Expr
 open Starling.Core.View
 open Starling.Core.Symbolic
 open Starling.Core.Model
-open Starling.Core.Command
 open Starling.Core.Var
+open Starling.Core.Command
 open Starling.Core.GuardedView
 
 
 /// <summary>
-///     Extracts a sequence of all of the parameters in an func sequence
-///     (OView or DView) in order.
+///     Extracts a sequence of all of the parameters in a func sequence
 /// </summary>
 let paramsOfFuncSeq (funcs : Func<'var> seq) : 'var seq =
     funcs |> Seq.map (fun v -> v.Params) |> Seq.concat
 
 /// <summary>
 ///     Constructs a (hopefully) unique name for a Func resulting from
-///     the flattening of a func sequence (OView or DView).
+///     the flattening of a func sequence
 /// </summary>
 let genFlatFuncSeqName (funcs : Func<'var> seq) : string =
     funcs
@@ -34,26 +33,40 @@ let genFlatFuncSeqName (funcs : Func<'var> seq) : string =
     // This step ensures that the empty view is named 'emp', not 'v'.
     |> fun s -> if s = "v" then "emp" else s
 
+let genFlatIteratedFuncName ifcs =
+    let funcs = Seq.map (fun ifc -> ifc.Func) ifcs
+    genFlatFuncSeqName funcs
+
+let paramsFromIteratedFunc funcContainer =
+    let funcParams = funcContainer.Func.Params
+    match funcContainer.Iterator with
+    | None -> Seq.ofList funcParams
+    | Some v -> Seq.append (seq {yield v;}) funcParams
+
 /// <summary>
-///     Constructs a Func from a func sequence, appending global variables.
+///     Constructs a Func from a DView
 /// </summary>
-/// <param name="globals">
-///     The set of active globals, in expression form, which will be appended
-///     into the Func's parameter list.
+/// <param name="svars">
+///     The set of shared variables in use, to be merged into the func.
 /// </param>
-/// <param name="funcs">
-///     The Func sequence to flatten.
+/// <param name="dview">
+///     The DView to use in construction.
 /// </param>
 /// <returns>
-///     A new SMVFunc containing all of the parameters of the constituent
-///     funcs, as well as the globals list, and a new unique name.
+///     A new Func containing all parameters of the individuals as well as their iterators
+///     with the shared variables appended
 /// </returns>
-let flattenFuncSeq
-  (globals : 'var seq)
-  (oview : Func<'var> seq)
-  : Func<'var> =
+let flattenDView (svars : TypedVar seq) (dview : DView) : DFunc =
+    // TODO: What if iterators share names? e.g. iterated A [n] * iterated B [n]
+    let ownParams = Seq.concat <| Seq.map paramsFromIteratedFunc dview
+    let allParams = Seq.append svars ownParams
+    { Name = genFlatIteratedFuncName dview ; Params = Seq.toList allParams }
+
+/// Flattens an OView into an SMVFunc given the set of globals
+let flattenOView (svarExprs : Expr<Sym<MarkedVar>> seq) (oview : OView)
+  : SMVFunc =
     { Name = genFlatFuncSeqName oview
-      Params = oview |> paramsOfFuncSeq |> Seq.append globals |> List.ofSeq }
+      Params = Seq.toList <| Seq.append svarExprs (paramsOfFuncSeq oview) }
 
 /// <summary>
 ///     Flattens a term by converting all of its OViews into single funcs.
@@ -71,9 +84,9 @@ let flattenTerm
   : Term<_, Set<GuardedSubview>, OView>
   -> Term<_, GView<Sym<MarkedVar>>, SMVFunc> =
     mapTerm id
-            (Seq.map (mapItem (flattenFuncSeq (globalsF Before)))
+            (Seq.map (mapItem (flattenOView (globalsF Before)))
              >> Multiset.ofFlatSeq)
-            (flattenFuncSeq (globalsF After))
+            (flattenOView (globalsF After))
 
 /// <summary>
 ///    Flattens all func sequences in a model, turning them into funcs.
@@ -111,88 +124,7 @@ let flatten
       ViewDefs =
           model.ViewDefs
           |> ViewDefiner.toSeq
-          |> Seq.map (pairMap (flattenFuncSeq globalsP) id)
+          |> Seq.map (pairMap (flattenDView globalsP) id)
           |> FuncDefiner.ofSeq
-      Semantics = model.Semantics }
-
-
-/// <summary>
-///     Tests for <c>Flattener</c>.
-/// </summary>
-module Tests =
-    open NUnit.Framework
-    open Chessie.ErrorHandling
-    open Starling.Utils.Testing
-
-
-    /// <summary>
-    ///     NUnit tests for <c>Flattener</c>.
-    /// </summary>
-    type NUnit () =
-        /// The globals environment used in the tests.
-        static member Globals : VarMap =
-            returnOrFail <| makeVarMap
-                [ TypedVar.Int "serving"
-                  TypedVar.Int "ticket" ]
-
-        /// Test cases for the view func renamer.
-        static member ViewFuncNamings =
-            let ms : SMVFunc list -> OView = Multiset.ofFlatList >> Multiset.toFlatList
-            [ TestCaseData(ms [ { Name = "foo"; Params = [] }
-                                { Name = "bar_baz"; Params = [] } ])
-                .Returns("v_bar__baz_foo") // Remember, multisets sort!
-                .SetName("Encode func name of view 'foo() * bar_baz()' as 'v_bar__baz_foo'")
-              TestCaseData(ms []).Returns("emp")
-                .SetName("Encode func name of view '' as 'emp'") ]
-
-        /// Tests the view predicate name generator.
-        [<TestCaseSource("ViewFuncNamings")>]
-        member x.``the flattened view name generator generates names correctly`` v =
-            (genFlatFuncSeqName : OView -> string) v
-
-        /// Test cases for the full defining-view func converter.
-        /// These all use the Globals environment above.
-        static member DViewFuncs =
-            let ms : DFunc list -> DView = Multiset.ofFlatList >> Multiset.toFlatList
-            [ TestCaseData(ms [ { Name = "holdLock"; Params = [] }
-                                { Name = "holdTick"; Params = [ Int "t" ] } ])
-                 .Returns({ Name = "v_holdLock_holdTick"
-                            Params =
-                                [ Int "serving"
-                                  Int "ticket"
-                                  Int "t" ] } : DFunc)
-                .SetName("Convert defining view 'holdLock() * holdTick(t)' to defining func") ]
-
-        /// Tests the viewdef LHS translator.
-        [<TestCaseSource("DViewFuncs")>]
-        member x.``the defining view func translator works correctly`` (v : DView) =
-            v
-            |> flattenFuncSeq
-                   (NUnit.Globals
-                    |> Map.toSeq
-                    |> Seq.map (fun (n, t) -> withType t n))
-
-        /// Test cases for the full view func converter.
-        /// These all use the Globals environment above.
-        static member ViewFuncs =
-            let ms : SMVFunc list -> OView = Multiset.ofFlatList >> Multiset.toFlatList
-            [ TestCaseData(ms [ { Name = "holdLock"; Params = [] }
-                                { Name = "holdTick"; Params = [ Expr.Int (siBefore "t") ] } ])
-                 .Returns({ Name = "v_holdLock_holdTick"
-                            Params =
-                                [ Expr.Int (siBefore "serving")
-                                  Expr.Int (siBefore "ticket")
-                                  Expr.Int (siBefore "t") ] })
-                .SetName("Convert 'holdLock() * holdTick(t)' to func") ]
-
-        /// Tests the viewdef LHS translator.
-        [<TestCaseSource("ViewFuncs")>]
-        member x.``the view func translator works correctly`` (v : OView) =
-            v
-            |> flattenFuncSeq
-                   (NUnit.Globals
-                    |> Map.toSeq
-                    |> Seq.map
-                           (function
-                            | (x, Type.Int ()) -> x |> siBefore |> Expr.Int
-                            | (x, Type.Bool ()) -> x |> sbBefore |> Expr.Bool))
+      Semantics = model.Semantics
+      ViewProtos = model.ViewProtos }

@@ -33,7 +33,7 @@ module Types =
           /// </remarks>
           Search : int option
           VProtos : ViewProto list
-          Constraints : (DView * Expression option) list
+          Constraints : (ViewSignature * Expression option) list
           Methods : CMethod<Marked<View>> list }
 
 
