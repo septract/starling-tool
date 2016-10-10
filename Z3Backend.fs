@@ -50,9 +50,9 @@ module Types =
           ///     The above as a Boolean expression with all non-Z3-native parts
           ///     converted to symbols.
           /// </summary>
-          SymBool: CmdTerm<BoolExpr<Sym<MarkedVar>>,
-                           BoolExpr<Sym<MarkedVar>>,
-                           BoolExpr<Sym<MarkedVar>>>
+          SymBool: Term<BoolExpr<Sym<MarkedVar>>,
+                        BoolExpr<Sym<MarkedVar>>,
+                        BoolExpr<Sym<MarkedVar>>>
 
           /// <summary>
           ///     The Z3-reified equivalent, which may be optional if the
@@ -161,7 +161,7 @@ module Pretty =
                     (printVFunc (printSym printMarkedVar))
                     zterm.Original ]
               headed "Symbolic conversion" <|
-                [ printCmdTerm
+                [ printTerm
                     (printBoolExpr (printSym printMarkedVar))
                     (printBoolExpr (printSym printMarkedVar))
                     (printBoolExpr (printSym printMarkedVar))
@@ -218,6 +218,8 @@ let runTerm (ctx: Z3.Context) term =
 
 /// <summary>
 ///     Uses Z3 to mark some proof terms as eliminated.
+///     If approximates were enabled, Z3 will prove them instead of the
+///     symbolic proof terms, allowing it to eliminate tautological
 /// </summary>
 /// <param name="reals">
 ///     Whether to use Real instead of Int.
@@ -227,8 +229,7 @@ let runTerm (ctx: Z3.Context) term =
 /// <returns>
 ///     A model with proof terms marked up with their SMT solver results.
 /// </returns>
-let eliminate
-  (reals: bool)
+let eliminate (reals : bool)
   (model : Model<SymProofTerm, FuncDefiner<BoolExpr<Sym<Var>> option>>)
   : ZModel =
     use ctx = new Z3.Context ()
@@ -238,11 +239,20 @@ let eliminate
         let _, res = Mapper.mapBoolCtx (tsfRemoveSym id) NoCtx bexp
         okOption res
 
+    (* If the user asked for approximation, then, instead of taking the
+       SymBool as the source of Z3 queries, use the approximation.  This will
+       result in a stronger, but perhaps more SMT-solvable, proof. *)
+    let zsource term selectSym selectNoSym =
+        // Yay, monomorphism!
+        match term.Approx with
+        | Some a -> Some (selectNoSym a)
+        | None -> removeSym (selectSym term.SymBool)
+
     let z3Term (term : SymProofTerm) : ZTerm =
         // We can only run Z3 if the symbool has no symbols in it.
-        let cmdO = removeSym term.SymBool.Cmd.Semantics
-        let wpreO = removeSym term.SymBool.WPre
-        let goalO = removeSym term.SymBool.Goal
+        let cmdO = zsource term (fun t -> t.Cmd) (fun t -> t.Cmd)
+        let wpreO = zsource term (fun t -> t.WPre) (fun t -> t.WPre)
+        let goalO = zsource term (fun t -> t.Goal) (fun t -> t.Goal)
 
         let z3, status =
             match cmdO, wpreO, goalO with
@@ -319,7 +329,7 @@ let extractFailures (model : ZModel) : Map<string, ZTerm> =
 /// <returns>
 ///     A model with proof terms marked up with their SMT solver results.
 /// </returns>
-let backend (reals: bool) (request : Request) (model : ZModel)
+let backend (request : Request) (model : ZModel)
   : Response =
     // TODO(CaptainHayashi): reject if any deferred checks.
     match request with
@@ -331,7 +341,5 @@ let backend (reals: bool) (request : Request) (model : ZModel)
             (Map.map
                 (fun _ v ->
                     mkAnd
-                        [ v.SymBool.Cmd.Semantics
-                          v.SymBool.WPre
-                          mkNot v.SymBool.Goal ])
+                        [ v.SymBool.Cmd; v.SymBool.WPre; mkNot v.SymBool.Goal ])
                 model.Axioms)
