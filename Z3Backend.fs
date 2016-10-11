@@ -19,6 +19,7 @@ open Microsoft
 open Chessie.ErrorHandling
 open Starling
 open Starling.Collections
+open Starling.Utils
 open Starling.Core.Definer
 open Starling.Core.Expr
 open Starling.Core.Var
@@ -167,9 +168,10 @@ module Pretty =
                     (printBoolExpr (printSym printMarkedVar))
                     zterm.SymBool ]
               headed "Z3 expansion" <|
-                [ withDefault (String "None available")
-                    (Option.map (printTerm printZ3Exp printZ3Exp printZ3Exp)
-                        zterm.Z3) ]
+                [ maybe
+                    (String "None available")
+                    (printTerm printZ3Exp printZ3Exp printZ3Exp)
+                    zterm.Z3 ]
               colonSep [ String "Status"; printMaybeSat zterm.Status ] ]
 
     /// <summary>
@@ -239,20 +241,17 @@ let eliminate (reals : bool)
         let _, res = Mapper.mapBoolCtx (tsfRemoveSym id) NoCtx bexp
         okOption res
 
-    (* If the user asked for approximation, then, instead of taking the
-       SymBool as the source of Z3 queries, use the approximation.  This will
-       result in a stronger, but perhaps more SMT-solvable, proof. *)
-    let zsource term selectSym selectNoSym =
-        // Yay, monomorphism!
-        match term.Approx with
-        | Some a -> Some (selectNoSym a)
-        | None -> removeSym (selectSym term.SymBool)
-
     let z3Term (term : SymProofTerm) : ZTerm =
-        // We can only run Z3 if the symbool has no symbols in it.
-        let cmdO = zsource term (fun t -> t.Cmd) (fun t -> t.Cmd)
-        let wpreO = zsource term (fun t -> t.WPre) (fun t -> t.WPre)
-        let goalO = zsource term (fun t -> t.Goal) (fun t -> t.Goal)
+        (* If the user asked for approximation, then, instead of taking the
+           SymBool as the source of Z3 queries, use the approximation.  This
+           will result in a stronger, but perhaps more SMT-solvable, proof.
+
+           Otherwise, try to remove all symbols from the symbool, and fail
+           the Z3 proof if we can't. *)
+        let { SymBool = symbool; Approx = approx } = term
+        let cmdO  = maybe (removeSym symbool.Cmd)  (fun t -> Some t.Cmd)  approx
+        let wpreO = maybe (removeSym symbool.WPre) (fun t -> Some t.WPre) approx
+        let goalO = maybe (removeSym symbool.Goal) (fun t -> Some t.Goal) approx
 
         let z3, status =
             match cmdO, wpreO, goalO with

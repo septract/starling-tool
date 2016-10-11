@@ -330,13 +330,12 @@ module Pretty =
             hsep [ "if" |> String |> syntax
                    c |> printExpression |> parened
                    t |> printBlock pView (printCommand pView)
-                   (withDefault Nop
-                        (Option.map
-                            (fun f ->
-                                hsep
-                                    [ "else" |> String |> syntax
-                                      printBlock pView (printCommand pView) f ])
-                            fo)) ]
+                   (maybe Nop
+                        (fun f ->
+                            hsep
+                                [ "else" |> String |> syntax
+                                  printBlock pView (printCommand pView) f ])
+                        fo) ]
         | Command'.While(c, b) ->
             hsep [ "while" |> String |> syntax
                    c |> printExpression |> parened

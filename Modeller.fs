@@ -197,9 +197,7 @@ module Pretty =
     /// Pretty-prints a CView.
     and printCView : CView -> Doc =
         printMultiset
-            (printIteratedContainer
-                printCFunc
-                (Option.map (printSym printVar) >> withDefault Nop))
+            (printIteratedContainer printCFunc (maybe Nop (printSym printVar)))
         >> ssurround "[|" "|]"
 
     /// Pretty-prints a part-cmd at the given indent level.
@@ -214,11 +212,10 @@ module Pretty =
             cmdHeaded (hsep [String "begin if"
                              (printSVBoolExpr expr) ])
                       [headed "True" [printBlock pView (printPartCmd pView) inTrue]
-                       withDefault Nop
-                            (Option.map
-                                (fun f ->
-                                    headed "False" [printBlock pView (printPartCmd pView) f])
-                                inFalse) ]
+                       maybe Nop
+                            (fun f ->
+                                headed "False" [printBlock pView (printPartCmd pView) f])
+                            inFalse ]
 
     /// Pretty-prints expression conversion errors.
     let printExprError : ExprError -> Doc =

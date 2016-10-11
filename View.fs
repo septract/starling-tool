@@ -231,10 +231,7 @@ module Pretty =
 
     /// Pretty-prints a DView.
     let printDView : DView -> Doc =
-        List.map
-            (printIteratedContainer
-                printDFunc
-                (Option.map printTypedVar >> withDefault Nop))
+        List.map (printIteratedContainer printDFunc (maybe Nop printTypedVar))
         >> semiSep >> squared
 
     /// Pretty-prints view expressions.

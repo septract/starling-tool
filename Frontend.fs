@@ -100,8 +100,7 @@ let printResponse (mview : ModelView) : Response -> Doc =
         printModelView
             paxiom
             (printViewDefiner
-                (Option.map (printBoolExpr (printSym printVar))
-                 >> withDefault (String "?")))
+                (maybe (String "?") (printBoolExpr (printSym printVar))))
             mview m
 
     function

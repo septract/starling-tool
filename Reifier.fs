@@ -736,7 +736,7 @@ module Pretty =
             fmt "view '{0}' is not iterated, but used in an iterated constraint"
                 [ printIteratedContainer
                     printDFunc
-                    (Option.map printTypedVar >> withDefault Nop)
+                    (maybe Nop printTypedVar)
                     func ]
         | BadIteratorType (view, ty) ->
             fmt "iterator on constraint '{0}' is of type {1}, should be int"
