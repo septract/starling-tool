@@ -20,7 +20,8 @@ then
 fi
 
 echo "--- STARLING ---"
-./starling.sh -shsf $* | tee $tempfile
+# no-smt-reduce is needed to give HSF enough contraints to be practical.
+./starling.sh -shsf -Bno-smt-reduce $* | tee $tempfile
 echo "--- HSF ---"
 $QARMC $tempfile
 rm $tempfile
