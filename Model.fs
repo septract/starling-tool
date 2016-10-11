@@ -369,9 +369,8 @@ module Pretty =
         | ModelView.Model -> printModel pAxiom pDefiner m
         | ModelView.Terms -> printModelAxioms pAxiom m
         | ModelView.Term termstr ->
-            Map.tryFind termstr m.Axioms
-            |> Option.map pAxiom
-            |> withDefault (termstr |> sprintf "no term '%s'" |> String)
+            maybe (termstr |> sprintf "no term '%s'" |> String) pAxiom
+                (Map.tryFind termstr m.Axioms)
 
 
     /// Prints a Term<CommandSemantics, 'WPre, 'Goal> using the WPre and Goal printers provided

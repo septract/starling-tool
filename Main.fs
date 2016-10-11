@@ -208,14 +208,12 @@ let printResponse (mview : ModelView) : Response -> Doc =
         printModelView
             paxiom
             (printViewDefiner
-                (Option.map (printBoolExpr (printSym printVar))
-                 >> withDefault (String "?")))
+                (maybe (String "?") (printBoolExpr (printSym printVar))))
             mview m
     let printFModel paxiom m =
         printModelView paxiom
             (printFuncDefiner
-                (Option.map (printBoolExpr (printSym printVar))
-                 >> withDefault (String "?")))
+                (maybe (String "?") (printBoolExpr (printSym printVar))))
             mview m
     let printUModel paxiom m =
         printModelView paxiom (fun _ -> Seq.empty) mview m
@@ -385,16 +383,14 @@ let runStarling (request : Request)
 
     let opts =
         config.optimisers
-        |> Option.map Utils.parseOptionString
-        |> withDefault (Seq.empty)
+        |> maybe (Seq.empty) Utils.parseOptionString
         |> Seq.toList
         |> Optimiser.Utils.parseOptimisationString
 
     let bp = backendParams ()
     let { Approx = approx; Reals = reals } =
         config.backendOpts
-        |> Option.map Utils.parseOptionString
-        |> withDefault (Seq.empty)
+        |> maybe (Seq.empty) Utils.parseOptionString
         |> Seq.fold
                (fun opts str ->
                     match (bp.TryFind str) with

@@ -116,26 +116,12 @@ let onlyOne (s : 'A seq) : 'A option =
 /// Reverses a 2-argument function.
 let flip (f : 'A -> 'B -> 'C) (x : 'B) (y : 'A) : 'C = f y x
 
-/// Reverses a pair.
-let flipPair (x : 'A1, y : 'A2) : 'A2 * 'A1 = (y, x)
-
 /// A predicate that always returns true.
 let always (_ : _) : bool = true
 
-/// Applies f and g to x and returns (f x, g x).
-let splitThrough (f : 'A -> 'B) (g : 'A -> 'C) (x : 'A) : 'B * 'C =
-    (f x, g x)
-
-/// Given f and x, returns (x, f x).
-let inAndOut (f : 'A -> 'B) : 'A -> 'A * 'B = splitThrough id f
-
-/// Given f and (x, y), returns (x, f x y).
-let inAndOut2 (f : 'A -> 'B -> 'C) (x : 'A, y : 'B) : 'A * 'C =
-    (x, f x y)
-
 /// Passes fst through f, and snd through g.
-let pairMap (f : 'A1 -> 'B1) (g : 'A2 -> 'B2) : 'A1 * 'A2 -> 'B1 * 'B2 =
-    splitThrough (fst >> f) (snd >> g)
+let pairMap (f : 'A1 -> 'B1) (g : 'A2 -> 'B2) (a1 : 'A1, a2 : 'A2) : 'B1 * 'B2 =
+    (f a1, g a2)
 
 /// Converts a pairwise function to a function of two arguments.
 let curry (f : 'A * 'B -> 'C) (a : 'A) (b : 'B) : 'C = f (a, b)
@@ -156,11 +142,26 @@ let cons (x : 'X) (xs : 'X list) : 'X list = x :: xs
 /// Puts a onto the top of a sequence b.
 let scons (x : 'X) : 'X seq -> 'X seq = Seq.append (Seq.singleton x)
 
-/// Returns `a` if the input is `Some a`, or `d` otherwise.
-let withDefault (d : 'A) : 'A option -> 'A =
-    function
-    | Some a -> a
+/// <summary>
+///     Returns a default value if the input is <c>None</c>, and maps a function
+///     over it otherwise.
+/// </summary>
+/// <param name="d">The default value.</param>
+/// <param name="f">The transformer used if the input is <c>Some</c>.</param>
+/// <param name="input">The input value.</param>
+/// <typeparam name="In">The type of the input.</typeparam>
+/// <typeparam name="Out">The type of the input.</typeparam>
+/// <returns>
+///     <paramref name="d"/> if <paramref name="input"/> is <c>None</c>;
+///     <paramref name="f"/> <c>v</c> if it is <c>Some v</c>.
+/// </returns>
+let maybe (d : 'Out) (f : 'In -> 'Out) (input: 'In option) : 'Out =
+    match input with
+    | Some a -> f a
     | None -> d
+
+/// Returns `a` if the input is `Some a`, or `d` otherwise.
+let withDefault (d : 'A) : 'A option -> 'A = maybe d id
 
 /// Maps a function f through a sequence, and concatenates the resulting
 /// list of lists into one set.
