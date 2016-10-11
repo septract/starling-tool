@@ -109,20 +109,24 @@ module Types =
         ///         for regression tests.
         ///     </para>
         /// </summary>
-        | SatMap of Map<string, Z3.Status option>
+        | SatMap of sats : Map<string, Z3.Status option>
+                  * failedChecks : DeferredCheck list
         /// <summary>
         ///     Collect the failures from SMT elimination in expanded form.
         /// </summary>
-        | Failures of Map<string, ZTerm>
+        | Failures of failedTerms : Map<string, ZTerm>
+                    * failedChecks : DeferredCheck list
         /// <summary>
         ///     Show every proof term, its derivation, and its Z3 status.
         /// </summary>
-        | AllTerms of Map<string, ZTerm>
+        | AllTerms of terms : Map<string, ZTerm>
+                    * failedChecks : DeferredCheck list
         /// <summary>
         ///     Show the remaining proof obligations as symbolic Boolean
         ///     expressions.
         /// </summary>
-        | RemainingSymBools of Map<string, BoolExpr<Sym<MarkedVar>>>
+        | RemainingSymBools of terms : Map<string, BoolExpr<Sym<MarkedVar>>>
+                          *    failedChecks : DeferredCheck list
 
 
 /// <summary>
@@ -199,18 +203,36 @@ module Pretty =
 
     /// Pretty-prints a response.
     let printResponse (mview : ModelView) (response : Response) : Doc =
+        let attachChecks doc =
+            function
+            | [] -> doc
+            | xs ->
+                vsep
+                    [ doc
+                      cmdHeaded
+                        (error (String "These sanity checks could not be established"))
+                        (Seq.map printDeferredCheck xs)]
+
         match response with
-        | SatMap map -> printMap Inline String printMaybeSat map
-        | Failures map ->
-            if Map.isEmpty map
-            then success (String "No proof failures")
-            else
-                cmdHeaded (error (String "Proof failures"))
-                    (Seq.map (uncurry printFailure) (Map.toSeq map))
-        | AllTerms map -> printMap Indented String printZTerm map
-        | RemainingSymBools map ->
-            printMap Indented String (printBoolExpr (printSym printMarkedVar))
-                map
+        | SatMap (map, dcs) ->
+            let mapDoc = printMap Inline String printMaybeSat map
+            attachChecks mapDoc dcs
+        | Failures (map, dcs) ->
+            let mapDoc =
+                if Map.isEmpty map
+                then success (String "No proof failures")
+                else
+                    cmdHeaded (error (String "Proof failures"))
+                        (Seq.map (uncurry printFailure) (Map.toSeq map))
+            attachChecks mapDoc dcs
+        | AllTerms (map, dcs) ->
+            let mapDoc = printMap Indented String printZTerm map
+            attachChecks mapDoc dcs
+        | RemainingSymBools (map, dcs) ->
+            let mapDoc =
+                printMap Indented String (printBoolExpr (printSym printMarkedVar))
+                    map
+            attachChecks mapDoc dcs
 
 /// <summary>
 ///     Uses Z3 to mark some proof terms as eliminated.
@@ -322,17 +344,18 @@ let extractFailures (model : ZModel) : Map<string, ZTerm> =
 /// <returns>
 ///     A model with proof terms marked up with their SMT solver results.
 /// </returns>
-let backend (request : Request) (model : ZModel)
-  : Response =
-    // TODO(CaptainHayashi): reject if any deferred checks.
+let backend (request : Request) (model : ZModel) : Response =
+    let dcs = model.DeferredChecks
+
     match request with
-    | Request.SatMap -> SatMap (extractSats model)
-    | Request.AllTerms -> AllTerms (model.Axioms)
-    | Request.Failures -> Failures (extractFailures model)
+    | Request.SatMap -> SatMap (extractSats model, dcs)
+    | Request.AllTerms -> AllTerms (model.Axioms, dcs)
+    | Request.Failures -> Failures (extractFailures model, dcs)
     | Request.RemainingSymBools ->
         RemainingSymBools
             (Map.map
                 (fun _ v ->
                     mkAnd
                         [ v.SymBool.Cmd; v.SymBool.WPre; mkNot v.SymBool.Goal ])
-                model.Axioms)
+                model.Axioms,
+             dcs)
