@@ -212,12 +212,6 @@ module Pretty =
             printMap Indented String (printBoolExpr (printSym printMarkedVar))
                 map
 
-/// Runs Z3 on a single term.
-let runTerm (ctx: Z3.Context) term =
-    let solver = ctx.MkSimpleSolver ()
-    solver.Assert [| term |]
-    solver.Check [||]
-
 /// <summary>
 ///     Uses Z3 to mark some proof terms as eliminated.
 ///     If approximates were enabled, Z3 will prove them instead of the
@@ -277,7 +271,7 @@ let eliminate (reals : bool)
                         (mkAnd [ cmd; wpre; mkNot goal ])
 
                 // This bit actually runs Z3 on the term.
-                let s = runTerm ctx combined
+                let s = Starling.Core.Z3.Run.runTerm ctx combined
                 Some z, Some s
             | _ -> None, None
 

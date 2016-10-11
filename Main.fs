@@ -336,6 +336,10 @@ type BackendParams =
       /// </summary>
       Approx : bool
       /// <summary>
+      ///     Whether SMT reduction is being suppressed.
+      /// </summary>
+      NoSMTReduce : bool
+      /// <summary>
       ///     Whether reals are being substituted for integers in Z3 proofs.
       /// </summary>
       Reals : bool }
@@ -348,9 +352,14 @@ let rec backendParams ()
     Map.ofList
         [ ("approx",
            ("Replace all symbols in a proof with their under-approximation.\n\
-             Allows some symbol proofs to be run by the Z3 backend, but the \
+             Allows some symbolic terms to be discharged by SMT, but the \
              resulting proof may be incomplete.",
              fun ps -> { ps with Approx = true } ))
+          ("no-smt-reduce",
+           ("Don't remove SMT-solved proof terms before applying the backend.\n\
+             This can speed up some solvers due to overconstraining the search \
+             space.",
+             fun ps -> { ps with NoSMTReduce = true } ))
           ("reals",
            ("In Z3/muZ3 proofs, model integers as reals.\n\
              This may speed up the proof at the cost of soundness.",
@@ -388,7 +397,7 @@ let runStarling (request : Request)
         |> Optimiser.Utils.parseOptimisationString
 
     let bp = backendParams ()
-    let { Approx = approx; Reals = reals } =
+    let { Approx = approx; NoSMTReduce = noSMTReduce; Reals = reals } =
         config.backendOpts
         |> maybe (Seq.empty) Utils.parseOptionString
         |> Seq.fold
@@ -399,7 +408,7 @@ let runStarling (request : Request)
                         eprintfn "unknown backend param %s ignored (try 'list')"
                             str
                         opts)
-               { Approx = false; Reals = false }
+               { Approx = false; NoSMTReduce = false; Reals = false }
 
     // Shorthand for the various stages available.
     let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
@@ -427,7 +436,12 @@ let runStarling (request : Request)
     let prepareForHorn =
         bind
             (fun model ->
-                let nonProvenZTerms = Backends.Z3.extractFailures model
+                // If the user specified not to reduce, don't filter to SMT
+                // failures.
+                let nonProvenZTerms =
+                    if noSMTReduce
+                    then model.Axioms
+                    else Backends.Z3.extractFailures model
                 // TODO(CaptainHayashi): maybe don't lose information here.
                 let nonProvenAxioms =
                     Map.map
