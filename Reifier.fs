@@ -134,7 +134,6 @@ module Downclosure =
     /// </returns>
     let lookupFunc (protos : FuncDefiner<ProtoInfo>) (func : DFunc)
       : Result<ProtoInfo option, Error> =
-        // TODO(CaptainHayashi): proper doc comment
         // TODO(CaptainHayashi): merge with Modeller.lookupFunc?
         let look func = Core.Definer.FuncDefiner.lookup func protos
         let record = wrapMessages LookupError look func
@@ -674,7 +673,7 @@ let reify
             model.ViewDefs
             model.DeferredChecks
     let checkedModelR =
-        lift (fun ds ->  { model with DeferredChecks = ds }) deferredCheckR
+        lift (fun ds -> { model with DeferredChecks = ds }) deferredCheckR
 
     lift
         (mapAxioms (mapTerm id (reifyView model.ViewProtos model.ViewDefs) id))
