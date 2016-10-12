@@ -47,8 +47,8 @@ module Types =
     type Horn =
         /// A normal Horn clause.
         | Clause of head: Literal * body: (Literal list)
-        /// A comment.
-        | Comment of string
+        /// A comment attached to a Horn clause.
+        | Comment of cmt: string
         /// A query-naming call.
         | QueryNaming of Func<string>
 
@@ -345,13 +345,16 @@ let hsfModelViewDef
  * Variables
  *)
 
-/// Constructs a Horn clause for initialising an integer variable.
-/// Returns an error if the variable is not an integer.
-/// Returns no clause if the variable is not initialised.
-/// Takes the environment of active global variables.
-let hsfModelVariables (sharedVars : VarMap) : Result<Horn, Error> =
+/// <summary>
+///     Generates the Horn uninterpreted function for emp.
+/// </summary>
+/// <param name="svars">The shared vars used as parameters to emp.</param>
+/// <returns>
+///     If successful, the Horn uninterpreted function for emp.
+/// </returns>
+let predOfEmp (svars : VarMap) : Result<Func<VIntExpr>, Error> =
     let vpars =
-        sharedVars
+        svars
         |> Map.toSeq
         |> Seq.map
             (function

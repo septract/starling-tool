@@ -220,6 +220,16 @@ let lookupVar
     |> tryLookupVar env
     |> failIfNone (NotFound (flattenLV s))
 
+/// <summary>
+///     Converts a variable map to a sequence of typed variables.
+/// </summary>
+/// <param name="vmap">The map to convert.</param>
+/// <returns>
+///     <paramref name="vmap"/>, as a sequence of <see cref="TypedVar"/>s.
+/// </returns>
+let toVarSeq (vmap : VarMap) : TypedVar seq =
+    Seq.map (fun (name, ty) -> withType ty name) (Map.toSeq vmap)
+
 
 (*
  * Variable constructors
@@ -283,4 +293,3 @@ module Tests =
             // The fun x boilerplate seems to be necessary.
             // Otherwise, mutations to fg apparently don't propagate!
             List.map (fun x -> goalVar fg x) xs
-
