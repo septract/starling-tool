@@ -205,6 +205,8 @@ let hsep2 sep x y =
     | HSep (xs, sx), y when sx = sep -> HSep (Seq.append xs (Seq.singleton y), sep)
     | x, HSep (ys, sy) when sy = sep -> HSep (Seq.append (Seq.singleton x) ys, sep)
     | x, y -> HSep (Seq.ofList [ x; y ], sep)
+/// Infix version of hjoin.
+let (<->) x y = hsep2 Nop x y
 /// Infix version of hsep.
 let (<+>) x y = hsep2 (String " ") x y
 /// Horizontally separates a list of commands with commas.
