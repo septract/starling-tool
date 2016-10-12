@@ -255,8 +255,7 @@ module Downclosure =
       : Result<DeferredCheck list, Error> =
         (* To do the inductive downclosure, we need to replace all instances of
            the iterator in the definition with (iterator + 1) in one version. *)
-        let increment v = mkAdd2 (AVar (Reg v)) (AInt 1L)
-        let succDefn = mapOverIteratorUses increment iterator defn
+        let succDefn = mapOverIteratorUses (Reg >> incVar) iterator defn
 
         (* Inductive downclosure for a view V[n](x):
              (0 <= n) => (D(V[n+1](x)) => D(V[n](x)))
