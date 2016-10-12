@@ -52,19 +52,33 @@ module Types =
         /// A query-naming call.
         | QueryNaming of Func<string>
 
-    /// An error caused when emitting a Horn clause.
+    /// <summary>
+    ///     An error caused when emitting a Horn clause.
+    /// </summary>
     type Error =
-        /// A Func is inconsistent with its definition.
+        /// <summary>
+        ///     A Func is inconsistent with its definition.
+        /// </summary>
         | InconsistentFunc of func : MVFunc * err : Starling.Core.Definer.Error
-        /// A viewdef has a non-arithmetic param.
+        /// <summary>
+        ///     A viewdef has a non-arithmetic param.
+        /// </summary>
         | NonArithParam of TypedVar
-        /// A model has a non-arithmetic variable.
+        /// <summary>
+        ///     A model has a non-arithmetic variable.
+        /// </summary>
         | NonArithVar of TypedVar
-        /// The expression given is not supported in the given position.
+        /// <summary>
+        ///     The expression given is not supported in the given position.
+        /// </summary>
         | UnsupportedExpr of VExpr
-        /// The expression given is compound, but empty.
+        /// <summary>
+        ///     The expression given is compound, but empty.
+        /// </summary>
         | EmptyCompoundExpr of exptype : string
-        /// HSF can't check the given deferred check.
+        /// <summary>
+        ///     HSF can't check the given deferred check.
+        /// </summary>
         | CannotCheckDeferred of check : DeferredCheck * why : string
 
 
@@ -176,8 +190,15 @@ module Pretty =
     /// Emits a Horn clause list.
     let printHorns (hs : Horn list) : Doc = hs |> List.map printHorn |> vsep
 
-    let printHornError : Error -> Doc =
-        function
+    /// <summary>
+    ///     Pretty-prints a MuZ3 backend error.
+    /// </summary>
+    /// <param name="err">The error to print.</param>
+    /// <returns>
+    ///     A <see cref="Doc"/> representing <paramref name="err"/>.
+    /// </returns>
+    let printError (err : Error) : Doc =
+        match err with
         | InconsistentFunc (func, err) ->
             wrapped "view func"
                     (printMVFunc func)
@@ -496,10 +517,9 @@ let hsfModelDeferredCheck (svars : VarMap) (check : DeferredCheck)
             | None -> fail (CannotCheckDeferred (check, "malformed iterator"))
         let funcPredZeroResult =
             lift2
-                (fun it pred ->
-                    subIteratorInPred it (fun _ -> AInt 0L) pred)
-                    iterVarResult
-                    funcPredResult
+                (fun it pred -> subIteratorInPred it (fun _ -> AInt 0L) pred)
+                iterVarResult
+                funcPredResult
 
         let empPredResult = predOfEmp svars
 
@@ -527,11 +547,9 @@ let hsfModelDeferredCheck (svars : VarMap) (check : DeferredCheck)
 
         let funcPredSuccResult =
             lift2
-                (fun it pred -> subIteratorInPred it (fun i -> mkAdd2 (AVar i) (AInt 1L)) pred)
+                (fun it pred -> subIteratorInPred it incVar pred)
                 iterVarResult
                 funcPredResult
-
-        let empPredResult = predOfEmp svars
 
         let hornResult =
             lift3

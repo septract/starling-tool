@@ -248,8 +248,14 @@ type Error =
     | Frontend of Lang.Frontend.Error
     /// An error occurred in semantic translation.
     | Semantics of Semantics.Types.Error
-    /// An error occurred in the HSF backend.
+    /// <summary>
+    ///     An error occurred in the HSF backend.
+    /// </summary>
     | HSF of Backends.Horn.Types.Error
+    /// <summary>
+    ///     An error occurred in the MuZ3 backend.
+    /// </summary>
+    | MuZ3 of Backends.MuZ3.Types.Error
     /// <summary>
     ///     An error occurred during reifying.
     /// </summary>
@@ -268,12 +274,19 @@ type Error =
     /// A miscellaneous (internal) error has occurred.
     | Other of string
 
-/// Prints a top-level program error.
-let printError : Error -> Doc =
-    function
+/// <summary>
+///     Prints a top-level program error.
+/// </summary>
+/// <param name="err">The error to print.</param>
+/// <returns>
+///     A <see cref="Doc"/> representing <paramref name="err"/>.
+/// </returns>
+let printError (err : Error) : Doc =
+    match err with
     | Frontend e -> Lang.Frontend.printError e
     | Semantics e -> Semantics.Pretty.printSemanticsError e
-    | HSF e -> Backends.Horn.Pretty.printHornError e
+    | HSF e -> Backends.Horn.Pretty.printError e
+    | MuZ3 e -> Backends.MuZ3.Pretty.printError e
     | Reify e ->
         headed "Reification failed"
                [ Reifier.Pretty.printError e ]
@@ -413,7 +426,7 @@ let runStarling (request : Request)
     // Shorthand for the various stages available.
     let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
     let smt rq = lift (Backends.Z3.backend rq)
-    let muz3 rq = lift (Backends.MuZ3.run reals rq)
+    let muz3 rq = bind (Backends.MuZ3.run reals rq >> mapMessages Error.MuZ3)
     let frontend times rq =
         Lang.Frontend.run times rq Response.Frontend Error.Frontend
     let graphOptimise =
