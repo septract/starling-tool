@@ -774,7 +774,9 @@ module Translator =
       : Result<MuModel, Error> =
         let funcDecls, definites = translateViewDefs reals ctx ds
         let vrules = translateVariables reals ctx funcDecls svars
-        let trules = xs |> Map.toSeq |> Seq.choose (translateTerm reals ctx funcDecls)
+
+        let axseq = Map.toSeq xs
+        let trules = Seq.choose (translateTerm reals ctx funcDecls) axseq
 
         let tdc = translateDeferredCheck reals ctx funcDecls svars
         let drulesResult = lift (Seq.choose id) (collect (Seq.map tdc cs))
@@ -792,6 +794,39 @@ module Translator =
 /// </summary>
 module Run =
     open Starling.Core.Z3.Expr
+
+    let genViewDefRule reals (ctx : Z3.Context) fm (fixedpoint : Z3.Fixedpoint) (unsafeapp : Z3.BoolExpr) view def =
+        let defImpliesView =
+            Translator.mkRule reals id ctx fm def Multiset.empty view
+        Option.iter fixedpoint.AddRule defImpliesView
+
+        // TODO(CaptainHayashi): de-duplicate this with mkRule.
+        let vars =
+            Set.ofSeq
+                (seq {
+                    yield! (mapOverVars Mapper.mapBoolCtx findVars def)
+                    for param in view.Params do
+                        yield! (mapOverVars Mapper.mapCtx findVars param)
+                })
+
+        let z3Vars =
+            Set.toArray
+                (Set.map
+                    (fun (var : CTyped<Var>) ->
+                        ctx.MkConst
+                            (valueOf var,
+                             Translator.typeToSort reals ctx (typeOf var)))
+                    vars)
+
+        // Introduce 'V ^ ¬D(V) -> unsafe'.
+        let viewImpliesDef =
+            Translator.mkQuantifiedEntailment
+                ctx
+                z3Vars
+                (ctx.MkAnd [| boolToZ3 reals id ctx (mkNot def)
+                              Translator.translateVFunc reals id ctx fm view |])
+                unsafeapp
+        Option.iter fixedpoint.AddRule viewImpliesDef
 
     /// <summary>
     ///     Generates a MuZ3 fixedpoint.
@@ -819,42 +854,11 @@ module Run =
         pars.Add("engine", ctx.MkSymbol("pdr"))
         fixedpoint.Parameters <- pars
 
-        List.iter
-            (fun (view, def) ->
-                 match (Translator.mkRule reals id ctx fm def Multiset.empty view) with
-                 | Some rule -> fixedpoint.AddRule rule
-                 | None -> ())
-            ds
-
         let unsafe = ctx.MkFuncDecl ("unsafe", [||], ctx.MkBoolSort () :> Z3.Sort)
         fixedpoint.RegisterRelation unsafe
         let unsafeapp = unsafe.Apply [| |] :?> Z3.BoolExpr
 
-        List.iter
-            (fun (view, def) ->
-                 // TODO(CaptainHayashi): de-duplicate this with mkRule.
-                 let vars =
-                     seq {
-                         yield! (mapOverVars Mapper.mapBoolCtx findVars def)
-                         for param in view.Params do
-                             yield! (mapOverVars Mapper.mapCtx findVars param)
-                     }
-                     |> Set.ofSeq
-                     |> Set.map
-                            (fun (var : CTyped<Var>) ->
-                                 ctx.MkConst (valueOf var,
-                                              Translator.typeToSort reals ctx (typeOf var)))
-                     |> Set.toArray
-
-                 // Introduce 'V ^ ¬D(V) -> unsafe'.
-                 Translator.mkQuantifiedEntailment
-                     ctx
-                     vars
-                     (ctx.MkAnd [| def |> mkNot |> boolToZ3 reals id ctx
-                                   Translator.translateVFunc reals id ctx fm view |])
-                     unsafeapp
-                 |> Option.iter (fixedpoint.AddRule))
-            ds
+        List.iter (uncurry (genViewDefRule reals ctx fm fixedpoint unsafeapp)) ds
 
         Map.iter (fun (s : string) g -> fixedpoint.AddRule (g, ctx.MkSymbol s :> Z3.Symbol)) rs
         Map.iter (fun _ g -> fixedpoint.RegisterRelation g) fm
@@ -873,13 +877,10 @@ module Run =
     /// </returns>
     let run (fixedpoint : Z3.Fixedpoint) (unsafe : Z3.FuncDecl) : MuSat =
         match (fixedpoint.Query [| unsafe |]) with
-        | Z3.Status.SATISFIABLE ->
-             MuSat.Sat (fixedpoint.GetAnswer ())
-        | Z3.Status.UNSATISFIABLE ->
-             MuSat.Unsat (fixedpoint.GetAnswer ())
-        | Z3.Status.UNKNOWN ->
-             MuSat.Unknown (fixedpoint.GetReasonUnknown ())
-         | _ -> MuSat.Unknown "query result out of bounds"
+        | Z3.Status.SATISFIABLE -> MuSat.Sat (fixedpoint.GetAnswer ())
+        | Z3.Status.UNSATISFIABLE -> MuSat.Unsat (fixedpoint.GetAnswer ())
+        | Z3.Status.UNKNOWN -> MuSat.Unknown (fixedpoint.GetReasonUnknown ())
+        | _ -> MuSat.Unknown "query result out of bounds"
 
 /// <summary>
 ///     The Starling MuZ3 backend driver.
