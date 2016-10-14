@@ -32,7 +32,7 @@ open Starling.Core.Model
 open Starling.Core.Sub
 open Starling.Core.Symbolic
 open Starling.Core.GuardedView
-open Starling.Core.GuardedView.Sub
+open Starling.Core.GuardedView.Traversal
 
 
 /// <summary>
@@ -65,6 +65,16 @@ module Types =
         ///     one.
         /// </summary>
         | UnwantedSym of sym: string
+        /// <summary>
+        ///     We tried to substitute parameters, but one parameter was free
+        ///     (not bound to an expression) somehow.
+        /// </summary>
+        | FreeVarInSub of param: TypedVar
+        /// <summary>
+        ///     An error occurred during traversal.
+        ///     This error may contain nested instantiation errors!
+        /// </summary>
+        | Traversal of SubError<Error>
 
     /// Terms in a Proof are boolean expression pre/post conditions with Command's
     type SymProofTerm = CmdTerm<SMBoolExpr, SMBoolExpr, SMBoolExpr>
@@ -85,7 +95,7 @@ module Pretty =
     open Starling.Core.View.Pretty
 
     /// Pretty-prints instantiation errors.
-    let printError : Error -> Doc =
+    let rec printError : Error -> Doc =
         function
         | TypeMismatch (par, atype) ->
             fmt "parameter '{0}' conflicts with argument of type '{1}'"
@@ -100,6 +110,14 @@ module Pretty =
             // TODO(CaptainHayashi): this is a bit shoddy.
             fmt "encountered uninterpreted symbol {0}"
                 [ String sym ]
+        | FreeVarInSub var ->
+            // TODO(CaptainHayashi): this is a bit shoddy.
+            error
+                (hsep
+                    [ String "parameter '"
+                      printTypedVar var
+                      String "' has no substitution" ])
+        | Traversal err -> Sub.Pretty.printSubError printError err
 
     let printSymProofTerm : SymProofTerm -> Doc =
         printCmdTerm printSMBoolExpr printSMBoolExpr printSMBoolExpr
@@ -209,31 +227,22 @@ let checkParamTypes func def =
 /// <param name="_arg2">
 ///     The <c>DFunc</c> into which we are substituting.
 /// </param>
-/// <typeparam name="dstVar">
-///     The type of variables in the arguments being substituted.
-/// </typeparam>
 /// <returns>
-///     A <c>VSubFun</c> performing the above substitutions.
+///     A <see cref="Traversal"/> performing the above substitutions.
 /// </returns>
 let paramSubFun
-  ( { Params = fpars } : VFunc<'dstVar>)
+  ( { Params = fpars } : VFunc<Sym<MarkedVar>>)
   ( { Params = dpars } : DFunc)
-  : VSubFun<Var, 'dstVar> =
-    let pmap =
-        Seq.map2 (fun par up -> valueOf par, up) dpars fpars
-        |> Map.ofSeq
+  : Traversal<TypedVar, Expr<Sym<MarkedVar>>, Error> =
+    let pmap = Map.ofSeq (Seq.map2 (fun par up -> valueOf par, up) dpars fpars)
 
-    Mapper.make
-        (fun srcV ->
-             match (pmap.TryFind srcV) with
-             | Some (Typed.Int expr) -> expr
-             | Some _ -> failwith "param substitution type error"
-             | None -> failwith "free variable in substitution")
-        (fun srcV ->
-             match (pmap.TryFind srcV) with
-             | Some (Typed.Bool expr) -> expr
-             | Some _ -> failwith "param substitution type error"
-             | None -> failwith "free variable in substitution")
+    ignoreContext
+        (function
+         | WithType (var, vtype) as v ->
+            match pmap.TryFind var with
+            | Some expr when vtype = typeOf expr -> ok expr
+            | Some expr -> fail (Inner (TypeMismatch (v, typeOf expr)))
+            | None -> fail (Inner (FreeVarInSub v)))
 
 /// <summary>
 ///     Look up <c>func</c> in <c>_arg1</c>, and instantiate the
@@ -255,22 +264,43 @@ let paramSubFun
 let instantiate
   (definer : FuncDefiner<BoolExpr<Sym<Var>>>)
   (vfunc : VFunc<Sym<MarkedVar>>)
-  : Result<BoolExpr<Sym<MarkedVar>> option, Error> =
-    let subfun dfunc = paramSubFun vfunc dfunc |> liftVToSym |> onVars
+  : Result<BoolExpr<Sym<MarkedVar>> option, SubError<Error>> =
+    // TODO(CaptainHayashi): this symbolic code is horrific.
 
-    definer
-    |> lookup vfunc
-    |> bind
+    let dfuncResult = lookup vfunc definer
+    let typeCheckedDFuncResult =
+        bind
            (function
             | None -> ok None
             | Some (dfunc, defn) ->
                 lift
                     (fun _ -> Some (dfunc, defn))
                     (checkParamTypes vfunc dfunc))
-    |> lift
-           (Option.map
-                (fun (dfunc, defn) ->
-                     defn |> Mapper.mapBoolCtx (subfun dfunc) NoCtx |> snd))
+            dfuncResult
+
+    let subInBool dfunc =
+        withoutContext (boolSubVars (paramSubFun vfunc dfunc))
+
+    let rec subInTypedSym dfunc ctx sym =
+        match (valueOf sym) with
+        | Reg r -> paramSubFun vfunc dfunc ctx (withType (typeOf sym) r)
+        | Sym { Name = n; Params = ps } ->
+            tchainL (subInExpr dfunc)
+                (fun ps' ->
+                    mkVarExp
+                        (withType (typeOf sym)
+                            (Sym { Name = n; Params = ps' })))
+                ctx ps
+    and subInExpr dfunc = liftTraversalToExprSrc (subInTypedSym dfunc)
+    and subInBool dfunc = boolSubVars (subInTypedSym dfunc)
+
+    bind
+        (function
+         | None -> ok None
+         | Some (dfunc, defn) ->
+            lift Some (withoutContext (subInBool dfunc) defn))
+        (mapMessages Inner typeCheckedDFuncResult)
+
 /// <summary>
 ///     Partitions a <see cref="FuncDefiner"/> into a definite
 ///     definer and an indefinite definer.
@@ -305,16 +335,19 @@ module DefinerFilter =
     /// </summary>
     let tryRemoveFuncDefinerSymbols
       (defs : FuncDefiner<SVBoolExpr>)
-      : Result<FuncDefiner<VBoolExpr>, Error> =
+      : Result<FuncDefiner<VBoolExpr>, SubError<Error>> =
         // TODO(CaptainHayashi): proper doc comment.
         // TODO(CaptainHayashi): stop assuming Definer is a list.
         defs
         |> List.map
                (fun (f, d) ->
-                    d
-                    |> Mapper.mapBoolCtx (tsfRemoveSym UnwantedSym) NoCtx
-                    |> snd
-                    |> lift (mkPair f))
+                    let trav =
+                        boolSubVars
+                            (liftTraversalToExprDest
+                                (liftTraversalOverCTyped
+                                    (removeSymFromVars UnwantedSym)))
+                    let result = withoutContext trav d
+                    lift (mkPair f) result)
         |> collect
 
     /// <summary>
