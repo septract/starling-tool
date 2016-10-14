@@ -206,27 +206,48 @@ module Queries =
              | Reg f -> ok f)
 
     (*
-     * Common substitutions
+     * Common traversals
      *)
+
+    /// <summary>
+    ///     Traversal for converting symbolic expressions with a marker.
+    /// </summary>
+    let traverseSymWithMarker
+      (marker : Var -> MarkedVar)
+      : Traversal<Sym<Var>, Sym<MarkedVar>, 'Error> =
+        liftTraversalOverSym (ignoreContext (marker >> ok))
+
+    /// <summary>
+    ///     Traversal for converting type-annotated symbolic variables with a
+    ///     marker.
+    /// </summary>
+    /// <param name="marker">The marker to lift into a traversal.</param>
+    /// <returns>
+    ///     The marker function <paramref name="marker"/>, lifted into a
+    ///     <see cref="Traversal"/> over symbolic <see cref="Var"/>s annotated
+    ///     using <see cref="CTyped"/>.
+    /// </returns>
+    let traverseTypedSymWithMarker
+      (marker : Var -> MarkedVar)
+      : Traversal<CTyped<Sym<Var>>, CTyped<Sym<MarkedVar>>, 'Error> =
+        liftTraversalOverCTyped (traverseSymWithMarker marker)
 
     /// <summary>
     ///     Converts a symbolic expression to its pre-state.
     /// </summary>
     let before (expr : Expr<Sym<Var>>)
       : Result<Expr<Sym<MarkedVar>>, SubError<'Error>> =
-        liftWithoutContext
-            (Before >> ok)
-            (liftTraversalOverSym >> liftTraversalOverCTyped >> liftTraversalOverExpr)
+        withoutContext
+            (liftTraversalOverExpr (traverseTypedSymWithMarker Before))
             expr
 
     /// <summary>
     ///     Converts a symbolic expression to its post-state.
     /// </summary>
     let after (expr : Expr<Sym<Var>>)
-      : Result<Expr<Sym<MarkedVar>>, SubError<'Error>> =
-        liftWithoutContext
-            (After >> ok)
-            (liftTraversalOverSym >> liftTraversalOverCTyped >> liftTraversalOverExpr)
+      : Result<Expr<Sym<MarkedVar>>, SubError<unit>> =
+        withoutContext
+            (liftTraversalOverExpr (traverseTypedSymWithMarker After))
             expr
 
     /// <summary>
@@ -361,22 +382,24 @@ module Tests =
         /// Test cases for testing constant post-state rewriting.
         static member IntConstantPostStates =
             [ TestCaseData(siVar "target1")
-                  .Returns(siAfter "target1")
+                  .Returns(Some <| siAfter "target1")
                   .SetName("Rewrite single variable to post-state")
               TestCaseData(AAdd [AInt 4L; siVar "target1"])
-                  .Returns(AAdd [AInt 4L; siAfter "target1"])
+                  .Returns(Some <| AAdd [AInt 4L; siAfter "target1"])
                   .SetName("Rewrite expression with one variable to post-state")
               TestCaseData(ASub [siVar "target1"; siVar "target2"])
-                  .Returns(ASub [siAfter "target1"; siAfter "target2"])
+                  .Returns(Some <| ASub [siAfter "target1"; siAfter "target2"])
                   .SetName("Rewrite expression with two variables to post-state")
               TestCaseData(ADiv (AInt 6L, AInt 0L) : SVIntExpr)
-                  .Returns(ADiv (AInt 6L, AInt 0L) : SMIntExpr)
+                  .Returns(Some <| ADiv (AInt 6L, AInt 0L) : SMIntExpr option)
                   .SetName("Rewrite expression with no variables to post-state") ]
 
         [<TestCaseSource("IntConstantPostStates")>]
         /// Tests whether rewriting constants in arithmetic expressions to post-state works.
         member x.``constants in arithmetic expressions can be rewritten to post-state`` (expr : IntExpr<Sym<Var>>) =
-            expr |> Int |> after |> bind expectInt
+            let trav = liftTraversalToExprDest (traverseTypedSymWithMarker After)
+            let res = withoutContext (intSubVars trav) expr
+            okOption res
 
         /// <summary>
         ///     Test cases for testing underapproximation of Booleans.
@@ -482,14 +505,9 @@ module Tests =
         ///     Tests whether Boolean underapproximation works.
         /// </summary>
         [<TestCaseSource("BoolApprox")>]
-        member this.testBoolApprox (bl : BoolExpr<Sym<MarkedVar>>)
-          (pos : TraversalContext)
-          : (TraversalContext * BoolExpr<Sym<MarkedVar>>) option =
-            bl
-            |> Expr.Bool
-            |> liftTraversalToExprSrc approx pos
-            |> bind (fun (ctx, e) -> expectBool e |> lift (mkPair ctx))
-            |> okOption
+        member this.testBoolApprox (bl : BoolExpr<Sym<MarkedVar>>) (pos : TraversalContext) =
+            let res = boolSubVars approx pos bl
+            okOption (lift snd res)
 
         /// <summary>
         ///     Test cases for finding variables in expressions.
@@ -573,4 +591,4 @@ module Tests =
         /// </summary>
         [<TestCaseSource("FindSMVarsCases")>]
         member this.testFindSMVars expr =
-            expr |> findMarkedVars collectSymMarkedVars |> okOption
+            okOption (findMarkedVars collectSymMarkedVars expr)

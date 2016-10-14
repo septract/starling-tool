@@ -328,20 +328,20 @@ let expectBool : Expr<'Var> -> Result<BoolExpr<'Var>, SubError<_>> =
     | Bool x -> ok x
     | tx -> fail (BadType (expected = Type.Bool (), got = typeOf tx))
 
-// <summary>
-//     Maps a traversal over an item, feeds the result into a function,
-//     and returns the final context and the result of that function.
-// </summary>
+/// <summary>
+///     Maps a traversal over an item, feeds the result into a function,
+///     and returns the final context and the result of that function.
+/// </summary>
 let tchain (f : Traversal<'A, 'AR, 'Error>) (g : 'AR -> 'Result)
   : Traversal<'A, 'Result, 'Error> =
     // TODO(CaptainHayashi): proper doc comment.
     fun ctx -> f ctx >> lift (fun (ctxF, xR) -> ctxF, g xR)
 
-// <summary>
-//     Maps a traversal from left to right over a list, accumulating the
-//     context, feeds the result list into a function, and returns the
-//     final context and the result of that function.
-// </summary>
+/// <summary>
+///     Maps a traversal from left to right over a list, accumulating the
+///     context, feeds the result list into a function, and returns the
+///     final context and the result of that function.
+/// </summary>
 let tchainL (f : Traversal<'A, 'AR, 'Error>) (g : 'AR list -> 'Result)
   : Traversal<'A list, 'Result, 'Error> =
     // TODO(CaptainHayashi): proper doc comment.
@@ -353,6 +353,33 @@ let tchainL (f : Traversal<'A, 'AR, 'Error>) (g : 'AR list -> 'Result)
                      (f ctxN x))
             (ctx, [])
         >> lift (pairMap id g)
+
+/// <summary>
+///     Maps a traversal from left to right over a multiset, accumulating the
+///     context; feeds the result list into a functionl and returns the
+///     final context and the result of that function.
+///     <para>
+///         The context is only updated once for each unique item in the
+///         multiset.
+///     </para>
+/// </summary>
+let tchainM (f : Traversal<'A, 'AR, 'Error>) (g : Multiset<'AR> -> 'Result)
+  : Traversal<Multiset<'A>, 'Result, 'Error> =
+    // TODO(CaptainHayashi): proper doc comment.
+    // TODO(CaptainHayashi): proper doc comment.
+    let trav ctx ms =
+        let ms' =
+            Multiset.fold
+                (fun res x n ->
+                    trial {
+                        let! (c, mset) = res
+                        let! (c', x') = f
+                        return (c', Multiset.addn x' n)
+                    })
+                (ok (ctx, Multiset.empty))
+                ms
+        lift g ms'
+    trav
 
 // <summary>
 //     Runs two traversals from left to right, accumulating the context,

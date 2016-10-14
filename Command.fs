@@ -3,6 +3,8 @@
 /// </summary>
 module Starling.Core.Command
 
+open Chessie.ErrorHandling
+
 open Starling.Utils
 open Starling.Collections
 open Starling.Lang
@@ -63,9 +65,7 @@ module Queries =
     ///     <c>false</c> otherwise.
     /// </returns>
     let isNop : Command -> bool =
-        List.forall
-            (fun { Results = ps } ->
-                  ps = [])
+        List.forall (fun { Results = ps } -> List.isEmpty ps )
 
     /// <summary>
     ///     Active pattern matching assume commands.
@@ -85,8 +85,8 @@ module Queries =
     /// command as a list
     let commandArgs cmd =
         let f c = List.map SMExprVars c.Args
-        let vars = List.fold (@) [] <| List.map f cmd
-        Set.fold (+) Set.empty (Set.ofList vars)
+        let vars = collect (concatMap f cmd)
+        lift Set.unionMany vars
 
 /// <summary>
 ///     Composition of Boolean expressions representing commands.
@@ -274,7 +274,7 @@ module Pretty =
     open Starling.Core.Symbolic.Pretty
 
     /// Pretty-prints a Command.
-    let printPrimCommand { Name = name; Args = xs; Results = ys } = 
+    let printPrimCommand { Name = name; Args = xs; Results = ys } =
         hjoin [ commaSep <| Seq.map (printCTyped String) ys; " <- " |> String; name |> String; String " "; commaSep <| Seq.map printSMExpr xs ]
 
     let printCommand : Command -> Doc = List.map printPrimCommand >> semiSep
