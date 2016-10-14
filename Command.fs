@@ -49,6 +49,39 @@ module Types =
         { Cmd : Command; Semantics : 'Semantics }
         override this.ToString() = sprintf "%A" this
 
+/// <summary>
+///     Traversals on commands.
+/// </summary>
+module Traversal =
+    open Starling.Core.Sub
+
+    /// <summary>
+    ///     Lifts a <c>Traversal</c> over all variables in a
+    ///     <see cref="CommandSemantics"/>.
+    /// </summary>
+    /// <param name="traversal">
+    ///     The <c>Traversal</c> to map over all variables in the command.
+    ///     This should map from typed variables to expressions.
+    /// </param>
+    /// <typeparam name="SrcVar">
+    ///     The type of variables before traversal.
+    /// </typeparam>
+    /// <typeparam name="DstVar">
+    ///     The type of variables after traversal.
+    /// </typeparam>
+    /// <typeparam name="Error">
+    ///     The type of any returned errors.
+    /// </typeparam>
+    /// <returns>The lifted <see cref="Traversal"/>.</returns>
+    let liftTraversalOverCommandSemantics
+      (traversal : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
+      : Traversal<CommandSemantics<BoolExpr<'SrcVar>>,
+                  CommandSemantics<BoolExpr<'DstVar>>,
+                  'Error> =
+        fun ctx { Cmd = c; Semantics = s } ->
+            let swapSemantics s' = { Cmd = c; Semantics = s' }
+            let result = boolSubVars traversal ctx s
+            lift (pairMap id swapSemantics) result
 
 /// <summary>
 ///     Queries on commands.
@@ -248,7 +281,7 @@ module SymRemove =
     /// </summary>
     let rec removeSym : BoolExpr<Sym<'var>> -> BoolExpr<Sym<'var>> =
         function
-        | SymAssign (_, _) -> BTrue
+        | SymAssign _ -> BTrue
         // Distributivity.
         // TODO(CaptainHayashi): distribute through more things?
         | BAnd xs -> BAnd (List.map removeSym xs)
@@ -282,4 +315,3 @@ module Pretty =
     /// Printing a CommandSemantics prints just the semantic boolexpr associated with it
     let printCommandSemantics pSem sem =
         pSem sem.Semantics
-

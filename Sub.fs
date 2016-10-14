@@ -373,12 +373,12 @@ let tchainM (f : Traversal<'A, 'AR, 'Error>) (g : Multiset<'AR> -> 'Result)
                 (fun res x n ->
                     trial {
                         let! (c, mset) = res
-                        let! (c', x') = f
-                        return (c', Multiset.addn x' n)
+                        let! (c', x') = f c x
+                        return (c', Multiset.addn mset x' n)
                     })
                 (ok (ctx, Multiset.empty))
                 ms
-        lift g ms'
+        lift (pairMap id g) ms'
     trav
 
 // <summary>
@@ -397,6 +397,26 @@ let tchain2
             let! ctxF, xR = f ctx x
             let! ctxG, yR = g ctxF y
             return (ctxG, h (xR, yR))
+        }
+
+// <summary>
+//     Runs three traversals from left to right, accumulating the context,
+//     feeds both results into a triple-accepting function, and returns the
+//     final context and the result of that function.
+// </summary>
+let tchain3
+  (f : Traversal<'A, 'AR, 'Error>)
+  (g : Traversal<'B, 'BR, 'Error>)
+  (h : Traversal<'C, 'CR, 'Error>)
+  (i : ('AR * 'BR * 'CR) -> 'Result)
+  : Traversal<'A * 'B * 'C, 'Result, 'Error> =
+    // TODO(CaptainHayashi): proper doc comment.
+    fun ctx (x, y, z) ->
+        trial {
+            let! ctxF, xR = f ctx x
+            let! ctxG, yR = g ctxF y
+            let! ctxH, zR = h ctxG z
+            return (ctxH, i (xR, yR, zR))
         }
 
 /// <summary>
