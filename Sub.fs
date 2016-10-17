@@ -491,6 +491,28 @@ and liftTraversalToExprSrc
         | Int i -> i |> intSubVars sub ctx |> lift (pairMap id Int)
 
 /// <summary>
+///     Adapts an expression traversal to work on Boolean expressions.
+///     Fails if the traversal responds with a non-Boolean expression.
+/// </summary>
+let traverseBoolAsExpr
+  (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
+  : Traversal<BoolExpr<'SrcVar>, BoolExpr<'DstVar>, 'Error> =
+    let toExpr = ignoreContext (Bool >> ok)
+    let fromExpr = ignoreContext expectBool
+    fun ctx expr -> toExpr ctx expr >>= uncurry traversal >>= uncurry fromExpr
+
+/// <summary>
+///     Adapts an expression traversal to work on integer expressions.
+///     Fails if the traversal responds with a non-integer expression.
+/// </summary>
+let traverseIntAsExpr
+  (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
+  : Traversal<IntExpr<'SrcVar>, IntExpr<'DstVar>, 'Error> =
+    let toExpr = ignoreContext (Int >> ok)
+    let fromExpr = ignoreContext expectInt
+    fun ctx expr -> toExpr ctx expr >>= uncurry traversal >>= uncurry fromExpr
+
+/// <summary>
 ///     Converts a traversal from typed variables to typed variables to one from
 ///     variables to expressions.
 /// </summary>

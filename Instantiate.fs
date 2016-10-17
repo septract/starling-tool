@@ -332,11 +332,7 @@ module DefinerFilter =
         defs
         |> List.map
                (fun (f, d) ->
-                    let trav =
-                        boolSubVars
-                            (liftTraversalToExprDest
-                                (liftTraversalOverCTyped
-                                    (removeSymFromVars UnwantedSym)))
+                    let trav = removeSymFromBoolExpr UnwantedSym
                     let result = withoutContext trav d
                     lift (mkPair f) result)
         |> collect
@@ -404,8 +400,8 @@ module DefinerFilter =
                      FuncDefiner<VBoolExpr option>>, Error> =
         let stripSymbolT =
             liftTraversalOverCmdTerm
-                (liftTraversalToExprDest
-                    (liftTraversalOverCTyped (removeSymFromVars UnwantedSym)))
+                (liftTraversalOverExpr
+                    (liftTraversalOverCTyped (removeSymFromVar UnwantedSym)))
 
         let stripSymbols = withoutContext stripSymbolT >> mapMessages Traversal
         let axiomFilterResult = tryMapAxioms stripSymbols model

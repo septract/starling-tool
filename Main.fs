@@ -500,11 +500,7 @@ let runStarling (request : Request)
             else ok
 
         let sub =
-            withoutContext
-                (boolSubVars
-                    (liftTraversalToExprDest
-                        (liftTraversalOverCTyped
-                            (removeSymFromVars UnwantedSym))))
+            withoutContext (removeSymFromBoolExpr UnwantedSym)
             >> mapMessages
                 (Core.Instantiate.Types.Traversal >> ModelFilterError)
 

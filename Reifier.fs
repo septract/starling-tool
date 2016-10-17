@@ -188,12 +188,7 @@ module Downclosure =
         // Expression equivalence cannot handle symbols, so try remove them.
         // TODO(CaptainHayashi): is it sound to approximate here?
         let removeResult =
-            withoutContext
-                (boolSubVars
-                    (liftTraversalToExprDest
-                        (liftTraversalOverCTyped
-                            (removeSymFromVars SymInIteratedConstraint))))
-                check
+            withoutContext (removeSymFromBoolExpr SymInIteratedConstraint) check
         // If check is a tautology, it will be equivalent to 'true'.
         lift
             (equiv BTrue >> equivHolds id)

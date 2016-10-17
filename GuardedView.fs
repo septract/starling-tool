@@ -579,11 +579,11 @@ module Traversal =
     open Starling.Core.Command.Traversal
 
     /// <summary>
-    ///     Lifts a <c>Traversal</c> over all variables in a guarded func.
+    ///     Lifts a <c>Traversal</c> over all expressions in a guarded func.
     /// </summary>
     /// <param name="traversal">
-    ///     The <c>Traversal</c> to map over all variables in the guarded func.
-    ///     This should map from typed variables to expressions.
+    ///     The <c>Traversal</c> to map over all expressions in the guarded
+    ///     func.  This should map from expressions to expressions.
     /// </param>
     /// <typeparam name="SrcVar">
     ///     The type of variables before traversal.
@@ -596,23 +596,23 @@ module Traversal =
     /// </typeparam>
     /// <returns>The lifted <see cref="Traversal"/>.</returns>
     let liftTraversalOverGFunc
-      (traversal : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
+      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
       : Traversal<GFunc<'SrcVar>, GFunc<'DstVar>, 'Error> =
         fun ctx { Cond = cond; Item = item } ->
-            let tBool = boolSubVars traversal
-            let tFunc = liftTraversalOverFunc (liftTraversalToExprSrc traversal)
+            let tBool = traverseBoolAsExpr traversal
+            let tFunc = liftTraversalOverFunc traversal
             tchain2 tBool tFunc
                 (fun (cond', item') -> { Cond = cond'; Item = item' })
                 ctx
                 (cond, item)
 
     /// <summary>
-    ///     Lifts a <c>Traversal</c> over all variables in an iterated
+    ///     Lifts a <c>Traversal</c> over all expressions in an iterated
     ///     guarded func.
     /// </summary>
     /// <param name="traversal">
-    ///     The <c>Traversal</c> to map over all variables in the guarded func.
-    ///     This should map from typed variables to expressions.
+    ///     The <c>Traversal</c> to map over all expressions in the guarded
+    ///     func.  This should map from expressions to expressions.
     /// </param>
     /// <typeparam name="SrcVar">
     ///     The type of variables before traversal.
@@ -625,10 +625,10 @@ module Traversal =
     /// </typeparam>
     /// <returns>The lifted <see cref="Traversal"/>.</returns>
     let liftTraversalOverIteratedGFunc
-      (traversal : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
+      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
       : Traversal<IteratedGFunc<'SrcVar>, IteratedGFunc<'DstVar>, 'Error> =
         fun ctx { Iterator = iter ; Func = func } ->
-            let tInt = intSubVars traversal
+            let tInt = traverseIntAsExpr traversal
             let tGFunc = liftTraversalOverGFunc traversal
             tchain2 tInt tGFunc
                 (fun (iter', func') -> { Iterator = iter'; Func = func' })
@@ -653,14 +653,14 @@ module Traversal =
     /// </typeparam>
     /// <returns>The lifted <see cref="Traversal"/>.</returns>
     let liftTraversalOverTerm
-      (traversal : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
+      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
       : Traversal<Term<BoolExpr<'SrcVar>, GView<'SrcVar>, VFunc<'SrcVar>>,
                   Term<BoolExpr<'DstVar>, GView<'DstVar>, VFunc<'DstVar>>,
                   'Error> =
         fun ctx { Cmd = c ; WPre = w; Goal = g } ->
-            let tCmd = boolSubVars traversal
+            let tCmd = traverseBoolAsExpr traversal
             let tWPre = tchainM (liftTraversalOverGFunc traversal) id
-            let tGoal = liftTraversalOverFunc (liftTraversalToExprSrc traversal)
+            let tGoal = liftTraversalOverFunc traversal
             tchain3 tCmd tWPre tGoal
                 (fun (c', w', g') -> { Cmd = c'; WPre = w'; Goal = g' })
                 ctx
@@ -685,14 +685,14 @@ module Traversal =
     /// </typeparam>
     /// <returns>The lifted <see cref="Traversal"/>.</returns>
     let liftTraversalOverCmdTerm
-      (traversal : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
+      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
       : Traversal<CmdTerm<BoolExpr<'SrcVar>, GView<'SrcVar>, VFunc<'SrcVar>>,
                   CmdTerm<BoolExpr<'DstVar>, GView<'DstVar>, VFunc<'DstVar>>,
                   'Error> =
         fun ctx { Cmd = c ; WPre = w; Goal = g } ->
             let tCmd = liftTraversalOverCommandSemantics traversal
             let tWPre = tchainM (liftTraversalOverGFunc traversal) id
-            let tGoal = liftTraversalOverFunc (liftTraversalToExprSrc traversal)
+            let tGoal = liftTraversalOverFunc traversal
             tchain3 tCmd tWPre tGoal
                 (fun (c', w', g') -> { Cmd = c'; WPre = w'; Goal = g' })
                 ctx
@@ -701,11 +701,11 @@ module Traversal =
 /// Gets set of TypedVar's from a GFunc
 let gFuncVars (gfunc : GFunc<Sym<Var>>)
   : Result<Set<TypedVar>, SubError<'Error>> =
-    let tVars = liftTraversalToExprDest collectSymVars
+    let tVars = liftTraversalOverExpr collectSymVars
     findVars (Traversal.liftTraversalOverGFunc tVars) gfunc
 
 /// Gets set of TypedVars from an IteratedGFunc
 let iteratedGFuncVars (itgfunc : IteratedGFunc<Sym<Var>>)
   : Result<Set<TypedVar>, SubError<'Error>> =
-    let tVars = liftTraversalToExprDest collectSymVars
+    let tVars = liftTraversalOverExpr collectSymVars
     findVars (Traversal.liftTraversalOverIteratedGFunc tVars) itgfunc

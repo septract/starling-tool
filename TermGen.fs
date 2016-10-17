@@ -219,7 +219,7 @@ let termGenWPre
         withoutContext
             (tchainM
                 (liftTraversalOverIteratedGFunc
-                    (liftTraversalToExprDest (traverseTypedSymWithMarker mark)))
+                    (liftTraversalOverExpr (traverseTypedSymWithMarker mark)))
                 id)
         >> mapMessages Traversal
 

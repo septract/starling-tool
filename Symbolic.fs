@@ -182,7 +182,7 @@ module Queries =
         sub |> liftTraversalToSymDest |> liftTraversalToSymSrc
 
     /// <summary>
-    ///     A traversal for removing symbols from expressions.
+    ///     A traversal for removing symbols from variables.
     /// </summary>
     /// <param name="err">
     ///     Function mapping a symbol's contents to an error to throw when
@@ -195,15 +195,55 @@ module Queries =
     ///     The type of regular (non-symbolic) variables.
     /// </typeparam>
     /// <returns>
-    ///     A <c>TrySubFun</c> trying to remove symbols.
+    ///     A <see cref="Traversal"/> trying to remove symbols from
+    ///     variables.
     /// </returns>
-    let removeSymFromVars
-      (err : string -> 'Error)
+    let removeSymFromVar (err : string -> 'Error)
       : Traversal<Sym<'Var>, 'Var, 'Error> =
         ignoreContext
             (function
              | Sym s -> s.Name |> err |> Inner |> fail
              | Reg f -> ok f)
+
+    /// <summary>
+    ///     A traversal for removing symbols from expressions.
+    /// </summary>
+    /// <param name="err">
+    ///     Function mapping a symbol's contents to an error to throw when
+    ///     detecting one.
+    /// </param>
+    /// <typeparam name="Error">The type of <paramref name="err"/>.</typeparam>
+    /// <typeparam name="Var">
+    ///     The type of regular (non-symbolic) variables.
+    /// </typeparam>
+    /// <returns>
+    ///     A <see cref="Traversal"/> trying to remove symbols from
+    ///     expressions.
+    /// </returns>
+    let removeSymFromExpr (err : string -> 'Error)
+      : Traversal<Expr<Sym<'Var>>, Expr<'Var>, 'Error> =
+        (liftTraversalOverExpr (liftTraversalOverCTyped (removeSymFromVar err)))
+
+    /// <summary>
+    ///     A traversal for removing symbols from Boolean expressions.
+    /// </summary>
+    /// <param name="err">
+    ///     Function mapping a symbol's contents to an error to throw when
+    ///     detecting one.
+    /// </param>
+    /// <typeparam name="Error">The type of <paramref name="err"/>.</typeparam>
+    /// <typeparam name="Var">
+    ///     The type of regular (non-symbolic) variables.
+    /// </typeparam>
+    /// <returns>
+    ///     A <see cref="Traversal"/> trying to remove symbols from
+    ///     Boolean expressions.
+    /// </returns>
+    let removeSymFromBoolExpr (err : string -> 'Error)
+      : Traversal<BoolExpr<Sym<'Var>>, BoolExpr<'Var>, 'Error> =
+        boolSubVars
+            (liftTraversalToExprDest
+                (liftTraversalOverCTyped (removeSymFromVar err)))
 
     (*
      * Common traversals
@@ -218,10 +258,12 @@ module Queries =
     ///     </para>
     /// </summary>
     /// <param name="traversal">The <see cref="Traversal"/> to lift.</param>
+    /// <typeparam name="SrcVar">Type of variables entering traversal.</param>
+    /// <typeparam name="DstVar">Type of variables leaving traversal.</param>
     /// <returns>The lifted <see cref="Traversal"/>.</returns>
     let rec liftTraversalToTypedSymVarSrc
-      (traversal : Traversal<TypedVar, Expr<Sym<'Var>>, 'Error>)
-      : Traversal<CTyped<Sym<Var>>, Expr<Sym<'Var>>, 'Error> =
+      (traversal : Traversal<CTyped<'SrcVar>, Expr<Sym<'DstVar>>, 'Error>)
+      : Traversal<CTyped<Sym<'SrcVar>>, Expr<Sym<'DstVar>>, 'Error> =
         let rec subInTypedSym ctx sym =
             match (valueOf sym) with
             | Reg r -> traversal ctx (withType (typeOf sym) r)

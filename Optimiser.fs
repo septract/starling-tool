@@ -28,7 +28,7 @@ open Starling.Core.Command.Queries
 open Starling.Core.Sub
 open Starling.Core.View
 open Starling.Core.GuardedView
-open Starling.Core.GuardedView.Sub
+open Starling.Core.GuardedView.Traversal
 
 
 /// <summary>
@@ -108,6 +108,15 @@ module Types =
           /// </summary>
           Transforms : Transform list
         }
+
+    /// <summary>
+    ///     Types of error that can happen in the optimiser.
+    /// </summary>
+    type OptError =
+        /// <summary>
+        ///     An error occurred during traversal.
+        /// </summary>
+        | Traversal of SubError<OptError>
 
 /// <summary>
 ///     Utilities common to the whole optimisation system.
@@ -264,15 +273,16 @@ module Utils =
     ///     the selected optimisers.
     /// </returns>
     let optimiseWith
-      : (string * bool) list -> (string * bool * ('a -> 'a)) list -> ('a -> 'a) =
-        fun args opts ->
+      (args : (string * bool) list)
+      (opts : (string * bool * ('a -> Result<'a, OptError>)) list)
+      : ('a -> Result<'a, OptError>) =
         let fs = mkOptimiserList opts args
 
         (* This would be much more readable if it wasn't pointfree...
            ...but would also cause fs to be evaluated every single time
            the result of partially applying optimiseWith to removes, adds,
            verbose and opts is then applied to the input!  Oh, F#.  *)
-        (flip (List.fold (|>)) fs)
+        ok >> (flip (List.fold (flip bind)) fs)
 
 /// <summary>
 ///     Graph optimisation.
@@ -493,30 +503,33 @@ module Graph =
         // A command is local if, for all of its funcs...
         List.forall
             (fun { Args = ps } ->
-                 // ...for all of the parameters in said funcs...
-                 Seq.forall
-                     (fun p ->
-                          // ...there are no symbols, and...
-                          match (Mapper.tryMapCtx (tsfRemoveSym ignore) NoCtx p) with
-                          | _, Bad _ -> false
-                          | _, _ ->
-                              // ...for all of the variables in said parameters...
-                              p
-                              |> mapOverSMVars Mapper.mapCtx findSMVars
-                              |> Set.toSeq
-                              |> Seq.forall
-                                     (// ...the variable is thread-local.
-                                      valueOf
-                                      >> function
-                                         | (After x)
-                                         | (Before x)
-                                         | (Intermediate (_, x))
-                                         | (Goal (_, x)) ->
-                                           x
-                                           |> tVars.TryFind
-                                           |> function
-                                              | Some _ -> true
-                                              | _ -> false))
+                // ...for all of the parameters in said funcs...
+                Seq.forall
+                    (fun p ->
+                        // ...there are no symbols, and...
+                        match (withoutContext (removeSymFromExpr ignore) p) with
+                        | Bad _ -> false
+                        | Ok (sp, _) ->
+                            // ...for all of the variables in said parameters...
+                            let getVars = liftTraversalOverExpr collectMarkedVars
+                            match findMarkedVars getVars sp with
+                            | Bad _ -> false
+                            | Ok (pvars, _) ->
+                                let pvseq = Set.toSeq pvars
+                                Seq.forall
+                                    (// ...the variable is thread-local.
+                                     valueOf
+                                     >> function
+                                        | (After x)
+                                        | (Before x)
+                                        | (Intermediate (_, x))
+                                        | (Goal (_, x)) ->
+                                            x
+                                            |> tVars.TryFind
+                                            |> function
+                                               | Some _ -> true
+                                               | _ -> false)
+                                    pvseq)
                      ps)
 
     /// Decides whether a given Command contains any `assume` command
@@ -545,14 +558,13 @@ module Graph =
     ///     Partial active pattern matching <c>Sym</c>-less expressions.
     /// </summary>
     let (|VNoSym|_|) : BoolExpr<Sym<Var>> -> BoolExpr<Var> option =
-        Mapper.mapBoolCtx (tsfRemoveSym (fun _ -> ())) NoCtx >> snd >> okOption
+        withoutContext (removeSymFromBoolExpr ignore) >> okOption
 
     /// <summary>
     ///     Partial active pattern matching <c>Sym</c>-less expressions.
     /// </summary>
     let (|MNoSym|_|) : BoolExpr<Sym<MarkedVar>> -> BoolExpr<MarkedVar> option =
-        Mapper.mapBoolCtx (tsfRemoveSym (fun _ -> ())) NoCtx >> snd >> okOption
-
+        withoutContext (removeSymFromBoolExpr ignore) >> okOption
 
     /// <summary>
     ///     Active pattern matching on if-then-else guard multisets.
@@ -607,44 +619,50 @@ module Graph =
                 match nView with
                 | InnerView(ITEGuards (xc, xv, yc, yv)) ->
                     (* Translate xc and yc to pre-state, to match the
-                       commands. *)
-                    let _, xcPre = Mapper.mapBoolCtx vBefore NoCtx xc
-                    let _, ycPre = Mapper.mapBoolCtx vBefore NoCtx yc
-
-                    match (Set.toList outEdges, Set.toList inEdges) with
-                    (* Are there only two out edges, and only one in edge?
-                       Are the out edges assumes, and are they non-symbolic? *)
-                    | ( [ { Dest = out1D
-                            Command = Assume (MNoSym out1P) } as out1
-                          { Dest = out2D
-                            Command = Assume (MNoSym out2P) } as out2
-                        ],
-                        [ inE ] )
-                        when (// Is the first one x and the second y?
-                              (equivHolds
-                                   unmarkVar
-                                   (andEquiv (equiv out1P xcPre)
-                                             (equiv out2P ycPre))
-                               && nodeHasView out1D xv ctx.Graph
-                               && nodeHasView out2D yv ctx.Graph)
-                              // Or is the first one y and the second x?
-                              || (equivHolds
-                                      unmarkVar
-                                      (andEquiv (equiv out2P xcPre)
-                                                (equiv out1P ycPre))
-                                  && nodeHasView out2D xv ctx.Graph
-                                  && nodeHasView out1D yv ctx.Graph)) ->
-                        let xforms =
-                            seq { // Remove the existing edges first.
-                                  yield RmInEdge (inE, node)
-                                  yield RmOutEdge (node, out1)
-                                  yield RmOutEdge (node, out2)
-                                  // Then, remove the node.
-                                  yield RmNode node
-                                  // Then, add the new edges.
-                                  yield MkCombinedEdge (inE, out1)
-                                  yield MkCombinedEdge (inE, out2) }
-                        runTransforms xforms ctx
+                       commands.  If this fails, give up on the optimisation. *)
+                    let toBefore : BoolExpr<Var> -> Result<BoolExpr<MarkedVar>, _> =
+                        withoutContext
+                            (boolSubVars
+                                (liftTraversalToExprDest
+                                    (liftTraversalOverCTyped
+                                        (ignoreContext (Before >> ok)))))
+                    match toBefore xc, toBefore yc with
+                    | Ok (xcPre, _), Ok (ycPre, _) ->
+                        match (Set.toList outEdges, Set.toList inEdges) with
+                        (* Are there only two out edges, and only one in edge?
+                           Are the out edges assumes, and are they non-symbolic? *)
+                        | ( [ { Dest = out1D
+                                Command = Assume (MNoSym out1P) } as out1
+                              { Dest = out2D
+                                Command = Assume (MNoSym out2P) } as out2
+                            ],
+                            [ inE ] )
+                            when (// Is the first one x and the second y?
+                                  (equivHolds
+                                       unmarkVar
+                                       (andEquiv (equiv out1P xcPre)
+                                                 (equiv out2P ycPre))
+                                   && nodeHasView out1D xv ctx.Graph
+                                   && nodeHasView out2D yv ctx.Graph)
+                                  // Or is the first one y and the second x?
+                                  || (equivHolds
+                                          unmarkVar
+                                          (andEquiv (equiv out2P xcPre)
+                                                    (equiv out1P ycPre))
+                                      && nodeHasView out2D xv ctx.Graph
+                                      && nodeHasView out1D yv ctx.Graph)) ->
+                            let xforms =
+                                seq { // Remove the existing edges first.
+                                      yield RmInEdge (inE, node)
+                                      yield RmOutEdge (node, out1)
+                                      yield RmOutEdge (node, out2)
+                                      // Then, remove the node.
+                                      yield RmNode node
+                                      // Then, add the new edges.
+                                      yield MkCombinedEdge (inE, out1)
+                                      yield MkCombinedEdge (inE, out2) }
+                            runTransforms xforms ctx
+                        | _ -> ctx
                     | _ -> ctx
                 | _ -> ctx
 
@@ -718,16 +736,20 @@ module Graph =
                             // (TODO: do something with the ViewExpr annotations?)
                             match (pViewexpr, qViewexpr) with
                             | InnerView pView, InnerView qView ->
-                                let vars = unionMap iteratedGFuncVars (Multiset.toSet pView)
+                                let varResultSet = Set.map iteratedGFuncVars (Multiset.toSet pView)
+                                let varsResults = lift Set.unionMany (collect varResultSet)
                                 let cmdVars = commandResults e.Command
                                 // TODO: Better equality?
-                                if pView = qView && disjoint cmdVars vars
-                                    then
-                                        (flip runTransforms) ctx
-                                        <| seq {
-                                            yield RmOutEdge (node, e)
-                                        }
-                                    else ctx
+                                match varsResults with
+                                | Ok (vars, _) ->
+                                    if pView = qView && disjoint cmdVars vars
+                                        then
+                                            (flip runTransforms) ctx
+                                            <| seq {
+                                                yield RmOutEdge (node, e)
+                                            }
+                                        else ctx
+                                | _ -> ctx
                         else ctx
                 Set.fold processEdge ctx outEdges
 
@@ -758,27 +780,29 @@ module Graph =
                     | InnerView pView, InnerView qView, InnerView rView ->
                         let cResults = Set.ofList <| commandResults c
                         let dResults = Set.ofList <| commandResults d
-                        let dArgs    = commandArgs d
-                        if Set.isSubset cResults dResults
-                            && disjoint cResults dArgs
-                            && isLocalResults locals c
-                            && not (hasAssume c)  // TODO: is this too broad?
-                            && not (hasAssume d)  // TODO: is this necessary?
-                            then
-                                (flip runTransforms) ctx
-                                <| seq {
-                                      // Remove the {p}c{q} edge
-                                      yield RmOutEdge (node, cEdge)
-                                      // Remove the {q}d{r} edge
-                                      yield RmOutEdge (cEdge.Dest, dEdge)
-                                      // Remove q
-                                      yield RmNode cEdge.Dest
-                                      // Then, add the new edges {p}d{q}
-                                      yield MkCombinedEdge
-                                          ({ Name = node;       Src = dEdge.Dest;   Command = d },
-                                          { Name = dEdge.Dest;  Dest = node;        Command = d })
-                                }
-                            else ctx
+                        match (commandArgs d) with
+                        | Ok (dArgs, _) ->
+                            if Set.isSubset cResults dResults
+                                && disjoint cResults dArgs
+                                && isLocalResults locals c
+                                && not (hasAssume c)  // TODO: is this too broad?
+                                && not (hasAssume d)  // TODO: is this necessary?
+                                then
+                                    (flip runTransforms) ctx
+                                    <| seq {
+                                          // Remove the {p}c{q} edge
+                                          yield RmOutEdge (node, cEdge)
+                                          // Remove the {q}d{r} edge
+                                          yield RmOutEdge (cEdge.Dest, dEdge)
+                                          // Remove q
+                                          yield RmNode cEdge.Dest
+                                          // Then, add the new edges {p}d{q}
+                                          yield MkCombinedEdge
+                                              ({ Name = node;       Src = dEdge.Dest;   Command = d },
+                                              { Name = dEdge.Dest;  Dest = node;        Command = d })
+                                    }
+                                else ctx
+                        | _ -> ctx
 
                 let triples = Set.fold (+) Set.empty <| Set.map processCEdge outEdges
                 Set.fold processTriple ctx triples
@@ -801,24 +825,27 @@ module Graph =
     ///     as possible.
     /// </returns>
     let rec onNodes
-      (opt : TransformContext -> TransformContext)
+      (opt : TransformContext -> Result<TransformContext, OptError>)
       (graph : Graph)
-      : Graph =
+      : Result<Graph, OptError> =
         // TODO(CaptainHayashi): do a proper depth-first search instead.
 
-        let { Graph = newGraph ; Transforms = xs } =
+        let graphResult =
             graph.Contents
             // Pull out nodeNames for removeIdStep.
             |> keys
             // Then, for each of those, try merging everything else into it.
-            |> Seq.fold (fun ctx node -> opt { ctx with Node = Some node })
-                        { Graph = graph ; Node = None ; Transforms = [] }
+            |> seqBind (fun node ctx -> opt { ctx with Node = Some node })
+                       { Graph = graph ; Node = None ; Transforms = [] }
 
         (* Tail-recurse back if we did some optimisations.
            This is to see if we enabled more of them. *)
-        if (Seq.isEmpty xs)
-        then newGraph
-        else onNodes opt newGraph
+        bind
+            (fun { Graph = newGraph; Transforms = xs } ->
+                if (Seq.isEmpty xs)
+                then ok newGraph
+                else onNodes opt newGraph)
+            graphResult
 
     /// <summary>
     ///     Optimises a graph.
@@ -836,14 +863,16 @@ module Graph =
     ///     An optimised equivalent of <paramref name="_arg1" />.
     /// </returns>
     let optimiseGraph (tvars : VarMap) (opts : (string * bool) list)
-      : Graph -> Graph =
-        onNodes (Utils.optimiseWith opts
-                     [ ("graph-collapse-nops", true, collapseNops)
-                       ("graph-collapse-ites", true, collapseITEs)
-                       ("graph-drop-local-edges", true, dropLocalEdges tvars)
-                       ("graph-collapse-unobservable-edges", true, collapseUnobservableEdges tvars)
-                       ("graph-drop-local-midview",true, dropLocalMidView tvars)
-                     ] )
+      : Graph -> Result<Graph, OptError> =
+        let theOpts : (string * bool * (TransformContext -> Result<TransformContext, OptError>)) list =
+            [ ("graph-collapse-nops", true, collapseNops >> ok)
+              ("graph-collapse-ites", true, collapseITEs >> ok)
+              ("graph-drop-local-edges", true, dropLocalEdges tvars >> ok)
+              ("graph-collapse-unobservable-edges", true, collapseUnobservableEdges tvars >> ok)
+              ("graph-drop-local-midview",true, dropLocalMidView tvars >> ok)
+            ]
+
+        onNodes (Utils.optimiseWith opts theOpts)
 
     /// <summary>
     ///     Optimises a model over graphs.
@@ -862,8 +891,8 @@ module Graph =
     ///     An optimised equivalent of <paramref name="mdl" />.
     /// </returns>
     let optimise (opts : (string * bool) list) (mdl : Model<Graph, _>)
-      : Model<Graph, _> =
-        mapAxioms (optimiseGraph mdl.Locals opts) mdl
+      : Result<Model<Graph, _>, OptError> =
+        tryMapAxioms (optimiseGraph mdl.Locals opts) mdl
 
 
 /// <summary>
@@ -878,13 +907,17 @@ module Term =
     /// constant.
     let rec (|ConstantBoolFunction|_|) (x : BoolExpr<Sym<MarkedVar>>)
       : MarkedVar option =
-        x |> mapOverSMVars Mapper.mapBoolCtx findSMVars |> Seq.map valueOf |> onlyOne
+        x
+        |> findMarkedVars (boolSubVars (liftTraversalToExprDest collectSymMarkedVars))
+        |> okOption |> Option.map (Seq.map valueOf) |> Option.bind onlyOne
 
     /// Partial pattern that matches a Boolean expression in terms of exactly one /
     /// constant.
     let rec (|ConstantIntFunction|_|) (x : IntExpr<Sym<MarkedVar>>)
       : MarkedVar option =
-        x |> mapOverSMVars Mapper.mapIntCtx findSMVars |> Seq.map valueOf |> onlyOne
+        x
+        |> findMarkedVars (intSubVars (liftTraversalToExprDest collectSymMarkedVars))
+        |> okOption |> Option.map (Seq.map valueOf) |> Option.bind onlyOne
 
     /// Finds all instances of the pattern `x!after = f(x!before)` in an
     /// Boolean expression that is either an equality or conjunction, and
@@ -964,42 +997,41 @@ module Term =
         | BAnd xs -> concatMap findArithInters xs
         | _ -> []
 
-    /// Lifts a pair of before/after maps to a SubFun.
+    /// Lifts a pair of before/after maps to a traversals.
     let afterSubs
       (isubs : Map<Var, IntExpr<Sym<MarkedVar>>>)
       (bsubs : Map<Var, BoolExpr<Sym<MarkedVar>>>)
-      : SubFun<Sym<MarkedVar>, Sym<MarkedVar>> =
-        onVars
-            (liftVToSym
-                (Mapper.make
-                    (function
-                     | After a -> (Map.tryFind a isubs |> withDefault (siAfter a))
-                     | x -> AVar (Reg x))
-                    (function
-                     | After a -> (Map.tryFind a bsubs |> withDefault (sbAfter a))
-                     | x -> BVar (Reg x))))
+      : Traversal<CTyped<MarkedVar>, Expr<Sym<MarkedVar>>, OptError> =
+        let switch =
+            function
+            | Int (After a) ->
+                Map.tryFind a isubs |> withDefault (siAfter a) |> Int
+            | Bool (After a) ->
+                Map.tryFind a bsubs |> withDefault (sbAfter a) |> Bool
+            | x -> mkVarExp (mapCTyped Reg x)
+        ignoreContext (switch >> ok)
 
     /// Creates a SubFun from intermediate substitutions
     let interSubs
       (isubs : Map<bigint * Var, IntExpr<Sym<MarkedVar>>>)
       (bsubs : Map<bigint * Var, BoolExpr<Sym<MarkedVar>>>)
-      : SubFun<Sym<MarkedVar>, Sym<MarkedVar>> =
-        onVars
-            (liftVToSym
-                (Mapper.make
-                    (function
-                     | Intermediate(i, a) -> (Map.tryFind (i, a) isubs |> withDefault (siInter i a))
-                     | x -> AVar (Reg x))
-                    (function
-                     | Intermediate(i, a) -> (Map.tryFind (i, a) bsubs |> withDefault (sbInter i a))
-                     | x -> BVar (Reg x))))
+      : Traversal<CTyped<MarkedVar>, Expr<Sym<MarkedVar>>, OptError> =
+        let switch =
+            function
+            | Int (Intermediate (i, a)) ->
+                Map.tryFind (i, a) isubs |> withDefault (siInter i a) |> Int
+            | Bool (Intermediate (i, a)) ->
+                Map.tryFind (i, a) bsubs |> withDefault (sbInter i a) |> Bool
+            | x -> mkVarExp (mapCTyped Reg x)
+        ignoreContext (switch >> ok)
 
     /// Eliminates bound before/after pairs in the term.
     /// If x!after = f(x!before) in the action, we replace x!after with
     /// f(x!before) in the precondition and postcondition.
     let eliminateAfters
       (term : CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc> )
-      : CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc> =
+      : Result<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>, OptError> =
+        // TODO(CaptainHayashi): make this more general and typesystem agnostic.
         let sub = afterSubs (term.Cmd.Semantics |> findArithAfters |> Map.ofList)
                             (term.Cmd.Semantics |> findBoolAfters  |> Map.ofList)
 
@@ -1007,16 +1039,25 @@ module Term =
          * f(x!before) = f(x!before).
          * We assume we can eliminate it later.
          *)
-        subExprInCmdTerm sub NoCtx term |> snd
+
+        let trav =
+            liftTraversalOverCmdTerm
+                (liftTraversalToExprSrc (liftTraversalToTypedSymVarSrc sub))
+        let result = withoutContext trav term
+        mapMessages OptError.Traversal result
 
     let eliminateInters
       : CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>
-        -> CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc> =
+        -> Result<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>, OptError> =
         fun term ->
         let sub = interSubs (term.Cmd.Semantics |> findArithInters |> Map.ofList)
                             (term.Cmd.Semantics |> findBoolInters  |> Map.ofList)
 
-        subExprInCmdTerm sub NoCtx term |> snd
+        let trav =
+            liftTraversalOverCmdTerm
+                (liftTraversalToExprSrc (liftTraversalToTypedSymVarSrc sub))
+        let result = withoutContext trav term
+        mapMessages OptError.Traversal result
 
     (*
      * Guard reduction
@@ -1050,10 +1091,10 @@ module Term =
     /// Reduce the guards in a Term.
     let guardReduce
       ({Cmd = c; WPre = w; Goal = g} : CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>)
-      : CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc> =
+      : Result<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>, OptError> =
 
         let fs = c.Semantics |> facts |> Set.ofList
-        {Cmd = c; WPre = reduceGView fs w; Goal = g}
+        ok {Cmd = c; WPre = reduceGView fs w; Goal = g}
 
     (*
      * Boolean simplification
@@ -1062,8 +1103,14 @@ module Term =
     /// Performs expression simplification on a term.
     let simpTerm
       : CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>
-        -> CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc> =
-        subExprInCmdTerm (Mapper.make id simp) NoCtx >> snd
+        -> Result<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>, OptError> =
+        let simpExpr : Expr<Sym<MarkedVar>> -> Expr<Sym<MarkedVar>> =
+            function
+            | Bool b -> Bool (simp b)
+            | x -> x
+        let sub = ignoreContext (simpExpr >> ok)
+        let trav = liftTraversalOverCmdTerm sub
+        withoutContext trav >> mapMessages Traversal
 
     (*
      * Frontend
@@ -1079,11 +1126,12 @@ module Term =
     let optimise
       (opts : (string * bool) list)
       : Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>, _>
-      -> Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>, _> =
+      -> Result<Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>, _>,
+                OptError> =
         let optimiseTerm =
             Utils.optimiseWith opts
                 [ ("term-remove-after", true, eliminateAfters)
                   ("term-remove-inters", true, eliminateInters)
                   ("term-reduce-guards", true, guardReduce)
                   ("term-simplify-bools", true, simpTerm) ]
-        mapAxioms optimiseTerm
+        tryMapAxioms optimiseTerm

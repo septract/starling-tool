@@ -56,12 +56,12 @@ module Traversal =
     open Starling.Core.Sub
 
     /// <summary>
-    ///     Lifts a <c>Traversal</c> over all variables in a
+    ///     Lifts a <c>Traversal</c> over all expressions in a
     ///     <see cref="CommandSemantics"/>.
     /// </summary>
     /// <param name="traversal">
-    ///     The <c>Traversal</c> to map over all variables in the command.
-    ///     This should map from typed variables to expressions.
+    ///     The <c>Traversal</c> to map over all expressions in the command.
+    ///     This should map from expressions to expressions.
     /// </param>
     /// <typeparam name="SrcVar">
     ///     The type of variables before traversal.
@@ -74,13 +74,13 @@ module Traversal =
     /// </typeparam>
     /// <returns>The lifted <see cref="Traversal"/>.</returns>
     let liftTraversalOverCommandSemantics
-      (traversal : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
+      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
       : Traversal<CommandSemantics<BoolExpr<'SrcVar>>,
                   CommandSemantics<BoolExpr<'DstVar>>,
                   'Error> =
         fun ctx { Cmd = c; Semantics = s } ->
             let swapSemantics s' = { Cmd = c; Semantics = s' }
-            let result = boolSubVars traversal ctx s
+            let result = traverseBoolAsExpr traversal ctx s
             lift (pairMap id swapSemantics) result
 
 /// <summary>
