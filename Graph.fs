@@ -833,7 +833,7 @@ module Pretty =
     ///     A pretty-printer command that prints <paramref name="err" />.
     /// </returns>
     let rec printError (err : Error) : Doc =
-        function
+        match err with
         | EdgeOutOfBounds edge ->
             colonSep
                 [ String "edge out of bounds: "
