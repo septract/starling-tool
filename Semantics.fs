@@ -239,7 +239,8 @@ let instantiateSemanticsOfPrim
 ///
 /// the frame can then be constructed by taking the BoolExpr and looking for the aforementioned Intermediate
 /// variables and adding a (= (After v) (Intermediate maxInterValue v)) if it finds one
-let seqComposition xs =
+let seqComposition (xs : BoolExpr<Sym<MarkedVar>> list)
+  : Result<BoolExpr<Sym<MarkedVar>>, Error> =
     // since we are trying to keep track of explicit state (where we are in terms of the intermediate variables)
     // it's _okay_ to include actual mutable state here!
     let mutable dict = System.Collections.Generic.Dictionary<Var, bigint>()
@@ -248,7 +249,7 @@ let seqComposition xs =
         let dict2 = System.Collections.Generic.Dictionary<Var, bigint>(dict)
         let isSet = System.Collections.Generic.HashSet<Var>()
 
-        let xRewrite =
+        let xRewriteVar =
             function
             | Before v as v' ->
                 if dict.ContainsKey (v) then
@@ -272,28 +273,31 @@ let seqComposition xs =
                 else
                     Reg (Intermediate (dict2.[v], v))
             | v -> Reg v
-            |> (fun f ->
-                    Mapper.compose
-                        (Mapper.cmake f)
-                        (Mapper.make AVar BVar))
-            |> liftVToSym
-            |> onVars
 
-        let bexpr = Mapper.mapBoolCtx xRewrite NoCtx x |> snd
+        let xRewriteBool =
+            boolSubVars
+                (liftTraversalToExprDest
+                    (liftTraversalOverCTyped
+                        (liftTraversalToSymSrc
+                            (ignoreContext (xRewriteVar >> ok)))))
+
+        let bexprResult = withoutContext xRewriteBool x
         dict <- dict2
-        bexpr
+        bexprResult
 
     let rec mapping =
         function
-        | []        ->  BTrue
-        | x :: ys   ->  mkAnd2 (mapper x) (mapping ys)
+        | []        ->  ok BTrue
+        | x :: ys   ->  lift2 mkAnd2 (mapper x) (mapping ys)
 
-    mapping xs
+    mapMessages Traversal (mapping xs)
 
 /// Given a BoolExpr add the frame and return the new BoolExpr
 let addFrame svars tvars bexpr =
-    mkAnd2 (frame svars tvars bexpr |> List.ofSeq |> mkAnd)
-           bexpr
+    let frameSeqResult = frame svars tvars bexpr
+    let frameResult = lift (List.ofSeq >> mkAnd) frameSeqResult
+    let addResult = lift (flip mkAnd2 bexpr) frameResult
+    mapMessages Traversal addResult
 
 /// Translate a command to an expression characterising it.
 /// This is the sequential composition of the translations of each
@@ -308,10 +312,10 @@ let semanticsOfCommand
     |> collect
 
     // Compose them together with intermediates
-    |> lift seqComposition
+    |> bind seqComposition
 
     // Add the frame
-    |> lift (addFrame svars tvars)
+    |> bind (addFrame svars tvars)
     |> lift (fun bexpr -> { Cmd = cmd; Semantics = bexpr })
 
 open Starling.Core.Axiom.Types

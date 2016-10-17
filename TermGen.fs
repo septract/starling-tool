@@ -10,9 +10,9 @@ open Starling.Collections
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.View
-open Starling.Core.View.Sub
+open Starling.Core.View.Traversal
 open Starling.Core.GuardedView
-open Starling.Core.GuardedView.Sub
+open Starling.Core.GuardedView.Traversal
 open Starling.Core.Sub
 open Starling.Core.Symbolic
 open Starling.Core.Model
