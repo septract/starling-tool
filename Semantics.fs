@@ -49,7 +49,7 @@ module Types =
         | FreeVarInSub of param: TypedVar
         /// <summary>
         ///     An error occurred during traversal.
-        ///     This error may contain nested instantiation errors!
+        ///     This error may contain nested semantics errors!
         /// </summary>
         | Traversal of SubError<Error>
 

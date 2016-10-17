@@ -24,9 +24,11 @@ open Starling.Core.Instantiate
 open Starling.Core.Instantiate.Pretty
 open Starling.Core.Command
 open Starling.Core.Command.Pretty
+open Starling.Core.Sub
 open Starling.Core.View
 open Starling.Core.View.Pretty
 open Starling.Core.GuardedView
+open Starling.Core.GuardedView.Traversal
 open Starling.Core.GuardedView.Pretty
 open Starling.Core.Axiom
 open Starling.Core.Axiom.Pretty
@@ -286,6 +288,10 @@ type Error =
     /// </summary>
     | Reify of Reifier.Types.Error
     /// <summary>
+    ///     An error occurred during term generation.
+    /// </summary>
+    | TermGen of TermGen.Error
+    /// <summary>
     ///     An error occurred during iterator lowering.
     /// </summary>
     | IterLowerError of TermGen.Iter.Error
@@ -294,20 +300,27 @@ type Error =
     ///     and/or uninterpreted viewdefs, but the filter failed.
     /// </summary>
     | ModelFilterError of Core.Instantiate.Types.Error
+    /// <summary>
+    ///     A main-level traversal went belly-up.
+    /// </summary>
+    | Traversal of SubError<Error>
     /// A stage was requested using the -s flag that does not exist.
     | BadStage
     /// A miscellaneous (internal) error has occurred.
     | Other of string
 
 /// Prints a top-level program error.
-let printError : Error -> Doc =
-    function
+let rec printError (err : Error) : Doc =
+    match err with
     | Frontend e -> Lang.Frontend.printError e
     | Semantics e -> Semantics.Pretty.printSemanticsError e
     | HSF e -> Backends.Horn.Pretty.printHornError e
     | Reify e ->
         headed "Reification failed"
                [ Reifier.Pretty.printError e ]
+    | TermGen e ->
+        headed "Term generation failed"
+               [ TermGen.Pretty.printError e ]
     | IterLowerError e ->
         headed "Iterator lowering failed"
                [ TermGen.Iter.printError e ]
@@ -321,6 +334,7 @@ let printError : Error -> Doc =
                    |> List.map (fst >> String)
                    |> commaSep ]
     | Other e -> String e
+    | Traversal err -> Core.Sub.Pretty.printSubError printError err
 
 /// Prints an ok result to stdout.
 let printOk (pOk : 'Ok -> Doc) (pBad : 'Warn -> Doc)
@@ -446,7 +460,7 @@ let runStarling (request : Request)
         lift (fix <| Starling.Optimiser.Term.optimise opts)
     let flatten = lift Starling.Flattener.flatten
     let reify = bind (Starling.Reifier.reify >> mapMessages Error.Reify)
-    let termGen = lift Starling.TermGen.termGen
+    let termGen = bind (Starling.TermGen.termGen >> mapMessages Error.TermGen)
     let iterLower =
         bind (Starling.TermGen.Iter.flatten >> mapMessages IterLowerError)
     let goalAdd = lift Starling.Core.Axiom.goalAdd
@@ -466,39 +480,52 @@ let runStarling (request : Request)
         let aprC =
             if approx then Starling.Core.Command.SymRemove.removeSym else id
 
-        let apr position =
+        // approx returns SubError<unit>, we need to convert to SubError<Error>
+        let toError (err: SubError<unit>) : Error =
+            // This is horrible, but F# makes us do it
+            Error.Traversal
+                (match err with
+                 | Inner x -> failwith "unreachable [unit error for sub]"
+                 | BadType (x, y) -> BadType (x, y)
+                 | ContextMismatch (x, y) -> ContextMismatch (x, y))
+
+        let apr (position : TraversalContext)
+          : BoolExpr<_> -> Result<BoolExpr<_>, Error> =
             if approx
             then
-                Core.TypeSystem.Mapper.mapBoolCtx
-                    Starling.Core.Symbolic.Queries.approx
+                (boolSubVars Starling.Core.Symbolic.Queries.approx)
                     position
-                >> snd
-            else id
+                >> lift snd
+                >> mapMessages toError
+            else ok
 
         let sub =
-            Core.TypeSystem.Mapper.mapBoolCtx
-                (tsfRemoveSym Core.Instantiate.Types.UnwantedSym)
-                Core.Sub.Types.SubCtx.NoCtx
-            >> snd
+            withoutContext
+                (boolSubVars
+                    (liftTraversalToExprDest
+                        (liftTraversalOverCTyped
+                            (removeSymFromVars UnwantedSym))))
+            >> mapMessages
+                (Core.Instantiate.Types.Traversal >> ModelFilterError)
 
-        let pos = Starling.Core.Sub.Position.positive
-        let neg = Starling.Core.Sub.Position.negative
+        let ssub = sub >> lift simp
+
+        let pos = Starling.Core.Sub.Context.positive
+        let neg = Starling.Core.Sub.Context.negative
 
         let mapCmd cmdSemantics =
-          cmdSemantics.Semantics
-          |> aprC
-          |> (apr neg)
-          |> sub
-          |> lift simp
-          |> lift (fun bexpr -> { Semantics = bexpr; Cmd = cmdSemantics.Cmd })
+            let strippedCmd = aprC cmdSemantics.Semantics
+            let negApproxedCmdResult = apr neg strippedCmd
+            let symRemovedCmdResult = bind ssub negApproxedCmdResult
+            lift (fun bexpr -> { Semantics = bexpr; Cmd = cmdSemantics.Cmd })
+                symRemovedCmdResult
 
         bind
             (tryMapAxioms
                  (tryMapTerm
                       mapCmd
-                      ((apr neg) >> sub >> lift Starling.Core.Expr.simp)
-                      ((apr pos) >> sub >> lift Starling.Core.Expr.simp))
-             >> mapMessages Error.ModelFilterError)
+                      ((apr neg) >> bind ssub)
+                      ((apr pos) >> bind ssub)))
             v
 
     let backend m =
@@ -509,19 +536,21 @@ let runStarling (request : Request)
             |> lift response
 
         let maybeApprox =
+            let stripCommand =
+                (mapTerm
+                    Starling.Core.Command.SymRemove.removeSym
+                    id
+                    id)
+
+            let approxTerm =
+                (liftTraversalOverTerm Starling.Core.Symbolic.Queries.approx)
+                    Starling.Core.Sub.Context.positive
+                >> lift snd
+
             lift
                 (if approx
-                 then
-                     mapAxioms
-                         ((mapTerm
-                               Starling.Core.Command.SymRemove.removeSym
-                               id
-                               id)
-                          >> (Sub.subExprInDTerm
-                                  Starling.Core.Symbolic.Queries.approx
-                                  Starling.Core.Sub.Position.positive)
-                          >> snd)
-                 else id)
+                 then tryMapAxioms (stripCommand >> approxTerm)
+                 else ok)
 
 
         // Magic function for unwrapping / wrapping Result types

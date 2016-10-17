@@ -828,14 +828,11 @@ module Pretty =
     /// <summary>
     ///     Pretty-prints graph construction errors.
     /// </summary>
-    /// <param name="_arg1">
-    ///     The graph error to print.
-    /// </param>
+    /// <param name="err">The graph error to print.</param>
     /// <returns>
-    ///     A pretty-printer command that prints
-    ///     <paramref name="_arg1" />.
+    ///     A pretty-printer command that prints <paramref name="err" />.
     /// </returns>
-    let rec printError : Error -> Doc =
+    let rec printError (err : Error) : Doc =
         function
         | EdgeOutOfBounds edge ->
             colonSep
