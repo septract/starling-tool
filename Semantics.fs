@@ -42,6 +42,16 @@ module Types =
         /// Got unexpected number of arguments
         | CountMismatch of expected: int * actual: int
         | TypeMismatch of param: TypedVar * atype: Type
+        /// <summary>
+        ///     We tried to substitute parameters, but one parameter was free
+        ///     (not bound to an expression) somehow.
+        /// </summary>
+        | FreeVarInSub of param: TypedVar
+        /// <summary>
+        ///     An error occurred during traversal.
+        ///     This error may contain nested instantiation errors!
+        /// </summary>
+        | Traversal of SubError<Error>
 
 
 /// <summary>
@@ -72,6 +82,15 @@ module Pretty =
         | CountMismatch (fn, dn) ->
             fmt "view usage has {0} parameter(s), but its definition has {1}"
                 [ fn |> sprintf "%d" |> String; dn |> sprintf "%d" |> String ]
+        | FreeVarInSub var ->
+            // TODO(CaptainHayashi): this is a bit shoddy.
+            error
+                (hsep
+                    [ String "parameter '"
+                      printTypedVar var
+                      String "' has no substitution" ])
+        | Traversal err ->
+            Starling.Core.Sub.Pretty.printSubError printSemanticsError err
 
 /// Generates a framing relation for a given variable.
 let frameVar ctor (par : CTyped<Var>) : SMBoolExpr =
@@ -81,24 +100,43 @@ let frameVar ctor (par : CTyped<Var>) : SMBoolExpr =
 /// Generates a frame for a given expression.
 /// The frame is a relation a!after = a!before for every a not mentioned in the expression.
 let frame svars tvars expr =
-    // Find all the bound post-variables in the expression...
-    let evars =
-        expr
-        |> mapOverSMVars Mapper.mapBoolCtx findSMVars
-        |> Seq.map valueOf
-        |> Seq.choose (function After x -> Some x | _ -> None)
-        |> Set.ofSeq
+    (* First, we need to find all the bound post-variables in the expression.
+       We do this by finding _all_ variables, then filtering. *)
+    let varsInExprResult =
+        findMarkedVars
+            (boolSubVars (liftTraversalToExprDest collectSymMarkedVars))
+            expr
+    let untypedVarsInExprResult = lift (Seq.map valueOf) varsInExprResult
 
-    // Then, for all of the variables in the model, choose those not in evars, and make frame expressions for them.
-    Seq.append (Map.toSeq svars) (Map.toSeq tvars)
+    let aftersInExprResult =
+        lift (Seq.choose (function After x -> Some x | _ -> None))
+            untypedVarsInExprResult
+
+    let evarsResult = lift Set.ofSeq aftersInExprResult
+
+
+    (* Then, for all of the variables in the model, choose those not in evars,
+       and make frame expressions for them. *)
+    let allVars = Seq.append (Map.toSeq svars) (Map.toSeq tvars)
+
+    let makeFrames evars =
     // TODO(CaptainHayashi): this is fairly inefficient.
-    |> Seq.filter (fun (name, _) -> not (Set.contains name evars))
-    |> Seq.choose (fun (name, ty) ->
-        let next = getBoolIntermediate name expr
-        match next with
-        | None   -> Some (name, ty, Before)
-        | Some i -> Some (name, ty, (fun x -> (Intermediate(i, x)))))
-    |> Seq.map (fun (name, ty, ctor) -> frameVar ctor (withType ty name))
+        let varsNotInEvars =
+            Seq.filter (fun (name, _) -> not (Set.contains name evars)) allVars
+
+        let markedVarsNotInEvars =
+            Seq.map
+                (fun (name, ty) ->
+                    let next = getBoolIntermediate name expr
+                    match next with
+                    | None   -> (name, ty, Before)
+                    | Some i -> (name, ty, (fun x -> (Intermediate(i, x)))))
+                varsNotInEvars
+
+        Seq.map (fun (name, ty, ctor) -> frameVar ctor (withType ty name))
+            markedVarsNotInEvars
+
+    lift makeFrames evarsResult
 
 let paramToMExpr : TypedVar -> SMExpr =
     function
@@ -108,27 +146,21 @@ let paramToMExpr : TypedVar -> SMExpr =
 let primParamSubFun
   ( cmd : PrimCommand )
   ( sem : PrimSemantics )
-  : VSubFun<Var, Sym<MarkedVar>> =
+  : Traversal<TypedVar, Expr<Sym<MarkedVar>>, Error> =
     /// merge the pre + post conditions
     let fres = List.map paramToMExpr cmd.Results
     let fpars = cmd.Args @ fres
     let dpars = sem.Args @ sem.Results
 
-    let pmap =
-        Seq.map2 (fun par up -> valueOf par, up) dpars fpars
-        |> Map.ofSeq
+    let pmap = Map.ofSeq (Seq.map2 (fun par up -> valueOf par, up) dpars fpars)
 
-    Mapper.make
-        (fun srcV ->
-             match (pmap.TryFind srcV) with
-             | Some (Typed.Int expr) -> expr
-             | Some _ -> failwith "param substitution type error"
-             | None -> failwith "free variable in substitution")
-        (fun srcV ->
-             match (pmap.TryFind srcV) with
-             | Some (Typed.Bool expr) -> expr
-             | Some _ -> failwith "param substitution type error"
-             | None -> failwith "free variable in substitution")
+    ignoreContext
+        (function
+         | WithType (var, vtype) as v ->
+            match pmap.TryFind var with
+            | Some (Typed.Bool expr) -> ok (Bool expr)
+            | Some tvar -> fail (Inner (TypeMismatch (v, typeOf tvar)))
+            | None -> fail (Inner (FreeVarInSub v)))
 
 let checkParamCountPrim : PrimCommand -> PrimSemantics option -> Result<PrimSemantics option, Error> =
     fun prim opt ->
@@ -163,19 +195,27 @@ let instantiatePrim
   (smap : PrimSemanticsMap)
   (prim : PrimCommand)
   : Result<SMBoolExpr option, Error> =
-    lookupPrim prim smap
-    |> bind
-           (function
-            | None -> ok None
-            | Some sem ->
-                lift
-                    (fun _ -> Some sem)
-                    (checkParamTypesPrim prim sem))
-    |> lift
-           (Option.map
-                (fun sem ->
-                    let mapper = onVars (liftVToSym (primParamSubFun prim sem))
-                    Mapper.mapBoolCtx mapper NoCtx sem.Body |> snd))
+    let primDefResult = lookupPrim prim smap
+    let typeCheckedDefResult =
+        bind
+            (function
+             | None -> ok None
+             | Some sem ->
+                lift (fun _ -> Some sem) (checkParamTypesPrim prim sem))
+            primDefResult
+
+    let instantiate =
+        function
+        | None -> ok None
+        | Some s ->
+            let subInTypedSym =
+                    liftTraversalToTypedSymVarSrc (primParamSubFun prim s)
+            let subInBool = boolSubVars subInTypedSym
+            let subbed = lift Some (withoutContext subInBool s.Body)
+            mapMessages Traversal subbed
+
+    bind instantiate typeCheckedDefResult
+
 /// Translate a primitive command to an expression characterising it
 /// by instantiating the semantics from the core semantics map with
 /// the variables from the command

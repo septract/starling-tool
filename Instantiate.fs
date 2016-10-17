@@ -264,7 +264,7 @@ let paramSubFun
 let instantiate
   (definer : FuncDefiner<BoolExpr<Sym<Var>>>)
   (vfunc : VFunc<Sym<MarkedVar>>)
-  : Result<BoolExpr<Sym<MarkedVar>> option, SubError<Error>> =
+  : Result<BoolExpr<Sym<MarkedVar>> option, Error> =
     // TODO(CaptainHayashi): this symbolic code is horrific.
 
     let dfuncResult = lookup vfunc definer
@@ -278,28 +278,19 @@ let instantiate
                     (checkParamTypes vfunc dfunc))
             dfuncResult
 
-    let subInBool dfunc =
-        withoutContext (boolSubVars (paramSubFun vfunc dfunc))
+    let subInTypedSym dfunc =
+        liftTraversalToTypedSymVarSrc (paramSubFun vfunc dfunc)
+    let subInBool dfunc = boolSubVars (subInTypedSym dfunc)
 
-    let rec subInTypedSym dfunc ctx sym =
-        match (valueOf sym) with
-        | Reg r -> paramSubFun vfunc dfunc ctx (withType (typeOf sym) r)
-        | Sym { Name = n; Params = ps } ->
-            tchainL (subInExpr dfunc)
-                (fun ps' ->
-                    mkVarExp
-                        (withType (typeOf sym)
-                            (Sym { Name = n; Params = ps' })))
-                ctx ps
-    and subInExpr dfunc = liftTraversalToExprSrc (subInTypedSym dfunc)
-    and subInBool dfunc = boolSubVars (subInTypedSym dfunc)
+    let result =
+        bind
+            (function
+             | None -> ok None
+             | Some (dfunc, defn) ->
+                lift Some (withoutContext (subInBool dfunc) defn))
+            (mapMessages Inner typeCheckedDFuncResult)
 
-    bind
-        (function
-         | None -> ok None
-         | Some (dfunc, defn) ->
-            lift Some (withoutContext (subInBool dfunc) defn))
-        (mapMessages Inner typeCheckedDFuncResult)
+    mapMessages Traversal result
 
 /// <summary>
 ///     Partitions a <see cref="FuncDefiner"/> into a definite
@@ -358,21 +349,21 @@ module DefinerFilter =
       (vds : FuncDefiner<SVBoolExpr option>)
       : Result<FuncDefiner<VBoolExpr option>, Error> =
         // TODO(CaptainHayashi): proper doc comment.
-        vds
-        |> partitionDefiner
-        |> function
-           | (defs, indefs) ->
-               defs
-               |> tryRemoveFuncDefinerSymbols
-               |> lift
-                      (fun remdefs ->
-                           FuncDefiner.ofSeq
-                              (seq {
-                                   for (v, d) in FuncDefiner.toSeq remdefs do
-                                       yield (v, Some d)
-                                   for (v, _) in FuncDefiner.toSeq indefs do
-                                       yield (v, None)
-                               } ))
+        let partitionResult = partitionDefiner vds
+
+        let assembleDefiniteDefiner indefs remdefs =
+            let defseq = seq {
+                for (v, d) in FuncDefiner.toSeq remdefs do yield (v, Some d)
+                for (v, _) in FuncDefiner.toSeq indefs do yield (v, None) }
+            FuncDefiner.ofSeq defseq
+
+        let handlePartition (defs, indefs) =
+            let removeResult = tryRemoveFuncDefinerSymbols defs
+            let defResult = lift (assembleDefiniteDefiner indefs) removeResult
+            // defResult has SubError errors, we need to lift them
+            mapMessages Traversal defResult
+
+        handlePartition partitionResult
 
     /// <summary>
     ///     Filters a symbolic, indefinite definer into one containing only
@@ -382,17 +373,17 @@ module DefinerFilter =
       (vds : FuncDefiner<SVBoolExpr option>)
       : Result<FuncDefiner<VBoolExpr>, Error> =
         // TODO(CaptainHayashi): proper doc comment.
-        vds
-        |> partitionDefiner
-        |> function
-           | defs, [] ->
-               tryRemoveFuncDefinerSymbols defs
-           | _, indefs ->
-               indefs
-               |> FuncDefiner.toSeq
-               |> Seq.toList
-               |> List.map (fst >> IndefiniteConstraint)
-               |> Bad
+        let partitionResult = partitionDefiner vds
+
+        let handlePartition (defs, indefs) =
+            // Complain if we have _any_ indefinite constraints.
+            if List.isEmpty indefs
+            then mapMessages Traversal (tryRemoveFuncDefinerSymbols defs)
+            else
+                let xs = Seq.toList (FuncDefiner.toSeq indefs)
+                Bad (List.map (fst >> IndefiniteConstraint) xs)
+
+        handlePartition partitionResult
 
     /// <summary>
     ///     Tries to convert a <c>ViewDef</C> based model into one over
@@ -411,9 +402,15 @@ module DefinerFilter =
                      FuncDefiner<SVBoolExpr option>> )
       : Result<Model<CmdTerm<MBoolExpr, GView<MarkedVar>, MVFunc>,
                      FuncDefiner<VBoolExpr option>>, Error> =
-        model
-        |> tryMapAxioms (trySubExprInCmdTerm (tsfRemoveSym UnwantedSym) NoCtx >> snd)
-        |> bind (tryMapViewDefs filterIndefiniteViewDefs)
+        let stripSymbolT =
+            liftTraversalOverCmdTerm
+                (liftTraversalToExprDest
+                    (liftTraversalOverCTyped (removeSymFromVars UnwantedSym)))
+
+        let stripSymbols = withoutContext stripSymbolT >> mapMessages Traversal
+        let axiomFilterResult = tryMapAxioms stripSymbols model
+
+        bind (tryMapViewDefs filterIndefiniteViewDefs) axiomFilterResult
 
 
 /// <summary>
@@ -476,30 +473,31 @@ module Phase =
     /// </returns>
     let symboliseIndefinites
       (definer : FuncDefiner<SVBoolExpr option>)
-      : FuncDefiner<SVBoolExpr> =
+      : Result<FuncDefiner<SVBoolExpr>, Error> =
         let def, indef = partitionDefiner definer
 
         // Then, convert the indefs to symbols.
         let symconv =
-            Mapper.make (Reg >> AVar) (Reg >> BVar)
+            withoutContext
+                (liftTraversalToExprDest
+                    (liftTraversalOverCTyped (ignoreContext (Reg >> ok))))
 
-        let idsym : FuncDefiner<SVBoolExpr> =
-            indef
-            |> FuncDefiner.toSeq
-            |> Seq.map
-                (fun ({ Name = n ; Params = ps }, _) ->
-                    (func n ps,
-                     BVar
-                         (Sym
-                              (func
-                                   (sprintf "!UNDEF:%A" n)
-                                   (List.map
-                                       (Mapper.mapCtx symconv NoCtx >> snd)
-                                       ps)))))
-            |> FuncDefiner.ofSeq
+        let indefSeq = FuncDefiner.toSeq indef
+
+        let symbolise ({ Name = n ; Params = ps }, _) =
+            let convParamsResult = collect (List.map symconv ps)
+
+            let defResult =
+                lift (func (sprintf "!UNDEF:%A" n) >> Sym >> BVar)
+                    convParamsResult
+
+            lift (mkPair (func n ps)) defResult
+
+        let symbolisedResult = collect (Seq.map symbolise indefSeq)
+        let idsymResult = lift FuncDefiner.ofSeq symbolisedResult
 
         // TODO(CaptainHayashi): use functables properly.
-        def @ idsym
+        lift (fun idsym -> def @ idsym) (mapMessages Traversal idsymResult)
 
 
     /// <summary>
@@ -519,8 +517,7 @@ module Phase =
       (model : Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
                      FuncDefiner<SVBoolExpr option>>)
       : Result<Model<SymProofTerm, unit>, Error> =
-      let vs = symboliseIndefinites model.ViewDefs
-
-      model
-      |> tryMapAxioms (interpretTerm vs)
-      |> lift (withViewDefs ())
+        let vsResult = symboliseIndefinites model.ViewDefs
+        let axiomMapResult =
+            bind (fun vs -> tryMapAxioms (interpretTerm vs) model) vsResult
+        lift (withViewDefs ()) axiomMapResult

@@ -210,6 +210,32 @@ module Queries =
      *)
 
     /// <summary>
+    ///     Lifts a traversal from typed variables to symbolic expressions
+    ///     such that it now takes typed symbolic variables as input.
+    ///     <para>
+    ///         This is needed because <see cref="liftTraversalToExprSrc"/>
+    ///         and other such traversals don't play well with symbolics.
+    ///     </para>
+    /// </summary>
+    /// <param name="traversal">The <see cref="Traversal"/> to lift.</param>
+    /// <returns>The lifted <see cref="Traversal"/>.</returns>
+    let rec liftTraversalToTypedSymVarSrc
+      (traversal : Traversal<TypedVar, Expr<Sym<'Var>>, 'Error>)
+      : Traversal<CTyped<Sym<Var>>, Expr<Sym<'Var>>, 'Error> =
+        let rec subInTypedSym ctx sym =
+            match (valueOf sym) with
+            | Reg r -> traversal ctx (withType (typeOf sym) r)
+            | Sym { Name = n; Params = ps } ->
+                tchainL sub
+                    (fun ps' ->
+                        mkVarExp
+                            (withType (typeOf sym)
+                                (Sym { Name = n; Params = ps' })))
+                    ctx ps
+        and sub = liftTraversalToExprSrc subInTypedSym
+        subInTypedSym
+
+    /// <summary>
     ///     Traversal for converting symbolic expressions with a marker.
     /// </summary>
     let traverseSymWithMarker

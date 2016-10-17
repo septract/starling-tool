@@ -23,7 +23,7 @@ open Starling.Lang.Guarder.Types
 open Starling.Core.Command
 open Starling.Core.Command.Create
 
-let cId : Command = List.empty
+let cId : Command = []
 (* TODO(CaptainHayashi): currently we're assuming Assumed expressions
    are in pre-state position.  When we move to type-safe renaming this
    change should happen *here*. *)
@@ -67,18 +67,24 @@ let rec graphWhile
   (expr : SVBoolExpr)
   (inner : GuarderBlock)
   : Result<Subgraph, Error> =
-    (* First, we need to convert the expression into an assert.
-       This means we cast it into the pre-state, as it is diverging the
-       program if its state _entering_ the loop condition makes expr go
-       false. *)
-    let _, exprB = Mapper.mapBoolCtx before NoCtx expr
-
-    (* If isDo:
-     *   Translating [|oP|] do { [|iP|] [|iQ|] } while (C) [|oQ|].
-     * Else:
-     *   Translating [|oP|] while (C) { [|iP|] [|iQ|] } [|oQ|].
-     *)
     trial {
+        (* First, we need to convert the expression into an assert.
+           This means we cast it into the pre-state, as it is diverging the
+           program if its state _entering_ the loop condition makes expr go
+           false. *)
+        let! exprB =
+            mapMessages Traversal
+                (withoutContext
+                    (boolSubVars
+                        (liftTraversalToExprDest
+                            (traverseTypedSymWithMarker Before)))
+                    expr)
+
+        (* If isDo:
+         *   Translating [|oP|] do { [|iP|] [|iQ|] } while (C) [|oQ|].
+         * Else:
+         *   Translating [|oP|] while (C) { [|iP|] [|iQ|] } [|oQ|].
+         *)
         // Recursively graph the block first.
         let! iP, iQ, iGraph = graphBlock false vg cg inner
 
@@ -149,14 +155,21 @@ and graphITE
   (inTrue : GuarderBlock)
   (inFalse : GuarderBlock)
   : Result<Subgraph, Error> =
-    (* First, we need to convert the expression into an assert.
-       This means we cast it into the pre-state, as it is diverging the
-       program if its state _entering_ the loop condition makes expr go
-       false. *)
-    let _, exprB = Mapper.mapBoolCtx before NoCtx expr
-
-    // Translating [|oP|] if (C) { [|tP|] [|tQ|] } else { [|fP|] [|fQ|] } [|oQ|].
     trial {
+        (* First, we need to convert the expression into an assert.
+           This means we cast it into the pre-state, as it is diverging the
+           program if its state _entering_ the loop condition makes expr go
+           false. *)
+        let! exprB =
+            mapMessages Traversal
+                (withoutContext
+                    (boolSubVars
+                        (liftTraversalToExprDest
+                            (traverseTypedSymWithMarker Before)))
+                    expr)
+
+        // Translating [|oP|] if (C) { [|tP|] [|tQ|] } else { [|fP|] [|fQ|] } [|oQ|].
+
         (* We presume oP and oQ are added into the nodes list by the caller,
          * and that tP and tQ are returned in tGraph (and fP/fQ in fGraph).
          * This means the nodes we return are tGraph and fGraph.
