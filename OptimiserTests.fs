@@ -6,13 +6,14 @@ module Starling.Tests.Optimiser
 open Chessie.ErrorHandling
 open NUnit.Framework
 open Starling.Collections
+open Starling.Utils
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
 open Starling.Core.Model
 open Starling.Core.View
-open Starling.Core.View.Sub
+open Starling.Core.View.Traversal
 open Starling.Core.Command
 open Starling.Core.Sub
 open Starling.Optimiser.Graph
@@ -39,40 +40,41 @@ type OptimiserTests() =
     /// Test cases for rewriting Boolean expressions containing afters.
     static member AfterBools =
         [ TestCaseData(iEq (siAfter "serving") (siAfter "ticket"))
-              .Returns(iEq
+              .Returns(Some <| iEq
                            (AAdd [ siBefore "serving"; AInt 1L ] )
                            (siBefore "ticket"))
               .SetName("Remove arithmetic afters in a simple equality")
           TestCaseData(iEq
                            (siAfter "serving")
                            (AAdd [ siBefore "serving"; AInt 1L ] ))
-              .Returns(iEq
+              .Returns(Some <| iEq
                            (AAdd [ siBefore "serving"; AInt 1L ] )
                            (AAdd [ siBefore "serving"; AInt 1L ] ))
               .SetName("Remove arithmetic afters in after-before relation")
           TestCaseData(BGt (siAfter "serving", siAfter "t"))
-              .Returns(BGt
+              .Returns(Some <| BGt
                            (AAdd [ siBefore "serving"; AInt 1L ],
                             siAfter "t"))
               .SetName("Remove arithmetic afters only if in the environment")
           TestCaseData(bEq (sbAfter "flag") (sbAfter "turn"))
-              .Returns(bEq
+              .Returns(Some <| bEq
                            (BNot (sbBefore "flag"))
                            (sbBefore "turn"))
               .SetName("Remove Boolean afters in a simple equality")
           TestCaseData(bEq (sbAfter "flag") (BNot (sbBefore "flag")))
-              .Returns(bEq
+              .Returns(Some <| bEq
                            (BNot (sbBefore "flag"))
                            (BNot (sbBefore "flag")))
               .SetName("Remove Boolean afters in after-before relation")
           TestCaseData(BAnd [ sbAfter "flag"; sbAfter "pole" ] )
-              .Returns(BAnd [ BNot (sbBefore "flag")
+              .Returns(Some <| BAnd
+                            [ BNot (sbBefore "flag")
                               sbAfter "pole" ])
               .SetName("Remove Boolean afters only if in the environment")
           TestCaseData(BAnd
                            [ BGt (siAfter "serving", siAfter "t")
                              BOr [ sbAfter "flag"; sbAfter "pole" ]] )
-              .Returns(BAnd
+              .Returns(Some <| BAnd
                            [ BGt
                                  ((AAdd [ siBefore "serving"; AInt 1L ] ),
                                   siAfter "t")
@@ -84,7 +86,7 @@ type OptimiserTests() =
                                  BGt
                                      (siAfter "serving",
                                       siAfter "t"))))
-              .Returns(BNot
+              .Returns(Some <| BNot
                            (BImplies
                                 (BNot (sbBefore "flag"),
                                  BGt
@@ -94,12 +96,12 @@ type OptimiserTests() =
 
     /// Test after-elimination of Booleans.
     [<TestCaseSource("AfterBools")>]
-    member x.``After-elimination of Booleans should operate correctly`` b =
-        b
-        |> Mapper.mapBoolCtx
-              (afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs)
-              NoCtx
-        |> snd
+    member x.``After-elimination of Booleans should operate correctly`` (b : BoolExpr<MarkedVar>) =
+        let trav =
+            boolSubVars
+                (afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs)
+        let result = withoutContext trav b
+        okOption result
 
     /// Test cases for discovering Boolean after-before pairs.
     static member BoolAfterDiscoveries =
@@ -133,7 +135,8 @@ type OptimiserTests() =
         [ TestCaseData({ Name = "foo"
                          Params = [ SMExpr.Int (siAfter "serving")
                                     SMExpr.Bool (sbAfter "flag") ] })
-              .Returns({ Name = "foo"
+              .Returns(Some <|
+                       { Name = "foo"
                          Params = [ SMExpr.Int (AAdd [siBefore "serving"; AInt 1L])
                                     SMExpr.Bool (BNot (sbBefore "flag")) ] })
               .SetName("Substitute afters in a func with all-after params") ]
@@ -141,9 +144,12 @@ type OptimiserTests() =
     /// Test substitution of afters in funcs.
     [<TestCaseSource("AfterFuncs")>]
     member x.``Afters in func params should be substituted correctly`` f =
-        let sub = afterSubs OptimiserTests.AfterArithSubs
-                            OptimiserTests.AfterBoolSubs
-        f |> subExprInVFunc sub NoCtx |> snd
+        let trav =
+            liftTraversalOverFunc <| liftTraversalToExprSrc
+                (afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs)
+
+        let result = withoutContext trav f
+        okOption result
 
     /// Test cases for simplification.
     static member ObviousBools =

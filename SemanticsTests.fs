@@ -3,6 +3,7 @@
 /// </summary>
 module Starling.Tests.Semantics
 
+open Chessie.ErrorHandling
 open NUnit.Framework
 open Starling
 open Starling.Collections
@@ -22,8 +23,10 @@ open Starling.Tests.Studies
 module Compositions =
     let check xs expectedExprList =
         match seqComposition xs with
-        | BAnd ands ->
+        | Ok (BAnd ands, _) ->
             Assert.AreEqual (Set.ofList expectedExprList, Set.ofList ands)
+        | Bad x ->
+            Assert.Fail (sprintf "sequential composition failed: %A" x)
         | y -> Assert.Fail (sprintf "Expected %A but got %A" expectedExprList y)
 
     [<Test>]
@@ -116,7 +119,7 @@ module Frames =
     // Test cases for the expression framer.
     [<Test>]
     let ``Frame id using the ticket lock model`` () =
-        checkExpr BTrue 
+        checkExpr BTrue
               <| [ iEq (siAfter "serving") (siBefore "serving")
                    iEq (siAfter "ticket") (siBefore "ticket")
                    iEq (siAfter "s") (siBefore "s")

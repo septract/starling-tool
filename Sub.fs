@@ -430,9 +430,9 @@ let rec boolSubVars
     // We do some tricky inserting and removing of positions on the stack
     // to ensure the correct position appears in the correct place, and
     // is removed when we pop back up the expression stack.
-    let bsv f = Context.changePos f (boolSubVars sub)
-    let isv = Context.changePos id (intSubVars sub)
-    let esv = Context.changePos id (liftTraversalToExprSrc sub)
+    let bsv f x = Context.changePos f (boolSubVars sub) x
+    let isv x = Context.changePos id (intSubVars sub) x
+    let esv x = Context.changePos id (liftTraversalToExprSrc sub) x
 
     let neg = Context.negate
 
@@ -461,7 +461,7 @@ let rec boolSubVars
 and intSubVars
   (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
   : Traversal<IntExpr<'SrcVar>, IntExpr<'DstVar>, 'Error> =
-    let isv = Context.changePos id (intSubVars sub)
+    let isv x = Context.changePos id (intSubVars sub) x
     // TODO(CaptainHayashi): proper doc comment.
 
     fun ctx ->
