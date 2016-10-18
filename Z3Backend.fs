@@ -254,8 +254,8 @@ let eliminate (reals : bool)
 
     // Try to remove symbols from boolean expressions: don't error if we can't
     let removeSym bexp =
-        let _, res = Mapper.mapBoolCtx (tsfRemoveSym id) NoCtx bexp
-        okOption res
+        let result = withoutContext (removeSymFromBoolExpr ignore) bexp
+        okOption result
 
     let z3Term (term : SymProofTerm) : ZTerm =
         (* If the user asked for approximation, then, instead of taking the

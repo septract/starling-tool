@@ -398,32 +398,40 @@ module Phase =
         >> lift mkAnd
 
     /// Given a symbolic-boolean term, calculate the non-symbolic approximation.
-    let approxTerm (symterm : Term<SMBoolExpr, SMBoolExpr, SMBoolExpr>) =
+    let approxTerm (symterm : Term<SMBoolExpr, SMBoolExpr, SMBoolExpr>)
+      : Result<Term<MBoolExpr, MBoolExpr, MBoolExpr>, Error> =
+        (* This is needed to adapt approx's SubError<unit> into SubError<Error>.
+           It's horrible and I hate it. *)
+        let toError =
+            mapMessages
+                (function
+                 | Inner () -> failwith "toError: somehow approx returned Inner ()"
+                 | BadType (x, y) -> BadType (x, y)
+                 | ContextMismatch (x, y) -> ContextMismatch (x, y))
+
         let apr position =
-            Mapper.mapBoolCtx
-                Starling.Core.Symbolic.Queries.approx
+            boolSubVars Starling.Core.Symbolic.Queries.approx
                 position
-            >> snd
+            >> lift snd
+            >> toError
 
-        let sub =
-            Mapper.mapBoolCtx (tsfRemoveSym UnwantedSym) Sub.Types.SubCtx.NoCtx
-            >> snd
+        let sub = withoutContext (removeSymFromBoolExpr UnwantedSym)
 
-        let pos = Starling.Core.Sub.Position.positive
-        let neg = Starling.Core.Sub.Position.negative
+        let pos = Starling.Core.Sub.Context.positive
+        let neg = Starling.Core.Sub.Context.negative
+
+        let aprSubSimp position bool =
+            let approxedResult = apr position bool
+            let subbedResult = bind sub approxedResult
+            let simpleResult = lift simp subbedResult
+            mapMessages Traversal simpleResult
 
         let mapCmd cmdSemantics =
-          cmdSemantics
-          |> Starling.Core.Command.SymRemove.removeSym
-          |> (apr neg)
-          |> sub
-          |> lift simp
+            let cmdSymRemoved =
+                Starling.Core.Command.SymRemove.removeSym cmdSemantics
+            aprSubSimp neg cmdSymRemoved
 
-        tryMapTerm
-            mapCmd
-            ((apr neg) >> sub >> lift Starling.Core.Expr.simp)
-            ((apr pos) >> sub >> lift Starling.Core.Expr.simp)
-                symterm
+        tryMapTerm mapCmd (aprSubSimp neg) (aprSubSimp pos) symterm
 
     /// Interprets all of the views in a term over the given definer.
     let interpretTerm
