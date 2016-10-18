@@ -65,6 +65,10 @@ module Types =
         | UnsupportedExpr of VExpr
         /// The expression given is compound, but empty.
         | EmptyCompoundExpr of exptype : string
+        /// <summary>
+        ///     A traversal blew up somewhere.
+        /// </summary>
+        | Traversal of err : SubError<Error>
 
 
 /// <summary>
@@ -77,6 +81,7 @@ module Pretty =
     open Starling.Core.Var.Pretty
     open Starling.Core.View.Pretty
     open Starling.Core.Model.Pretty
+    open Starling.Core.Sub.Pretty
 
     /// <summary>
     ///     Given an expression and its Doc, potentially wrap the Doc
@@ -175,7 +180,7 @@ module Pretty =
     /// Emits a Horn clause list.
     let printHorns (hs : Horn list) : Doc = hs |> List.map printHorn |> vsep
 
-    let printHornError : Error -> Doc =
+    let rec printHornError : Error -> Doc =
         function
         | InconsistentFunc (func, err) ->
             wrapped "view func"
@@ -193,6 +198,7 @@ module Pretty =
         | EmptyCompoundExpr exptype ->
             fmt "found an empty '{0}' expression"
                 [ String exptype ]
+        | Traversal err -> printSubError printHornError err
 
 
 (*
@@ -269,12 +275,11 @@ let boolExpr
         | BLe(x, y) -> lift2 (curry Le) (ca x) (ca y)
         | BLt(x, y) -> lift2 (curry Lt) (ca x) (ca y)
         | x ->
-            x
-            |> Expr.Bool
-            |> Mapper.mapCtx (liftCToSub (Mapper.cmake toVar)) NoCtx
-            |> snd
-            |> UnsupportedExpr
-            |> fail
+            let everythingToVar =
+                liftWithoutContext (toVar >> ok)
+                    (liftTraversalOverCTyped >> liftTraversalOverExpr)
+                >> mapMessages Traversal
+            bind (UnsupportedExpr >> fail) (everythingToVar (Bool x))
     be
 
 (*
@@ -282,16 +287,26 @@ let boolExpr
  *)
 
 /// <summary>
-///     Tries to convert a <c>MExpr</c> to a <c>IntExpr</c>.
-///     Fails with <c>UnsupportedExpr</c> if the expression is
-///     Boolean.
+///     Tries to convert a marked expression into an unmarked integer
+///     expression by mangling the marks into unique names.
 /// </summary>
-let tryIntExpr : MExpr -> Result<IntExpr<Var>, Error> =
-    Mapper.mapCtx (liftCToSub (Mapper.cmake unmarkVar)) NoCtx
-    >> snd
-    >> function
-       | Expr.Int x -> ok x
-       | e -> e |> UnsupportedExpr |> fail
+/// <param name="expr">The expression to convert.</param>
+/// <returns>
+///     If successful, the resulting integer expression.
+///     Fails with <see cref="UnsupportedExpr"/> if the expression is
+///     Boolean.
+/// </returns>
+let tryIntExpr (expr : MExpr) : Result<IntExpr<Var>, Error> =
+    let mapper =
+        liftWithoutContext (unmarkVar >> ok)
+            (liftTraversalOverCTyped >> liftTraversalOverExpr)
+
+    let filterExpr =
+        function
+        | Expr.Int x -> ok x
+        | e -> fail (UnsupportedExpr e)
+
+    bind filterExpr (mapMessages Traversal (mapper expr))
 
 ///<summary>
 ///     HSF requires variables to start with a capital letter.

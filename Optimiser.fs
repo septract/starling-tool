@@ -110,13 +110,22 @@ module Types =
         }
 
     /// <summary>
-    ///     Types of error that can happen in the optimiser.
+    ///     Types of error that can happen in the term optimiser.
     /// </summary>
-    type OptError =
+    type TermOptError =
         /// <summary>
         ///     An error occurred during traversal.
         /// </summary>
-        | Traversal of SubError<OptError>
+        | Traversal of SubError<TermOptError>
+
+    /// <summary>
+    ///     Types of error that can happen in the graph optimiser.
+    /// </summary>
+    type GraphOptError =
+        /// <summary>
+        ///     An error occurred during traversal.
+        /// </summary>
+        | Traversal of SubError<GraphOptError>
 
 /// <summary>
 ///     Utilities common to the whole optimisation system.
@@ -189,16 +198,19 @@ module Utils =
     ///     The set of optimisation names to adds.  If this contains 'all',
     ///     all optimisations will be permitted.
     /// </param>
-    /// <typeparam name="Fun">
-    ///     The optimisation function type.
+    /// <typeparam name="A">
+    ///     The type of items being optimised.
+    /// </typeparam>
+    /// <typeparam name="Error">
+    ///     The type of errors coming out of the optimiser.
     /// </typeparam>
     /// <returns>
     ///     A list of optimisers to run.
     /// </returns>
     let mkOptimiserList
-      (allOpts : (string * bool * 'Fun) list)
+      (allOpts : (string * bool * ('A -> Result<'A, 'Error>)) list)
       (opts : (string * bool) seq)
-      : 'Fun list =
+      : ('A -> Result<'A, 'Error>) list =
         let config = config()
         let optimisationSet = new HashSet<string>();
         // try add or remove from prefix
@@ -265,8 +277,11 @@ module Utils =
     ///     A list of triples of optimiser name, whether it's enabled by
     ///     default, and function.
     /// </param>
-    /// <typeparam name="a">
+    /// <typeparam name="A">
     ///     The type of the item to optimise.
+    /// </typeparam>
+    /// <typeparam name="Error">
+    ///     The type of errors coming out of the optimiser.
     /// </typeparam>
     /// <returns>
     ///     A function that, when applied to something, optimises it with
@@ -274,8 +289,8 @@ module Utils =
     /// </returns>
     let optimiseWith
       (args : (string * bool) list)
-      (opts : (string * bool * ('a -> Result<'a, OptError>)) list)
-      : ('a -> Result<'a, OptError>) =
+      (opts : (string * bool * ('A -> Result<'A, 'Error>)) list)
+      : ('A -> Result<'A, 'Error>) =
         let fs = mkOptimiserList opts args
 
         (* This would be much more readable if it wasn't pointfree...
@@ -825,9 +840,9 @@ module Graph =
     ///     as possible.
     /// </returns>
     let rec onNodes
-      (opt : TransformContext -> Result<TransformContext, OptError>)
+      (opt : TransformContext -> Result<TransformContext, GraphOptError>)
       (graph : Graph)
-      : Result<Graph, OptError> =
+      : Result<Graph, GraphOptError> =
         // TODO(CaptainHayashi): do a proper depth-first search instead.
 
         let graphResult =
@@ -863,16 +878,16 @@ module Graph =
     ///     An optimised equivalent of <paramref name="_arg1" />.
     /// </returns>
     let optimiseGraph (tvars : VarMap) (opts : (string * bool) list)
-      : Graph -> Result<Graph, OptError> =
-        let theOpts : (string * bool * (TransformContext -> Result<TransformContext, OptError>)) list =
-            [ ("graph-collapse-nops", true, collapseNops >> ok)
-              ("graph-collapse-ites", true, collapseITEs >> ok)
-              ("graph-drop-local-edges", true, dropLocalEdges tvars >> ok)
-              ("graph-collapse-unobservable-edges", true, collapseUnobservableEdges tvars >> ok)
-              ("graph-drop-local-midview",true, dropLocalMidView tvars >> ok)
-            ]
-
-        onNodes (Utils.optimiseWith opts theOpts)
+      : Graph -> Result<Graph, GraphOptError> =
+        // TODO(CaptainHayashi): make graph optiisations fail.
+        onNodes
+            (Utils.optimiseWith opts
+                [ ("graph-collapse-nops", true, collapseNops >> ok)
+                  ("graph-collapse-ites", true, collapseITEs >> ok)
+                  ("graph-drop-local-edges", true, dropLocalEdges tvars >> ok)
+                  ("graph-collapse-unobservable-edges", true, collapseUnobservableEdges tvars >> ok)
+                  ("graph-drop-local-midview",true, dropLocalMidView tvars >> ok)
+                ])
 
     /// <summary>
     ///     Optimises a model over graphs.
@@ -891,7 +906,7 @@ module Graph =
     ///     An optimised equivalent of <paramref name="mdl" />.
     /// </returns>
     let optimise (opts : (string * bool) list) (mdl : Model<Graph, _>)
-      : Result<Model<Graph, _>, OptError> =
+      : Result<Model<Graph, _>, GraphOptError> =
         tryMapAxioms (optimiseGraph mdl.Locals opts) mdl
 
 
@@ -1001,7 +1016,7 @@ module Term =
     let afterSubs
       (isubs : Map<Var, IntExpr<Sym<MarkedVar>>>)
       (bsubs : Map<Var, BoolExpr<Sym<MarkedVar>>>)
-      : Traversal<CTyped<MarkedVar>, Expr<Sym<MarkedVar>>, OptError> =
+      : Traversal<CTyped<MarkedVar>, Expr<Sym<MarkedVar>>, TermOptError> =
         let switch =
             function
             | Int (After a) ->
@@ -1015,7 +1030,7 @@ module Term =
     let interSubs
       (isubs : Map<bigint * Var, IntExpr<Sym<MarkedVar>>>)
       (bsubs : Map<bigint * Var, BoolExpr<Sym<MarkedVar>>>)
-      : Traversal<CTyped<MarkedVar>, Expr<Sym<MarkedVar>>, OptError> =
+      : Traversal<CTyped<MarkedVar>, Expr<Sym<MarkedVar>>, TermOptError> =
         let switch =
             function
             | Int (Intermediate (i, a)) ->
@@ -1030,7 +1045,7 @@ module Term =
     /// f(x!before) in the precondition and postcondition.
     let eliminateAfters
       (term : CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc> )
-      : Result<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>, OptError> =
+      : Result<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>, TermOptError> =
         // TODO(CaptainHayashi): make this more general and typesystem agnostic.
         let sub = afterSubs (term.Cmd.Semantics |> findArithAfters |> Map.ofList)
                             (term.Cmd.Semantics |> findBoolAfters  |> Map.ofList)
@@ -1044,11 +1059,12 @@ module Term =
             liftTraversalOverCmdTerm
                 (liftTraversalToExprSrc (liftTraversalToTypedSymVarSrc sub))
         let result = withoutContext trav term
-        mapMessages OptError.Traversal result
+        mapMessages TermOptError.Traversal result
 
     let eliminateInters
       : CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>
-        -> Result<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>, OptError> =
+        -> Result<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
+                  TermOptError> =
         fun term ->
         let sub = interSubs (term.Cmd.Semantics |> findArithInters |> Map.ofList)
                             (term.Cmd.Semantics |> findBoolInters  |> Map.ofList)
@@ -1057,7 +1073,7 @@ module Term =
             liftTraversalOverCmdTerm
                 (liftTraversalToExprSrc (liftTraversalToTypedSymVarSrc sub))
         let result = withoutContext trav term
-        mapMessages OptError.Traversal result
+        mapMessages TermOptError.Traversal result
 
     (*
      * Guard reduction
@@ -1091,7 +1107,8 @@ module Term =
     /// Reduce the guards in a Term.
     let guardReduce
       ({Cmd = c; WPre = w; Goal = g} : CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>)
-      : Result<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>, OptError> =
+      : Result<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
+               TermOptError> =
 
         let fs = c.Semantics |> facts |> Set.ofList
         ok {Cmd = c; WPre = reduceGView fs w; Goal = g}
@@ -1103,31 +1120,26 @@ module Term =
     /// Performs expression simplification on a term.
     let simpTerm
       : CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>
-        -> Result<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>, OptError> =
+        -> Result<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
+                  TermOptError> =
         let simpExpr : Expr<Sym<MarkedVar>> -> Expr<Sym<MarkedVar>> =
             function
             | Bool b -> Bool (simp b)
             | x -> x
         let sub = ignoreContext (simpExpr >> ok)
         let trav = liftTraversalOverCmdTerm sub
-        withoutContext trav >> mapMessages Traversal
+        withoutContext trav >> mapMessages TermOptError.Traversal
 
     (*
      * Frontend
      *)
-
-    /// Term optimisers switched on by default.
-    let defaultTermOpts : Set<string> =
-        Set.ofList [ "term-remove-after"
-                     "term-reduce-guards"
-                     "term-simplify-bools" ]
 
     /// Optimises a model's terms.
     let optimise
       (opts : (string * bool) list)
       : Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>, _>
       -> Result<Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>, _>,
-                OptError> =
+                TermOptError> =
         let optimiseTerm =
             Utils.optimiseWith opts
                 [ ("term-remove-after", true, eliminateAfters)
@@ -1135,3 +1147,36 @@ module Term =
                   ("term-reduce-guards", true, guardReduce)
                   ("term-simplify-bools", true, simpTerm) ]
         tryMapAxioms optimiseTerm
+
+
+/// <summary>
+///     Pretty printers for the optimiser types.
+/// </summary>
+module Pretty =
+    open Starling.Core.Pretty
+    open Starling.Core.Sub.Pretty
+    /// <summary>
+    ///     Pretty-prints a term optimiser error.
+    /// </summary>
+    /// <param name="err">The <see cref="TermOptError"/> to print.</param>
+    /// <param name="returns">
+    ///     The <see cref="Doc"/> resulting from printing
+    ///     <paramref name="err"/>.
+    /// </param>
+    let rec printTermOptError (err : TermOptError) : Doc =
+        match err with
+        | TermOptError.Traversal err -> printSubError printTermOptError err
+        |> error
+
+    /// <summary>
+    ///     Pretty-prints a graph optimiser error.
+    /// </summary>
+    /// <param name="err">The <see cref="GraphOptError"/> to print.</param>
+    /// <param name="returns">
+    ///     The <see cref="Doc"/> resulting from printing
+    ///     <paramref name="err"/>.
+    /// </param>
+    let rec printGraphOptError (err : GraphOptError) : Doc =
+        match err with
+        | GraphOptError.Traversal err -> printSubError printGraphOptError err
+        |> error

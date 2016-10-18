@@ -292,6 +292,14 @@ type Error =
     /// </summary>
     | TermGen of TermGen.Error
     /// <summary>
+    ///     An error occurred during the graph optimiser pass.
+    /// </summary>
+    | GraphOptimiser of Optimiser.Types.GraphOptError
+    /// <summary>
+    ///     An error occurred during the term optimiser pass.
+    /// </summary>
+    | TermOptimiser of Optimiser.Types.TermOptError
+    /// <summary>
     ///     An error occurred during iterator lowering.
     /// </summary>
     | IterLowerError of TermGen.Iter.Error
@@ -315,6 +323,12 @@ let rec printError (err : Error) : Doc =
     | Frontend e -> Lang.Frontend.printError e
     | Semantics e -> Semantics.Pretty.printSemanticsError e
     | HSF e -> Backends.Horn.Pretty.printHornError e
+    | GraphOptimiser e ->
+        headed "Graph optimiser failed"
+               [ Optimiser.Pretty.printGraphOptError e ]
+    | TermOptimiser e ->
+        headed "Term optimiser failed"
+               [ Optimiser.Pretty.printTermOptError e ]
     | Reify e ->
         headed "Reification failed"
                [ Reifier.Pretty.printError e ]
@@ -455,9 +469,11 @@ let runStarling (request : Request)
     let frontend times rq =
         Lang.Frontend.run times rq Response.Frontend Error.Frontend
     let graphOptimise =
-        lift (fix <| Starling.Optimiser.Graph.optimise opts)
+        (fix (bind (Starling.Optimiser.Graph.optimise opts
+                    >> mapMessages Error.GraphOptimiser)))
     let termOptimise =
-        lift (fix <| Starling.Optimiser.Term.optimise opts)
+        (fix (bind (Starling.Optimiser.Term.optimise opts
+                    >> mapMessages Error.TermOptimiser)))
     let flatten = lift Starling.Flattener.flatten
     let reify = bind (Starling.Reifier.reify >> mapMessages Error.Reify)
     let termGen = bind (Starling.TermGen.termGen >> mapMessages Error.TermGen)
@@ -539,7 +555,9 @@ let runStarling (request : Request)
                     id)
 
             let approxTerm =
-                (liftTraversalOverTerm Starling.Core.Symbolic.Queries.approx)
+                (liftTraversalOverTerm
+                    (liftTraversalToExprSrc
+                        Starling.Core.Symbolic.Queries.approx))
                     Starling.Core.Sub.Context.positive
                 >> lift snd
 
