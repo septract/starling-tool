@@ -32,7 +32,7 @@ method readAcquire() {
       {| if r > (m - 1) then holdInnerLock() else canHoldReadLock() |}
     } while (r > (m - 1));
   {| canHoldReadLock() |}
-  
+
   <readCount++>;
   {| holdInnerLock() * holdReadLock() |}
     <serving++>;
@@ -77,16 +77,11 @@ method writeRelease() {
 }
 
 
-//Utility predicate
-view Lift(bool b);
-constraint Lift(b)                              -> b;
-
-
 view holdTick(int t);
 view holdInnerLock();
 view holdWriteLock();
 view canHoldReadLock();
-view holdReadLock()[n];
+view iter[n] holdReadLock();
 
 // Invariant
 constraint emp                                  -> ticket >= serving && readCount >= 0 && maxCount > 0;

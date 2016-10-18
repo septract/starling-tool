@@ -338,6 +338,9 @@ let mkAdd2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
     | (AInt x, AInt y)            -> AInt (x + y)
     | _                           -> AAdd [ l; r ]
 
+/// Makes a variable increment expression.
+let incVar (x : 'Var) : IntExpr<'Var> = mkAdd2 (AVar x) (AInt 1L)
+
 /// Makes an Add out of a sequence of expressions.
 let mkAdd (xs : IntExpr<'var> seq) : IntExpr<'var> =
     // TODO(CaptainHayashi): produce a trimmed list, instead of mkAdd2ing.

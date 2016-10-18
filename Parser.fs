@@ -65,7 +65,7 @@ let inSquareBrackets p = inBrackets "[" "]" p
 /// Parser for items in {braces}.
 let inBraces p = inBrackets "{" "}" p
 /// Parser for items in {|view braces|}.
-let inViewBraces p = inBrackets "{" "|}" p
+let inViewBraces p = inBrackets "{|" "|}" p
 /// Parser for items in <angle brackets>.
 let inAngles p = inBrackets "<" ">" p
 
@@ -360,19 +360,19 @@ let parseBasicView =
 do parseViewRef := parseViewLike parseBasicView Join
 
 /// Parser for view expressions.
-let parseViewExpr = between
-                        (pstring "{|" .>> ws)
-                        (pstring "|}")
-                        ((stringReturn "?" Unknown .>> ws)
-                         <|> pipe2ws parseView
-                                     (opt (stringReturn "?" ()))
-                                     (fun v qm ->
-                                          match qm with
-                                          | Some () -> Questioned v
-                                          | None -> Unmarked v))
-                    // ^- {| <view> |}
-                    //  | {| <view> ? |}
-                    //  | {| ? |}
+let parseViewExpr =
+    inViewBraces
+        ((stringReturn "?" Unknown .>> ws)
+        <|> pipe2ws
+                parseView
+                (opt (stringReturn "?" ()))
+                (fun v qm ->
+                     match qm with
+                     | Some () -> Questioned v
+                     | None -> Unmarked v))
+        // ^- {| <view> |}
+        //  | {| <view> ? |}
+        //  | {| ? |}
 
 
 (*
@@ -388,13 +388,21 @@ let parseDUnit = stringReturn "emp" ViewSignature.Unit
 /// Parses a view iterator definition.
 let parseIteratorDef = inSquareBrackets parseIdentifier
 
+/// Parses an iterated item, feeding the two results to another function.
+let parseIteratedContainer
+  (parseInner : Parser<'Inner, unit>)
+  (comb : string -> 'Inner -> 'Outer)
+  : Parser<'Outer, unit> =
+    pipe2ws
+        (pstring "iter" >>. ws >>. parseIteratorDef)
+        (parseInner)
+        comb
+
 /// Parses an iterated view definition.
 let parseDIterated =
-    pstring "iter" >>. ws >>.
-    pipe2ws
-            parseIteratorDef
-            (parseFunc parseIdentifier)
-            (fun e f -> ViewSignature.Iterated(f, e))
+    parseIteratedContainer
+        (parseFunc parseIdentifier)
+        (fun e f -> ViewSignature.Iterated(f, e))
 
 /// Parses a `basic` view definition (unit, if, named, or bracketed).
 let parseBasicViewSignature =
@@ -413,17 +421,17 @@ do parseViewSignatureRef := parseViewLike parseBasicViewSignature ViewSignature.
  * View prototypes.
  *)
 
-/// Parses the LHS of a view prototype.
-let parseViewProtoLhs =
-    pstring "view" >>. ws >>. parseFunc parseTypedTypedVar
 
 /// Parses a view prototype (a LHS followed optionally by an iterator).
 let parseViewProto =
-    parseViewProtoLhs
-    >>= fun lhs ->
-            (wsSemi >>% NoIterator (lhs, false)) <|>
-            (parseIteratorDef .>> wsSemi |>> curry WithIterator lhs)
-    .>> ws
+    // TODO (CaptainHayashi): so much backtracking...
+    pstring "view" >>. ws
+    >>. (parseIteratedContainer
+            (parseFunc parseTypedTypedVar)
+            (fun i f -> WithIterator (f, i))
+         <|> (parseFunc parseTypedTypedVar
+              |>> (fun lhs -> NoIterator (lhs, false))))
+    .>> wsSemi
 
 
 (*
@@ -454,8 +462,8 @@ let parseDoWhile =
 /// Parser for if (expr) block else block.
 let parseIf =
     pipe3ws (pstring "if" >>. ws >>. inParens parseExpression)
-            (parseBlock .>> ws .>> pstring "else")
             parseBlock
+            (opt (pstring "else" >>. ws >>. parseBlock))
             (curry3 If)
 
 /// Parser for prim compositions.
@@ -557,13 +565,10 @@ let parseMethod =
                 // ^-                             ... <block>
                 (fun s b -> {Signature = s ; Body = b} )
 
-/// Parses a variable with the given initial keyword.
-let parseVar kw = pstring kw >>. ws
-                  // ^- shared     ...
-                             >>. parseTypedTypedVar
-                             // ^- ... <type> <identifier> ...
-                             .>> pstring ";"
-                             // ^-                         ... ;
+/// Parses a variable set with the given initial keyword and AST type.
+let parseVars kw atype =
+    let parseList = parseParams parseIdentifier .>> wsSemi
+    pstring kw >>. ws >>. pipe2ws parseType parseList (fun t v -> atype (t, v))
 
 /// Parses a search directive.
 let parseSearch =
@@ -571,8 +576,7 @@ let parseSearch =
     // ^- search
                      >>. pint32
                      // ^- ... <depth>
-                     .>> ws
-                     .>> pstring ";"
+                     .>> wsSemi
 
 /// Parses a script of zero or more methods, including leading and trailing whitespace.
 let parseScript =
@@ -588,9 +592,9 @@ let parseScript =
                              //  | view <identifier> <view-proto-param-list> ;
                              parseSearch |>> Search
                              // ^- search 0;
-                             parseVar "shared" |>> Global
+                             parseVars "shared" SharedVars
                              // ^- shared <type> <identifier> ;
-                             parseVar "thread" |>> Local]) .>> ws ) eof
+                             parseVars "thread" ThreadVars]) .>> ws ) eof
                              // ^- thread <type> <identifier> ;
 
 (*

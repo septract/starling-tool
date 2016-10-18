@@ -8,6 +8,7 @@ open Starling.TermGen
 open Starling.Utils
 open Starling.Utils.Testing
 open Starling.Core.TypeSystem
+open Starling.Core.Definer
 open Starling.Core.Expr
 open Starling.Core.Model
 open Starling.Core.View

@@ -18,7 +18,7 @@ open Starling.Tests.Studies
 /// Tests for Starling.Horn and Starling.HSF.
 module Tests =
     /// The globals environment used in the tests.
-    let Globals : VarMap =
+    let SharedVars : VarMap =
         returnOrFail <| makeVarMap
             [ TypedVar.Int "serving"
               TypedVar.Int "ticket" ]
@@ -112,7 +112,7 @@ module Tests =
     [<Test>]
     let ``the HSF variable initialiser works correctly using various variable maps``() =
         Assert.That(
-            Globals |> hsfModelVariables |> okOption,
+            SharedVars |> hsfModelVariables |> okOption,
             Is.EqualTo(
                 Clause (Pred { Name = "emp"
                                Params = [ AVar "Vserving"; AVar "Vticket" ] },

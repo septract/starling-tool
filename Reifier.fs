@@ -7,6 +7,7 @@ module Starling.Reifier
 open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Utils
+open Starling.Core.Definer
 open Starling.Core.Expr
 open Starling.Core.View
 open Starling.Core.Var
@@ -89,7 +90,7 @@ module Types =
         ///         to make sure.
         ///     </para>
         /// </summary>
-        | LookupError of func : DFunc * err : Core.Instantiate.Types.Error
+        | LookupError of func : DFunc * err : Core.Definer.Error
         /// <summary>
         ///     An iterator had the wrong type.
         /// </summary>
@@ -138,9 +139,8 @@ module Downclosure =
     /// </returns>
     let lookupFunc (protos : FuncDefiner<ProtoInfo>) (func : DFunc)
       : Result<ProtoInfo option, Error> =
-        // TODO(CaptainHayashi): proper doc comment
         // TODO(CaptainHayashi): merge with Modeller.lookupFunc?
-        let look func = Core.Instantiate.lookup func protos
+        let look func = Core.Definer.FuncDefiner.lookup func protos
         let record = wrapMessages LookupError look func
         lift (Option.map snd) record
 
@@ -207,36 +207,43 @@ module Downclosure =
     /// <param name="iterator">The iterator variable, <c>n</c>.</param>
     /// <param name="func">The iterated func to check, <c>A(x)[n]</c>.</param>
     /// <param name="defn">The definition to check, <c>D(A(x)[n])</c>.</param>
+    /// <param name="deferred">The log of existing deferred checks.</param>
     /// <returns>
     ///     The original definition if base downclosure holds; an error
     ///     otherwise.
     /// </returns>
     let checkBaseDownclosure
-      (empDefn : BoolExpr<Sym<Var>>)
+      (empDefn : BoolExpr<Sym<Var>> option)
       (iterator : Var)
       (func : IteratedDFunc)
       (defn : BoolExpr<Sym<Var>>)
-      : Result<IteratedDFunc * BoolExpr<Sym<Var>>, Error> =
+      (deferred : DeferredCheck list)
+      : Result<DeferredCheck list, Error> =
         (* To do the base downclosure, we need to replace all instances of the
            iterator in the definition with 0. *)
         let baseDefnResult =
             mapOverIteratorUses (fun _ -> AInt 0L) iterator defn
 
-        (* Base downclosure for a view V[n](x):
-             D(emp) => D(V[0](x))
-           That is, the definition of V when the iterator is 0 can be no
-           stricter than the definition of emp.
+        // If emp is indefinite (None), defer this base downclosure check.
+        match empDefn with
+        | None ->
+            ok (NeedsBaseDownclosure (func, "emp is indefinite")::deferred)
+        | Some ed ->
+            (* Base downclosure for a view V[n](x):
+                 D(emp) => D(V[0](x))
+               That is, the definition of V when the iterator is 0 can be no
+               stricter than the definition of emp.
 
-           The definition of emp can only mention global variables, so it does
-           not need to be freshened. *)
-        let checkResult = lift (mkImplies empDefn) baseDefnResult
-        let baseHoldsResult = bind runDownclosureCheck checkResult
-        bind
-            (fun baseHolds ->
-                if baseHolds
-                then ok (func, defn)
-                else fail (BaseDownclosureError ([func], defn, empDefn)))
-            baseHoldsResult
+               The definition of emp can only mention global variables, so it
+               need not need to be freshened. *)
+            let checkResult = lift (mkImplies ed) baseDefnResult
+            let baseHoldsResult = bind runDownclosureCheck checkResult
+            bind
+                (fun baseHolds ->
+                    if baseHolds
+                    then ok deferred
+                    else fail (BaseDownclosureError ([func], defn, ed)))
+                baseHoldsResult
 
     /// <summary>
     ///     Checks the inductive downclosure property.
@@ -253,6 +260,7 @@ module Downclosure =
     /// <param name="iterator">The iterator variable, <c>n</c>.</param>
     /// <param name="func">The iterated func to check, <c>A(x)[n]</c>.</param>
     /// <param name="defn">The definition to check, <c>D(A(x)[n])</c>.</param>
+    /// <param name="deferred">The log of existing deferred checks.</param>
     /// <returns>
     ///     The original definition if inductive downclosure holds; an error
     ///     otherwise.
@@ -260,11 +268,11 @@ module Downclosure =
     let checkInductiveDownclosure (iterator : Var)
       (func : IteratedDFunc)
       (defn : BoolExpr<Sym<Var>>)
-      : Result<IteratedDFunc * BoolExpr<Sym<Var>>, Error> =
+      (deferred : DeferredCheck list)
+      : Result<DeferredCheck list, Error> =
         (* To do the inductive downclosure, we need to replace all instances of
            the iterator in the definition with (iterator + 1) in one version. *)
-        let increment v = mkAdd2 (AVar (Reg v)) (AInt 1L)
-        let succDefnResult = mapOverIteratorUses increment iterator defn
+        let succDefnResult = mapOverIteratorUses (Reg >> incVar) iterator defn
 
         (* Inductive downclosure for a view V[n](x):
              (0 <= n && D(V[n+1](x)) => D(V[n](x)))
@@ -285,7 +293,7 @@ module Downclosure =
         bind
             (fun indHolds ->
                 if indHolds
-                then ok (func, defn)
+                then ok deferred
                 else
                     bind
                         (fun succDefn ->
@@ -300,38 +308,39 @@ module Downclosure =
     /// <param name="func">The view definition's lone defined func.</param>
     /// <param name="empDefn">The definition of 'emp', if one exists.</param>
     /// <param name="defn">The definition of <paramref name="func"/>.</param>
+    /// <param name="deferred">The log of existing deferred checks.</param>
     /// <returns>
-    ///     The view definition itself, if it obeys downclosure; an error
-    ///     stating which property failed, otherwise.
+    ///     The set of deferred downclosure checks, if the non-deferred ones
+    ///     passed; an error stating which property failed, otherwise.
     /// </returns>
     let checkDownclosure (func : IteratedDFunc)
         (empDefn : BoolExpr<Sym<Var>> option)
         (defn : BoolExpr<Sym<Var>> option)
-        : Result<IteratedDFunc * BoolExpr<Sym<Var>> option, Error> =
+        (deferred : DeferredCheck list)
+        : Result<DeferredCheck list, Error> =
         let checkIterator =
             function
             | None -> fail (MissingIterator [func])
             | Some (Int v) -> ok v
             | Some v -> fail (BadIteratorType ([func], typeOf v))
 
-        // If empDefn is undefined, it becomes true by the theory.
-        let empDefnT = withDefault BTrue empDefn
-
-        (* No point checking downclosure of an indefinite viewdef.
-           This job is delegated to the indefinite-proof backends, like HSF and
-           MuZ3, which must make sure their synthesised definitions are
+        (* Delegate any checks on indefinite viewdefs to the backends, eg HSF
+           and MuZ3, which must make sure their synthesised definitions are
            downclosed. *)
         match defn with
-        | None -> ok (func, None)
+        | None ->
+            ok
+                (NeedsBaseDownclosure (func, "func is indefinite")
+                :: NeedsInductiveDownclosure (func, "func is indefinite")
+                :: deferred)
         | Some d ->
             let checkedIterR = checkIterator func.Iterator
-            let checkedDefnR =
-                bind
-                    (fun i ->
-                        checkBaseDownclosure empDefnT i func d
-                        >>= uncurry (checkInductiveDownclosure i))
-                    checkedIterR
-            lift (pairMap id Some) checkedDefnR
+            bind
+                (fun i ->
+                    deferred
+                    |> checkBaseDownclosure empDefn i func d
+                    >>= checkInductiveDownclosure i func d)
+                checkedIterR
 
     /// <summary>
     ///     Performs iterated view well-formedness checking on the left of a
@@ -340,14 +349,17 @@ module Downclosure =
     /// <param name="empDefn">The definition, if any, of 'emp'.</param>
     /// <param name="vprotos">The view prototypes in use.</param>
     /// <param name="def">The definition being checked.</param>
+    /// <param name="deferred">The log of existing deferred checks.</param>
     /// <returns>
-    ///     The view definition if all checks passed; errors otherwise.
+    ///     The new deferred log if all testable checks passed;
+    ///     errors otherwise.
     /// </returns>
     let checkDef
       (empDefn : BoolExpr<Sym<Var>> option)
       (vprotos : FuncDefiner<ProtoInfo>)
       (def : DView * BoolExpr<Sym<Var>> option)
-      : Result<DView * BoolExpr<Sym<Var>> option, Error> =
+      (deferred : DeferredCheck list)
+      : Result<DeferredCheck list, Error> =
         let (lhs, rhs) = def
 
         trial {
@@ -360,7 +372,7 @@ module Downclosure =
             match (iterprotos, normprotos) with
             (* Correct non-iterated view definition.
                No more checking necessary. *)
-            | [], _ -> return def
+            | [], _ -> return deferred
             (* Correct iterated view definition, as long as i is actually an
                iterated func.
                Need to check inductive and base downclosure. *)
@@ -369,9 +381,7 @@ module Downclosure =
                 return!
                     (match iInfo with
                      | Some { IsIterated = true } ->
-                        (lift
-                            (fun (v, r) -> ([v], r))
-                            (checkDownclosure i empDefn rhs))
+                        checkDownclosure i empDefn rhs deferred
                      | Some { IsIterated = _ } -> fail (IteratorOnNonIterated i)
                      | None -> fail (NoSuchView i.Func))
             // Over-large iterated view definition (for now, anyway).
@@ -384,29 +394,36 @@ module Downclosure =
     ///     Performs all downclosure and well-formedness checking on iterated
     ///     constraints.
     /// </summary>
+    /// <param name="vprotos">The view prototypes in use.</param>
     /// <param name="definer">
     ///     The definer whose constraints are being checked.
     /// </param>
+    /// <param name="deferred">The log of existing deferred checks.</param>
     /// <returns>
-    ///     The definer if all checks passed; errors otherwise.
+    ///     The new deferred log if all testable checks passed;
+    ///     errors otherwise.
     /// </returns>
     let check
       (vprotos : FuncDefiner<ProtoInfo>)
       (definer : ViewDefiner<BoolExpr<Sym<Var>> option>)
-        : Result<ViewDefiner<BoolExpr<Sym<Var>> option>, Error> =
+      (deferred : DeferredCheck list)
+        : Result<DeferredCheck list, Error> =
+        (* Get the definition of 'emp'.
+           This is needed for base downclosure checking.
 
-        (* Currently, we don't actually modify the definer, but this may
-           change in future. *)
-
-        (* This is needed for base downclosure checking.
-           If it doesn't exist, then we don't do those checks. *)
+           There are three possibilities here:
+           1) emp is defined, in which case we use the definition;
+           2) emp is not defined, in which case we assume 'true' by the theory;
+           3) emp is indefinite, in which case we pass None to 'checkDef' and
+              'checkDef' then has to defer any base downclosure checks. *)
         let defSeq = ViewDefiner.toSeq definer
-        let empDefn = Option.bind snd (Seq.tryFind (fst >> List.isEmpty) defSeq)
+        let empDefIfDefined =
+            Option.map snd (Seq.tryFind (fst >> List.isEmpty) defSeq)
+        // Deal with case 2).
+        let empDefn = withDefault (Some BTrue) empDefIfDefined
 
         // TODO (CaptainHayashi): actually use the result here
-        let checkEach def definerSoFar =
-            ok def >>= checkDef empDefn vprotos >>= (fun _ -> ok definerSoFar)
-        seqBind checkEach definer defSeq
+        seqBind (checkDef empDefn vprotos) deferred defSeq
 
 /// Splits an iterated GFunc into a pair of guard and iterated func.
 let iterGFuncTuple
@@ -678,9 +695,17 @@ let reify
                  ViewDefiner<SVBoolExpr option>>)
   : Result<Model<Term<'a, Set<GuardedIteratedSubview>, IteratedOView>,
                  ViewDefiner<SVBoolExpr option>>, Error> =
-    model
-    |> mapAxioms (mapTerm id (reifyView model.ViewProtos model.ViewDefs) id)
-    |> tryMapViewDefs (Downclosure.check model.ViewProtos)
+    let deferredCheckR =
+        Downclosure.check
+            model.ViewProtos
+            model.ViewDefs
+            model.DeferredChecks
+    let checkedModelR =
+        lift (fun ds -> { model with DeferredChecks = ds }) deferredCheckR
+
+    lift
+        (mapAxioms (mapTerm id (reifyView model.ViewProtos model.ViewDefs) id))
+        checkedModelR
 
 
 /// <summary>
@@ -734,12 +759,12 @@ module Pretty =
         | LookupError(func, err) ->
             wrapped "lookup for view"
                 (printDFunc func)
-                (err |> Core.Instantiate.Pretty.printError)
+                (err |> Core.Definer.Pretty.printError)
         | IteratorOnNonIterated func ->
             fmt "view '{0}' is not iterated, but used in an iterated constraint"
                 [ printIteratedContainer
                     printDFunc
-                    (Option.map printTypedVar >> withDefault Nop)
+                    (maybe Nop printTypedVar)
                     func ]
         | BadIteratorType (view, ty) ->
             fmt "iterator on constraint '{0}' is of type {1}, should be int"

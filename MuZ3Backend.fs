@@ -25,11 +25,13 @@
 
 module Starling.Backends.MuZ3
 
+open Chessie.ErrorHandling
 open Microsoft
 open Starling
 open Starling.Collections
 open Starling.Semantics
 open Starling.Core.TypeSystem
+open Starling.Core.Definer
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
@@ -49,6 +51,16 @@ open Starling.Optimiser
 /// </summary>
 [<AutoOpen>]
 module Types =
+    /// <summary>
+    ///     An error caused when emitting a Horn clause.
+    /// </summary>
+    type Error =
+        /// <summary>
+        ///     MuZ3 can't check the given deferred check.
+        /// </summary>
+        | CannotCheckDeferred of check : DeferredCheck * why : string
+
+
     /// <summary>
     ///     Type of MuZ3 results.
     /// </summary>
@@ -120,6 +132,22 @@ module Pretty =
     open Starling.Core.Model.Pretty
     open Starling.Core.Instantiate.Pretty
     open Starling.Core.Z3.Pretty
+
+    /// <summary>
+    ///     Pretty-prints a MuZ3 backend error.
+    /// </summary>
+    /// <param name="err">The error to print.</param>
+    /// <returns>
+    ///     A <see cref="Doc"/> representing <paramref name="err"/>.
+    /// </returns>
+    let printError (err : Error) : Doc =
+        match err with
+        | CannotCheckDeferred (check, why) ->
+            error
+                (String "deferred sanity check '"
+                 <-> printDeferredCheck check
+                 <-> String "' failed:"
+                 <+> String why)
 
     /// Pretty-prints a MuSat.
     let printMuSat : MuSat -> Doc =
@@ -479,23 +507,19 @@ module Translator =
     ///     A function converting variables in the <c>BoolExpr</c> into
     ///     <c>Var</c>s: for example, <c>constToString</c>.
     /// </param>
-    /// <param name="ctx">
-    ///     The Z3 context to use to model the rule.
-    /// </param>
+    /// <param name="ctx">The Z3 context to use to model the rule.</param>
     /// <param name="funcDecls">
     ///     The map of <c>FuncDecls</c> to use in the modelling.
     /// </param>
     /// <param name="bodyExpr">
     ///     The body, as a Starling <c>BoolExpr</c>.  May be <c>BTrue</c> if
-    ///     no view is desired.
+    ///     no non-view body expression is desired.
     /// </param>
     /// <param name="bodyView">
     ///     The view part, as a Starling <c>GView</c>.  May be emp if no view
     ///     is desired.
     /// </param>
-    /// <param name="head">
-    ///     The <c>VFunc</c> making up the head.
-    /// </param>
+    /// <param name="head">The <c>VFunc</c> making up the head.</param>
     /// <typeparam name="var">
     ///     The meta-type of variables in the body of the rule.
     /// </typeparam>
@@ -553,6 +577,101 @@ module Translator =
 
         mkQuantifiedEntailment ctx vars bodyZ headZ
 
+    (*
+     * Deferred checks
+     *)
+
+    /// <summary>
+    ///     Constructs a MuZ3 rule for a deferred check, if possible.
+    /// </summary>
+    /// <param name="reals">
+    ///     Whether to use Real instead of Int for integers.
+    /// </param>
+    /// <param name="ctx">The Z3 context to use to model the rule.</param>
+    /// <param name="funcs">A map of active view <c>FuncDecl</c>s.</param>
+    /// <param name="svars">Map of shared variables in the program.</param>
+    /// <param name="check">The deferred check to translate.</param>
+    /// <returns>
+    ///     If successful, an optional a pair of the constructed rule's name
+    ///     and body.
+    /// </returns>
+    let translateDeferredCheck
+      (reals : bool)
+      (ctx : Z3.Context)
+      (funcDecls : Map<string, Z3.FuncDecl>)
+      (svars : VarMap)
+      (check : DeferredCheck)
+      : Result<(string * Z3.BoolExpr) option, Error> =
+        let svarSeq = toVarSeq svars
+
+        // TODO(CaptainHayashi): clean this up?
+        let varToExpr v =
+            match v with
+            | Int iv -> Int (AVar iv)
+            | Bool bv -> Bool (BVar bv)
+
+        (* Converts a downclosure func into a guarded func, instantiating the
+           variables directly as nonsymbolic unmarked vars.
+           We map any instance of the iterator through f. *)
+        let instantiate iterator f (dfunc : DFunc) : GFunc<Var> =
+            let trans param =
+                match param with
+                | Int var when var = iterator -> Int (f var)
+                | v -> varToExpr v
+            gfunc BTrue dfunc.Name (List.map trans dfunc.Params)
+
+        match check with
+        | NeedsBaseDownclosure (func, reason) ->
+            let iterVarResult =
+                match func.Iterator with
+                | Some (Int x) -> ok x
+                | _ -> fail (CannotCheckDeferred (check, "malformed iterator"))
+
+            (* TODO(CaptainHayashi): We're given the func needing downclosure in
+               unflattened form.  This is kind-of messy, as we now have to flatten
+               it again. *)
+            // TODO(CaptainHayashi): this duplicates the HSF work a lot.
+            let flatDFunc = Starling.Flattener.flattenDView svarSeq [func]
+            let zeroFuncResult =
+                lift (fun it -> instantiate it (fun _ -> AInt 0L) flatDFunc)
+                    iterVarResult
+            let zeroViewResult = lift Multiset.singleton zeroFuncResult
+
+            // TODO(CaptainHayashi): using a round peg in a square hole here.
+            let empFunc = vfunc "emp" (Seq.map varToExpr svarSeq)
+
+            let ruleResult =
+                lift (fun z -> mkRule reals id ctx funcDecls BTrue z empFunc)
+                    zeroViewResult
+
+            lift (Option.map (mkPair (sprintf "_baseD_%s" func.Func.Name)))
+                ruleResult
+        | NeedsInductiveDownclosure (func, reason) ->
+            // See above for caveats.
+            let iterVarResult =
+                match func.Iterator with
+                | Some (Int x) -> ok x
+                | _ -> fail (CannotCheckDeferred (check, "malformed iterator"))
+
+            let flatDFunc = Starling.Flattener.flattenDView svarSeq [func]
+
+            let normFuncResult =
+                ok (vfunc flatDFunc.Name (List.map varToExpr flatDFunc.Params))
+            let succFuncResult =
+                lift (fun it -> instantiate it incVar flatDFunc) iterVarResult
+            let succViewResult = lift Multiset.singleton succFuncResult
+            let guardResult =
+                lift (fun it -> mkGe (AVar it) (AInt 0L)) iterVarResult
+
+            let ruleResult =
+                lift3
+                    (mkRule reals id ctx funcDecls)
+                    guardResult
+                    succViewResult
+                    normFuncResult
+
+            lift (Option.map (mkPair (sprintf "_indD_%s" func.Func.Name)))
+                ruleResult
 
     (*
      * Variables
@@ -564,15 +683,9 @@ module Translator =
     /// <param name="reals">
     ///     Whether to use Real instead of Int for integers.
     /// </param>
-    /// <param name="ctx">
-    ///     The Z3 context to use to model the rule.
-    /// </param>
-    /// <param name="funcs">
-    ///     A map of active view <c>FuncDecl</c>s.
-    /// </param>
-    /// <param name="svars">
-    ///     Map of shared variables in the program.
-    /// </param>
+    /// <param name="ctx">The Z3 context to use to model the rule.</param>
+    /// <param name="funcs">A map of active view <c>FuncDecl</c>s.</param>
+    /// <param name="svars">Map of shared variables in the program.</param>
     /// <returns>
     ///     A sequence containing at most one pair of <c>string</c> and
     ///     Z3 <c>BoolExpr</c> representing the variable initialisation rule.
@@ -647,27 +760,33 @@ module Translator =
     /// <param name="ctx">
     ///     The Z3 context to use for modelling the fixpoint.
     /// </param>
-    /// <param name="_arg1">
-    ///     The model to turn into a fixpoint.
-    /// </param>
+    /// <param name="_arg1">The model to turn into a fixpoint.</param>
     /// <returns>
-    ///     A pair of the sequence of (<c>BoolExpr</c>, <c>Symbol</c>) goals
-    ///     used to prove the model, and the map of names to <c>FuncDecl</c>s
-    ///     to use to start queries.
+    ///     A Chessie result wrapping, on success, a <see cref="MuModel"/>
+    ///     containing the translation of the Starling model to MuZ3.
     /// </returns>
     let translate
       (reals : bool)
       (ctx : Z3.Context)
-      ({ Globals = svars ; ViewDefs = ds ; Axioms = xs }
+      ({ SharedVars = svars; ViewDefs = ds; Axioms = xs; DeferredChecks = cs }
          : Model<CmdTerm<MBoolExpr, GView<MarkedVar>, MVFunc>,
-                 FuncDefiner<BoolExpr<Var> option>> ) =
+                 FuncDefiner<BoolExpr<Var> option>> )
+      : Result<MuModel, Error> =
         let funcDecls, definites = translateViewDefs reals ctx ds
         let vrules = translateVariables reals ctx funcDecls svars
-        let trules = xs |> Map.toSeq |> Seq.choose (translateTerm reals ctx funcDecls)
 
-        { Definites = List.ofSeq definites
-          Rules = Seq.append vrules trules |> Map.ofSeq
-          FuncDecls = funcDecls }
+        let axseq = Map.toSeq xs
+        let trules = Seq.choose (translateTerm reals ctx funcDecls) axseq
+
+        let tdc = translateDeferredCheck reals ctx funcDecls svars
+        let drulesResult = lift (Seq.choose id) (collect (Seq.map tdc cs))
+
+        lift
+            (fun drules ->
+                { Definites = List.ofSeq definites
+                  Rules = Map.ofSeq (Seq.concat [ drules; vrules; trules ])
+                  FuncDecls = funcDecls })
+            drulesResult
 
 
 /// <summary>
@@ -675,6 +794,39 @@ module Translator =
 /// </summary>
 module Run =
     open Starling.Core.Z3.Expr
+
+    let genViewDefRule reals (ctx : Z3.Context) fm (fixedpoint : Z3.Fixedpoint) (unsafeapp : Z3.BoolExpr) view def =
+        let defImpliesView =
+            Translator.mkRule reals id ctx fm def Multiset.empty view
+        Option.iter fixedpoint.AddRule defImpliesView
+
+        // TODO(CaptainHayashi): de-duplicate this with mkRule.
+        let vars =
+            Set.ofSeq
+                (seq {
+                    yield! (mapOverVars Mapper.mapBoolCtx findVars def)
+                    for param in view.Params do
+                        yield! (mapOverVars Mapper.mapCtx findVars param)
+                })
+
+        let z3Vars =
+            Set.toArray
+                (Set.map
+                    (fun (var : CTyped<Var>) ->
+                        ctx.MkConst
+                            (valueOf var,
+                             Translator.typeToSort reals ctx (typeOf var)))
+                    vars)
+
+        // Introduce 'V ^ ¬D(V) -> unsafe'.
+        let viewImpliesDef =
+            Translator.mkQuantifiedEntailment
+                ctx
+                z3Vars
+                (ctx.MkAnd [| boolToZ3 reals id ctx (mkNot def)
+                              Translator.translateVFunc reals id ctx fm view |])
+                unsafeapp
+        Option.iter fixedpoint.AddRule viewImpliesDef
 
     /// <summary>
     ///     Generates a MuZ3 fixedpoint.
@@ -702,42 +854,11 @@ module Run =
         pars.Add("engine", ctx.MkSymbol("pdr"))
         fixedpoint.Parameters <- pars
 
-        List.iter
-            (fun (view, def) ->
-                 match (Translator.mkRule reals id ctx fm def Multiset.empty view) with
-                 | Some rule -> fixedpoint.AddRule rule
-                 | None -> ())
-            ds
-
         let unsafe = ctx.MkFuncDecl ("unsafe", [||], ctx.MkBoolSort () :> Z3.Sort)
         fixedpoint.RegisterRelation unsafe
         let unsafeapp = unsafe.Apply [| |] :?> Z3.BoolExpr
 
-        List.iter
-            (fun (view, def) ->
-                 // TODO(CaptainHayashi): de-duplicate this with mkRule.
-                 let vars =
-                     seq {
-                         yield! (mapOverVars Mapper.mapBoolCtx findVars def)
-                         for param in view.Params do
-                             yield! (mapOverVars Mapper.mapCtx findVars param)
-                     }
-                     |> Set.ofSeq
-                     |> Set.map
-                            (fun (var : CTyped<Var>) ->
-                                 ctx.MkConst (valueOf var,
-                                              Translator.typeToSort reals ctx (typeOf var)))
-                     |> Set.toArray
-
-                 // Introduce 'V ^ ¬D(V) -> unsafe'.
-                 Translator.mkQuantifiedEntailment
-                     ctx
-                     vars
-                     (ctx.MkAnd [| def |> mkNot |> boolToZ3 reals id ctx
-                                   Translator.translateVFunc reals id ctx fm view |])
-                     unsafeapp
-                 |> Option.iter (fixedpoint.AddRule))
-            ds
+        List.iter (uncurry (genViewDefRule reals ctx fm fixedpoint unsafeapp)) ds
 
         Map.iter (fun (s : string) g -> fixedpoint.AddRule (g, ctx.MkSymbol s :> Z3.Symbol)) rs
         Map.iter (fun _ g -> fixedpoint.RegisterRelation g) fm
@@ -747,9 +868,7 @@ module Run =
     /// <summary>
     ///     Runs a MuZ3 fixedpoint.
     /// </summary>
-    /// <param name="fixedpoint">
-    ///     The <c>Fixedpoint</c> to run.
-    /// </param>
+    /// <param name="fixedpoint">The <c>Fixedpoint</c> to run.</param>
     /// <param name="unsafe">
     ///     The <c>FuncDecl</c> naming the unsafeness predicate.
     /// </param>
@@ -758,13 +877,10 @@ module Run =
     /// </returns>
     let run (fixedpoint : Z3.Fixedpoint) (unsafe : Z3.FuncDecl) : MuSat =
         match (fixedpoint.Query [| unsafe |]) with
-        | Z3.Status.SATISFIABLE ->
-             MuSat.Sat (fixedpoint.GetAnswer ())
-        | Z3.Status.UNSATISFIABLE ->
-             MuSat.Unsat (fixedpoint.GetAnswer ())
-        | Z3.Status.UNKNOWN ->
-             MuSat.Unknown (fixedpoint.GetReasonUnknown ())
-         | _ -> MuSat.Unknown "query result out of bounds"
+        | Z3.Status.SATISFIABLE -> MuSat.Sat (fixedpoint.GetAnswer ())
+        | Z3.Status.UNSATISFIABLE -> MuSat.Unsat (fixedpoint.GetAnswer ())
+        | Z3.Status.UNKNOWN -> MuSat.Unknown (fixedpoint.GetReasonUnknown ())
+        | _ -> MuSat.Unknown "query result out of bounds"
 
 /// <summary>
 ///     The Starling MuZ3 backend driver.
@@ -773,27 +889,22 @@ module Run =
 ///     Whether to use Real instead of Int.
 ///     This can be faster, but is slightly inaccurate.
 /// </param>
-/// <param name="req">
-///     The request to handle.
-/// </param>
+/// <param name="req">The request to handle.</param>
 /// <returns>
 ///     A function implementing the chosen MuZ3 backend process.
 /// </returns>
 let run (reals : bool) (req : Request)
   : Model<CmdTerm<MBoolExpr, GView<MarkedVar>, MVFunc>,
           FuncDefiner<BoolExpr<Var> option>>
-    -> Response =
+    -> Result<Response, Error> =
     use ctx = new Z3.Context()
     match req with
     | Request.Translate ->
         Translator.translate reals ctx
-        >> Response.Translate
+        >> lift Response.Translate
     | Request.Fix ->
         Translator.translate reals ctx
-        >> Run.fixgen reals ctx
-        >> Response.Fix
+        >> lift (Run.fixgen reals ctx >> Response.Fix)
     | Request.Sat ->
         Translator.translate reals ctx
-        >> Run.fixgen reals ctx
-        >> uncurry Run.run
-        >> Response.Sat
+        >> lift (Run.fixgen reals ctx >> uncurry Run.run >> Response.Sat)

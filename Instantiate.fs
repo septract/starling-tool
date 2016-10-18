@@ -22,6 +22,7 @@ module Starling.Core.Instantiate
 open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Utils
+open Starling.Core.Definer
 open Starling.Core.TypeSystem
 open Starling.Core.TypeSystem.Check
 open Starling.Core.Var
@@ -41,20 +42,26 @@ open Starling.Core.GuardedView.Traversal
 [<AutoOpen>]
 module Types =
     /// <summary>
+    ///     Type of terms going into instantiation.
+    /// </summary>
+    type FinalTerm =
+        CmdTerm<BoolExpr<Sym<MarkedVar>>,
+                GView<Sym<MarkedVar>>,
+                Func<Expr<Sym<MarkedVar>>>>
+
+    /// <summary>
+    ///     Type of models going into instantiation.
+    /// </summary>
+    type FinalModel = Model<FinalTerm, FuncDefiner<Sym<Var>>>
+
+    /// <summary>
     ///     Type of Chessie errors arising from Instantiate.
     /// </summary>
     type Error =
         /// <summary>
-        ///     The func looked up has a parameter <c>param</c>, which
-        ///     has been assigned to an argument of the incorrect type
-        ///     <c>atype</c>.
+        ///     An error occurred during func lookup.
         /// </summary>
-        | TypeMismatch of param: TypedVar * atype: Type
-        /// <summary>
-        ///     The func looked up has <c>fn</c> arguments, but its
-        ///     definition has <c>dn</c> parameters.
-        /// </summary>
-        | CountMismatch of fn: int * dn: int
+        | BadFuncLookup of func : VFunc<Sym<MarkedVar>> * err : Definer.Error
         /// <summary>
         ///     We were given an indefinite constraint when trying to
         ///     assert that all constraints are definite.
@@ -77,7 +84,20 @@ module Types =
         | Traversal of SubError<Error>
 
     /// Terms in a Proof are boolean expression pre/post conditions with Command's
-    type SymProofTerm = CmdTerm<SMBoolExpr, SMBoolExpr, SMBoolExpr>
+    type SymProofTerm =
+        { /// <summary>
+          ///    The proof term before symbolic conversion.
+          /// </summary>
+          Original: FinalTerm
+          /// <summary>
+          ///     The proof term after symbolic conversion.
+          /// </summary>
+          SymBool: Term<SMBoolExpr, SMBoolExpr, SMBoolExpr>
+          /// <summary>
+          ///     An approximate of the proof term with all symbols removed.
+          ///     Only appears if approximation was requested.
+          /// </summary>
+          Approx : Term<MBoolExpr, MBoolExpr, MBoolExpr> option }
 
     /// Terms in a Proof are over boolean expressions
     type ProofTerm = CmdTerm<MBoolExpr, MBoolExpr, MBoolExpr>
@@ -87,6 +107,7 @@ module Types =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
+    open Starling.Core.GuardedView.Pretty
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Var.Pretty
@@ -97,12 +118,10 @@ module Pretty =
     /// Pretty-prints instantiation errors.
     let rec printError : Error -> Doc =
         function
-        | TypeMismatch (par, atype) ->
-            fmt "parameter '{0}' conflicts with argument of type '{1}'"
-                [ printTypedVar par; printType atype ]
-        | CountMismatch (fn, dn) ->
-            fmt "view usage has {0} parameter(s), but its definition has {1}"
-                [ fn |> sprintf "%d" |> String; dn |> sprintf "%d" |> String ]
+        | BadFuncLookup (func, err) ->
+            wrapped "resolution of func"
+                (printVFunc (printSym printMarkedVar) func)
+                (Starling.Core.Definer.Pretty.printError err)
         | IndefiniteConstraint (view) ->
             fmt "indefinite 'constraint {0} -> ?' not allowed here"
                 [ printDFunc view ]
@@ -119,95 +138,33 @@ module Pretty =
                       String "' has no substitution" ])
         | Traversal err -> Sub.Pretty.printSubError printError err
 
-    let printSymProofTerm : SymProofTerm -> Doc =
-        printCmdTerm printSMBoolExpr printSMBoolExpr printSMBoolExpr
+    let printSymProofTerm (sterm : SymProofTerm) : Doc =
+        vsep
+            [ headed "Original term" <|
+                [ printCmdTerm
+                    (printBoolExpr (printSym printMarkedVar))
+                    (printGView (printSym printMarkedVar))
+                    (printVFunc (printSym printMarkedVar))
+                    sterm.Original ]
+              headed "Symbolic conversion" <|
+                [ printTerm
+                    (printBoolExpr (printSym printMarkedVar))
+                    (printBoolExpr (printSym printMarkedVar))
+                    (printBoolExpr (printSym printMarkedVar))
+                    sterm.SymBool ]
+              (match sterm.Approx with
+               | None -> String "No approximation requested"
+               | Some a ->
+                headed "Approximate" <|
+                    [ printTerm
+                        (printBoolExpr printMarkedVar)
+                        (printBoolExpr printMarkedVar)
+                        (printBoolExpr printMarkedVar)
+                        a ]) ]
 
     let printProofTerm : ProofTerm -> Doc =
         printCmdTerm printMBoolExpr printMBoolExpr printMBoolExpr
-(*
- * Func lookup
- *)
 
-/// <summary>
-///     Checks whether <c>func</c> and <c>_arg1</c> agree on parameter
-///     count.
-/// </summary>
-/// <param name="func">
-///     The func being looked up, the process of which this check is part.
-/// </param>
-/// <param name="_arg1">
-///     An <c>Option</c>al pair of <c>DFunc</c> and its defining
-///     <c>BoolExpr</c>.
-///     The value <c>None</c> suggests that <c>func</c> has no definition,
-///     which can be ok (eg. if the <c>func</c> is a non-defining view).
-/// </param>
-/// <returns>
-///     A Chessie result, where the <c>ok</c> value is the optional pair of
-///     prototype func and definition, and the failure value is a
-///     <c>Starling.Instantiate.Error</c>.
-/// </returns>
-let checkParamCount (func : Func<'a>) : (Func<'b> * 'c) option -> Result<(Func<'b> * 'c) option, Error> =
-    function
-    | None -> ok None
-    | Some def ->
-        let fn = List.length func.Params
-        let dn = List.length (fst def).Params
-        if fn = dn then ok (Some def) else CountMismatch (fn, dn) |> fail
-
-/// <summary>
-///     Look up <c>func</c> in <c>_arg1</c>.
-///
-///     <para>
-///         This checks that the use of <c>func</c> agrees on the number of
-///         parameters, but not necessarily types.  You will need to add
-///         type checking if needed.
-///     </para>
-/// </summary>
-/// <param name="func">
-///     The func to look up in <c>_arg1</c>.
-/// </param>
-/// <param name="_arg1">
-///     An associative sequence mapping <c>Func</c>s to some definition.
-/// </param>
-/// <returns>
-///     A Chessie result, where the <c>ok</c> value is an <c>Option</c>
-///     containing the pair of
-///     prototype func and definition, and the failure value is a
-///     <c>Starling.Instantiate.Error</c>.  If the <c>ok</c> value is
-///     <c>None</c>, it means no (valid or otherwise) definition exists.
-/// </returns>
-let lookup (func : Func<_>)
-  : FuncDefiner<'b> -> Result<(DFunc * 'b) option, Error> =
-    // First, try to find a func whose name agrees with ours.
-    FuncDefiner.toSeq
-    >> Seq.tryFind (fun (dfunc, _) -> dfunc.Name = func.Name)
-    >> checkParamCount func
-
-/// <summary>
-///     Checks whether <c>func</c> and <c>_arg1</c> agree on parameter
-///     types.
-/// </summary>
-/// <param name="func">
-///     The func being looked up, the process of which this check is part.
-/// </param>
-/// <param name="def">
-///     The <c>DFunc</c> that <paramref name="func" /> has matched.
-/// </param>
-/// <returns>
-///     A Chessie result, where the <c>ok</c> value is
-///     <paramref name="func" />, and the failure value is a
-///     <c>Starling.Instantiate.Error</c>.
-/// </returns>
-let checkParamTypes func def =
-    List.map2
-        (curry
-             (function
-              | UnifyInt _ | UnifyBool _ -> ok ()
-              | UnifyFail (fp, dp) -> fail (TypeMismatch (dp, typeOf fp))))
-        func.Params
-        def.Params
-    |> collect
-    |> lift (fun _ -> func)
 
 /// <summary>
 ///     Produces a <c>VSubFun</c> that substitutes the arguments of
@@ -231,9 +188,10 @@ let checkParamTypes func def =
 ///     A <see cref="Traversal"/> performing the above substitutions.
 /// </returns>
 let paramSubFun
-  ( { Params = fpars } : VFunc<Sym<MarkedVar>>)
-  ( { Params = dpars } : DFunc)
+  (vfunc : VFunc<Sym<MarkedVar>>)
+  ({ Params = dpars } : DFunc)
   : Traversal<TypedVar, Expr<Sym<MarkedVar>>, Error> =
+    let fpars = vfunc.Params
     let pmap = Map.ofSeq (Seq.map2 (fun par up -> valueOf par, up) dpars fpars)
 
     ignoreContext
@@ -241,7 +199,7 @@ let paramSubFun
          | WithType (var, vtype) as v ->
             match pmap.TryFind var with
             | Some expr when vtype = typeOf expr -> ok expr
-            | Some expr -> fail (Inner (TypeMismatch (v, typeOf expr)))
+            | Some expr -> fail (Inner (BadFuncLookup (vfunc, TypeMismatch (v, typeOf expr))))
             | None -> fail (Inner (FreeVarInSub v)))
 
 /// <summary>
@@ -267,16 +225,9 @@ let instantiate
   : Result<BoolExpr<Sym<MarkedVar>> option, Error> =
     // TODO(CaptainHayashi): this symbolic code is horrific.
 
-    let dfuncResult = lookup vfunc definer
-    let typeCheckedDFuncResult =
-        bind
-           (function
-            | None -> ok None
-            | Some (dfunc, defn) ->
-                lift
-                    (fun _ -> Some (dfunc, defn))
-                    (checkParamTypes vfunc dfunc))
-            dfuncResult
+    let dfuncResult =
+        wrapMessages BadFuncLookup
+            (flip FuncDefiner.lookupWithTypeCheck definer) vfunc
 
     let subInTypedSym dfunc =
         liftTraversalToTypedSymVarSrc (paramSubFun vfunc dfunc)
@@ -288,7 +239,7 @@ let instantiate
              | None -> ok None
              | Some (dfunc, defn) ->
                 lift Some (withoutContext (subInBool dfunc) defn))
-            (mapMessages Inner typeCheckedDFuncResult)
+            (mapMessages Inner dfuncResult)
 
     mapMessages Traversal result
 
@@ -446,14 +397,58 @@ module Phase =
         >> lift Seq.toList
         >> lift mkAnd
 
+    /// Given a symbolic-boolean term, calculate the non-symbolic approximation.
+    let approxTerm (symterm : Term<SMBoolExpr, SMBoolExpr, SMBoolExpr>) =
+        let apr position =
+            Mapper.mapBoolCtx
+                Starling.Core.Symbolic.Queries.approx
+                position
+            >> snd
+
+        let sub =
+            Mapper.mapBoolCtx (tsfRemoveSym UnwantedSym) Sub.Types.SubCtx.NoCtx
+            >> snd
+
+        let pos = Starling.Core.Sub.Position.positive
+        let neg = Starling.Core.Sub.Position.negative
+
+        let mapCmd cmdSemantics =
+          cmdSemantics
+          |> Starling.Core.Command.SymRemove.removeSym
+          |> (apr neg)
+          |> sub
+          |> lift simp
+
+        tryMapTerm
+            mapCmd
+            ((apr neg) >> sub >> lift Starling.Core.Expr.simp)
+            ((apr pos) >> sub >> lift Starling.Core.Expr.simp)
+                symterm
+
     /// Interprets all of the views in a term over the given definer.
     let interpretTerm
       (definer : FuncDefiner<SVBoolExpr>)
-      : CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>,
-                VFunc<Sym<MarkedVar>>>
-      -> Result<CmdTerm<SMBoolExpr, BoolExpr<Sym<MarkedVar>>,
-                        BoolExpr<Sym<MarkedVar>>>, Error> =
-        tryMapTerm ok (interpretGView definer) (interpretVFunc definer)
+      (approx : bool)
+      (term : FinalTerm)
+      : Result<SymProofTerm, Error> =
+        let symboolResult =
+            tryMapTerm
+                (fun { CommandSemantics.Semantics = c } -> ok c)
+                (interpretGView definer)
+                (interpretVFunc definer)
+                term
+
+        // TODO(CaptainHayashi): don't do this unless the user requested it?
+        let approxResult =
+            if approx
+            then lift Some (bind approxTerm symboolResult)
+            else ok None
+
+        lift2
+            (fun s a ->
+                { Original = term; SymBool = s; Approx = a })
+            symboolResult
+            approxResult
 
 
     /// <summary>
@@ -503,17 +498,15 @@ module Phase =
     ///         This consumes the view definitions.
     ///     </para>
     /// </summary>
-    /// <param name="model">
-    ///     The model to instantiate.
-    /// </param>
+    /// <param name="approx">Whether to build approximates.</param>
+    /// <param name="model">The model to instantiate.</param>
     /// <returns>
     ///     The model with all views instantiated.
     /// </returns>
     let run
+      (approx : bool)
       (model : Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
                      FuncDefiner<SVBoolExpr option>>)
-      : Result<Model<SymProofTerm, unit>, Error> =
+      : Result<Model<SymProofTerm, FuncDefiner<SVBoolExpr option>>, Error> =
         let vsResult = symboliseIndefinites model.ViewDefs
-        let axiomMapResult =
-            bind (fun vs -> tryMapAxioms (interpretTerm vs) model) vsResult
-        lift (withViewDefs ()) axiomMapResult
+        bind (fun vs -> tryMapAxioms (interpretTerm vs approx) model) vsResult

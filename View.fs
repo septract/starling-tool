@@ -209,7 +209,13 @@ module Pretty =
         | AInt 1L -> Nop
         | e -> printIntExpr pVar e
 
-    /// Pretty-prints an OView.
+    /// Pretty-prints an IteratedDFunc.
+    let printIteratedDFunc : IteratedDFunc -> Doc =
+        printIteratedContainer
+            printDFunc
+            (function | None -> Nop | Some i -> printTypedVar i)
+
+    /// Pretty-prints an IteratedOView.
     let printIteratedOView : IteratedOView -> Doc =
         List.map
             (printIteratedContainer
@@ -225,10 +231,7 @@ module Pretty =
 
     /// Pretty-prints a DView.
     let printDView : DView -> Doc =
-        List.map
-            (printIteratedContainer
-                printDFunc
-                (Option.map printTypedVar >> withDefault Nop))
+        List.map (printIteratedContainer printDFunc (maybe Nop printTypedVar))
         >> semiSep >> squared
 
     /// Pretty-prints view expressions.

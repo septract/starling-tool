@@ -4,6 +4,7 @@
 module Starling.Flattener
 
 open Starling.Collections
+open Starling.Core.Definer
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.View
@@ -38,10 +39,8 @@ let genFlatIteratedFuncName ifcs =
     genFlatFuncSeqName funcs
 
 let paramsFromIteratedFunc funcContainer =
-    let funcParams = funcContainer.Func.Params
-    match funcContainer.Iterator with
-    | None -> Seq.ofList funcParams
-    | Some v -> Seq.append (seq {yield v;}) funcParams
+    let funcParams = Seq.ofList funcContainer.Func.Params
+    maybe funcParams (flip scons funcParams) funcContainer.Iterator
 
 /// <summary>
 ///     Constructs a Func from a DView
@@ -58,15 +57,15 @@ let paramsFromIteratedFunc funcContainer =
 /// </returns>
 let flattenDView (svars : TypedVar seq) (dview : DView) : DFunc =
     // TODO: What if iterators share names? e.g. iterated A [n] * iterated B [n]
-    let ownParams = Seq.concat <| Seq.map paramsFromIteratedFunc dview
+    let ownParams = Seq.concat (Seq.map paramsFromIteratedFunc dview)
     let allParams = Seq.append svars ownParams
-    { Name = genFlatIteratedFuncName dview ; Params = Seq.toList allParams }
+    { Name = genFlatIteratedFuncName dview; Params = Seq.toList allParams }
 
 /// Flattens an OView into an SMVFunc given the set of globals
 let flattenOView (svarExprs : Expr<Sym<MarkedVar>> seq) (oview : OView)
   : SMVFunc =
     { Name = genFlatFuncSeqName oview
-      Params = Seq.toList <| Seq.append svarExprs (paramsOfFuncSeq oview) }
+      Params = Seq.toList (Seq.append svarExprs (paramsOfFuncSeq oview)) }
 
 /// <summary>
 ///     Flattens a term by converting all of its OViews into single funcs.
@@ -109,17 +108,13 @@ let flatten
   : Model<Term<_, GView<Sym<MarkedVar>>, SMVFunc>,
           FuncDefiner<SVBoolExpr option>> =
     /// Build a function making a list of global arguments, for view assertions.
-    let globalsF marker = varMapToExprs (marker >> Reg) model.Globals
+    let globalsF marker = varMapToExprs (marker >> Reg) model.SharedVars
 
     /// Build a list of global parameters, for view definitions.
-    let globalsP =
-        model.Globals
-        |> Map.toSeq
-        |> Seq.map (fun (name, ty) -> withType ty name)
-        |> List.ofSeq
+    let globalsP = toVarSeq model.SharedVars
 
-    { Globals = model.Globals
-      Locals = model.Locals
+    { SharedVars = model.SharedVars
+      ThreadVars = model.ThreadVars
       Axioms = Map.map (fun _ x -> flattenTerm globalsF x) model.Axioms
       ViewDefs =
           model.ViewDefs
@@ -127,4 +122,5 @@ let flatten
           |> Seq.map (pairMap (flattenDView globalsP) id)
           |> FuncDefiner.ofSeq
       Semantics = model.Semantics
-      ViewProtos = model.ViewProtos }
+      ViewProtos = model.ViewProtos
+      DeferredChecks = model.DeferredChecks }

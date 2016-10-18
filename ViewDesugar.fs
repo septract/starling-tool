@@ -30,8 +30,7 @@ let makeFreshView (tvars : VarMap) (fg : FreshGen) : View * ViewProto =
         fg |> getFresh |> sprintf "%A"
     let viewArgs =
         tvars |> Map.toSeq |> Seq.map (fst >> LVIdent >> LV >> fun l -> freshNode l)
-    let viewParams =
-        tvars |> Map.toSeq |> Seq.map (fun (name, ty) -> withType ty name)
+    let viewParams = toVarSeq tvars
 
     (Func (func viewName viewArgs), NoIterator (func viewName viewParams, false))
 
@@ -81,9 +80,12 @@ let rec desugarCommand (tvars : VarMap) (fg : FreshGen)
     : Command<ViewExpr<View>> * ViewProto seq =
     let f = fun (a, b) -> (cmd |=> a, b)
     f <| match cmd.Node with
-            | If (e, t, f) ->
+            | If (e, t, fo) ->
                 let t', tv = desugarBlock tvars fg t
-                let f', fv = desugarBlock tvars fg f
+                let f', fv =
+                    match fo with
+                    | None -> None, Seq.empty
+                    | Some f -> f |> desugarBlock tvars fg |> pairMap Some id
                 let ast = If (e, t', f')
                 (ast, Seq.append tv fv)
             | While (e, b) ->

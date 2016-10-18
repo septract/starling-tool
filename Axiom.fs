@@ -12,6 +12,7 @@ module Starling.Core.Axiom
 
 open Starling.Collections
 open Starling.Utils
+open Starling.Core.Definer
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.View
@@ -104,9 +105,7 @@ let instantiateGoal (fg : FreshGen)
     dvs |> List.map (function
         | { Iterator = i; Func = { Name = n; Params = ps } } ->
             { Iterator =
-                i
-                |> Option.map (AVar << Reg << goalVar fg << valueOf)
-                |> withDefault (AInt 1L)
+                maybe (AInt 1L) (AVar << Reg << goalVar fg << valueOf) i
               Func = { Name = n; Params = List.map instantiateParam ps } } )
 
 /// Converts an axiom into a list of framed axioms, by combining it with the

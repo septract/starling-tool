@@ -8,6 +8,7 @@ open Chessie.ErrorHandling
 open Starling
 open Starling.Collections
 open Starling.Core
+open Starling.Core.Definer
 open Starling.Core.TypeSystem
 open Starling.Core.TypeSystem.Check
 open Starling.Core.Expr
@@ -46,7 +47,7 @@ module Types =
         | ITE of
             expr : SVBoolExpr
             * inTrue : Block<'view, PartCmd<'view>>
-            * inFalse : Block<'view, PartCmd<'view>>
+            * inFalse : Block<'view, PartCmd<'view>> option
         override this.ToString() = sprintf "PartCmd(%A)" this
 
     /// <summary>
@@ -102,7 +103,7 @@ module Types =
         /// A view was requested that does not exist.
         | NoSuchView of name : string
         /// A view lookup failed.
-        | LookupError of name : string * err : Instantiate.Types.Error
+        | LookupError of name : string * err : Core.Definer.Error
         /// A view used variables in incorrect ways, eg by duplicating.
         | BadVar of err : VarMapError
         /// A viewdef conflicted with the shared variables.
@@ -199,9 +200,7 @@ module Pretty =
     /// Pretty-prints a CView.
     and printCView : CView -> Doc =
         printMultiset
-            (printIteratedContainer
-                printCFunc
-                (Option.map (printSym printVar) >> withDefault Nop))
+            (printIteratedContainer printCFunc (maybe Nop (printSym printVar)))
         >> ssurround "[|" "|]"
 
     /// Pretty-prints a part-cmd at the given indent level.
@@ -216,7 +215,10 @@ module Pretty =
             cmdHeaded (hsep [String "begin if"
                              (printSVBoolExpr expr) ])
                       [headed "True" [printBlock pView (printPartCmd pView) inTrue]
-                       headed "False" [printBlock pView (printPartCmd pView) inFalse]]
+                       maybe Nop
+                            (fun f ->
+                                headed "False" [printBlock pView (printPartCmd pView) f])
+                            inFalse ]
 
     /// Pretty-prints expression conversion errors.
     let printExprError : ExprError -> Doc =
@@ -244,7 +246,10 @@ module Pretty =
         | ViewError.BadExpr(expr, err) ->
             wrapped "expression" (printExpression expr) (printExprError err)
         | NoSuchView name -> fmt "no view prototype for '{0}'" [ String name ]
-        | LookupError(name, err) -> wrapped "lookup for view" (name |> String) (err |> Instantiate.Pretty.printError)
+        | LookupError(name, err) ->
+            wrapped "lookup for view"
+                (String name)
+                (Definer.Pretty.printError err)
         | ViewError.BadVar err ->
             colonSep [ "invalid variable usage" |> String
                        err |> printVarMapError ]
@@ -662,11 +667,11 @@ let funcViewParMerge (ppars : TypedVar list) (dpars : Var list)
   : TypedVar list =
     List.map2 (fun ppar dpar -> withType (typeOf ppar) dpar) ppars dpars
 
-/// Adapts Instantiate.lookup to the modeller's needs.
+/// Adapts Definer.lookup to the modeller's needs.
 let lookupFunc (protos : FuncDefiner<ProtoInfo>) (func : Func<_>)
   : Result<DFunc, ViewError> =
     protos
-    |> Instantiate.lookup func
+    |> FuncDefiner.lookup func
     |> mapMessages (curry LookupError func.Name)
     |> bind (function
              | Some (proto, _) -> proto |> ok
@@ -925,11 +930,11 @@ let modelCFunc
              |> collect
              // Then, put them into a VFunc.
              |> lift (vfunc afunc.Name)
-             // Now, we can use Instantiate's type checker to ensure
+             // Now, we can use Definer's type checker to ensure
              // the params in the VFunc are of the types mentioned
              // in proto.
              |> bind (fun vfunc ->
-                          Instantiate.checkParamTypes vfunc proto
+                          FuncDefiner.checkParamTypes vfunc proto
                           |> mapMessages (curry LookupError vfunc.Name)))
     // Finally, lift to CFunc.
     |> lift CFunc.Func
@@ -1175,9 +1180,9 @@ and modelITE
   : MethodContext
     -> Expression
     -> Block<ViewExpr<View>, Command<ViewExpr<View>>>
-    -> Block<ViewExpr<View>, Command<ViewExpr<View>>>
+    -> Block<ViewExpr<View>, Command<ViewExpr<View>>> option
     -> Result<ModellerPartCmd, MethodError> =
-    fun ctx i t f ->
+    fun ctx i t fo ->
         trial { let! iM =
                     wrapMessages
                         BadITECondition
@@ -1187,7 +1192,10 @@ and modelITE
                  * need the inner cpairs for each to store the ITE placeholder.
                  *)
                 let! tM = modelBlock ctx t
-                let! fM = modelBlock ctx f
+                let! fM =
+                    match fo with
+                    | Some f -> modelBlock ctx f |> lift Some
+                    | None -> ok None
                 return ITE(iM, tM, fM) }
 
 /// Converts a while or do-while to a PartCmd.
@@ -1317,24 +1325,24 @@ let model
   (collated : CollatedScript)
   : Result<Model<ModellerMethod, ViewDefiner<SVBoolExpr option>>, ModelError> =
     trial {
-        // Make variable maps out of the global and local variable definitions.
-        let! globals = makeVarMap collated.Globals
+        // Make variable maps out of the shared and thread variable definitions.
+        let! svars = makeVarMap collated.SharedVars
                        |> mapMessages (curry BadVar "shared")
-        let! locals = makeVarMap collated.Locals
+        let! tvars = makeVarMap collated.ThreadVars
                       |> mapMessages (curry BadVar "thread-local")
 
         let desugaredMethods, unknownProtos =
-            Starling.Lang.ViewDesugar.desugar locals collated.Methods
+            Starling.Lang.ViewDesugar.desugar tvars collated.Methods
 
         let! vprotos =
             modelViewProtos (Seq.append collated.VProtos unknownProtos)
 
-        let! constraints = modelViewDefs globals vprotos collated
+        let! constraints = modelViewDefs svars vprotos collated
 
         let mctx =
             { ViewProtos = vprotos
-              SharedVars = globals
-              ThreadVars = locals }
+              SharedVars = svars
+              ThreadVars = tvars }
         let! axioms =
             desugaredMethods
             |> Seq.map (modelMethod mctx)
@@ -1342,10 +1350,11 @@ let model
             |> lift Map.ofSeq
 
         return
-            { Globals = globals
-              Locals = locals
+            { SharedVars = svars
+              ThreadVars = tvars
               ViewDefs = constraints
               Semantics = coreSemantics
               Axioms = axioms
-              ViewProtos = vprotos }
+              ViewProtos = vprotos
+              DeferredChecks = [] }
     }

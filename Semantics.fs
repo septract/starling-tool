@@ -323,7 +323,7 @@ open Starling.Core.Axiom.Types
 let translate
   (model : Model<GoalAxiom<Command>, 'viewdef>)
   : Result<Model<GoalAxiom<CommandSemantics<SMBoolExpr>>, 'viewdef>, Error> =
-    let modelSemantics = semanticsOfCommand model.Semantics model.Globals model.Locals
+    let modelSemantics = semanticsOfCommand model.Semantics model.SharedVars model.ThreadVars
     let replaceCmd ga c = { Goal = ga.Goal; Axiom = {Pre = ga.Axiom.Pre; Post = ga.Axiom.Post; Cmd = c }}
     let transSem ga = bind (replaceCmd ga >> ok) (modelSemantics ga.Axiom.Cmd)
     tryMapAxioms transSem model
