@@ -53,7 +53,7 @@
     <Compile Include="Var.fs" />
     <Compile Include="AST.fs" />
     <Compile Include="Parser.fs" />
-    <Compile Include="Sub.fs" />
+    <Compile Include="Traversal.fs" />
     <Compile Include="Symbolic.fs" />
     <Compile Include="View.fs" />
     <Compile Include="Z3.fs" />
@@ -94,7 +94,7 @@
     <Compile Include="GuardedViewTests.fs" />
     <Compile Include="ReifierTests.fs" />
     <Compile Include="SemanticsTests.fs" />
-    <Compile Include="SubTests.fs" />
+    <Compile Include="TraversalTests.fs" />
     <Compile Include="SymbolicTests.fs" />
     <Compile Include="OptimiserTests.fs" />
     <Compile Include="HornTests.fs" />

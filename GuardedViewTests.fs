@@ -14,7 +14,7 @@ open Starling.Core.GuardedView.Traversal
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
-open Starling.Core.Sub
+open Starling.Core.Traversal
 open Starling.Core.View
 open Starling.Core.View.Traversal
 open Starling.Core.Symbolic
@@ -54,7 +54,7 @@ module Tests =
     module TermTraversal =
         open Starling.Utils.Testing
         open Starling.Core.Pretty
-        open Starling.Core.Sub.Pretty
+        open Starling.Core.Traversal.Pretty
 
         /// <summary>
         ///     Tests term traversal on positional substitutions.
@@ -67,7 +67,7 @@ module Tests =
             let result = trav pos gv
 
             assertOkAndEqual (pos, expected) result
-                (printSubError (fun _ -> String "?") >> printUnstyled)
+                (printTraversalError (fun _ -> String "?") >> printUnstyled)
 
         [<Test>]
         let ``successfully translate a positive Term`` () =
@@ -134,7 +134,7 @@ module Tests =
     module GFuncTraversal =
         open Starling.Utils.Testing
         open Starling.Core.Pretty
-        open Starling.Core.Sub.Pretty
+        open Starling.Core.Traversal.Pretty
 
         /// <summary>
         ///     Tests GFunc traversal on positional substitutions.
@@ -147,7 +147,7 @@ module Tests =
             let result = trav pos gv
 
             assertOkAndEqual (pos, expected) result
-                (printSubError (fun _ -> String "?") >> printUnstyled)
+                (printTraversalError (fun _ -> String "?") >> printUnstyled)
 
         [<Test>]
         let ``GFunc substitution in +ve case works properly`` () =
@@ -172,7 +172,7 @@ module Tests =
     module GViewTraversal =
         open Starling.Utils.Testing
         open Starling.Core.Pretty
-        open Starling.Core.Sub.Pretty
+        open Starling.Core.Traversal.Pretty
 
         /// <summary>
         ///     Tests GView traversal on positional substitutions.
@@ -185,7 +185,7 @@ module Tests =
             let result = trav pos gv
 
             assertOkAndEqual (pos, expected) result
-                (printSubError (fun _ -> String "?") >> printUnstyled)
+                (printTraversalError (fun _ -> String "?") >> printUnstyled)
 
         [<Test>]
         let ``+ve empty GView substitution is a no-op`` () =

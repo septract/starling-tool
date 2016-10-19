@@ -360,7 +360,7 @@ let isAdvisory =
 ///     Functions for traversing over model elements.
 /// </summary>
 module Traversal =
-    open Starling.Core.Sub
+    open Starling.Core.Traversal
 
     /// <summary>
     ///   Lifts a <c>Traversal</c> over all parameters in a func.

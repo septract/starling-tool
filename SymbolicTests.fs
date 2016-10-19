@@ -8,11 +8,11 @@ open Starling.Utils.Testing
 open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.Expr
-open Starling.Core.Sub
+open Starling.Core.Traversal
 open Starling.Core.Symbolic
 
 open Starling.Core.Pretty
-open Starling.Core.Sub.Pretty
+open Starling.Core.Traversal.Pretty
 open Starling.Core.Symbolic.Pretty
 
 
@@ -23,10 +23,10 @@ module PostStateRewrite =
     let checkInt (expected : IntExpr<Sym<MarkedVar>>) (expr : IntExpr<Sym<Var>>)
       : unit =
         let trav = tliftToExprDest (traverseTypedSymWithMarker After)
-        let res = mapTraversal (intSubVars trav) expr
+        let res = mapTraversal (tLiftToIntSrc trav) expr
 
         assertOkAndEqual expected res
-            (printSubError (fun () -> String "?" ) >> printUnstyled)
+            (printTraversalError (fun () -> String "?" ) >> printUnstyled)
 
     [<Test>]
     let ``Rewrite single variable to post-state`` () =
@@ -58,9 +58,9 @@ module BoolApprox =
       (ctx : TraversalContext)
       (expr : BoolExpr<Sym<MarkedVar>>)
       : unit =
-        let result = boolSubVars approx ctx expr
+        let result = tLiftToBoolSrc approx ctx expr
         assertOkAndEqual (ctx, expected) result
-            (printSubError (fun () -> String "?" ) >> printUnstyled)
+            (printTraversalError (fun () -> String "?" ) >> printUnstyled)
 
     [<Test>]
     let ``Don't alter +ve symbol-less expression`` () =
@@ -165,7 +165,7 @@ module FindSMVarsCases =
             findMarkedVars (tliftOverExpr collectSymMarkedVars) expr
 
         assertOkAndEqual (Set.ofList expected) result
-            (printSubError (fun () -> String "?" ) >> printUnstyled)
+            (printTraversalError (fun () -> String "?" ) >> printUnstyled)
 
     [<Test>]
     let ``Finding vars in a Boolean primitive returns empty`` () =

@@ -23,7 +23,7 @@ open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
 open Starling.Core.Model
-open Starling.Core.Sub
+open Starling.Core.Traversal
 
 
 /// <summary>
@@ -50,7 +50,7 @@ module Types =
         ///     An error occurred during traversal.
         ///     This error may contain nested semantics errors!
         /// </summary>
-        | Traversal of SubError<Error>
+        | Traversal of TraversalError<Error>
 
 
 /// <summary>
@@ -89,7 +89,7 @@ module Pretty =
                       printTypedVar var
                       String "' has no substitution" ])
         | Traversal err ->
-            Starling.Core.Sub.Pretty.printSubError printSemanticsError err
+            Starling.Core.Traversal.Pretty.printTraversalError printSemanticsError err
 
 /// Generates a framing relation for a given variable.
 let frameVar ctor (par : CTyped<Var>) : SMBoolExpr =
@@ -103,7 +103,7 @@ let frame svars tvars expr =
        We do this by finding _all_ variables, then filtering. *)
     let varsInExprResult =
         findMarkedVars
-            (boolSubVars (tliftToExprDest collectSymMarkedVars))
+            (tLiftToBoolSrc (tliftToExprDest collectSymMarkedVars))
             expr
     let untypedVarsInExprResult = lift (Seq.map valueOf) varsInExprResult
 
@@ -211,7 +211,7 @@ let instantiatePrim
         | Some s ->
             let subInTypedSym =
                     tliftToTypedSymVarSrc (primParamSubFun prim s)
-            let subInBool = boolSubVars subInTypedSym
+            let subInBool = tLiftToBoolSrc subInTypedSym
             let subbed = lift Some (mapTraversal subInBool s.Body)
             mapMessages Traversal subbed
 
@@ -276,7 +276,7 @@ let seqComposition (xs : BoolExpr<Sym<MarkedVar>> list)
             | v -> Reg v
 
         let xRewriteBool =
-            boolSubVars
+            tLiftToBoolSrc
                 (tliftToExprDest
                     (tliftOverCTyped
                         (tliftToSymSrc

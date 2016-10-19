@@ -40,7 +40,7 @@ open Starling.Core.View.Traversal
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Traversal
 open Starling.Core.Instantiate
-open Starling.Core.Sub
+open Starling.Core.Traversal
 open Starling.Core.Z3
 open Starling.Reifier
 open Starling.Optimiser
@@ -62,7 +62,7 @@ module Types =
         /// <summary>
         ///     One of our traversals bought the farm.
         /// </summary>
-        | Traversal of err : SubError<Error>
+        | Traversal of err : TraversalError<Error>
 
 
     /// <summary>
@@ -135,7 +135,7 @@ module Pretty =
     open Starling.Core.View.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Instantiate.Pretty
-    open Starling.Core.Sub.Pretty
+    open Starling.Core.Traversal.Pretty
     open Starling.Core.Z3.Pretty
 
     /// <summary>
@@ -153,7 +153,7 @@ module Pretty =
                  <-> printDeferredCheck check
                  <-> String "' failed:"
                  <+> String why)
-        | Traversal err -> printSubError printError err
+        | Traversal err -> printTraversalError printError err
 
     /// Pretty-prints a MuSat.
     let printMuSat : MuSat -> Doc =
@@ -551,14 +551,14 @@ module Translator =
             tliftToExprDest
                 (tliftOverCTyped (ignoreContext (toVar >> ok)))
         let toVarTravExpr = tliftToExprSrc toVarTrav
-        let toVarTravBool = boolSubVars toVarTrav
+        let toVarTravBool = tLiftToBoolSrc toVarTrav
         let toVarTravGView = tchainM (tliftOverGFunc toVarTravExpr) id
         let toVarTravVFunc = tliftOverFunc toVarTravExpr
 
         let findVarTrav : Traversal<TypedVar, Expr<Var>, Error> =
             tliftToExprDest collectVars
         let findVarTravExpr = tliftToExprSrc findVarTrav
-        let findVarTravBool = boolSubVars findVarTrav
+        let findVarTravBool = tLiftToBoolSrc findVarTrav
         let findVarTravGView = tchainM (tliftOverGFunc findVarTravExpr) id
         let findVarTravVFunc = tliftOverFunc findVarTravExpr
 
@@ -906,7 +906,7 @@ module Run =
 
         // TODO(CaptainHayashi): de-duplicate this with mkRule?
         let defVarsR =
-            findVars (boolSubVars (tliftToExprDest collectVars)) def
+            findVars (tLiftToBoolSrc (tliftToExprDest collectVars)) def
         let paramVarsR =
             findVars
                 (tchainL (tliftOverExpr collectVars) id)

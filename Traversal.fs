@@ -1,7 +1,15 @@
 /// <summary>
 ///     Functions for traversing and substituting expressions.
+///
+///     <para>
+///         This module defines <see cref="Traversal"/>, the type of functions
+///         that can be distributed over expressions, views, and other
+///         constructs using traversal combinators.  Traversals are
+///         map-accumulates that build up a <see cref="TraversalContext"/>
+///         while visiting variables in a traversable structure.
+///     </para>
 /// </summary>
-module Starling.Core.Sub
+module Starling.Core.Traversal
 
 open Chessie.ErrorHandling
 
@@ -178,7 +186,7 @@ module Context =
 /// <typeparam name="Inner">
 ///     Type for errors returned by the traversal itself.
 /// </typeparam>
-type SubError<'Inner> =
+type TraversalError<'Inner> =
     /// <summary>
     ///     An inner error occurred.
     /// </summary>
@@ -208,7 +216,7 @@ type SubError<'Inner> =
 /// </typeparam>
 type Traversal<'Src, 'Dst, 'Error> =
     TraversalContext -> 'Src ->
-        Result<TraversalContext * 'Dst, SubError<'Error>>
+        Result<TraversalContext * 'Dst, TraversalError<'Error>>
 
 /// <summary>
 ///     Lifts a traversal to a context-less function.
@@ -230,7 +238,7 @@ type Traversal<'Src, 'Dst, 'Error> =
 ///     <see cref="NoCtx"/> (and then discards it).
 /// </returns>
 let mapTraversal
-  (f : Traversal<'Src, 'Dst, 'Error>) : 'Src -> Result<'Dst, SubError<'Error>> =
+  (f : Traversal<'Src, 'Dst, 'Error>) : 'Src -> Result<'Dst, TraversalError<'Error>> =
     f NoCtx >> lift snd
 
 /// <summary>
@@ -253,7 +261,7 @@ let mapTraversal
 ///     in a traversal.
 /// </returns>
 let ignoreContext
-  (f : 'Src -> Result<'Dst, SubError<'Error>>) : Traversal<'Src, 'Dst, 'Error> =
+  (f : 'Src -> Result<'Dst, TraversalError<'Error>>) : Traversal<'Src, 'Dst, 'Error> =
     fun ctx -> f >> lift (mkPair ctx)
 
 /// <summary>
@@ -285,7 +293,7 @@ let ignoreContext
 /// </typeparam>
 /// <typeparam name="ErrorB">
 ///     The type of errors that can occur during the lifted function, to be
-///     wrapped in <see cref="SubError"/>.
+///     wrapped in <see cref="TraversalError"/>.
 /// </typeparam>
 /// <returns>
 ///     The function <paramref name="f"/> lifted over <paramref name="lift"/>.
@@ -293,7 +301,7 @@ let ignoreContext
 let liftWithoutContext
   (f : 'SrcA -> Result<'DstA, 'ErrorA>)
   (lift : Traversal<'SrcA, 'DstA, 'ErrorA> -> Traversal<'SrcB, 'DstB, 'ErrorB>)
-  : 'SrcB -> Result<'DstB, SubError<'ErrorB>> =
+  : 'SrcB -> Result<'DstB, TraversalError<'ErrorB>> =
     mapTraversal (lift (ignoreContext (f >> mapMessages Inner)))
 
 /// <summary>
@@ -312,7 +320,7 @@ let tliftOverCTyped
 ///     Tries to extract an <see cref="IntExpr"/> out of an
 ///     <see cref="Expr"/>, failing if the expression is not of that type.
 /// </summary>
-let expectInt : Expr<'Var> -> Result<IntExpr<'Var>, SubError<_>> =
+let expectInt : Expr<'Var> -> Result<IntExpr<'Var>, TraversalError<_>> =
     // TODO(CaptainHayashi): proper doc comment.
     function
     | Int x -> ok x
@@ -322,7 +330,7 @@ let expectInt : Expr<'Var> -> Result<IntExpr<'Var>, SubError<_>> =
 ///     Tries to extract an <see cref="BoolExpr"/> out of an
 ///     <see cref="Expr"/>, failing if the expression is not of that type.
 /// </summary>
-let expectBool : Expr<'Var> -> Result<BoolExpr<'Var>, SubError<_>> =
+let expectBool : Expr<'Var> -> Result<BoolExpr<'Var>, TraversalError<_>> =
     // TODO(CaptainHayashi): proper doc comment.
     function
     | Bool x -> ok x
@@ -422,7 +430,7 @@ let tchain3
 /// <summary>
 ///     Lifts a variable substitution to one over Boolean expressions.
 /// </summary>
-let rec boolSubVars
+let rec tLiftToBoolSrc
     (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
     : Traversal<BoolExpr<'SrcVar>, BoolExpr<'DstVar>, 'Error> =
     // TODO(CaptainHayashi): proper doc comment.
@@ -430,8 +438,8 @@ let rec boolSubVars
     // We do some tricky inserting and removing of positions on the stack
     // to ensure the correct position appears in the correct place, and
     // is removed when we pop back up the expression stack.
-    let bsv f x = Context.changePos f (boolSubVars sub) x
-    let isv x = Context.changePos id (intSubVars sub) x
+    let bsv f x = Context.changePos f (tLiftToBoolSrc sub) x
+    let isv x = Context.changePos id (tLiftToIntSrc sub) x
     let esv x = Context.changePos id (tliftToExprSrc sub) x
 
     let neg = Context.negate
@@ -458,10 +466,10 @@ let rec boolSubVars
 
 /// Substitutes all variables with the given substitution function
 /// for the given arithmetic expression.
-and intSubVars
+and tLiftToIntSrc
   (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
   : Traversal<IntExpr<'SrcVar>, IntExpr<'DstVar>, 'Error> =
-    let isv x = Context.changePos id (intSubVars sub) x
+    let isv x = Context.changePos id (tLiftToIntSrc sub) x
     // TODO(CaptainHayashi): proper doc comment.
 
     fun ctx ->
@@ -488,8 +496,8 @@ and tliftToExprSrc
     // TODO(CaptainHayashi): proper doc comment.
     fun ctx ->
         function
-        | Bool b -> b |> boolSubVars sub ctx |> lift (pairMap id Bool)
-        | Int i -> i |> intSubVars sub ctx |> lift (pairMap id Int)
+        | Bool b -> b |> tLiftToBoolSrc sub ctx |> lift (pairMap id Bool)
+        | Int i -> i |> tLiftToIntSrc sub ctx |> lift (pairMap id Int)
 
 /// <summary>
 ///     Adapts an expression traversal to work on Boolean expressions.
@@ -558,7 +566,7 @@ let tliftOverExpr
 /// <summary>
 ///     Converts a non-symbolic expression to its pre-state.
 /// </summary>
-let vBefore (expr : Expr<Var>) : Result<Expr<MarkedVar>, SubError<'Error>> =
+let vBefore (expr : Expr<Var>) : Result<Expr<MarkedVar>, TraversalError<'Error>> =
     ((Before >> ok)
     |> ignoreContext
     |> tliftOverCTyped
@@ -569,7 +577,7 @@ let vBefore (expr : Expr<Var>) : Result<Expr<MarkedVar>, SubError<'Error>> =
 /// <summary>
 ///     Converts a non-symbolic expression to its post-state.
 /// </summary>
-let vAfter (expr : Expr<Var>) : Result<Expr<MarkedVar>, SubError<'Error>> =
+let vAfter (expr : Expr<Var>) : Result<Expr<MarkedVar>, TraversalError<'Error>> =
     ((After >> ok)
     |> ignoreContext
     |> tliftOverCTyped
@@ -581,7 +589,7 @@ let vAfter (expr : Expr<Var>) : Result<Expr<MarkedVar>, SubError<'Error>> =
 ///     Updates a context with a new variable.
 /// <summary>
 let pushVar (ctx : TraversalContext) (v : TypedVar)
-  : Result<TraversalContext, SubError<'Error>>=
+  : Result<TraversalContext, TraversalError<'Error>>=
     match ctx with
     | Vars vs -> ok (Vars (v::vs))
     | c -> fail (ContextMismatch ("vars context", c))
@@ -596,7 +604,7 @@ let collectVars : Traversal<TypedVar, TypedVar, 'Error>  =
 ///     Updates a context with a new marked variable.
 /// <summary>
 let pushMarkedVar (ctx : TraversalContext) (v : CTyped<MarkedVar>)
-  : Result<TraversalContext, SubError<'Error>>=
+  : Result<TraversalContext, TraversalError<'Error>>=
     match ctx with
     | MarkedVars vs -> ok (MarkedVars (v::vs))
     | c -> fail (ContextMismatch ("markedvars context", c))
@@ -630,7 +638,7 @@ let collectMarkedVars
 let findVars
   (t : Traversal<'Subject, 'Subject, 'Error>)
   (subject : 'Subject)
-  : Result<Set<CTyped<Var>>, SubError<'Error>> =
+  : Result<Set<CTyped<Var>>, TraversalError<'Error>> =
     subject
     |> t (Vars [])
     |> bind
@@ -660,7 +668,7 @@ let findVars
 let findMarkedVars
   (t : Traversal<'Subject, 'Subject, 'Error>)
   (subject : 'Subject)
-  : Result<Set<CTyped<MarkedVar>>, SubError<'Error>> =
+  : Result<Set<CTyped<MarkedVar>>, TraversalError<'Error>> =
     subject
     |> t (MarkedVars [])
     |> bind
@@ -697,14 +705,14 @@ module Pretty =
                                       commaSep (List.map (printCTyped printMarkedVar) xs) ]
 
     /// <summary>
-    ///     Pretty-prints a <see cref="SubError"/>.
+    ///     Pretty-prints a <see cref="TraversalError"/>.
     /// </summary>
     /// <param name="pInner">Pretty-printer for wrapped errors.</param>
     /// <typeparam name="Inner">Type for wrapped errors.</typeparam>
     /// <returns>
-    ///     A function pretty-printing <see cref="SubError"/>s.
+    ///     A function pretty-printing <see cref="TraversalError"/>s.
     /// </returns>
-    let printSubError (pInner : 'Inner -> Doc) : SubError<'Inner> -> Doc =
+    let printTraversalError (pInner : 'Inner -> Doc) : TraversalError<'Inner> -> Doc =
         function
         | Inner e -> pInner e
         | BadType (expected, got) ->

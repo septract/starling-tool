@@ -16,7 +16,7 @@ open Starling.Core.View
 open Starling.Core.Symbolic
 open Starling.Core.Instantiate
 open Starling.Core.Pretty
-open Starling.Core.Sub
+open Starling.Core.Traversal
 open Starling.Core.Instantiate.Pretty
 
 

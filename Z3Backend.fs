@@ -26,7 +26,7 @@ open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.GuardedView
 open Starling.Core.Instantiate
-open Starling.Core.Sub
+open Starling.Core.Traversal
 open Starling.Core.Symbolic
 open Starling.Core.TypeSystem
 open Starling.Core.Z3

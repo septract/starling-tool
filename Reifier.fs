@@ -15,7 +15,7 @@ open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.GuardedView
 open Starling.Core.Symbolic
-open Starling.Core.Sub
+open Starling.Core.Traversal
 open Starling.Core.TypeSystem
 open Starling.TermGen.Iter
 
@@ -112,7 +112,7 @@ module Types =
         /// <summary>
         ///     An expression traversal went belly-up.
         /// </summary>
-        | Traversal of SubError<Error>
+        | Traversal of TraversalError<Error>
 
 
 /// <summary>
@@ -125,7 +125,7 @@ module Types =
 /// </summary>
 module Downclosure =
     open Starling.Core.ExprEquiv
-    open Starling.Core.Sub
+    open Starling.Core.Traversal
 
     /// <summary>
     ///     Adapts Instantiate.lookup to the downclosure checker's needs.
@@ -171,7 +171,7 @@ module Downclosure =
         let mapper =
             liftWithoutContext
                 fOnIter
-                (tliftToTypedSymVarSrc >> boolSubVars)
+                (tliftToTypedSymVarSrc >> tLiftToBoolSrc)
 
         mapMessages Traversal (mapper defn)
 
@@ -729,7 +729,7 @@ module Pretty =
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.View.Pretty
-    open Starling.Core.Sub.Pretty
+    open Starling.Core.Traversal.Pretty
 
     /// <summary>
     ///     Pretty-prints an <see cref="Error"/>.
@@ -787,5 +787,5 @@ module Pretty =
         | SymInIteratedConstraint sym ->
             fmt "symbol '{0}' not allowed in an iterated constraint"
                 [ String sym ]
-        | Traversal err -> printSubError printError err
+        | Traversal err -> printTraversalError printError err
         |> error

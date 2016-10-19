@@ -106,7 +106,7 @@ module Frames =
                 (ticketLockModel.SharedVars)
                 (ticketLockModel.ThreadVars)
                 expr)
-            (Starling.Core.Sub.Pretty.printSubError
+            (Starling.Core.Traversal.Pretty.printTraversalError
                 Starling.Semantics.Pretty.printSemanticsError
              >> Starling.Core.Pretty.printUnstyled)
 

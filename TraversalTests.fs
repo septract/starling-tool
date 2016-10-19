@@ -1,17 +1,17 @@
 /// <summary>
 ///     Tests for <c>Sub</c>.
 /// </summary>
-module Starling.Tests.Core.Sub
+module Starling.Tests.Core.Traversal
 
 open NUnit.Framework
 open Starling.Utils.Testing
 open Starling.Core.Expr
 open Starling.Core.TypeSystem
 open Starling.Core.Var
-open Starling.Core.Sub
+open Starling.Core.Traversal
 
 open Starling.Core.Pretty
-open Starling.Core.Sub.Pretty
+open Starling.Core.Traversal.Pretty
 
 /// <summary>
 ///     Test cases for finding variables in expressions.
@@ -23,7 +23,7 @@ module FindVars =
     let check (expected : TypedVar list) (expr : Expr<Var>) : unit =
         let result = findVars (tliftOverExpr collectVars) expr
         assertOkAndEqual (Set.ofList expected) result
-            (printSubError (fun () -> String "?") >> printUnstyled)
+            (printTraversalError (fun () -> String "?") >> printUnstyled)
 
     [<Test>]
     let ``Finding vars in a Boolean primitive returns empty`` () =

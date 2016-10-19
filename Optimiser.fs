@@ -25,7 +25,7 @@ open Starling.Core.Symbolic
 open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.Command.Queries
-open Starling.Core.Sub
+open Starling.Core.Traversal
 open Starling.Core.View
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Traversal
@@ -136,7 +136,7 @@ module Types =
         /// <summary>
         ///     An error occurred during traversal.
         /// </summary>
-        | Traversal of SubError<TermOptError>
+        | Traversal of TraversalError<TermOptError>
 
     /// <summary>
     ///     Types of error that can happen in the graph optimiser.
@@ -145,7 +145,7 @@ module Types =
         /// <summary>
         ///     An error occurred during traversal.
         /// </summary>
-        | Traversal of SubError<GraphOptError>
+        | Traversal of TraversalError<GraphOptError>
 
 /// <summary>
 ///     Utilities common to the whole optimisation system.
@@ -677,7 +677,7 @@ module Graph =
                        commands.  If this fails, give up on the optimisation. *)
                     let toBefore : BoolExpr<Var> -> Result<BoolExpr<MarkedVar>, _> =
                         mapTraversal
-                            (boolSubVars
+                            (tLiftToBoolSrc
                                 (tliftToExprDest
                                     (tliftOverCTyped
                                         (ignoreContext (Before >> ok)))))
@@ -965,7 +965,7 @@ module Term =
     let rec (|ConstantBoolFunction|_|) (x : BoolExpr<Sym<MarkedVar>>)
       : MarkedVar option =
         x
-        |> findMarkedVars (boolSubVars (tliftToExprDest collectSymMarkedVars))
+        |> findMarkedVars (tLiftToBoolSrc (tliftToExprDest collectSymMarkedVars))
         |> okOption |> Option.map (Seq.map valueOf) |> Option.bind onlyOne
 
     /// Partial pattern that matches a Boolean expression in terms of exactly one /
@@ -973,7 +973,7 @@ module Term =
     let rec (|ConstantIntFunction|_|) (x : IntExpr<Sym<MarkedVar>>)
       : MarkedVar option =
         x
-        |> findMarkedVars (intSubVars (tliftToExprDest collectSymMarkedVars))
+        |> findMarkedVars (tLiftToIntSrc (tliftToExprDest collectSymMarkedVars))
         |> okOption |> Option.map (Seq.map valueOf) |> Option.bind onlyOne
 
     /// Finds all instances of the pattern `x!after = f(x!before)` in an
@@ -1196,7 +1196,7 @@ module Term =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
-    open Starling.Core.Sub.Pretty
+    open Starling.Core.Traversal.Pretty
     /// <summary>
     ///     Pretty-prints a term optimiser error.
     /// </summary>
@@ -1207,7 +1207,7 @@ module Pretty =
     /// </param>
     let rec printTermOptError (err : TermOptError) : Doc =
         match err with
-        | TermOptError.Traversal err -> printSubError printTermOptError err
+        | TermOptError.Traversal err -> printTraversalError printTermOptError err
         |> error
 
     /// <summary>
@@ -1220,5 +1220,5 @@ module Pretty =
     /// </param>
     let rec printGraphOptError (err : GraphOptError) : Doc =
         match err with
-        | GraphOptError.Traversal err -> printSubError printGraphOptError err
+        | GraphOptError.Traversal err -> printTraversalError printGraphOptError err
         |> error

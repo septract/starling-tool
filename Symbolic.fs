@@ -33,7 +33,7 @@ open Starling.Utils
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
-open Starling.Core.Sub
+open Starling.Core.Traversal
 
 /// <summary>
 ///     Types for symbolic and variable maps.
@@ -241,7 +241,7 @@ module Queries =
     /// </returns>
     let removeSymFromBoolExpr (err : string -> 'Error)
       : Traversal<BoolExpr<Sym<'Var>>, BoolExpr<'Var>, 'Error> =
-        boolSubVars
+        tLiftToBoolSrc
             (tliftToExprDest
                 (tliftOverCTyped (removeSymFromVar err)))
 
@@ -304,14 +304,14 @@ module Queries =
     ///     Converts a symbolic expression to its pre-state.
     /// </summary>
     let before (expr : Expr<Sym<Var>>)
-      : Result<Expr<Sym<MarkedVar>>, SubError<'Error>> =
+      : Result<Expr<Sym<MarkedVar>>, TraversalError<'Error>> =
         mapTraversal (tliftOverExpr (traverseTypedSymWithMarker Before)) expr
 
     /// <summary>
     ///     Converts a symbolic expression to its post-state.
     /// </summary>
     let after (expr : Expr<Sym<Var>>)
-      : Result<Expr<Sym<MarkedVar>>, SubError<unit>> =
+      : Result<Expr<Sym<MarkedVar>>, TraversalError<unit>> =
         mapTraversal (tliftOverExpr (traverseTypedSymWithMarker After)) expr
 
     /// <summary>
@@ -419,12 +419,12 @@ let unmarkMarkedVar =
 let unmark : CTyped<MarkedVar> -> TypedVar = mapCTyped unmarkMarkedVar
 
 let markedSymExprVars (expr : Expr<Sym<MarkedVar>>)
-  : Result<Set<CTyped<MarkedVar>>, SubError<'Error>> =
+  : Result<Set<CTyped<MarkedVar>>, TraversalError<'Error>> =
     findMarkedVars (tliftOverExpr collectSymMarkedVars) expr
 
 /// Returns the set of all variables annotated with their types
 /// contained within the SMExpr
-let SMExprVars : SMExpr -> Result<Set<TypedVar>, SubError<'Error>> =
+let SMExprVars : SMExpr -> Result<Set<TypedVar>, TraversalError<'Error>> =
     fun expr ->
         let smvars = markedSymExprVars expr
         lift (Set.map unmark) smvars

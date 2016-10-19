@@ -18,7 +18,7 @@ open Starling.Core.View
 open Starling.Core.Command
 open Starling.Core.Command.Create
 open Starling.Core.Instantiate
-open Starling.Core.Sub
+open Starling.Core.Traversal
 open Starling.Lang.AST
 open Starling.Lang.Collator
 
@@ -85,8 +85,8 @@ module Types =
         | VarNotInt of var : LValue
         /// A variable usage in the expression produced a `VarMapError`.
         | Var of var : LValue * err : VarMapError
-        /// A substitution over the variable produced a `SubError`.
-        | BadSub of err : SubError<unit>
+        /// A substitution over the variable produced a `TraversalError`.
+        | BadSub of err : TraversalError<unit>
         /// A symbolic expression appeared in an ambiguous position.
         | AmbiguousSym of sym : string
 
@@ -179,7 +179,7 @@ module Pretty =
     open Starling.Core.Model.Pretty
     open Starling.Core.Expr.Pretty
     open Starling.Core.Command.Pretty
-    open Starling.Core.Sub.Pretty
+    open Starling.Core.Traversal.Pretty
     open Starling.Core.Symbolic.Pretty
     open Starling.Core.View.Pretty
     open Starling.Lang.AST.Pretty
@@ -232,7 +232,7 @@ module Pretty =
             fmt "lvalue '{0}' is not a suitable type for use in an integral expression" [ printLValue lv ]
         | Var(var, err) -> wrapped "variable" (var |> printLValue) (err |> printVarMapError)
         | BadSub err ->
-            fmt "Substitution error: {0}" [ printSubError (fun _ -> String "()") err ]
+            fmt "Substitution error: {0}" [ printTraversalError (fun _ -> String "()") err ]
         | AmbiguousSym sym ->
             fmt
                 "symbolic var '{0}' has ambiguous type: \
