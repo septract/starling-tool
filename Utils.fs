@@ -362,6 +362,18 @@ module Testing =
     let assertEqual (a : 'a) (b : 'a) = Assert.AreEqual(a, b)
     let AssertAreEqual(a, b) = assertEqual a b
 
+    let assertOkAndEqual
+      (expected: 'Val)
+      (actualResult : Result<'Val, 'Error>)
+      (pError : 'Error -> string)
+      : unit =
+        match actualResult with
+        | Pass actual -> assertEqual expected actual
+        | Warn (_, warns) | Fail warns ->
+            let warnstr = String.concat "\n" (List.map pError warns)
+            let fmsg = sprintf "Got warnings:\n%s" warnstr
+            Assert.Fail(warnstr)
+
     let inline (?=?) a b = assertEqual a b
 
     /// <summary>

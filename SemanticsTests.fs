@@ -24,7 +24,7 @@ module Compositions =
     let check xs expectedExprList =
         match seqComposition xs with
         | Ok (BAnd ands, _) ->
-            Assert.AreEqual (Set.ofList expectedExprList, Set.ofList ands)
+            assertEqual (Set.ofList expectedExprList) (Set.ofList ands)
         | Bad x ->
             Assert.Fail (sprintf "sequential composition failed: %A" x)
         | y -> Assert.Fail (sprintf "Expected %A but got %A" expectedExprList y)
@@ -97,16 +97,18 @@ module Compositions =
 
 module Frames =
     let check var expectedFramedExpr =
-        Assert.AreEqual(expectedFramedExpr, frameVar Before var)
+        expectedFramedExpr ?=? (frameVar Before var)
 
     let checkExpr expr framedExpr =
-        let actualExpr =
-            frame
+        assertOkAndEqual
+            framedExpr
+            (frame
                 (ticketLockModel.SharedVars)
                 (ticketLockModel.ThreadVars)
-                expr
-
-        Assert.AreEqual(actualExpr, framedExpr)
+                expr)
+            (Starling.Core.Sub.Pretty.printSubError
+                Starling.Semantics.Pretty.printSemanticsError
+             >> Starling.Core.Pretty.printUnstyled)
 
     [<Test>]
     let ``Frame an integer variable`` () =
@@ -144,12 +146,14 @@ module CommandTests =
                    (Starling.Lang.Modeller.coreSemantics)
                    (ticketLockModel.SharedVars)
                    (ticketLockModel.ThreadVars)
-            |> okOption
-            |> Option.bind (function
-                            | { Semantics = BAnd xs } -> xs |> Set.ofList |> Some
-                            | _ -> None)
+            |> lift (function
+                     | { Semantics = BAnd xs } -> xs |> Set.ofList |> Some
+                     | _ -> None)
 
-        Assert.AreEqual(expectedValues, actualValues)
+        let pError =
+            Starling.Semantics.Pretty.printSemanticsError
+            >> Starling.Core.Pretty.printUnstyled
+        assertOkAndEqual expectedValues actualValues pError
 
     [<Test>]
     let ``Semantically translate <assume(s == t)> using the ticket lock model`` () =

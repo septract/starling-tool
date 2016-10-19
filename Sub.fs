@@ -352,7 +352,7 @@ let tchainL (f : Traversal<'A, 'AR, 'Error>) (g : 'AR list -> 'Result)
                 lift (fun (ctxS, xsRS) -> (ctxS, xsRS::xsRN))
                      (f ctxN x))
             (ctx, [])
-        >> lift (pairMap id g)
+        >> lift (pairMap id (List.rev >> g))
 
 /// <summary>
 ///     Maps a traversal from left to right over a multiset, accumulating the
@@ -661,7 +661,7 @@ let findMarkedVars
   (subject : 'Subject)
   : Result<Set<CTyped<MarkedVar>>, SubError<'Error>> =
     subject
-    |> t (Vars [])
+    |> t (MarkedVars [])
     |> bind
         (function
          | (MarkedVars xs, _) -> ok (Set.ofList xs)
