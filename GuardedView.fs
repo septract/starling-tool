@@ -663,7 +663,10 @@ module Traversal =
             let tCmd = traverseBoolAsExpr traversal
             let tWPre = tchainM (liftTraversalOverGFunc traversal) id
             let tGoal = liftTraversalOverFunc traversal
-            tchain3 tCmd tWPre tGoal
+
+            (* Remember: Cmd and WPre are in a negative position, because
+               the term is of the form Cmd /\ WPre => Goal. *)
+            tchain3 (changePos negate tCmd) (changePos negate tWPre) tGoal
                 (fun (c', w', g') -> { Cmd = c'; WPre = w'; Goal = g' })
                 ctx
                 (c, w, g)

@@ -153,6 +153,7 @@ module CommandTests =
         let pError =
             Starling.Semantics.Pretty.printSemanticsError
             >> Starling.Core.Pretty.printUnstyled
+
         assertOkAndEqual expectedValues actualValues pError
 
     [<Test>]
