@@ -92,108 +92,6 @@ module Tests =
             okOption result
 
         /// <summary>
-        ///     Case studies for <c>testPositionSubExprInGView</c>.
-        /// </summary>
-        static member PositionSubExprInGViewCases =
-            [ (tcd
-                   [| (Multiset.empty : GView<Var>)
-                      Context.positive |] )
-                  .Returns(
-                      ok <|
-                      (Context.positive,
-                       (Multiset.empty : GView<Var>)))
-                  .SetName("+ve empty GView substitution is a no-op")
-              (tcd
-                   [| (Multiset.empty : GView<Var>)
-                      Context.negative |] )
-                  .Returns(
-                      ok <|
-                      (Context.negative,
-                       (Multiset.empty : GView<Var>)))
-                  .SetName("-ve empty GView substitution is a no-op")
-              (tcd
-                   [| Multiset.singleton
-                          (gfunc (BVar "foo") "bar"
-                               [ Typed.Int (AVar "baz")
-                                 Typed.Bool (BVar "fizz") ] )
-                      Context.positive |] )
-                  .Returns(
-                      ok <|
-                      (Context.positive,
-                       (Multiset.singleton
-                            (gfunc BFalse "bar"
-                                 [ Typed.Int (AInt 1L)
-                                   Typed.Bool BTrue ] ) : GView<Var> )))
-                  .SetName("Singleton GView substitution in +ve case works properly")
-              (tcd
-                   [| Multiset.singleton
-                          (gfunc (BVar "foo") "bar"
-                               [ Typed.Int (AVar "baz")
-                                 Typed.Bool (BVar "fizz") ] )
-                      Context.negative |] )
-                  .Returns(
-                      ok <|
-                      (Context.negative,
-                       (Multiset.singleton
-                            (gfunc BTrue "bar"
-                                 [ Typed.Int (AInt 0L)
-                                   Typed.Bool BFalse ] ) : GView<Var> )))
-                  .SetName("Singleton GView substitution in -ve case works properly")
-              (tcd
-                   [| Multiset.ofFlatList
-                          [ gfunc (BVar "foo") "bar"
-                                [ Typed.Int (AVar "baz")
-                                  Typed.Bool (BVar "fizz") ]
-                            gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
-                                [ Typed.Int
-                                      (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ]
-                      Context.positive |] )
-                  .Returns(
-                      ok <|
-                      (Context.positive,
-                       (Multiset.ofFlatList
-                            [ gfunc BFalse "bar"
-                                  [ Typed.Int (AInt 1L)
-                                    Typed.Bool BTrue ]
-                              gfunc (BGt (AInt 0L, AInt 0L)) "barbaz"
-                                  [ Typed.Int
-                                        (AAdd [ AInt 1L; AInt 1L ]) ] ]
-                        : GView<Var>)))
-                  .SetName("Multi GView substitution in +ve case works properly")
-              (tcd
-                   [| Multiset.ofFlatList
-                          [ gfunc (BVar "foo") "bar"
-                                [ Typed.Int (AVar "baz")
-                                  Typed.Bool (BVar "fizz") ]
-                            gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
-                                [ Typed.Int
-                                      (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ]
-                      Context.negative |] )
-                  .Returns(
-                      ok <|
-                      (Context.negative,
-                       (Multiset.ofFlatList
-                            [ gfunc BTrue "bar"
-                                  [ Typed.Int (AInt 0L)
-                                    Typed.Bool BFalse ]
-                              gfunc (BGt (AInt 1L, AInt 1L)) "barbaz"
-                                  [ Typed.Int
-                                        (AAdd [ AInt 0L; AInt 0L ]) ] ]
-                        : GView<Var>)))
-                  .SetName("Multi GView substitution in -ve case works properly") ]
-
-        /// <summary>
-        ///     Tests <c>subExprInGView</c> on positional substitutions.
-        /// </summary>
-        [<TestCaseSource("PositionSubExprInGViewCases")>]
-        member this.testPositionSubExprInGView
-          (gv : GView<Var>)
-          (pos : TraversalContext) =
-            let trav = tchainM (liftTraversalOverGFunc positionTestSub) id
-            let result = trav pos gv
-            okOption result
-
-        /// <summary>
         ///     Case studies for <c>testPositionSubExprInDTerm</c>.
         /// </summary>
         static member PositionSubExprInDTermCases =
@@ -288,3 +186,106 @@ module Tests =
             let trav = liftTraversalOverTerm positionTestSub
             let result = trav pos t
             okOption result
+
+    /// <summary>
+    ///     Case studies for testing GView traversal.
+    /// </summary>
+    module GViewTraversal =
+        open Starling.Utils.Testing
+        open Starling.Core.Pretty
+        open Starling.Core.Sub.Pretty
+
+        /// <summary>
+        ///     Tests GView traversal on positional substitutions.
+        /// </summary>
+        let check
+          (expected : TraversalContext * GView<Var>)
+          (pos : TraversalContext)
+          (gv : GView<Var>) : unit =
+            let trav = tchainM (liftTraversalOverGFunc positionTestSub) id
+            let result = trav pos gv
+
+            assertOkAndEqual expected result
+                (printSubError (fun _ -> String "?") >> printUnstyled)
+
+        [<Test>]
+        let ``+ve empty GView substitution is a no-op`` () =
+            check
+                (Context.positive, Multiset.empty)
+                Context.positive
+                Multiset.empty
+
+        [<Test>]
+        let ``-ve empty GView substitution is a no-op`` () =
+            check
+                (Context.negative, Multiset.empty)
+                Context.negative
+                Multiset.empty
+
+        [<Test>]
+        let ``Singleton GView substitution in +ve case works properly`` () =
+            check
+                (Context.positive,
+                 (Multiset.singleton
+                    (gfunc BFalse "bar"
+                        [ Typed.Int (AInt 1L)
+                          Typed.Bool BTrue ] )))
+                Context.positive
+                (Multiset.singleton
+                    (gfunc (BVar "foo") "bar"
+                        [ Typed.Int (AVar "baz")
+                          Typed.Bool (BVar "fizz") ] ))
+
+        [<Test>]
+        let ``Singleton GView substitution in -ve case works properly`` () =
+            check
+                (Context.negative,
+                   (Multiset.singleton
+                        (gfunc BTrue "bar"
+                            [ Typed.Int (AInt 0L)
+                              Typed.Bool BFalse ] )))
+                Context.negative
+                (Multiset.singleton
+                    (gfunc (BVar "foo") "bar"
+                        [ Typed.Int (AVar "baz")
+                          Typed.Bool (BVar "fizz") ] ))
+
+        [<Test>]
+        let ``Multi GView substitution in +ve case works properly`` () =
+            check
+                (Context.positive,
+                    (Multiset.ofFlatList
+                        [ gfunc BFalse "bar"
+                            [ Typed.Int (AInt 1L)
+                              Typed.Bool BTrue ]
+                          gfunc (BGt (AInt 0L, AInt 0L)) "barbaz"
+                            [ Typed.Int
+                                  (AAdd [ AInt 1L; AInt 1L ]) ] ] ))
+                Context.positive
+                (Multiset.ofFlatList
+                    [ gfunc (BVar "foo") "bar"
+                        [ Typed.Int (AVar "baz")
+                          Typed.Bool (BVar "fizz") ]
+                      gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
+                        [ Typed.Int
+                              (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ] )
+
+        [<Test>]
+        let ``Multi GView substitution in -ve case works properly`` () =
+            check
+                (Context.negative,
+                 (Multiset.ofFlatList
+                    [ gfunc BTrue "bar"
+                        [ Typed.Int (AInt 0L)
+                          Typed.Bool BFalse ]
+                      gfunc (BGt (AInt 1L, AInt 1L)) "barbaz"
+                        [ Typed.Int
+                              (AAdd [ AInt 0L; AInt 0L ]) ] ] ))
+                Context.negative
+                (Multiset.ofFlatList
+                    [ gfunc (BVar "foo") "bar"
+                        [ Typed.Int (AVar "baz")
+                          Typed.Bool (BVar "fizz") ]
+                      gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
+                        [ Typed.Int
+                              (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ] )

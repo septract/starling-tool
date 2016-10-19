@@ -601,7 +601,9 @@ module Traversal =
         fun ctx { Cond = cond; Item = item } ->
             let tBool = traverseBoolAsExpr traversal
             let tFunc = liftTraversalOverFunc traversal
-            tchain2 tBool tFunc
+            (* Remember: the condition of a guarded func is in a negative
+               position! *)
+            tchain2 (changePos negate tBool) tFunc
                 (fun (cond', item') -> { Cond = cond'; Item = item' })
                 ctx
                 (cond, item)
