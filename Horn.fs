@@ -12,7 +12,7 @@ open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.Expr
 open Starling.Core.View
-open Starling.Core.Sub
+open Starling.Core.Traversal
 open Starling.Core.Model
 open Starling.Core.GuardedView
 
@@ -82,7 +82,7 @@ module Types =
         /// <summary>
         ///     A traversal blew up somewhere.
         /// </summary>
-        | Traversal of err : SubError<Error>
+        | Traversal of err : TraversalError<Error>
 
 /// <summary>
 ///     Pretty printers for the Horn clause generator.
@@ -94,7 +94,7 @@ module Pretty =
     open Starling.Core.Var.Pretty
     open Starling.Core.View.Pretty
     open Starling.Core.Model.Pretty
-    open Starling.Core.Sub.Pretty
+    open Starling.Core.Traversal.Pretty
 
     /// <summary>
     ///     Given an expression and its Doc, potentially wrap the Doc
@@ -226,7 +226,7 @@ module Pretty =
                 (String "found an empty '"
                  <-> String exptype
                  <-> String "' expression")
-        | Traversal err -> printSubError printError err
+        | Traversal err -> printTraversalError printError err
         | CannotCheckDeferred (check, why) ->
             error
                 (String "deferred sanity check '"

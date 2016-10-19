@@ -20,7 +20,7 @@ open Starling.Utils
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
-open Starling.Core.Sub
+open Starling.Core.Traversal
 open Starling.Core.View
 open Starling.Core.View.Traversal
 open Starling.Core.Symbolic
@@ -573,7 +573,7 @@ module Pretty =
 ///     Functions for traversing guarded views.
 /// </summary>
 module Traversal =
-    open Starling.Core.Sub
+    open Starling.Core.Traversal
     open Starling.Core.View
     open Starling.Core.View.Traversal
     open Starling.Core.Command.Traversal
@@ -705,12 +705,12 @@ module Traversal =
 
 /// Gets set of TypedVar's from a GFunc
 let gFuncVars (gfunc : GFunc<Sym<Var>>)
-  : Result<Set<TypedVar>, SubError<'Error>> =
+  : Result<Set<TypedVar>, TraversalError<'Error>> =
     let tVars = tliftOverExpr collectSymVars
     findVars (Traversal.tliftOverGFunc tVars) gfunc
 
 /// Gets set of TypedVars from an IteratedGFunc
 let iteratedGFuncVars (itgfunc : IteratedGFunc<Sym<Var>>)
-  : Result<Set<TypedVar>, SubError<'Error>> =
+  : Result<Set<TypedVar>, TraversalError<'Error>> =
     let tVars = tliftOverExpr collectSymVars
     findVars (Traversal.tliftOverIteratedGFunc tVars) itgfunc

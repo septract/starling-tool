@@ -14,7 +14,7 @@ open Starling.Core.View
 open Starling.Core.View.Traversal
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Traversal
-open Starling.Core.Sub
+open Starling.Core.Traversal
 open Starling.Core.Symbolic
 open Starling.Core.Model
 open Starling.Core.Command
@@ -34,7 +34,7 @@ type Error =
     ///     An error occurred during traversal.
     ///     This error may contain nested semantics errors!
     /// </summary>
-    | Traversal of SubError<Error>
+    | Traversal of TraversalError<Error>
 
 /// <summary>
 ///     Normalises the iterator of an iterated func stored multiple times in a
@@ -260,7 +260,7 @@ module Pretty =
     /// </returns>
     let rec printError (err : Error) : Doc =
         match err with
-        | Traversal err -> Starling.Core.Sub.Pretty.printSubError printError err
+        | Traversal err -> Starling.Core.Traversal.Pretty.printTraversalError printError err
 
 /// Stage that flattens the Iterator's from GuardedFunc's
 module Iter =

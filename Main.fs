@@ -25,7 +25,7 @@ open Starling.Core.Instantiate
 open Starling.Core.Instantiate.Pretty
 open Starling.Core.Command
 open Starling.Core.Command.Pretty
-open Starling.Core.Sub
+open Starling.Core.Traversal
 open Starling.Core.View
 open Starling.Core.View.Pretty
 open Starling.Core.GuardedView
@@ -286,7 +286,7 @@ type Error =
     /// <summary>
     ///     A main-level traversal went belly-up.
     /// </summary>
-    | Traversal of SubError<Error>
+    | Traversal of TraversalError<Error>
     /// A stage was requested using the -s flag that does not exist.
     | BadStage
     /// A miscellaneous (internal) error has occurred.
@@ -324,7 +324,7 @@ let rec printError (err : Error) : Doc =
                    |> List.map (fst >> String)
                    |> commaSep ]
     | Other e -> String e
-    | Traversal err -> Core.Sub.Pretty.printSubError printError err
+    | Traversal err -> Core.Traversal.Pretty.printTraversalError printError err
 
 /// Prints an ok result to stdout.
 let printOk (pOk : 'Ok -> Doc) (pBad : 'Warn -> Doc)

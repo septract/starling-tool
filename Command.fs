@@ -53,7 +53,7 @@ module Types =
 ///     Traversals on commands.
 /// </summary>
 module Traversal =
-    open Starling.Core.Sub
+    open Starling.Core.Traversal
 
     /// <summary>
     ///     Lifts a <c>Traversal</c> over all expressions in a

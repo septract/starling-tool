@@ -20,7 +20,7 @@ open Starling.Core.Axiom
 open Starling.Core.Command
 open Starling.Core.GuardedView
 open Starling.Core.Symbolic
-open Starling.Core.Sub
+open Starling.Core.Traversal
 
 
 /// <summary>
@@ -192,7 +192,7 @@ module Types =
         /// <summary>
         ///     A traversal used in graph processing failed.
         /// </summary>
-        | Traversal of err : SubError<Error>
+        | Traversal of err : TraversalError<Error>
 
 
 /// <summary>
@@ -849,4 +849,4 @@ module Pretty =
             colonSep [ String "node duplicated: "; String node ]
         | DuplicateEdge edge ->
             colonSep [ String "edge duplicated: "; String edge ]
-        | Traversal err -> Starling.Core.Sub.Pretty.printSubError printError err
+        | Traversal err -> Starling.Core.Traversal.Pretty.printTraversalError printError err

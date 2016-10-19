@@ -30,7 +30,7 @@ open Starling.Core.Expr
 open Starling.Core.View
 open Starling.Core.Command
 open Starling.Core.Model
-open Starling.Core.Sub
+open Starling.Core.Traversal
 open Starling.Core.Symbolic
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Traversal
@@ -81,7 +81,7 @@ module Types =
         ///     An error occurred during traversal.
         ///     This error may contain nested instantiation errors!
         /// </summary>
-        | Traversal of SubError<Error>
+        | Traversal of TraversalError<Error>
 
     /// Terms in a Proof are boolean expression pre/post conditions with Command's
     type SymProofTerm =
@@ -136,7 +136,7 @@ module Pretty =
                     [ String "parameter '"
                       printTypedVar var
                       String "' has no substitution" ])
-        | Traversal err -> Sub.Pretty.printSubError printError err
+        | Traversal err -> Traversal.Pretty.printTraversalError printError err
 
     let printSymProofTerm (sterm : SymProofTerm) : Doc =
         vsep
@@ -231,7 +231,7 @@ let instantiate
 
     let subInTypedSym dfunc =
         tliftToTypedSymVarSrc (paramSubFun vfunc dfunc)
-    let subInBool dfunc = boolSubVars (subInTypedSym dfunc)
+    let subInBool dfunc = tLiftToBoolSrc (subInTypedSym dfunc)
 
     let result =
         bind
@@ -277,7 +277,7 @@ module DefinerFilter =
     /// </summary>
     let tryRemoveFuncDefinerSymbols
       (defs : FuncDefiner<SVBoolExpr>)
-      : Result<FuncDefiner<VBoolExpr>, SubError<Error>> =
+      : Result<FuncDefiner<VBoolExpr>, TraversalError<Error>> =
         // TODO(CaptainHayashi): proper doc comment.
         // TODO(CaptainHayashi): stop assuming Definer is a list.
         defs
@@ -307,7 +307,7 @@ module DefinerFilter =
         let handlePartition (defs, indefs) =
             let removeResult = tryRemoveFuncDefinerSymbols defs
             let defResult = lift (assembleDefiniteDefiner indefs) removeResult
-            // defResult has SubError errors, we need to lift them
+            // defResult has TraversalError errors, we need to lift them
             mapMessages Traversal defResult
 
         handlePartition partitionResult
@@ -400,7 +400,7 @@ module Phase =
     /// Given a symbolic-boolean term, calculate the non-symbolic approximation.
     let approxTerm (symterm : Term<SMBoolExpr, SMBoolExpr, SMBoolExpr>)
       : Result<Term<MBoolExpr, MBoolExpr, MBoolExpr>, Error> =
-        (* This is needed to adapt approx's SubError<unit> into SubError<Error>.
+        (* This is needed to adapt approx's TraversalError<unit> into TraversalError<Error>.
            It's horrible and I hate it. *)
         let toError =
             mapMessages
@@ -410,15 +410,15 @@ module Phase =
                  | ContextMismatch (x, y) -> ContextMismatch (x, y))
 
         let apr position =
-            boolSubVars Starling.Core.Symbolic.Queries.approx
+            tLiftToBoolSrc Starling.Core.Symbolic.Queries.approx
                 position
             >> lift snd
             >> toError
 
         let sub = mapTraversal (removeSymFromBoolExpr UnwantedSym)
 
-        let pos = Starling.Core.Sub.Context.positive
-        let neg = Starling.Core.Sub.Context.negative
+        let pos = Starling.Core.Traversal.Context.positive
+        let neg = Starling.Core.Traversal.Context.negative
 
         let aprSubSimp position bool =
             let approxedResult = apr position bool

@@ -11,7 +11,7 @@ open Starling.Utils
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
-open Starling.Core.Sub
+open Starling.Core.Traversal
 open Starling.Core.Symbolic
 open Starling.Core.Model
 open Starling.Core.View
@@ -75,7 +75,7 @@ let rec graphWhile
         let! exprB =
             mapMessages Traversal
                 (mapTraversal
-                    (boolSubVars
+                    (tLiftToBoolSrc
                         (tliftToExprDest
                             (traverseTypedSymWithMarker Before)))
                     expr)
@@ -164,7 +164,7 @@ and graphITE
         let! exprB =
             mapMessages Traversal
                 (mapTraversal
-                    (boolSubVars
+                    (tLiftToBoolSrc
                         (tliftToExprDest
                             (traverseTypedSymWithMarker Before)))
                     expr)

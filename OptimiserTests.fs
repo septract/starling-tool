@@ -15,7 +15,7 @@ open Starling.Core.Model
 open Starling.Core.View
 open Starling.Core.View.Traversal
 open Starling.Core.Command
-open Starling.Core.Sub
+open Starling.Core.Traversal
 open Starling.Optimiser.Graph
 open Starling.Optimiser.Term
 
@@ -111,18 +111,18 @@ type OptimiserTests() =
 module AfterExprs =
     open Starling.Utils.Testing
     open Starling.Core.Pretty
-    open Starling.Core.Sub.Pretty
+    open Starling.Core.Traversal.Pretty
     open Starling.Optimiser.Pretty
 
     /// Test after-elimination of Booleans.
     let check expected case : unit =
         let trav =
-            boolSubVars
+            tLiftToBoolSrc
                 (tliftToTypedSymVarSrc
                     (afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs))
         let result = mapTraversal trav case
         assertOkAndEqual expected result
-            (printSubError printTermOptError >> printUnstyled)
+            (printTraversalError printTermOptError >> printUnstyled)
 
     [<Test>]
     let ``Remove arithmetic afters in a simple equality`` () =
@@ -195,7 +195,7 @@ module AfterExprs =
 module AfterFuncs =
     open Starling.Utils.Testing
     open Starling.Core.Pretty
-    open Starling.Core.Sub.Pretty
+    open Starling.Core.Traversal.Pretty
     open Starling.Optimiser.Pretty
 
     /// Test after-elimination of Booleans.
@@ -207,7 +207,7 @@ module AfterFuncs =
                         (afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs)))
         let result = mapTraversal trav case
         assertOkAndEqual expected result
-            (printSubError printTermOptError >> printUnstyled)
+            (printTraversalError printTermOptError >> printUnstyled)
 
     [<Test>]
     let ``Substitute afters in a func with all-after params`` () =
