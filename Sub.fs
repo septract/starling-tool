@@ -352,7 +352,7 @@ let tchainL (f : Traversal<'A, 'AR, 'Error>) (g : 'AR list -> 'Result)
                 lift (fun (ctxS, xsRS) -> (ctxS, xsRS::xsRN))
                      (f ctxN x))
             (ctx, [])
-        >> lift (pairMap id g)
+        >> lift (pairMap id (List.rev >> g))
 
 /// <summary>
 ///     Maps a traversal from left to right over a multiset, accumulating the
@@ -662,7 +662,7 @@ let findMarkedVars
   (subject : 'Subject)
   : Result<Set<CTyped<MarkedVar>>, SubError<'Error>> =
     subject
-    |> t (Vars [])
+    |> t (MarkedVars [])
     |> bind
         (function
          | (MarkedVars xs, _) -> ok (Set.ofList xs)
@@ -713,75 +713,3 @@ module Pretty =
         | ContextMismatch (expected, got) ->
             fmt "Internal context mismatch: expected {0}, got {1}"
                 [ String expected; printTraversalContext got ]
-
-
-/// <summary>
-///     Tests for <c>Sub</c>.
-/// </summary>
-module Tests =
-    open NUnit.Framework
-    open Starling.Utils.Testing
-
-    /// <summary>
-    ///     NUnit tests for <c>Sub</c>.
-    /// </summary>
-    type NUnit () =
-        /// <summary>
-        ///     Test cases for finding variables in expressions.
-        /// </summary>
-        static member FindVarsCases =
-            [ (tcd
-                   [| Expr.Bool (BTrue : VBoolExpr) |] )
-                  .Returns(Set.empty)
-                  .SetName("Finding vars in a Boolean primitive returns empty")
-              (tcd
-                   [| Expr.Int (AInt 1L : VIntExpr) |] )
-                  .Returns(Set.empty)
-                  .SetName("Finding vars in an integer primitive returns empty")
-              (tcd
-                   [| Expr.Bool (BVar "foo") |] )
-                  .Returns(Set.singleton (CTyped.Bool "foo"))
-                  .SetName("Finding vars in a Boolean var returns that var")
-              (tcd
-                   [| Expr.Int (AVar "bar") |] )
-                  .Returns(Set.singleton (CTyped.Int "bar"))
-                  .SetName("Finding vars in an integer var returns that var")
-              (tcd
-                   [| Expr.Bool
-                          (BAnd
-                               [ BOr
-                                     [ BVar "foo"
-                                       BVar "baz" ]
-                                 BGt
-                                     ( AVar "foobar",
-                                       AVar "barbaz" ) ] ) |] )
-                  .Returns(
-                      Set.ofList
-                          [ CTyped.Bool "foo"
-                            CTyped.Bool "baz"
-                            CTyped.Int "foobar"
-                            CTyped.Int "barbaz" ])
-                  .SetName("Finding vars in a Boolean expression works correctly")
-              (tcd
-                   [| Expr.Int
-                         (AAdd
-                              [ ASub
-                                    [ AVar "foo"
-                                      AVar "bar" ]
-                                AMul
-                                    [ AVar "foobar"
-                                      AVar "barbaz" ]]) |])
-                  .Returns(
-                      Set.ofList
-                          [ CTyped.Int "foo"
-                            CTyped.Int "bar"
-                            CTyped.Int "foobar"
-                            CTyped.Int "barbaz" ])
-                  .SetName("Finding vars in an integer expression works correctly") ]
-
-        /// <summary>
-        ///     Tests finding variables in expressions.
-        /// </summary>
-        [<TestCaseSource("FindVarsCases")>]
-        member this.testFindVars expr =
-            expr |> findVars collectVars |> okOption

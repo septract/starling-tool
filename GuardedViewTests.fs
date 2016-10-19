@@ -47,244 +47,210 @@ module Tests =
             ok (ctx, exp)
         liftTraversalToExprSrc ptsVar
 
+
     /// <summary>
-    ///     NUnit tests for guarded views.
+    ///     Case studies for testing Term traversal.
     /// </summary>
-    type NUnit () =
-        /// <summary>
-        ///     Case studies for <c>testPositionSubExprInGFunc</c>.
-        /// </summary>
-        static member PositionSubExprInGFuncCases =
-            [ (tcd
-                   [| gfunc (BVar "foo") "bar"
-                          [ Typed.Int (AVar "baz")
-                            Typed.Bool (BVar "fizz") ]
-                      Context.positive |] )
-                  .Returns(
-                      ok <|
-                      (Context.positive,
-                       (gfunc BFalse "bar"
-                            [ Typed.Int (AInt 1L)
-                              Typed.Bool BTrue ] : GFunc<Var> )))
-                  .SetName("GFunc substitution in +ve case works properly")
-              (tcd
-                   [| gfunc (BVar "foo") "bar"
-                          [ Typed.Int (AVar "baz")
-                            Typed.Bool (BVar "fizz") ]
-                      Context.negative |] )
-                  .Returns(
-                      ok <|
-                      (Context.negative,
-                       (gfunc BTrue "bar"
-                            [ Typed.Int (AInt 0L)
-                              Typed.Bool BFalse ] : GFunc<Var> )))
-                  .SetName("GFunc substitution in -ve case works properly") ]
+    module TermTraversal =
+        open Starling.Utils.Testing
+        open Starling.Core.Pretty
+        open Starling.Core.Sub.Pretty
 
         /// <summary>
-        ///     Tests <c>subExprInGFunc</c> on positional substitutions.
+        ///     Tests term traversal on positional substitutions.
         /// </summary>
-        [<TestCaseSource("PositionSubExprInGFuncCases")>]
-        member this.testPositionSubExprInGFunc
-          (gf : GFunc<Var>)
-          (pos : TraversalContext) =
+        let check
+          (expected : Term<BoolExpr<Var>, GView<Var>, Func<Expr<Var>>>)
+          (pos : TraversalContext)
+          (gv : Term<BoolExpr<Var>, GView<Var>, Func<Expr<Var>>>) : unit =
+            let trav = liftTraversalOverTerm positionTestSub
+            let result = trav pos gv
+
+            assertOkAndEqual (pos, expected) result
+                (printSubError (fun _ -> String "?") >> printUnstyled)
+
+        [<Test>]
+        let ``successfully translate a positive Term`` () =
+            check
+                { Cmd = BAnd [ bEq BFalse BFalse; bEq BFalse (BNot BTrue) ]
+                  WPre =
+                    Multiset.ofFlatList
+                        [ gfunc BTrue "bar"
+                            [ Typed.Int (AInt 0L); Typed.Bool BFalse ]
+                          gfunc (BGt (AInt 1L, AInt 1L)) "barbaz"
+                            [ Typed.Int (AAdd [ AInt 0L; AInt 0L ]) ] ]
+                  Goal =
+                    (vfunc "bar" [ Typed.Int (AInt 1L); Typed.Bool BTrue ]) }
+                Context.positive
+                { Cmd =
+                    BAnd
+                        [ bEq (BVar "foo") (BVar "bar")
+                          bEq (BVar "baz") (BNot (BVar "baz")) ]
+                  WPre =
+                    Multiset.ofFlatList
+                        [ gfunc (BVar "foo") "bar"
+                            [ Typed.Int (AVar "baz")
+                              Typed.Bool (BVar "fizz") ]
+                          gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
+                            [ Typed.Int
+                                (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ]
+                  Goal =
+                    vfunc "bar"
+                        [ Typed.Int (AVar "baz")
+                          Typed.Bool (BVar "barbaz") ] }
+
+
+        [<Test>]
+        let ``Successfully translate a negative DTerm`` () =
+            check
+                { Cmd = BAnd [ bEq BTrue BTrue; bEq BTrue (BNot BFalse) ]
+                  WPre =
+                    Multiset.ofFlatList
+                        [ gfunc BFalse "bar"
+                            [ Typed.Int (AInt 1L); Typed.Bool BTrue ]
+                          gfunc (BGt (AInt 0L, AInt 0L)) "barbaz"
+                            [ Typed.Int (AAdd [ AInt 1L; AInt 1L ]) ] ]
+                  Goal =
+                    vfunc "bar" [ Typed.Int (AInt 0L); Typed.Bool BFalse ] }
+                Context.negative
+                { Cmd =
+                    BAnd
+                        [ bEq (BVar "foo") (BVar "bar")
+                          bEq (BVar "baz") (BNot (BVar "baz")) ]
+                  WPre =
+                    Multiset.ofFlatList
+                        [ gfunc (BVar "foo") "bar"
+                            [ Typed.Int (AVar "baz"); Typed.Bool (BVar "fizz") ]
+                          gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
+                            [ Typed.Int
+                                (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ]
+                  Goal =
+                    vfunc "bar"
+                       [ Typed.Int (AVar "baz"); Typed.Bool (BVar "barbaz") ] }
+
+    /// <summary>
+    ///     Case studies for testing GFunc traversal.
+    /// </summary>
+    module GFuncTraversal =
+        open Starling.Utils.Testing
+        open Starling.Core.Pretty
+        open Starling.Core.Sub.Pretty
+
+        /// <summary>
+        ///     Tests GFunc traversal on positional substitutions.
+        /// </summary>
+        let check
+          (expected : GFunc<Var>)
+          (pos : TraversalContext)
+          (gv : GFunc<Var>) : unit =
             let trav = liftTraversalOverGFunc positionTestSub
-            let result = trav pos gf
-            okOption result
+            let result = trav pos gv
+
+            assertOkAndEqual (pos, expected) result
+                (printSubError (fun _ -> String "?") >> printUnstyled)
+
+        [<Test>]
+        let ``GFunc substitution in +ve case works properly`` () =
+            check
+                (gfunc BFalse "bar" [ Typed.Int (AInt 1L); Typed.Bool BTrue ] )
+                Context.positive
+                (gfunc (BVar "foo") "bar"
+                    [ Typed.Int (AVar "baz"); Typed.Bool (BVar "fizz") ] )
+
+        [<Test>]
+        let ``GFunc substitution in -ve case works properly`` () =
+            check
+                (gfunc BTrue "bar" [ Typed.Int (AInt 0L); Typed.Bool BFalse ] )
+                Context.negative
+                (gfunc (BVar "foo") "bar"
+                    [ Typed.Int (AVar "baz"); Typed.Bool (BVar "fizz") ])
+
+
+    /// <summary>
+    ///     Case studies for testing GView traversal.
+    /// </summary>
+    module GViewTraversal =
+        open Starling.Utils.Testing
+        open Starling.Core.Pretty
+        open Starling.Core.Sub.Pretty
 
         /// <summary>
-        ///     Case studies for <c>testPositionSubExprInGView</c>.
+        ///     Tests GView traversal on positional substitutions.
         /// </summary>
-        static member PositionSubExprInGViewCases =
-            [ (tcd
-                   [| (Multiset.empty : GView<Var>)
-                      Context.positive |] )
-                  .Returns(
-                      ok <|
-                      (Context.positive,
-                       (Multiset.empty : GView<Var>)))
-                  .SetName("+ve empty GView substitution is a no-op")
-              (tcd
-                   [| (Multiset.empty : GView<Var>)
-                      Context.negative |] )
-                  .Returns(
-                      ok <|
-                      (Context.negative,
-                       (Multiset.empty : GView<Var>)))
-                  .SetName("-ve empty GView substitution is a no-op")
-              (tcd
-                   [| Multiset.singleton
-                          (gfunc (BVar "foo") "bar"
-                               [ Typed.Int (AVar "baz")
-                                 Typed.Bool (BVar "fizz") ] )
-                      Context.positive |] )
-                  .Returns(
-                      ok <|
-                      (Context.positive,
-                       (Multiset.singleton
-                            (gfunc BFalse "bar"
-                                 [ Typed.Int (AInt 1L)
-                                   Typed.Bool BTrue ] ) : GView<Var> )))
-                  .SetName("Singleton GView substitution in +ve case works properly")
-              (tcd
-                   [| Multiset.singleton
-                          (gfunc (BVar "foo") "bar"
-                               [ Typed.Int (AVar "baz")
-                                 Typed.Bool (BVar "fizz") ] )
-                      Context.negative |] )
-                  .Returns(
-                      ok <|
-                      (Context.negative,
-                       (Multiset.singleton
-                            (gfunc BTrue "bar"
-                                 [ Typed.Int (AInt 0L)
-                                   Typed.Bool BFalse ] ) : GView<Var> )))
-                  .SetName("Singleton GView substitution in -ve case works properly")
-              (tcd
-                   [| Multiset.ofFlatList
-                          [ gfunc (BVar "foo") "bar"
-                                [ Typed.Int (AVar "baz")
-                                  Typed.Bool (BVar "fizz") ]
-                            gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
-                                [ Typed.Int
-                                      (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ]
-                      Context.positive |] )
-                  .Returns(
-                      ok <|
-                      (Context.positive,
-                       (Multiset.ofFlatList
-                            [ gfunc BFalse "bar"
-                                  [ Typed.Int (AInt 1L)
-                                    Typed.Bool BTrue ]
-                              gfunc (BGt (AInt 0L, AInt 0L)) "barbaz"
-                                  [ Typed.Int
-                                        (AAdd [ AInt 1L; AInt 1L ]) ] ]
-                        : GView<Var>)))
-                  .SetName("Multi GView substitution in +ve case works properly")
-              (tcd
-                   [| Multiset.ofFlatList
-                          [ gfunc (BVar "foo") "bar"
-                                [ Typed.Int (AVar "baz")
-                                  Typed.Bool (BVar "fizz") ]
-                            gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
-                                [ Typed.Int
-                                      (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ]
-                      Context.negative |] )
-                  .Returns(
-                      ok <|
-                      (Context.negative,
-                       (Multiset.ofFlatList
-                            [ gfunc BTrue "bar"
-                                  [ Typed.Int (AInt 0L)
-                                    Typed.Bool BFalse ]
-                              gfunc (BGt (AInt 1L, AInt 1L)) "barbaz"
-                                  [ Typed.Int
-                                        (AAdd [ AInt 0L; AInt 0L ]) ] ]
-                        : GView<Var>)))
-                  .SetName("Multi GView substitution in -ve case works properly") ]
-
-        /// <summary>
-        ///     Tests <c>subExprInGView</c> on positional substitutions.
-        /// </summary>
-        [<TestCaseSource("PositionSubExprInGViewCases")>]
-        member this.testPositionSubExprInGView
-          (gv : GView<Var>)
-          (pos : TraversalContext) =
+        let check
+          (expected : GView<Var>)
+          (pos : TraversalContext)
+          (gv : GView<Var>) : unit =
             let trav = tchainM (liftTraversalOverGFunc positionTestSub) id
             let result = trav pos gv
-            okOption result
 
-        /// <summary>
-        ///     Case studies for <c>testPositionSubExprInDTerm</c>.
-        /// </summary>
-        static member PositionSubExprInDTermCases =
-            [ (tcd
-                   [| ( { Cmd =
-                              BAnd
-                                  [ bEq (BVar "foo") (BVar "bar")
-                                    bEq (BVar "baz") (BNot (BVar "baz")) ]
-                          WPre =
-                              Multiset.ofFlatList
-                                  [ gfunc (BVar "foo") "bar"
-                                        [ Typed.Int (AVar "baz")
-                                          Typed.Bool (BVar "fizz") ]
-                                    gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
-                                        [ Typed.Int
-                                              (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ]
-                          Goal =
-                              (vfunc "bar"
-                                   [ Typed.Int (AVar "baz")
-                                     Typed.Bool (BVar "barbaz") ] : VFunc<Var> ) }
-                       : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>> )
-                      Context.positive |] )
-                  .Returns(
-                      ok <|
-                      (Context.positive,
-                       ( { Cmd =
-                               BAnd
-                                   [ bEq BFalse BFalse
-                                     bEq BFalse (BNot BTrue) ]
-                           WPre =
-                               Multiset.ofFlatList
-                                   [ gfunc BTrue "bar"
-                                         [ Typed.Int (AInt 0L)
-                                           Typed.Bool BFalse ]
-                                     gfunc (BGt (AInt 1L, AInt 1L)) "barbaz"
-                                         [ Typed.Int
-                                               (AAdd [ AInt 0L; AInt 0L ]) ] ]
-                           Goal =
-                               (vfunc "bar"
-                                    [ Typed.Int (AInt 1L)
-                                      Typed.Bool BTrue ] : VFunc<Var> ) }
-                        : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>> )))
-                  .SetName("Successfully translate a positive DTerm")
-              (tcd
-                   [| ( { Cmd =
-                              BAnd
-                                  [ bEq (BVar "foo") (BVar "bar")
-                                    bEq (BVar "baz") (BNot (BVar "baz")) ]
-                          WPre =
-                              Multiset.ofFlatList
-                                  [ gfunc (BVar "foo") "bar"
-                                        [ Typed.Int (AVar "baz")
-                                          Typed.Bool (BVar "fizz") ]
-                                    gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
-                                        [ Typed.Int
-                                              (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ]
-                          Goal =
-                              (vfunc "bar"
-                                   [ Typed.Int (AVar "baz")
-                                     Typed.Bool (BVar "barbaz") ] : VFunc<Var> ) }
-                       : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>> )
-                      Context.negative |] )
-                  .Returns(
-                      ok <|
-                      (Context.negative,
-                       ( { Cmd =
-                               BAnd
-                                   [ bEq BTrue BTrue
-                                     bEq BTrue (BNot BFalse) ]
-                           WPre =
-                               Multiset.ofFlatList
-                                   [ gfunc BFalse "bar"
-                                         [ Typed.Int (AInt 1L)
-                                           Typed.Bool BTrue ]
-                                     gfunc (BGt (AInt 0L, AInt 0L)) "barbaz"
-                                         [ Typed.Int
-                                               (AAdd [ AInt 1L; AInt 1L ]) ] ]
-                           Goal =
-                               (vfunc "bar"
-                                    [ Typed.Int (AInt 0L)
-                                      Typed.Bool BFalse ] : VFunc<Var> ) }
-                        : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>> )))
-                  .SetName("Successfully translate a negative DTerm") ]
+            assertOkAndEqual (pos, expected) result
+                (printSubError (fun _ -> String "?") >> printUnstyled)
 
-        /// <summary>
-        ///     Tests <c>subExprInDTerm</c> on positional substitutions.
-        /// </summary>
-        [<TestCaseSource("PositionSubExprInDTermCases")>]
-        member this.testPositionSubExprInDTerm
-          (t : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>>)
-          (pos : TraversalContext) =
-            let trav = liftTraversalOverTerm positionTestSub
-            let result = trav pos t
-            okOption result
+        [<Test>]
+        let ``+ve empty GView substitution is a no-op`` () =
+            check Multiset.empty Context.positive Multiset.empty
+
+        [<Test>]
+        let ``-ve empty GView substitution is a no-op`` () =
+            check Multiset.empty Context.negative Multiset.empty
+
+        [<Test>]
+        let ``Singleton GView substitution in +ve case works properly`` () =
+            check
+                (Multiset.singleton
+                    (gfunc BFalse "bar"
+                        [ Typed.Int (AInt 1L)
+                          Typed.Bool BTrue ] ))
+                Context.positive
+                (Multiset.singleton
+                    (gfunc (BVar "foo") "bar"
+                        [ Typed.Int (AVar "baz")
+                          Typed.Bool (BVar "fizz") ] ))
+
+        [<Test>]
+        let ``Singleton GView substitution in -ve case works properly`` () =
+            check
+                (Multiset.singleton
+                    (gfunc BTrue "bar"
+                        [ Typed.Int (AInt 0L); Typed.Bool BFalse ] ))
+                Context.negative
+                (Multiset.singleton
+                    (gfunc (BVar "foo") "bar"
+                        [ Typed.Int (AVar "baz")
+                          Typed.Bool (BVar "fizz") ] ))
+
+        [<Test>]
+        let ``Multi GView substitution in +ve case works properly`` () =
+            check
+                (Multiset.ofFlatList
+                    [ gfunc BFalse "bar"
+                        [ Typed.Int (AInt 1L)
+                          Typed.Bool BTrue ]
+                      gfunc (BGt (AInt 0L, AInt 0L)) "barbaz"
+                        [ Typed.Int
+                              (AAdd [ AInt 1L; AInt 1L ]) ] ] )
+                Context.positive
+                (Multiset.ofFlatList
+                    [ gfunc (BVar "foo") "bar"
+                        [ Typed.Int (AVar "baz")
+                          Typed.Bool (BVar "fizz") ]
+                      gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
+                        [ Typed.Int
+                              (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ] )
+
+        [<Test>]
+        let ``Multi GView substitution in -ve case works properly`` () =
+            check
+                (Multiset.ofFlatList
+                    [ gfunc BTrue "bar"
+                        [ Typed.Int (AInt 0L); Typed.Bool BFalse ]
+                      gfunc (BGt (AInt 1L, AInt 1L)) "barbaz"
+                        [ Typed.Int (AAdd [ AInt 0L; AInt 0L ]) ] ] )
+                Context.negative
+                (Multiset.ofFlatList
+                    [ gfunc (BVar "foo") "bar"
+                        [ Typed.Int (AVar "baz"); Typed.Bool (BVar "fizz") ]
+                      gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
+                        [ Typed.Int
+                              (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ] )

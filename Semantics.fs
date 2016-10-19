@@ -157,8 +157,10 @@ let primParamSubFun
         (function
          | WithType (var, vtype) as v ->
             match pmap.TryFind var with
-            | Some (Typed.Bool expr) -> ok (Bool expr)
-            | Some tvar -> fail (Inner (TypeMismatch (v, typeOf tvar)))
+            | Some tvar ->
+                if vtype = typeOf tvar
+                then ok tvar
+                else fail (Inner (TypeMismatch (v, typeOf tvar)))
             | None -> fail (Inner (FreeVarInSub v)))
 
 let checkParamCountPrim : PrimCommand -> PrimSemantics option -> Result<PrimSemantics option, Error> =
