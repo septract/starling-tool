@@ -500,7 +500,7 @@ let rec modelExpr
             |> bind (
                 liftWithoutContext
                     (varF >> Reg >> ok)
-                    (liftTraversalOverCTyped >> liftTraversalToExprDest)
+                    (tliftOverCTyped >> tliftToExprDest)
                 >> mapMessages BadSub)
         | Symbolic (sym, exprs) ->
             fail (AmbiguousSym sym)

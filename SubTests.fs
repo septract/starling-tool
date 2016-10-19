@@ -21,7 +21,7 @@ module FindVars =
     ///     Tests finding variables in expressions.
     /// </summary>
     let check (expected : TypedVar list) (expr : Expr<Var>) : unit =
-        let result = findVars (liftTraversalOverExpr collectVars) expr
+        let result = findVars (tliftOverExpr collectVars) expr
         assertOkAndEqual (Set.ofList expected) result
             (printSubError (fun () -> String "?") >> printUnstyled)
 

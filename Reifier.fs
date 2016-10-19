@@ -171,7 +171,7 @@ module Downclosure =
         let mapper =
             liftWithoutContext
                 fOnIter
-                (liftTraversalToTypedSymVarSrc >> boolSubVars)
+                (tliftToTypedSymVarSrc >> boolSubVars)
 
         mapMessages Traversal (mapper defn)
 
@@ -188,7 +188,7 @@ module Downclosure =
         // Expression equivalence cannot handle symbols, so try remove them.
         // TODO(CaptainHayashi): is it sound to approximate here?
         let removeResult =
-            withoutContext (removeSymFromBoolExpr SymInIteratedConstraint) check
+            mapTraversal (removeSymFromBoolExpr SymInIteratedConstraint) check
         // If check is a tautology, it will be equivalent to 'true'.
         lift
             (equiv BTrue >> equivHolds id)

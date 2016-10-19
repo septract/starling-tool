@@ -311,7 +311,7 @@ let boolExpr
         | x ->
             let everythingToVar =
                 liftWithoutContext (toVar >> ok)
-                    (liftTraversalOverCTyped >> liftTraversalOverExpr)
+                    (tliftOverCTyped >> tliftOverExpr)
                 >> mapMessages Traversal
             bind (UnsupportedExpr >> fail) (everythingToVar (Bool x))
     be
@@ -333,7 +333,7 @@ let boolExpr
 let tryIntExpr (expr : MExpr) : Result<IntExpr<Var>, Error> =
     let mapper =
         liftWithoutContext (unmarkVar >> ok)
-            (liftTraversalOverCTyped >> liftTraversalOverExpr)
+            (tliftOverCTyped >> tliftOverExpr)
 
     let filterExpr =
         function

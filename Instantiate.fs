@@ -230,7 +230,7 @@ let instantiate
             (flip FuncDefiner.lookupWithTypeCheck definer) vfunc
 
     let subInTypedSym dfunc =
-        liftTraversalToTypedSymVarSrc (paramSubFun vfunc dfunc)
+        tliftToTypedSymVarSrc (paramSubFun vfunc dfunc)
     let subInBool dfunc = boolSubVars (subInTypedSym dfunc)
 
     let result =
@@ -238,7 +238,7 @@ let instantiate
             (function
              | None -> ok None
              | Some (dfunc, defn) ->
-                lift Some (withoutContext (subInBool dfunc) defn))
+                lift Some (mapTraversal (subInBool dfunc) defn))
             (mapMessages Inner dfuncResult)
 
     mapMessages Traversal result
@@ -284,7 +284,7 @@ module DefinerFilter =
         |> List.map
                (fun (f, d) ->
                     let trav = removeSymFromBoolExpr UnwantedSym
-                    let result = withoutContext trav d
+                    let result = mapTraversal trav d
                     lift (mkPair f) result)
         |> collect
 
@@ -350,11 +350,11 @@ module DefinerFilter =
       : Result<Model<CmdTerm<MBoolExpr, GView<MarkedVar>, MVFunc>,
                      FuncDefiner<VBoolExpr option>>, Error> =
         let stripSymbolT =
-            liftTraversalOverCmdTerm
-                (liftTraversalOverExpr
-                    (liftTraversalOverCTyped (removeSymFromVar UnwantedSym)))
+            tliftOverCmdTerm
+                (tliftOverExpr
+                    (tliftOverCTyped (removeSymFromVar UnwantedSym)))
 
-        let stripSymbols = withoutContext stripSymbolT >> mapMessages Traversal
+        let stripSymbols = mapTraversal stripSymbolT >> mapMessages Traversal
         let axiomFilterResult = tryMapAxioms stripSymbols model
 
         bind (tryMapViewDefs filterIndefiniteViewDefs) axiomFilterResult
@@ -415,7 +415,7 @@ module Phase =
             >> lift snd
             >> toError
 
-        let sub = withoutContext (removeSymFromBoolExpr UnwantedSym)
+        let sub = mapTraversal (removeSymFromBoolExpr UnwantedSym)
 
         let pos = Starling.Core.Sub.Context.positive
         let neg = Starling.Core.Sub.Context.negative
@@ -477,9 +477,9 @@ module Phase =
 
         // Then, convert the indefs to symbols.
         let symconv =
-            withoutContext
-                (liftTraversalToExprDest
-                    (liftTraversalOverCTyped (ignoreContext (Reg >> ok))))
+            mapTraversal
+                (tliftToExprDest
+                    (tliftOverCTyped (ignoreContext (Reg >> ok))))
 
         let indefSeq = FuncDefiner.toSeq indef
 

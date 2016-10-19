@@ -22,8 +22,8 @@ open Starling.Core.Symbolic.Pretty
 module PostStateRewrite =
     let checkInt (expected : IntExpr<Sym<MarkedVar>>) (expr : IntExpr<Sym<Var>>)
       : unit =
-        let trav = liftTraversalToExprDest (traverseTypedSymWithMarker After)
-        let res = withoutContext (intSubVars trav) expr
+        let trav = tliftToExprDest (traverseTypedSymWithMarker After)
+        let res = mapTraversal (intSubVars trav) expr
 
         assertOkAndEqual expected res
             (printSubError (fun () -> String "?" ) >> printUnstyled)
@@ -162,7 +162,7 @@ module FindSMVarsCases =
       (expr : Expr<Sym<MarkedVar>>)
       : unit =
         let result =
-            findMarkedVars (liftTraversalOverExpr collectSymMarkedVars) expr
+            findMarkedVars (tliftOverExpr collectSymMarkedVars) expr
 
         assertOkAndEqual (Set.ofList expected) result
             (printSubError (fun () -> String "?" ) >> printUnstyled)

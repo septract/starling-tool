@@ -562,11 +562,11 @@ module Graph =
                 Seq.forall
                     (fun p ->
                         // ...there are no symbols, and...
-                        match (withoutContext (removeSymFromExpr ignore) p) with
+                        match (mapTraversal (removeSymFromExpr ignore) p) with
                         | Bad _ -> false
                         | Ok (sp, _) ->
                             // ...for all of the variables in said parameters...
-                            let getVars = liftTraversalOverExpr collectMarkedVars
+                            let getVars = tliftOverExpr collectMarkedVars
                             match findMarkedVars getVars sp with
                             | Bad _ -> false
                             | Ok (pvars, _) ->
@@ -613,13 +613,13 @@ module Graph =
     ///     Partial active pattern matching <c>Sym</c>-less expressions.
     /// </summary>
     let (|VNoSym|_|) : BoolExpr<Sym<Var>> -> BoolExpr<Var> option =
-        withoutContext (removeSymFromBoolExpr ignore) >> okOption
+        mapTraversal (removeSymFromBoolExpr ignore) >> okOption
 
     /// <summary>
     ///     Partial active pattern matching <c>Sym</c>-less expressions.
     /// </summary>
     let (|MNoSym|_|) : BoolExpr<Sym<MarkedVar>> -> BoolExpr<MarkedVar> option =
-        withoutContext (removeSymFromBoolExpr ignore) >> okOption
+        mapTraversal (removeSymFromBoolExpr ignore) >> okOption
 
     /// <summary>
     ///     Active pattern matching on if-then-else guard multisets.
@@ -676,10 +676,10 @@ module Graph =
                     (* Translate xc and yc to pre-state, to match the
                        commands.  If this fails, give up on the optimisation. *)
                     let toBefore : BoolExpr<Var> -> Result<BoolExpr<MarkedVar>, _> =
-                        withoutContext
+                        mapTraversal
                             (boolSubVars
-                                (liftTraversalToExprDest
-                                    (liftTraversalOverCTyped
+                                (tliftToExprDest
+                                    (tliftOverCTyped
                                         (ignoreContext (Before >> ok)))))
                     match toBefore xc, toBefore yc with
                     | Ok (xcPre, _), Ok (ycPre, _) ->
@@ -966,7 +966,7 @@ module Term =
     let rec (|ConstantBoolFunction|_|) (x : BoolExpr<Sym<MarkedVar>>)
       : MarkedVar option =
         x
-        |> findMarkedVars (boolSubVars (liftTraversalToExprDest collectSymMarkedVars))
+        |> findMarkedVars (boolSubVars (tliftToExprDest collectSymMarkedVars))
         |> okOption |> Option.map (Seq.map valueOf) |> Option.bind onlyOne
 
     /// Partial pattern that matches a Boolean expression in terms of exactly one /
@@ -974,7 +974,7 @@ module Term =
     let rec (|ConstantIntFunction|_|) (x : IntExpr<Sym<MarkedVar>>)
       : MarkedVar option =
         x
-        |> findMarkedVars (intSubVars (liftTraversalToExprDest collectSymMarkedVars))
+        |> findMarkedVars (intSubVars (tliftToExprDest collectSymMarkedVars))
         |> okOption |> Option.map (Seq.map valueOf) |> Option.bind onlyOne
 
     /// Finds all instances of the pattern `x!after = f(x!before)` in an
@@ -1099,9 +1099,9 @@ module Term =
          *)
 
         let trav =
-            liftTraversalOverCmdTerm
-                (liftTraversalToExprSrc (liftTraversalToTypedSymVarSrc sub))
-        let result = withoutContext trav term
+            tliftOverCmdTerm
+                (tliftToExprSrc (tliftToTypedSymVarSrc sub))
+        let result = mapTraversal trav term
         mapMessages TermOptError.Traversal result
 
     let eliminateInters
@@ -1113,9 +1113,9 @@ module Term =
                             (term.Cmd.Semantics |> findBoolInters  |> Map.ofList)
 
         let trav =
-            liftTraversalOverCmdTerm
-                (liftTraversalToExprSrc (liftTraversalToTypedSymVarSrc sub))
-        let result = withoutContext trav term
+            tliftOverCmdTerm
+                (tliftToExprSrc (tliftToTypedSymVarSrc sub))
+        let result = mapTraversal trav term
         mapMessages TermOptError.Traversal result
 
     (*
@@ -1170,8 +1170,8 @@ module Term =
             | Bool b -> Bool (simp b)
             | x -> x
         let sub = ignoreContext (simpExpr >> ok)
-        let trav = liftTraversalOverCmdTerm sub
-        withoutContext trav >> mapMessages TermOptError.Traversal
+        let trav = tliftOverCmdTerm sub
+        mapTraversal trav >> mapMessages TermOptError.Traversal
 
     (*
      * Frontend

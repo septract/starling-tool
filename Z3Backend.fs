@@ -254,7 +254,7 @@ let eliminate (reals : bool)
 
     // Try to remove symbols from boolean expressions: don't error if we can't
     let removeSym bexp =
-        let result = withoutContext (removeSymFromBoolExpr ignore) bexp
+        let result = mapTraversal (removeSymFromBoolExpr ignore) bexp
         okOption result
 
     let z3Term (term : SymProofTerm) : ZTerm =
