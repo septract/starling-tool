@@ -73,7 +73,7 @@ module Traversal =
     ///     The type of any returned errors.
     /// </typeparam>
     /// <returns>The lifted <see cref="Traversal"/>.</returns>
-    let liftTraversalOverCommandSemantics
+    let tliftOverCommandSemantics
       (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
       : Traversal<CommandSemantics<BoolExpr<'SrcVar>>,
                   CommandSemantics<BoolExpr<'DstVar>>,

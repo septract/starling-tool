@@ -217,10 +217,10 @@ let termGenWPre
      * stage, both sides only contain local variables.
      *)
     let markView mark =
-        withoutContext
+        mapTraversal
             (tchainM
-                (liftTraversalOverIteratedGFunc
-                    (liftTraversalOverExpr (traverseTypedSymWithMarker mark)))
+                (tliftOverIteratedGFunc
+                    (tliftOverExpr (traverseTypedSymWithMarker mark)))
                 id)
         >> mapMessages Traversal
 

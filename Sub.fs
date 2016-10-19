@@ -229,7 +229,7 @@ type Traversal<'Src, 'Dst, 'Error> =
 ///     The traversal <paramref name="f"/> lifted such that it accepts
 ///     <see cref="NoCtx"/> (and then discards it).
 /// </returns>
-let withoutContext
+let mapTraversal
   (f : Traversal<'Src, 'Dst, 'Error>) : 'Src -> Result<'Dst, SubError<'Error>> =
     f NoCtx >> lift snd
 
@@ -263,7 +263,7 @@ let ignoreContext
 ///     <para>
 ///         This allows, for example, simple functions from one variable type
 ///         to another to be converted into functions over expressions by using
-///         <see cref="liftTraversalOverExpr"/> as <paramref name="lifter"/>.
+///         <see cref="tliftOverExpr"/> as <paramref name="lifter"/>.
 ///     </para>
 /// </summary>
 /// <param name="f">The function to lift.</param>
@@ -294,12 +294,12 @@ let liftWithoutContext
   (f : 'SrcA -> Result<'DstA, 'ErrorA>)
   (lift : Traversal<'SrcA, 'DstA, 'ErrorA> -> Traversal<'SrcB, 'DstB, 'ErrorB>)
   : 'SrcB -> Result<'DstB, SubError<'ErrorB>> =
-    withoutContext (lift (ignoreContext (f >> mapMessages Inner)))
+    mapTraversal (lift (ignoreContext (f >> mapMessages Inner)))
 
 /// <summary>
 ///     Lifts a traversal over <see cref="CTyped"/>.
 /// </summary>
-let liftTraversalOverCTyped
+let tliftOverCTyped
   (sub : Traversal<'Src, 'Dest, 'Error>)
   : Traversal<CTyped<'Src>, CTyped<'Dest>, 'Error> =
     // TODO(CaptainHayashi): proper doc comment.
@@ -432,7 +432,7 @@ let rec boolSubVars
     // is removed when we pop back up the expression stack.
     let bsv f x = Context.changePos f (boolSubVars sub) x
     let isv x = Context.changePos id (intSubVars sub) x
-    let esv x = Context.changePos id (liftTraversalToExprSrc sub) x
+    let esv x = Context.changePos id (tliftToExprSrc sub) x
 
     let neg = Context.negate
 
@@ -482,7 +482,7 @@ and intSubVars
 ///   Converts a traversal from typed variables to expressions to one from
 ///   expressions to expressions.
 /// </summary>
-and liftTraversalToExprSrc
+and tliftToExprSrc
   (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
   : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error> =
     // TODO(CaptainHayashi): proper doc comment.
@@ -529,7 +529,7 @@ let traverseIntAsExpr
 /// <returns>
 ///     <paramref name="sub">, lifted to return expressions.
 /// </returns>
-let liftTraversalToExprDest
+let tliftToExprDest
   (sub : Traversal<CTyped<'SrcVar>, CTyped<'DstVar>, 'Error>)
   : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error> =
     fun ctx -> sub ctx >> lift (pairMap id mkVarExp)
@@ -550,10 +550,10 @@ let liftTraversalToExprDest
 /// <returns>
 ///     <paramref name="sub">, lifted over expressions.
 /// </returns>
-let liftTraversalOverExpr
+let tliftOverExpr
   (sub : Traversal<CTyped<'SrcVar>, CTyped<'DstVar>, 'Error>)
   : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error> =
-    sub |> liftTraversalToExprDest |> liftTraversalToExprSrc
+    sub |> tliftToExprDest |> tliftToExprSrc
 
 /// <summary>
 ///     Converts a non-symbolic expression to its pre-state.
@@ -561,9 +561,9 @@ let liftTraversalOverExpr
 let vBefore (expr : Expr<Var>) : Result<Expr<MarkedVar>, SubError<'Error>> =
     ((Before >> ok)
     |> ignoreContext
-    |> liftTraversalOverCTyped
-    |> liftTraversalOverExpr
-    |> withoutContext)
+    |> tliftOverCTyped
+    |> tliftOverExpr
+    |> mapTraversal)
         expr
 
 /// <summary>
@@ -572,9 +572,9 @@ let vBefore (expr : Expr<Var>) : Result<Expr<MarkedVar>, SubError<'Error>> =
 let vAfter (expr : Expr<Var>) : Result<Expr<MarkedVar>, SubError<'Error>> =
     ((After >> ok)
     |> ignoreContext
-    |> liftTraversalOverCTyped
-    |> liftTraversalOverExpr
-    |> withoutContext)
+    |> tliftOverCTyped
+    |> tliftOverExpr
+    |> mapTraversal)
         expr
 
 /// <summary>

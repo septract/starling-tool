@@ -548,28 +548,28 @@ module Translator =
       : Result<Z3.BoolExpr option, Error> =
         // We use a _lot_ of traversals in this function!
         let toVarTrav : Traversal<CTyped<'Var>, Expr<Var>, Error> =
-            liftTraversalToExprDest
-                (liftTraversalOverCTyped (ignoreContext (toVar >> ok)))
-        let toVarTravExpr = liftTraversalToExprSrc toVarTrav
+            tliftToExprDest
+                (tliftOverCTyped (ignoreContext (toVar >> ok)))
+        let toVarTravExpr = tliftToExprSrc toVarTrav
         let toVarTravBool = boolSubVars toVarTrav
-        let toVarTravGView = tchainM (liftTraversalOverGFunc toVarTravExpr) id
-        let toVarTravVFunc = liftTraversalOverFunc toVarTravExpr
+        let toVarTravGView = tchainM (tliftOverGFunc toVarTravExpr) id
+        let toVarTravVFunc = tliftOverFunc toVarTravExpr
 
         let findVarTrav : Traversal<TypedVar, Expr<Var>, Error> =
-            liftTraversalToExprDest collectVars
-        let findVarTravExpr = liftTraversalToExprSrc findVarTrav
+            tliftToExprDest collectVars
+        let findVarTravExpr = tliftToExprSrc findVarTrav
         let findVarTravBool = boolSubVars findVarTrav
-        let findVarTravGView = tchainM (liftTraversalOverGFunc findVarTravExpr) id
-        let findVarTravVFunc = liftTraversalOverFunc findVarTravExpr
+        let findVarTravGView = tchainM (tliftOverGFunc findVarTravExpr) id
+        let findVarTravVFunc = tliftOverFunc findVarTravExpr
 
         // First, make everything use string variables.
         trial {
             let! bodyExpr' =
-                mapMessages Traversal (withoutContext toVarTravBool bodyExpr)
+                mapMessages Traversal (mapTraversal toVarTravBool bodyExpr)
             let! bodyView' =
-                mapMessages Traversal (withoutContext toVarTravGView bodyView)
+                mapMessages Traversal (mapTraversal toVarTravGView bodyView)
             let! head' =
-                mapMessages Traversal (withoutContext toVarTravVFunc head)
+                mapMessages Traversal (mapTraversal toVarTravVFunc head)
 
             // Then, collect those variables.
             let! bodyExprVars =
@@ -906,10 +906,10 @@ module Run =
 
         // TODO(CaptainHayashi): de-duplicate this with mkRule?
         let defVarsR =
-            findVars (boolSubVars (liftTraversalToExprDest collectVars)) def
+            findVars (boolSubVars (tliftToExprDest collectVars)) def
         let paramVarsR =
             findVars
-                (tchainL (liftTraversalOverExpr collectVars) id)
+                (tchainL (tliftOverExpr collectVars) id)
                 view.Params
         let varsR =
             mapMessages Traversal

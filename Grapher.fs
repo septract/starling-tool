@@ -74,9 +74,9 @@ let rec graphWhile
            false. *)
         let! exprB =
             mapMessages Traversal
-                (withoutContext
+                (mapTraversal
                     (boolSubVars
-                        (liftTraversalToExprDest
+                        (tliftToExprDest
                             (traverseTypedSymWithMarker Before)))
                     expr)
 
@@ -163,9 +163,9 @@ and graphITE
            false. *)
         let! exprB =
             mapMessages Traversal
-                (withoutContext
+                (mapTraversal
                     (boolSubVars
-                        (liftTraversalToExprDest
+                        (tliftToExprDest
                             (traverseTypedSymWithMarker Before)))
                     expr)
 

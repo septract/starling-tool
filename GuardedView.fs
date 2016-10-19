@@ -595,12 +595,12 @@ module Traversal =
     ///     The type of any returned errors.
     /// </typeparam>
     /// <returns>The lifted <see cref="Traversal"/>.</returns>
-    let liftTraversalOverGFunc
+    let tliftOverGFunc
       (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
       : Traversal<GFunc<'SrcVar>, GFunc<'DstVar>, 'Error> =
         fun ctx { Cond = cond; Item = item } ->
             let tBool = traverseBoolAsExpr traversal
-            let tFunc = liftTraversalOverFunc traversal
+            let tFunc = tliftOverFunc traversal
             (* Remember: the condition of a guarded func is in a negative
                position! *)
             tchain2 (changePos negate tBool) tFunc
@@ -626,12 +626,12 @@ module Traversal =
     ///     The type of any returned errors.
     /// </typeparam>
     /// <returns>The lifted <see cref="Traversal"/>.</returns>
-    let liftTraversalOverIteratedGFunc
+    let tliftOverIteratedGFunc
       (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
       : Traversal<IteratedGFunc<'SrcVar>, IteratedGFunc<'DstVar>, 'Error> =
         fun ctx { Iterator = iter ; Func = func } ->
             let tInt = traverseIntAsExpr traversal
-            let tGFunc = liftTraversalOverGFunc traversal
+            let tGFunc = tliftOverGFunc traversal
             tchain2 tInt tGFunc
                 (fun (iter', func') -> { Iterator = iter'; Func = func' })
                 ctx
@@ -654,15 +654,15 @@ module Traversal =
     ///     The type of any returned errors.
     /// </typeparam>
     /// <returns>The lifted <see cref="Traversal"/>.</returns>
-    let liftTraversalOverTerm
+    let tliftOverTerm
       (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
       : Traversal<Term<BoolExpr<'SrcVar>, GView<'SrcVar>, VFunc<'SrcVar>>,
                   Term<BoolExpr<'DstVar>, GView<'DstVar>, VFunc<'DstVar>>,
                   'Error> =
         fun ctx { Cmd = c ; WPre = w; Goal = g } ->
             let tCmd = traverseBoolAsExpr traversal
-            let tWPre = tchainM (liftTraversalOverGFunc traversal) id
-            let tGoal = liftTraversalOverFunc traversal
+            let tWPre = tchainM (tliftOverGFunc traversal) id
+            let tGoal = tliftOverFunc traversal
 
             (* Remember: Cmd and WPre are in a negative position, because
                the term is of the form Cmd /\ WPre => Goal. *)
@@ -689,15 +689,15 @@ module Traversal =
     ///     The type of any returned errors.
     /// </typeparam>
     /// <returns>The lifted <see cref="Traversal"/>.</returns>
-    let liftTraversalOverCmdTerm
+    let tliftOverCmdTerm
       (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
       : Traversal<CmdTerm<BoolExpr<'SrcVar>, GView<'SrcVar>, VFunc<'SrcVar>>,
                   CmdTerm<BoolExpr<'DstVar>, GView<'DstVar>, VFunc<'DstVar>>,
                   'Error> =
         fun ctx { Cmd = c ; WPre = w; Goal = g } ->
-            let tCmd = liftTraversalOverCommandSemantics traversal
-            let tWPre = tchainM (liftTraversalOverGFunc traversal) id
-            let tGoal = liftTraversalOverFunc traversal
+            let tCmd = tliftOverCommandSemantics traversal
+            let tWPre = tchainM (tliftOverGFunc traversal) id
+            let tGoal = tliftOverFunc traversal
             tchain3 tCmd tWPre tGoal
                 (fun (c', w', g') -> { Cmd = c'; WPre = w'; Goal = g' })
                 ctx
@@ -706,11 +706,11 @@ module Traversal =
 /// Gets set of TypedVar's from a GFunc
 let gFuncVars (gfunc : GFunc<Sym<Var>>)
   : Result<Set<TypedVar>, SubError<'Error>> =
-    let tVars = liftTraversalOverExpr collectSymVars
-    findVars (Traversal.liftTraversalOverGFunc tVars) gfunc
+    let tVars = tliftOverExpr collectSymVars
+    findVars (Traversal.tliftOverGFunc tVars) gfunc
 
 /// Gets set of TypedVars from an IteratedGFunc
 let iteratedGFuncVars (itgfunc : IteratedGFunc<Sym<Var>>)
   : Result<Set<TypedVar>, SubError<'Error>> =
-    let tVars = liftTraversalOverExpr collectSymVars
-    findVars (Traversal.liftTraversalOverIteratedGFunc tVars) itgfunc
+    let tVars = tliftOverExpr collectSymVars
+    findVars (Traversal.tliftOverIteratedGFunc tVars) itgfunc

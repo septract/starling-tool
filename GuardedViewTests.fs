@@ -45,7 +45,7 @@ module Tests =
                     | _ -> BVar "?"
                     |> Bool
             ok (ctx, exp)
-        liftTraversalToExprSrc ptsVar
+        tliftToExprSrc ptsVar
 
 
     /// <summary>
@@ -63,7 +63,7 @@ module Tests =
           (expected : Term<BoolExpr<Var>, GView<Var>, Func<Expr<Var>>>)
           (pos : TraversalContext)
           (gv : Term<BoolExpr<Var>, GView<Var>, Func<Expr<Var>>>) : unit =
-            let trav = liftTraversalOverTerm positionTestSub
+            let trav = tliftOverTerm positionTestSub
             let result = trav pos gv
 
             assertOkAndEqual (pos, expected) result
@@ -143,7 +143,7 @@ module Tests =
           (expected : GFunc<Var>)
           (pos : TraversalContext)
           (gv : GFunc<Var>) : unit =
-            let trav = liftTraversalOverGFunc positionTestSub
+            let trav = tliftOverGFunc positionTestSub
             let result = trav pos gv
 
             assertOkAndEqual (pos, expected) result
@@ -181,7 +181,7 @@ module Tests =
           (expected : GView<Var>)
           (pos : TraversalContext)
           (gv : GView<Var>) : unit =
-            let trav = tchainM (liftTraversalOverGFunc positionTestSub) id
+            let trav = tchainM (tliftOverGFunc positionTestSub) id
             let result = trav pos gv
 
             assertOkAndEqual (pos, expected) result

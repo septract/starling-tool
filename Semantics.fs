@@ -103,7 +103,7 @@ let frame svars tvars expr =
        We do this by finding _all_ variables, then filtering. *)
     let varsInExprResult =
         findMarkedVars
-            (boolSubVars (liftTraversalToExprDest collectSymMarkedVars))
+            (boolSubVars (tliftToExprDest collectSymMarkedVars))
             expr
     let untypedVarsInExprResult = lift (Seq.map valueOf) varsInExprResult
 
@@ -210,9 +210,9 @@ let instantiatePrim
         | None -> ok None
         | Some s ->
             let subInTypedSym =
-                    liftTraversalToTypedSymVarSrc (primParamSubFun prim s)
+                    tliftToTypedSymVarSrc (primParamSubFun prim s)
             let subInBool = boolSubVars subInTypedSym
-            let subbed = lift Some (withoutContext subInBool s.Body)
+            let subbed = lift Some (mapTraversal subInBool s.Body)
             mapMessages Traversal subbed
 
     bind instantiate typeCheckedDefResult
@@ -277,12 +277,12 @@ let seqComposition (xs : BoolExpr<Sym<MarkedVar>> list)
 
         let xRewriteBool =
             boolSubVars
-                (liftTraversalToExprDest
-                    (liftTraversalOverCTyped
-                        (liftTraversalToSymSrc
+                (tliftToExprDest
+                    (tliftOverCTyped
+                        (tliftToSymSrc
                             (ignoreContext (xRewriteVar >> ok)))))
 
-        let bexprResult = withoutContext xRewriteBool x
+        let bexprResult = mapTraversal xRewriteBool x
         dict <- dict2
         bexprResult
 

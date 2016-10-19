@@ -378,7 +378,7 @@ module Traversal =
     ///     The type of any returned errors.
     /// </typeparam>
     /// <returns>The lifted <see cref="Traversal"/>.</returns>
-    let liftTraversalOverFunc
+    let tliftOverFunc
       (traversal : Traversal<'SrcPar, 'DstPar, 'Error>)
       : Traversal<Func<'SrcPar>, Func<'DstPar>, 'Error> =
         fun context { Name = n ; Params = ps } ->

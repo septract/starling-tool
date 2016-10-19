@@ -146,7 +146,7 @@ module Queries =
     ///     Lifts a Traversal from variables to symbolic variables to accept
     ///     symbolic variables.
     /// </summary>
-    let rec liftTraversalToSymSrc
+    let rec tliftToSymSrc
       (sub : Traversal<'SrcVar, Sym<'DstVar>, 'Error>)
       : Traversal<Sym<'SrcVar>, Sym<'DstVar>, 'Error> =
         fun ctx ->
@@ -157,9 +157,9 @@ module Queries =
                 // Are our abstractions wrong?
                 tchainL
                     (sub
-                     |> liftTraversalToSymSrc
-                     |> liftTraversalOverCTyped
-                     |> liftTraversalOverExpr)
+                     |> tliftToSymSrc
+                     |> tliftOverCTyped
+                     |> tliftOverExpr)
                     (sym body)
                     ctx rs
 
@@ -167,7 +167,7 @@ module Queries =
     ///     Lifts a Traversal from variables to variables to return
     ///     symbolic variables.
     /// </summary>
-    let liftTraversalToSymDest
+    let tliftToSymDest
       (sub : Traversal<'SrcVar, 'DstVar, 'Error>)
       : Traversal<'SrcVar, Sym<'DstVar>, 'Error> =
         fun ctx -> sub ctx >> lift (pairMap id Reg)
@@ -176,10 +176,10 @@ module Queries =
     ///     Lifts a Traversal from variables to variables to one from
     ///     symbolic variables to symbolic variables.
     /// </summary>
-    let liftTraversalOverSym
+    let tliftOverSym
       (sub : Traversal<'SrcVar, 'DstVar, 'Error>)
       : Traversal<Sym<'SrcVar>, Sym<'DstVar>, 'Error> =
-        sub |> liftTraversalToSymDest |> liftTraversalToSymSrc
+        sub |> tliftToSymDest |> tliftToSymSrc
 
     /// <summary>
     ///     A traversal for removing symbols from variables.
@@ -222,7 +222,7 @@ module Queries =
     /// </returns>
     let removeSymFromExpr (err : string -> 'Error)
       : Traversal<Expr<Sym<'Var>>, Expr<'Var>, 'Error> =
-        (liftTraversalOverExpr (liftTraversalOverCTyped (removeSymFromVar err)))
+        (tliftOverExpr (tliftOverCTyped (removeSymFromVar err)))
 
     /// <summary>
     ///     A traversal for removing symbols from Boolean expressions.
@@ -242,8 +242,8 @@ module Queries =
     let removeSymFromBoolExpr (err : string -> 'Error)
       : Traversal<BoolExpr<Sym<'Var>>, BoolExpr<'Var>, 'Error> =
         boolSubVars
-            (liftTraversalToExprDest
-                (liftTraversalOverCTyped (removeSymFromVar err)))
+            (tliftToExprDest
+                (tliftOverCTyped (removeSymFromVar err)))
 
     (*
      * Common traversals
@@ -253,7 +253,7 @@ module Queries =
     ///     Lifts a traversal from typed variables to symbolic expressions
     ///     such that it now takes typed symbolic variables as input.
     ///     <para>
-    ///         This is needed because <see cref="liftTraversalToExprSrc"/>
+    ///         This is needed because <see cref="tliftToExprSrc"/>
     ///         and other such traversals don't play well with symbolics.
     ///     </para>
     /// </summary>
@@ -261,7 +261,7 @@ module Queries =
     /// <typeparam name="SrcVar">Type of variables entering traversal.</param>
     /// <typeparam name="DstVar">Type of variables leaving traversal.</param>
     /// <returns>The lifted <see cref="Traversal"/>.</returns>
-    let rec liftTraversalToTypedSymVarSrc
+    let rec tliftToTypedSymVarSrc
       (traversal : Traversal<CTyped<'SrcVar>, Expr<Sym<'DstVar>>, 'Error>)
       : Traversal<CTyped<Sym<'SrcVar>>, Expr<Sym<'DstVar>>, 'Error> =
         let rec subInTypedSym ctx sym =
@@ -274,7 +274,7 @@ module Queries =
                             (withType (typeOf sym)
                                 (Sym { Name = n; Params = ps' })))
                     ctx ps
-        and sub = liftTraversalToExprSrc subInTypedSym
+        and sub = tliftToExprSrc subInTypedSym
         subInTypedSym
 
     /// <summary>
@@ -283,7 +283,7 @@ module Queries =
     let traverseSymWithMarker
       (marker : Var -> MarkedVar)
       : Traversal<Sym<Var>, Sym<MarkedVar>, 'Error> =
-        liftTraversalOverSym (ignoreContext (marker >> ok))
+        tliftOverSym (ignoreContext (marker >> ok))
 
     /// <summary>
     ///     Traversal for converting type-annotated symbolic variables with a
@@ -298,25 +298,21 @@ module Queries =
     let traverseTypedSymWithMarker
       (marker : Var -> MarkedVar)
       : Traversal<CTyped<Sym<Var>>, CTyped<Sym<MarkedVar>>, 'Error> =
-        liftTraversalOverCTyped (traverseSymWithMarker marker)
+        tliftOverCTyped (traverseSymWithMarker marker)
 
     /// <summary>
     ///     Converts a symbolic expression to its pre-state.
     /// </summary>
     let before (expr : Expr<Sym<Var>>)
       : Result<Expr<Sym<MarkedVar>>, SubError<'Error>> =
-        withoutContext
-            (liftTraversalOverExpr (traverseTypedSymWithMarker Before))
-            expr
+        mapTraversal (tliftOverExpr (traverseTypedSymWithMarker Before)) expr
 
     /// <summary>
     ///     Converts a symbolic expression to its post-state.
     /// </summary>
     let after (expr : Expr<Sym<Var>>)
       : Result<Expr<Sym<MarkedVar>>, SubError<unit>> =
-        withoutContext
-            (liftTraversalOverExpr (traverseTypedSymWithMarker After))
-            expr
+        mapTraversal (tliftOverExpr (traverseTypedSymWithMarker After)) expr
 
     /// <summary>
     ///     Replaces symbols in a Boolean position with their
@@ -335,7 +331,7 @@ module Queries =
                 tchainL rmap (sym body >> AVar >> Int) ctx rs
             | Bool (Reg x) -> ok (ctx, x |> sbVar |> Bool)
             | Int (Reg x) -> ok (ctx, x |> siVar |> Int)
-        and sf = liftTraversalToExprSrc sub
+        and sf = tliftToExprSrc sub
         and rmap ctx = sf (Context.push id ctx)
 
         sub
@@ -354,7 +350,7 @@ let rec collectSymVars
                 (pushVar ctx (withType tc v))
         | WithType (Sym { Name = body; Params = ps }, tc) ->
             tchainL
-                (liftTraversalOverExpr collectSymVars)
+                (tliftOverExpr collectSymVars)
                 (sym body >> withType tc)
                 ctx ps
 
@@ -372,7 +368,7 @@ let rec collectSymMarkedVars
                 (pushMarkedVar ctx (withType tc v))
         | WithType (Sym { Name = body; Params = ps }, tc) ->
             tchainL
-                (liftTraversalOverExpr collectSymMarkedVars)
+                (tliftOverExpr collectSymMarkedVars)
                 (sym body >> withType tc)
                 ctx ps
 
@@ -420,14 +416,11 @@ let unmarkMarkedVar =
 
 /// Takes a type annotated MarkedVar and strips away the Marked part of the Var
 /// i.e. (Int (Before s)) => (Int s)
-let unmark : CTyped<MarkedVar> -> TypedVar =
-    function
-    | Int a  -> Int <| unmarkMarkedVar a
-    | Bool a -> Bool <| unmarkMarkedVar a
+let unmark : CTyped<MarkedVar> -> TypedVar = mapCTyped unmarkMarkedVar
 
 let markedSymExprVars (expr : Expr<Sym<MarkedVar>>)
   : Result<Set<CTyped<MarkedVar>>, SubError<'Error>> =
-    findMarkedVars (liftTraversalOverExpr collectSymMarkedVars) expr
+    findMarkedVars (tliftOverExpr collectSymMarkedVars) expr
 
 /// Returns the set of all variables annotated with their types
 /// contained within the SMExpr

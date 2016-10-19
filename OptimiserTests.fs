@@ -118,9 +118,9 @@ module AfterExprs =
     let check expected case : unit =
         let trav =
             boolSubVars
-                (liftTraversalToTypedSymVarSrc
+                (tliftToTypedSymVarSrc
                     (afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs))
-        let result = withoutContext trav case
+        let result = mapTraversal trav case
         assertOkAndEqual expected result
             (printSubError printTermOptError >> printUnstyled)
 
@@ -201,11 +201,11 @@ module AfterFuncs =
     /// Test after-elimination of Booleans.
     let check expected case : unit =
         let trav =
-            liftTraversalOverFunc
-                (liftTraversalToExprSrc
-                    (liftTraversalToTypedSymVarSrc
+            tliftOverFunc
+                (tliftToExprSrc
+                    (tliftToTypedSymVarSrc
                         (afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs)))
-        let result = withoutContext trav case
+        let result = mapTraversal trav case
         assertOkAndEqual expected result
             (printSubError printTermOptError >> printUnstyled)
 

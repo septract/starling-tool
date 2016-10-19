@@ -260,7 +260,7 @@ let runZ3OnModel (shouldUseRealsForInts : bool)
        Suppress the Chessie error that happens if we can't, because in that case
        we just return a 'Z3 can't prove this' result. *)
     let removeSym bexp =
-        let result = withoutContext (removeSymFromBoolExpr ignore) bexp
+        let result = mapTraversal (removeSymFromBoolExpr ignore) bexp
         okOption result
 
     let z3Term (term : SymProofTerm) : ZTerm =
