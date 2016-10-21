@@ -21,10 +21,12 @@ open Starling.Core.Instantiate
 open Starling.Core.Traversal
 open Starling.Lang.AST
 open Starling.Lang.Collator
+open Starling.Lang.ViewDesugar
 
 
 /// <summary>
-///     Types used only in the modeller and adjacent pipeline stages.  /// </summary>
+///     Types used only in the modeller and adjacent pipeline stages.
+/// </summary>
 [<AutoOpen>]
 module Types =
     /// A conditional (flat or if-then-else) func.
@@ -72,17 +74,30 @@ module Types =
     type ModellerViewedCommand = ViewedCommand<ModellerViewExpr, ModellerPartCmd>
     type ModellerMethod = Method<ModellerViewExpr, ModellerPartCmd>
 
+    /// <summary>
+    ///     An error originating from the type system.
+    /// </summary>
+    type TypeError =
+        /// <summary>
+        ///     Two items that should have been the same type were not.
+        /// </summary>
+        | TypeMismatch of expected : Type * got : Type
+        /// <summary>
+        ///     A language type literal is inexpressible in Starling.
+        /// </summary>
+        | ImpossibleType of lit : TypeLiteral * why : string
+
     // TODO(CaptainHayashi): more consistent constructor names
     /// Represents an error when converting an expression.
     type ExprError =
-        /// A non-Boolean expression was found in a Boolean position.
-        | ExprNotBoolean
-        /// A non-Boolean variable was found in a Boolean position.
-        | VarNotBoolean of var : LValue
-        /// A non-integral expression was found in an integral position.
-        | ExprNotInt
-        /// A non-integral variable was found in an integral position.
-        | VarNotInt of var : LValue
+        /// <summary>
+        ///     The expression failed the type checker.
+        /// </summary>
+        | ExprBadType of err : TypeError
+        /// <summary>
+        ///     A variable in the expression failed the type checker.
+        /// </summary>
+        | VarBadType of var : LValue * err : TypeError
         /// A variable usage in the expression produced a `VarMapError`.
         | Var of var : LValue * err : VarMapError
         /// A substitution over the variable produced a `TraversalError`.
@@ -93,7 +108,11 @@ module Types =
     /// Represents an error when converting a view prototype.
     type ViewProtoError =
         /// A parameter name was used more than once in the same view prototype.
-        | VPEDuplicateParam of AST.Types.ViewProto * param : string
+        | VPEDuplicateParam of DesugaredViewProto * param : string
+        /// <summary>
+        ///     A view prototype had parameters of incorrect type in it.
+        /// </summary>
+        | BadParamType of proto : ViewProto * par : Param * err : TypeError
 
     /// Represents an error when converting a view or view def.
     type ViewError =
@@ -136,7 +155,7 @@ module Types =
         /// A prim tried to atomic-load from a non-lvalue expression.
         | LoadNonLV of expr : AST.Types.Expression
         /// A prim had a type error in it.
-        | TypeMismatch of expected : Type * bad : LValue * got : Type
+        | BadType of lv : LValue * err : TypeError
         /// A prim has no effect.
         | Useless
 
@@ -159,14 +178,17 @@ module Types =
     /// Represents an error when converting a model.
     type ModelError =
         /// A view prototype in the program generated a `ViewProtoError`.
-        | BadVProto of proto : AST.Types.ViewProto * err : ViewProtoError
+        | BadVProto of proto : DesugaredViewProto * err : ViewProtoError
+        /// A view prototype's parameter in the program generated a `TypeError`.
+        | BadVProtoParamType of proto : ViewProto * param : Param * err : TypeError
         /// A constraint in the program generated a `ConstraintError`.
         | BadConstraint of constr : AST.Types.ViewSignature * err : ConstraintError
         /// A method in the program generated an `MethodError`.
         | BadMethod of methname : string * err : MethodError
         /// A variable in the program generated a `VarMapError`.
         | BadVar of scope: string * err : VarMapError
-
+        /// A variable declaration in the program generated a `TypeError`.
+        | BadVarType of var: string * err : TypeError
 
 /// <summary>
 ///     Pretty printers for the modeller types.
@@ -219,17 +241,43 @@ module Pretty =
                                 headed "False" [printBlock pView (printPartCmd pView) f])
                             inFalse ]
 
-    /// Pretty-prints expression conversion errors.
-    let printExprError : ExprError -> Doc =
-        function
-        | ExprNotBoolean ->
-            "expression is not suitable for use in a Boolean position" |> String
-        | VarNotBoolean lv ->
-            fmt "lvalue '{0}' is not a suitable type for use in a Boolean expression" [ printLValue lv ]
-        | ExprNotInt ->
-            "expression is not suitable for use in an integral position" |> String
-        | VarNotInt lv ->
-            fmt "lvalue '{0}' is not a suitable type for use in an integral expression" [ printLValue lv ]
+    /// <summary>
+    ///     Pretty-prints type errors.
+    /// </summary>
+    /// <param name="err">The error to print.</param>
+    /// <returns>
+    ///     A pretty-printer command that prints <paramref name="err" />.
+    /// </returns>
+    let printTypeError (err : TypeError) : Doc =
+        match err with
+        | TypeMismatch (expected, got) ->
+            errorStr "expected"
+            <+> quoted (printType expected)
+            <&> errorStr "got"
+            <+> quoted (printType got)
+        | ImpossibleType (lit, why) ->
+            let header =
+                errorStr "type literal"
+                <+> quoted (printTypeLiteral lit)
+                <&> errorStr "cannot be expressed in Starling"
+            cmdHeaded header [ errorInfoStr why ]
+
+    /// <summary>
+    ///     Pretty-prints expression conversion errors.
+    /// </summary>
+    /// <param name="err">The error to print.</param>
+    /// <returns>
+    ///     A pretty-printer command that prints <paramref name="err" />.
+    /// </returns>
+    let printExprError (err : ExprError) : Doc =
+        match err with
+        | ExprBadType err ->
+            cmdHeaded (errorStr "type error in expression")
+                [ printTypeError err ]
+        | VarBadType (lv, err) ->
+            let header =
+                errorStr "type error in lvalue" <+> quoted (printLValue lv)
+            cmdHeaded header [ printTypeError err ]
         | Var(var, err) -> wrapped "variable" (var |> printLValue) (err |> printVarMapError)
         | BadSub err ->
             fmt "Substitution error: {0}" [ printTraversalError (fun _ -> String "()") err ]
@@ -268,12 +316,20 @@ module Pretty =
     let printViewProtoError : ViewProtoError -> Doc =
         function
         | VPEDuplicateParam(vp, param) ->
-            fmt "view proto '{0} has duplicate param {1}" [ printViewProto vp
-                                                            String param ]
+            fmt "view proto '{0}' has duplicate param {1}"
+                [ printGeneralViewProto printTypedVar vp; String param ]
+        | BadParamType (proto, par, err) ->
+            cmdHeaded
+                (errorStr "parameter"
+                 <+> quoted (printParam par)
+                 <+> errorStr "in view proto"
+                 <+> quoted (printGeneralViewProto printParam proto)
+                 <+> errorStr "has bad type")
+                [ printTypeError err ]
 
     /// Pretty-prints prim errors.
-    let printPrimError : PrimError -> Doc =
-        function
+    let printPrimError (err : PrimError) : Doc =
+        match err with
         | BadSVar (var, err : VarMapError) ->
             wrapped "shared lvalue" (printLValue var)
                                     (printVarMapError err)
@@ -300,16 +356,18 @@ module Pretty =
         | LoadNonLV expr ->
             fmt "cannot load from non-lvalue expression '{0}'"
                 [ printExpression expr ]
-        | TypeMismatch (expected, bad, got) ->
-            fmt "lvalue '{0}' should be of type {1}, but is {2}"
-                [ printLValue bad
-                  printType expected
-                  printType got ]
         | Useless -> String "command has no effect"
+        | BadType (lv, err) ->
+            let header =
+                errorStr "lvalue"
+                <+> quoted (printLValue lv)
+                <+> errorStr "has incorrect type"
+            cmdHeaded header [ printTypeError err ]
+
 
     /// Pretty-prints method errors.
-    let printMethodError : MethodError -> Doc =
-        function
+    let printMethodError (err : MethodError) : Doc =
+        match err with
         | BadAssign (dest, src, err) ->
             wrapped "local assign" (printAssign dest src) (printPrimError err)
         | BadAtomic (atom, err) ->
@@ -328,8 +386,8 @@ module Pretty =
                 [ printCommand (printViewExpr printView) cmd ]
 
     /// Pretty-prints model conversion errors.
-    let printModelError : ModelError -> Doc =
-        function
+    let printModelError (err : ModelError) : Doc =
+        match err with
         | BadConstraint(constr, err) ->
             wrapped "constraint" (printViewSignature constr)
                                  (printConstraintError err)
@@ -338,8 +396,17 @@ module Pretty =
         | BadMethod(methname, err) ->
             wrapped "method" (String methname) (printMethodError err)
         | BadVProto(vproto, err) ->
-            wrapped "view prototype" (printViewProto vproto)
+            wrapped "view prototype" (printGeneralViewProto printTypedVar vproto)
                                      (printViewProtoError err)
+        | BadVProtoParamType(vproto, param, err) ->
+            let head =
+                errorStr "type of param"
+                <+> quoted (printParam param)
+                <+> errorStr "in view prototype"
+                <+> quoted (printGeneralViewProto printParam vproto)
+            cmdHeaded head [ printTypeError err ]
+        | BadVarType(name, err) ->
+            wrapped "type of variable" (String name) (printTypeError err)
 
 
 (*
@@ -558,7 +625,13 @@ and modelBoolExpr
             |> wrapMessages Var (VarMap.lookup env)
             |> bind (function
                      | Typed.Bool vn -> vn |> varF |> Reg |> BVar |> ok
-                     | _ -> v |> VarNotBoolean |> fail)
+                     | vr ->
+                        fail
+                            (VarBadType
+                                (v,
+                                 TypeMismatch
+                                    (expected = Type.Bool (),
+                                     got = typeOf vr))))
         | Symbolic (sym, args) ->
             args
             |> List.map me
@@ -590,7 +663,9 @@ and modelBoolExpr
                        | _ -> failwith "unreachable[modelBoolExpr::AnyIn]")
                       (me l)
                       (me r)
-        | _ -> fail ExprNotBoolean
+        // TODO(CaptainHayashi): figure out what the actual type is here
+        | _ ->
+            fail (ExprBadType (TypeMismatch (expected = Bool (), got = Int ())))
     mb
 
 /// <summary>
@@ -638,7 +713,13 @@ and modelIntExpr
             |> wrapMessages Var (VarMap.lookup env)
             |> bind (function
                      | Typed.Int vn -> vn |> varF |> Reg |> AVar |> ok
-                     | _ -> v |> VarNotInt |> fail)
+                     | vr ->
+                        fail
+                            (VarBadType
+                                (v,
+                                 TypeMismatch
+                                    (expected = Type.Int (),
+                                     got = typeOf vr))))
         | Symbolic (sym, args) ->
             args
             |> List.map me
@@ -654,7 +735,9 @@ and modelIntExpr
                    | _ -> failwith "unreachable[modelIntExpr]")
                   (mi l)
                   (mi r)
-        | _ -> fail ExprNotInt
+        // TODO(CaptainHayashi): figure out what the actual type is here
+        | _ ->
+            fail (ExprBadType (TypeMismatch (expected = Int (), got = Bool ())))
     mi
 
 (*
@@ -985,7 +1068,12 @@ let modelBoolLoad : MethodContext -> Var -> Expression -> FetchMode -> Result<Pr
 
             | Typed.Bool s, Increment -> return! fail (IncBool srcExpr)
             | Typed.Bool s, Decrement -> return! fail (DecBool srcExpr)
-            | _ -> return! fail (TypeMismatch (Type.Bool (), srcLV, typeOf src))
+            | _ ->
+                return!
+                    (fail
+                        (BadType
+                            (srcLV,
+                             TypeMismatch (Type.Bool (), typeOf src))))
         }
     | _ -> fail (LoadNonLV srcExpr)
 
@@ -1010,7 +1098,7 @@ let modelIntLoad : MethodContext -> Var -> Expression -> FetchMode -> Result<Pri
             | Typed.Int s, Decrement ->
                 return command "!ILoad--" [ Int dest; Int s ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
 
-            | _ -> return! fail (TypeMismatch (Type.Int (), srcLV, typeOf src))
+            | _ -> return! fail (BadType (srcLV, TypeMismatch (Type.Int (), typeOf src)))
         }
     | _ -> fail (LoadNonLV srcExpr)
 
@@ -1093,7 +1181,7 @@ let modelCAS : MethodContext -> LValue -> LValue -> Expression -> Result<PrimCom
          | (d, t) ->
              // Oops, we have a type error.
              // Arbitrarily single out test as the cause of it.
-             fail (TypeMismatch (typeOf d, testLV, typeOf t)))
+             fail (BadType (testLV, TypeMismatch (typeOf d, typeOf t))))
 
 /// Converts an atomic fetch to a model command.
 let modelFetch : MethodContext -> LValue -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
@@ -1288,8 +1376,8 @@ let modelMethod
     |> mapMessages (curry BadMethod sg.Name)
 
 /// Checks a view prototype to see if it contains duplicate parameters.
-let checkViewProtoDuplicates (proto : ViewProto)
-  : Result<ViewProto, ViewProtoError> =
+let checkViewProtoDuplicates (proto : DesugaredViewProto)
+  : Result<DesugaredViewProto, ViewProtoError> =
     match proto with
     | NoIterator (f, _) | WithIterator (f, _) ->
         f.Params
@@ -1301,7 +1389,7 @@ let checkViewProtoDuplicates (proto : ViewProto)
            | ds -> List.map (fun d -> VPEDuplicateParam(proto, d)) ds |> Bad
 
 /// Checks view prototypes and converts them to func-table form.
-let modelViewProtos (protos : #(ViewProto seq))
+let modelViewProtos (protos : #(DesugaredViewProto seq))
   : Result<FuncDefiner<ProtoInfo>, ModelError> =
     let modelViewProto proto =
         proto
@@ -1312,12 +1400,76 @@ let modelViewProtos (protos : #(ViewProto seq))
                     (f, { IsIterated = false; IsAnonymous = isAnonymous; } )
                 | WithIterator (f, _) ->
                     (f, { IsIterated = true; IsAnonymous = false; } ))
-        |> mapMessages (curry BadVProto proto)
 
     protos
-    |> Seq.map modelViewProto
+    |> Seq.map (wrapMessages BadVProto modelViewProto)
     |> collect
     |> lift FuncDefiner.ofSeq
+
+/// <summary>
+///     Converts a pair of AST type literal and name into a typed variable.
+/// </summary>
+/// <param name="lit">The type literal to convert.</param>
+/// <param name="name">The variable name to use.</param>
+/// <returns>
+///     If the type literal is expressible in Starling's type system, the
+///     corresponding type; otherwise, an error.
+/// </returns>
+let convertTypedVar (lit : AST.Types.TypeLiteral) (name : string)
+  : Result<TypedVar, TypeError> =
+    match lit with
+    | TInt -> ok (Int name)
+    | TBool -> ok (Bool name)
+    | TArray _ -> fail (ImpossibleType (lit, "arrays not yet implemented"))
+
+/// <summary>
+///     Converts a type-variable list to a variable map.
+/// </summary>
+/// <param name="tvs">The list to convert.</param>
+/// <param name="scope">The name of the scope of the variables.</param>
+/// <returns>
+///     If the variables' types are expressible in Starling's type system, the
+///     corresponding variable map of the variables; otherwise, an error.
+/// </returns>
+let modelVarMap (tvs : (TypeLiteral * string) list) (scope : string)
+  : Result<VarMap, ModelError> =
+    let cvt (t, v) = mapMessages (curry BadVarType v) (convertTypedVar t v)
+    let varsResult = collect (List.map cvt tvs)
+
+    bind (VarMap.ofTypedVarSeq >> mapMessages (curry BadVar scope)) varsResult
+
+/// <summary>
+///     Converts a parameter to a typed variable.
+/// </summary>
+/// <param name="par">The parameter to convert.</param>
+/// <returns>
+///     If the parameter is expressible in Starling's type system, the
+///     corresponding type; otherwise, an error.
+/// </returns>
+let convertParam (par : AST.Types.Param) : Result<TypedVar, TypeError> =
+    let { ParamType = ptype; ParamName = pname } = par
+    convertTypedVar ptype pname
+
+/// <summary>
+///     Converts view prototypes from the Starling language's type system
+///     to Starling's type system.
+/// </summary>
+let convertViewProtos (vps : ViewProto list)
+  : Result<DesugaredViewProto list, ModelError> =
+    // TODO(CaptainHayashi): proper doc comment.
+    let convertViewFunc vp { Name = n; Params = ps } =
+        let conv = wrapMessages (fun (p, e) -> BadVProtoParamType (vp, p, e)) convertParam
+        let ps'Result = ps |> List.map conv |> collect
+        lift (func n) ps'Result
+
+    let convertViewProto vp =
+        match vp with
+        | NoIterator (func, isAnonymous) ->
+            lift (fun f -> NoIterator (f, isAnonymous)) (convertViewFunc vp func)
+        | WithIterator (func, iterator) ->
+            lift (fun f -> WithIterator (f, iterator)) (convertViewFunc vp func)
+
+    collect (List.map convertViewProto vps)
 
 /// Converts a collated script to a model.
 let model
@@ -1325,16 +1477,14 @@ let model
   : Result<Model<ModellerMethod, ViewDefiner<SVBoolExpr option>>, ModelError> =
     trial {
         // Make variable maps out of the shared and thread variable definitions.
-        let! svars = VarMap.ofTypedVarSeq collated.SharedVars
-                       |> mapMessages (curry BadVar "shared")
-        let! tvars = VarMap.ofTypedVarSeq collated.ThreadVars
-                      |> mapMessages (curry BadVar "thread-local")
+        let! svars = modelVarMap collated.SharedVars "shared"
+        let! tvars = modelVarMap collated.ThreadVars "thread"
 
         let desugaredMethods, unknownProtos =
-            Starling.Lang.ViewDesugar.desugar tvars collated.Methods
+            desugar tvars collated.Methods
 
-        let! vprotos =
-            modelViewProtos (Seq.append collated.VProtos unknownProtos)
+        let! cprotos = convertViewProtos collated.VProtos
+        let! vprotos = modelViewProtos (Seq.append cprotos unknownProtos)
 
         let! constraints = modelViewDefs svars vprotos collated
 

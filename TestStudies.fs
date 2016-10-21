@@ -317,7 +317,7 @@ let ticketLockParsed =
             ViewProtos
                 [ NoIterator
                     ({ Name = "holdTick"
-                       Params = [ Int "t" ] },
+                       Params = [ { ParamType = TInt; ParamName = "t" } ] },
                      false) ] }
       { Position =
             { StreamName = "Examples/Pass/ticketLock.cvf"
@@ -362,45 +362,49 @@ let ticketLockParsed =
         Constraint ticketLockConstraint06}
 
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
-                   Line = 5L;
-                   Column = 1L;};
-       Node = SharedVars (Int (), ["ticket"]);};
-      {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
-                   Line = 6L;
-                   Column = 1L;};
-       Node = SharedVars (Int (), ["serving"]);};
-      {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
-                   Line = 7L;
-                   Column = 1L;};
-       Node = ThreadVars (Int (), ["t"]);};
-      {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
-                   Line = 8L;
-                   Column = 1L;};
-       Node = ThreadVars (Int (), ["s"]);};
+                   Line = 5L
+                   Column = 1L}
+       Node = SharedVars { VarType = TInt; VarNames = ["ticket"] }}
+      {Position = {StreamName = "Examples/Pass/ticketLock.cvf"
+                   Line = 6L
+                   Column = 1L}
+       Node = SharedVars { VarType = TInt; VarNames = ["serving"] }}
+      {Position = {StreamName = "Examples/Pass/ticketLock.cvf"
+                   Line = 7L
+                   Column = 1L}
+       Node = ThreadVars { VarType = TInt; VarNames = ["t"] }}
+      {Position = {StreamName = "Examples/Pass/ticketLock.cvf"
+                   Line = 8L
+                   Column = 1L}
+       Node = ThreadVars { VarType = TInt; VarNames = ["s"] }}
 
-      {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
-                   Line = 13L;
-                   Column = 1L;};
-       Node = Method ticketLockLockMethodAST;};
+      {Position = {StreamName = "Examples/Pass/ticketLock.cvf"
+                   Line = 13L
+                   Column = 1L}
+       Node = Method ticketLockLockMethodAST}
 
-      {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
-                   Line = 28L;
-                   Column = 1L;};
-       Node = Method ticketLockUnlockMethodAST;};
+      {Position = {StreamName = "Examples/Pass/ticketLock.cvf"
+                   Line = 28L
+                   Column = 1L}
+       Node = Method ticketLockUnlockMethodAST}
        ]
 
 /// The collated form of the ticket lock.
 let ticketLockCollated =
     { CollatedScript.SharedVars =
-          [ (TypedVar.Int "ticket")
-            (TypedVar.Int "serving") ]
+          [ (TInt, "ticket")
+            (TInt, "serving") ]
       ThreadVars =
-          [ (TypedVar.Int "t")
-            (TypedVar.Int "s") ]
+          [ (TInt, "t")
+            (TInt, "s") ]
       Search = None
       VProtos =
-          [ NoIterator ({ Name = "holdTick"; Params = [ (Int "t") ] }, false)
-            NoIterator ({ Name = "holdLock"; Params = [] }, false) ]
+          [ NoIterator
+                ({ Name = "holdTick"
+                   Params = [ { ParamType = TInt; ParamName = "t" } ] }, false)
+            NoIterator
+                ({ Name = "holdLock"
+                   Params = [] }, false) ]
       Constraints =
           [ // constraint emp -> ticket >= serving;
             ticketLockConstraint01

@@ -37,8 +37,8 @@ module ViewProtoTests =
              [ NoIterator
                 (Func =
                     func "foo"
-                        [ Int "a"
-                          Int "b" ],
+                        [ { ParamType = TInt; ParamName = "a" }
+                          { ParamType = TInt; ParamName = "b" } ],
                  IsAnonymous = false) ])
 
     [<Test>]
@@ -46,10 +46,16 @@ module ViewProtoTests =
         check parseViewProtoSet "view foo(int a, int b), bar(int c, bool d);"
             (Some <|
              [ NoIterator
-                (Func = func "foo"[ Int "a"; Int "b" ],
+                (Func =
+                    func "foo"
+                        [ { ParamType = TInt; ParamName = "a" }
+                          { ParamType = TInt; ParamName = "b" } ],
                  IsAnonymous = false)
                NoIterator
-                (Func = func "bar"[ Int "c"; Bool "d" ],
+                (Func =
+                    func "bar"
+                        [ { ParamType = TInt; ParamName = "c" }
+                          { ParamType = TBool; ParamName = "d" } ],
                  IsAnonymous = false) ])
 
     [<Test>]
@@ -62,7 +68,7 @@ module ExpressionTests =
     [<Test>]
     let ``Test modulo is parsed correctly`` () =
         check parseExpression "5 + 6 % 7"
-            (Some <| 
+            (Some <|
              node "" 1L 3L
              ** BopExpr (Add,
                     node "" 1L 1L (Num 5L),
