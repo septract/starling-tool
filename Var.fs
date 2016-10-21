@@ -175,8 +175,8 @@ let rec flattenLV =
     function
     | LVIdent s -> s
 
-/// Makes a variable map from a list of type-name pairs.
-let makeVarMap lst =
+/// Makes a variable map from a list of typed variables.
+let makeVarMap (lst : TypedVar list) : Result<VarMap, VarMapError> =
     lst
     |> List.map valueOf // Extract all names from the list.
     |> findDuplicates

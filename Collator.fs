@@ -21,8 +21,8 @@ module Types =
     ///     A script whose items have been partitioned by type.
     /// </summary>
     type CollatedScript =
-        { SharedVars : TypedVar list
-          ThreadVars : TypedVar list
+        { SharedVars : (TypeLiteral * string) list
+          ThreadVars : (TypeLiteral * string) list
           /// <summary>
           ///     The search depth, defaulting to <c>None</c> (no search).
           /// </summary>
@@ -57,8 +57,10 @@ module Pretty =
     ///     A pretty-printer command for printing <paramref name="cs" />.
     /// </returns>
     let printCollatedScript (cs: CollatedScript) : Doc =
-        let printScriptVar cls v =
-            withSemi (hsep [ String cls |> syntax; printTypedVar v ])
+        let printScriptVar cls (t, v) =
+            // This is a bit of a cop-out.
+            let vdc = { VarType = t; VarNames = [v] }
+            hsep [ String cls; printVarDecl vdc ]
 
         let definites =
             [ vsep <| Seq.map printViewProto cs.VProtos
@@ -106,13 +108,13 @@ let collate (script : ScriptItem list) : CollatedScript =
 
     let collateStep item (cs : CollatedScript) =
         match item.Node with
-        | SharedVars (t, vs) ->
+        | SharedVars { VarType = t; VarNames = vs } ->
             // Flatten eg. 'int x, y, z' into 'int x; int y; int z'.
-            let s = List.map (withType t) vs
+            let s = List.map (mkPair t) vs
             { cs with SharedVars = s @ cs.SharedVars }
-        | ThreadVars (t, vs) ->
+        | ThreadVars { VarType = t; VarNames = vs } ->
             // Flatten eg. 'int x, y, z' into 'int x; int y; int z'.
-            let s = List.map (withType t) vs
+            let s = List.map (mkPair t) vs
             { cs with ThreadVars = s @ cs.ThreadVars }
         | ViewProto v -> { cs with VProtos = v::cs.VProtos }
         | Search i -> { cs with Search = Some i }

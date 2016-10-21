@@ -62,24 +62,6 @@ module Types =
         | Assume of Expression // <assume(e)
     and Atomic = Node<Atomic'>
 
-    /// A view prototype.
-    type ViewProto =
-        /// <summary>
-        ///     A non-iterated view prototype; can be anonymous.
-        /// </summary>
-        | NoIterator of Func : Func<TypedVar> * IsAnonymous : bool
-        /// <summary>
-        ///     An iterated view prototype; cannot be anonymous
-        /// </summary>
-        | WithIterator of Func: Func<TypedVar> * Iterator: string
-
-    /// A view as seen on the LHS of a ViewDef.
-    type ViewSignature =
-        | Unit
-        | Join of ViewSignature * ViewSignature
-        | Func of Func<string>
-        | Iterated of Func<string> * string
-
     /// <summary>
     ///     A view, annotated with additional syntax.
     ///
@@ -107,6 +89,62 @@ module Types =
 
     /// An AST func.
     type AFunc = Func<Expression>
+
+    /// <summary>
+    ///     An AST type literal.
+    ///     <para>
+    ///         This is kept separate from the Starling type system to allow
+    ///         it to become more expressive later on (eg typedefs).
+    ///     </para>
+    /// </summary>
+    type TypeLiteral =
+        /// <summary>An integer type.</summary>
+        | TInt
+        /// <summary>A Boolean type.</summary>
+        | TBool
+        /// <summary>An array type.</summary>
+        | TArray of length : int * contentT : TypeLiteral
+
+    /// <summary>
+    ///     An AST formal parameter declaration.
+    /// </summary>
+    type Param =
+        { /// <summary>The type of the parameters.</summary>
+          ParamType : TypeLiteral
+          /// <summary>The names of the parameters.</summary>
+          ParamName : string
+        }
+
+    /// A view prototype.
+    type GeneralViewProto<'Param> =
+        /// <summary>
+        ///     A non-iterated view prototype; can be anonymous.
+        /// </summary>
+        | NoIterator of Func : Func<'Param> * IsAnonymous : bool
+        /// <summary>
+        ///     An iterated view prototype; cannot be anonymous
+        /// </summary>
+        | WithIterator of Func: Func<'Param> * Iterator: string
+
+    /// A view prototype with Param parameters.
+    type ViewProto = GeneralViewProto<Param>
+
+    /// A view as seen on the LHS of a ViewDef.
+    type ViewSignature =
+        | Unit
+        | Join of ViewSignature * ViewSignature
+        | Func of Func<string>
+        | Iterated of Func<string> * string
+
+    /// <summary>
+    ///     An AST variable declaration.
+    /// </summary>
+    type VarDecl =
+        { /// <summary>The type of the variables.</summary>
+          VarType : TypeLiteral
+          /// <summary>The names of the variables.</summary>
+          VarNames : string list
+        }
 
     /// A view.
     type View =
@@ -152,7 +190,7 @@ module Types =
 
     /// A method.
     type Method<'view, 'cmd> =
-        { Signature : Func<string> // main (argv, argc) ...
+        { Signature : Func<Param> // main (argv, argc) ...
           Body : Block<'view, 'cmd> } // ... { ... }
 
     /// Synonym for methods over CommandTypes.
@@ -160,8 +198,8 @@ module Types =
 
     /// A top-level item in a Starling script.
     type ScriptItem' =
-        | SharedVars of Type * Var list // shared int name1, name2, name3;
-        | ThreadVars of Type * Var list // thread int name1, name2, name3;
+        | SharedVars of VarDecl // shared int name1, name2, name3;
+        | ThreadVars of VarDecl // thread int name1, name2, name3;
         | Method of CMethod<Marked<View>> // method main(argv, argc) { ... }
         | Search of int // search 0;
         | ViewProto of ViewProto // view name(int arg);
@@ -302,13 +340,36 @@ module Pretty =
               :: List.map (printViewedCommand pView pCmd >> Indent) c)
         |> braced
 
+    /// <summary>
+    ///     Pretty-prints a type literal.
+    /// </summary>
+    /// <param name="lit">The <see cref="TypeLiteral"/> to print.</param>
+    /// <returns>
+    ///     A <see cref="Doc"/> representing the given type literal.
+    /// </returns>
+    let printTypeLiteral (lit : TypeLiteral) : Doc =
+        let rec pl lit suffix =
+            match lit with
+            | TInt -> hsep2 Nop (syntaxIdent (String ("int"))) suffix
+            | TBool -> hsep2 Nop (syntaxIdent (String ("bool"))) suffix
+            | TArray (len, contents) ->
+                let lenSuffix = squared (String (sprintf "%d" len))
+                pl contents (hsep2 Nop suffix lenSuffix)
+        pl lit Nop
+
+    /// Pretty-prints parameters.
+    let printParam (par : Param) : Doc =
+        hsep
+            [ printTypeLiteral par.ParamType
+              syntaxLiteral (String par.ParamName) ]
+
     /// Pretty-prints methods.
     let printMethod (pView : 'view -> Doc)
                     (pCmd : 'cmd -> Doc)
                     ({ Signature = s; Body = b } : Method<'view, 'cmd>)
                     : Doc =
         hsep [ "method" |> String |> syntax
-               printFunc (String >> syntaxIdent) s
+               printFunc (printParam >> syntaxIdent) s
                printBlock pView pCmd b ]
 
     /// Pretty-prints commands.
@@ -353,34 +414,41 @@ module Pretty =
                      : Doc =
         printCommand' pView x.Node
 
-    /// Pretty-prints a view prototype.
-    let printViewProto : ViewProto -> Doc =
-        function
+    /// Pretty-prints a general view prototype.
+    let printGeneralViewProto (pParam : 'Param -> Doc)(vp : GeneralViewProto<'Param>) : Doc =
+        match vp with
         | NoIterator (Func = { Name = n; Params = ps }; IsAnonymous = _) ->
             hsep [ "view" |> String |> syntax
-                   func n (List.map (printCTyped String) ps) ]
+                   func n (List.map pParam ps) ]
             |> withSemi
         | WithIterator (Func = { Name = n; Params = ps }; Iterator = i) ->
             hsep [ "view" |> String |> syntax
-                   func n (List.map (printCTyped String) ps)
+                   func n (List.map pParam ps)
                    squared (String i)]
             |> withSemi
+
+    /// Pretty-prints a view prototype.
+    let printViewProto : ViewProto -> Doc = printGeneralViewProto printParam
 
     /// Pretty-prints a search directive.
     let printSearch (i : int) : Doc =
         hsep [ String "search" |> syntax
                sprintf "%d" i |> String ]
 
+    /// Pretty-prints a variable declaration, without semicolon.
+    let printVarDecl (vs : VarDecl) : Doc =
+        let vsp = commaSep (List.map printVar vs.VarNames)
+        hsep [ printTypeLiteral vs.VarType; vsp ]
+
     /// Pretty-prints a script variable list of the given class.
-    let printScriptVars (cls : string) (t : Type) (vs : Var list) : Doc =
-        let vsp = commaSep (List.map printVar vs)
-        withSemi (hsep [ String cls |> syntax; printType t; vsp ])
+    let printScriptVars (cls : string) (vs : VarDecl) : Doc =
+        withSemi (hsep [ String cls |> syntax; printVarDecl vs ])
 
     /// Pretty-prints script lines.
     let printScriptItem' : ScriptItem' -> Doc =
         function
-        | SharedVars (t, vs) -> printScriptVars "shared" t vs
-        | ThreadVars (t, vs) -> printScriptVars "thread" t vs
+        | SharedVars vs -> printScriptVars "shared" vs
+        | ThreadVars vs -> printScriptVars "thread" vs
         | Method m ->
             fun mdoc -> vsep [Nop; mdoc; Nop]
             <| printMethod (printMarkedView printView) (printCommand (printMarkedView printView)) m

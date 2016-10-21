@@ -315,13 +315,24 @@ let parseViewLike basic join =
  *)
 
 /// Parses a type identifier.
-let parseType =
-    stringReturn "int" (Type.Int ())
-    <|> stringReturn "bool" (Type.Bool ());
+let parseType : Parser<TypeLiteral, unit> =
+    let parsePrimType =
+        stringReturn "int" TInt <|> stringReturn "bool" TBool
 
-/// Parses a pair of type identifier and parameter name.
-let parseTypedTypedVar : Parser<TypedVar, unit> =
-    pipe2ws parseType parseIdentifier withType
+    let parseArray = inSquareBrackets pint32 |>> curry TArray
+    let parseSuffixes = many parseArray
+
+    let rec applySuffixes ty suffixes =
+        match suffixes with
+        | [] -> ty
+        | x::xs -> applySuffixes (x ty) xs
+
+    pipe2ws parsePrimType parseSuffixes applySuffixes
+
+/// Parses a parameter.
+let parseParam : Parser<Param, unit> =
+    let buildParam ty id = { ParamType = ty; ParamName = id }
+    pipe2ws parseType parseIdentifier buildParam
     // ^ <type> <identifier>
 
 
@@ -427,9 +438,9 @@ let parseViewProto =
     // TODO (CaptainHayashi): so much backtracking...
     pstring "view" >>. ws
     >>. (parseIteratedContainer
-            (parseFunc parseTypedTypedVar)
+            (parseFunc parseParam)
             (fun i f -> WithIterator (f, i))
-         <|> (parseFunc parseTypedTypedVar
+         <|> (parseFunc parseParam
               |>> (fun lhs -> NoIterator (lhs, false))))
     .>> wsSemi
 
@@ -559,16 +570,17 @@ let parseConstraint : Parser<ViewSignature * Expression option, unit> =
 let parseMethod =
     pstring "method" >>. ws >>.
     // ^- method ...
-        pipe2ws (parseFunc parseIdentifier)
+        pipe2ws (parseFunc parseParam)
                 // ^- <identifier> <arg-list> ...
                 parseBlock
                 // ^-                             ... <block>
                 (fun s b -> {Signature = s ; Body = b} )
 
-/// Parses a variable set with the given initial keyword and AST type.
-let parseVars kw atype =
+/// Parses a variable declaration with the given initial keyword and AST type.
+let parseVarDecl kw (atype : VarDecl -> ScriptItem') =
     let parseList = parseParams parseIdentifier .>> wsSemi
-    pstring kw >>. ws >>. pipe2ws parseType parseList (fun t v -> atype (t, v))
+    let buildVarDecl t vs = atype { VarType = t; VarNames = vs }
+    pstring kw >>. ws >>. pipe2ws parseType parseList buildVarDecl
 
 /// Parses a search directive.
 let parseSearch =
@@ -592,9 +604,9 @@ let parseScript =
                              //  | view <identifier> <view-proto-param-list> ;
                              parseSearch |>> Search
                              // ^- search 0;
-                             parseVars "shared" SharedVars
+                             parseVarDecl "shared" SharedVars
                              // ^- shared <type> <identifier> ;
-                             parseVars "thread" ThreadVars]) .>> ws ) eof
+                             parseVarDecl "thread" ThreadVars]) .>> ws ) eof
                              // ^- thread <type> <identifier> ;
 
 (*
