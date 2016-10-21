@@ -321,7 +321,18 @@ let parseViewLike basic join =
 
 /// Parses a type identifier.
 let parseType : Parser<TypeLiteral, unit> =
-    stringReturn "int" TInt <|> stringReturn "bool" TBool
+    let parsePrimType =
+        stringReturn "int" TInt <|> stringReturn "bool" TBool
+
+    let parseArray = inSquareBrackets pint32 |>> curry TArray
+    let parseSuffixes = many parseArray
+
+    let rec applySuffixes ty suffixes =
+        match suffixes with
+        | [] -> ty
+        | x::xs -> applySuffixes (x ty) xs
+
+    pipe2ws parsePrimType parseSuffixes applySuffixes
 
 /// Parses a parameter.
 let parseParam : Parser<Param, unit> =

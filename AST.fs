@@ -103,6 +103,8 @@ module Types =
         | TInt
         /// <summary>A Boolean type.</summary>
         | TBool
+        /// <summary>An array type.</summary>
+        | TArray of length : int * contentT : TypeLiteral
 
     /// <summary>
     ///     An AST formal parameter declaration.
@@ -352,6 +354,9 @@ module Pretty =
             match lit with
             | TInt -> hsep2 Nop (syntaxIdent (String ("int"))) suffix
             | TBool -> hsep2 Nop (syntaxIdent (String ("bool"))) suffix
+            | TArray (len, contents) ->
+                let lenSuffix = squared (String (sprintf "%d" len))
+                pl contents (hsep2 Nop suffix lenSuffix)
         pl lit Nop
 
     /// Pretty-prints parameters.

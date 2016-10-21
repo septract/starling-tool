@@ -1420,6 +1420,7 @@ let convertTypedVar (lit : AST.Types.TypeLiteral) (name : string)
     match lit with
     | TInt -> ok (Int name)
     | TBool -> ok (Bool name)
+    | TArray _ -> fail (ImpossibleType (lit, "arrays not yet implemented"))
 
 /// <summary>
 ///     Converts a type-variable list to a variable map.
