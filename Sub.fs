@@ -417,6 +417,10 @@ module Var =
             let ctxx, x' = isv id ctx x
             let ctx', y' = isv id ctxx y
             (ctx', lift2 (curry ADiv) x' y')
+        | AMod (x, y) ->
+            let ctxx, x' = isv id ctx x
+            let ctx', y' = isv id ctxx y
+            (ctx', lift2 (curry AMod) x' y')
 
     /// <summary>
     ///   Creates a <c>TrySubFun</c> from a <c>VTrySubFun</c>.
