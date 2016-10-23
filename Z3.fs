@@ -44,6 +44,8 @@ module Expr =
             | ASub xs -> ctx.MkSub (xs |> Seq.map az |> Seq.toArray)
             | AMul xs -> ctx.MkMul (xs |> Seq.map az |> Seq.toArray)
             | ADiv (x, y) -> ctx.MkDiv (az x, az y)
+            // TODO(CaptainHayashi): refuse AMod when reals is true.
+            | AMod (x, y) -> ctx.MkMod (az x :?> Z3.IntExpr, az y :?> Z3.IntExpr) :> Z3.ArithExpr
         az
 
     /// Converts a Starling Boolean expression to a Z3 ArithExpr.
@@ -80,6 +82,22 @@ module Expr =
         function
         | Expr.Bool b -> boolToZ3 reals toStr ctx b :> Z3.Expr
         | Expr.Int a -> arithToZ3 reals toStr ctx a :> Z3.Expr
+      
+    /// <summary>
+    ///     Z3 tests for expressions.
+    /// </summary>
+    module Tests =
+        // TODO(CaptainHayashi): move this to a separate module.
+
+        open NUnit.Framework
+        open Starling.Utils.Testing
+
+        [<Test>]
+        let ``modulo expressions are translated correctly when reals is disabled`` () =
+            use ctx = new Z3.Context ()
+            assertEqual
+                (ctx.MkMod (ctx.MkIntConst "foo", ctx.MkInt 5L) :> Z3.ArithExpr)
+                (arithToZ3 false id ctx (mkMod (AVar "foo") (AInt 5L)))
 
 /// <summary>
 ///     Z3 invocation.
