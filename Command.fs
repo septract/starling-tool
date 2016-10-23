@@ -92,30 +92,7 @@ module Queries =
 ///     Composition of Boolean expressions representing commands.
 /// </summary>
 module Compose =
-    /// <summary>
-    ///     Finds the highest intermediate stage number in an integral
-    ///     expression.
-    ///     Returns one higher.
-    /// </summary>
-    /// <param name="_arg1">
-    ///     The <c>IntExpr</c> to investigate.
-    /// </param>
-    /// <returns>
-    ///     The next available intermediate stage number.
-    ///     If the expression has no intermediate stages, we return 0.
-    /// </returns>
-    let rec nextIntIntermediate : IntExpr<Sym<_>> -> bigint =
-        function
-        | AVar (Reg (Intermediate (n, _))) -> n + 1I
-        | AVar (Sym { Params = xs } ) ->
-            xs |> Seq.map nextIntermediate |> Seq.fold (curry bigint.Max) 0I
-        | AVar _ | AInt _ -> 0I
-        | AAdd xs | ASub xs | AMul xs ->
-            xs |> Seq.map nextIntIntermediate |> Seq.fold (curry bigint.Max) 0I
-        | ADiv (x, y) ->
-            bigint.Max (nextIntIntermediate x, nextIntIntermediate y)
-
-    and maxOpt a b =
+    let maxOpt a b =
         match a, b with
         | Some a, Some b -> Some <| max a b
         | None, Some b -> Some b
@@ -125,45 +102,16 @@ module Compose =
 
     /// Gets the highest intermediate number for some variable in a given
     /// int expression
-    and getIntIntermediate v =
+    let rec getIntIntermediate v =
         function
         | AVar (Reg (Intermediate (n, x))) when v = x-> Some n
         | AVar (Sym { Params = xs } ) ->
             Seq.fold maxOpt None <| (Seq.map (getIntermediate v) <| xs)
-        | AVar _ | AInt _ -> None
         | AAdd xs | ASub xs | AMul xs ->
             Seq.fold maxOpt None <| (Seq.map (getIntIntermediate v) <| xs)
-        | ADiv (x, y) ->
+        | ADiv (x, y) | AMod (x, y) ->
             maxOpt (getIntIntermediate v x) (getIntIntermediate v y)
         | _ -> None
-
-    /// <summary>
-    ///     Finds the highest intermediate stage number in a Boolean expression.
-    ///     Returns one higher.
-    /// </summary>
-    /// <param name="_arg1">
-    ///     The <c>BoolExpr</c> to investigate.
-    /// </param>
-    /// <returns>
-    ///     The next available intermediate stage number.
-    ///     If the expression has no intermediate stages, we return 0.
-    /// </returns>
-    and nextBoolIntermediate : BoolExpr<Sym<_>> -> bigint =
-        function
-        | BVar (Reg (Intermediate (n, _))) -> n + 1I
-        | BVar (Sym { Params = xs } ) ->
-            xs |> Seq.map nextIntermediate |> Seq.fold (curry bigint.Max) 0I
-        | BVar _ -> 0I
-        | BAnd xs | BOr xs ->
-            xs |> Seq.map nextBoolIntermediate |> Seq.fold (curry bigint.Max) 0I
-        | BImplies (x, y) ->
-            bigint.Max (nextBoolIntermediate x, nextBoolIntermediate y)
-        | BNot x -> nextBoolIntermediate x
-        | BGt (x, y) | BLt (x, y) | BGe (x, y) | BLe (x, y) ->
-            bigint.Max (nextIntIntermediate x, nextIntIntermediate y)
-        | BEq (x, y) ->
-            bigint.Max (nextIntermediate x, nextIntermediate y)
-        | BTrue | BFalse -> 0I
 
     /// Gets the highest intermediate number for some variable in a given
     /// boolean expression
@@ -172,9 +120,6 @@ module Compose =
         | BVar (Reg (Intermediate (n, name))) when name = v -> Some n
         | BVar (Sym { Params = xs } ) ->
             Seq.fold maxOpt None <| (Seq.map (getIntermediate v) <| xs)
-        | BVar (Reg (After x)) when x = v -> None
-        | BVar (Reg (Before x)) when x = v -> None
-        | BVar (Reg (Intermediate(i, x))) when x = v -> Some i
         | BAnd xs | BOr xs ->
             Seq.fold maxOpt None <| (Seq.map (getBoolIntermediate v) <| xs)
         | BImplies (x, y) ->
@@ -184,24 +129,7 @@ module Compose =
             maxOpt (getIntIntermediate v x) (getIntIntermediate v y)
         | BEq (x, y) ->
             maxOpt (getIntermediate v x) (getIntermediate v y)
-        | BTrue | BFalse -> None
         | _ -> None
-
-    /// <summary>
-    ///     Finds the highest intermediate stage number in an expression.
-    ///     Returns one higher.
-    /// </summary>
-    /// <param name="_arg1">
-    ///     The <c>Expr</c> to investigate.
-    /// </param>
-    /// <returns>
-    ///     The next available intermediate stage number.
-    ///     If the expression has no intermediate stages, we return 0.
-    /// </returns>
-    and nextIntermediate : Expr<Sym<_>> -> bigint =
-        function
-        | Int x -> nextIntIntermediate x
-        | Bool x -> nextBoolIntermediate x
 
     /// Gets the highest intermediate stage number for a given variable name
     /// in some expression.
@@ -209,7 +137,6 @@ module Compose =
         function
         | Int x -> getIntIntermediate v x
         | Bool x -> getBoolIntermediate v x
-
 
 /// <summary>
 ///     Functions for removing symbols from commands.
