@@ -188,7 +188,8 @@ let parseBinaryExpressionLevel nextLevel expList =
 let parseMultiplicativeExpression =
     parseBinaryExpressionLevel parsePrimaryExpression
         [ ("*", Mul)
-          ("/", Div) ]
+          ("/", Div)
+          ("%", Mod) ]
 
 /// Parser for additive expressions.
 let parseAdditiveExpression =
