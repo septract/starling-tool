@@ -638,6 +638,7 @@ and modelIntExpr
         | BopExpr(ArithOp as op, l, r) ->
             lift2 (match op with
                    | Mul -> mkMul2
+                   | Mod -> mkMod
                    | Div -> mkDiv
                    | Add -> mkAdd2
                    | Sub -> mkSub2
