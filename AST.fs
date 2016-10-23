@@ -30,6 +30,7 @@ module Types =
     type BinOp =
         | Mul // a * b
         | Div // a / b
+        | Mod // a % b
         | Add // a + b
         | Sub // a - b
         | Gt // a > b
@@ -188,6 +189,7 @@ module Pretty =
         function
         | Mul -> "*"
         | Div -> "/"
+        | Mod -> "%"
         | Add -> "+"
         | Sub -> "-"
         | Gt -> ">"
@@ -403,7 +405,7 @@ module Pretty =
 /// arithmetic or Boolean expressions.
 let (|ArithOp|BoolOp|) : BinOp -> Choice<unit, unit> =
     function
-    | Mul | Div | Add | Sub -> ArithOp
+    | Mul | Div | Add | Sub | Mod -> ArithOp
     | Gt | Ge | Le | Lt | Imp -> BoolOp
     | Eq | Neq -> BoolOp
     | And | Or -> BoolOp
@@ -412,7 +414,7 @@ let (|ArithOp|BoolOp|) : BinOp -> Choice<unit, unit> =
 /// arithmetic, Boolean, or indeterminate operands.
 let (|ArithIn|BoolIn|AnyIn|) : BinOp -> Choice<unit, unit, unit> =
     function
-    | Mul | Div | Add | Sub -> ArithIn
+    | Mul | Div | Add | Sub | Mod -> ArithIn
     | Gt | Ge | Le | Lt -> ArithIn
     | Eq | Neq -> AnyIn
     | And | Or | Imp -> BoolIn
