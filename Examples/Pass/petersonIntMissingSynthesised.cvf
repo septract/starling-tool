@@ -49,9 +49,9 @@ view v8(int f, int t);
  */
 method lockA() {
   {| aFlagDown() |}
-    <aFlag = (1)>;
+    <aFlag = 1>;
   {| v0(oFlag, oTurn) |}
-    <turn = (0)>;
+    <turn = 0>;
   {| v2(oFlag, oTurn) |}
     do {
       {| v2(oFlag, oTurn) |}
@@ -68,7 +68,7 @@ method lockA() {
  */
 method unlockA() {
   {| aHoldLock() |}
-    <aFlag = (0)>;
+    <aFlag = 0>;
   {| aFlagDown() |}
 }
 
@@ -77,9 +77,9 @@ method unlockA() {
  */
 method lockB() {
   {| bFlagDown() |}
-    <bFlag = (1)>;
+    <bFlag = 1>;
   {| v5(oFlag, oTurn) |}
-    <turn = (1)>;
+    <turn = 1>;
   {| v7(oFlag, oTurn) |}
     do {
       {| v7(oFlag, oTurn) |}
@@ -96,7 +96,7 @@ method lockB() {
  */
 method unlockB() {
   {| bHoldLock() |}
-    <bFlag = (0)>;
+    <bFlag = 0>;
   {| bFlagDown() |}
 }
 
