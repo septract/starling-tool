@@ -222,7 +222,7 @@ module Downclosure =
         (* To do the base downclosure, we need to replace all instances of the
            iterator in the definition with 0. *)
         let baseDefnResult =
-            mapOverIteratorUses (fun _ -> AInt 0L) iterator defn
+            mapOverIteratorUses (fun _ -> IInt 0L) iterator defn
 
         // If emp is indefinite (None), defer this base downclosure check.
         match empDefn with
@@ -283,7 +283,7 @@ module Downclosure =
                 (fun succDefn ->
                     mkImplies
                         (mkAnd2
-                            (mkLe (AInt 0L) (AVar (Reg iterator)))
+                            (mkLe (IInt 0L) (IVar (Reg iterator)))
                             succDefn)
                         defn)
                 succDefnResult
@@ -623,14 +623,14 @@ let reifySingleDef
                        pattern match guards above, it short-circuits to
                        false and kills off the entire view. *)
 
-                    let nIsPos = mkGt v.Iterator (AInt 0L)
+                    let nIsPos = mkGt v.Iterator (IInt 0L)
                     let func = { v.Func with Cond = mkAnd2 v.Func.Cond nIsPos }
 
                     let result =
-                        { Func = func; Iterator = AInt 1L } :: result
+                        { Func = func; Iterator = IInt 1L } :: result
 
                     let view =
-                        { Func = func; Iterator = mkSub2 v.Iterator (AInt 1L) }
+                        { Func = func; Iterator = mkSub2 v.Iterator (IInt 1L) }
                         :: view
 
                     matchMultipleViews pattern (rview @ view) accumulator result

@@ -28,7 +28,7 @@ type OptimiserTests() =
 
     /// A test environment of arithmetic after substitutions.
     static member AfterArithSubs =
-        [ ("serving", AAdd [siBefore "serving"; AInt 1L])
+        [ ("serving", IAdd [siBefore "serving"; IInt 1L])
           ("ticket", siBefore "ticket") ]
         |> Map.ofList
 
@@ -128,7 +128,7 @@ module AfterExprs =
     let ``Remove arithmetic afters in a simple equality`` () =
         check
             (iEq
-                (AAdd [ siBefore "serving"; AInt 1L ] )
+                (IAdd [ siBefore "serving"; IInt 1L ] )
                 (siBefore "ticket"))
             (iEq (siAfter "serving") (siAfter "ticket"))
 
@@ -136,16 +136,16 @@ module AfterExprs =
     let ``Remove arithmetic afters in after-before relation`` () =
         check
             (iEq
-                (AAdd [ siBefore "serving"; AInt 1L ] )
-                (AAdd [ siBefore "serving"; AInt 1L ] ))
+                (IAdd [ siBefore "serving"; IInt 1L ] )
+                (IAdd [ siBefore "serving"; IInt 1L ] ))
             (iEq
                 (siAfter "serving")
-                (AAdd [ siBefore "serving"; AInt 1L ] ))
+                (IAdd [ siBefore "serving"; IInt 1L ] ))
 
     [<Test>]
     let ``Remove arithmetic afters only if in the environment`` () =
         check
-            (BGt (AAdd [ siBefore "serving"; AInt 1L ], siAfter "t"))
+            (BGt (IAdd [ siBefore "serving"; IInt 1L ], siAfter "t"))
             (BGt (siAfter "serving", siAfter "t"))
 
     [<Test>]
@@ -172,7 +172,7 @@ module AfterExprs =
     let ``Remove afters of both types simultaneously`` () =
         check
             (BAnd
-                [ BGt ((AAdd [ siBefore "serving"; AInt 1L ] ), siAfter "t")
+                [ BGt ((IAdd [ siBefore "serving"; IInt 1L ] ), siAfter "t")
                   BOr [ BNot (sbBefore "flag"); sbAfter "pole" ]] )
             (BAnd
                    [ BGt (siAfter "serving", siAfter "t")
@@ -184,7 +184,7 @@ module AfterExprs =
             (BNot
                 (BImplies
                     (BNot (sbBefore "flag"),
-                    BGt (AAdd [siBefore "serving"; AInt 1L], siAfter "t"))))
+                    BGt (IAdd [siBefore "serving"; IInt 1L], siAfter "t"))))
             (BNot
                 (BImplies
                     (sbAfter "flag",
@@ -213,7 +213,7 @@ module AfterFuncs =
     let ``Substitute afters in a func with all-after params`` () =
         check
             { Name = "foo"
-              Params = [ SMExpr.Int (AAdd [siBefore "serving"; AInt 1L])
+              Params = [ SMExpr.Int (IAdd [siBefore "serving"; IInt 1L])
                          SMExpr.Bool (BNot (sbBefore "flag")) ] }
             { Name = "foo"
               Params = [ SMExpr.Int (siAfter "serving")

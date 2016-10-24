@@ -59,14 +59,14 @@ module Expr =
       (int : IntExpr<'Var>) : Z3.ArithExpr =
         let rec iz =
             function
-            | AVar c when reals -> c |> toStr |> ctx.MkRealConst :> Z3.ArithExpr
-            | AVar c -> c |> toStr |> ctx.MkIntConst :> Z3.ArithExpr
-            | AInt i when reals -> (i |> ctx.MkReal) :> Z3.ArithExpr
-            | AInt i -> (i |> ctx.MkInt) :> Z3.ArithExpr
-            | AAdd xs -> ctx.MkAdd (xs |> Seq.map iz |> Seq.toArray)
-            | ASub xs -> ctx.MkSub (xs |> Seq.map iz |> Seq.toArray)
-            | AMul xs -> ctx.MkMul (xs |> Seq.map iz |> Seq.toArray)
-            | ADiv (x, y) -> ctx.MkDiv (iz x, iz y)
+            | IVar c when reals -> c |> toStr |> ctx.MkRealConst :> Z3.ArithExpr
+            | IVar c -> c |> toStr |> ctx.MkIntConst :> Z3.ArithExpr
+            | IInt i when reals -> (i |> ctx.MkReal) :> Z3.ArithExpr
+            | IInt i -> (i |> ctx.MkInt) :> Z3.ArithExpr
+            | IAdd xs -> ctx.MkAdd (xs |> Seq.map iz |> Seq.toArray)
+            | ISub xs -> ctx.MkSub (xs |> Seq.map iz |> Seq.toArray)
+            | IMul xs -> ctx.MkMul (xs |> Seq.map iz |> Seq.toArray)
+            | IDiv (x, y) -> ctx.MkDiv (iz x, iz y)
         iz int
 
     /// Converts a Starling Boolean expression to a Z3 ArithExpr.
@@ -103,7 +103,7 @@ module Expr =
       (arr : ArrayExpr<'Var>)
       : Z3.ArrayExpr =
         match arr with
-        | ARVar c ->
+        | AVar c ->
             ctx.MkArrayConst
                 (name = toStr c,
                  domain = typeToSort reals ctx eltype,

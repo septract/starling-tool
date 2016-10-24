@@ -28,12 +28,12 @@ module Types =
     ///     The type of variables in the expression.
     /// </typeparam>
     and IntExpr<'Var> when 'Var : equality =
-        | AVar of 'Var
-        | AInt of int64
-        | AAdd of IntExpr<'Var> list
-        | ASub of IntExpr<'Var> list
-        | AMul of IntExpr<'Var> list
-        | ADiv of IntExpr<'Var> * IntExpr<'Var>
+        | IVar of 'Var
+        | IInt of int64
+        | IAdd of IntExpr<'Var> list
+        | ISub of IntExpr<'Var> list
+        | IMul of IntExpr<'Var> list
+        | IDiv of IntExpr<'Var> * IntExpr<'Var>
         override this.ToString () = sprintf "%A" this
 
     /// <summary>
@@ -64,8 +64,8 @@ module Types =
     ///     The type of variables in the expression.
     /// </typeparam>
     and ArrayExpr<'Var> when 'Var : equality =
-        // TODO(CaptainHayashi): rename to AVar when we rename A -> I.
-        | ARVar of 'Var
+        // TODO(CaptainHayashi): rename to IVar when we rename A -> I.
+        | AVar of 'Var
 
     /// Type for fresh variable generators.
     type FreshGen = bigint ref
@@ -98,12 +98,12 @@ module Pretty =
     /// Pretty-prints an arithmetic expression.
     let rec printIntExpr (pVar : 'Var -> Doc) : IntExpr<'Var> -> Doc =
         function
-        | AVar c -> pVar c
-        | AInt i -> i |> sprintf "%i" |> String
-        | AAdd xs -> sexpr "+" (printIntExpr pVar) xs
-        | ASub xs -> sexpr "-" (printIntExpr pVar) xs
-        | AMul xs -> sexpr "*" (printIntExpr pVar) xs
-        | ADiv (x, y) -> sexpr "/" (printIntExpr pVar) [x; y]
+        | IVar c -> pVar c
+        | IInt i -> i |> sprintf "%i" |> String
+        | IAdd xs -> sexpr "+" (printIntExpr pVar) xs
+        | ISub xs -> sexpr "-" (printIntExpr pVar) xs
+        | IMul xs -> sexpr "*" (printIntExpr pVar) xs
+        | IDiv (x, y) -> sexpr "/" (printIntExpr pVar) [x; y]
 
     /// Pretty-prints a Boolean expression.
     and printBoolExpr (pVar : 'Var -> Doc) : BoolExpr<'Var> -> Doc =
@@ -124,7 +124,7 @@ module Pretty =
     /// Pretty-prints an array expression.
     and printArrayExpr (pVar : 'Var -> Doc) : ArrayExpr<'Var> -> Doc =
         function
-        | ARVar c -> pVar c
+        | AVar c -> pVar c
 
     /// Pretty-prints an expression.
     and printExpr (pVar : 'Var -> Doc) : Expr<'Var> -> Doc =
@@ -264,9 +264,9 @@ let isTrue (expr : BoolExpr<_>) : bool =
 /// Converts a typed variable to an expression.
 let mkVarExp (var : CTyped<'Var>) : Expr<'Var> =
     match var with
-    | Int s -> s |> AVar |> Int
+    | Int s -> s |> IVar |> Int
     | Bool s -> s |> BVar |> Bool
-    | Array (eltype, length, s) -> Array (eltype, length, ARVar s)
+    | Array (eltype, length, s) -> Array (eltype, length, AVar s)
 
 /// Converts a VarMap to a sequence of expressions.
 let varMapToExprs
@@ -282,26 +282,26 @@ let varMapToExprs
 /// Curried wrapper over BGt.
 let mkGt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
     match (a, b) with
-    | AInt x, AInt y when x >  y -> BTrue
-    | AInt x, AInt y when x <= y -> BFalse
+    | IInt x, IInt y when x >  y -> BTrue
+    | IInt x, IInt y when x <= y -> BFalse
     | _ -> BGt (a, b)
 /// Curried wrapper over BGe.
 let mkGe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
     match (a, b) with
-    | AInt x, AInt y when x >= y -> BTrue
-    | AInt x, AInt y when x <  y -> BFalse
+    | IInt x, IInt y when x >= y -> BTrue
+    | IInt x, IInt y when x <  y -> BFalse
     | _ -> BGe (a, b)
 /// Curried wrapper over BLt.
 let mkLt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
     match (a, b) with
-    | AInt x, AInt y when x <  y -> BTrue
-    | AInt x, AInt y when x >= y -> BFalse
+    | IInt x, IInt y when x <  y -> BTrue
+    | IInt x, IInt y when x >= y -> BFalse
     | _ -> BLt (a, b)
 /// Curried wrapper over BLe.
 let mkLe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
     match (a, b) with
-    | AInt x, AInt y when x <= y -> BTrue
-    | AInt x, AInt y when x >  y -> BFalse
+    | IInt x, IInt y when x <= y -> BTrue
+    | IInt x, IInt y when x >  y -> BFalse
     | _ -> BLe (a, b)
 
 /// Curried wrapper over BEq.
@@ -315,8 +315,8 @@ let iEq (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
 let bEq (a : BoolExpr<'var>) (b : BoolExpr<'var>) : BoolExpr<'var> =
     BEq (Bool a, Bool b)
 
-/// Curried wrapper over ADiv.
-let mkDiv (a : IntExpr<'var>) (b : IntExpr<'var>) : IntExpr<'var> = ADiv (a, b)
+/// Curried wrapper over IDiv.
+let mkDiv (a : IntExpr<'var>) (b : IntExpr<'var>) : IntExpr<'var> = IDiv (a, b)
 
 /// Slightly optimised version of ctx.MkAnd.
 /// Returns true for the empty array, and x for the singleton set {x}.
@@ -351,29 +351,29 @@ let mkImplies (l : BoolExpr<'var>) (r : BoolExpr<'var>) : BoolExpr<'var> =
 /// Makes an Add out of a pair of two expressions.
 let mkAdd2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
     match (l, r) with
-    | (AInt 0L, x) | (x, AInt 0L) -> x
-    | (AInt x, AInt y)            -> AInt (x + y)
-    | _                           -> AAdd [ l; r ]
+    | (IInt 0L, x) | (x, IInt 0L) -> x
+    | (IInt x, IInt y)            -> IInt (x + y)
+    | _                           -> IAdd [ l; r ]
 
 /// Makes a variable increment expression.
-let incVar (x : 'Var) : IntExpr<'Var> = mkAdd2 (AVar x) (AInt 1L)
+let incVar (x : 'Var) : IntExpr<'Var> = mkAdd2 (IVar x) (IInt 1L)
 
 /// Makes an Add out of a sequence of expressions.
 let mkAdd (xs : IntExpr<'var> seq) : IntExpr<'var> =
     // TODO(CaptainHayashi): produce a trimmed list, instead of mkAdd2ing.
-    Seq.fold mkAdd2 (AInt 0L) xs
+    Seq.fold mkAdd2 (IInt 0L) xs
 
 /// Makes a Sub out of a pair of two expressions.
 let mkSub2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
     match (l, r) with
-    | (AInt x, AInt y) -> AInt (x - y)
-    | _                -> ASub [ l; r ]
+    | (IInt x, IInt y) -> IInt (x - y)
+    | _                -> ISub [ l; r ]
 /// Makes a Mul out of a pair of two expressions.
 let mkMul2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
     match (l, r) with
-    | (AInt x, AInt y)            -> AInt (x * y)
-    | (AInt 1L, x) | (x, AInt 1L) -> x
-    | _                           -> AMul [ l; r ]
+    | (IInt x, IInt y)            -> IInt (x * y)
+    | (IInt 1L, x) | (x, IInt 1L) -> x
+    | _                           -> IMul [ l; r ]
 
 
 (*
@@ -397,7 +397,7 @@ let getFresh (fg : FreshGen) : bigint =
 /// Categorises integral expressions into simple or compound.
 let (|SimpleInt|CompoundInt|) : IntExpr<_> -> Choice<unit, unit> =
     function
-    | AVar _ | AInt _ -> SimpleInt
+    | IVar _ | IInt _ -> SimpleInt
     | _ -> CompoundInt
 
 /// Categorises Boolean expressions into simple or compound.
@@ -425,19 +425,19 @@ module Tests =
     type NUnit () =
         /// Test cases for testing simple/compound arithmetic classification.
         static member IntSimpleCompound =
-            [ TestCaseData(AInt 1L)
+            [ TestCaseData(IInt 1L)
                 .Returns(false)
                 .SetName("Classify '1' as simple")
-              TestCaseData(AAdd [AInt 1L; AInt 2L])
+              TestCaseData(IAdd [IInt 1L; IInt 2L])
                 .Returns(true)
                 .SetName("Classify '1+2' as compound")
-              TestCaseData(ASub [AAdd [AInt 1L; AInt 2L]; AInt 3L])
+              TestCaseData(ISub [IAdd [IInt 1L; IInt 2L]; IInt 3L])
                 .Returns(true)
                 .SetName("Classify '(1+2)-3' as compound")
-              TestCaseData(AVar "foo")
+              TestCaseData(IVar "foo")
                 .Returns(false)
                 .SetName("Classify 'foo' as simple")
-              TestCaseData(AMul [AVar "foo"; AVar "bar"])
+              TestCaseData(IMul [IVar "foo"; IVar "bar"])
                 .Returns(true)
                 .SetName("Classify 'foo * bar' as compound") ]
 

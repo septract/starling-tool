@@ -75,7 +75,7 @@ module Assumes =
 
     [<Test>]
     let ``nextIntermediate on 'add' is one higher than max``() =
-        checkIntermediate 3I <| SMExpr.Int (AAdd [ siInter 1I "a";
+        checkIntermediate 3I <| SMExpr.Int (IAdd [ siInter 1I "a";
                                                    siAfter "b";
                                                    siBefore "c";
                                                    siInter 2I "d"; ])

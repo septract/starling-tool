@@ -986,10 +986,10 @@ module Term =
     let rec findArithAfters
       : BoolExpr<Sym<MarkedVar>> -> (Var * IntExpr<Sym<MarkedVar>>) list =
         function
-        | BAEq(AVar (Reg (After x)), (ConstantIntFunction (Before y) as fx))
+        | BAEq(IVar (Reg (After x)), (ConstantIntFunction (Before y) as fx))
             when x = y
             -> [(x, fx)]
-        | BAEq(ConstantIntFunction (Before y) as fx, AVar (Reg (After x)))
+        | BAEq(ConstantIntFunction (Before y) as fx, IVar (Reg (After x)))
             when x = y
             -> [(x, fx)]
         | BAnd xs -> concatMap findArithAfters xs
@@ -1041,18 +1041,18 @@ module Term =
       : BoolExpr<Sym<MarkedVar>>
         -> ((bigint * Var) * IntExpr<Sym<MarkedVar>>) list =
         function
-        | BAEq (AVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Intermediate(k, y)) as fx))
-        | BAEq (ConstantIntFunction (Intermediate(k, y)) as fx, AVar (Reg (Intermediate(i, x))))
+        | BAEq (IVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Intermediate(k, y)) as fx))
+        | BAEq (ConstantIntFunction (Intermediate(k, y)) as fx, IVar (Reg (Intermediate(i, x))))
             when x = y
             ->
                 if i > k then
                     [((i, x), fx)]
                 else
                     []
-        | BAEq (AVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Before y) as fx))
-        | BAEq (AVar (Reg (Intermediate(i, x))), (ConstantIntFunction (After y) as fx))
-        | BAEq (ConstantIntFunction (Before y) as fx, AVar (Reg (Intermediate(i, x))))
-        | BAEq (ConstantIntFunction (After y) as fx, AVar (Reg (Intermediate(i, x))))
+        | BAEq (IVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Before y) as fx))
+        | BAEq (IVar (Reg (Intermediate(i, x))), (ConstantIntFunction (After y) as fx))
+        | BAEq (ConstantIntFunction (Before y) as fx, IVar (Reg (Intermediate(i, x))))
+        | BAEq (ConstantIntFunction (After y) as fx, IVar (Reg (Intermediate(i, x))))
             when x = y
             -> [((i, x), fx)]
         | BAnd xs -> concatMap findArithInters xs

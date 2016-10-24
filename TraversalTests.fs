@@ -31,7 +31,7 @@ module FindVars =
 
     [<Test>]
     let ``Finding vars in an integer primitive returns empty`` () =
-        check [] (Expr.Int (AInt 1L))
+        check [] (Expr.Int (IInt 1L))
 
     [<Test>]
     let ``Finding vars in a Boolean var returns that var`` () =
@@ -39,7 +39,7 @@ module FindVars =
 
     [<Test>]
     let ``Finding vars in an integer var returns that var`` () =
-        check [ CTyped.Int "bar" ] (Expr.Int (AVar "bar"))
+        check [ CTyped.Int "bar" ] (Expr.Int (IVar "bar"))
 
     [<Test>]
     let ``Finding vars in a Boolean expression works correctly`` () =
@@ -51,7 +51,7 @@ module FindVars =
             (Expr.Bool
                 (BAnd
                     [ BOr [ BVar "foo"; BVar "baz" ]
-                      BGt ( AVar "foobar", AVar "barbaz" ) ] ))
+                      BGt ( IVar "foobar", IVar "barbaz" ) ] ))
 
     [<Test>]
     let ``Finding vars in an integer expression works correctly`` () =
@@ -61,6 +61,6 @@ module FindVars =
               CTyped.Int "foobar"
               CTyped.Int "barbaz" ]
             (Expr.Int
-                (AAdd
-                    [ ASub [ AVar "foo"; AVar "bar" ]
-                      AMul [ AVar "foobar"; AVar "barbaz" ]] ))
+                (IAdd
+                    [ ISub [ IVar "foo"; IVar "bar" ]
+                      IMul [ IVar "foobar"; IVar "barbaz" ]] ))

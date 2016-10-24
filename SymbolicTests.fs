@@ -35,18 +35,18 @@ module PostStateRewrite =
     [<Test>]
     let ``Rewrite expression with one variable to post-state`` () =
         checkInt
-            (AAdd [AInt 4L; siAfter "target1"])
-            (AAdd [AInt 4L; siVar "target1"])
+            (IAdd [IInt 4L; siAfter "target1"])
+            (IAdd [IInt 4L; siVar "target1"])
 
     [<Test>]
     let ``Rewrite expression with two variables to post-state`` () =
         checkInt
-            (ASub [siAfter "target1"; siAfter "target2"])
-            (ASub [siVar "target1"; siVar "target2"])
+            (ISub [siAfter "target1"; siAfter "target2"])
+            (ISub [siVar "target1"; siVar "target2"])
 
     [<Test>]
     let ``Rewrite expression with no variables to post-state`` () =
-        checkInt (ADiv (AInt 6L, AInt 0L)) (ADiv (AInt 6L, AInt 0L))
+        checkInt (IDiv (IInt 6L, IInt 0L)) (IDiv (IInt 6L, IInt 0L))
 
 
 /// <summary>
@@ -67,11 +67,11 @@ module BoolApprox =
         check
             (BAnd
                 [ bEq (sbBefore "foo") (sbAfter "bar")
-                  BGt (siBefore "baz", AInt 1L) ] )
+                  BGt (siBefore "baz", IInt 1L) ] )
             Context.positive
             (BAnd
                 [ bEq (sbBefore "foo") (sbAfter "bar")
-                  BGt (siBefore "baz", AInt 1L) ] )
+                  BGt (siBefore "baz", IInt 1L) ] )
 
     [<Test>]
     let ``Rewrite +ve param-less Bool symbol to false`` () =
@@ -173,7 +173,7 @@ module FindSMVarsCases =
 
     [<Test>]
     let ``Finding vars in an integer primitive returns empty`` () =
-        check [] (Expr.Int (AInt 1L))
+        check [] (Expr.Int (IInt 1L))
 
     [<Test>]
     let ``Finding vars in a Boolean var returns that var`` () =
@@ -203,9 +203,9 @@ module FindSMVarsCases =
               CTyped.Int (Before "foobar")
               CTyped.Int (After "barbaz") ]
             (Expr.Int
-                (AAdd
-                    [ ASub [ siBefore "foo"; siAfter "bar" ]
-                      AMul [ siBefore "foobar"; siAfter "barbaz" ]] ))
+                (IAdd
+                    [ ISub [ siBefore "foo"; siAfter "bar" ]
+                      IMul [ siBefore "foobar"; siAfter "barbaz" ]] ))
 
     [<Test>]
     let ``Finding vars in an Boolean symbol works correctly`` () =
@@ -223,7 +223,7 @@ module FindSMVarsCases =
         check
             [ CTyped.Int (Before "bar"); CTyped.Bool (After "baz") ]
             (Expr.Int
-                (AVar
+                (IVar
                     (sym "foo"
                         [ Expr.Int (siBefore "bar")
                           Expr.Bool (sbAfter "baz") ] )))

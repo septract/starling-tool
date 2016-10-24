@@ -639,7 +639,7 @@ module Translator =
             // TODO(CaptainHayashi): this duplicates the HSF work a lot.
             let flatDFunc = Starling.Flattener.flattenDView svarSeq [func]
             let zeroFuncResult =
-                lift (fun it -> instantiate it (fun _ -> AInt 0L) flatDFunc)
+                lift (fun it -> instantiate it (fun _ -> IInt 0L) flatDFunc)
                     iterVarResult
             let zeroViewResult = lift Multiset.singleton zeroFuncResult
 
@@ -667,7 +667,7 @@ module Translator =
                 lift (fun it -> instantiate it incVar flatDFunc) iterVarResult
             let succViewResult = lift Multiset.singleton succFuncResult
             let guardResult =
-                lift (fun it -> mkGe (AVar it) (AInt 0L)) iterVarResult
+                lift (fun it -> mkGe (IVar it) (IInt 0L)) iterVarResult
 
             let ruleResult =
                 bind3
@@ -708,7 +708,7 @@ module Translator =
 
         let defaultVal =
             function
-            | Expr.Int _ -> ok (Expr.Int (AInt 0L))
+            | Expr.Int _ -> ok (Expr.Int (IInt 0L))
             | Expr.Bool _ -> ok (Expr.Bool BFalse)
             (* TODO(CaptainHayashi): this needs implementing.
                Will requires array literal support. *)

@@ -107,19 +107,19 @@ module Create =
         Sym { Name = body; Params = xs }
 
     /// Creates an integer sym-variable.
-    let siVar c = c |> Reg |> AVar
+    let siVar c = c |> Reg |> IVar
 
     /// Creates an before-marked integer sym-variable.
-    let siBefore c = c |> Before |> Reg |> AVar
+    let siBefore c = c |> Before |> Reg |> IVar
 
     /// Creates an after-marked integer sym-variable.
-    let siAfter c = c |> After |> Reg |> AVar
+    let siAfter c = c |> After |> Reg |> IVar
 
     /// Creates a goal-marked integer sym-variable.
-    let siGoal i c = (i, c) |> Goal |> Reg |> AVar
+    let siGoal i c = (i, c) |> Goal |> Reg |> IVar
 
     /// Creates an intermediate-marked integer sym-variable.
-    let siInter i c = (i, c) |> Intermediate |> Reg |> AVar
+    let siInter i c = (i, c) |> Intermediate |> Reg |> IVar
 
     /// Creates a Boolean sym-variable.
     let sbVar c = c |> Reg |> BVar

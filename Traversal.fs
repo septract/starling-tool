@@ -498,16 +498,16 @@ and tLiftToIntSrc
 
     fun ctx ->
         function
-        | AVar x ->
+        | IVar x ->
             x
             |> CTyped.Int
             |> Context.changePos id sub ctx
             |> bind (uncurry (ignoreContext expectInt))
-        | AInt i -> ok (ctx, AInt i)
-        | AAdd xs -> tchainL isv AAdd ctx xs
-        | ASub xs -> tchainL isv ASub ctx xs
-        | AMul xs -> tchainL isv AMul ctx xs
-        | ADiv (x, y) -> tchain2 isv isv ADiv ctx (x, y)
+        | IInt i -> ok (ctx, IInt i)
+        | IAdd xs -> tchainL isv IAdd ctx xs
+        | ISub xs -> tchainL isv ISub ctx xs
+        | IMul xs -> tchainL isv IMul ctx xs
+        | IDiv (x, y) -> tchain2 isv isv IDiv ctx (x, y)
 
 /// <summary>
 ///     Converts a traversal from typed variables to expressions to one from
@@ -521,7 +521,7 @@ and tLiftToArraySrc
     fun ctx (eltype, length, arrayExpr) ->
         let arrayExprResult =
             match arrayExpr with
-            | ARVar x ->
+            | AVar x ->
                 let typedVar = CTyped.Array (eltype, length, x)
                 let exprResult = Context.changePos id sub ctx typedVar
                 (* Traversals have to preserve the element type and, if it
