@@ -57,7 +57,7 @@ type Error =
 /// </returns>
 let normalise (func : IteratedGFunc<TermGenVar>) (i : int)
   : IteratedGFunc<TermGenVar> =
-    mapIterator (fun x -> mkMul2 x (AInt (int64 i))) func
+    mapIterator (fun x -> mkMul2 x (IInt (int64 i))) func
 
 /// <summary>
 ///     Performs view minus of a view by a single func.
@@ -155,7 +155,7 @@ let rec minusViewByFunc (qstep : IteratedGFunc<TermGenVar>)
                    will always evaluate to false in this case, so they don't
                    ever make it past here. *)
                 let optAdd rdoneSoFar rToAddG rToAdd =
-                    if isFalse rToAddG || rToAdd.Iterator = AInt 0L
+                    if isFalse rToAddG || rToAdd.Iterator = IInt 0L
                     then rdoneSoFar
                     else Multiset.add rdoneSoFar rToAdd
 
@@ -379,7 +379,7 @@ module Iter =
              | false ->
                 // TODO(CaptainHayashi): evaluate this properly.
                 match iterator with
-                | AInt n -> ok (Some n)
+                | IInt n -> ok (Some n)
                 | i -> fail (CannotEvalIterator (func, i)))
 
     /// <summary>

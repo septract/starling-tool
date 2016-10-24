@@ -21,7 +21,7 @@ module Tests =
     let oneGFunc (cnd : BoolExpr<Sym<Var>>) (name : string)
       (ps : Expr<Sym<Var>> list)
       : IteratedGFunc<Sym<Var>> =
-        iteratedGFunc cnd name ps (AInt 1L)
+        iteratedGFunc cnd name ps (IInt 1L)
 
     [<Test>]
     let ``Convert the empty CView to the empty GView`` () =

@@ -206,7 +206,7 @@ module Pretty =
     let printExprIterator (pVar : 'Var -> Doc)
       : IntExpr<'Var> -> Doc =
         function
-        | AInt 1L -> Nop
+        | IInt 1L -> Nop
         | e -> printIntExpr pVar e
 
     /// Pretty-prints an IteratedDFunc.

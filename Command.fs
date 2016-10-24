@@ -154,12 +154,12 @@ module Compose =
     /// int expression
     let rec getIntIntermediate v =
         function
-        | AVar (Reg (Intermediate (n, x))) when v = x-> Some n
-        | AVar (Sym { Params = xs } ) ->
+        | IVar (Reg (Intermediate (n, x))) when v = x-> Some n
+        | IVar (Sym { Params = xs } ) ->
             Seq.fold maxOpt None <| (Seq.map (getIntermediate v) <| xs)
-        | AAdd xs | ASub xs | AMul xs ->
+        | IAdd xs | ISub xs | IMul xs ->
             Seq.fold maxOpt None <| (Seq.map (getIntIntermediate v) <| xs)
-        | ADiv (x, y) | AMod (x, y) ->
+        | IDiv (x, y) | IMod (x, y) ->
             maxOpt (getIntIntermediate v x) (getIntIntermediate v y)
         | _ -> None
 
@@ -185,11 +185,11 @@ module Compose =
     /// array expression
     and getArrayIntermediate v =
         function
-        | ARVar (Reg (Intermediate (n, name))) when name = v -> Some n
-        | ARVar (Sym { Params = xs } ) ->
+        | AVar (Reg (Intermediate (n, name))) when name = v -> Some n
+        | AVar (Sym { Params = xs } ) ->
             Seq.fold maxOpt None <| (Seq.map (getIntermediate v) <| xs)
-        | ARVar _ -> None
-        
+        | AVar _ -> None
+
     /// Gets the highest intermediate stage number for a given variable name
     /// in some expression.
     and getIntermediate v =
@@ -223,10 +223,10 @@ module SymRemove =
                (Expr.Bool _ as rhs))
         | BEq ((Expr.Bool _ as lhs),
                (Expr.Bool (BVar (Sym _)) as rhs))
-        | BEq ((Expr.Int (AVar (Sym _)) as lhs),
+        | BEq ((Expr.Int (IVar (Sym _)) as lhs),
                (Expr.Int _ as rhs))
         | BEq ((Expr.Int _ as lhs),
-               (Expr.Int (AVar (Sym _)) as rhs)) -> Some (lhs, rhs)
+               (Expr.Int (IVar (Sym _)) as rhs)) -> Some (lhs, rhs)
         | _ -> None
 
     /// <summary>

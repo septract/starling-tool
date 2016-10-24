@@ -214,16 +214,16 @@ module VarMap =
 let goalVar (fg : FreshGen) = (fg |> getFresh |> curry Goal)
 
 /// Creates a before-marked integer variable.
-let iBefore c = c |> Before |> AVar
+let iBefore c = c |> Before |> IVar
 
 /// Creates an after-marked integer variable.
-let iAfter c = c |> After |> AVar
+let iAfter c = c |> After |> IVar
 
 /// Creates a goal-marked integer variable.
-let iGoal i c = (i, c) |> Goal |> AVar
+let iGoal i c = (i, c) |> Goal |> IVar
 
 /// Creates an intermediate-marked integer variable.
-let iInter i c = (i, c) |> Intermediate |> AVar
+let iInter i c = (i, c) |> Intermediate |> IVar
 
 /// Creates a before-marked Boolean variable.
 let bBefore c = c |> Before |> BVar

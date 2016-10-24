@@ -25,8 +25,8 @@ module Tests =
     [<Test>]
     let ``Refuse modulo expressions``() =
         assertEqual
-            (Some [ UnsupportedExpr (Int (AMod (AInt 5L, AVar "foo"))) ])
-            (checkArith id (AMod (AInt 5L, AVar "foo")) |> failOption)
+            (Some [ UnsupportedExpr (Int (IMod (IInt 5L, IVar "foo"))) ])
+            (checkArith id (IMod (IInt 5L, IVar "foo")) |> failOption)
 
     [<Test>]
     let ``Model the ticket lock view definitions as Horn clauses``() =
@@ -34,27 +34,27 @@ module Tests =
             [ ( { Name = "emp"
                   Params = [ Int "serving"
                              Int "ticket" ] },
-                Some <| BGe(AVar "ticket", AVar "serving"))
+                Some <| BGe(IVar "ticket", IVar "serving"))
               ( { Name = "v_holdTick"
                   Params = [ Int "serving"
                              Int "ticket"
                              Int "t" ] },
-                Some <| BGt(AVar "ticket", AVar "t"))
+                Some <| BGt(IVar "ticket", IVar "t"))
               ( { Name = "v_holdLock"
                   Params = [ Int "serving"
                              Int "ticket" ] },
-                Some <| BGt(AVar "ticket", AVar "serving"))
+                Some <| BGt(IVar "ticket", IVar "serving"))
               ( { Name = "v_holdLock_holdTick"
                   Params = [ Int "serving"
                              Int "ticket"
                              Int "t" ] },
-                Some <| BNot(iEq (AVar "serving") (AVar "t")))
+                Some <| BNot(iEq (IVar "serving") (IVar "t")))
               ( { Name = "v_holdTick_holdTick"
                   Params = [ Int "serving"
                              Int "ticket"
                              Int "ta"
                              Int "tb" ] },
-                Some <| BNot(iEq (AVar "ta") (AVar "tb")))
+                Some <| BNot(iEq (IVar "ta") (IVar "tb")))
               ( { Name = "v_holdLock_holdLock"
                   Params = [ Int "serving"
                              Int "ticket" ] },
@@ -67,41 +67,41 @@ module Tests =
              |> okOption,
              Is.EqualTo
                 (Set.ofList
-                    [ Clause(Ge (AVar "Vticket", AVar "Vserving"),
+                    [ Clause(Ge (IVar "Vticket", IVar "Vserving"),
                              [ Pred { Name = "emp"
-                                      Params = [ AVar "Vserving"; AVar "Vticket" ] } ] )
-                      Clause(Gt (AVar "Vticket", AVar "Vt"),
+                                      Params = [ IVar "Vserving"; IVar "Vticket" ] } ] )
+                      Clause(Gt (IVar "Vticket", IVar "Vt"),
                              [ Pred { Name = "v_holdTick"
-                                      Params = [ AVar "Vserving"; AVar "Vticket"; AVar "Vt" ] } ] )
-                      Clause(Gt (AVar "Vticket", AVar "Vserving"),
+                                      Params = [ IVar "Vserving"; IVar "Vticket"; IVar "Vt" ] } ] )
+                      Clause(Gt (IVar "Vticket", IVar "Vserving"),
                              [ Pred { Name = "v_holdLock"
-                                      Params = [ AVar "Vserving"; AVar "Vticket" ] } ] )
-                      Clause(Neq (AVar "Vserving", AVar "Vt"),
+                                      Params = [ IVar "Vserving"; IVar "Vticket" ] } ] )
+                      Clause(Neq (IVar "Vserving", IVar "Vt"),
                              [ Pred { Name = "v_holdLock_holdTick"
-                                      Params = [ AVar "Vserving"; AVar "Vticket"; AVar "Vt" ] } ] )
-                      Clause(Neq (AVar "Vta", AVar "Vtb"),
+                                      Params = [ IVar "Vserving"; IVar "Vticket"; IVar "Vt" ] } ] )
+                      Clause(Neq (IVar "Vta", IVar "Vtb"),
                              [ Pred { Name = "v_holdTick_holdTick"
-                                      Params = [ AVar "Vserving"; AVar "Vticket"; AVar "Vta"; AVar "Vtb" ] } ] )
+                                      Params = [ IVar "Vserving"; IVar "Vticket"; IVar "Vta"; IVar "Vtb" ] } ] )
                       Clause(False,
                              [ Pred { Name = "v_holdLock_holdLock"
-                                      Params = [ AVar "Vserving"; AVar "Vticket"] } ] )
+                                      Params = [ IVar "Vserving"; IVar "Vticket"] } ] )
                       Clause(Pred { Name = "emp"
-                                    Params = [ AVar "Vserving"; AVar "Vticket" ] },
-                             [ Ge (AVar "Vticket", AVar "Vserving") ] )
+                                    Params = [ IVar "Vserving"; IVar "Vticket" ] },
+                             [ Ge (IVar "Vticket", IVar "Vserving") ] )
                       Clause(Pred { Name = "v_holdTick"
-                                    Params = [ AVar "Vserving"; AVar "Vticket"; AVar "Vt" ] },
-                             [ Gt (AVar "Vticket", AVar "Vt") ] )
+                                    Params = [ IVar "Vserving"; IVar "Vticket"; IVar "Vt" ] },
+                             [ Gt (IVar "Vticket", IVar "Vt") ] )
                       Clause(Pred { Name = "v_holdLock"
-                                    Params = [ AVar "Vserving"; AVar "Vticket" ] },
-                             [ Gt (AVar "Vticket", AVar "Vserving") ] )
+                                    Params = [ IVar "Vserving"; IVar "Vticket" ] },
+                             [ Gt (IVar "Vticket", IVar "Vserving") ] )
                       Clause(Pred { Name = "v_holdLock_holdTick"
-                                    Params = [ AVar "Vserving"; AVar "Vticket"; AVar "Vt" ] },
-                             [ Neq (AVar "Vserving", AVar "Vt") ] )
+                                    Params = [ IVar "Vserving"; IVar "Vticket"; IVar "Vt" ] },
+                             [ Neq (IVar "Vserving", IVar "Vt") ] )
                       Clause(Pred { Name = "v_holdTick_holdTick"
-                                    Params = [ AVar "Vserving"; AVar "Vticket"; AVar "Vta"; AVar "Vtb" ] },
-                             [ Neq (AVar "Vta", AVar "Vtb") ] )
+                                    Params = [ IVar "Vserving"; IVar "Vticket"; IVar "Vta"; IVar "Vtb" ] },
+                             [ Neq (IVar "Vta", IVar "Vtb") ] )
                       Clause(Pred { Name = "v_holdLock_holdLock"
-                                    Params = [ AVar "Vserving"; AVar "Vticket"] },
+                                    Params = [ IVar "Vserving"; IVar "Vticket"] },
                              [ False ] )
 
                       QueryNaming {Name = "emp"; Params = ["serving"; "ticket"]}
@@ -120,8 +120,8 @@ module Tests =
             SharedVars |> hsfModelVariables |> okOption,
             Is.EqualTo(
                 Clause (Pred { Name = "emp"
-                               Params = [ AVar "Vserving"; AVar "Vticket" ] },
-                        [ Eq (AVar "Vserving", AInt 0L)
-                          Eq (AVar "Vticket", AInt 0L) ] )
+                               Params = [ IVar "Vserving"; IVar "Vticket" ] },
+                        [ Eq (IVar "Vserving", IInt 0L)
+                          Eq (IVar "Vticket", IInt 0L) ] )
             |> Some
         ))

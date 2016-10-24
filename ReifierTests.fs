@@ -46,14 +46,14 @@ module ParamEqualities =
         paramEqualities
             [ iteratedFunc "A"
                 [ Int (siBefore "x1"); Int (siBefore "y1") ]
-                (AInt 1L) ]
+                (IInt 1L) ]
 
     [<Test>]
     let ``Parameter equalities on a set of nullary funcs are empty`` () =
         [] ?=?
         paramEqualities
-            [ iterated (smvfunc "A" []) (AInt 1L)
-              iterated (smvfunc "A" []) (AInt 1L) ]
+            [ iterated (smvfunc "A" []) (IInt 1L)
+              iterated (smvfunc "A" []) (IInt 1L) ]
 
     [<Test>]
     let ``Parameter equalities on parameterised funcs are correct`` () =
@@ -69,16 +69,16 @@ module ParamEqualities =
         paramEqualities
             [ iteratedFunc "A"
                 [ Int (siBefore "x1"); Int (siAfter "y1"); Bool (sbBefore "z1") ]
-                (AInt 1L)
+                (IInt 1L)
               iteratedFunc "A"
                 [ Int (siBefore "x2"); Int (siAfter "y2"); Bool (sbBefore "z2") ]
-                (AInt 10L)
+                (IInt 10L)
               iteratedFunc "A"
                 [ Int (siBefore "x3"); Int (siAfter "y3"); Bool (sbBefore "z3") ]
                 (siBefore "i")
               iteratedFunc "A"
                 [ Int (siBefore "x4"); Int (siAfter "y4"); Bool (sbBefore "z4") ]
-                (AMul [ siAfter "j"; AInt 6L ]) ]
+                (IMul [ siAfter "j"; IInt 6L ]) ]
 
 /// <summary>
 ///     Tests for view preprocessing.
@@ -114,7 +114,7 @@ module ViewPreprocess =
             (sbBefore "G1")
             "B"
             [ Int (siBefore "n1") ]
-            (AInt 5L) ]
+            (IInt 5L) ]
         ?=?
         preprocessView protos
             (Multiset.ofFlatList
@@ -122,7 +122,7 @@ module ViewPreprocess =
                     (sbBefore "G1")
                     "B"
                     [ Int (siBefore "n1") ]
-                    (AInt 5L)
+                    (IInt 5L)
                   iteratedGFunc
                     (sbBefore "G2")
                     "B"
@@ -138,12 +138,12 @@ module ViewPreprocess =
                      bEq (sbAfter "z2") (sbBefore "z1") ])
             "A"
             [ Int (siAfter "x2"); Int (siAfter "y2"); Bool (sbAfter "z2") ]
-            (mkAdd2 (siAfter "k") (AInt 5L))
+            (mkAdd2 (siAfter "k") (IInt 5L))
           iteratedGFunc
             (sbBefore "G1")
             "A"
             [ Int (siBefore "x1"); Int (siBefore "y1"); Bool (sbBefore "z1") ]
-            (AInt 5L)
+            (IInt 5L)
           iteratedGFunc
             (sbBefore "G2")
             "A"
@@ -161,4 +161,4 @@ module ViewPreprocess =
                     (sbBefore "G1")
                     "A"
                     [ Int (siBefore "x1"); Int (siBefore "y1"); Bool (sbBefore "z1") ]
-                    (AInt 5L) ])
+                    (IInt 5L) ])

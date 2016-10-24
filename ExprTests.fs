@@ -22,28 +22,28 @@ module ExprSimp =
   let ``Expression de-duplication, conjuction removal.`` () = 
     Assert.AreEqual (
      simp (BAnd [ BEq 
-                   (Int (AVar "foo"), 
-                    Int (AVar "bar"));
+                   (Int (IVar "foo"), 
+                    Int (IVar "bar"));
                   BEq 
-                   (Int (AVar "bar"), 
-                    Int (AVar "foo"))
+                   (Int (IVar "bar"), 
+                    Int (IVar "foo"))
                ]), 
-     BEq (Int (AVar "foo"), 
-          Int (AVar "bar"))
+     BEq (Int (IVar "foo"), 
+          Int (IVar "bar"))
    ) 
 
   [<Test>] 
   let ``Expression de-duplication, disjunction removal.`` () = 
     Assert.AreEqual (
      simp (BOr [ BEq 
-                   (Int (AVar "foo"), 
-                    Int (AVar "bar"));
+                   (Int (IVar "foo"), 
+                    Int (IVar "bar"));
                   BEq 
-                   (Int (AVar "bar"), 
-                    Int (AVar "foo"))
+                   (Int (IVar "bar"), 
+                    Int (IVar "foo"))
                ]), 
-     BEq (Int (AVar "foo"), 
-          Int (AVar "bar"))
+     BEq (Int (IVar "foo"), 
+          Int (IVar "bar"))
    ) 
 
-//])) , (BAnd [(Beq (AVar 0) (AVar 1))]) ) 
+//])) , (BAnd [(Beq (IVar 0) (IVar 1))]) ) 

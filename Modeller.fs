@@ -460,20 +460,20 @@ let coreSemantics : PrimSemanticsMap =
       // Integer load-and-increment
       (prim "!ILoad++"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
            <| mkAnd [ iEq (siVar "dest") (siVar "srcB")
-                      iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (AInt 1L)) ])
+                      iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (IInt 1L)) ])
 
       // Integer load-and-decrement
       (prim "!ILoad--"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
            <| mkAnd [ iEq (siVar "dest") (siVar "srcB")
-                      iEq (siVar "srcA") (mkSub2 (siVar "srcB") (AInt 1L)) ])
+                      iEq (siVar "srcA") (mkSub2 (siVar "srcB") (IInt 1L)) ])
 
       // Integer increment
       (prim "!I++"  [ Int "srcA" ] [ Int "srcB" ]
-           <| iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (AInt 1L)))
+           <| iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (IInt 1L)))
 
       // Integer decrement
       (prim "!I--"  [ Int "srcA" ] [ Int "srcB" ]
-           <| iEq (siVar "srcA") (mkSub2 (siVar "srcB") (AInt 1L)))
+           <| iEq (siVar "srcA") (mkSub2 (siVar "srcB") (IInt 1L)))
 
       // Boolean load
       (prim "!BLoad"  [ Bool "dest" ] [ Bool "src" ]
@@ -594,7 +594,7 @@ let rec modelExpr
 /// </param>
 /// <param name="varF">
 ///     A function to transform any variables after they are looked-up,
-///     but before they are placed in <c>AVar</c>.  Use this to apply
+///     but before they are placed in <c>IVar</c>.  Use this to apply
 ///     markers on variables, etc.
 /// </param>
 /// <typeparam name="var">
@@ -684,7 +684,7 @@ and modelBoolExpr
 /// </param>
 /// <param name="varF">
 ///     A function to transform any variables after they are looked-up,
-///     but before they are placed in <c>AVar</c>.  Use this to apply
+///     but before they are placed in <c>IVar</c>.  Use this to apply
 ///     markers on variables, etc.
 /// </param>
 /// <typeparam name="var">
@@ -706,7 +706,7 @@ and modelIntExpr
 
     let rec mi e =
         match e.Node with
-        | Num i -> i |> AInt |> ok
+        | Num i -> i |> IInt |> ok
         | Identifier v ->
             (* Look-up the variable to ensure it a) exists and b) is of an
              * arithmetic type.
@@ -714,7 +714,7 @@ and modelIntExpr
             v
             |> wrapMessages Var (VarMap.lookup env)
             |> bind (function
-                     | Typed.Int vn -> vn |> varF |> Reg |> AVar |> ok
+                     | Typed.Int vn -> vn |> varF |> Reg |> IVar |> ok
                      | vr ->
                         fail
                             (VarBadType
@@ -726,7 +726,7 @@ and modelIntExpr
             args
             |> List.map me
             |> collect
-            |> lift (func sym >> Sym >> AVar)
+            |> lift (func sym >> Sym >> IVar)
         | BopExpr(ArithOp as op, l, r) ->
             lift2 (match op with
                    | Mul -> mkMul2
