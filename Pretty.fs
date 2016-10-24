@@ -308,3 +308,8 @@ let printList pItem lst =
 /// Formats an error that is wrapping another error.
 let wrapped wholeDesc whole err =
     headed (sprintf "In %s '%s'" wholeDesc (print whole)) [ err ]
+
+/// <summary>
+///     Prints an integer.
+/// </summary>
+let printInt (i : int) : Doc = String (sprintf "%i" i)

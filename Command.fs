@@ -181,12 +181,22 @@ module Compose =
             maxOpt (getIntermediate v x) (getIntermediate v y)
         | _ -> None
 
+    /// Gets the highest intermediate number for some variable in a given
+    /// array expression
+    and getArrayIntermediate v =
+        function
+        | AVar (Reg (Intermediate (n, name))) when name = v -> Some n
+        | AVar (Sym { Params = xs } ) ->
+            Seq.fold maxOpt None <| (Seq.map (getIntermediate v) <| xs)
+        | AVar _ -> None
+
     /// Gets the highest intermediate stage number for a given variable name
     /// in some expression.
     and getIntermediate v =
         function
         | Int x -> getIntIntermediate v x
         | Bool x -> getBoolIntermediate v x
+        | Array (_, _, x) -> getArrayIntermediate v x
 
 /// <summary>
 ///     Functions for removing symbols from commands.

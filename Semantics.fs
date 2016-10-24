@@ -188,7 +188,7 @@ let checkParamTypesPrim : PrimCommand -> PrimSemantics -> Result<PrimCommand, Er
     fun prim sem ->
     List.map2
         (fun fp dp ->
-            if typeOf fp = typeOf dp
+            if typesCompatible (typeOf fp) (typeOf dp)
             then ok ()
             else fail (TypeMismatch (dp, typeOf fp)))
         prim.Args
