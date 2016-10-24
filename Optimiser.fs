@@ -683,7 +683,7 @@ module Graph =
                        commands.  If this fails, give up on the optimisation. *)
                     let toBefore : BoolExpr<Var> -> Result<BoolExpr<MarkedVar>, _> =
                         mapTraversal
-                            (tLiftToBoolSrc
+                            (tliftToBoolSrc
                                 (tliftToExprDest
                                     (tliftOverCTyped
                                         (ignoreContext (Before >> ok)))))
@@ -971,7 +971,7 @@ module Term =
     let rec (|ConstantBoolFunction|_|) (x : BoolExpr<Sym<MarkedVar>>)
       : MarkedVar option =
         x
-        |> findMarkedVars (tLiftToBoolSrc (tliftToExprDest collectSymMarkedVars))
+        |> findMarkedVars (tliftToBoolSrc (tliftToExprDest collectSymMarkedVars))
         |> okOption |> Option.map (Seq.map valueOf) |> Option.bind onlyOne
 
     /// Partial pattern that matches a Boolean expression in terms of exactly one /
@@ -979,7 +979,7 @@ module Term =
     let rec (|ConstantIntFunction|_|) (x : IntExpr<Sym<MarkedVar>>)
       : MarkedVar option =
         x
-        |> findMarkedVars (tLiftToIntSrc (tliftToExprDest collectSymMarkedVars))
+        |> findMarkedVars (tliftToIntSrc (tliftToExprDest collectSymMarkedVars))
         |> okOption |> Option.map (Seq.map valueOf) |> Option.bind onlyOne
 
     /// Finds all instances of the pattern `x!after = f(x!before)` in an

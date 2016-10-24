@@ -123,6 +123,7 @@ module Pretty =
         function
         | IVar c -> String c
         | IInt i -> sprintf "%d" i |> String
+        | IIdx _ -> failwith "unexpected array index"
         // Do some reshuffling of n-ary expressions into binary ones.
         // These expressions are left-associative, so this should be sound.
         | IAdd [] -> failwith "unexpected empty addition"

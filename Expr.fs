@@ -29,6 +29,10 @@ module Types =
     /// </typeparam>
     and IntExpr<'Var> when 'Var : equality =
         | IVar of 'Var
+        | IIdx of eltype : Type
+                * length : int option
+                * arr : ArrayExpr<'Var>
+                * idx : IntExpr<'Var>
         | IInt of int64
         | IAdd of IntExpr<'Var> list
         | ISub of IntExpr<'Var> list
@@ -45,6 +49,10 @@ module Types =
     /// </typeparam>
     and BoolExpr<'Var> when 'Var : equality =
         | BVar of 'Var
+        | BIdx of eltype : Type
+                * length : int option
+                * arr : ArrayExpr<'Var>
+                * idx : IntExpr<'Var>
         | BTrue
         | BFalse
         | BAnd of BoolExpr<'Var> list
@@ -66,6 +74,10 @@ module Types =
     /// </typeparam>
     and ArrayExpr<'Var> when 'Var : equality =
         | AVar of 'Var
+        | AIdx of eltype : Type
+                * length : int option
+                * arr : ArrayExpr<'Var>
+                * idx : IntExpr<'Var>
 
     /// Type for fresh variable generators.
     type FreshGen = bigint ref
@@ -87,19 +99,29 @@ module Pretty =
       let head = HSep([(String "("); (String op)], Nop)
       vsep [head; sep; (String ")")]
 
+    /// Creates an S-expression from an operator string and sequence of operand
+    /// documents.
+    let cmdSexpr (op : string) : Doc seq -> Doc =
+        scons (String op) >> hsep >> parened
+
     /// Creates an S-expression from an operator string, operand print function, and
     /// sequence of operands.
     let sexpr (op : string) (pxs : 'x -> Doc) : 'x seq -> Doc =
-        Seq.map pxs
-        >> scons (String op)
-        >> hsep
-        >> parened
+        cmdSexpr op << Seq.map pxs
+
+    /// Pretty-prints an array subscript.
+    let rec printIdx
+      (pVar : 'Var -> Doc)
+      (arr : ArrayExpr<'Var>)
+      (idx : IntExpr<'Var>) : Doc =
+        cmdSexpr "[]" [ printIntExpr pVar idx; printArrayExpr pVar arr ]
 
     /// Pretty-prints an arithmetic expression.
-    let rec printIntExpr (pVar : 'Var -> Doc) : IntExpr<'Var> -> Doc =
+    and printIntExpr (pVar : 'Var -> Doc) : IntExpr<'Var> -> Doc =
         function
         | IVar c -> pVar c
         | IInt i -> i |> sprintf "%i" |> String
+        | IIdx (_, _, arr, idx) -> printIdx pVar arr idx
         | IAdd xs -> sexpr "+" (printIntExpr pVar) xs
         | ISub xs -> sexpr "-" (printIntExpr pVar) xs
         | IMul xs -> sexpr "*" (printIntExpr pVar) xs
@@ -110,6 +132,7 @@ module Pretty =
     and printBoolExpr (pVar : 'Var -> Doc) : BoolExpr<'Var> -> Doc =
         function
         | BVar c -> pVar c
+        | BIdx (_, _, arr, idx) -> printIdx pVar arr idx
         | BTrue -> String "true"
         | BFalse -> String "false"
         | BAnd xs -> svexpr "and" (printBoolExpr pVar) xs
@@ -126,6 +149,7 @@ module Pretty =
     and printArrayExpr (pVar : 'Var -> Doc) : ArrayExpr<'Var> -> Doc =
         function
         | AVar c -> pVar c
+        | AIdx (_, _, arr, idx) -> printIdx pVar arr idx
 
     /// Pretty-prints an expression.
     and printExpr (pVar : 'Var -> Doc) : Expr<'Var> -> Doc =

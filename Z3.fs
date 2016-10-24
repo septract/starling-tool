@@ -55,12 +55,18 @@ module Expr =
     let rec intToZ3
       (reals : bool)
       (toStr : 'Var -> string)
-      (ctx: Z3.Context)
+      (ctx : Z3.Context)
       (int : IntExpr<'Var>) : Z3.ArithExpr =
         let rec iz =
             function
             | IVar c when reals -> c |> toStr |> ctx.MkRealConst :> Z3.ArithExpr
             | IVar c -> c |> toStr |> ctx.MkIntConst :> Z3.ArithExpr
+            | IIdx (eltype, _, arr, idx) ->
+                // TODO(CaptainHayashi): ensure eltype is Int?
+                let arrZ3 = arrayToZ3 reals toStr ctx eltype arr
+                let idxZ3 = intToZ3 reals toStr ctx idx
+                // TODO(CaptainHayashi): make this not crash if the select is not an ArithExpr.
+                ctx.MkSelect (arrZ3, idxZ3) :?> Z3.ArithExpr
             | IInt i when reals -> (i |> ctx.MkReal) :> Z3.ArithExpr
             | IInt i -> (i |> ctx.MkInt) :> Z3.ArithExpr
             | IAdd xs -> ctx.MkAdd (xs |> Seq.map iz |> Seq.toArray)
@@ -83,6 +89,12 @@ module Expr =
         let rec bz =
             function
             | BVar c -> c |> toStr |> ctx.MkBoolConst
+            | BIdx (eltype, _, arr, idx) ->
+                // TODO(CaptainHayashi): ensure eltype is Bool?
+                let arrZ3 = arrayToZ3 reals toStr ctx eltype arr
+                let idxZ3 = intToZ3 reals toStr ctx idx
+                // TODO(CaptainHayashi): make this not crash if the select is not an ArithExpr.
+                ctx.MkSelect (arrZ3, idxZ3) :?> Z3.BoolExpr
             | BTrue -> ctx.MkTrue ()
             | BFalse -> ctx.MkFalse ()
             | BAnd xs -> ctx.MkAnd (xs |> Seq.map bz |> Seq.toArray)
@@ -110,6 +122,12 @@ module Expr =
                 (name = toStr c,
                  domain = typeToSort reals ctx eltype,
                  range = ctx.MkIntSort ())
+        | AIdx (eltype, _, arr, idx) ->
+            // TODO(CaptainHayashi): ensure eltype is Array?
+            let arrZ3 = arrayToZ3 reals toStr ctx eltype arr
+            let idxZ3 = intToZ3 reals toStr ctx idx
+            // TODO(CaptainHayashi): make this not crash if the select is not an ArithExpr.
+            ctx.MkSelect (arrZ3, idxZ3) :?> Z3.ArrayExpr
 
     /// Converts a Starling expression to a Z3 Expr.
     and exprToZ3

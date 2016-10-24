@@ -161,6 +161,9 @@ module Compose =
             Seq.fold maxOpt None <| (Seq.map (getIntIntermediate v) <| xs)
         | IDiv (x, y) | IMod (x, y) ->
             maxOpt (getIntIntermediate v x) (getIntIntermediate v y)
+        // Is this correct?
+        | IIdx (_, _, arr, idx) ->
+            maxOpt (getArrayIntermediate v arr) (getIntIntermediate v idx)
         | _ -> None
 
     /// Gets the highest intermediate number for some variable in a given
@@ -188,6 +191,9 @@ module Compose =
         | AVar (Reg (Intermediate (n, name))) when name = v -> Some n
         | AVar (Sym { Params = xs } ) ->
             Seq.fold maxOpt None <| (Seq.map (getIntermediate v) <| xs)
+        // Is this correct?
+        | AIdx (_, _, arr, idx) ->
+            maxOpt (getArrayIntermediate v arr) (getIntIntermediate v idx)
         | AVar _ -> None
 
     /// Gets the highest intermediate stage number for a given variable name
