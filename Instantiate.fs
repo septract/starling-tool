@@ -228,7 +228,7 @@ let instantiate
 
     let subInTypedSym dfunc =
         tliftToTypedSymVarSrc (paramSubFun vfunc dfunc)
-    let subInBool dfunc = tLiftToBoolSrc (subInTypedSym dfunc)
+    let subInBool dfunc = tliftToBoolSrc (subInTypedSym dfunc)
 
     let result =
         bind
@@ -409,7 +409,7 @@ module Phase =
                This returns a pair of (useless) context and neq expression.
                Throw away the context with snd. *)
             let approxBoolExprR =
-                lift snd (toError (tLiftToBoolSrc approx position boolExpr))
+                lift snd (toError (tliftToBoolSrc approx position boolExpr))
 
             (* The above might have left some symbols, eg in integer position.
                Try to remove them, and fail if we can't. *)
