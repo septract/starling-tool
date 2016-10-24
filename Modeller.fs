@@ -82,7 +82,7 @@ module Types =
         /// <summary>
         ///     Two items that should have been the same type were not.
         /// </summary>
-        | TypeMismatch of expected : Type * got : Type
+        | TypeMismatch of expected : string * got : Type
         /// <summary>
         ///     A language type literal is inexpressible in Starling.
         /// </summary>
@@ -256,7 +256,7 @@ module Pretty =
         match err with
         | TypeMismatch (expected, got) ->
             errorStr "expected"
-            <+> quoted (printType expected)
+            <+> errorStr expected
             <&> errorStr "got"
             <+> quoted (printType got)
         | ImpossibleType (lit, why) ->
@@ -560,9 +560,9 @@ let rec modelExpr
   (e : Expression)
   : Result<Expr<Sym<'var>>, ExprError> =
     match e.Node with
-    (* First, if we have a variable, the type of expression is
-       determined by the type of the variable.  If the variable is
-       symbolic, then we have ambiguity. *)
+        (* First, if we have a variable, the type of expression is
+           determined by the type of the variable.  If the variable is
+           symbolic, then we have ambiguity. *)
         | Identifier v ->
             v
             |> wrapMessages Var (lookupVar env)
@@ -573,6 +573,19 @@ let rec modelExpr
                 >> mapMessages BadSub)
         | Symbolic (sym, exprs) ->
             fail (AmbiguousSym sym)
+        (* If we have an array, then work out what the type of the array's
+           elements are, then walk back from there. *)
+        | ArraySubscript (arr, idx) ->
+            let arrResult = modelArrayExpr env varF arr
+            let idxResult = modelIntExpr env varF idx
+            lift2
+                (fun (eltype, length, arrE) idxE ->
+                    match eltype with
+                    | Int () -> Int (IIdx (eltype, length, arrE, idxE))
+                    | Bool () -> Bool (BIdx (eltype, length, arrE, idxE))
+                    | Array (ieltype, ilength, ()) ->
+                        Array (ieltype, ilength, AIdx (eltype, length, arrE, idxE)))
+                arrResult idxResult
         (* We can use the active patterns above to figure out whether we
          * need to treat this expression as arithmetic or Boolean.
          *)
@@ -582,7 +595,7 @@ let rec modelExpr
                 | _ -> failwith "unreachable[modelExpr]"
 
 /// <summary>
-///     Models a Starling integral expression as a <c>BoolExpr</c>.
+///     Models a Starling Boolean expression as a <c>BoolExpr</c>.
 ///
 ///     <para>
 ///         See <c>modelExpr</c> for more information.
@@ -598,23 +611,26 @@ let rec modelExpr
 ///     but before they are placed in <c>IVar</c>.  Use this to apply
 ///     markers on variables, etc.
 /// </param>
+/// <param name="expr">
+///     An expression previously judged as Boolean, to be modelled.
+/// </param>
 /// <typeparam name="var">
 ///     The type of variables in the <c>BoolExpr</c>, achieved by
 ///     applying <paramref name="varF"/> to <c>Var</c>s.
 /// </typeparam>
 /// <returns>
-///     A function, taking <c>Expression</c>s previously judged as
-///     Boolean.  This function will return a <c>Result</c>, over
-///     <c>ExprError</c>, containing the modelled <c>BoolExpr</c> on
-///     success.  The exact type parameters of the expression depend on
+///     A <c>Result</c>, over <c>ExprError</c>, containing the modelled
+///     <c>BoolExpr</c> on success.
+///     The exact type parameters of the expression depend on
 ///     <paramref name="varF"/>.
 /// </returns>
 and modelBoolExpr
   (env : VarMap)
   (varF : Var -> 'var)
-  : Expression -> Result<BoolExpr<Sym<'var>>, ExprError> =
+  (expr : Expression) : Result<BoolExpr<Sym<'var>>, ExprError> =
     let mi = modelIntExpr env varF
     let me = modelExpr env varF
+    let ma = modelArrayExpr env varF
 
     let rec mb e =
         match e.Node with
@@ -633,13 +649,22 @@ and modelBoolExpr
                             (VarBadType
                                 (v,
                                  TypeMismatch
-                                    (expected = Type.Bool (),
-                                     got = typeOf vr))))
+                                    (expected = "bool", got = typeOf vr))))
         | Symbolic (sym, args) ->
             args
             |> List.map me
             |> collect
             |> lift (func sym >> Sym >> BVar)
+        | ArraySubscript (arr, idx) ->
+            let arrResult = ma arr
+            let idxResult = mi idx
+            bind2
+                (fun (eltype, length, arrE) idxE ->
+                    match eltype with
+                    | Bool () -> ok (BIdx (eltype, length, arrE, idxE))
+                    | t ->
+                        fail (ExprBadType (TypeMismatch (expected = "bool[]", got = t))))
+                arrResult idxResult
         | BopExpr(BoolOp as op, l, r) ->
             match op with
             | ArithIn as o ->
@@ -666,10 +691,9 @@ and modelBoolExpr
                        | _ -> failwith "unreachable[modelBoolExpr::AnyIn]")
                       (me l)
                       (me r)
-        // TODO(CaptainHayashi): figure out what the actual type is here
         | _ ->
-            fail (ExprBadType (TypeMismatch (expected = Bool (), got = Int ())))
-    mb
+            fail (ExprBadType (TypeMismatch (expected = "bool", got = Int ())))
+    mb expr
 
 /// <summary>
 ///     Models a Starling integral expression as an <c>IntExpr</c>.
@@ -688,22 +712,25 @@ and modelBoolExpr
 ///     but before they are placed in <c>IVar</c>.  Use this to apply
 ///     markers on variables, etc.
 /// </param>
+/// <param name="expr">
+///     An expression previously judged as integral, to be modelled.
+/// </param>
 /// <typeparam name="var">
 ///     The type of variables in the <c>IntExpr</c>, achieved by
 ///     applying <paramref name="varF"/> to <c>Var</c>s.
 /// </typeparam>
 /// <returns>
-///     A function, taking <c>Expression</c>s previously judged as
-///     integral.  This function will return a <c>Result</c>, over
-///     <c>ExprError</c>, containing the modelled <c>IntExpr</c> on
-///     success.  The exact type parameters of the expression depend on
+///     A <c>Result</c>, over <c>ExprError</c>, containing the modelled
+///     <c>IntExpr</c> on success.
+///     The exact type parameters of the expression depend on
 ///     <paramref name="varF"/>.
 /// </returns>
 and modelIntExpr
   (env : VarMap)
   (varF : Var -> 'var)
-  : Expression -> Result<IntExpr<Sym<'var>>, ExprError> =
+  (expr : Expression) : Result<IntExpr<Sym<'var>>, ExprError> =
     let me = modelExpr env varF
+    let ma = modelArrayExpr env varF
 
     let rec mi e =
         match e.Node with
@@ -721,13 +748,22 @@ and modelIntExpr
                             (VarBadType
                                 (v,
                                  TypeMismatch
-                                    (expected = Type.Int (),
-                                     got = typeOf vr))))
+                                    (expected = "int", got = typeOf vr))))
         | Symbolic (sym, args) ->
             args
             |> List.map me
             |> collect
             |> lift (func sym >> Sym >> IVar)
+        | ArraySubscript (arr, idx) ->
+            let arrResult = ma arr
+            let idxResult = mi idx
+            bind2
+                (fun (eltype, length, arrE) idxE ->
+                    match eltype with
+                    | Int () -> ok (IIdx (eltype, length, arrE, idxE))
+                    | t ->
+                        fail (ExprBadType (TypeMismatch (expected = "int[]", got = t))))
+                arrResult idxResult
         | BopExpr(ArithOp as op, l, r) ->
             lift2 (match op with
                    | Mul -> mkMul2
@@ -737,10 +773,88 @@ and modelIntExpr
                    | _ -> failwith "unreachable[modelIntExpr]")
                   (mi l)
                   (mi r)
-        // TODO(CaptainHayashi): figure out what the actual type is here
         | _ ->
-            fail (ExprBadType (TypeMismatch (expected = Int (), got = Bool ())))
-    mi
+            fail (ExprBadType (TypeMismatch (expected = "int", got = Bool ())))
+    mi expr
+
+/// <summary>
+///     Models a Starling array expression as an <c>ArrayExpr</c>.
+///
+///     <para>
+///         See <c>modelExpr</c> for more information.
+///     </para>
+/// </summary>
+/// <param name="env">
+///     The <c>VarMap</c> of variables bound where this expression
+///     occurs.  Usually, but not always, these are the thread-local
+///     variables.
+/// </param>
+/// <param name="varF">
+///     A function to transform any variables after they are looked-up,
+///     but before they are placed in <c>AVar</c>.  Use this to apply
+///     markers on variables, etc.
+/// </param>
+/// <param name="expr">
+///     An expression previously judged as integral, to be modelled.
+/// </param>
+/// <typeparam name="var">
+///     The type of variables in the <c>ArrayExpr</c>, achieved by
+///     applying <paramref name="varF"/> to <c>Var</c>s.
+/// </typeparam>
+/// <returns>
+///     A <c>Result</c>, over <c>ExprError</c>, containing the modelled
+///     <c>ArrayExpr</c> on success.
+///     The exact type parameters of the expression depend on
+///     <paramref name="varF"/>.
+/// </returns>
+and modelArrayExpr
+  (env : VarMap)
+  (varF : Var -> 'var)
+  (expr : Expression)
+  : Result<Type * int option * ArrayExpr<Sym<'var>>, ExprError> =
+    let mi = modelIntExpr env varF
+
+    let rec ma e =
+        match e.Node with
+        | Identifier v ->
+            (* Look-up the variable to ensure it a) exists and b) is of an
+             * array type.
+             *)
+            v
+            |> wrapMessages Var (lookupVar env)
+            |> bind (function
+                     | Typed.Array (eltype, length, vn) ->
+                        ok (eltype, length, AVar (Reg (varF vn)))
+                     | vr ->
+                        fail
+                            (VarBadType
+                                (v,
+                                 TypeMismatch
+                                    (expected = "array", got = typeOf vr))))
+        | Symbolic (sym, _) ->
+            (* TODO(CaptainHayashi): a symbolic array is ambiguously typed.
+               Maybe when modelling we should take our 'best guess' at
+               eltype and length from any subscripting expression? *)
+            fail (AmbiguousSym sym)
+        | ArraySubscript (arr, idx) ->
+            let arrResult = ma arr
+            let idxResult = mi idx
+            bind2
+                (fun (eltype, length, arrE) idxE ->
+                    match eltype with
+                    | Array (eltype', length', ()) ->
+                        ok (eltype', length', AIdx (eltype, length, arrE, idxE))
+                    | t ->
+                        // TODO(CaptainHayashi): more sensible error?
+                        fail (ExprBadType (TypeMismatch (expected = "array[]", got = t))))
+                arrResult idxResult
+        | ArithExp' _ ->
+            fail (ExprBadType (TypeMismatch (expected = "array", got = Int ())))
+        | BoolExp' _ ->
+            fail (ExprBadType (TypeMismatch (expected = "array", got = Bool ())))
+        // We should have covered all expressions by here.
+        | _ -> failwith "unreachable?[modelArrayExpr]"
+    ma expr
 
 (*
  * Views
@@ -1048,20 +1162,6 @@ let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
 //
 
 /// <summary>
-///     Selects the thread-local environment of a context.
-/// </summary>
-/// <param name="ctx">The context whose scope is being accessed.</param>
-/// <returns>The thread-local environment as a <see cref="VarMap"/>.
-let threadEnv (ctx : MethodContext) : VarMap = ctx.ThreadVars
-
-/// <summary>
-///     Selects the shared environment of a context.
-/// </summary>
-/// <param name="ctx">The context whose scope is being accessed.</param>
-/// <returns>The shared environment as a <see cref="VarMap"/>.
-let sharedEnv (ctx : MethodContext) : VarMap = ctx.SharedVars
-
-/// <summary>
 ///     Models a Boolean lvalue given a potentially valid expression and
 ///     environment.
 /// </summary>
@@ -1234,7 +1334,13 @@ let modelCAS
         | d, t ->
             (* Oops, we have a type error.
                Arbitrarily single out test as the cause of it. *)
-            fail (BadType (test, TypeMismatch (typeOf d, typeOf t)))
+            fail
+                (BadType
+                    (test,
+                     TypeMismatch
+                        // TODO(CaptainHayashi): clean this up
+                        (Starling.Core.Pretty.printUnstyled
+                            (Starling.Core.TypeSystem.Pretty.printType (typeOf d)), typeOf t)))
 
     (* We need the unmarked version of dest and test for the outputs,
        and the marked version for the inputs. *)
@@ -1245,35 +1351,6 @@ let modelCAS
         (toPost ctx.SharedVars dest)
         (toPre  ctx.ThreadVars test)
         (toPost ctx.ThreadVars test)
-
-(*
-    wrapMessages BadSVar (lookupVar svars) destLV
-    >>= (fun dest ->
-             let v = wrapMessages BadTVar (lookupVar tvars) testLV
-             lift (mkPair dest) v)
-    >>= (function
-         | UnifyBool (d, t) ->
-             set
-             |> wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Before)
-             |> lift
-                    (fun s ->
-                        command "BCAS"
-                            [ Bool d; Bool t ]
-                            [ d |> sbBefore |> Expr.Bool
-                              t |> sbBefore |> Expr.Bool
-                              s |> Expr.Bool ] )
-         | UnifyInt (d, t) ->
-            set
-            |> wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Before)
-            |> lift
-                   (fun s ->
-                        command "ICAS"
-                            [ Int d; Int t ]
-                            [ d |> siBefore |> Expr.Int
-                              t |> siBefore |> Expr.Int
-                              s |> Expr.Int ] )
-         | UnifyFail (d, t) ->
-             *)
 
 /// <summary>
 ///     Gets the underlying variable of an lvalue.

@@ -486,18 +486,27 @@ let (|ArithIn|BoolIn|AnyIn|) : BinOp -> Choice<unit, unit, unit> =
     | Eq | Neq -> AnyIn
     | And | Or | Imp -> BoolIn
 
+/// Active pattern classifying inner expressions as to whether they are
+/// arithmetic, Boolean, or indeterminate.
+let (|BoolExp'|ArithExp'|AnyExp'|) (e : Expression')
+  : Choice<Expression', Expression', Expression'> =
+    match e with
+    | Identifier _ -> AnyExp' e
+    | Symbolic _ -> AnyExp' e
+    | ArraySubscript _ -> AnyExp' e
+    | Num _ -> ArithExp' e
+    | True | False -> BoolExp' e
+    | BopExpr(BoolOp, _, _) -> BoolExp' e
+    | BopExpr(ArithOp, _, _) -> ArithExp' e
+
 /// Active pattern classifying expressions as to whether they are
 /// arithmetic, Boolean, or indeterminate.
 let (|BoolExp|ArithExp|AnyExp|) (e : Expression)
   : Choice<Expression, Expression, Expression> =
     match e.Node with
-    | Identifier _ -> AnyExp e
-    | Symbolic _ -> AnyExp e
-    | ArraySubscript _ -> AnyExp e
-    | Num _ -> ArithExp e
-    | True | False -> BoolExp e
-    | BopExpr(BoolOp, _, _) -> BoolExp e
-    | BopExpr(ArithOp, _, _) -> ArithExp e
+    | BoolExp' _ -> BoolExp e
+    | ArithExp' _ -> ArithExp e
+    | AnyExp' _ -> AnyExp e
 
 /// <summary>
 ///     Active pattern classifying expressions as lvalues or rvalues.
