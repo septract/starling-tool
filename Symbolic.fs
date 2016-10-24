@@ -241,7 +241,7 @@ module Queries =
     /// </returns>
     let removeSymFromBoolExpr (err : string -> 'Error)
       : Traversal<BoolExpr<Sym<'Var>>, BoolExpr<'Var>, 'Error> =
-        tLiftToBoolSrc
+        tliftToBoolSrc
             (tliftToExprDest
                 (tliftOverCTyped (removeSymFromVar err)))
 

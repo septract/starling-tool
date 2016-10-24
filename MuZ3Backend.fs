@@ -537,14 +537,14 @@ module Translator =
             tliftToExprDest
                 (tliftOverCTyped (ignoreContext (toVar >> ok)))
         let toVarTravExpr = tliftToExprSrc toVarTrav
-        let toVarTravBool = tLiftToBoolSrc toVarTrav
+        let toVarTravBool = tliftToBoolSrc toVarTrav
         let toVarTravGView = tchainM (tliftOverGFunc toVarTravExpr) id
         let toVarTravVFunc = tliftOverFunc toVarTravExpr
 
         let findVarTrav : Traversal<TypedVar, Expr<Var>, Error> =
             tliftToExprDest collectVars
         let findVarTravExpr = tliftToExprSrc findVarTrav
-        let findVarTravBool = tLiftToBoolSrc findVarTrav
+        let findVarTravBool = tliftToBoolSrc findVarTrav
         let findVarTravGView = tchainM (tliftOverGFunc findVarTravExpr) id
         let findVarTravVFunc = tliftOverFunc findVarTravExpr
 
@@ -825,7 +825,7 @@ module Run =
 
         // TODO(CaptainHayashi): de-duplicate this with mkRule?
         let defVarsResult =
-            findVars (tLiftToBoolSrc (tliftToExprDest collectVars)) def
+            findVars (tliftToBoolSrc (tliftToExprDest collectVars)) def
         let paramVarsResult =
             findVars
                 (tchainL (tliftOverExpr collectVars) id)

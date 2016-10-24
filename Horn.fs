@@ -120,6 +120,7 @@ module Pretty =
         function
         | IVar c -> String c
         | IInt i -> sprintf "%d" i |> String
+        | IIdx _ -> failwith "unexpected array index"
         // Do some reshuffling of n-ary expressions into binary ones.
         // These expressions are left-associative, so this should be sound.
         | IAdd [] -> failwith "unexpected empty addition"
@@ -270,6 +271,12 @@ let checkArith
         | ISub xs -> xs |> List.map ca |> collect |> lift ISub
         | IMul xs -> xs |> List.map ca |> collect |> lift IMul
         | IDiv (x, y) -> lift2 (curry IDiv) (ca x) (ca y)
+        | x ->
+            x
+            |> Expr.Int
+            |> liftWithoutContext (toVar >> ok) (tliftOverCTyped >> tliftOverExpr)
+            |> mapMessages Traversal
+            |> bind (UnsupportedExpr >> fail)
     ca
 
 /// <summary>

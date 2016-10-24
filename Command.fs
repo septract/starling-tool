@@ -164,6 +164,9 @@ module Compose =
             xs |> Seq.map nextIntIntermediate |> Seq.fold (curry bigint.Max) 0I
         | IDiv (x, y) ->
             bigint.Max (nextIntIntermediate x, nextIntIntermediate y)
+        // Is this correct?
+        | IIdx (_, _, arr, idx) ->
+            bigint.Max (nextArrayIntermediate arr, nextIntIntermediate idx)
 
     and maxOpt a b =
         match a, b with
@@ -185,6 +188,9 @@ module Compose =
             Seq.fold maxOpt None <| (Seq.map (getIntIntermediate v) <| xs)
         | IDiv (x, y) ->
             maxOpt (getIntIntermediate v x) (getIntIntermediate v y)
+        // Is this correct?
+        | IIdx (_, _, arr, idx) ->
+            maxOpt (getArrayIntermediate v arr) (getIntIntermediate v idx)
         | _ -> None
 
     /// <summary>
@@ -214,6 +220,9 @@ module Compose =
         | BEq (x, y) ->
             bigint.Max (nextIntermediate x, nextIntermediate y)
         | BTrue | BFalse -> 0I
+        // Is this correct?
+        | BIdx (_, _, arr, idx) ->
+            bigint.Max (nextArrayIntermediate arr, nextIntIntermediate idx)
 
     /// Gets the highest intermediate number for some variable in a given
     /// boolean expression
@@ -235,6 +244,9 @@ module Compose =
         | BEq (x, y) ->
             maxOpt (getIntermediate v x) (getIntermediate v y)
         | BTrue | BFalse -> None
+        // Is this correct?
+        | BIdx (_, _, arr, idx) ->
+            maxOpt (getArrayIntermediate v arr) (getIntIntermediate v idx)
         | _ -> None
 
     /// <summary>
@@ -255,6 +267,9 @@ module Compose =
         | AVar (Sym { Params = xs } ) ->
             xs |> Seq.map nextIntermediate |> Seq.fold (curry bigint.Max) 0I
         | AVar _ -> 0I
+        // Is this correct?
+        | AIdx (_, _, arr, idx) ->
+            bigint.Max (nextArrayIntermediate arr, nextIntIntermediate idx)
 
     /// Gets the highest intermediate number for some variable in a given
     /// array expression
@@ -263,6 +278,9 @@ module Compose =
         | AVar (Reg (Intermediate (n, name))) when name = v -> Some n
         | AVar (Sym { Params = xs } ) ->
             Seq.fold maxOpt None <| (Seq.map (getIntermediate v) <| xs)
+        // Is this correct?
+        | AIdx (_, _, arr, idx) ->
+            maxOpt (getArrayIntermediate v arr) (getIntIntermediate v idx)
         | AVar _ -> None
 
     /// <summary>

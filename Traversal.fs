@@ -452,7 +452,7 @@ let tchain3
 ///     Converts a traversal from typed variables to expressions to one from
 ///     Boolean expressions to Boolean expressions.
 /// </summary>
-let rec tLiftToBoolSrc
+let rec tliftToBoolSrc
     (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
     : Traversal<BoolExpr<'SrcVar>, BoolExpr<'DstVar>, 'Error> =
     // TODO(CaptainHayashi): proper doc comment.
@@ -460,9 +460,10 @@ let rec tLiftToBoolSrc
     // We do some tricky inserting and removing of positions on the stack
     // to ensure the correct position appears in the correct place, and
     // is removed when we pop back up the expression stack.
-    let bsv f x = Context.changePos f (tLiftToBoolSrc sub) x
-    let isv x = Context.changePos id (tLiftToIntSrc sub) x
+    let bsv f x = Context.changePos f (tliftToBoolSrc sub) x
+    let isv x = Context.changePos id (tliftToIntSrc sub) x
     let esv x = Context.changePos id (tliftToExprSrc sub) x
+    let asv x = Context.changePos id (tliftToArraySrc sub) x
 
     let neg = Context.negate
 
@@ -473,6 +474,22 @@ let rec tLiftToBoolSrc
             |> CTyped.Bool
             |> Context.changePos id sub ctx
             |> bind (uncurry (ignoreContext expectBool))
+        | BIdx (eltype, length, arr, ix) ->
+            // TODO(CaptainHayashi): this is awful.
+            let originalType = Array (eltype, length, ())
+
+            (* Ensure the traversal doesn't change eltype or length to something
+               we're not expecting. *)
+            let assemble ((eltype', length', arr'), ix') =
+                let newType = Array (eltype', length', ())
+                match (originalType, newType) with
+                | UnifyArray _ -> ok (BIdx (eltype, length, arr', ix'))
+                | _ -> fail (BadType (expected = originalType, got = newType))
+            let tResult =
+                tchain2 asv isv assemble ctx ((eltype, length, arr), ix)
+
+            // Remove the nested result.
+            bind (uncurry (ignoreContext id)) tResult
         | BTrue -> ok (ctx, BTrue)
         | BFalse -> ok (ctx, BFalse)
         | BAnd xs -> tchainL (bsv id) BAnd ctx xs
@@ -490,10 +507,11 @@ let rec tLiftToBoolSrc
 ///     Converts a traversal from typed variables to expressions to one from
 ///     integral expressions to integral expressions.
 /// </summary>
-and tLiftToIntSrc
+and tliftToIntSrc
   (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
   : Traversal<IntExpr<'SrcVar>, IntExpr<'DstVar>, 'Error> =
-    let isv x = Context.changePos id (tLiftToIntSrc sub) x
+    let isv x = Context.changePos id (tliftToIntSrc sub) x
+    let asv x = Context.changePos id (tliftToArraySrc sub) x
     // TODO(CaptainHayashi): proper doc comment.
 
     fun ctx ->
@@ -503,6 +521,22 @@ and tLiftToIntSrc
             |> CTyped.Int
             |> Context.changePos id sub ctx
             |> bind (uncurry (ignoreContext expectInt))
+        | IIdx (eltype, length, arr, ix) ->
+            // TODO(CaptainHayashi): this is awful.
+            let originalType = Array (eltype, length, ())
+
+            (* Ensure the traversal doesn't change eltype or length to something
+               we're not expecting. *)
+            let assemble ((eltype', length', arr'), ix') =
+                let newType = Array (eltype', length', ())
+                match (originalType, newType) with
+                | UnifyArray _ -> ok (IIdx (eltype, length, arr', ix'))
+                | _ -> fail (BadType (expected = originalType, got = newType))
+            let tResult =
+                tchain2 asv isv assemble ctx ((eltype, length, arr), ix)
+
+            // Remove the nested result.
+            bind (uncurry (ignoreContext id)) tResult
         | IInt i -> ok (ctx, IInt i)
         | IAdd xs -> tchainL isv IAdd ctx xs
         | ISub xs -> tchainL isv ISub ctx xs
@@ -513,11 +547,14 @@ and tLiftToIntSrc
 ///     Converts a traversal from typed variables to expressions to one from
 ///     array expressions to array expressions.
 /// </summary>
-and tLiftToArraySrc
+and tliftToArraySrc
   (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
   : Traversal<(Type * int option * ArrayExpr<'SrcVar>),
               (Type * int option * ArrayExpr<'DstVar>), 'Error> =
     // TODO(CaptainHayashi): proper doc comment.
+    let isv x = Context.changePos id (tliftToIntSrc sub) x
+    let asv x = Context.changePos id (tliftToArraySrc sub) x
+
     fun ctx (eltype, length, arrayExpr) ->
         let arrayExprResult =
             match arrayExpr with
@@ -529,6 +566,22 @@ and tLiftToArraySrc
                 bind
                     (uncurry (ignoreContext (expectArray eltype length)))
                     exprResult
+            | AIdx (eltype, length, arr, ix) ->
+                // TODO(CaptainHayashi): this is awful.
+                let originalType = Array (eltype, length, ())
+
+                (* Ensure the traversal doesn't change eltype or length to something
+                   we're not expecting. *)
+                let assemble ((eltype', length', arr'), ix') =
+                    let newType = Array (eltype', length', ())
+                    match (originalType, newType) with
+                    | UnifyArray _ -> ok (AIdx (eltype, length, arr', ix'))
+                    | _ -> fail (BadType (expected = originalType, got = newType))
+                let tResult =
+                    tchain2 asv isv assemble ctx ((eltype, length, arr), ix)
+
+                // Remove the nested result.
+                bind (uncurry (ignoreContext id)) tResult
         lift (fun (ctx, ex) -> (ctx, (eltype, length, ex))) arrayExprResult
 
 and tliftToExprSrc
@@ -537,12 +590,12 @@ and tliftToExprSrc
     // TODO(CaptainHayashi): proper doc comment.
     fun ctx ->
         function
-        | Bool b -> b |> tLiftToBoolSrc sub ctx |> lift (pairMap id Bool)
-        | Int i -> i |> tLiftToIntSrc sub ctx |> lift (pairMap id Int)
+        | Bool b -> b |> tliftToBoolSrc sub ctx |> lift (pairMap id Bool)
+        | Int i -> i |> tliftToIntSrc sub ctx |> lift (pairMap id Int)
         | Array (eltype, length, a) ->
             lift
                 (fun (ctx', ela) -> (ctx', Array ela))
-                (tLiftToArraySrc sub ctx (eltype, length, a))
+                (tliftToArraySrc sub ctx (eltype, length, a))
 
 /// <summary>
 ///     Adapts an expression traversal to work on Boolean expressions.

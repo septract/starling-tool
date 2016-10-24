@@ -231,7 +231,7 @@ let instantiate
 
     let subInTypedSym dfunc =
         tliftToTypedSymVarSrc (paramSubFun vfunc dfunc)
-    let subInBool dfunc = tLiftToBoolSrc (subInTypedSym dfunc)
+    let subInBool dfunc = tliftToBoolSrc (subInTypedSym dfunc)
 
     let result =
         bind
@@ -410,7 +410,7 @@ module Phase =
                  | ContextMismatch (x, y) -> ContextMismatch (x, y))
 
         let apr position =
-            tLiftToBoolSrc Starling.Core.Symbolic.Queries.approx
+            tliftToBoolSrc Starling.Core.Symbolic.Queries.approx
                 position
             >> lift snd
             >> toError

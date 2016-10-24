@@ -171,7 +171,7 @@ module Downclosure =
         let mapper =
             liftWithoutContext
                 fOnIter
-                (tliftToTypedSymVarSrc >> tLiftToBoolSrc)
+                (tliftToTypedSymVarSrc >> tliftToBoolSrc)
 
         mapMessages Traversal (mapper defn)
 

@@ -23,7 +23,7 @@ module PostStateRewrite =
     let checkInt (expected : IntExpr<Sym<MarkedVar>>) (expr : IntExpr<Sym<Var>>)
       : unit =
         let trav = tliftToExprDest (traverseTypedSymWithMarker After)
-        let res = mapTraversal (tLiftToIntSrc trav) expr
+        let res = mapTraversal (tliftToIntSrc trav) expr
 
         assertOkAndEqual expected res
             (printTraversalError (fun () -> String "?" ) >> printUnstyled)
@@ -58,7 +58,7 @@ module BoolApprox =
       (ctx : TraversalContext)
       (expr : BoolExpr<Sym<MarkedVar>>)
       : unit =
-        let result = tLiftToBoolSrc approx ctx expr
+        let result = tliftToBoolSrc approx ctx expr
         assertOkAndEqual (ctx, expected) result
             (printTraversalError (fun () -> String "?" ) >> printUnstyled)
 
