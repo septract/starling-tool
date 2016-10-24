@@ -147,42 +147,64 @@ module ExpressionTests =
 module AtomicActionTests =
     [<Test>]
     let ``foo++``() =
-        check parseAtomic "foo++" <| Some ** node "" 1L 1L (Postfix(LVIdent "foo", Increment))
+        check parseAtomic "foo++"
+            (Some
+                (node "" 1L 1L <| Postfix
+                    (node "" 1L 1L (Identifier "foo"),
+                    Increment)))
 
     [<Test>]
     let ``foo--`` =
-        check parseAtomic "foo--" <| Some ** node "" 1L 1L (Postfix(LVIdent "foo", Decrement))
+        check parseAtomic "foo--"
+            (Some
+                (node "" 1L 1L <| Postfix
+                    (node "" 1L 1L (Identifier "foo"),
+                     Decrement)))
 
     [<Test>]
     let ``foo = bar`` =
-        check parseAtomic "foo = bar"  <| Some
-        ** node "" 1L 1L (Fetch(LVIdent "foo", node "" 1L 7L <| LV(LVIdent "bar"), Direct))
+        check parseAtomic "foo = bar"
+            (Some
+                (node "" 1L 1L <| Fetch
+                    (node "" 1L 1L (Identifier "foo"),
+                     node "" 1L 7L (Identifier "bar"),
+                     Direct)))
 
     [<Test>]
     let ``foo = bar++`` =
-        check parseAtomic "foo = bar++" <| Some
-        ** node "" 1L 1L (Fetch(LVIdent "foo", node "" 1L 7L <| LV(LVIdent "bar"), Increment))
+        check parseAtomic "foo = bar++"
+            (Some
+                (node "" 1L 1L <| Fetch
+                    (node "" 1L 1L (Identifier "foo"),
+                     node "" 1L 7L (Identifier "bar"),
+                     Increment)))
 
     [<Test>]
     let ``foo = bar--`` =
-        check parseAtomic "foo = bar--" <| Some
-        ** node "" 1L 1L (Fetch(LVIdent "foo", node "" 1L 7L <| LV(LVIdent "bar"), Decrement))
+        check parseAtomic "foo = bar--"
+            (Some
+                (node "" 1L 1L <| Fetch
+                    (node "" 1L 1L (Identifier "foo"),
+                     node "" 1L 7L (Identifier "bar"),
+                     Decrement)))
 
     [<Test>]
     let ``Compare and swap``() =
-        check parseAtomic "CAS(foo, bar, 2)" <| Some
-        ** node "" 1L 1L
-           (CompareAndSwap( LVIdent "foo",
-                            LVIdent "bar",
-                            node "" 1L 15L (Num 2L)))
+        check parseAtomic "CAS(foo, bar, 2)"
+            (Some
+                (node "" 1L 1L <| CompareAndSwap
+                    (node "" 1L 5L (Identifier "foo"),
+                     node "" 1L 10L (Identifier "bar"),
+                     node "" 1L 15L (Num 2L))))
 
 module AtomicSetTests =
     [<Test>]
     let ``<foo++>``() =
         check parseAtomicSet "<foo++>"
-        <| Some ** [
-            node "" 1L 2L (Postfix (LVIdent "foo", Increment))
-            ]
+            (Some
+                [ node "" 1L 2L <| Postfix
+                    (node "" 1L 2L (Identifier "foo"),
+                     Increment) ] )
 
     [<Test>]
     let ``Multiple outside block invalid``() =
@@ -191,17 +213,21 @@ module AtomicSetTests =
     [<Test>]
     let ``Single atomic block``() =
         check parseAtomicSet "<{ foo++; }>"
-        <| Some [
-            node "" 1L 4L (Postfix (LVIdent "foo", Increment))
-            ]
+            (Some
+                [ node "" 1L 4L <| Postfix
+                    (node "" 1L 4L (Identifier "foo"),
+                     Increment) ] )
 
     [<Test>]
     let ``Multiple in block valid``() =
         check parseAtomicSet "<{ foo++; bar--; }>"
-        <| Some [
-            node "" 1L 4L (Postfix (LVIdent "foo", Increment))
-            node "" 1L 11L (Postfix (LVIdent "bar", Decrement))
-            ]
+            (Some
+                [ node "" 1L 4L <| Postfix
+                    (node "" 1L 4L (Identifier "foo"),
+                     Increment)
+                  node "" 1L 11L <| Postfix
+                    (node "" 1L 11L (Identifier "bar"),
+                     Decrement) ] )
 
 module ConstraintTests =
     [<Test>]
@@ -216,11 +242,11 @@ module ConstraintTests =
                  Some
                    (node "" 1L 28L
                     <| BopExpr (Gt,
-                                node "" 1L 26L (LV(LVIdent "c")),
+                                node "" 1L 26L (Identifier "c"),
                                 node "" 1L 32L
                                 <| BopExpr(Add,
-                                       node "" 1L 30L (LV(LVIdent "a")),
-                                       node "" 1L 34L (LV(LVIdent "b"))))))
+                                       node "" 1L 30L (Identifier "a"),
+                                       node "" 1L 34L (Identifier "b")))))
 
     [<Test>]
     let ``Func(a,b) -> ?;``() =

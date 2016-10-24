@@ -49,16 +49,20 @@ module Types =
         | True // true
         | False // false
         | Num of int64 // 42
-        | LV of LValue // foobaz
+        | Identifier of string // foobaz
         | Symbolic of string * Expression list // %{foo}(exprs)
         | BopExpr of BinOp * Expression * Expression // a BOP b
+        | ArraySubscript of array : Expression * subscript : Expression
     and Expression = Node<Expression'>
 
     /// An atomic action.
     type Atomic' =
-        | CompareAndSwap of LValue * LValue * Expression // <CAS(a, b, c)>
-        | Fetch of LValue * Expression * FetchMode // <a = b??>
-        | Postfix of LValue * FetchMode // <a++> or <a-->
+        | CompareAndSwap of
+            src : Expression
+            * test : Expression
+            * dest : Expression // <CAS(a, b, c)>
+        | Fetch of Expression * Expression * FetchMode // <a = b??>
+        | Postfix of Expression * FetchMode // <a++> or <a-->
         | Id // <id>
         | Assume of Expression // <assume(e)
     and Atomic = Node<Atomic'>
@@ -156,9 +160,9 @@ module Types =
 
     /// A set of primitives.
     type PrimSet =
-        { PreAssigns: (LValue * Expression) list
+        { PreAssigns: (Expression * Expression) list
           Atomics: Atomic list
-          PostAssigns: (LValue * Expression) list }
+          PostAssigns: (Expression * Expression) list }
 
     /// A statement in the command language.
     type Command'<'view> =
@@ -217,11 +221,6 @@ module Pretty =
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Var.Pretty
 
-    /// Pretty-prints lvalues.
-    let rec printLValue : LValue -> Doc =
-        function
-        | LVIdent i -> String i
-
     /// Pretty-prints Boolean operations.
     let printBinOp : BinOp -> Doc =
         function
@@ -243,12 +242,12 @@ module Pretty =
 
     /// Pretty-prints expressions.
     /// This is not guaranteed to produce an optimal expression.
-    let rec printExpression' : Expression' -> Doc =
-        function
+    let rec printExpression' (expr : Expression') : Doc =
+        match expr with
         | True -> String "true" |> syntaxLiteral
         | False -> String "false" |> syntaxLiteral
         | Num i -> i.ToString() |> String |> syntaxLiteral
-        | LV x -> printLValue x
+        | Identifier x -> syntaxIdent (String x)
         | Symbolic (sym, args) ->
             func (sprintf "%%{%s}" sym) (Seq.map printExpression args)
         | BopExpr(op, a, b) ->
@@ -256,6 +255,8 @@ module Pretty =
                    printBinOp op
                    printExpression b ]
             |> parened
+        | ArraySubscript (array, subscript) ->
+            printExpression array <-> squared (printExpression subscript)
     and printExpression (x : Expression) : Doc = printExpression' x.Node
 
     /// Pretty-prints views.
@@ -306,22 +307,22 @@ module Pretty =
         | Decrement -> String "--"
 
     /// Pretty-prints local assignments.
-    let printAssign (dest : LValue) (src : Expression) : Doc =
-        equality (printLValue dest) (printExpression src)
+    let printAssign (dest : Expression) (src : Expression) : Doc =
+        equality (printExpression dest) (printExpression src)
 
     /// Pretty-prints atomic actions.
     let printAtomic' : Atomic' -> Doc =
         function
         | CompareAndSwap(l, f, t) ->
-            func "CAS" [ printLValue l
-                         printLValue f
+            func "CAS" [ printExpression l
+                         printExpression f
                          printExpression t ]
         | Fetch(l, r, m) ->
-            equality (printLValue l) (hjoin [ printExpression r
-                                              printFetchMode m ])
+            equality
+                (printExpression l)
+                (hjoin [ printExpression r; printFetchMode m ])
         | Postfix(l, m) ->
-            hjoin [ printLValue l
-                    printFetchMode m ]
+            hjoin [ printExpression l; printFetchMode m ]
         | Id -> String "id"
         | Assume e -> func "assume" [ printExpression e ]
     let printAtomic (x : Atomic) : Doc = printAtomic' x.Node
@@ -491,12 +492,21 @@ let (|ArithIn|BoolIn|AnyIn|) : BinOp -> Choice<unit, unit, unit> =
 let (|BoolExp|ArithExp|AnyExp|) (e : Expression)
   : Choice<Expression, Expression, Expression> =
     match e.Node with
-    | LV _ -> AnyExp e
+    | Identifier _ -> AnyExp e
     | Symbolic _ -> AnyExp e
+    | ArraySubscript _ -> AnyExp e
     | Num _ -> ArithExp e
     | True | False -> BoolExp e
     | BopExpr(BoolOp, _, _) -> BoolExp e
     | BopExpr(ArithOp, _, _) -> ArithExp e
+
+/// <summary>
+///     Active pattern classifying expressions as lvalues or rvalues.
+/// </summary>
+let (|LValue|RValue|) (e : Expression) : Choice<Expression, Expression> =
+    match e.Node with
+    | Identifier _ | Symbolic _ | ArraySubscript _ -> LValue e
+    | _ -> RValue e
 
 (*
  * Misc

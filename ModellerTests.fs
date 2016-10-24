@@ -168,24 +168,45 @@ module VarLists =
             ([ VarMapError.Duplicate "foo" ])
 
 module Atomics =
-    let check (ast : Atomic) (cmd : PrimCommand) =
-        let actualCmd = okOption <| modelAtomic sharedContext ast
-        AssertAreEqual(Some cmd, actualCmd)
+    open Starling.Core.Pretty
+    open Starling.Lang.Modeller.Pretty
+
+    let check (ast : Atomic) (cmd : PrimCommand) : unit =
+        assertOkAndEqual
+            cmd
+            (modelAtomic sharedContext ast)
+            (printPrimError >> printUnstyled)
 
     [<Test>]
     let ``model integer load primitive <foo = x++>`` ()=
-        let ast = freshNode (Fetch((LVIdent "foo"), freshNode (LV(LVIdent "x")), Increment))
+        let ast = freshNode (Fetch(freshNode (Identifier "foo"), freshNode (Identifier "x"), Increment))
         check
             ast
             <| command' "!ILoad++"
                 ast
-                [ Int "foo"; Int "x" ]
+                [ Int (siVar "foo"); Int (siVar "x") ]
                 [ "x" |> siBefore |> SMExpr.Int ]
 
+    [<Test>]
+    let ``model Boolean load primitive <baz = y>`` ()=
+        let ast = freshNode (Fetch(freshNode (Identifier "baz"), freshNode (Identifier "y"), Direct))
+        check
+            ast
+            <| command' "!BLoad"
+                ast
+                [ Bool (sbVar "baz") ]
+                [ "y" |> sbBefore |> SMExpr.Bool ]
+
+
 module CommandAxioms =
-    let check (c : Command<ViewExpr<View>>) (cmd : ModellerPartCmd) =
-        let actualCmd = okOption <| modelCommand sharedContext c
-        AssertAreEqual(Some cmd, actualCmd)
+    open Starling.Core.Pretty
+    open Starling.Lang.Modeller.Pretty
+
+    let check (c : Command<ViewExpr<View>>) (cmd : ModellerPartCmd) : unit =
+        assertOkAndEqual
+            cmd
+            (modelCommand sharedContext c)
+            (printMethodError >> printUnstyled)
 
     let prim (atom : Atomic) : Command<ViewExpr<View>> =
         freshNode
@@ -195,14 +216,23 @@ module CommandAxioms =
 
     [<Test>]
     let ``modelling command <foo = x++> passes`` () =
-        let ast = freshNode (Fetch((LVIdent "foo"), freshNode (LV(LVIdent "x")), Increment))
+        let ast = freshNode (Fetch(freshNode (Identifier "foo"), freshNode (Identifier "x"), Increment))
         check
             (prim <| ast)
             <| Prim ([ command' "!ILoad++"
                         ast
-                        [ Int "foo"; Int "x" ]
+                        [ Int (siVar "foo"); Int (siVar "x") ]
                         [ "x" |> siBefore |> SMExpr.Int ] ])
 
+    [<Test>]
+    let ``modelling command <baz = y> passes`` () =
+        let ast = freshNode (Fetch(freshNode (Identifier "baz"), freshNode (Identifier "y"), Direct))
+        check
+            (prim <| ast)
+            <| Prim ([ command' "!BLoad"
+                        ast
+                        [ Bool (sbVar "baz") ]
+                        [ "y" |> sbBefore |> SMExpr.Bool ] ])
 
 
 module ViewDefs =
