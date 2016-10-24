@@ -140,7 +140,7 @@ let frame svars tvars expr =
 
 let paramToMExpr : TypedVar -> SMExpr =
     function
-    | Int  i -> After i |> Reg |> AVar |> Int
+    | Int  i -> After i |> Reg |> IVar |> Int
     | Bool b -> After b |> Reg |> BVar |> Bool
 
 let primParamSubFun

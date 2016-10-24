@@ -103,7 +103,7 @@ module ArithmeticExprs =
                                    freshNode <| BopExpr(Mul, freshNode (Num 1L), freshNode (Num 3L)),
                                    freshNode (Num 2L) ))
             // TODO (CaptainHayashi): this shouldn't be optimised?
-            (AInt 1L)
+            (IInt 1L)
 
     [<Test>]
     let ``test modelling (1 * 2) + 3`` ()=
@@ -112,7 +112,7 @@ module ArithmeticExprs =
                                    freshNode <| BopExpr(Mul, freshNode (Num 1L), freshNode (Num 2L)),
                                    freshNode (Num 3L) ))
             // TODO (CaptainHayashi): this shouldn't be optimised?
-            (AInt 5L)
+            (IInt 5L)
 
 module BooleanExprs =
     let check (ast : Expression) (expectedExpr : BoolExpr<Sym<Var>>) =

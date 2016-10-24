@@ -33,7 +33,7 @@ let guardCView (cview : CView) : GuarderView =
             (* Treat non-iterated views as if they have the iterator [1].
                This means we don't need to special-case them elsewhere. *)
             [ { Func = { Cond = mkAnd (Set.toList suffix); Item = v };
-                Iterator = maybe (AInt 1L) AVar cv.Iterator } ]
+                Iterator = maybe (IInt 1L) IVar cv.Iterator } ]
         | CFunc.ITE(expr, tviews, fviews) ->
             List.concat
                 [ guardCViewIn (suffix.Add expr) (Multiset.toFlatList tviews)

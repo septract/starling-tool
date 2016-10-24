@@ -123,7 +123,7 @@ module Assumes =
     let ``getIntermediate on 'add' is max of the addends matching the name``() =
         checkIntermediate "a" (Some 2I)
             (SMExpr.Int
-                (AAdd
+                (IAdd
                     [ siInter 1I "a"
                       siAfter "b"
                       siInter 3I "b"
@@ -133,4 +133,4 @@ module Assumes =
     [<Test>]
     let ``getIntermediate on 'modulo' is max of its arguments matching the name`` () =
         checkIntermediate "a" (Some 11I)
-            (SMExpr.Int (AMod (siInter 6I "a", siInter 11I "a")))
+            (SMExpr.Int (IMod (siInter 6I "a", siInter 11I "a")))

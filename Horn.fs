@@ -121,24 +121,24 @@ module Pretty =
     /// Emits an integral expression in Datalog syntax.
     let rec printInt : IntExpr<Var> -> Doc =
         function
-        | AVar c -> String c
-        | AInt i -> sprintf "%d" i |> String
+        | IVar c -> String c
+        | IInt i -> sprintf "%d" i |> String
         // Do some reshuffling of n-ary expressions into binary ones.
         // These expressions are left-associative, so this should be sound.
-        | AAdd [] -> failwith "unexpected empty addition"
-        | AAdd [ x ] -> printInt x
-        | AAdd [ x; y ] -> printBop "+" x y
-        | AAdd(x :: y :: xs) -> printInt (AAdd((AAdd [ x; y ]) :: xs))
-        | ASub [] -> failwith "unexpected empty subtraction"
-        | ASub [ x ] -> printInt x
-        | ASub [ x; y ] -> printBop "-" x y
-        | ASub(x :: y :: xs) -> printInt (ASub((ASub [ x; y ]) :: xs))
-        | AMul [] -> failwith "unexpected empty multiplication"
-        | AMul [ x ] -> printInt x
-        | AMul [ x; y ] -> printBop "*" x y
-        | AMul(x :: y :: xs) -> printInt (AMul((AMul [ x; y ]) :: xs))
-        | ADiv(x, y) -> printBop "/" x y
-        | AMod(x, y) -> failwith "unexpected modulo"
+        | IAdd [] -> failwith "unexpected empty addition"
+        | IAdd [ x ] -> printInt x
+        | IAdd [ x; y ] -> printBop "+" x y
+        | IAdd(x :: y :: xs) -> printInt (IAdd((IAdd [ x; y ]) :: xs))
+        | ISub [] -> failwith "unexpected empty subtraction"
+        | ISub [ x ] -> printInt x
+        | ISub [ x; y ] -> printBop "-" x y
+        | ISub(x :: y :: xs) -> printInt (ISub((ISub [ x; y ]) :: xs))
+        | IMul [] -> failwith "unexpected empty multiplication"
+        | IMul [ x ] -> printInt x
+        | IMul [ x; y ] -> printBop "*" x y
+        | IMul(x :: y :: xs) -> printInt (IMul((IMul [ x; y ]) :: xs))
+        | IDiv(x, y) -> printBop "/" x y
+        | IMod(x, y) -> failwith "unexpected modulo"
 
     and printBop (op : string) (x : IntExpr<Var>) (y : IntExpr<Var>) =
         binop
@@ -265,15 +265,15 @@ let checkArith
   : IntExpr<'var> -> Result<VIntExpr, Error> =
     let rec ca =
         function
-        | AVar c -> c |> toVar |> AVar |> ok
-        | AInt i -> i |> AInt |> ok
-        | AAdd [] -> EmptyCompoundExpr "addition" |> fail
-        | ASub [] -> EmptyCompoundExpr "subtraction" |> fail
-        | AMul [] -> EmptyCompoundExpr "multiplication" |> fail
-        | AAdd xs -> xs |> List.map ca |> collect |> lift AAdd
-        | ASub xs -> xs |> List.map ca |> collect |> lift ASub
-        | AMul xs -> xs |> List.map ca |> collect |> lift AMul
-        | ADiv (x, y) -> lift2 (curry ADiv) (ca x) (ca y)
+        | IVar c -> c |> toVar |> IVar |> ok
+        | IInt i -> i |> IInt |> ok
+        | IAdd [] -> EmptyCompoundExpr "addition" |> fail
+        | ISub [] -> EmptyCompoundExpr "subtraction" |> fail
+        | IMul [] -> EmptyCompoundExpr "multiplication" |> fail
+        | IAdd xs -> xs |> List.map ca |> collect |> lift IAdd
+        | ISub xs -> xs |> List.map ca |> collect |> lift ISub
+        | IMul xs -> xs |> List.map ca |> collect |> lift IMul
+        | IDiv (x, y) -> lift2 (curry IDiv) (ca x) (ca y)
         | x ->
             (* Need to convert this expression into an Expr<Var> for the
                error message, which is somewhat painful and can itself fail! *)
@@ -367,7 +367,7 @@ let makeHSFVar : string -> string = (+) "V"
 /// Ensures a param in a viewdef multiset is arithmetic.
 let ensureArith : TypedVar -> Result<IntExpr<Var>, Error> =
     function
-    | Int x -> x |> makeHSFVar |> AVar |> ok
+    | Int x -> x |> makeHSFVar |> IVar |> ok
     | x -> x |> NonArithParam |> fail
 
 /// Constructs a pred from a Func, given a set of active globals,
@@ -422,7 +422,7 @@ let predOfEmp (svars : VarMap) : Result<Func<VIntExpr>, Error> =
         collect
             (Seq.map
                 (function
-                 | Int name -> ok (AVar (makeHSFVar name))
+                 | Int name -> ok (IVar (makeHSFVar name))
                  | var -> fail (NonArithVar var))
                 svarSeq)
 
@@ -439,7 +439,7 @@ let hsfModelVariables (svars : VarMap) : Result<Horn, Error> =
     lift
         (fun hd ->
             let vps = hd.Params
-            Clause(Pred hd, List.map (fun n -> Eq (n, AInt 0L)) vps ))
+            Clause(Pred hd, List.map (fun n -> Eq (n, IInt 0L)) vps ))
         (predOfEmp svars)
 
 (*
@@ -540,7 +540,7 @@ let mapIteratorParam
 
     let fOnIter param =
         match param with
-        | AVar var when var = iterator -> f var
+        | IVar var when var = iterator -> f var
         | x -> x
     { func with Params = List.map fOnIter func.Params }
 
@@ -578,7 +578,7 @@ let hsfModelBaseDownclosure
        the iterator from n to 0 in `funcPredR`, and 'empPredR' models emp. *)
     let funcPredZeroR =
         lift2
-            (fun it pred -> mapIteratorParam it (fun _ -> AInt 0L) pred)
+            (fun it pred -> mapIteratorParam it (fun _ -> IInt 0L) pred)
             iterVarR
             funcPredR
     let empPredR = predOfEmp svars
@@ -642,7 +642,7 @@ let hsfModelInductiveDownclosure
     let hornR =
         lift3
             (fun it succ norm ->
-                Clause (Pred norm, [Ge (AVar it, AInt 0L); Pred succ]))
+                Clause (Pred norm, [Ge (IVar it, IInt 0L); Pred succ]))
             iterVarR
             funcPredSuccR
             funcPredR

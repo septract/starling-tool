@@ -472,17 +472,17 @@ and tLiftToIntSrc
 
     fun ctx ->
         function
-        | AVar x ->
+        | IVar x ->
             x
             |> CTyped.Int
             |> Context.changePos id sub ctx
             |> bind (uncurry (ignoreContext expectInt))
-        | AInt i -> ok (ctx, AInt i)
-        | AAdd xs -> tchainL isv AAdd ctx xs
-        | ASub xs -> tchainL isv ASub ctx xs
-        | AMul xs -> tchainL isv AMul ctx xs
-        | ADiv (x, y) -> tchain2 isv isv ADiv ctx (x, y)
-        | AMod (x, y) -> tchain2 isv isv AMod ctx (x, y)
+        | IInt i -> ok (ctx, IInt i)
+        | IAdd xs -> tchainL isv IAdd ctx xs
+        | ISub xs -> tchainL isv ISub ctx xs
+        | IMul xs -> tchainL isv IMul ctx xs
+        | IDiv (x, y) -> tchain2 isv isv IDiv ctx (x, y)
+        | IMod (x, y) -> tchain2 isv isv IMod ctx (x, y)
 
 /// <summary>
 ///   Converts a traversal from typed variables to expressions to one from

@@ -25,9 +25,9 @@ module FuncInstantiate =
     /// Environment of test funcs.
     let TestFuncs =
         [ (dfunc "foo" [],
-           iEq (AInt 5L : SVIntExpr) (AInt 6L))
+           iEq (IInt 5L : SVIntExpr) (IInt 6L))
           (dfunc "bar" [ Int "quux" ],
-           iEq (siVar "quux") (AInt 6L))
+           iEq (siVar "quux") (IInt 6L))
           (dfunc "baz" [ Int "quux" ; Bool "flop" ],
            BAnd [sbVar "flop"; BGt (siVar "quux", siVar "quux")]) ]
 
@@ -51,14 +51,14 @@ module FuncInstantiate =
     [<Test>]
     let ``Instantiate func with no arguments``() =
         checkInstantiate
-            (Some (iEq (AInt 5L : SMIntExpr) (AInt 6L : SMIntExpr)))
+            (Some (iEq (IInt 5L : SMIntExpr) (IInt 6L : SMIntExpr)))
             (smvfunc "foo" [])
 
     [<Test>]
     let ``Instantiate func with one integer argument``() =
         checkInstantiate
-            (Some (iEq (AInt 101L) (AInt 6L : SMIntExpr)))
-            (smvfunc "bar" [ AInt 101L |> Expr.Int ])
+            (Some (iEq (IInt 101L) (IInt 6L : SMIntExpr)))
+            (smvfunc "bar" [ IInt 101L |> Expr.Int ])
 
     [<Test>]
     let ``Instantiate func with two arguments of different types``() =
@@ -74,9 +74,9 @@ module FuncInstantiate =
             [ Traversal
                 (Inner
                     (BadFuncLookup
-                        (smvfunc "foo" [ AInt 101L |> Expr.Int ],
+                        (smvfunc "foo" [ IInt 101L |> Expr.Int ],
                          CountMismatch(1, 0)))) ]
-        ?=? testInstantiateFail (smvfunc "foo" [ AInt 101L |> Expr.Int ])
+        ?=? testInstantiateFail (smvfunc "foo" [ IInt 101L |> Expr.Int ])
 
     [<Test>]
     let ``Instantiate func with too few arguments``() =
