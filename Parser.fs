@@ -136,13 +136,6 @@ let nodify v =
         v |>> fun x -> { Position = { StreamName = p.StreamName; Line = p.Line; Column = p.Column; }
                          Node = x }
 
-/// Parser for lvalues.
-let parseLValue, parseLValueRef = createParserForwardedToRef<LValue, unit> ()
-do parseLValueRef :=
-    //(pstring "*" >>. ws >>. parseLValue |>> LVPtr)
-    //<|>
-    (parseIdentifier |>> LVIdent)
-
 /// <summary>
 ///     Parser for symbolic expressions.
 ///
@@ -164,7 +157,7 @@ let parsePrimaryExpression =
             pstring "true" >>% True
             pstring "false" >>% False
             pint64 |>> Num
-            parseLValue |>> LV
+            parseIdentifier |>> Identifier
             parseSymbolic |>> Symbolic
     ]
 
@@ -174,15 +167,33 @@ let parsePrimaryExpression =
 /// Accepts the next precedence level parser, and a list of pairs of operator and AST representation.
 /// This generates a LEFT-associative precedence level.
 let parseBinaryExpressionLevel nextLevel expList =
-    let parseBopExpr (ops, op) = nodify (pstring ops) .>> ws |>> fun x -> fun a b -> { Node = BopExpr(op, a, b); Position = x.Position }
+    let parseBopExpr (ops, op) =
+        // TODO(CaptainHayashi): can this be solved without backtracking?
+        nodify (pstring ops)
+        .>>? ws
+        (* A binary operator cannot ever be followed by a semicolon, + or -.
+           This check removes ambiguity between > and <atomic braces>;,
+           + and ++, and - and --. *)
+        .>>? notFollowedBy (anyOf ";+-")
+        |>> fun x -> fun a b -> { Node = BopExpr(op, a, b); Position = x.Position }
     chainl1 (nextLevel .>> ws)
             (choice
                 (List.map parseBopExpr expList)
             )
 
+/// Parser for postfix expressions.
+let parsePostfixExpression, parsePostfixExpressionRef = createParserForwardedToRef<Expression, unit> ()
+do parsePostfixExpressionRef :=
+    let parseArraySubscript pex
+        = nodify (inSquareBrackets parseExpression
+                  >>= fun a -> preturn (ArraySubscript (pex, a)))
+          <|> preturn pex
+
+    parsePrimaryExpression .>> ws >>= parseArraySubscript
+
 /// Parser for multiplicative expressions.
 let parseMultiplicativeExpression =
-    parseBinaryExpressionLevel parsePrimaryExpression
+    parseBinaryExpressionLevel parsePostfixExpression
         [ ("*", Mul)
           ("/", Div) ]
 
@@ -232,8 +243,8 @@ do parseExpressionRef := parseOrExpression
 /// This parser DOES NOT parse whitespace afterwards.
 let parseCAS =
     pstring "CAS"
-    >>. inParens (pipe3ws (parseLValue .>> ws .>> pstring ",")
-                          (parseLValue .>> ws .>> pstring ",")
+    >>. inParens (pipe3ws (parseExpression .>> ws .>> pstring ",")
+                          (parseExpression .>> ws .>> pstring ",")
                           parseExpression
                           (curry3 CompareAndSwap))
 
@@ -242,22 +253,15 @@ let parseFetchSigil =
     choice [ pstring "++" >>% Increment
              pstring "--" >>% Decrement ] <|>% Direct
 
-/// Parser for fetch sources.
-let parseFetchSrc =
-    // We can't parse general expressions here, because they
-    // eat the > at the end of the atomic and the sigil!
-    (parseLValue |>> LV |> nodify)
-    <|> inParens parseExpression
-
 /// Parser for fetch right-hand-sides.
 let parseFetch fetcher =
-    pipe2ws parseFetchSrc
+    pipe2ws parseExpression
             parseFetchSigil
             (fun fetchee sigil -> Fetch (fetcher, fetchee, sigil))
 
 /// Parser for fetch actions.
 let parseFetchOrPostfix =
-    parseLValue
+    parseExpression
     .>> ws
     .>>. parseFetchSigil
     >>= function
@@ -270,7 +274,7 @@ let parseAssume =
 
 /// Parser for local assignments.
 let parseAssign =
-    pipe2ws parseLValue
+    pipe2ws parseExpression
     // ^- <lvalue> ...
             (pstring "=" >>. ws >>. parseExpression)
                   //             ... = <expression> ;

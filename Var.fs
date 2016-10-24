@@ -49,14 +49,6 @@ module Types =
         | Intermediate of bigint * Var
 
     /// <summary>
-    ///     An lvalue.
-    ///     This is given a separate type in case we add to it later.
-    /// </summary>
-    type LValue =
-        // TODO(CaptainHayashi): add support for non-variable LValues.
-        | LVIdent of string
-
-    /// <summary>
     ///     A variable reference with an associated type.
     ///     This is usually a formal parameter or variable declaration.
     /// </summary>
@@ -167,14 +159,6 @@ module Pretty =
     /// Pretty-prints a MIntExpr.
     let printMIntExpr = printIntExpr printMarkedVar
 
-
-/// Flattens a LV to a string.
-let rec flattenLV =
-    // TODO(CaptainHayashi): this is completely wrong, but we don't
-    // have a semantics for it yet.
-    function
-    | LVIdent s -> s
-
 /// Makes a variable map from a list of typed variables.
 let makeVarMap (lst : TypedVar list) : Result<VarMap, VarMapError> =
     lst
@@ -201,24 +185,13 @@ let combineMaps (a : VarMap) (b : VarMap) =
 
 /// Tries to look up a variable record in a variable map.
 /// Failures are in terms of Some/None.
-let tryLookupVar
-  (env : VarMap)
-  : LValue -> CTyped<string> option =
-    function
-    | LVIdent s ->
-        s
-        |> env.TryFind
-        |> Option.map (fun ty -> withType ty s)
+let tryLookupVar (env : VarMap) (var : Var) : TypedVar option =
+    Option.map (fun ty -> withType ty var) (env.TryFind var)
 
 /// Looks up a variable record in a variable map.
 /// Failures are in terms of VarMapError.
-let lookupVar
-  (env : VarMap)
-  (s : LValue)
-  : Result<CTyped<string>, VarMapError> =
-    s
-    |> tryLookupVar env
-    |> failIfNone (NotFound (flattenLV s))
+let lookupVar (env : VarMap) (s : Var) : Result<TypedVar, VarMapError> =
+    s |> tryLookupVar env |> failIfNone (NotFound s)
 
 /// <summary>
 ///     Converts a variable map to a sequence of typed variables.

@@ -12,6 +12,7 @@ open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
+open Starling.Core.Traversal
 
 
 /// <summary>
@@ -37,7 +38,7 @@ module Types =
     /// </remarks>
     type PrimCommand =
         { Name : string
-          Results : TypedVar list
+          Results : SVExpr list
           Args : SMExpr list
           Node : AST.Types.Atomic option }
         override this.ToString() = sprintf "%A" this
@@ -113,6 +114,22 @@ module Queries =
     /// Combines the results of each command into a list of all results
     let commandResults cs =
         List.fold (fun a c -> a @ c.Results) [] cs
+
+    /// <summary>
+    ///     Gets all variables mentioned in the results of a command.
+    /// </summary>
+    /// <param name="cmd">The <see cref="Command"/> to query.</param>
+    /// <typeparam name="'Error">The traversal-internal error type.</typeparam>
+    /// <returns>
+    ///     All variables mentioned in <paramref name="cmd"/>'s results, as
+    ///     <see cref="TypedVar"/>s.  This is wrapped in a result, because the
+    ///     internal traversal can fail.
+    /// </returns>
+    let commandResultVars (cmd : Command)
+      : Result<Set<TypedVar>, TraversalError<'Error>> =
+        let results = commandResults cmd
+        let trav = tchainL (tliftOverExpr collectSymVars) id
+        findVars trav results
 
     /// Retrieves the type annotated vars from the arguments to a
     /// command as a list
@@ -291,10 +308,10 @@ module SymRemove =
 
 
 module Create =
-    let command : string -> TypedVar list -> SMExpr list -> PrimCommand =
+    let command : string -> SVExpr list -> SMExpr list -> PrimCommand =
         fun name results args -> { Name = name; Results = results; Args = args; Node = None }
 
-    let command' : string -> AST.Types.Atomic -> TypedVar list -> SMExpr list -> PrimCommand =
+    let command' : string -> AST.Types.Atomic -> SVExpr list -> SMExpr list -> PrimCommand =
         fun name ast results args -> { Name = name; Results = results; Args = args; Node = Some ast }
 
 /// <summary>
@@ -302,13 +319,15 @@ module Create =
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
+    open Starling.Core.Expr.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Symbolic.Pretty
 
     /// Pretty-prints a Command.
     let printPrimCommand { Name = name; Args = xs; Results = ys } =
-        hjoin [ commaSep <| Seq.map (printCTyped String) ys; " <- " |> String; name |> String; String " "; commaSep <| Seq.map printSMExpr xs ]
+        hjoin [ commaSep <| Seq.map (printExpr (printSym printVar)) ys
+                " <- " |> String; name |> String; String " "; commaSep <| Seq.map printSMExpr xs ]
 
     let printCommand : Command -> Doc = List.map printPrimCommand >> semiSep
 

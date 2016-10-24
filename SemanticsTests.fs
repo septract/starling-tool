@@ -168,7 +168,7 @@ module CommandTests =
 
     [<Test>]
     let ``Semantically translate <serving++> using the ticket lock model``() =
-        check [ command "!I++" [ Int "serving" ] [ Expr.Int <| siBefore "serving" ] ]
+        check [ command "!I++" [ Int (siVar "serving") ] [ Expr.Int <| siBefore "serving" ] ]
         <| Some (Set.ofList
             [
                 iEq (siAfter "s") (siBefore "s")
