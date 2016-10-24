@@ -36,9 +36,9 @@ view bHoldLock();       // B holds the lock.
  */
 method lockA() {
   {| aFlagDown() |}
-    <aFlag = (true)>;
+    <aFlag = true>;
   {| aFlagUp() |}
-    <turn = (1)>;
+    <turn = 1>;
   {| aWaiting() |}
     do {
       {| aWaiting() |}
@@ -55,7 +55,7 @@ method lockA() {
  */
 method unlockA() {
   {| aHoldLock() |}
-    <aFlag = (false)>;
+    <aFlag = false>;
   {| aFlagDown() |}
 }
 
@@ -64,9 +64,9 @@ method unlockA() {
  */
 method lockB() {
   {| bFlagDown() |}
-    <bFlag = (true)>;
+    <bFlag = true>;
   {| bFlagUp() |}
-    <turn = (2)>;
+    <turn = 2>;
   {| bWaiting() |}
     do {
       {| bWaiting() |}
@@ -83,7 +83,7 @@ method lockB() {
  */
 method unlockB() {
   {| bHoldLock() |}
-    <bFlag = (false)>;
+    <bFlag = false>;
   {| bFlagDown() |}
 }
 
