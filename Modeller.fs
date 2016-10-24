@@ -1564,10 +1564,17 @@ let modelViewProtos (protos : #(DesugaredViewProto seq))
 /// </returns>
 let convertTypedVar (lit : AST.Types.TypeLiteral) (name : string)
   : Result<TypedVar, TypeError> =
-    match lit with
-    | TInt -> ok (Int name)
-    | TBool -> ok (Bool name)
-    | TArray _ -> fail (ImpossibleType (lit, "arrays not yet implemented"))
+    let rec convType =
+        function
+        | TInt -> ok (Int ())
+        | TBool -> ok (Bool ())
+        | TArray (len, elt) ->
+            lift
+                (fun eltype -> Array (eltype, Some len, ()))
+                (convType elt)
+        (* At some point, this may (and once did) return ImpossibleType,
+           hence why it is a Result. *)
+    lift (fun ty -> withType ty name) (convType lit)
 
 /// <summary>
 ///     Converts a type-variable list to a variable map.
