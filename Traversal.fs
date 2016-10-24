@@ -17,6 +17,7 @@ open Starling.Utils
 open Starling.Collections
 
 open Starling.Core.TypeSystem
+open Starling.Core.TypeSystem.Check
 open Starling.Core.Var
 open Starling.Core.Expr
 
@@ -315,6 +316,26 @@ let tliftOverCTyped
         function
         | Int i -> lift (pairMap id Int) (sub ctx i)
         | Bool b -> lift (pairMap id Bool) (sub ctx b)
+        | Array (eltype, length, a) ->
+            lift (pairMap id (fun a -> Array (eltype, length, a))) (sub ctx a)
+
+/// <summary>
+///     Tries to extract an <see cref="ArrayExpr"/> out of an
+///     <see cref="ArrayExpr"/>, failing if the expression is not of that type
+///     or the element type or array is wrong.
+/// </summary>
+let expectArray
+  (eltype : Type)
+  (length : int option)
+  (expr : Expr<'Var>)
+  : Result<ArrayExpr<'Var>, TraversalError<_>> =
+    // TODO(CaptainHayashi): proper doc comment.
+    match (Type.Array (eltype, length, ()), expr) with
+    | UnifyArray (_, _, _, ae) -> ok ae
+    | _ ->
+        fail
+            (BadType
+                (expected = Type.Array (eltype, length, ()), got = typeOf expr))
 
 /// <summary>
 ///     Tries to extract an <see cref="IntExpr"/> out of an
@@ -428,7 +449,8 @@ let tchain3
         }
 
 /// <summary>
-///     Lifts a variable substitution to one over Boolean expressions.
+///     Converts a traversal from typed variables to expressions to one from
+///     Boolean expressions to Boolean expressions.
 /// </summary>
 let rec tLiftToBoolSrc
     (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
@@ -464,8 +486,10 @@ let rec tLiftToBoolSrc
         | BLt (x, y) -> tchain2 isv isv BLt ctx (x, y)
         | BNot x -> tchain (bsv neg) BNot ctx x
 
-/// Substitutes all variables with the given substitution function
-/// for the given arithmetic expression.
+/// <summary>
+///     Converts a traversal from typed variables to expressions to one from
+///     integral expressions to integral expressions.
+/// </summary>
 and tLiftToIntSrc
   (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
   : Traversal<IntExpr<'SrcVar>, IntExpr<'DstVar>, 'Error> =
@@ -486,9 +510,27 @@ and tLiftToIntSrc
         | ADiv (x, y) -> tchain2 isv isv ADiv ctx (x, y)
 
 /// <summary>
-///   Converts a traversal from typed variables to expressions to one from
-///   expressions to expressions.
+///     Converts a traversal from typed variables to expressions to one from
+///     array expressions to array expressions.
 /// </summary>
+and tLiftToArraySrc
+  (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
+  : Traversal<(Type * int option * ArrayExpr<'SrcVar>),
+              (Type * int option * ArrayExpr<'DstVar>), 'Error> =
+    // TODO(CaptainHayashi): proper doc comment.
+    fun ctx (eltype, length, arrayExpr) ->
+        let arrayExprResult =
+            match arrayExpr with
+            | ARVar x ->
+                let typedVar = CTyped.Array (eltype, length, x)
+                let exprResult = Context.changePos id sub ctx typedVar
+                (* Traversals have to preserve the element type and, if it
+                   exists, the length. *)
+                bind
+                    (uncurry (ignoreContext (expectArray eltype length)))
+                    exprResult
+        lift (fun (ctx, ex) -> (ctx, (eltype, length, ex))) arrayExprResult
+
 and tliftToExprSrc
   (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
   : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error> =
@@ -497,6 +539,10 @@ and tliftToExprSrc
         function
         | Bool b -> b |> tLiftToBoolSrc sub ctx |> lift (pairMap id Bool)
         | Int i -> i |> tLiftToIntSrc sub ctx |> lift (pairMap id Int)
+        | Array (eltype, length, a) ->
+            lift
+                (fun (ctx', ela) -> (ctx', Array ela))
+                (tLiftToArraySrc sub ctx (eltype, length, a))
 
 /// <summary>
 ///     Adapts an expression traversal to work on Boolean expressions.

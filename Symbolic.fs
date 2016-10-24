@@ -321,16 +321,19 @@ module Queries =
     let approx
       : Traversal<CTyped<Sym<MarkedVar>>, Expr<Sym<MarkedVar>>, unit> =
         let rec sub ctx =
+            // Only symbolic Booleans are handled specially.
             function
             | Bool (Sym x) ->
                 match ctx with
                 | Positions (position::_) ->
                     ok (ctx, position |> Context.underapprox |> Bool)
                 | c -> fail (ContextMismatch ("position context", c))
-            | Int (Sym { Name = body; Params = rs }) ->
-                tchainL rmap (sym body >> AVar >> Int) ctx rs
-            | Bool (Reg x) -> ok (ctx, x |> sbVar |> Bool)
-            | Int (Reg x) -> ok (ctx, x |> siVar |> Int)
+            (* Everything else just has approximation bubbled through
+               in a type-generic way. *)
+            | WithType (Sym { Name = body; Params = rs }, t) ->
+                tchainL rmap (sym body >> withType t >> mkVarExp) ctx rs
+            | WithType (Reg x, t) ->
+                ok (ctx, mkVarExp (withType t (Reg x)))
         and sf = tliftToExprSrc sub
         and rmap ctx = sf (Context.push id ctx)
 

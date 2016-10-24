@@ -150,7 +150,7 @@ module FuncDefiner =
         List.map2
             (curry
                  (function
-                  | UnifyInt _ | UnifyBool _ -> ok ()
+                  | UnifyInt _ | UnifyBool _ | UnifyArray _ -> ok ()
                   | UnifyFail (fp, dp) -> fail (TypeMismatch (dp, typeOf fp))))
             func.Params
             defn.Params

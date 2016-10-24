@@ -25,30 +25,44 @@ open Starling.Utils
 /// <summary>
 ///     A typed item.
 /// </summary>
-/// <typeparam name="int">
+/// <typeparam name="Int">
 ///     The meta-type of the item when it is typed as <c>Int</c>.
 /// </typeparam>
-/// <typeparam name="bool">
+/// <typeparam name="Bool">
 ///     The meta-type of the item when it is typed as <c>Bool</c>.
 /// </typeparam>
-type Typed<'int, 'bool> =
+/// <typeparam name="Array">
+///     The meta-type of the item when it is typed as <c>Array</c>.
+/// </typeparam>
+type Typed<'Int, 'Bool, 'Array> =
     /// <summary>
     ///    An item of integral type.
     /// </summary>
-    | Int of 'int
-    | Bool of 'bool
+    | Int of 'Int
+    /// <summary>
+    ///    An item of Boolean type.
+    /// </summary>
+    | Bool of 'Bool
+    /// <summary>
+    ///    An item of array type, annotated by the type of the array element
+    ///    and an optional length.
+    /// </summary>
+    | Array of eltype : Typed<unit, unit, unit>
+             * length : int option
+             * value  : 'Array
     override this.ToString() =
         match this with
         | Int x -> sprintf "I(%A)" x
         | Bool x -> sprintf "B(%A)" x
+        | Array (eltype, length, x) -> sprintf "A<%A, %A>(%A)" eltype length x
 
 /// <summary>
 ///     A typed item where every type leads to the same meta-type.
 /// </summary>
-/// <typeparam name="ty">
+/// <typeparam name="T">
 ///     The meta-type to use for all <c>Typed</c> parameters.
 /// </typeparam>
-type CTyped<'ty> = Typed<'ty, 'ty>
+type CTyped<'T> = Typed<'T, 'T, 'T>
 
 /// <summary>
 ///     Maps over the contents of a <see cref="CTyped"/>.
@@ -69,6 +83,7 @@ let mapCTyped (f : 'Src -> 'Dst) : CTyped<'Src> -> CTyped<'Dst> =
     function
     | Int i -> Int (f i)
     | Bool b -> Bool (f b)
+    | Array (eltype, length, a) -> Array (eltype, length, f a)
 
 /// <summary>
 ///     A standalone type annotation.
@@ -82,10 +97,20 @@ module Check =
     /// <summary>
     ///     Active pattern performing type unification.
     /// </summary>
-    let (|UnifyInt|UnifyBool|UnifyFail|)
+    let (|UnifyInt|UnifyBool|UnifyArray|UnifyFail|)
         = function
           | (Typed.Int x, Typed.Int y) -> UnifyInt (x, y)
           | (Typed.Bool x, Typed.Bool y) -> UnifyBool (x, y)
+          (* Arrays unify when their element types are compatible and their
+             lengths are not both defined as contradictory values. *)
+          | (Typed.Array (ex, Some l, x), Typed.Array (ey, None, y))
+                when ex = ey -> UnifyArray (ex, Some l, x, y)
+          | (Typed.Array (ex, None, x), Typed.Array (ey, Some l, y))
+                when ex = ey -> UnifyArray (ex, Some l, x, y)
+          | (Typed.Array (ex, Some lx, x), Typed.Array (ey, Some ly, y))
+                when ex = ey && lx = ly -> UnifyArray (ex, Some lx, x, y)
+          | (Typed.Array (ex, None, x), Typed.Array (ey, None, y))
+                when ex = ey -> UnifyArray (ex, None, x, y)
           | x, y -> UnifyFail (x, y)
 
 
@@ -103,10 +128,11 @@ module Typed =
     /// <returns>
     ///     The item's <c>Type</c>.
     /// </returns>
-    let typeOf : Typed<_, _> -> Type =
+    let typeOf : Typed<_, _, _> -> Type =
         function
         | Bool _ -> Bool ()
         | Int _ -> Int ()
+        | Array (eltype, length, _) -> Array (eltype, length, ())
 
     /// <summary>
     ///     Combines a <c>Type</c> with an item to make it
@@ -128,6 +154,7 @@ module Typed =
         match ty with
         | Bool () -> Bool item
         | Int () -> Int item
+        | Array (eltype, length, ()) -> Array (eltype, length, item)
 
     /// <summary>
     ///     Extracts the value of a <c>CTyped</c> item.
@@ -140,7 +167,7 @@ module Typed =
     /// </returns>
     let valueOf (typed : CTyped<'a>) : 'a =
         match typed with
-        | Int a | Bool a -> a
+        | Int a | Bool a | Array (_, _, a) -> a
 
     /// <summary>
     ///     Active pattern splitting a CTyped item into its item and type.
@@ -157,10 +184,15 @@ module Pretty =
     /// <summary>
     ///     Pretty-prints a type.
     /// </summary>
-    let printType : Type -> Doc =
+    let rec printType : Type -> Doc =
         function
         | Int () -> "int" |> String
         | Bool () -> "bool" |> String
+        | Array (eltype, len, ()) ->
+            parened
+                (String "array"
+                 <+> printType eltype
+                 <+> maybe (String "?") printInt len)
 
     /// <summary>
     ///     Pretty-prints a typed item.
@@ -193,20 +225,24 @@ module Pretty =
     let printTyped
       (pInt : 'Int -> Doc)
       (pBool : 'Bool -> Doc)
-      (typed : Typed<'Int, 'Bool>) : Doc =
+      (pArray : Type -> int option -> 'Array -> Doc)
+      (typed : Typed<'Int, 'Bool, 'Array>) : Doc =
         let pTypeName = String >> syntaxLiteral
 
-        let typeDocs, valDoc =
+        let typeDoc = printType (typeOf typed)
+
+        let valDoc =
             match typed with
-            | Int a -> [ pTypeName "int" ], pInt a
-            | Bool a -> [ pTypeName "bool" ], pBool a
+            | Int a -> pInt a
+            | Bool a -> pBool a
+            | Array (eltype, length, a) -> pArray eltype length a
 
         let sexprContents =
             match valDoc with
             | Nop -> []
             | doc -> [ doc ]
 
-        parened (hsep (typeDocs @ sexprContents))
+        parened (hsep (typeDoc::sexprContents))
 
     /// <summary>
     ///     Pretty-prints a ctyped item.
@@ -228,4 +264,4 @@ module Pretty =
     ///     A printer <c>Doc</c> printing <paramref name="ctyped"/>.
     /// </returns>
     let printCTyped (pItem : 'item -> Doc) (ctyped : CTyped<'item>) : Doc =
-        printTyped pItem pItem ctyped
+        printTyped pItem pItem (fun _ _ -> pItem) ctyped

@@ -189,7 +189,7 @@ let checkParamTypesPrim : PrimCommand -> PrimSemantics -> Result<PrimCommand, Er
     List.map2
         (curry
              (function
-              | UnifyInt _ | UnifyBool _ -> ok ()
+              | UnifyInt _ | UnifyBool _ | UnifyArray _ -> ok ()
               | UnifyFail (fp, dp) -> fail (TypeMismatch (dp, typeOf fp))))
         prim.Args
         sem.Args

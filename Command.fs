@@ -238,6 +238,34 @@ module Compose =
         | _ -> None
 
     /// <summary>
+    ///     Finds the highest intermediate stage number in an array
+    ///     expression.
+    ///     Returns one higher.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The <c>ArrayExpr</c> to investigate.
+    /// </param>
+    /// <returns>
+    ///     The next available intermediate stage number.
+    ///     If the expression has no intermediate stages, we return 0.
+    /// </returns>
+    and nextArrayIntermediate : ArrayExpr<Sym<_>> -> bigint =
+        function
+        | ARVar (Reg (Intermediate (n, _))) -> n + 1I
+        | ARVar (Sym { Params = xs } ) ->
+            xs |> Seq.map nextIntermediate |> Seq.fold (curry bigint.Max) 0I
+        | ARVar _ -> 0I
+
+    /// Gets the highest intermediate number for some variable in a given
+    /// array expression
+    and getArrayIntermediate v =
+        function
+        | ARVar (Reg (Intermediate (n, name))) when name = v -> Some n
+        | ARVar (Sym { Params = xs } ) ->
+            Seq.fold maxOpt None <| (Seq.map (getIntermediate v) <| xs)
+        | ARVar _ -> None
+
+    /// <summary>
     ///     Finds the highest intermediate stage number in an expression.
     ///     Returns one higher.
     /// </summary>
@@ -252,6 +280,7 @@ module Compose =
         function
         | Int x -> nextIntIntermediate x
         | Bool x -> nextBoolIntermediate x
+        | Array (_, _, x) -> nextArrayIntermediate x
 
     /// Gets the highest intermediate stage number for a given variable name
     /// in some expression.
@@ -259,6 +288,7 @@ module Compose =
         function
         | Int x -> getIntIntermediate v x
         | Bool x -> getBoolIntermediate v x
+        | Array (_, _, x) -> getArrayIntermediate v x
 
 
 /// <summary>

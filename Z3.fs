@@ -5,6 +5,7 @@ module Starling.Core.Z3
 
 open Microsoft
 open Starling.Core.Expr
+open Starling.Core.TypeSystem
 
 
 /// <summary>
@@ -30,31 +31,51 @@ module Pretty =
 ///     Functions for translating Starling expressions into Z3.
 /// </summary>
 module Expr =
+    /// <summary>
+    ///     Converts a type into a Z3 sort.
+    /// </summary>
+    /// <param name="reals">
+    ///     Whether to use Real instead of Int for integers.
+    /// </param>
+    /// <param name="ctx">The Z3 context to use to generate the sorts.</param>
+    /// <param name="ty">The type to convert to a sort.</param>
+    /// <returns>
+    ///     The Z3 sort corresponding to <paramref name="ty"/>.
+    /// </returns>
+    let rec typeToSort (reals : bool) (ctx : Z3.Context) (ty : Type) : Z3.Sort =
+        match ty with
+        | Type.Int () when reals -> ctx.MkRealSort () :> Z3.Sort
+        | Type.Int () -> ctx.MkIntSort () :> Z3.Sort
+        | Type.Bool () -> ctx.MkBoolSort () :> Z3.Sort
+        | Type.Array (eltype, _, ()) ->
+            let elZ3 = typeToSort reals ctx eltype
+            ctx.MkArraySort (domain = elZ3, range = ctx.MkIntSort ()) :> Z3.Sort
+
     /// Converts a Starling arithmetic expression to a Z3 ArithExpr.
-    let rec arithToZ3
+    let rec intToZ3
       (reals : bool)
-      (toStr : 'var -> string)
+      (toStr : 'Var -> string)
       (ctx: Z3.Context)
-      : IntExpr<'var> -> Z3.ArithExpr =
-        let rec az =
+      (int : IntExpr<'Var>) : Z3.ArithExpr =
+        let rec iz =
             function
             | AVar c when reals -> c |> toStr |> ctx.MkRealConst :> Z3.ArithExpr
             | AVar c -> c |> toStr |> ctx.MkIntConst :> Z3.ArithExpr
             | AInt i when reals -> (i |> ctx.MkReal) :> Z3.ArithExpr
             | AInt i -> (i |> ctx.MkInt) :> Z3.ArithExpr
-            | AAdd xs -> ctx.MkAdd (xs |> Seq.map az |> Seq.toArray)
-            | ASub xs -> ctx.MkSub (xs |> Seq.map az |> Seq.toArray)
-            | AMul xs -> ctx.MkMul (xs |> Seq.map az |> Seq.toArray)
-            | ADiv (x, y) -> ctx.MkDiv (az x, az y)
-        az
+            | AAdd xs -> ctx.MkAdd (xs |> Seq.map iz |> Seq.toArray)
+            | ASub xs -> ctx.MkSub (xs |> Seq.map iz |> Seq.toArray)
+            | AMul xs -> ctx.MkMul (xs |> Seq.map iz |> Seq.toArray)
+            | ADiv (x, y) -> ctx.MkDiv (iz x, iz y)
+        iz int
 
     /// Converts a Starling Boolean expression to a Z3 ArithExpr.
     and boolToZ3
       (reals : bool)
-      (toStr : 'var -> string)
+      (toStr : 'Var -> string)
       (ctx: Z3.Context)
-      : BoolExpr<'var> -> Z3.BoolExpr =
-        let az = arithToZ3 reals toStr ctx
+      (bool : BoolExpr<'Var>) : Z3.BoolExpr =
+        let iz = intToZ3 reals toStr ctx
         let ez = exprToZ3 reals toStr ctx
 
         let rec bz =
@@ -66,22 +87,39 @@ module Expr =
             | BOr xs -> ctx.MkOr (xs |> Seq.map bz |> Seq.toArray)
             | BImplies (x, y) -> ctx.MkImplies (bz x, bz y)
             | BEq (x, y) -> ctx.MkEq (ez x, ez y)
-            | BGt (x, y) -> ctx.MkGt (az x, az y)
-            | BGe (x, y) -> ctx.MkGe (az x, az y)
-            | BLe (x, y) -> ctx.MkLe (az x, az y)
-            | BLt (x, y) -> ctx.MkLt (az x, az y)
+            | BGt (x, y) -> ctx.MkGt (iz x, iz y)
+            | BGe (x, y) -> ctx.MkGe (iz x, iz y)
+            | BLe (x, y) -> ctx.MkLe (iz x, iz y)
+            | BLt (x, y) -> ctx.MkLt (iz x, iz y)
             | BNot x -> x |> bz |> ctx.MkNot
-        bz
+        bz bool
+
+    /// Converts a Starling array expression to a Z3 Expr.
+    and arrayToZ3
+      (reals : bool)
+      (toStr : 'Var -> string)
+      (ctx: Z3.Context)
+      (eltype : Type)
+      (arr : ArrayExpr<'Var>)
+      : Z3.ArrayExpr =
+        match arr with
+        | ARVar c ->
+            ctx.MkArrayConst
+                (name = toStr c,
+                 domain = typeToSort reals ctx eltype,
+                 range = ctx.MkIntSort ())
 
     /// Converts a Starling expression to a Z3 Expr.
     and exprToZ3
       (reals : bool)
-      (toStr : 'var -> string)
+      (toStr : 'Var -> string)
       (ctx: Z3.Context)
-      : Expr<'var> -> Z3.Expr =
-        function
+      (expr : Expr<'Var>)
+      : Z3.Expr =
+        match expr with
         | Expr.Bool b -> boolToZ3 reals toStr ctx b :> Z3.Expr
-        | Expr.Int a -> arithToZ3 reals toStr ctx a :> Z3.Expr
+        | Expr.Int i -> intToZ3 reals toStr ctx i :> Z3.Expr
+        | Expr.Array (eltype, _, a) -> arrayToZ3 reals toStr ctx eltype a :> Z3.Expr
 
 /// <summary>
 ///     Z3 invocation.

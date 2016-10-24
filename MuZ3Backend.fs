@@ -63,7 +63,10 @@ module Types =
         ///     One of our traversals bought the farm.
         /// </summary>
         | Traversal of err : TraversalError<Error>
-
+        /// <summary>
+        ///     Arrays were encountered: these are not yet supported.
+        /// </summary>
+        | ArraysNotSupported
 
     /// <summary>
     ///     Type of MuZ3 results.
@@ -148,12 +151,13 @@ module Pretty =
     let rec printError (err : Error) : Doc =
         match err with
         | CannotCheckDeferred (check, why) ->
-            error
-                (String "deferred sanity check '"
-                 <-> printDeferredCheck check
-                 <-> String "' failed:"
-                 <+> String why)
+            (errorStr "deferred sanity check"
+             <+> quoted (printDeferredCheck check)
+             <+> errorStr "failed:"
+             <+> String why)
         | Traversal err -> printTraversalError printError err
+        | ArraysNotSupported ->
+            errorStr "arrays are not yet supported in muZ3"
 
     /// Pretty-prints a MuSat.
     let printMuSat : MuSat -> Doc =
@@ -202,24 +206,6 @@ module Pretty =
 /// </summary>
 module Translator =
     open Starling.Core.Z3.Expr
-
-    /// <summary>
-    ///     Converts a type into a Z3 sort.
-    /// </summary>
-    /// <param name="reals">
-    ///     Whether to use Real instead of Int for integers.
-    /// </param>
-    /// <param name="ctx">
-    ///     The Z3 context to use to generate the sorts.
-    /// </param>
-    /// <returns>
-    ///     A function mapping types to sorts.
-    /// </returns>
-    let typeToSort (reals : bool) (ctx : Z3.Context) : Type -> Z3.Sort =
-        function
-        | Type.Int _ when reals -> ctx.MkRealSort () :> Z3.Sort
-        | Type.Int _ -> ctx.MkIntSort () :> Z3.Sort
-        | Type.Bool _ -> ctx.MkBoolSort () :> Z3.Sort
 
     (*
      * View definitions
@@ -630,12 +616,6 @@ module Translator =
       : Result<(string * Z3.BoolExpr) option, Error> =
         let svarSeq = toVarSeq svars
 
-        // TODO(CaptainHayashi): clean this up?
-        let varToExpr v =
-            match v with
-            | Int iv -> Int (AVar iv)
-            | Bool bv -> Bool (BVar bv)
-
         (* Converts a downclosure func into a guarded func, instantiating the
            variables directly as nonsymbolic unmarked vars.
            We map any instance of the iterator through f. *)
@@ -643,7 +623,7 @@ module Translator =
             let trans param =
                 match param with
                 | Int var when var = iterator -> Int (f var)
-                | v -> varToExpr v
+                | v -> mkVarExp v
             gfunc BTrue dfunc.Name (List.map trans dfunc.Params)
 
         match check with
@@ -664,7 +644,7 @@ module Translator =
             let zeroViewResult = lift Multiset.singleton zeroFuncResult
 
             // TODO(CaptainHayashi): using a round peg in a square hole here.
-            let empFunc = vfunc "emp" (Seq.map varToExpr svarSeq)
+            let empFunc = vfunc "emp" (Seq.map mkVarExp svarSeq)
 
             let ruleResult =
                 bind (fun z -> mkRule reals id ctx funcDecls BTrue z empFunc)
@@ -682,7 +662,7 @@ module Translator =
             let flatDFunc = Starling.Flattener.flattenDView svarSeq [func]
 
             let normFuncResult =
-                ok (vfunc flatDFunc.Name (List.map varToExpr flatDFunc.Params))
+                ok (vfunc flatDFunc.Name (List.map mkVarExp flatDFunc.Params))
             let succFuncResult =
                 lift (fun it -> instantiate it incVar flatDFunc) iterVarResult
             let succViewResult = lift Multiset.singleton succFuncResult
@@ -726,20 +706,32 @@ module Translator =
             |> Map.toList
             |> List.map (fun (v, t) -> mkVarExp (withType t v))
 
+        let defaultVal =
+            function
+            | Expr.Int _ -> ok (Expr.Int (AInt 0L))
+            | Expr.Bool _ -> ok (Expr.Bool BFalse)
+            (* TODO(CaptainHayashi): this needs implementing.
+               Will requires array literal support. *)
+            | Expr.Array _ -> fail ArraysNotSupported
+
         // TODO(CaptainHayashi): actually get these initialisations from
         // somewhere.
-        let body =
+        let bodyResult =
             vpars
             |> List.map
-                   (fun v -> BEq (v,
-                                  match v with
-                                  | Expr.Int _ -> Expr.Int (AInt 0L)
-                                  | Expr.Bool _ -> Expr.Bool (BFalse)))
-            |> mkAnd
+                   (fun v ->
+                        let dResult = defaultVal v
+                        lift (fun d -> BEq (v, d)) dResult)
+            |> collect
+            |> lift mkAnd
 
         let head = { Name = "emp" ; Params = vpars }
 
-        let ruleResult = mkRule reals id ctx funcDecls body Multiset.empty head
+        let ruleResult =
+            bind
+                (fun body ->
+                    mkRule reals id ctx funcDecls body Multiset.empty head)
+                bodyResult
         lift (maybe Seq.empty (fun x -> Seq.singleton ("init", x))) ruleResult
 
 
@@ -847,8 +839,7 @@ module Run =
                 (Set.map
                     (fun (var : CTyped<Var>) ->
                         ctx.MkConst
-                            (valueOf var,
-                             Translator.typeToSort reals ctx (typeOf var)))
+                            (valueOf var, typeToSort reals ctx (typeOf var)))
                  >> Set.toArray)
                 varsResult
 
