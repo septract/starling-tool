@@ -1275,6 +1275,44 @@ let modelCAS
          | UnifyFail (d, t) ->
              *)
 
+/// <summary>
+///     Gets the underlying variable of an lvalue.
+/// </summary>
+/// <param name="lv">The lvalue-candidate whose type is needed.</param>
+/// <returns>
+///     The lvalue's variable; will crash if the expression is not an lvalue.
+/// </returns>
+let rec varOfLValue (lv : Expression) : string =
+    match lv.Node with
+    | Identifier i -> i
+    | ArraySubscript (arr, _) -> varOfLValue arr
+    | _ -> failwith "called varOfLValue with non-lvalue"
+
+/// <summary>
+///     Tries to get the type of an lvalue.
+/// </summary>
+/// <param name="env">The map in which the lvalue's variable exists.</param>
+/// <param name="lv">The lvalue-candidate whose type is needed.</param>
+/// <returns>
+///     If the lvalue has a valid type, the type of that lvalue; otherwise,
+///     None.
+/// </returns>
+let typeOfLValue (env : VarMap) (lv : Expression) : Type option =
+    let matchArray var =
+        match var with
+        | Array (eltype, _, _) -> Some eltype
+        | _ -> None
+
+    // First, we work out the type of the variable at the top of the lvalue.
+    let rec findIdxType lv matcher =
+        match lv.Node with
+        | Identifier v -> Option.bind (typeOf >> matcher) (tryLookupVar env v)
+        | ArraySubscript (arr, _) ->
+            findIdxType arr (matcher >> Option.bind matchArray)
+        | _ -> None
+
+    findIdxType lv Some
+
 /// Converts an atomic fetch to a model command.
 let modelFetch
   (ctx : MethodContext)
@@ -1289,23 +1327,23 @@ let modelFetch
      * We figure this out by looking at dest.
      *)
     let rec findModeller d =
-        match d.Node with
-        | Identifier v ->
-            match (tryLookupVar ctx.SharedVars v) with
+        match d with
+        | LValue _ ->
+            match (typeOfLValue ctx.SharedVars d) with
             | Some (Typed.Int _) -> ok modelIntStore
             | Some (Typed.Bool _) -> ok modelBoolStore
             | Some (Typed.Array (_))
                 -> fail (PrimNotImplemented "array fetch")
             | None ->
-                match (tryLookupVar ctx.ThreadVars v) with
+                match (typeOfLValue ctx.ThreadVars d) with
                 | Some (Typed.Int _) -> ok modelIntLoad
                 | Some (Typed.Bool _) -> ok modelBoolLoad
                 | Some (Typed.Array (_))
                     -> fail (PrimNotImplemented "array fetch")
-                | None -> fail (BadExpr (dest, Var (v, NotFound v)))
-        | ArraySubscript (arr, _) -> findModeller arr
-        // TODO(CaptainHayashi): symbols
-        | _ -> fail (NeedLValue d)
+                | None ->
+                    let v = varOfLValue d
+                    fail (BadExpr (dest, Var (v, NotFound v)))
+        | RValue _ -> fail (NeedLValue d)
 
     bind (fun f -> f ctx dest test mode) (findModeller dest)
 
