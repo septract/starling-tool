@@ -34,7 +34,7 @@ let makeFreshView (tvars : VarMap) (fg : FreshGen) : View * DesugaredViewProto =
     let viewName =
         fg |> getFresh |> sprintf "%A"
     let viewArgs =
-        tvars |> Map.toSeq |> Seq.map (fst >> LVIdent >> LV >> fun l -> freshNode l)
+        tvars |> Map.toSeq |> Seq.map (fst >> Identifier >> fun l -> freshNode l)
     let viewParams = VarMap.toTypedVarSeq tvars
 
     (Func (func viewName viewArgs), NoIterator (func viewName viewParams, false))
@@ -214,7 +214,7 @@ module Tests =
         static member ViewDesugars =
             [TestCaseData(Unknown : Marked<View>)
               .Returns((Func
-                            (func "0" [ freshNode <| LV (LVIdent "s") ; freshNode <| LV (LVIdent "t") ]),
+                            (func "0" [ freshNode <| Identifier "s" ; freshNode <| Identifier "t" ]),
                         Seq.singleton <| func "0" [ (Int, "s"), (Int, "t") ]))
               .SetName("Desugaring an unknown view creates a fresh view\
                         with a fresh name and all locals as parameters") ]

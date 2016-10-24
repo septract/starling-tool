@@ -601,15 +601,19 @@ module Graph =
 
     /// Determines if some given Command is local with respect to the given
     /// map of thread-local variables
-    let isLocalResults : VarMap -> Command -> bool =
-        fun tvars ->
-        let localResults prim =
-            List.forall (fun v ->
-                match (tvars.TryFind <| valueOf v) with
-                | Some x -> typeOf v = x
-                | None   -> false
-                ) prim.Results
-        List.forall localResults
+    let isLocalResults (tvars : VarMap) (command : Command) : bool =
+        (* We need to see if any of the variables named in the results
+           are local.  This can fail, but currently the optimiser can't.
+           For now we just assume the command is _not_ local if the
+           variable getter failed. *)
+        let maybeVars = okOption (commandResultVars command)
+
+        let isVarLocal v =
+            maybe false (fun x -> typeOf v = x) (tvars.TryFind (valueOf v))
+
+        maybe false
+            (Set.toList >> List.forall isVarLocal)
+            maybeVars
 
     /// <summary>
     ///     Partial active pattern matching <c>Sym</c>-less expressions.
@@ -793,22 +797,22 @@ module Graph =
                         // (TODO: do something with the ViewExpr annotations?)
                         match (pViewexpr, qViewexpr) with
                         | InnerView pView, InnerView qView ->
-                        let varResultSet = Set.map iteratedGFuncVars (Multiset.toSet pView)
-                        let varsResults = lift Set.unionMany (collect varResultSet)
-                        let cmdVars = commandResults e.Command
-                        // TODO: Better equality?
-                        match varsResults with
-                        | Ok (vars, _) ->
+                            let varResultSet = Set.map iteratedGFuncVars (Multiset.toSet pView)
+                            let varsResults = lift Set.unionMany (collect varResultSet)
+                            let cmdVarsResults = commandResultVars e.Command
                             // TODO: Better equality?
-                            if pView = qView && disjoint cmdVars vars
-                            then
-                                (flip runTransforms) ctx
-                                <| seq {
-                                    yield RmOutEdge (node, e)
-                                    yield Unify (node, e.Dest, OnlyIfNoConnections)
-                                }
-                            else ctx
-                        | _ -> ctx
+                            match varsResults, cmdVarsResults with
+                            | Ok (vars, _), Ok (cmdVars, _) ->
+                                // TODO: Better equality?
+                                if pView = qView && disjoint (Set.toList cmdVars) vars
+                                then
+                                    (flip runTransforms) ctx
+                                    <| seq {
+                                        yield RmOutEdge (node, e)
+                                        yield Unify (node, e.Dest, OnlyIfNoConnections)
+                                    }
+                                else ctx
+                            | _, _ -> ctx
                     else ctx
                 Set.fold processEdge ctx outEdges
 
@@ -837,12 +841,12 @@ module Graph =
 
                     match (pViewexpr, qViewexpr, rViewexpr) with
                     | InnerView pView, InnerView qView, InnerView rView ->
-                        let cResults = Set.ofList <| commandResults c
-                        let dResults = Set.ofList <| commandResults d
-                        match (commandArgs d) with
-                        | Ok (dArgs, _) ->
-                            if Set.isSubset cResults dResults
-                                && disjoint cResults dArgs
+                        let cVarResult = commandResultVars c
+                        let dVarResult = commandResultVars d
+                        match (commandArgs d, cVarResult, dVarResult) with
+                        | Ok (dArgs, _), Ok (cVars, _), Ok (dVars, _) ->
+                            if Set.isSubset cVars dVars
+                                && disjoint cVars dArgs
                                 && isLocalResults locals c
                                 && not (hasAssume c)  // TODO: is this too broad?
                                 && not (hasAssume d)  // TODO: is this necessary?

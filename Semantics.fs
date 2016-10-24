@@ -138,31 +138,37 @@ let frame svars tvars expr =
 
     lift makeFrames evarsResult
 
-let paramToMExpr : TypedVar -> SMExpr =
-    function
-    | Int  i -> After i |> Reg |> AVar |> Int
-    | Bool b -> After b |> Reg |> BVar |> Bool
-
 let primParamSubFun
   ( cmd : PrimCommand )
   ( sem : PrimSemantics )
   : Traversal<TypedVar, Expr<Sym<MarkedVar>>, Error> =
     /// merge the pre + post conditions
-    let fres = List.map paramToMExpr cmd.Results
-    let fpars = cmd.Args @ fres
+    let paramToMExpr : Traversal<Expr<Sym<Var>>, Expr<Sym<MarkedVar>>, Error> =
+        tliftOverExpr (traverseTypedSymWithMarker After)
+
+    let fparsResult =
+        mapTraversal
+            (tchainL paramToMExpr (List.append cmd.Args))
+            cmd.Results
+
     let dpars = sem.Args @ sem.Results
 
-    let pmap = Map.ofSeq (Seq.map2 (fun par up -> valueOf par, up) dpars fpars)
+    let pmapResult =
+        lift
+            (Map.ofSeq << Seq.map2 (fun par up -> valueOf par, up) dpars)
+            fparsResult
 
-    ignoreContext
-        (function
-         | WithType (var, vtype) as v ->
-            match pmap.TryFind var with
-            | Some tvar ->
-                if vtype = typeOf tvar
-                then ok tvar
-                else fail (Inner (TypeMismatch (v, typeOf tvar)))
-            | None -> fail (Inner (FreeVarInSub v)))
+    let travFromMap (pmap : Map<Var, Expr<Sym<MarkedVar>>>) =
+        ignoreContext
+            (function
+             | WithType (var, vtype) as v ->
+                match pmap.TryFind var with
+                | Some tvar ->
+                    if vtype = typeOf tvar
+                    then ok tvar
+                    else fail (Inner (TypeMismatch (v, typeOf tvar)))
+                | None -> fail (Inner (FreeVarInSub v)))
+    fun ctx e -> bind (fun pmap -> travFromMap pmap ctx e) pmapResult
 
 let checkParamCountPrim : PrimCommand -> PrimSemantics option -> Result<PrimSemantics option, Error> =
     fun prim opt ->

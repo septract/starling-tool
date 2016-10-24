@@ -97,9 +97,9 @@ module Types =
         /// <summary>
         ///     A variable in the expression failed the type checker.
         /// </summary>
-        | VarBadType of var : LValue * err : TypeError
+        | VarBadType of var : Var * err : TypeError
         /// A variable usage in the expression produced a `VarMapError`.
-        | Var of var : LValue * err : VarMapError
+        | Var of var : Var * err : VarMapError
         /// A substitution over the variable produced a `TraversalError`.
         | BadSub of err : TraversalError<unit>
         /// A symbolic expression appeared in an ambiguous position.
@@ -136,12 +136,10 @@ module Types =
 
     /// Represents an error when converting a prim.
     type PrimError =
-        /// A prim used a bad shared variable.
-        | BadSVar of var : LValue * err : VarMapError
-        /// A prim used a bad thread variable.
-        | BadTVar of var : LValue * err : VarMapError
-        /// A prim used a bad variable of ambiguous scope.
-        | BadAVar of var : LValue * err : VarMapError
+        /// <summary>
+        ///     A prim needed a lvalue but got a non-lvalue expression.
+        /// </summary>
+        | NeedLValue of expr : AST.Types.Expression
         /// A prim contained a bad expression.
         | BadExpr of expr : AST.Types.Expression * err : ExprError
         /// A prim tried to increment an expression.
@@ -155,15 +153,16 @@ module Types =
         /// A prim tried to atomic-load from a non-lvalue expression.
         | LoadNonLV of expr : AST.Types.Expression
         /// A prim had a type error in it.
-        | BadType of lv : LValue * err : TypeError
+        | BadType of expr : AST.Types.Expression * err : TypeError
         /// A prim has no effect.
         | Useless
 
     /// Represents an error when converting a method.
     type MethodError =
         /// The method contains a semantically invalid local assign.
-        | BadAssign of dest : LValue * src : AST.Types.Expression
-                                     * err : PrimError
+        | BadAssign of dest : AST.Types.Expression
+                     * src : AST.Types.Expression
+                     * err : PrimError
         /// The method contains a semantically invalid atomic action.
         | BadAtomic of atom : Atomic * err : PrimError
         /// The method contains a bad if-then-else condition.
@@ -276,9 +275,9 @@ module Pretty =
                 [ printTypeError err ]
         | VarBadType (lv, err) ->
             let header =
-                errorStr "type error in lvalue" <+> quoted (printLValue lv)
+                errorStr "type error in variable" <+> quoted (String lv)
             cmdHeaded header [ printTypeError err ]
-        | Var(var, err) -> wrapped "variable" (var |> printLValue) (err |> printVarMapError)
+        | Var(var, err) -> wrapped "variable" (var |> String) (err |> printVarMapError)
         | BadSub err ->
             fmt "Substitution error: {0}" [ printTraversalError (fun _ -> String "()") err ]
         | AmbiguousSym sym ->
@@ -330,14 +329,9 @@ module Pretty =
     /// Pretty-prints prim errors.
     let printPrimError (err : PrimError) : Doc =
         match err with
-        | BadSVar (var, err : VarMapError) ->
-            wrapped "shared lvalue" (printLValue var)
-                                    (printVarMapError err)
-        | BadTVar (var, err : VarMapError) ->
-            wrapped "thread-local lvalue" (printLValue var)
-                                          (printVarMapError err)
-        | BadAVar (var, err : VarMapError) ->
-            wrapped "lvalue" (printLValue var) (printVarMapError err)
+        | NeedLValue expr ->
+            errorStr "expected lvalue here, but got"
+            <+> quoted (printExpression expr)
         | BadExpr (expr, err : ExprError) ->
             wrapped "expression" (printExpression expr)
                                  (printExprError err)
@@ -357,10 +351,10 @@ module Pretty =
             fmt "cannot load from non-lvalue expression '{0}'"
                 [ printExpression expr ]
         | Useless -> String "command has no effect"
-        | BadType (lv, err) ->
+        | BadType (expr, err) ->
             let header =
-                errorStr "lvalue"
-                <+> quoted (printLValue lv)
+                errorStr "expression"
+                <+> quoted (printExpression expr)
                 <+> errorStr "has incorrect type"
             cmdHeaded header [ printTypeError err ]
 
@@ -560,7 +554,7 @@ let rec modelExpr
     (* First, if we have a variable, the type of expression is
        determined by the type of the variable.  If the variable is
        symbolic, then we have ambiguity. *)
-        | LV v ->
+        | Identifier v ->
             v
             |> wrapMessages Var (VarMap.lookup env)
             |> bind (
@@ -617,7 +611,7 @@ and modelBoolExpr
         match e.Node with
         | True -> BTrue |> ok
         | False -> BFalse |> ok
-        | LV v ->
+        | Identifier v ->
             (* Look-up the variable to ensure it a) exists and b) is of a
              * Boolean type.
              *)
@@ -705,7 +699,7 @@ and modelIntExpr
     let rec mi e =
         match e.Node with
         | Num i -> i |> AInt |> ok
-        | LV v ->
+        | Identifier v ->
             (* Look-up the variable to ensure it a) exists and b) is of an
              * arithmetic type.
              *)
@@ -1044,160 +1038,247 @@ let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
 // Axioms
 //
 
-let (|Shared|_|) ctx (lvalue : LValue) = VarMap.tryLookup ctx.SharedVars lvalue
-let (|Thread|_|) ctx (lvalue : LValue) = VarMap.tryLookup ctx.ThreadVars lvalue
+/// <summary>
+///     Models a Boolean lvalue given a potentially valid expression and
+///     environment.
+/// </summary>
+/// <param name="env">The environment of variables used for the lvalue.</param>
+/// <param name="marker">A function that marks (or doesn't mark) vars.</param>
+/// <param name="ex">The possible lvalue to model.</param>
+/// <returns>If the subject is a valid lvalue, the result expression.</returns>
+let modelBoolLValue (env : VarMap) (marker : Var -> 'Var) (ex : Expression)
+  : Result<BoolExpr<Sym<'Var>>, PrimError> =
+    match ex with
+    | RValue r -> fail (NeedLValue r)
+    | LValue l -> wrapMessages BadExpr (modelBoolExpr env marker) l
+
+/// <summary>
+///     Models an integer lvalue given a potentially valid expression and
+///     environment.
+/// </summary>
+/// <param name="env">The environment of variables used for the lvalue.</param>
+/// <param name="marker">A function that marks (or doesn't mark) vars.</param>
+/// <param name="ex">The possible lvalue to model.</param>
+/// <returns>If the subject is a valid lvalue, the result expression.</returns>
+let modelIntLValue (env : VarMap) (marker : Var -> 'Var) (ex : Expression)
+  : Result<IntExpr<Sym<'Var>>, PrimError> =
+    match ex with
+    | RValue r -> fail (NeedLValue r)
+    | LValue l -> wrapMessages BadExpr (modelIntExpr env marker) l
+
+/// <summary>
+///     Models an lvalue given a potentially valid expression and
+///     environment.
+/// </summary>
+/// <param name="env">The environment of variables used for the lvalue.</param>
+/// <param name="marker">A function that marks (or doesn't mark) vars.</param>
+/// <param name="ex">The possible lvalue to model.</param>
+/// <returns>If the subject is a valid lvalue, the result expression.</returns>
+let modelLValue (env : VarMap) (marker : Var -> 'Var) (ex : Expression)
+  : Result<Expr<Sym<'Var>>, PrimError> =
+    match ex with
+    | RValue r -> fail (NeedLValue r)
+    | LValue l -> wrapMessages BadExpr (modelExpr env marker) l
 
 /// Converts a Boolean load to a Prim.
-let modelBoolLoad : MethodContext -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
-    fun { SharedVars = svars } dest srcExpr mode ->
-    (* In a Boolean load, the destination must be LOCAL and Boolean;
-     *                    the source must be a GLOBAL Boolean lvalue;
-     *                    and the fetch mode must be Direct.
-     *)
-    match srcExpr.Node with
-    | LV srcLV ->
-        trial {
-            let! src = wrapMessages BadSVar (VarMap.lookup svars) srcLV
-            match src, mode with
-            | Typed.Bool s, Direct ->
-                return
-                    command
-                        "!BLoad"
-                            [ Bool dest ]
-                            [ s |> Before |> Reg |> BVar |> Expr.Bool ]
+let modelBoolLoad
+  (ctx : MethodContext)
+  (dest : Expression)
+  (src : Expression)
+  (mode : FetchMode)
+  : Result<PrimCommand, PrimError> =
+    (* In a Boolean load, the destination must be a THREAD Boolean lvalue;
+                          the source must be a SHARED Boolean lvalue;
+                          and the fetch mode must be Direct. *)
+    let modelWithExprs dstE srcE =
+        match mode with
+        | Direct -> ok (command "!BLoad" [ Bool dstE ] [ Bool srcE ])
+        | Increment -> fail (IncBool src)
+        | Decrement -> fail (DecBool src)
 
-            | Typed.Bool s, Increment -> return! fail (IncBool srcExpr)
-            | Typed.Bool s, Decrement -> return! fail (DecBool srcExpr)
-            | _ ->
-                return!
-                    (fail
-                        (BadType
-                            (srcLV,
-                             TypeMismatch (Type.Bool (), typeOf src))))
-        }
-    | _ -> fail (LoadNonLV srcExpr)
+    bind2 modelWithExprs
+        (modelBoolLValue ctx.ThreadVars id dest)
+        (modelBoolLValue ctx.SharedVars MarkedVar.Before src)
 
 /// Converts an integer load to a Prim.
-let modelIntLoad : MethodContext -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
-    fun { SharedVars = svars } dest srcExpr mode ->
-    (* In an integer load, the destination must be LOCAL and integral;
-     *                    the source must be a GLOBAL arithmetic lvalue;
-     *                    and the fetch mode is unconstrained.
-     *)
-    match srcExpr.Node with
-    | LV srcLV ->
-        trial {
-            let! src = wrapMessages BadSVar (VarMap.lookup svars) srcLV
-            match src, mode with
-            | Typed.Int s, Direct ->
-                return command "!ILoad" [ Int dest ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
+let modelIntLoad
+  (ctx : MethodContext)
+  (dest : Expression)
+  (src : Expression)
+  (mode : FetchMode)
+  : Result<PrimCommand, PrimError> =
+    (* In an integer load, the destination must be a THREAD integral lvalue;
+                           the source must be a SHARED integral lvalue;
+                           and the fetch mode is unconstrained. *)
+    let modelWithExprs dstPost srcPre srcPost =
+        let cmd, reads =
+            match mode with
+            | Direct -> "!ILoad", [ dstPost ]
+            | Increment -> "!ILoad++", [ dstPost; srcPost ]
+            | Decrement -> "!ILoad--", [ dstPost; srcPost ]
+        command cmd (List.map Int reads) [ Int srcPre ]
 
-            | Typed.Int s, Increment ->
-                return command "!ILoad++" [ Int dest; Int s ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
-
-            | Typed.Int s, Decrement ->
-                return command "!ILoad--" [ Int dest; Int s ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
-
-            | _ -> return! fail (BadType (srcLV, TypeMismatch (Type.Int (), typeOf src)))
-        }
-    | _ -> fail (LoadNonLV srcExpr)
+    lift3 modelWithExprs
+        (modelIntLValue ctx.ThreadVars id dest)
+        (modelIntLValue ctx.SharedVars MarkedVar.Before src)
+        (modelIntLValue ctx.SharedVars id src)
 
 /// Converts a Boolean store to a Prim.
-let modelBoolStore : MethodContext -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
-    fun { ThreadVars = tvars } dest src mode ->
-    (* In a Boolean store, the destination must be GLOBAL and Boolean;
-     *                     the source must be LOCAL and Boolean;
-     *                     and the fetch mode must be Direct.
-     *)
-    trial {
-        let! sxp = wrapMessages BadExpr (modelBoolExpr tvars Before) src
+let modelBoolStore
+  (ctx : MethodContext)
+  (dest : Expression)
+  (src : Expression)
+  (mode : FetchMode)
+  : Result<PrimCommand, PrimError> =
+    (* In a Boolean store, the destination must a SHARED Boolean lvalue;
+                           the source must be THREAD Boolean;
+                           and the fetch mode must be Direct. *)
+    let modelWithExprs dstE srcE =
         match mode with
-        | Direct ->
-            return
-                command
-                    "!BStore"
-                    [ Bool dest ]
-                    [ sxp |> Expr.Bool ]
-        | Increment -> return! fail (IncBool src)
-        | Decrement -> return! fail (DecBool src)
-    }
+        | Direct -> ok (command "!BStore" [ Bool dstE ] [ Bool srcE ])
+        | Increment -> fail (IncBool src)
+        | Decrement -> fail (DecBool src)
+
+    bind2 modelWithExprs
+        (modelBoolLValue ctx.SharedVars id dest)
+        (wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars MarkedVar.Before) src)
 
 /// Converts an integral store to a Prim.
-let modelIntStore : MethodContext -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
-    fun { ThreadVars = tvars } dest src mode ->
+let modelIntStore
+  (ctx : MethodContext)
+  (dest : Expression)
+  (src : Expression)
+  (mode : FetchMode)
+  : Result<PrimCommand, PrimError> =
     (* In an integral store, the destination must be GLOBAL and integral;
      *                       the source must be LOCAL and integral;
      *                       and the fetch mode must be Direct.
      *)
-    trial {
-        let! sxp =
-            wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Before) src
-        match mode with
-        | Direct ->
-            return
-                command
-                    "!IStore"
-                    [ Int dest ]
-                    [ sxp |> Expr.Int ]
+    let modelWithExprs dstPost srcPre srcPost =
+        let cmd, reads =
+            match mode with
+            | Direct -> "!IStore", [ dstPost ]
+            | Increment -> "!IStore++", [ dstPost; srcPost ]
+            | Decrement -> "!IStore--", [ dstPost; srcPost ]
+        command cmd (List.map Int reads) [ Int srcPre ]
 
-        | Increment -> return! fail (IncExpr src)
-        | Decrement -> return! fail (DecExpr src)
-    }
+    lift3 modelWithExprs
+        (modelIntLValue ctx.SharedVars id dest)
+        (wrapMessages BadExpr (modelIntExpr ctx.ThreadVars MarkedVar.Before) src)
+        (wrapMessages BadExpr (modelIntExpr ctx.ThreadVars id) src)
 
 /// Converts a CAS to part-commands.
-let modelCAS : MethodContext -> LValue -> LValue -> Expression -> Result<PrimCommand, PrimError> =
-    fun { SharedVars = svars; ThreadVars = tvars } destLV testLV set ->
-    (* In a CAS, the destination must be SHARED;
-     *           the test variable must be THREADLOCAL;
-     *           and the to-set value must be a valid expression.
-     * dest, test, and set must agree on type.
-     * The type of dest and test influences how we interpret set.
-     *)
-    wrapMessages BadSVar (VarMap.lookup svars) destLV
-    >>= (fun dest ->
-             let v = wrapMessages BadTVar (VarMap.lookup tvars) testLV
-             lift (mkPair dest) v)
-    >>= (function
-         | (Bool d, Bool t) ->
-             set
-             |> wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Before)
-             |> lift
-                    (fun s ->
-                        command "BCAS"
-                            [ Bool d; Bool t ]
-                            [ d |> sbBefore |> Expr.Bool
-                              t |> sbBefore |> Expr.Bool
-                              s |> Expr.Bool ] )
-         | (Int d, Int t) ->
-            set
-            |> wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Before)
-            |> lift
-                   (fun s ->
-                        command "ICAS"
-                            [ Int d; Int t ]
-                            [ d |> siBefore |> Expr.Int
-                              t |> siBefore |> Expr.Int
-                              s |> Expr.Int ] )
-         | (d, t) ->
-             // Oops, we have a type error.
-             // Arbitrarily single out test as the cause of it.
-             fail (BadType (testLV, TypeMismatch (typeOf d, typeOf t))))
+let modelCAS
+  (ctx : MethodContext)
+  (dest : Expression)
+  (test : Expression)
+  (set : Expression)
+  : Result<PrimCommand, PrimError> =
+    (* In a CAS, the destination must be a SHARED lvalue;
+                 the test variable must be a THREAD lvalue;
+                 and the to-set value must be a valid expression.
+
+       dest, test, and set must agree on type.
+       The type of dest and test influences how we interpret set. *)
+    let modelWithDestAndTest destPreLV destPostLV testPreLV testPostLV =
+        (* Determine from destPreLV and testPreLV what the type of the CAS is.
+           Assume that the post-states are of the same type. *)
+        match destPreLV, testPreLV with
+        | Bool dlPreB, Bool tlPreB ->
+            let setResult =
+                wrapMessages BadExpr
+                    (modelBoolExpr ctx.ThreadVars MarkedVar.Before)
+                    set
+
+            lift
+                (fun s ->
+                    command "BCAS"
+                        [ destPostLV; testPostLV ]
+                        [ Expr.Bool dlPreB; Bool tlPreB; Bool s ] )
+                setResult
+        | Int dlPreI, Int tlPreI ->
+            let setResult =
+                wrapMessages BadExpr
+                    (modelIntExpr ctx.ThreadVars MarkedVar.Before)
+                    set
+
+            lift
+                (fun s ->
+                    command "ICAS"
+                        [ destPostLV; testPostLV ]
+                        [ Int dlPreI; Int tlPreI; Int s ] )
+                setResult
+        | d, t ->
+            (* Oops, we have a type error.
+               Arbitrarily single out test as the cause of it. *)
+            fail (BadType (test, TypeMismatch (typeOf d, typeOf t)))
+
+    (* We need the unmarked version of dest and test for the outputs,
+       and the marked version for the inputs. *)
+    let toPost vars = modelLValue vars id
+    let toPre vars = modelLValue vars MarkedVar.Before
+    bind4 modelWithDestAndTest
+        (toPre  ctx.SharedVars dest)
+        (toPost ctx.SharedVars dest)
+        (toPre  ctx.ThreadVars test)
+        (toPost ctx.ThreadVars test)
 
 /// Converts an atomic fetch to a model command.
-let modelFetch : MethodContext -> LValue -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
-    fun ctx destLV srcExpr mode ->
+let modelFetch
+  (ctx : MethodContext)
+  (dest : Expression)
+  (test : Expression)
+  (mode : FetchMode)
+  : Result<PrimCommand, PrimError> =
     (* First, determine whether we have a fetch from shared to thread
      * (a load), or a fetch from thread to shared (a store).
      * Also figure out whether we have a Boolean or arithmetic
      * version.
      * We figure this out by looking at dest.
      *)
-    match destLV with
-    | Shared ctx (Typed.Int dest) -> modelIntStore ctx dest srcExpr mode
-    | Shared ctx (Typed.Bool dest) -> modelBoolStore ctx dest srcExpr mode
-    | Thread ctx (Typed.Int dest) -> modelIntLoad ctx dest srcExpr mode
-    | Thread ctx (Typed.Bool dest) -> modelBoolLoad ctx dest srcExpr mode
-    | lv -> fail (BadAVar(lv, NotFound (flattenLV lv)))
+    let rec findModeller d =
+        match d.Node with
+        | Identifier v ->
+            match (VarMap.tryLookup ctx.SharedVars v) with
+            | Some (Typed.Int _) -> ok modelIntStore
+            | Some (Typed.Bool _) -> ok modelBoolStore
+            | None ->
+                match (VarMap.tryLookup ctx.ThreadVars v) with
+                | Some (Typed.Int _) -> ok modelIntLoad
+                | Some (Typed.Bool _) -> ok modelBoolLoad
+                | None -> fail (BadExpr (dest, Var (v, NotFound v)))
+        | ArraySubscript (arr, _) -> findModeller arr
+        // TODO(CaptainHayashi): symbols
+        | _ -> fail (NeedLValue d)
+
+    bind (fun f -> f ctx dest test mode) (findModeller dest)
+
+/// <summary>
+///     Models a postfix expression as a primitive.
+/// </summary>
+/// <param name="ctx">The context of the modeller at this position.</param>
+/// <param name="operand">The postfixed expression.</param>
+/// <param name="mode">The mode representing the postfix operator.</param>
+/// <returns>If successful, the modelled expression.</returns>
+let modelPostfix (ctx : MethodContext) (operand : Expression) (mode : FetchMode)
+  : Result<PrimCommand, PrimError> =
+    (* A Postfix is basically a Fetch with no destination, at this point.
+       Thus, the source must be a SHARED LVALUE.
+       We don't allow the Direct fetch mode, as it is useless. *)
+    let modelWithOperand opPre opPost =
+        match mode, opPre with
+        | Direct, _ -> fail Useless
+        | Increment, Typed.Bool _ ->
+            fail (IncBool operand)
+        | Decrement, Typed.Bool _ ->
+            fail (DecBool operand)
+        | Increment, Typed.Int _ ->
+            ok (command "!I++" [ opPost ] [ opPre ])
+        | Decrement, Typed.Int _ ->
+            ok (command "!I--" [ opPost ] [ opPre ])
+    bind2 modelWithOperand
+        (modelLValue ctx.SharedVars MarkedVar.Before operand)
+        (modelLValue ctx.SharedVars id operand)
 
 /// Converts a single atomic command from AST to part-commands.
 let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> =
@@ -1206,27 +1287,7 @@ let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> 
         match a.Node with
         | CompareAndSwap(dest, test, set) -> modelCAS ctx dest test set
         | Fetch(dest, src, mode) -> modelFetch ctx dest src mode
-        | Postfix(operand, mode) ->
-            (* A Postfix is basically a Fetch with no destination, at this point.
-             * Thus, the source must be SHARED.
-             * We don't allow the Direct fetch mode, as it is useless.
-             *)
-            trial {
-                let! stype = wrapMessages BadSVar (VarMap.lookup ctx.SharedVars) operand
-                // TODO(CaptainHayashi): sort out lvalues...
-                let op = flattenLV operand
-                match mode, stype with
-                | Direct, _ ->
-                    return! fail Useless
-                | Increment, Typed.Bool _ ->
-                    return! fail (IncBool (freshNode <| LV operand))
-                | Decrement, Typed.Bool _ ->
-                    return! fail (DecBool (freshNode <| LV operand))
-                | Increment, Typed.Int _ ->
-                    return command "!I++" [ Int op ] [op |> Before |> Reg |> AVar |> Expr.Int ]
-                | Decrement, Typed.Int _ ->
-                    return command "!I--" [ Int op ] [op |> Before |> Reg |> AVar |> Expr.Int ]
-            }
+        | Postfix(operand, mode) -> modelPostfix ctx operand mode
         | Id -> ok (command "Id" [] [])
         | Assume e ->
             e
@@ -1235,32 +1296,22 @@ let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> 
     lift (fun cmd -> { cmd with Node = Some a }) prim
 
 /// Converts a local variable assignment to a Prim.
-and modelAssign : MethodContext -> LValue -> Expression -> Result<PrimCommand, PrimError> =
-    fun { ThreadVars = tvars } lLV e ->
+and modelAssign
+  (ctx : MethodContext)
+  (dest : Expression)
+  (src : Expression)
+  : Result<PrimCommand, PrimError> =
     (* We model assignments as !ILSet or !BLSet, depending on the
-     * type of l, which _must_ be in the locals set..
-     * We thus also have to make sure that e is the correct type.
-     *)
-    trial {
-        let! l = wrapMessages BadTVar (VarMap.lookup tvars) lLV
-        match l with
-        | Typed.Bool ls ->
-            let! em =
-                wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Before) e
-            return
-                command
-                    "!BLSet"
-                    [ Bool ls ]
-                    [ em |> Expr.Bool ]
-        | Typed.Int ls ->
-            let! em =
-                wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Before) e
-            return
-                command
-                    "!ILSet"
-                    [ Int ls ]
-                    [ em |> Expr.Int ]
-    }
+       type of dest, which _must_ be a thread lvalue.
+       We thus also have to make sure that src is the correct type. *)
+    let modelWithDestAndSrc destPost srcPre =
+        match destPost with
+        | Typed.Bool _ -> command "!BLSet" [ destPost ] [ srcPre ]
+        | Typed.Int _  -> command "!ILSet" [ destPost ] [ srcPre ]
+
+    lift2 modelWithDestAndSrc
+        (modelLValue ctx.ThreadVars id dest)
+        (wrapMessages BadExpr (modelExpr ctx.ThreadVars MarkedVar.Before) src)
 
 /// Creates a partially resolved axiom for an if-then-else.
 and modelITE
