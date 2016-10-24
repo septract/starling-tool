@@ -15,48 +15,58 @@ module Types =
     /// <summary>
     ///     An expression of arbitrary type.
     /// </summary>
-    /// <typeparam name="var">
+    /// <typeparam name="Var">
     ///     The type of variables in the expression.
     /// </typeparam>
-    type Expr<'var> when 'var : equality =
-        Typed<IntExpr<'var>, BoolExpr<'var>>
+    type Expr<'Var> when 'Var : equality =
+        Typed<IntExpr<'Var>, BoolExpr<'Var>, ArrayExpr<'Var>>
 
     /// <summary>
     ///     An integral expression.
     /// </summary>
-    /// <typeparam name="var">
+    /// <typeparam name="Var">
     ///     The type of variables in the expression.
     /// </typeparam>
-    and IntExpr<'var> when 'var : equality =
-        | AVar of 'var
+    and IntExpr<'Var> when 'Var : equality =
+        | AVar of 'Var
         | AInt of int64
-        | AAdd of IntExpr<'var> list
-        | ASub of IntExpr<'var> list
-        | AMul of IntExpr<'var> list
-        | ADiv of IntExpr<'var> * IntExpr<'var>
-        | AMod of IntExpr<'var> * IntExpr<'var>
+        | AAdd of IntExpr<'Var> list
+        | ASub of IntExpr<'Var> list
+        | AMul of IntExpr<'Var> list
+        | ADiv of IntExpr<'Var> * IntExpr<'Var>
+        | AMod of IntExpr<'Var> * IntExpr<'Var>
         override this.ToString () = sprintf "%A" this
 
     /// <summary>
     ///     A Boolean expression.
     /// </summary>
-    /// <typeparam name="var">
+    /// <typeparam name="Var">
     ///     The type of variables in the expression.
     /// </typeparam>
-    and BoolExpr<'var> when 'var : equality =
-        | BVar of 'var
+    and BoolExpr<'Var> when 'Var : equality =
+        | BVar of 'Var
         | BTrue
         | BFalse
-        | BAnd of BoolExpr<'var> list
-        | BOr of BoolExpr<'var> list
-        | BImplies of BoolExpr<'var> * BoolExpr<'var>
-        | BEq of Expr<'var> * Expr<'var>
-        | BGt of IntExpr<'var> * IntExpr<'var>
-        | BGe of IntExpr<'var> * IntExpr<'var>
-        | BLe of IntExpr<'var> * IntExpr<'var>
-        | BLt of IntExpr<'var> * IntExpr<'var>
-        | BNot of BoolExpr<'var>
+        | BAnd of BoolExpr<'Var> list
+        | BOr of BoolExpr<'Var> list
+        | BImplies of BoolExpr<'Var> * BoolExpr<'Var>
+        | BEq of Expr<'Var> * Expr<'Var>
+        | BGt of IntExpr<'Var> * IntExpr<'Var>
+        | BGe of IntExpr<'Var> * IntExpr<'Var>
+        | BLe of IntExpr<'Var> * IntExpr<'Var>
+        | BLt of IntExpr<'Var> * IntExpr<'Var>
+        | BNot of BoolExpr<'Var>
         override this.ToString () = sprintf "%A" this
+
+    /// <summary>
+    ///     An array expression.
+    /// </summary>
+    /// <typeparam name="Var">
+    ///     The type of variables in the expression.
+    /// </typeparam>
+    and ArrayExpr<'Var> when 'Var : equality =
+        // TODO(CaptainHayashi): rename to AVar when we rename A -> I.
+        | ARVar of 'Var
 
     /// Type for fresh variable generators.
     type FreshGen = bigint ref
@@ -87,7 +97,7 @@ module Pretty =
         >> parened
 
     /// Pretty-prints an arithmetic expression.
-    let rec printIntExpr (pVar : 'var -> Doc) : IntExpr<'var> -> Doc =
+    let rec printIntExpr (pVar : 'Var -> Doc) : IntExpr<'Var> -> Doc =
         function
         | AVar c -> pVar c
         | AInt i -> i |> sprintf "%i" |> String
@@ -98,7 +108,7 @@ module Pretty =
         | AMod (x, y) -> sexpr "%" (printIntExpr pVar) [x; y]
 
     /// Pretty-prints a Boolean expression.
-    and printBoolExpr (pVar : 'var -> Doc) : BoolExpr<'var> -> Doc =
+    and printBoolExpr (pVar : 'Var -> Doc) : BoolExpr<'Var> -> Doc =
         function
         | BVar c -> pVar c
         | BTrue -> String "true"
@@ -113,11 +123,17 @@ module Pretty =
         | BLt (x, y) -> sexpr "<" (printIntExpr pVar) [x; y]
         | BNot x -> sexpr "not" (printBoolExpr pVar) [x]
 
-    /// Pretty-prints an expression.
-    and printExpr (pVar : 'var -> Doc) : Expr<'var> -> Doc =
+    /// Pretty-prints an array expression.
+    and printArrayExpr (pVar : 'Var -> Doc) : ArrayExpr<'Var> -> Doc =
         function
-        | Int a -> printIntExpr pVar a
+        | ARVar c -> pVar c
+
+    /// Pretty-prints an expression.
+    and printExpr (pVar : 'Var -> Doc) : Expr<'Var> -> Doc =
+        function
+        | Int i -> printIntExpr pVar i
         | Bool b -> printBoolExpr pVar b
+        | Array (_, _, a) -> printArrayExpr pVar a
 
 
 /// Partial pattern that matches a Boolean equality on arithmetic expressions.
@@ -252,6 +268,7 @@ let mkVarExp (var : CTyped<'Var>) : Expr<'Var> =
     match var with
     | Int s -> s |> AVar |> Int
     | Bool s -> s |> BVar |> Bool
+    | Array (eltype, length, s) -> Array (eltype, length, ARVar s)
 
 /// Converts a VarMap to a sequence of expressions.
 let varMapToExprs

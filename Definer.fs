@@ -171,7 +171,7 @@ module FuncDefiner =
        : Result<Func<Expr<'Var>>, Error> =
         List.map2
             (fun fp dp ->
-                if typeOf fp = typeOf dp
+                if typesCompatible (typeOf fp) (typeOf dp)
                 then ok ()
                 else fail (TypeMismatch (dp, typeOf fp)))
             func.Params

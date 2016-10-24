@@ -156,6 +156,10 @@ module Types =
         | BadType of expr : AST.Types.Expression * err : TypeError
         /// A prim has no effect.
         | Useless
+        /// <summary>
+        ///     A prim is not yet implemented in Starling.
+        /// </summary>
+        | PrimNotImplemented of what : string
 
     /// Represents an error when converting a method.
     type MethodError =
@@ -357,6 +361,10 @@ module Pretty =
                 <+> quoted (printExpression expr)
                 <+> errorStr "has incorrect type"
             cmdHeaded header [ printTypeError err ]
+        | PrimNotImplemented what ->
+            errorStr "primitive command"
+            <+> quoted (String what)
+            <+> errorStr "not yet implemented"
 
 
     /// Pretty-prints method errors.
@@ -1242,10 +1250,14 @@ let modelFetch
             match (VarMap.tryLookup ctx.SharedVars v) with
             | Some (Typed.Int _) -> ok modelIntStore
             | Some (Typed.Bool _) -> ok modelBoolStore
+            | Some (Typed.Array (_))
+                -> fail (PrimNotImplemented "array fetch")
             | None ->
                 match (VarMap.tryLookup ctx.ThreadVars v) with
                 | Some (Typed.Int _) -> ok modelIntLoad
                 | Some (Typed.Bool _) -> ok modelBoolLoad
+                | Some (Typed.Array (_))
+                    -> fail (PrimNotImplemented "array fetch")
                 | None -> fail (BadExpr (dest, Var (v, NotFound v)))
         | ArraySubscript (arr, _) -> findModeller arr
         // TODO(CaptainHayashi): symbols
@@ -1276,6 +1288,7 @@ let modelPostfix (ctx : MethodContext) (operand : Expression) (mode : FetchMode)
             ok (command "!I++" [ opPost ] [ opPre ])
         | Decrement, Typed.Int _ ->
             ok (command "!I--" [ opPost ] [ opPre ])
+        | _, Typed.Array (_) -> fail (PrimNotImplemented "array postfix")
     bind2 modelWithOperand
         (modelLValue ctx.SharedVars MarkedVar.Before operand)
         (modelLValue ctx.SharedVars id operand)
@@ -1306,10 +1319,11 @@ and modelAssign
        We thus also have to make sure that src is the correct type. *)
     let modelWithDestAndSrc destPost srcPre =
         match destPost with
-        | Typed.Bool _ -> command "!BLSet" [ destPost ] [ srcPre ]
-        | Typed.Int _  -> command "!ILSet" [ destPost ] [ srcPre ]
+        | Typed.Bool _ -> ok (command "!BLSet" [ destPost ] [ srcPre ])
+        | Typed.Int _  -> ok (command "!ILSet" [ destPost ] [ srcPre ])
+        | Typed.Array (_) -> fail (PrimNotImplemented "array local assign")
 
-    lift2 modelWithDestAndSrc
+    bind2 modelWithDestAndSrc
         (modelLValue ctx.ThreadVars id dest)
         (wrapMessages BadExpr (modelExpr ctx.ThreadVars MarkedVar.Before) src)
 

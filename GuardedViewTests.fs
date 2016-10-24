@@ -39,6 +39,14 @@ module Tests =
                     | Positions (Negative::xs) -> AInt 0L
                     | _ -> AInt -1L
                     |> Int
+                | Array (eltype, length, ()) ->
+                    Array
+                        (eltype,
+                         length,
+                         match ctx with
+                         | Positions (Positive::xs) -> ARVar "pos"
+                         | Positions (Negative::xs) -> ARVar "neg"
+                         | _ -> ARVar "?")
                 | Bool () ->
                     match ctx with
                     | Positions (x::xs) -> Context.overapprox x
