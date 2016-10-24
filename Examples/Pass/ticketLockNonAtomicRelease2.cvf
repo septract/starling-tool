@@ -29,7 +29,7 @@ method unlock() {
   {| holdLock() |}
     <s = serving>;
   {| /*relLock(s)*/ holdLock() |}
-    <serving = (s + 1)>;
+    <serving = s + 1>;
   {| emp |}
 }
 

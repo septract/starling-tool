@@ -51,9 +51,9 @@ method init() {
  */
 method lockA() {
   {| aFlagDown() |}
-    <aFlag = (1)>;
+    <aFlag = 1>;
   {| aFlagUp() |}
-    <turn = (0)>;
+    <turn = 0>;
   {| aWaiting() |}
     do {
       {| aWaiting() |}
@@ -70,7 +70,7 @@ method lockA() {
  */
 method unlockA() {
   {| aHoldLock() |}
-    <aFlag = (0)>;
+    <aFlag = 0>;
   {| aFlagDown() |}
 }
 
@@ -79,9 +79,9 @@ method unlockA() {
  */
 method lockB() {
   {| bFlagDown() |}
-    <bFlag = (1)>;
+    <bFlag = 1>;
   {| bFlagUp() |}
-    <turn = (1)>;
+    <turn = 1>;
   {| bWaiting() |}
     do {
       {| bWaiting() |}
@@ -98,7 +98,7 @@ method lockB() {
  */
 method unlockB() {
   {| bHoldLock() |}
-    <bFlag = (0)>;
+    <bFlag = 0>;
   {| bFlagDown() |}
 }
 
