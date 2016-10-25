@@ -95,6 +95,19 @@ module Compositions =
                  iEq (siInter 0I "g") (siInter 1I "t") ]
 
 
+module WriteMaps =
+    [<Test>]
+    fun ``write map of x[3][i] = y[j]++ is correct`` () =
+        Map.ofList
+            [ (Reg "x",
+                Indices <| Map.ofList
+                    [ (IVar (Reg "i"),
+                        Indices <| Map.ofList
+                            (INum 3L, Entire)) ] )
+              (Reg "y",
+                Indices <| Map.ofList
+                    [ (IVar (Reg "j"), Entire ) ] ) ]
+
 module Frames =
     let check var expectedFramedExpr =
         expectedFramedExpr ?=? (frameVar Before var)

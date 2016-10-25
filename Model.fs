@@ -52,6 +52,21 @@ open Starling.Core.Command
 /// </summary>
 [<AutoOpen>]
 module Types =
+    /// <summary>
+    ///     Mid-level register transfer logic used to encode Starling
+    ///     commands.
+    /// </summary>
+    /// <typeparam name="L">The type of lvalues.</typeparam>
+    type Microcode<'L> =
+        /// <summary>An assignment.</summary>
+        | Assign of lvalue : 'L * rvalue : Expr<Sym<Var>>
+        /// <summary>A diverging assertion.</summary>
+        | Assume of assumption : BoolExpr<Sym<Var>>
+        /// <summary>A conditional.</summary>
+        | Branch of conditional : BoolExpr<Sym<Var>>
+                  * ifTrue : Microcode<'L> list
+                  * ifFalse : Microcode<'L> list
+
     (*
      * Terms
      *)
@@ -98,7 +113,7 @@ module Types =
     /// A term using only internal boolean expressions.
     type FTerm = CTerm<MBoolExpr>
 
-    type PrimSemantics = { Name: string; Results: TypedVar list; Args: TypedVar list; Body: SVBoolExpr }
+    type PrimSemantics = { Name: string; Results: TypedVar list; Args: TypedVar list; Body: Microcode<TypedVar> list }
     type SemanticsMap<'a> = Map<string, 'a>
     type PrimSemanticsMap = SemanticsMap<PrimSemantics>
 

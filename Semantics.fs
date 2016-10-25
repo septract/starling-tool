@@ -97,6 +97,129 @@ let frameVar ctor (par : CTyped<Var>) : SMBoolExpr =
     BEq (par |> mapCTyped (After >> Reg) |> mkVarExp,
          par |> mapCTyped (ctor >> Reg) |> mkVarExp)
 
+/// <summary>
+///     A write record for an variable.
+///
+///     <para>
+///         Write records are used to build frames, by calculating which bits
+///         of an variable have been modified by a command.
+/// </summary>
+type Write =
+    /// <summary>The entire lvalue has been written to.</summary>
+    | Entire
+    /// <summary>
+    ///     Only certain parts of the lvalue have been written to,
+    ///     and their recursive write records are enclosed.
+    /// </summary>
+    | Indices of Map<IntExpr<Sym<Var>>, Write>
+    /// <summary>
+    ///     None of this lvalue has been written to yet.
+    /// </summary>
+    | NoWrite
+
+/// <summary>
+///     Records a write into a write map.
+/// </summary>
+/// <param name="var">The variable being written to.</param>
+/// <param name="idxPath">
+///     The path of indexes from the variable being written to to the variable.
+///     For example, [3; x; 1+i] would represent a write to A[3][x][1+i].
+/// </param>
+/// <param name="map">The write map being extended.</param>
+/// <returns>The extended write map.</returns>
+let markWrite (var : Sym<Var>) (idxPath : IntExpr<Sym<Var>> list)
+  (map : Map<Sym<Var>, Write>)
+  : Map<Sym<Var>, Write> =
+    (* First, consider what it means to add an index write to an index write
+       map. *)
+    let rec markWriteIdx
+      (idx : IntExpr<Sym<Var>>)
+      (idxPathRest : IntExpr<Sym<Var>> list)
+      (imap : Map<IntExpr<Sym<Var>>, Write>) =
+        // Find out if we've already written to this index.
+        let idxRec = withDefault NoWrite (imap.TryFind idx)
+        let imapLessIdx = imap.Remove idx
+
+        let idxRec' =
+            match idxPath with
+            | [] ->
+                (* If there is no subscript, then we must be writing to this
+                   entire index, so mark it as Entire. *)
+                Entire
+            | x::xs ->
+                match idxRec with
+                | Entire ->
+                    (* If we're already writing to the entire index somewhere
+                       else, we don't need to do any further recording. *)
+                    Entire
+                | NoWrite -> markWriteIdx x xs Map.empty
+                | Indices imap -> markWriteIdx x xs imap
+
+        Indices (Map.add idx idxRec' imapLessIdx)
+
+
+    // Now we can define the top-level.
+
+    let varRec = withDefault NoWrite (map.TryFind var)
+    let mapLessVar = map.Remove var
+
+    let varRec' =
+        match idxPath with
+        | [] ->
+            (* If there is no subscript, then we must be writing to this entire
+               variable, so mark it as Entire. *)
+            Entire
+        | (x::xs) ->
+            match varRec with
+            | Entire ->
+                (* If we're already writing to the entire variable somewhere
+                   else, we don't need to do any further recording.
+                   That said, I'm unsure we will ever write to an _entire_ array
+                   in current Starling. *)
+                Entire
+            | NoWrite -> markWriteIdx x xs Map.empty
+            | Indices imap -> markWriteIdx x xs imap
+
+    Map.add var varRec' mapLessVar
+
+/// <summary>
+///     Tries to extract the variable and index path from a lvalue.
+/// </summary>
+let varAndIdxPath (expr : Expr<Sym<Var>>)
+  : (Sym<Var> * IntExpr<Sym<Var>> list) option =
+    // TODO(CaptainHayashi): proper doc comment.
+    // TODO(CaptainHayashi): merge with type lookup stuff in Modeller?
+
+    let rec getInBool bx path =
+        match bx with
+        | BVar v -> Some (v, path)
+        | BIdx (_, _, ax, ix) -> getInArray ax (ix::path)
+        | _ -> None
+    and getInInt ix path =
+        match ix with
+        | IVar v -> Some (v, path)
+        | IIdx (_, _, ax, ix) -> getInArray ax (ix::path)
+        | _ -> None
+    and getInArray ix path =
+        match ix with
+        | AVar v -> Some (v, path)
+        | AIdx (_, _, ax, ix) -> getInArray ax (ix::path)
+
+    match expr with
+    | Int ix -> getInInt ix []
+    | Bool bx -> getInBool bx []
+    | Array (_, _, ax) -> getInArray ax []
+
+/// <summary>
+///     Generates a write record map for a given primitive command.
+/// </summary>
+/// <param name="prim">The primitive to investigate.</param>
+/// <returns>The write map for that primitive.</returns>
+let makeWriteMap (prim : PrimCommand) : Map<Sym<Var>, Write> =
+    let addToWriteMap map res =
+        maybe map (fun (var, idx) -> markWrite var idx map) (varAndIdxPath res)
+    List.fold addToWriteMap Map.empty prim.Results
+
 /// Generates a frame for a given expression.
 /// The frame is a relation a!after = a!before for every a not mentioned in the expression.
 let frame svars tvars expr =
@@ -178,8 +301,7 @@ let primParamSubFun
                 | None -> fail (Inner (FreeVarInSub v)))
     fun ctx e -> bind (fun pmap -> travFromMap pmap ctx e) pmapResult
 
-let checkParamCountPrim : PrimCommand -> PrimSemantics option -> Result<PrimSemantics option, Error> =
-    fun prim opt ->
+let checkParamCountPrim (prim : PrimCommand) (opt : PrimSemantics option) : Result<PrimSemantics option, Error> =
     match opt with
     | None -> ok None
     | Some def ->
@@ -187,13 +309,11 @@ let checkParamCountPrim : PrimCommand -> PrimSemantics option -> Result<PrimSema
         let dn = List.length def.Args
         if fn = dn then ok (Some def) else CountMismatch (fn, dn) |> fail
 
-let lookupPrim : PrimCommand -> PrimSemanticsMap -> Result<PrimSemantics option, Error>  =
-    fun prim map ->
+let lookupPrim (prim : PrimCommand) (map : PrimSemanticsMap) : Result<PrimSemantics option, Error>  =
     checkParamCountPrim prim
     <| Map.tryFind prim.Name map
 
-let checkParamTypesPrim : PrimCommand -> PrimSemantics -> Result<PrimCommand, Error> =
-    fun prim sem ->
+let checkParamTypesPrim (prim : PrimCommand) (sem : PrimSemantics) : Result<PrimCommand, Error> =
     List.map2
         (curry
              (function
