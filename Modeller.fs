@@ -543,6 +543,10 @@ let coreSemantics : PrimSemanticsMap =
 ///     but before they are placed in the modelled expression.  Use this
 ///     to apply markers on variables, etc.
 /// </param>
+/// <param name="idxEnv">
+///     The <c>VarMap</c> of variables available to any array subscripts in this
+///     expression.  This is almost always the thread-local variables.
+/// </param>
 /// <typeparam name="var">
 ///     The type of variables in the <c>Expr</c>, achieved by
 ///     applying <paramref name="varF"/> to <c>Var</c>s.
@@ -555,6 +559,7 @@ let coreSemantics : PrimSemanticsMap =
 /// </returns>
 let rec modelExpr
   (env : VarMap)
+  (idxEnv : VarMap)
   (varF : Var -> 'var)
   (e : Expression)
   : Result<Expr<Sym<'var>>, ExprError> =
@@ -575,8 +580,8 @@ let rec modelExpr
         (* If we have an array, then work out what the type of the array's
            elements are, then walk back from there. *)
         | ArraySubscript (arr, idx) ->
-            let arrResult = modelArrayExpr env varF arr
-            let idxResult = modelIntExpr env varF idx
+            let arrResult = modelArrayExpr env idxEnv varF arr
+            let idxResult = modelIntExpr idxEnv idxEnv varF idx
             lift2
                 (fun (eltype, length, arrE) idxE ->
                     match eltype with
@@ -589,8 +594,8 @@ let rec modelExpr
          * need to treat this expression as arithmetic or Boolean.
          *)
         | _ -> match e with
-                | ArithExp expr -> expr |> modelIntExpr env varF |> lift Expr.Int
-                | BoolExp expr -> expr |> modelBoolExpr env varF |> lift Expr.Bool
+                | ArithExp expr -> expr |> modelIntExpr env idxEnv varF |> lift Expr.Int
+                | BoolExp expr -> expr |> modelBoolExpr env idxEnv varF |> lift Expr.Bool
                 | _ -> failwith "unreachable[modelExpr]"
 
 /// <summary>
@@ -613,6 +618,10 @@ let rec modelExpr
 /// <param name="expr">
 ///     An expression previously judged as Boolean, to be modelled.
 /// </param>
+/// <param name="idxEnv">
+///     The <c>VarMap</c> of variables available to any array subscripts in this
+///     expression.  This is almost always the thread-local variables.
+/// </param>
 /// <typeparam name="var">
 ///     The type of variables in the <c>BoolExpr</c>, achieved by
 ///     applying <paramref name="varF"/> to <c>Var</c>s.
@@ -625,11 +634,12 @@ let rec modelExpr
 /// </returns>
 and modelBoolExpr
   (env : VarMap)
+  (idxEnv : VarMap)
   (varF : Var -> 'var)
   (expr : Expression) : Result<BoolExpr<Sym<'var>>, ExprError> =
-    let mi = modelIntExpr env varF
-    let me = modelExpr env varF
-    let ma = modelArrayExpr env varF
+    let mi = modelIntExpr env idxEnv varF
+    let me = modelExpr env idxEnv varF
+    let ma = modelArrayExpr env idxEnv varF
 
     let rec mb e =
         match e.Node with
@@ -656,7 +666,8 @@ and modelBoolExpr
             |> lift (func sym >> Sym >> BVar)
         | ArraySubscript (arr, idx) ->
             let arrResult = ma arr
-            let idxResult = mi idx
+            // Bind array index using its own environment.
+            let idxResult = modelIntExpr idxEnv idxEnv varF idx
             bind2
                 (fun (eltype, length, arrE) idxE ->
                     match eltype with
@@ -706,6 +717,10 @@ and modelBoolExpr
 ///     occurs.  Usually, but not always, these are the thread-local
 ///     variables.
 /// </param>
+/// <param name="idxEnv">
+///     The <c>VarMap</c> of variables available to any array subscripts in this
+///     expression.  This is almost always the thread-local variables.
+/// </param>
 /// <param name="varF">
 ///     A function to transform any variables after they are looked-up,
 ///     but before they are placed in <c>IVar</c>.  Use this to apply
@@ -726,10 +741,11 @@ and modelBoolExpr
 /// </returns>
 and modelIntExpr
   (env : VarMap)
+  (idxEnv : VarMap)
   (varF : Var -> 'var)
   (expr : Expression) : Result<IntExpr<Sym<'var>>, ExprError> =
-    let me = modelExpr env varF
-    let ma = modelArrayExpr env varF
+    let me = modelExpr env idxEnv varF
+    let ma = modelArrayExpr env idxEnv varF
 
     let rec mi e =
         match e.Node with
@@ -755,7 +771,8 @@ and modelIntExpr
             |> lift (func sym >> Sym >> IVar)
         | ArraySubscript (arr, idx) ->
             let arrResult = ma arr
-            let idxResult = mi idx
+            // Bind array index using its own environment.
+            let idxResult = modelIntExpr idxEnv idxEnv varF idx
             bind2
                 (fun (eltype, length, arrE) idxE ->
                     match eltype with
@@ -789,6 +806,10 @@ and modelIntExpr
 ///     occurs.  Usually, but not always, these are the thread-local
 ///     variables.
 /// </param>
+/// <param name="idxEnv">
+///     The <c>VarMap</c> of variables available to any array subscripts in this
+///     expression.  This is almost always the thread-local variables.
+/// </param>
 /// <param name="varF">
 ///     A function to transform any variables after they are looked-up,
 ///     but before they are placed in <c>AVar</c>.  Use this to apply
@@ -809,10 +830,11 @@ and modelIntExpr
 /// </returns>
 and modelArrayExpr
   (env : VarMap)
+  (idxEnv : VarMap)
   (varF : Var -> 'var)
   (expr : Expression)
   : Result<Type * int option * ArrayExpr<Sym<'var>>, ExprError> =
-    let mi = modelIntExpr env varF
+    let mi = modelIntExpr env idxEnv varF
 
     let rec ma e =
         match e.Node with
@@ -937,7 +959,7 @@ let modelViewDef
         let! d = (match ad with
                   | Some dad ->
                       dad
-                      |> wrapMessages CEExpr (modelBoolExpr e id)
+                      |> wrapMessages CEExpr (modelBoolExpr e e id)
                       |> lift Some
                   | None _ -> ok None)
         return (v, d)
@@ -1124,7 +1146,7 @@ let modelCFunc
              afunc.Params
              |> Seq.map (fun e ->
                              e
-                             |> modelExpr env id
+                             |> modelExpr env env id
                              |> mapMessages (curry ViewError.BadExpr e))
              |> collect
              // Then, put them into a VFunc.
@@ -1146,7 +1168,7 @@ let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
         modelCFunc ctx afunc |> lift mkCView
     | View.If(e, l, r) ->
         lift3 (fun em lm rm -> CFunc.ITE(em, lm, rm) |> mkCView)
-              (e |> modelBoolExpr ctx.ThreadVars id
+              (e |> modelBoolExpr ctx.ThreadVars ctx.ThreadVars id
                  |> mapMessages (curry ViewError.BadExpr e))
               (modelCView ctx l)
               (modelCView ctx r)
@@ -1164,43 +1186,49 @@ let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
 ///     Models a Boolean lvalue given a potentially valid expression and
 ///     environment.
 /// </summary>
-/// <param name="env">The environment of variables used for the lvalue.</param>
+/// <param name="env">The environment used for variables in the lvalue.</param>
+/// <param name="idxEnv">The environment used for indexes in the lvalue.</param>
 /// <param name="marker">A function that marks (or doesn't mark) vars.</param>
 /// <param name="ex">The possible lvalue to model.</param>
 /// <returns>If the subject is a valid lvalue, the result expression.</returns>
-let modelBoolLValue (env : VarMap) (marker : Var -> 'Var) (ex : Expression)
+let modelBoolLValue
+  (env : VarMap) (idxEnv : VarMap) (marker : Var -> 'Var) (ex : Expression)
   : Result<BoolExpr<Sym<'Var>>, PrimError> =
     match ex with
     | RValue r -> fail (NeedLValue r)
-    | LValue l -> wrapMessages BadExpr (modelBoolExpr env marker) l
+    | LValue l -> wrapMessages BadExpr (modelBoolExpr env idxEnv marker) l
 
 /// <summary>
 ///     Models an integer lvalue given a potentially valid expression and
 ///     environment.
 /// </summary>
-/// <param name="env">The environment of variables used for the lvalue.</param>
+/// <param name="env">The environment used for variables in the lvalue.</param>
+/// <param name="idxEnv">The environment used for indexes in the lvalue.</param>
 /// <param name="marker">A function that marks (or doesn't mark) vars.</param>
 /// <param name="ex">The possible lvalue to model.</param>
 /// <returns>If the subject is a valid lvalue, the result expression.</returns>
-let modelIntLValue (env : VarMap) (marker : Var -> 'Var) (ex : Expression)
+let modelIntLValue
+  (env : VarMap) (idxEnv : VarMap) (marker : Var -> 'Var) (ex : Expression)
   : Result<IntExpr<Sym<'Var>>, PrimError> =
     match ex with
     | RValue r -> fail (NeedLValue r)
-    | LValue l -> wrapMessages BadExpr (modelIntExpr env marker) l
+    | LValue l -> wrapMessages BadExpr (modelIntExpr env idxEnv marker) l
 
 /// <summary>
 ///     Models an lvalue given a potentially valid expression and
 ///     environment.
 /// </summary>
 /// <param name="env">The environment of variables used for the lvalue.</param>
+/// <param name="idxEnv">The environment used for indexes in the lvalue.</param>
 /// <param name="marker">A function that marks (or doesn't mark) vars.</param>
 /// <param name="ex">The possible lvalue to model.</param>
 /// <returns>If the subject is a valid lvalue, the result expression.</returns>
-let modelLValue (env : VarMap) (marker : Var -> 'Var) (ex : Expression)
+let modelLValue
+  (env : VarMap) (idxEnv : VarMap) (marker : Var -> 'Var) (ex : Expression)
   : Result<Expr<Sym<'Var>>, PrimError> =
     match ex with
     | RValue r -> fail (NeedLValue r)
-    | LValue l -> wrapMessages BadExpr (modelExpr env marker) l
+    | LValue l -> wrapMessages BadExpr (modelExpr env idxEnv marker) l
 
 /// Converts a Boolean load to a Prim.
 let modelBoolLoad
@@ -1219,8 +1247,8 @@ let modelBoolLoad
         | Decrement -> fail (DecBool src)
 
     bind2 modelWithExprs
-        (modelBoolLValue ctx.ThreadVars id dest)
-        (modelBoolLValue ctx.SharedVars MarkedVar.Before src)
+        (modelBoolLValue ctx.ThreadVars ctx.ThreadVars id dest)
+        (modelBoolLValue ctx.SharedVars ctx.ThreadVars MarkedVar.Before src)
 
 /// Converts an integer load to a Prim.
 let modelIntLoad
@@ -1241,9 +1269,9 @@ let modelIntLoad
         command cmd (List.map Int reads) [ Int srcPre ]
 
     lift3 modelWithExprs
-        (modelIntLValue ctx.ThreadVars id dest)
-        (modelIntLValue ctx.SharedVars MarkedVar.Before src)
-        (modelIntLValue ctx.SharedVars id src)
+        (modelIntLValue ctx.ThreadVars ctx.ThreadVars id dest)
+        (modelIntLValue ctx.SharedVars ctx.ThreadVars MarkedVar.Before src)
+        (modelIntLValue ctx.SharedVars ctx.ThreadVars id src)
 
 /// Converts a Boolean store to a Prim.
 let modelBoolStore
@@ -1262,8 +1290,8 @@ let modelBoolStore
         | Decrement -> fail (DecBool src)
 
     bind2 modelWithExprs
-        (modelBoolLValue ctx.SharedVars id dest)
-        (wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars MarkedVar.Before) src)
+        (modelBoolLValue ctx.SharedVars ctx.ThreadVars id dest)
+        (wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars ctx.ThreadVars MarkedVar.Before) src)
 
 /// Converts an integral store to a Prim.
 let modelIntStore
@@ -1285,9 +1313,9 @@ let modelIntStore
         command cmd (List.map Int reads) [ Int srcPre ]
 
     lift3 modelWithExprs
-        (modelIntLValue ctx.SharedVars id dest)
-        (wrapMessages BadExpr (modelIntExpr ctx.ThreadVars MarkedVar.Before) src)
-        (wrapMessages BadExpr (modelIntExpr ctx.ThreadVars id) src)
+        (modelIntLValue ctx.SharedVars ctx.ThreadVars id dest)
+        (wrapMessages BadExpr (modelIntExpr ctx.ThreadVars ctx.ThreadVars MarkedVar.Before) src)
+        (wrapMessages BadExpr (modelIntExpr ctx.ThreadVars ctx.ThreadVars id) src)
 
 /// Converts a CAS to part-commands.
 let modelCAS
@@ -1309,7 +1337,7 @@ let modelCAS
         | Bool dlPreB, Bool tlPreB ->
             let setResult =
                 wrapMessages BadExpr
-                    (modelBoolExpr ctx.ThreadVars MarkedVar.Before)
+                    (modelBoolExpr ctx.ThreadVars ctx.ThreadVars MarkedVar.Before)
                     set
 
             lift
@@ -1321,7 +1349,7 @@ let modelCAS
         | Int dlPreI, Int tlPreI ->
             let setResult =
                 wrapMessages BadExpr
-                    (modelIntExpr ctx.ThreadVars MarkedVar.Before)
+                    (modelIntExpr ctx.ThreadVars ctx.ThreadVars MarkedVar.Before)
                     set
 
             lift
@@ -1343,8 +1371,8 @@ let modelCAS
 
     (* We need the unmarked version of dest and test for the outputs,
        and the marked version for the inputs. *)
-    let toPost vars = modelLValue vars id
-    let toPre vars = modelLValue vars MarkedVar.Before
+    let toPost vars = modelLValue vars ctx.ThreadVars id
+    let toPre vars = modelLValue vars ctx.ThreadVars MarkedVar.Before
     bind4 modelWithDestAndTest
         (toPre  ctx.SharedVars dest)
         (toPost ctx.SharedVars dest)
@@ -1448,8 +1476,8 @@ let modelPostfix (ctx : MethodContext) (operand : Expression) (mode : FetchMode)
             ok (command "!I--" [ opPost ] [ opPre ])
         | _, Typed.Array (_) -> fail (PrimNotImplemented "array postfix")
     bind2 modelWithOperand
-        (modelLValue ctx.SharedVars MarkedVar.Before operand)
-        (modelLValue ctx.SharedVars id operand)
+        (modelLValue ctx.SharedVars ctx.ThreadVars MarkedVar.Before operand)
+        (modelLValue ctx.SharedVars ctx.ThreadVars id operand)
 
 /// Converts a single atomic command from AST to part-commands.
 let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> =
@@ -1462,7 +1490,7 @@ let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> 
         | Id -> ok (command "Id" [] [])
         | Assume e ->
             e
-            |> wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars MarkedVar.Before)
+            |> wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars ctx.ThreadVars MarkedVar.Before)
             |> lift (Expr.Bool >> List.singleton >> command "Assume" [])
     lift (fun cmd -> { cmd with Node = Some a }) prim
 
@@ -1482,8 +1510,8 @@ and modelAssign
         | Typed.Array (_) -> fail (PrimNotImplemented "array local assign")
 
     bind2 modelWithDestAndSrc
-        (modelLValue ctx.ThreadVars id dest)
-        (wrapMessages BadExpr (modelExpr ctx.ThreadVars MarkedVar.Before) src)
+        (modelLValue ctx.ThreadVars ctx.ThreadVars id dest)
+        (wrapMessages BadExpr (modelExpr ctx.ThreadVars ctx.ThreadVars MarkedVar.Before) src)
 
 /// Creates a partially resolved axiom for an if-then-else.
 and modelITE
@@ -1496,7 +1524,7 @@ and modelITE
         trial { let! iM =
                     wrapMessages
                         BadITECondition
-                        (modelBoolExpr ctx.ThreadVars id)
+                        (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
                         i
                 (* We need to calculate the recursive axioms first, because we
                  * need the inner cpairs for each to store the ITE placeholder.
@@ -1524,7 +1552,7 @@ and modelWhile
     lift2 (fun eM bM -> PartCmd.While(isDo, eM, bM))
           (wrapMessages
                BadWhileCondition
-               (modelBoolExpr ctx.ThreadVars id)
+               (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
                e)
           (modelBlock ctx b)
 
