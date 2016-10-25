@@ -95,6 +95,44 @@ module Compositions =
                  iEq (siInter 0I "g") (siInter 1I "t") ]
 
 
+module WriteMaps =
+    [<Test>]
+    let ``write map of x[3][i] = y[j]++ is correct`` () =
+        Map.ofList
+            [ (Reg "x",
+                Indices <| Map.ofList
+                    [ (IVar (Reg "i"),
+                        Indices <| Map.ofList
+                            [ (IInt 3L, Entire) ]) ] )
+              (Reg "y",
+                Indices <| Map.ofList
+                    [ (IVar (Reg "j"), Entire ) ] ) ]
+        ?=?
+        makeWriteMap
+            (command "!ILoad++"
+                [ Int
+                    (IIdx
+                        (Int (),
+                         Some 320,
+                         AIdx
+                            (Array (Int (), Some 320, ()),
+                             Some 240,
+                             AVar (Reg "x"),
+                             IInt 3L),
+                         IVar (Reg "i")))
+                  Int
+                    (IIdx
+                        (Int (),
+                         Some 320,
+                         AVar (Reg "y"),
+                         (IVar (Reg "j")))) ]
+                [ Expr.Int
+                    (IIdx
+                        (Int (),
+                         Some 320,
+                         AVar (Reg (Before "y")),
+                         (siBefore "j"))) ])
+
 module Frames =
     let check var expectedFramedExpr =
         expectedFramedExpr ?=? (frameVar Before var)

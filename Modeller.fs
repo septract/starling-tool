@@ -414,8 +414,10 @@ module Pretty =
 (*
  * Starling imperative language semantics
  *)
-let prim : string -> TypedVar list -> TypedVar list -> SVBoolExpr -> PrimSemantics =
-    fun name results args body -> { Name = name; Results = results; Args = args; Body = body }
+let prim (name : string) (results : TypedVar list) (args : TypedVar list)
+  (body : Microcode<TypedVar, Var> list)
+  : PrimSemantics =
+    { Name = name; Results = results; Args = args; Body = body }
 
 /// <summary>
 ///   The core semantic function for the imperative language.
@@ -431,53 +433,53 @@ let coreSemantics : PrimSemanticsMap =
     // TODO(CaptainHayashi): generic functions?
     // TODO(CaptainHayashi): add shared/local/expr qualifiers to parameters?
     List.fold (fun m (a : PrimSemantics) -> Map.add a.Name a m) Map.empty
-    <| [ (*
+    <| [
+      (*
        * CAS
        *)
-      (prim "ICAS" [ Int "destA"; Int "testA"; ] [ Int "destB"; Int "testB"; Int "set"; ]
-           <| mkAnd [ mkImplies (iEq (siVar "destB") (siVar "testB"))
-                             (mkAnd [ iEq (siVar "destA") (siVar "set")
-                                      iEq (siVar "testA") (siVar "testB") ] )
-                      mkImplies (mkNot (iEq (siVar "destB") (siVar "testB")))
-                                (mkAnd [ iEq (siVar "destA") (siVar "destB")
-                                         iEq (siVar "testA") (siVar "destB") ] ) ] )
+      (prim "ICAS" [ Int "destA"; Int "testA" ] [ Int "destB"; Int "testB"; Int "set" ]
+           [ Branch
+                (iEq (IVar "destB") (IVar "testB"),
+                 [ Assign (Int "destA", Int (IVar "set"))
+                   Assign (Int "testA", Int (IVar "testB")) ],
+                 [ Assign (Int "destA", Int (IVar "destB"))
+                   Assign (Int "testA", Int (IVar "destB")) ] ) ] )
       // Boolean CAS
-      (prim "BCAS" [Bool "destA"; Bool "testA"; ] [Bool "destB"; Bool "testB"; Bool "set"; ]
-           <| mkAnd [ mkImplies (bEq (sbVar "destB") (sbVar "testB"))
-                                (mkAnd [ bEq (sbVar "destA") (sbVar "set")
-                                         bEq (sbVar "testA") (sbVar "testB") ] )
-                      mkImplies (mkNot (bEq (sbVar "destB") (sbVar "testB")))
-                                (mkAnd [ bEq (sbVar "destA") (sbVar "destB")
-                                         bEq (sbVar "testA") (sbVar "destB") ] ) ] )
-
+      (prim "BCAS" [ Bool "destA"; Bool "testA" ] [ Bool "destB"; Bool "testB"; Bool "set" ]
+           [ Branch
+                (bEq (BVar "destB") (BVar "testB"),
+                 [ Assign (Bool "destA", Bool (BVar "set"))
+                   Assign (Bool "testA", Bool (BVar "testB")) ],
+                 [ Assign (Bool "destA", Bool (BVar "destB"))
+                   Assign (Bool "testA", Bool (BVar "destB")) ] ) ] )
       (*
        * Atomic load
        *)
       // Integer load
       (prim "!ILoad"  [ Int "dest" ] [ Int "src" ]
-           <| iEq (siVar "dest") (siVar "src"))
+            [ Assign (Int "dest", Int (IVar "src")) ] )
 
       // Integer load-and-increment
       (prim "!ILoad++"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
-           <| mkAnd [ iEq (siVar "dest") (siVar "srcB")
-                      iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (IInt 1L)) ])
+            [ Assign (Int "dest", Int (IVar "srcB"))
+              Assign (Int "srcA", Int (mkAdd2 (IVar "srcB") (IInt 1L))) ] )
 
       // Integer load-and-decrement
       (prim "!ILoad--"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
-           <| mkAnd [ iEq (siVar "dest") (siVar "srcB")
-                      iEq (siVar "srcA") (mkSub2 (siVar "srcB") (IInt 1L)) ])
+            [ Assign (Int "dest", Int (IVar "srcB"))
+              Assign (Int "srcA", Int (mkSub2 (IVar "srcB") (IInt 1L))) ] )
 
       // Integer increment
       (prim "!I++"  [ Int "srcA" ] [ Int "srcB" ]
-           <| iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (IInt 1L)))
+            [ Assign (Int "srcA", Int (mkAdd2 (IVar "srcB") (IInt 1L))) ] )
 
       // Integer decrement
       (prim "!I--"  [ Int "srcA" ] [ Int "srcB" ]
-           <| iEq (siVar "srcA") (mkSub2 (siVar "srcB") (IInt 1L)))
+            [ Assign (Int "srcA", Int (mkSub2 (IVar "srcB") (IInt 1L))) ] )
 
       // Boolean load
       (prim "!BLoad"  [ Bool "dest" ] [ Bool "src" ]
-           <| bEq (sbVar "dest") (sbVar "src"))
+            [ Assign (Bool "dest", Bool (BVar "src")) ] )
 
       (*
        * Atomic store
@@ -485,11 +487,11 @@ let coreSemantics : PrimSemanticsMap =
 
       // Integer store
       (prim "!IStore" [ Int "dest" ] [ Int "src" ]
-           <| iEq (siVar "dest") (siVar "src"))
+            [ Assign (Int "dest", Int (IVar "src")) ] )
 
       // Boolean store
       (prim "!BStore" [ Bool "dest" ] [ Bool "src" ]
-           <| bEq (sbVar "dest") (sbVar "src"))
+            [ Assign (Bool "dest", Bool (BVar "src")) ] )
 
       (*
        * Local set
@@ -497,21 +499,21 @@ let coreSemantics : PrimSemanticsMap =
 
       // Integer local set
       (prim "!ILSet" [ Int "dest" ] [ Int "src" ]
-           <| iEq (siVar "dest") (siVar "src"))
+            [ Assign (Int "dest", Int (IVar "src")) ] )
 
       // Boolean store
       (prim "!BLSet" [ Bool "dest" ] [ Bool "src" ]
-           <| bEq (sbVar "dest") (sbVar "src"))
+            [ Assign (Bool "dest", Bool (BVar "src")) ] )
 
       (*
        * Assumptions
        *)
 
       // Identity
-      (prim "Id" [] [] BTrue)
+      (prim "Id" [] [] [])
 
       // Assume
-      (prim "Assume" [] [Bool "expr"] <| sbVar "expr") ]
+      (prim "Assume" [] [Bool "expr"] [ Microcode.Assume (BVar "expr") ]) ]
 
 (*
  * Expression translation
