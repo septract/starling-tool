@@ -92,13 +92,13 @@ module ViewFail =
                    (Int "t", Type.Bool ())) ])
 
 module ArithmeticExprs =
-    let check (ast : Expression) (expectedExpr : IntExpr<Sym<Var>>) =
-        let actualIntExpr = okOption <| modelIntExpr environ id ast
+    let check (env : VarMap) (ast : Expression) (expectedExpr : IntExpr<Sym<Var>>) =
+        let actualIntExpr = okOption <| modelIntExpr env environ id ast
         AssertAreEqual(Some expectedExpr, actualIntExpr)
 
     [<Test>]
     let ``test modelling (1 * 2) + 3`` ()=
-        check
+        check environ
             (freshNode <| BopExpr( Add,
                                    freshNode <| BopExpr(Mul, freshNode (Num 1L), freshNode (Num 2L)),
                                    freshNode (Num 3L) ))
@@ -106,13 +106,13 @@ module ArithmeticExprs =
             (IInt 5L)
 
 module BooleanExprs =
-    let check (ast : Expression) (expectedExpr : BoolExpr<Sym<Var>>) =
-        let actualBoolExpr = okOption <| modelBoolExpr environ id ast
+    let check (env : VarMap) (ast : Expression) (expectedExpr : BoolExpr<Sym<Var>>) =
+        let actualBoolExpr = okOption <| modelBoolExpr env environ id ast
         AssertAreEqual(Some expectedExpr, actualBoolExpr)
 
     [<Test>]
     let ``model (true || true) && false`` () =
-        check
+        check environ
             (freshNode <| BopExpr(And, freshNode <| BopExpr(Or, freshNode True, freshNode True), freshNode False))
             (BFalse : BoolExpr<Sym<Var>>)
 
