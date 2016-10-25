@@ -139,17 +139,25 @@ let frame svars tvars expr =
     lift makeFrames evarsResult
 
 let primParamSubFun
-  ( cmd : PrimCommand )
-  ( sem : PrimSemantics )
+  (cmd : PrimCommand)
+  (sem : PrimSemantics)
   : Traversal<TypedVar, Expr<Sym<MarkedVar>>, Error> =
+    (* Mark variables as their pre-state if they are in index position, and
+       their pre-state otherwise.  This is because indices in a command are
+       semantically speaking evaluated before the command itself. *)
+    let marker ctx var =
+        match ctx with
+        | InIndex true -> ok (ctx, Reg (Before var))
+        | InIndex false -> ok (ctx, Reg (After var))
+        | c -> fail (ContextMismatch ("InIndex", c))
+
     /// merge the pre + post conditions
     let paramToMExpr : Traversal<Expr<Sym<Var>>, Expr<Sym<MarkedVar>>, Error> =
-        tliftOverExpr (traverseTypedSymWithMarker After)
+        tliftOverExpr (tliftOverCTyped (tliftToSymSrc marker))
 
     let fparsResult =
-        mapTraversal
-            (tchainL paramToMExpr (List.append cmd.Args))
-            cmd.Results
+        lift snd
+            (tchainL paramToMExpr (List.append cmd.Args) (InIndex false) cmd.Results)
 
     let dpars = sem.Args @ sem.Results
 
@@ -237,7 +245,7 @@ let instantiateSemanticsOfPrim
      * Since this is an error in this case, make it one.
      *)
     prim
-    |> wrapMessages Instantiate (instantiatePrim semantics)  // TODO: Remove this line? maybe not needed anymore.
+    |> wrapMessages Instantiate (instantiatePrim semantics)
     |> bind (failIfNone (MissingDef prim))
 
 /// Given a list of BoolExpr's it sequentially composes them together
