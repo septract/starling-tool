@@ -72,6 +72,10 @@ module Context =
         ///     A context for searching for <c>MarkedVar</c>s.
         /// </summary>
         | MarkedVars of CTyped<MarkedVar> list
+        /// <summary>
+        ///     A context for checking whether we've entered an array index.
+        /// </summary>
+        | InIndex of bool
         override this.ToString () = sprintf "%A" this
 
 
@@ -123,6 +127,40 @@ module Context =
         | Positions [] -> failwith "empty position stack"
         | Positions (x::xs) -> Positions ((f x)::x::xs)
         | x -> x
+
+    /// <summary>
+    ///     Sets IsIndex to true for the duration of a traversal.
+    /// </summary>
+    /// <param name="trav">The traversal to modify.</param>
+    /// <param name="ctx">The current context.</param>
+    /// <typeparam name="Src">
+    ///     The input type of <paramref name="trav"/>, less the context.
+    /// </typeparam>
+    /// <typeparam name="Dst">
+    ///     The return type of <paramref name="trav"/>, less the context.
+    /// </typeparam>
+    /// <returns>
+    ///     A function over a <c>TraversalContext</c>, which behaves as
+    ///     <paramref name="trav"/>, but, if the <c>TraversalContext</c> is
+    ///     <c>InIndex</c>, has this set to true for the duration of the
+    ///     traversal.
+    /// </returns>
+    let inIndex
+      (g : TraversalContext -> 'Src -> Result<TraversalContext * 'Dst, 'Error>)
+      (ctx : TraversalContext)
+      : 'Src -> Result<TraversalContext * 'Dst, 'Error> =
+        let ctx' =
+            match ctx with
+            | InIndex _ -> InIndex true
+            | x -> x
+
+        let travResult = g ctx'
+        let resetCtx ctx'' =
+            match ctx'' with
+            | InIndex _ -> ctx
+            | x -> x
+        
+        g ctx' >> lift (pairMap resetCtx id)
 
     /// <summary>
     ///     If the context is position-based, pop the position stack.
@@ -486,7 +524,7 @@ let rec tliftToBoolSrc
                 | UnifyArray _ -> ok (BIdx (eltype, length, arr', ix'))
                 | _ -> fail (BadType (expected = originalType, got = newType))
             let tResult =
-                tchain2 asv isv assemble ctx ((eltype, length, arr), ix)
+                tchain2 asv (Context.inIndex isv) assemble ctx ((eltype, length, arr), ix)
 
             // Remove the nested result.
             bind (uncurry (ignoreContext id)) tResult
@@ -533,7 +571,7 @@ and tliftToIntSrc
                 | UnifyArray _ -> ok (IIdx (eltype, length, arr', ix'))
                 | _ -> fail (BadType (expected = originalType, got = newType))
             let tResult =
-                tchain2 asv isv assemble ctx ((eltype, length, arr), ix)
+                tchain2 asv (Context.inIndex isv) assemble ctx ((eltype, length, arr), ix)
 
             // Remove the nested result.
             bind (uncurry (ignoreContext id)) tResult
@@ -578,7 +616,7 @@ and tliftToArraySrc
                     | UnifyArray _ -> ok (AIdx (eltype, length, arr', ix'))
                     | _ -> fail (BadType (expected = originalType, got = newType))
                 let tResult =
-                    tchain2 asv isv assemble ctx ((eltype, length, arr), ix)
+                    tchain2 asv (Context.inIndex isv) assemble ctx ((eltype, length, arr), ix)
 
                 // Remove the nested result.
                 bind (uncurry (ignoreContext id)) tResult
@@ -794,6 +832,8 @@ module Pretty =
 
         function
         | NoCtx -> String "(no context)"
+        | InIndex true -> String "in index"
+        | InIndex false -> String "not in index"
         | Positions [] -> String "(empty position stack)"
         | Positions xs -> colonSep [ String "position stack"
                                      hjoin (List.map printPosition xs) ]
