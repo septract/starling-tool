@@ -67,6 +67,7 @@ module Types =
         | Branch of conditional : BoolExpr<'RV>
                   * ifTrue : Microcode<'L, 'RV> list
                   * ifFalse : Microcode<'L, 'RV> list
+        override this.ToString() = sprintf "%A" this
 
     (*
      * Terms

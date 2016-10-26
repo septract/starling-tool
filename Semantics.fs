@@ -319,6 +319,33 @@ let normaliseAssigns (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>>) list)
 
     collect (Seq.map translateAssign (Map.toSeq wmap))
 
+/// <summary>
+///     Normalises a microcode listing.
+/// </summary>
+/// <param name="instrs">The set of instructions to normalise.</param>
+/// <returns>On success, the normalised listing (in arbitrary order).</returns>
+let rec normaliseMicrocode
+  (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
+  : Result<Microcode<CTyped<Sym<Var>>, Sym<Var>> list, Error> =
+    let assigns, assumes, branches = partitionMicrocode instrs
+
+    let normaliseBranch (i, t, e) =
+        let t'Result = normaliseMicrocode t
+        let e'Result = normaliseMicrocode e
+        lift2 (fun t' e' -> (i, t', e')) t'Result e'Result
+
+    let branches'Result = collect (Seq.map normaliseBranch branches)
+    let assigns'Result = normaliseAssigns assigns
+
+    lift2
+        (fun branches' assigns' ->
+            List.concat
+                [ List.map Assign assigns'
+                  List.map Assume assumes
+                  List.map Branch branches' ])
+        branches'Result
+        assigns'Result
+
 /// Generates a frame for a given expression.
 /// The frame is a relation a!after = a!before for every a not mentioned in the expression.
 let frame svars tvars expr =

@@ -132,15 +132,21 @@ module Normalisation =
     open Starling.Core.Pretty
     open Starling.Semantics.Pretty
 
-    let check expected actual : unit =
+    let checkAssigns expected actual : unit =
         assertOkAndEqual
             (Set.ofList expected)
             (lift Set.ofList (normaliseAssigns actual))
             (printSemanticsError >> printUnstyled)
 
+    let checkMicrocode expected actual : unit =
+        assertOkAndEqual
+            (Set.ofList expected)
+            (lift Set.ofList (normaliseMicrocode actual))
+            (printSemanticsError >> printUnstyled)
+
     [<Test>]
-    let ``normalisation of x[3][i] <- 3; y[j] <- 4 is correct`` () =
-        check
+    let ``assign normalisation of x[3][i] <- 3; y[j] <- 4 is correct`` () =
+        checkAssigns
             [ (Array (Array (Int (), Some 320, ()), Some 240, Reg "x"),
                Array
                 (Array (Int (), Some 320, ()), Some 240,
@@ -190,6 +196,40 @@ module Normalisation =
                      (IVar (Reg "j")))),
                Int (IInt 4L)) ]
 
+    [<Test>]
+    let ``microcode normalisation of CAS(x[3], d[6], 2) is correct`` () =
+        let xel = Int ()
+        let xlen = Some 10
+        let xname = Reg "x"
+        let xar = Array (xel, xlen, xname)
+        let x3 = IIdx (xel, xlen, AVar xname, IInt 3L)
+        let x3upd v =
+            Array (xel, xlen, AUpd (xel, xlen, AVar xname, IInt 3L, v))
+
+        let del = Int ()
+        let dlen = Some 10
+        let dname = Reg "d"
+        let dar = Array (del, dlen, dname)
+        let d6 = IIdx (del, dlen, AVar dname, IInt 6L)
+        let d6upd v =
+            Array (del, dlen, AUpd (del, dlen, AVar dname, IInt 6L, v))
+
+        checkMicrocode
+            // TODO(CaptainHayashi): order shouldn't matter in branches.
+            [ Branch
+                (iEq x3 d6,
+                 [ Assign (dar, d6upd (Int d6))
+                   Assign (xar, x3upd (Int (IInt 2L))) ],
+                 [ Assign (dar, d6upd (Int x3))
+                   Assign (xar, x3upd (Int x3)) ])
+            ]
+            [ Branch
+                (iEq x3 d6,
+                 [ Assign (Int x3, Int (IInt 2L))
+                   Assign (Int d6, Int d6) ],
+                 [ Assign (Int x3, Int x3)
+                   Assign (Int d6, Int x3) ])
+            ]
 
 module Frames =
     let check var expectedFramedExpr =
