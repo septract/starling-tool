@@ -566,24 +566,18 @@ module Graph =
                         | Bad _ -> false
                         | Ok (sp, _) ->
                             // ...for all of the variables in said parameters...
-                            let getVars = tliftOverExpr collectMarkedVars
-                            match findMarkedVars getVars sp with
+                            let getVars = tliftOverExpr collectVars
+                            match findVars getVars sp with
                             | Bad _ -> false
                             | Ok (pvars, _) ->
                                 let pvseq = Set.toSeq pvars
                                 Seq.forall
                                     (// ...the variable is thread-local.
                                      valueOf
+                                     >> tVars.TryFind
                                      >> function
-                                        | (After x)
-                                        | (Before x)
-                                        | (Intermediate (_, x))
-                                        | (Goal (_, x)) ->
-                                            x
-                                            |> tVars.TryFind
-                                            |> function
-                                               | Some _ -> true
-                                               | _ -> false)
+                                        | Some _ -> true
+                                        | _ -> false)
                                     pvseq)
                      ps)
 
@@ -622,7 +616,7 @@ module Graph =
     /// <summary>
     ///     Partial active pattern matching <c>Sym</c>-less expressions.
     /// </summary>
-    let (|MNoSym|_|) : BoolExpr<Sym<MarkedVar>> -> BoolExpr<MarkedVar> option =
+    let (|NoSym|_|) : BoolExpr<Sym<Var>> -> BoolExpr<Var> option =
         mapTraversal (removeSymFromBoolExpr ignore) >> okOption
 
     /// <summary>
@@ -677,51 +671,40 @@ module Graph =
             fun node nView outEdges inEdges nk ->
                 match nView with
                 | InnerView(ITEGuards (xc, xv, yc, yv)) ->
-                    (* Translate xc and yc to pre-state, to match the
-                       commands.  If this fails, give up on the optimisation. *)
-                    let toBefore : BoolExpr<Var> -> Result<BoolExpr<MarkedVar>, _> =
-                        mapTraversal
-                            (tliftToBoolSrc
-                                (tliftToExprDest
-                                    (tliftOverCTyped
-                                        (ignoreContext (Before >> ok)))))
-                    match toBefore xc, toBefore yc with
-                    | Ok (xcPre, _), Ok (ycPre, _) ->
-                        match (Set.toList outEdges, Set.toList inEdges) with
-                        (* Are there only two out edges, and only one in edge?
-                           Are the out edges assumes, and are they non-symbolic? *)
-                        | ( [ { Dest = out1D
-                                Command = Assume (MNoSym out1P) } as out1
-                              { Dest = out2D
-                                Command = Assume (MNoSym out2P) } as out2
-                            ],
-                            [ inE ] )
-                            when (// Is the first one x and the second y?
-                                  (equivHolds
-                                       unmarkVar
-                                       (andEquiv (equiv out1P xcPre)
-                                                 (equiv out2P ycPre))
-                                   && nodeHasView out1D xv ctx.Graph
-                                   && nodeHasView out2D yv ctx.Graph)
-                                  // Or is the first one y and the second x?
-                                  || (equivHolds
-                                          unmarkVar
-                                          (andEquiv (equiv out2P xcPre)
-                                                    (equiv out1P ycPre))
-                                      && nodeHasView out2D xv ctx.Graph
-                                      && nodeHasView out1D yv ctx.Graph)) ->
-                            let xforms =
-                                seq { // Remove the existing edges first.
-                                      yield RmInEdge (inE, node)
-                                      yield RmOutEdge (node, out1)
-                                      yield RmOutEdge (node, out2)
-                                      // Then, remove the node.
-                                      yield RmNode node
-                                      // Then, add the new edges.
-                                      yield MkCombinedEdge (inE, out1)
-                                      yield MkCombinedEdge (inE, out2) }
-                            runTransforms xforms ctx
-                        | _ -> ctx
+                    match (Set.toList outEdges, Set.toList inEdges) with
+                    (* Are there only two out edges, and only one in edge?
+                       Are the out edges assumes, and are they non-symbolic? *)
+                    | ( [ { Dest = out1D
+                            Command = Assume (NoSym out1P) } as out1
+                          { Dest = out2D
+                            Command = Assume (NoSym out2P) } as out2
+                        ],
+                        [ inE ] )
+                        when (// Is the first one x and the second y?
+                              (equivHolds
+                                   id
+                                   (andEquiv (equiv out1P xc)
+                                             (equiv out2P yc))
+                               && nodeHasView out1D xv ctx.Graph
+                               && nodeHasView out2D yv ctx.Graph)
+                              // Or is the first one y and the second x?
+                              || (equivHolds
+                                      id
+                                      (andEquiv (equiv out2P xc)
+                                                (equiv out1P yc))
+                                  && nodeHasView out2D xv ctx.Graph
+                                  && nodeHasView out1D yv ctx.Graph)) ->
+                        let xforms =
+                            seq { // Remove the existing edges first.
+                                  yield RmInEdge (inE, node)
+                                  yield RmOutEdge (node, out1)
+                                  yield RmOutEdge (node, out2)
+                                  // Then, remove the node.
+                                  yield RmNode node
+                                  // Then, add the new edges.
+                                  yield MkCombinedEdge (inE, out1)
+                                  yield MkCombinedEdge (inE, out2) }
+                        runTransforms xforms ctx
                     | _ -> ctx
                 | _ -> ctx
 

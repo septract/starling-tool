@@ -39,7 +39,7 @@ module Types =
     type PrimCommand =
         { Name : string
           Results : SVExpr list
-          Args : SMExpr list
+          Args : SVExpr list
           Node : AST.Types.Atomic option }
         override this.ToString() = sprintf "%A" this
 
@@ -104,9 +104,9 @@ module Queries =
     /// <summary>
     ///     Active pattern matching assume commands.
     /// </summary>
-    let (|Assume|_|) : Command -> SMBoolExpr option =
+    let (|Assume|_|) : Command -> SVBoolExpr option =
         function
-        | [ { Name = n ; Args = [ SMExpr.Bool b ] } ]
+        | [ { Name = n ; Args = [ SVExpr.Bool b ] } ]
           when n = "Assume" -> Some b
         | _ -> None
 
@@ -134,7 +134,7 @@ module Queries =
     /// Retrieves the type annotated vars from the arguments to a
     /// command as a list
     let commandArgs cmd =
-        let f c = List.map SMExprVars c.Args
+        let f c = List.map SVExprVars c.Args
         let vars = collect (concatMap f cmd)
         lift Set.unionMany vars
 
@@ -364,11 +364,11 @@ module SymRemove =
 
 
 module Create =
-    let command : string -> SVExpr list -> SMExpr list -> PrimCommand =
-        fun name results args -> { Name = name; Results = results; Args = args; Node = None }
+    let command (name : string) (results : SVExpr list) (args : SVExpr list) : PrimCommand =
+        { Name = name; Results = results; Args = args; Node = None }
 
-    let command' : string -> AST.Types.Atomic -> SVExpr list -> SMExpr list -> PrimCommand =
-        fun name ast results args -> { Name = name; Results = results; Args = args; Node = Some ast }
+    let command' (name : string) (ast : AST.Types.Atomic) (results : SVExpr list) (args : SVExpr list) : PrimCommand =
+        { Name = name; Results = results; Args = args; Node = Some ast }
 
 /// <summary>
 ///     Pretty printers for commands.
@@ -383,7 +383,7 @@ module Pretty =
     /// Pretty-prints a Command.
     let printPrimCommand { Name = name; Args = xs; Results = ys } =
         hjoin [ commaSep <| Seq.map (printExpr (printSym printVar)) ys
-                " <- " |> String; name |> String; String " "; commaSep <| Seq.map printSMExpr xs ]
+                " <- " |> String; name |> String; String " "; commaSep <| Seq.map printSVExpr xs ]
 
     let printCommand : Command -> Doc = List.map printPrimCommand >> semiSep
 

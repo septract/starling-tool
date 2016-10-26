@@ -226,17 +226,14 @@ module Atomics =
             <| command' "!ILoad++"
                 ast
                 [ Int (siVar "foo"); Int (siVar "x") ]
-                [ "x" |> siBefore |> SMExpr.Int ]
+                [ Int (siVar "x") ]
 
     [<Test>]
     let ``model Boolean load primitive <baz = y>`` ()=
         let ast = freshNode (Fetch(freshNode (Identifier "baz"), freshNode (Identifier "y"), Direct))
         check
             ast
-            <| command' "!BLoad"
-                ast
-                [ Bool (sbVar "baz") ]
-                [ "y" |> sbBefore |> SMExpr.Bool ]
+            (command' "!BLoad" ast [ Bool (sbVar "baz") ] [ Bool (sbVar "y") ])
 
 
 module CommandAxioms =
@@ -263,7 +260,7 @@ module CommandAxioms =
             <| Prim ([ command' "!ILoad++"
                         ast
                         [ Int (siVar "foo"); Int (siVar "x") ]
-                        [ "x" |> siBefore |> SMExpr.Int ] ])
+                        [ Int (siVar "x") ] ])
 
     [<Test>]
     let ``modelling command <baz = y> passes`` () =
@@ -273,7 +270,7 @@ module CommandAxioms =
             <| Prim ([ command' "!BLoad"
                         ast
                         [ Bool (sbVar "baz") ]
-                        [ "y" |> sbBefore |> SMExpr.Bool ] ])
+                        [ Bool (sbVar "y") ] ])
 
 
 module ViewDefs =

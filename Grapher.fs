@@ -27,9 +27,9 @@ let cId : Command = []
 (* TODO(CaptainHayashi): currently we're assuming Assumed expressions
    are in pre-state position.  When we move to type-safe renaming this
    change should happen *here*. *)
-let cAssume (expr : SMBoolExpr) : Command =
+let cAssume (expr : SVBoolExpr) : Command =
     command "Assume" [] [ simp expr |> Expr.Bool ] |> List.singleton
-let cAssumeNot : SMBoolExpr -> Command = mkNot >> cAssume
+let cAssumeNot : SVBoolExpr -> Command = mkNot >> cAssume
 
 /// <summary>
 ///     Constructs a graph from a while loop.
@@ -68,18 +68,6 @@ let rec graphWhile
   (inner : GuarderBlock)
   : Result<Subgraph, Error> =
     trial {
-        (* First, we need to convert the expression into an assert.
-           This means we cast it into the pre-state, as it is diverging the
-           program if its state _entering_ the loop condition makes expr go
-           false. *)
-        let! exprB =
-            mapMessages Traversal
-                (mapTraversal
-                    (tliftToBoolSrc
-                        (tliftToExprDest
-                            (traverseTypedSymWithMarker Before)))
-                    expr)
-
         (* If isDo:
          *   Translating [|oP|] do { [|iP|] [|iQ|] } while (C) [|oQ|].
          * Else:
@@ -96,10 +84,10 @@ let rec graphWhile
         // Outer edges common to do-while and while loops.
         let commonEdges =
             [ // {|iQ|} assume C {|iP|}: loop back.
-              (cg (), edge iQ (cAssume exprB) iP)
+              (cg (), edge iQ (cAssume expr) iP)
 
               // {|iQ|} assume ¬C {|oQ|}: fall out of loop.
-              (cg (), edge iQ (cAssumeNot exprB) oQ) ]
+              (cg (), edge iQ (cAssumeNot expr) oQ) ]
 
         // Outer edges different between do-while and while loops.
         let diffEdges =
@@ -109,9 +97,9 @@ let rec graphWhile
                   (cg (), edge oP cId iP) ]
             else
                 [ // {|oP|} assume C {|iP|} conditionally enter loop...
-                  (cg (), edge oP (cAssume exprB) iP)
+                  (cg (), edge oP (cAssume expr) iP)
                   // {|oP|} assume ¬C {|oQ|} ...otherwise skip it.
-                  (cg (), edge oP (cAssumeNot exprB) oQ) ]
+                  (cg (), edge oP (cAssumeNot expr) oQ) ]
 
         let cGraph = { Nodes = Map.empty
                        Edges = (Seq.append commonEdges diffEdges
@@ -180,7 +168,7 @@ and graphITE
         // We also definitely have these edges.
         let tEdges =
             [ // {|oP|} assume C {|tP|}: enter true block
-              (cg (), edge oP (cAssume exprB) tP)
+              (cg (), edge oP (cAssume expr) tP)
               // {|tQ|} id {|oQ|}: exit true block
               (cg (), edge tQ cId oQ) ]
 
@@ -193,7 +181,7 @@ and graphITE
                     (// No additional graph for the false leg
                      tGraph,
                      // {|oP|} assume ¬C {|fP|}: bypass true block
-                     [ cg (), edge oP (cAssumeNot exprB) oQ ])
+                     [ cg (), edge oP (cAssumeNot expr) oQ ])
             | Some f ->
                 // [|oP|] if (C) { [|tP|] [|tQ|] } else { [|fP|] [|fQ|] } [|oQ|].
                 trial {
@@ -203,7 +191,7 @@ and graphITE
                     return
                         (tfGraph,
                          [ // {|oP|} assume ¬C {|fP|}: enter false block
-                           (cg (), edge oP (cAssumeNot exprB) fP)
+                           (cg (), edge oP (cAssumeNot expr) fP)
                            // {|fQ|} id {|oQ|}: exit false block
                            (cg (), edge fQ cId oQ) ]) }
 

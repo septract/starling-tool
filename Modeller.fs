@@ -1251,7 +1251,7 @@ let modelBoolLoad
 
     bind2 modelWithExprs
         (modelBoolLValue ctx.ThreadVars ctx.ThreadVars id dest)
-        (modelBoolLValue ctx.SharedVars ctx.ThreadVars MarkedVar.Before src)
+        (modelBoolLValue ctx.SharedVars ctx.ThreadVars id src)
 
 /// Converts an integer load to a Prim.
 let modelIntLoad
@@ -1263,17 +1263,16 @@ let modelIntLoad
     (* In an integer load, the destination must be a THREAD integral lvalue;
                            the source must be a SHARED integral lvalue;
                            and the fetch mode is unconstrained. *)
-    let modelWithExprs dstPost srcPre srcPost =
+    let modelWithExprs dstE srcE =
         let cmd, reads =
             match mode with
-            | Direct -> "!ILoad", [ dstPost ]
-            | Increment -> "!ILoad++", [ dstPost; srcPost ]
-            | Decrement -> "!ILoad--", [ dstPost; srcPost ]
-        command cmd (List.map Int reads) [ Int srcPre ]
+            | Direct -> "!ILoad", [ dstE ]
+            | Increment -> "!ILoad++", [ dstE; srcE ]
+            | Decrement -> "!ILoad--", [ dstE; srcE ]
+        command cmd (List.map Int reads) [ Int srcE ]
 
-    lift3 modelWithExprs
+    lift2 modelWithExprs
         (modelIntLValue ctx.ThreadVars ctx.ThreadVars id dest)
-        (modelIntLValue ctx.SharedVars ctx.ThreadVars MarkedVar.Before src)
         (modelIntLValue ctx.SharedVars ctx.ThreadVars id src)
 
 /// Converts a Boolean store to a Prim.
@@ -1294,7 +1293,7 @@ let modelBoolStore
 
     bind2 modelWithExprs
         (modelBoolLValue ctx.SharedVars ctx.ThreadVars id dest)
-        (wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars ctx.ThreadVars MarkedVar.Before) src)
+        (wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id) src)
 
 /// Converts an integral store to a Prim.
 let modelIntStore
@@ -1307,17 +1306,16 @@ let modelIntStore
      *                       the source must be LOCAL and integral;
      *                       and the fetch mode must be Direct.
      *)
-    let modelWithExprs dstPost srcPre srcPost =
+    let modelWithExprs dst src =
         let cmd, reads =
             match mode with
-            | Direct -> "!IStore", [ dstPost ]
-            | Increment -> "!IStore++", [ dstPost; srcPost ]
-            | Decrement -> "!IStore--", [ dstPost; srcPost ]
-        command cmd (List.map Int reads) [ Int srcPre ]
+            | Direct -> "!IStore", [ dst ]
+            | Increment -> "!IStore++", [ dst; src ]
+            | Decrement -> "!IStore--", [ dst; src ]
+        command cmd (List.map Int reads) [ Int src ]
 
-    lift3 modelWithExprs
+    lift2 modelWithExprs
         (modelIntLValue ctx.SharedVars ctx.ThreadVars id dest)
-        (wrapMessages BadExpr (modelIntExpr ctx.ThreadVars ctx.ThreadVars MarkedVar.Before) src)
         (wrapMessages BadExpr (modelIntExpr ctx.ThreadVars ctx.ThreadVars id) src)
 
 /// Converts a CAS to part-commands.
@@ -1333,33 +1331,33 @@ let modelCAS
 
        dest, test, and set must agree on type.
        The type of dest and test influences how we interpret set. *)
-    let modelWithDestAndTest destPreLV destPostLV testPreLV testPostLV =
+    let modelWithDestAndTest destLV testLV =
         (* Determine from destPreLV and testPreLV what the type of the CAS is.
            Assume that the post-states are of the same type. *)
-        match destPreLV, testPreLV with
-        | Bool dlPreB, Bool tlPreB ->
+        match destLV, testLV with
+        | Bool dlB, Bool tlB ->
             let setResult =
                 wrapMessages BadExpr
-                    (modelBoolExpr ctx.ThreadVars ctx.ThreadVars MarkedVar.Before)
+                    (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
                     set
 
             lift
                 (fun s ->
                     command "BCAS"
-                        [ destPostLV; testPostLV ]
-                        [ Expr.Bool dlPreB; Bool tlPreB; Bool s ] )
+                        [ destLV; testLV ]
+                        [ Expr.Bool dlB; Bool tlB; Bool s ] )
                 setResult
-        | Int dlPreI, Int tlPreI ->
+        | Int dlI, Int tlI ->
             let setResult =
                 wrapMessages BadExpr
-                    (modelIntExpr ctx.ThreadVars ctx.ThreadVars MarkedVar.Before)
+                    (modelIntExpr ctx.ThreadVars ctx.ThreadVars id)
                     set
 
             lift
                 (fun s ->
                     command "ICAS"
-                        [ destPostLV; testPostLV ]
-                        [ Int dlPreI; Int tlPreI; Int s ] )
+                        [ destLV; testLV ]
+                        [ Int dlI; Int tlI; Int s ] )
                 setResult
         | d, t ->
             (* Oops, we have a type error.
@@ -1374,13 +1372,10 @@ let modelCAS
 
     (* We need the unmarked version of dest and test for the outputs,
        and the marked version for the inputs. *)
-    let toPost vars = modelLValue vars ctx.ThreadVars id
-    let toPre vars = modelLValue vars ctx.ThreadVars MarkedVar.Before
-    bind4 modelWithDestAndTest
-        (toPre  ctx.SharedVars dest)
-        (toPost ctx.SharedVars dest)
-        (toPre  ctx.ThreadVars test)
-        (toPost ctx.ThreadVars test)
+    let mdl vars = modelLValue vars ctx.ThreadVars id
+    bind2 modelWithDestAndTest
+        (mdl ctx.SharedVars dest)
+        (mdl ctx.ThreadVars test)
 
 /// <summary>
 ///     Gets the underlying variable of an lvalue.
@@ -1466,20 +1461,15 @@ let modelPostfix (ctx : MethodContext) (operand : Expression) (mode : FetchMode)
     (* A Postfix is basically a Fetch with no destination, at this point.
        Thus, the source must be a SHARED LVALUE.
        We don't allow the Direct fetch mode, as it is useless. *)
-    let modelWithOperand opPre opPost =
-        match mode, opPre with
+    let modelWithOperand opE =
+        match mode, opE with
         | Direct, _ -> fail Useless
-        | Increment, Typed.Bool _ ->
-            fail (IncBool operand)
-        | Decrement, Typed.Bool _ ->
-            fail (DecBool operand)
-        | Increment, Typed.Int _ ->
-            ok (command "!I++" [ opPost ] [ opPre ])
-        | Decrement, Typed.Int _ ->
-            ok (command "!I--" [ opPost ] [ opPre ])
+        | Increment, Typed.Bool _ -> fail (IncBool operand)
+        | Decrement, Typed.Bool _ -> fail (DecBool operand)
+        | Increment, Typed.Int _ -> ok (command "!I++" [ opE ] [ opE ])
+        | Decrement, Typed.Int _ -> ok (command "!I--" [ opE ] [ opE ])
         | _, Typed.Array (_) -> fail (PrimNotImplemented "array postfix")
-    bind2 modelWithOperand
-        (modelLValue ctx.SharedVars ctx.ThreadVars MarkedVar.Before operand)
+    bind modelWithOperand
         (modelLValue ctx.SharedVars ctx.ThreadVars id operand)
 
 /// Converts a single atomic command from AST to part-commands.
@@ -1493,7 +1483,7 @@ let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> 
         | Id -> ok (command "Id" [] [])
         | Assume e ->
             e
-            |> wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars ctx.ThreadVars MarkedVar.Before)
+            |> wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
             |> lift (Expr.Bool >> List.singleton >> command "Assume" [])
     lift (fun cmd -> { cmd with Node = Some a }) prim
 
@@ -1514,7 +1504,7 @@ and modelAssign
 
     bind2 modelWithDestAndSrc
         (modelLValue ctx.ThreadVars ctx.ThreadVars id dest)
-        (wrapMessages BadExpr (modelExpr ctx.ThreadVars ctx.ThreadVars MarkedVar.Before) src)
+        (wrapMessages BadExpr (modelExpr ctx.ThreadVars ctx.ThreadVars id) src)
 
 /// Creates a partially resolved axiom for an if-then-else.
 and modelITE
