@@ -207,6 +207,8 @@ let varAndIdxPath (expr : Expr<Sym<Var>>)
         match ax with
         | AVar v -> Some (v, path)
         | AIdx (_, _, a, i) -> getInArray a (i::path)
+        // TODO(CaptainHayashi): do something useful here.
+        | AUpd (_, _, a, i, _) -> None
 
     (* Because we've traversed from outside in, the path is actually the wrong
        way round, so we need to flip it! *)

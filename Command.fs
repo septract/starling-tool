@@ -267,9 +267,13 @@ module Compose =
         | AVar (Sym { Params = xs } ) ->
             xs |> Seq.map nextIntermediate |> Seq.fold (curry bigint.Max) 0I
         | AVar _ -> 0I
-        // Is this correct?
+        // TODO(CaptainHayashi): is this correct?
         | AIdx (_, _, arr, idx) ->
             bigint.Max (nextArrayIntermediate arr, nextIntIntermediate idx)
+        | AUpd (_, _, arr, idx, upd) ->
+            bigint.Max
+                (nextArrayIntermediate arr,
+                 bigint.Max(nextIntIntermediate idx, nextIntermediate upd))
 
     /// Gets the highest intermediate number for some variable in a given
     /// array expression
@@ -282,6 +286,10 @@ module Compose =
         | AIdx (_, _, arr, idx) ->
             maxOpt (getArrayIntermediate v arr) (getIntIntermediate v idx)
         | AVar _ -> None
+        | AUpd (_, _, arr, idx, upd) ->
+            maxOpt
+                (getArrayIntermediate v arr)
+                (maxOpt (getIntIntermediate v idx) (getIntermediate v upd))
 
     /// <summary>
     ///     Finds the highest intermediate stage number in an expression.
