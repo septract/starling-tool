@@ -97,41 +97,36 @@ module Compositions =
 
 module WriteMaps =
     [<Test>]
-    let ``write map of x[3][i] = y[j]++ is correct`` () =
+    let ``write map of x[3][i] <- 3; y[j] <- 4 is correct`` () =
         Map.ofList
             [ (Reg "x",
                 Indices <| Map.ofList
                     [ (IVar (Reg "i"),
                         Indices <| Map.ofList
-                            [ (IInt 3L, Entire) ]) ] )
+                            [ (IInt 3L, Entire (Int (IInt 3L))) ]) ] )
               (Reg "y",
                 Indices <| Map.ofList
-                    [ (IVar (Reg "j"), Entire ) ] ) ]
+                    [ (IVar (Reg "j"), Entire (Int (IInt 4L))) ] ) ]
         ?=?
         makeWriteMap
-            (command "!ILoad++"
-                [ Int
-                    (IIdx
-                        (Int (),
-                         Some 320,
-                         AIdx
-                            (Array (Int (), Some 320, ()),
-                             Some 240,
-                             AVar (Reg "x"),
-                             IInt 3L),
-                         IVar (Reg "i")))
-                  Int
-                    (IIdx
-                        (Int (),
-                         Some 320,
-                         AVar (Reg "y"),
-                         (IVar (Reg "j")))) ]
-                [ Expr.Int
-                    (IIdx
-                        (Int (),
-                         Some 320,
-                         AVar (Reg (Before "y")),
-                         (siBefore "j"))) ])
+            [ (Int
+                (IIdx
+                    (Int (),
+                     Some 320,
+                     AIdx
+                        (Array (Int (), Some 320, ()),
+                         Some 240,
+                         AVar (Reg "x"),
+                         IInt 3L),
+                     IVar (Reg "i"))),
+               Int (IInt 3L))
+              (Int
+                (IIdx
+                    (Int (),
+                     Some 320,
+                     AVar (Reg "y"),
+                     (IVar (Reg "j")))),
+               Int (IInt 4L)) ]
 
 module Frames =
     let check var expectedFramedExpr =
