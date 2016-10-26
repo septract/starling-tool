@@ -73,12 +73,25 @@ module Types =
     ///     The type of variables in the expression.
     /// </typeparam>
     and ArrayExpr<'Var> when 'Var : equality =
-        // TODO(CaptainHayashi): rename to IVar when we rename A -> I.
+        /// <summary>An array variable reference.</summary>
         | AVar of 'Var
+        /// <summary>
+        ///     An index into an array <c>arr</c> of type <c>eltype[length]</c>.
+        /// </summary>
         | AIdx of eltype : Type
                 * length : int option
                 * arr : ArrayExpr<'Var>
                 * idx : IntExpr<'Var>
+        /// <summary>
+        ///     A functional update of an array <c>arr</c> of type
+        ///     <c>eltype[length]</c>, overriding index <c>idx</c> with value
+        ///     <c>var</c>.
+        /// </summary>
+        | AUpd of eltype : Type
+                * length : int option
+                * arr : ArrayExpr<'Var>
+                * idx : IntExpr<'Var>
+                * nval : Expr<'Var>
 
     /// Type for fresh variable generators.
     type FreshGen = bigint ref
@@ -151,6 +164,11 @@ module Pretty =
         function
         | AVar c -> pVar c
         | AIdx (_, _, arr, idx) -> printIdx pVar arr idx
+        | AUpd (_, _, arr, idx, value) ->
+            cmdSexpr "[]<-"
+                [ printIntExpr pVar idx
+                  printExpr pVar value
+                  printArrayExpr pVar arr ]
 
     /// Pretty-prints an expression.
     and printExpr (pVar : 'Var -> Doc) : Expr<'Var> -> Doc =

@@ -93,7 +93,7 @@ module Expr =
                 // TODO(CaptainHayashi): ensure eltype is Bool?
                 let arrZ3 = arrayToZ3 reals toStr ctx eltype arr
                 let idxZ3 = intToZ3 reals toStr ctx idx
-                // TODO(CaptainHayashi): make this not crash if the select is not an ArithExpr.
+                // TODO(CaptainHayashi): make this not crash if the select is not a BoolExpr.
                 ctx.MkSelect (arrZ3, idxZ3) :?> Z3.BoolExpr
             | BTrue -> ctx.MkTrue ()
             | BFalse -> ctx.MkFalse ()
@@ -126,8 +126,14 @@ module Expr =
             // TODO(CaptainHayashi): ensure eltype is Array?
             let arrZ3 = arrayToZ3 reals toStr ctx eltype arr
             let idxZ3 = intToZ3 reals toStr ctx idx
-            // TODO(CaptainHayashi): make this not crash if the select is not an ArithExpr.
+            // TODO(CaptainHayashi): make this not crash if the select is not an ArrayExpr.
             ctx.MkSelect (arrZ3, idxZ3) :?> Z3.ArrayExpr
+        | AUpd (eltype, _, arr, idx, upd) ->
+            let arrZ3 = arrayToZ3 reals toStr ctx eltype arr
+            let idxZ3 = intToZ3 reals toStr ctx idx
+            let updZ3 = exprToZ3 reals toStr ctx upd
+            ctx.MkStore (arrZ3, idxZ3, updZ3)
+
 
     /// Converts a Starling expression to a Z3 Expr.
     and exprToZ3
