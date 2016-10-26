@@ -195,6 +195,10 @@ module Compose =
         | AIdx (_, _, arr, idx) ->
             maxOpt (getArrayIntermediate v arr) (getIntIntermediate v idx)
         | AVar _ -> None
+        | AUpd (_, _, arr, idx, upd) ->
+            maxOpt
+                (getArrayIntermediate v arr)
+                (maxOpt (getIntIntermediate v idx) (getIntermediate v upd))
 
     /// Gets the highest intermediate stage number for a given variable name
     /// in some expression.

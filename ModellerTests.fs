@@ -113,7 +113,7 @@ module ArithmeticExprs =
 
     [<Test>]
     let ``test modelling (1 * 3) % 2`` ()=
-        check
+        check environ
             (freshNode <| BopExpr( Mod,
                                    freshNode <| BopExpr(Mul, freshNode (Num 1L), freshNode (Num 3L)),
                                    freshNode (Num 2L) ))

@@ -158,7 +158,7 @@ module Context =
             match ctx'' with
             | InIndex _ -> ctx
             | x -> x
-        
+
         g ctx' >> lift (pairMap resetCtx id)
 
     /// <summary>
@@ -592,6 +592,7 @@ and tliftToArraySrc
     // TODO(CaptainHayashi): proper doc comment.
     let isv x = Context.changePos id (tliftToIntSrc sub) x
     let asv x = Context.changePos id (tliftToArraySrc sub) x
+    let esv x = Context.changePos id (tliftToExprSrc sub) x
 
     fun ctx (eltype, length, arrayExpr) ->
         let arrayExprResult =
@@ -617,6 +618,31 @@ and tliftToArraySrc
                     else fail (BadType (expected = originalType, got = newType))
                 let tResult =
                     tchain2 asv (Context.inIndex isv) assemble ctx ((eltype, length, arr), ix)
+
+                // Remove the nested result.
+                bind (uncurry (ignoreContext id)) tResult
+            | AUpd (eltype, length, arr, ix, value) ->
+                // TODO(CaptainHayashi): this is awful.
+                let originalType = Array (eltype, length, ())
+
+                (* Ensure the traversal doesn't change eltype or length to something
+                   we're not expecting, and doesn't change the type of value. *)
+                let assemble ((eltype', length', arr'), ix', value') =
+                    let newType = Array (eltype', length', ())
+                    if typesCompatible originalType newType
+                    then
+                        // Also type-check value.
+                        let vt, vt' = typeOf value, typeOf value'
+                        if typesCompatible vt vt'
+                        then ok (AUpd (eltype, length, arr', ix', value'))
+                        else fail (BadType (expected = vt, got = vt'))
+                    else fail (BadType (expected = originalType, got = newType))
+                let tResult =
+                    tchain3
+                        asv
+                        (Context.inIndex isv)
+                        esv
+                        assemble ctx ((eltype, length, arr), ix, value)
 
                 // Remove the nested result.
                 bind (uncurry (ignoreContext id)) tResult

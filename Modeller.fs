@@ -845,7 +845,7 @@ and modelArrayExpr
              * array type.
              *)
             v
-            |> wrapMessages Var (lookupVar env)
+            |> wrapMessages Var (VarMap.lookup env)
             |> bind (function
                      | Typed.Array (eltype, length, vn) ->
                         ok (eltype, length, AVar (Reg (varF vn)))
