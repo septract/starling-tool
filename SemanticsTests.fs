@@ -128,6 +128,10 @@ module WriteMaps =
                      (IVar (Reg "j")))),
                Int (IInt 4L)) ]
 
+/// Shorthand for expressing an array update.
+let aupd eltype length arr idx var =
+    Array (eltype, length, AUpd (eltype, length, arr, idx, var))
+
 module Normalisation =
     open Starling.Core.Pretty
     open Starling.Semantics.Pretty
@@ -148,35 +152,22 @@ module Normalisation =
     let ``assign normalisation of x[3][i] <- 3; y[j] <- 4 is correct`` () =
         checkAssigns
             [ (Array (Array (Int (), Some 320, ()), Some 240, Reg "x"),
-               Array
-                (Array (Int (), Some 320, ()), Some 240,
-                 AUpd
-                    (Array (Int (), Some 320, ()),
-                     Some 240,
-                     AVar (Reg "x"),
-                     IInt 3L,
-                     Array
-                        (Int (),
-                         Some 320,
-                         AUpd
-                            (Int (),
-                             Some 320,
-                             AIdx
-                                (Array (Int (), Some 320, ()),
-                                 Some 240,
-                                 AVar (Reg "x"),
-                                 IInt 3L),
-                             IVar (Reg "i"),
-                             Int (IInt 3L))))))
+               aupd (Array (Int (), Some 320, ())) (Some 240) (AVar (Reg "x"))
+                (IInt 3L)
+                (aupd
+                    (Int ())
+                    (Some 320)
+                    (AIdx
+                        (Array (Int (), Some 320, ()),
+                         Some 240,
+                         AVar (Reg "x"),
+                         IInt 3L))
+                    (IVar (Reg "i"))
+                    (Int (IInt 3L))))
               (Array (Int (), Some 320, Reg "y"),
-               Array
-                (Int(), Some 320,
-                 AUpd
-                    (Int (),
-                     Some 320,
-                     AVar (Reg "y"),
-                     IVar (Reg "j"),
-                     Int (IInt 4L)))) ]
+               aupd (Int()) (Some 320) (AVar (Reg "y"))
+                    (IVar (Reg "j"))
+                    (Int (IInt 4L))) ]
             [ (Int
                 (IIdx
                     (Int (),
@@ -203,16 +194,14 @@ module Normalisation =
         let xname = Reg "x"
         let xar = Array (xel, xlen, xname)
         let x3 = IIdx (xel, xlen, AVar xname, IInt 3L)
-        let x3upd v =
-            Array (xel, xlen, AUpd (xel, xlen, AVar xname, IInt 3L, v))
+        let x3upd v = aupd xel xlen (AVar xname) (IInt 3L) v
 
         let del = Int ()
         let dlen = Some 10
         let dname = Reg "d"
         let dar = Array (del, dlen, dname)
         let d6 = IIdx (del, dlen, AVar dname, IInt 6L)
-        let d6upd v =
-            Array (del, dlen, AUpd (del, dlen, AVar dname, IInt 6L, v))
+        let d6upd v = aupd del dlen (AVar dname) (IInt 6L) v
 
         checkMicrocode
             // TODO(CaptainHayashi): order shouldn't matter in branches.
@@ -322,30 +311,37 @@ module PrimInstantiateTests =
                          AIdx
                             (Array (Int (), Some 320, ()),
                              Some 240,
-                             AVar (Reg (Before "grid")),
-                             (siBefore "x")),
-                         (siBefore "y"))) ])
-                (iEq
-                    (IIdx
-                        (Int (),
-                         Some 320,
-                         AIdx
-                            (Array (Int (), Some 320, ()),
-                             Some 240,
-                             AVar (Reg (After "grid")),
-                             (siBefore "x")),
-                         (siBefore "y")))
-                    (mkAdd2
-                        (IIdx
-                            (Int (),
-                             Some 320,
-                             AIdx
-                                (Array (Int (), Some 320, ()),
-                                 Some 240,
-                                 AVar (Reg (Before "grid")),
-                                 (siBefore "x")),
-                             (siBefore "y")))
-                        (IInt 1L)))
+                             AVar (Reg "grid"),
+                             (siVar "x")),
+                         (siVar "y"))) ])
+            (BEq
+                (Array
+                    (Array (Int (), Some 320, ()), Some 240,
+                     AVar (Reg (After "grid"))),
+                 aupd
+                    (Array (Int (), Some 320, ()))
+                    (Some 240)
+                    (AVar (Reg (Before "grid")))
+                    (siBefore "x")
+                    (aupd
+                        (Int ())
+                        (Some 320)
+                        (AIdx
+                            (Array (Int (), Some 320, ()), Some 240,
+                                AVar (Reg (Before "grid")),
+                                siBefore "x"))
+                        (siBefore "y")
+                        (Int <| mkAdd2
+                            (IIdx
+                                (Int (),
+                                 Some 320,
+                                 AIdx
+                                    (Array (Int (), Some 320, ()),
+                                     Some 240,
+                                     AVar (Reg (Before "grid")),
+                                     (siBefore "x")),
+                                 (siBefore "y")))
+                            (IInt 1L)))))
 
 
 module CommandTests =
@@ -369,7 +365,7 @@ module CommandTests =
     [<Test>]
     let ``Semantically translate <assume(s == t)> using the ticket lock model`` () =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-              [ command "Assume" [] [ Expr.Bool <| iEq (siBefore "s") (siBefore "t") ]]
+              [ command "Assume" [] [ Expr.Bool <| iEq (siVar "s") (siVar "t") ]]
         <| Some (Set.ofList
                    [ iEq (siAfter "serving") (siBefore "serving")
                      iEq (siAfter "ticket") (siBefore "ticket")
@@ -377,7 +373,6 @@ module CommandTests =
                      iEq (siAfter "t") (siBefore "t")
                      iEq (siBefore "s") (siBefore "t") ])
 
-(*
     [<Test>]
     let ``Semantically translate <grid[x][y]++> using the test environments``() =
         check testShared testThread
@@ -399,62 +394,53 @@ module CommandTests =
                          AIdx
                             (Array (Int (), Some 320, ()),
                              Some 240,
-                             AVar (Reg (Before "grid")),
-                             (siBefore "x")),
-                         (siBefore "y"))) ]]
+                             AVar (Reg "grid"),
+                             (siVar "x")),
+                         (siVar "y"))) ]]
         <| Some (Set.ofList
-            [
-                // TODO: frame for grid
-                iEq (siAfter "x") (siBefore "x")
-                iEq (siAfter "y") (siBefore "y")
-                bEq (sbAfter "test") (sbBefore "test")
-                iEq
-                    (IIdx
-                        (Int (),
-                         Some 320,
-                         AIdx
-                            (Array (Int (), Some 320, ()),
-                             Some 240,
-                             AVar (Reg (After "grid")),
-                             (siBefore "x")),
-                         (siBefore "y")))
-                    (IIdx
-                        (Int (),
-                         Some 320,
-                         AIdx
-                            (Array (Int (), Some 320, ()),
-                             Some 240,
-                             AVar (Reg (Intermediate (0I, "grid"))),
-                             (siBefore "x")),
-                         (siBefore "after")))
-                iEq
-                    (IIdx
-                        (Int (),
-                         Some 320,
-                         AIdx
-                            (Array (Int (), Some 320, ()),
-                             Some 240,
-                             AVar (Reg (Intermediate (0I, "grid"))),
-                             (siBefore "x")),
-                         (siBefore "after")))
-                    (mkAdd2
-                        (IIdx
-                            (Int (),
-                             Some 320,
-                             AIdx
-                                (Array (Int (), Some 320, ()),
-                                 Some 240,
-                                 AVar (Reg (Before "grid")),
-                                 (siBefore "x")),
-                             (siBefore "after")))
-                        (IInt 1L))
-            ])
-*)
+            [ iEq (siAfter "x") (siBefore "x")
+              iEq (siAfter "y") (siBefore "y")
+              bEq (sbAfter "test") (sbBefore "test")
+              (BEq
+                (Array
+                    (Array (Int (), Some 320, ()), Some 240,
+                     AVar (Reg (After "grid"))),
+                (Array
+                    (Array (Int (), Some 320, ()), Some 240,
+                     AVar (Reg (Intermediate (0I, "grid")))))))
+              (BEq
+                (Array
+                    (Array (Int (), Some 320, ()), Some 240,
+                     AVar (Reg (Intermediate (0I, "grid")))),
+                 aupd
+                    (Array (Int (), Some 320, ()))
+                    (Some 240)
+                    (AVar (Reg (Before "grid")))
+                    (siBefore "x")
+                    (aupd
+                        (Int ())
+                        (Some 320)
+                        (AIdx
+                            (Array (Int (), Some 320, ()), Some 240,
+                                AVar (Reg (Before "grid")),
+                                siBefore "x"))
+                        (siBefore "y")
+                        (Int <| mkAdd2
+                            (IIdx
+                                (Int (),
+                                 Some 320,
+                                 AIdx
+                                    (Array (Int (), Some 320, ()),
+                                     Some 240,
+                                     AVar (Reg (Before "grid")),
+                                     (siBefore "x")),
+                                 (siBefore "y")))
+                            (IInt 1L))))) ])
 
     [<Test>]
     let ``Semantically translate <serving++> using the ticket lock model``() =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-              [ command "!I++" [ Int (siVar "serving") ] [ Expr.Int <| siBefore "serving" ] ]
+              [ command "!I++" [ Int (siVar "serving") ] [ Expr.Int <| siVar "serving" ] ]
         <| Some (Set.ofList
             [
                 iEq (siAfter "s") (siBefore "s")

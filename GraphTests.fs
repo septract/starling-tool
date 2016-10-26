@@ -58,8 +58,8 @@ module Tests =
                                 OutEdge.Command =
                                     [ command "!ILoad++"
                                            [ Int (siVar "t"); Int (siVar "ticket") ]
-                                           [ Typed.Int (siBefore "t")
-                                             Typed.Int (siBefore "ticket")]] },
+                                           [ Typed.Int (siVar "t")
+                                             Typed.Int (siVar "ticket")]] },
                            Set.empty,
                            Entry)))
                         ("lock_V001",
@@ -74,8 +74,8 @@ module Tests =
                                 Command =
                                     [ command "!ILoad++"
                                            [ Int (siVar "t"); Int (siVar "ticket"); ]
-                                           [ Typed.Int (siBefore "t")
-                                             Typed.Int (siBefore "ticket") ]] },
+                                           [ Typed.Int (siVar "t")
+                                             Typed.Int (siVar "ticket") ]] },
                           Normal ))
                         ("lock_V002",
                          (Mandatory <| Multiset.singleton (gHoldLock BTrue),
@@ -86,8 +86,8 @@ module Tests =
                                 Command =
                                     [ command "Assume" []
                                            [ Typed.Bool
-                                                 (iEq (siBefore "s")
-                                                      (siBefore "t")) ]] },
+                                                 (iEq (siVar "s")
+                                                      (siVar "t")) ]] },
                            Exit))
                         ("lock_V003",
                          (Mandatory <| Multiset.singleton (gHoldTick BTrue),
@@ -97,15 +97,15 @@ module Tests =
                                 Command =
                                     [ command "!ILoad"
                                            [ Int (siVar "s") ]
-                                           [ Typed.Int (siBefore "serving") ]] },
+                                           [ Typed.Int (siVar "serving") ]] },
                           Set.ofList
                               [ { Name = "lock_C002"
                                   Src = "lock_V004"
                                   Command =
                                       [ command "Assume" []
                                              [ Typed.Bool
-                                                   (BNot (iEq (siBefore "s")
-                                                              (siBefore "t"))) ]] }
+                                                   (BNot (iEq (siVar "s")
+                                                              (siVar "t"))) ]] }
                                 { Name = "lock_C004"
                                   Src = "lock_V001"
                                   Command = [] } ],
@@ -121,22 +121,22 @@ module Tests =
                                   Command =
                                       [ command "Assume" []
                                              [ Typed.Bool
-                                                   (BNot (iEq (siBefore "s")
-                                                              (siBefore "t"))) ]] }
+                                                   (BNot (iEq (siVar "s")
+                                                              (siVar "t"))) ]] }
                                 { Name = "lock_C003"
                                   Dest = "lock_V002"
                                   Command =
                                       [ command "Assume" []
                                              [ Typed.Bool
-                                                   (iEq (siBefore "s")
-                                                        (siBefore "t")) ]] } ],
+                                                   (iEq (siVar "s")
+                                                        (siVar "t")) ]] } ],
                           Set.singleton
                               { Name = "lock_C001"
                                 Src = "lock_V003"
                                 Command =
                                     [ command "!ILoad"
                                            [ Int (siVar "s") ]
-                                           [ Typed.Int (siBefore "serving") ]] },
+                                           [ Typed.Int (siVar "serving") ]] },
 
                           Normal)) ] }
 
@@ -155,7 +155,7 @@ module Tests =
                                 Command =
                                     [ command "!I++"
                                            [ Int (siVar "serving") ]
-                                           [ Typed.Int (siBefore "serving") ]] },
+                                           [ Typed.Int (siVar "serving") ]] },
                           Set.empty,
                           Entry))
                         ("unlock_V001",
@@ -167,7 +167,7 @@ module Tests =
                                 Command =
                                     [ command "!I++"
                                            [ Int (siVar "serving") ]
-                                           [ Typed.Int (siBefore "serving") ]] },
+                                           [ Typed.Int (siVar "serving") ]] },
                            Exit)) ] }
 
         /// The partial CFG for the ticket lock lock method.
@@ -190,30 +190,30 @@ module Tests =
                              edge "lock_V000"
                                   [ command "!ILoad++"
                                          [ Int (siVar "t"); Int (siVar "ticket") ]
-                                         [ Typed.Int (siBefore "t")
-                                           Typed.Int (siBefore "ticket") ]]
+                                         [ Typed.Int (siVar "t")
+                                           Typed.Int (siVar "ticket") ]]
                                   "lock_V001")
                         ("lock_C001",
                              edge "lock_V003"
                                   [ command "!ILoad"
                                          [ Int (siVar "s") ]
-                                         [ Typed.Int (siBefore "serving") ]]
+                                         [ Typed.Int (siVar "serving") ]]
                                   "lock_V004")
                         ("lock_C002",
                              edge "lock_V004"
                                   [ command "Assume"
                                          []
                                          [ Typed.Bool
-                                               (BNot (iEq (siBefore "s")
-                                                          (siBefore "t"))) ]]
+                                               (BNot (iEq (siVar "s")
+                                                          (siVar "t"))) ]]
                                   "lock_V003")
                         ("lock_C003",
                              edge "lock_V004"
                                   [ command "Assume"
                                          []
                                          [ Typed.Bool
-                                               (iEq (siBefore "s")
-                                                    (siBefore "t")) ]]
+                                               (iEq (siVar "s")
+                                                    (siVar "t")) ]]
                                   "lock_V002")
                         ("lock_C004",
                              edge "lock_V001"
@@ -235,7 +235,7 @@ module Tests =
                              edge "unlock_V000"
                                   [ command "!I++"
                                          [ Int (siVar "serving") ]
-                                         [ Typed.Int (siBefore "serving") ]]
+                                         [ Typed.Int (siVar "serving") ]]
                                   "unlock_V001" ) ] }
 
 
@@ -261,7 +261,7 @@ module Tests =
                                 Command =
                                     [ command "!I++"
                                            [ Int (siVar "serving") ]
-                                           [ SMExpr.Int (siBefore "serving") ]] },
+                                           [ Int (siVar "serving") ]] },
                           Set.singleton
                               { Name = "unlock_N0"
                                 Src = "unlock_V001"
@@ -279,7 +279,7 @@ module Tests =
                                 Command =
                                     [ command "!I++"
                                            [ Int (siVar "serving") ]
-                                           [ SMExpr.Int (siBefore "serving") ]] },
+                                           [ Int (siVar "serving") ]] },
                           Exit)) ] )
                 .SetName("Adding a valid, unique edge to unlock works")]
 
@@ -314,7 +314,7 @@ module Tests =
                                  edge "unlock_V000"
                                       [ command "!I++"
                                               [ Int (siVar "serving") ]
-                                              [ SMExpr.Int (siBefore "serving") ]]
+                                              [ Int (siVar "serving") ]]
                                       "unlock_V000" ) ] } )
                 .SetName("unify C1 into C0 on the ticket lock 'unlock'")
               TestCaseData(("unlock_V000", "unlock_V001"))
@@ -330,7 +330,7 @@ module Tests =
                                  edge "unlock_V001"
                                       [ command "!I++"
                                               [ Int (siVar "serving") ]
-                                              [ SMExpr.Int (siBefore "serving") ]]
+                                              [ Int (siVar "serving") ]]
                                       "unlock_V001" ) ] } )
                 .SetName("unify C0 into C1 on the ticket lock 'unlock'")
               TestCaseData(("unlock_V000", "unlock_V002"))
@@ -387,10 +387,10 @@ module Tests =
               TestCaseData(Advisory
                                (Multiset.singleton
                                     (smgfunc BTrue "holdTick"
-                                         [ SMExpr.Int (siBefore "t") ] )))
+                                         [ Int (siBefore "t") ] )))
                   .Returns(Multiset.singleton
                                (smgfunc BTrue "holdTick"
-                                    [ SMExpr.Int (siBefore "t") ] ))
+                                    [ Int (siBefore "t") ] ))
                   .SetName("Flattening an advisory viewexpr returns its view") ]
 
         /// <summary>

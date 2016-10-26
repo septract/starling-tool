@@ -390,42 +390,23 @@ let frame svars tvars expr =
 let primParamSubFun
   (cmd : PrimCommand)
   (sem : PrimSemantics)
-  : Traversal<TypedVar, Expr<Sym<MarkedVar>>, Error> =
-    (* Mark variables as their pre-state if they are in index position, and
-       their pre-state otherwise.  This is because indices in a command are
-       semantically speaking evaluated before the command itself. *)
-    let marker ctx var =
-        match ctx with
-        | InIndex true -> ok (ctx, Reg (Before var))
-        | InIndex false -> ok (ctx, Reg (After var))
-        | c -> fail (ContextMismatch ("InIndex", c))
+  : Traversal<TypedVar, Expr<Sym<Var>>, Error> =
 
-    /// merge the pre + post conditions
-    let paramToMExpr : Traversal<Expr<Sym<Var>>, Expr<Sym<MarkedVar>>, Error> =
-        tliftOverExpr (tliftOverCTyped (tliftToSymSrc marker))
-
-    let fparsResult =
-        lift snd
-            (tchainL paramToMExpr (List.append cmd.Args) (InIndex false) cmd.Results)
-
+    let fpars = List.append cmd.Args cmd.Results
     let dpars = sem.Args @ sem.Results
 
-    let pmapResult =
-        lift
-            (Map.ofSeq << Seq.map2 (fun par up -> valueOf par, up) dpars)
-            fparsResult
+    let pmap =
+        Map.ofSeq (Seq.map2 (fun par up -> valueOf par, up) dpars fpars)
 
-    let travFromMap (pmap : Map<Var, Expr<Sym<MarkedVar>>>) =
-        ignoreContext
-            (function
-             | WithType (var, vtype) as v ->
-                match pmap.TryFind var with
-                | Some tvar ->
-                    if vtype = typeOf tvar
-                    then ok tvar
-                    else fail (Inner (TypeMismatch (v, typeOf tvar)))
-                | None -> fail (Inner (FreeVarInSub v)))
-    fun ctx e -> bind (fun pmap -> travFromMap pmap ctx e) pmapResult
+    ignoreContext
+        (function
+         | WithType (var, vtype) as v ->
+            match pmap.TryFind var with
+            | Some tvar ->
+                if vtype = typeOf tvar
+                then ok tvar
+                else fail (Inner (TypeMismatch (v, typeOf tvar)))
+            | None -> fail (Inner (FreeVarInSub v)))
 
 let checkParamCountPrim (prim : PrimCommand) (opt : PrimSemantics option) : Result<PrimSemantics option, Error> =
     match opt with
@@ -459,12 +440,12 @@ let checkParamTypesPrim (prim : PrimCommand) (sem : PrimSemantics) : Result<Prim
 ///     instruction.
 /// </returns>
 let tliftToMicrocode
-  (trav : Traversal<TypedVar, Expr<Sym<MarkedVar>>, Error>)
+  (trav : Traversal<TypedVar, Expr<Sym<Var>>, Error>)
   : Traversal<Microcode<TypedVar, Var>,
-              Microcode<Expr<Sym<MarkedVar>>, Sym<MarkedVar>>, Error> =
-    let travE : Traversal<Expr<Var>, Expr<Sym<MarkedVar>>, Error> =
+              Microcode<Expr<Sym<Var>>, Sym<Var>>, Error> =
+    let travE : Traversal<Expr<Var>, Expr<Sym<Var>>, Error> =
         tliftToExprSrc trav
-    let travB : Traversal<BoolExpr<Var>, BoolExpr<Sym<MarkedVar>>, Error> =
+    let travB : Traversal<BoolExpr<Var>, BoolExpr<Sym<Var>>, Error> =
         tliftToBoolSrc trav
 
     let rec tm ctx mc =
@@ -479,22 +460,46 @@ let tliftToMicrocode
 /// <summary>
 ///     Converts a microcode instruction set into a two-state Boolean predicate.
 /// </summary>
-let rec microcodeToBool
-  (instructions : Microcode<Expr<Sym<MarkedVar>>, Sym<MarkedVar>> list)
-  : BoolExpr<Sym<MarkedVar>> =
-    // TODO(CaptainHayashi): do two-state conversion here, not earlier.
-    // TODO(CaptainHayashi): convert to variable LVs.
-    // TODO(CaptainHayashi): framing (currently done elsewhere).
-    let instr =
-        function
-        | Assign (x, y) -> mkEq x y
-        | Assume x -> x
-        | Branch (i, t, e) ->
-            mkAnd2
-                (mkImplies i (microcodeToBool t))
-                (mkImplies (mkNot i) (microcodeToBool e))
+let microcodeToBool
+  (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
+  : Result<BoolExpr<Sym<MarkedVar>>, Error> =
+    (* First, normalise the expression: this will make framing much easier
+       later. *)
+    let normalisedResult = normaliseMicrocode instrs
 
-    mkAnd (List.map instr instructions)
+    (* We need some traversals to rewrite the expressions to their
+       pre- and post-states.  The normalisation has already sifted things that
+       are post-states onto the LHS of an Assign, and pre-states everywhere
+       else. *)
+    let toAfter = traverseTypedSymWithMarker After
+    let toAfterV =
+        mapTraversal (tliftToExprDest toAfter)
+        >> mapMessages Traversal
+    let toBefore = traverseTypedSymWithMarker Before
+    let toBeforeE =
+        mapTraversal (tliftOverExpr toBefore) >> mapMessages Traversal
+    let toBeforeB =
+        mapTraversal (tliftToBoolSrc (tliftToExprDest toBefore))
+        >> mapMessages Traversal
+
+    let rec translateInstrs is =
+        // TODO(CaptainHayashi): do two-state conversion here, not earlier.
+        // TODO(CaptainHayashi): convert to variable LVs.
+        // TODO(CaptainHayashi): framing (currently done elsewhere).
+        let translateInstr =
+            function
+            | Assign (x, y) -> lift2 mkEq (toAfterV x) (toBeforeE y)
+            | Assume x -> toBeforeB x
+            | Branch (i, t, e) ->
+                lift3
+                    (fun iX tX eX ->
+                        mkAnd2 (mkImplies iX tX) (mkImplies (mkNot iX) eX))
+                    (toBeforeB i)
+                    (translateInstrs t)
+                    (translateInstrs e)
+        lift mkAnd (collect (List.map translateInstr is))
+
+    bind translateInstrs normalisedResult
 
 /// Instantiates a PrimCommand from a PrimSemantics instance
 let instantiatePrim
@@ -516,9 +521,10 @@ let instantiatePrim
         | Some s ->
             let subInMCode =
                     tchainL (tliftToMicrocode (primParamSubFun prim s)) id
-            let subbedMCode = mapTraversal subInMCode s.Body
-            let subbed = lift microcodeToBool subbedMCode
-            mapMessages Traversal (lift Some subbed)
+            let subbedMCode =
+                mapMessages Traversal (mapTraversal subInMCode s.Body)
+            let subbed = bind microcodeToBool subbedMCode
+            lift Some subbed
 
     bind instantiate typeCheckedDefResult
 

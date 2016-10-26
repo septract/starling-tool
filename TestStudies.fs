@@ -395,7 +395,7 @@ let ticketLockLock =
             [ { Command =
                     command "!ILoad++"
                         [ Int (siVar "t"); Int (siVar "ticket") ]
-                        [ SMExpr.Int (siBefore "ticket") ]
+                        [ Int (siVar "ticket") ]
                     |> List.singleton |> Prim
                 Post = Mandatory <| sing holdTick }
               { Command =
@@ -406,7 +406,7 @@ let ticketLockLock =
                                  Contents =
                                      [ { Command =
                                              command "!ILoad" [ Int (siVar "s") ]
-                                                  [ SMExpr.Int (siBefore "serving") ]
+                                                  [ Int (siVar "serving") ]
                                              |> List.singleton |> Prim
                                          Post =
                                             { Func =
@@ -427,7 +427,7 @@ let ticketLockUnlock =
             // constraint holdTick(ta) * holdTick(tb) -> ta != tb;
             Contents =
                 [ { Command =
-                        command "!I++" [ Int (siVar "serving") ] [ SMExpr.Int (siBefore "serving") ]
+                        command "!I++" [ Int (siVar "serving") ] [ Int (siVar "serving") ]
                         |> List.singleton |> Prim
                     Post = Mandatory <| Multiset.empty }]}}
 
@@ -446,8 +446,8 @@ let ticketLockGuardedLock : GuarderMethod =
                 [ { Command =
                         command "!ILoad++"
                              [ Int (siVar "t"); Int (siVar "ticket") ]
-                             [ SMExpr.Int (siBefore "t");
-                               SMExpr.Int (siBefore "ticket"); ]
+                             [ Int (siVar "t");
+                               Int (siVar "ticket"); ]
                         |> List.singleton |> Prim
                     Post = Mandatory <| sing (gHoldTick BTrue) }
                   { Command =
@@ -459,7 +459,7 @@ let ticketLockGuardedLock : GuarderMethod =
                                          [ { Command =
                                                  command "!ILoad"
                                                       [ Int (siVar "s") ]
-                                                      [ SMExpr.Int (siBefore "serving"); ]
+                                                      [ Int (siVar "serving"); ]
                                                  |> List.singleton |> Prim
                                              Post =
                                                  Mandatory <|
@@ -475,7 +475,7 @@ let ticketLockGuardedUnlock : GuarderMethod =
           { Pre = Mandatory <| sing (gHoldLock BTrue)
             Contents =
                 [ { Command =
-                        command "!I++" [ Int (siVar "serving") ] [ Expr.Int (siBefore "serving") ]
+                        command "!I++" [ Int (siVar "serving") ] [ Int (siVar "serving") ]
                         |> List.singleton |> Prim
                     Post = Mandatory <| Multiset.empty } ] } }
 
