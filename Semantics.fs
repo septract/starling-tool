@@ -106,7 +106,7 @@ let frameVar ctor (par : CTyped<Var>) : SMBoolExpr =
 /// </summary>
 type Write =
     /// <summary>The entire lvalue has been written to.</summary>
-    | Entire
+    | Entire of newVal : Expr<Sym<Var>>
     /// <summary>
     ///     Only certain parts of the lvalue have been written to,
     ///     and their recursive write records are enclosed.
@@ -126,9 +126,11 @@ type Write =
 ///     The path of indexes from the variable being written to to the variable.
 ///     For example, [3; x; 1+i] would represent a write to A[3][x][1+i].
 /// </param>
+/// <param name="value">The value written to the eventual destination.</param>
 /// <param name="map">The write map being extended.</param>
 /// <returns>The extended write map.</returns>
 let markWrite (var : Sym<Var>) (idxPath : IntExpr<Sym<Var>> list)
+  (value : Expr<Sym<Var>>)
   (map : Map<Sym<Var>, Write>)
   : Map<Sym<Var>, Write> =
     (* First, consider what it means to add an index write to an index write
@@ -146,13 +148,14 @@ let markWrite (var : Sym<Var>) (idxPath : IntExpr<Sym<Var>> list)
             | [] ->
                 (* If there is no subscript, then we must be writing to this
                    entire index, so mark it as Entire. *)
-                Entire
+                Entire value
             | x::xs ->
                 match idxRec with
-                | Entire ->
+                | Entire _ ->
                     (* If we're already writing to the entire index somewhere
-                       else, we don't need to do any further recording. *)
-                    Entire
+                       else, we probably have a problem!  Eventually we should
+                       report it, but for now we just clobber the value. *)
+                    Entire value
                 | NoWrite -> markWriteIdx x xs Map.empty
                 | Indices imap -> markWriteIdx x xs imap
 
@@ -169,15 +172,14 @@ let markWrite (var : Sym<Var>) (idxPath : IntExpr<Sym<Var>> list)
         | [] ->
             (* If there is no subscript, then we must be writing to this entire
                variable, so mark it as Entire. *)
-            Entire
+            Entire value
         | (x::xs) ->
             match varRec with
-            | Entire ->
-                (* If we're already writing to the entire variable somewhere
-                   else, we don't need to do any further recording.
-                   That said, I'm unsure we will ever write to an _entire_ array
-                   in current Starling. *)
-                Entire
+            | Entire _ ->
+                (* If we're already writing to the entire index somewhere
+                   else, we probably have a problem!  Eventually we should
+                   report it, but for now we just clobber the value. *)
+                Entire value
             | NoWrite -> markWriteIdx x xs Map.empty
             | Indices imap -> markWriteIdx x xs imap
 
@@ -216,14 +218,16 @@ let varAndIdxPath (expr : Expr<Sym<Var>>)
     Option.map (fun (var, htap) -> (var, List.rev htap)) result
 
 /// <summary>
-///     Generates a write record map for a given primitive command.
+///     Generates a write record map for a given assignment list.
 /// </summary>
-/// <param name="prim">The primitive to investigate.</param>
-/// <returns>The write map for that primitive.</returns>
-let makeWriteMap (prim : PrimCommand) : Map<Sym<Var>, Write> =
-    let addToWriteMap map res =
-        maybe map (fun (var, idx) -> markWrite var idx map) (varAndIdxPath res)
-    List.fold addToWriteMap Map.empty prim.Results
+/// <param name="assigns">The assignment list to investigate.</param>
+/// <returns>The write map for that microcode list.</returns>
+let makeWriteMap (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>>) list)
+  : Map<Sym<Var>, Write> =
+    let addToWriteMap map (lv, rv) =
+        // TODO(CaptainHayashi): complain if lv isn't a lvalue?
+        maybe map (fun (var, idx) -> markWrite var idx rv map) (varAndIdxPath lv)
+    List.fold addToWriteMap Map.empty assigns
 
 /// Generates a frame for a given expression.
 /// The frame is a relation a!after = a!before for every a not mentioned in the expression.
