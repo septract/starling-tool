@@ -43,6 +43,10 @@ module Types =
         | CountMismatch of expected: int * actual: int
         | TypeMismatch of param: TypedVar * atype: Type
         /// <summary>
+        ///     The semantics of a command is ill-formed.
+        /// </summary>
+        | BadSemantics of why : string
+        /// <summary>
         ///     We tried to substitute parameters, but one parameter was free
         ///     (not bound to an expression) somehow.
         /// </summary>
@@ -82,6 +86,8 @@ module Pretty =
         | CountMismatch (fn, dn) ->
             fmt "view usage has {0} parameter(s), but its definition has {1}"
                 [ fn |> sprintf "%d" |> String; dn |> sprintf "%d" |> String ]
+        | BadSemantics why ->
+            errorStr "internal semantics error:" <+> errorStr why
         | FreeVarInSub var ->
             // TODO(CaptainHayashi): this is a bit shoddy.
             error
@@ -112,10 +118,6 @@ type Write =
     ///     and their recursive write records are enclosed.
     /// </summary>
     | Indices of Map<IntExpr<Sym<Var>>, Write>
-    /// <summary>
-    ///     None of this lvalue has been written to yet.
-    /// </summary>
-    | NoWrite
     override this.ToString () = sprintf "%A" this
 
 /// <summary>
@@ -129,10 +131,10 @@ type Write =
 /// <param name="value">The value written to the eventual destination.</param>
 /// <param name="map">The write map being extended.</param>
 /// <returns>The extended write map.</returns>
-let markWrite (var : Sym<Var>) (idxPath : IntExpr<Sym<Var>> list)
+let markWrite (var : CTyped<Sym<Var>>) (idxPath : IntExpr<Sym<Var>> list)
   (value : Expr<Sym<Var>>)
-  (map : Map<Sym<Var>, Write>)
-  : Map<Sym<Var>, Write> =
+  (map : Map<CTyped<Sym<Var>>, Write>)
+  : Map<CTyped<Sym<Var>>, Write> =
     (* First, consider what it means to add an index write to an index write
        map. *)
     let rec markWriteIdx
@@ -140,8 +142,9 @@ let markWrite (var : Sym<Var>) (idxPath : IntExpr<Sym<Var>> list)
       (idxPathRest : IntExpr<Sym<Var>> list)
       (imap : Map<IntExpr<Sym<Var>>, Write>) =
         // Find out if we've already written to this index.
-        let idxRec, imapLessIdx =
-            maybe (NoWrite, imap) (fun w -> w, imap.Remove idx) (imap.TryFind idx)
+        let idxRec = imap.TryFind idx
+        let imapLessIdx =
+            maybe imap (fun _ -> imap.Remove idx) (imap.TryFind idx)
 
         let idxRec' =
             match idxPathRest with
@@ -151,21 +154,21 @@ let markWrite (var : Sym<Var>) (idxPath : IntExpr<Sym<Var>> list)
                 Entire value
             | x::xs ->
                 match idxRec with
-                | Entire _ ->
+                | Some (Entire _) ->
                     (* If we're already writing to the entire index somewhere
                        else, we probably have a problem!  Eventually we should
                        report it, but for now we just clobber the value. *)
                     Entire value
-                | NoWrite -> markWriteIdx x xs Map.empty
-                | Indices imap -> markWriteIdx x xs imap
+                | Some (Indices imap) -> markWriteIdx x xs imap
+                | None -> markWriteIdx x xs Map.empty
 
         Indices (Map.add idx idxRec' imapLessIdx)
 
 
     // Now we can define the top-level.
 
-    let varRec, mapLessVar =
-        maybe (NoWrite, map) (fun w -> w, map.Remove var) (map.TryFind var)
+    let varRec = map.TryFind var
+    let mapLessVar = maybe map (fun _ -> map.Remove var) (map.TryFind var)
 
     let varRec' =
         match idxPath with
@@ -175,13 +178,13 @@ let markWrite (var : Sym<Var>) (idxPath : IntExpr<Sym<Var>> list)
             Entire value
         | (x::xs) ->
             match varRec with
-            | Entire _ ->
+            | Some (Entire _) ->
                 (* If we're already writing to the entire index somewhere
                    else, we probably have a problem!  Eventually we should
                    report it, but for now we just clobber the value. *)
                 Entire value
-            | NoWrite -> markWriteIdx x xs Map.empty
-            | Indices imap -> markWriteIdx x xs imap
+            | Some (Indices imap) -> markWriteIdx x xs imap
+            | None -> markWriteIdx x xs Map.empty
 
     Map.add var varRec' mapLessVar
 
@@ -189,35 +192,31 @@ let markWrite (var : Sym<Var>) (idxPath : IntExpr<Sym<Var>> list)
 ///     Tries to extract the variable and index path from a lvalue.
 /// </summary>
 let varAndIdxPath (expr : Expr<Sym<Var>>)
-  : (Sym<Var> * IntExpr<Sym<Var>> list) option =
+  : (CTyped<Sym<Var>> * IntExpr<Sym<Var>> list) option =
     // TODO(CaptainHayashi): proper doc comment.
     // TODO(CaptainHayashi): merge with type lookup stuff in Modeller?
 
     let rec getInBool bx path =
         match bx with
-        | BVar v -> Some (v, path)
-        | BIdx (_, _, a, i) -> getInArray a (i::path)
+        | BVar v -> Some (Bool v, path)
+        | BIdx (e, l, a, i) -> getInArray e l a (i::path)
         | _ -> None
     and getInInt ix path =
         match ix with
-        | IVar v -> Some (v, path)
-        | IIdx (_, _, a, i) -> getInArray a (i::path)
+        | IVar v -> Some (Int v, path)
+        | IIdx (e, l, a, i) -> getInArray e l a (i::path)
         | _ -> None
-    and getInArray ax path =
+    and getInArray eltype length ax path =
         match ax with
-        | AVar v -> Some (v, path)
-        | AIdx (_, _, a, i) -> getInArray a (i::path)
+        | AVar v -> Some (Array (eltype, length, v), path)
+        | AIdx (e, l, a, i) -> getInArray e l a (i::path)
         // TODO(CaptainHayashi): do something useful here.
         | AUpd (_, _, a, i, _) -> None
 
-    (* Because we've traversed from outside in, the path is actually the wrong
-       way round, so we need to flip it! *)
-    let result =
-        match expr with
-        | Int ix -> getInInt ix []
-        | Bool bx -> getInBool bx []
-        | Array (_, _, ax) -> getInArray ax []
-    Option.map (fun (var, htap) -> (var, List.rev htap)) result
+    match expr with
+    | Int ix -> getInInt ix []
+    | Bool bx -> getInBool bx []
+    | Array (eltype, length, ax) -> getInArray eltype length ax []
 
 /// <summary>
 ///     Generates a write record map for a given assignment list.
@@ -225,11 +224,100 @@ let varAndIdxPath (expr : Expr<Sym<Var>>)
 /// <param name="assigns">The assignment list to investigate.</param>
 /// <returns>The write map for that microcode list.</returns>
 let makeWriteMap (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>>) list)
-  : Map<Sym<Var>, Write> =
+  : Map<CTyped<Sym<Var>>, Write> =
     let addToWriteMap map (lv, rv) =
         // TODO(CaptainHayashi): complain if lv isn't a lvalue?
         maybe map (fun (var, idx) -> markWrite var idx rv map) (varAndIdxPath lv)
     List.fold addToWriteMap Map.empty assigns
+
+/// <summary>
+///     Partitions a list of microcode instructions.
+/// </summary>
+/// <param name="instrs">The instructions to partition.</param>
+/// <returns>
+///     A triple containing a list of assignments, a list of assumptions,
+///     and a list of (unpartitioned) microcode branches.
+/// </returns>
+let partitionMicrocode (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
+  : ((Expr<Sym<Var>> * Expr<Sym<Var>>) list
+     * BoolExpr<Sym<Var>> list
+     * (BoolExpr<Sym<Var>>
+        * Microcode<Expr<Sym<Var>>, Sym<Var>> list
+        * Microcode<Expr<Sym<Var>>, Sym<Var>> list) list) =
+    let partitionStep (assigns, assumes, branches) instr =
+        match instr with
+        | Assign (l, r) -> ((l, r)::assigns, assumes, branches)
+        | Assume s -> (assigns, s::assumes, branches)
+        | Branch (i, t, e) -> (assigns, assumes, (i, t, e)::branches)
+    List.fold partitionStep ([], [], []) instrs
+
+/// <summary>
+///     Generates a well-typed expression for a subscript of a given array.
+/// </summary>
+/// <param name="eltype">The type of elements in the array.</param>
+/// <param name="length">The length of the array.</param>
+/// <param name="array">The array to subscript.</param>
+/// <param name="idx">The index to subscript by.</param>
+/// <returns>A well-typed <see cref="Expr"/> capturing the subscript.</returns>
+let mkIdx (eltype : Type) (length : int option) (arr : ArrayExpr<Sym<Var>>)
+  (idx : IntExpr<Sym<Var>>)
+  : Expr<Sym<Var>> =
+    let record = (eltype, length, arr, idx)
+
+    match eltype with
+    | Int () -> Int (IIdx record)
+    | Bool () -> Bool (BIdx record)
+    | Array (eltype', length', ()) -> Array (eltype', length', AIdx record)
+
+/// <summary>
+///     Normalises a list of assignments such that they represent
+///     entire-variable assignments.
+///     <para>
+///         This converts array-subscript assignments into assignments of
+///         arrays to array updates.
+///         This allows the framing logic to frame on a per-variable basis
+///         in the presence of arrays.
+///     </para>
+/// </summary>
+/// <param name="assigns">The assignments to normalise.</param>
+/// <returns>
+///     The assignments in entire-variable form, in arbitrary order.
+/// </returns>
+let normaliseAssigns (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>>) list)
+  : Result<(CTyped<Sym<Var>> * Expr<Sym<Var>>) list, Error> =
+    // First, we convert the assigns to a write map.
+    let wmap = makeWriteMap assigns
+    (* Then, each item in the write map represents an assignment.
+       We need to convert each write map entry into an array update or a
+       direct value. *)
+    let rec translateRhs lhs =
+        function
+        | Entire v -> ok v
+        | Indices ixmap ->
+            // TODO(CaptainHayashi): proper errors.
+            match lhs with
+            | Array (eltype, length, alhs) ->
+                let addUpdate (index, value) lhs' =
+                    (* Need to translate any further subscripts inside value.
+                       But, to do that, we need to know what the LHS of those
+                       subscripts is! *)
+                    let vlhs = mkIdx eltype length alhs index
+                    let vrhsResult = translateRhs vlhs value
+                    lift
+                        (fun (vrhs) ->
+                            Array
+                                (eltype, length,
+                                 AUpd (eltype, length, alhs, index, vrhs)))
+                        vrhsResult
+                seqBind addUpdate lhs (Map.toSeq ixmap)
+            | _ -> fail (BadSemantics "tried to index into a non-array")
+
+    let translateAssign (lhs, rhs) =
+        // lhs is a typed variable here, but must be an expression for the above
+        let lhsE = mkVarExp lhs
+        lift (mkPair lhs) (translateRhs lhsE rhs)
+
+    collect (Seq.map translateAssign (Map.toSeq wmap))
 
 /// Generates a frame for a given expression.
 /// The frame is a relation a!after = a!before for every a not mentioned in the expression.
