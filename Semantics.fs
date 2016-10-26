@@ -116,6 +116,7 @@ type Write =
     ///     None of this lvalue has been written to yet.
     /// </summary>
     | NoWrite
+    override this.ToString () = sprintf "%A" this
 
 /// <summary>
 ///     Records a write into a write map.
@@ -137,11 +138,11 @@ let markWrite (var : Sym<Var>) (idxPath : IntExpr<Sym<Var>> list)
       (idxPathRest : IntExpr<Sym<Var>> list)
       (imap : Map<IntExpr<Sym<Var>>, Write>) =
         // Find out if we've already written to this index.
-        let idxRec = withDefault NoWrite (imap.TryFind idx)
-        let imapLessIdx = imap.Remove idx
+        let idxRec, imapLessIdx =
+            maybe (NoWrite, imap) (fun w -> w, imap.Remove idx) (imap.TryFind idx)
 
         let idxRec' =
-            match idxPath with
+            match idxPathRest with
             | [] ->
                 (* If there is no subscript, then we must be writing to this
                    entire index, so mark it as Entire. *)
@@ -160,8 +161,8 @@ let markWrite (var : Sym<Var>) (idxPath : IntExpr<Sym<Var>> list)
 
     // Now we can define the top-level.
 
-    let varRec = withDefault NoWrite (map.TryFind var)
-    let mapLessVar = map.Remove var
+    let varRec, mapLessVar =
+        maybe (NoWrite, map) (fun w -> w, map.Remove var) (map.TryFind var)
 
     let varRec' =
         match idxPath with
@@ -193,22 +194,26 @@ let varAndIdxPath (expr : Expr<Sym<Var>>)
     let rec getInBool bx path =
         match bx with
         | BVar v -> Some (v, path)
-        | BIdx (_, _, ax, ix) -> getInArray ax (ix::path)
+        | BIdx (_, _, a, i) -> getInArray a (i::path)
         | _ -> None
     and getInInt ix path =
         match ix with
         | IVar v -> Some (v, path)
-        | IIdx (_, _, ax, ix) -> getInArray ax (ix::path)
+        | IIdx (_, _, a, i) -> getInArray a (i::path)
         | _ -> None
-    and getInArray ix path =
-        match ix with
+    and getInArray ax path =
+        match ax with
         | AVar v -> Some (v, path)
-        | AIdx (_, _, ax, ix) -> getInArray ax (ix::path)
+        | AIdx (_, _, a, i) -> getInArray a (i::path)
 
-    match expr with
-    | Int ix -> getInInt ix []
-    | Bool bx -> getInBool bx []
-    | Array (_, _, ax) -> getInArray ax []
+    (* Because we've traversed from outside in, the path is actually the wrong
+       way round, so we need to flip it! *)
+    let result =
+        match expr with
+        | Int ix -> getInInt ix []
+        | Bool bx -> getInBool bx []
+        | Array (_, _, ax) -> getInArray ax []
+    Option.map (fun (var, htap) -> (var, List.rev htap)) result
 
 /// <summary>
 ///     Generates a write record map for a given primitive command.
@@ -324,7 +329,51 @@ let checkParamTypesPrim (prim : PrimCommand) (sem : PrimSemantics) : Result<Prim
     |> collect
     |> lift (fun _ -> prim)
 
+/// <summary>
+///     Lifts a parameter instantiation traversal onto a microcode instruction.
+/// </summary>
+/// <param name="trav">The traversal to lift onto microcode.</param>
+/// <returns>
+///     A traversal that visits all of the lvalues and rvalues in a microcode
+///     instruction.
+/// </returns>
+let tliftToMicrocode
+  (trav : Traversal<TypedVar, Expr<Sym<MarkedVar>>, Error>)
+  : Traversal<Microcode<TypedVar, Var>,
+              Microcode<Expr<Sym<MarkedVar>>, Sym<MarkedVar>>, Error> =
+    let travE : Traversal<Expr<Var>, Expr<Sym<MarkedVar>>, Error> =
+        tliftToExprSrc trav
+    let travB : Traversal<BoolExpr<Var>, BoolExpr<Sym<MarkedVar>>, Error> =
+        tliftToBoolSrc trav
 
+    let rec tm ctx mc =
+        let tml = tchainL tm id
+
+        match mc with
+        | Assign (lv, rv) -> tchain2 trav travE Assign ctx (lv, rv)
+        | Assume assumption -> tchain travB Assume ctx assumption
+        | Branch (i, t, e) -> tchain3 travB tml tml Branch ctx (i, t, e)
+    tm
+
+/// <summary>
+///     Converts a microcode instruction set into a two-state Boolean predicate.
+/// </summary>
+let rec microcodeToBool
+  (instructions : Microcode<Expr<Sym<MarkedVar>>, Sym<MarkedVar>> list)
+  : BoolExpr<Sym<MarkedVar>> =
+    // TODO(CaptainHayashi): do two-state conversion here, not earlier.
+    // TODO(CaptainHayashi): convert to variable LVs.
+    // TODO(CaptainHayashi): framing (currently done elsewhere).
+    let instr =
+        function
+        | Assign (x, y) -> mkEq x y
+        | Assume x -> x
+        | Branch (i, t, e) ->
+            mkAnd2
+                (mkImplies i (microcodeToBool t))
+                (mkImplies (mkNot i) (microcodeToBool e))
+
+    mkAnd (List.map instr instructions)
 
 /// Instantiates a PrimCommand from a PrimSemantics instance
 let instantiatePrim
@@ -344,11 +393,11 @@ let instantiatePrim
         function
         | None -> ok None
         | Some s ->
-            let subInTypedSym =
-                    tliftToTypedSymVarSrc (primParamSubFun prim s)
-            let subInBool = tliftToBoolSrc subInTypedSym
-            let subbed = lift Some (mapTraversal subInBool s.Body)
-            mapMessages Traversal subbed
+            let subInMCode =
+                    tchainL (tliftToMicrocode (primParamSubFun prim s)) id
+            let subbedMCode = mapTraversal subInMCode s.Body
+            let subbed = lift microcodeToBool subbedMCode
+            mapMessages Traversal (lift Some subbed)
 
     bind instantiate typeCheckedDefResult
 

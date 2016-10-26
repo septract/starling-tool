@@ -57,15 +57,16 @@ module Types =
     ///     commands.
     /// </summary>
     /// <typeparam name="L">The type of lvalues.</typeparam>
-    type Microcode<'L> =
+    /// <typeparam name="L">The type of rvalue variables.</typeparam>
+    type Microcode<'L, 'RV> when 'RV : equality =
         /// <summary>An assignment.</summary>
-        | Assign of lvalue : 'L * rvalue : Expr<Sym<Var>>
+        | Assign of lvalue : 'L * rvalue : Expr<'RV>
         /// <summary>A diverging assertion.</summary>
-        | Assume of assumption : BoolExpr<Sym<Var>>
+        | Assume of assumption : BoolExpr<'RV>
         /// <summary>A conditional.</summary>
-        | Branch of conditional : BoolExpr<Sym<Var>>
-                  * ifTrue : Microcode<'L> list
-                  * ifFalse : Microcode<'L> list
+        | Branch of conditional : BoolExpr<'RV>
+                  * ifTrue : Microcode<'L, 'RV> list
+                  * ifFalse : Microcode<'L, 'RV> list
 
     (*
      * Terms
@@ -113,7 +114,11 @@ module Types =
     /// A term using only internal boolean expressions.
     type FTerm = CTerm<MBoolExpr>
 
-    type PrimSemantics = { Name: string; Results: TypedVar list; Args: TypedVar list; Body: Microcode<TypedVar> list }
+    type PrimSemantics =
+        { Name: string
+          Results: TypedVar list
+          Args: TypedVar list
+          Body: Microcode<TypedVar, Var> list }
     type SemanticsMap<'a> = Map<string, 'a>
     type PrimSemanticsMap = SemanticsMap<PrimSemantics>
 
