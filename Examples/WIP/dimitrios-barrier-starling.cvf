@@ -85,7 +85,7 @@ constraint isInterior(p1) * isInterior(p2)  ->  p1 == p2;
 
 // Can't be master and outside the barrier sync
 constraint isMaster(i, p1) * existsBarrier(p2)  ->  false;
-constraint isMaster(i, p1) * isBarrier(p2)  ->  false;
+constraint iter[i] isMaster(i, p1) * isBarrier(p2)  ->  false;
 
 constraint isSet(t)                         ->  ok[t] == false;
 

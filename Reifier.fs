@@ -61,6 +61,10 @@ module Types =
         /// </summary>
         | TooManyIteratedFuncs of view : DView * amount : int
         /// <summary>
+        ///     An iterated func is being used in a non-iterated manner.
+        /// </summary>
+        | NoIteratorOnIterated of func : IteratedDFunc
+        /// <summary>
         ///     An non-iterated func is being used in an iterated manner.
         /// </summary>
         | IteratorOnNonIterated of func : IteratedDFunc
@@ -362,33 +366,45 @@ module Downclosure =
       : Result<DeferredCheck list, Error> =
         let (lhs, rhs) = def
 
-        trial {
-            (* First, we check the prototypes of the views in the lhs to see which
-               are iterated. *)
+        (* First, we check the uses of the views in the lhs to see which
+           are iterated in the definition. *)
+        let iterprotos, normprotos =
+            List.partition (fun func -> func.Iterator <> None) lhs
 
-            let iterprotos, normprotos =
-                List.partition (fun func -> func.Iterator <> None) lhs
+        (* Now, check that each iterated use matches up with an iterated
+           prototype, and vice versa. *)
+        let checkIterAgree shouldBeIterated error ifunc =
+            let iInfoResult = lookupFunc vprotos ifunc.Func
+            bind
+                (function
+                 | Some { IsIterated = ii } when ii = shouldBeIterated ->
+                    ok ifunc
+                 | Some _ -> fail (error ifunc)
+                 | None -> fail (NoSuchView ifunc.Func))
+                iInfoResult
 
-            match (iterprotos, normprotos) with
-            (* Correct non-iterated view definition.
-               No more checking necessary. *)
-            | [], _ -> return deferred
-            (* Correct iterated view definition, as long as i is actually an
-               iterated func.
-               Need to check inductive and base downclosure. *)
-            | [i], [] ->
-                let! iInfo = lookupFunc vprotos i.Func
-                return!
-                    (match iInfo with
-                     | Some { IsIterated = true } ->
-                        checkDownclosure i empDefn rhs deferred
-                     | Some { IsIterated = _ } -> fail (IteratorOnNonIterated i)
-                     | None -> fail (NoSuchView i.Func))
-            // Over-large iterated view definition (for now, anyway).
-            | xs, [] -> return! fail (TooManyIteratedFuncs (lhs, List.length xs))
-            // Mixed view definition (currently not allowed).
-            | _, _ -> return! fail (MixedFuncType lhs)
-        }
+        let iterProtoCheckedResult =
+            collect (Seq.map (checkIterAgree true IteratorOnNonIterated) iterprotos)
+        let normProtoCheckedResult =
+            collect (Seq.map (checkIterAgree false NoIteratorOnIterated) normprotos)
+
+        bind2
+            (fun ips nps ->
+                match (ips, nps) with
+                (* Correct non-iterated view definition.
+                   No more checking necessary. *)
+                | [], _ -> ok deferred
+                (* Correct iterated view definition, as long as i is actually an
+                   iterated func.
+                   Need to check inductive and base downclosure. *)
+                | [i], [] ->
+                    checkDownclosure i empDefn rhs deferred
+                // Over-large iterated view definition (for now, anyway).
+                | xs, [] -> fail (TooManyIteratedFuncs (lhs, List.length xs))
+                // Mixed view definition (currently not allowed).
+                | _, _ -> fail (MixedFuncType lhs))
+            iterProtoCheckedResult
+            normProtoCheckedResult
 
     /// <summary>
     ///     Performs all downclosure and well-formedness checking on iterated
@@ -760,12 +776,22 @@ module Pretty =
             wrapped "lookup for view"
                 (printDFunc func)
                 (err |> Core.Definer.Pretty.printError)
+        | NoIteratorOnIterated func ->
+            errorStr "view"
+            <+> quoted
+                    (printIteratedContainer
+                        printDFunc
+                        (maybe Nop printTypedVar)
+                        func)
+            <+> errorStr "is iterated, but used as non-iterated in a constraint"
         | IteratorOnNonIterated func ->
-            fmt "view '{0}' is not iterated, but used in an iterated constraint"
-                [ printIteratedContainer
-                    printDFunc
-                    (maybe Nop printTypedVar)
-                    func ]
+            errorStr "view"
+            <+> quoted
+                    (printIteratedContainer
+                        printDFunc
+                        (maybe Nop printTypedVar)
+                        func)
+            <+> errorStr "is not iterated, but used as iterated in a constraint"
         | BadIteratorType (view, ty) ->
             fmt "iterator on constraint '{0}' is of type {1}, should be int"
                 [ printDView view
