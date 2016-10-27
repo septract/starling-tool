@@ -1,5 +1,6 @@
 ./Examples/Fail/badInc.cvf: badInc_C000_000
 ./Examples/Fail/badInc2.cvf: badInc_C000_000
+./Examples/Fail/petersonArrayBadTurns.cvf: lock_C001_005
 ./Examples/Fail/petersonBadTurns.cvf: lockA_C001_019 lockB_C001_018
 ./Examples/Fail/ticketLockBad.cvf: unlock_C000_002 unlock_C000_003
 ./Examples/Fail/ticketLockBad2.cvf: lock_C000_000 lock_C000_002 unlock_C000_000
@@ -7,6 +8,7 @@
 ./Examples/Pass/arc.cvf:
 ./Examples/Pass/multicounter.cvf:
 ./Examples/Pass/peterson.cvf:
+./Examples/Pass/petersonArray.cvf:
 ./Examples/Pass/petersonInt.cvf:
 ./Examples/Pass/petersonIntMissingSynthesised.cvf:
 ./Examples/Pass/petersonMultiCmd.cvf:
