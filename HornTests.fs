@@ -7,13 +7,12 @@ open Chessie.ErrorHandling
 open NUnit.Framework
 open Starling.Collections
 open Starling.Utils
+open Starling.Utils.Testing
 open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.Expr
 open Starling.Core.View
-open Starling.Core.Model
 open Starling.Backends.Horn
-open Starling.Tests.Studies
 
 /// Tests for Starling.Horn and Starling.HSF.
 module Tests =
@@ -22,6 +21,12 @@ module Tests =
         returnOrFail <| makeVarMap
             [ TypedVar.Int "serving"
               TypedVar.Int "ticket" ]
+
+    [<Test>]
+    let ``Refuse modulo expressions``() =
+        assertEqual
+            (Some [ UnsupportedExpr (Int (IMod (IInt 5L, IVar "foo"))) ])
+            (checkArith id (IMod (IInt 5L, IVar "foo")) |> failOption)
 
     [<Test>]
     let ``Model the ticket lock view definitions as Horn clauses``() =

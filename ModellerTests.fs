@@ -112,6 +112,15 @@ module ArithmeticExprs =
             (printExprError >> printUnstyled)
 
     [<Test>]
+    let ``test modelling (1 * 3) % 2`` ()=
+        check environ
+            (freshNode <| BopExpr( Mod,
+                                   freshNode <| BopExpr(Mul, freshNode (Num 1L), freshNode (Num 3L)),
+                                   freshNode (Num 2L) ))
+            // TODO (CaptainHayashi): this shouldn't be optimised?
+            (IInt 1L)
+
+    [<Test>]
     let ``test modelling (1 * 2) + 3`` ()=
         check environ
             (freshNode <| BopExpr( Add,

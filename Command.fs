@@ -142,33 +142,7 @@ module Queries =
 ///     Composition of Boolean expressions representing commands.
 /// </summary>
 module Compose =
-    /// <summary>
-    ///     Finds the highest intermediate stage number in an integral
-    ///     expression.
-    ///     Returns one higher.
-    /// </summary>
-    /// <param name="_arg1">
-    ///     The <c>IntExpr</c> to investigate.
-    /// </param>
-    /// <returns>
-    ///     The next available intermediate stage number.
-    ///     If the expression has no intermediate stages, we return 0.
-    /// </returns>
-    let rec nextIntIntermediate : IntExpr<Sym<_>> -> bigint =
-        function
-        | IVar (Reg (Intermediate (n, _))) -> n + 1I
-        | IVar (Sym { Params = xs } ) ->
-            xs |> Seq.map nextIntermediate |> Seq.fold (curry bigint.Max) 0I
-        | IVar _ | IInt _ -> 0I
-        | IAdd xs | ISub xs | IMul xs ->
-            xs |> Seq.map nextIntIntermediate |> Seq.fold (curry bigint.Max) 0I
-        | IDiv (x, y) ->
-            bigint.Max (nextIntIntermediate x, nextIntIntermediate y)
-        // Is this correct?
-        | IIdx (_, _, arr, idx) ->
-            bigint.Max (nextArrayIntermediate arr, nextIntIntermediate idx)
-
-    and maxOpt a b =
+    let maxOpt a b =
         match a, b with
         | Some a, Some b -> Some <| max a b
         | None, Some b -> Some b
@@ -178,7 +152,7 @@ module Compose =
 
     /// Gets the highest intermediate number for some variable in a given
     /// int expression
-    and getIntIntermediate v =
+    let rec getIntIntermediate v =
         function
         | IVar (Reg (Intermediate (n, x))) when v = x-> Some n
         | IVar (Sym { Params = xs } ) ->
@@ -186,43 +160,12 @@ module Compose =
         | IVar _ | IInt _ -> None
         | IAdd xs | ISub xs | IMul xs ->
             Seq.fold maxOpt None <| (Seq.map (getIntIntermediate v) <| xs)
-        | IDiv (x, y) ->
+        | IDiv (x, y) | IMod (x, y) ->
             maxOpt (getIntIntermediate v x) (getIntIntermediate v y)
         // Is this correct?
         | IIdx (_, _, arr, idx) ->
             maxOpt (getArrayIntermediate v arr) (getIntIntermediate v idx)
         | _ -> None
-
-    /// <summary>
-    ///     Finds the highest intermediate stage number in a Boolean expression.
-    ///     Returns one higher.
-    /// </summary>
-    /// <param name="_arg1">
-    ///     The <c>BoolExpr</c> to investigate.
-    /// </param>
-    /// <returns>
-    ///     The next available intermediate stage number.
-    ///     If the expression has no intermediate stages, we return 0.
-    /// </returns>
-    and nextBoolIntermediate : BoolExpr<Sym<_>> -> bigint =
-        function
-        | BVar (Reg (Intermediate (n, _))) -> n + 1I
-        | BVar (Sym { Params = xs } ) ->
-            xs |> Seq.map nextIntermediate |> Seq.fold (curry bigint.Max) 0I
-        | BVar _ -> 0I
-        | BAnd xs | BOr xs ->
-            xs |> Seq.map nextBoolIntermediate |> Seq.fold (curry bigint.Max) 0I
-        | BImplies (x, y) ->
-            bigint.Max (nextBoolIntermediate x, nextBoolIntermediate y)
-        | BNot x -> nextBoolIntermediate x
-        | BGt (x, y) | BLt (x, y) | BGe (x, y) | BLe (x, y) ->
-            bigint.Max (nextIntIntermediate x, nextIntIntermediate y)
-        | BEq (x, y) ->
-            bigint.Max (nextIntermediate x, nextIntermediate y)
-        | BTrue | BFalse -> 0I
-        // Is this correct?
-        | BIdx (_, _, arr, idx) ->
-            bigint.Max (nextArrayIntermediate arr, nextIntIntermediate idx)
 
     /// Gets the highest intermediate number for some variable in a given
     /// boolean expression
@@ -231,9 +174,6 @@ module Compose =
         | BVar (Reg (Intermediate (n, name))) when name = v -> Some n
         | BVar (Sym { Params = xs } ) ->
             Seq.fold maxOpt None <| (Seq.map (getIntermediate v) <| xs)
-        | BVar (Reg (After x)) when x = v -> None
-        | BVar (Reg (Before x)) when x = v -> None
-        | BVar (Reg (Intermediate(i, x))) when x = v -> Some i
         | BAnd xs | BOr xs ->
             Seq.fold maxOpt None <| (Seq.map (getBoolIntermediate v) <| xs)
         | BImplies (x, y) ->
@@ -248,32 +188,6 @@ module Compose =
         | BIdx (_, _, arr, idx) ->
             maxOpt (getArrayIntermediate v arr) (getIntIntermediate v idx)
         | _ -> None
-
-    /// <summary>
-    ///     Finds the highest intermediate stage number in an array
-    ///     expression.
-    ///     Returns one higher.
-    /// </summary>
-    /// <param name="_arg1">
-    ///     The <c>ArrayExpr</c> to investigate.
-    /// </param>
-    /// <returns>
-    ///     The next available intermediate stage number.
-    ///     If the expression has no intermediate stages, we return 0.
-    /// </returns>
-    and nextArrayIntermediate : ArrayExpr<Sym<_>> -> bigint =
-        function
-        | AVar (Reg (Intermediate (n, _))) -> n + 1I
-        | AVar (Sym { Params = xs } ) ->
-            xs |> Seq.map nextIntermediate |> Seq.fold (curry bigint.Max) 0I
-        | AVar _ -> 0I
-        // TODO(CaptainHayashi): is this correct?
-        | AIdx (_, _, arr, idx) ->
-            bigint.Max (nextArrayIntermediate arr, nextIntIntermediate idx)
-        | AUpd (_, _, arr, idx, upd) ->
-            bigint.Max
-                (nextArrayIntermediate arr,
-                 bigint.Max(nextIntIntermediate idx, nextIntermediate upd))
 
     /// Gets the highest intermediate number for some variable in a given
     /// array expression
@@ -290,23 +204,7 @@ module Compose =
             maxOpt
                 (getArrayIntermediate v arr)
                 (maxOpt (getIntIntermediate v idx) (getIntermediate v upd))
-
-    /// <summary>
-    ///     Finds the highest intermediate stage number in an expression.
-    ///     Returns one higher.
-    /// </summary>
-    /// <param name="_arg1">
-    ///     The <c>Expr</c> to investigate.
-    /// </param>
-    /// <returns>
-    ///     The next available intermediate stage number.
-    ///     If the expression has no intermediate stages, we return 0.
-    /// </returns>
-    and nextIntermediate : Expr<Sym<_>> -> bigint =
-        function
-        | Int x -> nextIntIntermediate x
-        | Bool x -> nextBoolIntermediate x
-        | Array (_, _, x) -> nextArrayIntermediate x
+        | _ -> None
 
     /// Gets the highest intermediate stage number for a given variable name
     /// in some expression.

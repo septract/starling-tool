@@ -580,6 +580,7 @@ and tliftToIntSrc
         | ISub xs -> tchainL isv ISub ctx xs
         | IMul xs -> tchainL isv IMul ctx xs
         | IDiv (x, y) -> tchain2 isv isv IDiv ctx (x, y)
+        | IMod (x, y) -> tchain2 isv isv IMod ctx (x, y)
 
 /// <summary>
 ///     Converts a traversal from typed variables to expressions to one from

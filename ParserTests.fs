@@ -5,10 +5,7 @@ module Starling.Tests.Lang.Parser
 
 open NUnit.Framework
 
-open Starling
 open Starling.Core.Var
-open Starling.Core.Model
-open Starling.Core.View
 open Starling.Lang.AST
 open Starling.Lang.Parser
 
@@ -31,6 +28,36 @@ let ( ** ) = ( <| )
 
 // Conversion of mattw's test cases into new system
 module ExpressionTests =
+    [<Test>]
+    let ``Test modulo is parsed correctly`` () =
+        check parseExpression "5 + 6 % 7"
+            (Some <| 
+             node "" 1L 3L
+             ** BopExpr (Add,
+                    node "" 1L 1L (Num 5L),
+                    node "" 1L 7L
+                        <| BopExpr (Mod,
+                                node "" 1L 5L (Num 6L),
+                                node "" 1L 9L (Num 7L))))
+
+    [<Test>]
+    let ``Test multiplicatives parse left to right`` () =
+        check parseExpression "5 * 6 / 7 % 8"
+            (Some <|
+             node "" 1L 11L
+                 (BopExpr
+                     (Mod,
+                      node "" 1L 7L
+                          (BopExpr
+                              (Div,
+                               node "" 1L 3L
+                                   (BopExpr
+                                        (Mul,
+                                         node "" 1L 1L (Num 5L),
+                                         node "" 1L 5L (Num 6L))),
+                               node "" 1L 9L (Num 7L))),
+                      node "" 1L 13L (Num 8L))))
+
     [<Test>]
     let ``Test order-of-operations on (1 + 2 * 3)``() =
         check parseExpression "1 + 2 * 3" <| Some

@@ -136,6 +136,7 @@ module Pretty =
         | IMul [ x; y ] -> printBop "*" x y
         | IMul(x :: y :: xs) -> printInt (IMul((IMul [ x; y ]) :: xs))
         | IDiv(x, y) -> printBop "/" x y
+        | IMod(x, y) -> failwith "unexpected modulo"
 
     and printBop (op : string) (x : IntExpr<Var>) (y : IntExpr<Var>) =
         binop

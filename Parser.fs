@@ -195,7 +195,8 @@ do parsePostfixExpressionRef :=
 let parseMultiplicativeExpression =
     parseBinaryExpressionLevel parsePostfixExpression
         [ ("*", Mul)
-          ("/", Div) ]
+          ("/", Div)
+          ("%", Mod) ]
 
 /// Parser for additive expressions.
 let parseAdditiveExpression =
