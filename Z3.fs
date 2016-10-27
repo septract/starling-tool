@@ -118,8 +118,8 @@ module Expr =
         | AVar c ->
             ctx.MkArrayConst
                 (name = toStr c,
-                 domain = typeToSort reals ctx eltype,
-                 range = ctx.MkIntSort ())
+                 domain = ctx.MkIntSort (),
+                 range = typeToSort reals ctx eltype)
         | AIdx (eltype, _, arr, idx) ->
             // TODO(CaptainHayashi): ensure eltype is Array?
             let arrZ3 = arrayToZ3 reals toStr ctx eltype arr
