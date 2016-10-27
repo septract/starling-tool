@@ -4,72 +4,87 @@ shared int no_threads;
 shared int thr_cnt;
 shared bool[10] ok;
 
+thread int l_no_threads;
 thread int tid;
 thread int ph;
 thread int i;
 thread int c;
 thread bool b; 
 
-view isBarrier(int ph);
+view existsBarrier(int ph);
+view iter[n] isBarrier(int ph);
 view isMaster(int i, int tid);
 view isInterior(int tid);
 view isSlave(int tid);
 view isThr(int tid);
 view isSet(int tid);
+view noThreads(int nt);
 
 
 method barrier (/* tid, ph */) {
- {| isBarrier(ph) * isThr(tid) |}
-  if (tid == 0) {
-   {| isBarrier(ph) * isMaster(0, ph) |}
-    do {
-     {| isBarrier(ph) * isMaster(0, ph) |}
-      <c = thr_cnt>;
-     {| if (c == (no_threads - 1))
-          then isInterior(ph) * isMaster(0, ph)
-          else isBarrier(ph) * isMaster(0, ph) |}
-    } while (c < (no_threads - 1));
-   {| isMaster(0, ph) |}
-    i = 0;
-    <thr_cnt = i>;
-   {| isMaster(1, ph) |}
-    i = 1;
-   {| isMaster(i, ph) |}
-    while (i < no_threads) {
-     {| isMaster(i, ph) |}
-      <ok[i] = true>;
-     {| isMaster(i+1, ph) |}
-      i = i + 1;
-     {| isMaster(i, ph) |}
-    } 
-   {| isBarrier(ph+1) * isThr(0) |}
-  } else {
-   {| isBarrier(ph) * isSlave(tid) |}
-    ok[tid] = false;
-   {| isBarrier(ph) * isSet(tid) |}
-    <i = thr_cnt++>;
-   {| isInterior(ph) * isSet(tid) |}
-    do {
-     {| isInterior(ph) * isSet(tid) |}
-      b = ok[tid];
-     {| if b != true
-          then isBarrier(ph+1) * isThr(tid)
-          else isInterior(ph) * isSet(tid) |}
-    } while (b != true);
-   {| isBarrier(ph+1) * isThr(tid) |}
-  }
- {| isBarrier(ph+1) * isThr(tid) |}
+  {| existsBarrier(ph) * isBarrier(ph) * isThr(tid) |}
+    <l_no_threads = no_threads>;
+  {| existsBarrier(ph) * noThreads(l_no_threads) * isBarrier(ph) * isThr(tid) |}
+   
+    if (tid == 0) {
+      {| existsBarrier(ph) * noThreads(l_no_threads) * isBarrier(ph) * isMaster(0, ph) |}
+   
+        do {
+          {| existsBarrier(ph) * noThreads(l_no_threads) * isBarrier(ph) * isMaster(0, ph) |}
+            <c = thr_cnt>;
+          {| noThreads(l_no_threads) * isMaster(0, ph)
+             * (if (c == l_no_threads - 1) then isInterior(ph) else isBarrier(ph)) |}
+        } while (c < l_no_threads - 1);
+
+      {| noThreads(l_no_threads) * isMaster(0, ph) |}
+        i = 0;
+        <thr_cnt = i>;
+      {| noThreads(l_no_threads) * isMaster(1, ph) |}
+        i = 1;
+      {| noThreads(l_no_threads) * isMaster(i, ph) |}
+
+        while (i < l_no_threads) {
+          {| noThreads(l_no_threads) * isMaster(i, ph) |}
+            <ok[i] = true>;
+          {| noThreads(l_no_threads) * isMaster(i+1, ph) |}
+            i = i + 1;
+          {| noThreads(l_no_threads) * isMaster(i, ph) |}
+        } 
+   
+      {| existsBarrier(ph) * noThreads(l_no_threads) * isBarrier(ph+1) * isThr(0) |}
+    } else {
+      {| existsBarrier(ph) * noThreads(l_no_threads) * isBarrier(ph) * isSlave(tid) |}
+   
+        <ok[tid] = false>;
+      {| existsBarrier(ph) * noThreads(l_no_threads) * isBarrier(ph) * isSet(tid) |}
+        <i = thr_cnt++>;
+      {| existsBarrier(ph) * noThreads(l_no_threads) * isInterior(ph) * isSet(tid) |}
+
+        do {
+          {| noThreads(l_no_threads) * isInterior(ph) * isSet(tid) |}
+            <b = ok[tid]>;
+          {| noThreads(l_no_threads) * if b != true
+             then existsBarrier(ph) * isBarrier(ph+1) * isThr(tid)
+             else isInterior(ph) * isSet(tid) |}
+        } while (b != true);
+   
+      {| existsBarrier(ph) * noThreads(l_no_threads) * isBarrier(ph+1) * isThr(tid) |}
+    }
+   
+  {| existsBarrier(ph) * noThreads(l_no_threads) * isBarrier(ph+1) * isThr(tid) |}
 }
 
-constraint emp -> no_threads <= 10;
+constraint emp -> thr_cnt < no_threads && no_threads <= 10;
 
 // Specification of barrier
-constraint isBarrier(p1) * isBarrier(p2)    ->  p1 == p2;
+constraint existsBarrier(p1) -> 1 < no_threads;
+constraint existsBarrier(p1) * existsBarrier(p2)    ->  p1 == p2;
 
 // Can't be in different interior phases
 constraint isInterior(p1) * isInterior(p2)  ->  p1 == p2;
 
 // Can't be master and outside the barrier sync
+constraint isMaster(i, p1) * existsBarrier(p2)  ->  false;
 constraint isMaster(i, p1) * isBarrier(p2)  ->  false;
 
 constraint isSet(t)                         ->  ok[t] == false;
@@ -84,7 +99,7 @@ constraint iter[i] isBarrier(p)             ->  (i + thr_cnt) < no_threads;
 constraint isThr(t)                         ->  0 <= t && t < no_threads;
 constraint isThr(t1) * isThr(t2)            ->  t1 != t2;
 
-
+constraint noThreads(nt) -> no_threads == nt;
 
 // // Original source from MattP & Dimitrios's email (13-10-2015) 
 // #define MAXPOSSIBLETHREADS 4
