@@ -207,7 +207,7 @@ module Types =
         | ThreadVars of VarDecl // thread int name1, name2, name3;
         | Method of CMethod<Marked<View>> // method main(argv, argc) { ... }
         | Search of int // search 0;
-        | ViewProto of ViewProto // view name(int arg);
+        | ViewProtos of ViewProto list // view name(int arg);
         | Constraint of ViewSignature * Expression option // constraint emp => true
         override this.ToString() = sprintf "%A" this
     and ScriptItem = Node<ScriptItem'>
@@ -418,7 +418,7 @@ module Pretty =
         printCommand' pView x.Node
 
     /// Pretty-prints a general view prototype.
-    let printGeneralViewProto (pParam : 'Param -> Doc)(vp : GeneralViewProto<'Param>) : Doc =
+    let printGeneralViewProto (pParam : 'Param -> Doc) (vp : GeneralViewProto<'Param>) : Doc =
         match vp with
         | NoIterator (Func = { Name = n; Params = ps }; IsAnonymous = _) ->
             hsep [ "view" |> String |> syntax
@@ -431,7 +431,9 @@ module Pretty =
             |> withSemi
 
     /// Pretty-prints a view prototype.
-    let printViewProto : ViewProto -> Doc = printGeneralViewProto printParam
+    let printViewProtoList (vps : ViewProto list) : Doc =
+        syntax (String "view")
+        <+> commaSep (List.map (printGeneralViewProto printParam) vps)
 
     /// Pretty-prints a search directive.
     let printSearch (i : int) : Doc =
@@ -455,7 +457,7 @@ module Pretty =
         | Method m ->
             fun mdoc -> vsep [Nop; mdoc; Nop]
             <| printMethod (printMarkedView printView) (printCommand (printMarkedView printView)) m
-        | ViewProto v -> printViewProto v
+        | ViewProtos v -> printViewProtoList v
         | Search i -> printSearch i
         | Constraint (view, def) -> printConstraint view def
     let printScriptItem (x : ScriptItem) : Doc = printScriptItem' x.Node

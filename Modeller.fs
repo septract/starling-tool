@@ -327,7 +327,7 @@ module Pretty =
                 (errorStr "parameter"
                  <+> quoted (printParam par)
                  <+> errorStr "in view proto"
-                 <+> quoted (printViewProto proto)
+                 <+> quoted (printGeneralViewProto printParam proto)
                  <+> errorStr "has bad type")
                 [ printTypeError err ]
 
@@ -406,7 +406,7 @@ module Pretty =
                 errorStr "type of param"
                 <+> quoted (printParam param)
                 <+> errorStr "in view prototype"
-                <+> quoted (printViewProto vproto)
+                <+> quoted (printGeneralViewProto printParam vproto)
             cmdHeaded head [ printTypeError err ]
         | BadVarType(name, err) ->
             wrapped "type of variable" (String name) (printTypeError err)
