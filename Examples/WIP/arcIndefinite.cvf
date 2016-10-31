@@ -7,7 +7,7 @@ thread int f, c;
 
 method init() {
   {| noArc() |}
-    <{ free = (0); count = (1); }>;
+    <{ free = 0; count = 1; }>;
   {| arc() |}
 }
 
@@ -35,7 +35,7 @@ method drop() {
   {| countVal(c) |}
     if (c == 1) {
       {| noCnt() |}
-        <free = (1)>;
+        <free = 1>;
       {| emp |}
     }
   {| emp |}
@@ -51,7 +51,7 @@ view countVal(int c);
 view freeVal(int f);
 
 
-constraint emp -> count >= 0 && free >= 0 && free <= 1;
+constraint emp -> 0 <= count;
 constraint noCnt() -> count == 0;
 
 constraint noArc() -> count == 0 && free == 1;
@@ -61,14 +61,15 @@ constraint noArc() * noCnt() -> false;
 constraint noArc() * freeVal(f) -> false;
 constraint noArc() * countVal(f) -> false;
 
-constraint countVal(c) -> c == 1 => count == 0;
+constraint countVal(c) -> ?;
 
 // freeVal(f) * arc() -> f = free;
-constraint freeVal(f) -> count > 0 => f == free;
+constraint freeVal(f) -> ?;
 
 // holds less than count arc()'s
 //  and if holding at least 1 then it can't have been freed
-constraint iter[n] arc() -> ?;
+constraint iter[n] arc() -> n <= count
+                            && (n > 0 => (free == 0));
 
 // goal
 constraint error() -> false;
