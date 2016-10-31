@@ -113,6 +113,10 @@ let parseParams argp =
     //  | <identifier>
     //  | <identifier> , <params>
 
+/// Parses a non-empty comma-delimited parameter list.
+let parseDefs argp =
+    sepBy1 argp (pstring "," .>> ws)
+
 /// Parses a comma-delimited, parenthesised parameter list.
 let parseParamList argp =
     // TODO(CaptainHayashi):
@@ -425,14 +429,15 @@ do parseViewSignatureRef := parseViewLike parseBasicViewSignature ViewSignature.
 /// Parses a view prototype (a LHS followed optionally by an iterator).
 let parseViewProto =
     // TODO (CaptainHayashi): so much backtracking...
-    pstring "view" >>. ws
-    >>. (parseIteratedContainer
-            (parseFunc parseTypedTypedVar)
-            (fun i f -> WithIterator (f, i))
-         <|> (parseFunc parseTypedTypedVar
-              |>> (fun lhs -> NoIterator (lhs, false))))
-    .>> wsSemi
+    parseIteratedContainer
+        (parseFunc parseTypedTypedVar)
+        (fun i f -> WithIterator (f, i))
+    <|> (parseFunc parseTypedTypedVar
+         |>> (fun lhs -> NoIterator (lhs, false)))
 
+/// Parses a set of one or more view prototypes.
+let parseViewProtoSet =
+    pstring "view" >>. ws >>. parseDefs parseViewProto .>> wsSemi
 
 (*
  * Commands.
@@ -587,7 +592,7 @@ let parseScript =
                              // ^- method <identifier> <arg-list> <block>
                              parseConstraint |>> Constraint
                              // ^- constraint <view> -> <expression> ;
-                             parseViewProto |>> ViewProto
+                             parseViewProtoSet |>> ViewProtos
                              // ^- view <identifier> ;
                              //  | view <identifier> <view-proto-param-list> ;
                              parseSearch |>> Search

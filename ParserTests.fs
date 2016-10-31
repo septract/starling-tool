@@ -5,10 +5,10 @@ module Starling.Tests.Lang.Parser
 
 open NUnit.Framework
 
-open Starling
+open Starling.Collections
+open Starling.Utils.Testing
 open Starling.Core.Var
-open Starling.Core.Model
-open Starling.Core.View
+open Starling.Core.TypeSystem
 open Starling.Lang.AST
 open Starling.Lang.Parser
 
@@ -21,12 +21,40 @@ let get =
 
 let check p str ast =
     let actual = run p str
-    Assert.AreEqual (ast, get actual)
+    assertEqual ast (get actual)
 
 
 // Perform the same trick matt uses in Main.fs to overwrite a right-associative
 // operator with the correct behaviour
 let ( ** ) = ( <| )
+
+
+module ViewProtoTests =
+    [<Test>]
+    let ``Test single view prototype is parsed correctly`` () =
+        check parseViewProtoSet "view foo(int a, int b);"
+            (Some <|
+             [ NoIterator
+                (Func =
+                    func "foo"
+                        [ Int "a"
+                          Int "b" ],
+                 IsAnonymous = false) ])
+
+    [<Test>]
+    let ``Test multiple view prototype is parsed correctly`` () =
+        check parseViewProtoSet "view foo(int a, int b), bar(int c, bool d);"
+            (Some <|
+             [ NoIterator
+                (Func = func "foo"[ Int "a"; Int "b" ],
+                 IsAnonymous = false)
+               NoIterator
+                (Func = func "bar"[ Int "c"; Bool "d" ],
+                 IsAnonymous = false) ])
+
+    [<Test>]
+    let ``Test nullary view prototype is not allowed`` () =
+        check parseViewProtoSet "view ;" None
 
 
 // Conversion of mattw's test cases into new system

@@ -164,7 +164,7 @@ module Types =
         | ThreadVars of Type * Var list // thread int name1, name2, name3;
         | Method of CMethod<Marked<View>> // method main(argv, argc) { ... }
         | Search of int // search 0;
-        | ViewProto of ViewProto // view name(int arg);
+        | ViewProtos of ViewProto list // view name(int arg);
         | Constraint of ViewSignature * Expression option // constraint emp => true
         override this.ToString() = sprintf "%A" this
     and ScriptItem = Node<ScriptItem'>
@@ -367,6 +367,11 @@ module Pretty =
                    squared (String i)]
             |> withSemi
 
+    /// Pretty-prints a view prototype.
+    let printViewProtoList (vps : ViewProto list) : Doc =
+        hsep [ syntax (String "view")
+               commaSep (List.map printViewProto vps) ]
+
     /// Pretty-prints a search directive.
     let printSearch (i : int) : Doc =
         hsep [ String "search" |> syntax
@@ -385,7 +390,7 @@ module Pretty =
         | Method m ->
             fun mdoc -> vsep [Nop; mdoc; Nop]
             <| printMethod (printMarkedView printView) (printCommand (printMarkedView printView)) m
-        | ViewProto v -> printViewProto v
+        | ViewProtos v -> printViewProtoList v
         | Search i -> printSearch i
         | Constraint (view, def) -> printConstraint view def
     let printScriptItem (x : ScriptItem) : Doc = printScriptItem' x.Node

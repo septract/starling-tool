@@ -61,7 +61,7 @@ module Pretty =
             withSemi (hsep [ String cls |> syntax; printTypedVar v ])
 
         let definites =
-            [ vsep <| Seq.map printViewProto cs.VProtos
+            [ vsep <| Seq.map (fun p -> printViewProtoList [p]) cs.VProtos
               vsep <| Seq.map (printScriptVar "shared") cs.SharedVars
               vsep <| Seq.map (printScriptVar "thread") cs.ThreadVars
               vsep <| Seq.map (uncurry printConstraint) cs.Constraints
@@ -114,7 +114,7 @@ let collate (script : ScriptItem list) : CollatedScript =
             // Flatten eg. 'int x, y, z' into 'int x; int y; int z'.
             let s = List.map (withType t) vs
             { cs with ThreadVars = s @ cs.ThreadVars }
-        | ViewProto v -> { cs with VProtos = v::cs.VProtos }
+        | ViewProtos v -> { cs with VProtos = v @ cs.VProtos }
         | Search i -> { cs with Search = Some i }
         | Method m -> { cs with Methods = m::cs.Methods }
         | Constraint (v, d) -> { cs with Constraints = (v, d)::cs.Constraints }

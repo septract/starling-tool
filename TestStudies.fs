@@ -313,14 +313,17 @@ let ticketLockParsed =
             { StreamName = "Examples/Pass/ticketLock.cvf"
               Line = 34L; Column = 1L }
         Node =
-            ViewProto <|
-                NoIterator ({ Name = "holdTick"; Params = [Int "t"] }, false) }
+            ViewProtos
+                [ NoIterator
+                    ({ Name = "holdTick"
+                       Params = [ Int "t" ] },
+                     false) ] }
       { Position =
             { StreamName = "Examples/Pass/ticketLock.cvf"
               Line = 35L; Column = 1L }
         Node =
-            ViewProto <|
-                NoIterator ({ Name = "holdLock"; Params = [] }, false) }
+            ViewProtos
+                [ NoIterator ({ Name = "holdLock"; Params = [] }, false) ] }
       { Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 38L;
                    Column = 1L;};
