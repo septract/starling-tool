@@ -134,13 +134,13 @@ let requestList : (string * (string * Request)) list =
        ("Proves as much as possible using SMT, returning the remaining proof.",
         Request.SMTProof Backends.Z3.Types.Request.RemainingSymBools))
       ("mutranslate",
-       ("Generates a proof using MuZ3 and outputs the individual terms.",
+       ("(EXPERIMENTAL: KNOWN TO BE UNSOUND) Generates a proof using MuZ3 and outputs the individual terms.",
         Request.MuZ3 Backends.MuZ3.Types.Request.Translate))
       ("mufix",
-       ("Generates a proof using MuZ3 and outputs the fixed point.",
+       ("(EXPERIMENTAL: KNOWN TO BE UNSOUND) Generates a proof using MuZ3 and outputs the fixed point.",
         Request.MuZ3 Backends.MuZ3.Types.Request.Fix))
       ("musat",
-       ("Executes a proof using MuZ3 and reports the result.",
+       ("(EXPERIMENTAL: KNOWN TO BE UNSOUND) Executes a proof using MuZ3 and reports the result.",
         Request.MuZ3 Backends.MuZ3.Types.Request.Sat))
       ("hsf",
        ("Outputs a proof in HSF format.",
