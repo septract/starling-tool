@@ -22,5 +22,5 @@ fi
 echo "--- STARLING ---"
 ./starling.sh -shsf $* | tee $tempfile
 echo "--- HSF ---"
-$QARMC $tempfile
+$QARMC -get-model $tempfile
 rm $tempfile
