@@ -214,6 +214,7 @@ module Types =
         | Search of int // search 0;
         | ViewProtos of ViewProto list // view name(int arg);
         | Constraint of ViewSignature * Expression option // constraint emp => true
+        | Exclusive of List<ViewSignature> // exclusive p(x), q(x), r(x) 
         override this.ToString() = sprintf "%A" this
     and ScriptItem = Node<ScriptItem'>
 
@@ -310,6 +311,12 @@ module Pretty =
                (match def with
                 | Some d -> printExpression d
                 | None _ -> String "?" |> syntax) ]
+        |> withSemi
+
+    /// Pretty-prints exclusivity constraints.
+    let printExclusive (xs : List<ViewSignature>) : Doc =
+        hsep ((String "exclusive") :: 
+              (List.map printViewSignature xs)) 
         |> withSemi
 
     /// Pretty-prints fetch modes.
@@ -473,6 +480,7 @@ module Pretty =
         | ViewProtos v -> printViewProtoList v
         | Search i -> printSearch i
         | Constraint (view, def) -> printConstraint view def
+        | Exclusive xs -> printExclusive xs 
     let printScriptItem (x : ScriptItem) : Doc = printScriptItem' x.Node
 
     /// Pretty-prints scripts.

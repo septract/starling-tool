@@ -1,0 +1,3 @@
+view foo(), bar(), baz(int x); 
+
+exclusive foo(), bar(), baz(x); 

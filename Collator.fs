@@ -94,6 +94,23 @@ let empty : CollatedScript =
       ThreadVars = [] }
 
 /// <summary>
+///     Make one view exclusive from a list of others. 
+/// </summary>
+let makeExclusiveSingle x xs = 
+  List.map 
+    (fun y -> (ViewSignature.Join (x,y), Some (freshNode False))) xs  
+
+
+/// <summary>
+///     Make a list of views mutually exclusive. 
+/// </summary>
+let rec makeExclusive xs = 
+    match xs with 
+    | x::xs' -> 
+        List.concat [ makeExclusiveSingle x xs'; makeExclusive xs'] 
+    | [] -> [] 
+
+/// <summary>
 ///     Collates a script, grouping all like-typed items together.
 /// </summary>
 /// <param name="script">
@@ -120,6 +137,9 @@ let collate (script : ScriptItem list) : CollatedScript =
         | Search i -> { cs with Search = Some i }
         | Method m -> { cs with Methods = m::cs.Methods }
         | Constraint (v, d) -> { cs with Constraints = (v, d)::cs.Constraints }
+        | Exclusive xs -> 
+            let exc = makeExclusive xs 
+            { cs with Constraints = List.concat [exc; cs.Constraints] } 
 
     // We foldBack instead of fold to preserve the original order.
     List.foldBack collateStep script empty
