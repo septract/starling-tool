@@ -56,6 +56,12 @@ method unlock() {
 }
 """
 
+let pos l c node =
+    { Position = { StreamName = "Examples/Pass/ticketLock.cvf"
+                   Line = l
+                   Column = c }
+      Node = node }
+
 /// The correct parsing of the ticket lock's lock method.
 let ticketLockLockMethodAST =
     {Signature = {Name = "lock";
@@ -64,36 +70,22 @@ let ticketLockLockMethodAST =
             {Pre = Unmarked Unit;
              Contents =
               [{Command =
-                 {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
-                              Line = 15L;
-                              Column = 5L;};
-                  Node =
-                   Command'.Prim
+                 pos 15L 5L
+                 <| Command'.Prim
                      {PreAssigns = [];
                       Atomics =
-                       [{Position =
-                          {StreamName = "Examples/Pass/ticketLock.cvf";
-                           Line = 15L;
-                           Column = 6L;};
-                         Node =
+                       [pos 15L 6L <|
                           Fetch
                             (LVIdent "t",
-                             {Position =
-                               {StreamName = "Examples/Pass/ticketLock.cvf";
-                                Line = 15L;
-                                Column = 10L;};
-                              Node = LV (LVIdent "ticket");},Increment);}];
-                      PostAssigns = [];};};
+                             pos 15L 10L <| LV (LVIdent "ticket"), Increment);];
+                      PostAssigns = [];};
                 Post =
                  Unmarked
                    (View.Func
                       {Name = "holdTick";
                        Params =
-                        [{Position =
-                           {StreamName = "Examples/Pass/ticketLock.cvf";
-                            Line = 16L;
-                            Column = 15L;};
-                          Node = LV (LVIdent "t");}];});};
+                        [pos 16L 15L <| LV (LVIdent "t")] })};
+
                {Command =
                  {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                               Line = 17L;
@@ -211,8 +203,8 @@ let ticketLockUnlockMethodAST =
                   PostAssigns = [];};};
             Post = Unmarked Unit;}];};};
 
-let ticketLockConstraint01 = 
-    (DView.Unit,
+let ticketLockConstraint01 =
+    (ViewSignature.Unit,
      Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 38L;
@@ -229,7 +221,7 @@ let ticketLockConstraint01 =
             Node = LV (LVIdent "serving");});})
 
 let ticketLockConstraint02 =
-    (DView.Func {Name = "holdTick";
+    (ViewSignature.Func {Name = "holdTick";
             Params = ["t"];},
      Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
@@ -247,7 +239,7 @@ let ticketLockConstraint02 =
             Node = LV (LVIdent "t");});})
 
 let ticketLockConstraint03 =
-    (DView.Func {Name = "holdLock";
+    (ViewSignature.Func {Name = "holdLock";
             Params = [];},
      Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
@@ -265,9 +257,9 @@ let ticketLockConstraint03 =
             Node = LV (LVIdent "serving");});})
 
 let ticketLockConstraint04 =
-    (DView.Join (DView.Func {Name = "holdLock";
+    (ViewSignature.Join (ViewSignature.Func {Name = "holdLock";
                              Params = [];},
-                 DView.Func {Name = "holdTick";
+                 ViewSignature.Func {Name = "holdTick";
                              Params = ["t"];}),
      Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
@@ -285,9 +277,9 @@ let ticketLockConstraint04 =
             Node = LV (LVIdent "t");});})
 
 let ticketLockConstraint05 =
-    (DView.Join (DView.Func {Name = "holdTick";
+    (ViewSignature.Join (ViewSignature.Func {Name = "holdTick";
                              Params = ["ta"];},
-                 DView.Func {Name = "holdTick";
+                 ViewSignature.Func {Name = "holdTick";
                              Params = ["tb"];}),
      Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
@@ -304,10 +296,10 @@ let ticketLockConstraint05 =
                         Column = 49L;};
             Node = LV (LVIdent "tb");});})
 
-let ticketLockConstraint06 = 
-    (DView.Join (DView.Func {Name = "holdLock";
+let ticketLockConstraint06 =
+    (ViewSignature.Join (ViewSignature.Func {Name = "holdLock";
                              Params = [];},
-                 DView.Func {Name = "holdLock";
+                 ViewSignature.Func {Name = "holdLock";
                              Params = [];}),
      Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
@@ -317,23 +309,23 @@ let ticketLockConstraint06 =
 
 /// The parsed form of the ticket lock.
 let ticketLockParsed =
-      [ 
-      { Position = { StreamName = "Examples/Pass/ticketLock.cvf";
-                   Line = 34L;
-                   Column = 1L; };
-        Node = ViewProto {Name = "holdTick";
-                         Params = [Int "t"];};};
+    [ { Position =
+            { StreamName = "Examples/Pass/ticketLock.cvf"
+              Line = 34L; Column = 1L }
+        Node =
+            ViewProto <|
+                NoIterator ({ Name = "holdTick"; Params = [Int "t"] }, false) }
+      { Position =
+            { StreamName = "Examples/Pass/ticketLock.cvf"
+              Line = 35L; Column = 1L }
+        Node =
+            ViewProto <|
+                NoIterator ({ Name = "holdLock"; Params = [] }, false) }
       { Position = {StreamName = "Examples/Pass/ticketLock.cvf";
-                   Line = 35L;
-                   Column = 1L;};
-        Node = ViewProto {Name = "holdLock";
-                         Params = []} }
-
-      {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 38L;
                    Column = 1L;};
        Node =
-        Constraint ticketLockConstraint01} 
+        Constraint ticketLockConstraint01}
 
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 41L;
@@ -380,8 +372,8 @@ let ticketLockParsed =
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 8L;
                    Column = 1L;};
-       Node = Local (Int "s");}; 
-        
+       Node = Local (Int "s");};
+
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 13L;
                    Column = 1L;};
@@ -403,10 +395,8 @@ let ticketLockCollated =
             (TypedVar.Int "s") ]
       Search = None
       VProtos =
-          [ { Name = "holdTick"
-              Params = [ (Int "t") ] }
-            { Name = "holdLock"
-              Params = [] } ]
+          [ NoIterator ({ Name = "holdTick"; Params = [ (Int "t") ] }, false)
+            NoIterator ({ Name = "holdLock"; Params = [] }, false) ]
       Constraints =
           [ // constraint emp -> ticket >= serving;
             ticketLockConstraint01
@@ -427,17 +417,27 @@ let sing = Multiset.singleton
 
 /// The conditional holdLock view.
 let holdLock =
-    svfunc "holdLock" [] |> Func
+    { Func = Func (svfunc "holdLock" [])
+      Iterator = None }
 
 /// The conditional holdTick view.
 let holdTick =
-    svfunc "holdTick" [SVExpr.Int (siVar "t")] |> Func
+    { Func = Func (svfunc "holdTick" [SVExpr.Int (siVar "t")])
+      Iterator = None }
+
+
+let oneGFunc (cnd : BoolExpr<Sym<Var>>) (name : string)
+  (ps : Expr<Sym<Var>> list)
+  : IteratedGFunc<Sym<Var>> =
+    iterated (svgfunc cnd name ps) (AInt 1L)
 
 /// The guarded holdLock view.
-let gHoldLock cnd : SVGFunc = svgfunc cnd "holdLock" []
+let gHoldLock cnd : IteratedGFunc<Sym<Var>> =
+    oneGFunc cnd "holdLock" []
 
 /// The guarded holdTick view.
-let gHoldTick cnd : SVGFunc = svgfunc cnd "holdTick" [SVExpr.Int (siVar "t")]
+let gHoldTick cnd : IteratedGFunc<Sym<Var>> =
+    oneGFunc cnd "holdTick" [SVExpr.Int (siVar "t")]
 
 /// Produces the expression 's!before == t!before'.
 let sIsT = iEq (siVar "s") (siVar "t")
@@ -446,31 +446,34 @@ let sIsT = iEq (siVar "s") (siVar "t")
 let ticketLockLock =
     { Signature = func "lock" []
       Body =
-          { Pre = Mandatory <| Multiset.empty
-            Contents =
-                [ { Command =
-                        command "!ILoad++" [ Int "t"; Int "ticket" ]
-                             [ SMExpr.Int (siBefore "ticket") ]
-                        |> List.singleton |> Prim
-                    Post = Mandatory <| sing holdTick }
-                  { Command =
-                        While (isDo = true,
-                               expr = BNot sIsT,
-                               inner =
-                                   { Pre = Mandatory <| sing holdTick
-                                     Contents =
-                                         [ { Command =
-                                                 command "!ILoad" [ Int "s" ]
-                                                      [ SMExpr.Int (siBefore "serving") ]
-                                                 |> List.singleton |> Prim
-                                             Post =
+        { Pre = Mandatory <| Multiset.empty
+          Contents =
+            [ { Command =
+                    command "!ILoad++"
+                        [ Int "t"; Int "ticket" ]
+                        [ SMExpr.Int (siBefore "ticket") ]
+                    |> List.singleton |> Prim
+                Post = Mandatory <| sing holdTick }
+              { Command =
+                    While (isDo = true,
+                           expr = BNot sIsT,
+                           inner =
+                               { Pre = Mandatory <| sing holdTick
+                                 Contents =
+                                     [ { Command =
+                                             command "!ILoad" [ Int "s" ]
+                                                  [ SMExpr.Int (siBefore "serving") ]
+                                             |> List.singleton |> Prim
+                                         Post =
+                                            { Func =
+                                                CFunc.ITE
                                                  (sIsT,
                                                   sing holdLock,
                                                   sing holdTick)
-                                                 |> CFunc.ITE
-                                                 |> Multiset.singleton
-                                                 |> Mandatory } ] } )
-                    Post = Mandatory <| sing holdLock } ] } }
+                                              Iterator = None }
+                                             |> Multiset.singleton
+                                             |> Mandatory } ] } )
+                Post = Mandatory <| sing holdLock } ] } }
 
 /// The ticket lock's unlock method.
 let ticketLockUnlock =
@@ -491,7 +494,7 @@ let ticketLockMethods =
 
 
 /// The ticket lock's lock method, in guarded form.
-let ticketLockGuardedLock =
+let ticketLockGuardedLock : GuarderMethod =
     { Signature = func "lock" []
       Body =
           { Pre = Mandatory <| Multiset.empty
@@ -536,32 +539,34 @@ let ticketLockGuardedUnlock : GuarderMethod =
 let ticketLockViewDefs =
     [([],
       Some <| BGe(siVar "ticket", siVar "serving"))
-     (Multiset.ofFlatList
-          [ { Name = "holdTick"
-              Params = [ Int "t" ] } ] |> Multiset.toFlatList,
+     ([ { Func = { Name = "holdTick"; Params = [ Int "t" ] }
+          Iterator = None } ],
       Some <| BGt(siVar "ticket", siVar "t"))
-     (Multiset.ofFlatList
-          [ { Name = "holdLock"
-              Params = [] } ] |> Multiset.toFlatList,
+     ([ { Func = { Name = "holdLock"; Params = [] }
+          Iterator = None } ],
       Some <| BNot (iEq (siVar "ticket") (siVar "serving")))
-     (Multiset.ofFlatList
-          [ { Name = "holdLock"
-              Params = [] }
-            { Name = "holdTick"
-              Params = [ Int "t" ] } ] |> Multiset.toFlatList,
+     ([ { Func = { Name = "holdLock"; Params = [] }
+          Iterator = None }
+        { Func = { Name = "holdTick"; Params = [ Int "t" ] }
+          Iterator = None } ],
       Some <| BNot(iEq (siVar "serving") (siVar "t")))
-     (Multiset.ofFlatList
-          [ { Name = "holdTick"
-              Params = [ Int "ta" ] }
-            { Name = "holdTick"
-              Params = [ Int "tb" ] } ] |> Multiset.toFlatList,
+     ([ { Func = { Name = "holdTick"; Params = [ Int "ta" ] }
+          Iterator = None }
+        { Func = { Name = "holdTick"; Params = [ Int "tb" ] }
+          Iterator = None } ],
       Some <| BNot(iEq (siVar "ta") (siVar "tb")))
-     (Multiset.ofFlatList
-          [ { Name = "holdLock"
-              Params = [] }
-            { Name = "holdLock"
-              Params = [] } ] |> Multiset.toFlatList,
+     ([ { Func = { Name = "holdLock"; Params = [] }
+          Iterator = None }
+        { Func = { Name = "holdLock"; Params = [] }
+          Iterator = None } ],
       Some BFalse) ]
+
+let ticketLockViewProtos : FuncDefiner<ProtoInfo> =
+    FuncDefiner.ofSeq
+        [ ({ Name = "holdTick"; Params = [ Int "t" ] },
+           { IsIterated = false; IsAnonymous = false })
+          ({ Name = "holdLock"; Params = [] },
+           { IsIterated = false; IsAnonymous = false }) ]
 
 /// The model of the ticket lock.
 let ticketLockModel : Model<ModellerMethod, ViewDefiner<SVBoolExpr option>> =
@@ -573,4 +578,5 @@ let ticketLockModel : Model<ModellerMethod, ViewDefiner<SVBoolExpr option>> =
                        ("t", Type.Int ()) ]
       Axioms = ticketLockMethods
       ViewDefs = ticketLockViewDefs
+      ViewProtos = ticketLockViewProtos
       Semantics = Starling.Lang.Modeller.coreSemantics }

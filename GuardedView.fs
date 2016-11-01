@@ -71,6 +71,15 @@ module Types =
     type GFunc<'var> when 'var : equality = Guarded<'var, VFunc<'var>>
 
     /// <summary>
+    ///     A guarded iterated <c>VFunc</c>.
+    /// </summary>
+    /// <typeparam name="Var">
+    ///     The type of variables in the guard.
+    /// </typeparam>
+    type IteratedGFunc<'Var> when 'Var : equality =
+        IteratedContainer<GFunc<'Var>, IntExpr<'Var>>
+
+    /// <summary>
     ///     A <c>GFunc</c> over <c>MarkedVar</c>s.
     /// </summary>
     type MGFunc = GFunc<MarkedVar>
@@ -99,8 +108,24 @@ module Types =
     type GView<'var> when 'var : comparison =
         Multiset<GFunc<'var>>
 
+    /// An iterated GView
+    /// i.e. a GView but containing Iterated forms of the GFunc's
+    type IteratedGView<'var> when 'var : comparison =
+        Multiset<IteratedGFunc<'var>>
+
     /// <summary>
     ///     A view produced by expanding a sub-view of an guarded view.
+    ///     <para>
+    ///         The entire view (not its individual funcs) is guarded, by the
+    ///         conjunction of the guards over the sub-view's original guarded
+    ///         funcs.
+    ///     </para>
+    /// </summary>
+    type GuardedIteratedSubview = Guarded<Sym<MarkedVar>, IteratedOView>
+
+    /// <summary>
+    ///     A view produced by iter-lowering a
+    ///     <see cref="GuardedIteratedSubView"/>.
     ///     <para>
     ///         The entire view (not its individual funcs) is guarded, by the
     ///         conjunction of the guards over the sub-view's original guarded
@@ -192,6 +217,24 @@ let mgfunc (guard : MBoolExpr) (name : string) (pars : MExpr seq) : MGFunc =
 let smgfunc (guard : SMBoolExpr) (name : string) (pars : SMExpr seq) : SMGFunc =
     gfunc guard name pars
 
+/// <summary>
+///     Constructs an iterated guarded func.
+/// </summary>
+/// <param name="guard">The guard on which the func is conditional.</param>
+/// <param name="name">The name of the func.</param>
+/// <param name="pars">The parameters of the func, as a sequence.</param>
+/// <param name="iter">The iterator.</param>
+/// <typeparam name="Var">The type of expression variables.</typeparam>
+/// <returns>
+///     The <see cref="IteratedGFunc"/> iterating over the func with name
+///     <paramref name="name"/> and params <paramref name="pars"/>
+///     <paramref name="it"/> times, subject to <paramref name="guard"/>
+///     holding.
+/// </returns>
+let iteratedGFunc (guard : BoolExpr<'Var>) (name : string)
+  (pars : Expr<'Var> seq) (iter : IntExpr<'Var>)
+  : IteratedGFunc<'Var> =
+    iterated (gfunc guard name pars) iter
 
 (*
  * Single-guard active patterns.
@@ -231,6 +274,7 @@ let (|Never|_|)
 let gFuncTuple
   ({ Cond = c ; Item = i } : Guarded<'var, 'item>)
   : BoolExpr<'var> * 'item = (c, i)
+
 
 /// <summary>
 ///     Maps over the condition of a guard.
@@ -319,26 +363,24 @@ let pruneGuardedSet (gset : Multiset<Guarded<_, _>>)
                    | _       -> true)
     |> Multiset.ofFlatSeq
 
-/// <summary>
-/// Given a guarded View over Symbolic Var's return the set of all
-/// variables and their types that are in the view definition.
-/// </summary>
-let SVGViewVars : GView<Sym<Var>> -> Set<TypedVar> =
-    fun v ->
-        let l = Multiset.toSet v
+/// Gets a Set of TypedVar's from an Expr
+let varsFromExpr : Expr<Sym<Var>> -> Set<TypedVar> =
+    function
+    | Bool e -> mapOverSymVars Mapper.mapBoolCtx findSymVars e
+    | Int e -> mapOverSymVars Mapper.mapIntCtx findSymVars e
 
-        let symVarExprs =
-            function
-            | Bool e -> mapOverSymVars Mapper.mapBoolCtx findSymVars e
-            | Int e -> mapOverSymVars Mapper.mapIntCtx findSymVars e
+/// Gets set of TypedVar's from a GFunc
+let gFuncVars ({ Cond = g; Item = f} : GFunc<Sym<Var>>) : Set<TypedVar> =
+    let condvars = mapOverSymVars Mapper.mapBoolCtx findSymVars g
+    let itemvars = Set.unionMany (List.map varsFromExpr f.Params)
+    condvars + itemvars
 
-        let gfuncVars gf = Set.fold (+) Set.empty (Set.ofList (List.map symVarExprs gf.Params))
-
-        let vars(g, gf) =
-            mapOverSymVars Mapper.mapBoolCtx findSymVars g
-            + gfuncVars gf
-
-        Set.fold (+) Set.empty (Set.map (vars << gFuncTuple) l)
+/// Gets set of TypedVars from an IteratedGFunc
+let iteratedGFuncVars ({ Func = f; Iterator = it } : IteratedGFunc<Sym<Var>>)
+  : Set<TypedVar> =
+    let funcvars = gFuncVars f
+    let iteratorvars = mapOverSymVars Mapper.mapIntCtx findSymVars it
+    funcvars + iteratorvars
 
 /// <summary>
 ///     Pretty printers for guarded items.
@@ -465,6 +507,11 @@ module Pretty =
         printMultiset (printGFunc pVar)
         >> ssurround "<|" "|>"
 
+    let printIteratedGView (pVar : 'var -> Doc) : IteratedGView<'var> -> Doc =
+        printMultiset
+            (printIteratedContainer (printGFunc pVar) (printIntExpr pVar))
+        >> ssurround "<|" "|>"
+
     /// <summary>
     ///     Pretty-prints a guarded view over <c>MarkedVar</c>s.
     /// </summary>
@@ -488,6 +535,17 @@ module Pretty =
     let printSVGView : GView<Sym<Var>> -> Doc = printGView (printSym String)
 
     /// <summary>
+    ///     Pretty-prints an iterated guarded view over symbolic <c>Var</c>s.
+    /// </summary>
+    /// <param name="_arg1">
+    ///     The view to print.
+    /// </param>
+    /// <returns>
+    ///     A pretty-printer command to print the view.
+    /// </returns>
+    let printIteratedSVGView : IteratedGView<Sym<Var>> -> Doc = printIteratedGView (printSym String)
+
+    /// <summary>
     ///     Pretty-prints a guarded view over symbolic <c>MarkedVar</c>s.
     /// </summary>
     /// <param name="_arg1">
@@ -500,22 +558,35 @@ module Pretty =
         printGView (printSym printMarkedVar)
 
     /// <summary>
-    ///     Pretty-prints a guarded subview set over symbolic <c>MarkedVar</c>s.
+    ///     Pretty-prints a set of subviews.
     /// </summary>
-    /// <param name="_arg1">
-    ///     The <see cref="GuardedSubview"/> set to print.
+    /// <param name="pSubview">
+    ///     A pretty-printer for the subview.
     /// </param>
+    /// <typeparam name="Subview">
+    ///     The type of subviews in the set.
+    /// </typeparam>
     /// <returns>
-    ///     A pretty-printer command to print the <see cref="GuardedSubview"/>
-    ///     set.
+    ///     A function printing subview sets.
     /// </returns>
-    let printGuardedSubviewSet : Set<GuardedSubview> -> Doc =
+    let printSubviewSet (pSubview : 'Subview -> Doc) : Set<'Subview> -> Doc =
         Set.toSeq
-        >> Seq.map (printGuarded (printSym printMarkedVar) printOView
-                    >> ssurround "((" "))")
+        >> Seq.map (pSubview >> ssurround "((" "))")
         >> commaSep
         >> ssurround "[" "]"
 
+    /// <summary>
+    ///     Pretty-prints a guarded iterated subview over symbolic
+    ///     <c>MarkedVar</c>s.
+    /// </summary>
+    let printGuardedIteratedSubview : GuardedIteratedSubview -> Doc =
+        printGuarded (printSym printMarkedVar) printIteratedOView
+
+    /// <summary>
+    ///     Pretty-prints a guarded subview over symbolic <c>MarkedVar</c>s.
+    /// </summary>
+    let printGuardedSubview : GuardedSubview -> Doc =
+        printGuarded (printSym printMarkedVar) printOView
 
 /// <summary>
 ///     Functions for substituting over guarded views.
@@ -535,7 +606,7 @@ module Sub =
     ///     The context to pass to the <c>SubFun</c>.
     /// </param>
     /// <param name="_arg1">
-    ///   The <c>GFunc</c> over which whose expressions are to be mapped.
+    ///   The iterated <c>GFunc</c> over which whose expressions are to be mapped.
     /// </param>
     /// <typeparam name="srcVar">
     ///     The type of variables entering the map.
@@ -573,6 +644,45 @@ module Sub =
         (context', { Cond = cond'; Item = item' } )
 
     /// <summary>
+    ///   Maps a <c>SubFun</c> over all expressions in an iterated <c>GFunc</c>.
+    /// </summary>
+    /// <param name="sub">
+    ///     The <c>SubFun</c> to map.
+    /// </param>
+    /// <param name="context">
+    ///     The context to pass to the <c>SubFun</c>.
+    /// </param>
+    /// <param name="_arg1">
+    ///   The <c>IteratedGFunc</c> over which whose expressions are to be
+    ///   mapped.
+    /// </param>
+    /// <typeparam name="SrcVar">
+    ///     The type of variables entering the map.
+    /// </typeparam>
+    /// <typeparam name="DstVar">
+    ///     The type of variables leaving the map.
+    /// </typeparam>
+    /// <returns>
+    ///   The <c>IteratedGFunc</c> resulting from the mapping.
+    /// </returns>
+    /// <remarks>
+    ///   <para>
+    ///     The expressions in an <c>IteratedGFunc</c> are the guard itself, the
+    ///     iterator if it exists, and the expressions of the enclosed
+    ///     <c>VFunc</c>.
+    ///   </para>
+    /// </remarks>
+    let subExprInIteratedGFunc
+      (sub : SubFun<'SrcVar, 'DstVar>)
+      (context : SubCtx)
+      ( { Iterator = iter ; Func = func } : IteratedGFunc<'SrcVar> )
+      : (SubCtx * IteratedGFunc<'DstVar>) =
+        let contextI, iter' = Mapper.mapIntCtx sub context iter
+        let context', func' = subExprInGFunc sub contextI func
+
+        (context', { Iterator = iter'; Func = func' } )
+
+    /// <summary>
     ///   Maps a <c>SubFun</c> over all expressions in a <c>GView</c>.
     /// </summary>
     /// <param name="sub">
@@ -608,6 +718,49 @@ module Sub =
                  Position.changePos
                      id
                      (subExprInGFunc sub)
+                     ctx
+                     f)
+            context
+
+    /// <summary>
+    ///   Maps a <c>SubFun</c> over all expressions in an <c>IteratedGView</c>.
+    /// </summary>
+    /// <param name="sub">
+    ///   The <c>SubFun</c> to map over all expressions in the
+    ///   <c>IteratedGView</c>.
+    /// </param>
+    /// <param name="context">
+    ///     The context to pass to the <c>SubFun</c>.
+    /// </param>
+    /// <param name="_arg1">
+    ///   The <c>IteratedGView</c> over which whose expressions are to be
+    ///   mapped.
+    /// </param>
+    /// <typeparam name="srcVar">
+    ///     The type of variables entering the map.
+    /// </typeparam>
+    /// <typeparam name="dstVar">
+    ///     The type of variables leaving the map.
+    /// </typeparam>
+    /// <returns>
+    ///   The <c>IteratedGView</c> resulting from the mapping.
+    /// </returns>
+    /// <remarks>
+    ///   <para>
+    ///     The expressions in an <c>IteratedGView</c> are those of its
+    ///     constituent <c>IteratedGFunc</c>s.
+    ///   </para>
+    /// </remarks>
+    let subExprInIteratedGView
+      (sub : SubFun<'SrcVar, 'DstVar>)
+      (context : SubCtx)
+      : IteratedGView<'SrcVar> -> (SubCtx * IteratedGView<'DstVar>) =
+        // TODO(CaptainHayashi): De-duplicate this from above.
+        Multiset.mapAccum
+            (fun ctx f _ ->
+                 Position.changePos
+                     id
+                     (subExprInIteratedGFunc sub)
                      ctx
                      f)
             context
@@ -879,265 +1032,3 @@ module Sub =
              cmd'
              wpre'
              goal')
-
-/// <summary>
-///     Tests for guarded views.
-/// </summary>
-module Tests =
-    open NUnit.Framework
-
-    open Starling.Utils.Testing
-    open Starling.Core.TypeSystem
-
-    /// <summary>
-    ///     Test substitution function for position-based substitution.
-    /// </summary>
-    let positionTestSub =
-        (onVars
-             (Mapper.makeCtx
-                  (fun ctx _ ->
-                       (ctx,
-                        match ctx with
-                        | Positions (Positive::xs) -> AInt 1L
-                        | Positions (Negative::xs) -> AInt 0L
-                        | _ -> AInt -1L ))
-                  (fun ctx _ ->
-                       (ctx,
-                        match ctx with
-                        | Positions (x::xs) -> Position.overapprox x
-                        | _ -> BVar "?"))))
-
-    /// <summary>
-    ///     NUnit tests for guarded views.
-    /// </summary>
-    type NUnit () =
-        /// <summary>
-        ///     Case studies for <c>testPositionSubExprInGFunc</c>.
-        /// </summary>
-        static member PositionSubExprInGFuncCases =
-            [ (tcd
-                   [| gfunc (BVar "foo") "bar"
-                          [ Typed.Int (AVar "baz")
-                            Typed.Bool (BVar "fizz") ]
-                      Position.positive |] )
-                  .Returns(
-                      (Position.positive,
-                       (gfunc BFalse "bar"
-                            [ Typed.Int (AInt 1L)
-                              Typed.Bool BTrue ] : GFunc<Var> )))
-                  .SetName("GFunc substitution in +ve case works properly")
-              (tcd
-                   [| gfunc (BVar "foo") "bar"
-                          [ Typed.Int (AVar "baz")
-                            Typed.Bool (BVar "fizz") ]
-                      Position.negative |] )
-                  .Returns(
-                      (Position.negative,
-                       (gfunc BTrue "bar"
-                            [ Typed.Int (AInt 0L)
-                              Typed.Bool BFalse ] : GFunc<Var> )))
-                  .SetName("GFunc substitution in -ve case works properly") ]
-
-        /// <summary>
-        ///     Tests <c>subExprInGFunc</c> on positional substitutions.
-        /// </summary>
-        [<TestCaseSource("PositionSubExprInGFuncCases")>]
-        member this.testPositionSubExprInGFunc
-          (gf : GFunc<Var>)
-          (pos : SubCtx) =
-            Sub.subExprInGFunc
-                positionTestSub
-                pos
-                gf
-
-        /// <summary>
-        ///     Case studies for <c>testPositionSubExprInGView</c>.
-        /// </summary>
-        static member PositionSubExprInGViewCases =
-            [ (tcd
-                   [| (Multiset.empty : GView<Var>)
-                      Position.positive |] )
-                  .Returns(
-                      (Position.positive,
-                       (Multiset.empty : GView<Var>)))
-                  .SetName("+ve empty GView substitution is a no-op")
-              (tcd
-                   [| (Multiset.empty : GView<Var>)
-                      Position.negative |] )
-                  .Returns(
-                      (Position.negative,
-                       (Multiset.empty : GView<Var>)))
-                  .SetName("-ve empty GView substitution is a no-op")
-              (tcd
-                   [| Multiset.singleton
-                          (gfunc (BVar "foo") "bar"
-                               [ Typed.Int (AVar "baz")
-                                 Typed.Bool (BVar "fizz") ] )
-                      Position.positive |] )
-                  .Returns(
-                      (Position.positive,
-                       (Multiset.singleton
-                            (gfunc BFalse "bar"
-                                 [ Typed.Int (AInt 1L)
-                                   Typed.Bool BTrue ] ) : GView<Var> )))
-                  .SetName("Singleton GView substitution in +ve case works properly")
-              (tcd
-                   [| Multiset.singleton
-                          (gfunc (BVar "foo") "bar"
-                               [ Typed.Int (AVar "baz")
-                                 Typed.Bool (BVar "fizz") ] )
-                      Position.negative |] )
-                  .Returns(
-                      (Position.negative,
-                       (Multiset.singleton
-                            (gfunc BTrue "bar"
-                                 [ Typed.Int (AInt 0L)
-                                   Typed.Bool BFalse ] ) : GView<Var> )))
-                  .SetName("Singleton GView substitution in -ve case works properly")
-              (tcd
-                   [| Multiset.ofFlatList
-                          [ gfunc (BVar "foo") "bar"
-                                [ Typed.Int (AVar "baz")
-                                  Typed.Bool (BVar "fizz") ]
-                            gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
-                                [ Typed.Int
-                                      (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ]
-                      Position.positive |] )
-                  .Returns(
-                      (Position.positive,
-                       (Multiset.ofFlatList
-                            [ gfunc BFalse "bar"
-                                  [ Typed.Int (AInt 1L)
-                                    Typed.Bool BTrue ]
-                              gfunc (BGt (AInt 0L, AInt 0L)) "barbaz"
-                                  [ Typed.Int
-                                        (AAdd [ AInt 1L; AInt 1L ]) ] ]
-                        : GView<Var>)))
-                  .SetName("Multi GView substitution in +ve case works properly")
-              (tcd
-                   [| Multiset.ofFlatList
-                          [ gfunc (BVar "foo") "bar"
-                                [ Typed.Int (AVar "baz")
-                                  Typed.Bool (BVar "fizz") ]
-                            gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
-                                [ Typed.Int
-                                      (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ]
-                      Position.negative |] )
-                  .Returns(
-                      (Position.negative,
-                       (Multiset.ofFlatList
-                            [ gfunc BTrue "bar"
-                                  [ Typed.Int (AInt 0L)
-                                    Typed.Bool BFalse ]
-                              gfunc (BGt (AInt 1L, AInt 1L)) "barbaz"
-                                  [ Typed.Int
-                                        (AAdd [ AInt 0L; AInt 0L ]) ] ]
-                        : GView<Var>)))
-                  .SetName("Multi GView substitution in -ve case works properly") ]
-
-        /// <summary>
-        ///     Tests <c>subExprInGView</c> on positional substitutions.
-        /// </summary>
-        [<TestCaseSource("PositionSubExprInGViewCases")>]
-        member this.testPositionSubExprInGView
-          (gv : GView<Var>)
-          (pos : SubCtx) =
-            Sub.subExprInGView
-                positionTestSub
-                pos
-                gv
-
-        /// <summary>
-        ///     Case studies for <c>testPositionSubExprInDTerm</c>.
-        /// </summary>
-        static member PositionSubExprInDTermCases =
-            [ (tcd
-                   [| ( { Cmd =
-                              BAnd
-                                  [ bEq (BVar "foo") (BVar "bar")
-                                    bEq (BVar "baz") (BNot (BVar "baz")) ]
-                          WPre =
-                              Multiset.ofFlatList
-                                  [ gfunc (BVar "foo") "bar"
-                                        [ Typed.Int (AVar "baz")
-                                          Typed.Bool (BVar "fizz") ]
-                                    gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
-                                        [ Typed.Int
-                                              (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ]
-                          Goal =
-                              (vfunc "bar"
-                                   [ Typed.Int (AVar "baz")
-                                     Typed.Bool (BVar "barbaz") ] : VFunc<Var> ) }
-                       : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>> )
-                      Position.positive |] )
-                  .Returns(
-                      (Position.positive,
-                       ( { Cmd =
-                               BAnd
-                                   [ bEq BFalse BFalse
-                                     bEq BFalse (BNot BTrue) ]
-                           WPre =
-                               Multiset.ofFlatList
-                                   [ gfunc BTrue "bar"
-                                         [ Typed.Int (AInt 0L)
-                                           Typed.Bool BFalse ]
-                                     gfunc (BGt (AInt 1L, AInt 1L)) "barbaz"
-                                         [ Typed.Int
-                                               (AAdd [ AInt 0L; AInt 0L ]) ] ]
-                           Goal =
-                               (vfunc "bar"
-                                    [ Typed.Int (AInt 1L)
-                                      Typed.Bool BTrue ] : VFunc<Var> ) }
-                        : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>> )))
-                  .SetName("Successfully translate a positive DTerm")
-              (tcd
-                   [| ( { Cmd =
-                              BAnd
-                                  [ bEq (BVar "foo") (BVar "bar")
-                                    bEq (BVar "baz") (BNot (BVar "baz")) ]
-                          WPre =
-                              Multiset.ofFlatList
-                                  [ gfunc (BVar "foo") "bar"
-                                        [ Typed.Int (AVar "baz")
-                                          Typed.Bool (BVar "fizz") ]
-                                    gfunc (BGt (AVar "foobar", AVar "barbar")) "barbaz"
-                                        [ Typed.Int
-                                              (AAdd [ AVar "foobaz"; AVar "bazbaz" ]) ] ]
-                          Goal =
-                              (vfunc "bar"
-                                   [ Typed.Int (AVar "baz")
-                                     Typed.Bool (BVar "barbaz") ] : VFunc<Var> ) }
-                       : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>> )
-                      Position.negative |] )
-                  .Returns(
-                      (Position.negative,
-                       ( { Cmd =
-                               BAnd
-                                   [ bEq BTrue BTrue
-                                     bEq BTrue (BNot BFalse) ]
-                           WPre =
-                               Multiset.ofFlatList
-                                   [ gfunc BFalse "bar"
-                                         [ Typed.Int (AInt 1L)
-                                           Typed.Bool BTrue ]
-                                     gfunc (BGt (AInt 0L, AInt 0L)) "barbaz"
-                                         [ Typed.Int
-                                               (AAdd [ AInt 1L; AInt 1L ]) ] ]
-                           Goal =
-                               (vfunc "bar"
-                                    [ Typed.Int (AInt 0L)
-                                      Typed.Bool BFalse ] : VFunc<Var> ) }
-                        : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>> )))
-                  .SetName("Successfully translate a negative DTerm") ]
-
-        /// <summary>
-        ///     Tests <c>subExprInDTerm</c> on positional substitutions.
-        /// </summary>
-        [<TestCaseSource("PositionSubExprInDTermCases")>]
-        member this.testPositionSubExprInDTerm
-          (t : Term<BoolExpr<Var>, GView<Var>, VFunc<Var>>)
-          (pos : SubCtx) =
-            Sub.subExprInDTerm
-                positionTestSub
-                pos
-                t

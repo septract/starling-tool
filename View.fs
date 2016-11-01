@@ -40,18 +40,103 @@ module Types =
     /// A func over symbolic-marked-var expressions.
     type SMVFunc = ExprFunc<Sym<MarkedVar>>
 
+    /// <summary>
+    ///     A wrapper over funcs that adds an iterator.
+    /// </summary>
+    /// <typeparam name="Func">The type of wrapped funcs.</typeparam>
+    /// <typeparam name="Iterator">The type of the iterator.</typeparam>
+    type IteratedContainer<'Func, 'Iterator> =
+        { Func : 'Func; Iterator : 'Iterator }
+        override this.ToString () =
+            sprintf "iter[%A](%A)" this.Iterator this.Func
+
+    /// <summary>
+    ///     Constructs an iterated container.
+    /// </summary>
+    /// <param name="f">The func to iterate.</param>
+    /// <param name="it">The iterator to use.</param>
+    /// <typeparam name="Func">The type of func to iterate.</typeparam>
+    /// <typeparam name="Iterator type of iterator to use.</typeparam>
+    /// <returns>
+    ///     The <see cref="IteratedContainer"/> iterating over
+    ///     <paramref name="f"/> <paramref name="it"/> times.
+    /// </returns>
+    let iterated (f : 'Func) (it : 'Iterator)
+      : IteratedContainer<'Func, 'Iterator> =
+        { Func = f; Iterator = it }
+
+    /// <summary>
+    ///     Maps over the func inside an iterated container.
+    /// </summary>
+    /// <param name="f">The mapping function to use.</param>
+    /// <typeparam name="FuncA">The type of func before the map.</typeparam>
+    /// <typeparam name="FuncB">The type of func after the map.</typeparam>
+    /// <typeparam name="Iterator">The type of iterator.</typeparam>
+    /// <returns>
+    ///     A function mapping <paramref name="f"/> over the func of an
+    ///     <see cref="IteratedContainer"/>.
+    // </returns>
+    let mapIterated (f : 'FuncA -> 'FuncB)
+      ({ Func = v; Iterator = i } : IteratedContainer<'FuncA, 'Iterator>)
+      : IteratedContainer<'FuncB, 'Iterator> =
+        { Func = f v; Iterator = i }
+
+    /// <summary>
+    ///     Maps over the iterator an iterated container.
+    /// </summary>
+    /// <param name="f">The mapping function to use.</param>
+    /// <typeparam name="Func">The type of func.</typeparam>
+    /// <typeparam name="IterA">The iterator type before the map.</typeparam>
+    /// <typeparam name="IterB">The iterator type after the map.</typeparam>
+    /// <returns>
+    ///     A function mapping <paramref name="f"/> over the iterator of an
+    ///     <see cref="IteratedContainer"/>.
+    // </returns>
+    let mapIterator (f : 'IterA -> 'IterB)
+      ({ Func = v; Iterator = i } : IteratedContainer<'Func, 'IterA>)
+      : IteratedContainer<'Func, 'IterB> =
+        { Func = v; Iterator = f i }
+
+    /// An iterated view-definition func.
+    type IteratedDFunc = IteratedContainer<DFunc, TypedVar option>
 
     (*
      * Views
      *)
 
     /// A view definition.
-    type DView = List<DFunc>
+    type DView = IteratedDFunc list
+    // TODO(CaptainHayashi): rename DView?
+
+    /// An iterated non-D func.
+    type IteratedFunc<'Var> when 'Var : equality =
+        // TODO(CaptainHayashi): sort out this type mess.
+        IteratedContainer<Func<Expr<'Var>>, IntExpr<'Var>>
+
+    /// <summary>
+    ///     Construct an iterated func.
+    /// </summary>
+    /// <param name="name">The name of the iterated func.</param>
+    /// <param name="pars">The parameters of the iterated func.</param>
+    /// <param name="iterator">The iterator of the iterated func.</param>
+    /// <typeparam name="Var">The type of variables in the func.</typeparam>
+    /// <returns>
+    ///     An <see cref="IteratedFunc"/> with the given parameters.
+    /// </returns>
+    let iteratedFunc
+      (name : string) (pars : Expr<'Var> seq) (iterator : IntExpr<'Var>)
+      : IteratedFunc<'Var> =
+      iterated (func name pars) iterator
 
     /// <summary>
     ///     A basic view, as an ordered list of VFuncs.
     /// </summary>
-    type OView = List<SMVFunc>
+    type IteratedOView = IteratedFunc<Sym<MarkedVar>> list
+
+    /// <summary>
+    ///     A basic view, as an ordered list of VFuncs.
+    /// </summary>
+    type OView = SMVFunc list
 
     /// <summary>
     ///     A view expression, combining a view with its kind.
@@ -105,15 +190,49 @@ module Pretty =
     /// Pretty-prints a MView.
     let printMView = printMultiset printMVFunc
 
+    /// Prints an IteratedContainer.
+    /// Iterator is suppressed if its pretty-printer returns a Nop.
+    let printIteratedContainer (pFunc : 'Func -> Doc)
+      (pIterator : 'Iterator -> Doc)
+      ({ Iterator = i; Func = func } : IteratedContainer<'Func, 'Iterator>)
+      : Doc =
+        match (pIterator i) with
+        | Nop -> pFunc func
+        | it ->
+            hjoin [ String "iter["; it; String "]"; pFunc func ]
+
+    /// Pretty-prints an expression iterator.
+    /// Yields Nop if the expression evaluates to 1.
+    let printExprIterator (pVar : 'Var -> Doc)
+      : IntExpr<'Var> -> Doc =
+        function
+        | AInt 1L -> Nop
+        | e -> printIntExpr pVar e
+
     /// Pretty-prints an OView.
-    let printOView = List.map printSMVFunc >> semiSep >> squared
+    let printIteratedOView : IteratedOView -> Doc =
+        List.map
+            (printIteratedContainer
+                 printSMVFunc
+                 (printExprIterator (printSym printMarkedVar)))
+        >> semiSep
+        >> squared
+
+    let printOView : OView -> Doc =
+        List.map printSMVFunc
+        >> semiSep
+        >> squared
 
     /// Pretty-prints a DView.
-    let printDView = List.map printDFunc >> semiSep >> squared
+    let printDView : DView -> Doc =
+        List.map
+            (printIteratedContainer
+                printDFunc
+                (Option.map printTypedVar >> withDefault Nop))
+        >> semiSep >> squared
 
     /// Pretty-prints view expressions.
     let rec printViewExpr pView =
-
         function
         | Mandatory v -> pView v
         | Advisory v -> hjoin [ pView v ; String "?" ]

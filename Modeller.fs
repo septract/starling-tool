@@ -13,8 +13,8 @@ open Starling.Core.TypeSystem.Check
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
-open Starling.Core.View
 open Starling.Core.Model
+open Starling.Core.View
 open Starling.Core.Command
 open Starling.Core.Command.Create
 open Starling.Core.Instantiate
@@ -29,12 +29,12 @@ open Starling.Lang.Collator
 module Types =
     /// A conditional (flat or if-then-else) func.
     type CFunc =
-        | ITE of SVBoolExpr * Multiset<CFunc> * Multiset<CFunc>
+        | ITE of SVBoolExpr * CView * CView
         | Func of SVFunc
         override this.ToString() = sprintf "CFunc(%A)" this
 
     /// A conditional view, or multiset of CFuncs.
-    type CView = Multiset<CFunc>
+    and CView = Multiset<IteratedContainer<CFunc, Sym<Var> option>>
 
     /// A partially resolved command.
     type PartCmd<'view> =
@@ -64,7 +64,7 @@ module Types =
           /// <summary>
           ///     A definer containing the visible view prototypes.
           /// </summary>
-          ViewProtos : FuncDefiner<unit> }
+          ViewProtos : FuncDefiner<ProtoInfo> }
 
     type ModellerViewExpr = ViewExpr<CView>
     type ModellerPartCmd = PartCmd<ModellerViewExpr>
@@ -109,7 +109,7 @@ module Types =
     /// Represents an error when converting a constraint.
     type ConstraintError =
         /// The view definition in the constraint generated a `ViewError`.
-        | CEView of vdef : AST.Types.DView * err : ViewError
+        | CEView of vdef : AST.Types.ViewSignature * err : ViewError
         /// The expression in the constraint generated an `ExprError`.
         | CEExpr of expr : AST.Types.Expression * err : ExprError
 
@@ -159,7 +159,7 @@ module Types =
         /// A view prototype in the program generated a `ViewProtoError`.
         | BadVProto of proto : AST.Types.ViewProto * err : ViewProtoError
         /// A constraint in the program generated a `ConstraintError`.
-        | BadConstraint of constr : AST.Types.DView * err : ConstraintError
+        | BadConstraint of constr : AST.Types.ViewSignature * err : ConstraintError
         /// A method in the program generated an `MethodError`.
         | BadMethod of methname : string * err : MethodError
         /// A variable in the program generated a `VarMapError`.
@@ -188,14 +188,18 @@ module Pretty =
             hsep [ String "if"
                    printSVBoolExpr i
                    String "then"
-                   t |> printMultiset printCFunc |> ssurround "[" "]"
+                   t |> printCView |> ssurround "[" "]"
                    String "else"
-                   e |> printMultiset printCFunc |> ssurround "[" "]" ]
+                   e |> printCView |> ssurround "[" "]" ]
         | Func v -> printSVFunc v
 
     /// Pretty-prints a CView.
-    let printCView : CView -> Doc =
-        printMultiset printCFunc >> ssurround "[|" "|]"
+    and printCView : CView -> Doc =
+        printMultiset
+            (printIteratedContainer
+                printCFunc
+                (Option.map (printSym printVar) >> withDefault Nop))
+        >> ssurround "[|" "|]"
 
     /// Pretty-prints a part-cmd at the given indent level.
     let rec printPartCmd (pView : 'view -> Doc) : PartCmd<'view> -> Doc =
@@ -247,7 +251,7 @@ module Pretty =
     let printConstraintError : ConstraintError -> Doc =
         function
         | CEView(vdef, err) ->
-            wrapped "view definition" (printDView vdef) (printViewError err)
+            wrapped "view definition" (printViewSignature vdef) (printViewError err)
         | CEExpr(expr, err) ->
             wrapped "expression" (printExpression expr) (printExprError err)
 
@@ -318,7 +322,7 @@ module Pretty =
     let printModelError : ModelError -> Doc =
         function
         | BadConstraint(constr, err) ->
-            wrapped "constraint" (printDView constr)
+            wrapped "constraint" (printViewSignature constr)
                                  (printConstraintError err)
         | BadVar(scope, err) ->
             wrapped "variables in scope" (String scope) (printVarMapError err)
@@ -332,7 +336,7 @@ module Pretty =
 (*
  * Starling imperative language semantics
  *)
-let prim : string -> TypedVar list -> TypedVar list -> SVBoolExpr -> PrimSemantics =  
+let prim : string -> TypedVar list -> TypedVar list -> SVBoolExpr -> PrimSemantics =
     fun name results args body -> { Name = name; Results = results; Args = args; Body = body }
 
 /// <summary>
@@ -414,11 +418,11 @@ let coreSemantics : PrimSemanticsMap =
        *)
 
       // Integer local set
-      (prim "!ILSet" [ Int "dest" ] [ Int "src" ] 
+      (prim "!ILSet" [ Int "dest" ] [ Int "src" ]
            <| iEq (siVar "dest") (siVar "src"))
 
       // Boolean store
-      (prim "!BLSet" [ Bool "dest" ] [ Bool "src" ] 
+      (prim "!BLSet" [ Bool "dest" ] [ Bool "src" ]
            <| bEq (sbVar "dest") (sbVar "src"))
 
       (*
@@ -496,7 +500,7 @@ let rec modelExpr
         | _ -> match e with
                 | ArithExp expr -> expr |> modelIntExpr env varF |> lift Expr.Int
                 | BoolExp expr -> expr |> modelBoolExpr env varF |> lift Expr.Bool
-                | _ -> failwith "unreachable"
+                | _ -> failwith "unreachable[modelExpr]"
 
 /// <summary>
 ///     Models a Starling integral expression as a <c>BoolExpr</c>.
@@ -559,21 +563,22 @@ and modelBoolExpr
                        | Ge -> mkGe
                        | Le -> mkLe
                        | Lt -> mkLt
-                       | _ -> failwith "unreachable")
+                       | _ -> failwith "unreachable[modelBoolExpr::ArithIn]")
                       (mi l)
                       (mi r)
             | BoolIn as o ->
                 lift2 (match o with
                        | And -> mkAnd2
                        | Or -> mkOr2
-                       | _ -> failwith "unreachable")
+                       | Imp -> mkImpl
+                       | _ -> failwith "unreachable[modelBoolExpr::BoolIn]")
                       (mb l)
                       (mb r)
             | AnyIn as o ->
                 lift2 (match o with
                        | Eq -> mkEq
                        | Neq -> mkNeq
-                       | _ -> failwith "unreachable")
+                       | _ -> failwith "unreachable[modelBoolExpr::AnyIn]")
                       (me l)
                       (me r)
         | _ -> fail ExprNotBoolean
@@ -636,7 +641,7 @@ and modelIntExpr
                    | Div -> mkDiv
                    | Add -> mkAdd2
                    | Sub -> mkSub2
-                   | _ -> failwith "unreachable")
+                   | _ -> failwith "unreachable[modelIntExpr]")
                   (mi l)
                   (mi r)
         | _ -> fail ExprNotInt
@@ -653,18 +658,18 @@ let funcViewParMerge (ppars : TypedVar list) (dpars : Var list)
     List.map2 (fun ppar dpar -> withType (typeOf ppar) dpar) ppars dpars
 
 /// Adapts Instantiate.lookup to the modeller's needs.
-let lookupFunc (protos : FuncDefiner<unit>) (func : Func<_>)
+let lookupFunc (protos : FuncDefiner<ProtoInfo>) (func : Func<_>)
   : Result<DFunc, ViewError> =
     protos
     |> Instantiate.lookup func
     |> mapMessages (curry LookupError func.Name)
     |> bind (function
-             | Some (proto, ()) -> proto |> ok
+             | Some (proto, _) -> proto |> ok
              | None -> func.Name |> NoSuchView |> fail)
 
 /// Models part of a view definition as a DFunc.
 let modelDFunc
-  (protos : FuncDefiner<unit>)
+  (protos : FuncDefiner<ProtoInfo>)
   (func : Func<Var>)
   : Result<Multiset<DFunc>, ViewError> =
     func
@@ -674,35 +679,50 @@ let modelDFunc
                  |> Multiset.singleton)
 
 /// Tries to convert a view def into its model (multiset) form.
-let rec modelDView (protos : FuncDefiner<unit>) =
+let rec modelViewSignature (protos : FuncDefiner<ProtoInfo>) =
     function
-    | DView.Unit -> ok Multiset.empty
-    | DView.Func dfunc -> modelDFunc protos dfunc
-    | DView.Join(l, r) -> trial { let! lM = modelDView protos l
-                                  let! rM = modelDView protos r
-                                  return Multiset.append lM rM }
+    | ViewSignature.Unit -> ok Multiset.empty
+    | ViewSignature.Func dfunc ->
+        let uniterated = modelDFunc protos dfunc
+        lift (Multiset.map (fun f -> { Func = f; Iterator = None })) uniterated
+    | ViewSignature.Join(l, r) -> trial { let! lM = modelViewSignature protos l
+                                          let! rM = modelViewSignature protos r
+                                          return Multiset.append lM rM }
+    | ViewSignature.Iterated(dfunc, e) ->
+        let updateFunc (s : string) f = { Func = f; Iterator = Some (Int s) }
+        let modelledDFunc = modelDFunc protos dfunc
+        lift (Multiset.map (updateFunc e)) modelledDFunc
+
+let makeIteratorMap : TypedVar option -> VarMap =
+    function
+    | None         -> Map.empty
+    | Some (Int v) -> Map.ofList [ v, Type.Int () ]
+    | _            -> failwith "Iterator in iterated views must be Int type"
 
 /// Produces the environment created by interpreting the viewdef vds using the
 /// view prototype map vpm.
-let rec localEnvOfViewDef vds =
-    vds
-    |> Seq.ofList
-    |> Seq.map (fun {Params = ps} -> makeVarMap ps)
-    |> seqBind (fun xR s -> bind (combineMaps s) xR) Map.empty
-    |> mapMessages ViewError.BadVar
+let rec localEnvOfViewDef (vds : DView) : Result<VarMap, ViewError> =
+    let makeFuncMap { Func = {Params = ps}; Iterator = it } =
+        makeVarMap ps >>= (combineMaps (makeIteratorMap it))
+
+    let funcMaps = Seq.map makeFuncMap vds
+    let singleMap =
+        seqBind (fun xR s -> bind (combineMaps s) xR) Map.empty funcMaps
+
+    mapMessages ViewError.BadVar singleMap
 
 /// Produces the variable environment for the constraint whose viewdef is v.
-let envOfViewDef svars =
+let envOfViewDef (svars : VarMap) : DView -> Result<VarMap, ViewError> =
     localEnvOfViewDef >> bind (combineMaps svars >> mapMessages SVarConflict)
 
 /// Converts a single constraint to its model form.
 let modelViewDef
   (svars : VarMap)
-  (vprotos : FuncDefiner<unit>)
-  (av : AST.Types.DView, ad : Expression option)
-  : Result<(View.Types.DView * SVBoolExpr option), ModelError> =
+  (vprotos : FuncDefiner<ProtoInfo>)
+  (av : ViewSignature, ad : Expression option)
+  : Result<(DView * SVBoolExpr option), ModelError> =
     trial {
-        let! vms = wrapMessages CEView (modelDView vprotos) av
+        let! vms = wrapMessages CEView (modelViewSignature vprotos) av
         let  v = vms |> Multiset.toFlatList
         let! e = envOfViewDef svars v |> mapMessages (curry CEView av)
         let! d = (match ad with
@@ -735,7 +755,12 @@ let modelViewDef
 ///         caught them in the main defining view modeller.
 ///     </para>
 /// </remarks>
-let inDefiner : ViewDefiner<SVBoolExpr option> -> Func<'c> list -> bool =
+let inDefiner : ViewDefiner<SVBoolExpr option> -> DView -> bool =
+    let namesEqual
+      (vdfunc : IteratedContainer<DFunc, TypedVar option>)
+      (dfunc : IteratedContainer<DFunc, TypedVar option>) =
+        vdfunc.Func.Name = dfunc.Func.Name
+
     fun definer dview ->
         definer
         |> ViewDefiner.toSeq
@@ -743,13 +768,8 @@ let inDefiner : ViewDefiner<SVBoolExpr option> -> Func<'c> list -> bool =
         |> List.map fst
         |> List.exists
                (fun view ->
-                    if (List.length view = List.length dview)
-                    then
-                        List.forall2
-                            (fun (vdfunc: Func<TypedVar>) (dfunc : Func<'c>) -> vdfunc.Name = dfunc.Name)
-                            view
-                            dview
-                    else false)
+                    (List.length view = List.length dview)
+                    && List.forall2 namesEqual view dview)
 
 /// <summary>
 ///     Converts a <c>DView</c> to an indefinite <c>ViewDef</c>.
@@ -766,8 +786,8 @@ let inDefiner : ViewDefiner<SVBoolExpr option> -> Func<'c> list -> bool =
 ///     An indefinite constraint over <paramref name="dview" />.
 /// </returns>
 let searchViewToConstraint
-  (dview : View.Types.DView)
-  : (View.Types.DView * SVBoolExpr option) =
+  (dview : DView)
+  : (DView * SVBoolExpr option) =
     (* To ensure likewise-named parameters in separate DFuncs don't
        clash, append fresh identifiers to all of them.
 
@@ -779,7 +799,7 @@ let searchViewToConstraint
 
     let dview' =
         List.map
-            (fun { Name = name; Params = ps } ->
+            (fun { Func = { Name = name; Params = ps }; Iterator = it } ->
                  let nps =
                      List.map
                          (fun p ->
@@ -787,7 +807,7 @@ let searchViewToConstraint
                                  (typeOf p)
                                     (sprintf "%s%A" (valueOf p) (getFresh fg))))
                          ps
-                 { Name = name; Params = nps })
+                 { Func = { Name = name; Params = nps }; Iterator = it })
             dview
 
     (dview', None)
@@ -805,7 +825,7 @@ let searchViewToConstraint
 ///     A set of all <c>View</c>s of maximum size <paramref name="depth" />,
 ///     whose <c>Func</c>s are taken from <paramref name="funcs" />
 /// </returns>
-let genAllViewsAt depth (funcs : DFunc seq) : Set<View.Types.DView> =
+let genAllViewsAt depth (funcs : DFunc seq) : Set<DView> =
     let rec f depth existing =
         match depth with
         // Multiset and set conversion removes duplicate views.
@@ -819,7 +839,7 @@ let genAllViewsAt depth (funcs : DFunc seq) : Set<View.Types.DView> =
                 seq { yield []
                       for f in funcs do
                           for e in existing do
-                              yield f :: e }
+                              yield {Iterator = None; Func = f} :: e }
             f (depth - 1) existing'
     f depth (Seq.singleton [])
 
@@ -844,7 +864,7 @@ let genAllViewsAt depth (funcs : DFunc seq) : Set<View.Types.DView> =
 ///     generated from the views at <paramref name="vprotos" />.
 /// </returns>
 let addSearchDefs
-  (vprotos : FuncDefiner<unit>)
+  (vprotos : FuncDefiner<ProtoInfo>)
   depth
   (definer : ViewDefiner<SVBoolExpr option>)
     : ViewDefiner<SVBoolExpr option>=
@@ -871,7 +891,7 @@ let addSearchDefs
 /// ViewDef.
 let modelViewDefs
   svars
-  (vprotos : FuncDefiner<unit>)
+  (vprotos : FuncDefiner<ProtoInfo>)
   { Search = s; Constraints = cs } =
     cs
     |> List.map (modelViewDef svars vprotos)
@@ -911,12 +931,13 @@ let modelCFunc
 
 /// Tries to flatten a view AST into a CView.
 /// Takes an environment of local variables, and the AST itself.
-let rec modelCView (ctx : MethodContext) =
+let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
+    let mkCView cfunc = Multiset.singleton ({ Func = cfunc; Iterator = None })
     function
     | View.Func afunc ->
-        modelCFunc ctx afunc |> lift Multiset.singleton
+        modelCFunc ctx afunc |> lift mkCView
     | View.If(e, l, r) ->
-        lift3 (fun em lm rm -> CFunc.ITE(em, lm, rm) |> Multiset.singleton)
+        lift3 (fun em lm rm -> CFunc.ITE(em, lm, rm) |> mkCView)
               (e |> modelBoolExpr ctx.ThreadVars id
                  |> mapMessages (curry ViewError.BadExpr e))
               (modelCView ctx l)
@@ -952,7 +973,7 @@ let modelBoolLoad : MethodContext -> Var -> Expression -> FetchMode -> Result<Pr
                         "!BLoad"
                             [ Bool dest ]
                             [ s |> Before |> Reg |> BVar |> Expr.Bool ]
-                              
+
             | Typed.Bool s, Increment -> return! fail (IncBool srcExpr)
             | Typed.Bool s, Decrement -> return! fail (DecBool srcExpr)
             | _ -> return! fail (TypeMismatch (Type.Bool (), srcLV, typeOf src))
@@ -1037,8 +1058,8 @@ let modelCAS : MethodContext -> LValue -> LValue -> Expression -> Result<PrimCom
      *)
     wrapMessages BadSVar (lookupVar svars) destLV
     >>= (fun dest ->
-             mkPair dest
-             <!> wrapMessages BadTVar (lookupVar tvars) testLV)
+             let v = wrapMessages BadTVar (lookupVar tvars) testLV
+             lift (mkPair dest) v)
     >>= (function
          | UnifyBool (d, t) ->
              set
@@ -1082,9 +1103,9 @@ let modelFetch : MethodContext -> LValue -> Expression -> FetchMode -> Result<Pr
     | lv -> fail (BadAVar(lv, NotFound (flattenLV lv)))
 
 /// Converts a single atomic command from AST to part-commands.
-let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> = 
+let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> =
     fun ctx a ->
-    let prim = 
+    let prim =
         match a.Node with
         | CompareAndSwap(dest, test, set) -> modelCAS ctx dest test set
         | Fetch(dest, src, mode) -> modelFetch ctx dest src mode
@@ -1111,13 +1132,13 @@ let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> 
             }
         | Id -> ok (command "Id" [] [])
         | Assume e ->
-            e 
+            e
             |> wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars MarkedVar.Before)
             |> lift (Expr.Bool >> List.singleton >> command "Assume" [])
     lift (fun cmd -> { cmd with Node = Some a }) prim
 
 /// Converts a local variable assignment to a Prim.
-and modelAssign : MethodContext -> LValue -> Expression -> Result<PrimCommand, PrimError> = 
+and modelAssign : MethodContext -> LValue -> Expression -> Result<PrimCommand, PrimError> =
     fun { ThreadVars = tvars } lLV e ->
     (* We model assignments as !ILSet or !BLSet, depending on the
      * type of l, which _must_ be in the locals set..
@@ -1257,24 +1278,30 @@ let modelMethod
 /// Checks a view prototype to see if it contains duplicate parameters.
 let checkViewProtoDuplicates (proto : ViewProto)
   : Result<ViewProto, ViewProtoError> =
-    proto.Params
-    |> Seq.map valueOf
-    |> findDuplicates
-    |> Seq.toList
-    |> function
-       | [] -> ok proto
-       | ds -> List.map (fun d -> VPEDuplicateParam(proto, d)) ds |> Bad
-
-/// Checks a view prototype and converts it to an associative pair.
-let modelViewProto (proto : ViewProto) : Result<DFunc * unit, ModelError> =
-    proto
-    |> checkViewProtoDuplicates
-    |> lift (fun pro -> (pro, ()))
-    |> mapMessages (curry BadVProto proto)
+    match proto with
+    | NoIterator (f, _) | WithIterator (f, _) ->
+        f.Params
+        |> Seq.map valueOf
+        |> findDuplicates
+        |> Seq.toList
+        |> function
+           | [] -> ok proto
+           | ds -> List.map (fun d -> VPEDuplicateParam(proto, d)) ds |> Bad
 
 /// Checks view prototypes and converts them to func-table form.
 let modelViewProtos (protos : #(ViewProto seq))
-  : Result<FuncDefiner<unit>, ModelError> =
+  : Result<FuncDefiner<ProtoInfo>, ModelError> =
+    let modelViewProto proto =
+        proto
+        |> checkViewProtoDuplicates
+        |> lift
+               (function
+                | NoIterator (f, isAnonymous) ->
+                    (f, { IsIterated = false; IsAnonymous = isAnonymous; } )
+                | WithIterator (f, _) ->
+                    (f, { IsIterated = true; IsAnonymous = false; } ))
+        |> mapMessages (curry BadVProto proto)
+
     protos
     |> Seq.map modelViewProto
     |> collect
@@ -1294,8 +1321,8 @@ let model
         let desugaredMethods, unknownProtos =
             Starling.Lang.ViewDesugar.desugar locals collated.Methods
 
-        let! vprotos = modelViewProtos
-                           (Seq.append collated.VProtos unknownProtos)
+        let! vprotos =
+            modelViewProtos (Seq.append collated.VProtos unknownProtos)
 
         let! constraints = modelViewDefs globals vprotos collated
 
@@ -1314,5 +1341,6 @@ let model
               Locals = locals
               ViewDefs = constraints
               Semantics = coreSemantics
-              Axioms = axioms }
+              Axioms = axioms
+              ViewProtos = vprotos }
     }

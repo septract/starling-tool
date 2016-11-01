@@ -60,6 +60,8 @@ let parseIdentifier = many1Chars2 (pchar '_' <|> asciiLetter)
 let inBrackets bra ket = between (pstring bra .>> ws) (ws >>. pstring ket)
 /// Parser for items in (parentheses).
 let inParens p = inBrackets "(" ")" p
+/// Parser for items in [brackets].
+let inSquareBrackets p = inBrackets "[" "]" p
 /// Parser for items in {braces}.
 let inBraces p = inBrackets "{" "}" p
 /// Parser for items in {|view braces|}.
@@ -80,8 +82,9 @@ let inAngles p = inBrackets "<" ">" p
 let parseView, parseViewRef =
     createParserForwardedToRef<View, unit> ()
 /// Parser for view definitions.
-let parseDView, parseDViewRef =
-    createParserForwardedToRef<DView, unit> ()
+let parseViewSignature, parseViewSignatureRef =
+    createParserForwardedToRef<ViewSignature, unit> ()
+
 /// Parser for commands.
 let parseCommand, parseCommandRef =
     createParserForwardedToRef<Command<Marked<View>>, unit> ()
@@ -203,9 +206,14 @@ let parseEqualityExpression =
         [ ("==", Eq)
           ("!=", Neq) ]
 
+/// Parser for logical IMPL expressions.
+let parseImplExpression =
+    parseBinaryExpressionLevel parseEqualityExpression
+        [ ("=>", Imp) ]
+
 /// Parser for logical AND expressions.
 let parseAndExpression =
-    parseBinaryExpressionLevel parseEqualityExpression
+    parseBinaryExpressionLevel parseImplExpression
         [ ("&&", And) ]
 
 /// Parser for logical OR expressions.
@@ -372,31 +380,50 @@ let parseViewExpr = between
  *)
 
 /// Parses a functional view definition.
-let parseDFuncView = parseFunc parseIdentifier |>> DView.Func
+let parseDFuncView = parseFunc parseIdentifier |>> ViewSignature.Func
 
 /// Parses the unit view definition.
-let parseDUnit = stringReturn "emp" DView.Unit
+let parseDUnit = stringReturn "emp" ViewSignature.Unit
+
+/// Parses a view iterator definition.
+let parseIteratorDef = inSquareBrackets parseIdentifier
+
+/// Parses an iterated view definition.
+let parseDIterated =
+    pstring "iter" >>. ws >>.
+    pipe2ws
+            parseIteratorDef
+            (parseFunc parseIdentifier)
+            (fun e f -> ViewSignature.Iterated(f, e))
 
 /// Parses a `basic` view definition (unit, if, named, or bracketed).
-let parseBasicDView =
+let parseBasicViewSignature =
     choice [ parseDUnit
              // ^- `emp'
              parseDFuncView
              // ^- <identifier>
              //  | <identifier> <arg-list>
-             inParens parseDView ]
+             inParens parseViewSignature ]
              // ( <view> )
 
-do parseDViewRef := parseViewLike parseBasicDView DView.Join
+do parseViewSignatureRef := parseViewLike parseBasicViewSignature ViewSignature.Join
 
 
 (*
  * View prototypes.
  *)
 
-/// Parses a view prototype.
+/// Parses the LHS of a view prototype.
+let parseViewProtoLhs =
+    pstring "view" >>. ws >>. parseFunc parseTypedTypedVar
+
+/// Parses a view prototype (a LHS followed optionally by an iterator).
 let parseViewProto =
-    pstring "view" >>. ws >>. parseFunc parseTypedTypedVar .>> wsSemi .>> ws
+    parseViewProtoLhs
+    >>= fun lhs ->
+            (wsSemi >>% NoIterator (lhs, false)) <|>
+            (parseIteratorDef .>> wsSemi |>> curry WithIterator lhs)
+    .>> ws
 
 
 (*
@@ -509,14 +536,16 @@ let parseConstraintRhs : Parser<Expression option, unit> =
     // ^ <expression>
 
 /// Parses a constraint.
-let parseConstraint : Parser<DView * Expression option, unit> =
-    pstring "constraint" >>. ws >>.
+let parseConstraint : Parser<ViewSignature * Expression option, unit> =
+    pstring "constraint" >>. ws
     // ^- constraint ..
-        pipe2ws parseDView
-                // ^- <view> ...
-                (pstring "->" >>. ws >>. parseConstraintRhs .>> ws .>> pstring ";")
-                // ^-        ... -> <constraint-rhs> ;
-                (fun d v -> (d, v))
+    >>. pipe3ws
+            (parseDIterated <|> parseViewSignature)
+            // ^- <view> ...
+            (pstring "->")
+            parseConstraintRhs
+            (fun d _ v -> (d, v))
+    .>> pstring ";"
 
 /// Parses a single method, excluding leading or trailing whitespace.
 let parseMethod =
@@ -553,7 +582,7 @@ let parseScript =
                             [parseMethod |>> Method
                              // ^- method <identifier> <arg-list> <block>
                              parseConstraint |>> Constraint
-                             // ^- constraint <view> => <expression> ;
+                             // ^- constraint <view> -> <expression> ;
                              parseViewProto |>> ViewProto
                              // ^- view <identifier> ;
                              //  | view <identifier> <view-proto-param-list> ;

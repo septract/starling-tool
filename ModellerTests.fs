@@ -21,10 +21,10 @@ open Starling.Core.Model
 open Starling.Lang.Modeller
 open Starling.Tests.Studies
 
-let ticketLockProtos: FuncDefiner<unit> =
+let ticketLockProtos: FuncDefiner<ProtoInfo> =
     FuncDefiner.ofSeq
-        [ (func "holdLock" [], ())
-          (func "holdTick" [ Int "t" ], ()) ]
+        [ (func "holdLock" [], { IsIterated = false ; IsAnonymous = false })
+          (func "holdTick" [ Int "t" ], { IsIterated = false ; IsAnonymous = false }) ]
 
 let environ =
     Map.ofList [ ("foo", Type.Int ())
@@ -59,7 +59,10 @@ module ViewPass =
     let ``test correct func``() =
         check
             (View.Func <| afunc "holdLock" [])
-            (Multiset.singleton (CFunc.Func (vfunc "holdLock" [])))
+            (Multiset.singleton
+                (iterated
+                    (CFunc.Func (vfunc "holdLock" []))
+                    None))
 
 module ViewFail =
     let check (view : View) (expectedFailures : ViewError list) =
@@ -98,7 +101,8 @@ module ArithmeticExprs =
             (freshNode <| BopExpr( Add,
                                    freshNode <| BopExpr(Mul, freshNode (Num 1L), freshNode (Num 2L)),
                                    freshNode (Num 3L) ))
-            (AAdd [ AMul [ AInt 1L; AInt 2L ] ; AInt 3L ])
+            // TODO (CaptainHayashi): this shouldn't be optimised?
+            (AInt 5L)
 
 module BooleanExprs =
     let check (ast : Expression) (expectedExpr : BoolExpr<Sym<Var>>) =
@@ -235,19 +239,19 @@ module ViewDefs =
         check (Some 1) []
             (indefinites
                 [ []
-                  [ func "holdLock" [] ]
-                  [ func "holdTick" [ Int "t0" ] ] ])
+                  [ iterated (func "holdLock" []) None ]
+                  [ iterated (func "holdTick" [ Int "t0" ]) None ] ])
 
     [<Test>]
     let ``Search for size-2 viewdefs yields viewdefs up to size 2``() =
         check (Some 2) []
             (indefinites
                 [ []
-                  [ func "holdLock" [] ]
-                  [ func "holdLock" []
-                    func "holdLock" [] ]
-                  [ func "holdLock" []
-                    func "holdTick" [ Int "t0" ] ]
-                  [ func "holdTick" [ Int "t0" ] ]
-                  [ func "holdTick" [ Int "t0" ]
-                    func "holdTick" [ Int "t1" ] ] ] )
+                  [ iterated (func "holdLock" []) None ]
+                  [ iterated (func "holdLock" []) None
+                    iterated (func "holdLock" []) None ]
+                  [ iterated (func "holdLock" []) None
+                    iterated (func "holdTick" [ Int "t0" ]) None ]
+                  [ iterated (func "holdTick" [ Int "t0" ]) None ]
+                  [ iterated (func "holdTick" [ Int "t0" ]) None
+                    iterated (func "holdTick" [ Int "t1" ]) None ] ] )

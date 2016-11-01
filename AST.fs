@@ -34,8 +34,9 @@ module Types =
         | Sub // a - b
         | Gt // a > b
         | Ge // a >= b
-        | Le // a < b
-        | Lt // a <= b
+        | Le // a <= b
+        | Lt // a < b
+        | Imp // a => b
         | Eq // a == b
         | Neq // a != b
         | And // a && b
@@ -62,13 +63,22 @@ module Types =
     and Atomic = Node<Atomic'>
 
     /// A view prototype.
-    type ViewProto = Func<TypedVar>
+    type ViewProto =
+        /// <summary>
+        ///     A non-iterated view prototype; can be anonymous.
+        /// </summary>
+        | NoIterator of Func : Func<TypedVar> * IsAnonymous : bool
+        /// <summary>
+        ///     An iterated view prototype; cannot be anonymous
+        /// </summary>
+        | WithIterator of Func: Func<TypedVar> * Iterator: string
 
     /// A view as seen on the LHS of a ViewDef.
-    type DView =
+    type ViewSignature =
         | Unit
-        | Join of DView * DView
+        | Join of ViewSignature * ViewSignature
         | Func of Func<string>
+        | Iterated of Func<string> * string
 
     /// <summary>
     ///     A view, annotated with additional syntax.
@@ -155,7 +165,7 @@ module Types =
         | Method of CMethod<Marked<View>> // method main(argv, argc) { ... }
         | Search of int // search 0;
         | ViewProto of ViewProto // view name(int arg);
-        | Constraint of DView * Expression option // constraint emp => true
+        | Constraint of ViewSignature * Expression option // constraint emp => true
         override this.ToString() = sprintf "%A" this
     and ScriptItem = Node<ScriptItem'>
 
@@ -184,6 +194,7 @@ module Pretty =
         | Ge -> ">="
         | Le -> "<"
         | Lt -> "<="
+        | Imp -> "=>"
         | Eq -> "=="
         | Neq -> "!="
         | And -> "&&"
@@ -230,16 +241,17 @@ module Pretty =
         >> ssurround "{| " " |}"
 
     /// Pretty-prints view definitions.
-    let rec printDView : DView -> Doc =
+    let rec printViewSignature : ViewSignature -> Doc =
         function
-        | DView.Func f -> printFunc String f
-        | DView.Unit -> String "emp" |> syntaxView
-        | DView.Join(l, r) -> binop "*" (printDView l) (printDView r)
+        | ViewSignature.Func f -> printFunc String f
+        | ViewSignature.Unit -> String "emp" |> syntaxView
+        | ViewSignature.Join(l, r) -> binop "*" (printViewSignature l) (printViewSignature r)
+        | ViewSignature.Iterated(f, e) -> hsep [String "iter" |> syntaxView; hjoin [String "[" |> syntaxView; String e; String "]" |> syntaxView]; printFunc String f]
 
     /// Pretty-prints constraints.
-    let printConstraint (view : DView) (def : Expression option) : Doc =
+    let printConstraint (view : ViewSignature) (def : Expression option) : Doc =
         hsep [ String "constraint" |> syntax
-               printDView view
+               printViewSignature view
                String "->" |> syntax
                (match def with
                 | Some d -> printExpression d
@@ -343,10 +355,17 @@ module Pretty =
         printCommand' pView x.Node
 
     /// Pretty-prints a view prototype.
-    let printViewProto ({ Name = n; Params = ps } : ViewProto) : Doc =
-        hsep [ "view" |> String |> syntax
-               func n (List.map (printCTyped String) ps) ]
-        |> withSemi
+    let printViewProto : ViewProto -> Doc =
+        function
+        | NoIterator (Func = { Name = n; Params = ps }; IsAnonymous = _) ->
+            hsep [ "view" |> String |> syntax
+                   func n (List.map (printCTyped String) ps) ]
+            |> withSemi
+        | WithIterator (Func = { Name = n; Params = ps }; Iterator = i) ->
+            hsep [ "view" |> String |> syntax
+                   func n (List.map (printCTyped String) ps)
+                   squared (String i)]
+            |> withSemi
 
     /// Pretty-prints a search directive.
     let printSearch (i : int) : Doc =
@@ -385,7 +404,7 @@ module Pretty =
 let (|ArithOp|BoolOp|) : BinOp -> Choice<unit, unit> =
     function
     | Mul | Div | Add | Sub -> ArithOp
-    | Gt | Ge | Le | Lt -> BoolOp
+    | Gt | Ge | Le | Lt | Imp -> BoolOp
     | Eq | Neq -> BoolOp
     | And | Or -> BoolOp
 
@@ -396,7 +415,7 @@ let (|ArithIn|BoolIn|AnyIn|) : BinOp -> Choice<unit, unit, unit> =
     | Mul | Div | Add | Sub -> ArithIn
     | Gt | Ge | Le | Lt -> ArithIn
     | Eq | Neq -> AnyIn
-    | And | Or -> BoolIn
+    | And | Or | Imp -> BoolIn
 
 /// Active pattern classifying expressions as to whether they are
 /// arithmetic, Boolean, or indeterminate.
