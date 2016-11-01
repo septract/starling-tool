@@ -195,9 +195,17 @@ do parsePostfixExpressionRef :=
 
     parsePrimaryExpression .>> ws >>= parseArraySubscript
 
+
+/// Parser for unary expressions 
+let parseUnaryExpression = 
+     parsePostfixExpression
+     <|> 
+     nodify (skipString "!" >>. ws >>. parsePostfixExpression |>> (fun x -> UopExpr (Neg, x )))  
+
+
 /// Parser for multiplicative expressions.
 let parseMultiplicativeExpression =
-    parseBinaryExpressionLevel parsePostfixExpression
+    parseBinaryExpressionLevel parseUnaryExpression
         [ ("*", Mul)
           ("/", Div)
           ("%", Mod) ]
