@@ -43,6 +43,10 @@ module Types =
         | And // a && b
         | Or // a || b
 
+    /// A unary operator. 
+    type UnOp = 
+        | Neg // ! a
+
     /// An untyped, raw expression.
     /// These currently cover all languages, but this may change later.
     type Expression' =
@@ -52,6 +56,7 @@ module Types =
         | Identifier of string // foobaz
         | Symbolic of string * Expression list // %{foo}(exprs)
         | BopExpr of BinOp * Expression * Expression // a BOP b
+        | UopExpr of UnOp * Expression // UOP a 
         | ArraySubscript of array : Expression * subscript : Expression
     and Expression = Node<Expression'>
 
@@ -240,6 +245,11 @@ module Pretty =
         | Or -> "||"
         >> String >> syntax
 
+    let printUnOp : UnOp -> Doc = 
+        function 
+        | Neg -> "!" 
+        >> String >> syntax 
+
     /// Pretty-prints expressions.
     /// This is not guaranteed to produce an optimal expression.
     let rec printExpression' (expr : Expression') : Doc =
@@ -255,6 +265,9 @@ module Pretty =
                    printBinOp op
                    printExpression b ]
             |> parened
+        | UopExpr(op, a) -> 
+            hsep [ printUnOp op
+                   printExpression a ] 
         | ArraySubscript (array, subscript) ->
             printExpression array <-> squared (printExpression subscript)
     and printExpression (x : Expression) : Doc = printExpression' x.Node
@@ -497,7 +510,7 @@ let (|BoolExp'|ArithExp'|AnyExp'|) (e : Expression')
     | ArraySubscript _ -> AnyExp' e
     | Num _ -> ArithExp' e
     | True | False -> BoolExp' e
-    | BopExpr(BoolOp, _, _) -> BoolExp' e
+    | BopExpr(BoolOp, _, _) | UopExpr(_,_) -> BoolExp' e
     | BopExpr(ArithOp, _, _) -> ArithExp' e
 
 /// Active pattern classifying expressions as to whether they are
