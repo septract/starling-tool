@@ -704,6 +704,7 @@ and modelBoolExpr
                        | _ -> failwith "unreachable[modelBoolExpr::AnyIn]")
                       (me l)
                       (me r)
+        | UopExpr (Neg,e) -> lift mkNot (mb e) 
         | _ ->
             fail (ExprBadType (TypeMismatch (expected = "bool", got = Int ())))
     mb expr

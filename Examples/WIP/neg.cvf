@@ -1,0 +1,13 @@
+view foo(); 
+view error(); 
+
+shared int a, b; 
+
+method testNeg() { 
+  {| if (! false) then foo() else error() |} 
+   ; 
+  {| foo() |} 
+} 
+
+constraint foo() -> ! (a == b);  
+constraint error() -> false; 
