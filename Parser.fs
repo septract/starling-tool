@@ -585,6 +585,15 @@ let parseConstraint : Parser<ViewSignature * Expression option, unit> =
             (fun d _ v -> (d, v))
     .>> pstring ";"
 
+
+/// parse an exclusivity constraint
+let parseExclusive : Parser<List<ViewSignature>, unit> = 
+    pstring "exclusive" >>. ws
+    // ^- exclusive ..  
+    >>. parseDefs parseViewSignature
+    .>> pstring ";" 
+       
+
 /// Parses a single method, excluding leading or trailing whitespace.
 let parseMethod =
     pstring "method" >>. ws >>.
@@ -618,6 +627,8 @@ let parseScript =
                              // ^- method <identifier> <arg-list> <block>
                              parseConstraint |>> Constraint
                              // ^- constraint <view> -> <expression> ;
+                             parseExclusive |>> Exclusive
+                             // ^- exclusive <view>, <view>, ... ;
                              parseViewProtoSet |>> ViewProtos
                              // ^- view <identifier> ;
                              //  | view <identifier> <view-proto-param-list> ;
