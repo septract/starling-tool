@@ -109,30 +109,34 @@ let rec makeExclusive views =
     | [] -> [] 
 
 
-// let rec makeDisjoint views = 
-// 
-//     let makeNeqArgs x y = 
-//       match x, y with 
-//       | 
-//         (List.map 
-//           (fun (x,y) -> BopExpr (Neq, x, y)) 
-//           (List.zip x y))
-//         |> 
-//         // (List.fold 
-//         //   (fun (x,xs) -> BopExpr (Or, x, xs)) True) 
-//         (fun x -> True) 
-// 
-//     let makeDisjointSingle x xs = 
-//       List.map 
-//         (fun y -> 
-//            (ViewSignature.Join (x,y), Some (freshNode (makeNeqArgs x y)))) xs  
-//     
-//     match views with 
-//     | x::xs' -> 
-//         List.concat [ makeDisjointSingle x xs'; makeDisjoint xs'] 
-//     | [] -> [] 
-    
+let rec makeDisjoint (xs : List<strFunc>) = 
 
+    let str2Expr (s : string) : Expression = 
+      freshNode (Identifier s) 
+
+    let makeNeqArgs 
+         ({Name = fx; Params = px}: strFunc) 
+         ({Name = fy; Params = py}: strFunc) : Expression = 
+      List.zip (List.map str2Expr px) (List.map str2Expr py) 
+      |> 
+      List.map (fun (a,b) -> freshNode (BopExpr(Neq,a,b))) 
+      |> 
+      List.fold 
+        (fun acc e -> freshNode (BopExpr(Or,acc,e))) 
+        (freshNode False) 
+
+    let makeJoin (x: strFunc) (y: strFunc)  = 
+      ViewSignature.Join (ViewSignature.Func x, ViewSignature.Func y)
+ 
+    let makeDisjointSingle x xs = 
+       List.map 
+         (fun y -> (makeJoin x y), Some (makeNeqArgs x y))
+         xs  
+
+    match xs with 
+    | x::xs' -> 
+        List.concat [ makeDisjointSingle x xs'; makeDisjoint xs'] 
+    | [] -> [] 
 
 /// <summary>
 ///     Collates a script, grouping all like-typed items together.
@@ -164,9 +168,8 @@ let collate (script : ScriptItem list) : CollatedScript =
         | Exclusive xs -> 
             let views = List.map ViewSignature.Func xs 
             { cs with Constraints = List.concat [makeExclusive views; cs.Constraints] } 
-        //  | Disjoint xs -> 
-        //      let res = [] 
-        //      { cs with Constraints = List.concat [res; cs.Constraints] } 
+        | Disjoint xs -> 
+            { cs with Constraints = List.concat [makeDisjoint xs; cs.Constraints] } 
 
     // We foldBack instead of fold to preserve the original order.
     List.foldBack collateStep script empty
