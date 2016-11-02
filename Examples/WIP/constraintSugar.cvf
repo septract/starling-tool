@@ -1,3 +1,5 @@
-view foo(), bar(), baz(int x); 
+view foo(int x), bar(int y), baz(int x); 
 
-exclusive foo(), bar(), baz(x); 
+exclusive foo(x), bar(y), baz(x); 
+
+// disjoint foo(x), bar(y), baz(z); 

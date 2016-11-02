@@ -409,7 +409,7 @@ let parseViewExpr =
  *)
 
 /// Parses a functional view definition.
-let parseDFuncView = parseFunc parseIdentifier |>> ViewSignature.Func
+let parsestrFuncView = parseFunc parseIdentifier |>> ViewSignature.Func
 
 /// Parses the unit view definition.
 let parseDUnit = stringReturn "emp" ViewSignature.Unit
@@ -437,7 +437,7 @@ let parseDIterated =
 let parseBasicViewSignature =
     choice [ parseDUnit
              // ^- `emp'
-             parseDFuncView
+             parsestrFuncView
              // ^- <identifier>
              //  | <identifier> <arg-list>
              inParens parseViewSignature ]
@@ -587,10 +587,17 @@ let parseConstraint : Parser<ViewSignature * Expression option, unit> =
 
 
 /// parse an exclusivity constraint
-let parseExclusive : Parser<List<ViewSignature>, unit> = 
+let parseExclusive : Parser<List<strFunc>, unit> = 
     pstring "exclusive" >>. ws
     // ^- exclusive ..  
-    >>. parseDefs parseViewSignature
+    >>. parseDefs (parseFunc parseIdentifier)
+    .>> pstring ";" 
+       
+/// parse a disjointness constraint
+let parseDisjoint : Parser<List<strFunc>, unit> = 
+    pstring "disjoint" >>. ws
+    // ^- exclusive ..  
+    >>. parseDefs (parseFunc parseIdentifier) 
     .>> pstring ";" 
        
 
@@ -629,6 +636,8 @@ let parseScript =
                              // ^- constraint <view> -> <expression> ;
                              parseExclusive |>> Exclusive
                              // ^- exclusive <view>, <view>, ... ;
+                             // parseDisjoint |>> Disjoint
+                             // ^- disjoint <view>, <view>, ... ;
                              parseViewProtoSet |>> ViewProtos
                              // ^- view <identifier> ;
                              //  | view <identifier> <view-proto-param-list> ;
