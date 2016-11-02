@@ -636,7 +636,7 @@ let parseScript =
                              // ^- constraint <view> -> <expression> ;
                              parseExclusive |>> Exclusive
                              // ^- exclusive <view>, <view>, ... ;
-                             // parseDisjoint |>> Disjoint
+                             parseDisjoint |>> Disjoint
                              // ^- disjoint <view>, <view>, ... ;
                              parseViewProtoSet |>> ViewProtos
                              // ^- view <identifier> ;
