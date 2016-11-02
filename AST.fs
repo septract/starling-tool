@@ -101,7 +101,7 @@ module Types =
     type AFunc = Func<Expression>
 
     /// A function view definition
-    type strFunc = Func<string> 
+    type StrFunc = Func<string> 
 
     /// <summary>
     ///     An AST type literal.
@@ -146,8 +146,8 @@ module Types =
     type ViewSignature =
         | Unit
         | Join of ViewSignature * ViewSignature
-        | Func of strFunc 
-        | Iterated of strFunc * string
+        | Func of StrFunc 
+        | Iterated of StrFunc * string
 
     /// <summary>
     ///     An AST variable declaration.
@@ -217,8 +217,8 @@ module Types =
         | Search of int // search 0;
         | ViewProtos of ViewProto list // view name(int arg);
         | Constraint of ViewSignature * Expression option // constraint emp => true
-        | Exclusive of List<strFunc> // exclusive p(x), q(x), r(x) 
-        | Disjoint of List<strFunc> // disjoint p(x), q(x), r(x) 
+        | Exclusive of List<StrFunc> // exclusive p(x), q(x), r(x) 
+        | Disjoint of List<StrFunc> // disjoint p(x), q(x), r(x) 
         override this.ToString() = sprintf "%A" this
     and ScriptItem = Node<ScriptItem'>
 
@@ -318,13 +318,13 @@ module Pretty =
         |> withSemi
 
     /// Pretty-prints exclusivity constraints.
-    let printExclusive (xs : List<strFunc>) : Doc =
+    let printExclusive (xs : List<StrFunc>) : Doc =
         hsep ((String "exclusive") :: 
               (List.map (printFunc String) xs)) 
         |> withSemi
 
     /// Pretty-prints exclusivity constraints.
-    let printDisjoint (xs : List<strFunc>) : Doc =
+    let printDisjoint (xs : List<StrFunc>) : Doc =
         hsep ((String "disjoint") :: 
               (List.map (printFunc String) xs)) 
         |> withSemi
