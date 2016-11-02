@@ -93,22 +93,46 @@ let empty : CollatedScript =
       SharedVars = []
       ThreadVars = [] }
 
-/// <summary>
-///     Make one view exclusive from a list of others. 
-/// </summary>
-let makeExclusiveSingle x xs = 
-  List.map 
-    (fun y -> (ViewSignature.Join (x,y), Some (freshNode False))) xs  
-
 
 /// <summary>
 ///     Make a list of views mutually exclusive. 
 /// </summary>
-let rec makeExclusive xs = 
-    match xs with 
+let rec makeExclusive views = 
+
+    let makeExclusiveSingle x xs = 
+       List.map 
+         (fun y -> (ViewSignature.Join (x,y), Some (freshNode False))) xs  
+
+    match views with 
     | x::xs' -> 
         List.concat [ makeExclusiveSingle x xs'; makeExclusive xs'] 
     | [] -> [] 
+
+
+// let rec makeDisjoint views = 
+// 
+//     let makeNeqArgs x y = 
+//       match x, y with 
+//       | 
+//         (List.map 
+//           (fun (x,y) -> BopExpr (Neq, x, y)) 
+//           (List.zip x y))
+//         |> 
+//         // (List.fold 
+//         //   (fun (x,xs) -> BopExpr (Or, x, xs)) True) 
+//         (fun x -> True) 
+// 
+//     let makeDisjointSingle x xs = 
+//       List.map 
+//         (fun y -> 
+//            (ViewSignature.Join (x,y), Some (freshNode (makeNeqArgs x y)))) xs  
+//     
+//     match views with 
+//     | x::xs' -> 
+//         List.concat [ makeDisjointSingle x xs'; makeDisjoint xs'] 
+//     | [] -> [] 
+    
+
 
 /// <summary>
 ///     Collates a script, grouping all like-typed items together.
@@ -138,8 +162,11 @@ let collate (script : ScriptItem list) : CollatedScript =
         | Method m -> { cs with Methods = m::cs.Methods }
         | Constraint (v, d) -> { cs with Constraints = (v, d)::cs.Constraints }
         | Exclusive xs -> 
-            let exc = makeExclusive xs 
-            { cs with Constraints = List.concat [exc; cs.Constraints] } 
+            let views = List.map ViewSignature.Func xs 
+            { cs with Constraints = List.concat [makeExclusive views; cs.Constraints] } 
+        //  | Disjoint xs -> 
+        //      let res = [] 
+        //      { cs with Constraints = List.concat [res; cs.Constraints] } 
 
     // We foldBack instead of fold to preserve the original order.
     List.foldBack collateStep script empty

@@ -100,6 +100,9 @@ module Types =
     /// An AST func.
     type AFunc = Func<Expression>
 
+    /// A function view definition
+    type strFunc = Func<string> 
+
     /// <summary>
     ///     An AST type literal.
     ///     <para>
@@ -214,7 +217,8 @@ module Types =
         | Search of int // search 0;
         | ViewProtos of ViewProto list // view name(int arg);
         | Constraint of ViewSignature * Expression option // constraint emp => true
-        | Exclusive of List<ViewSignature> // exclusive p(x), q(x), r(x) 
+        | Exclusive of List<strFunc> // exclusive p(x), q(x), r(x) 
+        // | Disjoint of List<Func<string>> // disjoint p(x), q(x), r(x) 
         override this.ToString() = sprintf "%A" this
     and ScriptItem = Node<ScriptItem'>
 
@@ -314,10 +318,16 @@ module Pretty =
         |> withSemi
 
     /// Pretty-prints exclusivity constraints.
-    let printExclusive (xs : List<ViewSignature>) : Doc =
+    let printExclusive (xs : List<strFunc>) : Doc =
         hsep ((String "exclusive") :: 
-              (List.map printViewSignature xs)) 
+              (List.map (printFunc String) xs)) 
         |> withSemi
+
+    /// Pretty-prints exclusivity constraints.
+    // let printDisjoint (xs : List<ViewSignature>) : Doc =
+    //     hsep ((String "disjoint") :: 
+    //           (List.map (printFunc String) xs)) 
+    //     |> withSemi
 
     /// Pretty-prints fetch modes.
     let printFetchMode : FetchMode -> Doc =
@@ -481,6 +491,7 @@ module Pretty =
         | Search i -> printSearch i
         | Constraint (view, def) -> printConstraint view def
         | Exclusive xs -> printExclusive xs 
+        // | Disjoint xs -> printDisjoint xs 
     let printScriptItem (x : ScriptItem) : Doc = printScriptItem' x.Node
 
     /// Pretty-prints scripts.
