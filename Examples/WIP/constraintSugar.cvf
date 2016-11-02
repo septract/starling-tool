@@ -1,7 +1,7 @@
 view foo(int x), bar(int y), baz(int x); 
 view foo2(), bar2(), baz2(); 
 
-exclusive foo(x), bar(y), baz(z); 
+exclusive foo(x), bar(y), baz(z) ; 
 
 disjoint foo(x), bar(y), baz(z); 
 disjoint foo2(), bar2(), baz2(); 
