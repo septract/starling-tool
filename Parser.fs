@@ -409,7 +409,7 @@ let parseViewExpr =
  *)
 
 /// Parses a functional view definition.
-let parsestrFuncView = parseFunc parseIdentifier |>> ViewSignature.Func
+let parseStrFuncView = parseFunc parseIdentifier |>> ViewSignature.Func
 
 /// Parses the unit view definition.
 let parseDUnit = stringReturn "emp" ViewSignature.Unit
@@ -437,7 +437,7 @@ let parseDIterated =
 let parseBasicViewSignature =
     choice [ parseDUnit
              // ^- `emp'
-             parsestrFuncView
+             parseStrFuncView
              // ^- <identifier>
              //  | <identifier> <arg-list>
              inParens parseViewSignature ]
@@ -587,18 +587,18 @@ let parseConstraint : Parser<ViewSignature * Expression option, unit> =
 
 
 /// parse an exclusivity constraint
-let parseExclusive : Parser<List<strFunc>, unit> = 
+let parseExclusive : Parser<List<StrFunc>, unit> = 
     pstring "exclusive" >>. ws
     // ^- exclusive ..  
     >>. parseDefs (parseFunc parseIdentifier)
-    .>> pstring ";" 
+    .>> wsSemi 
        
 /// parse a disjointness constraint
-let parseDisjoint : Parser<List<strFunc>, unit> = 
+let parseDisjoint : Parser<List<StrFunc>, unit> = 
     pstring "disjoint" >>. ws
     // ^- exclusive ..  
     >>. parseDefs (parseFunc parseIdentifier) 
-    .>> pstring ";" 
+    .>> wsSemi 
        
 
 /// Parses a single method, excluding leading or trailing whitespace.
