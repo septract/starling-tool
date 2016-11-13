@@ -1,0 +1,47 @@
+// View declarations 
+view iter[n] arc();
+view noArc();
+view countWas(int c);
+
+// Variable declarations
+shared int free, count;
+thread int c;
+
+// View specification  
+constraint iter[n] arc() -> 
+    // Can't dispose if an ARC clone exists
+    n > 0 => (free == 0)  && 
+    // Reference count is correct
+    n <= count;  
+
+// Method specifications 
+method init() {
+  {| noArc() |} 
+    <free=0>; 
+    {| ? |}
+    <count=1>; 
+  {| arc() |}
+}
+
+method clone() { 
+  {| arc() |} 
+    <count++>; 
+  {| arc() * arc() |}
+} 
+
+method drop() { 
+  {| arc() |}
+    <c = count-->; 
+  {| countWas(c) |}
+    if (c == 1) { {| ? |} <free = 1>; {| ? |} } 
+  {| emp |}
+} 
+
+// Helper constraints 
+constraint emp -> count >= 0;
+constraint noArc() -> count == 0 && free == 1;
+exclusive noArc(), noArc();
+exclusive noArc(), countWas(c);
+
+// Infer the meaning of countWas(c}
+constraint countWas(c) -> ?;
