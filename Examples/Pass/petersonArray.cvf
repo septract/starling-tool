@@ -83,13 +83,13 @@ constraint holdLock(me) * waiting(you) -> me != you && turn == you;
  * We can't be in multiple states at the same time, unless exactly one of those
  * states is flag-down.
  */
-constraint flagDown(me) * flagDown(you) -> me != you;
-constraint flagUp(me)   * flagUp(you)   -> me != you;
-constraint flagUp(me)   * waiting(you)  -> me != you;
-constraint flagUp(me)   * holdLock(you) -> me != you;
-constraint waiting(me)  * waiting(you)  -> me != you;
+disjoint flagDown(me), flagDown(you);
+disjoint flagUp(me), flagUp(you);
+disjoint flagUp(me), waiting(you);
+disjoint flagUp(me), holdLock(you);
+disjoint waiting(me), waiting(you);
 
 /*
  * Goal: mutual exclusion.
  */
-constraint holdLock(me) * holdLock(you) -> false;
+exclusive holdLock(me), holdLock(you);

@@ -34,7 +34,7 @@ method drop() {
     < c = count-- >;
   {| countVal(c) |}
     if (c == 1) {
-      {| noCnt() |}
+      {| freeing() |}
         <free = 1>;
       {| emp |}
     }
@@ -43,7 +43,7 @@ method drop() {
 
 view error();
 view iter[n] arc();
-view noCnt();
+view freeing();
 view noArc();
 
 // These views just add free=f and count=c to the final proof predicates
@@ -52,14 +52,14 @@ view freeVal(int f);
 
 
 constraint emp -> 0 <= count;
-constraint noCnt() -> count == 0;
+constraint freeing() -> count == 0;
 
 constraint noArc() -> count == 0 && free == 1;
 // noArc has to have exclusivity over threads.
-constraint noArc() * noArc() -> false;
-constraint noArc() * noCnt() -> false;
-constraint noArc() * freeVal(f) -> false;
-constraint noArc() * countVal(f) -> false;
+exclusive noArc(), noArc();
+exclusive noArc(), freeing();
+exclusive noArc(), freeVal(f);
+exclusive noArc(), countVal(f);
 
 constraint countVal(c) -> ?;
 
