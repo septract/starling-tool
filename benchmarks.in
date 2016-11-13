@@ -1,0 +1,11 @@
+# Examples for PLDI paper benchmarks
+# Group:name:dir:Z3?:HSF?:Optimised Z3?:Optimised HSF?:
+Ticket lock:with conditional view:Examples/Pass/ticketLock.cvf:yes:no:yes:no
+Ticket lock:without conditional view:Examples/Pass/ticketLockNoIf.cvf:yes:no:yes:no
+Ticket lock:with integers and indefinite views:Examples/PassHSF/ticketLockIndefinite.cvf:no:yes:no:yes
+Peterson:flag array:Examples/Pass/petersonArray.cvf:yes:no:yes:no
+Peterson:double methods:Examples/Pass/peterson.cvf:yes:no:yes:no
+Peterson:double methods and ints:Examples/Pass/petersonInt.cvf:yes:no:yes:yes
+Peterson:double methods, ints, indefinite views:Examples/PassHSF/petersonIndefinite.cvf:no:yes:no:yes
+ARC:definite, Boolean free, no init:Examples/Pass/arc.cvf:yes:no:yes:no
+ARC:definite, integer free, no init:Examples/Pass/arcInt.cvf:yes:yes:yes:yes
