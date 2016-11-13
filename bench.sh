@@ -12,7 +12,8 @@ sed -e 's/#.*$//' -e '/^$/d' ./benchmarks.in | while read category name path z3 
 	# Print category header if we're on a new category.
 	if [ "${category}" != "${cat}" ];
 	then
-		echo "${category}&&&&&&"
+		echo "\\midrule"
+		echo "${category}&&&&&&&&"
 		cat="$category"
 	fi
 
