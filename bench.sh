@@ -13,7 +13,7 @@ sed -e 's/#.*$//' -e '/^$/d' ./benchmarks.in | while read category name path z3 
 	if [ "${category}" != "${cat}" ];
 	then
 		echo "\\midrule"
-		echo "${category}&&&&&&&&"
+		echo "${category}&&&&&&&&"'\\\\'
 		cat="$category"
 	fi
 
