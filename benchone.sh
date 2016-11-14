@@ -1,9 +1,9 @@
 #!/bin/sh
 
 # Number of times to run ProofGen, Z3, and HSF per subject
-NPG=1
-NZ3=1
-NHSF=1
+NPG=10
+NZ3=10
+NHSF=10
 
 name=$1
 path=$2
@@ -152,4 +152,4 @@ else
 	ohsffinal="--"
 fi
 
-echo "--${name}&${terms}&${pgfinal}&${z3final}&${hsffinal}&${oterms}&${opgfinal}&${oz3final}&${ohsffinal}\\\\"
+echo "--${name}&${terms}&${pgfinal}&${z3final}&${hsffinal}&${oterms}&${opgfinal}&${oz3final}&${ohsffinal}"'\\\\'
