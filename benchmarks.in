@@ -8,6 +8,6 @@ Peterson:double methods:Examples/Pass/peterson.cvf:yes:no:yes:no
 Peterson:double methods and ints:Examples/Pass/petersonInt.cvf:yes:no:yes:yes
 ARC:definite, Boolean free, no init:Examples/Pass/arc.cvf:yes:no:yes:no
 ARC:definite, integer free, no init:Examples/Pass/arcInt.cvf:yes:yes:yes:yes
-ARC:indefinite, integer free:Examples/WIP/arcIndefinitePLDI.cvf:yes:yes:yes:yes
+ARC:indefinite, integer free:Examples/WIP/arcIndefinitePLDI.cvf:no:yes:no:yes
 Spin lock:definite, Boolean lock:Examples/Pass/spinLock.cvf:yes:no:yes:no
 Spin lock:definite, integer lock:Examples/Pass/spinLockInt.cvf:yes:no:yes:no
