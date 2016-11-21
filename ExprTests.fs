@@ -45,5 +45,3 @@ module ExprSimp =
      BEq (Int (IVar "foo"), 
           Int (IVar "bar"))
    ) 
-
-//])) , (BAnd [(Beq (IVar 0) (IVar 1))]) ) 
