@@ -244,6 +244,21 @@ module Atomics =
             ast
             (command' "!BLoad" ast [ Bool (sbVar "baz") ] [ Bool (sbVar "y") ])
 
+    [<Test>]
+    let ``model symbolic load <baz = %{foo}(x)>`` () =
+        let ast =
+            freshNode
+                (Fetch
+                    (freshNode (Identifier "baz"),
+                     freshNode
+                        (Symbolic ("foo", [ freshNode (Identifier "x") ])),
+                     Direct))
+        check
+            ast
+            (command' "!BLoad" ast
+                [ Bool (sbVar "baz") ]
+                [ Bool (BVar (sym "foo" [ Int (siVar "x") ] )) ])
+
 
 module CommandAxioms =
     open Starling.Core.Pretty
@@ -259,6 +274,13 @@ module CommandAxioms =
         freshNode
         <| Command'.Prim { PreAssigns = []
                            Atomics = [ atom ]
+                           PostAssigns = [] }
+
+    let local (lvalue : Expression) (rvalue : Expression)
+      : Command<ViewExpr<View>> =
+        freshNode
+        <| Command'.Prim { PreAssigns = [ (lvalue, rvalue) ]
+                           Atomics = []
                            PostAssigns = [] }
 
     [<Test>]
@@ -280,6 +302,20 @@ module CommandAxioms =
                         ast
                         [ Bool (sbVar "baz") ]
                         [ Bool (sbVar "y") ] ])
+
+    [<Test>]
+    let ``model local Boolean symbolic load {baz = %{foo}(bar)}`` () =
+        let ast =
+            local
+                (freshNode (Identifier "baz"))
+                (freshNode (Symbolic ("foo", [ freshNode (Identifier "bar") ])))
+
+        check
+            ast
+            (Prim
+                [ command "!BLSet"
+                    [ Bool (sbVar "baz") ]
+                    [ Bool (BVar (sym "foo" [ Int (siVar "bar") ] )) ] ])
 
 
 module ViewDefs =

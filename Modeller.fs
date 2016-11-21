@@ -1496,15 +1496,27 @@ and modelAssign
     (* We model assignments as !ILSet or !BLSet, depending on the
        type of dest, which _must_ be a thread lvalue.
        We thus also have to make sure that src is the correct type. *)
-    let modelWithDestAndSrc destPost srcPre =
-        match destPost with
-        | Typed.Bool _ -> ok (command "!BLSet" [ destPost ] [ srcPre ])
-        | Typed.Int _  -> ok (command "!ILSet" [ destPost ] [ srcPre ])
-        | Typed.Array (_) -> fail (PrimNotImplemented "array local assign")
+    let modelWithDest destM =
+        match destM with
+        | Int _ ->
+            let srcResult =
+                wrapMessages BadExpr
+                    (modelIntExpr ctx.ThreadVars ctx.ThreadVars id)
+                    src
+            lift (fun srcM -> command "!ILSet" [ destM ] [ Int srcM ]) srcResult
+        | Bool _ ->
+            let srcResult =
+                wrapMessages BadExpr
+                    (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
+                    src
+            lift (fun srcM -> command "!BLSet" [ destM ] [ Bool srcM ]) srcResult
+        | Array (_, _, _) ->
+            fail (PrimNotImplemented "array local assign")
 
-    bind2 modelWithDestAndSrc
-        (modelLValue ctx.ThreadVars ctx.ThreadVars id dest)
-        (wrapMessages BadExpr (modelExpr ctx.ThreadVars ctx.ThreadVars id) src)
+    (* The permitted type of src depends on the type of dest.
+       (Maybe, if the dest is ambiguous, we should invert this?) *)
+    let destResult = modelLValue ctx.ThreadVars ctx.ThreadVars id dest
+    bind modelWithDest destResult
 
 /// Creates a partially resolved axiom for an if-then-else.
 and modelITE
