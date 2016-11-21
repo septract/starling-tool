@@ -1,0 +1,12 @@
+/*
+ * Lamport's bakery algorithm.
+ */
+
+bool[10] flag;
+int[10] label;
+
+// Acquires a lock.
+method lock()
+{
+	
+} 

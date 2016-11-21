@@ -1,0 +1,74 @@
+/* Atomic reference counter encoded with integers.
+ * Example taken from Derek: http://www.mpi-sws.org/~dreyer/talks/talk-dagstuhl16.pdf
+ */
+
+shared int free, count;
+thread int f, c;
+
+method init() {
+  {| noArc() |}
+    <{ free = 0; count = 1; }>;
+  {| arc() |}
+}
+
+// Assumption: clone() cannot be called when there are no references
+method clone() {
+  {| arc() |} < count++ >; {| arc() * arc() |}
+}
+
+// Try to prove that use() when holding a reference is always valid
+// i.e. free can never be true when {| arc() |} is held
+method use() {
+  {| arc() |}
+    <f = free>;
+  {| arc() * freeVal(f) |}
+    // Test for disposal
+    if (f != 0) {
+      {| error() |} ; {| error() |}
+    }
+  {| arc() |}
+}
+
+method drop() {
+  {| arc() |}
+    < c = count-- >;
+  {| countVal(c) |}
+    if (c == 1) {
+      {| freeing() |} <free = 1>; {| emp |}
+    }
+  {| emp |}
+}
+
+view error();
+view iter[n] arc();
+view freeing(), noArc();
+
+// These views just add free=f and count=c to the final proof predicates
+view countVal(int c), freeVal(int f);
+
+
+constraint emp -> 0 <= count;
+constraint freeing() -> count == 0;
+
+constraint noArc() -> count == 0 && free == 1;
+// noArc has to have exclusivity over threads.
+constraint noArc() * noArc() -> false;
+constraint noArc() * freeing() -> false;
+constraint noArc() * freeVal(f) -> false;
+constraint noArc() * countVal(f) -> false;
+
+constraint freeVal(f) ->
+    (1<=free && count==0) ||
+    (0<=count && f==0 && free==0);
+constraint countVal(c) ->
+    (2<=c && 0<=count && free==0) ||
+    (1<=c && 1<=free && count==0) ||
+    (0<=count && 1+count<=c && free==0);
+
+// holds less than count arc()'s
+//  and if holding at least 1 then it can't have been freeing
+constraint iter[n] arc() -> n <= count
+                            && (n > 0 => (free == 0));
+
+// goal
+constraint error() -> false;
