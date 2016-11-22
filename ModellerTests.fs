@@ -96,6 +96,15 @@ module ArithmeticExprs =
         AssertAreEqual(Some expectedExpr, actualIntExpr)
 
     [<Test>]
+    let ``test modelling (1 * 3) % 2`` ()=
+        check
+            (freshNode <| BopExpr( Mod,
+                                   freshNode <| BopExpr(Mul, freshNode (Num 1L), freshNode (Num 3L)),
+                                   freshNode (Num 2L) ))
+            // TODO (CaptainHayashi): this shouldn't be optimised?
+            (AInt 1L)
+
+    [<Test>]
     let ``test modelling (1 * 2) + 3`` ()=
         check
             (freshNode <| BopExpr( Add,

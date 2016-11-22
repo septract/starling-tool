@@ -76,7 +76,6 @@ module Pretty =
     open Starling.Collections.Func.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.View.Pretty
-    open Starling.Core.Model.Pretty
 
     /// <summary>
     ///     Given an expression and its Doc, potentially wrap the Doc
@@ -117,6 +116,7 @@ module Pretty =
         | AMul [ x; y ] -> printBop "*" x y
         | AMul(x :: y :: xs) -> printInt (AMul((AMul [ x; y ]) :: xs))
         | ADiv(x, y) -> printBop "/" x y
+        | AMod(x, y) -> failwith "unexpected modulo"
 
     and printBop (op : string) (x : IntExpr<Var>) (y : IntExpr<Var>) =
         binop
@@ -230,6 +230,13 @@ let checkArith
         | ASub xs -> xs |> List.map ca |> collect |> lift ASub
         | AMul xs -> xs |> List.map ca |> collect |> lift AMul
         | ADiv (x, y) -> lift2 (curry ADiv) (ca x) (ca y)
+        | x ->
+            x
+            |> Expr.Int
+            |> Mapper.mapCtx (liftCToSub (Mapper.cmake toVar)) NoCtx
+            |> snd
+            |> UnsupportedExpr
+            |> fail
     ca
 
 /// <summary>

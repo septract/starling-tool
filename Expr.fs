@@ -34,6 +34,7 @@ module Types =
         | ASub of IntExpr<'var> list
         | AMul of IntExpr<'var> list
         | ADiv of IntExpr<'var> * IntExpr<'var>
+        | AMod of IntExpr<'var> * IntExpr<'var>
         override this.ToString () = sprintf "%A" this
 
     /// <summary>
@@ -94,6 +95,7 @@ module Pretty =
         | ASub xs -> sexpr "-" (printIntExpr pVar) xs
         | AMul xs -> sexpr "*" (printIntExpr pVar) xs
         | ADiv (x, y) -> sexpr "/" (printIntExpr pVar) [x; y]
+        | AMod (x, y) -> sexpr "%" (printIntExpr pVar) [x; y]
 
     /// Pretty-prints a Boolean expression.
     and printBoolExpr (pVar : 'var -> Doc) : BoolExpr<'var> -> Doc =
@@ -302,6 +304,12 @@ let bEq (a : BoolExpr<'var>) (b : BoolExpr<'var>) : BoolExpr<'var> =
 
 /// Curried wrapper over ADiv.
 let mkDiv (a : IntExpr<'var>) (b : IntExpr<'var>) : IntExpr<'var> = ADiv (a, b)
+
+/// Curried wrapper over AMod.
+let mkMod (a : IntExpr<'var>) (b : IntExpr<'var>) : IntExpr<'var> =
+    match (a, b) with
+    | (AInt ai, AInt bi) -> AInt (ai % bi)
+    | a, b               -> AMod (a, b)
 
 /// Slightly optimised version of ctx.MkAnd.
 /// Returns true for the empty array, and x for the singleton set {x}.
