@@ -387,7 +387,14 @@ let unify (src : NodeID) (dest : NodeID) (graph : Graph) : Graph option =
                     |> Set.map swapIn
                     |> if name = dest then Set.union srcIn else id
 
-                Some (name, (view, newOut, newIn, unifyNodeKind nodeKind nodeKind2))
+                (* If we are the destination, then we need to merge in the
+                   source's node kind. *)
+                let newNodeKind =
+                    if name = dest
+                    then unifyNodeKind nodeKind nodeKind2
+                    else nodeKind2
+
+                Some (name, (view, newOut, newIn, newNodeKind))
 
         let contents =
             graph.Contents

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-if [ "$(uname)" = "Darwin" ]; then
+if [ "$(uname)" = "Darwin" ] || [ "$(uname)" = "FreeBSD" ]; then
   mono ./bin/Debug/starling.exe $*
 elif [ "$(expr substr $(uname -s) 1 5)" = "Linux" ]; then
   mono ./bin/Debug/starling.exe $*

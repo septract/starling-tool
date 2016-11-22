@@ -72,7 +72,7 @@ and guardPartCmd : ModellerPartCmd -> GuarderPartCmd =
     | While (isDo, expr, inner) ->
         While (isDo, expr, guardBlock inner)
     | ITE (expr, inTrue, inFalse) ->
-        ITE (expr, guardBlock inTrue, guardBlock inFalse)
+        ITE (expr, guardBlock inTrue, Option.map guardBlock inFalse)
 
 /// Converts a method to guarded views.
 let guardMethod

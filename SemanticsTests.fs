@@ -99,8 +99,8 @@ module Frames =
     let checkExpr expr framedExpr =
         let actualExpr =
             frame
-                (ticketLockModel.Globals)
-                (ticketLockModel.Locals)
+                (ticketLockModel.SharedVars)
+                (ticketLockModel.ThreadVars)
                 expr
 
         Assert.AreEqual(actualExpr, framedExpr)
@@ -139,8 +139,8 @@ module CommandTests =
             command
             |> semanticsOfCommand
                    (Starling.Lang.Modeller.coreSemantics)
-                   (ticketLockModel.Globals)
-                   (ticketLockModel.Locals)
+                   (ticketLockModel.SharedVars)
+                   (ticketLockModel.ThreadVars)
             |> okOption
             |> Option.bind (function
                             | { Semantics = BAnd xs } -> xs |> Set.ofList |> Some

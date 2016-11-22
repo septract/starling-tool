@@ -658,7 +658,7 @@ module Translator =
     let translate
       (reals : bool)
       (ctx : Z3.Context)
-      ({ Globals = svars ; ViewDefs = ds ; Axioms = xs }
+      ({ SharedVars = svars ; ViewDefs = ds ; Axioms = xs }
          : Model<CmdTerm<MBoolExpr, GView<MarkedVar>, MVFunc>,
                  FuncDefiner<BoolExpr<Var> option>> ) =
         let funcDecls, definites = translateViewDefs reals ctx ds

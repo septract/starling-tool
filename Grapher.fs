@@ -135,7 +135,8 @@ let rec graphWhile
 ///     The block of actions inside the true leg of the if statement.
 /// </param>
 /// <param name="inFalse">
-///     The block of actions inside the false leg of the if statement.
+///     The block of actions inside the false leg of the if statement,
+///     which is optional (there may be no false leg).
 /// </param>
 /// <returns>
 ///     A Chessie result containing the graph of this if statement.
@@ -147,7 +148,7 @@ and graphITE
   (oQ : NodeID)
   (expr : SVBoolExpr)
   (inTrue : GuarderBlock)
-  (inFalse : GuarderBlock)
+  (inFalse : GuarderBlock option)
   : Result<Subgraph, Error> =
     (* First, we need to convert the expression into an assert.
        This means we cast it into the pre-state, as it is diverging the
@@ -155,29 +156,44 @@ and graphITE
        false. *)
     let _, exprB = Mapper.mapBoolCtx before NoCtx expr
 
-    // Translating [|oP|] if (C) { [|tP|] [|tQ|] } else { [|fP|] [|fQ|] } [|oQ|].
     trial {
-        (* We presume oP and oQ are added into the nodes list by the caller,
-         * and that tP and tQ are returned in tGraph (and fP/fQ in fGraph).
-         * This means the nodes we return are tGraph and fGraph.
-         *)
+        (* We definitely have an inner graph for the true leg, so get that
+           out of the way first. *)
         let! tP, tQ, tGraph = graphBlock false vg cg inTrue
-        let! fP, fQ, fGraph = graphBlock false vg cg inFalse
-        let! tfGraph = combine tGraph fGraph
 
-        let cEdges =
+        // We also definitely have these edges.
+        let tEdges =
             [ // {|oP|} assume C {|tP|}: enter true block
               (cg (), edge oP (cAssume exprB) tP)
               // {|tQ|} id {|oQ|}: exit true block
-              (cg (), edge tQ cId oQ)
-              // {|oP|} assume ¬C {|fP|}: enter false block
-              (cg (), edge oP (cAssumeNot exprB) fP)
-              // {|fQ|} id {|oQ|}: exit false block
-              (cg (), edge fQ cId oQ) ]
+              (cg (), edge tQ cId oQ) ]
+
+        // Model the remainder, which depends on whether we have a false leg.
+        let! tfGraph, fEdges =
+            match inFalse with
+            | None ->
+                // [|oP|] if (C) { [|tP|] [|tQ|] } [|oQ|].
+                ok
+                    (// No additional graph for the false leg
+                     tGraph,
+                     // {|oP|} assume ¬C {|fP|}: bypass true block
+                     [ cg (), edge oP (cAssumeNot exprB) oQ ])
+            | Some f ->
+                // [|oP|] if (C) { [|tP|] [|tQ|] } else { [|fP|] [|fQ|] } [|oQ|].
+                trial {
+                    let! fP, fQ, fGraph = graphBlock false vg cg f
+                    let! tfGraph = combine tGraph fGraph
+
+                    return
+                        (tfGraph,
+                         [ // {|oP|} assume ¬C {|fP|}: enter false block
+                           (cg (), edge oP (cAssumeNot exprB) fP)
+                           // {|fQ|} id {|oQ|}: exit false block
+                           (cg (), edge fQ cId oQ) ]) }
 
         // We don't add anything into the graph here.
         let cGraph = { Nodes = Map.empty
-                       Edges = Map.ofSeq cEdges }
+                       Edges = Map.ofSeq (Seq.append tEdges fEdges) }
 
         return! combine cGraph tfGraph }
 

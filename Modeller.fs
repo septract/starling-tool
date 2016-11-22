@@ -46,7 +46,7 @@ module Types =
         | ITE of
             expr : SVBoolExpr
             * inTrue : Block<'view, PartCmd<'view>>
-            * inFalse : Block<'view, PartCmd<'view>>
+            * inFalse : Block<'view, PartCmd<'view>> option
         override this.ToString() = sprintf "PartCmd(%A)" this
 
     /// <summary>
@@ -213,7 +213,11 @@ module Pretty =
             cmdHeaded (hsep [String "begin if"
                              (printSVBoolExpr expr) ])
                       [headed "True" [printBlock pView (printPartCmd pView) inTrue]
-                       headed "False" [printBlock pView (printPartCmd pView) inFalse]]
+                       withDefault Nop
+                            (Option.map
+                                (fun f ->
+                                    headed "False" [printBlock pView (printPartCmd pView) f])
+                                inFalse) ]
 
     /// Pretty-prints expression conversion errors.
     let printExprError : ExprError -> Doc =
@@ -221,11 +225,11 @@ module Pretty =
         | ExprNotBoolean ->
             "expression is not suitable for use in a Boolean position" |> String
         | VarNotBoolean lv ->
-            fmt "lvalue '{0}' is not a suitable type for use in a Boolean expressio    n" [ printLValue lv ]
+            fmt "lvalue '{0}' is not a suitable type for use in a Boolean expression" [ printLValue lv ]
         | ExprNotInt ->
             "expression is not suitable for use in an integral position" |> String
         | VarNotInt lv ->
-            fmt "lvalue '{0}' is not a suitable type for use in an integral expre    ssion" [ printLValue lv ]
+            fmt "lvalue '{0}' is not a suitable type for use in an integral expression" [ printLValue lv ]
         | Var(var, err) -> wrapped "variable" (var |> printLValue) (err |> printVarMapError)
         | AmbiguousSym sym ->
             fmt
@@ -1170,9 +1174,9 @@ and modelITE
   : MethodContext
     -> Expression
     -> Block<ViewExpr<View>, Command<ViewExpr<View>>>
-    -> Block<ViewExpr<View>, Command<ViewExpr<View>>>
+    -> Block<ViewExpr<View>, Command<ViewExpr<View>>> option
     -> Result<ModellerPartCmd, MethodError> =
-    fun ctx i t f ->
+    fun ctx i t fo ->
         trial { let! iM =
                     wrapMessages
                         BadITECondition
@@ -1182,7 +1186,10 @@ and modelITE
                  * need the inner cpairs for each to store the ITE placeholder.
                  *)
                 let! tM = modelBlock ctx t
-                let! fM = modelBlock ctx f
+                let! fM =
+                    match fo with
+                    | Some f -> modelBlock ctx f |> lift Some
+                    | None -> ok None
                 return ITE(iM, tM, fM) }
 
 /// Converts a while or do-while to a PartCmd.
@@ -1312,24 +1319,24 @@ let model
   (collated : CollatedScript)
   : Result<Model<ModellerMethod, ViewDefiner<SVBoolExpr option>>, ModelError> =
     trial {
-        // Make variable maps out of the global and local variable definitions.
-        let! globals = makeVarMap collated.Globals
+        // Make variable maps out of the shared and thread variable definitions.
+        let! svars = makeVarMap collated.SharedVars
                        |> mapMessages (curry BadVar "shared")
-        let! locals = makeVarMap collated.Locals
+        let! tvars = makeVarMap collated.ThreadVars
                       |> mapMessages (curry BadVar "thread-local")
 
         let desugaredMethods, unknownProtos =
-            Starling.Lang.ViewDesugar.desugar locals collated.Methods
+            Starling.Lang.ViewDesugar.desugar tvars collated.Methods
 
         let! vprotos =
             modelViewProtos (Seq.append collated.VProtos unknownProtos)
 
-        let! constraints = modelViewDefs globals vprotos collated
+        let! constraints = modelViewDefs svars vprotos collated
 
         let mctx =
             { ViewProtos = vprotos
-              SharedVars = globals
-              ThreadVars = locals }
+              SharedVars = svars
+              ThreadVars = tvars }
         let! axioms =
             desugaredMethods
             |> Seq.map (modelMethod mctx)
@@ -1337,8 +1344,8 @@ let model
             |> lift Map.ofSeq
 
         return
-            { Globals = globals
-              Locals = locals
+            { SharedVars = svars
+              ThreadVars = tvars
               ViewDefs = constraints
               Semantics = coreSemantics
               Axioms = axioms

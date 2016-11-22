@@ -8,13 +8,9 @@ shared int count;
 thread bool f;
 thread int c;
 
-thread bool dummy; // used in dummy skips
-
 // Assumption: clone() cannot be called when there are no references
 method clone() {
-  {| arc() |}
-    < count++ >;
-  {| arc() * arc() |}
+  {| arc() |} < count++ >; {| arc() * arc() |}
 }
 
 // Try to prove that print() when holding a reference is always valid
@@ -25,13 +21,7 @@ method print() {
   {| arc() * specialViewForFree(f) |}
     // Test for disposal
     if (f == true) {
-      {| error() |}
-        dummy = dummy; // skip;
-      {| error() |}
-    } else {
-      {| arc() |}
-        dummy = dummy; // skip;
-      {| arc() |}
+      {| error() |} ; {| error() |}
     }
   {| arc() |}
 }
@@ -44,16 +34,12 @@ method drop() {
       {| noCnt() |}
         <free = (true)>;
       {| emp |}
-    } else {
-      {| emp |}
-        dummy = dummy; // skip;
-      {| emp |}
     }
   {| emp |}
 }
 
 view error();
-view arc()[n];
+view iter[n] arc();
 view noCnt();
 
 // These views just add free=f and count=c to the final proof predicates

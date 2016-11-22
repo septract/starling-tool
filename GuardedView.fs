@@ -638,7 +638,7 @@ module Sub =
             Position.changePos
                 id
                 (subExprInVFunc sub)
-                context
+                contextC
                 item
 
         (context', { Cond = cond'; Item = item' } )

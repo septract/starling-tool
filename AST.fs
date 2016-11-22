@@ -125,10 +125,10 @@ module Types =
     type Command'<'view> =
         /// A set of sequentially composed primitives.
         | Prim of PrimSet
-        /// An if-then-else statement.
-        | If of Expression
-              * Block<'view, Command<'view>>
-              * Block<'view, Command<'view>>
+        /// An if-then-else statement, with optional else.
+        | If of ifCond : Expression
+              * thenBlock : Block<'view, Command<'view>>
+              * elseBlock : Block<'view, Command<'view>> option
         /// A while loop.
         | While of Expression
                  * Block<'view, Command<'view>>
@@ -160,11 +160,11 @@ module Types =
 
     /// A top-level item in a Starling script.
     type ScriptItem' =
-        | Global of TypedVar // global int name;
-        | Local of TypedVar // local int name;
+        | SharedVars of Type * Var list // shared int name1, name2, name3;
+        | ThreadVars of Type * Var list // thread int name1, name2, name3;
         | Method of CMethod<Marked<View>> // method main(argv, argc) { ... }
         | Search of int // search 0;
-        | ViewProto of ViewProto // view name(int arg);
+        | ViewProtos of ViewProto list // view name(int arg);
         | Constraint of ViewSignature * Expression option // constraint emp => true
         override this.ToString() = sprintf "%A" this
     and ScriptItem = Node<ScriptItem'>
@@ -324,26 +324,26 @@ module Pretty =
                          |> semiSep |> withSemi |> braced |> angled)
                   yield! Seq.map (uncurry printAssign) qs }
             |> semiSep |> withSemi
-        | Command'.If(c, t, f) ->
+        | Command'.If(c, t, fo) ->
             hsep [ "if" |> String |> syntax
-                   c
-                   |> printExpression
-                   |> parened
+                   c |> printExpression |> parened
                    t |> printBlock pView (printCommand pView)
-                   f |> printBlock pView (printCommand pView) ]
+                   (withDefault Nop
+                        (Option.map
+                            (fun f ->
+                                hsep
+                                    [ "else" |> String |> syntax
+                                      printBlock pView (printCommand pView) f ])
+                            fo)) ]
         | Command'.While(c, b) ->
             hsep [ "while" |> String |> syntax
-                   c
-                   |> printExpression
-                   |> parened
+                   c |> printExpression |> parened
                    b |> printBlock pView (printCommand pView) ]
         | Command'.DoWhile(b, c) ->
             hsep [ "do" |> String |> syntax
                    b |> printBlock pView (printCommand pView)
                    "while" |> String |> syntax
-                   c
-                   |> printExpression
-                   |> parened ]
+                   c |> printExpression |> parened ]
             |> withSemi
         | Command'.Blocks bs ->
             bs
@@ -367,24 +367,30 @@ module Pretty =
                    squared (String i)]
             |> withSemi
 
+    /// Pretty-prints a view prototype.
+    let printViewProtoList (vps : ViewProto list) : Doc =
+        hsep [ syntax (String "view")
+               commaSep (List.map printViewProto vps) ]
+
     /// Pretty-prints a search directive.
     let printSearch (i : int) : Doc =
         hsep [ String "search" |> syntax
                sprintf "%d" i |> String ]
 
-    /// Pretty-prints a script variable of the given class.
-    let printScriptVar (cls : string) (v : CTyped<Var>) : Doc =
-        hsep [ String cls |> syntax; printCTyped String v ] |> withSemi
+    /// Pretty-prints a script variable list of the given class.
+    let printScriptVars (cls : string) (t : Type) (vs : Var list) : Doc =
+        let vsp = commaSep (List.map printVar vs)
+        withSemi (hsep [ String cls |> syntax; printType t; vsp ])
 
     /// Pretty-prints script lines.
     let printScriptItem' : ScriptItem' -> Doc =
         function
-        | Global v -> printScriptVar "shared" v
-        | Local v -> printScriptVar "thread" v
+        | SharedVars (t, vs) -> printScriptVars "shared" t vs
+        | ThreadVars (t, vs) -> printScriptVars "thread" t vs
         | Method m ->
             fun mdoc -> vsep [Nop; mdoc; Nop]
             <| printMethod (printMarkedView printView) (printCommand (printMarkedView printView)) m
-        | ViewProto v -> printViewProto v
+        | ViewProtos v -> printViewProtoList v
         | Search i -> printSearch i
         | Constraint (view, def) -> printConstraint view def
     let printScriptItem (x : ScriptItem) : Doc = printScriptItem' x.Node
