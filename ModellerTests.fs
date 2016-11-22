@@ -251,13 +251,15 @@ module Atomics =
                 (Fetch
                     (freshNode (Identifier "baz"),
                      freshNode
-                        (Symbolic ("foo", [ freshNode (Identifier "x") ])),
+                        (Symbolic
+                          { Sentence = [ SymString "foo" ]
+                            Args = [ freshNode (Identifier "x") ] }),
                      Direct))
         check
             ast
             (command' "!BLoad" ast
                 [ Bool (sbVar "baz") ]
-                [ Bool (BVar (sym "foo" [ Int (siVar "x") ] )) ])
+                [ Bool (BVar (sym [ SymString "foo" ] [ Int (siVar "x") ] )) ])
 
 
 module CommandAxioms =
@@ -308,14 +310,21 @@ module CommandAxioms =
         let ast =
             local
                 (freshNode (Identifier "baz"))
-                (freshNode (Symbolic ("foo", [ freshNode (Identifier "bar") ])))
+                (freshNode
+                    (Symbolic
+                        { Sentence = [ SymString "foo" ]
+                          Args = [ freshNode (Identifier "bar") ] }))
 
         check
             ast
             (Prim
                 [ command "!BLSet"
                     [ Bool (sbVar "baz") ]
-                    [ Bool (BVar (sym "foo" [ Int (siVar "bar") ] )) ] ])
+                    [ Bool
+                        (BVar
+                            (sym
+                                [ SymString "foo" ]
+                                [ Int (siVar "bar") ] )) ] ])
 
 
 module ViewDefs =

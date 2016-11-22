@@ -155,7 +155,7 @@ module Compose =
     let rec getIntIntermediate v =
         function
         | IVar (Reg (Intermediate (n, x))) when v = x-> Some n
-        | IVar (Sym { Params = xs } ) ->
+        | IVar (Sym { Args = xs } ) ->
             Seq.fold maxOpt None <| (Seq.map (getIntermediate v) <| xs)
         | IAdd xs | ISub xs | IMul xs ->
             Seq.fold maxOpt None <| (Seq.map (getIntIntermediate v) <| xs)
@@ -171,7 +171,7 @@ module Compose =
     and getBoolIntermediate v =
         function
         | BVar (Reg (Intermediate (n, name))) when name = v -> Some n
-        | BVar (Sym { Params = xs } ) ->
+        | BVar (Sym { Args = xs } ) ->
             Seq.fold maxOpt None <| (Seq.map (getIntermediate v) <| xs)
         | BAnd xs | BOr xs ->
             Seq.fold maxOpt None <| (Seq.map (getBoolIntermediate v) <| xs)
@@ -189,7 +189,7 @@ module Compose =
     and getArrayIntermediate v =
         function
         | AVar (Reg (Intermediate (n, name))) when name = v -> Some n
-        | AVar (Sym { Params = xs } ) ->
+        | AVar (Sym { Args = xs } ) ->
             Seq.fold maxOpt None <| (Seq.map (getIntermediate v) <| xs)
         // Is this correct?
         | AIdx (_, _, arr, idx) ->

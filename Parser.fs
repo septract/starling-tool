@@ -10,6 +10,7 @@ open Chessie.ErrorHandling
 
 open Starling
 open Starling.Collections
+open Starling.Core.Symbolic
 open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Lang.AST
@@ -141,18 +142,31 @@ let nodify v =
                          Node = x }
 
 /// <summary>
+///     Parser for symbolic sentences.
+///
+///     <para>
+///         Symbolic sentences mix free strings and #-delimited parameter
+///         references.
+///     </para>
+/// </summary>
+let parseSymbolicSentence =
+    many
+        ((many1Chars (noneOf "}#") |>> SymString)
+         <|> (pchar '#' >>. pint32 |>> SymParamRef))
+
+/// <summary>
 ///     Parser for symbolic expressions.
 ///
 ///     <para>
 ///         Symbolic expressions are of the form
-///         <c>%{arbitrary string}(expr1, expr2, ..., exprN)</c>.
+///         <c>%{sentence}(expr1, expr2, ..., exprN)</c>.
 ///     </para>
 /// </summary>
 let parseSymbolic =
-    pstring "%"
-    >>. inBraces (manyChars (noneOf "}"))
-    .>> ws
-    .>>. parseParamList parseExpression
+    pipe2ws
+        (pstring "%" >>. inBraces parseSymbolicSentence)
+        (parseParamList parseExpression)
+        (fun s es -> { Sentence = s; Args = es })
 
 /// Parser for primary expressions.
 let parsePrimaryExpression =

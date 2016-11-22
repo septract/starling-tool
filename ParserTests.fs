@@ -7,6 +7,8 @@ open NUnit.Framework
 
 open Starling.Collections
 open Starling.Utils.Testing
+open Starling.Core.Var
+open Starling.Core.Symbolic
 open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Lang.AST
@@ -27,6 +29,17 @@ let check p str ast =
 // Perform the same trick matt uses in Main.fs to overwrite a right-associative
 // operator with the correct behaviour
 let ( ** ) = ( <| )
+
+
+module SymbolicTests =
+    [<Test>]
+    let ``Test symbolic %{foo #1 bar}(x) is parsed correctly`` () =
+        check parseSymbolic "%{foo #1 bar}(x)"
+            (Some <|
+                { Sentence =
+                    [ SymString "foo "; SymParamRef 1; SymString " bar" ]
+                  Args =
+                    [ node "" 1L 15L (Identifier "x") ] })
 
 
 module ViewProtoTests =
@@ -148,7 +161,7 @@ module ExpressionTests =
     [<Test>]
     let ``Test negation / disjunction are parsed correctly`` () =
         check parseExpression "true || ! false"
-            (Some <| 
+            (Some <|
              node "" 1L 6L
              ** BopExpr (Or,
                     node "" 1L 1L True,
