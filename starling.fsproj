@@ -53,10 +53,10 @@
     <Compile Include="TypeSystem.fs" />
     <Compile Include="Expr.fs" />
     <Compile Include="Var.fs" />
-    <Compile Include="AST.fs" />
-    <Compile Include="Parser.fs" />
     <Compile Include="Traversal.fs" />
     <Compile Include="Symbolic.fs" />
+    <Compile Include="AST.fs" />
+    <Compile Include="Parser.fs" />
     <Compile Include="View.fs" />
     <Compile Include="Z3.fs" />
     <Compile Include="ExprEquiv.fs" />

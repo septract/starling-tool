@@ -5,6 +5,7 @@ module Starling.Lang.AST
 
 open Starling
 open Starling.Collections
+open Starling.Core.Symbolic
 open Starling.Core.TypeSystem
 open Starling.Core.Var.Types
 
@@ -54,7 +55,7 @@ module Types =
         | False // false
         | Num of int64 // 42
         | Identifier of string // foobaz
-        | Symbolic of string * Expression list // %{foo}(exprs)
+        | Symbolic of Symbolic<Expression> // %{foo}(exprs)
         | BopExpr of BinOp * Expression * Expression // a BOP b
         | UopExpr of UnOp * Expression // UOP a 
         | ArraySubscript of array : Expression * subscript : Expression
@@ -226,8 +227,9 @@ module Types =
 ///     Pretty printers for the AST.
 /// </summary>
 module Pretty =
-    open Starling.Core.Pretty
     open Starling.Collections.Func.Pretty
+    open Starling.Core.Pretty
+    open Starling.Core.Symbolic.Pretty
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Var.Pretty
 
@@ -263,8 +265,7 @@ module Pretty =
         | False -> String "false" |> syntaxLiteral
         | Num i -> i.ToString() |> String |> syntaxLiteral
         | Identifier x -> syntaxIdent (String x)
-        | Symbolic (sym, args) ->
-            func (sprintf "%%{%s}" sym) (Seq.map printExpression args)
+        | Symbolic sym -> printSymbolic sym
         | BopExpr(op, a, b) ->
             hsep [ printExpression a
                    printBinOp op
@@ -276,6 +277,17 @@ module Pretty =
         | ArraySubscript (array, subscript) ->
             printExpression array <-> squared (printExpression subscript)
     and printExpression (x : Expression) : Doc = printExpression' x.Node
+    /// <summary>
+    ///     Pretty-prints a symbolic without interpolation.
+    /// </summary>
+    /// <param name="s">The symbolic to print.</param>
+    /// <returns>
+    ///     The <see cref="Doc"/> resulting from printing <paramref name="s"/>.
+    /// </returns> 
+    and printSymbolic (s : Symbolic<Expression>) : Doc =
+        String "%"
+        <-> printSymbolicSentence s.Sentence
+        <-> parened (commaSep (List.map printExpression s.Args))
 
     /// Pretty-prints views.
     let rec printView : View -> Doc =

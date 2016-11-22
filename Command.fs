@@ -156,7 +156,7 @@ module Compose =
       (var : Var) (expr : IntExpr<Sym<MarkedVar>>) : bigint option =
         match expr with
         | IVar (Reg (Intermediate (n, x))) when var = x -> Some n
-        | IVar (Sym { Params = xs } ) ->
+        | IVar (Sym { Args = xs } ) ->
             Seq.fold maxOpt None (Seq.map (getIntermediate var) xs)
         | IAdd xs | ISub xs | IMul xs ->
             Seq.fold maxOpt None (Seq.map (getIntIntermediate var) xs)
@@ -173,7 +173,7 @@ module Compose =
       (var : Var) (expr : BoolExpr<Sym<MarkedVar>>) : bigint option =
         match expr with
         | BVar (Reg (Intermediate (n, name))) when name = var -> Some n
-        | BVar (Sym { Params = xs } ) ->
+        | BVar (Sym { Args = xs } ) ->
             Seq.fold maxOpt None (Seq.map (getIntermediate var) xs)
         | BAnd xs | BOr xs ->
             Seq.fold maxOpt None (Seq.map (getBoolIntermediate var) xs)
@@ -195,7 +195,7 @@ module Compose =
       (var : Var) (expr : ArrayExpr<Sym<MarkedVar>>) : bigint option =
         match expr with
         | AVar (Reg (Intermediate (n, name))) when name = var -> Some n
-        | AVar (Sym { Params = xs } ) ->
+        | AVar (Sym { Args = xs } ) ->
             Seq.fold maxOpt None (Seq.map (getIntermediate var) xs)
         // TODO(CaptainHayashi): need to convince myself this is correct.
         | AIdx (_, _, arr, idx) ->
