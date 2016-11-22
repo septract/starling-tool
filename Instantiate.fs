@@ -67,7 +67,7 @@ module Types =
         ///     We found a symbolic variable somewhere we didn't expect
         ///     one.
         /// </summary>
-        | UnwantedSym of sym: string
+        | UnwantedSym of sym: SymbolicSentence
         /// <summary>
         ///     We tried to substitute parameters, but one parameter was free
         ///     (not bound to an expression) somehow.
@@ -124,7 +124,7 @@ module Pretty =
         | UnwantedSym sym ->
             // TODO(CaptainHayashi): this is a bit shoddy.
             fmt "encountered uninterpreted symbol {0}"
-                [ String sym ]
+                [ printSymbolicSentence sym ]
         | FreeVarInSub var ->
             // TODO(CaptainHayashi): this is a bit shoddy.
             error
@@ -496,7 +496,7 @@ module Phase =
             let convParamsR = collect (List.map exprToSym ps)
 
             let defR =
-                lift (func (sprintf "!UNDEF:%A" n) >> Sym >> BVar)
+                lift (sym [ SymString (sprintf "!UNDEF:%A" n) ] >> BVar)
                     convParamsR
 
             lift (mkPair (func n ps)) defR

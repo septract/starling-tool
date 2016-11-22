@@ -4,6 +4,7 @@
 module Starling.Tests.Core.Symbolic
 
 open NUnit.Framework
+open Starling.Collections
 open Starling.Utils.Testing
 open Starling.Core.TypeSystem
 open Starling.Core.Var
@@ -79,14 +80,14 @@ module BoolApprox =
         check
             BFalse
             Context.positive
-            (BVar (Sym { Name = "test"; Params = ([] : SMExpr list) } ))
+            (BVar (Sym { Sentence = [ SymString "test" ]; Args = ([] : SMExpr list) } ))
 
     [<Test>]
     let ``Rewrite -ve param-less Bool symbol to true`` () =
         check
             BTrue
             Context.negative
-            (BVar (Sym { Name = "test"; Params = ([] : SMExpr list) } ))
+            (BVar (Sym { Sentence = [ SymString "test" ]; Args = ([] : SMExpr list) } ))
 
     [<Test>]
     let ``Rewrite +ve Reg-params Bool symbol to false`` () =
@@ -95,8 +96,8 @@ module BoolApprox =
             Context.positive
             (BVar
                 (Sym
-                    { Name = "test"
-                      Params =
+                    { Sentence = [ SymString "test" ]
+                      Args =
                         [ Expr.Int (siBefore "foo")
                           Expr.Bool (sbAfter "bar") ] } ))
 
@@ -107,8 +108,8 @@ module BoolApprox =
             Context.negative
             (BVar
                 (Sym
-                    { Name = "test"
-                      Params =
+                    { Sentence = [ SymString "test" ]
+                      Args =
                         [ Expr.Int (siBefore "foo")
                           Expr.Bool (sbAfter "bar") ] } ))
 
@@ -120,14 +121,14 @@ module BoolApprox =
             (BImplies
                 (BVar
                     (Sym
-                        { Name = "test1"
-                          Params =
+                        { Sentence = [ SymString "test1" ]
+                          Args =
                             [ Expr.Int (siBefore "foo")
                               Expr.Bool (sbAfter "bar") ] } ),
                  BVar
                     (Sym
-                        { Name = "test2"
-                          Params =
+                        { Sentence = [ SymString "test2" ]
+                          Args =
                               [ Expr.Int (siBefore "baz")
                                 Expr.Bool (sbAfter "barbaz") ] } )))
 
@@ -139,14 +140,14 @@ module BoolApprox =
             (BImplies
                 (BVar
                     (Sym
-                        { Name = "test1"
-                          Params =
+                        { Sentence = [ SymString "test1" ]
+                          Args =
                             [ Expr.Int (siBefore "foo")
                               Expr.Bool (sbAfter "bar") ] } ),
                  BVar
                     (Sym
-                        { Name = "test2"
-                          Params =
+                        { Sentence = [ SymString "test2" ]
+                          Args =
                             [ Expr.Int (siBefore "baz")
                               Expr.Bool (sbAfter "barbaz") ] } )))
 
@@ -215,7 +216,7 @@ module FindSMVarsCases =
               CTyped.Bool (After "baz") ]
             (Expr.Bool
                 (BVar
-                    (sym "foo"
+                    (sym [ SymString "foo" ]
                         [ Expr.Int (siBefore "bar")
                           Expr.Bool (sbAfter "baz") ] )))
 
@@ -225,6 +226,6 @@ module FindSMVarsCases =
             [ CTyped.Int (Before "bar"); CTyped.Bool (After "baz") ]
             (Expr.Int
                 (IVar
-                    (sym "foo"
+                    (sym [ SymString "foo" ]
                         [ Expr.Int (siBefore "bar")
                           Expr.Bool (sbAfter "baz") ] )))
