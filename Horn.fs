@@ -394,16 +394,20 @@ let hsfModelViewDef
 ///     If successful, the Horn uninterpreted function for emp.
 /// </returns>
 let predOfEmp (svars : VarMap) : Result<Func<VIntExpr>, Error> =
-    let vpars =
-        svars
-        |> Map.toSeq
-        |> Seq.map
-            (function
-             | (name, Type.Int()) -> name |> makeHSFVar |> AVar |> ok
-             | (name, ty) -> name |> withType ty |> NonArithVar |> fail)
-        |> collect
+    let svarSeq = VarMap.toTypedVarSeq svars
 
-    bind (fun vp -> predOfFunc ok { Name = "emp"; Params = vp }) vpars
+    (* emp is parameterised by the entire shared state, but nothing else.
+       We can't make the predicate if any of those variables are non-integer. *)
+    let empParamsR =
+        collect
+            (Seq.map
+                (function
+                 | Int name -> ok (AVar (makeHSFVar name))
+                 | var -> fail (NonArithVar var))
+                svarSeq)
+
+    bind (fun empParams -> predOfFunc ok { Name = "emp"; Params = empParams })
+        empParamsR
 
 /// Constructs a Horn clause for initialising an integer variable.
 /// Returns an error if the variable is not an integer.
