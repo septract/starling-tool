@@ -537,36 +537,47 @@ let hsfModelBaseDownclosure
        unflattened form.  This is kind-of messy, as we now have to flatten
        it again. *)
     let flatFunc = Starling.Flattener.flattenDView svarSeq [func]
-    let funcPredResult = predOfFunc ensureArith flatFunc
+    let funcPredR = predOfFunc ensureArith flatFunc
 
     // TODO(CaptainHayashi): lots of duplication here.
     let iterator = func.Iterator
-    let iterVarResult =
+    let iterVarR =
         match iterator with
         | Some (Int x) -> ok x
         | _ ->
             fail
                 (CannotCheckDeferred
                     (NeedsBaseDownclosure (func, reason), "malformed iterator"))
-    let funcPredZeroResult =
+
+    (* Base downclosure for a view V[n](x):
+         D(emp) => D(V[0](x))
+       That is, the definition of V when the iterator is 0 can be no
+       stricter than the definition of emp.
+
+       In the following, `funcPredZeroR` models V[0](x) by transforming
+       the iterator from n to 0 in `funcPredR`, and 'empPredR' models emp. *)
+    let funcPredZeroR =
         lift2
             (fun it pred -> mapIteratorParam it (fun _ -> AInt 0L) pred)
-            iterVarResult
-            funcPredResult
+            iterVarR
+            funcPredR
+    let empPredR = predOfEmp svars
 
-    let empPredResult = predOfEmp svars
-
-    let hornResult =
+    // The above can be modelled as the Horn clause funcPredZero :- empPred.
+    let hornR =
         lift2
-            (fun zero emp -> Clause (Pred emp, [Pred zero]))
-            funcPredZeroResult
-            empPredResult
+            (fun funcPredZero empPred ->
+                Clause (Pred empPred, [Pred funcPredZero]))
+            funcPredZeroR
+            empPredR
 
+    // We then add a comment to help show where this came from.
     lift
         (fun h ->
-            [ Comment (sprintf "base downclosure on %s: %s" func.Func.Name reason)
+            [ Comment
+                (sprintf "base downclosure on %s: %s" func.Func.Name reason)
               h ])
-        hornResult
+        hornR
 
 /// <summary>
 ///     Constructs a Horn clause for an inductive downclosure check on a given
@@ -580,10 +591,10 @@ let hsfModelInductiveDownclosure
 
     // See hsfModelBaseDownclosure for caveats.
     let flatFunc = Starling.Flattener.flattenDView svarSeq [func]
-    let funcPredResult = predOfFunc ensureArith flatFunc
+    let funcPredR = predOfFunc ensureArith flatFunc
 
     let iterator = func.Iterator
-    let iterVarResult =
+    let iterVarR =
         match iterator with
         | Some (Int x) -> ok x
         | _ ->
@@ -592,25 +603,36 @@ let hsfModelInductiveDownclosure
                     (NeedsInductiveDownclosure (func, reason),
                      "malformed iterator"))
 
-    let funcPredSuccResult =
+    (* Inductive downclosure for a view V[n](x):
+         (0 <= n) => (D(V[n+1](x)) => D(V[n](x)))
+       That is, the definition of V when the iterator is n+1 implies the
+       definition of V when the iterator is n, for all positive n.
+
+       In the following, `funcPredSuccR` models V[n+1](x) by transforming
+       the iterator from n to n+1 in `funcPredR`. *)
+    let funcPredSuccR =
         lift2
             (fun it pred -> mapIteratorParam it incVar pred)
-            iterVarResult
-            funcPredResult
+            iterVarR
+            funcPredR
 
-    let hornResult =
+    (* The above can be modelled as the Horn clause
+         funcPredR :- n > 0, funcPredSuccR.
+       (We flatten the nested implication into a conjunction.) *)
+    let hornR =
         lift3
             (fun it succ norm ->
                 Clause (Pred norm, [Ge (AVar it, AInt 0L); Pred succ]))
-            iterVarResult
-            funcPredSuccResult
-            funcPredResult
+            iterVarR
+            funcPredSuccR
+            funcPredR
 
+    // As with base DC, comment to show where this clause originated.
     lift
         (fun h ->
             [ Comment (sprintf "ind downclosure on %s: %s" func.Func.Name reason)
               h ])
-        hornResult
+        hornR
 
 /// <summary>
 ///     Constructs a Horn clause for a deferred check, if possible.
