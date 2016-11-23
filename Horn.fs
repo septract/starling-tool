@@ -192,7 +192,7 @@ module Pretty =
     let printHorns (hs : Horn list) : Doc = hs |> List.map printHorn |> vsep
 
     /// <summary>
-    ///     Pretty-prints a MuZ3 backend error.
+    ///     Pretty-prints a HSF backend error.
     /// </summary>
     /// <param name="err">The error to print.</param>
     /// <returns>
