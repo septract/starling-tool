@@ -114,7 +114,7 @@ let flatten
     let globalsF marker = varMapToExprs (marker >> Reg) model.SharedVars
 
     /// Build a list of global parameters, for view definitions.
-    let globalsP = toVarSeq model.SharedVars
+    let globalsP = VarMap.toTypedVarSeq model.SharedVars
 
     { SharedVars = model.SharedVars
       ThreadVars = model.ThreadVars

@@ -30,7 +30,7 @@ let makeFreshView (tvars : VarMap) (fg : FreshGen) : View * ViewProto =
         fg |> getFresh |> sprintf "%A"
     let viewArgs =
         tvars |> Map.toSeq |> Seq.map (fst >> LVIdent >> LV >> fun l -> freshNode l)
-    let viewParams = toVarSeq tvars
+    let viewParams = VarMap.toTypedVarSeq tvars
 
     (Func (func viewName viewArgs), NoIterator (func viewName viewParams, false))
 

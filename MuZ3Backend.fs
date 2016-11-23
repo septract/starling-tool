@@ -602,7 +602,7 @@ module Translator =
       (svars : VarMap)
       (check : DeferredCheck)
       : Result<(string * Z3.BoolExpr) option, Error> =
-        let svarSeq = toVarSeq svars
+        let svarSeq = VarMap.toTypedVarSeq svars
 
         // TODO(CaptainHayashi): clean this up?
         let varToExpr v =

@@ -500,7 +500,7 @@ let hsfTerm
 /// </summary>
 let hsfModelDeferredCheck (svars : VarMap) (check : DeferredCheck)
   : Result<Horn list, Error> =
-    let svarSeq = toVarSeq svars
+    let svarSeq = VarMap.toTypedVarSeq svars
 
     let subIteratorInPred iterator f (pred : Func<VIntExpr>) =
         let fOnIter param =

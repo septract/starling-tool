@@ -490,7 +490,7 @@ let rec modelExpr
        symbolic, then we have ambiguity. *)
         | LV v ->
             v
-            |> wrapMessages Var (lookupVar env)
+            |> wrapMessages Var (VarMap.lookup env)
             |> lift
                    (Mapper.map
                         (Mapper.compose
@@ -550,7 +550,7 @@ and modelBoolExpr
              * Boolean type.
              *)
             v
-            |> wrapMessages Var (lookupVar env)
+            |> wrapMessages Var (VarMap.lookup env)
             |> bind (function
                      | Typed.Bool vn -> vn |> varF |> Reg |> BVar |> ok
                      | _ -> v |> VarNotBoolean |> fail)
@@ -630,7 +630,7 @@ and modelIntExpr
              * arithmetic type.
              *)
             v
-            |> wrapMessages Var (lookupVar env)
+            |> wrapMessages Var (VarMap.lookup env)
             |> bind (function
                      | Typed.Int vn -> vn |> varF |> Reg |> AVar |> ok
                      | _ -> v |> VarNotInt |> fail)
@@ -708,17 +708,17 @@ let makeIteratorMap : TypedVar option -> VarMap =
 /// view prototype map vpm.
 let rec localEnvOfViewDef (vds : DView) : Result<VarMap, ViewError> =
     let makeFuncMap { Func = {Params = ps}; Iterator = it } =
-        makeVarMap ps >>= (combineMaps (makeIteratorMap it))
+        VarMap.ofTypedVarSeq ps >>= (VarMap.combine (makeIteratorMap it))
 
     let funcMaps = Seq.map makeFuncMap vds
     let singleMap =
-        seqBind (fun xR s -> bind (combineMaps s) xR) Map.empty funcMaps
+        seqBind (fun xR s -> bind (VarMap.combine s) xR) Map.empty funcMaps
 
     mapMessages ViewError.BadVar singleMap
 
 /// Produces the variable environment for the constraint whose viewdef is v.
 let envOfViewDef (svars : VarMap) : DView -> Result<VarMap, ViewError> =
-    localEnvOfViewDef >> bind (combineMaps svars >> mapMessages SVarConflict)
+    localEnvOfViewDef >> bind (VarMap.combine svars >> mapMessages SVarConflict)
 
 /// Converts a single constraint to its model form.
 let modelViewDef
@@ -957,8 +957,8 @@ let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
 // Axioms
 //
 
-let (|Shared|_|) ctx (lvalue : LValue) = tryLookupVar ctx.SharedVars lvalue
-let (|Thread|_|) ctx (lvalue : LValue) = tryLookupVar ctx.ThreadVars lvalue
+let (|Shared|_|) ctx (lvalue : LValue) = VarMap.tryLookup ctx.SharedVars lvalue
+let (|Thread|_|) ctx (lvalue : LValue) = VarMap.tryLookup ctx.ThreadVars lvalue
 
 /// Converts a Boolean load to a Prim.
 let modelBoolLoad : MethodContext -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
@@ -970,7 +970,7 @@ let modelBoolLoad : MethodContext -> Var -> Expression -> FetchMode -> Result<Pr
     match srcExpr.Node with
     | LV srcLV ->
         trial {
-            let! src = wrapMessages BadSVar (lookupVar svars) srcLV
+            let! src = wrapMessages BadSVar (VarMap.lookup svars) srcLV
             match src, mode with
             | Typed.Bool s, Direct ->
                 return
@@ -995,7 +995,7 @@ let modelIntLoad : MethodContext -> Var -> Expression -> FetchMode -> Result<Pri
     match srcExpr.Node with
     | LV srcLV ->
         trial {
-            let! src = wrapMessages BadSVar (lookupVar svars) srcLV
+            let! src = wrapMessages BadSVar (VarMap.lookup svars) srcLV
             match src, mode with
             | Typed.Int s, Direct ->
                 return command "!ILoad" [ Int dest ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
@@ -1061,9 +1061,9 @@ let modelCAS : MethodContext -> LValue -> LValue -> Expression -> Result<PrimCom
      * dest, test, and set must agree on type.
      * The type of dest and test influences how we interpret set.
      *)
-    wrapMessages BadSVar (lookupVar svars) destLV
+    wrapMessages BadSVar (VarMap.lookup svars) destLV
     >>= (fun dest ->
-             let v = wrapMessages BadTVar (lookupVar tvars) testLV
+             let v = wrapMessages BadTVar (VarMap.lookup tvars) testLV
              lift (mkPair dest) v)
     >>= (function
          | (Bool d, Bool t) ->
@@ -1120,7 +1120,7 @@ let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> 
              * We don't allow the Direct fetch mode, as it is useless.
              *)
             trial {
-                let! stype = wrapMessages BadSVar (lookupVar ctx.SharedVars) operand
+                let! stype = wrapMessages BadSVar (VarMap.lookup ctx.SharedVars) operand
                 // TODO(CaptainHayashi): sort out lvalues...
                 let op = flattenLV operand
                 match mode, stype with
@@ -1150,7 +1150,7 @@ and modelAssign : MethodContext -> LValue -> Expression -> Result<PrimCommand, P
      * We thus also have to make sure that e is the correct type.
      *)
     trial {
-        let! l = wrapMessages BadTVar (lookupVar tvars) lLV
+        let! l = wrapMessages BadTVar (VarMap.lookup tvars) lLV
         match l with
         | Typed.Bool ls ->
             let! em =
@@ -1321,9 +1321,9 @@ let model
   : Result<Model<ModellerMethod, ViewDefiner<SVBoolExpr option>>, ModelError> =
     trial {
         // Make variable maps out of the shared and thread variable definitions.
-        let! svars = makeVarMap collated.SharedVars
+        let! svars = VarMap.ofTypedVarSeq collated.SharedVars
                        |> mapMessages (curry BadVar "shared")
-        let! tvars = makeVarMap collated.ThreadVars
+        let! tvars = VarMap.ofTypedVarSeq collated.ThreadVars
                       |> mapMessages (curry BadVar "thread-local")
 
         let desugaredMethods, unknownProtos =
