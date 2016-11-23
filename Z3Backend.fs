@@ -165,7 +165,7 @@ module Pretty =
                     (printGView (printSym printMarkedVar))
                     (printVFunc (printSym printMarkedVar))
                     zterm.Original ]
-              headed "Symbolic conversion" <|
+              headed "After instantiation" <|
                 [ printTerm
                     (printBoolExpr (printSym printMarkedVar))
                     (printBoolExpr (printSym printMarkedVar))
