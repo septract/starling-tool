@@ -567,7 +567,7 @@ let hsfModelBaseDownclosure
     let hornR =
         lift2
             (fun funcPredZero empPred ->
-                Clause (Pred empPred, [Pred funcPredZero]))
+                Clause (Pred funcPredZero, [Pred empPred]))
             funcPredZeroR
             empPredR
 
