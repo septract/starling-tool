@@ -500,82 +500,128 @@ let hsfTerm
           (hsfConditionBody definer w c.Semantics) // TODO: keep around Command?
 
 /// <summary>
+///     Given the name of an iterator, map a function over the parameter in a
+///     func that represents that iterator.
+/// </summary>
+/// <param name="iterator">The name of the iterator to transform.<param>
+/// <param name="f">The function mapping the iterator to an expression.</param>
+/// <param name="func">
+///     The func in which <paramref name="iterator"/> is a parameter.
+/// </param>
+/// <returns>
+///     <paramref name="func"/>, with the iterator transformed by
+///     <paramref name="f"/>.
+/// </returns>
+let mapIteratorParam
+  (iterator : Var) (f : Var -> IntExpr<Var>) (func : Func<IntExpr<Var>>)
+  : Func<IntExpr<Var>> =
+    (* We don't check that the iterator is only in there once, and instead just
+       map over each ocurrence.  This should be sound by construction. *)
+
+    let fOnIter param =
+        match param with
+        | AVar var when var = iterator -> f var
+        | x -> x
+    { func with Params = List.map fOnIter func.Params }
+
+/// <summary>
+///     Constructs a Horn clause for a base downclosure check on a given func.
+/// </summary>
+let hsfModelBaseDownclosure
+  (svars : VarMap) (func : IteratedDFunc) (reason : string)
+  : Result<Horn list, Error> =
+    // TODO(CaptainHayashi): proper doc comment.
+    let svarSeq = VarMap.toTypedVarSeq svars
+
+    (* TODO(CaptainHayashi): We're given the func needing downclosure in
+       unflattened form.  This is kind-of messy, as we now have to flatten
+       it again. *)
+    let flatFunc = Starling.Flattener.flattenDView svarSeq [func]
+    let funcPredResult = predOfFunc ensureArith flatFunc
+
+    // TODO(CaptainHayashi): lots of duplication here.
+    let iterator = func.Iterator
+    let iterVarResult =
+        match iterator with
+        | Some (Int x) -> ok x
+        | _ ->
+            fail
+                (CannotCheckDeferred
+                    (NeedsBaseDownclosure (func, reason), "malformed iterator"))
+    let funcPredZeroResult =
+        lift2
+            (fun it pred -> mapIteratorParam it (fun _ -> AInt 0L) pred)
+            iterVarResult
+            funcPredResult
+
+    let empPredResult = predOfEmp svars
+
+    let hornResult =
+        lift2
+            (fun zero emp -> Clause (Pred emp, [Pred zero]))
+            funcPredZeroResult
+            empPredResult
+
+    lift
+        (fun h ->
+            [ Comment (sprintf "base downclosure on %s: %s" func.Func.Name reason)
+              h ])
+        hornResult
+
+/// <summary>
+///     Constructs a Horn clause for an inductive downclosure check on a given
+///     func.
+/// </summary>
+let hsfModelInductiveDownclosure
+  (svars : VarMap) (func : IteratedDFunc) (reason : string)
+  : Result<Horn list, Error> =
+    // TODO(CaptainHayashi): proper doc comment.
+    let svarSeq = VarMap.toTypedVarSeq svars
+
+    // See hsfModelBaseDownclosure for caveats.
+    let flatFunc = Starling.Flattener.flattenDView svarSeq [func]
+    let funcPredResult = predOfFunc ensureArith flatFunc
+
+    let iterator = func.Iterator
+    let iterVarResult =
+        match iterator with
+        | Some (Int x) -> ok x
+        | _ ->
+            fail
+                (CannotCheckDeferred
+                    (NeedsInductiveDownclosure (func, reason),
+                     "malformed iterator"))
+
+    let funcPredSuccResult =
+        lift2
+            (fun it pred -> mapIteratorParam it incVar pred)
+            iterVarResult
+            funcPredResult
+
+    let hornResult =
+        lift3
+            (fun it succ norm ->
+                Clause (Pred norm, [Ge (AVar it, AInt 0L); Pred succ]))
+            iterVarResult
+            funcPredSuccResult
+            funcPredResult
+
+    lift
+        (fun h ->
+            [ Comment (sprintf "ind downclosure on %s: %s" func.Func.Name reason)
+              h ])
+        hornResult
+
+/// <summary>
 ///     Constructs a Horn clause for a deferred check, if possible.
 /// </summary>
 let hsfModelDeferredCheck (svars : VarMap) (check : DeferredCheck)
   : Result<Horn list, Error> =
-    let svarSeq = VarMap.toTypedVarSeq svars
-
-    let subIteratorInPred iterator f (pred : Func<VIntExpr>) =
-        let fOnIter param =
-            match param with
-            | AVar var when AVar var = iterator -> f var
-            | x -> x
-        { pred with Params = List.map fOnIter pred.Params }
-
     match check with
     | NeedsBaseDownclosure (func, reason) ->
-        (* TODO(CaptainHayashi): We're given the func needing downclosure in
-           unflattened form.  This is kind-of messy, as we now have to flatten
-           it again. *)
-        let flatFunc = Starling.Flattener.flattenDView svarSeq [func]
-        let funcPredResult = predOfFunc ensureArith flatFunc
-
-        // TODO(CaptainHayashi): lots of duplication here.
-        let iterator = func.Iterator
-        let iterVarResult =
-            match iterator with
-            | Some x -> ensureArith x
-            | None -> fail (CannotCheckDeferred (check, "malformed iterator"))
-        let funcPredZeroResult =
-            lift2
-                (fun it pred -> subIteratorInPred it (fun _ -> AInt 0L) pred)
-                iterVarResult
-                funcPredResult
-
-        let empPredResult = predOfEmp svars
-
-        let hornResult =
-            lift2
-                (fun zero emp -> Clause (Pred emp, [Pred zero]))
-                funcPredZeroResult
-                empPredResult
-
-        lift
-            (fun h ->
-                [ Comment (sprintf "base downclosure on %s: %s" func.Func.Name reason)
-                  h ])
-            hornResult
+        hsfModelBaseDownclosure svars func reason
     | NeedsInductiveDownclosure (func, reason) ->
-        // See above for caveats.
-        let flatFunc = Starling.Flattener.flattenDView svarSeq [func]
-        let funcPredResult = predOfFunc ensureArith flatFunc
-
-        let iterator = func.Iterator
-        let iterVarResult =
-            match iterator with
-            | Some x -> ensureArith x
-            | None -> fail (CannotCheckDeferred (check, "malformed iterator"))
-
-        let funcPredSuccResult =
-            lift2
-                (fun it pred -> subIteratorInPred it incVar pred)
-                iterVarResult
-                funcPredResult
-
-        let hornResult =
-            lift3
-                (fun it succ norm ->
-                    Clause (Pred norm, [Ge (it, AInt 0L); Pred succ]))
-                iterVarResult
-                funcPredSuccResult
-                funcPredResult
-
-        lift
-            (fun h ->
-                [ Comment (sprintf "ind downclosure on %s: %s" func.Func.Name reason)
-                  h ])
-            hornResult
+        hsfModelInductiveDownclosure svars func reason
 
 /// Constructs a HSF script for a model.
 let hsfModel
