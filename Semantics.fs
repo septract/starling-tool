@@ -16,7 +16,6 @@ module Starling.Semantics
 open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Core.TypeSystem
-open Starling.Core.TypeSystem.Check
 open Starling.Core.Command
 open Starling.Core.Command.Compose
 open Starling.Core.GuardedView
@@ -146,10 +145,10 @@ let lookupPrim : PrimCommand -> PrimSemanticsMap -> Result<PrimSemantics option,
 let checkParamTypesPrim : PrimCommand -> PrimSemantics -> Result<PrimCommand, Error> =
     fun prim sem ->
     List.map2
-        (curry
-             (function
-              | UnifyInt _ | UnifyBool _ -> ok ()
-              | UnifyFail (fp, dp) -> fail (TypeMismatch (dp, typeOf fp))))
+        (fun fp dp ->
+            if typeOf fp = typeOf dp
+            then ok ()
+            else fail (TypeMismatch (dp, typeOf fp)))
         prim.Args
         sem.Args
     |> collect

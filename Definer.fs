@@ -11,7 +11,6 @@ open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.View
 open Starling.Core.TypeSystem
-open Starling.Core.TypeSystem.Check
 
 
 /// <summary>
@@ -148,10 +147,10 @@ module FuncDefiner =
     let checkParamTypes (func : Func<Expr<'Var>>) (defn : Func<TypedVar>)
        : Result<Func<Expr<'Var>>, Error> =
         List.map2
-            (curry
-                 (function
-                  | UnifyInt _ | UnifyBool _ -> ok ()
-                  | UnifyFail (fp, dp) -> fail (TypeMismatch (dp, typeOf fp))))
+            (fun fp dp ->
+                if typeOf fp = typeOf dp
+                then ok ()
+                else fail (TypeMismatch (dp, typeOf fp)))
             func.Params
             defn.Params
         |> collect

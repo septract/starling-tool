@@ -112,20 +112,6 @@ type CMapper<'context, 'src, 'dst> = Mapper<'context, 'src, 'src, 'dst, 'dst>
 
 
 /// <summary>
-///     The Starling type checker.
-/// </summary>
-module Check =
-    /// <summary>
-    ///     Active pattern performing type unification.
-    /// </summary>
-    let (|UnifyInt|UnifyBool|UnifyFail|)
-        = function
-          | (Typed.Int x, Typed.Int y) -> UnifyInt (x, y)
-          | (Typed.Bool x, Typed.Bool y) -> UnifyBool (x, y)
-          | x, y -> UnifyFail (x, y)
-
-
-/// <summary>
 ///     Functions and types for mapping typed values.
 /// </summary>
 module Mapper =

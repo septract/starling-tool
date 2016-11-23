@@ -10,7 +10,6 @@ open Starling.Collections
 open Starling.Core
 open Starling.Core.Definer
 open Starling.Core.TypeSystem
-open Starling.Core.TypeSystem.Check
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
@@ -1067,7 +1066,7 @@ let modelCAS : MethodContext -> LValue -> LValue -> Expression -> Result<PrimCom
              let v = wrapMessages BadTVar (lookupVar tvars) testLV
              lift (mkPair dest) v)
     >>= (function
-         | UnifyBool (d, t) ->
+         | (Bool d, Bool t) ->
              set
              |> wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Before)
              |> lift
@@ -1077,7 +1076,7 @@ let modelCAS : MethodContext -> LValue -> LValue -> Expression -> Result<PrimCom
                             [ d |> sbBefore |> Expr.Bool
                               t |> sbBefore |> Expr.Bool
                               s |> Expr.Bool ] )
-         | UnifyInt (d, t) ->
+         | (Int d, Int t) ->
             set
             |> wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Before)
             |> lift
@@ -1087,7 +1086,7 @@ let modelCAS : MethodContext -> LValue -> LValue -> Expression -> Result<PrimCom
                             [ d |> siBefore |> Expr.Int
                               t |> siBefore |> Expr.Int
                               s |> Expr.Int ] )
-         | UnifyFail (d, t) ->
+         | (d, t) ->
              // Oops, we have a type error.
              // Arbitrarily single out test as the cause of it.
              fail (TypeMismatch (typeOf d, testLV, typeOf t)))
