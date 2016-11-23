@@ -38,9 +38,12 @@ let genFlatIteratedFuncName ifcs =
     let funcs = Seq.map (fun ifc -> ifc.Func) ifcs
     genFlatFuncSeqName funcs
 
-let paramsFromIteratedFunc funcContainer =
-    let funcParams = Seq.ofList funcContainer.Func.Params
-    maybe funcParams (flip scons funcParams) funcContainer.Iterator
+let paramsFromIteratedFunc
+  (funcContainer : IteratedContainer<Func<'Param>, 'Param option>)
+  : 'Param list =
+    let funcParams = funcContainer.Func.Params
+    let iterParams = maybe [] (fun i -> [i]) funcContainer.Iterator
+    iterParams @ funcParams
 
 /// <summary>
 ///     Constructs a Func from a DView
