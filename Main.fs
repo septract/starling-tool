@@ -461,10 +461,11 @@ let runStarling (request : Request)
                         (fun _ { Backends.Z3.Types.ZTerm.Original = a } -> a)
                         nonProvenZTerms
                 let nonProvenModel = withAxioms nonProvenAxioms model
-                let npmIndefinite =
-                    Core.Instantiate.DefinerFilter.filterModelIndefinite
+                // We can't have symbols in our view constraints, so strip them.
+                let npmNoSymbolicConstraintsR =
+                    Core.Instantiate.DefinerFilter.filterModelNonSymbolicConstraints
                         nonProvenModel
-                mapMessages ModelFilterError npmIndefinite)
+                mapMessages ModelFilterError npmNoSymbolicConstraintsR)
 
     let symproof : Result<Model<_, _>, Error> -> Result<Model<_, _>, Error> =
         bind (Core.Instantiate.Phase.run approx

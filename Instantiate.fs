@@ -311,17 +311,17 @@ module DefinerFilter =
 
     /// <summary>
     ///     Tries to convert a <c>ViewDef</C> based model into one over
-    ///     definite or indefinite constraints.
+    ///     non-symbolic constraints.
     /// </summary>
     /// <param name="model">
     ///     A model over <c>ViewDef</c>s.
     /// </param>
     /// <returns>
     ///     A <c>Result</c> over <c>Error</c> containing the
-    ///     new model if the original contained only definite view
+    ///     new model if the original contained only non-symbolic view
     ///     definitions.
     /// </returns>
-    let filterModelIndefinite
+    let filterModelNonSymbolicConstraints
       (model : Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
                      FuncDefiner<SVBoolExpr option>> )
       : Result<Model<CmdTerm<MBoolExpr, GView<MarkedVar>, MVFunc>,
