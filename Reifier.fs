@@ -664,20 +664,27 @@ let reifyView
     |> ViewDefiner.toSeq
     |> Seq.fold (reifySingleDef protos goal) Set.empty
 
+/// Performs sanity checking on the model, possibly producing deferred checks.
+let sanityCheckModel
+  (model : Model<Term<'a, IteratedGView<Sym<MarkedVar>>, IteratedOView>,
+                 ViewDefiner<SVBoolExpr option>>)
+  : Result<Model<Term<'a, IteratedGView<Sym<MarkedVar>>, IteratedOView>,
+                 ViewDefiner<SVBoolExpr option>>, Error> =
+    // Currently the only sanity check is downclosure.
+    let deferredCheckR =
+        Downclosure.check
+            model.ViewProtos
+            model.ViewDefs
+            model.DeferredChecks
+    lift (fun ds -> { model with DeferredChecks = ds }) deferredCheckR
+
 /// Reifies all of the terms in a model's axiom list.
 let reify
   (model : Model<Term<'a, IteratedGView<Sym<MarkedVar>>, IteratedOView>,
                  ViewDefiner<SVBoolExpr option>>)
   : Result<Model<Term<'a, Set<GuardedIteratedSubview>, IteratedOView>,
                  ViewDefiner<SVBoolExpr option>>, Error> =
-    let deferredCheckR =
-        Downclosure.check
-            model.ViewProtos
-            model.ViewDefs
-            model.DeferredChecks
-    let checkedModelR =
-        lift (fun ds -> { model with DeferredChecks = ds }) deferredCheckR
-
+    let checkedModelR = sanityCheckModel model
     lift
         (mapAxioms (mapTerm id (reifyView model.ViewProtos model.ViewDefs) id))
         checkedModelR
