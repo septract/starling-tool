@@ -15,6 +15,7 @@ open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.GuardedView
 open Starling.Core.Symbolic
+open Starling.Core.Symbolic.Traversal
 open Starling.Core.Traversal
 open Starling.Core.TypeSystem
 open Starling.TermGen.Iter

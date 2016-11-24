@@ -140,8 +140,7 @@ module Create =
 /// <summary>
 ///     Utilities to traverse or eliminate symbolic variables.
 /// </summary>
-[<AutoOpen>]
-module Queries =
+module Traversal =
     /// <summary>
     ///     Lifts a Traversal from variables to symbolic variables to accept
     ///     symbolic variables.

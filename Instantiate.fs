@@ -27,6 +27,7 @@ open Starling.Core.Command
 open Starling.Core.Model
 open Starling.Core.Traversal
 open Starling.Core.Symbolic
+open Starling.Core.Symbolic.Traversal
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Traversal
 
@@ -408,11 +409,7 @@ module Phase =
                This returns a pair of (useless) context and neq expression.
                Throw away the context with snd. *)
             let approxBoolExprR =
-                lift snd
-                    (toError
-                        (tLiftToBoolSrc Starling.Core.Symbolic.Queries.approx
-                            position
-                            boolExpr))
+                lift snd (toError (tLiftToBoolSrc approx position boolExpr))
 
             (* The above might have left some symbols, eg in integer position.
                Try to remove them, and fail if we can't. *)

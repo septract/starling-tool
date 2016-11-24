@@ -10,6 +10,7 @@ open Starling.Core.Var
 open Starling.Core.Expr
 open Starling.Core.Traversal
 open Starling.Core.Symbolic
+open Starling.Core.Symbolic.Traversal
 
 open Starling.Core.Pretty
 open Starling.Core.Traversal.Pretty

@@ -13,6 +13,7 @@ open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Traversal
 open Starling.Core.Symbolic
+open Starling.Core.Symbolic.Traversal
 open Starling.Core.Model
 open Starling.Core.View
 open Starling.Core.GuardedView

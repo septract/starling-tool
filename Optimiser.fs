@@ -22,6 +22,7 @@ open Starling.Core.Expr
 open Starling.Core.ExprEquiv
 open Starling.Core.Var
 open Starling.Core.Symbolic
+open Starling.Core.Symbolic.Traversal
 open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.Command.Queries
