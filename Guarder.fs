@@ -6,6 +6,7 @@ module Starling.Lang.Guarder
 
 open Starling.Collections
 open Starling.Utils
+open Starling.Core.Definer
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Symbolic
@@ -29,11 +30,10 @@ let guardCView (cview : CView) : GuarderView =
     let rec guardCFuncIn suffix cv =
         match cv.Func with
         | CFunc.Func v ->
-            let itVar = Option.map AVar cv.Iterator
             (* Treat non-iterated views as if they have the iterator [1].
                This means we don't need to special-case them elsewhere. *)
             [ { Func = { Cond = mkAnd (Set.toList suffix); Item = v };
-                Iterator = withDefault (AInt 1L) itVar } ]
+                Iterator = maybe (AInt 1L) AVar cv.Iterator } ]
         | CFunc.ITE(expr, tviews, fviews) ->
             List.concat
                 [ guardCViewIn (suffix.Add expr) (Multiset.toFlatList tviews)

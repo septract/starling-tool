@@ -175,50 +175,55 @@ let rec flattenLV =
     function
     | LVIdent s -> s
 
-/// Makes a variable map from a list of type-name pairs.
-let makeVarMap lst =
-    lst
-    |> List.map valueOf // Extract all names from the list.
-    |> findDuplicates
-    |> Seq.toList
-    |> function
-       | [] -> lst
-               |> Seq.ofList
-               |> Seq.map (fun param -> (valueOf param, typeOf param))
-               |> Map.ofSeq |> ok
-       | ds -> List.map Duplicate ds |> Bad
+module VarMap =
+    /// Makes a variable map from a sequence of typed variables.
+    /// Can fail if there are duplicates.
+    let ofTypedVarSeq (vars : TypedVar seq) : Result<VarMap, VarMapError> =
+        // Before we make the map, make sure we have no duplicates.
+        let duplicates = findDuplicates (Seq.map valueOf vars)
+        match (Seq.toList duplicates) with 
+        | [] ->
+            let pairs = Seq.map (fun v -> (valueOf v, typeOf v)) vars
+            ok (Map.ofSeq pairs)
+        | ds -> Bad (List.map Duplicate ds)
 
-/// Tries to combine two variable maps.
-/// Fails if the environments are not disjoint.
-/// Failures are in terms of VarMapError.
-let combineMaps (a : VarMap) (b : VarMap) =
-    Map.fold (fun (sR : Result<VarMap, VarMapError>) name var ->
-        trial {
-            let! s = sR
-            if s.ContainsKey name then return! (fail (Duplicate name))
-            else return (s.Add(name, var))
-        }) (ok a) b
+    /// Tries to combine two variable maps.
+    /// Fails if the environments are not disjoint.
+    /// Failures are in terms of VarMapError.
+    let combine (a : VarMap) (b : VarMap) : Result<VarMap, VarMapError> =
+        Map.fold (fun (sR : Result<VarMap, VarMapError>) name var ->
+            trial {
+                let! s = sR
+                if s.ContainsKey name then return! (fail (Duplicate name))
+                else return (s.Add(name, var))
+            }) (ok a) b
 
-/// Tries to look up a variable record in a variable map.
-/// Failures are in terms of Some/None.
-let tryLookupVar
-  (env : VarMap)
-  : LValue -> CTyped<string> option =
-    function
-    | LVIdent s ->
-        s
-        |> env.TryFind
-        |> Option.map (fun ty -> withType ty s)
+    /// Tries to look up a variable record in a variable map.
+    /// Failures are in terms of Some/None.
+    let tryLookup
+      (env : VarMap)
+      : LValue -> CTyped<string> option =
+        function
+        | LVIdent s ->
+            Option.map (fun ty -> withType ty s) (env.TryFind s)
 
-/// Looks up a variable record in a variable map.
-/// Failures are in terms of VarMapError.
-let lookupVar
-  (env : VarMap)
-  (s : LValue)
-  : Result<CTyped<string>, VarMapError> =
-    s
-    |> tryLookupVar env
-    |> failIfNone (NotFound (flattenLV s))
+    /// Looks up a variable record in a variable map.
+    /// Failures are in terms of VarMapError.
+    let lookup
+      (env : VarMap)
+      (s : LValue)
+      : Result<CTyped<string>, VarMapError> =
+        failIfNone (NotFound (flattenLV s)) (tryLookup env s)
+
+    /// <summary>
+    ///     Converts a variable map to a sequence of typed variables.
+    /// </summary>
+    /// <param name="vmap">The map to convert.</param>
+    /// <returns>
+    ///     <paramref name="vmap"/>, as a sequence of <see cref="TypedVar"/>s.
+    /// </returns>
+    let toTypedVarSeq (vmap : VarMap) : TypedVar seq =
+        Seq.map (fun (name, ty) -> withType ty name) (Map.toSeq vmap)
 
 
 (*
@@ -283,4 +288,3 @@ module Tests =
             // The fun x boilerplate seems to be necessary.
             // Otherwise, mutations to fg apparently don't propagate!
             List.map (fun x -> goalVar fg x) xs
-

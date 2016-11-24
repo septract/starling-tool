@@ -18,7 +18,7 @@ open Starling.Backends.Horn
 module Tests =
     /// The globals environment used in the tests.
     let SharedVars : VarMap =
-        returnOrFail <| makeVarMap
+        returnOrFail <| VarMap.ofTypedVarSeq
             [ TypedVar.Int "serving"
               TypedVar.Int "ticket" ]
 

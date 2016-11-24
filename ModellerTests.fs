@@ -9,6 +9,7 @@ open Starling.Utils.Testing
 open Starling.Collections
 open Starling.Core
 open Starling.Core.TypeSystem
+open Starling.Core.Definer
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
@@ -126,11 +127,11 @@ module BooleanExprs =
 
 module VarLists =
     let checkFail (vars : TypedVar list) (expectedErrs : VarMapError list) =
-        let varmap = failOption <| makeVarMap vars
+        let varmap = failOption <| VarMap.ofTypedVarSeq vars
         AssertAreEqual(Some expectedErrs, varmap)
 
     let checkPass (vars : TypedVar list) (expectedMap : Map<string, CTyped<unit>>) =
-        let varmap = okOption <| makeVarMap vars
+        let varmap = okOption <| VarMap.ofTypedVarSeq vars
         AssertAreEqual(Some expectedMap, varmap)
 
     [<Test>]
@@ -153,14 +154,14 @@ module VarLists =
                           ("baz", Bool ()) ])
 
     [<Test>]
-    let ``duplicate vars of same type fail in makeVarMap`` () =
+    let ``duplicate vars of same type fail in VarMap.ofTypedVarSeq`` () =
         checkFail
             ([ Bool "foo"
                Bool "foo" ])
             ([ VarMapError.Duplicate "foo" ])
 
     [<Test>]
-    let ``duplicate var with different type fails in makeVarMap`` () =
+    let ``duplicate var with different type fails in VarMap.ofTypedVarSeq`` () =
         checkFail
             ([ Bool "foo"
                Int  "foo" ])

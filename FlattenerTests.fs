@@ -23,7 +23,7 @@ module Tests =
     ///     The shared variables environment used in the tests.
     /// </summary>
     let svars : VarMap =
-        returnOrFail <| makeVarMap
+        returnOrFail <| VarMap.ofTypedVarSeq
             [ TypedVar.Int "serving"
               TypedVar.Int "ticket" ]
 

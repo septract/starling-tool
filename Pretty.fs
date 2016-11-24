@@ -53,6 +53,9 @@ let syntaxView d = Styled([Yellow], d)
 let error d = Styled([Red], d)
 let errorContext d = Styled([Cyan], d)
 let errorInfo d = Styled([Magenta], d)
+let warning d = Styled([Yellow], d)
+let success d = Styled([Green], d)
+let inconclusive d = Styled([Blue], d)
 
 /// <summary>
 ///     Styles a string with ANSI escape sequences.
@@ -111,20 +114,20 @@ type PrintState =
 /// <summary>
 ///     The internal print function.
 /// </summary>
-/// <param name="state">
-///     The current state of the printer.
-/// </param>
+/// <param name="state">The current state of the printer.</param>
+/// <param name="doc">The document to print.</param>
 /// <returns>
 ///     A function mapping <see cref="Doc"/>s to strings.
 /// </returns>
-let rec printState state =
-    function
+let rec printState (state : PrintState) (doc : Doc) : string =
+    match doc with
     | Header (heading, incmd) ->
         printState state heading + ":" + lnIndent state.Level + printState state incmd + lnIndent state.Level
     | Separator ->
         "----"
     | Styled (s, d) when state.UseStyles ->
-        stylise s state.CurrentStyle <| printState { state with CurrentStyle = Some s } d
+        let state' = { state with CurrentStyle = Some s }
+        stylise s state.CurrentStyle (printState state' d)
     | Styled (s, d) ->
         printState state d
     | VSkip ->
@@ -193,6 +196,19 @@ let hsepStr s c = HSep(c, String s)
 let hjoin c = HSep(c, Nop)
 /// Horizontally separates a list of commands with a space separator.
 let hsep c = hsepStr " " c
+/// Binary version of hsep.
+let hsep2 sep x y =
+    // Do a bit of optimisation in case we get long chains of hsep2s.
+    match (x, y) with
+    | HSep (xs, sx), HSep (ys, sy) when sx = sep && sy = sep ->
+        HSep (Seq.append xs ys, sep)
+    | HSep (xs, sx), y when sx = sep -> HSep (Seq.append xs (Seq.singleton y), sep)
+    | x, HSep (ys, sy) when sy = sep -> HSep (Seq.append (Seq.singleton x) ys, sep)
+    | x, y -> HSep (Seq.ofList [ x; y ], sep)
+/// Infix version of hjoin.
+let (<->) x y = hsep2 Nop x y
+/// Infix version of hsep.
+let (<+>) x y = hsep2 (String " ") x y
 /// Horizontally separates a list of commands with commas.
 let commaSep c = hsepStr ", " c
 /// Horizontally separates a list of commands with semicolons.

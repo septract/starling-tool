@@ -8,6 +8,7 @@ open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Utils
 open Starling.Core.TypeSystem
+open Starling.Core.Definer
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
@@ -97,36 +98,6 @@ module Types =
     /// A term using only internal boolean expressions.
     type FTerm = CTerm<MBoolExpr>
 
-    (*
-     * Func lookup
-     *)
-
-    /// <summary>
-    ///     A definer function mapping views to their meanings.
-    /// </summary>
-    /// <typeparam name="defn">
-    ///     Type of definitions of <c>View</c>s stored in the table.
-    ///     May be <c>unit</c>.
-    /// </typeparam>
-    type ViewDefiner<'defn> =
-        // TODO(CaptainHayashi): this should probably be a map,
-        // but translating it to one seems non-trivial.
-        // Would need to define equality on funcs very loosely.
-        (DView * 'defn) list
-
-    /// <summary>
-    ///     A definer function mapping funcs to their meanings.
-    /// </summary>
-    /// <typeparam name="defn">
-    ///     Type of definitions of <c>Func</c>s stored in the table.
-    ///     May be <c>unit</c>.
-    /// </typeparam>
-    type FuncDefiner<'defn> =
-        // TODO(CaptainHayashi): this should probably be a map,
-        // but translating it to one seems non-trivial.
-        // Would need to define equality on funcs very loosely.
-        (DFunc * 'defn) list
-
     type PrimSemantics = { Name: string; Results: TypedVar list; Args: TypedVar list; Body: SVBoolExpr }
     type SemanticsMap<'a> = Map<string, 'a>
     type PrimSemanticsMap = SemanticsMap<PrimSemantics>
@@ -147,25 +118,65 @@ module Types =
           /// </summary>
           IsAnonymous : bool }
 
+    /// <summary>
+    ///     Record of a sanity check that has been postponed to the backend due
+    ///     to missing information.
+    ///
+    ///     <para>
+    ///         Starling tries to check certain aspects of a proof for sanity
+    ///         before handing off to a backend, but sometimes there is
+    ///         information missing that the backend itself can give.  In these
+    ///         cases, it forces the backend to add the check as a proof term,
+    ///         which offers less immediate 'your proof is wrong' feedback but
+    ///         ensures as many proofs as possible are sound.
+    ///     </para>
+    /// </summary>
+    type DeferredCheck =
+        /// <summary>
+        ///     The given iterated func needs its definition checking for base
+        ///     downclosure.
+        /// </summary>
+        | NeedsBaseDownclosure of func : IteratedDFunc * why : string
+        /// <summary>
+        ///     The given iterated func needs its definition checking for
+        ///     inductive downclosure.
+        /// </summary>
+        | NeedsInductiveDownclosure of func : IteratedDFunc * why : string
+
     (*
      * Models
      *)
 
     /// A parameterised model of a Starling program.
     type Model<'axiom, 'viewdefs> =
-        { SharedVars : VarMap
+        { /// <summary>
+          ///     The shared variable environment.
+          /// </summary>
+          SharedVars : VarMap
+          /// <summary>
+          ///     The thread-local variable environment.
+          /// </summary>
           ThreadVars : VarMap
+          /// <summary>
+          ///     The set of proof terms in the model.
+          /// </summary>
           Axioms : Map<string, 'axiom>
           /// <summary>
           ///     The semantic function for this model.
           /// </summary>
           Semantics : PrimSemanticsMap
-          // This corresponds to the function D.
+          /// <summary>
+          ///     This corresponds to the function D.
+          /// </summary>
           ViewDefs : 'viewdefs
           /// <summary>
           ///     The view prototypes defined in this model.
           /// </summary>
-          ViewProtos : FuncDefiner<ProtoInfo> }
+          ViewProtos : FuncDefiner<ProtoInfo>
+          /// <summary>
+          ///     A log of any deferred checks the backend must do.
+          /// </summary>
+          DeferredChecks : DeferredCheck list }
 
 
 /// <summary>
@@ -174,6 +185,7 @@ module Types =
 module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Symbolic.Pretty
+    open Starling.Core.Var.Pretty
     open Starling.Core.View.Pretty
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Command.Pretty
@@ -215,6 +227,26 @@ module Pretty =
       : Doc =
         printMap Indented String pAxiom model.Axioms
 
+    /// <summary>
+    ///     Pretty-prints a deferred check.
+    /// </summary>
+    /// <param name="check">The deferred check to print.</param>
+    /// <returns>A <see cref="Doc"/> capturing the deferred check.</returns>
+    let printDeferredCheck (check : DeferredCheck) : Doc =
+        warning <|
+            match check with
+            | NeedsBaseDownclosure (func, why) ->
+                colonSep
+                    [ String "base downclosure check for iterated func"
+                        <+> printIteratedDFunc func
+                      String why ]
+            | NeedsInductiveDownclosure (func, why) ->
+                colonSep
+                    [ hsep
+                        [ String "inductive downclosure check for iterated func"
+                            <+> printIteratedDFunc func ]
+                      String why ]
+
     /// Pretty-prints a model given axiom and defining-view printers.
     let printModel
       (pAxiom : 'Axiom -> Doc)
@@ -231,7 +263,9 @@ module Pretty =
               headed "ViewDefs" <|
                   pDefiner model.ViewDefs
               headed "Axioms" <|
-                  Seq.singleton (printModelAxioms pAxiom model) ]
+                  Seq.singleton (printModelAxioms pAxiom model)
+              headed "Deferred checks" <|
+                  Seq.map printDeferredCheck model.DeferredChecks ]
 
     /// <summary>
     ///     Pretty-prints <see cref="FuncDefiner"/>s.
@@ -335,9 +369,8 @@ module Pretty =
         | ModelView.Model -> printModel pAxiom pDefiner m
         | ModelView.Terms -> printModelAxioms pAxiom m
         | ModelView.Term termstr ->
-            Map.tryFind termstr m.Axioms
-            |> Option.map pAxiom
-            |> withDefault (termstr |> sprintf "no term '%s'" |> String)
+            maybe (termstr |> sprintf "no term '%s'" |> String) pAxiom
+                (Map.tryFind termstr m.Axioms)
 
 
     /// Prints a Term<CommandSemantics, 'WPre, 'Goal> using the WPre and Goal printers provided
@@ -457,7 +490,8 @@ let withAxioms (xs : Map<string, 'y>) (model : Model<'x, 'dview>)
       ViewDefs = model.ViewDefs
       Semantics = model.Semantics
       Axioms = xs
-      ViewProtos = model.ViewProtos }
+      ViewProtos = model.ViewProtos
+      DeferredChecks = model.DeferredChecks }
 
 /// Maps a pure function f over the axioms of a model.
 let mapAxioms (f : 'x -> 'y) (model : Model<'x, 'dview>) : Model<'y, 'dview> =
@@ -487,7 +521,8 @@ let withViewDefs (ds : 'Definer2)
       ViewDefs = ds
       Semantics = model.Semantics
       Axioms = model.Axioms
-      ViewProtos = model.ViewProtos }
+      ViewProtos = model.ViewProtos
+      DeferredChecks = model.DeferredChecks }
 
 /// Maps a pure function f over the viewdef database of a model.
 let mapViewDefs (f : 'x -> 'y) (model : Model<'axiom, 'x>) : Model<'axiom, 'y> =
@@ -497,83 +532,3 @@ let mapViewDefs (f : 'x -> 'y) (model : Model<'axiom, 'x>) : Model<'axiom, 'y> =
 let tryMapViewDefs (f : 'x -> Result<'y, 'e>) (model : Model<'axiom, 'x>)
     : Result<Model<'axiom, 'y>, 'e> =
     lift (fun x -> withViewDefs x model) (model |> viewDefs |> f)
-
-module FuncDefiner =
-    /// <summary>
-    ///     Converts a <c>FuncDefiner</c> to a sequence of pairs of
-    ///     <c>Func</c> and definition.
-    /// </summary>
-    /// <param name="definer">
-    ///     A <see cref="FuncDefiner"/> to convert to a sequence.
-    /// </param>
-    /// <typeparam name="defn">
-    ///     The type of <c>Func</c> definitions.  May be <c>unit</c>.
-    /// </typeparam>
-    /// <returns>
-    ///     The sequence of (<c>Func</c>, <c>'defn</c>) pairs.
-    ///     A <c>FuncDefiner</c> allowing the <c>'defn</c>s of the given
-    ///     <c>Func</c> to be looked up.
-    /// </returns>
-    let toSeq (definer : FuncDefiner<'defn>) : (DFunc * 'defn) seq =
-        // This function exists to smooth over any changes in Definer
-        // representation we make later (eg. to maps).
-        List.toSeq definer
-
-    /// <summary>
-    ///     Builds a <c>FuncDefiner</c> from a sequence of pairs of
-    ///     <c>Func</c> and definition.
-    /// </summary>
-    /// <param name="fseq">
-    ///     The sequence of (<c>Func</c>, <c>'defn</c>) pairs.
-    /// </param>
-    /// <typeparam name="defn">
-    ///     The type of <c>Func</c> definitions.  May be <c>unit</c>.
-    /// </typeparam>
-    /// <returns>
-    ///     A <c>FuncDefiner</c> allowing the <c>'defn</c>s of the given
-    ///     <c>Func</c> to be looked up.
-    /// </returns>
-    let ofSeq (fseq : #((DFunc * 'defn) seq)) : FuncDefiner<'defn> =
-        // This function exists to smooth over any changes in Definer
-        // representation we make later (eg. to maps).
-        Seq.toList fseq
-
-module ViewDefiner =
-    /// <summary>
-    ///     Converts a <c>ViewDefiner</c> to a sequence of pairs of
-    ///     <c>View</c> and definition.
-    /// </summary>
-    /// <param name="definer">
-    ///     A <see cref="ViewDefiner"/> to convert to a sequence.
-    /// </param>
-    /// <typeparam name="defn">
-    ///     The type of <c>View</c> definitions.  May be <c>unit</c>.
-    /// </typeparam>
-    /// <returns>
-    ///     The sequence of (<c>View</c>, <c>'defn</c>) pairs.
-    ///     A <c>ViewDefiner</c> allowing the <c>'defn</c>s of the given
-    ///     <c>View</c> to be looked up.
-    /// </returns>
-    let toSeq (definer : ViewDefiner<'defn>) : (DView * 'defn) seq =
-        // This function exists to smooth over any changes in Definer
-        // representation we make later (eg. to maps).
-        List.toSeq definer
-
-    /// <summary>
-    ///     Builds a <c>ViewDefiner</c> from a sequence of pairs of
-    ///     <c>View</c> and definition.
-    /// </summary>
-    /// <param name="fseq">
-    ///     The sequence of (<c>Func</c>, <c>'defn</c>) pairs.
-    /// </param>
-    /// <typeparam name="defn">
-    ///     The type of <c>Func</c> definitions.  May be <c>unit</c>.
-    /// </typeparam>
-    /// <returns>
-    ///     A <c>ViewDefiner</c> allowing the <c>'defn</c>s of the given
-    ///     <c>View</c>s to be looked up.
-    /// </returns>
-    let ofSeq (fseq : #((DView * 'defn) seq)) : ViewDefiner<'defn> =
-        // This function exists to smooth over any changes in Definer
-        // representation we make later (eg. to maps).
-        Seq.toList fseq

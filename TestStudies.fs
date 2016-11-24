@@ -6,6 +6,7 @@ module Starling.Tests.Studies
 open Starling
 open Starling.Collections
 open Starling.Core.TypeSystem
+open Starling.Core.Definer
 open Starling.Core.Expr
 open Starling.Core.Symbolic
 open Starling.Core.Var
@@ -582,4 +583,5 @@ let ticketLockModel : Model<ModellerMethod, ViewDefiner<SVBoolExpr option>> =
       Axioms = ticketLockMethods
       ViewDefs = ticketLockViewDefs
       ViewProtos = ticketLockViewProtos
-      Semantics = Starling.Lang.Modeller.coreSemantics }
+      Semantics = Starling.Lang.Modeller.coreSemantics
+      DeferredChecks = [] }

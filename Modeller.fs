@@ -8,8 +8,8 @@ open Chessie.ErrorHandling
 open Starling
 open Starling.Collections
 open Starling.Core
+open Starling.Core.Definer
 open Starling.Core.TypeSystem
-open Starling.Core.TypeSystem.Check
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
@@ -100,7 +100,7 @@ module Types =
         /// A view was requested that does not exist.
         | NoSuchView of name : string
         /// A view lookup failed.
-        | LookupError of name : string * err : Instantiate.Types.Error
+        | LookupError of name : string * err : Core.Definer.Error
         /// A view used variables in incorrect ways, eg by duplicating.
         | BadVar of err : VarMapError
         /// A viewdef conflicted with the shared variables.
@@ -196,9 +196,7 @@ module Pretty =
     /// Pretty-prints a CView.
     and printCView : CView -> Doc =
         printMultiset
-            (printIteratedContainer
-                printCFunc
-                (Option.map (printSym printVar) >> withDefault Nop))
+            (printIteratedContainer printCFunc (maybe Nop (printSym printVar)))
         >> ssurround "[|" "|]"
 
     /// Pretty-prints a part-cmd at the given indent level.
@@ -213,11 +211,10 @@ module Pretty =
             cmdHeaded (hsep [String "begin if"
                              (printSVBoolExpr expr) ])
                       [headed "True" [printBlock pView (printPartCmd pView) inTrue]
-                       withDefault Nop
-                            (Option.map
-                                (fun f ->
-                                    headed "False" [printBlock pView (printPartCmd pView) f])
-                                inFalse) ]
+                       maybe Nop
+                            (fun f ->
+                                headed "False" [printBlock pView (printPartCmd pView) f])
+                            inFalse ]
 
     /// Pretty-prints expression conversion errors.
     let printExprError : ExprError -> Doc =
@@ -243,7 +240,10 @@ module Pretty =
         | ViewError.BadExpr(expr, err) ->
             wrapped "expression" (printExpression expr) (printExprError err)
         | NoSuchView name -> fmt "no view prototype for '{0}'" [ String name ]
-        | LookupError(name, err) -> wrapped "lookup for view" (name |> String) (err |> Instantiate.Pretty.printError)
+        | LookupError(name, err) ->
+            wrapped "lookup for view"
+                (String name)
+                (Definer.Pretty.printError err)
         | ViewError.BadVar err ->
             colonSep [ "invalid variable usage" |> String
                        err |> printVarMapError ]
@@ -490,7 +490,7 @@ let rec modelExpr
        symbolic, then we have ambiguity. *)
         | LV v ->
             v
-            |> wrapMessages Var (lookupVar env)
+            |> wrapMessages Var (VarMap.lookup env)
             |> lift
                    (Mapper.map
                         (Mapper.compose
@@ -550,7 +550,7 @@ and modelBoolExpr
              * Boolean type.
              *)
             v
-            |> wrapMessages Var (lookupVar env)
+            |> wrapMessages Var (VarMap.lookup env)
             |> bind (function
                      | Typed.Bool vn -> vn |> varF |> Reg |> BVar |> ok
                      | _ -> v |> VarNotBoolean |> fail)
@@ -630,7 +630,7 @@ and modelIntExpr
              * arithmetic type.
              *)
             v
-            |> wrapMessages Var (lookupVar env)
+            |> wrapMessages Var (VarMap.lookup env)
             |> bind (function
                      | Typed.Int vn -> vn |> varF |> Reg |> AVar |> ok
                      | _ -> v |> VarNotInt |> fail)
@@ -662,11 +662,11 @@ let funcViewParMerge (ppars : TypedVar list) (dpars : Var list)
   : TypedVar list =
     List.map2 (fun ppar dpar -> withType (typeOf ppar) dpar) ppars dpars
 
-/// Adapts Instantiate.lookup to the modeller's needs.
+/// Adapts Definer.lookup to the modeller's needs.
 let lookupFunc (protos : FuncDefiner<ProtoInfo>) (func : Func<_>)
   : Result<DFunc, ViewError> =
     protos
-    |> Instantiate.lookup func
+    |> FuncDefiner.lookup func
     |> mapMessages (curry LookupError func.Name)
     |> bind (function
              | Some (proto, _) -> proto |> ok
@@ -708,17 +708,17 @@ let makeIteratorMap : TypedVar option -> VarMap =
 /// view prototype map vpm.
 let rec localEnvOfViewDef (vds : DView) : Result<VarMap, ViewError> =
     let makeFuncMap { Func = {Params = ps}; Iterator = it } =
-        makeVarMap ps >>= (combineMaps (makeIteratorMap it))
+        VarMap.ofTypedVarSeq ps >>= (VarMap.combine (makeIteratorMap it))
 
     let funcMaps = Seq.map makeFuncMap vds
     let singleMap =
-        seqBind (fun xR s -> bind (combineMaps s) xR) Map.empty funcMaps
+        seqBind (fun xR s -> bind (VarMap.combine s) xR) Map.empty funcMaps
 
     mapMessages ViewError.BadVar singleMap
 
 /// Produces the variable environment for the constraint whose viewdef is v.
 let envOfViewDef (svars : VarMap) : DView -> Result<VarMap, ViewError> =
-    localEnvOfViewDef >> bind (combineMaps svars >> mapMessages SVarConflict)
+    localEnvOfViewDef >> bind (VarMap.combine svars >> mapMessages SVarConflict)
 
 /// Converts a single constraint to its model form.
 let modelViewDef
@@ -925,13 +925,12 @@ let modelCFunc
              |> collect
              // Then, put them into a VFunc.
              |> lift (vfunc afunc.Name)
-             // Now, we can use Instantiate's type checker to ensure
+             // Now, we can use Definer's type checker to ensure
              // the params in the VFunc are of the types mentioned
              // in proto.
              |> bind (fun vfunc ->
-                          Instantiate.checkParamTypes vfunc proto
+                          FuncDefiner.checkParamTypes vfunc proto
                           |> mapMessages (curry LookupError vfunc.Name)))
-    // Finally, lift to CFunc.
     |> lift CFunc.Func
 
 /// Tries to flatten a view AST into a CView.
@@ -957,8 +956,8 @@ let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
 // Axioms
 //
 
-let (|Shared|_|) ctx (lvalue : LValue) = tryLookupVar ctx.SharedVars lvalue
-let (|Thread|_|) ctx (lvalue : LValue) = tryLookupVar ctx.ThreadVars lvalue
+let (|Shared|_|) ctx (lvalue : LValue) = VarMap.tryLookup ctx.SharedVars lvalue
+let (|Thread|_|) ctx (lvalue : LValue) = VarMap.tryLookup ctx.ThreadVars lvalue
 
 /// Converts a Boolean load to a Prim.
 let modelBoolLoad : MethodContext -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
@@ -970,7 +969,7 @@ let modelBoolLoad : MethodContext -> Var -> Expression -> FetchMode -> Result<Pr
     match srcExpr.Node with
     | LV srcLV ->
         trial {
-            let! src = wrapMessages BadSVar (lookupVar svars) srcLV
+            let! src = wrapMessages BadSVar (VarMap.lookup svars) srcLV
             match src, mode with
             | Typed.Bool s, Direct ->
                 return
@@ -995,7 +994,7 @@ let modelIntLoad : MethodContext -> Var -> Expression -> FetchMode -> Result<Pri
     match srcExpr.Node with
     | LV srcLV ->
         trial {
-            let! src = wrapMessages BadSVar (lookupVar svars) srcLV
+            let! src = wrapMessages BadSVar (VarMap.lookup svars) srcLV
             match src, mode with
             | Typed.Int s, Direct ->
                 return command "!ILoad" [ Int dest ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
@@ -1061,12 +1060,12 @@ let modelCAS : MethodContext -> LValue -> LValue -> Expression -> Result<PrimCom
      * dest, test, and set must agree on type.
      * The type of dest and test influences how we interpret set.
      *)
-    wrapMessages BadSVar (lookupVar svars) destLV
+    wrapMessages BadSVar (VarMap.lookup svars) destLV
     >>= (fun dest ->
-             let v = wrapMessages BadTVar (lookupVar tvars) testLV
+             let v = wrapMessages BadTVar (VarMap.lookup tvars) testLV
              lift (mkPair dest) v)
     >>= (function
-         | UnifyBool (d, t) ->
+         | (Bool d, Bool t) ->
              set
              |> wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Before)
              |> lift
@@ -1076,7 +1075,7 @@ let modelCAS : MethodContext -> LValue -> LValue -> Expression -> Result<PrimCom
                             [ d |> sbBefore |> Expr.Bool
                               t |> sbBefore |> Expr.Bool
                               s |> Expr.Bool ] )
-         | UnifyInt (d, t) ->
+         | (Int d, Int t) ->
             set
             |> wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Before)
             |> lift
@@ -1086,7 +1085,7 @@ let modelCAS : MethodContext -> LValue -> LValue -> Expression -> Result<PrimCom
                             [ d |> siBefore |> Expr.Int
                               t |> siBefore |> Expr.Int
                               s |> Expr.Int ] )
-         | UnifyFail (d, t) ->
+         | (d, t) ->
              // Oops, we have a type error.
              // Arbitrarily single out test as the cause of it.
              fail (TypeMismatch (typeOf d, testLV, typeOf t)))
@@ -1120,7 +1119,7 @@ let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> 
              * We don't allow the Direct fetch mode, as it is useless.
              *)
             trial {
-                let! stype = wrapMessages BadSVar (lookupVar ctx.SharedVars) operand
+                let! stype = wrapMessages BadSVar (VarMap.lookup ctx.SharedVars) operand
                 // TODO(CaptainHayashi): sort out lvalues...
                 let op = flattenLV operand
                 match mode, stype with
@@ -1150,7 +1149,7 @@ and modelAssign : MethodContext -> LValue -> Expression -> Result<PrimCommand, P
      * We thus also have to make sure that e is the correct type.
      *)
     trial {
-        let! l = wrapMessages BadTVar (lookupVar tvars) lLV
+        let! l = wrapMessages BadTVar (VarMap.lookup tvars) lLV
         match l with
         | Typed.Bool ls ->
             let! em =
@@ -1321,9 +1320,9 @@ let model
   : Result<Model<ModellerMethod, ViewDefiner<SVBoolExpr option>>, ModelError> =
     trial {
         // Make variable maps out of the shared and thread variable definitions.
-        let! svars = makeVarMap collated.SharedVars
+        let! svars = VarMap.ofTypedVarSeq collated.SharedVars
                        |> mapMessages (curry BadVar "shared")
-        let! tvars = makeVarMap collated.ThreadVars
+        let! tvars = VarMap.ofTypedVarSeq collated.ThreadVars
                       |> mapMessages (curry BadVar "thread-local")
 
         let desugaredMethods, unknownProtos =
@@ -1350,5 +1349,6 @@ let model
               ViewDefs = constraints
               Semantics = coreSemantics
               Axioms = axioms
-              ViewProtos = vprotos }
+              ViewProtos = vprotos
+              DeferredChecks = [] }
     }

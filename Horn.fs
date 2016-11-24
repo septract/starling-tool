@@ -7,6 +7,7 @@ open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Semantics
 open Starling.Utils
+open Starling.Core.Definer
 open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.Expr
@@ -46,25 +47,39 @@ module Types =
     type Horn =
         /// A normal Horn clause.
         | Clause of head: Literal * body: (Literal list)
-        /// A comment.
-        | Comment of string
+        /// A comment attached to a Horn clause.
+        | Comment of cmt: string
         /// A query-naming call.
         | QueryNaming of Func<string>
 
-    /// An error caused when emitting a Horn clause.
+    /// <summary>
+    ///     An error caused when emitting a Horn clause.
+    /// </summary>
     type Error =
-        /// A Func is inconsistent with its definition.
-        | InconsistentFunc of
-              func : MVFunc
-              * err : Starling.Core.Instantiate.Types.Error
-        /// A viewdef has a non-arithmetic param.
+        /// <summary>
+        ///     A Func is inconsistent with its definition.
+        /// </summary>
+        | InconsistentFunc of func : MVFunc * err : Starling.Core.Definer.Error
+        /// <summary>
+        ///     A viewdef has a non-arithmetic param.
+        /// </summary>
         | NonArithParam of TypedVar
-        /// A model has a non-arithmetic variable.
+        /// <summary>
+        ///     A model has a non-arithmetic variable.
+        /// </summary>
         | NonArithVar of TypedVar
-        /// The expression given is not supported in the given position.
+        /// <summary>
+        ///     The expression given is not supported in the given position.
+        /// </summary>
         | UnsupportedExpr of VExpr
-        /// The expression given is compound, but empty.
+        /// <summary>
+        ///     The expression given is compound, but empty.
+        /// </summary>
         | EmptyCompoundExpr of exptype : string
+        /// <summary>
+        ///     HSF can't check the given deferred check.
+        /// </summary>
+        | CannotCheckDeferred of check : DeferredCheck * why : string
 
 
 /// <summary>
@@ -74,6 +89,7 @@ module Types =
 module Pretty =
     open Starling.Core.Pretty
     open Starling.Collections.Func.Pretty
+    open Starling.Core.Model.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.View.Pretty
 
@@ -175,24 +191,45 @@ module Pretty =
     /// Emits a Horn clause list.
     let printHorns (hs : Horn list) : Doc = hs |> List.map printHorn |> vsep
 
-    let printHornError : Error -> Doc =
-        function
+    /// <summary>
+    ///     Pretty-prints a HSF backend error.
+    /// </summary>
+    /// <param name="err">The error to print.</param>
+    /// <returns>
+    ///     A <see cref="Doc"/> representing <paramref name="err"/>.
+    /// </returns>
+    let printError (err : Error) : Doc =
+        match err with
         | InconsistentFunc (func, err) ->
             wrapped "view func"
                     (printMVFunc func)
-                    (Starling.Core.Instantiate.Pretty.printError err)
+                    (Starling.Core.Definer.Pretty.printError err)
         | NonArithParam p ->
-            fmt "invalid parameter '{0}': HSF only permits integers here"
-                [ printTypedVar p ]
+            error
+                (String "invalid parameter '"
+                 <-> printTypedVar p
+                 <-> String "': HSF only permits integers here")
         | NonArithVar p ->
-            fmt "invalid variable '{0}': HSF only permits integers here"
-                [ printTypedVar p ]
+            error
+                (String "invalid variable '"
+                 <-> printTypedVar p
+                 <-> String "': HSF only permits integers here")
         | UnsupportedExpr expr ->
-            fmt "expression '{0}' is not supported in the HSF backend"
-                [ printVExpr expr ]
+            error
+                (String "expression '"
+                 <-> printVExpr expr
+                 <-> String "' is not supported in the HSF backend")
         | EmptyCompoundExpr exptype ->
-            fmt "found an empty '{0}' expression"
-                [ String exptype ]
+            error
+                (String "found an empty '"
+                 <-> String exptype
+                 <-> String "' expression")
+        | CannotCheckDeferred (check, why) ->
+            error
+                (String "deferred sanity check '"
+                 <-> printDeferredCheck check
+                 <-> String "' failed:"
+                 <+> String why)
 
 
 (*
@@ -318,9 +355,10 @@ let ensureArith : TypedVar -> Result<IntExpr<Var>, Error> =
 let predOfFunc
   (parT : 'par -> Result<VIntExpr, Error>)
   ({ Name = n; Params = pars } : Func<'par>)
-  : Result<Literal, Error> =
-    lift (fun parR -> Pred { Name = n; Params = parR })
+  : Result<Func<VIntExpr>, Error> =
+    lift (fun parR -> { Name = n; Params = parR })
          (pars |> Seq.map parT |> collect)
+
 (*
  * View definitions
  *)
@@ -336,7 +374,9 @@ let hsfModelViewDef
   : (DFunc * VBoolExpr option) -> Result<Horn list, Error> =
     function
     | (vs, Some ex) ->
-        lift2 (fun hd bd -> [Clause (hd, [bd]); Clause (bd, [hd])])
+        lift2 (fun hd bdp ->
+                let bd = Pred bdp
+                [Clause (hd, [bd]); Clause (bd, [hd])])
               (boolExpr makeHSFVar ex)
               (predOfFunc ensureArith vs)
         |> lift (fun c -> queryNaming vs :: c)
@@ -346,34 +386,41 @@ let hsfModelViewDef
  * Variables
  *)
 
+/// <summary>
+///     Generates the Horn uninterpreted function for emp.
+/// </summary>
+/// <param name="svars">The shared vars used as parameters to emp.</param>
+/// <returns>
+///     If successful, the Horn uninterpreted function for emp.
+/// </returns>
+let predOfEmp (svars : VarMap) : Result<Func<VIntExpr>, Error> =
+    let svarSeq = VarMap.toTypedVarSeq svars
+
+    (* emp is parameterised by the entire shared state, but nothing else.
+       We can't make the predicate if any of those variables are non-integer. *)
+    let empParamsR =
+        collect
+            (Seq.map
+                (function
+                 | Int name -> ok (AVar (makeHSFVar name))
+                 | var -> fail (NonArithVar var))
+                svarSeq)
+
+    bind (fun empParams -> predOfFunc ok { Name = "emp"; Params = empParams })
+        empParamsR
+
 /// Constructs a Horn clause for initialising an integer variable.
 /// Returns an error if the variable is not an integer.
 /// Returns no clause if the variable is not initialised.
 /// Takes the environment of active global variables.
-let hsfModelVariables (sharedVars : VarMap) : Result<Horn, Error> =
-    let vpars =
-        sharedVars
-        |> Map.toSeq
-        |> Seq.map
-            (function
-             | (name, Type.Int()) -> name |> makeHSFVar |> AVar |> ok
-             | (name, ty) -> name |> withType ty |> NonArithVar |> fail)
-        |> collect
-
-    let head =
-        bind
-            (fun vp -> predOfFunc
-                           ok
-                           { Name = "emp"; Params = vp })
-            vpars
-
-
+let hsfModelVariables (svars : VarMap) : Result<Horn, Error> =
     // TODO(CaptainHayashi): actually get these initialisations from
     // somewhere instead of assuming everything to be 0L.
-    lift2 (fun hd vp -> Clause(hd,
-                               List.map (fun n -> Eq (n, AInt 0L)) vp ))
-          head
-          vpars
+    lift
+        (fun hd ->
+            let vps = hd.Params
+            Clause(Pred hd, List.map (fun n -> Eq (n, AInt 0L)) vps ))
+        (predOfEmp svars)
 
 (*
  * Terms
@@ -406,9 +453,9 @@ let hsfFunc
     // defining views is to be held true.
     // Now that we're at the func level, finding the view is easy!
     definer
-    |> (lookup func >> mapMessages (curry InconsistentFunc func))
+    |> (FuncDefiner.lookup func >> mapMessages (curry InconsistentFunc func))
     |> bind (function
-             | Some df -> lift Some (predOfFunc tryIntExpr func)
+             | Some df -> lift (Pred >> Some) (predOfFunc tryIntExpr func)
              | None -> ok None)
 
 /// Constructs a Horn literal for a GFunc.
@@ -452,17 +499,178 @@ let hsfTerm
           (hsfFunc definer g)
           (hsfConditionBody definer w c.Semantics) // TODO: keep around Command?
 
+/// <summary>
+///     Given the name of an iterator, map a function over the parameter in a
+///     func that represents that iterator.
+/// </summary>
+/// <param name="iterator">The name of the iterator to transform.<param>
+/// <param name="f">The function mapping the iterator to an expression.</param>
+/// <param name="func">
+///     The func in which <paramref name="iterator"/> is a parameter.
+/// </param>
+/// <returns>
+///     <paramref name="func"/>, with the iterator transformed by
+///     <paramref name="f"/>.
+/// </returns>
+let mapIteratorParam
+  (iterator : Var) (f : Var -> IntExpr<Var>) (func : Func<IntExpr<Var>>)
+  : Func<IntExpr<Var>> =
+    (* We don't check that the iterator is only in there once, and instead just
+       map over each ocurrence.  This should be sound by construction. *)
+
+    let fOnIter param =
+        match param with
+        | AVar var when var = iterator -> f var
+        | x -> x
+    { func with Params = List.map fOnIter func.Params }
+
+/// <summary>
+///     Constructs a Horn clause for a base downclosure check on a given func.
+/// </summary>
+let hsfModelBaseDownclosure
+  (svars : VarMap) (func : IteratedDFunc) (reason : string)
+  : Result<Horn list, Error> =
+    // TODO(CaptainHayashi): proper doc comment.
+    let svarSeq = VarMap.toTypedVarSeq svars
+
+    (* TODO(CaptainHayashi): We're given the func needing downclosure in
+       unflattened form.  This is kind-of messy, as we now have to flatten
+       it again. *)
+    let flatFunc = Starling.Flattener.flattenDView svarSeq [func]
+    let funcPredR = predOfFunc ensureArith flatFunc
+
+    // TODO(CaptainHayashi): lots of duplication here.
+    let iterator = func.Iterator
+    let iterVarR =
+        match iterator with
+        | Some (Int x) -> ok x
+        | _ ->
+            fail
+                (CannotCheckDeferred
+                    (NeedsBaseDownclosure (func, reason), "malformed iterator"))
+
+    (* Base downclosure for a view V[n](x):
+         D(emp) => D(V[0](x))
+       That is, the definition of V when the iterator is 0 can be no
+       stricter than the definition of emp.
+
+       In the following, `funcPredZeroR` models V[0](x) by transforming
+       the iterator from n to 0 in `funcPredR`, and 'empPredR' models emp. *)
+    let funcPredZeroR =
+        lift2
+            (fun it pred -> mapIteratorParam it (fun _ -> AInt 0L) pred)
+            iterVarR
+            funcPredR
+    let empPredR = predOfEmp svars
+
+    // The above can be modelled as the Horn clause funcPredZero :- empPred.
+    let hornR =
+        lift2
+            (fun funcPredZero empPred ->
+                Clause (Pred funcPredZero, [Pred empPred]))
+            funcPredZeroR
+            empPredR
+
+    // We then add a comment to help show where this came from.
+    lift
+        (fun h ->
+            [ Comment
+                (sprintf "base downclosure on %s: %s" func.Func.Name reason)
+              h ])
+        hornR
+
+/// <summary>
+///     Constructs a Horn clause for an inductive downclosure check on a given
+///     func.
+/// </summary>
+let hsfModelInductiveDownclosure
+  (svars : VarMap) (func : IteratedDFunc) (reason : string)
+  : Result<Horn list, Error> =
+    // TODO(CaptainHayashi): proper doc comment.
+    let svarSeq = VarMap.toTypedVarSeq svars
+
+    // See hsfModelBaseDownclosure for caveats.
+    let flatFunc = Starling.Flattener.flattenDView svarSeq [func]
+    let funcPredR = predOfFunc ensureArith flatFunc
+
+    let iterator = func.Iterator
+    let iterVarR =
+        match iterator with
+        | Some (Int x) -> ok x
+        | _ ->
+            fail
+                (CannotCheckDeferred
+                    (NeedsInductiveDownclosure (func, reason),
+                     "malformed iterator"))
+
+    (* Inductive downclosure for a view V[n](x):
+         (0 <= n) => (D(V[n+1](x)) => D(V[n](x)))
+       That is, the definition of V when the iterator is n+1 implies the
+       definition of V when the iterator is n, for all positive n.
+
+       In the following, `funcPredSuccR` models V[n+1](x) by transforming
+       the iterator from n to n+1 in `funcPredR`. *)
+    let funcPredSuccR =
+        lift2
+            (fun it pred -> mapIteratorParam it incVar pred)
+            iterVarR
+            funcPredR
+
+    (* The above can be modelled as the Horn clause
+         funcPredR :- n > 0, funcPredSuccR.
+       (We flatten the nested implication into a conjunction.) *)
+    let hornR =
+        lift3
+            (fun it succ norm ->
+                Clause (Pred norm, [Ge (AVar it, AInt 0L); Pred succ]))
+            iterVarR
+            funcPredSuccR
+            funcPredR
+
+    // As with base DC, comment to show where this clause originated.
+    lift
+        (fun h ->
+            [ Comment (sprintf "ind downclosure on %s: %s" func.Func.Name reason)
+              h ])
+        hornR
+
+/// <summary>
+///     Constructs a Horn clause for a deferred check, if possible.
+/// </summary>
+let hsfModelDeferredCheck (svars : VarMap) (check : DeferredCheck)
+  : Result<Horn list, Error> =
+    match check with
+    | NeedsBaseDownclosure (func, reason) ->
+        hsfModelBaseDownclosure svars func reason
+    | NeedsInductiveDownclosure (func, reason) ->
+        hsfModelInductiveDownclosure svars func reason
+
 /// Constructs a HSF script for a model.
 let hsfModel
-  ({ SharedVars = sharedVars; ViewDefs = definer; Axioms = xs }
+  ({ SharedVars = svars; ViewDefs = definer; Axioms = xs; DeferredChecks = ds }
      : Model<CmdTerm<MBoolExpr, GView<MarkedVar>, MVFunc>,
              FuncDefiner<BoolExpr<Var> option>>)
   : Result<Horn list, Error> =
-    let uniquify = Set.ofList >> Set.toList
+    // This is complicated so as to preserve order.
+    let uniquify hs =
+        let f seenSoFar horn =
+            match horn with
+            | Clause (_) as c ->
+                if (Set.contains c seenSoFar)
+                then (seenSoFar, Comment "(duplicate clause)")
+                else (Set.add c seenSoFar, c)
+            | l -> (seenSoFar, l)
+        snd (mapAccumL f Set.empty hs)
+
     let collectMap f = Seq.map f >> collect
 
     trial {
-        let! varHorn = hsfModelVariables sharedVars
+        let! varHorn = hsfModelVariables svars
+
+        let! dcHorns =
+            lift
+                (List.concat >> uniquify)
+                (collectMap (hsfModelDeferredCheck svars) ds)
 
         let! defHorns =
             definer
@@ -476,5 +684,5 @@ let hsfModel
             |> collectMap (hsfTerm definer)
             |> lift (List.concat >> uniquify)
 
-        return varHorn :: List.append defHorns axHorns
+        return varHorn :: List.concat [ defHorns; axHorns; dcHorns ]
     }
