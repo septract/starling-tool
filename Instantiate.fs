@@ -4,7 +4,7 @@
 ///     <para>
 ///         Starling has multiple stages during which we need to look up a
 ///         func in a list mapping funcs to Boolean expressions, and
-///         substitute func's arguments for the parameters in that Boolean
+///         substitute the func's arguments for the parameters in that Boolean
 ///         expression.
 ///     </para>
 ///     <para>
@@ -12,10 +12,6 @@
 ///         which contains the function <c>instantiate</c> for this
 ///         purpose.
 ///      </para>
-///     <para>
-///         In addition, it contains more generic functions for looking
-///         up funcs in tables, which are useful throughout Starling.
-///     </para>
 /// </summary>
 module Starling.Core.Instantiate
 
