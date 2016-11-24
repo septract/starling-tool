@@ -840,9 +840,33 @@ module Translator =
 module Run =
     open Starling.Core.Z3.Expr
 
-    let genViewDefRule reals (ctx : Z3.Context) fm (fixedpoint : Z3.Fixedpoint) (unsafeapp : Z3.BoolExpr) view def =
+    /// <summary>
+    ///     Generates the MuZ3 rules representing a definite view constraint.
+    /// </summary>
+    /// <param name="shouldUseRealsForInts">
+    ///     Whether or not we should model integers using Z3 reals.
+    /// </param>
+    /// <param name="ctx">The Z3 context to use for modelling the rules.</param>
+    /// <param name="funcDecls">
+    ///     The map of <c>FuncDecl</c>s to use when creating view
+    ///     applications.
+    /// </param>
+    /// <param name="fixedpoint">The MuZ3 fixedpoint to add rules to.</param>
+    /// <param name="unsafeapp">The expression representing 'unsafe()'.</param>
+    /// <param name="view">The view being defined, as a single func.</param>
+    /// <param name="def">The view definition.</param>
+    let genViewDefRule
+      (shouldUseRealsForInts : bool)
+      (ctx : Z3.Context)
+      (funcDecls : Map<string, Z3.FuncDecl>)
+      (fixedpoint : Z3.Fixedpoint)
+      (unsafeapp : Z3.BoolExpr)
+      (view : VFunc<Var>)
+      (def : BoolExpr<Var>)
+      : unit =
         let defImpliesView =
-            Translator.mkRule reals id ctx fm def Multiset.empty view
+            Translator.mkRule
+                shouldUseRealsForInts id ctx funcDecls def Multiset.empty view
         Option.iter fixedpoint.AddRule defImpliesView
 
         // TODO(CaptainHayashi): de-duplicate this with mkRule.
@@ -857,10 +881,11 @@ module Run =
         let z3Vars =
             Set.toArray
                 (Set.map
-                    (fun (var : CTyped<Var>) ->
+                    (fun (var : TypedVar) ->
                         ctx.MkConst
                             (valueOf var,
-                             Translator.typeToSort reals ctx (typeOf var)))
+                             Translator.typeToSort
+                                shouldUseRealsForInts ctx (typeOf var)))
                     vars)
 
         // Introduce 'V ^ ¬D(V) -> unsafe'.
@@ -868,8 +893,9 @@ module Run =
             Translator.mkQuantifiedEntailment
                 ctx
                 z3Vars
-                (ctx.MkAnd [| boolToZ3 reals id ctx (mkNot def)
-                              Translator.translateVFunc reals id ctx fm view |])
+                (ctx.MkAnd [| boolToZ3 shouldUseRealsForInts id ctx (mkNot def)
+                              Translator.translateVFunc
+                                  shouldUseRealsForInts id ctx funcDecls view |])
                 unsafeapp
         Option.iter fixedpoint.AddRule viewImpliesDef
 
