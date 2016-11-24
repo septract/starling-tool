@@ -360,41 +360,52 @@ module Phase =
     /// Interprets an entire view application over the given definer.
     let interpretGView
       (definer : FuncDefiner<SVBoolExpr>)
-      : GView<Sym<MarkedVar>>
-      -> Result<BoolExpr<Sym<MarkedVar>>, Error> =
-        Multiset.toFlatSeq
-        >> Seq.map (interpretGFunc definer)
-        >> collect
-        >> lift Seq.toList
-        >> lift mkAnd
+      (gview : GView<Sym<MarkedVar>>)
+      : Result<BoolExpr<Sym<MarkedVar>>, Error> =
+        let funcs = Multiset.toFlatSeq gview
+        let interpretedFuncsR = collect (Seq.map (interpretGFunc definer) funcs)
+        lift mkAnd interpretedFuncsR
 
     /// Given a symbolic-boolean term, calculate the non-symbolic approximation.
-    let approxTerm (symterm : Term<SMBoolExpr, SMBoolExpr, SMBoolExpr>) =
-        let apr position =
-            Mapper.mapBoolCtx
-                Starling.Core.Symbolic.Queries.approx
-                position
-            >> snd
-
-        let sub =
-            Mapper.mapBoolCtx (tsfRemoveSym UnwantedSym) Sub.Types.SubCtx.NoCtx
-            >> snd
+    let approxTerm (symterm : Term<SMBoolExpr, SMBoolExpr, SMBoolExpr>)
+      : Result<Term<MBoolExpr, MBoolExpr, MBoolExpr>, Error> =
+        let tryApproxInBool position boolExpr =
+            (* First, try to replace symbols with Boolean approximates.
+               This returns a pair of (useless) context and neq expression. *)
+            let _, approxBoolExpr =
+                Mapper.mapBoolCtx
+                    Starling.Core.Symbolic.Queries.approx
+                    position
+                    boolExpr
+            (* The above might have left some symbols, eg in integer position.
+               Try to remove them, and fail if we can't. *)
+            let _, elimBoolExprR =
+                Mapper.mapBoolCtx
+                    (tsfRemoveSym UnwantedSym)
+                    Sub.Types.SubCtx.NoCtx
+                    approxBoolExpr
+            // Finally, tidy up the resulting expression.
+            lift simp elimBoolExprR
 
         let pos = Starling.Core.Sub.Position.positive
         let neg = Starling.Core.Sub.Position.negative
 
-        let mapCmd cmdSemantics =
-          cmdSemantics
-          |> Starling.Core.Command.SymRemove.removeSym
-          |> (apr neg)
-          |> sub
-          |> lift simp
+        // Now work out how to approximate the individual bits of a Term.
 
-        tryMapTerm
-            mapCmd
-            ((apr neg) >> sub >> lift Starling.Core.Expr.simp)
-            ((apr pos) >> sub >> lift Starling.Core.Expr.simp)
-                symterm
+        let mapCmd cmdSemantics =
+            (* As well as general approximation, commands can be further
+               approximated by removing certain part-symbolic parts of them.
+
+               Commands appear on the LHS of a term, thus in -ve position. *)
+            tryApproxInBool neg
+              (Starling.Core.Command.SymRemove.removeSym cmdSemantics)
+
+        // Weakest precondition is on the LHS of a term, thus in -ve position.
+        let mapWPre wPre = tryApproxInBool neg wPre
+        // Goal is on the RHS of a term, thus in +ve position.
+        let mapGoal goal = tryApproxInBool pos goal
+
+        tryMapTerm mapCmd mapWPre mapGoal symterm
 
     /// Interprets all of the views in a term over the given definer.
     let interpretTerm
