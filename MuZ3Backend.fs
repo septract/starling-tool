@@ -592,7 +592,7 @@ module Translator =
     /// <param name="svars">Map of shared variables in the program.</param>
     /// <param name="check">The deferred check to translate.</param>
     /// <returns>
-    ///     If successful, an optional a pair of the constructed rule's name
+    ///     If successful, an optional pair of the constructed rule's name
     ///     and body.
     /// </returns>
     let translateDeferredCheck
