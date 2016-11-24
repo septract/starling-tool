@@ -410,27 +410,26 @@ module Phase =
     /// Interprets all of the views in a term over the given definer.
     let interpretTerm
       (definer : FuncDefiner<SVBoolExpr>)
-      (approx : bool)
+      (shouldApprox : bool)
       (term : FinalTerm)
       : Result<SymProofTerm, Error> =
-        let symboolResult =
+        let interpretedR =
             tryMapTerm
                 (fun { CommandSemantics.Semantics = c } -> ok c)
                 (interpretGView definer)
                 (interpretVFunc definer)
                 term
 
-        // TODO(CaptainHayashi): don't do this unless the user requested it?
-        let approxResult =
-            if approx
-            then lift Some (bind approxTerm symboolResult)
+        let approxR =
+            if shouldApprox
+            then lift Some (bind approxTerm interpretedR)
             else ok None
 
         lift2
-            (fun s a ->
-                { Original = term; SymBool = s; Approx = a })
-            symboolResult
-            approxResult
+            (fun interpreted approx ->
+                { Original = term; SymBool = interpreted; Approx = approx })
+            interpretedR
+            approxR
 
 
     /// <summary>
@@ -450,8 +449,7 @@ module Phase =
         let def, indef = partitionDefiner definer
 
         // Then, convert the indefs to symbols.
-        let symconv =
-            Mapper.make (Reg >> AVar) (Reg >> BVar)
+        let symconv = Mapper.make (Reg >> AVar) (Reg >> BVar)
 
         let idsym : FuncDefiner<SVBoolExpr> =
             indef
@@ -479,15 +477,15 @@ module Phase =
     ///         This consumes the view definitions.
     ///     </para>
     /// </summary>
-    /// <param name="approx">Whether to build approximates.</param>
+    /// <param name="shouldApprox">Whether to build approximates.</param>
     /// <param name="model">The model to instantiate.</param>
     /// <returns>
     ///     The model with all views instantiated.
     /// </returns>
     let run
-      (approx : bool)
+      (shouldApprox : bool)
       (model : Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
                      FuncDefiner<SVBoolExpr option>>)
       : Result<Model<SymProofTerm, FuncDefiner<SVBoolExpr option>>, Error> =
       let vs = symboliseIndefinites model.ViewDefs
-      tryMapAxioms (interpretTerm vs approx) model
+      tryMapAxioms (interpretTerm vs shouldApprox) model
