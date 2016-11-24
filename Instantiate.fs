@@ -395,7 +395,7 @@ module Phase =
     let approxTerm (symterm : Term<SMBoolExpr, SMBoolExpr, SMBoolExpr>)
       : Result<Term<MBoolExpr, MBoolExpr, MBoolExpr>, Error> =
         (* This is needed to adapt approx's TraversalError<unit> into TraversalError<Error>.
-           It's horrible and I hate it. *)
+           TODO(CaptainHayashi): It's horrible and I hate it, try fix somehow *)
         let toError =
             mapMessages
                 (function
@@ -465,7 +465,8 @@ module Phase =
 
 
     /// <summary>
-    ///     Converts all indefinite viewdefs to symbols.
+    ///     Makes all indefinite viewdefs in a definer definite by defining them
+    ///     as symbols.
     /// </summary>
     /// <param name="definer">
     ///     The view definer to convert.
@@ -478,30 +479,38 @@ module Phase =
     let symboliseIndefinites
       (definer : FuncDefiner<SVBoolExpr option>)
       : Result<FuncDefiner<SVBoolExpr>, Error> =
+        // First, work out which definitions are indefinite.
         let def, indef = partitionDefiner definer
 
-        // Then, convert the indefs to symbols.
-        let symconv =
+        (* We now need to convert the definitions in 'indefSeq' such that they
+           map the funcs to a symbol.  We do this by first making some helper
+           functions. *)
+
+        // Lifts variables in an expression into the Sym<> type with Reg.
+        let exprToSym expr =
             mapTraversal
                 (tliftToExprDest
                     (tliftOverCTyped (ignoreContext (Reg >> ok))))
+                expr
 
-        let indefSeq = FuncDefiner.toSeq indef
+        (* Constructs a definite view definition, given an indefinite view
+           definition as a pair. *)
+        let indefiniteFuncToSym ({ Name = n ; Params = ps }, _) =
+            let convParamsR = collect (List.map exprToSym ps)
 
-        let symbolise ({ Name = n ; Params = ps }, _) =
-            let convParamsResult = collect (List.map symconv ps)
-
-            let defResult =
+            let defR =
                 lift (func (sprintf "!UNDEF:%A" n) >> Sym >> BVar)
-                    convParamsResult
+                    convParamsR
 
-            lift (mkPair (func n ps)) defResult
+            lift (mkPair (func n ps)) defR
 
-        let symbolisedResult = collect (Seq.map symbolise indefSeq)
-        let idsymResult = lift FuncDefiner.ofSeq symbolisedResult
+        // Now apply the above to all indefinites to create a new definer.
+        let indefSeq = FuncDefiner.toSeq indef
+        let indefSymSeqR = collect (Seq.map indefiniteFuncToSym indefSeq)
+        let indefSymR = lift FuncDefiner.ofSeq indefSymSeqR
 
-        // TODO(CaptainHayashi): use functables properly.
-        lift (fun idsym -> def @ idsym) (mapMessages Traversal idsymResult)
+        // Merge the new definitions into our original definer.
+        lift (FuncDefiner.combine def) (mapMessages Traversal indefSymR)
 
 
     /// <summary>
