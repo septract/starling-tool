@@ -203,8 +203,9 @@ module Pretty =
 
     /// Pretty-prints a response.
     let printResponse (mview : ModelView) (response : Response) : Doc =
-        let attachChecks doc =
-            function
+        // Add deferred checks to a response if and only if there are some.
+        let attachChecks doc deferredChecks =
+            match deferredChecks with
             | [] -> doc
             | xs ->
                 vsep
