@@ -864,6 +864,11 @@ module Run =
       (view : VFunc<Var>)
       (def : BoolExpr<Var>)
       : unit =
+        (* To model a view definition, we introduce an if and only if.
+           This can't be modelled directly in MuZ3, so instead we split it
+           into two implications.
+
+           This is the 'def => view' part. *)
         let defImpliesView =
             Translator.mkRule
                 shouldUseRealsForInts id ctx funcDecls def Multiset.empty view
@@ -888,7 +893,12 @@ module Run =
                                 shouldUseRealsForInts ctx (typeOf var)))
                     vars)
 
-        // Introduce 'V ^ ¬D(V) -> unsafe'.
+        (* This is the 'view => def' part.
+           We can't model this directly in MuZ3 because the head of a MuZ3
+           constraint must be a single positive func.
+           Instead, we rearrange to 'view && !def => unsafe', where unsafe is
+           a stand-in for some notion of false. *)
+        // TODO(CaptainHayashi): in practice this appears to be unsound.
         let viewImpliesDef =
             Translator.mkQuantifiedEntailment
                 ctx
