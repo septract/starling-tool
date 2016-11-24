@@ -581,6 +581,116 @@ module Translator =
      * Deferred checks
      *)
 
+    // TODO(CaptainHayashi): clean this up?
+    let varToExpr (v : TypedVar) : Expr<Var> =
+        match v with
+        | Int iv -> Int (AVar iv)
+        | Bool bv -> Bool (BVar bv)
+
+    /// Converts a downclosure func into a guarded func, instantiating the
+    /// variables directly as nonsymbolic unmarked vars.
+    /// We map any instance of the iterator through f.
+    let instantiate (iterator : Var) (f : Var -> IntExpr<Var>) (dfunc : DFunc) : GFunc<Var> =
+        let trans param =
+            match param with
+            | Int var when var = iterator -> Int (f var)
+            | v -> varToExpr v
+        gfunc BTrue dfunc.Name (List.map trans dfunc.Params)
+
+    /// Converts a downclosure func into an ordinary func, instantiating the
+    /// variables directly as nonsymbolic unmarked vars.
+    /// We map any instance of the iterator through f.
+    let instantiateFunc (iterator : Var) (f : Var -> IntExpr<Var>) (dfunc : DFunc) : Func<Expr<Var>> =
+        let trans param =
+            match param with
+            | Int var when var = iterator -> Int (f var)
+            | v -> varToExpr v
+        func dfunc.Name (List.map trans dfunc.Params)
+
+    /// <summary>
+    ///     Constructs a rule for a base downclosure check on a given func.
+    /// </summary>
+    let translateBaseDownclosure
+      (reals : bool)
+      (ctx : Z3.Context)
+      (funcDecls : Map<string, Z3.FuncDecl>)
+      (svars : VarMap)
+      (func : IteratedDFunc) (reason : string)
+      : Result<(string * Z3.BoolExpr) option, Error> =
+        // TODO(CaptainHayashi): proper doc comment.
+        let svarSeq = VarMap.toTypedVarSeq svars
+
+        let iterVarR =
+            match func.Iterator with
+            | Some (Int x) -> ok x
+            | _ ->
+                let check = NeedsBaseDownclosure (func, reason)
+                fail (CannotCheckDeferred (check, "malformed iterator"))
+
+        (* TODO(CaptainHayashi): We're given the func needing downclosure in
+           unflattened form.  This is kind-of messy, as we now have to flatten
+           it again. *)
+        // TODO(CaptainHayashi): this duplicates the HSF work a lot.
+        let flatDFunc = Starling.Flattener.flattenDView svarSeq [func]
+        let zeroFuncR =
+            lift (fun it -> instantiateFunc it (fun _ -> AInt 0L) flatDFunc)
+                iterVarR
+
+        // TODO(CaptainHayashi): using a round peg in a square hole here.
+        let empFunc =
+            Multiset.singleton (gfunc BTrue "emp" (Seq.map varToExpr svarSeq))
+
+        let ruleR =
+            lift
+                (fun zeroFunc ->
+                    mkRule reals id ctx funcDecls BTrue empFunc zeroFunc)
+                zeroFuncR
+
+        lift (Option.map (mkPair (sprintf "_baseD_%s" func.Func.Name)))
+            ruleR
+
+    /// <summary>
+    ///     Constructs a rule for an inductive downclosure check on a given
+    ///     func.
+    /// </summary>
+    let translateInductiveDownclosure
+      (reals : bool)
+      (ctx : Z3.Context)
+      (funcDecls : Map<string, Z3.FuncDecl>)
+      (svars : VarMap)
+      (func : IteratedDFunc) (reason : string)
+      : Result<(string * Z3.BoolExpr) option, Error> =
+        // TODO(CaptainHayashi): proper doc comment.
+        let svarSeq = VarMap.toTypedVarSeq svars
+
+        // See above for caveats.
+        let iterVarResult =
+            match func.Iterator with
+            | Some (Int x) -> ok x
+            | _ ->
+                let check = NeedsInductiveDownclosure (func, reason)
+                fail (CannotCheckDeferred (check, "malformed iterator"))
+
+        let flatDFunc = Starling.Flattener.flattenDView svarSeq [func]
+
+        let normFuncResult =
+            ok (vfunc flatDFunc.Name (List.map varToExpr flatDFunc.Params))
+        let succFuncResult =
+            lift (fun it -> instantiate it incVar flatDFunc) iterVarResult
+        let succViewResult = lift Multiset.singleton succFuncResult
+        let guardResult =
+            lift (fun it -> mkGe (AVar it) (AInt 0L)) iterVarResult
+
+        let ruleResult =
+            lift3
+                (mkRule reals id ctx funcDecls)
+                guardResult
+                succViewResult
+                normFuncResult
+
+        lift (Option.map (mkPair (sprintf "_indD_%s" func.Func.Name)))
+            ruleResult
+
     /// <summary>
     ///     Constructs a MuZ3 rule for a deferred check, if possible.
     /// </summary>
@@ -602,76 +712,11 @@ module Translator =
       (svars : VarMap)
       (check : DeferredCheck)
       : Result<(string * Z3.BoolExpr) option, Error> =
-        let svarSeq = VarMap.toTypedVarSeq svars
-
-        // TODO(CaptainHayashi): clean this up?
-        let varToExpr v =
-            match v with
-            | Int iv -> Int (AVar iv)
-            | Bool bv -> Bool (BVar bv)
-
-        (* Converts a downclosure func into a guarded func, instantiating the
-           variables directly as nonsymbolic unmarked vars.
-           We map any instance of the iterator through f. *)
-        let instantiate iterator f (dfunc : DFunc) : GFunc<Var> =
-            let trans param =
-                match param with
-                | Int var when var = iterator -> Int (f var)
-                | v -> varToExpr v
-            gfunc BTrue dfunc.Name (List.map trans dfunc.Params)
-
         match check with
         | NeedsBaseDownclosure (func, reason) ->
-            let iterVarResult =
-                match func.Iterator with
-                | Some (Int x) -> ok x
-                | _ -> fail (CannotCheckDeferred (check, "malformed iterator"))
-
-            (* TODO(CaptainHayashi): We're given the func needing downclosure in
-               unflattened form.  This is kind-of messy, as we now have to flatten
-               it again. *)
-            // TODO(CaptainHayashi): this duplicates the HSF work a lot.
-            let flatDFunc = Starling.Flattener.flattenDView svarSeq [func]
-            let zeroFuncResult =
-                lift (fun it -> instantiate it (fun _ -> AInt 0L) flatDFunc)
-                    iterVarResult
-            let zeroViewResult = lift Multiset.singleton zeroFuncResult
-
-            // TODO(CaptainHayashi): using a round peg in a square hole here.
-            let empFunc = vfunc "emp" (Seq.map varToExpr svarSeq)
-
-            let ruleResult =
-                lift (fun z -> mkRule reals id ctx funcDecls BTrue z empFunc)
-                    zeroViewResult
-
-            lift (Option.map (mkPair (sprintf "_baseD_%s" func.Func.Name)))
-                ruleResult
+            translateBaseDownclosure reals ctx funcDecls svars func reason
         | NeedsInductiveDownclosure (func, reason) ->
-            // See above for caveats.
-            let iterVarResult =
-                match func.Iterator with
-                | Some (Int x) -> ok x
-                | _ -> fail (CannotCheckDeferred (check, "malformed iterator"))
-
-            let flatDFunc = Starling.Flattener.flattenDView svarSeq [func]
-
-            let normFuncResult =
-                ok (vfunc flatDFunc.Name (List.map varToExpr flatDFunc.Params))
-            let succFuncResult =
-                lift (fun it -> instantiate it incVar flatDFunc) iterVarResult
-            let succViewResult = lift Multiset.singleton succFuncResult
-            let guardResult =
-                lift (fun it -> mkGe (AVar it) (AInt 0L)) iterVarResult
-
-            let ruleResult =
-                lift3
-                    (mkRule reals id ctx funcDecls)
-                    guardResult
-                    succViewResult
-                    normFuncResult
-
-            lift (Option.map (mkPair (sprintf "_indD_%s" func.Func.Name)))
-                ruleResult
+            translateInductiveDownclosure reals ctx funcDecls svars func reason
 
     (*
      * Variables
