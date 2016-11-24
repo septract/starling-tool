@@ -256,7 +256,9 @@ let runZ3OnModel (shouldUseRealsForInts : bool)
     // Save us from having to supply all of these arguments every time.
     let toZ3 b = Expr.boolToZ3 shouldUseRealsForInts unmarkVar ctx b
 
-    // Try to remove symbols from boolean expressions: don't error if we can't
+    (* Try to remove symbols from boolean expressions.
+       Suppress the Chessie error that happens if we can't, because in that case
+       we just return a 'Z3 can't prove this' result. *)
     let removeSym bexp =
         let _, res = Mapper.mapBoolCtx (tsfRemoveSym id) NoCtx bexp
         okOption res
