@@ -239,7 +239,7 @@ module Pretty =
 ///     If approximates were enabled, Z3 will prove them instead of the
 ///     symbolic proof terms, allowing it to eliminate tautological
 /// </summary>
-/// <param name="reals">
+/// <param name="shouldUseRealsForInts">
 ///     Whether to use Real instead of Int.
 ///     This can be faster, but is slightly inaccurate.
 /// </param>
@@ -247,10 +247,13 @@ module Pretty =
 /// <returns>
 ///     A model with proof terms marked up with their SMT solver results.
 /// </returns>
-let eliminate (reals : bool)
+let runZ3OnModel (shouldUseRealsForInts : bool)
   (model : Model<SymProofTerm, FuncDefiner<BoolExpr<Sym<Var>> option>>)
   : ZModel =
     use ctx = new Z3.Context ()
+
+    // Save us from having to supply all of these arguments every time.
+    let toZ3 b = Expr.boolToZ3 shouldUseRealsForInts unmarkVar ctx b
 
     // Try to remove symbols from boolean expressions: don't error if we can't
     let removeSym bexp =
@@ -275,10 +278,7 @@ let eliminate (reals : bool)
                 (* This is mainly for auditing purposes: we don't use it in the
                    proof.  Instead, we combine cmd, wpre, and goal _before_
                    converting to Z3. *)
-                let z =
-                    { Cmd = Expr.boolToZ3 reals unmarkVar ctx cmd
-                      WPre = Expr.boolToZ3 reals unmarkVar ctx wpre
-                      Goal = Expr.boolToZ3 reals unmarkVar ctx goal }
+                let z = { Cmd = toZ3 cmd; WPre = toZ3 wpre; Goal = toZ3 goal }
 
                 (* This is effectively asking Z3 to refute (c ^ w => g).
                  *
@@ -288,9 +288,7 @@ let eliminate (reals : bool)
                  *   - ((c^w) ^ ¬g) deMorgan
                  *   - (c^w^¬g) associativity.
                  *)
-                let combined =
-                    Expr.boolToZ3 reals unmarkVar ctx
-                        (mkAnd [ cmd; wpre; mkNot goal ])
+                let combined = toZ3 (mkAnd [ cmd; wpre; mkNot goal ])
 
                 // This bit actually runs Z3 on the term.
                 let s = Starling.Core.Z3.Run.runTerm ctx combined

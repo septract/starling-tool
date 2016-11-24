@@ -475,7 +475,7 @@ let runStarling (request : Request)
         bind (Core.Instantiate.Phase.run shouldApprox
               >> mapMessages Error.ModelFilterError)
     let eliminate : Result<Model<_, _>, Error> -> Result<Model<_, _>, Error>  =
-        lift (Backends.Z3.eliminate shouldUseRealsForInts)
+        lift (Backends.Z3.runZ3OnModel shouldUseRealsForInts)
 
     let backend m =
         let phase op response =
