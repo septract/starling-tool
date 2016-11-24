@@ -281,7 +281,7 @@ let runZ3OnModel (shouldUseRealsForInts : bool)
               SymBool = term.SymBool
               Z3 = None
               Status = None }
-              
+
         // Now, see if we can fill them in.
         match cmdO, wpreO, goalO with
         | Some cmd, Some wpre, Some goal ->
@@ -361,5 +361,5 @@ let backend (request : Request) (model : ZModel) : Response =
                 (fun _ v ->
                     mkAnd
                         [ v.SymBool.Cmd; v.SymBool.WPre; mkNot v.SymBool.Goal ])
-                model.Axioms,
+                (extractFailures model),
              dcs)
