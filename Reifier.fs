@@ -307,10 +307,14 @@ module Downclosure =
         | Some d ->
             let checkedIterR = checkIterator func.Iterator
             bind
-                (fun i ->
-                    deferred
-                    |> checkBaseDownclosure empDefn i func d
-                    >>= checkInductiveDownclosure i func d)
+                (fun checkedIter ->
+                    let baseDeferredR =
+                        checkBaseDownclosure empDefn checkedIter func d deferred
+                    bind
+                        (fun baseDeferred ->
+                            checkInductiveDownclosure checkedIter func d
+                                baseDeferred)
+                        baseDeferredR)
                 checkedIterR
 
     /// <summary>
