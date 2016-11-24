@@ -33,7 +33,7 @@ open Starling.Utils
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
-open Starling.Core.Sub
+open Starling.Core.Traversal
 
 /// <summary>
 ///     Types for symbolic and variable maps.
@@ -102,6 +102,10 @@ module SymExprs =
 /// </summary>
 [<AutoOpen>]
 module Create =
+    /// Creates a symbolic variable given its body and parameters.
+    let sym (body : string) (xs : Expr<Sym<'Var>> list) : Sym<'Var> =
+        Sym { Name = body; Params = xs }
+
     /// Creates an integer sym-variable.
     let siVar c = c |> Reg |> AVar
 
@@ -136,189 +140,236 @@ module Create =
 /// <summary>
 ///     Utilities to traverse or eliminate symbolic variables.
 /// </summary>
-[<AutoOpen>]
-module Queries =
-    /// Lifts a VSubFun over MarkedVars to deal with symbolic vars.
-    let rec liftVToSym
-      (sf : VSubFun<'srcVar, Sym<'dstVar>>)
-      : VSubFun<Sym<'srcVar>, Sym<'dstVar>> =
-        let rmap ctx =
-            (sf |> liftVToSym |> onVars |> Mapper.mapCtx) ctx
-
-        Mapper.makeCtx
-            (fun pos v ->
-                 match v with
-                 | Reg r -> Mapper.mapIntCtx sf pos r
-                 | Sym { Name = sym; Params = rs } ->
-                     // TODO(CaptainHayashi): this is horrible.
-                     // Are our abstractions wrong?
-                     let pos', rs' = mapAccumL rmap pos rs
-                     (pos', AVar (Sym { Name = sym; Params = rs' } )))
-            (fun pos v ->
-                 match v with
-                 | Reg r -> Mapper.mapBoolCtx sf pos r
-                 | Sym { Name = sym; Params = rs } ->
-                     let pos', rs' = mapAccumL rmap pos rs
-                     (pos', BVar (Sym { Name = sym; Params = rs' } )))
+module Traversal =
+    /// <summary>
+    ///     Lifts a Traversal from variables to symbolic variables to accept
+    ///     symbolic variables.
+    /// </summary>
+    let rec tliftToSymSrc
+      (sub : Traversal<'SrcVar, Sym<'DstVar>, 'Error>)
+      : Traversal<Sym<'SrcVar>, Sym<'DstVar>, 'Error> =
+        fun ctx ->
+            function
+            | Reg r -> sub ctx r
+            | Sym { Name = body; Params = rs } ->
+                // TODO(CaptainHayashi): this is horrible.
+                // Are our abstractions wrong?
+                tchainL
+                    (sub
+                     |> tliftToSymSrc
+                     |> tliftOverCTyped
+                     |> tliftOverExpr)
+                    (sym body)
+                    ctx rs
 
     /// <summary>
-    ///     Substitution table for removing symbols from expressions.
+    ///     Lifts a Traversal from variables to variables to return
+    ///     symbolic variables.
+    /// </summary>
+    let tliftToSymDest
+      (sub : Traversal<'SrcVar, 'DstVar, 'Error>)
+      : Traversal<'SrcVar, Sym<'DstVar>, 'Error> =
+        fun ctx -> sub ctx >> lift (pairMap id Reg)
+
+    /// <summary>
+    ///     Lifts a Traversal from variables to variables to one from
+    ///     symbolic variables to symbolic variables.
+    /// </summary>
+    let tliftOverSym
+      (sub : Traversal<'SrcVar, 'DstVar, 'Error>)
+      : Traversal<Sym<'SrcVar>, Sym<'DstVar>, 'Error> =
+        sub |> tliftToSymDest |> tliftToSymSrc
+
+    /// <summary>
+    ///     A traversal for removing symbols from variables.
     /// </summary>
     /// <param name="err">
     ///     Function mapping a symbol's contents to an error to throw when
     ///     detecting one.
     /// </param>
-    /// <typeparam name="err">
+    /// <typeparam name="Error">
     ///     The type of <paramref name="err"/>.
     /// </typeparam>
-    /// <typeparam name="err">
+    /// <typeparam name="Var">
     ///     The type of regular (non-symbolic) variables.
     /// </typeparam>
     /// <returns>
-    ///     A <c>TrySubFun</c> trying to remove symbols.
+    ///     A <see cref="Traversal"/> trying to remove symbols from
+    ///     variables.
     /// </returns>
-    let tsfRemoveSym
-      (err : string -> 'err)
-      : TrySubFun<Sym<'var>, 'var, 'err> =
-        tryOnVars <| Mapper.make
+    let removeSymFromVar (err : string -> 'Error)
+      : Traversal<Sym<'Var>, 'Var, 'Error> =
+        ignoreContext
             (function
-             | Sym s -> s.Name |> err |> fail
-             | Reg f -> f |> AVar |> ok)
-            (function
-             | Sym s -> s.Name |> err |> fail
-             | Reg f -> f |> BVar |> ok)
+             | Sym s -> s.Name |> err |> Inner |> fail
+             | Reg f -> ok f)
+
+    /// <summary>
+    ///     A traversal for removing symbols from expressions.
+    /// </summary>
+    /// <param name="err">
+    ///     Function mapping a symbol's contents to an error to throw when
+    ///     detecting one.
+    /// </param>
+    /// <typeparam name="Error">The type of <paramref name="err"/>.</typeparam>
+    /// <typeparam name="Var">
+    ///     The type of regular (non-symbolic) variables.
+    /// </typeparam>
+    /// <returns>
+    ///     A <see cref="Traversal"/> trying to remove symbols from
+    ///     expressions.
+    /// </returns>
+    let removeSymFromExpr (err : string -> 'Error)
+      : Traversal<Expr<Sym<'Var>>, Expr<'Var>, 'Error> =
+        (tliftOverExpr (tliftOverCTyped (removeSymFromVar err)))
+
+    /// <summary>
+    ///     A traversal for removing symbols from Boolean expressions.
+    /// </summary>
+    /// <param name="err">
+    ///     Function mapping a symbol's contents to an error to throw when
+    ///     detecting one.
+    /// </param>
+    /// <typeparam name="Error">The type of <paramref name="err"/>.</typeparam>
+    /// <typeparam name="Var">
+    ///     The type of regular (non-symbolic) variables.
+    /// </typeparam>
+    /// <returns>
+    ///     A <see cref="Traversal"/> trying to remove symbols from
+    ///     Boolean expressions.
+    /// </returns>
+    let removeSymFromBoolExpr (err : string -> 'Error)
+      : Traversal<BoolExpr<Sym<'Var>>, BoolExpr<'Var>, 'Error> =
+        tLiftToBoolSrc
+            (tliftToExprDest
+                (tliftOverCTyped (removeSymFromVar err)))
 
     (*
-     * Common substitutions
+     * Common traversals
      *)
 
     /// <summary>
-    ///     Converts a marking <c>CMapper</c> to a <c>SubFun</c> over
-    ///     symbolic variables.
+    ///     Lifts a traversal from typed variables to symbolic expressions
+    ///     such that it now takes typed symbolic variables as input.
+    ///     <para>
+    ///         This is needed because <see cref="tliftToExprSrc"/>
+    ///         and other such traversals don't play well with symbolics.
+    ///     </para>
     /// </summary>
-    /// <param name="mapper">
-    ///     The variable <c>CMapper</c> to lift.
-    /// </param>
-    /// <typeparam name="srcVar">
-    ///     The type of variables entering the map.
-    /// </typeparam>
-    /// <typeparam name="dstVar">
-    ///     The type of variables leaving the map.
-    /// </typeparam>
+    /// <param name="traversal">The <see cref="Traversal"/> to lift.</param>
+    /// <typeparam name="SrcVar">Type of variables entering traversal.</param>
+    /// <typeparam name="DstVar">Type of variables leaving traversal.</param>
+    /// <returns>The lifted <see cref="Traversal"/>.</returns>
+    let rec tliftToTypedSymVarSrc
+      (traversal : Traversal<CTyped<'SrcVar>, Expr<Sym<'DstVar>>, 'Error>)
+      : Traversal<CTyped<Sym<'SrcVar>>, Expr<Sym<'DstVar>>, 'Error> =
+        let rec subInTypedSym ctx sym =
+            match (valueOf sym) with
+            | Reg r -> traversal ctx (withType (typeOf sym) r)
+            | Sym { Name = n; Params = ps } ->
+                tchainL sub
+                    (fun ps' ->
+                        mkVarExp
+                            (withType (typeOf sym)
+                                (Sym { Name = n; Params = ps' })))
+                    ctx ps
+        and sub = tliftToExprSrc subInTypedSym
+        subInTypedSym
+
+    /// <summary>
+    ///     Traversal for converting symbolic expressions with a marker.
+    /// </summary>
+    let traverseSymWithMarker
+      (marker : Var -> MarkedVar)
+      : Traversal<Sym<Var>, Sym<MarkedVar>, 'Error> =
+        tliftOverSym (ignoreContext (marker >> ok))
+
+    /// <summary>
+    ///     Traversal for converting type-annotated symbolic variables with a
+    ///     marker.
+    /// </summary>
+    /// <param name="marker">The marker to lift into a traversal.</param>
     /// <returns>
-    ///     <paramref name="mapper">, lifted into a <C>SubFun</c>
-    ///     over symbolic variables.
+    ///     The marker function <paramref name="marker"/>, lifted into a
+    ///     <see cref="Traversal"/> over symbolic <see cref="Var"/>s annotated
+    ///     using <see cref="CTyped"/>.
     /// </returns>
-    let liftCToSymSub
-      (mapper : CMapper<SubCtx, 'srcVar, 'dstVar>)
-      : SubFun<Sym<'srcVar>, Sym<'dstVar>> =
-        Mapper.compose mapper (Mapper.cmake Reg)
-        |> liftCToVSub
-        |> liftVToSym
-        |> onVars
+    let traverseTypedSymWithMarker
+      (marker : Var -> MarkedVar)
+      : Traversal<CTyped<Sym<Var>>, CTyped<Sym<MarkedVar>>, 'Error> =
+        tliftOverCTyped (traverseSymWithMarker marker)
 
-    /// Converts an expression to its pre-state.
-    let before
-      : SubFun<Sym<Var>, Sym<MarkedVar>> =
-        liftCToSymSub (Mapper.cmake Before)
+    /// <summary>
+    ///     Converts a symbolic expression to its pre-state.
+    /// </summary>
+    let before (expr : Expr<Sym<Var>>)
+      : Result<Expr<Sym<MarkedVar>>, TraversalError<'Error>> =
+        mapTraversal (tliftOverExpr (traverseTypedSymWithMarker Before)) expr
 
-    /// Converts an expression to its post-state.
-    let after
-      : SubFun<Sym<Var>, Sym<MarkedVar>> =
-        liftCToSymSub (Mapper.cmake After)
+    /// <summary>
+    ///     Converts a symbolic expression to its post-state.
+    /// </summary>
+    let after (expr : Expr<Sym<Var>>)
+      : Result<Expr<Sym<MarkedVar>>, TraversalError<unit>> =
+        mapTraversal (tliftOverExpr (traverseTypedSymWithMarker After)) expr
 
     /// <summary>
     ///     Replaces symbols in a Boolean position with their
     ///     under-approximation.
     /// </summary>
     let approx
-      : SubFun<Sym<MarkedVar>, Sym<MarkedVar>> =
-        let rec boolSub pos v =
-            (pos,
-             match (pos, v) with
-             | (Positions (position::_), Sym _) ->
-                   Position.underapprox position
-             | (Positions _, Reg x) -> BVar (Reg x)
-             | _ -> failwith "approx must be used with Position context")
-        and intSub pos v =
-             match v with
-             | Reg r -> (pos, AVar (Reg r))
-             | Sym { Name = sym; Params = rs } ->
-                 let pos', rs' = mapAccumL rmap pos rs
-                 (pos', AVar (Sym { Name = sym; Params = rs' } ))
-        and vsf = Mapper.makeCtx intSub boolSub
-        and sf = onVars vsf
-        and rmap ctx = Mapper.mapCtx sf (Position.push id ctx)
+      : Traversal<CTyped<Sym<MarkedVar>>, Expr<Sym<MarkedVar>>, unit> =
+        let rec sub ctx =
+            function
+            | Bool (Sym x) ->
+                match ctx with
+                | Positions (position::_) ->
+                    ok (ctx, position |> Context.underapprox |> Bool)
+                | c -> fail (ContextMismatch ("position context", c))
+            | Int (Sym { Name = body; Params = rs }) ->
+                tchainL rmap (sym body >> AVar >> Int) ctx rs
+            | Bool (Reg x) -> ok (ctx, x |> sbVar |> Bool)
+            | Int (Reg x) -> ok (ctx, x |> siVar |> Int)
+        and sf = tliftToExprSrc sub
+        and rmap ctx = sf (Context.push id ctx)
 
-        sf
+        sub
 
-    /// <summary>
-    ///     Substitution function for accumulating the <c>MarkedVar</c>s of
-    ///     a symbolic expression.
-    /// <summary>
-    let findSMVars : SubFun<Sym<MarkedVar>, Sym<MarkedVar>> =
-        Mapper.makeCtx
-            (fun ctx x ->
-                 match ctx with
-                 | MarkedVars xs -> (MarkedVars ((Typed.Int x)::xs), AVar (Reg x))
-                 | c -> (c, AVar (Reg x)))
-            (fun ctx x ->
-                 match ctx with
-                 | MarkedVars xs -> (MarkedVars ((Typed.Bool x)::xs), BVar (Reg x))
-                 | c -> (c, BVar (Reg x)))
-        |> liftVToSym
-        |> onVars
+/// <summary>
+///     Traversal for accumulating symbolic <c>MarkedVar</c>s.
+/// <summary>
+let rec collectSymVars
+  : Traversal<CTyped<Sym<Var>>, CTyped<Sym<Var>>, 'Error> =
+    // TODO(CaptainHayashi): de-duplicate this.
+    fun ctx ->
+        function
+        | WithType (Reg v, tc) ->
+            lift
+                (fun ctx -> (ctx, withType tc (Reg v)))
+                (pushVar ctx (withType tc v))
+        | WithType (Sym { Name = body; Params = ps }, tc) ->
+            tchainL
+                (tliftOverExpr collectSymVars)
+                (sym body >> withType tc)
+                ctx ps
 
-    /// Substitution function for accumulating Vars from a symbolic expression
-    let findSymVars : SubFun<Sym<Var>, Sym<Var>> =
-        Mapper.makeCtx
-            (fun ctx x ->
-                 match ctx with
-                 | Vars xs -> (Vars ((Typed.Int x)::xs), AVar (Reg x))
-                 | c -> (c, AVar (Reg x)))
-            (fun ctx x ->
-                 match ctx with
-                 | Vars xs -> (Vars ((Typed.Bool x)::xs), BVar (Reg x))
-                 | c -> (c, BVar (Reg x)))
-        |> liftVToSym
-        |> onVars
-
-    /// <summary>
-    ///     Wrapper for running a <see cref="findSMVars"/>-style function
-    ///     on a sub-able construct.
-    /// <summary>
-    /// <param name="r">
-    ///     The mapping function to wrap.
-    /// </param>
-    /// <param name="sf">
-    ///     The substitution function to run.
-    /// </param>
-    /// <param name="subject">
-    ///     The item in which to find vars.
-    /// </param>
-    /// <typeparam name="subject">
-    ///     The type of the item in which to find vars.
-    /// </typeparam>
-    /// <returns>
-    ///     The list of variables found in the expression.
-    /// </returns>
-    let mapOverSMVars
-      (r : SubFun<Sym<MarkedVar>, Sym<MarkedVar>> -> SubCtx -> 'subject -> (SubCtx * 'subject))
-      (sf : SubFun<Sym<MarkedVar>, Sym<MarkedVar>>)
-      (subject : 'subject)
-      : Set<CTyped<MarkedVar>> =
-        match (r sf (MarkedVars []) subject) with
-        | (MarkedVars xs, _) -> Set.ofList xs
-        | _ -> failwith "mapOverSMVars: did not get MarkedVars context back"
-
-    let mapOverSymVars
-      (r : SubFun<Sym<Var>, Sym<Var>> -> SubCtx -> 'subject -> (SubCtx * 'subject))
-      (sf : SubFun<Sym<Var>, Sym<Var>>)
-      (subject : 'subject)
-      : Set<CTyped<Var>> =
-        match (r sf (Vars []) subject) with
-        | (Vars xs, _) -> Set.ofList xs
-        | _ -> failwith "mapOverSymVars: did not get Vars context back"
+/// <summary>
+///     Traversal for accumulating symbolic <c>MarkedVar</c>s.
+/// <summary>
+let rec collectSymMarkedVars
+  : Traversal<CTyped<Sym<MarkedVar>>, CTyped<Sym<MarkedVar>>, 'Error> =
+    // TODO(CaptainHayashi): de-duplicate this.
+    fun ctx ->
+        function
+        | WithType (Reg v, tc) ->
+            lift
+                (fun ctx -> (ctx, withType tc (Reg v)))
+                (pushMarkedVar ctx (withType tc v))
+        | WithType (Sym { Name = body; Params = ps }, tc) ->
+            tchainL
+                (tliftOverExpr collectSymMarkedVars)
+                (sym body >> withType tc)
+                ctx ps
 
 /// <summary>
 ///     Pretty printers for symbolics.
@@ -364,239 +415,15 @@ let unmarkMarkedVar =
 
 /// Takes a type annotated MarkedVar and strips away the Marked part of the Var
 /// i.e. (Int (Before s)) => (Int s)
-let unmark : CTyped<MarkedVar> -> TypedVar =
-    function
-    | Int a  -> Int <| unmarkMarkedVar a
-    | Bool a -> Bool <| unmarkMarkedVar a
+let unmark : CTyped<MarkedVar> -> TypedVar = mapCTyped unmarkMarkedVar
 
-let markedSymExprVars =
-    function
-    | Bool e -> mapOverSMVars Mapper.mapBoolCtx findSMVars e
-    | Int e -> mapOverSMVars Mapper.mapIntCtx findSMVars e
+let markedSymExprVars (expr : Expr<Sym<MarkedVar>>)
+  : Result<Set<CTyped<MarkedVar>>, TraversalError<'Error>> =
+    findMarkedVars (tliftOverExpr collectSymMarkedVars) expr
 
 /// Returns the set of all variables annotated with their types
 /// contained within the SMExpr
-let SMExprVars : SMExpr -> Set<TypedVar> =
+let SMExprVars : SMExpr -> Result<Set<TypedVar>, TraversalError<'Error>> =
     fun expr ->
         let smvars = markedSymExprVars expr
-        Set.map unmark smvars
-
-/// <summary>
-///     Tests for <c>Symbolic</c>.
-/// </summary>
-module Tests =
-    open NUnit.Framework
-    open Starling.Utils.Testing
-
-    /// <summary>
-    ///     NUnit tests for <c>Symbolic</c>.
-    /// </summary>
-    type NUnit () =
-        /// Test cases for testing constant post-state rewriting.
-        static member IntConstantPostStates =
-            [ TestCaseData(siVar "target1")
-                  .Returns(siAfter "target1")
-                  .SetName("Rewrite single variable to post-state")
-              TestCaseData(AAdd [AInt 4L; siVar "target1"])
-                  .Returns(AAdd [AInt 4L; siAfter "target1"])
-                  .SetName("Rewrite expression with one variable to post-state")
-              TestCaseData(ASub [siVar "target1"; siVar "target2"])
-                  .Returns(ASub [siAfter "target1"; siAfter "target2"])
-                  .SetName("Rewrite expression with two variables to post-state")
-              TestCaseData(ADiv (AInt 6L, AInt 0L) : SVIntExpr)
-                  .Returns(ADiv (AInt 6L, AInt 0L) : SMIntExpr)
-                  .SetName("Rewrite expression with no variables to post-state") ]
-
-        [<TestCaseSource("IntConstantPostStates")>]
-        /// Tests whether rewriting constants in arithmetic expressions to post-state works.
-        member x.``constants in arithmetic expressions can be rewritten to post-state`` expr =
-            expr |> Mapper.mapIntCtx after NoCtx |> snd
-
-        /// <summary>
-        ///     Test cases for testing underapproximation of Booleans.
-        /// </summary>
-        static member BoolApprox =
-            [ (tcd
-                   [| BAnd
-                          [ bEq
-                                (sbBefore "foo")
-                                (sbAfter "bar")
-                            BGt
-                                (siBefore "baz", AInt 1L) ]
-                      Position.positive |])
-                  .Returns(
-                    (Positions [ Positive ],
-                     ((BAnd
-                          [ bEq
-                                (sbBefore "foo")
-                                (sbAfter "bar")
-                            BGt
-                                (siBefore "baz", AInt 1L) ] ) : SMBoolExpr)))
-                  .SetName("Don't alter +ve symbol-less expression")
-              (tcd
-                   [| BVar
-                          (Sym
-                               { Name = "test"
-                                 Params = ([] : SMExpr list) } )
-                      Position.positive |])
-                  .Returns(
-                      (Positions [ Positive ], (BFalse : SMBoolExpr)))
-                  .SetName("Rewrite +ve param-less Bool symbol to false")
-              (tcd
-                   [| BVar
-                          (Sym
-                               { Name = "test"
-                                 Params = ([] : SMExpr list) } )
-                      Position.negative |])
-                  .Returns(
-                      (Positions [ Negative ], (BTrue : SMBoolExpr)))
-                  .SetName("Rewrite -ve param-less Bool symbol to true")
-              (tcd
-                   [| BVar
-                          (Sym { Name = "test"
-                                 Params =
-                                     ([ Expr.Int (siBefore "foo")
-                                        Expr.Bool (sbAfter "bar") ] : SMExpr list) } )
-                      Position.positive |])
-                  .Returns(
-                      (Positions [ Positive ], (BFalse : SMBoolExpr)))
-                  .SetName("Rewrite +ve Reg-params Bool symbol to false")
-              (tcd
-                   [| BVar
-                          (Sym { Name = "test"
-                                 Params =
-                                     ([ Expr.Int (siBefore "foo")
-                                        Expr.Bool (sbAfter "bar") ] : SMExpr list) } )
-                      Position.negative |])
-                  .Returns(
-                       (Positions [ Negative ], (BTrue : SMBoolExpr)))
-                  .SetName("Rewrite -ve Reg-params Bool symbol to true")
-              (tcd
-                   [| BImplies
-                          (BVar
-                               (Sym { Name = "test1"
-                                      Params =
-                                          ([ Expr.Int (siBefore "foo")
-                                             Expr.Bool (sbAfter "bar") ] : SMExpr list) } ),
-                           BVar
-                               (Sym { Name = "test2"
-                                      Params =
-                                          ([ Expr.Int (siBefore "baz")
-                                             Expr.Bool (sbAfter "barbaz") ] : SMExpr list) } ))
-                      Position.positive |])
-                  .Returns(
-                      (Positions [ Positive ],
-                       BImplies
-                           ((BTrue : SMBoolExpr),
-                            (BFalse : SMBoolExpr))))
-                  .SetName("Rewrite +ve implication correctly")
-              (tcd
-                   [| BImplies
-                          (BVar
-                               (Sym { Name = "test1"
-                                      Params =
-                                          ([ Expr.Int (siBefore "foo")
-                                             Expr.Bool (sbAfter "bar") ] : SMExpr list) } ),
-                           BVar
-                               (Sym { Name = "test2"
-                                      Params =
-                                          ([ Expr.Int (siBefore "baz")
-                                             Expr.Bool (sbAfter "barbaz") ] : SMExpr list) } ))
-                      Position.negative |])
-                  .Returns(
-                      (Positions [ Negative ],
-                       BImplies
-                           ((BFalse : SMBoolExpr),
-                            (BTrue : SMBoolExpr))))
-                  .SetName("Rewrite -ve implication correctly") ]
-
-        /// <summary>
-        ///     Tests whether Boolean underapproximation works.
-        /// </summary>
-        [<TestCaseSource("BoolApprox")>]
-        member this.testBoolApprox bl pos =
-            bl |> Mapper.mapBoolCtx approx pos
-
-        /// <summary>
-        ///     Test cases for finding variables in expressions.
-        /// </summary>
-        static member FindSMVarsCases =
-            [ (tcd
-                   [| Expr.Bool (BTrue : SMBoolExpr) |] )
-                  .Returns(Set.empty)
-                  .SetName("Finding vars in a Boolean primitive returns empty")
-              (tcd
-                   [| Expr.Int (AInt 1L : SMIntExpr) |] )
-                  .Returns(Set.empty)
-                  .SetName("Finding vars in an integer primitive returns empty")
-              (tcd
-                   [| Expr.Bool (sbBefore "foo") |] )
-                  .Returns(Set.singleton (CTyped.Bool (Before "foo")))
-                  .SetName("Finding vars in a Boolean var returns that var")
-              (tcd
-                   [| Expr.Int (siAfter "bar") |] )
-                  .Returns(Set.singleton (CTyped.Int (After "bar")))
-                  .SetName("Finding vars in an integer var returns that var")
-              (tcd
-                   [| Expr.Bool
-                          (BAnd
-                               [ BOr
-                                     [ sbBefore "foo"
-                                       sbAfter "baz" ]
-                                 BGt
-                                     ( siBefore "foobar",
-                                       siAfter "barbaz" ) ] ) |] )
-                  .Returns(
-                      Set.ofList
-                          [ CTyped.Bool (Before "foo")
-                            CTyped.Bool (After "baz")
-                            CTyped.Int (Before "foobar")
-                            CTyped.Int (After "barbaz") ])
-                  .SetName("Finding vars in a Boolean expression works correctly")
-              (tcd
-                   [| Expr.Int
-                         (AAdd
-                              [ ASub
-                                    [ siBefore "foo"
-                                      siAfter "bar" ]
-                                AMul
-                                    [ siBefore "foobar"
-                                      siAfter "barbaz" ]]) |])
-                  .Returns(
-                      Set.ofList
-                          [ CTyped.Int (Before "foo")
-                            CTyped.Int (After "bar")
-                            CTyped.Int (Before "foobar")
-                            CTyped.Int (After "barbaz") ])
-                  .SetName("Finding vars in an integer expression works correctly")
-              (tcd
-                   [| Expr.Bool
-                         (BVar
-                             (Sym
-                                  (func "foo"
-                                       [ Expr.Int (siBefore "bar")
-                                         Expr.Bool (sbAfter "baz") ] ))) |])
-                  .Returns(
-                      Set.ofList
-                          [ CTyped.Int (Before "bar")
-                            CTyped.Bool (After "baz") ])
-                  .SetName("Finding vars in an Boolean symbol works correctly")
-              (tcd
-                   [| Expr.Int
-                         (AVar
-                             (Sym
-                                  (func "foo"
-                                       [ Expr.Int (siBefore "bar")
-                                         Expr.Bool (sbAfter "baz") ] ))) |])
-                  .Returns(
-                      Set.ofList
-                          [ CTyped.Int (Before "bar")
-                            CTyped.Bool (After "baz") ])
-                  .SetName("Finding vars in an integer symbol works correctly") ]
-
-        /// <summary>
-        ///     Tests finding variables in symbolic expressions.
-        /// </summary>
-        [<TestCaseSource("FindSMVarsCases")>]
-        member this.testFindSMVars expr =
-            mapOverSMVars Mapper.mapCtx findSMVars expr
+        lift (Set.map unmark) smvars

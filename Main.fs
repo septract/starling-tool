@@ -25,9 +25,11 @@ open Starling.Core.Instantiate
 open Starling.Core.Instantiate.Pretty
 open Starling.Core.Command
 open Starling.Core.Command.Pretty
+open Starling.Core.Traversal
 open Starling.Core.View
 open Starling.Core.View.Pretty
 open Starling.Core.GuardedView
+open Starling.Core.GuardedView.Traversal
 open Starling.Core.GuardedView.Pretty
 open Starling.Core.Axiom
 open Starling.Core.Axiom.Pretty
@@ -261,6 +263,18 @@ type Error =
     /// </summary>
     | Reify of Reifier.Types.Error
     /// <summary>
+    ///     An error occurred during term generation.
+    /// </summary>
+    | TermGen of TermGen.Error
+    /// <summary>
+    ///     An error occurred during the graph optimiser pass.
+    /// </summary>
+    | GraphOptimiser of Optimiser.Types.GraphOptError
+    /// <summary>
+    ///     An error occurred during the term optimiser pass.
+    /// </summary>
+    | TermOptimiser of Optimiser.Types.TermOptError
+    /// <summary>
     ///     An error occurred during iterator lowering.
     /// </summary>
     | IterLowerError of TermGen.Iter.Error
@@ -269,6 +283,10 @@ type Error =
     ///     and/or uninterpreted viewdefs, but the filter failed.
     /// </summary>
     | ModelFilterError of Core.Instantiate.Types.Error
+    /// <summary>
+    ///     A main-level traversal went belly-up.
+    /// </summary>
+    | Traversal of TraversalError<Error>
     /// A stage was requested using the -s flag that does not exist.
     | BadStage
     /// A miscellaneous (internal) error has occurred.
@@ -281,15 +299,24 @@ type Error =
 /// <returns>
 ///     A <see cref="Doc"/> representing <paramref name="err"/>.
 /// </returns>
-let printError (err : Error) : Doc =
+let rec printError (err : Error) : Doc =
     match err with
     | Frontend e -> Lang.Frontend.printError e
     | Semantics e -> Semantics.Pretty.printSemanticsError e
     | HSF e -> Backends.Horn.Pretty.printError e
     | MuZ3 e -> Backends.MuZ3.Pretty.printError e
+    | GraphOptimiser e ->
+        headed "Graph optimiser failed"
+               [ Optimiser.Pretty.printGraphOptError e ]
+    | TermOptimiser e ->
+        headed "Term optimiser failed"
+               [ Optimiser.Pretty.printTermOptError e ]
     | Reify e ->
         headed "Reification failed"
                [ Reifier.Pretty.printError e ]
+    | TermGen e ->
+        headed "Term generation failed"
+               [ TermGen.Pretty.printError e ]
     | IterLowerError e ->
         headed "Iterator lowering failed"
                [ TermGen.Iter.printError e ]
@@ -303,6 +330,7 @@ let printError (err : Error) : Doc =
                    |> List.map (fst >> String)
                    |> commaSep ]
     | Other e -> String e
+    | Traversal err -> Core.Traversal.Pretty.printTraversalError printError err
 
 /// Prints an ok result to stdout.
 let printOk (pOk : 'Ok -> Doc) (pBad : 'Warn -> Doc)
@@ -434,12 +462,14 @@ let runStarling (request : Request)
     let frontend times rq =
         Lang.Frontend.run times rq Response.Frontend Error.Frontend
     let graphOptimise =
-        lift (fix <| Starling.Optimiser.Graph.optimise opts)
+        (fix (bind (Starling.Optimiser.Graph.optimise opts
+                    >> mapMessages Error.GraphOptimiser)))
     let termOptimise =
-        lift (fix <| Starling.Optimiser.Term.optimise opts)
+        (fix (bind (Starling.Optimiser.Term.optimise opts
+                    >> mapMessages Error.TermOptimiser)))
     let flatten = lift Starling.Flattener.flatten
     let reify = bind (Starling.Reifier.reify >> mapMessages Error.Reify)
-    let termGen = lift Starling.TermGen.termGen
+    let termGen = bind (Starling.TermGen.termGen >> mapMessages Error.TermGen)
     let iterLower =
         bind (Starling.TermGen.Iter.flatten >> mapMessages IterLowerError)
     let goalAdd = lift Starling.Core.Axiom.goalAdd

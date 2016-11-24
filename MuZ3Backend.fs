@@ -36,11 +36,11 @@ open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.View
-open Starling.Core.View.Sub
+open Starling.Core.View.Traversal
 open Starling.Core.GuardedView
-open Starling.Core.GuardedView.Sub
+open Starling.Core.GuardedView.Traversal
 open Starling.Core.Instantiate
-open Starling.Core.Sub
+open Starling.Core.Traversal
 open Starling.Core.Z3
 open Starling.Reifier
 open Starling.Optimiser
@@ -59,6 +59,10 @@ module Types =
         ///     MuZ3 can't check the given deferred check.
         /// </summary>
         | CannotCheckDeferred of check : DeferredCheck * why : string
+        /// <summary>
+        ///     One of our traversals bought the farm.
+        /// </summary>
+        | Traversal of err : TraversalError<Error>
 
 
     /// <summary>
@@ -131,6 +135,7 @@ module Pretty =
     open Starling.Core.View.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Instantiate.Pretty
+    open Starling.Core.Traversal.Pretty
     open Starling.Core.Z3.Pretty
 
     /// <summary>
@@ -140,7 +145,7 @@ module Pretty =
     /// <returns>
     ///     A <see cref="Doc"/> representing <paramref name="err"/>.
     /// </returns>
-    let printError (err : Error) : Doc =
+    let rec printError (err : Error) : Doc =
         match err with
         | CannotCheckDeferred (check, why) ->
             error
@@ -148,6 +153,7 @@ module Pretty =
                  <-> printDeferredCheck check
                  <-> String "' failed:"
                  <+> String why)
+        | Traversal err -> printTraversalError printError err
 
     /// Pretty-prints a MuSat.
     let printMuSat : MuSat -> Doc =
@@ -317,7 +323,7 @@ module Translator =
                         The parameters of a DFunc are in parameter format,
                         which we need to convert to expression format first.
                         dex uses Unmarked constants, so we do too. *)
-                     let eparams = List.map (mkVarExp id) vs.Params
+                     let eparams = List.map mkVarExp vs.Params
                      let vfunc = { Name = vs.Name ; Params = eparams }
 
                      (vfunc, dex))
@@ -533,49 +539,68 @@ module Translator =
     /// </returns>
     let mkRule
       (reals : bool)
-      (toVar : 'var -> Var)
+      (toVar : 'Var -> Var)
       (ctx : Z3.Context)
       (funcDecls : Map<string, Z3.FuncDecl>)
-      (bodyExpr : BoolExpr<'var>)
-      (bodyView : GView<'var>)
-      (head : VFunc<'var>)
-      : Z3.BoolExpr option =
-        let vsub = (liftCToSub (Mapper.cmake toVar))
+      (bodyExpr : BoolExpr<'Var>)
+      (bodyView : GView<'Var>)
+      (head : VFunc<'Var>)
+      : Result<Z3.BoolExpr option, Error> =
+        // We use a _lot_ of traversals in this function!
+        let toVarTrav : Traversal<CTyped<'Var>, Expr<Var>, Error> =
+            tliftToExprDest
+                (tliftOverCTyped (ignoreContext (toVar >> ok)))
+        let toVarTravExpr = tliftToExprSrc toVarTrav
+        let toVarTravBool = tLiftToBoolSrc toVarTrav
+        let toVarTravGView = tchainM (tliftOverGFunc toVarTravExpr) id
+        let toVarTravVFunc = tliftOverFunc toVarTravExpr
 
-        // First, make everything use string variables.
-        let _, bodyExpr' = Mapper.mapBoolCtx vsub NoCtx bodyExpr
-        let _, bodyView' = subExprInGView vsub NoCtx bodyView
-        let _, head' = subExprInVFunc vsub NoCtx head
+        let findVarTrav : Traversal<TypedVar, Expr<Var>, Error> =
+            tliftToExprDest collectVars
+        let findVarTravExpr = tliftToExprSrc findVarTrav
+        let findVarTravBool = tLiftToBoolSrc findVarTrav
+        let findVarTravGView = tchainM (tliftOverGFunc findVarTravExpr) id
+        let findVarTravVFunc = tliftOverFunc findVarTravExpr
 
-        let vars =
-            seq {
-                yield! (mapOverVars Mapper.mapBoolCtx findVars bodyExpr')
+        trial {
+            // First, make everything use string variables.
+            let! bodyExpr' =
+                mapMessages Traversal (mapTraversal toVarTravBool bodyExpr)
+            let! bodyView' =
+                mapMessages Traversal (mapTraversal toVarTravGView bodyView)
+            let! head' =
+                mapMessages Traversal (mapTraversal toVarTravVFunc head)
 
-                for gfunc in Multiset.toFlatList bodyView' do
-                    yield! (mapOverVars Sub.subExprInGFunc findVars gfunc)
+            // Then, collect those variables.
+            let! bodyExprVars =
+                mapMessages Traversal (findVars findVarTravBool bodyExpr')
+            let! bodyViewVars =
+                mapMessages Traversal (findVars findVarTravGView bodyView')
+            let! headVars =
+                mapMessages Traversal (findVars findVarTravVFunc head')
 
-                yield! (mapOverVars Sub.subExprInVFunc findVars head')
-            }
-            // Make sure we don't quantify over a variable twice.
-            |> Set.ofSeq
-            |> Set.map (fun p ->
-                            ctx.MkConst (p |> valueOf,
-                                         p |> typeOf |> typeToSort reals ctx))
-            |> Set.toArray
+            // Now convert the variables to Z3 constants.
+            let varToConst (var : TypedVar) =
+                ctx.MkConst (valueOf var, typeToSort reals ctx (typeOf var))
+            // We use a set here so that we don't quantify over variables twice.
+            let varSet = Set.unionMany [ bodyExprVars; bodyViewVars; headVars ]
+            let varConstSet = Set.map varToConst varSet
+            let vars = Set.toArray varConstSet
 
-        let bodyExprZ = boolToZ3 reals id ctx bodyExpr'
+            let bodyExprZ = boolToZ3 reals id ctx bodyExpr'
 
-        let bodyZ =
-            if (Multiset.length bodyView = 0)
-            then bodyExprZ
-            else
-                ctx.MkAnd
-                    [| bodyExprZ
-                       translateGView reals id ctx funcDecls bodyView' |]
+            let bodyZ =
+                if (Multiset.length bodyView = 0)
+                then bodyExprZ
+                else
+                    ctx.MkAnd
+                        [| bodyExprZ
+                           translateGView reals id ctx funcDecls bodyView' |]
 
-        let headZ = translateVFunc reals id ctx funcDecls head'
+            let headZ = translateVFunc reals id ctx funcDecls head'
 
-        mkQuantifiedEntailment ctx vars bodyZ headZ
+            return mkQuantifiedEntailment ctx vars bodyZ headZ
+        }
 
     (*
      * Deferred checks
@@ -641,7 +666,7 @@ module Translator =
             Multiset.singleton (gfunc BTrue "emp" (Seq.map varToExpr svarSeq))
 
         let ruleR =
-            lift
+            bind
                 (fun zeroFunc ->
                     mkRule reals id ctx funcDecls BTrue empFunc zeroFunc)
                 zeroFuncR
@@ -682,7 +707,7 @@ module Translator =
             lift (fun it -> mkGe (AVar it) (AInt 0L)) iterVarResult
 
         let ruleResult =
-            lift3
+            bind3
                 (mkRule reals id ctx funcDecls)
                 guardResult
                 succViewResult
@@ -743,7 +768,7 @@ module Translator =
         let vpars =
             svars
             |> Map.toList
-            |> List.map (fun (v, t) -> mkVarExp id (withType t v))
+            |> List.map (fun (v, t) -> mkVarExp (withType t v))
 
         // TODO(CaptainHayashi): actually get these initialisations from
         // somewhere.
@@ -758,10 +783,8 @@ module Translator =
 
         let head = { Name = "emp" ; Params = vpars }
 
-        mkRule reals id ctx funcDecls body Multiset.empty head
-        |> function
-           | Some x -> Seq.singleton ("init", x)
-           | None -> Seq.empty
+        let ruleResult = mkRule reals id ctx funcDecls body Multiset.empty head
+        lift (maybe Seq.empty (fun x -> Seq.singleton ("init", x))) ruleResult
 
 
     (*
@@ -793,8 +816,9 @@ module Translator =
       (ctx : Z3.Context)
       (funcDecls : Map<string, Z3.FuncDecl>)
       (name : string, {Cmd = c ; WPre = w ; Goal = g} : CmdTerm<MBoolExpr, GView<MarkedVar>, MVFunc>)
-      : (string * Z3.BoolExpr) option =
-        mkRule reals unmarkVar ctx funcDecls c.Semantics w g |> Option.map (mkPair name)  // TODO: keep around Command?
+      : Result<(string * Z3.BoolExpr) option, Error> =
+        let ruleResult = mkRule reals unmarkVar ctx funcDecls c.Semantics w g
+        lift (Option.map (mkPair name)) ruleResult  // TODO: keep around Command?
 
     /// <summary>
     ///     Constructs muZ3 rules and goals for a model.
@@ -818,20 +842,24 @@ module Translator =
                  FuncDefiner<BoolExpr<Var> option>> )
       : Result<MuModel, Error> =
         let funcDecls, definites = translateViewDefs reals ctx ds
-        let vrules = translateVariables reals ctx funcDecls svars
+        let vrulesResult = translateVariables reals ctx funcDecls svars
 
         let axseq = Map.toSeq xs
-        let trules = Seq.choose (translateTerm reals ctx funcDecls) axseq
+        let tMaybeRulesResult =
+            collect (Seq.map (translateTerm reals ctx funcDecls) axseq)
+        let trulesResult = lift (Seq.choose id) tMaybeRulesResult
 
         let tdc = translateDeferredCheck reals ctx funcDecls svars
         let drulesResult = lift (Seq.choose id) (collect (Seq.map tdc cs))
 
-        lift
-            (fun drules ->
+        lift3
+            (fun drules vrules trules ->
                 { Definites = List.ofSeq definites
                   Rules = Map.ofSeq (Seq.concat [ drules; vrules; trules ])
                   FuncDecls = funcDecls })
             drulesResult
+            vrulesResult
+            trulesResult
 
 
 /// <summary>
@@ -863,35 +891,38 @@ module Run =
       (unsafeapp : Z3.BoolExpr)
       (view : VFunc<Var>)
       (def : BoolExpr<Var>)
-      : unit =
+      : Result<unit, Error> =
         (* To model a view definition, we introduce an if and only if.
            This can't be modelled directly in MuZ3, so instead we split it
            into two implications.
 
            This is the 'def => view' part. *)
-        let defImpliesView =
+        let defImpliesViewR =
             Translator.mkRule
                 shouldUseRealsForInts id ctx funcDecls def Multiset.empty view
-        Option.iter fixedpoint.AddRule defImpliesView
+        let defImpliesViewAddR =
+            lift (Option.iter fixedpoint.AddRule) defImpliesViewR
 
-        // TODO(CaptainHayashi): de-duplicate this with mkRule.
-        let vars =
-            Set.ofSeq
-                (seq {
-                    yield! (mapOverVars Mapper.mapBoolCtx findVars def)
-                    for param in view.Params do
-                        yield! (mapOverVars Mapper.mapCtx findVars param)
-                })
+        // TODO(CaptainHayashi): de-duplicate this with mkRule?
+        let defVarsR =
+            findVars (tLiftToBoolSrc (tliftToExprDest collectVars)) def
+        let paramVarsR =
+            findVars
+                (tchainL (tliftOverExpr collectVars) id)
+                view.Params
+        let varsR =
+            mapMessages Traversal
+                (lift2 Set.union defVarsR paramVarsR)
 
-        let z3Vars =
-            Set.toArray
-                (Set.map
-                    (fun (var : TypedVar) ->
-                        ctx.MkConst
-                            (valueOf var,
-                             Translator.typeToSort
-                                shouldUseRealsForInts ctx (typeOf var)))
-                    vars)
+        let z3VarsR =
+              lift
+                  (Set.map
+                      (fun (var : CTyped<Var>) ->
+                          ctx.MkConst
+                              (valueOf var,
+                               Translator.typeToSort shouldUseRealsForInts ctx (typeOf var)))
+                   >> Set.toArray)
+                  varsR
 
         (* This is the 'view => def' part.
            We can't model this directly in MuZ3 because the head of a MuZ3
@@ -899,15 +930,19 @@ module Run =
            Instead, we rearrange to 'view && !def => unsafe', where unsafe is
            a stand-in for some notion of false. *)
         // TODO(CaptainHayashi): in practice this appears to be unsound.
-        let viewImpliesDef =
-            Translator.mkQuantifiedEntailment
-                ctx
-                z3Vars
-                (ctx.MkAnd [| boolToZ3 shouldUseRealsForInts id ctx (mkNot def)
-                              Translator.translateVFunc
-                                  shouldUseRealsForInts id ctx funcDecls view |])
-                unsafeapp
-        Option.iter fixedpoint.AddRule viewImpliesDef
+        let viewImpliesDefR =
+            lift
+                (fun z3Vars ->
+                    Translator.mkQuantifiedEntailment
+                        ctx
+                        z3Vars
+                        (ctx.MkAnd [| boolToZ3 shouldUseRealsForInts id ctx (mkNot def)
+                                      Translator.translateVFunc shouldUseRealsForInts id ctx funcDecls view |])
+                        unsafeapp)
+                z3VarsR
+        lift2 (fun _ -> Option.iter fixedpoint.AddRule)
+            defImpliesViewR
+            viewImpliesDefR
 
     /// <summary>
     ///     Generates a MuZ3 fixedpoint.
@@ -928,7 +963,7 @@ module Run =
       (reals : bool)
       (ctx : Z3.Context)
       ({ Definites = ds; Rules = rs ; FuncDecls = fm } : MuModel)
-      : (Z3.Fixedpoint * Z3.FuncDecl) =
+      : Result<(Z3.Fixedpoint * Z3.FuncDecl), Error> =
         let fixedpoint = ctx.MkFixedpoint ()
 
         let pars = ctx.MkParams ()
@@ -939,12 +974,15 @@ module Run =
         fixedpoint.RegisterRelation unsafe
         let unsafeapp = unsafe.Apply [| |] :?> Z3.BoolExpr
 
-        List.iter (uncurry (genViewDefRule reals ctx fm fixedpoint unsafeapp)) ds
+        let viewDefRulesResult =
+            collect (List.map (uncurry (genViewDefRule reals ctx fm fixedpoint unsafeapp)) ds)
 
-        Map.iter (fun (s : string) g -> fixedpoint.AddRule (g, ctx.MkSymbol s :> Z3.Symbol)) rs
-        Map.iter (fun _ g -> fixedpoint.RegisterRelation g) fm
+        lift (fun _ ->
+            Map.iter (fun (s : string) g -> fixedpoint.AddRule (g, ctx.MkSymbol s :> Z3.Symbol)) rs
+            Map.iter (fun _ g -> fixedpoint.RegisterRelation g) fm
 
-        (fixedpoint, unsafe)
+            (fixedpoint, unsafe))
+            viewDefRulesResult
 
     /// <summary>
     ///     Runs a MuZ3 fixedpoint.
@@ -985,7 +1023,7 @@ let run (reals : bool) (req : Request)
         >> lift Response.Translate
     | Request.Fix ->
         Translator.translate reals ctx
-        >> lift (Run.fixgen reals ctx >> Response.Fix)
+        >> bind (Run.fixgen reals ctx >> lift Response.Fix)
     | Request.Sat ->
         Translator.translate reals ctx
-        >> lift (Run.fixgen reals ctx >> uncurry Run.run >> Response.Sat)
+        >> bind (Run.fixgen reals ctx >> lift (uncurry Run.run >> Response.Sat))

@@ -3,6 +3,7 @@
 /// </summary>
 module Starling.Tests.Semantics
 
+open Chessie.ErrorHandling
 open NUnit.Framework
 open Starling
 open Starling.Collections
@@ -22,8 +23,10 @@ open Starling.Tests.Studies
 module Compositions =
     let check xs expectedExprList =
         match seqComposition xs with
-        | BAnd ands ->
-            Assert.AreEqual (Set.ofList expectedExprList, Set.ofList ands)
+        | Ok (BAnd ands, _) ->
+            assertEqual (Set.ofList expectedExprList) (Set.ofList ands)
+        | Bad x ->
+            Assert.Fail (sprintf "sequential composition failed: %A" x)
         | y -> Assert.Fail (sprintf "Expected %A but got %A" expectedExprList y)
 
     [<Test>]
@@ -94,16 +97,18 @@ module Compositions =
 
 module Frames =
     let check var expectedFramedExpr =
-        Assert.AreEqual(expectedFramedExpr, frameVar Before var)
+        expectedFramedExpr ?=? (frameVar Before var)
 
     let checkExpr expr framedExpr =
-        let actualExpr =
-            frame
+        assertOkAndEqual
+            framedExpr
+            (frame
                 (ticketLockModel.SharedVars)
                 (ticketLockModel.ThreadVars)
-                expr
-
-        Assert.AreEqual(actualExpr, framedExpr)
+                expr)
+            (Starling.Core.Traversal.Pretty.printTraversalError
+                Starling.Semantics.Pretty.printSemanticsError
+             >> Starling.Core.Pretty.printUnstyled)
 
     [<Test>]
     let ``Frame an integer variable`` () =
@@ -116,7 +121,7 @@ module Frames =
     // Test cases for the expression framer.
     [<Test>]
     let ``Frame id using the ticket lock model`` () =
-        checkExpr BTrue 
+        checkExpr BTrue
               <| [ iEq (siAfter "serving") (siBefore "serving")
                    iEq (siAfter "ticket") (siBefore "ticket")
                    iEq (siAfter "s") (siBefore "s")
@@ -141,12 +146,15 @@ module CommandTests =
                    (Starling.Lang.Modeller.coreSemantics)
                    (ticketLockModel.SharedVars)
                    (ticketLockModel.ThreadVars)
-            |> okOption
-            |> Option.bind (function
-                            | { Semantics = BAnd xs } -> xs |> Set.ofList |> Some
-                            | _ -> None)
+            |> lift (function
+                     | { Semantics = BAnd xs } -> xs |> Set.ofList |> Some
+                     | _ -> None)
 
-        Assert.AreEqual(expectedValues, actualValues)
+        let pError =
+            Starling.Semantics.Pretty.printSemanticsError
+            >> Starling.Core.Pretty.printUnstyled
+
+        assertOkAndEqual expectedValues actualValues pError
 
     [<Test>]
     let ``Semantically translate <assume(s == t)> using the ticket lock model`` () =

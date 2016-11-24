@@ -20,6 +20,7 @@ open Starling.Core.Axiom
 open Starling.Core.Command
 open Starling.Core.GuardedView
 open Starling.Core.Symbolic
+open Starling.Core.Traversal
 
 
 /// <summary>
@@ -188,6 +189,10 @@ module Types =
         ///     The given edge was duplicated when trying to merge graphs.
         /// </summary>
         | DuplicateEdge of id: EdgeID
+        /// <summary>
+        ///     A traversal used in graph processing failed.
+        /// </summary>
+        | Traversal of err : TraversalError<Error>
 
 
 /// <summary>
@@ -830,15 +835,12 @@ module Pretty =
     /// <summary>
     ///     Pretty-prints graph construction errors.
     /// </summary>
-    /// <param name="_arg1">
-    ///     The graph error to print.
-    /// </param>
+    /// <param name="err">The graph error to print.</param>
     /// <returns>
-    ///     A pretty-printer command that prints
-    ///     <paramref name="_arg1" />.
+    ///     A pretty-printer command that prints <paramref name="err" />.
     /// </returns>
-    let printError : Error -> Doc =
-        function
+    let rec printError (err : Error) : Doc =
+        match err with
         | EdgeOutOfBounds edge ->
             colonSep
                 [ String "edge out of bounds: "
@@ -847,3 +849,4 @@ module Pretty =
             colonSep [ String "node duplicated: "; String node ]
         | DuplicateEdge edge ->
             colonSep [ String "edge duplicated: "; String edge ]
+        | Traversal err -> Starling.Core.Traversal.Pretty.printTraversalError printError err

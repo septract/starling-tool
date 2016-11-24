@@ -15,6 +15,8 @@ open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.GuardedView
 open Starling.Core.Symbolic
+open Starling.Core.Symbolic.Traversal
+open Starling.Core.Traversal
 open Starling.Core.TypeSystem
 open Starling.TermGen.Iter
 
@@ -108,6 +110,10 @@ module Types =
         ///     </para>
         /// </summary>
         | SymInIteratedConstraint of sym : string
+        /// <summary>
+        ///     An expression traversal went belly-up.
+        /// </summary>
+        | Traversal of TraversalError<Error>
 
 
 /// <summary>
@@ -120,7 +126,7 @@ module Types =
 /// </summary>
 module Downclosure =
     open Starling.Core.ExprEquiv
-    open Starling.Core.Sub
+    open Starling.Core.Traversal
 
     /// <summary>
     ///     Adapts Instantiate.lookup to the downclosure checker's needs.
@@ -156,10 +162,19 @@ module Downclosure =
     let mapOverIteratorUses (f : Var -> IntExpr<Sym<Var>>)
       (iterator : Var)
       (defn : BoolExpr<Sym<Var>>)
-      : BoolExpr<Sym<Var>> =
-        let fOnIter var = if var = iterator then f var else AVar (Reg var)
-        let m = onVars (liftVToSym (Mapper.make fOnIter (Reg >> BVar)))
-        snd (Mapper.mapBoolCtx m NoCtx defn)
+      : Result<BoolExpr<Sym<Var>>, Error> =
+        let fOnIter (var : TypedVar) : Result<Expr<Sym<Var>>, Error> =
+            ok
+                (match var with
+                 | Int v when v = iterator -> Int (f v)
+                 | tv -> mkVarExp (mapCTyped Reg tv))
+
+        let mapper =
+            liftWithoutContext
+                fOnIter
+                (tliftToTypedSymVarSrc >> tLiftToBoolSrc)
+
+        mapMessages Traversal (mapper defn)
 
     /// <summary>
     ///     Runs a downclosure check using Z3.
@@ -173,11 +188,12 @@ module Downclosure =
     let runDownclosureCheck (check : BoolExpr<Sym<Var>>) : Result<bool, Error> =
         // Expression equivalence cannot handle symbols, so try remove them.
         // TODO(CaptainHayashi): is it sound to approximate here?
-        // TODO(CaptainHayashi): perhaps defer check instead
-        let _, removeResult =
-            Mapper.mapBoolCtx (tsfRemoveSym SymInIteratedConstraint) NoCtx check
+        let removeResult =
+            mapTraversal (removeSymFromBoolExpr SymInIteratedConstraint) check
         // If check is a tautology, it will be equivalent to 'true'.
-        lift (equiv BTrue >> equivHolds id) removeResult
+        lift
+            (equiv BTrue >> equivHolds id)
+            (mapMessages Traversal removeResult)
 
     /// <summary>
     ///     Checks the base downclosure property.
@@ -206,7 +222,8 @@ module Downclosure =
       : Result<DeferredCheck list, Error> =
         (* To do the base downclosure, we need to replace all instances of the
            iterator in the definition with 0. *)
-        let baseDefn = mapOverIteratorUses (fun _ -> AInt 0L) iterator defn
+        let baseDefnR =
+            mapOverIteratorUses (fun _ -> AInt 0L) iterator defn
 
         // If emp is indefinite (None), defer this base downclosure check.
         match empDefn with
@@ -220,13 +237,14 @@ module Downclosure =
 
                The definition of emp can only mention global variables, so it
                need not need to be freshened. *)
-            let check = mkImplies ed baseDefn
+            let checkR = lift (mkImplies ed) baseDefnR
+            let baseHoldsR = bind runDownclosureCheck checkR
             bind
                 (fun baseHolds ->
                     if baseHolds
                     then ok deferred
                     else fail (BaseDownclosureError ([func], defn, ed)))
-                (runDownclosureCheck check)
+                baseHoldsR
 
     /// <summary>
     ///     Checks the inductive downclosure property.
@@ -255,22 +273,34 @@ module Downclosure =
       : Result<DeferredCheck list, Error> =
         (* To do the inductive downclosure, we need to replace all instances of
            the iterator in the definition with (iterator + 1) in one version. *)
-        let succDefn = mapOverIteratorUses (Reg >> incVar) iterator defn
+        let succDefnR = mapOverIteratorUses (Reg >> incVar) iterator defn
 
         (* Inductive downclosure for a view V[n](x):
-             (0 <= n) => (D(V[n+1](x)) => D(V[n](x)))
+             (0 <= n && D(V[n+1](x)) => D(V[n](x)))
            That is, the definition of V when the iterator is n+1 implies the
            definition of V when the iterator is n, for all positive n. *)
-        let check =
-            mkImplies
-                (mkLe (AInt 0L) (AVar (Reg iterator)))
-                (mkImplies succDefn defn)
+        let checkR =
+            lift
+                (fun succDefn ->
+                    mkImplies
+                        (mkAnd2
+                            (mkLe (AInt 0L) (AVar (Reg iterator)))
+                            succDefn)
+                        defn)
+                succDefnR
+
+        let indHoldsR = bind runDownclosureCheck checkR
+
         bind
             (fun indHolds ->
                 if indHolds
                 then ok deferred
-                else fail (InductiveDownclosureError ([func], succDefn, defn)))
-            (runDownclosureCheck check)
+                else
+                    bind
+                        (fun succDefn ->
+                            fail (InductiveDownclosureError ([func], succDefn, defn)))
+                        succDefnR)
+            indHoldsR
 
     /// <summary>
     ///     Checks the base and inductive downclosure properties on a given
@@ -700,12 +730,13 @@ module Pretty =
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.View.Pretty
+    open Starling.Core.Traversal.Pretty
 
     /// <summary>
     ///     Pretty-prints an <see cref="Error"/>.
     /// </summary>
-    let printError : Error -> Doc =
-        function
+    let rec printError (err : Error) : Doc =
+        match err with
         | InductiveDownclosureError (view, sdef, bdef) ->
             headed "Iterated view does not satisfy inductive downclosure property"
                 [ errorInfo <|
@@ -757,4 +788,5 @@ module Pretty =
         | SymInIteratedConstraint sym ->
             fmt "symbol '{0}' not allowed in an iterated constraint"
                 [ String sym ]
-        >> error
+        | Traversal err -> printTraversalError printError err
+        |> error

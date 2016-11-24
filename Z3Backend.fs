@@ -26,8 +26,9 @@ open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.GuardedView
 open Starling.Core.Instantiate
-open Starling.Core.Sub
+open Starling.Core.Traversal
 open Starling.Core.Symbolic
+open Starling.Core.Symbolic.Traversal
 open Starling.Core.TypeSystem
 open Starling.Core.Z3
 
@@ -260,8 +261,8 @@ let runZ3OnModel (shouldUseRealsForInts : bool)
        Suppress the Chessie error that happens if we can't, because in that case
        we just return a 'Z3 can't prove this' result. *)
     let removeSym bexp =
-        let _, res = Mapper.mapBoolCtx (tsfRemoveSym id) NoCtx bexp
-        okOption res
+        let result = mapTraversal (removeSymFromBoolExpr ignore) bexp
+        okOption result
 
     let z3Term (term : SymProofTerm) : ZTerm =
         (* If the user asked for approximation, then, instead of taking the
@@ -276,7 +277,7 @@ let runZ3OnModel (shouldUseRealsForInts : bool)
         let goalO = maybe (removeSym symbool.Goal) (fun t -> Some t.Goal) approx
 
         // First, populate the term without Z3 results.
-        let zTermWithNoZ3 = 
+        let zTermWithNoZ3 =
             { Original = term.Original
               SymBool = term.SymBool
               Z3 = None

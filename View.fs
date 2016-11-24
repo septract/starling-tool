@@ -357,89 +357,29 @@ let isAdvisory =
 
 
 /// <summary>
-///     Functions for substituting over model elements.
+///     Functions for traversing over views and funcs.
 /// </summary>
-module Sub =
-    open Starling.Core.Sub
+module Traversal =
+    open Starling.Core.Traversal
 
     /// <summary>
-    ///   Maps a <c>SubFun</c> over all expressions in a <c>VFunc</c>.
+    ///   Lifts a <c>Traversal</c> over all parameters in a func.
     /// </summary>
-    /// <param name="sub">
-    ///   The <c>SubFun</c> to map over all expressions in the <c>VFunc</c>.
+    /// <param name="traversal">
+    ///   The <c>Traversal</c> to map over all parameters in the func.
     /// </param>
-    /// <param name="context">
-    ///     The context to pass to the <c>SubFun</c>.
-    /// </param>
-    /// <param name="_arg1">
-    ///   The <c>VFunc</c> over which whose expressions are to be mapped.
-    /// </param>
-    /// <typeparam name="srcVar">
-    ///     The type of variables entering the map.
+    /// <typeparam name="SrcPar">
+    ///     The type of parameters before traversal.
     /// </typeparam>
-    /// <typeparam name="dstVar">
-    ///     The type of variables leaving the map.
+    /// <typeparam name="DstPar">
+    ///     The type of parameters after traversal.
     /// </typeparam>
-    /// <returns>
-    ///   The <c>VFunc</c> resulting from the mapping.
-    /// </returns>
-    /// <remarks>
-    ///   <para>
-    ///     The expressions in a <c>VFunc</c> are its parameters.
-    ///   </para>
-    /// </remarks>
-    let subExprInVFunc
-      (sub : SubFun<'srcVar, 'dstVar>)
-      (context : SubCtx)
-      ( { Name = n ; Params = ps } : VFunc<'srcVar> )
-      : (SubCtx * VFunc<'dstVar> ) =
-        let context', ps' =
-            mapAccumL
-                (Position.changePos id (Mapper.mapCtx sub))
-                context
-                ps
-        (context', { Name = n; Params = ps' } )
-
-    /// <summary>
-    ///     Maps a <c>TrySubFun</c> over all expressions in a <c>VFunc</c>.
-    /// </summary>
-    /// <param name="sub">
-    ///     The <c>TrySubFun</c> to map over all expressions in the <c>VFunc</c>.
-    /// </param>
-    /// <param name="context">
-    ///     The context to pass to the <c>SubFun</c>.
-    /// </param>
-    /// <param name="_arg1">
-    ///     The <c>VFunc</c> over which whose expressions are to be mapped.
-    /// </param>
-    /// <typeparam name="srcVar">
-    ///     The type of variables entering the map.
-    /// </typeparam>
-    /// <typeparam name="dstVar">
-    ///     The type of variables leaving the map.
-    /// </typeparam>
-    /// <typeparam name="err">
+    /// <typeparam name="Error">
     ///     The type of any returned errors.
     /// </typeparam>
-    /// <returns>
-    ///     The Chessie-wrapped <c>VFunc</c> resulting from the mapping.
-    /// </returns>
-    /// <remarks>
-    ///     <para>
-    ///         The expressions in a <c>VFunc</c> are its parameters.
-    ///     </para>
-    /// </remarks>
-    let trySubExprInVFunc
-      (sub : TrySubFun<'srcVar, 'dstVar, 'err>)
-      (context : SubCtx)
-      ( { Name = n ; Params = ps } : VFunc<'srcVar> )
-      : (SubCtx * Result<VFunc<'dstVar>, 'err>) =
-        let context', ps' =
-            mapAccumL
-                (Position.changePos id (Mapper.tryMapCtx sub))
-                context
-                ps
-        (context',
-         ps'
-         |> collect
-         |> lift (fun ps' -> { Name = n ; Params = ps' } ))
+    /// <returns>The lifted <see cref="Traversal"/>.</returns>
+    let tliftOverFunc
+      (traversal : Traversal<'SrcPar, 'DstPar, 'Error>)
+      : Traversal<Func<'SrcPar>, Func<'DstPar>, 'Error> =
+        fun context { Name = n ; Params = ps } ->
+            tchainL traversal (func n) context ps

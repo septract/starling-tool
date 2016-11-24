@@ -97,6 +97,29 @@ module FuncDefiner =
         Seq.toList fseq
 
     /// <summary>
+    ///     Merges two definers.
+    /// </summary>
+    /// <param name="x">The first <see cref="FuncDefiner"/> to merge.</param>
+    /// <param name="y">The second <see cref="FuncDefiner"/> to merge.</param>
+    /// <typeparam name="Defn">
+    ///     The type of <c>Func</c> definitions.  May be <c>unit</c>.
+    /// </typeparam>
+    /// <returns>
+    ///     The <see cref="FuncDefiner"/> containing definitions from both
+    ///     <paramref name="x"/> and <paramref name="y"/>.
+    /// </returns>
+    /// <remarks>
+    ///    This does not yet check for duplicates.
+    /// </remarks>
+    let combine
+      (x : FuncDefiner<'Defn>) (y : FuncDefiner<'Defn>) : FuncDefiner<'Defn> =
+        // TODO(CaptainHayashi): duplicate checking.
+        let xs = toSeq x
+        let ys = toSeq y
+        let xys = Seq.append x y
+        ofSeq xys
+
+    /// <summary>
     ///     Checks whether <c>func</c> and <c>_arg1</c> agree on parameter
     ///     count.
     /// </summary>

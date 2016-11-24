@@ -11,11 +11,12 @@ open Starling.Core.Definer
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.View
-open Starling.Core.View.Sub
+open Starling.Core.View.Traversal
 open Starling.Core.GuardedView
-open Starling.Core.GuardedView.Sub
-open Starling.Core.Sub
+open Starling.Core.GuardedView.Traversal
+open Starling.Core.Traversal
 open Starling.Core.Symbolic
+open Starling.Core.Symbolic.Traversal
 open Starling.Core.Model
 open Starling.Core.Command
 open Starling.Core.Axiom
@@ -25,6 +26,16 @@ open Starling.Core.Var
 ///     Type of variables in funcs and views handled by TermGen.
 /// </summary>
 type TermGenVar = Sym<MarkedVar>
+
+/// <summary>
+///     Type of errors returned by the term generator.
+/// </summary>
+type Error =
+    /// <summary>
+    ///     An error occurred during traversal.
+    ///     This error may contain nested semantics errors!
+    /// </summary>
+    | Traversal of TraversalError<Error>
 
 /// <summary>
 ///     Normalises the iterator of an iterated func stored multiple times in a
@@ -195,7 +206,7 @@ let termGenWPreMinus
 /// Generates a (weakest) precondition from a framed axiom.
 let termGenWPre
   (gax : GoalAxiom<'cmd>)
-  : IteratedGView<Sym<MarkedVar>> =
+  : Result<IteratedGView<Sym<MarkedVar>>, Error> =
     (* Theoretically speaking, this is crunching an axiom {P} C {Q} and
      * goal view R into (P * (R \ Q)), where R \ Q is the weakest frame.
      * Remember that * is multiset append.
@@ -206,23 +217,51 @@ let termGenWPre
      * and those in post to their post-state.  This is sound because, at this
      * stage, both sides only contain local variables.
      *)
-    let _, pre = subExprInIteratedGView before NoCtx gax.Axiom.Pre
-    let _, post = subExprInIteratedGView after NoCtx gax.Axiom.Post
+    let markView mark =
+        mapTraversal
+            (tchainM
+                (tliftOverIteratedGFunc
+                    (tliftOverExpr (traverseTypedSymWithMarker mark)))
+                id)
+        >> mapMessages Traversal
+
+    let preResult = markView Before gax.Axiom.Pre
+    let postResult = markView After gax.Axiom.Post
     let goal = gax.Goal
 
-    Multiset.append pre (termGenWPreMinus goal post)
+    lift2 (fun pre post -> Multiset.append pre (termGenWPreMinus goal post))
+        preResult
+        postResult
 
 /// Generates a term from a goal axiom.
 let termGenAxiom (gax : GoalAxiom<'cmd>)
-  : Term<'cmd, IteratedGView<Sym<MarkedVar>>, IteratedOView> =
-    { WPre = termGenWPre gax
-      Goal = gax.Goal
-      Cmd = gax.Axiom.Cmd }
+  : Result<Term<'cmd, IteratedGView<Sym<MarkedVar>>, IteratedOView>, Error> =
+    lift (fun wpre -> { WPre = wpre; Goal = gax.Goal; Cmd = gax.Axiom.Cmd })
+        (termGenWPre gax)
 
 /// Converts a model's goal axioms to terms.
 let termGen (model : Model<GoalAxiom<'cmd>, _>)
-  : Model<Term<'cmd, IteratedGView<Sym<MarkedVar>>, IteratedOView>, _> =
-    mapAxioms termGenAxiom model
+  : Result<Model<Term<'cmd, IteratedGView<Sym<MarkedVar>>, IteratedOView>, _>,
+           Error> =
+    tryMapAxioms termGenAxiom model
+
+
+/// <summary>
+///     Pretty printers for TermGen types.
+/// </summary>
+module Pretty =
+    open Starling.Core.Pretty
+
+    /// <summary>
+    ///     Pretty-prints term generator errors.
+    /// </summary>
+    /// <param name="err">The graph error to print.</param>
+    /// <returns>
+    ///     A pretty-printer command that prints <paramref name="err" />.
+    /// </returns>
+    let rec printError (err : Error) : Doc =
+        match err with
+        | Traversal err -> Starling.Core.Traversal.Pretty.printTraversalError printError err
 
 /// Stage that flattens the Iterator's from GuardedFunc's
 module Iter =

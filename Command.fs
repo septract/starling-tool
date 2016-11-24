@@ -3,6 +3,8 @@
 /// </summary>
 module Starling.Core.Command
 
+open Chessie.ErrorHandling
+
 open Starling.Utils
 open Starling.Collections
 open Starling.Lang
@@ -47,6 +49,39 @@ module Types =
         { Cmd : Command; Semantics : 'Semantics }
         override this.ToString() = sprintf "%A" this
 
+/// <summary>
+///     Traversals on commands.
+/// </summary>
+module Traversal =
+    open Starling.Core.Traversal
+
+    /// <summary>
+    ///     Lifts a <c>Traversal</c> over all expressions in a
+    ///     <see cref="CommandSemantics"/>.
+    /// </summary>
+    /// <param name="traversal">
+    ///     The <c>Traversal</c> to map over all expressions in the command.
+    ///     This should map from expressions to expressions.
+    /// </param>
+    /// <typeparam name="SrcVar">
+    ///     The type of variables before traversal.
+    /// </typeparam>
+    /// <typeparam name="DstVar">
+    ///     The type of variables after traversal.
+    /// </typeparam>
+    /// <typeparam name="Error">
+    ///     The type of any returned errors.
+    /// </typeparam>
+    /// <returns>The lifted <see cref="Traversal"/>.</returns>
+    let tliftOverCommandSemantics
+      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
+      : Traversal<CommandSemantics<BoolExpr<'SrcVar>>,
+                  CommandSemantics<BoolExpr<'DstVar>>,
+                  'Error> =
+        fun ctx { Cmd = c; Semantics = s } ->
+            let swapSemantics s' = { Cmd = c; Semantics = s' }
+            let result = traverseBoolAsExpr traversal ctx s
+            lift (pairMap id swapSemantics) result
 
 /// <summary>
 ///     Queries on commands.
@@ -63,9 +98,7 @@ module Queries =
     ///     <c>false</c> otherwise.
     /// </returns>
     let isNop : Command -> bool =
-        List.forall
-            (fun { Results = ps } ->
-                  ps = [])
+        List.forall (fun { Results = ps } -> List.isEmpty ps )
 
     /// <summary>
     ///     Active pattern matching assume commands.
@@ -85,8 +118,8 @@ module Queries =
     /// command as a list
     let commandArgs cmd =
         let f c = List.map SMExprVars c.Args
-        let vars = List.fold (@) [] <| List.map f cmd
-        Set.fold (+) Set.empty (Set.ofList vars)
+        let vars = collect (concatMap f cmd)
+        lift Set.unionMany vars
 
 /// <summary>
 ///     Composition of Boolean expressions representing commands.
@@ -175,7 +208,7 @@ module SymRemove =
     /// </summary>
     let rec removeSym : BoolExpr<Sym<'var>> -> BoolExpr<Sym<'var>> =
         function
-        | SymAssign (_, _) -> BTrue
+        | SymAssign _ -> BTrue
         // Distributivity.
         // TODO(CaptainHayashi): distribute through more things?
         | BAnd xs -> BAnd (List.map removeSym xs)
@@ -201,7 +234,7 @@ module Pretty =
     open Starling.Core.Symbolic.Pretty
 
     /// Pretty-prints a Command.
-    let printPrimCommand { Name = name; Args = xs; Results = ys } = 
+    let printPrimCommand { Name = name; Args = xs; Results = ys } =
         hjoin [ commaSep <| Seq.map (printCTyped String) ys; " <- " |> String; name |> String; String " "; commaSep <| Seq.map printSMExpr xs ]
 
     let printCommand : Command -> Doc = List.map printPrimCommand >> semiSep
@@ -209,4 +242,3 @@ module Pretty =
     /// Printing a CommandSemantics prints just the semantic boolexpr associated with it
     let printCommandSemantics pSem sem =
         pSem sem.Semantics
-
