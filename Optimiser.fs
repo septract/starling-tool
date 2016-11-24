@@ -563,6 +563,7 @@ module Graph =
                     (fun p ->
                         // ...there are no symbols, and...
                         match (mapTraversal (removeSymFromExpr ignore) p) with
+                        // TODO(CaptainHayashi): propagate if traversal error
                         | Bad _ -> false
                         | Ok (sp, _) ->
                             // ...for all of the variables in said parameters...
@@ -1054,11 +1055,13 @@ module Term =
         | BAnd xs -> concatMap findArithInters xs
         | _ -> []
 
-    /// Lifts a pair of before/after maps to a traversals.
+    /// Lifts a set of after-variable substitutions to a traversal.
     let afterSubs
       (isubs : Map<Var, IntExpr<Sym<MarkedVar>>>)
       (bsubs : Map<Var, BoolExpr<Sym<MarkedVar>>>)
       : Traversal<CTyped<MarkedVar>, Expr<Sym<MarkedVar>>, TermOptError> =
+        (* TODO(CaptainHayashi): just use one Map<Var, Expr<_>>, and raise a
+           traversal error if we get the wrong type out. *)
         let switch =
             function
             | Int (After a) ->
@@ -1068,11 +1071,13 @@ module Term =
             | x -> mkVarExp (mapCTyped Reg x)
         ignoreContext (switch >> ok)
 
-    /// Creates a SubFun from intermediate substitutions
+    /// Lifts a set of intermediate-variable substitutions to a traversal.
     let interSubs
       (isubs : Map<bigint * Var, IntExpr<Sym<MarkedVar>>>)
       (bsubs : Map<bigint * Var, BoolExpr<Sym<MarkedVar>>>)
       : Traversal<CTyped<MarkedVar>, Expr<Sym<MarkedVar>>, TermOptError> =
+        (* TODO(CaptainHayashi): just use one Map<Var, Expr<_>>, and raise a
+           traversal error if we get the wrong type out. *)
         let switch =
             function
             | Int (Intermediate (i, a)) ->

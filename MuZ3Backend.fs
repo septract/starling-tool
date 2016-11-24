@@ -562,8 +562,8 @@ module Translator =
         let findVarTravGView = tchainM (tliftOverGFunc findVarTravExpr) id
         let findVarTravVFunc = tliftOverFunc findVarTravExpr
 
-        // First, make everything use string variables.
         trial {
+            // First, make everything use string variables.
             let! bodyExpr' =
                 mapMessages Traversal (mapTraversal toVarTravBool bodyExpr)
             let! bodyView' =
@@ -579,14 +579,13 @@ module Translator =
             let! headVars =
                 mapMessages Traversal (findVars findVarTravVFunc head')
 
+            // Now convert the variables to Z3 constants.
+            let varToConst (var : TypedVar) =
+                ctx.MkConst (valueOf var, typeToSort reals ctx (typeOf var))
+            // We use a set here so that we don't quantify over variables twice.
             let varSet = Set.unionMany [ bodyExprVars; bodyViewVars; headVars ]
-            let vars =
-                varSet
-                // Make sure we don't quantify over a variable twice.
-                |> Set.map (fun p ->
-                                ctx.MkConst (p |> valueOf,
-                                             p |> typeOf |> typeToSort reals ctx))
-                |> Set.toArray
+            let varConstSet = Set.map varToConst varSet
+            let vars = Set.toArray varConstSet
 
             let bodyExprZ = boolToZ3 reals id ctx bodyExpr'
 
