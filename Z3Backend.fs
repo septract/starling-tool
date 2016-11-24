@@ -275,33 +275,36 @@ let runZ3OnModel (shouldUseRealsForInts : bool)
         let wpreO = maybe (removeSym symbool.WPre) (fun t -> Some t.WPre) approx
         let goalO = maybe (removeSym symbool.Goal) (fun t -> Some t.Goal) approx
 
-        let z3, status =
-            match cmdO, wpreO, goalO with
-            | Some cmd, Some wpre, Some goal ->
-                (* This is mainly for auditing purposes: we don't use it in the
-                   proof.  Instead, we combine cmd, wpre, and goal _before_
-                   converting to Z3. *)
-                let z = { Cmd = toZ3 cmd; WPre = toZ3 wpre; Goal = toZ3 goal }
+        // First, populate the term without Z3 results.
+        let zTermWithNoZ3 = 
+            { Original = term.Original
+              SymBool = term.SymBool
+              Z3 = None
+              Status = None }
+              
+        // Now, see if we can fill them in.
+        match cmdO, wpreO, goalO with
+        | Some cmd, Some wpre, Some goal ->
+            (* This is mainly for auditing purposes: we don't use it in the
+               proof.  Instead, we combine cmd, wpre, and goal _before_
+               converting to Z3. *)
+            let z = { Cmd = toZ3 cmd; WPre = toZ3 wpre; Goal = toZ3 goal }
 
-                (* This is effectively asking Z3 to refute (c ^ w => g).
-                 *
-                 * This arranges to:
-                 *   - ¬(c^w => g) premise
-                 *   - ¬(¬(c^w) v g) def. =>
-                 *   - ((c^w) ^ ¬g) deMorgan
-                 *   - (c^w^¬g) associativity.
-                 *)
-                let combined = toZ3 (mkAnd [ cmd; wpre; mkNot goal ])
+            (* This is effectively asking Z3 to refute (c ^ w => g).
+             *
+             * This arranges to:
+             *   - ¬(c^w => g) premise
+             *   - ¬(¬(c^w) v g) def. =>
+             *   - ((c^w) ^ ¬g) deMorgan
+             *   - (c^w^¬g) associativity.
+             *)
+            let combined = toZ3 (mkAnd [ cmd; wpre; mkNot goal ])
 
-                // This bit actually runs Z3 on the term.
-                let s = Starling.Core.Z3.Run.runTerm ctx combined
-                Some z, Some s
-            | _ -> None, None
+            // This bit actually runs Z3 on the term.
+            let s = Starling.Core.Z3.Run.runTerm ctx combined
 
-        { Original = term.Original
-          SymBool = term.SymBool
-          Z3 = z3
-          Status = status }
+            { zTermWithNoZ3 with Z3 = Some z; Status = Some s }
+        | _ -> zTermWithNoZ3
 
     mapAxioms z3Term model
 
