@@ -353,7 +353,6 @@ let tchain (f : Traversal<'A, 'AR, 'Error>) (g : 'AR -> 'Result)
 let tchainL (f : Traversal<'A, 'AR, 'Error>) (g : 'AR list -> 'Result)
   : Traversal<'A list, 'Result, 'Error> =
     // TODO(CaptainHayashi): proper doc comment.
-    // TODO(CaptainHayashi): proper doc comment.
     fun ctx ->
         seqBind
             (fun x (ctxN, xsRN) ->
@@ -373,7 +372,6 @@ let tchainL (f : Traversal<'A, 'AR, 'Error>) (g : 'AR list -> 'Result)
 /// </summary>
 let tchainM (f : Traversal<'A, 'AR, 'Error>) (g : Multiset<'AR> -> 'Result)
   : Traversal<Multiset<'A>, 'Result, 'Error> =
-    // TODO(CaptainHayashi): proper doc comment.
     // TODO(CaptainHayashi): proper doc comment.
     let trav ctx ms =
         let ms' =
@@ -506,6 +504,7 @@ and tliftToExprSrc
 let traverseBoolAsExpr
   (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
   : Traversal<BoolExpr<'SrcVar>, BoolExpr<'DstVar>, 'Error> =
+    // TODO(CaptainHayashi): proper doc comment.
     let toExpr = ignoreContext (Bool >> ok)
     let fromExpr = ignoreContext expectBool
     fun ctx expr -> toExpr ctx expr >>= uncurry traversal >>= uncurry fromExpr
@@ -517,6 +516,7 @@ let traverseBoolAsExpr
 let traverseIntAsExpr
   (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
   : Traversal<IntExpr<'SrcVar>, IntExpr<'DstVar>, 'Error> =
+    // TODO(CaptainHayashi): proper doc comment.
     let toExpr = ignoreContext (Int >> ok)
     let fromExpr = ignoreContext expectInt
     fun ctx expr -> toExpr ctx expr >>= uncurry traversal >>= uncurry fromExpr
@@ -567,6 +567,7 @@ let tliftOverExpr
 ///     Converts a non-symbolic expression to its pre-state.
 /// </summary>
 let vBefore (expr : Expr<Var>) : Result<Expr<MarkedVar>, TraversalError<'Error>> =
+    // TODO(CaptainHayashi): proper doc comment.
     ((Before >> ok)
     |> ignoreContext
     |> tliftOverCTyped
@@ -578,6 +579,7 @@ let vBefore (expr : Expr<Var>) : Result<Expr<MarkedVar>, TraversalError<'Error>>
 ///     Converts a non-symbolic expression to its post-state.
 /// </summary>
 let vAfter (expr : Expr<Var>) : Result<Expr<MarkedVar>, TraversalError<'Error>> =
+    // TODO(CaptainHayashi): proper doc comment.
     ((After >> ok)
     |> ignoreContext
     |> tliftOverCTyped
@@ -590,6 +592,7 @@ let vAfter (expr : Expr<Var>) : Result<Expr<MarkedVar>, TraversalError<'Error>> 
 /// <summary>
 let pushVar (ctx : TraversalContext) (v : TypedVar)
   : Result<TraversalContext, TraversalError<'Error>>=
+    // TODO(CaptainHayashi): proper doc comment.
     match ctx with
     | Vars vs -> ok (Vars (v::vs))
     | c -> fail (ContextMismatch ("vars context", c))
@@ -598,13 +601,15 @@ let pushVar (ctx : TraversalContext) (v : TypedVar)
 ///     Traversal for accumulating <c>Var</c>s.
 /// <summary>
 let collectVars : Traversal<TypedVar, TypedVar, 'Error>  =
+    // TODO(CaptainHayashi): proper doc comment.
     fun ctx v -> lift (fun ctx -> (ctx, v)) (pushVar ctx v)
 
 /// <summary>
 ///     Updates a context with a new marked variable.
 /// <summary>
 let pushMarkedVar (ctx : TraversalContext) (v : CTyped<MarkedVar>)
-  : Result<TraversalContext, TraversalError<'Error>>=
+  : Result<TraversalContext, TraversalError<'Error>> =
+    // TODO(CaptainHayashi): proper doc comment.
     match ctx with
     | MarkedVars vs -> ok (MarkedVars (v::vs))
     | c -> fail (ContextMismatch ("markedvars context", c))
@@ -614,6 +619,7 @@ let pushMarkedVar (ctx : TraversalContext) (v : CTyped<MarkedVar>)
 /// <summary>
 let collectMarkedVars
   : Traversal<CTyped<MarkedVar>, CTyped<MarkedVar>, 'Error> =
+    // TODO(CaptainHayashi): proper doc comment.
     fun ctx v -> lift (fun ctx -> (ctx, v)) (pushMarkedVar ctx v)
 
 /// <summary>
@@ -689,6 +695,7 @@ module Pretty =
     ///     Pretty-prints a <see cref="TraversalContext"/>.
     /// </summary>
     let printTraversalContext : TraversalContext -> Doc =
+        // TODO(CaptainHayashi): proper doc comment.
         let printPosition =
             function
             | Positive -> String "+"

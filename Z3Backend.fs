@@ -277,7 +277,7 @@ let runZ3OnModel (shouldUseRealsForInts : bool)
         let goalO = maybe (removeSym symbool.Goal) (fun t -> Some t.Goal) approx
 
         // First, populate the term without Z3 results.
-        let zTermWithNoZ3 = 
+        let zTermWithNoZ3 =
             { Original = term.Original
               SymBool = term.SymBool
               Z3 = None

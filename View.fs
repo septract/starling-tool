@@ -357,7 +357,7 @@ let isAdvisory =
 
 
 /// <summary>
-///     Functions for traversing over model elements.
+///     Functions for traversing over views and funcs.
 /// </summary>
 module Traversal =
     open Starling.Core.Traversal
