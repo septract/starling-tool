@@ -211,9 +211,7 @@ module Pretty =
 
     /// Pretty-prints an IteratedDFunc.
     let printIteratedDFunc : IteratedDFunc -> Doc =
-        printIteratedContainer
-            printDFunc
-            (function | None -> Nop | Some i -> printTypedVar i)
+        printIteratedContainer printDFunc (maybe Nop printTypedVar)
 
     /// Pretty-prints an IteratedOView.
     let printIteratedOView : IteratedOView -> Doc =
