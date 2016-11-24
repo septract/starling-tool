@@ -410,7 +410,9 @@ let runStarling (request : Request)
         |> Optimiser.Utils.parseOptimisationString
 
     let bp = backendParams ()
-    let { Approx = approx; NoSMTReduce = noSMTReduce; Reals = reals } =
+    let { Approx = shouldApprox
+          NoSMTReduce = noSMTReduce
+          Reals = shouldUseRealsForInts } =
         config.backendOpts
         |> maybe (Seq.empty) Utils.parseOptionString
         |> Seq.fold
@@ -426,7 +428,9 @@ let runStarling (request : Request)
     // Shorthand for the various stages available.
     let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
     let smt rq = lift (Backends.Z3.backend rq)
-    let muz3 rq = bind (Backends.MuZ3.run reals rq >> mapMessages Error.MuZ3)
+    let muz3 rq =
+        bind (Backends.MuZ3.run shouldUseRealsForInts rq
+              >> mapMessages Error.MuZ3)
     let frontend times rq =
         Lang.Frontend.run times rq Response.Frontend Error.Frontend
     let graphOptimise =
@@ -468,10 +472,10 @@ let runStarling (request : Request)
                 mapMessages ModelFilterError npmNoSymbolicConstraintsR)
 
     let symproof : Result<Model<_, _>, Error> -> Result<Model<_, _>, Error> =
-        bind (Core.Instantiate.Phase.run approx
+        bind (Core.Instantiate.Phase.run shouldApprox
               >> mapMessages Error.ModelFilterError)
     let eliminate : Result<Model<_, _>, Error> -> Result<Model<_, _>, Error>  =
-        lift (Backends.Z3.eliminate reals)
+        lift (Backends.Z3.eliminate shouldUseRealsForInts)
 
     let backend m =
         let phase op response =
