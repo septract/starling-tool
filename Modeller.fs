@@ -931,7 +931,6 @@ let modelCFunc
              |> bind (fun vfunc ->
                           FuncDefiner.checkParamTypes vfunc proto
                           |> mapMessages (curry LookupError vfunc.Name)))
-    // Finally, lift to CFunc.
     |> lift CFunc.Func
 
 /// Tries to flatten a view AST into a CView.
