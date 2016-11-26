@@ -1,10 +1,8 @@
 #!/bin/sh
 #
-# Runs Starling in Z3 mode on each passing and failing example N times, and
-# reports the results.
+# Runs `benchone.sh` on each example specified in `benchmarks.in`.
+# See those files for more information.
 #
-# The results are in the form 'FILENAME RUN TIME', and can be awked into a
-# proper benchmark set.
 
 IFS=:
 cat=""
