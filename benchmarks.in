@@ -1,5 +1,14 @@
-# Examples for PLDI paper benchmarks
-# Group:name:dir:Z3?:HSF?:Optimised Z3?:Optimised HSF?:
+# This file tells `bench.sh` which benchmarks to run.
+#
+# Each line is formatted as follows:
+#
+# Group:Name:Path:Run unoptimised Z3?:Run unoptimised HSF?:Run optimised Z3?:Run optimised HSF?
+#
+# Benchmarks are emitted as a LaTeX table, sorted alphabetically and grouped by Group.
+#
+# For the last four fields, type 'yes' to enable, and 'no' to disable (case sensitive).
+#
+# Lines starting with # are discarded.  Whitespace is significant.
 Ticket lock:with conditional view:Examples/Pass/ticketLock.cvf:yes:no:yes:no
 Ticket lock:without conditional view:Examples/Pass/ticketLockNoIf.cvf:yes:no:yes:no
 Ticket lock:with integers and indefinite views:Examples/PassHSF/ticketLockIndefinite.cvf:no:no:no:yes
