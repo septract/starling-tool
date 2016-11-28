@@ -514,7 +514,10 @@ let (|BoolExp|ArithExp|AnyExp|) (e : Expression)
 /// </summary>
 let (|LValue|RValue|) (e : Expression) : Choice<Expression, Expression> =
     match e.Node with
-    | Identifier _ | Symbolic _ | ArraySubscript _ -> LValue e
+    (* TODO(CaptainHayashi): symbolic lvalues?
+       These, however, need a lot of thought as to what the framing semantics
+       are. *)
+    | Identifier _ | ArraySubscript _ -> LValue e
     | _ -> RValue e
 
 (*
