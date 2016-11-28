@@ -353,11 +353,11 @@ module Pretty =
     let printTypeLiteral (lit : TypeLiteral) : Doc =
         let rec pl lit suffix =
             match lit with
-            | TInt -> hsep2 Nop (syntaxIdent (String ("int"))) suffix
-            | TBool -> hsep2 Nop (syntaxIdent (String ("bool"))) suffix
+            | TInt -> syntaxIdent (String ("int")) <-> suffix
+            | TBool -> syntaxIdent (String ("bool")) <-> suffix
             | TArray (len, contents) ->
                 let lenSuffix = squared (String (sprintf "%d" len))
-                pl contents (hsep2 Nop suffix lenSuffix)
+                pl contents (suffix <-> lenSuffix)
         pl lit Nop
 
     /// Pretty-prints parameters.
