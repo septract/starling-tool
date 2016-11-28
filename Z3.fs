@@ -49,7 +49,7 @@ module Expr =
         | Type.Bool () -> ctx.MkBoolSort () :> Z3.Sort
         | Type.Array (eltype, _, ()) ->
             let elZ3 = typeToSort reals ctx eltype
-            ctx.MkArraySort (domain = elZ3, range = ctx.MkIntSort ()) :> Z3.Sort
+            ctx.MkArraySort (range = ctx.MkIntSort (), domain = elZ3) :> Z3.Sort
 
     /// Converts a Starling arithmetic expression to a Z3 ArithExpr.
     let rec intToZ3
