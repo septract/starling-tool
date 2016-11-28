@@ -57,6 +57,9 @@ let warning d = Styled([Yellow], d)
 let success d = Styled([Green], d)
 let inconclusive d = Styled([Blue], d)
 
+let errorStr s = error (String s)
+let errorInfoStr s = error (String s)
+
 /// <summary>
 ///     Styles a string with ANSI escape sequences.
 /// </summary>
@@ -211,6 +214,9 @@ let (<->) x y = hsep2 Nop x y
 let (<+>) x y = hsep2 (String " ") x y
 /// Horizontally separates a list of commands with commas.
 let commaSep c = hsepStr ", " c
+/// Infix version of commaSep.
+/// This would be <,>, but that's a type error!
+let (<&>) x y = hsep2 (String ", ") x y
 /// Horizontally separates a list of commands with semicolons.
 let semiSep c = hsepStr "; " c
 /// Horizontally separates a list of commands with colons.
@@ -242,6 +248,7 @@ let braced = ssurround "{" "}"
 let angled = ssurround "<" ">"
 let parened = ssurround "(" ")"
 let squared = ssurround "[" "]"
+let quoted = ssurround "'" "'"
 
 /// Pretty-prints a function f(xs1, xs2, ...xsn)
 let func f xs = hjoin [String f |> syntaxIdent; commaSep xs |> parened]

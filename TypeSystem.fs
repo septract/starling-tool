@@ -149,13 +149,57 @@ module Pretty =
         | Bool () -> "bool" |> String
 
     /// <summary>
+    ///     Pretty-prints a typed item.
+    ///
+    ///     <para>
+    ///         The item is printed as, for example, '(int foo)',
+    ///         where 'int' is the type and 'foo' the result of printing
+    ///         the inner item.  If the pretty printer returns a no-op, then
+    ///         no extra whitespace is generated.
+    ///     </para>
+    /// </summary>
+    /// <param name="pInt">
+    ///     Pretty printer for the inner item when the type is
+    ///     <c>Int</c>.
+    /// </param>
+    /// <param name="pBool">
+    ///     Pretty printer for the inner item when the type is
+    ///     <c>Bool</c>.
+    /// </param>
+    /// <param name="typed">The typed item to print.</typed>
+    /// <typeparam name="Int">
+    ///     The meta-type of <c>Int</c>-typed values.
+    /// </typeparam>
+    /// <typeparam name="Bool">
+    ///     The meta-type of <c>Bool</c>-typed values.
+    /// </typeparam>
+    /// <returns>
+    ///     A <see cref="Doc"/> capturing the typed value.
+    /// </returns>
+    let printTyped
+      (pInt : 'Int -> Doc)
+      (pBool : 'Bool -> Doc)
+      (typed : Typed<'Int, 'Bool>) : Doc =
+        let pTypeName = String >> syntaxLiteral
+
+        let typeDocs, valDoc =
+            match typed with
+            | Int a -> [ pTypeName "int" ], pInt a
+            | Bool a -> [ pTypeName "bool" ], pBool a
+
+        let sexprContents =
+            match valDoc with
+            | Nop -> []
+            | doc -> [ doc ]
+
+        parened (hsep (typeDocs @ sexprContents))
+
+    /// <summary>
     ///     Pretty-prints a ctyped item.
     ///
-    ///     <param>
-    ///         The item is printed as, for example, 'int foo',
-    ///         where 'int' is the type and 'foo' the result of printing
-    ///         the inner item.
-    ///     </param>
+    ///     <para>
+    ///         See <see cref="printTyped"/> for more information.
+    ///     </para>
     /// </summary>
     /// <param name="pItem">
     ///     Pretty printer for the inner item.
@@ -169,45 +213,5 @@ module Pretty =
     /// <returns>
     ///     A printer <c>Doc</c> printing <paramref name="ctyped"/>.
     /// </returns>
-    let printCTyped
-      (pItem : 'item -> Doc)
-      (ctyped : CTyped<'item>)
-      : Doc =
-        hsep
-            [ printType (typeOf ctyped) |> syntaxIdent
-              pItem (valueOf ctyped) ]
-
-    /// <summary>
-    ///     Pretty-prints a typed item.
-    ///
-    ///     <param>
-    ///         The item is printed as, for example, 'int foo',
-    ///         where 'int' is the type and 'foo' the result of printing
-    ///         the inner item.
-    ///     </param>
-    /// </summary>
-    /// <param name="pInt">
-    ///     Pretty printer for the inner item when the type is
-    ///     <c>Int</c>.
-    /// </param>
-    /// <param name="pBool">
-    ///     Pretty printer for the inner item when the type is
-    ///     <c>Bool</c>.
-    /// </param>
-    /// <typeparam name="int">
-    ///     The meta-type of <c>Int</c>-typed values.
-    /// </typeparam>
-    /// <typeparam name="bool">
-    ///     The meta-type of <c>Bool</c>-typed values.
-    /// </typeparam>
-    /// <returns>
-    ///     A function converting <c>Typed</c> items to printer
-    ///     <c>Doc</c>s.
-    /// </returns>
-    let printTyped
-      (pInt : 'int -> Doc)
-      (pBool : 'bool -> Doc)
-      : Typed<'int, 'bool> -> Doc =
-        function
-        | Int a -> pInt a
-        | Bool a -> pBool a
+    let printCTyped (pItem : 'item -> Doc) (ctyped : CTyped<'item>) : Doc =
+        printTyped pItem pItem ctyped

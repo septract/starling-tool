@@ -181,7 +181,7 @@ module VarMap =
     let ofTypedVarSeq (vars : TypedVar seq) : Result<VarMap, VarMapError> =
         // Before we make the map, make sure we have no duplicates.
         let duplicates = findDuplicates (Seq.map valueOf vars)
-        match (Seq.toList duplicates) with 
+        match (Seq.toList duplicates) with
         | [] ->
             let pairs = Seq.map (fun v -> (valueOf v, typeOf v)) vars
             ok (Map.ofSeq pairs)
