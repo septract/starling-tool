@@ -433,7 +433,7 @@ let holdTick =
 let oneGFunc (cnd : BoolExpr<Sym<Var>>) (name : string)
   (ps : Expr<Sym<Var>> list)
   : IteratedGFunc<Sym<Var>> =
-    iterated (svgfunc cnd name ps) (AInt 1L)
+    iterated (svgfunc cnd name ps) (IInt 1L)
 
 /// The guarded holdLock view.
 let gHoldLock cnd : IteratedGFunc<Sym<Var>> =

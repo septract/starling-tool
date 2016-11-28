@@ -31,32 +31,32 @@ module Pretty =
 /// </summary>
 module Expr =
     /// Converts a Starling arithmetic expression to a Z3 ArithExpr.
-    let rec arithToZ3
+    let rec intToZ3
       (reals : bool)
       (toStr : 'var -> string)
       (ctx: Z3.Context)
-      : IntExpr<'var> -> Z3.ArithExpr =
-        let rec az =
+      (int : IntExpr<'var>) : Z3.ArithExpr =
+        let rec iz =
             function
-            | AVar c when reals -> c |> toStr |> ctx.MkRealConst :> Z3.ArithExpr
-            | AVar c -> c |> toStr |> ctx.MkIntConst :> Z3.ArithExpr
-            | AInt i when reals -> (i |> ctx.MkReal) :> Z3.ArithExpr
-            | AInt i -> (i |> ctx.MkInt) :> Z3.ArithExpr
-            | AAdd xs -> ctx.MkAdd (xs |> Seq.map az |> Seq.toArray)
-            | ASub xs -> ctx.MkSub (xs |> Seq.map az |> Seq.toArray)
-            | AMul xs -> ctx.MkMul (xs |> Seq.map az |> Seq.toArray)
-            | ADiv (x, y) -> ctx.MkDiv (az x, az y)
+            | IVar c when reals -> c |> toStr |> ctx.MkRealConst :> Z3.ArithExpr
+            | IVar c -> c |> toStr |> ctx.MkIntConst :> Z3.ArithExpr
+            | IInt i when reals -> (i |> ctx.MkReal) :> Z3.ArithExpr
+            | IInt i -> (i |> ctx.MkInt) :> Z3.ArithExpr
+            | IAdd xs -> ctx.MkAdd (xs |> Seq.map iz |> Seq.toArray)
+            | ISub xs -> ctx.MkSub (xs |> Seq.map iz |> Seq.toArray)
+            | IMul xs -> ctx.MkMul (xs |> Seq.map iz |> Seq.toArray)
+            | IDiv (x, y) -> ctx.MkDiv (iz x, iz y)
             // TODO(CaptainHayashi): refuse AMod when reals is true.
-            | AMod (x, y) -> ctx.MkMod (az x :?> Z3.IntExpr, az y :?> Z3.IntExpr) :> Z3.ArithExpr
-        az
+            | IMod (x, y) -> ctx.MkMod (iz x :?> Z3.IntExpr, iz y :?> Z3.IntExpr) :> Z3.ArithExpr
+        iz int
 
     /// Converts a Starling Boolean expression to a Z3 ArithExpr.
     and boolToZ3
       (reals : bool)
       (toStr : 'var -> string)
       (ctx: Z3.Context)
-      : BoolExpr<'var> -> Z3.BoolExpr =
-        let az = arithToZ3 reals toStr ctx
+      (bool : BoolExpr<'var>) : Z3.BoolExpr =
+        let az = intToZ3 reals toStr ctx
         let ez = exprToZ3 reals toStr ctx
 
         let rec bz =
@@ -73,7 +73,7 @@ module Expr =
             | BLe (x, y) -> ctx.MkLe (az x, az y)
             | BLt (x, y) -> ctx.MkLt (az x, az y)
             | BNot x -> x |> bz |> ctx.MkNot
-        bz
+        bz bool
 
     /// Converts a Starling expression to a Z3 Expr.
     and exprToZ3
@@ -83,8 +83,8 @@ module Expr =
       : Expr<'var> -> Z3.Expr =
         function
         | Expr.Bool b -> boolToZ3 reals toStr ctx b :> Z3.Expr
-        | Expr.Int a -> arithToZ3 reals toStr ctx a :> Z3.Expr
-      
+        | Expr.Int a -> intToZ3 reals toStr ctx a :> Z3.Expr
+
     /// <summary>
     ///     Z3 tests for expressions.
     /// </summary>
@@ -99,7 +99,7 @@ module Expr =
             use ctx = new Z3.Context ()
             assertEqual
                 (ctx.MkMod (ctx.MkIntConst "foo", ctx.MkInt 5L) :> Z3.ArithExpr)
-                (arithToZ3 false id ctx (mkMod (AVar "foo") (AInt 5L)))
+                (intToZ3 false id ctx (mkMod (IVar "foo") (IInt 5L)))
 
 /// <summary>
 ///     Z3 invocation.

@@ -609,7 +609,7 @@ module Translator =
     // TODO(CaptainHayashi): clean this up?
     let varToExpr (v : TypedVar) : Expr<Var> =
         match v with
-        | Int iv -> Int (AVar iv)
+        | Int iv -> Int (IVar iv)
         | Bool bv -> Bool (BVar bv)
 
     /// Converts a downclosure func into a guarded func, instantiating the
@@ -658,7 +658,7 @@ module Translator =
         // TODO(CaptainHayashi): this duplicates the HSF work a lot.
         let flatDFunc = Starling.Flattener.flattenDView svarSeq [func]
         let zeroFuncR =
-            lift (fun it -> instantiateFunc it (fun _ -> AInt 0L) flatDFunc)
+            lift (fun it -> instantiateFunc it (fun _ -> IInt 0L) flatDFunc)
                 iterVarR
 
         // TODO(CaptainHayashi): using a round peg in a square hole here.
@@ -704,7 +704,7 @@ module Translator =
             lift (fun it -> instantiate it incVar flatDFunc) iterVarResult
         let succViewResult = lift Multiset.singleton succFuncResult
         let guardResult =
-            lift (fun it -> mkGe (AVar it) (AInt 0L)) iterVarResult
+            lift (fun it -> mkGe (IVar it) (IInt 0L)) iterVarResult
 
         let ruleResult =
             bind3
@@ -777,7 +777,7 @@ module Translator =
             |> List.map
                    (fun v -> BEq (v,
                                   match v with
-                                  | Expr.Int _ -> Expr.Int (AInt 0L)
+                                  | Expr.Int _ -> Expr.Int (IInt 0L)
                                   | Expr.Bool _ -> Expr.Bool (BFalse)))
             |> mkAnd
 

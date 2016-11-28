@@ -122,7 +122,7 @@ module Types =
         /// A prim used a bad thread variable.
         | BadTVar of var : LValue * err : VarMapError
         /// A prim used a bad variable of ambiguous scope.
-        | BadAVar of var : LValue * err : VarMapError
+        | BadIVar of var : LValue * err : VarMapError
         /// A prim contained a bad expression.
         | BadExpr of expr : AST.Types.Expression * err : ExprError
         /// A prim tried to increment an expression.
@@ -280,7 +280,7 @@ module Pretty =
         | BadTVar (var, err : VarMapError) ->
             wrapped "thread-local lvalue" (printLValue var)
                                           (printVarMapError err)
-        | BadAVar (var, err : VarMapError) ->
+        | BadIVar (var, err : VarMapError) ->
             wrapped "lvalue" (printLValue var) (printVarMapError err)
         | BadExpr (expr, err : ExprError) ->
             wrapped "expression" (printExpression expr)
@@ -391,20 +391,20 @@ let coreSemantics : PrimSemanticsMap =
       // Integer load-and-increment
       (prim "!ILoad++"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
            <| mkAnd [ iEq (siVar "dest") (siVar "srcB")
-                      iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (AInt 1L)) ])
+                      iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (IInt 1L)) ])
 
       // Integer load-and-decrement
       (prim "!ILoad--"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
            <| mkAnd [ iEq (siVar "dest") (siVar "srcB")
-                      iEq (siVar "srcA") (mkSub2 (siVar "srcB") (AInt 1L)) ])
+                      iEq (siVar "srcA") (mkSub2 (siVar "srcB") (IInt 1L)) ])
 
       // Integer increment
       (prim "!I++"  [ Int "srcA" ] [ Int "srcB" ]
-           <| iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (AInt 1L)))
+           <| iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (IInt 1L)))
 
       // Integer decrement
       (prim "!I--"  [ Int "srcA" ] [ Int "srcB" ]
-           <| iEq (siVar "srcA") (mkSub2 (siVar "srcB") (AInt 1L)))
+           <| iEq (siVar "srcA") (mkSub2 (siVar "srcB") (IInt 1L)))
 
       // Boolean load
       (prim "!BLoad"  [ Bool "dest" ] [ Bool "src" ]
@@ -525,7 +525,7 @@ let rec modelExpr
 /// </param>
 /// <param name="varF">
 ///     A function to transform any variables after they are looked-up,
-///     but before they are placed in <c>AVar</c>.  Use this to apply
+///     but before they are placed in <c>IVar</c>.  Use this to apply
 ///     markers on variables, etc.
 /// </param>
 /// <typeparam name="var">
@@ -607,7 +607,7 @@ and modelBoolExpr
 /// </param>
 /// <param name="varF">
 ///     A function to transform any variables after they are looked-up,
-///     but before they are placed in <c>AVar</c>.  Use this to apply
+///     but before they are placed in <c>IVar</c>.  Use this to apply
 ///     markers on variables, etc.
 /// </param>
 /// <typeparam name="var">
@@ -629,7 +629,7 @@ and modelIntExpr
 
     let rec mi e =
         match e.Node with
-        | Num i -> i |> AInt |> ok
+        | Num i -> i |> IInt |> ok
         | LV v ->
             (* Look-up the variable to ensure it a) exists and b) is of an
              * arithmetic type.
@@ -637,13 +637,13 @@ and modelIntExpr
             v
             |> wrapMessages Var (VarMap.lookup env)
             |> bind (function
-                     | Typed.Int vn -> vn |> varF |> Reg |> AVar |> ok
+                     | Typed.Int vn -> vn |> varF |> Reg |> IVar |> ok
                      | _ -> v |> VarNotInt |> fail)
         | Symbolic (sym, args) ->
             args
             |> List.map me
             |> collect
-            |> lift (func sym >> Sym >> AVar)
+            |> lift (func sym >> Sym >> IVar)
         | BopExpr(ArithOp as op, l, r) ->
             lift2 (match op with
                    | Mul -> mkMul2
@@ -1002,13 +1002,13 @@ let modelIntLoad : MethodContext -> Var -> Expression -> FetchMode -> Result<Pri
             let! src = wrapMessages BadSVar (VarMap.lookup svars) srcLV
             match src, mode with
             | Typed.Int s, Direct ->
-                return command "!ILoad" [ Int dest ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
+                return command "!ILoad" [ Int dest ] [ s |> Before |> Reg |> IVar |> Expr.Int ]
 
             | Typed.Int s, Increment ->
-                return command "!ILoad++" [ Int dest; Int s ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
+                return command "!ILoad++" [ Int dest; Int s ] [ s |> Before |> Reg |> IVar |> Expr.Int ]
 
             | Typed.Int s, Decrement ->
-                return command "!ILoad--" [ Int dest; Int s ] [ s |> Before |> Reg |> AVar |> Expr.Int ]
+                return command "!ILoad--" [ Int dest; Int s ] [ s |> Before |> Reg |> IVar |> Expr.Int ]
 
             | _ -> return! fail (TypeMismatch (Type.Int (), srcLV, typeOf src))
         }
@@ -1109,7 +1109,7 @@ let modelFetch : MethodContext -> LValue -> Expression -> FetchMode -> Result<Pr
     | Shared ctx (Typed.Bool dest) -> modelBoolStore ctx dest srcExpr mode
     | Thread ctx (Typed.Int dest) -> modelIntLoad ctx dest srcExpr mode
     | Thread ctx (Typed.Bool dest) -> modelBoolLoad ctx dest srcExpr mode
-    | lv -> fail (BadAVar(lv, NotFound (flattenLV lv)))
+    | lv -> fail (BadIVar(lv, NotFound (flattenLV lv)))
 
 /// Converts a single atomic command from AST to part-commands.
 let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> =
@@ -1135,9 +1135,9 @@ let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> 
                 | Decrement, Typed.Bool _ ->
                     return! fail (DecBool (freshNode <| LV operand))
                 | Increment, Typed.Int _ ->
-                    return command "!I++" [ Int op ] [op |> Before |> Reg |> AVar |> Expr.Int ]
+                    return command "!I++" [ Int op ] [op |> Before |> Reg |> IVar |> Expr.Int ]
                 | Decrement, Typed.Int _ ->
-                    return command "!I--" [ Int op ] [op |> Before |> Reg |> AVar |> Expr.Int ]
+                    return command "!I--" [ Int op ] [op |> Before |> Reg |> IVar |> Expr.Int ]
             }
         | Id -> ok (command "Id" [] [])
         | Assume e ->
