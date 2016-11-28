@@ -409,19 +409,42 @@ module Pretty =
     open Starling.Core.Var.Pretty
 
     /// <summary>
-    ///     Pretty-prints a symbolic sentence.
+    ///     Pretty-prints a symbolic sentence without interpolation.
     /// </summary>
     /// <param name="s">The symbolic sentence to print.</param>
     /// <returns>
     ///     The <see cref="Doc"/> resulting from printing <paramref name="s"/>.
-    /// </returns> 
+    /// </returns>
     let printSymbolicSentence (s : SymbolicSentence) : Doc =
         let printSymbolicWord =
             function
             | SymString s -> String s
             | SymParamRef i -> String (sprintf "#%d" i)
 
-        hsep (List.map printSymbolicWord s)
+        hjoin (List.map printSymbolicWord s)
+
+    /// <summary>
+    ///     Pretty-prints a symbolic sentence with interpolation.
+    ///     <para>
+    ///         Invalid arguments are replaced with '#ERROR#'.
+    ///     </para>
+    /// </summary>
+    /// <param name="pArg">Pretty-printer for arguments.</param>
+    /// <param name="s">The symbolic sentence to print.</param>
+    /// <param name="args">The sentence arguments to print.</param>
+    /// <typeparam name="Arg">The type of sentence arguments.</param>
+    /// <returns>
+    ///     The <see cref="Doc"/> resulting from printing <paramref name="s"/>.
+    /// </returns>
+    let printInterpolatedSymbolicSentence
+      (pArg : 'Arg -> Doc) (s : SymbolicSentence) (args : 'Arg list) : Doc =
+        let printSymbolicWord =
+            function
+            | SymString s -> String s
+            | SymParamRef i when i > 0 && i <= args.Length -> pArg args.[i - 1]
+            | _ -> String "#ERROR#"
+
+        hjoin (List.map printSymbolicWord s)
 
     /// <summary>
     ///     Pretty-prints a <c>Sym</c>, with interpolation.
@@ -436,19 +459,14 @@ module Pretty =
     /// <returns>
     ///     A <see cref="Doc"/> representing <paramref name="sym"/>.
     /// </returns>
-    let rec printSym (pReg : 'Reg -> Doc) (sym : Sym<'Reg>)
-      : Doc =
+    let rec printSym (pReg : 'Reg -> Doc) (sym : Sym<'Reg>) : Doc =
         match sym with
         | Reg r -> pReg r
         | Sym { Sentence = ws; Args = xs } ->
-            parened <| hjoin
-                (List.map
-                    (function
-                     | SymString s -> String s
-                     | SymParamRef i when i > 0 && i <= xs.Length ->
-                        printExpr (printSym pReg) xs.[i - 1]
-                     | _ -> String "#ERROR#")
-                    ws)
+            let pArg = printExpr (printSym pReg)
+            parened
+                (String "sym"
+                 <+> quoted (printInterpolatedSymbolicSentence pArg ws xs))
 
     /// Pretty-prints a SVExpr.
     let printSVExpr = printExpr (printSym String)

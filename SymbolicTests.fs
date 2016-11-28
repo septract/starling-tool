@@ -229,3 +229,49 @@ module FindSMVarsCases =
                     (sym [ SymString "foo" ]
                         [ Expr.Int (siBefore "bar")
                           Expr.Bool (sbAfter "baz") ] )))
+
+
+/// <summary>
+///     Tests on the symbolic pretty printer.
+/// </summary>
+module Pretty =
+    open Starling.Core.Symbolic.Pretty
+
+    [<Test>]
+    let ``Pretty-printing a symbolic sentence without interpolation works`` () =
+        let sentence =
+            [ SymString "foo("
+              SymParamRef 2
+              SymString ", "
+              SymParamRef 1
+              SymString ")" ]
+        "foo(#2, #1)"
+            ?=? printUnstyled (printSymbolicSentence sentence)
+
+    [<Test>]
+    let ``Pretty-printing a valid Sym interpolates variables properly`` () =
+        let sentence =
+            [ SymString "foo("
+              SymParamRef 2
+              SymString ", "
+              SymParamRef 1
+              SymString ")" ]
+        let args = [ Int (siVar "bar"); Bool (sbVar "baz") ]
+
+        "(sym 'foo(baz, bar)')"
+            ?=? printUnstyled (printSym String (sym sentence args))
+
+    [<Test>]
+    let ``Pretty-printing an invalid Sym interpolates errors properly`` () =
+        let sentence =
+            [ SymString "nope("
+              SymParamRef 2
+              SymString ", "
+              SymParamRef 0 // error
+              SymString ", "
+              SymParamRef 3 // error
+              SymString ")" ]
+        let args = [ Int (siVar "bar"); Bool (sbVar "baz") ]
+
+        "(sym 'nope(baz, #ERROR#, #ERROR#)')"
+            ?=? printUnstyled (printSym String (sym sentence args))
