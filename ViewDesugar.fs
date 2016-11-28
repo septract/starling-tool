@@ -182,19 +182,21 @@ and desugarBlock (tvars: Map<string, Type>) (fg: bigint ref) (blk: Block<Marked<
 ///     The sequence of methods to convert.
 /// </param>
 /// <returns>
-///     A pair of desugared methods and a sequence of <c>ViewProto</c>s.
+///     A pair of desugared methods and a sequence of <c>DesugaredViewProto</c>s.
 /// </returns>
-let desugar (tvars : VarMap) methods =
+let desugar
+  (tvars : VarMap)
+  (methods : Method<Marked<View>, Command<Marked<View>>> seq)
+  : (Method<ViewExpr<View>, Command<ViewExpr<View>>> seq * DesugaredViewProto seq) =
     let fg = freshGen ()
-    let methods', vprotoSeqs =
-        methods
-        |> Seq.map
+    let desugaredSeq =
+        Seq.map
             (fun { Signature = s ; Body = b } ->
                  let b', vsNew = desugarBlock tvars fg b
                  let m' = { Signature = s ; Body = b' }
                  (m', vsNew))
-        |> Seq.toList
-        |> List.unzip
+            methods
+    let methods', vprotoSeqs = List.unzip (Seq.toList desugaredSeq)
     (Seq.rev methods', Seq.concat vprotoSeqs)
 
 
