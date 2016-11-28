@@ -11,6 +11,11 @@ open Starling.Core.Var
 open Starling.Core.Expr
 open Starling.Lang.AST
 
+/// <summary>
+///     A partly modelled view prototype, whose parameters use Starling's type
+///     system rather than the language's.
+/// </summary>
+type DesugaredViewProto = GeneralViewProto<TypedVar>
 
 /// <summary>
 ///     Generates a new view from an unknown view expression.
@@ -25,7 +30,7 @@ open Starling.Lang.AST
 /// <returns>
 ///     A pair of a fresh <c>View</c>, and its corresponding <c>ViewProto</c>.
 /// </returns>
-let makeFreshView (tvars : VarMap) (fg : FreshGen) : View * ViewProto =
+let makeFreshView (tvars : VarMap) (fg : FreshGen) : View * DesugaredViewProto =
     let viewName =
         fg |> getFresh |> sprintf "%A"
     let viewArgs =
@@ -51,7 +56,7 @@ let makeFreshView (tvars : VarMap) (fg : FreshGen) : View * ViewProto =
 ///     inside it.
 /// </returns>
 let desugarView (tvars : VarMap) (fg : FreshGen)
-  : Marked<View> -> ViewExpr<View> * ViewProto seq =
+  : Marked<View> -> ViewExpr<View> * DesugaredViewProto seq =
     function
     | Unmarked v -> (Mandatory v, Seq.empty)
     | Questioned v -> (Advisory v, Seq.empty)
@@ -77,7 +82,7 @@ let desugarView (tvars : VarMap) (fg : FreshGen)
 /// </returns>
 let rec desugarCommand (tvars : VarMap) (fg : FreshGen)
   (cmd : Command<Marked<View>>)
-    : Command<ViewExpr<View>> * ViewProto seq =
+    : Command<ViewExpr<View>> * DesugaredViewProto seq =
     let f = fun (a, b) -> (cmd |=> a, b)
     f <| match cmd.Node with
             | If (e, t, fo) ->
@@ -122,7 +127,7 @@ let rec desugarCommand (tvars : VarMap) (fg : FreshGen)
 and desugarViewedCommand (tvars : VarMap) (fg : FreshGen)
   ({ Command = c ; Post = q }
      : ViewedCommand<Marked<View>, Command<Marked<View>>>)
-  : ViewedCommand<ViewExpr<View>, Command<ViewExpr<View>>> * ViewProto seq =
+  : ViewedCommand<ViewExpr<View>, Command<ViewExpr<View>>> * DesugaredViewProto seq =
     let c', cProtos = desugarCommand tvars fg c
     let q', qProtos = desugarView tvars fg q
 
@@ -147,7 +152,7 @@ and desugarViewedCommand (tvars : VarMap) (fg : FreshGen)
 ///     inside it.
 /// </returns>
 and desugarBlock (tvars: Map<string, Type>) (fg: bigint ref) (blk: Block<Marked<View>, Command<Marked<View>>>)
-    : Block<ViewExpr<View>, Command<ViewExpr<View>>> * ViewProto seq =
+    : Block<ViewExpr<View>, Command<ViewExpr<View>>> * DesugaredViewProto seq =
     let p, cs = blk.Pre, blk.Contents
     let p', pProtos = desugarView tvars fg p
     let cs', csProtos =
@@ -177,19 +182,21 @@ and desugarBlock (tvars: Map<string, Type>) (fg: bigint ref) (blk: Block<Marked<
 ///     The sequence of methods to convert.
 /// </param>
 /// <returns>
-///     A pair of desugared methods and a sequence of <c>ViewProto</c>s.
+///     A pair of desugared methods and a sequence of <c>DesugaredViewProto</c>s.
 /// </returns>
-let desugar tvars methods =
+let desugar
+  (tvars : VarMap)
+  (methods : Method<Marked<View>, Command<Marked<View>>> seq)
+  : (Method<ViewExpr<View>, Command<ViewExpr<View>>> seq * DesugaredViewProto seq) =
     let fg = freshGen ()
-    let methods', vprotoSeqs =
-        methods
-        |> Seq.map
+    let desugaredSeq =
+        Seq.map
             (fun { Signature = s ; Body = b } ->
                  let b', vsNew = desugarBlock tvars fg b
                  let m' = { Signature = s ; Body = b' }
                  (m', vsNew))
-        |> Seq.toList
-        |> List.unzip
+            methods
+    let methods', vprotoSeqs = List.unzip (Seq.toList desugaredSeq)
     (Seq.rev methods', Seq.concat vprotoSeqs)
 
 
