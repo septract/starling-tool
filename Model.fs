@@ -57,7 +57,7 @@ module Types =
     ///     commands.
     /// </summary>
     /// <typeparam name="L">The type of lvalues.</typeparam>
-    /// <typeparam name="L">The type of rvalue variables.</typeparam>
+    /// <typeparam name="RV">The type of rvalue variables.</typeparam>
     type Microcode<'L, 'RV> when 'RV : equality =
         /// <summary>An assignment.</summary>
         | Assign of lvalue : 'L * rvalue : Expr<'RV>
