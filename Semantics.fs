@@ -482,7 +482,6 @@ let microcodeToBool
         >> mapMessages Traversal
 
     let rec translateInstrs is =
-        // TODO(CaptainHayashi): do two-state conversion here, not earlier.
         // TODO(CaptainHayashi): convert to variable LVs.
         // TODO(CaptainHayashi): framing (currently done elsewhere).
         let translateInstr =
