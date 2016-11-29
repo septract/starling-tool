@@ -294,15 +294,17 @@ let normaliseAssigns (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>>) list)
             // TODO(CaptainHayashi): proper errors.
             match lhs with
             | Array (eltype, length, alhs) ->
-                let addUpdate (index, value) lhs' =
+                let addUpdate
+                  (index : IntExpr<Sym<Var>>, value : Write) (lhs' : Expr<Sym<Var>>)
+                  : Result<Expr<Sym<Var>>, Error> =
                     (* Need to translate any further subscripts inside value.
                        But, to do that, we need to know what the LHS of those
                        subscripts is! *)
                     let vlhs = mkIdx eltype length alhs index
                     let vrhsResult = translateRhs vlhs value
                     lift
-                        (fun (vrhs) ->
-                            Array
+                        (fun vrhs ->
+                            Expr.Array
                                 (eltype, length,
                                  AUpd (eltype, length, alhs, index, vrhs)))
                         vrhsResult
