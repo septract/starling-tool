@@ -1138,7 +1138,7 @@ let modelViewDefs
 
 /// Models an AFunc as a CFunc.
 let modelCFunc
-  ({ ViewProtos = protos; ThreadVars = env } : MethodContext)
+  ({ ViewProtos = protos; ThreadVars = tvars } : MethodContext)
   (afunc : Func<Expression>) =
     // First, make sure this AFunc actually has a prototype
     // and the correct number of parameters.
@@ -1149,7 +1149,7 @@ let modelCFunc
              afunc.Params
              |> Seq.map (fun e ->
                              e
-                             |> modelExpr env env id
+                             |> modelExpr tvars tvars id
                              |> mapMessages (curry ViewError.BadExpr e))
              |> collect
              // Then, put them into a VFunc.
