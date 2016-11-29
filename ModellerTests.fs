@@ -245,21 +245,21 @@ module Atomics =
             (command' "!BLoad" ast [ Bool (sbVar "baz") ] [ Bool (sbVar "y") ])
 
     [<Test>]
-    let ``model symbolic load <baz = %{foo}(x)>`` () =
+    let ``model symbolic store <x = %{foo}(baz)>`` () =
         let ast =
             freshNode
                 (Fetch
-                    (freshNode (Identifier "baz"),
+                    (freshNode (Identifier "x"),
                      freshNode
                         (Symbolic
                           { Sentence = [ SymString "foo" ]
-                            Args = [ freshNode (Identifier "x") ] }),
+                            Args = [ freshNode (Identifier "baz") ] }),
                      Direct))
         check
             ast
-            (command' "!BLoad" ast
-                [ Bool (sbVar "baz") ]
-                [ Bool (BVar (sym [ SymString "foo" ] [ Int (siVar "x") ] )) ])
+            (command' "!IStore" ast
+                [ Int (siVar "x") ]
+                [ Int (IVar (sym [ SymString "foo" ] [ Bool (sbVar "baz") ] )) ])
 
 
 module CommandAxioms =
