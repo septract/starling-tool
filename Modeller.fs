@@ -1400,20 +1400,32 @@ let rec varOfLValue (lv : Expression) : Var =
 ///     None.
 /// </returns>
 let typeOfLValue (env : VarMap) (lv : Expression) : Type option =
+    (* We can get the type by traversing the lvalue up to its underlying variable,
+       chaining together a sequence of 'matcher functions' that respond to the
+       various transformations (subscripts etc.) to that variable by peeling off
+       bits of the variable's own type. *)
+
+    (* For example, if we go through a [] to get to a variable, we need to remove
+       an Array type. *)
     let matchArray var =
         match var with
         | Array (eltype, _, _) -> Some eltype
         | _ -> None
 
-    // First, we work out the type of the variable at the top of the lvalue.
-    let rec findIdxType lv matcher =
+    // This is the part that actually traverses the expression.
+    let rec walkLValue lv matcher =
         match lv.Node with
-        | Identifier v -> Option.bind (typeOf >> matcher) (VarMap.tryLookup env v)
+        | Identifier v ->
+            (* We've found a variable x.  Its type is available in env.
+               However, if we walked through some []s to get here, we need to
+               apply the matcher sequence to extract the eventual element type. *)
+            Option.bind (typeOf >> matcher) (VarMap.tryLookup env v)
         | ArraySubscript (arr, _) ->
-            findIdxType arr (matcher >> Option.bind matchArray)
+            (* If we find x[i], get the type t(x) and then make a note to extract
+               t(x)'s element type.  So, if arr is of type int[], we will get int. *)
+            walkLValue arr (matcher >> Option.bind matchArray)
         | _ -> None
-
-    findIdxType lv Some
+    walkLValue lv Some
 
 /// Converts an atomic fetch to a model command.
 let modelFetch
