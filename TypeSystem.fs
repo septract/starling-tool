@@ -99,7 +99,7 @@ type Type = CTyped<unit>
 ///     True if <paramref name="x"/> can be made compatible with
 ///     <paramref name="y"/>, or vice versa; false otherwise.
 /// </returns>
-let typesCompatible (x : Type) (y : Type) : bool =
+let rec typesCompatible (x : Type) (y : Type) : bool =
     (* Technically, if this was proper unification, we'd want to return a
        record of the substitutions made. *)
     match (x, y) with
@@ -108,9 +108,9 @@ let typesCompatible (x : Type) (y : Type) : bool =
     | (Type.Array (ex, Some _ , ()), Type.Array (ey, None   , ()))
     | (Type.Array (ex, None   , ()), Type.Array (ey, Some _ , ()))
     | (Type.Array (ex, None   , ()), Type.Array (ey, None   , ())) ->
-        ex = ey
+        typesCompatible ex ey
     | (Type.Array (ex, Some lx, x), Typed.Array (ey, Some ly, y)) ->
-        ex = ey && lx = ly
+        typesCompatible ex ey && lx = ly
     // For primitive types, structural equality suffices.
     | x, y -> x = y
 
