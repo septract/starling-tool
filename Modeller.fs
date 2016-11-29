@@ -414,7 +414,9 @@ module Pretty =
 (*
  * Starling imperative language semantics
  *)
-let prim (name : string) (results : TypedVar list) (args : TypedVar list)
+
+/// Creates a prim from a name, results list, and arguments list.
+let mkPrim (name : string) (results : TypedVar list) (args : TypedVar list)
   (body : Microcode<TypedVar, Var> list)
   : PrimSemantics =
     { Name = name; Results = results; Args = args; Body = body }
@@ -437,7 +439,7 @@ let coreSemantics : PrimSemanticsMap =
       (*
        * CAS
        *)
-      (prim "ICAS" [ Int "destA"; Int "testA" ] [ Int "destB"; Int "testB"; Int "set" ]
+      (mkPrim "ICAS" [ Int "destA"; Int "testA" ] [ Int "destB"; Int "testB"; Int "set" ]
            [ Branch
                 (iEq (IVar "destB") (IVar "testB"),
                  [ Assign (Int "destA", Int (IVar "set"))
@@ -445,7 +447,7 @@ let coreSemantics : PrimSemanticsMap =
                  [ Assign (Int "destA", Int (IVar "destB"))
                    Assign (Int "testA", Int (IVar "destB")) ] ) ] )
       // Boolean CAS
-      (prim "BCAS" [ Bool "destA"; Bool "testA" ] [ Bool "destB"; Bool "testB"; Bool "set" ]
+      (mkPrim "BCAS" [ Bool "destA"; Bool "testA" ] [ Bool "destB"; Bool "testB"; Bool "set" ]
            [ Branch
                 (bEq (BVar "destB") (BVar "testB"),
                  [ Assign (Bool "destA", Bool (BVar "set"))
@@ -456,29 +458,29 @@ let coreSemantics : PrimSemanticsMap =
        * Atomic load
        *)
       // Integer load
-      (prim "!ILoad"  [ Int "dest" ] [ Int "src" ]
+      (mkPrim "!ILoad"  [ Int "dest" ] [ Int "src" ]
             [ Assign (Int "dest", Int (IVar "src")) ] )
 
       // Integer load-and-increment
-      (prim "!ILoad++"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
+      (mkPrim "!ILoad++"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
             [ Assign (Int "dest", Int (IVar "srcB"))
               Assign (Int "srcA", Int (mkAdd2 (IVar "srcB") (IInt 1L))) ] )
 
       // Integer load-and-decrement
-      (prim "!ILoad--"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
+      (mkPrim "!ILoad--"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
             [ Assign (Int "dest", Int (IVar "srcB"))
               Assign (Int "srcA", Int (mkSub2 (IVar "srcB") (IInt 1L))) ] )
 
       // Integer increment
-      (prim "!I++"  [ Int "srcA" ] [ Int "srcB" ]
+      (mkPrim "!I++"  [ Int "srcA" ] [ Int "srcB" ]
             [ Assign (Int "srcA", Int (mkAdd2 (IVar "srcB") (IInt 1L))) ] )
 
       // Integer decrement
-      (prim "!I--"  [ Int "srcA" ] [ Int "srcB" ]
+      (mkPrim "!I--"  [ Int "srcA" ] [ Int "srcB" ]
             [ Assign (Int "srcA", Int (mkSub2 (IVar "srcB") (IInt 1L))) ] )
 
       // Boolean load
-      (prim "!BLoad"  [ Bool "dest" ] [ Bool "src" ]
+      (mkPrim "!BLoad"  [ Bool "dest" ] [ Bool "src" ]
             [ Assign (Bool "dest", Bool (BVar "src")) ] )
 
       (*
@@ -486,11 +488,11 @@ let coreSemantics : PrimSemanticsMap =
        *)
 
       // Integer store
-      (prim "!IStore" [ Int "dest" ] [ Int "src" ]
+      (mkPrim "!IStore" [ Int "dest" ] [ Int "src" ]
             [ Assign (Int "dest", Int (IVar "src")) ] )
 
       // Boolean store
-      (prim "!BStore" [ Bool "dest" ] [ Bool "src" ]
+      (mkPrim "!BStore" [ Bool "dest" ] [ Bool "src" ]
             [ Assign (Bool "dest", Bool (BVar "src")) ] )
 
       (*
@@ -498,11 +500,11 @@ let coreSemantics : PrimSemanticsMap =
        *)
 
       // Integer local set
-      (prim "!ILSet" [ Int "dest" ] [ Int "src" ]
+      (mkPrim "!ILSet" [ Int "dest" ] [ Int "src" ]
             [ Assign (Int "dest", Int (IVar "src")) ] )
 
       // Boolean store
-      (prim "!BLSet" [ Bool "dest" ] [ Bool "src" ]
+      (mkPrim "!BLSet" [ Bool "dest" ] [ Bool "src" ]
             [ Assign (Bool "dest", Bool (BVar "src")) ] )
 
       (*
@@ -510,10 +512,10 @@ let coreSemantics : PrimSemanticsMap =
        *)
 
       // Identity
-      (prim "Id" [] [] [])
+      (mkPrim "Id" [] [] [])
 
       // Assume
-      (prim "Assume" [] [Bool "expr"] [ Microcode.Assume (BVar "expr") ]) ]
+      (mkPrim "Assume" [] [Bool "expr"] [ Microcode.Assume (BVar "expr") ]) ]
 
 (*
  * Expression translation
