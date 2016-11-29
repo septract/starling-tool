@@ -1264,12 +1264,12 @@ let modelIntLoad
                            the source must be a SHARED integral lvalue;
                            and the fetch mode is unconstrained. *)
     let modelWithExprs dstE srcE =
-        let cmd, reads =
+        let cmd, results =
             match mode with
             | Direct -> "!ILoad", [ dstE ]
             | Increment -> "!ILoad++", [ dstE; srcE ]
             | Decrement -> "!ILoad--", [ dstE; srcE ]
-        command cmd (List.map Int reads) [ Int srcE ]
+        command cmd (List.map Int results) [ Int srcE ]
 
     lift2 modelWithExprs
         (modelIntLValue ctx.ThreadVars ctx.ThreadVars id dest)
