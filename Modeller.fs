@@ -597,10 +597,9 @@ let rec modelExpr
         (* We can use the active patterns above to figure out whether we
          * need to treat this expression as arithmetic or Boolean.
          *)
-        | _ -> match e with
-                | ArithExp expr -> expr |> modelIntExpr env idxEnv varF |> lift Expr.Int
-                | BoolExp expr -> expr |> modelBoolExpr env idxEnv varF |> lift Expr.Bool
-                | _ -> failwith "unreachable[modelExpr]"
+        | ArithExp' _ -> lift Expr.Int (modelIntExpr env idxEnv varF e)
+        | BoolExp' _ -> lift Expr.Bool (modelBoolExpr env idxEnv varF e)
+        | _ -> failwith "unreachable[modelExpr]"
 
 /// <summary>
 ///     Models a Starling Boolean expression as a <c>BoolExpr</c>.
