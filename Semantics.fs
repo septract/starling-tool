@@ -262,9 +262,9 @@ let mkIdx (eltype : Type) (length : int option) (arr : ArrayExpr<Sym<Var>>)
     let record = (eltype, length, arr, idx)
 
     match eltype with
-    | Int () -> Int (IIdx record)
-    | Bool () -> Bool (BIdx record)
-    | Array (eltype', length', ()) -> Array (eltype', length', AIdx record)
+    | Type.Int () -> Expr.Int (IIdx record)
+    | Type.Bool () -> Expr.Bool (BIdx record)
+    | Type.Array (eltype', length', ()) -> Expr.Array (eltype', length', AIdx record)
 
 /// <summary>
 ///     Normalises a list of assignments such that they represent
