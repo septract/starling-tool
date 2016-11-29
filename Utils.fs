@@ -271,6 +271,20 @@ let bind3
             let! cv = c
             return! f av bv cv }
 
+/// Extends bind to functions of 4 arguments.
+let bind4
+  (f: 'A -> 'B -> 'C -> 'D -> Result<'Value, 'Error>)
+  (a : Result<'A, 'Error>)
+  (b : Result<'B, 'Error>)
+  (c : Result<'C, 'Error>)
+  (d : Result<'D, 'Error>)
+  : Result<'Value, 'Error> =
+    trial { let! av = a
+            let! bv = b
+            let! cv = c
+            let! dv = d
+            return! f av bv cv dv }
+
 /// Extends lift to functions of 3 arguments.
 let lift3
   (f: 'A -> 'B -> 'C -> 'Value)

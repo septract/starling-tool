@@ -81,7 +81,7 @@ module Types =
         /// <summary>
         ///     Two items that should have been the same type were not.
         /// </summary>
-        | TypeMismatch of expected : Type * got : Type
+        | TypeMismatch of expected : string * got : Type
         /// <summary>
         ///     A language type literal is inexpressible in Starling.
         /// </summary>
@@ -97,9 +97,9 @@ module Types =
         /// <summary>
         ///     A variable in the expression failed the type checker.
         /// </summary>
-        | VarBadType of var : LValue * err : TypeError
+        | VarBadType of var : Var * err : TypeError
         /// A variable usage in the expression produced a `VarMapError`.
-        | Var of var : LValue * err : VarMapError
+        | Var of var : Var * err : VarMapError
         /// A substitution over the variable produced a `TraversalError`.
         | BadSub of err : TraversalError<unit>
         /// A symbolic expression appeared in an ambiguous position.
@@ -136,12 +136,10 @@ module Types =
 
     /// Represents an error when converting a prim.
     type PrimError =
-        /// A prim used a bad shared variable.
-        | BadSVar of var : LValue * err : VarMapError
-        /// A prim used a bad thread variable.
-        | BadTVar of var : LValue * err : VarMapError
-        /// A prim used a bad variable of ambiguous scope.
-        | BadIVar of var : LValue * err : VarMapError
+        /// <summary>
+        ///     A prim needed a lvalue but got a non-lvalue expression.
+        /// </summary>
+        | NeedLValue of expr : AST.Types.Expression
         /// A prim contained a bad expression.
         | BadExpr of expr : AST.Types.Expression * err : ExprError
         /// A prim tried to increment an expression.
@@ -155,15 +153,20 @@ module Types =
         /// A prim tried to atomic-load from a non-lvalue expression.
         | LoadNonLV of expr : AST.Types.Expression
         /// A prim had a type error in it.
-        | BadType of lv : LValue * err : TypeError
+        | BadType of expr : AST.Types.Expression * err : TypeError
         /// A prim has no effect.
         | Useless
+        /// <summary>
+        ///     A prim is not yet implemented in Starling.
+        /// </summary>
+        | PrimNotImplemented of what : string
 
     /// Represents an error when converting a method.
     type MethodError =
         /// The method contains a semantically invalid local assign.
-        | BadAssign of dest : LValue * src : AST.Types.Expression
-                                     * err : PrimError
+        | BadAssign of dest : AST.Types.Expression
+                     * src : AST.Types.Expression
+                     * err : PrimError
         /// The method contains a semantically invalid atomic action.
         | BadAtomic of atom : Atomic * err : PrimError
         /// The method contains a bad if-then-else condition.
@@ -252,7 +255,7 @@ module Pretty =
         match err with
         | TypeMismatch (expected, got) ->
             errorStr "expected"
-            <+> quoted (printType expected)
+            <+> errorStr expected
             <&> errorStr "got"
             <+> quoted (printType got)
         | ImpossibleType (lit, why) ->
@@ -276,9 +279,9 @@ module Pretty =
                 [ printTypeError err ]
         | VarBadType (lv, err) ->
             let header =
-                errorStr "type error in lvalue" <+> quoted (printLValue lv)
+                errorStr "type error in variable" <+> quoted (String lv)
             cmdHeaded header [ printTypeError err ]
-        | Var(var, err) -> wrapped "variable" (var |> printLValue) (err |> printVarMapError)
+        | Var(var, err) -> wrapped "variable" (var |> String) (err |> printVarMapError)
         | BadSub err ->
             fmt "Substitution error: {0}" [ printTraversalError (fun _ -> String "()") err ]
         | AmbiguousSym sym ->
@@ -330,14 +333,9 @@ module Pretty =
     /// Pretty-prints prim errors.
     let printPrimError (err : PrimError) : Doc =
         match err with
-        | BadSVar (var, err : VarMapError) ->
-            wrapped "shared lvalue" (printLValue var)
-                                    (printVarMapError err)
-        | BadTVar (var, err : VarMapError) ->
-            wrapped "thread-local lvalue" (printLValue var)
-                                          (printVarMapError err)
-        | BadIVar (var, err : VarMapError) ->
-            wrapped "lvalue" (printLValue var) (printVarMapError err)
+        | NeedLValue expr ->
+            errorStr "expected lvalue here, but got"
+            <+> quoted (printExpression expr)
         | BadExpr (expr, err : ExprError) ->
             wrapped "expression" (printExpression expr)
                                  (printExprError err)
@@ -357,12 +355,16 @@ module Pretty =
             fmt "cannot load from non-lvalue expression '{0}'"
                 [ printExpression expr ]
         | Useless -> String "command has no effect"
-        | BadType (lv, err) ->
+        | BadType (expr, err) ->
             let header =
-                errorStr "lvalue"
-                <+> quoted (printLValue lv)
+                errorStr "expression"
+                <+> quoted (printExpression expr)
                 <+> errorStr "has incorrect type"
             cmdHeaded header [ printTypeError err ]
+        | PrimNotImplemented what ->
+            errorStr "primitive command"
+            <+> quoted (String what)
+            <+> errorStr "not yet implemented"
 
 
     /// Pretty-prints method errors.
@@ -412,8 +414,12 @@ module Pretty =
 (*
  * Starling imperative language semantics
  *)
-let prim : string -> TypedVar list -> TypedVar list -> SVBoolExpr -> PrimSemantics =
-    fun name results args body -> { Name = name; Results = results; Args = args; Body = body }
+
+/// Creates a prim from a name, results list, and arguments list.
+let mkPrim (name : string) (results : TypedVar list) (args : TypedVar list)
+  (body : Microcode<TypedVar, Var> list)
+  : PrimSemantics =
+    { Name = name; Results = results; Args = args; Body = body }
 
 /// <summary>
 ///   The core semantic function for the imperative language.
@@ -429,87 +435,87 @@ let coreSemantics : PrimSemanticsMap =
     // TODO(CaptainHayashi): generic functions?
     // TODO(CaptainHayashi): add shared/local/expr qualifiers to parameters?
     List.fold (fun m (a : PrimSemantics) -> Map.add a.Name a m) Map.empty
-    <| [ (*
+    <| [
+      (*
        * CAS
        *)
-      (prim "ICAS" [ Int "destA"; Int "testA"; ] [ Int "destB"; Int "testB"; Int "set"; ]
-           <| mkAnd [ mkImplies (iEq (siVar "destB") (siVar "testB"))
-                             (mkAnd [ iEq (siVar "destA") (siVar "set")
-                                      iEq (siVar "testA") (siVar "testB") ] )
-                      mkImplies (mkNot (iEq (siVar "destB") (siVar "testB")))
-                                (mkAnd [ iEq (siVar "destA") (siVar "destB")
-                                         iEq (siVar "testA") (siVar "destB") ] ) ] )
+      (mkPrim "ICAS" [ Int "destA"; Int "testA" ] [ Int "destB"; Int "testB"; Int "set" ]
+           [ Branch
+                (iEq (IVar "destB") (IVar "testB"),
+                 [ Assign (Int "destA", Int (IVar "set"))
+                   Assign (Int "testA", Int (IVar "testB")) ],
+                 [ Assign (Int "destA", Int (IVar "destB"))
+                   Assign (Int "testA", Int (IVar "destB")) ] ) ] )
       // Boolean CAS
-      (prim "BCAS" [Bool "destA"; Bool "testA"; ] [Bool "destB"; Bool "testB"; Bool "set"; ]
-           <| mkAnd [ mkImplies (bEq (sbVar "destB") (sbVar "testB"))
-                                (mkAnd [ bEq (sbVar "destA") (sbVar "set")
-                                         bEq (sbVar "testA") (sbVar "testB") ] )
-                      mkImplies (mkNot (bEq (sbVar "destB") (sbVar "testB")))
-                                (mkAnd [ bEq (sbVar "destA") (sbVar "destB")
-                                         bEq (sbVar "testA") (sbVar "destB") ] ) ] )
-
+      (mkPrim "BCAS" [ Bool "destA"; Bool "testA" ] [ Bool "destB"; Bool "testB"; Bool "set" ]
+           [ Branch
+                (bEq (BVar "destB") (BVar "testB"),
+                 [ Assign (Bool "destA", Bool (BVar "set"))
+                   Assign (Bool "testA", Bool (BVar "testB")) ],
+                 [ Assign (Bool "destA", Bool (BVar "destB"))
+                   Assign (Bool "testA", Bool (BVar "destB")) ] ) ] )
       (*
        * Atomic load
        *)
       // Integer load
-      (prim "!ILoad"  [ Int "dest" ] [ Int "src" ]
-           <| iEq (siVar "dest") (siVar "src"))
+      (mkPrim "!ILoad"  [ Int "dest" ] [ Int "src" ]
+            [ Assign (Int "dest", Int (IVar "src")) ] )
 
       // Integer load-and-increment
-      (prim "!ILoad++"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
-           <| mkAnd [ iEq (siVar "dest") (siVar "srcB")
-                      iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (IInt 1L)) ])
+      (mkPrim "!ILoad++"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
+            [ Assign (Int "dest", Int (IVar "srcB"))
+              Assign (Int "srcA", Int (mkAdd2 (IVar "srcB") (IInt 1L))) ] )
 
       // Integer load-and-decrement
-      (prim "!ILoad--"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
-           <| mkAnd [ iEq (siVar "dest") (siVar "srcB")
-                      iEq (siVar "srcA") (mkSub2 (siVar "srcB") (IInt 1L)) ])
+      (mkPrim "!ILoad--"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
+            [ Assign (Int "dest", Int (IVar "srcB"))
+              Assign (Int "srcA", Int (mkSub2 (IVar "srcB") (IInt 1L))) ] )
 
       // Integer increment
-      (prim "!I++"  [ Int "srcA" ] [ Int "srcB" ]
-           <| iEq (siVar "srcA") (mkAdd2 (siVar "srcB") (IInt 1L)))
+      (mkPrim "!I++"  [ Int "srcA" ] [ Int "srcB" ]
+            [ Assign (Int "srcA", Int (mkAdd2 (IVar "srcB") (IInt 1L))) ] )
 
       // Integer decrement
-      (prim "!I--"  [ Int "srcA" ] [ Int "srcB" ]
-           <| iEq (siVar "srcA") (mkSub2 (siVar "srcB") (IInt 1L)))
+      (mkPrim "!I--"  [ Int "srcA" ] [ Int "srcB" ]
+            [ Assign (Int "srcA", Int (mkSub2 (IVar "srcB") (IInt 1L))) ] )
 
       // Boolean load
-      (prim "!BLoad"  [ Bool "dest" ] [ Bool "src" ]
-           <| bEq (sbVar "dest") (sbVar "src"))
+      (mkPrim "!BLoad"  [ Bool "dest" ] [ Bool "src" ]
+            [ Assign (Bool "dest", Bool (BVar "src")) ] )
 
       (*
        * Atomic store
        *)
 
       // Integer store
-      (prim "!IStore" [ Int "dest" ] [ Int "src" ]
-           <| iEq (siVar "dest") (siVar "src"))
+      (mkPrim "!IStore" [ Int "dest" ] [ Int "src" ]
+            [ Assign (Int "dest", Int (IVar "src")) ] )
 
       // Boolean store
-      (prim "!BStore" [ Bool "dest" ] [ Bool "src" ]
-           <| bEq (sbVar "dest") (sbVar "src"))
+      (mkPrim "!BStore" [ Bool "dest" ] [ Bool "src" ]
+            [ Assign (Bool "dest", Bool (BVar "src")) ] )
 
       (*
        * Local set
        *)
 
       // Integer local set
-      (prim "!ILSet" [ Int "dest" ] [ Int "src" ]
-           <| iEq (siVar "dest") (siVar "src"))
+      (mkPrim "!ILSet" [ Int "dest" ] [ Int "src" ]
+            [ Assign (Int "dest", Int (IVar "src")) ] )
 
       // Boolean store
-      (prim "!BLSet" [ Bool "dest" ] [ Bool "src" ]
-           <| bEq (sbVar "dest") (sbVar "src"))
+      (mkPrim "!BLSet" [ Bool "dest" ] [ Bool "src" ]
+            [ Assign (Bool "dest", Bool (BVar "src")) ] )
 
       (*
        * Assumptions
        *)
 
       // Identity
-      (prim "Id" [] [] BTrue)
+      (mkPrim "Id" [] [] [])
 
       // Assume
-      (prim "Assume" [] [Bool "expr"] <| sbVar "expr") ]
+      (mkPrim "Assume" [] [Bool "expr"] [ Microcode.Assume (BVar "expr") ]) ]
 
 (*
  * Expression translation
@@ -541,6 +547,10 @@ let coreSemantics : PrimSemanticsMap =
 ///     but before they are placed in the modelled expression.  Use this
 ///     to apply markers on variables, etc.
 /// </param>
+/// <param name="idxEnv">
+///     The <c>VarMap</c> of variables available to any array subscripts in this
+///     expression.  This is almost always the thread-local variables.
+/// </param>
 /// <typeparam name="var">
 ///     The type of variables in the <c>Expr</c>, achieved by
 ///     applying <paramref name="varF"/> to <c>Var</c>s.
@@ -553,14 +563,15 @@ let coreSemantics : PrimSemanticsMap =
 /// </returns>
 let rec modelExpr
   (env : VarMap)
+  (idxEnv : VarMap)
   (varF : Var -> 'var)
   (e : Expression)
   : Result<Expr<Sym<'var>>, ExprError> =
     match e.Node with
-    (* First, if we have a variable, the type of expression is
-       determined by the type of the variable.  If the variable is
-       symbolic, then we have ambiguity. *)
-        | LV v ->
+        (* First, if we have a variable, the type of expression is
+           determined by the type of the variable.  If the variable is
+           symbolic, then we have ambiguity. *)
+        | Identifier v ->
             v
             |> wrapMessages Var (VarMap.lookup env)
             |> bind (
@@ -570,16 +581,28 @@ let rec modelExpr
                 >> mapMessages BadSub)
         | Symbolic (sym, exprs) ->
             fail (AmbiguousSym sym)
+        (* If we have an array, then work out what the type of the array's
+           elements are, then walk back from there. *)
+        | ArraySubscript (arr, idx) ->
+            let arrResult = modelArrayExpr env idxEnv varF arr
+            let idxResult = modelIntExpr idxEnv idxEnv varF idx
+            lift2
+                (fun (eltype, length, arrE) idxE ->
+                    match eltype with
+                    | Int () -> Int (IIdx (eltype, length, arrE, idxE))
+                    | Bool () -> Bool (BIdx (eltype, length, arrE, idxE))
+                    | Array (ieltype, ilength, ()) ->
+                        Array (ieltype, ilength, AIdx (eltype, length, arrE, idxE)))
+                arrResult idxResult
         (* We can use the active patterns above to figure out whether we
          * need to treat this expression as arithmetic or Boolean.
          *)
-        | _ -> match e with
-                | ArithExp expr -> expr |> modelIntExpr env varF |> lift Expr.Int
-                | BoolExp expr -> expr |> modelBoolExpr env varF |> lift Expr.Bool
-                | _ -> failwith "unreachable[modelExpr]"
+        | ArithExp' _ -> lift Expr.Int (modelIntExpr env idxEnv varF e)
+        | BoolExp' _ -> lift Expr.Bool (modelBoolExpr env idxEnv varF e)
+        | _ -> failwith "unreachable[modelExpr]"
 
 /// <summary>
-///     Models a Starling integral expression as a <c>BoolExpr</c>.
+///     Models a Starling Boolean expression as a <c>BoolExpr</c>.
 ///
 ///     <para>
 ///         See <c>modelExpr</c> for more information.
@@ -595,29 +618,37 @@ let rec modelExpr
 ///     but before they are placed in <c>IVar</c>.  Use this to apply
 ///     markers on variables, etc.
 /// </param>
+/// <param name="expr">
+///     An expression previously judged as Boolean, to be modelled.
+/// </param>
+/// <param name="idxEnv">
+///     The <c>VarMap</c> of variables available to any array subscripts in this
+///     expression.  This is almost always the thread-local variables.
+/// </param>
 /// <typeparam name="var">
 ///     The type of variables in the <c>BoolExpr</c>, achieved by
 ///     applying <paramref name="varF"/> to <c>Var</c>s.
 /// </typeparam>
 /// <returns>
-///     A function, taking <c>Expression</c>s previously judged as
-///     Boolean.  This function will return a <c>Result</c>, over
-///     <c>ExprError</c>, containing the modelled <c>BoolExpr</c> on
-///     success.  The exact type parameters of the expression depend on
+///     A <c>Result</c>, over <c>ExprError</c>, containing the modelled
+///     <c>BoolExpr</c> on success.
+///     The exact type parameters of the expression depend on
 ///     <paramref name="varF"/>.
 /// </returns>
 and modelBoolExpr
   (env : VarMap)
+  (idxEnv : VarMap)
   (varF : Var -> 'var)
-  : Expression -> Result<BoolExpr<Sym<'var>>, ExprError> =
-    let mi = modelIntExpr env varF
-    let me = modelExpr env varF
+  (expr : Expression) : Result<BoolExpr<Sym<'var>>, ExprError> =
+    let mi = modelIntExpr env idxEnv varF
+    let me = modelExpr env idxEnv varF
+    let ma = modelArrayExpr env idxEnv varF
 
     let rec mb e =
         match e.Node with
         | True -> BTrue |> ok
         | False -> BFalse |> ok
-        | LV v ->
+        | Identifier v ->
             (* Look-up the variable to ensure it a) exists and b) is of a
              * Boolean type.
              *)
@@ -630,13 +661,23 @@ and modelBoolExpr
                             (VarBadType
                                 (v,
                                  TypeMismatch
-                                    (expected = Type.Bool (),
-                                     got = typeOf vr))))
+                                    (expected = "bool", got = typeOf vr))))
         | Symbolic (sym, args) ->
             args
             |> List.map me
             |> collect
             |> lift (func sym >> Sym >> BVar)
+        | ArraySubscript (arr, idx) ->
+            let arrResult = ma arr
+            // Bind array index using its own environment.
+            let idxResult = modelIntExpr idxEnv idxEnv varF idx
+            bind2
+                (fun (eltype, length, arrE) idxE ->
+                    match eltype with
+                    | Bool () -> ok (BIdx (eltype, length, arrE, idxE))
+                    | t ->
+                        fail (ExprBadType (TypeMismatch (expected = "bool[]", got = t))))
+                arrResult idxResult
         | BopExpr(BoolOp as op, l, r) ->
             match op with
             | ArithIn as o ->
@@ -663,10 +704,9 @@ and modelBoolExpr
                        | _ -> failwith "unreachable[modelBoolExpr::AnyIn]")
                       (me l)
                       (me r)
-        // TODO(CaptainHayashi): figure out what the actual type is here
         | _ ->
-            fail (ExprBadType (TypeMismatch (expected = Bool (), got = Int ())))
-    mb
+            fail (ExprBadType (TypeMismatch (expected = "bool", got = Int ())))
+    mb expr
 
 /// <summary>
 ///     Models a Starling integral expression as an <c>IntExpr</c>.
@@ -680,32 +720,40 @@ and modelBoolExpr
 ///     occurs.  Usually, but not always, these are the thread-local
 ///     variables.
 /// </param>
+/// <param name="idxEnv">
+///     The <c>VarMap</c> of variables available to any array subscripts in this
+///     expression.  This is almost always the thread-local variables.
+/// </param>
 /// <param name="varF">
 ///     A function to transform any variables after they are looked-up,
 ///     but before they are placed in <c>IVar</c>.  Use this to apply
 ///     markers on variables, etc.
+/// </param>
+/// <param name="expr">
+///     An expression previously judged as integral, to be modelled.
 /// </param>
 /// <typeparam name="var">
 ///     The type of variables in the <c>IntExpr</c>, achieved by
 ///     applying <paramref name="varF"/> to <c>Var</c>s.
 /// </typeparam>
 /// <returns>
-///     A function, taking <c>Expression</c>s previously judged as
-///     integral.  This function will return a <c>Result</c>, over
-///     <c>ExprError</c>, containing the modelled <c>IntExpr</c> on
-///     success.  The exact type parameters of the expression depend on
+///     A <c>Result</c>, over <c>ExprError</c>, containing the modelled
+///     <c>IntExpr</c> on success.
+///     The exact type parameters of the expression depend on
 ///     <paramref name="varF"/>.
 /// </returns>
 and modelIntExpr
   (env : VarMap)
+  (idxEnv : VarMap)
   (varF : Var -> 'var)
-  : Expression -> Result<IntExpr<Sym<'var>>, ExprError> =
-    let me = modelExpr env varF
+  (expr : Expression) : Result<IntExpr<Sym<'var>>, ExprError> =
+    let me = modelExpr env idxEnv varF
+    let ma = modelArrayExpr env idxEnv varF
 
     let rec mi e =
         match e.Node with
         | Num i -> i |> IInt |> ok
-        | LV v ->
+        | Identifier v ->
             (* Look-up the variable to ensure it a) exists and b) is of an
              * arithmetic type.
              *)
@@ -718,13 +766,23 @@ and modelIntExpr
                             (VarBadType
                                 (v,
                                  TypeMismatch
-                                    (expected = Type.Int (),
-                                     got = typeOf vr))))
+                                    (expected = "int", got = typeOf vr))))
         | Symbolic (sym, args) ->
             args
             |> List.map me
             |> collect
             |> lift (func sym >> Sym >> IVar)
+        | ArraySubscript (arr, idx) ->
+            let arrResult = ma arr
+            // Bind array index using its own environment.
+            let idxResult = modelIntExpr idxEnv idxEnv varF idx
+            bind2
+                (fun (eltype, length, arrE) idxE ->
+                    match eltype with
+                    | Int () -> ok (IIdx (eltype, length, arrE, idxE))
+                    | t ->
+                        fail (ExprBadType (TypeMismatch (expected = "int[]", got = t))))
+                arrResult idxResult
         | BopExpr(ArithOp as op, l, r) ->
             lift2 (match op with
                    | Mul -> mkMul2
@@ -735,10 +793,93 @@ and modelIntExpr
                    | _ -> failwith "unreachable[modelIntExpr]")
                   (mi l)
                   (mi r)
-        // TODO(CaptainHayashi): figure out what the actual type is here
         | _ ->
-            fail (ExprBadType (TypeMismatch (expected = Int (), got = Bool ())))
-    mi
+            fail (ExprBadType (TypeMismatch (expected = "int", got = Bool ())))
+    mi expr
+
+/// <summary>
+///     Models a Starling array expression as an <c>ArrayExpr</c>.
+///
+///     <para>
+///         See <c>modelExpr</c> for more information.
+///     </para>
+/// </summary>
+/// <param name="env">
+///     The <c>VarMap</c> of variables bound where this expression
+///     occurs.  Usually, but not always, these are the thread-local
+///     variables.
+/// </param>
+/// <param name="idxEnv">
+///     The <c>VarMap</c> of variables available to any array subscripts in this
+///     expression.  This is almost always the thread-local variables.
+/// </param>
+/// <param name="varF">
+///     A function to transform any variables after they are looked-up,
+///     but before they are placed in <c>AVar</c>.  Use this to apply
+///     markers on variables, etc.
+/// </param>
+/// <param name="expr">
+///     An expression previously judged as integral, to be modelled.
+/// </param>
+/// <typeparam name="var">
+///     The type of variables in the <c>ArrayExpr</c>, achieved by
+///     applying <paramref name="varF"/> to <c>Var</c>s.
+/// </typeparam>
+/// <returns>
+///     A <c>Result</c>, over <c>ExprError</c>, containing the modelled
+///     <c>ArrayExpr</c> on success.
+///     The exact type parameters of the expression depend on
+///     <paramref name="varF"/>.
+/// </returns>
+and modelArrayExpr
+  (env : VarMap)
+  (idxEnv : VarMap)
+  (varF : Var -> 'var)
+  (expr : Expression)
+  : Result<Type * int option * ArrayExpr<Sym<'var>>, ExprError> =
+    let mi = modelIntExpr env idxEnv varF
+
+    let rec ma e =
+        match e.Node with
+        | Identifier v ->
+            (* Look-up the variable to ensure it a) exists and b) is of an
+             * array type.
+             *)
+            v
+            |> wrapMessages Var (VarMap.lookup env)
+            |> bind (function
+                     | Typed.Array (eltype, length, vn) ->
+                        ok (eltype, length, AVar (Reg (varF vn)))
+                     | vr ->
+                        fail
+                            (VarBadType
+                                (v,
+                                 TypeMismatch
+                                    (expected = "array", got = typeOf vr))))
+        | Symbolic (sym, _) ->
+            (* TODO(CaptainHayashi): a symbolic array is ambiguously typed.
+               Maybe when modelling we should take our 'best guess' at
+               eltype and length from any subscripting expression? *)
+            fail (AmbiguousSym sym)
+        | ArraySubscript (arr, idx) ->
+            let arrResult = ma arr
+            let idxResult = mi idx
+            bind2
+                (fun (eltype, length, arrE) idxE ->
+                    match eltype with
+                    | Array (eltype', length', ()) ->
+                        ok (eltype', length', AIdx (eltype, length, arrE, idxE))
+                    | t ->
+                        // TODO(CaptainHayashi): more sensible error?
+                        fail (ExprBadType (TypeMismatch (expected = "array[]", got = t))))
+                arrResult idxResult
+        | ArithExp' _ ->
+            fail (ExprBadType (TypeMismatch (expected = "array", got = Int ())))
+        | BoolExp' _ ->
+            fail (ExprBadType (TypeMismatch (expected = "array", got = Bool ())))
+        // We should have covered all expressions by here.
+        | _ -> failwith "unreachable?[modelArrayExpr]"
+    ma expr
 
 (*
  * Views
@@ -821,7 +962,7 @@ let modelViewDef
         let! d = (match ad with
                   | Some dad ->
                       dad
-                      |> wrapMessages CEExpr (modelBoolExpr e id)
+                      |> wrapMessages CEExpr (modelBoolExpr e e id)
                       |> lift Some
                   | None _ -> ok None)
         return (v, d)
@@ -997,7 +1138,7 @@ let modelViewDefs
 
 /// Models an AFunc as a CFunc.
 let modelCFunc
-  ({ ViewProtos = protos; ThreadVars = env } : MethodContext)
+  ({ ViewProtos = protos; ThreadVars = tvars } : MethodContext)
   (afunc : Func<Expression>) =
     // First, make sure this AFunc actually has a prototype
     // and the correct number of parameters.
@@ -1008,7 +1149,7 @@ let modelCFunc
              afunc.Params
              |> Seq.map (fun e ->
                              e
-                             |> modelExpr env id
+                             |> modelExpr tvars tvars id
                              |> mapMessages (curry ViewError.BadExpr e))
              |> collect
              // Then, put them into a VFunc.
@@ -1030,7 +1171,7 @@ let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
         modelCFunc ctx afunc |> lift mkCView
     | View.If(e, l, r) ->
         lift3 (fun em lm rm -> CFunc.ITE(em, lm, rm) |> mkCView)
-              (e |> modelBoolExpr ctx.ThreadVars id
+              (e |> modelBoolExpr ctx.ThreadVars ctx.ThreadVars id
                  |> mapMessages (curry ViewError.BadExpr e))
               (modelCView ctx l)
               (modelCView ctx r)
@@ -1044,160 +1185,304 @@ let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
 // Axioms
 //
 
-let (|Shared|_|) ctx (lvalue : LValue) = VarMap.tryLookup ctx.SharedVars lvalue
-let (|Thread|_|) ctx (lvalue : LValue) = VarMap.tryLookup ctx.ThreadVars lvalue
+/// <summary>
+///     Models a Boolean lvalue given a potentially valid expression and
+///     environment.
+/// </summary>
+/// <param name="env">The environment used for variables in the lvalue.</param>
+/// <param name="idxEnv">The environment used for indexes in the lvalue.</param>
+/// <param name="marker">A function that marks (or doesn't mark) vars.</param>
+/// <param name="ex">The possible lvalue to model.</param>
+/// <returns>If the subject is a valid lvalue, the result expression.</returns>
+let modelBoolLValue
+  (env : VarMap) (idxEnv : VarMap) (marker : Var -> 'Var) (ex : Expression)
+  : Result<BoolExpr<Sym<'Var>>, PrimError> =
+    match ex with
+    | RValue r -> fail (NeedLValue r)
+    | LValue l -> wrapMessages BadExpr (modelBoolExpr env idxEnv marker) l
+
+/// <summary>
+///     Models an integer lvalue given a potentially valid expression and
+///     environment.
+/// </summary>
+/// <param name="env">The environment used for variables in the lvalue.</param>
+/// <param name="idxEnv">The environment used for indexes in the lvalue.</param>
+/// <param name="marker">A function that marks (or doesn't mark) vars.</param>
+/// <param name="ex">The possible lvalue to model.</param>
+/// <returns>If the subject is a valid lvalue, the result expression.</returns>
+let modelIntLValue
+  (env : VarMap) (idxEnv : VarMap) (marker : Var -> 'Var) (ex : Expression)
+  : Result<IntExpr<Sym<'Var>>, PrimError> =
+    match ex with
+    | RValue r -> fail (NeedLValue r)
+    | LValue l -> wrapMessages BadExpr (modelIntExpr env idxEnv marker) l
+
+/// <summary>
+///     Models an lvalue given a potentially valid expression and
+///     environment.
+/// </summary>
+/// <param name="env">The environment of variables used for the lvalue.</param>
+/// <param name="idxEnv">The environment used for indexes in the lvalue.</param>
+/// <param name="marker">A function that marks (or doesn't mark) vars.</param>
+/// <param name="ex">The possible lvalue to model.</param>
+/// <returns>If the subject is a valid lvalue, the result expression.</returns>
+let modelLValue
+  (env : VarMap) (idxEnv : VarMap) (marker : Var -> 'Var) (ex : Expression)
+  : Result<Expr<Sym<'Var>>, PrimError> =
+    match ex with
+    | RValue r -> fail (NeedLValue r)
+    | LValue l -> wrapMessages BadExpr (modelExpr env idxEnv marker) l
 
 /// Converts a Boolean load to a Prim.
-let modelBoolLoad : MethodContext -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
-    fun { SharedVars = svars } dest srcExpr mode ->
-    (* In a Boolean load, the destination must be LOCAL and Boolean;
-     *                    the source must be a GLOBAL Boolean lvalue;
-     *                    and the fetch mode must be Direct.
-     *)
-    match srcExpr.Node with
-    | LV srcLV ->
-        trial {
-            let! src = wrapMessages BadSVar (VarMap.lookup svars) srcLV
-            match src, mode with
-            | Typed.Bool s, Direct ->
-                return
-                    command
-                        "!BLoad"
-                            [ Bool dest ]
-                            [ s |> Before |> Reg |> BVar |> Expr.Bool ]
+let modelBoolLoad
+  (ctx : MethodContext)
+  (dest : Expression)
+  (src : Expression)
+  (mode : FetchMode)
+  : Result<PrimCommand, PrimError> =
+    (* In a Boolean load, the destination must be a THREAD Boolean lvalue;
+                          the source must be a SHARED Boolean lvalue;
+                          and the fetch mode must be Direct. *)
+    let modelWithExprs dstE srcE =
+        match mode with
+        | Direct -> ok (command "!BLoad" [ Bool dstE ] [ Bool srcE ])
+        | Increment -> fail (IncBool src)
+        | Decrement -> fail (DecBool src)
 
-            | Typed.Bool s, Increment -> return! fail (IncBool srcExpr)
-            | Typed.Bool s, Decrement -> return! fail (DecBool srcExpr)
-            | _ ->
-                return!
-                    (fail
-                        (BadType
-                            (srcLV,
-                             TypeMismatch (Type.Bool (), typeOf src))))
-        }
-    | _ -> fail (LoadNonLV srcExpr)
+    bind2 modelWithExprs
+        (modelBoolLValue ctx.ThreadVars ctx.ThreadVars id dest)
+        (modelBoolLValue ctx.SharedVars ctx.ThreadVars id src)
 
 /// Converts an integer load to a Prim.
-let modelIntLoad : MethodContext -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
-    fun { SharedVars = svars } dest srcExpr mode ->
-    (* In an integer load, the destination must be LOCAL and integral;
-     *                    the source must be a GLOBAL arithmetic lvalue;
-     *                    and the fetch mode is unconstrained.
-     *)
-    match srcExpr.Node with
-    | LV srcLV ->
-        trial {
-            let! src = wrapMessages BadSVar (VarMap.lookup svars) srcLV
-            match src, mode with
-            | Typed.Int s, Direct ->
-                return command "!ILoad" [ Int dest ] [ s |> Before |> Reg |> IVar |> Expr.Int ]
+let modelIntLoad
+  (ctx : MethodContext)
+  (dest : Expression)
+  (src : Expression)
+  (mode : FetchMode)
+  : Result<PrimCommand, PrimError> =
+    (* In an integer load, the destination must be a THREAD integral lvalue;
+                           the source must be a SHARED integral lvalue;
+                           and the fetch mode is unconstrained. *)
+    let modelWithExprs dstE srcE =
+        let cmd, results =
+            match mode with
+            | Direct -> "!ILoad", [ dstE ]
+            | Increment -> "!ILoad++", [ dstE; srcE ]
+            | Decrement -> "!ILoad--", [ dstE; srcE ]
+        command cmd (List.map Int results) [ Int srcE ]
 
-            | Typed.Int s, Increment ->
-                return command "!ILoad++" [ Int dest; Int s ] [ s |> Before |> Reg |> IVar |> Expr.Int ]
-
-            | Typed.Int s, Decrement ->
-                return command "!ILoad--" [ Int dest; Int s ] [ s |> Before |> Reg |> IVar |> Expr.Int ]
-
-            | _ -> return! fail (BadType (srcLV, TypeMismatch (Type.Int (), typeOf src)))
-        }
-    | _ -> fail (LoadNonLV srcExpr)
+    lift2 modelWithExprs
+        (modelIntLValue ctx.ThreadVars ctx.ThreadVars id dest)
+        (modelIntLValue ctx.SharedVars ctx.ThreadVars id src)
 
 /// Converts a Boolean store to a Prim.
-let modelBoolStore : MethodContext -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
-    fun { ThreadVars = tvars } dest src mode ->
-    (* In a Boolean store, the destination must be GLOBAL and Boolean;
-     *                     the source must be LOCAL and Boolean;
-     *                     and the fetch mode must be Direct.
-     *)
-    trial {
-        let! sxp = wrapMessages BadExpr (modelBoolExpr tvars Before) src
+let modelBoolStore
+  (ctx : MethodContext)
+  (dest : Expression)
+  (src : Expression)
+  (mode : FetchMode)
+  : Result<PrimCommand, PrimError> =
+    (* In a Boolean store, the destination must a SHARED Boolean lvalue;
+                           the source must be THREAD Boolean;
+                           and the fetch mode must be Direct. *)
+    let modelWithExprs dstE srcE =
         match mode with
-        | Direct ->
-            return
-                command
-                    "!BStore"
-                    [ Bool dest ]
-                    [ sxp |> Expr.Bool ]
-        | Increment -> return! fail (IncBool src)
-        | Decrement -> return! fail (DecBool src)
-    }
+        | Direct -> ok (command "!BStore" [ Bool dstE ] [ Bool srcE ])
+        | Increment -> fail (IncBool src)
+        | Decrement -> fail (DecBool src)
+
+    bind2 modelWithExprs
+        (modelBoolLValue ctx.SharedVars ctx.ThreadVars id dest)
+        (wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id) src)
 
 /// Converts an integral store to a Prim.
-let modelIntStore : MethodContext -> Var -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
-    fun { ThreadVars = tvars } dest src mode ->
+let modelIntStore
+  (ctx : MethodContext)
+  (dest : Expression)
+  (src : Expression)
+  (mode : FetchMode)
+  : Result<PrimCommand, PrimError> =
     (* In an integral store, the destination must be GLOBAL and integral;
      *                       the source must be LOCAL and integral;
      *                       and the fetch mode must be Direct.
      *)
-    trial {
-        let! sxp =
-            wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Before) src
-        match mode with
-        | Direct ->
-            return
-                command
-                    "!IStore"
-                    [ Int dest ]
-                    [ sxp |> Expr.Int ]
+    let modelWithExprs dst src =
+        let cmd, reads =
+            match mode with
+            | Direct -> "!IStore", [ dst ]
+            | Increment -> "!IStore++", [ dst; src ]
+            | Decrement -> "!IStore--", [ dst; src ]
+        command cmd (List.map Int reads) [ Int src ]
 
-        | Increment -> return! fail (IncExpr src)
-        | Decrement -> return! fail (DecExpr src)
-    }
+    lift2 modelWithExprs
+        (modelIntLValue ctx.SharedVars ctx.ThreadVars id dest)
+        (wrapMessages BadExpr (modelIntExpr ctx.ThreadVars ctx.ThreadVars id) src)
 
 /// Converts a CAS to part-commands.
-let modelCAS : MethodContext -> LValue -> LValue -> Expression -> Result<PrimCommand, PrimError> =
-    fun { SharedVars = svars; ThreadVars = tvars } destLV testLV set ->
-    (* In a CAS, the destination must be SHARED;
-     *           the test variable must be THREADLOCAL;
-     *           and the to-set value must be a valid expression.
-     * dest, test, and set must agree on type.
-     * The type of dest and test influences how we interpret set.
-     *)
-    wrapMessages BadSVar (VarMap.lookup svars) destLV
-    >>= (fun dest ->
-             let v = wrapMessages BadTVar (VarMap.lookup tvars) testLV
-             lift (mkPair dest) v)
-    >>= (function
-         | (Bool d, Bool t) ->
-             set
-             |> wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Before)
-             |> lift
-                    (fun s ->
-                        command "BCAS"
-                            [ Bool d; Bool t ]
-                            [ d |> sbBefore |> Expr.Bool
-                              t |> sbBefore |> Expr.Bool
-                              s |> Expr.Bool ] )
-         | (Int d, Int t) ->
-            set
-            |> wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Before)
-            |> lift
-                   (fun s ->
-                        command "ICAS"
-                            [ Int d; Int t ]
-                            [ d |> siBefore |> Expr.Int
-                              t |> siBefore |> Expr.Int
-                              s |> Expr.Int ] )
-         | (d, t) ->
-             // Oops, we have a type error.
-             // Arbitrarily single out test as the cause of it.
-             fail (BadType (testLV, TypeMismatch (typeOf d, typeOf t))))
+let modelCAS
+  (ctx : MethodContext)
+  (dest : Expression)
+  (test : Expression)
+  (set : Expression)
+  : Result<PrimCommand, PrimError> =
+    (* In a CAS, the destination must be a SHARED lvalue;
+                 the test variable must be a THREAD lvalue;
+                 and the to-set value must be a valid expression.
+
+       dest, test, and set must agree on type.
+       The type of dest and test influences how we interpret set. *)
+    let modelWithDestAndTest destLV testLV =
+        (* Determine from destPreLV and testPreLV what the type of the CAS is.
+           Assume that the post-states are of the same type. *)
+        match destLV, testLV with
+        | Bool dlB, Bool tlB ->
+            let setResult =
+                wrapMessages BadExpr
+                    (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
+                    set
+
+            lift
+                (fun s ->
+                    command "BCAS"
+                        [ destLV; testLV ]
+                        [ Expr.Bool dlB; Bool tlB; Bool s ] )
+                setResult
+        | Int dlI, Int tlI ->
+            let setResult =
+                wrapMessages BadExpr
+                    (modelIntExpr ctx.ThreadVars ctx.ThreadVars id)
+                    set
+
+            lift
+                (fun s ->
+                    command "ICAS"
+                        [ destLV; testLV ]
+                        [ Int dlI; Int tlI; Int s ] )
+                setResult
+        | d, t ->
+            (* Oops, we have a type error.
+               Arbitrarily single out test as the cause of it. *)
+            fail
+                (BadType
+                    (test,
+                     TypeMismatch
+                        // TODO(CaptainHayashi): clean this up
+                        (Starling.Core.Pretty.printUnstyled
+                            (Starling.Core.TypeSystem.Pretty.printType (typeOf d)), typeOf t)))
+
+    (* We need the unmarked version of dest and test for the outputs,
+       and the marked version for the inputs. *)
+    let mdl vars = modelLValue vars ctx.ThreadVars id
+    bind2 modelWithDestAndTest
+        (mdl ctx.SharedVars dest)
+        (mdl ctx.ThreadVars test)
+
+/// <summary>
+///     Gets the underlying variable of an lvalue.
+/// </summary>
+/// <param name="lv">The lvalue-candidate whose type is needed.</param>
+/// <returns>
+///     The lvalue's variable; will crash if the expression is not an lvalue.
+/// </returns>
+let rec varOfLValue (lv : Expression) : Var =
+    match lv.Node with
+    | Identifier i -> i
+    | ArraySubscript (arr, _) -> varOfLValue arr
+    | _ -> failwith "called varOfLValue with non-lvalue"
+
+/// <summary>
+///     Tries to get the type of an lvalue.
+/// </summary>
+/// <param name="env">The map in which the lvalue's variable exists.</param>
+/// <param name="lv">The lvalue-candidate whose type is needed.</param>
+/// <returns>
+///     If the lvalue has a valid type, the type of that lvalue; otherwise,
+///     None.
+/// </returns>
+let typeOfLValue (env : VarMap) (lv : Expression) : Type option =
+    (* We can get the type by traversing the lvalue up to its underlying variable,
+       chaining together a sequence of 'matcher functions' that respond to the
+       various transformations (subscripts etc.) to that variable by peeling off
+       bits of the variable's own type. *)
+
+    (* For example, if we go through a [] to get to a variable, we need to remove
+       an Array type. *)
+    let matchArray var =
+        match var with
+        | Array (eltype, _, _) -> Some eltype
+        | _ -> None
+
+    // This is the part that actually traverses the expression.
+    let rec walkLValue lv matcher =
+        match lv.Node with
+        | Identifier v ->
+            (* We've found a variable x.  Its type is available in env.
+               However, if we walked through some []s to get here, we need to
+               apply the matcher sequence to extract the eventual element type. *)
+            Option.bind (typeOf >> matcher) (VarMap.tryLookup env v)
+        | ArraySubscript (arr, _) ->
+            (* If we find x[i], get the type t(x) and then make a note to extract
+               t(x)'s element type.  So, if arr is of type int[], we will get int. *)
+            walkLValue arr (matcher >> Option.bind matchArray)
+        | _ -> None
+    walkLValue lv Some
 
 /// Converts an atomic fetch to a model command.
-let modelFetch : MethodContext -> LValue -> Expression -> FetchMode -> Result<PrimCommand, PrimError> =
-    fun ctx destLV srcExpr mode ->
+let modelFetch
+  (ctx : MethodContext)
+  (dest : Expression)
+  (test : Expression)
+  (mode : FetchMode)
+  : Result<PrimCommand, PrimError> =
     (* First, determine whether we have a fetch from shared to thread
      * (a load), or a fetch from thread to shared (a store).
      * Also figure out whether we have a Boolean or arithmetic
      * version.
      * We figure this out by looking at dest.
      *)
-    match destLV with
-    | Shared ctx (Typed.Int dest) -> modelIntStore ctx dest srcExpr mode
-    | Shared ctx (Typed.Bool dest) -> modelBoolStore ctx dest srcExpr mode
-    | Thread ctx (Typed.Int dest) -> modelIntLoad ctx dest srcExpr mode
-    | Thread ctx (Typed.Bool dest) -> modelBoolLoad ctx dest srcExpr mode
-    | lv -> fail (BadIVar(lv, NotFound (flattenLV lv)))
+    let rec findModeller d =
+        match d with
+        | LValue _ ->
+            match (typeOfLValue ctx.SharedVars d) with
+            | Some (Typed.Int _) -> ok modelIntStore
+            | Some (Typed.Bool _) -> ok modelBoolStore
+            | Some (Typed.Array (_))
+                -> fail (PrimNotImplemented "array fetch")
+            | None ->
+                match (typeOfLValue ctx.ThreadVars d) with
+                | Some (Typed.Int _) -> ok modelIntLoad
+                | Some (Typed.Bool _) -> ok modelBoolLoad
+                | Some (Typed.Array (_))
+                    -> fail (PrimNotImplemented "array fetch")
+                | None ->
+                    let v = varOfLValue d
+                    fail (BadExpr (dest, Var (v, NotFound v)))
+        | RValue _ -> fail (NeedLValue d)
+
+    bind (fun f -> f ctx dest test mode) (findModeller dest)
+
+/// <summary>
+///     Models a postfix expression as a primitive.
+/// </summary>
+/// <param name="ctx">The context of the modeller at this position.</param>
+/// <param name="operand">The postfixed expression.</param>
+/// <param name="mode">The mode representing the postfix operator.</param>
+/// <returns>If successful, the modelled expression.</returns>
+let modelPostfix (ctx : MethodContext) (operand : Expression) (mode : FetchMode)
+  : Result<PrimCommand, PrimError> =
+    (* A Postfix is basically a Fetch with no destination, at this point.
+       Thus, the source must be a SHARED LVALUE.
+       We don't allow the Direct fetch mode, as it is useless. *)
+    let modelWithOperand opE =
+        match mode, opE with
+        | Direct, _ -> fail Useless
+        | Increment, Typed.Bool _ -> fail (IncBool operand)
+        | Decrement, Typed.Bool _ -> fail (DecBool operand)
+        | Increment, Typed.Int _ -> ok (command "!I++" [ opE ] [ opE ])
+        | Decrement, Typed.Int _ -> ok (command "!I--" [ opE ] [ opE ])
+        | _, Typed.Array (_) -> fail (PrimNotImplemented "array postfix")
+    bind modelWithOperand
+        (modelLValue ctx.SharedVars ctx.ThreadVars id operand)
 
 /// Converts a single atomic command from AST to part-commands.
 let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> =
@@ -1206,61 +1491,32 @@ let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> 
         match a.Node with
         | CompareAndSwap(dest, test, set) -> modelCAS ctx dest test set
         | Fetch(dest, src, mode) -> modelFetch ctx dest src mode
-        | Postfix(operand, mode) ->
-            (* A Postfix is basically a Fetch with no destination, at this point.
-             * Thus, the source must be SHARED.
-             * We don't allow the Direct fetch mode, as it is useless.
-             *)
-            trial {
-                let! stype = wrapMessages BadSVar (VarMap.lookup ctx.SharedVars) operand
-                // TODO(CaptainHayashi): sort out lvalues...
-                let op = flattenLV operand
-                match mode, stype with
-                | Direct, _ ->
-                    return! fail Useless
-                | Increment, Typed.Bool _ ->
-                    return! fail (IncBool (freshNode <| LV operand))
-                | Decrement, Typed.Bool _ ->
-                    return! fail (DecBool (freshNode <| LV operand))
-                | Increment, Typed.Int _ ->
-                    return command "!I++" [ Int op ] [op |> Before |> Reg |> IVar |> Expr.Int ]
-                | Decrement, Typed.Int _ ->
-                    return command "!I--" [ Int op ] [op |> Before |> Reg |> IVar |> Expr.Int ]
-            }
+        | Postfix(operand, mode) -> modelPostfix ctx operand mode
         | Id -> ok (command "Id" [] [])
         | Assume e ->
             e
-            |> wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars MarkedVar.Before)
+            |> wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
             |> lift (Expr.Bool >> List.singleton >> command "Assume" [])
     lift (fun cmd -> { cmd with Node = Some a }) prim
 
 /// Converts a local variable assignment to a Prim.
-and modelAssign : MethodContext -> LValue -> Expression -> Result<PrimCommand, PrimError> =
-    fun { ThreadVars = tvars } lLV e ->
+and modelAssign
+  (ctx : MethodContext)
+  (dest : Expression)
+  (src : Expression)
+  : Result<PrimCommand, PrimError> =
     (* We model assignments as !ILSet or !BLSet, depending on the
-     * type of l, which _must_ be in the locals set..
-     * We thus also have to make sure that e is the correct type.
-     *)
-    trial {
-        let! l = wrapMessages BadTVar (VarMap.lookup tvars) lLV
-        match l with
-        | Typed.Bool ls ->
-            let! em =
-                wrapMessages BadExpr (modelBoolExpr tvars MarkedVar.Before) e
-            return
-                command
-                    "!BLSet"
-                    [ Bool ls ]
-                    [ em |> Expr.Bool ]
-        | Typed.Int ls ->
-            let! em =
-                wrapMessages BadExpr (modelIntExpr tvars MarkedVar.Before) e
-            return
-                command
-                    "!ILSet"
-                    [ Int ls ]
-                    [ em |> Expr.Int ]
-    }
+       type of dest, which _must_ be a thread lvalue.
+       We thus also have to make sure that src is the correct type. *)
+    let modelWithDestAndSrc destPost srcPre =
+        match destPost with
+        | Typed.Bool _ -> ok (command "!BLSet" [ destPost ] [ srcPre ])
+        | Typed.Int _  -> ok (command "!ILSet" [ destPost ] [ srcPre ])
+        | Typed.Array (_) -> fail (PrimNotImplemented "array local assign")
+
+    bind2 modelWithDestAndSrc
+        (modelLValue ctx.ThreadVars ctx.ThreadVars id dest)
+        (wrapMessages BadExpr (modelExpr ctx.ThreadVars ctx.ThreadVars id) src)
 
 /// Creates a partially resolved axiom for an if-then-else.
 and modelITE
@@ -1273,7 +1529,7 @@ and modelITE
         trial { let! iM =
                     wrapMessages
                         BadITECondition
-                        (modelBoolExpr ctx.ThreadVars id)
+                        (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
                         i
                 (* We need to calculate the recursive axioms first, because we
                  * need the inner cpairs for each to store the ITE placeholder.
@@ -1301,7 +1557,7 @@ and modelWhile
     lift2 (fun eM bM -> PartCmd.While(isDo, eM, bM))
           (wrapMessages
                BadWhileCondition
-               (modelBoolExpr ctx.ThreadVars id)
+               (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
                e)
           (modelBlock ctx b)
 
@@ -1417,9 +1673,17 @@ let modelViewProtos (protos : #(DesugaredViewProto seq))
 /// </returns>
 let convertTypedVar (lit : AST.Types.TypeLiteral) (name : string)
   : Result<TypedVar, TypeError> =
-    match lit with
-    | TInt -> ok (Int name)
-    | TBool -> ok (Bool name)
+    let rec convType =
+        function
+        | TInt -> ok (Int ())
+        | TBool -> ok (Bool ())
+        | TArray (len, elt) ->
+            lift
+                (fun eltype -> Array (eltype, Some len, ()))
+                (convType elt)
+        (* At some point, this may (and once did) return ImpossibleType,
+           hence why it is a Result. *)
+    lift (fun ty -> withType ty name) (convType lit)
 
 /// <summary>
 ///     Converts a type-variable list to a variable map.

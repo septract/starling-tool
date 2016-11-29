@@ -15,7 +15,7 @@ view hasPos(int p, bool s);
 view currSense(bool s); 
 view oldSense(bool s); 
 
-method await(i) { 
+method await() { 
  {| isBarrier(i) * currSense(mysense) |} 
   < pos = count-- >; 
  {| hasPos(pos, mysense) |} 
@@ -43,8 +43,8 @@ method await(i) {
  {| isBarrier(i+1) * currSense(mysense) |} 
 } 
 
-// // Iterated views
-// constraint isBarrier(a)[x]  ->  count + x <= size; 
+// Iterated views
+constraint iter[x] isBarrier(a) -> count + x <= size; 
 
 // Global invariant 
 constraint emp  ->  size >= count;  

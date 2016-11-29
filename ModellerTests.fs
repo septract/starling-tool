@@ -31,10 +31,17 @@ let environ =
     Map.ofList [ ("foo", Type.Int ())
                  ("bar", Type.Int ())
                  ("baz", Type.Bool ())
-                 ("emp", Type.Bool ()) ]
+                 ("emp", Type.Bool ())
+                 // Multi-dimensional arrays
+                 ("grid",
+                    Type.Array
+                        (Type.Array (Type.Int (), Some 320, ()),
+                         Some 240,
+                         ())) ]
 
 let shared =
-    Map.ofList [ ("x", Type.Int ())
+    Map.ofList [ ("nums", Type.Array (Type.Int(), Some 10, ()))
+                 ("x", Type.Int ())
                  ("y", Type.Bool ()) ]
 
 let context =
@@ -46,6 +53,7 @@ let sharedContext =
     { ViewProtos = ticketLockProtos
       SharedVars = shared
       ThreadVars = environ }
+
 
 module ViewPass =
     let check (view : View) (expectedCView : CView) =
@@ -64,6 +72,7 @@ module ViewPass =
                 (iterated
                     (CFunc.Func (vfunc "holdLock" []))
                     None))
+
 
 module ViewFail =
     let check (view : View) (expectedFailures : ViewError list) =
@@ -91,14 +100,20 @@ module ViewFail =
                  Error.TypeMismatch
                    (Int "t", Type.Bool ())) ])
 
+
 module ArithmeticExprs =
-    let check (ast : Expression) (expectedExpr : IntExpr<Sym<Var>>) =
-        let actualIntExpr = okOption <| modelIntExpr environ id ast
-        AssertAreEqual(Some expectedExpr, actualIntExpr)
+    open Starling.Core.Pretty
+    open Starling.Lang.Modeller.Pretty
+
+    let check (env : VarMap) (ast : Expression) (expectedExpr : IntExpr<Sym<Var>>) =
+        assertOkAndEqual
+            expectedExpr
+            (modelIntExpr env environ id ast)
+            (printExprError >> printUnstyled)
 
     [<Test>]
     let ``test modelling (1 * 3) % 2`` ()=
-        check
+        check environ
             (freshNode <| BopExpr( Mod,
                                    freshNode <| BopExpr(Mul, freshNode (Num 1L), freshNode (Num 3L)),
                                    freshNode (Num 2L) ))
@@ -107,23 +122,58 @@ module ArithmeticExprs =
 
     [<Test>]
     let ``test modelling (1 * 2) + 3`` ()=
-        check
+        check environ
             (freshNode <| BopExpr( Add,
                                    freshNode <| BopExpr(Mul, freshNode (Num 1L), freshNode (Num 2L)),
                                    freshNode (Num 3L) ))
             // TODO (CaptainHayashi): this shouldn't be optimised?
             (IInt 5L)
 
+    [<Test>]
+    let ``test modelling shared array access nums[foo + 1]`` ()=
+        check shared
+            (freshNode <| ArraySubscript
+                (freshNode (Identifier "nums"),
+                 freshNode <| BopExpr
+                    (Add,
+                     freshNode (Identifier "foo"),
+                     freshNode (Num 3L))))
+            (IIdx
+                (Int (),
+                 Some 10,
+                 AVar (Reg "nums"),
+                 IAdd [ IVar (Reg "foo"); IInt 3L ]))
+
+    [<Test>]
+    let ``test modelling local array access grid[x][y]`` () =
+        check environ
+            (freshNode <| ArraySubscript
+                (freshNode <| ArraySubscript
+                     (freshNode (Identifier "grid"),
+                      freshNode (Identifier "foo")),
+                 freshNode (Identifier "bar")))
+            (IIdx
+                (Int (),
+                 Some 320,
+                 AIdx
+                    (Array (Int (), Some 320, ()),
+                     Some 240,
+                     AVar (Reg "grid"),
+                     IVar (Reg "foo")),
+                 IVar (Reg "bar")))
+
+
 module BooleanExprs =
-    let check (ast : Expression) (expectedExpr : BoolExpr<Sym<Var>>) =
-        let actualBoolExpr = okOption <| modelBoolExpr environ id ast
+    let check (env : VarMap) (ast : Expression) (expectedExpr : BoolExpr<Sym<Var>>) =
+        let actualBoolExpr = okOption <| modelBoolExpr env environ id ast
         AssertAreEqual(Some expectedExpr, actualBoolExpr)
 
     [<Test>]
     let ``model (true || true) && false`` () =
-        check
+        check environ
             (freshNode <| BopExpr(And, freshNode <| BopExpr(Or, freshNode True, freshNode True), freshNode False))
             (BFalse : BoolExpr<Sym<Var>>)
+
 
 module VarLists =
     let checkFail (vars : TypedVar list) (expectedErrs : VarMapError list) =
@@ -168,24 +218,42 @@ module VarLists =
             ([ VarMapError.Duplicate "foo" ])
 
 module Atomics =
-    let check (ast : Atomic) (cmd : PrimCommand) =
-        let actualCmd = okOption <| modelAtomic sharedContext ast
-        AssertAreEqual(Some cmd, actualCmd)
+    open Starling.Core.Pretty
+    open Starling.Lang.Modeller.Pretty
+
+    let check (ast : Atomic) (cmd : PrimCommand) : unit =
+        assertOkAndEqual
+            cmd
+            (modelAtomic sharedContext ast)
+            (printPrimError >> printUnstyled)
 
     [<Test>]
     let ``model integer load primitive <foo = x++>`` ()=
-        let ast = freshNode (Fetch((LVIdent "foo"), freshNode (LV(LVIdent "x")), Increment))
+        let ast = freshNode (Fetch(freshNode (Identifier "foo"), freshNode (Identifier "x"), Increment))
         check
             ast
             <| command' "!ILoad++"
                 ast
-                [ Int "foo"; Int "x" ]
-                [ "x" |> siBefore |> SMExpr.Int ]
+                [ Int (siVar "foo"); Int (siVar "x") ]
+                [ Int (siVar "x") ]
+
+    [<Test>]
+    let ``model Boolean load primitive <baz = y>`` ()=
+        let ast = freshNode (Fetch(freshNode (Identifier "baz"), freshNode (Identifier "y"), Direct))
+        check
+            ast
+            (command' "!BLoad" ast [ Bool (sbVar "baz") ] [ Bool (sbVar "y") ])
+
 
 module CommandAxioms =
-    let check (c : Command<ViewExpr<View>>) (cmd : ModellerPartCmd) =
-        let actualCmd = okOption <| modelCommand sharedContext c
-        AssertAreEqual(Some cmd, actualCmd)
+    open Starling.Core.Pretty
+    open Starling.Lang.Modeller.Pretty
+
+    let check (c : Command<ViewExpr<View>>) (cmd : ModellerPartCmd) : unit =
+        assertOkAndEqual
+            cmd
+            (modelCommand sharedContext c)
+            (printMethodError >> printUnstyled)
 
     let prim (atom : Atomic) : Command<ViewExpr<View>> =
         freshNode
@@ -195,14 +263,23 @@ module CommandAxioms =
 
     [<Test>]
     let ``modelling command <foo = x++> passes`` () =
-        let ast = freshNode (Fetch((LVIdent "foo"), freshNode (LV(LVIdent "x")), Increment))
+        let ast = freshNode (Fetch(freshNode (Identifier "foo"), freshNode (Identifier "x"), Increment))
         check
             (prim <| ast)
             <| Prim ([ command' "!ILoad++"
                         ast
-                        [ Int "foo"; Int "x" ]
-                        [ "x" |> siBefore |> SMExpr.Int ] ])
+                        [ Int (siVar "foo"); Int (siVar "x") ]
+                        [ Int (siVar "x") ] ])
 
+    [<Test>]
+    let ``modelling command <baz = y> passes`` () =
+        let ast = freshNode (Fetch(freshNode (Identifier "baz"), freshNode (Identifier "y"), Direct))
+        check
+            (prim <| ast)
+            <| Prim ([ command' "!BLoad"
+                        ast
+                        [ Bool (sbVar "baz") ]
+                        [ Bool (sbVar "y") ] ])
 
 
 module ViewDefs =

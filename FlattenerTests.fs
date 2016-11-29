@@ -40,7 +40,9 @@ module Tests =
         Seq.map
             (function
              | TypedVar.Int x -> x |> siBefore |> Expr.Int
-             | TypedVar.Bool x -> x |> sbBefore |> Expr.Bool)
+             | TypedVar.Bool x -> x |> sbBefore |> Expr.Bool
+             | TypedVar.Array (eltype, length, x) ->
+                Expr.Array (eltype, length, AVar (Reg (Before x))))
             svarSeq
 
 

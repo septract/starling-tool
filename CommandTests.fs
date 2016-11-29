@@ -25,17 +25,17 @@ module Nops =
 
     [<Test>]
     let ``Classify Assume(x!before) as a no-op``() =
-        check [ command "Assume" [] [ SMExpr.Bool <| sbBefore "x" ] ]
+        check [ command "Assume" [] [ Bool (sbVar "x") ] ]
 
     [<Test>]
     let ``Reject baz <- Foo(bar) as a no-op``() =
-        checkNot [ command "Foo" [ Int "baz" ] [ SMExpr.Int <| siBefore "bar" ] ]
+        checkNot [ command "Foo" [ Int (siVar "baz") ] [ Int (siVar "bar") ] ]
 
     [<Test>]
     let ``Reject Assume (x!before); baz <- Foo(bar) as a no-op``() =
         checkNot
-            [ command "Assume" [] [ SMExpr.Bool <| sbBefore "x" ] 
-              command "Foo" [ Int "baz" ] [ SMExpr.Int <| siBefore "bar" ] ]
+            [ command "Assume" [] [ Bool (sbVar "x") ]
+              command "Foo" [ Int (siVar "baz") ] [ Int (siVar "bar") ] ]
 
 module Assumes =
     let isAssume c =
@@ -52,12 +52,12 @@ module Assumes =
 
     [<Test>]
     let ``Classify Assume(x!before) as an assume``() =
-        check [ command "Assume" [] [ SMExpr.Bool <| sbBefore "x" ] ]
+        check [ command "Assume" [] [ Bool (sbVar "x") ] ]
 
     [<Test>]
     let ``Reject baz <- Foo(bar); Assume(x!before) as an Assume`` ()=
-        checkNot [ command "Foo" [ Int "baz" ] [ SMExpr.Int <| siBefore "bar" ]
-                   command "Assume" [] [ SMExpr.Bool <| sbBefore "x" ] ]
+        checkNot [ command "Foo" [ Int (siVar "baz") ] [ Int (siVar "bar") ]
+                   command "Assume" [] [ Bool (sbVar "x") ] ]
 
 
     let checkIntermediate v i e = assertEqual i (getIntermediate v e)

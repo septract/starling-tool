@@ -1,0 +1,95 @@
+/*
+ * Peterson's algorithm for mutual exclusion:
+ * http://dx.doi.org/10.1016/0020-0190(81)90106-X
+ *
+ * This version uses a flag array, and is purposely broken.
+ *
+ * This proof was manually written: future exercises could involve
+ * making it easier to synthesise parts of it.
+ */
+
+
+shared bool[2] flag;    // Status of the two threads' claims to the lock.
+shared int turn;        // Whichever thread locked most recently has this.
+
+thread bool oFlag;      // The thread's view of its opponent's flag state.
+thread int oTurn;       // The thread's view of the current turn.
+thread int i;           // The thread's turn identifier.
+
+view flagDown(int me);  // 'me' does not hold the lock and is not seeking it.
+view flagUp(int me);    // 'me' has put its flag up, but isn't waiting yet.
+view waiting(int me);   // 'me' is now waiting for the lock.
+view holdLock(int me);  // 'me' holds the lock.
+
+
+/*
+ * Locks the Peterson lock.
+ */
+method lock() {
+  {| flagDown(i) |}
+    <flag[i] = true>;
+  {| flagUp(i) |}
+    <turn = (i + 1) % 2>; // oops!
+  {| waiting(i) |}
+    do {
+      {| waiting(i) |}
+        <oFlag = flag[(i + 1) % 2]>;
+      {| if (oFlag) then waiting(i) else holdLock(i) |}
+        <oTurn = turn>;
+      {| if (oFlag && oTurn == i) then waiting(i) else holdLock(i) |}
+    } while (oFlag && (oTurn == i));
+  {| holdLock(i) |}
+}
+
+/*
+ * Unlocks the Peterson lock.
+ */
+method unlock() {
+  {| holdLock(i) |}
+    <flag[i] = false>;
+  {| flagDown(i) |}
+}
+
+// Invariant: turn is always something well-formed.
+constraint emp -> (turn == 0 || turn == 1);
+
+/*
+ * Predicate definitions.
+ *
+ * Most of the interesting work happens in the interactions between
+ * constraints: these just keep track of the flag and ensure 'me' is valid.
+ */
+constraint flagDown(me)      -> flag[me] == false && (me == 0 || me == 1);
+constraint flagUp(me)        -> flag[me] == true  && (me == 0 || me == 1);
+constraint waiting(me)       -> flag[me] == true  && (me == 0 || me == 1);
+constraint holdLock(me)      -> flag[me] == true  && (me == 0 || me == 1);
+
+/*
+ * If we have the lock, and the other thread is waiting, we have the turn.
+ * Also, we cannot be holding and waiting at the same time.
+ *
+ * We note that to get the lock we must have either seen
+ * the other thread's flag down (see above), or we must have already
+ * been given the turn.
+ *
+ * More directly (and closer to how Starling will be proving this),
+ * any transition where the other thread starts waiting sets the turn
+ * to our turn, and nothing destabilises this except us starting to
+ * wait too.
+ */
+constraint holdLock(me) * waiting(you) -> me != you && turn == you;
+
+/*
+ * We can't be in multiple states at the same time, unless exactly one of those
+ * states is flag-down.
+ */
+constraint flagDown(me) * flagDown(you) -> me != you;
+constraint flagUp(me)   * flagUp(you)   -> me != you;
+constraint flagUp(me)   * waiting(you)  -> me != you;
+constraint flagUp(me)   * holdLock(you) -> me != you;
+constraint waiting(me)  * waiting(you)  -> me != you;
+
+/*
+ * Goal: mutual exclusion.
+ */
+constraint holdLock(me) * holdLock(you) -> false;

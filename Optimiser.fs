@@ -568,24 +568,18 @@ module Graph =
                         | Bad _ -> false
                         | Ok (sp, _) ->
                             // ...for all of the variables in said parameters...
-                            let getVars = tliftOverExpr collectMarkedVars
-                            match findMarkedVars getVars sp with
+                            let getVars = tliftOverExpr collectVars
+                            match findVars getVars sp with
                             | Bad _ -> false
                             | Ok (pvars, _) ->
                                 let pvseq = Set.toSeq pvars
                                 Seq.forall
                                     (// ...the variable is thread-local.
                                      valueOf
+                                     >> tVars.TryFind
                                      >> function
-                                        | (After x)
-                                        | (Before x)
-                                        | (Intermediate (_, x))
-                                        | (Goal (_, x)) ->
-                                            x
-                                            |> tVars.TryFind
-                                            |> function
-                                               | Some _ -> true
-                                               | _ -> false)
+                                        | Some _ -> true
+                                        | _ -> false)
                                     pvseq)
                      ps)
 
@@ -601,15 +595,19 @@ module Graph =
 
     /// Determines if some given Command is local with respect to the given
     /// map of thread-local variables
-    let isLocalResults : VarMap -> Command -> bool =
-        fun tvars ->
-        let localResults prim =
-            List.forall (fun v ->
-                match (tvars.TryFind <| valueOf v) with
-                | Some x -> typeOf v = x
-                | None   -> false
-                ) prim.Results
-        List.forall localResults
+    let isLocalResults (tvars : VarMap) (command : Command) : bool =
+        (* We need to see if any of the variables named in the results
+           are local.  This can fail, but currently the optimiser can't.
+           For now we just assume the command is _not_ local if the
+           variable getter failed. *)
+        let maybeVars = okOption (commandResultVars command)
+
+        let isVarLocal v =
+            maybe false (fun x -> typeOf v = x) (tvars.TryFind (valueOf v))
+
+        maybe false
+            (Set.toList >> List.forall isVarLocal)
+            maybeVars
 
     /// <summary>
     ///     Partial active pattern matching <c>Sym</c>-less expressions.
@@ -620,7 +618,7 @@ module Graph =
     /// <summary>
     ///     Partial active pattern matching <c>Sym</c>-less expressions.
     /// </summary>
-    let (|MNoSym|_|) : BoolExpr<Sym<MarkedVar>> -> BoolExpr<MarkedVar> option =
+    let (|NoSym|_|) : BoolExpr<Sym<Var>> -> BoolExpr<Var> option =
         mapTraversal (removeSymFromBoolExpr ignore) >> okOption
 
     /// <summary>
@@ -675,51 +673,40 @@ module Graph =
             fun node nView outEdges inEdges nk ->
                 match nView with
                 | InnerView(ITEGuards (xc, xv, yc, yv)) ->
-                    (* Translate xc and yc to pre-state, to match the
-                       commands.  If this fails, give up on the optimisation. *)
-                    let toBefore : BoolExpr<Var> -> Result<BoolExpr<MarkedVar>, _> =
-                        mapTraversal
-                            (tLiftToBoolSrc
-                                (tliftToExprDest
-                                    (tliftOverCTyped
-                                        (ignoreContext (Before >> ok)))))
-                    match toBefore xc, toBefore yc with
-                    | Ok (xcPre, _), Ok (ycPre, _) ->
-                        match (Set.toList outEdges, Set.toList inEdges) with
-                        (* Are there only two out edges, and only one in edge?
-                           Are the out edges assumes, and are they non-symbolic? *)
-                        | ( [ { Dest = out1D
-                                Command = Assume (MNoSym out1P) } as out1
-                              { Dest = out2D
-                                Command = Assume (MNoSym out2P) } as out2
-                            ],
-                            [ inE ] )
-                            when (// Is the first one x and the second y?
-                                  (equivHolds
-                                       unmarkVar
-                                       (andEquiv (equiv out1P xcPre)
-                                                 (equiv out2P ycPre))
-                                   && nodeHasView out1D xv ctx.Graph
-                                   && nodeHasView out2D yv ctx.Graph)
-                                  // Or is the first one y and the second x?
-                                  || (equivHolds
-                                          unmarkVar
-                                          (andEquiv (equiv out2P xcPre)
-                                                    (equiv out1P ycPre))
-                                      && nodeHasView out2D xv ctx.Graph
-                                      && nodeHasView out1D yv ctx.Graph)) ->
-                            let xforms =
-                                seq { // Remove the existing edges first.
-                                      yield RmInEdge (inE, node)
-                                      yield RmOutEdge (node, out1)
-                                      yield RmOutEdge (node, out2)
-                                      // Then, remove the node.
-                                      yield RmNode node
-                                      // Then, add the new edges.
-                                      yield MkCombinedEdge (inE, out1)
-                                      yield MkCombinedEdge (inE, out2) }
-                            runTransforms xforms ctx
-                        | _ -> ctx
+                    match (Set.toList outEdges, Set.toList inEdges) with
+                    (* Are there only two out edges, and only one in edge?
+                       Are the out edges assumes, and are they non-symbolic? *)
+                    | ( [ { Dest = out1D
+                            Command = Assume (NoSym out1P) } as out1
+                          { Dest = out2D
+                            Command = Assume (NoSym out2P) } as out2
+                        ],
+                        [ inE ] )
+                        when (// Is the first one x and the second y?
+                              (equivHolds
+                                   id
+                                   (andEquiv (equiv out1P xc)
+                                             (equiv out2P yc))
+                               && nodeHasView out1D xv ctx.Graph
+                               && nodeHasView out2D yv ctx.Graph)
+                              // Or is the first one y and the second x?
+                              || (equivHolds
+                                      id
+                                      (andEquiv (equiv out2P xc)
+                                                (equiv out1P yc))
+                                  && nodeHasView out2D xv ctx.Graph
+                                  && nodeHasView out1D yv ctx.Graph)) ->
+                        let xforms =
+                            seq { // Remove the existing edges first.
+                                  yield RmInEdge (inE, node)
+                                  yield RmOutEdge (node, out1)
+                                  yield RmOutEdge (node, out2)
+                                  // Then, remove the node.
+                                  yield RmNode node
+                                  // Then, add the new edges.
+                                  yield MkCombinedEdge (inE, out1)
+                                  yield MkCombinedEdge (inE, out2) }
+                        runTransforms xforms ctx
                     | _ -> ctx
                 | _ -> ctx
 
@@ -793,22 +780,22 @@ module Graph =
                         // (TODO: do something with the ViewExpr annotations?)
                         match (pViewexpr, qViewexpr) with
                         | InnerView pView, InnerView qView ->
-                        let varResultSet = Set.map iteratedGFuncVars (Multiset.toSet pView)
-                        let varsResults = lift Set.unionMany (collect varResultSet)
-                        let cmdVars = commandResults e.Command
-                        // TODO: Better equality?
-                        match varsResults with
-                        | Ok (vars, _) ->
+                            let varResultSet = Set.map iteratedGFuncVars (Multiset.toSet pView)
+                            let varsResults = lift Set.unionMany (collect varResultSet)
+                            let cmdVarsResults = commandResultVars e.Command
                             // TODO: Better equality?
-                            if pView = qView && disjoint cmdVars vars
-                            then
-                                (flip runTransforms) ctx
-                                <| seq {
-                                    yield RmOutEdge (node, e)
-                                    yield Unify (node, e.Dest, OnlyIfNoConnections)
-                                }
-                            else ctx
-                        | _ -> ctx
+                            match varsResults, cmdVarsResults with
+                            | Ok (vars, _), Ok (cmdVars, _) ->
+                                // TODO: Better equality?
+                                if pView = qView && disjoint (Set.toList cmdVars) vars
+                                then
+                                    (flip runTransforms) ctx
+                                    <| seq {
+                                        yield RmOutEdge (node, e)
+                                        yield Unify (node, e.Dest, OnlyIfNoConnections)
+                                    }
+                                else ctx
+                            | _, _ -> ctx
                     else ctx
                 Set.fold processEdge ctx outEdges
 
@@ -837,12 +824,12 @@ module Graph =
 
                     match (pViewexpr, qViewexpr, rViewexpr) with
                     | InnerView pView, InnerView qView, InnerView rView ->
-                        let cResults = Set.ofList <| commandResults c
-                        let dResults = Set.ofList <| commandResults d
-                        match (commandArgs d) with
-                        | Ok (dArgs, _) ->
-                            if Set.isSubset cResults dResults
-                                && disjoint cResults dArgs
+                        let cVarResult = commandResultVars c
+                        let dVarResult = commandResultVars d
+                        match (commandArgs d, cVarResult, dVarResult) with
+                        | Ok (dArgs, _), Ok (cVars, _), Ok (dVars, _) ->
+                            if Set.isSubset cVars dVars
+                                && disjoint cVars dArgs
                                 && isLocalResults locals c
                                 && not (hasAssume c)  // TODO: is this too broad?
                                 && not (hasAssume d)  // TODO: is this necessary?
@@ -967,7 +954,7 @@ module Term =
     let rec (|ConstantBoolFunction|_|) (x : BoolExpr<Sym<MarkedVar>>)
       : MarkedVar option =
         x
-        |> findMarkedVars (tLiftToBoolSrc (tliftToExprDest collectSymMarkedVars))
+        |> findMarkedVars (tliftToBoolSrc (tliftToExprDest collectSymMarkedVars))
         |> okOption |> Option.map (Seq.map valueOf) |> Option.bind onlyOne
 
     /// Partial pattern that matches a Boolean expression in terms of exactly one /
@@ -975,7 +962,7 @@ module Term =
     let rec (|ConstantIntFunction|_|) (x : IntExpr<Sym<MarkedVar>>)
       : MarkedVar option =
         x
-        |> findMarkedVars (tLiftToIntSrc (tliftToExprDest collectSymMarkedVars))
+        |> findMarkedVars (tliftToIntSrc (tliftToExprDest collectSymMarkedVars))
         |> okOption |> Option.map (Seq.map valueOf) |> Option.bind onlyOne
 
     /// Finds all instances of the pattern `x!after = f(x!before)` in an

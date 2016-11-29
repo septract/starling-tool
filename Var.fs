@@ -49,14 +49,6 @@ module Types =
         | Intermediate of bigint * Var
 
     /// <summary>
-    ///     An lvalue.
-    ///     This is given a separate type in case we add to it later.
-    /// </summary>
-    type LValue =
-        // TODO(CaptainHayashi): add support for non-variable LValues.
-        | LVIdent of string
-
-    /// <summary>
     ///     A variable reference with an associated type.
     ///     This is usually a formal parameter or variable declaration.
     /// </summary>
@@ -126,6 +118,13 @@ let unmarkVar : MarkedVar -> Var =
     | Intermediate(i, c) -> sprintf "V%sINT%A" c i
     | Goal(i, c) -> sprintf "V%sGOAL%A" c i
 
+// TODO(CaptainHayashi): clean this up?
+let varToExpr (v : TypedVar) : Expr<Var> =
+    match v with
+    | Int iv -> Int (IVar iv)
+    | Bool bv -> Bool (BVar bv)
+    | Array (eltype, length, av) -> Array (eltype, length, AVar av)
+
 /// <summary>
 ///     Pretty printers for variables.
 /// </summary>
@@ -168,13 +167,6 @@ module Pretty =
     let printMIntExpr = printIntExpr printMarkedVar
 
 
-/// Flattens a LV to a string.
-let rec flattenLV =
-    // TODO(CaptainHayashi): this is completely wrong, but we don't
-    // have a semantics for it yet.
-    function
-    | LVIdent s -> s
-
 module VarMap =
     /// Makes a variable map from a sequence of typed variables.
     /// Can fail if there are duplicates.
@@ -200,20 +192,14 @@ module VarMap =
 
     /// Tries to look up a variable record in a variable map.
     /// Failures are in terms of Some/None.
-    let tryLookup
-      (env : VarMap)
-      : LValue -> CTyped<string> option =
-        function
-        | LVIdent s ->
-            Option.map (fun ty -> withType ty s) (env.TryFind s)
+    let tryLookup (env : VarMap) (var : Var) : CTyped<string> option =
+        Option.map (fun ty -> withType ty var) (env.TryFind var)
 
     /// Looks up a variable record in a variable map.
     /// Failures are in terms of VarMapError.
-    let lookup
-      (env : VarMap)
-      (s : LValue)
+    let lookup (env : VarMap) (var : Var)
       : Result<CTyped<string>, VarMapError> =
-        failIfNone (NotFound (flattenLV s)) (tryLookup env s)
+        failIfNone (NotFound var) (tryLookup env var)
 
     /// <summary>
     ///     Converts a variable map to a sequence of typed variables.

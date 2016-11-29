@@ -12,6 +12,7 @@ open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
+open Starling.Core.Traversal
 
 
 /// <summary>
@@ -37,8 +38,8 @@ module Types =
     /// </remarks>
     type PrimCommand =
         { Name : string
-          Results : TypedVar list
-          Args : SMExpr list
+          Results : SVExpr list
+          Args : SVExpr list
           Node : AST.Types.Atomic option }
         override this.ToString() = sprintf "%A" this
 
@@ -103,9 +104,9 @@ module Queries =
     /// <summary>
     ///     Active pattern matching assume commands.
     /// </summary>
-    let (|Assume|_|) : Command -> SMBoolExpr option =
+    let (|Assume|_|) : Command -> SVBoolExpr option =
         function
-        | [ { Name = n ; Args = [ SMExpr.Bool b ] } ]
+        | [ { Name = n ; Args = [ SVExpr.Bool b ] } ]
           when n = "Assume" -> Some b
         | _ -> None
 
@@ -114,10 +115,26 @@ module Queries =
     let commandResults cs =
         List.fold (fun a c -> a @ c.Results) [] cs
 
+    /// <summary>
+    ///     Gets all variables mentioned in the results of a command.
+    /// </summary>
+    /// <param name="cmd">The <see cref="Command"/> to query.</param>
+    /// <typeparam name="'Error">The traversal-internal error type.</typeparam>
+    /// <returns>
+    ///     All variables mentioned in <paramref name="cmd"/>'s results, as
+    ///     <see cref="TypedVar"/>s.  This is wrapped in a result, because the
+    ///     internal traversal can fail.
+    /// </returns>
+    let commandResultVars (cmd : Command)
+      : Result<Set<TypedVar>, TraversalError<'Error>> =
+        let results = commandResults cmd
+        let trav = tchainL (tliftOverExpr collectSymVars) id
+        findVars trav results
+
     /// Retrieves the type annotated vars from the arguments to a
     /// command as a list
     let commandArgs cmd =
-        let f c = List.map SMExprVars c.Args
+        let f c = List.map SVExprVars c.Args
         let vars = collect (concatMap f cmd)
         lift Set.unionMany vars
 
@@ -135,41 +152,68 @@ module Compose =
 
     /// Gets the highest intermediate number for some variable in a given
     /// int expression
-    let rec getIntIntermediate v =
-        function
-        | IVar (Reg (Intermediate (n, x))) when v = x-> Some n
+    let rec getIntIntermediate
+      (var : Var) (expr : IntExpr<Sym<MarkedVar>>) : bigint option =
+        match expr with
+        | IVar (Reg (Intermediate (n, x))) when var = x -> Some n
         | IVar (Sym { Params = xs } ) ->
-            Seq.fold maxOpt None <| (Seq.map (getIntermediate v) <| xs)
+            Seq.fold maxOpt None (Seq.map (getIntermediate var) xs)
         | IAdd xs | ISub xs | IMul xs ->
-            Seq.fold maxOpt None <| (Seq.map (getIntIntermediate v) <| xs)
+            Seq.fold maxOpt None (Seq.map (getIntIntermediate var) xs)
         | IDiv (x, y) | IMod (x, y) ->
-            maxOpt (getIntIntermediate v x) (getIntIntermediate v y)
+            maxOpt (getIntIntermediate var x) (getIntIntermediate var y)
+        // TODO(CaptainHayashi): need to convince myself this is correct.
+        | IIdx (_, _, arr, idx) ->
+            maxOpt (getArrayIntermediate var arr) (getIntIntermediate var idx)
         | _ -> None
 
     /// Gets the highest intermediate number for some variable in a given
     /// boolean expression
-    and getBoolIntermediate v =
-        function
-        | BVar (Reg (Intermediate (n, name))) when name = v -> Some n
+    and getBoolIntermediate
+      (var : Var) (expr : BoolExpr<Sym<MarkedVar>>) : bigint option =
+        match expr with
+        | BVar (Reg (Intermediate (n, name))) when name = var -> Some n
         | BVar (Sym { Params = xs } ) ->
-            Seq.fold maxOpt None <| (Seq.map (getIntermediate v) <| xs)
+            Seq.fold maxOpt None (Seq.map (getIntermediate var) xs)
         | BAnd xs | BOr xs ->
-            Seq.fold maxOpt None <| (Seq.map (getBoolIntermediate v) <| xs)
+            Seq.fold maxOpt None (Seq.map (getBoolIntermediate var) xs)
         | BImplies (x, y) ->
-            maxOpt (getBoolIntermediate v x) (getBoolIntermediate v y)
-        | BNot x -> getBoolIntermediate v x
+            maxOpt (getBoolIntermediate var x) (getBoolIntermediate var y)
+        | BNot x -> getBoolIntermediate var x
         | BGt (x, y) | BLt (x, y) | BGe (x, y) | BLe (x, y) ->
-            maxOpt (getIntIntermediate v x) (getIntIntermediate v y)
+            maxOpt (getIntIntermediate var x) (getIntIntermediate var y)
         | BEq (x, y) ->
-            maxOpt (getIntermediate v x) (getIntermediate v y)
+            maxOpt (getIntermediate var x) (getIntermediate var y)
+        // TODO(CaptainHayashi): need to convince myself this is correct.
+        | BIdx (_, _, arr, idx) ->
+            maxOpt (getArrayIntermediate var arr) (getIntIntermediate var idx)
         | _ -> None
+
+    /// Gets the highest intermediate number for some variable in a given
+    /// array expression
+    and getArrayIntermediate
+      (var : Var) (expr : ArrayExpr<Sym<MarkedVar>>) : bigint option =
+        match expr with
+        | AVar (Reg (Intermediate (n, name))) when name = var -> Some n
+        | AVar (Sym { Params = xs } ) ->
+            Seq.fold maxOpt None (Seq.map (getIntermediate var) xs)
+        // TODO(CaptainHayashi): need to convince myself this is correct.
+        | AIdx (_, _, arr, idx) ->
+            maxOpt (getArrayIntermediate var arr) (getIntIntermediate var idx)
+        | AVar _ -> None
+        | AUpd (_, _, arr, idx, upd) ->
+            maxOpt
+                (getArrayIntermediate var arr)
+                (maxOpt (getIntIntermediate var idx) (getIntermediate var upd))
 
     /// Gets the highest intermediate stage number for a given variable name
     /// in some expression.
-    and getIntermediate v =
-        function
-        | Int x -> getIntIntermediate v x
-        | Bool x -> getBoolIntermediate v x
+    and getIntermediate
+      (var : Var) (expr : Expr<Sym<MarkedVar>>) : bigint option =
+        match expr with
+        | Int x -> getIntIntermediate var x
+        | Bool x -> getBoolIntermediate var x
+        | Array (_, _, x) -> getArrayIntermediate var x
 
 /// <summary>
 ///     Functions for removing symbols from commands.
@@ -218,24 +262,26 @@ module SymRemove =
 
 
 module Create =
-    let command : string -> TypedVar list -> SMExpr list -> PrimCommand =
-        fun name results args -> { Name = name; Results = results; Args = args; Node = None }
+    let command (name : string) (results : SVExpr list) (args : SVExpr list) : PrimCommand =
+        { Name = name; Results = results; Args = args; Node = None }
 
-    let command' : string -> AST.Types.Atomic -> TypedVar list -> SMExpr list -> PrimCommand =
-        fun name ast results args -> { Name = name; Results = results; Args = args; Node = Some ast }
+    let command' (name : string) (ast : AST.Types.Atomic) (results : SVExpr list) (args : SVExpr list) : PrimCommand =
+        { Name = name; Results = results; Args = args; Node = Some ast }
 
 /// <summary>
 ///     Pretty printers for commands.
 /// </summary>
 module Pretty =
     open Starling.Core.Pretty
+    open Starling.Core.Expr.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Symbolic.Pretty
 
     /// Pretty-prints a Command.
     let printPrimCommand { Name = name; Args = xs; Results = ys } =
-        hjoin [ commaSep <| Seq.map (printCTyped String) ys; " <- " |> String; name |> String; String " "; commaSep <| Seq.map printSMExpr xs ]
+        hjoin [ commaSep <| Seq.map (printExpr (printSym printVar)) ys
+                " <- " |> String; name |> String; String " "; commaSep <| Seq.map printSVExpr xs ]
 
     let printCommand : Command -> Doc = List.map printPrimCommand >> semiSep
 

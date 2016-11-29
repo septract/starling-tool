@@ -118,7 +118,7 @@ module AfterExprs =
     /// Test after-elimination of Booleans.
     let check expected case : unit =
         let trav =
-            tLiftToBoolSrc
+            tliftToBoolSrc
                 (tliftToTypedSymVarSrc
                     (afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs))
         let result = mapTraversal trav case

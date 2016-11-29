@@ -15,20 +15,24 @@ module Types =
     /// <summary>
     ///     An expression of arbitrary type.
     /// </summary>
-    /// <typeparam name="var">
+    /// <typeparam name="Var">
     ///     The type of variables in the expression.
     /// </typeparam>
-    type Expr<'var> when 'var : equality =
-        Typed<IntExpr<'var>, BoolExpr<'var>>
+    type Expr<'Var> when 'Var : equality =
+        Typed<IntExpr<'Var>, BoolExpr<'Var>, ArrayExpr<'Var>>
 
     /// <summary>
     ///     An integral expression.
     /// </summary>
-    /// <typeparam name="var">
+    /// <typeparam name="Var">
     ///     The type of variables in the expression.
     /// </typeparam>
     and IntExpr<'Var> when 'Var : equality =
         | IVar of 'Var
+        | IIdx of eltype : Type
+                * length : int option
+                * arr : ArrayExpr<'Var>
+                * idx : IntExpr<'Var>
         | IInt of int64
         | IAdd of IntExpr<'Var> list
         | ISub of IntExpr<'Var> list
@@ -40,23 +44,54 @@ module Types =
     /// <summary>
     ///     A Boolean expression.
     /// </summary>
-    /// <typeparam name="var">
+    /// <typeparam name="Var">
     ///     The type of variables in the expression.
     /// </typeparam>
-    and BoolExpr<'var> when 'var : equality =
-        | BVar of 'var
+    and BoolExpr<'Var> when 'Var : equality =
+        | BVar of 'Var
+        | BIdx of eltype : Type
+                * length : int option
+                * arr : ArrayExpr<'Var>
+                * idx : IntExpr<'Var>
         | BTrue
         | BFalse
-        | BAnd of BoolExpr<'var> list
-        | BOr of BoolExpr<'var> list
-        | BImplies of BoolExpr<'var> * BoolExpr<'var>
-        | BEq of Expr<'var> * Expr<'var>
-        | BGt of IntExpr<'var> * IntExpr<'var>
-        | BGe of IntExpr<'var> * IntExpr<'var>
-        | BLe of IntExpr<'var> * IntExpr<'var>
-        | BLt of IntExpr<'var> * IntExpr<'var>
-        | BNot of BoolExpr<'var>
+        | BAnd of BoolExpr<'Var> list
+        | BOr of BoolExpr<'Var> list
+        | BImplies of BoolExpr<'Var> * BoolExpr<'Var>
+        | BEq of Expr<'Var> * Expr<'Var>
+        | BGt of IntExpr<'Var> * IntExpr<'Var>
+        | BGe of IntExpr<'Var> * IntExpr<'Var>
+        | BLe of IntExpr<'Var> * IntExpr<'Var>
+        | BLt of IntExpr<'Var> * IntExpr<'Var>
+        | BNot of BoolExpr<'Var>
         override this.ToString () = sprintf "%A" this
+
+    /// <summary>
+    ///     An array expression.
+    /// </summary>
+    /// <typeparam name="Var">
+    ///     The type of variables in the expression.
+    /// </typeparam>
+    and ArrayExpr<'Var> when 'Var : equality =
+        /// <summary>An array variable reference.</summary>
+        | AVar of 'Var
+        /// <summary>
+        ///     An index into an array <c>arr</c> of type <c>eltype[length]</c>.
+        /// </summary>
+        | AIdx of eltype : Type
+                * length : int option
+                * arr : ArrayExpr<'Var>
+                * idx : IntExpr<'Var>
+        /// <summary>
+        ///     A functional update of an array <c>arr</c> of type
+        ///     <c>eltype[length]</c>, overriding index <c>idx</c> with value
+        ///     <c>var</c>.
+        /// </summary>
+        | AUpd of eltype : Type
+                * length : int option
+                * arr : ArrayExpr<'Var>
+                * idx : IntExpr<'Var>
+                * nval : Expr<'Var>
 
     /// Type for fresh variable generators.
     type FreshGen = bigint ref
@@ -78,19 +113,29 @@ module Pretty =
       let head = HSep([(String "("); (String op)], Nop)
       vsep [head; sep; (String ")")]
 
+    /// Creates an S-expression from an operator string and sequence of operand
+    /// documents.
+    let cmdSexpr (op : string) : Doc seq -> Doc =
+        scons (String op) >> hsep >> parened
+
     /// Creates an S-expression from an operator string, operand print function, and
     /// sequence of operands.
     let sexpr (op : string) (pxs : 'x -> Doc) : 'x seq -> Doc =
-        Seq.map pxs
-        >> scons (String op)
-        >> hsep
-        >> parened
+        cmdSexpr op << Seq.map pxs
+
+    /// Pretty-prints an array subscript.
+    let rec printIdx
+      (pVar : 'Var -> Doc)
+      (arr : ArrayExpr<'Var>)
+      (idx : IntExpr<'Var>) : Doc =
+        cmdSexpr "select" [ printIntExpr pVar idx; printArrayExpr pVar arr ]
 
     /// Pretty-prints an arithmetic expression.
-    let rec printIntExpr (pVar : 'var -> Doc) : IntExpr<'var> -> Doc =
+    and printIntExpr (pVar : 'Var -> Doc) : IntExpr<'Var> -> Doc =
         function
         | IVar c -> pVar c
         | IInt i -> i |> sprintf "%i" |> String
+        | IIdx (_, _, arr, idx) -> printIdx pVar arr idx
         | IAdd xs -> sexpr "+" (printIntExpr pVar) xs
         | ISub xs -> sexpr "-" (printIntExpr pVar) xs
         | IMul xs -> sexpr "*" (printIntExpr pVar) xs
@@ -98,9 +143,10 @@ module Pretty =
         | IMod (x, y) -> sexpr "%" (printIntExpr pVar) [x; y]
 
     /// Pretty-prints a Boolean expression.
-    and printBoolExpr (pVar : 'var -> Doc) : BoolExpr<'var> -> Doc =
+    and printBoolExpr (pVar : 'Var -> Doc) : BoolExpr<'Var> -> Doc =
         function
         | BVar c -> pVar c
+        | BIdx (_, _, arr, idx) -> printIdx pVar arr idx
         | BTrue -> String "true"
         | BFalse -> String "false"
         | BAnd xs -> svexpr "and" (printBoolExpr pVar) xs
@@ -113,11 +159,23 @@ module Pretty =
         | BLt (x, y) -> sexpr "<" (printIntExpr pVar) [x; y]
         | BNot x -> sexpr "not" (printBoolExpr pVar) [x]
 
-    /// Pretty-prints an expression.
-    and printExpr (pVar : 'var -> Doc) : Expr<'var> -> Doc =
+    /// Pretty-prints an array expression.
+    and printArrayExpr (pVar : 'Var -> Doc) : ArrayExpr<'Var> -> Doc =
         function
-        | Int a -> printIntExpr pVar a
+        | AVar c -> pVar c
+        | AIdx (_, _, arr, idx) -> printIdx pVar arr idx
+        | AUpd (_, _, arr, idx, value) ->
+            cmdSexpr "store"
+                [ printIntExpr pVar idx
+                  printExpr pVar value
+                  printArrayExpr pVar arr ]
+
+    /// Pretty-prints an expression.
+    and printExpr (pVar : 'Var -> Doc) : Expr<'Var> -> Doc =
+        function
+        | Int i -> printIntExpr pVar i
         | Bool b -> printBoolExpr pVar b
+        | Array (_, _, a) -> printArrayExpr pVar a
 
 
 /// Partial pattern that matches a Boolean equality on arithmetic expressions.
@@ -250,8 +308,9 @@ let isTrue (expr : BoolExpr<_>) : bool =
 /// Converts a typed variable to an expression.
 let mkVarExp (var : CTyped<'Var>) : Expr<'Var> =
     match var with
-    | Int s -> s |> IVar |> Int
-    | Bool s -> s |> BVar |> Bool
+    | CTyped.Int i -> Expr.Int (IVar i)
+    | CTyped.Bool b -> Expr.Bool (BVar b)
+    | CTyped.Array (eltype, length, a) -> Expr.Array (eltype, length, AVar a)
 
 /// Converts a VarMap to a sequence of expressions.
 let varMapToExprs

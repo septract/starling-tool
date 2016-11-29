@@ -28,7 +28,7 @@ method lock() {
  */
 method unlock() {
   {| holdLock() |}
-  <lock = (0)>;
+  <lock = 0>;
   {| emp |}
 }
 
