@@ -118,6 +118,13 @@ let unmarkVar : MarkedVar -> Var =
     | Intermediate(i, c) -> sprintf "V%sINT%A" c i
     | Goal(i, c) -> sprintf "V%sGOAL%A" c i
 
+// TODO(CaptainHayashi): clean this up?
+let varToExpr (v : TypedVar) : Expr<Var> =
+    match v with
+    | Int iv -> Int (IVar iv)
+    | Bool bv -> Bool (BVar bv)
+    | Array (eltype, length, av) -> Array (eltype, length, AVar av)
+
 /// <summary>
 ///     Pretty printers for variables.
 /// </summary>

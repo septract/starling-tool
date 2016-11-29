@@ -592,13 +592,6 @@ module Translator =
      * Deferred checks
      *)
 
-    // TODO(CaptainHayashi): clean this up?
-    let varToExpr (v : TypedVar) : Expr<Var> =
-        match v with
-        | Int iv -> Int (IVar iv)
-        | Bool bv -> Bool (BVar bv)
-        | Array (eltype, length, av) -> Array (eltype, length, AVar av)
-
     /// Converts a downclosure func into a guarded func, instantiating the
     /// variables directly as nonsymbolic unmarked vars.
     /// We map any instance of the iterator through f.
