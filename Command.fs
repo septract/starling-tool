@@ -152,64 +152,68 @@ module Compose =
 
     /// Gets the highest intermediate number for some variable in a given
     /// int expression
-    let rec getIntIntermediate v =
-        function
-        | IVar (Reg (Intermediate (n, x))) when v = x-> Some n
+    let rec getIntIntermediate
+      (var : Var) (expr : IntExpr<Sym<MarkedVar>>) : bigint option =
+        match expr with
+        | IVar (Reg (Intermediate (n, x))) when var = x -> Some n
         | IVar (Sym { Params = xs } ) ->
-            Seq.fold maxOpt None <| (Seq.map (getIntermediate v) <| xs)
+            Seq.fold maxOpt None (Seq.map (getIntermediate var) xs)
         | IAdd xs | ISub xs | IMul xs ->
-            Seq.fold maxOpt None <| (Seq.map (getIntIntermediate v) <| xs)
+            Seq.fold maxOpt None (Seq.map (getIntIntermediate var) xs)
         | IDiv (x, y) | IMod (x, y) ->
-            maxOpt (getIntIntermediate v x) (getIntIntermediate v y)
+            maxOpt (getIntIntermediate var x) (getIntIntermediate var y)
         // TODO(CaptainHayashi): need to convince myself this is correct.
         | IIdx (_, _, arr, idx) ->
-            maxOpt (getArrayIntermediate v arr) (getIntIntermediate v idx)
+            maxOpt (getArrayIntermediate var arr) (getIntIntermediate var idx)
         | _ -> None
 
     /// Gets the highest intermediate number for some variable in a given
     /// boolean expression
-    and getBoolIntermediate v =
-        function
-        | BVar (Reg (Intermediate (n, name))) when name = v -> Some n
+    and getBoolIntermediate
+      (var : Var) (expr : BoolExpr<Sym<MarkedVar>>) : bigint option =
+        match expr with
+        | BVar (Reg (Intermediate (n, name))) when name = var -> Some n
         | BVar (Sym { Params = xs } ) ->
-            Seq.fold maxOpt None <| (Seq.map (getIntermediate v) <| xs)
+            Seq.fold maxOpt None (Seq.map (getIntermediate var) xs)
         | BAnd xs | BOr xs ->
-            Seq.fold maxOpt None <| (Seq.map (getBoolIntermediate v) <| xs)
+            Seq.fold maxOpt None (Seq.map (getBoolIntermediate var) xs)
         | BImplies (x, y) ->
-            maxOpt (getBoolIntermediate v x) (getBoolIntermediate v y)
-        | BNot x -> getBoolIntermediate v x
+            maxOpt (getBoolIntermediate var x) (getBoolIntermediate var y)
+        | BNot x -> getBoolIntermediate var x
         | BGt (x, y) | BLt (x, y) | BGe (x, y) | BLe (x, y) ->
-            maxOpt (getIntIntermediate v x) (getIntIntermediate v y)
+            maxOpt (getIntIntermediate var x) (getIntIntermediate var y)
         | BEq (x, y) ->
-            maxOpt (getIntermediate v x) (getIntermediate v y)
+            maxOpt (getIntermediate var x) (getIntermediate var y)
         // TODO(CaptainHayashi): need to convince myself this is correct.
         | BIdx (_, _, arr, idx) ->
-            maxOpt (getArrayIntermediate v arr) (getIntIntermediate v idx)
+            maxOpt (getArrayIntermediate var arr) (getIntIntermediate var idx)
         | _ -> None
 
     /// Gets the highest intermediate number for some variable in a given
     /// array expression
-    and getArrayIntermediate v =
-        function
-        | AVar (Reg (Intermediate (n, name))) when name = v -> Some n
+    and getArrayIntermediate
+      (var : Var) (expr : ArrayExpr<Sym<MarkedVar>>) : bigint option =
+        match expr with
+        | AVar (Reg (Intermediate (n, name))) when name = var -> Some n
         | AVar (Sym { Params = xs } ) ->
-            Seq.fold maxOpt None <| (Seq.map (getIntermediate v) <| xs)
+            Seq.fold maxOpt None (Seq.map (getIntermediate var) xs)
         // TODO(CaptainHayashi): need to convince myself this is correct.
         | AIdx (_, _, arr, idx) ->
-            maxOpt (getArrayIntermediate v arr) (getIntIntermediate v idx)
+            maxOpt (getArrayIntermediate var arr) (getIntIntermediate var idx)
         | AVar _ -> None
         | AUpd (_, _, arr, idx, upd) ->
             maxOpt
-                (getArrayIntermediate v arr)
-                (maxOpt (getIntIntermediate v idx) (getIntermediate v upd))
+                (getArrayIntermediate var arr)
+                (maxOpt (getIntIntermediate var idx) (getIntermediate var upd))
 
     /// Gets the highest intermediate stage number for a given variable name
     /// in some expression.
-    and getIntermediate v =
-        function
-        | Int x -> getIntIntermediate v x
-        | Bool x -> getBoolIntermediate v x
-        | Array (_, _, x) -> getArrayIntermediate v x
+    and getIntermediate
+      (var : Var) (expr : Expr<Sym<MarkedVar>>) : bigint option =
+        match expr with
+        | Int x -> getIntIntermediate var x
+        | Bool x -> getBoolIntermediate var x
+        | Array (_, _, x) -> getArrayIntermediate var x
 
 /// <summary>
 ///     Functions for removing symbols from commands.
