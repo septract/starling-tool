@@ -351,14 +351,14 @@ let tliftOverCTyped
     // TODO(CaptainHayashi): proper doc comment.
     fun ctx ->
         function
-        | Int i -> lift (pairMap id Int) (sub ctx i)
-        | Bool b -> lift (pairMap id Bool) (sub ctx b)
-        | Array (eltype, length, a) ->
+        | CTyped.Int i -> lift (pairMap id Int) (sub ctx i)
+        | CTyped.Bool b -> lift (pairMap id Bool) (sub ctx b)
+        | CTyped.Array (eltype, length, a) ->
             lift (pairMap id (fun a -> Array (eltype, length, a))) (sub ctx a)
 
 /// <summary>
 ///     Tries to extract an <see cref="ArrayExpr"/> out of an
-///     <see cref="ArrayExpr"/>, failing if the expression is not of that type
+///     <see cref="Expr"/>, failing if the expression is not of that type
 ///     or the element type or array is wrong.
 /// </summary>
 let expectArray
@@ -368,7 +368,7 @@ let expectArray
   : Result<ArrayExpr<'Var>, TraversalError<_>> =
     // TODO(CaptainHayashi): proper doc comment.
     match expr with
-    | Typed.Array (_, _, ae)
+    | Expr.Array (_, _, ae)
         when typesCompatible (Type.Array (eltype, length, ())) (typeOf expr) ->
         ok ae
     | _ ->
