@@ -150,15 +150,14 @@ let markWrite (var : CTyped<Sym<Var>>) (idxPath : IntExpr<Sym<Var>> list)
             match idxPathRest with
             | [] ->
                 (* If there is no subscript, then we must be writing to this
-                   entire index, so mark it as Entire. *)
-                Entire value
+                   entire index, so mark it as Entire... if it isn't already
+                   written to. *)
+                match idxRec with
+                | Some _ -> failwith "markWriteIdx: tried to write twice with empty path"
+                | None -> Entire value
             | x::xs ->
                 match idxRec with
-                | Some (Entire _) ->
-                    (* If we're already writing to the entire index somewhere
-                       else, we probably have a problem!  Eventually we should
-                       report it, but for now we just clobber the value. *)
-                    Entire value
+                | Some (Entire _) -> failwith "markWriteIdx: tried to write twice with nonempty path"
                 | Some (Indices imap) -> markWriteIdx x xs imap
                 | None -> markWriteIdx x xs Map.empty
 
@@ -174,15 +173,13 @@ let markWrite (var : CTyped<Sym<Var>>) (idxPath : IntExpr<Sym<Var>> list)
         match idxPath with
         | [] ->
             (* If there is no subscript, then we must be writing to this entire
-               variable, so mark it as Entire. *)
-            Entire value
+               variable, so mark it as Entire... if it isn't already written to. *)
+            match varRec with
+            | Some _ -> failwith "markWrite: tried to write twice with empty path"
+            | None -> Entire value
         | (x::xs) ->
             match varRec with
-            | Some (Entire _) ->
-                (* If we're already writing to the entire index somewhere
-                   else, we probably have a problem!  Eventually we should
-                   report it, but for now we just clobber the value. *)
-                Entire value
+            | Some (Entire _) -> failwith "markWrite: tried to write twice with nonempty path"
             | Some (Indices imap) -> markWriteIdx x xs imap
             | None -> markWriteIdx x xs Map.empty
 
