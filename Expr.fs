@@ -308,9 +308,9 @@ let isTrue (expr : BoolExpr<_>) : bool =
 /// Converts a typed variable to an expression.
 let mkVarExp (var : CTyped<'Var>) : Expr<'Var> =
     match var with
-    | Int s -> s |> IVar |> Int
-    | Bool s -> s |> BVar |> Bool
-    | Array (eltype, length, s) -> Array (eltype, length, AVar s)
+    | CTyped.Int i -> Expr.Int (IVar i)
+    | CTyped.Bool b -> Expr.Bool (BVar b)
+    | CTyped.Array (eltype, length, a) -> Expr.Array (eltype, length, AVar a)
 
 /// Converts a VarMap to a sequence of expressions.
 let varMapToExprs
