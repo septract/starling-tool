@@ -1384,7 +1384,7 @@ let modelCAS
 /// <returns>
 ///     The lvalue's variable; will crash if the expression is not an lvalue.
 /// </returns>
-let rec varOfLValue (lv : Expression) : string =
+let rec varOfLValue (lv : Expression) : Var =
     match lv.Node with
     | Identifier i -> i
     | ArraySubscript (arr, _) -> varOfLValue arr
