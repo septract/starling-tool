@@ -43,6 +43,10 @@ module Types =
         | And // a && b
         | Or // a || b
 
+    /// A unary operator. 
+    type UnOp = 
+        | Neg // ! a
+
     /// An untyped, raw expression.
     /// These currently cover all languages, but this may change later.
     type Expression' =
@@ -52,6 +56,7 @@ module Types =
         | Identifier of string // foobaz
         | Symbolic of string * Expression list // %{foo}(exprs)
         | BopExpr of BinOp * Expression * Expression // a BOP b
+        | UopExpr of UnOp * Expression // UOP a 
         | ArraySubscript of array : Expression * subscript : Expression
     and Expression = Node<Expression'>
 
@@ -94,6 +99,9 @@ module Types =
 
     /// An AST func.
     type AFunc = Func<Expression>
+
+    /// A function view definition
+    type StrFunc = Func<string> 
 
     /// <summary>
     ///     An AST type literal.
@@ -138,8 +146,8 @@ module Types =
     type ViewSignature =
         | Unit
         | Join of ViewSignature * ViewSignature
-        | Func of Func<string>
-        | Iterated of Func<string> * string
+        | Func of StrFunc 
+        | Iterated of StrFunc * string
 
     /// <summary>
     ///     An AST variable declaration.
@@ -209,6 +217,8 @@ module Types =
         | Search of int // search 0;
         | ViewProtos of ViewProto list // view name(int arg);
         | Constraint of ViewSignature * Expression option // constraint emp => true
+        | Exclusive of List<StrFunc> // exclusive p(x), q(x), r(x) 
+        | Disjoint of List<StrFunc> // disjoint p(x), q(x), r(x) 
         override this.ToString() = sprintf "%A" this
     and ScriptItem = Node<ScriptItem'>
 
@@ -240,6 +250,11 @@ module Pretty =
         | Or -> "||"
         >> String >> syntax
 
+    let printUnOp : UnOp -> Doc = 
+        function 
+        | Neg -> "!" 
+        >> String >> syntax 
+
     /// Pretty-prints expressions.
     /// This is not guaranteed to produce an optimal expression.
     let rec printExpression' (expr : Expression') : Doc =
@@ -255,6 +270,9 @@ module Pretty =
                    printBinOp op
                    printExpression b ]
             |> parened
+        | UopExpr(op, a) -> 
+            hsep [ printUnOp op
+                   printExpression a ] 
         | ArraySubscript (array, subscript) ->
             printExpression array <-> squared (printExpression subscript)
     and printExpression (x : Expression) : Doc = printExpression' x.Node
@@ -297,6 +315,18 @@ module Pretty =
                (match def with
                 | Some d -> printExpression d
                 | None _ -> String "?" |> syntax) ]
+        |> withSemi
+
+    /// Pretty-prints exclusivity constraints.
+    let printExclusive (xs : List<StrFunc>) : Doc =
+        hsep ((String "exclusive") :: 
+              (List.map (printFunc String) xs)) 
+        |> withSemi
+
+    /// Pretty-prints exclusivity constraints.
+    let printDisjoint (xs : List<StrFunc>) : Doc =
+        hsep ((String "disjoint") :: 
+              (List.map (printFunc String) xs)) 
         |> withSemi
 
     /// Pretty-prints fetch modes.
@@ -457,6 +487,8 @@ module Pretty =
         | ViewProtos v -> printViewProtoList v
         | Search i -> printSearch i
         | Constraint (view, def) -> printConstraint view def
+        | Exclusive xs -> printExclusive xs 
+        | Disjoint xs -> printDisjoint xs 
     let printScriptItem (x : ScriptItem) : Doc = printScriptItem' x.Node
 
     /// Pretty-prints scripts.
@@ -497,7 +529,7 @@ let (|BoolExp'|ArithExp'|AnyExp'|) (e : Expression')
     | ArraySubscript _ -> AnyExp' e
     | Num _ -> ArithExp' e
     | True | False -> BoolExp' e
-    | BopExpr(BoolOp, _, _) -> BoolExp' e
+    | BopExpr(BoolOp, _, _) | UopExpr(_,_) -> BoolExp' e
     | BopExpr(ArithOp, _, _) -> ArithExp' e
 
 /// Active pattern classifying expressions as to whether they are

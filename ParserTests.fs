@@ -144,6 +144,20 @@ module ExpressionTests =
                             <| BopExpr (Sub,
                                     node "" 1L 34L (Num 7L),
                                     node "" 1L 38L (Num 8L))))
+
+    [<Test>]
+    let ``Test negation / disjunction are parsed correctly`` () =
+        check parseExpression "true || ! false"
+            (Some <| 
+             node "" 1L 6L
+             ** BopExpr (Or,
+                    node "" 1L 1L True,
+                    node "" 1L 9L
+                        <| UopExpr (Neg,
+                                node "" 1L 11L False)))
+
+
+
 module AtomicActionTests =
     [<Test>]
     let ``foo++``() =

@@ -93,6 +93,51 @@ let empty : CollatedScript =
       SharedVars = []
       ThreadVars = [] }
 
+
+/// <summary>
+///     Make a list of views mutually exclusive. 
+/// </summary>
+let rec makeExclusive views = 
+
+    let makeExclusiveSingle x xs = 
+       List.map 
+         (fun y -> (ViewSignature.Join (x,y), Some (freshNode False))) xs  
+
+    match views with 
+    | x::xs' -> 
+        List.concat [ makeExclusiveSingle x xs'; makeExclusive xs'] 
+    | [] -> [] 
+
+
+let rec makeDisjoint (xs : List<StrFunc>) = 
+
+    let str2Expr (s : string) : Expression = 
+      freshNode (Identifier s) 
+
+    let makeNeqArgs 
+         ({Name = fx; Params = px}: StrFunc) 
+         ({Name = fy; Params = py}: StrFunc) : Expression = 
+      List.zip (List.map str2Expr px) (List.map str2Expr py) 
+      |> 
+      List.map (fun (a,b) -> freshNode (BopExpr(Neq,a,b))) 
+      |> 
+      List.fold 
+        (fun acc e -> freshNode (BopExpr(Or,acc,e))) 
+        (freshNode False) 
+
+    let makeJoin (x: StrFunc) (y: StrFunc)  = 
+      ViewSignature.Join (ViewSignature.Func x, ViewSignature.Func y)
+ 
+    let makeDisjointSingle x xs = 
+       List.map 
+         (fun y -> (makeJoin x y), Some (makeNeqArgs x y))
+         xs  
+
+    match xs with 
+    | x::xs' -> 
+        List.concat [ makeDisjointSingle x xs'; makeDisjoint xs'] 
+    | [] -> [] 
+
 /// <summary>
 ///     Collates a script, grouping all like-typed items together.
 /// </summary>
@@ -120,6 +165,11 @@ let collate (script : ScriptItem list) : CollatedScript =
         | Search i -> { cs with Search = Some i }
         | Method m -> { cs with Methods = m::cs.Methods }
         | Constraint (v, d) -> { cs with Constraints = (v, d)::cs.Constraints }
+        | Exclusive xs -> 
+            let views = List.map ViewSignature.Func xs 
+            { cs with Constraints = List.concat [makeExclusive views; cs.Constraints] } 
+        | Disjoint xs -> 
+            { cs with Constraints = List.concat [makeDisjoint xs; cs.Constraints] } 
 
     // We foldBack instead of fold to preserve the original order.
     List.foldBack collateStep script empty

@@ -195,9 +195,18 @@ do parsePostfixExpressionRef :=
 
     parsePrimaryExpression .>> ws >>= parseArraySubscript
 
+
+/// Parser for unary expressions 
+/// TODO(CaptainHayashi): this is a bit hacky, could unify postfix / unary expr? 
+let parseUnaryExpression = 
+     parsePostfixExpression
+     <|> 
+     nodify (skipString "!" >>. ws >>. parsePostfixExpression |>> (fun x -> UopExpr (Neg, x )))  
+
+
 /// Parser for multiplicative expressions.
 let parseMultiplicativeExpression =
-    parseBinaryExpressionLevel parsePostfixExpression
+    parseBinaryExpressionLevel parseUnaryExpression
         [ ("*", Mul)
           ("/", Div)
           ("%", Mod) ]
@@ -400,7 +409,7 @@ let parseViewExpr =
  *)
 
 /// Parses a functional view definition.
-let parseDFuncView = parseFunc parseIdentifier |>> ViewSignature.Func
+let parseStrFuncView = parseFunc parseIdentifier |>> ViewSignature.Func
 
 /// Parses the unit view definition.
 let parseDUnit = stringReturn "emp" ViewSignature.Unit
@@ -428,7 +437,7 @@ let parseDIterated =
 let parseBasicViewSignature =
     choice [ parseDUnit
              // ^- `emp'
-             parseDFuncView
+             parseStrFuncView
              // ^- <identifier>
              //  | <identifier> <arg-list>
              inParens parseViewSignature ]
@@ -576,6 +585,22 @@ let parseConstraint : Parser<ViewSignature * Expression option, unit> =
             (fun d _ v -> (d, v))
     .>> pstring ";"
 
+
+/// parse an exclusivity constraint
+let parseExclusive : Parser<List<StrFunc>, unit> = 
+    pstring "exclusive" >>. ws
+    // ^- exclusive ..  
+    >>. parseDefs (parseFunc parseIdentifier)
+    .>> wsSemi 
+       
+/// parse a disjointness constraint
+let parseDisjoint : Parser<List<StrFunc>, unit> = 
+    pstring "disjoint" >>. ws
+    // ^- exclusive ..  
+    >>. parseDefs (parseFunc parseIdentifier) 
+    .>> wsSemi 
+       
+
 /// Parses a single method, excluding leading or trailing whitespace.
 let parseMethod =
     pstring "method" >>. ws >>.
@@ -609,6 +634,10 @@ let parseScript =
                              // ^- method <identifier> <arg-list> <block>
                              parseConstraint |>> Constraint
                              // ^- constraint <view> -> <expression> ;
+                             parseExclusive |>> Exclusive
+                             // ^- exclusive <view>, <view>, ... ;
+                             parseDisjoint |>> Disjoint
+                             // ^- disjoint <view>, <view>, ... ;
                              parseViewProtoSet |>> ViewProtos
                              // ^- view <identifier> ;
                              //  | view <identifier> <view-proto-param-list> ;
