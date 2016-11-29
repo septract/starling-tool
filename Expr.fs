@@ -128,7 +128,7 @@ module Pretty =
       (pVar : 'Var -> Doc)
       (arr : ArrayExpr<'Var>)
       (idx : IntExpr<'Var>) : Doc =
-        cmdSexpr "[]" [ printIntExpr pVar idx; printArrayExpr pVar arr ]
+        cmdSexpr "select" [ printIntExpr pVar idx; printArrayExpr pVar arr ]
 
     /// Pretty-prints an arithmetic expression.
     and printIntExpr (pVar : 'Var -> Doc) : IntExpr<'Var> -> Doc =
@@ -165,7 +165,7 @@ module Pretty =
         | AVar c -> pVar c
         | AIdx (_, _, arr, idx) -> printIdx pVar arr idx
         | AUpd (_, _, arr, idx, value) ->
-            cmdSexpr "[]<-"
+            cmdSexpr "store"
                 [ printIntExpr pVar idx
                   printExpr pVar value
                   printArrayExpr pVar arr ]
