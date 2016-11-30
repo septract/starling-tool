@@ -99,12 +99,12 @@ module WriteMaps =
     [<Test>]
     let ``write map of x[3][i] <- 3; y[j] <- 4 is correct`` () =
         Map.ofList
-            [ (Array (Array (Int (), Some 320, ()), Some 240, Reg "x"),
+            [ (Array (Array (Int (), Some 320, ()), Some 240, "x"),
                Indices <| Map.ofList
                 [ (IInt 3L,
                     Indices <| Map.ofList
                         [ (IVar (Reg "i"), Entire (Int (IInt 3L))) ]) ] )
-              (Array (Int (), Some 320, Reg "y"),
+              (Array (Int (), Some 320, "y"),
                Indices <| Map.ofList
                 [ (IVar (Reg "j"), Entire (Int (IInt 4L))) ] ) ]
         ?=?
@@ -151,7 +151,7 @@ module Normalisation =
     [<Test>]
     let ``assign normalisation of x[3][i] <- 3; y[j] <- 4 is correct`` () =
         checkAssigns
-            [ (Array (Array (Int (), Some 320, ()), Some 240, Reg "x"),
+            [ (Array (Array (Int (), Some 320, ()), Some 240, "x"),
                aupd (Array (Int (), Some 320, ())) (Some 240) (AVar (Reg "x"))
                 (IInt 3L)
                 (aupd
@@ -164,7 +164,7 @@ module Normalisation =
                          IInt 3L))
                     (IVar (Reg "i"))
                     (Int (IInt 3L))))
-              (Array (Int (), Some 320, Reg "y"),
+              (Array (Int (), Some 320, "y"),
                aupd (Int()) (Some 320) (AVar (Reg "y"))
                     (IVar (Reg "j"))
                     (Int (IInt 4L))) ]
@@ -191,17 +191,17 @@ module Normalisation =
     let ``microcode normalisation of CAS(x[3], d[6], 2) is correct`` () =
         let xel = Int ()
         let xlen = Some 10
-        let xname = Reg "x"
+        let xname = "x"
         let xar = Array (xel, xlen, xname)
-        let x3 = IIdx (xel, xlen, AVar xname, IInt 3L)
-        let x3upd v = aupd xel xlen (AVar xname) (IInt 3L) v
+        let x3 = IIdx (xel, xlen, AVar (Reg xname), IInt 3L)
+        let x3upd v = aupd xel xlen (AVar (Reg xname)) (IInt 3L) v
 
         let del = Int ()
         let dlen = Some 10
-        let dname = Reg "d"
+        let dname = "d"
         let dar = Array (del, dlen, dname)
-        let d6 = IIdx (del, dlen, AVar dname, IInt 6L)
-        let d6upd v = aupd del dlen (AVar dname) (IInt 6L) v
+        let d6 = IIdx (del, dlen, AVar (Reg dname), IInt 6L)
+        let d6upd v = aupd del dlen (AVar (Reg dname)) (IInt 6L) v
 
         checkMicrocode
             // TODO(CaptainHayashi): order shouldn't matter in branches.
