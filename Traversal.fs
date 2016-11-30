@@ -512,11 +512,6 @@ let rec tliftToBoolSrc
             |> Context.changePos id sub ctx
             |> bind (uncurry (ignoreContext expectBool))
         | BIdx (eltype, length, arr, ix) ->
-            // TODO(CaptainHayashi): this is awful.
-            let originalType = Array (eltype, length, ())
-
-            (* Ensure the traversal doesn't change eltype or length to something
-               we're not expecting. *)
             let assemble (arr', ix') =
                 ok (BIdx (eltype, length, arr', ix'))
             let tResult =
@@ -556,11 +551,6 @@ and tliftToIntSrc
             |> Context.changePos id sub ctx
             |> bind (uncurry (ignoreContext expectInt))
         | IIdx (eltype, length, arr, ix) ->
-            // TODO(CaptainHayashi): this is awful.
-            let originalType = Array (eltype, length, ())
-
-            (* Ensure the traversal doesn't change eltype or length to something
-               we're not expecting. *)
             let assemble (arr', ix') =
                 ok (IIdx (eltype, length, arr', ix'))
             let tResult =
@@ -593,17 +583,10 @@ and tliftToArraySrc
         | AVar x ->
             let typedVar = CTyped.Array (eltype, length, x)
             let exprResult = Context.changePos id sub ctx typedVar
-            (* Traversals have to preserve the element type and, if it
-               exists, the length. *)
             bind
                 (uncurry (ignoreContext (expectArray eltype length)))
                 exprResult
         | AIdx (eltype, length, arr, ix) ->
-            // TODO(CaptainHayashi): this is awful.
-            let originalType = Array (eltype, length, ())
-
-            (* Ensure the traversal doesn't change eltype or length to something
-               we're not expecting. *)
             let assemble (arr', ix') =
                 ok (AIdx (eltype, length, arr', ix'))
             let tResult =
@@ -612,13 +595,8 @@ and tliftToArraySrc
             // Remove the nested result.
             bind (uncurry (ignoreContext id)) tResult
         | AUpd (eltype, length, arr, ix, value) ->
-            // TODO(CaptainHayashi): this is awful.
-            let originalType = Array (eltype, length, ())
-
-            (* Ensure the traversal doesn't change eltype or length to something
-               we're not expecting, and doesn't change the type of value. *)
+            // Ensure the traversal doesn't change the type of value.
             let assemble (arr', ix', value') =
-                // Type-check value.
                 let vt, vt' = typeOf value, typeOf value'
                 if typesCompatible vt vt'
                 then ok (AUpd (eltype, length, arr', ix', value'))
