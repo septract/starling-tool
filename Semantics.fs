@@ -131,10 +131,10 @@ type Write =
 /// <param name="value">The value written to the eventual destination.</param>
 /// <param name="map">The write map being extended.</param>
 /// <returns>The extended write map.</returns>
-let markWrite (var : CTyped<Sym<Var>>) (idxPath : IntExpr<Sym<Var>> list)
+let markWrite (var : TypedVar) (idxPath : IntExpr<Sym<Var>> list)
   (value : Expr<Sym<Var>>)
-  (map : Map<CTyped<Sym<Var>>, Write>)
-  : Map<CTyped<Sym<Var>>, Write> =
+  (map : Map<TypedVar, Write>)
+  : Map<TypedVar, Write> =
     (* First, consider what it means to add an index write to an index write
        map. *)
     let rec markWriteIdx
@@ -189,26 +189,29 @@ let markWrite (var : CTyped<Sym<Var>>) (idxPath : IntExpr<Sym<Var>> list)
 ///     Tries to extract the variable and index path from a lvalue.
 /// </summary>
 let varAndIdxPath (expr : Expr<Sym<Var>>)
-  : (CTyped<Sym<Var>> * IntExpr<Sym<Var>> list) option =
+  : (TypedVar * IntExpr<Sym<Var>> list) option =
     // TODO(CaptainHayashi): proper doc comment.
     // TODO(CaptainHayashi): merge with type lookup stuff in Modeller?
+    // TODO(CaptainHayashi): error perhaps if given a non-lvalue
 
     let rec getInBool bx path =
         match bx with
-        | BVar v -> Some (Bool v, path)
+        | BVar (Reg v) -> Some (Bool v, path)
+        // Symbols are not lvalues, so we can't process them.
         | BIdx (e, l, a, i) -> getInArray e l a (i::path)
         | _ -> None
     and getInInt ix path =
         match ix with
-        | IVar v -> Some (Int v, path)
+        | IVar (Reg v) -> Some (Int v, path)
+        // Symbols are not lvalues, so we can't process them.
         | IIdx (e, l, a, i) -> getInArray e l a (i::path)
         | _ -> None
     and getInArray eltype length ax path =
         match ax with
-        | AVar v -> Some (Array (eltype, length, v), path)
+        | AVar (Reg v) -> Some (Array (eltype, length, v), path)
+        // Symbols are not lvalues, so we can't process them.
         | AIdx (e, l, a, i) -> getInArray e l a (i::path)
-        // TODO(CaptainHayashi): do something useful here.
-        | AUpd (_, _, a, i, _) -> None
+        | _ -> None
 
     match expr with
     | Int ix -> getInInt ix []
@@ -221,7 +224,7 @@ let varAndIdxPath (expr : Expr<Sym<Var>>)
 /// <param name="assigns">The assignment list to investigate.</param>
 /// <returns>The write map for that microcode list.</returns>
 let makeWriteMap (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>>) list)
-  : Map<CTyped<Sym<Var>>, Write> =
+  : Map<TypedVar, Write> =
     let addToWriteMap map (lv, rv) =
         // TODO(CaptainHayashi): complain if lv isn't a lvalue?
         maybe map (fun (var, idx) -> markWrite var idx rv map) (varAndIdxPath lv)
@@ -281,7 +284,7 @@ let mkIdx (eltype : Type) (length : int option) (arr : ArrayExpr<Sym<Var>>)
 ///     The assignments in entire-variable form, in arbitrary order.
 /// </returns>
 let normaliseAssigns (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>>) list)
-  : Result<(CTyped<Sym<Var>> * Expr<Sym<Var>>) list, Error> =
+  : Result<(TypedVar * Expr<Sym<Var>>) list, Error> =
     // First, we convert the assigns to a write map.
     let wmap = makeWriteMap assigns
     (* Then, each item in the write map represents an assignment.
@@ -311,9 +314,9 @@ let normaliseAssigns (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>>) list)
                 seqBind addUpdate lhs (Map.toSeq ixmap)
             | _ -> fail (BadSemantics "tried to index into a non-array")
 
-    let translateAssign (lhs, rhs) =
+    let translateAssign (lhs : TypedVar, rhs) =
         // lhs is a typed variable here, but must be an expression for the above
-        let lhsE = mkVarExp lhs
+        let lhsE = mkVarExp (mapCTyped Reg lhs)
         lift (mkPair lhs) (translateRhs lhsE rhs)
 
     collect (Seq.map translateAssign (Map.toSeq wmap))
@@ -325,7 +328,7 @@ let normaliseAssigns (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>>) list)
 /// <returns>On success, the normalised listing (in arbitrary order).</returns>
 let rec normaliseMicrocode
   (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
-  : Result<Microcode<CTyped<Sym<Var>>, Sym<Var>> list, Error> =
+  : Result<Microcode<TypedVar, Sym<Var>> list, Error> =
     let assigns, assumes, branches = partitionMicrocode instrs
 
     let normaliseBranch (i, t, e) =
@@ -487,7 +490,7 @@ let microcodeToBool
         // TODO(CaptainHayashi): framing (currently done elsewhere).
         let translateInstr =
             function
-            | Assign (x, y) -> lift2 mkEq (toAfterV x) (toBeforeE y)
+            | Assign (x, y) -> lift2 mkEq (toAfterV (mapCTyped Reg x)) (toBeforeE y)
             | Assume x -> toBeforeB x
             | Branch (i, t, e) ->
                 lift3
