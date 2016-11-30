@@ -11,21 +11,19 @@ thread int curr;
 thread int v;
 thread int cv;
 
-thread int _;   // Does this give the right semantics? 
-
 view isHead(int node); 
 view isVal(int v, int node);
 view isList(int v);
 view has1Lock(int x, int y);
+view has1LockDangle(int x);
 view has2Lock(int x, int y);
-// view dangleNode(int x);
 
-method deleteVal(v) {
+method deleteVal(int v) {
   {| isList(v) |}
     <prev = head>;
   {| isList(v) * isHead(prev) |} 
    <{ lheap = heap; heap = (%{ takeLock(#2) }(lheap, prev)); }>;
-  {| isList(v) * has1Lock(prev, _) * isHead(prev) |}
+  {| isList(v) * has1LockDangle(prev) * isHead(prev) |}
    <lheap = heap>; curr = (%{ #2.next }(lheap, curr)); 
   {| isList(v) * has1Lock(prev, curr) |}
    <{ lheap = heap; heap = (%{ takeLock(#2) }(lheap, curr)); }>;
@@ -35,7 +33,7 @@ method deleteVal(v) {
     while (cv < v ) {
       {| isList(v) * has2Lock(prev, curr) * isVal(curr, cv) |}
         <{ lheap = heap; heap = (%{ releaseLock(#2) }(lheap, prev)); }>; 
-      {| isList(v) * has1Lock(curr, _) * isVal(curr, cv) |}
+      {| isList(v) * has1LockDangle(curr) * isVal(curr, cv) |}
         prev = curr;
         <lheap = heap>; curr = (%{ #2->next }(lheap, curr));  
       {| isList(v) * has1Lock(prev, curr) * isVal(prev,cv) |}
@@ -51,14 +49,14 @@ method deleteVal(v) {
         <{ lheap = heap; 
            heap = (%{ #2.next := #3.next }(lheap, prev, curr)); 
            lheap = heap; heap = (%{ disposeNode(#2) }(lheap, curr)); }>; 
-      {| isList(v) * has1Lock(prev, _) |}
+      {| isList(v) * has1LockDangle(prev) |}
     } 
     else {
       {| has1Lock(prev, curr) |}
         <{ lheap = heap; heap = (%{ releaseLock(#1)}(curr)); }>; 
-      {| has1Lock(prev, _) |}
+      {| has1LockDangle(prev) |}
     }
-  {| has1Lock(prev, _) |}
+  {| has1LockDangle(prev) |}
     <{ lheap = heap; heap = (%{ releaseLock(#2) }(lheap, prev)); }>; 
   {| emp |}
 }
@@ -69,22 +67,21 @@ constraint isList(v) -> %{ isListG(head,ub,#1) }(v);
 
 constraint has1Lock(a,b) -> %{ has1LockG(head,#1,#2) }(a, b);
 
+constraint has1LockDangle(a) -> %{ exists e: Node :: has1LockG(head,#1,e) }(a);
+
 constraint has2Lock(a,b)  -> %{ has2LockG(head,#1,#2) }(a, b);
 
 constraint isVal(node, v) -> %{ isValG(head, #1, #2) &*& #2 < ub }(node, v);
 
-// constraint dangleNode(a) -> 
-//  %{ dangleNodeG(#1) }(a);
 
-
-// Are the constraints below necessary? 
-
-// Constraints on views
-constraint has1Lock(a,b) * has1Lock(c,d)   -> a != c;
-constraint has1Lock(a,b) * has2Lock(c,d)   -> a != c && a != d;
-constraint has2Lock(a,b) * has2Lock(c,d)   -> a != c && a != d && b != c && b != d;
-// constraint has1Lock(a,b) * dangleNode(c)   -> a != c;
-// constraint has2Lock(a,b) * dangleNode(c)   -> a != c && b != c;
-
-// // Could maybe replace some of the constraints above?
-// constraint has2Lock(a,b) -> %{ has1Lock(#1,_) &*& has1Lock(#2,_) }(a, b);
+// // Are the constraints below necessary? 
+// 
+// // Constraints on views
+// constraint has1Lock(a,b) * has1Lock(c,d)   -> a != c;
+// constraint has1Lock(a,b) * has2Lock(c,d)   -> a != c && a != d;
+// constraint has2Lock(a,b) * has2Lock(c,d)   -> a != c && a != d && b != c && b != d;
+// // constraint has1Lock(a,b) * dangleNode(c)   -> a != c;
+// // constraint has2Lock(a,b) * dangleNode(c)   -> a != c && b != c;
+// 
+// // // Could maybe replace some of the constraints above?
+// // constraint has2Lock(a,b) -> %{ has1Lock(#1,_) &*& has1Lock(#2,_) }(a, b);
