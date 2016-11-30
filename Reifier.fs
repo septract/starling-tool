@@ -113,7 +113,7 @@ module Types =
         ///         later on.
         ///     </para>
         /// </summary>
-        | SymInIteratedConstraint of sym : string
+        | SymInIteratedConstraint of sym : SymbolicSentence
         /// <summary>
         ///     An expression traversal went belly-up.
         /// </summary>
@@ -813,6 +813,6 @@ module Pretty =
                 [ printDView view ]
         | SymInIteratedConstraint sym ->
             fmt "symbol '{0}' not allowed in an iterated constraint"
-                [ String sym ]
+                [ printSymbolicSentence sym ]
         | Traversal err -> printTraversalError printError err
         |> error

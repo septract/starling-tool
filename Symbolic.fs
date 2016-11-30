@@ -41,6 +41,32 @@ open Starling.Core.Traversal
 [<AutoOpen>]
 module Types =
     /// <summary>
+    ///     A fragment of a symbolic sentence.
+    /// </summary>
+    type SymbolicWord =
+        /// <summary>
+        ///     A string part of a symbolic sentence.
+        /// </summary>
+        | SymString of string
+        /// <summary>
+        ///     A param reference part of a symbolic sentence.
+        /// </summary>
+        | SymParamRef of index: int
+
+    /// <summary>
+    ///     The uninterpreted body of a symbolic.
+    /// </summary>
+    type SymbolicSentence = SymbolicWord list
+
+    /// <summary>
+    ///     A symbolic, parameterised over arbitrary expressions.
+    /// </summary>
+    /// <typeparam name="Expr">The type of argument expressions.</typeparam>
+    type Symbolic<'Expr> =
+        { Sentence : SymbolicSentence
+          Args : 'Expr list }
+
+    /// <summary>
     ///     A variable reference that may be symbolic.
     ///
     ///     <para>
@@ -58,7 +84,7 @@ module Types =
         ///     A symbolic variable, predicated over multiple expressions.
         ///     The symbol itself is the name inside the <c>Func</c>.
         /// </summary>
-        | Sym of Func<Expr<Sym<'var>>>
+        | Sym of Symbolic<Expr<Sym<'var>>>
         /// <summary>
         ///     A regular, non-symbolic variable.
         | Reg of 'var
@@ -103,8 +129,8 @@ module SymExprs =
 [<AutoOpen>]
 module Create =
     /// Creates a symbolic variable given its body and parameters.
-    let sym (body : string) (xs : Expr<Sym<'Var>> list) : Sym<'Var> =
-        Sym { Name = body; Params = xs }
+    let sym (sentence : SymbolicSentence) (xs : Expr<Sym<'Var>> list) : Sym<'Var> =
+        Sym { Sentence = sentence; Args = xs }
 
     /// Creates an integer sym-variable.
     let siVar c = c |> Reg |> IVar
@@ -151,7 +177,7 @@ module Traversal =
         fun ctx ->
             function
             | Reg r -> sub ctx r
-            | Sym { Name = body; Params = rs } ->
+            | Sym { Sentence = body; Args = rs } ->
                 // TODO(CaptainHayashi): this is horrible.
                 // Are our abstractions wrong?
                 tchainL
@@ -197,11 +223,11 @@ module Traversal =
     ///     A <see cref="Traversal"/> trying to remove symbols from
     ///     variables.
     /// </returns>
-    let removeSymFromVar (err : string -> 'Error)
+    let removeSymFromVar (err : SymbolicSentence -> 'Error)
       : Traversal<Sym<'Var>, 'Var, 'Error> =
         ignoreContext
             (function
-             | Sym s -> s.Name |> err |> Inner |> fail
+             | Sym s -> s.Sentence |> err |> Inner |> fail
              | Reg f -> ok f)
 
     /// <summary>
@@ -219,7 +245,7 @@ module Traversal =
     ///     A <see cref="Traversal"/> trying to remove symbols from
     ///     expressions.
     /// </returns>
-    let removeSymFromExpr (err : string -> 'Error)
+    let removeSymFromExpr (err : SymbolicSentence -> 'Error)
       : Traversal<Expr<Sym<'Var>>, Expr<'Var>, 'Error> =
         (tliftOverExpr (tliftOverCTyped (removeSymFromVar err)))
 
@@ -238,7 +264,7 @@ module Traversal =
     ///     A <see cref="Traversal"/> trying to remove symbols from
     ///     Boolean expressions.
     /// </returns>
-    let removeSymFromBoolExpr (err : string -> 'Error)
+    let removeSymFromBoolExpr (err : SymbolicSentence -> 'Error)
       : Traversal<BoolExpr<Sym<'Var>>, BoolExpr<'Var>, 'Error> =
         tliftToBoolSrc
             (tliftToExprDest
@@ -266,12 +292,12 @@ module Traversal =
         let rec subInTypedSym ctx sym =
             match (valueOf sym) with
             | Reg r -> traversal ctx (withType (typeOf sym) r)
-            | Sym { Name = n; Params = ps } ->
+            | Sym { Sentence = n; Args = ps } ->
                 tchainL sub
                     (fun ps' ->
                         mkVarExp
                             (withType (typeOf sym)
-                                (Sym { Name = n; Params = ps' })))
+                                (Sym { Sentence = n; Args = ps' })))
                     ctx ps
         and sub = tliftToExprSrc subInTypedSym
         subInTypedSym
@@ -329,7 +355,7 @@ module Traversal =
                 | c -> fail (ContextMismatch ("position context", c))
             (* Everything else just has approximation bubbled through
                in a type-generic way. *)
-            | WithType (Sym { Name = body; Params = rs }, t) ->
+            | WithType (Sym { Sentence = body; Args = rs }, t) ->
                 tchainL rmap (sym body >> withType t >> mkVarExp) ctx rs
             | WithType (Reg x, t) ->
                 ok (ctx, mkVarExp (withType t (Reg x)))
@@ -350,7 +376,7 @@ let rec collectSymVars
             lift
                 (fun ctx -> (ctx, withType tc (Reg v)))
                 (pushVar ctx (withType tc v))
-        | WithType (Sym { Name = body; Params = ps }, tc) ->
+        | WithType (Sym { Sentence = body; Args = ps }, tc) ->
             tchainL
                 (tliftOverExpr collectSymVars)
                 (sym body >> withType tc)
@@ -368,7 +394,7 @@ let rec collectSymMarkedVars
             lift
                 (fun ctx -> (ctx, withType tc (Reg v)))
                 (pushMarkedVar ctx (withType tc v))
-        | WithType (Sym { Name = body; Params = ps }, tc) ->
+        | WithType (Sym { Sentence = body; Args = ps }, tc) ->
             tchainL
                 (tliftOverExpr collectSymMarkedVars)
                 (sym body >> withType tc)
@@ -383,20 +409,64 @@ module Pretty =
     open Starling.Core.Var.Pretty
 
     /// <summary>
-    ///     Pretty-prints a <c>Sym</c>.
+    ///     Pretty-prints a symbolic sentence without interpolation.
+    /// </summary>
+    /// <param name="s">The symbolic sentence to print.</param>
+    /// <returns>
+    ///     The <see cref="Doc"/> resulting from printing <paramref name="s"/>.
+    /// </returns>
+    let printSymbolicSentence (s : SymbolicSentence) : Doc =
+        let printSymbolicWord =
+            function
+            | SymString s -> String s
+            | SymParamRef i -> String (sprintf "#%d" i)
+
+        hjoin (List.map printSymbolicWord s)
+
+    /// <summary>
+    ///     Pretty-prints a symbolic sentence with interpolation.
+    ///     <para>
+    ///         Invalid arguments are replaced with '#ERROR#'.
+    ///     </para>
+    /// </summary>
+    /// <param name="pArg">Pretty-printer for arguments.</param>
+    /// <param name="s">The symbolic sentence to print.</param>
+    /// <param name="args">The sentence arguments to print.</param>
+    /// <typeparam name="Arg">The type of sentence arguments.</param>
+    /// <returns>
+    ///     The <see cref="Doc"/> resulting from printing <paramref name="s"/>.
+    /// </returns>
+    let printInterpolatedSymbolicSentence
+      (pArg : 'Arg -> Doc) (s : SymbolicSentence) (args : 'Arg list) : Doc =
+        let printSymbolicWord =
+            function
+            | SymString s -> String s
+            | SymParamRef i when i > 0 && i <= args.Length -> pArg args.[i - 1]
+            | _ -> String "#ERROR#"
+
+        hjoin (List.map printSymbolicWord s)
+
+    /// <summary>
+    ///     Pretty-prints a <c>Sym</c>, with interpolation.
     /// </summary>
     /// <param name="pReg">
     ///     Pretty printer to use for regular variables.
     /// </param>
+    /// <param name="sym">The symbolic to print.</sym>
+    /// <typeparam name="Reg">
+    ///     The type of regular variables in expressions.
+    /// </typeparam>
     /// <returns>
-    ///     A function taking <c>Sym</c>s and returning pretty-printer
-    ///     <c>Command</c>s.
+    ///     A <see cref="Doc"/> representing <paramref name="sym"/>.
     /// </returns>
-    let rec printSym pReg =
-        function
-        | Sym { Name = sym ; Params = regs } ->
-            func (sprintf "%%{%s}" sym) (Seq.map (printExpr (printSym pReg)) regs)
-        | Reg reg -> pReg reg
+    let rec printSym (pReg : 'Reg -> Doc) (sym : Sym<'Reg>) : Doc =
+        match sym with
+        | Reg r -> pReg r
+        | Sym { Sentence = ws; Args = xs } ->
+            let pArg = printExpr (printSym pReg)
+            parened
+                (String "sym"
+                 <+> quoted (printInterpolatedSymbolicSentence pArg ws xs))
 
     /// Pretty-prints a SVExpr.
     let printSVExpr = printExpr (printSym String)

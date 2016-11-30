@@ -4,6 +4,7 @@
 module Starling.Tests.Core.Symbolic
 
 open NUnit.Framework
+open Starling.Collections
 open Starling.Utils.Testing
 open Starling.Core.TypeSystem
 open Starling.Core.Var
@@ -79,14 +80,14 @@ module BoolApprox =
         check
             BFalse
             Context.positive
-            (BVar (Sym { Name = "test"; Params = ([] : SMExpr list) } ))
+            (BVar (Sym { Sentence = [ SymString "test" ]; Args = ([] : SMExpr list) } ))
 
     [<Test>]
     let ``Rewrite -ve param-less Bool symbol to true`` () =
         check
             BTrue
             Context.negative
-            (BVar (Sym { Name = "test"; Params = ([] : SMExpr list) } ))
+            (BVar (Sym { Sentence = [ SymString "test" ]; Args = ([] : SMExpr list) } ))
 
     [<Test>]
     let ``Rewrite +ve Reg-params Bool symbol to false`` () =
@@ -95,8 +96,8 @@ module BoolApprox =
             Context.positive
             (BVar
                 (Sym
-                    { Name = "test"
-                      Params =
+                    { Sentence = [ SymString "test" ]
+                      Args =
                         [ Expr.Int (siBefore "foo")
                           Expr.Bool (sbAfter "bar") ] } ))
 
@@ -107,8 +108,8 @@ module BoolApprox =
             Context.negative
             (BVar
                 (Sym
-                    { Name = "test"
-                      Params =
+                    { Sentence = [ SymString "test" ]
+                      Args =
                         [ Expr.Int (siBefore "foo")
                           Expr.Bool (sbAfter "bar") ] } ))
 
@@ -120,14 +121,14 @@ module BoolApprox =
             (BImplies
                 (BVar
                     (Sym
-                        { Name = "test1"
-                          Params =
+                        { Sentence = [ SymString "test1" ]
+                          Args =
                             [ Expr.Int (siBefore "foo")
                               Expr.Bool (sbAfter "bar") ] } ),
                  BVar
                     (Sym
-                        { Name = "test2"
-                          Params =
+                        { Sentence = [ SymString "test2" ]
+                          Args =
                               [ Expr.Int (siBefore "baz")
                                 Expr.Bool (sbAfter "barbaz") ] } )))
 
@@ -139,14 +140,14 @@ module BoolApprox =
             (BImplies
                 (BVar
                     (Sym
-                        { Name = "test1"
-                          Params =
+                        { Sentence = [ SymString "test1" ]
+                          Args =
                             [ Expr.Int (siBefore "foo")
                               Expr.Bool (sbAfter "bar") ] } ),
                  BVar
                     (Sym
-                        { Name = "test2"
-                          Params =
+                        { Sentence = [ SymString "test2" ]
+                          Args =
                             [ Expr.Int (siBefore "baz")
                               Expr.Bool (sbAfter "barbaz") ] } )))
 
@@ -215,7 +216,7 @@ module FindSMVarsCases =
               CTyped.Bool (After "baz") ]
             (Expr.Bool
                 (BVar
-                    (sym "foo"
+                    (sym [ SymString "foo" ]
                         [ Expr.Int (siBefore "bar")
                           Expr.Bool (sbAfter "baz") ] )))
 
@@ -225,6 +226,52 @@ module FindSMVarsCases =
             [ CTyped.Int (Before "bar"); CTyped.Bool (After "baz") ]
             (Expr.Int
                 (IVar
-                    (sym "foo"
+                    (sym [ SymString "foo" ]
                         [ Expr.Int (siBefore "bar")
                           Expr.Bool (sbAfter "baz") ] )))
+
+
+/// <summary>
+///     Tests on the symbolic pretty printer.
+/// </summary>
+module Pretty =
+    open Starling.Core.Symbolic.Pretty
+
+    [<Test>]
+    let ``Pretty-printing a symbolic sentence without interpolation works`` () =
+        let sentence =
+            [ SymString "foo("
+              SymParamRef 2
+              SymString ", "
+              SymParamRef 1
+              SymString ")" ]
+        "foo(#2, #1)"
+            ?=? printUnstyled (printSymbolicSentence sentence)
+
+    [<Test>]
+    let ``Pretty-printing a valid Sym interpolates variables properly`` () =
+        let sentence =
+            [ SymString "foo("
+              SymParamRef 2
+              SymString ", "
+              SymParamRef 1
+              SymString ")" ]
+        let args = [ Int (siVar "bar"); Bool (sbVar "baz") ]
+
+        "(sym 'foo(baz, bar)')"
+            ?=? printUnstyled (printSym String (sym sentence args))
+
+    [<Test>]
+    let ``Pretty-printing an invalid Sym interpolates errors properly`` () =
+        let sentence =
+            [ SymString "nope("
+              SymParamRef 2
+              SymString ", "
+              SymParamRef 0 // error
+              SymString ", "
+              SymParamRef 3 // error
+              SymString ")" ]
+        let args = [ Int (siVar "bar"); Bool (sbVar "baz") ]
+
+        "(sym 'nope(baz, #ERROR#, #ERROR#)')"
+            ?=? printUnstyled (printSym String (sym sentence args))

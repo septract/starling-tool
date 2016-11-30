@@ -103,7 +103,7 @@ module Types =
         /// A substitution over the variable produced a `TraversalError`.
         | BadSub of err : TraversalError<unit>
         /// A symbolic expression appeared in an ambiguous position.
-        | AmbiguousSym of sym : string
+        | AmbiguousSym of sym : Symbolic<Expression>
 
     /// Represents an error when converting a view prototype.
     type ViewProtoError =
@@ -288,7 +288,7 @@ module Pretty =
             fmt
                 "symbolic var '{0}' has ambiguous type: \
                  place it inside an expression with non-symbolic components"
-                [ printSymbol sym ]
+                [ printSymbolic sym ]
 
     /// Pretty-prints view conversion errors.
     let printViewError : ViewError -> Doc =
@@ -579,7 +579,7 @@ let rec modelExpr
                     (varF >> Reg >> ok)
                     (tliftOverCTyped >> tliftToExprDest)
                 >> mapMessages BadSub)
-        | Symbolic (sym, exprs) ->
+        | Symbolic sym ->
             fail (AmbiguousSym sym)
         (* If we have an array, then work out what the type of the array's
            elements are, then walk back from there. *)
@@ -662,11 +662,11 @@ and modelBoolExpr
                                 (v,
                                  TypeMismatch
                                     (expected = "bool", got = typeOf vr))))
-        | Symbolic (sym, args) ->
+        | Symbolic { Sentence = sen; Args = args } ->
             args
             |> List.map me
             |> collect
-            |> lift (func sym >> Sym >> BVar)
+            |> lift (fun a -> BVar (Sym { Sentence = sen; Args = a }))
         | ArraySubscript (arr, idx) ->
             let arrResult = ma arr
             // Bind array index using its own environment.
@@ -768,11 +768,11 @@ and modelIntExpr
                                 (v,
                                  TypeMismatch
                                     (expected = "int", got = typeOf vr))))
-        | Symbolic (sym, args) ->
+         | Symbolic { Sentence = sen; Args = args } ->
             args
             |> List.map me
             |> collect
-            |> lift (func sym >> Sym >> IVar)
+            |> lift (fun a -> IVar (Sym { Sentence = sen; Args = a }))           
         | ArraySubscript (arr, idx) ->
             let arrResult = ma arr
             // Bind array index using its own environment.
@@ -857,7 +857,7 @@ and modelArrayExpr
                                 (v,
                                  TypeMismatch
                                     (expected = "array", got = typeOf vr))))
-        | Symbolic (sym, _) ->
+        | Symbolic sym ->
             (* TODO(CaptainHayashi): a symbolic array is ambiguously typed.
                Maybe when modelling we should take our 'best guess' at
                eltype and length from any subscripting expression? *)
@@ -1509,15 +1509,27 @@ and modelAssign
     (* We model assignments as !ILSet or !BLSet, depending on the
        type of dest, which _must_ be a thread lvalue.
        We thus also have to make sure that src is the correct type. *)
-    let modelWithDestAndSrc destPost srcPre =
-        match destPost with
-        | Typed.Bool _ -> ok (command "!BLSet" [ destPost ] [ srcPre ])
-        | Typed.Int _  -> ok (command "!ILSet" [ destPost ] [ srcPre ])
-        | Typed.Array (_) -> fail (PrimNotImplemented "array local assign")
+    let modelWithDest destM =
+        match destM with
+        | Int _ ->
+            let srcResult =
+                wrapMessages BadExpr
+                    (modelIntExpr ctx.ThreadVars ctx.ThreadVars id)
+                    src
+            lift (fun srcM -> command "!ILSet" [ destM ] [ Int srcM ]) srcResult
+        | Bool _ ->
+            let srcResult =
+                wrapMessages BadExpr
+                    (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
+                    src
+            lift (fun srcM -> command "!BLSet" [ destM ] [ Bool srcM ]) srcResult
+        | Array (_, _, _) ->
+            fail (PrimNotImplemented "array local assign")
 
-    bind2 modelWithDestAndSrc
-        (modelLValue ctx.ThreadVars ctx.ThreadVars id dest)
-        (wrapMessages BadExpr (modelExpr ctx.ThreadVars ctx.ThreadVars id) src)
+    (* The permitted type of src depends on the type of dest.
+       (Maybe, if the dest is ambiguous, we should invert this?) *)
+    let destResult = modelLValue ctx.ThreadVars ctx.ThreadVars id dest
+    bind modelWithDest destResult
 
 /// Creates a partially resolved axiom for an if-then-else.
 and modelITE
