@@ -437,10 +437,6 @@ let tliftToMicrocode
   (trav : Traversal<TypedVar, Expr<Sym<Var>>, Error, 'Var>)
   : Traversal<Microcode<TypedVar, Var>,
               Microcode<Expr<Sym<Var>>, Sym<Var>>, Error, 'Var> =
-    let travE : Traversal<Expr<Var>, Expr<Sym<Var>>, Error, 'Var> =
-        tliftToExprSrc trav
-    let travB : Traversal<BoolExpr<Var>, BoolExpr<Sym<Var>>, Error, 'Var> =
-        tliftToBoolSrc trav
     traverseMicrocode trav (tliftToExprSrc trav)
 
 /// <summary>
