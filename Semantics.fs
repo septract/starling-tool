@@ -434,6 +434,35 @@ let checkParamTypesPrim (prim : PrimCommand) (sem : PrimSemantics) : Result<Prim
     |> lift (fun _ -> prim)
 
 /// <summary>
+///     Lifts lvalue and rvalue traversals onto a microcode instruction.
+/// </summary>
+/// <param name="ltrav">The lvalue traversal to lift onto microcode.</param>
+/// <param name="rtrav">The rvalue traversal to lift onto microcode.</param>
+/// <typeparam name="L">The type of input lvalues.</typeparam>
+/// <typeparam name="RV">The type of input rvalue variables.</typeparam>
+/// <typeparam name="LO">The type of output lvalue.</typeparam>
+/// <typeparam name="RVO">The type of output rvalue variables.</typeparam>
+/// <returns>
+///     A traversal that visits all of the lvalues and rvalues in a microcode
+///     instruction, applying the given traversals to each.
+/// </returns>
+let traverseMicrocode
+  (ltrav : Traversal<'L, 'LO, Error, 'Var>)
+  (rtrav : Traversal<Expr<'RV>, Expr<'RVO>, Error, 'Var>)
+  : Traversal<Microcode<'L, 'RV>,
+              Microcode<'LO, 'RVO>, Error, 'Var> =
+    let brtrav = traverseBoolAsExpr rtrav
+
+    let rec tm ctx mc =
+        let tml = tchainL tm id
+
+        match mc with
+        | Assign (lv, rv) -> tchain2 ltrav rtrav Assign ctx (lv, rv)
+        | Assume assumption -> tchain brtrav Assume ctx assumption
+        | Branch (i, t, e) -> tchain3 brtrav tml tml Branch ctx (i, t, e)
+    tm
+
+/// <summary>
 ///     Lifts a parameter instantiation traversal onto a microcode instruction.
 /// </summary>
 /// <param name="trav">The traversal to lift onto microcode.</param>
@@ -450,15 +479,150 @@ let tliftToMicrocode
         tliftToExprSrc trav
     let travB : Traversal<BoolExpr<Var>, BoolExpr<Sym<Var>>, Error, 'Var> =
         tliftToBoolSrc trav
+    traverseMicrocode trav (tliftToExprSrc trav)
 
-    let rec tm ctx mc =
-        let tml = tchainL tm id
+/// <summary>
+///     Traversal that marks a microcode instruction with its pre- and
+///     post-state.
+/// </summary>
+let rec markMicrocode
+  (postMark : Var -> MarkedVar)
+  (preStates : Map<TypedVar, MarkedVar>)
+  : Traversal<Microcode<TypedVar, Sym<Var>>,
+              Microcode<CTyped<MarkedVar>, Sym<MarkedVar>>,
+              Error, 'Var> =
+    // Define marker functions for lvalues and rvalues...
+    let lf var = ok (postMark var)
+    let rf var =
+        match preStates.TryFind var with
+         // TODO(CaptainHayashi): proper error
+         | None -> fail (Inner (BadSemantics "somehow referenced variable not in scope"))
+         | Some mv -> ok (withType (typeOf var) (Reg mv))
 
-        match mc with
-        | Assign (lv, rv) -> tchain2 trav travE Assign ctx (lv, rv)
-        | Assume assumption -> tchain travB Assume ctx assumption
-        | Branch (i, t, e) -> tchain3 travB tml tml Branch ctx (i, t, e)
-    tm
+    // ...then use them in a traversal.
+    let lt = tliftOverCTyped (ignoreContext lf)
+    let rt = tliftToExprSrc (tliftToTypedSymVarSrc (tliftToExprDest (ignoreContext rf)))
+
+    traverseMicrocode lt rt
+
+/// <summary>
+///     Updates a map from variables to their last marker with the assignments
+///     in a microcode listing.
+/// </summary>
+let rec updateState
+  (state : Map<TypedVar, MarkedVar>)
+  (listing : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
+  : Map<TypedVar, MarkedVar> =
+    let updateOne (s : Map<TypedVar, MarkedVar>) m =
+        // TODO(CaptainHayashi): de-duplicate this
+        match m with
+        | Assign (lv, rv) ->
+            // Assumption: this is monotone, eg. rv >= s.[lv]
+            // TODO(CaptainHayashi): check this?
+            match (valueOf lv) with
+            | Before l | After l | Intermediate (_, l) | Goal (_, l) ->
+                s.Add(withType (typeOf lv) l, valueOf lv)
+        | Assume _ -> s
+        | Branch (i, t, e) ->
+            updateState (updateState s t) e
+    List.fold updateOne state listing
+
+/// <summary>
+///     Converts a microcode instruction set into a two-state Boolean predicate.
+/// </summary>
+let rec markedMicrocodeToBool
+  (instrs : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
+  : BoolExpr<Sym<MarkedVar>> =
+    let translateInstr instr =
+        match instr with
+        | Assign (x, y) -> mkEq (mkVarExp (mapCTyped Reg x)) y
+        | Assume x -> x
+        | Branch (i, t, e) ->
+            let tX = markedMicrocodeToBool t
+            let eX = markedMicrocodeToBool e
+            mkAnd2 (mkImplies i tX) (mkImplies (mkNot i) eX)
+    mkAnd (List.map translateInstr instrs)
+
+/// <summary>
+///     Generates a frame from a state assignment map.
+/// </summary>
+let makeFrame (states : Map<TypedVar, MarkedVar>) : BoolExpr<Sym<MarkedVar>> =
+    let maybeFrame (var, state) =
+        match state with
+        // If the variable was last assigned an After, it needs no framing.
+        | After _ -> None
+        // Otherwise, we need to bind After to its last assigned state.
+        | _ ->
+            Some
+                (mkEq
+                    (mkVarExp (mapCTyped (After >> Reg) var))
+                    (mkVarExp (withType (typeOf var) (Reg state))))
+    mkAnd (List.choose maybeFrame (Map.toList states))
+
+/// <summary>
+///     Converts a microcode routine into a two-state Boolean predicate.
+/// </summary>
+let microcodeRoutineToBool
+  (vars : TypedVar list)
+  (routine : Microcode<Expr<Sym<Var>>, Sym<Var>> list list)
+  : Result<BoolExpr<Sym<MarkedVar>>, Error> =
+    (* Each item in 'routine' represents a stage in the sequential composition
+       of microcode listings.  Each stage has a corresponding variable state:
+       the first is Intermediate 0, the second Intermediate 1, and so on until
+       the last stage assigns to After.
+
+       To begin translation, we annotate each stage with the corresponding
+       state marker. *)
+    let decideMarker index stage =
+        (stage,
+         if index = routine.Length - 1
+         then After
+         else (curry Intermediate (bigint index)))
+    let markedStages = Seq.mapi decideMarker routine
+
+    (* Throughout the translation, we keep a record of the last variable state
+       that was assigned to for each variable.  To begin with, each variable
+       is assigned its own pre-state. *)
+    let initialState =
+        Map.ofSeq (Seq.map (fun var -> (var, Before (valueOf var))) vars)
+
+    (* The main process is a fold over all of the individual stages.
+       For each, we normalise the listing to assign whole variables instead of
+       lvalues, then translate the lvalues to the last assigned state of their
+       variable and rvalues to the expected assigned state of this stage.
+       Finally, we repopulate the state with the new assignments.
+
+       This way, 'state' always tells us which values were assigned in the last
+       stage, several stages ago, or not at all. *)
+    let listingToBool (listing, marker) (state, xs) =
+        (* First, normalise the listing.
+           This ensures only whole variables are written to, which allows us to
+           track the assignment later. *)
+        let normalisedR = normaliseMicrocode listing
+
+        (* Next, make the microcode state-aware.
+           This means that each lvalue is translated with this
+           stage's marker, and each rvalue is translated according to the state
+           map. *)
+        let stateAwareR =
+            let makeAware normalised =
+                mapMessages Traversal
+                    (mapTraversal (tchainL (markMicrocode marker state) id)
+                        normalised)
+            bind makeAware normalisedR
+
+        (* Finally, we need to repopulate the table with all assignments made
+           in this command, and actually translate the listing to a Boolean. *)
+        lift
+            (fun stateAware ->
+                (updateState state stateAware, markedMicrocodeToBool stateAware :: xs))
+            stateAwareR
+    let processedR = seqBind listingToBool (initialState, []) markedStages
+    (* Finally, decide the frame and conjoin it with the listings.
+       The frame is (x!after = x!z) where x!z is the last assignment of x and
+       z is not after. *)
+    lift (fun (assigns, bools) -> mkAnd (makeFrame assigns :: bools))
+        processedR 
 
 /// <summary>
 ///     Converts a microcode instruction set into a two-state Boolean predicate.

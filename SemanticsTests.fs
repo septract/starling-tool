@@ -132,6 +132,9 @@ module WriteMaps =
 let aupd eltype length arr idx var =
     Array (eltype, length, AUpd (eltype, length, arr, idx, var))
 
+/// <summary>
+///     Tests for microcode normalisation.
+/// </summary>
 module Normalisation =
     open Starling.Core.Pretty
     open Starling.Semantics.Pretty
@@ -219,6 +222,47 @@ module Normalisation =
                  [ Assign (Int x3, Int x3)
                    Assign (Int d6, Int x3) ])
             ]
+
+/// <summary>
+///     Tests for microcode compilation to Boolean expressions.
+/// </summary>
+module MicrocodeToBool =
+    /// <summary>
+    ///     Checks a microcode instruction set against an expected
+    ///     Boolean expression.
+    /// </summary>
+    /// <param name="expected">The expected expression.</param>
+    /// <param name="instrs">The instructions to convert.</param>
+    let check
+      (expected : BoolExpr<Sym<MarkedVar>>)
+      (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list list)
+      : unit =
+        // Try to make the check order-independent.
+        let rec trySort bool =
+            match bool with
+            | BAnd xs -> BAnd (List.sort (List.map trySort xs))
+            | BOr xs -> BOr (List.sort (List.map trySort xs))
+            | x -> x
+
+        let svars = VarMap.toTypedVarSeq ticketLockModel.SharedVars
+        let tvars = VarMap.toTypedVarSeq ticketLockModel.ThreadVars
+        let vars = List.ofSeq (Seq.append svars tvars)
+
+        assertOkAndEqual
+            (trySort expected)
+            (lift trySort (microcodeRoutineToBool vars instrs))
+            (Pretty.printSemanticsError >> Core.Pretty.printUnstyled)
+
+    [<Test>]
+    let ``lone assumes are translated properly`` () =
+        check
+            (BAnd
+                [ iEq (siAfter "serving") (siBefore "serving")
+                  iEq (siAfter "ticket") (siBefore "ticket")
+                  iEq (siAfter "s") (siBefore "s")
+                  iEq (siAfter "t") (siBefore "t")
+                  iEq (siBefore "s") (siBefore "t") ])
+            [ [ Assume (iEq (siVar "s") (siVar "t")) ] ]
 
 module Frames =
     let check var expectedFramedExpr =
