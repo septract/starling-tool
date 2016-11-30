@@ -512,16 +512,8 @@ let rec tliftToBoolSrc
             |> Context.changePos id sub ctx
             |> bind (uncurry (ignoreContext expectBool))
         | BIdx (eltype, length, arr, ix) ->
-            // TODO(CaptainHayashi): this is awful.
-            let originalType = Array (eltype, length, ())
-
-            (* Ensure the traversal doesn't change eltype or length to something
-               we're not expecting. *)
-            let assemble ((eltype', length', arr'), ix') =
-                let newType = Array (eltype', length', ())
-                if typesCompatible originalType newType
-                then ok (BIdx (eltype, length, arr', ix'))
-                else fail (BadType (expected = originalType, got = newType))
+            let assemble (arr', ix') =
+                ok (BIdx (eltype, length, arr', ix'))
             let tResult =
                 tchain2 asv (Context.inIndex isv) assemble ctx ((eltype, length, arr), ix)
 
@@ -559,16 +551,8 @@ and tliftToIntSrc
             |> Context.changePos id sub ctx
             |> bind (uncurry (ignoreContext expectInt))
         | IIdx (eltype, length, arr, ix) ->
-            // TODO(CaptainHayashi): this is awful.
-            let originalType = Array (eltype, length, ())
-
-            (* Ensure the traversal doesn't change eltype or length to something
-               we're not expecting. *)
-            let assemble ((eltype', length', arr'), ix') =
-                let newType = Array (eltype', length', ())
-                if typesCompatible originalType newType
-                then ok (IIdx (eltype, length, arr', ix'))
-                else fail (BadType (expected = originalType, got = newType))
+            let assemble (arr', ix') =
+                ok (IIdx (eltype, length, arr', ix'))
             let tResult =
                 tchain2 asv (Context.inIndex isv) assemble ctx ((eltype, length, arr), ix)
 
@@ -588,65 +572,44 @@ and tliftToIntSrc
 and tliftToArraySrc
   (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
   : Traversal<(Type * int option * ArrayExpr<'SrcVar>),
-              (Type * int option * ArrayExpr<'DstVar>), 'Error> =
+              ArrayExpr<'DstVar>, 'Error> =
     // TODO(CaptainHayashi): proper doc comment.
     let isv x = Context.changePos id (tliftToIntSrc sub) x
     let asv x = Context.changePos id (tliftToArraySrc sub) x
     let esv x = Context.changePos id (tliftToExprSrc sub) x
 
     fun ctx (eltype, length, arrayExpr) ->
-        let arrayExprResult =
-            match arrayExpr with
-            | AVar x ->
-                let typedVar = CTyped.Array (eltype, length, x)
-                let exprResult = Context.changePos id sub ctx typedVar
-                (* Traversals have to preserve the element type and, if it
-                   exists, the length. *)
-                bind
-                    (uncurry (ignoreContext (expectArray eltype length)))
-                    exprResult
-            | AIdx (eltype, length, arr, ix) ->
-                // TODO(CaptainHayashi): this is awful.
-                let originalType = Array (eltype, length, ())
+        match arrayExpr with
+        | AVar x ->
+            let typedVar = CTyped.Array (eltype, length, x)
+            let exprResult = Context.changePos id sub ctx typedVar
+            bind
+                (uncurry (ignoreContext (expectArray eltype length)))
+                exprResult
+        | AIdx (eltype, length, arr, ix) ->
+            let assemble (arr', ix') =
+                ok (AIdx (eltype, length, arr', ix'))
+            let tResult =
+                tchain2 asv (Context.inIndex isv) assemble ctx ((eltype, length, arr), ix)
 
-                (* Ensure the traversal doesn't change eltype or length to something
-                   we're not expecting. *)
-                let assemble ((eltype', length', arr'), ix') =
-                    let newType = Array (eltype', length', ())
-                    if typesCompatible originalType newType
-                    then ok (AIdx (eltype, length, arr', ix'))
-                    else fail (BadType (expected = originalType, got = newType))
-                let tResult =
-                    tchain2 asv (Context.inIndex isv) assemble ctx ((eltype, length, arr), ix)
+            // Remove the nested result.
+            bind (uncurry (ignoreContext id)) tResult
+        | AUpd (eltype, length, arr, ix, value) ->
+            // Ensure the traversal doesn't change the type of value.
+            let assemble (arr', ix', value') =
+                let vt, vt' = typeOf value, typeOf value'
+                if typesCompatible vt vt'
+                then ok (AUpd (eltype, length, arr', ix', value'))
+                else fail (BadType (expected = vt, got = vt'))
+            let tResult =
+                tchain3
+                    asv
+                    (Context.inIndex isv)
+                    esv
+                    assemble ctx ((eltype, length, arr), ix, value)
 
-                // Remove the nested result.
-                bind (uncurry (ignoreContext id)) tResult
-            | AUpd (eltype, length, arr, ix, value) ->
-                // TODO(CaptainHayashi): this is awful.
-                let originalType = Array (eltype, length, ())
-
-                (* Ensure the traversal doesn't change eltype or length to something
-                   we're not expecting, and doesn't change the type of value. *)
-                let assemble ((eltype', length', arr'), ix', value') =
-                    let newType = Array (eltype', length', ())
-                    if typesCompatible originalType newType
-                    then
-                        // Also type-check value.
-                        let vt, vt' = typeOf value, typeOf value'
-                        if typesCompatible vt vt'
-                        then ok (AUpd (eltype, length, arr', ix', value'))
-                        else fail (BadType (expected = vt, got = vt'))
-                    else fail (BadType (expected = originalType, got = newType))
-                let tResult =
-                    tchain3
-                        asv
-                        (Context.inIndex isv)
-                        esv
-                        assemble ctx ((eltype, length, arr), ix, value)
-
-                // Remove the nested result.
-                bind (uncurry (ignoreContext id)) tResult
-        lift (fun (ctx, ex) -> (ctx, (eltype, length, ex))) arrayExprResult
+            // Remove the nested result.
+            bind (uncurry (ignoreContext id)) tResult
 
 and tliftToExprSrc
   (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
@@ -658,7 +621,7 @@ and tliftToExprSrc
         | Int i -> i |> tliftToIntSrc sub ctx |> lift (pairMap id Int)
         | Array (eltype, length, a) ->
             lift
-                (fun (ctx', ela) -> (ctx', Array ela))
+                (fun (ctx', a') -> (ctx', Array (eltype, length, a')))
                 (tliftToArraySrc sub ctx (eltype, length, a))
 
 /// <summary>
