@@ -23,6 +23,7 @@ module Types =
 
 module Pretty = 
     open Starling.Core.Pretty
+    open Starling.Core.Expr.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Symbolic.Pretty
 
@@ -85,7 +86,7 @@ module Pretty =
     let printQuery (zterm : Backends.Z3.Types.ZTerm) : Doc = 
         headed "Grasshopper terms" <| 
           [ printTerm
-              (fun x -> String "Cmd printing not implemented yet.") 
+              (Core.Expr.Pretty.printBoolExpr (printSym printMarkedVar)) 
               printExprGrass 
               printExprGrass 
               zterm.SymBool ]
