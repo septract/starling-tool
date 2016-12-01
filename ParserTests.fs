@@ -23,8 +23,15 @@ let get =
 
 let check p str ast =
     let actual = run p str
-    assertEqual ast (get actual)
+    match (run p str) with
+    | Success (r, _, _) -> assertEqual ast r
+    | Failure (s, _, _) -> Assert.Fail(s)
 
+let checkFail (p : Parser<'A, unit>) (str : string) : unit =
+    let actual = run p str
+    match (run p str) with
+    | Success (r, _, _) -> Assert.Fail (r.ToString())
+    | Failure (s, _, _) -> ()
 
 // Perform the same trick matt uses in Main.fs to overwrite a right-associative
 // operator with the correct behaviour
@@ -35,45 +42,42 @@ module SymbolicTests =
     [<Test>]
     let ``Test symbolic %{foo #1 bar}(x) is parsed correctly`` () =
         check parseSymbolic "%{foo #1 bar}(x)"
-            (Some <|
-                { Sentence =
-                    [ SymString "foo "; SymParamRef 1; SymString " bar" ]
-                  Args =
-                    [ node "" 1L 15L (Identifier "x") ] })
+            { Sentence =
+                [ SymString "foo "; SymParamRef 1; SymString " bar" ]
+              Args =
+                [ node "" 1L 15L (Identifier "x") ] }
 
 
 module ViewProtoTests =
     [<Test>]
     let ``Test single view prototype is parsed correctly`` () =
         check parseViewProtoSet "view foo(int a, int b);"
-            (Some <|
-             [ NoIterator
+            [ NoIterator
                 (Func =
                     func "foo"
                         [ { ParamType = TInt; ParamName = "a" }
                           { ParamType = TInt; ParamName = "b" } ],
-                 IsAnonymous = false) ])
+                 IsAnonymous = false) ]
 
     [<Test>]
     let ``Test multiple view prototype is parsed correctly`` () =
         check parseViewProtoSet "view foo(int a, int b), bar(int c, bool d);"
-            (Some <|
-             [ NoIterator
+            [ NoIterator
                 (Func =
                     func "foo"
                         [ { ParamType = TInt; ParamName = "a" }
                           { ParamType = TInt; ParamName = "b" } ],
                  IsAnonymous = false)
-               NoIterator
+              NoIterator
                 (Func =
                     func "bar"
                         [ { ParamType = TInt; ParamName = "c" }
                           { ParamType = TBool; ParamName = "d" } ],
-                 IsAnonymous = false) ])
+                 IsAnonymous = false) ]
 
     [<Test>]
     let ``Test nullary view prototype is not allowed`` () =
-        check parseViewProtoSet "view ;" None
+        checkFail parseViewProtoSet "view ;"
 
 
 // Conversion of mattw's test cases into new system
@@ -81,20 +85,18 @@ module ExpressionTests =
     [<Test>]
     let ``Test modulo is parsed correctly`` () =
         check parseExpression "5 + 6 % 7"
-            (Some <|
-             node "" 1L 3L
-             ** BopExpr (Add,
+            ** node "" 1L 3L
+            ** BopExpr (Add,
                     node "" 1L 1L (Num 5L),
                     node "" 1L 7L
                         <| BopExpr (Mod,
                                 node "" 1L 5L (Num 6L),
-                                node "" 1L 9L (Num 7L))))
+                                node "" 1L 9L (Num 7L)))
 
     [<Test>]
     let ``Test multiplicatives parse left to right`` () =
         check parseExpression "5 * 6 / 7 % 8"
-            (Some <|
-             node "" 1L 11L
+            ** node "" 1L 11L
                  (BopExpr
                      (Mod,
                       node "" 1L 7L
@@ -106,12 +108,12 @@ module ExpressionTests =
                                          node "" 1L 1L (Num 5L),
                                          node "" 1L 5L (Num 6L))),
                                node "" 1L 9L (Num 7L))),
-                      node "" 1L 13L (Num 8L))))
+                      node "" 1L 13L (Num 8L)))
 
     [<Test>]
     let ``Test order-of-operations on (1 + 2 * 3)``() =
-        check parseExpression "1 + 2 * 3" <| Some
-        ** node "" 1L 3L
+        check parseExpression "1 + 2 * 3"
+            ** node "" 1L 3L
             ** BopExpr (Add,
                     node "" 1L 1L (Num 1L),
                     node "" 1L 7L
@@ -120,7 +122,7 @@ module ExpressionTests =
                                 node "" 1L 9L (Num 3L)))
     [<Test>]
     let ``Test bracketing on (1 + 2) * 3``() =
-        check parseExpression "(1 + 2) * 3"  <| Some
+        check parseExpression "(1 + 2) * 3"
         ** node "" 1L 9L
             ** BopExpr (Mul,
                     node "" 1L 4L
@@ -131,7 +133,7 @@ module ExpressionTests =
 
     [<Test>]
     let ``Complex expression 1 + 2 < 3 * 4 && true || 5 / 6 > 7 - 8``() =
-        check parseExpression "1 + 2 < 3 * 4 && true || 5 / 6 > 7 - 8"  <| Some
+        check parseExpression "1 + 2 < 3 * 4 && true || 5 / 6 > 7 - 8"
         ** node "" 1L 23L
             ** BopExpr (Or,
                     node "" 1L 15L
@@ -161,13 +163,12 @@ module ExpressionTests =
     [<Test>]
     let ``Test negation / disjunction are parsed correctly`` () =
         check parseExpression "true || ! false"
-            (Some <| 
-             node "" 1L 6L
+             ** node "" 1L 6L
              ** BopExpr (Or,
                     node "" 1L 1L True,
                     node "" 1L 9L
                         <| UopExpr (Neg,
-                                node "" 1L 11L False)))
+                                node "" 1L 11L False))
 
 
 
@@ -175,97 +176,101 @@ module AtomicActionTests =
     [<Test>]
     let ``foo++``() =
         check parseAtomic "foo++"
-            (Some
-                (node "" 1L 1L <| Postfix
-                    (node "" 1L 1L (Identifier "foo"),
-                    Increment)))
+            (node "" 1L 1L <| Postfix
+                (node "" 1L 1L (Identifier "foo"),
+                Increment))
 
     [<Test>]
     let ``foo--`` =
         check parseAtomic "foo--"
-            (Some
-                (node "" 1L 1L <| Postfix
-                    (node "" 1L 1L (Identifier "foo"),
-                     Decrement)))
+            (node "" 1L 1L <| Postfix
+                (node "" 1L 1L (Identifier "foo"),
+                 Decrement))
 
     [<Test>]
     let ``foo = bar`` =
         check parseAtomic "foo = bar"
-            (Some
-                (node "" 1L 1L <| Fetch
-                    (node "" 1L 1L (Identifier "foo"),
-                     node "" 1L 7L (Identifier "bar"),
-                     Direct)))
+            (node "" 1L 1L <| Fetch
+                (node "" 1L 1L (Identifier "foo"),
+                 node "" 1L 7L (Identifier "bar"),
+                 Direct))
 
     [<Test>]
     let ``foo = bar++`` =
         check parseAtomic "foo = bar++"
-            (Some
-                (node "" 1L 1L <| Fetch
-                    (node "" 1L 1L (Identifier "foo"),
-                     node "" 1L 7L (Identifier "bar"),
-                     Increment)))
+            (node "" 1L 1L <| Fetch
+                (node "" 1L 1L (Identifier "foo"),
+                 node "" 1L 7L (Identifier "bar"),
+                 Increment))
 
     [<Test>]
     let ``foo = bar--`` =
         check parseAtomic "foo = bar--"
-            (Some
-                (node "" 1L 1L <| Fetch
-                    (node "" 1L 1L (Identifier "foo"),
-                     node "" 1L 7L (Identifier "bar"),
-                     Decrement)))
+            (node "" 1L 1L <| Fetch
+                (node "" 1L 1L (Identifier "foo"),
+                 node "" 1L 7L (Identifier "bar"),
+                 Decrement))
 
     [<Test>]
     let ``Compare and swap``() =
         check parseAtomic "CAS(foo, bar, 2)"
-            (Some
-                (node "" 1L 1L <| CompareAndSwap
-                    (node "" 1L 5L (Identifier "foo"),
-                     node "" 1L 10L (Identifier "bar"),
-                     node "" 1L 15L (Num 2L))))
+            (node "" 1L 1L <| CompareAndSwap
+                (node "" 1L 5L (Identifier "foo"),
+                 node "" 1L 10L (Identifier "bar"),
+                 node "" 1L 15L (Num 2L)))
+
+    [<Test>]
+    let ``parse symbolic atomic``() =
+        check parseAtomic "%{foo(#1)}(x)[y, z]"
+            (node "" 1L 1L <| SymAtomic
+                ({ Sentence =
+                       [ SymString "foo("
+                         SymParamRef 1
+                         SymString ")" ]
+                   Args =
+                       [ node "" 1L 12L (Identifier "x") ] },
+                 [ "y"; "z" ]))
+
 
 module AtomicSetTests =
     [<Test>]
     let ``<foo++>``() =
         check parseAtomicSet "<foo++>"
-            (Some
-                [ node "" 1L 2L <| Postfix
-                    (node "" 1L 2L (Identifier "foo"),
-                     Increment) ] )
+            [ node "" 1L 2L <| Postfix
+                (node "" 1L 2L (Identifier "foo"),
+                 Increment) ]
 
     [<Test>]
     let ``Multiple outside block invalid``() =
-        check parseAtomicSet "<foo++; bar-->" None
+        checkFail parseAtomicSet "<foo++; bar-->"
 
     [<Test>]
     let ``Single atomic block``() =
         check parseAtomicSet "<{ foo++; }>"
-            (Some
-                [ node "" 1L 4L <| Postfix
-                    (node "" 1L 4L (Identifier "foo"),
-                     Increment) ] )
+            [ node "" 1L 4L <| Postfix
+                (node "" 1L 4L (Identifier "foo"),
+                 Increment) ]
 
     [<Test>]
     let ``Multiple in block valid``() =
         check parseAtomicSet "<{ foo++; bar--; }>"
-            (Some
-                [ node "" 1L 4L <| Postfix
-                    (node "" 1L 4L (Identifier "foo"),
-                     Increment)
-                  node "" 1L 11L <| Postfix
-                    (node "" 1L 11L (Identifier "bar"),
-                     Decrement) ] )
+            [ node "" 1L 4L <| Postfix
+                (node "" 1L 4L (Identifier "foo"),
+                 Increment)
+              node "" 1L 11L <| Postfix
+                (node "" 1L 11L (Identifier "bar"),
+                 Decrement) ]
 
 module ConstraintTests =
     [<Test>]
     let ``emp -> true``() =
         check parseConstraint "constraint emp -> true;"
-        <| Some (ViewSignature.Unit, Some <| node "" 1L 19L True)
+           (ViewSignature.Unit, Some <| node "" 1L 19L True)
 
     [<Test>]
     let ``Func(a,b) -> c > a + b``() =
         check parseConstraint "constraint Func(a, b) -> c > a + b;"
-        <| Some (ViewSignature.Func { Name = "Func"; Params = [ "a"; "b" ] },
+        <| (ViewSignature.Func { Name = "Func"; Params = [ "a"; "b" ] },
                  Some
                    (node "" 1L 28L
                     <| BopExpr (Gt,
@@ -278,5 +283,5 @@ module ConstraintTests =
     [<Test>]
     let ``Func(a,b) -> ?;``() =
         check parseConstraint "constraint Func(a, b) -> ?;"
-        <| Some (ViewSignature.Func { Name = "Func"; Params = [ "a"; "b" ] },
+        <| (ViewSignature.Func { Name = "Func"; Params = [ "a"; "b" ] },
                  (None : Expression option))
