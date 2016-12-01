@@ -551,38 +551,38 @@ module Graph =
     /// <param name="tVars">
     ///     A <c>VarMap</c> of thread-local variables.
     /// </param>
+    /// <param name="cmd">The command to check.</param>
     /// <returns>
     ///     A function returning True only if (but not necessarily if)
     ///     the given command is local (uses only local variables).
     /// </returns>
-    let isLocalCommand (tVars : VarMap) : Command -> bool =
-        // A command is local if, for all of its funcs...
-        List.forall
-            (fun { Args = ps } ->
-                // ...for all of the parameters in said funcs...
-                Seq.forall
-                    (fun p ->
-                        // ...there are no symbols, and...
-                        match (mapTraversal (removeSymFromExpr ignore) p) with
-                        // TODO(CaptainHayashi): propagate if traversal error
-                        | Bad _ -> false
-                        | Ok (sp, _) ->
-                            // ...for all of the variables in said parameters...
-                            let getVars = tliftOverExpr collectVars
-                            match findVars getVars sp with
-                            | Bad _ -> false
-                            | Ok (pvars, _) ->
-                                let pvseq = Set.toSeq pvars
-                                Seq.forall
-                                    (// ...the variable is thread-local.
-                                     valueOf
-                                     >> tVars.TryFind
-                                     >> function
-                                        | Some _ -> true
-                                        | _ -> false)
-                                    pvseq)
-                     ps)
+    let isLocalCommand (tVars : VarMap) (cmd : Command) : bool =
+        let typedVarIsThreadLocal var =
+             match tVars.TryFind (valueOf var) with
+             | Some _ -> true
+             | _ -> false
 
+        let isLocalArg arg =
+            // Forbid symbols in arguments.
+            match (mapTraversal (removeSymFromExpr ignore) arg) with
+                // TODO(CaptainHayashi): propagate if traversal error
+                | Bad _ -> false
+                | Ok (sp, _) ->
+                    // Now check if all the variables in the argument are local.
+                    let getVars = tliftOverExpr collectVars
+                    match findVars getVars sp with
+                    | Bad _ -> false
+                    | Ok (pvars, _) ->
+                        Seq.forall typedVarIsThreadLocal (Set.toSeq pvars)
+
+        let isLocalPrim prim =
+            match prim with
+            | // TODO(CaptainHayashi): too conservative?
+              SymC _ -> false
+            | Stored { Args = ps } -> Seq.forall isLocalArg ps
+
+        List.forall isLocalPrim cmd
+                        
     /// Decides whether a given Command contains any `assume` command
     /// in any of the sequentially composed primitives inside it
     let hasAssume : Command -> bool =
@@ -590,7 +590,7 @@ module Graph =
             c |>
             List.forall (
                 function
-                | { Name = "Assume" } -> true;
+                | Stored { Name = "Assume" } -> true;
                 | _ -> false)
 
     /// Determines if some given Command is local with respect to the given

@@ -558,6 +558,25 @@ module CommandTests =
                             (IInt 1L))))) ])
 
     [<Test>]
+    let ``Semantically translate <%{foo(#1)}(serving)[t]> using the ticket lock model``() =
+        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
+              [ SymC
+                    { Symbol =
+                        { Sentence = [ SymString "foo("; SymParamRef 1; SymString ")" ]
+                          Args = [ Int (siVar "serving") ] }
+                      Working = Set.singleton (Int "t") } ]
+        <| Some (Set.ofList
+            [
+                iEq (siAfter "s") (siBefore "s")
+                iEq (siAfter "ticket") (siBefore "ticket")
+                iEq (siAfter "serving") (siBefore "serving")
+                BVar (
+                    sym [ SymString "foo("; SymParamRef 1; SymString ")" ]
+                        [ Int (siBefore "serving") ]
+                )
+            ])
+
+    [<Test>]
     let ``Semantically translate <serving++> using the ticket lock model``() =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
               [ command "!I++" [ Int (siVar "serving") ] [ Expr.Int <| siVar "serving" ] ]
@@ -565,7 +584,6 @@ module CommandTests =
             [
                 iEq (siAfter "s") (siBefore "s")
                 iEq (siAfter "t") (siBefore "t")
-                iEq (siAfter "ticket") (siBefore "ticket")
                 iEq (siAfter "ticket") (siBefore "ticket")
                 iEq (siAfter "serving") (mkAdd2 (siBefore "serving") (IInt 1L))
             ])
