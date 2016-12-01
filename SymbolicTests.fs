@@ -57,7 +57,7 @@ module PostStateRewrite =
 module BoolApprox =
     let check
       (expected : BoolExpr<Sym<MarkedVar>>)
-      (ctx : TraversalContext)
+      (ctx : TraversalContext<unit>)
       (expr : BoolExpr<Sym<MarkedVar>>)
       : unit =
         let result = tliftToBoolSrc approx ctx expr
@@ -70,7 +70,7 @@ module BoolApprox =
             (BAnd
                 [ bEq (sbBefore "foo") (sbAfter "bar")
                   BGt (siBefore "baz", IInt 1L) ] )
-            Context.positive
+            (Context.positive ())
             (BAnd
                 [ bEq (sbBefore "foo") (sbAfter "bar")
                   BGt (siBefore "baz", IInt 1L) ] )
@@ -79,21 +79,21 @@ module BoolApprox =
     let ``Rewrite +ve param-less Bool symbol to false`` () =
         check
             BFalse
-            Context.positive
+            (Context.positive ())
             (BVar (Sym { Sentence = [ SymString "test" ]; Args = ([] : SMExpr list) } ))
 
     [<Test>]
     let ``Rewrite -ve param-less Bool symbol to true`` () =
         check
             BTrue
-            Context.negative
+            (Context.negative ())
             (BVar (Sym { Sentence = [ SymString "test" ]; Args = ([] : SMExpr list) } ))
 
     [<Test>]
     let ``Rewrite +ve Reg-params Bool symbol to false`` () =
         check
             BFalse
-            Context.positive
+            (Context.positive ())
             (BVar
                 (Sym
                     { Sentence = [ SymString "test" ]
@@ -105,7 +105,7 @@ module BoolApprox =
     let ``Rewrite -ve Reg-params Bool symbol to true`` () =
         check
             BTrue
-            Context.negative
+            (Context.negative ())
             (BVar
                 (Sym
                     { Sentence = [ SymString "test" ]
@@ -117,7 +117,7 @@ module BoolApprox =
     let ``Rewrite +ve implication correctly`` () =
         check
             (BImplies (BTrue, BFalse))
-            Context.positive
+            (Context.positive ())
             (BImplies
                 (BVar
                     (Sym
@@ -136,7 +136,7 @@ module BoolApprox =
     let ``Rewrite -ve implication correctly`` () =
         check
             (BImplies (BFalse, BTrue))
-            Context.negative
+            (Context.negative ())
             (BImplies
                 (BVar
                     (Sym
@@ -163,8 +163,7 @@ module FindSMVarsCases =
       (expected : CTyped<MarkedVar> list)
       (expr : Expr<Sym<MarkedVar>>)
       : unit =
-        let result =
-            findMarkedVars (tliftOverExpr collectSymMarkedVars) expr
+        let result = findVars (tliftOverExpr collectSymVars) expr
 
         assertOkAndEqual (Set.ofList expected) result
             (printTraversalError (fun () -> String "?" ) >> printUnstyled)
