@@ -15,10 +15,11 @@ open Starling.Core.Model
 open Starling.Core.Symbolic
 open Starling.Core.Instantiate
 open Starling.Core.GuardedView
+open Starling.Core.Traversal
 
 [<AutoOpen>] 
 module Types =
-    type Grass = Backends.Z3.Types.ZModel // Just piggyback on Z3 for now.  
+    type Grass = Backends.Z3.Types.ZModel // Just piggyback on Z3 model for now.  
     type Error = unit 
 
 module Pretty = 
@@ -27,8 +28,8 @@ module Pretty =
     open Starling.Core.Model.Pretty
     open Starling.Core.Symbolic.Pretty
 
-    let printMarkedVar =
-        function
+    let printMarkedVar (v : MarkedVar) : Doc =
+        match v with 
         | Before s -> String "before_" <-> String s 
         | After s -> String "after_" <-> String s
         | Intermediate (i, s) -> String "inter_" <-> String (sprintf "%A_" i) <-> String s 
@@ -52,25 +53,25 @@ module Pretty =
     let rec printIntExpr (pVar : 'Var -> Doc) : IntExpr<'Var> -> Doc =
         function
         | IVar c -> pVar c
-        | _ -> failwith "Unimplemented" 
+        | _ -> failwith "Unimplemented for Grasshopper backend." 
 
     /// Pretty-prints a Boolean expression.
     and printBoolExpr (pVar : 'Var -> Doc) : BoolExpr<'Var> -> Doc =
         function
+        | BVar c -> pVar c
         | BAnd xs -> infexprV "&&" (printBoolExpr pVar) xs
         | BOr xs -> infexprV "||" (printBoolExpr pVar) xs
-        | BVar c -> pVar c
         | BImplies (x, y) -> infexprV "==>" (printBoolExpr pVar)  [x; y]
         | BNot (BEq (x, y)) -> infexpr "!=" (printExpr pVar) [x; y]
         | BEq (x, y) -> infexpr "==" (printExpr pVar) [x; y]
-        | _ -> failwith "Unimplemented" 
+        | _ -> failwith "Unimplemented for Grasshopper backend." 
 
     /// Pretty-prints an expression.
     and printExpr (pVar : 'Var -> Doc) : Expr<'Var> -> Doc =
         function
         | Int i -> printIntExpr pVar i
         | Bool b -> printBoolExpr pVar b
-        | _ -> failwith "Unimplemented" 
+        | _ -> failwith "Unimplemented for Grasshopper backend." 
 
     let rec printSym (pReg : 'Reg -> Doc) (sym : Sym<'Reg>) : Doc =
         match sym with
@@ -80,16 +81,47 @@ module Pretty =
             parened
                 (printInterpolatedSymbolicSentence pArg ws xs)
 
-    let printExprGrass a = 
+    let printExprGrass (a : BoolExpr<Sym<MarkedVar>>) : Doc  = 
         printBoolExpr (printSym printMarkedVar) a 
 
-    let printQuery (zterm : Backends.Z3.Types.ZTerm) : Doc = 
-        headed "Grasshopper terms" <| 
-          [ printTerm
-              (Core.Expr.Pretty.printBoolExpr (printSym printMarkedVar)) 
-              printExprGrass 
-              printExprGrass 
-              zterm.SymBool ]
+    let findVarsGrass (zterm : Backends.Z3.Types.ZTerm) : seq<MarkedVar> = 
+        BAnd [zterm.SymBool.WPre; zterm.SymBool.Goal] 
+        |> findMarkedVars (tliftToBoolSrc (tliftToExprDest collectSymMarkedVars)) 
+        |> lift (Set.map valueOf) 
+        |> lift (Set.toSeq) 
+        |> returnOrFail
+
+    let printQuery (zterm: Backends.Z3.Types.ZTerm) : Doc =
+        let varprint = Seq.map printMarkedVar (findVarsGrass zterm) 
+                       |> (fun x -> VSep(x,String ",")) 
+                       |> Indent 
+        let wpreprint = zterm.SymBool.WPre 
+                        |> printExprGrass 
+        let goalprint = zterm.SymBool.Goal 
+                        |> printExprGrass 
+        let cmdprint = zterm.SymBool.Cmd 
+                       |> (Core.Expr.Pretty.printBoolExpr (printSym printMarkedVar))
+        vsep [ String "procedure test" <+> (varprint |> parened) 
+               String "requires" 
+               Indent wpreprint <+> String ";" 
+               String "ensures" 
+               Indent goalprint <+> String ";" 
+               String "{}"   
+               headed "Command" (cmdprint |> Seq.singleton)
+             ]  
+
+
+    // let printQuery (zterm : Backends.Z3.Types.ZTerm) : Doc = 
+    //    vsep  
+    //        [ headed "Variables" <|
+    //              List.map printMarkedVar (findVarsGrass zterm)
+    //          headed "Grasshopper terms" <| 
+    //              [ printTerm
+    //                  (Core.Expr.Pretty.printBoolExpr (printSym printMarkedVar)) 
+    //                  printExprGrass 
+    //                  printExprGrass 
+    //                  zterm.SymBool ]
+    //        ]
 
     let printGrassError e = 
         failwith "not implemented yet" 
