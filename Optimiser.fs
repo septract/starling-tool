@@ -952,7 +952,7 @@ module Term =
     let rec (|ConstantBoolFunction|_|) (x : BoolExpr<Sym<MarkedVar>>)
       : MarkedVar option =
         x
-        |> findMarkedVars (tliftToBoolSrc (tliftToExprDest collectSymMarkedVars))
+        |> findVars (tliftToBoolSrc (tliftToExprDest collectSymVars))
         |> okOption |> Option.map (Seq.map valueOf) |> Option.bind onlyOne
 
     /// Partial pattern that matches a Boolean expression in terms of exactly one /
@@ -960,7 +960,7 @@ module Term =
     let rec (|ConstantIntFunction|_|) (x : IntExpr<Sym<MarkedVar>>)
       : MarkedVar option =
         x
-        |> findMarkedVars (tliftToIntSrc (tliftToExprDest collectSymMarkedVars))
+        |> findVars (tliftToIntSrc (tliftToExprDest collectSymVars))
         |> okOption |> Option.map (Seq.map valueOf) |> Option.bind onlyOne
 
     /// Finds all instances of the pattern `x!after = f(x!before)` in an
@@ -1045,7 +1045,7 @@ module Term =
     let afterSubs
       (isubs : Map<Var, IntExpr<Sym<MarkedVar>>>)
       (bsubs : Map<Var, BoolExpr<Sym<MarkedVar>>>)
-      : Traversal<CTyped<MarkedVar>, Expr<Sym<MarkedVar>>, TermOptError> =
+      : Traversal<CTyped<MarkedVar>, Expr<Sym<MarkedVar>>, TermOptError, unit> =
         (* TODO(CaptainHayashi): just use one Map<Var, Expr<_>>, and raise a
            traversal error if we get the wrong type out. *)
         let switch =
@@ -1061,7 +1061,7 @@ module Term =
     let interSubs
       (isubs : Map<bigint * Var, IntExpr<Sym<MarkedVar>>>)
       (bsubs : Map<bigint * Var, BoolExpr<Sym<MarkedVar>>>)
-      : Traversal<CTyped<MarkedVar>, Expr<Sym<MarkedVar>>, TermOptError> =
+      : Traversal<CTyped<MarkedVar>, Expr<Sym<MarkedVar>>, TermOptError, unit> =
         (* TODO(CaptainHayashi): just use one Map<Var, Expr<_>>, and raise a
            traversal error if we get the wrong type out. *)
         let switch =

@@ -180,13 +180,14 @@ module Pretty =
 /// <param name="dfunc">
 ///     The <c>DFunc</c> into which we are substituting.
 /// </param>
+/// <typeparam name="Var">The type of context variables.</typeparam>
 /// <returns>
 ///     A <see cref="Traversal"/> performing the above substitutions.
 /// </returns>
 let paramSubFun
   (vfunc : VFunc<Sym<MarkedVar>>)
   (dfunc : DFunc)
-  : Traversal<TypedVar, Expr<Sym<MarkedVar>>, Error> =
+  : Traversal<TypedVar, Expr<Sym<MarkedVar>>, Error, 'Var> =
     let dpars = dfunc.Params
     let fpars = vfunc.Params
     let pmap = Map.ofSeq (Seq.map2 (fun par up -> valueOf par, up) dpars fpars)
@@ -426,13 +427,13 @@ module Phase =
                approximated by removing certain part-symbolic parts of them.
 
                Commands appear on the LHS of a term, thus in -ve position. *)
-            tryApproxInBool Context.negative
+            tryApproxInBool (Context.negative ())
               (Starling.Core.Command.SymRemove.removeSym cmdSemantics)
 
         // Weakest precondition is on the LHS of a term, thus in -ve position.
-        let mapWPre wPre = tryApproxInBool Context.negative wPre
+        let mapWPre wPre = tryApproxInBool (Context.negative ()) wPre
         // Goal is on the RHS of a term, thus in +ve position.
-        let mapGoal goal = tryApproxInBool Context.positive goal
+        let mapGoal goal = tryApproxInBool (Context.positive ()) goal
 
         tryMapTerm mapCmd mapWPre mapGoal symterm
 
