@@ -264,6 +264,72 @@ module MicrocodeToBool =
                   iEq (siBefore "s") (siBefore "t") ])
             [ [ Assume (iEq (siVar "s") (siVar "t")) ] ]
 
+    [<Test>]
+    let ``lone assigns are translated properly`` () =
+        check
+            (BAnd
+                [ iEq (siAfter "serving") (siBefore "serving")
+                  iEq (siAfter "ticket") (siBefore "ticket")
+                  iEq (siAfter "s") (siBefore "t")
+                  iEq (siAfter "t") (siBefore "t") ])
+            [ [ Assign (Int (siVar "s"), Int (siVar "t")) ] ]
+
+    [<Test>]
+    let ``unchained assigns are translated properly`` () =
+        check
+            (BAnd
+                [ iEq (siAfter "serving") (siBefore "serving")
+                  iEq (siAfter "ticket") (siBefore "ticket")
+                  iEq (siAfter "s") (siBefore "t")
+                  iEq (siAfter "t") (siBefore "t")
+                  iEq (siInter 0I "s") (siBefore "serving") ])
+            [ [ Assign (Int (siVar "s"), Int (siVar "serving")) ]
+              [ Assign (Int (siVar "s"), Int (siVar "t")) ]  ]
+
+    [<Test>]
+    let ``chained assigns are translated properly`` () =
+        check
+            (BAnd
+                [ iEq (siAfter "serving") (siBefore "serving")
+                  iEq (siAfter "ticket") (siBefore "ticket")
+                  iEq (siAfter "s") (siInter 0I "t")
+                  iEq (siAfter "t") (siInter 0I "t")
+                  iEq (siInter 0I "t") (siBefore "serving") ])
+            [ [ Assign (Int (siVar "t"), Int (siVar "serving")) ]
+              [ Assign (Int (siVar "s"), Int (siVar "t")) ] ]
+
+    [<Test>]
+    let ``chained assigns and assumptions are translated properly`` () =
+        check
+            (BAnd
+                [ iEq (siAfter "serving") (siBefore "serving")
+                  iEq (siAfter "ticket") (siBefore "ticket")
+                  iEq (siAfter "s") (siBefore "s")
+                  iEq (siBefore "s") (siInter 0I "t")
+                  iEq (siAfter "t") (siInter 0I "t")
+                  iEq (siInter 0I "t") (siBefore "serving") ])
+            [ [ Assign (Int (siVar "t"), Int (siVar "serving")) ]
+              [ Assume (iEq (siVar "s") (siVar "t")) ] ]
+
+    [<Test>]
+    let ``well-formed branches are translated properly`` () =
+        check
+            (BAnd
+                [ iEq (siAfter "serving") (siBefore "serving")
+                  iEq (siAfter "ticket") (siBefore "ticket")
+                  iEq (siAfter "s") (siBefore "s")
+                  (mkImplies
+                    (iEq (siBefore "s") (siBefore "t"))
+                    (iEq (siAfter "t") (siBefore "serving")))
+                  (mkImplies
+                    (mkNot (iEq (siBefore "s") (siBefore "t")))
+                    (iEq (siAfter "t") (siBefore "ticket"))) ])
+            [ [ Branch
+                    (iEq (siVar "s") (siVar "t"),
+                     [ Assign (Int (siVar "t"), Int (siVar "serving")) ],
+                     [ Assign (Int (siVar "t"), Int (siVar "ticket")) ]) ] ]
+
+
 module Frames =
     let check var expectedFramedExpr =
         expectedFramedExpr ?=? (frameVar Before var)
