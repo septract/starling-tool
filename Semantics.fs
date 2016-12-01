@@ -106,8 +106,8 @@ module Pretty =
 ///         of an variable have been modified by a command.
 /// </summary>
 type Write =
-    /// <summary>The entire lvalue has been written to.</summary>
-    | Entire of newVal : Expr<Sym<Var>>
+    /// <summary>The entire lvalue has been written to or havoc'd.</summary>
+    | Entire of newVal : Expr<Sym<Var>> option
     /// <summary>
     ///     Only certain parts of the lvalue have been written to,
     ///     and their recursive write records are enclosed.
@@ -127,7 +127,7 @@ type Write =
 /// <param name="map">The write map being extended.</param>
 /// <returns>The extended write map.</returns>
 let markWrite (var : TypedVar) (idxPath : IntExpr<Sym<Var>> list)
-  (value : Expr<Sym<Var>>)
+  (value : Expr<Sym<Var>> option)
   (map : Map<TypedVar, Write>)
   : Map<TypedVar, Write> =
     (* First, consider what it means to add an index write to an index write
@@ -218,7 +218,7 @@ let varAndIdxPath (expr : Expr<Sym<Var>>)
 /// </summary>
 /// <param name="assigns">The assignment list to investigate.</param>
 /// <returns>The write map for that microcode list.</returns>
-let makeWriteMap (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>>) list)
+let makeWriteMap (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>> option) list)
   : Map<TypedVar, Write> =
     let addToWriteMap map (lv, rv) =
         // TODO(CaptainHayashi): complain if lv isn't a lvalue?
@@ -234,7 +234,7 @@ let makeWriteMap (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>>) list)
 ///     and a list of (unpartitioned) microcode branches.
 /// </returns>
 let partitionMicrocode (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
-  : ((Expr<Sym<Var>> * Expr<Sym<Var>>) list
+  : ((Expr<Sym<Var>> * Expr<Sym<Var>> option) list
      * BoolExpr<Sym<Var>> list
      * (BoolExpr<Sym<Var>>
         * Microcode<Expr<Sym<Var>>, Sym<Var>> list
@@ -278,36 +278,41 @@ let mkIdx (eltype : Type) (length : int option) (arr : ArrayExpr<Sym<Var>>)
 /// <returns>
 ///     The assignments in entire-variable form, in arbitrary order.
 /// </returns>
-let normaliseAssigns (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>>) list)
-  : Result<(TypedVar * Expr<Sym<Var>>) list, Error> =
+let normaliseAssigns (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>> option) list)
+  : Result<(TypedVar * Expr<Sym<Var>> option) list, Error> =
     // First, we convert the assigns to a write map.
     let wmap = makeWriteMap assigns
     (* Then, each item in the write map represents an assignment.
        We need to convert each write map entry into an array update or a
        direct value. *)
-    let rec translateRhs lhs =
-        function
+    let rec translateRhs lhs (value : Write) =
+        match value with
         | Entire v -> ok v
         | Indices ixmap ->
             // TODO(CaptainHayashi): proper errors.
-            match lhs with
-            | Array (eltype, length, alhs) ->
-                let addUpdate
-                  (index : IntExpr<Sym<Var>>, value : Write) (lhs' : Expr<Sym<Var>>)
-                  : Result<Expr<Sym<Var>>, Error> =
+            let addUpdate
+              (index : IntExpr<Sym<Var>>, value : Write) (lhs' : Expr<Sym<Var>> option)
+              : Result<Expr<Sym<Var>> option, Error> =
+                (* TODO(CaptainHayashi): currently, if an array update havocs,
+                   any future updates also havoc.  This perhaps throws too much
+                   information away! *)
+                match lhs' with
+                | None -> ok None
+                | Some (Array (eltype, length, alhs)) ->
                     (* Need to translate any further subscripts inside value.
                        But, to do that, we need to know what the LHS of those
                        subscripts is! *)
                     let vlhs = mkIdx eltype length alhs index
                     let vrhsResult = translateRhs vlhs value
                     lift
-                        (fun vrhs ->
-                            Expr.Array
-                                (eltype, length,
-                                 AUpd (eltype, length, alhs, index, vrhs)))
+                        (Option.map
+                            (fun vrhs ->
+                                 Expr.Array
+                                    (eltype, length,
+                                     AUpd (eltype, length, alhs, index, vrhs))))
                         vrhsResult
-                seqBind addUpdate lhs (Map.toSeq ixmap)
-            | _ -> fail (BadSemantics "tried to index into a non-array")
+                | _ -> fail (BadSemantics "tried to index into a non-array")
+            seqBind addUpdate (Some lhs) (Map.toSeq ixmap)
 
     let translateAssign (lhs : TypedVar, rhs) =
         // lhs is a typed variable here, but must be an expression for the above
@@ -410,7 +415,10 @@ let traverseMicrocode
         let tml = tchainL tm id
 
         match mc with
-        | Assign (lv, rv) -> tchain2 ltrav rtrav Assign ctx (lv, rv)
+        | Assign (lv, Some rv) ->
+            tchain2 ltrav rtrav (pairMap id Some >> Assign) ctx (lv, rv)
+        | Assign (lv, None) ->
+            tchain ltrav (flip mkPair None >> Assign) ctx lv
         | Assume assumption -> tchain brtrav Assume ctx assumption
         | Branch (i, t, e) -> tchain3 brtrav tml tml Branch ctx (i, t, e)
     tm
@@ -488,7 +496,10 @@ let rec markedMicrocodeToBool
   : BoolExpr<Sym<MarkedVar>> =
     let translateInstr instr =
         match instr with
-        | Assign (x, y) -> mkEq (mkVarExp (mapCTyped Reg x)) y
+        // Havoc
+        | Assign (x, None) -> BTrue
+        // Deterministic assignment
+        | Assign (x, Some y) -> mkEq (mkVarExp (mapCTyped Reg x)) y
         | Assume x -> x
         | Branch (i, t, e) ->
             let tX = markedMicrocodeToBool t

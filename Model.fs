@@ -59,8 +59,8 @@ module Types =
     /// <typeparam name="L">The type of lvalues.</typeparam>
     /// <typeparam name="RV">The type of rvalue variables.</typeparam>
     type Microcode<'L, 'RV> when 'RV : equality =
-        /// <summary>An assignment.</summary>
-        | Assign of lvalue : 'L * rvalue : Expr<'RV>
+        /// <summary>An assignment, perhaps nondeterministic.</summary>
+        | Assign of lvalue : 'L * rvalue : Expr<'RV> option
         /// <summary>A diverging assertion.</summary>
         | Assume of assumption : BoolExpr<'RV>
         /// <summary>A conditional.</summary>
@@ -198,6 +198,19 @@ module Types =
           ///     A log of any deferred checks the backend must do.
           /// </summary>
           DeferredChecks : DeferredCheck list }
+
+
+/// <summary>
+///     Creates a deterministic assign.
+/// </summary>
+let ( *<- ) (lv : 'L) (rv : Expr<'RV>) : Microcode<'L, 'RV> =
+    Assign (lv, Some rv)
+
+/// <summary>
+///     Creates a nondeterministic assign.
+/// </summary>
+let havoc (lv : 'L) : Microcode<'L, 'RV> =
+    Assign (lv, None)
 
 
 /// <summary>

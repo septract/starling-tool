@@ -421,6 +421,7 @@ let mkPrim (name : string) (results : TypedVar list) (args : TypedVar list)
   : PrimSemantics =
     { Name = name; Results = results; Args = args; Body = body }
 
+
 /// <summary>
 ///   The core semantic function for the imperative language.
 /// </summary>
@@ -442,46 +443,46 @@ let coreSemantics : PrimSemanticsMap =
       (mkPrim "ICAS" [ Int "destA"; Int "testA" ] [ Int "destB"; Int "testB"; Int "set" ]
            [ Branch
                 (iEq (IVar "destB") (IVar "testB"),
-                 [ Assign (Int "destA", Int (IVar "set"))
-                   Assign (Int "testA", Int (IVar "testB")) ],
-                 [ Assign (Int "destA", Int (IVar "destB"))
-                   Assign (Int "testA", Int (IVar "destB")) ] ) ] )
+                 [ Int "destA" *<- Int (IVar "set")
+                   Int "testA" *<- Int (IVar "testB") ],
+                 [ Int "destA" *<- Int (IVar "destB")
+                   Int "testA" *<- Int (IVar "destB") ] ) ] )
       // Boolean CAS
       (mkPrim "BCAS" [ Bool "destA"; Bool "testA" ] [ Bool "destB"; Bool "testB"; Bool "set" ]
            [ Branch
                 (bEq (BVar "destB") (BVar "testB"),
-                 [ Assign (Bool "destA", Bool (BVar "set"))
-                   Assign (Bool "testA", Bool (BVar "testB")) ],
-                 [ Assign (Bool "destA", Bool (BVar "destB"))
-                   Assign (Bool "testA", Bool (BVar "destB")) ] ) ] )
+                 [ Bool "destA" *<- Bool (BVar "set")
+                   Bool "testA" *<- Bool (BVar "testB") ],
+                 [ Bool "destA" *<- Bool (BVar "destB")
+                   Bool "testA" *<- Bool (BVar "destB") ] ) ] )
       (*
        * Atomic load
        *)
       // Integer load
       (mkPrim "!ILoad"  [ Int "dest" ] [ Int "src" ]
-            [ Assign (Int "dest", Int (IVar "src")) ] )
+            [ Int "dest" *<- Int (IVar "src") ] )
 
       // Integer load-and-increment
       (mkPrim "!ILoad++"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
-            [ Assign (Int "dest", Int (IVar "srcB"))
-              Assign (Int "srcA", Int (mkAdd2 (IVar "srcB") (IInt 1L))) ] )
+            [ Int "dest" *<- Int (IVar "srcB")
+              Int "srcA" *<- Int (mkAdd2 (IVar "srcB") (IInt 1L)) ] )
 
       // Integer load-and-decrement
       (mkPrim "!ILoad--"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
-            [ Assign (Int "dest", Int (IVar "srcB"))
-              Assign (Int "srcA", Int (mkSub2 (IVar "srcB") (IInt 1L))) ] )
+            [ Int "dest" *<- Int (IVar "srcB")
+              Int "srcA" *<- Int (mkSub2 (IVar "srcB") (IInt 1L)) ] )
 
       // Integer increment
       (mkPrim "!I++"  [ Int "srcA" ] [ Int "srcB" ]
-            [ Assign (Int "srcA", Int (mkAdd2 (IVar "srcB") (IInt 1L))) ] )
+            [ Int "srcA" *<- Int (mkAdd2 (IVar "srcB") (IInt 1L)) ] )
 
       // Integer decrement
       (mkPrim "!I--"  [ Int "srcA" ] [ Int "srcB" ]
-            [ Assign (Int "srcA", Int (mkSub2 (IVar "srcB") (IInt 1L))) ] )
+            [ Int "srcA" *<- Int (mkSub2 (IVar "srcB") (IInt 1L)) ] )
 
       // Boolean load
       (mkPrim "!BLoad"  [ Bool "dest" ] [ Bool "src" ]
-            [ Assign (Bool "dest", Bool (BVar "src")) ] )
+            [ Bool "dest" *<- Bool (BVar "src") ] )
 
       (*
        * Atomic store
@@ -489,11 +490,11 @@ let coreSemantics : PrimSemanticsMap =
 
       // Integer store
       (mkPrim "!IStore" [ Int "dest" ] [ Int "src" ]
-            [ Assign (Int "dest", Int (IVar "src")) ] )
+            [ Int "dest" *<- Int (IVar "src") ] )
 
       // Boolean store
       (mkPrim "!BStore" [ Bool "dest" ] [ Bool "src" ]
-            [ Assign (Bool "dest", Bool (BVar "src")) ] )
+            [ Bool "dest" *<- Bool (BVar "src") ] )
 
       (*
        * Local set
@@ -501,11 +502,11 @@ let coreSemantics : PrimSemanticsMap =
 
       // Integer local set
       (mkPrim "!ILSet" [ Int "dest" ] [ Int "src" ]
-            [ Assign (Int "dest", Int (IVar "src")) ] )
+            [ Int "dest" *<- Int (IVar "src") ] )
 
       // Boolean store
       (mkPrim "!BLSet" [ Bool "dest" ] [ Bool "src" ]
-            [ Assign (Bool "dest", Bool (BVar "src")) ] )
+            [ Bool "dest" *<- Bool (BVar "src") ] )
 
       (*
        * Assumptions
