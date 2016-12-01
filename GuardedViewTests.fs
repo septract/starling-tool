@@ -29,7 +29,7 @@ module Tests =
     /// <summary>
     ///     Test traversal for position-based substitution.
     /// </summary>
-    let positionTestSub : Traversal<Expr<Var>, Expr<Var>, unit> =
+    let positionTestSub : Traversal<Expr<Var>, Expr<Var>, unit, unit> =
         let ptsVar ctx tv =
             let exp =
                 match (typeOf tv) with
@@ -69,7 +69,7 @@ module Tests =
         /// </summary>
         let check
           (expected : Term<BoolExpr<Var>, GView<Var>, Func<Expr<Var>>>)
-          (pos : TraversalContext)
+          (pos : TraversalContext<unit>)
           (gv : Term<BoolExpr<Var>, GView<Var>, Func<Expr<Var>>>) : unit =
             let trav = tliftOverTerm positionTestSub
             let result = trav pos gv
@@ -89,7 +89,7 @@ module Tests =
                             [ Typed.Int (IAdd [ IInt 0L; IInt 0L ]) ] ]
                   Goal =
                     (vfunc "bar" [ Typed.Int (IInt 1L); Typed.Bool BTrue ]) }
-                Context.positive
+                (Context.positive ())
                 { Cmd =
                     BAnd
                         [ bEq (BVar "foo") (BVar "bar")
@@ -120,7 +120,7 @@ module Tests =
                             [ Typed.Int (IAdd [ IInt 1L; IInt 1L ]) ] ]
                   Goal =
                     vfunc "bar" [ Typed.Int (IInt 0L); Typed.Bool BFalse ] }
-                Context.negative
+                (Context.negative ())
                 { Cmd =
                     BAnd
                         [ bEq (BVar "foo") (BVar "bar")
@@ -149,7 +149,7 @@ module Tests =
         /// </summary>
         let check
           (expected : GFunc<Var>)
-          (pos : TraversalContext)
+          (pos : TraversalContext<unit>)
           (gv : GFunc<Var>) : unit =
             let trav = tliftOverGFunc positionTestSub
             let result = trav pos gv
@@ -161,7 +161,7 @@ module Tests =
         let ``GFunc substitution in +ve case works properly`` () =
             check
                 (gfunc BFalse "bar" [ Typed.Int (IInt 1L); Typed.Bool BTrue ] )
-                Context.positive
+                (Context.positive ())
                 (gfunc (BVar "foo") "bar"
                     [ Typed.Int (IVar "baz"); Typed.Bool (BVar "fizz") ] )
 
@@ -169,7 +169,7 @@ module Tests =
         let ``GFunc substitution in -ve case works properly`` () =
             check
                 (gfunc BTrue "bar" [ Typed.Int (IInt 0L); Typed.Bool BFalse ] )
-                Context.negative
+                (Context.negative ())
                 (gfunc (BVar "foo") "bar"
                     [ Typed.Int (IVar "baz"); Typed.Bool (BVar "fizz") ])
 
@@ -187,7 +187,7 @@ module Tests =
         /// </summary>
         let check
           (expected : GView<Var>)
-          (pos : TraversalContext)
+          (pos : TraversalContext<unit>)
           (gv : GView<Var>) : unit =
             let trav = tchainM (tliftOverGFunc positionTestSub) id
             let result = trav pos gv
@@ -197,11 +197,11 @@ module Tests =
 
         [<Test>]
         let ``+ve empty GView substitution is a no-op`` () =
-            check Multiset.empty Context.positive Multiset.empty
+            check Multiset.empty (Context.positive ()) Multiset.empty
 
         [<Test>]
         let ``-ve empty GView substitution is a no-op`` () =
-            check Multiset.empty Context.negative Multiset.empty
+            check Multiset.empty (Context.negative ()) Multiset.empty
 
         [<Test>]
         let ``Singleton GView substitution in +ve case works properly`` () =
@@ -210,7 +210,7 @@ module Tests =
                     (gfunc BFalse "bar"
                         [ Typed.Int (IInt 1L)
                           Typed.Bool BTrue ] ))
-                Context.positive
+                (Context.positive ())
                 (Multiset.singleton
                     (gfunc (BVar "foo") "bar"
                         [ Typed.Int (IVar "baz")
@@ -222,7 +222,7 @@ module Tests =
                 (Multiset.singleton
                     (gfunc BTrue "bar"
                         [ Typed.Int (IInt 0L); Typed.Bool BFalse ] ))
-                Context.negative
+                (Context.negative ())
                 (Multiset.singleton
                     (gfunc (BVar "foo") "bar"
                         [ Typed.Int (IVar "baz")
@@ -238,7 +238,7 @@ module Tests =
                       gfunc (BGt (IInt 0L, IInt 0L)) "barbaz"
                         [ Typed.Int
                               (IAdd [ IInt 1L; IInt 1L ]) ] ] )
-                Context.positive
+                (Context.positive ())
                 (Multiset.ofFlatList
                     [ gfunc (BVar "foo") "bar"
                         [ Typed.Int (IVar "baz")
@@ -255,7 +255,7 @@ module Tests =
                         [ Typed.Int (IInt 0L); Typed.Bool BFalse ]
                       gfunc (BGt (IInt 1L, IInt 1L)) "barbaz"
                         [ Typed.Int (IAdd [ IInt 0L; IInt 0L ]) ] ] )
-                Context.negative
+                (Context.negative ())
                 (Multiset.ofFlatList
                     [ gfunc (BVar "foo") "bar"
                         [ Typed.Int (IVar "baz"); Typed.Bool (BVar "fizz") ]

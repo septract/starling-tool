@@ -533,7 +533,7 @@ module Translator =
       (head : VFunc<'Var>)
       : Result<Z3.BoolExpr option, Error> =
         // We use a _lot_ of traversals in this function!
-        let toVarTrav : Traversal<CTyped<'Var>, Expr<Var>, Error> =
+        let toVarTrav : Traversal<CTyped<'Var>, Expr<Var>, Error, unit> =
             tliftToExprDest
                 (tliftOverCTyped (ignoreContext (toVar >> ok)))
         let toVarTravExpr = tliftToExprSrc toVarTrav
@@ -541,7 +541,7 @@ module Translator =
         let toVarTravGView = tchainM (tliftOverGFunc toVarTravExpr) id
         let toVarTravVFunc = tliftOverFunc toVarTravExpr
 
-        let findVarTrav : Traversal<TypedVar, Expr<Var>, Error> =
+        let findVarTrav : Traversal<TypedVar, Expr<Var>, Error, Var> =
             tliftToExprDest collectVars
         let findVarTravExpr = tliftToExprSrc findVarTrav
         let findVarTravBool = tliftToBoolSrc findVarTrav

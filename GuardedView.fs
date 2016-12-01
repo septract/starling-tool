@@ -594,10 +594,11 @@ module Traversal =
     /// <typeparam name="Error">
     ///     The type of any returned errors.
     /// </typeparam>
+    /// <typeparam name="Var">The type of context variables.</typeparam>
     /// <returns>The lifted <see cref="Traversal"/>.</returns>
     let tliftOverGFunc
-      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
-      : Traversal<GFunc<'SrcVar>, GFunc<'DstVar>, 'Error> =
+      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error, 'Var>)
+      : Traversal<GFunc<'SrcVar>, GFunc<'DstVar>, 'Error, 'Var> =
         fun ctx { Cond = cond; Item = item } ->
             let tBool = traverseBoolAsExpr traversal
             let tFunc = tliftOverFunc traversal
@@ -625,10 +626,11 @@ module Traversal =
     /// <typeparam name="Error">
     ///     The type of any returned errors.
     /// </typeparam>
+    /// <typeparam name="Var">The type of context variables.</typeparam>
     /// <returns>The lifted <see cref="Traversal"/>.</returns>
     let tliftOverIteratedGFunc
-      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
-      : Traversal<IteratedGFunc<'SrcVar>, IteratedGFunc<'DstVar>, 'Error> =
+      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error, 'Var>)
+      : Traversal<IteratedGFunc<'SrcVar>, IteratedGFunc<'DstVar>, 'Error, 'Var> =
         fun ctx { Iterator = iter ; Func = func } ->
             let tInt = traverseIntAsExpr traversal
             let tGFunc = tliftOverGFunc traversal
@@ -653,12 +655,13 @@ module Traversal =
     /// <typeparam name="Error">
     ///     The type of any returned errors.
     /// </typeparam>
+    /// <typeparam name="Var">The type of context variables.</typeparam>
     /// <returns>The lifted <see cref="Traversal"/>.</returns>
     let tliftOverTerm
-      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
+      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error, 'Var>)
       : Traversal<Term<BoolExpr<'SrcVar>, GView<'SrcVar>, VFunc<'SrcVar>>,
                   Term<BoolExpr<'DstVar>, GView<'DstVar>, VFunc<'DstVar>>,
-                  'Error> =
+                  'Error, 'Var> =
         fun ctx { Cmd = c ; WPre = w; Goal = g } ->
             let tCmd = traverseBoolAsExpr traversal
             let tWPre = tchainM (tliftOverGFunc traversal) id
@@ -688,12 +691,13 @@ module Traversal =
     /// <typeparam name="Error">
     ///     The type of any returned errors.
     /// </typeparam>
+    /// <typeparam name="Var">The type of context variables.</typeparam>
     /// <returns>The lifted <see cref="Traversal"/>.</returns>
     let tliftOverCmdTerm
-      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
+      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error, 'Var>)
       : Traversal<CmdTerm<BoolExpr<'SrcVar>, GView<'SrcVar>, VFunc<'SrcVar>>,
                   CmdTerm<BoolExpr<'DstVar>, GView<'DstVar>, VFunc<'DstVar>>,
-                  'Error> =
+                  'Error, 'Var> =
         fun ctx { Cmd = c ; WPre = w; Goal = g } ->
             let tCmd = tliftOverCommandSemantics traversal
             let tWPre = tchainM (tliftOverGFunc traversal) id

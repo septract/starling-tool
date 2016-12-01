@@ -351,8 +351,8 @@ let frame svars tvars expr =
     (* First, we need to find all the bound post-variables in the expression.
        We do this by finding _all_ variables, then filtering. *)
     let varsInExprResult =
-        findMarkedVars
-            (tliftToBoolSrc (tliftToExprDest collectSymMarkedVars))
+        findVars
+            (tliftToBoolSrc (tliftToExprDest collectSymVars))
             expr
     let untypedVarsInExprResult = lift (Seq.map valueOf) varsInExprResult
 
@@ -389,7 +389,7 @@ let frame svars tvars expr =
 let primParamSubFun
   (cmd : PrimCommand)
   (sem : PrimSemantics)
-  : Traversal<TypedVar, Expr<Sym<Var>>, Error> =
+  : Traversal<TypedVar, Expr<Sym<Var>>, Error, unit> =
 
     let fpars = List.append cmd.Args cmd.Results
     let dpars = sem.Args @ sem.Results
@@ -434,17 +434,18 @@ let checkParamTypesPrim (prim : PrimCommand) (sem : PrimSemantics) : Result<Prim
 ///     Lifts a parameter instantiation traversal onto a microcode instruction.
 /// </summary>
 /// <param name="trav">The traversal to lift onto microcode.</param>
+/// <typeparam name="Var">The type of context variables.</typeparam>
 /// <returns>
 ///     A traversal that visits all of the lvalues and rvalues in a microcode
 ///     instruction.
 /// </returns>
 let tliftToMicrocode
-  (trav : Traversal<TypedVar, Expr<Sym<Var>>, Error>)
+  (trav : Traversal<TypedVar, Expr<Sym<Var>>, Error, 'Var>)
   : Traversal<Microcode<TypedVar, Var>,
-              Microcode<Expr<Sym<Var>>, Sym<Var>>, Error> =
-    let travE : Traversal<Expr<Var>, Expr<Sym<Var>>, Error> =
+              Microcode<Expr<Sym<Var>>, Sym<Var>>, Error, 'Var> =
+    let travE : Traversal<Expr<Var>, Expr<Sym<Var>>, Error, 'Var> =
         tliftToExprSrc trav
-    let travB : Traversal<BoolExpr<Var>, BoolExpr<Sym<Var>>, Error> =
+    let travB : Traversal<BoolExpr<Var>, BoolExpr<Sym<Var>>, Error, 'Var> =
         tliftToBoolSrc trav
 
     let rec tm ctx mc =
