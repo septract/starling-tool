@@ -28,6 +28,7 @@ module Pretty =
     open Starling.Core.Model.Pretty
     open Starling.Core.Symbolic.Pretty
 
+    /// Prints a marked Var 
     let printMarkedVar (v : MarkedVar) : Doc =
         match v with 
         | Before s -> String "before_" <-> String s 
@@ -73,6 +74,7 @@ module Pretty =
         | Bool b -> printBoolExpr pVar b
         | _ -> failwith "Unimplemented for Grasshopper backend." 
 
+    /// Pretty-prints a symbolic sentence 
     let rec printSym (pReg : 'Reg -> Doc) (sym : Sym<'Reg>) : Doc =
         match sym with
         | Reg r -> pReg r
@@ -85,6 +87,7 @@ module Pretty =
         printBoolExpr (printSym printMarkedVar) a 
 
     let findVarsGrass (zterm : Backends.Z3.Types.ZTerm) : seq<MarkedVar> = 
+        // TODO @(septract) Should this conjoin the command as well? 
         BAnd [zterm.SymBool.WPre; zterm.SymBool.Goal] 
         |> findMarkedVars (tliftToBoolSrc (tliftToExprDest collectSymMarkedVars)) 
         |> lift (Set.map valueOf) 
@@ -109,19 +112,6 @@ module Pretty =
                String "{}"   
                headed "Command" (cmdprint |> Seq.singleton)
              ]  
-
-
-    // let printQuery (zterm : Backends.Z3.Types.ZTerm) : Doc = 
-    //    vsep  
-    //        [ headed "Variables" <|
-    //              List.map printMarkedVar (findVarsGrass zterm)
-    //          headed "Grasshopper terms" <| 
-    //              [ printTerm
-    //                  (Core.Expr.Pretty.printBoolExpr (printSym printMarkedVar)) 
-    //                  printExprGrass 
-    //                  printExprGrass 
-    //                  zterm.SymBool ]
-    //        ]
 
     let printGrassError e = 
         failwith "not implemented yet" 
