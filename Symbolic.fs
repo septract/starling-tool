@@ -172,8 +172,8 @@ module Traversal =
     ///     symbolic variables.
     /// </summary>
     let rec tliftToSymSrc
-      (sub : Traversal<'SrcVar, Sym<'DstVar>, 'Error>)
-      : Traversal<Sym<'SrcVar>, Sym<'DstVar>, 'Error> =
+      (sub : Traversal<'SrcVar, Sym<'DstVar>, 'Error, 'Var>)
+      : Traversal<Sym<'SrcVar>, Sym<'DstVar>, 'Error, 'Var> =
         fun ctx ->
             function
             | Reg r -> sub ctx r
@@ -193,8 +193,8 @@ module Traversal =
     ///     symbolic variables.
     /// </summary>
     let tliftToSymDest
-      (sub : Traversal<'SrcVar, 'DstVar, 'Error>)
-      : Traversal<'SrcVar, Sym<'DstVar>, 'Error> =
+      (sub : Traversal<'SrcVar, 'DstVar, 'Error, 'Var>)
+      : Traversal<'SrcVar, Sym<'DstVar>, 'Error, 'Var> =
         fun ctx -> sub ctx >> lift (pairMap id Reg)
 
     /// <summary>
@@ -202,8 +202,8 @@ module Traversal =
     ///     symbolic variables to symbolic variables.
     /// </summary>
     let tliftOverSym
-      (sub : Traversal<'SrcVar, 'DstVar, 'Error>)
-      : Traversal<Sym<'SrcVar>, Sym<'DstVar>, 'Error> =
+      (sub : Traversal<'SrcVar, 'DstVar, 'Error, 'Var>)
+      : Traversal<Sym<'SrcVar>, Sym<'DstVar>, 'Error, 'Var> =
         sub |> tliftToSymDest |> tliftToSymSrc
 
     /// <summary>
@@ -219,12 +219,15 @@ module Traversal =
     /// <typeparam name="Var">
     ///     The type of regular (non-symbolic) variables.
     /// </typeparam>
+    /// <typeparam name="VarB">
+    ///     The type of variables inside the context.
+    /// </typeparam>
     /// <returns>
     ///     A <see cref="Traversal"/> trying to remove symbols from
     ///     variables.
     /// </returns>
     let removeSymFromVar (err : SymbolicSentence -> 'Error)
-      : Traversal<Sym<'Var>, 'Var, 'Error> =
+      : Traversal<Sym<'Var>, 'Var, 'Error, 'VarB> =
         ignoreContext
             (function
              | Sym s -> s.Sentence |> err |> Inner |> fail
@@ -241,12 +244,15 @@ module Traversal =
     /// <typeparam name="Var">
     ///     The type of regular (non-symbolic) variables.
     /// </typeparam>
+    /// <typeparam name="VarB">
+    ///     The type of variables in the context.
+    /// </typeparam>
     /// <returns>
     ///     A <see cref="Traversal"/> trying to remove symbols from
     ///     expressions.
     /// </returns>
     let removeSymFromExpr (err : SymbolicSentence -> 'Error)
-      : Traversal<Expr<Sym<'Var>>, Expr<'Var>, 'Error> =
+      : Traversal<Expr<Sym<'Var>>, Expr<'Var>, 'Error, 'VarB> =
         (tliftOverExpr (tliftOverCTyped (removeSymFromVar err)))
 
     /// <summary>
@@ -260,12 +266,15 @@ module Traversal =
     /// <typeparam name="Var">
     ///     The type of regular (non-symbolic) variables.
     /// </typeparam>
+    /// <typeparam name="VarB">
+    ///     The type of variables in the context.
+    /// </typeparam>
     /// <returns>
     ///     A <see cref="Traversal"/> trying to remove symbols from
     ///     Boolean expressions.
     /// </returns>
     let removeSymFromBoolExpr (err : SymbolicSentence -> 'Error)
-      : Traversal<BoolExpr<Sym<'Var>>, BoolExpr<'Var>, 'Error> =
+      : Traversal<BoolExpr<Sym<'Var>>, BoolExpr<'Var>, 'Error, 'VarB> =
         tliftToBoolSrc
             (tliftToExprDest
                 (tliftOverCTyped (removeSymFromVar err)))
@@ -285,10 +294,11 @@ module Traversal =
     /// <param name="traversal">The <see cref="Traversal"/> to lift.</param>
     /// <typeparam name="SrcVar">Type of variables entering traversal.</param>
     /// <typeparam name="DstVar">Type of variables leaving traversal.</param>
+    /// <typeparam name="Var">The type of variables inside the context.</typeparam>
     /// <returns>The lifted <see cref="Traversal"/>.</returns>
     let rec tliftToTypedSymVarSrc
-      (traversal : Traversal<CTyped<'SrcVar>, Expr<Sym<'DstVar>>, 'Error>)
-      : Traversal<CTyped<Sym<'SrcVar>>, Expr<Sym<'DstVar>>, 'Error> =
+      (traversal : Traversal<CTyped<'SrcVar>, Expr<Sym<'DstVar>>, 'Error, 'Var>)
+      : Traversal<CTyped<Sym<'SrcVar>>, Expr<Sym<'DstVar>>, 'Error, 'Var> =
         let rec subInTypedSym ctx sym =
             match (valueOf sym) with
             | Reg r -> traversal ctx (withType (typeOf sym) r)
@@ -307,7 +317,7 @@ module Traversal =
     /// </summary>
     let traverseSymWithMarker
       (marker : Var -> MarkedVar)
-      : Traversal<Sym<Var>, Sym<MarkedVar>, 'Error> =
+      : Traversal<Sym<Var>, Sym<MarkedVar>, 'Error, 'Var> =
         tliftOverSym (ignoreContext (marker >> ok))
 
     /// <summary>
@@ -322,7 +332,7 @@ module Traversal =
     /// </returns>
     let traverseTypedSymWithMarker
       (marker : Var -> MarkedVar)
-      : Traversal<CTyped<Sym<Var>>, CTyped<Sym<MarkedVar>>, 'Error> =
+      : Traversal<CTyped<Sym<Var>>, CTyped<Sym<MarkedVar>>, 'Error, 'Var> =
         tliftOverCTyped (traverseSymWithMarker marker)
 
     /// <summary>
@@ -344,7 +354,7 @@ module Traversal =
     ///     under-approximation.
     /// </summary>
     let approx
-      : Traversal<CTyped<Sym<MarkedVar>>, Expr<Sym<MarkedVar>>, unit> =
+      : Traversal<CTyped<Sym<MarkedVar>>, Expr<Sym<MarkedVar>>, unit, unit> =
         let rec sub ctx =
             // Only symbolic Booleans are handled specially.
             function
@@ -365,10 +375,10 @@ module Traversal =
         sub
 
 /// <summary>
-///     Traversal for accumulating symbolic <c>MarkedVar</c>s.
+///     Traversal for accumulating symbolic variables.
 /// <summary>
 let rec collectSymVars
-  : Traversal<CTyped<Sym<Var>>, CTyped<Sym<Var>>, 'Error> =
+  : Traversal<CTyped<Sym<'Var>>, CTyped<Sym<'Var>>, 'Error, 'Var> =
     // TODO(CaptainHayashi): de-duplicate this.
     fun ctx ->
         function
@@ -379,24 +389,6 @@ let rec collectSymVars
         | WithType (Sym { Sentence = body; Args = ps }, tc) ->
             tchainL
                 (tliftOverExpr collectSymVars)
-                (sym body >> withType tc)
-                ctx ps
-
-/// <summary>
-///     Traversal for accumulating symbolic <c>MarkedVar</c>s.
-/// <summary>
-let rec collectSymMarkedVars
-  : Traversal<CTyped<Sym<MarkedVar>>, CTyped<Sym<MarkedVar>>, 'Error> =
-    // TODO(CaptainHayashi): de-duplicate this.
-    fun ctx ->
-        function
-        | WithType (Reg v, tc) ->
-            lift
-                (fun ctx -> (ctx, withType tc (Reg v)))
-                (pushMarkedVar ctx (withType tc v))
-        | WithType (Sym { Sentence = body; Args = ps }, tc) ->
-            tchainL
-                (tliftOverExpr collectSymMarkedVars)
                 (sym body >> withType tc)
                 ctx ps
 
@@ -490,11 +482,7 @@ let unmarkMarkedVar =
 /// i.e. (Int (Before s)) => (Int s)
 let unmark : CTyped<MarkedVar> -> TypedVar = mapCTyped unmarkMarkedVar
 
-let markedSymExprVars (expr : Expr<Sym<MarkedVar>>)
-  : Result<Set<CTyped<MarkedVar>>, TraversalError<'Error>> =
-    findMarkedVars (tliftOverExpr collectSymMarkedVars) expr
-
 /// Returns the set of all variables annotated with their types
-/// contained within the SVExpr
-let SVExprVars (expr : SVExpr) : Result<Set<TypedVar>, TraversalError<'Error>> =
+/// contained within the symbolic Expr.
+let symExprVars (expr : Expr<Sym<'Var>>) : Result<Set<CTyped<'Var>>, TraversalError<'Error>> =
     findVars (tliftOverExpr collectSymVars) expr

@@ -377,9 +377,10 @@ module Traversal =
     /// <typeparam name="Error">
     ///     The type of any returned errors.
     /// </typeparam>
+    /// <typeparam name="Var">The type of context variables.</typeparam>
     /// <returns>The lifted <see cref="Traversal"/>.</returns>
     let tliftOverFunc
-      (traversal : Traversal<'SrcPar, 'DstPar, 'Error>)
-      : Traversal<Func<'SrcPar>, Func<'DstPar>, 'Error> =
+      (traversal : Traversal<'SrcPar, 'DstPar, 'Error, 'Var>)
+      : Traversal<Func<'SrcPar>, Func<'DstPar>, 'Error, 'Var> =
         fun context { Name = n ; Params = ps } ->
             tchainL traversal (func n) context ps

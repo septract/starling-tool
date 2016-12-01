@@ -351,7 +351,7 @@ let rec normaliseMicrocode
 let primParamSubFun
   (cmd : PrimCommand)
   (sem : PrimSemantics)
-  : Traversal<TypedVar, Expr<Sym<Var>>, Error> =
+  : Traversal<TypedVar, Expr<Sym<Var>>, Error, unit> =
 
     let fpars = List.append cmd.Args cmd.Results
     let dpars = sem.Args @ sem.Results
@@ -400,15 +400,16 @@ let checkParamTypesPrim (prim : PrimCommand) (sem : PrimSemantics) : Result<Prim
 /// <typeparam name="RV">The type of input rvalue variables.</typeparam>
 /// <typeparam name="LO">The type of output lvalue.</typeparam>
 /// <typeparam name="RVO">The type of output rvalue variables.</typeparam>
+/// <typeparam name="Var">The type of context variables.</typeparam>
 /// <returns>
 ///     A traversal that visits all of the lvalues and rvalues in a microcode
 ///     instruction, applying the given traversals to each.
 /// </returns>
 let traverseMicrocode
-  (ltrav : Traversal<'L, 'LO, Error>)
-  (rtrav : Traversal<Expr<'RV>, Expr<'RVO>, Error>)
+  (ltrav : Traversal<'L, 'LO, Error, 'Var>)
+  (rtrav : Traversal<Expr<'RV>, Expr<'RVO>, Error, 'Var>)
   : Traversal<Microcode<'L, 'RV>,
-              Microcode<'LO, 'RVO>, Error> =
+              Microcode<'LO, 'RVO>, Error, 'Var> =
     let brtrav = traverseBoolAsExpr rtrav
 
     let rec tm ctx mc =
@@ -424,14 +425,15 @@ let traverseMicrocode
 ///     Lifts a parameter instantiation traversal onto a microcode instruction.
 /// </summary>
 /// <param name="trav">The traversal to lift onto microcode.</param>
+/// <typeparam name="Var">The type of context variables.</typeparam>
 /// <returns>
 ///     A traversal that visits all of the lvalues and rvalues in a microcode
 ///     instruction.
 /// </returns>
 let tliftToMicrocode
-  (trav : Traversal<TypedVar, Expr<Sym<Var>>, Error>)
+  (trav : Traversal<TypedVar, Expr<Sym<Var>>, Error, 'Var>)
   : Traversal<Microcode<TypedVar, Var>,
-              Microcode<Expr<Sym<Var>>, Sym<Var>>, Error> =
+              Microcode<Expr<Sym<Var>>, Sym<Var>>, Error, 'Var> =
     traverseMicrocode trav (tliftToExprSrc trav)
 
 /// <summary>
@@ -443,7 +445,7 @@ let rec markMicrocode
   (preStates : Map<TypedVar, MarkedVar>)
   : Traversal<Microcode<TypedVar, Sym<Var>>,
               Microcode<CTyped<MarkedVar>, Sym<MarkedVar>>,
-              Error> =
+              Error, unit> =
     // Define marker functions for lvalues and rvalues...
     let lf var = ok (postMark var)
     let rf var =

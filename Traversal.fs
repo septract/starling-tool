@@ -47,7 +47,8 @@ module Context =
     /// <summary>
     ///     The context of a substitution.
     /// </summary>
-    type TraversalContext =
+    /// <typeparam name="Var">The type of variables in finding contexts.</param>
+    type TraversalContext<'Var> =
         /// <summary>
         ///     No context: used for most substitutions.
         /// </summary>
@@ -63,20 +64,24 @@ module Context =
         ///     </para>
         /// </summary>
         | Positions of Position list
-        /// <summary>
-        ///     A context for searching for <c>Var</c>s.
-        /// </summary>
-        | Vars of CTyped<Var> list
-        /// <summary>
-        ///     A context for searching for <c>MarkedVar</c>s.
-        /// </summary>
-        | MarkedVars of CTyped<MarkedVar> list
+        /// <summary>A context for searching for variables.</summary>
+        | Vars of CTyped<'Var> list
         /// <summary>
         ///     A context for checking whether we've entered an array index.
         /// </summary>
         | InIndex of bool
         override this.ToString () = sprintf "%A" this
 
+
+    /// <summary>
+    ///     Removes the variables from a variable context.
+    /// </summary>
+    let stripVars (ctx : TraversalContext<_>) : TraversalContext<unit> =
+        match ctx with
+        | Vars _ -> Vars []
+        | Positions pl -> Positions pl
+        | InIndex b -> InIndex b
+        | NoCtx -> NoCtx
 
     /// <summary>
     ///     Negates a Boolean position.
@@ -115,14 +120,19 @@ module Context =
     /// <param name="f">
     ///     The function transforming the position at the top of the stack.
     /// </param>
+    /// <param name="ctx">The context to change.</param>
+    /// <typeparam name="Var">The type of variables in finding contexts.</param>
     /// <returns>
-    ///     A function over a <c>TraversalContext</c>.  If the context is not
+    ///     If the context is not
     ///     <c>Positions</c>, it does not change the <c>TraversalContext</c>; else,
     ///     it pushes a new position that is <c>f c</c>, where <c>c</c> is
     ///     the current position.
     /// </returns>
-    let push (f : Position -> Position) : TraversalContext -> TraversalContext =
-        function
+    let push
+      (f : Position -> Position)
+      (ctx : TraversalContext<'Var>)
+      : TraversalContext<'Var> =
+        match ctx with
         | Positions [] -> failwith "empty position stack"
         | Positions (x::xs) -> Positions ((f x)::x::xs)
         | x -> x
@@ -138,6 +148,7 @@ module Context =
     /// <typeparam name="Dst">
     ///     The return type of <paramref name="trav"/>, less the context.
     /// </typeparam>
+    /// <typeparam name="Var">The type of variables in finding contexts.</param>
     /// <returns>
     ///     A function over a <c>TraversalContext</c>, which behaves as
     ///     <paramref name="trav"/>, but, if the <c>TraversalContext</c> is
@@ -145,9 +156,9 @@ module Context =
     ///     traversal.
     /// </returns>
     let inIndex
-      (g : TraversalContext -> 'Src -> Result<TraversalContext * 'Dst, 'Error>)
-      (ctx : TraversalContext)
-      : 'Src -> Result<TraversalContext * 'Dst, 'Error> =
+      (g : TraversalContext<'Var> -> 'Src -> Result<TraversalContext<'Var> * 'Dst, 'Error>)
+      (ctx : TraversalContext<'Var>)
+      : 'Src -> Result<TraversalContext<'Var> * 'Dst, 'Error> =
         let ctx' =
             match ctx with
             | InIndex _ -> InIndex true
@@ -164,13 +175,15 @@ module Context =
     /// <summary>
     ///     If the context is position-based, pop the position stack.
     /// </summary>
+    /// <param name="ctx">The current context.</param>
+    /// <typeparam name="Var">The type of variables in finding contexts.</param>
     /// <returns>
     ///     A function over a <c>TraversalContext</c>.  If the context is not
     ///     <c>Positions</c>, it does not change the <c>TraversalContext</c>; else,
     ///     it pops the current position.
     /// </returns>
-    let pop : TraversalContext -> TraversalContext =
-        function
+    let pop (ctx : TraversalContext<'Var>) : TraversalContext<'Var> =
+        match ctx with
         | Positions [] -> failwith "empty position stack"
         | Positions (x::xs) -> Positions xs
         | x -> x
@@ -185,9 +198,8 @@ module Context =
     ///     The function, taking a context and item, to wrap; returns a pair of
     ///     context and another item.
     /// </param>
-    /// <param name="ctx">
-    ///     The current context.
-    /// </param>
+    /// <param name="ctx">The current context.</param>
+    /// <typeparam name="Var">The type of variables in finding contexts.</param>
     /// <typeparam name="Src">
     ///     The input type of <paramref name="g"/>, less the context.
     /// </typeparam>
@@ -202,20 +214,20 @@ module Context =
     /// </returns>
     let changePos
       (f : Position -> Position)
-      (g : TraversalContext -> 'Src -> Result<TraversalContext * 'Dst, 'Error>)
-      (ctx : TraversalContext)
-      : 'Src -> Result<TraversalContext * 'Dst, 'Error> =
+      (g : TraversalContext<'Var> -> 'Src -> Result<TraversalContext<'Var> * 'Dst, 'Error>)
+      (ctx : TraversalContext<'Var>)
+      : 'Src -> Result<TraversalContext<'Var> * 'Dst, 'Error> =
         g (push f ctx) >> lift (pairMap pop id)
 
     /// <summary>
     ///     An initial positive position context.
     /// </summary>
-    let positive : TraversalContext = Positions [Positive]
+    let positive () : TraversalContext<unit> = Positions [Positive]
 
     /// <summary>
     ///     An initial negative position context.
     /// </summary>
-    let negative : TraversalContext = Positions [Negative]
+    let negative () : TraversalContext<unit> = Positions [Negative]
 
 
 /// <summary>
@@ -237,7 +249,7 @@ type TraversalError<'Inner> =
     /// <summary>
     ///     A substitution produced a context that wasn't expected.
     /// </summary>
-    | ContextMismatch of expectedType : string * got : TraversalContext
+    | ContextMismatch of expectedType : string * got : TraversalContext<unit>
 
 
 /// <summary>
@@ -252,9 +264,12 @@ type TraversalError<'Inner> =
 /// <typeparam name="Error">
 ///     The type of inner errors that can occur during traversal.
 /// </typeparam>
-type Traversal<'Src, 'Dst, 'Error> =
-    TraversalContext -> 'Src ->
-        Result<TraversalContext * 'Dst, TraversalError<'Error>>
+/// <typeparam name="Var">
+///     The type of variables collected in the traversal.
+/// </typeparam>
+type Traversal<'Src, 'Dst, 'Error, 'Var> =
+    TraversalContext<'Var> -> 'Src ->
+        Result<TraversalContext<'Var> * 'Dst, TraversalError<'Error>>
 
 /// <summary>
 ///     Lifts a traversal to a context-less function.
@@ -271,12 +286,15 @@ type Traversal<'Src, 'Dst, 'Error> =
 /// <typeparam name="Error">
 ///     The type of errors that can occur during traversal.
 /// </typeparam>
+/// <typeparam name="Var">
+///     The type of variables collected in the traversal.
+/// </typeparam>
 /// <returns>
 ///     The traversal <paramref name="f"/> lifted such that it accepts
 ///     <see cref="NoCtx"/> (and then discards it).
 /// </returns>
 let mapTraversal
-  (f : Traversal<'Src, 'Dst, 'Error>) : 'Src -> Result<'Dst, TraversalError<'Error>> =
+  (f : Traversal<'Src, 'Dst, 'Error, 'Var>) : 'Src -> Result<'Dst, TraversalError<'Error>> =
     f NoCtx >> lift snd
 
 /// <summary>
@@ -294,12 +312,15 @@ let mapTraversal
 /// <typeparam name="Error">
 ///     The type of errors that can occur during traversal.
 /// </typeparam>
+/// <typeparam name="Var">
+///     The type of variables collected in the traversal.
+/// </typeparam>
 /// <returns>
 ///     The function <paramref name="f"/> lifted such that it can be used
 ///     in a traversal.
 /// </returns>
 let ignoreContext
-  (f : 'Src -> Result<'Dst, TraversalError<'Error>>) : Traversal<'Src, 'Dst, 'Error> =
+  (f : 'Src -> Result<'Dst, TraversalError<'Error>>) : Traversal<'Src, 'Dst, 'Error, 'Var> =
     fun ctx -> f >> lift (mkPair ctx)
 
 /// <summary>
@@ -338,7 +359,7 @@ let ignoreContext
 /// </returns>
 let liftWithoutContext
   (f : 'SrcA -> Result<'DstA, 'ErrorA>)
-  (lift : Traversal<'SrcA, 'DstA, 'ErrorA> -> Traversal<'SrcB, 'DstB, 'ErrorB>)
+  (lift : Traversal<'SrcA, 'DstA, 'ErrorA, unit> -> Traversal<'SrcB, 'DstB, 'ErrorB, unit>)
   : 'SrcB -> Result<'DstB, TraversalError<'ErrorB>> =
     mapTraversal (lift (ignoreContext (f >> mapMessages Inner)))
 
@@ -346,8 +367,8 @@ let liftWithoutContext
 ///     Lifts a traversal over <see cref="CTyped"/>.
 /// </summary>
 let tliftOverCTyped
-  (sub : Traversal<'Src, 'Dest, 'Error>)
-  : Traversal<CTyped<'Src>, CTyped<'Dest>, 'Error> =
+  (sub : Traversal<'Src, 'Dest, 'Error, 'Var>)
+  : Traversal<CTyped<'Src>, CTyped<'Dest>, 'Error, 'Var> =
     // TODO(CaptainHayashi): proper doc comment.
     fun ctx ->
         function
@@ -400,8 +421,8 @@ let expectBool : Expr<'Var> -> Result<BoolExpr<'Var>, TraversalError<_>> =
 ///     Maps a traversal over an item, feeds the result into a function,
 ///     and returns the final context and the result of that function.
 /// </summary>
-let tchain (f : Traversal<'A, 'AR, 'Error>) (g : 'AR -> 'Result)
-  : Traversal<'A, 'Result, 'Error> =
+let tchain (f : Traversal<'A, 'AR, 'Error, 'Var>) (g : 'AR -> 'Result)
+  : Traversal<'A, 'Result, 'Error, 'Var> =
     // TODO(CaptainHayashi): proper doc comment.
     fun ctx -> f ctx >> lift (fun (ctxF, xR) -> ctxF, g xR)
 
@@ -410,8 +431,8 @@ let tchain (f : Traversal<'A, 'AR, 'Error>) (g : 'AR -> 'Result)
 ///     context, feeds the result list into a function, and returns the
 ///     final context and the result of that function.
 /// </summary>
-let tchainL (f : Traversal<'A, 'AR, 'Error>) (g : 'AR list -> 'Result)
-  : Traversal<'A list, 'Result, 'Error> =
+let tchainL (f : Traversal<'A, 'AR, 'Error, 'Var>) (g : 'AR list -> 'Result)
+  : Traversal<'A list, 'Result, 'Error, 'Var> =
     // TODO(CaptainHayashi): proper doc comment.
     fun ctx ->
         seqBind
@@ -430,8 +451,8 @@ let tchainL (f : Traversal<'A, 'AR, 'Error>) (g : 'AR list -> 'Result)
 ///         multiset.
 ///     </para>
 /// </summary>
-let tchainM (f : Traversal<'A, 'AR, 'Error>) (g : Multiset<'AR> -> 'Result)
-  : Traversal<Multiset<'A>, 'Result, 'Error> =
+let tchainM (f : Traversal<'A, 'AR, 'Error, 'Var>) (g : Multiset<'AR> -> 'Result)
+  : Traversal<Multiset<'A>, 'Result, 'Error, 'Var> =
     // TODO(CaptainHayashi): proper doc comment.
     let trav ctx ms =
         let ms' =
@@ -453,10 +474,10 @@ let tchainM (f : Traversal<'A, 'AR, 'Error>) (g : Multiset<'AR> -> 'Result)
 //     final context and the result of that function.
 // </summary>
 let tchain2
-  (f : Traversal<'A, 'AR, 'Error>)
-  (g : Traversal<'B, 'BR, 'Error>)
+  (f : Traversal<'A, 'AR, 'Error, 'Var>)
+  (g : Traversal<'B, 'BR, 'Error, 'Var>)
   (h : ('AR * 'BR) -> 'Result)
-  : Traversal<'A * 'B, 'Result, 'Error> =
+  : Traversal<'A * 'B, 'Result, 'Error, 'Var> =
     // TODO(CaptainHayashi): proper doc comment.
     fun ctx (x, y) ->
         trial {
@@ -471,11 +492,11 @@ let tchain2
 //     final context and the result of that function.
 // </summary>
 let tchain3
-  (f : Traversal<'A, 'AR, 'Error>)
-  (g : Traversal<'B, 'BR, 'Error>)
-  (h : Traversal<'C, 'CR, 'Error>)
+  (f : Traversal<'A, 'AR, 'Error, 'Var>)
+  (g : Traversal<'B, 'BR, 'Error, 'Var>)
+  (h : Traversal<'C, 'CR, 'Error, 'Var>)
   (i : ('AR * 'BR * 'CR) -> 'Result)
-  : Traversal<'A * 'B * 'C, 'Result, 'Error> =
+  : Traversal<'A * 'B * 'C, 'Result, 'Error, 'Var> =
     // TODO(CaptainHayashi): proper doc comment.
     fun ctx (x, y, z) ->
         trial {
@@ -490,8 +511,8 @@ let tchain3
 ///     Boolean expressions to Boolean expressions.
 /// </summary>
 let rec tliftToBoolSrc
-    (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
-    : Traversal<BoolExpr<'SrcVar>, BoolExpr<'DstVar>, 'Error> =
+    (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error, 'Var>)
+    : Traversal<BoolExpr<'SrcVar>, BoolExpr<'DstVar>, 'Error, 'Var> =
     // TODO(CaptainHayashi): proper doc comment.
 
     // We do some tricky inserting and removing of positions on the stack
@@ -537,8 +558,8 @@ let rec tliftToBoolSrc
 ///     integral expressions to integral expressions.
 /// </summary>
 and tliftToIntSrc
-  (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
-  : Traversal<IntExpr<'SrcVar>, IntExpr<'DstVar>, 'Error> =
+  (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error, 'Var>)
+  : Traversal<IntExpr<'SrcVar>, IntExpr<'DstVar>, 'Error, 'Var> =
     let isv x = Context.changePos id (tliftToIntSrc sub) x
     let asv x = Context.changePos id (tliftToArraySrc sub) x
     // TODO(CaptainHayashi): proper doc comment.
@@ -570,9 +591,9 @@ and tliftToIntSrc
 ///     array expressions to array expressions.
 /// </summary>
 and tliftToArraySrc
-  (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
+  (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error, 'Var>)
   : Traversal<(Type * int option * ArrayExpr<'SrcVar>),
-              ArrayExpr<'DstVar>, 'Error> =
+              ArrayExpr<'DstVar>, 'Error, 'Var> =
     // TODO(CaptainHayashi): proper doc comment.
     let isv x = Context.changePos id (tliftToIntSrc sub) x
     let asv x = Context.changePos id (tliftToArraySrc sub) x
@@ -612,8 +633,8 @@ and tliftToArraySrc
             bind (uncurry (ignoreContext id)) tResult
 
 and tliftToExprSrc
-  (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error>)
-  : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error> =
+  (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error, 'Var>)
+  : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error, 'Var> =
     // TODO(CaptainHayashi): proper doc comment.
     fun ctx ->
         function
@@ -629,8 +650,8 @@ and tliftToExprSrc
 ///     Fails if the traversal responds with a non-Boolean expression.
 /// </summary>
 let traverseBoolAsExpr
-  (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
-  : Traversal<BoolExpr<'SrcVar>, BoolExpr<'DstVar>, 'Error> =
+  (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error, 'Var>)
+  : Traversal<BoolExpr<'SrcVar>, BoolExpr<'DstVar>, 'Error, 'Var> =
     // TODO(CaptainHayashi): proper doc comment.
     let toExpr = ignoreContext (Bool >> ok)
     let fromExpr = ignoreContext expectBool
@@ -641,8 +662,8 @@ let traverseBoolAsExpr
 ///     Fails if the traversal responds with a non-integer expression.
 /// </summary>
 let traverseIntAsExpr
-  (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
-  : Traversal<IntExpr<'SrcVar>, IntExpr<'DstVar>, 'Error> =
+  (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error, 'Var>)
+  : Traversal<IntExpr<'SrcVar>, IntExpr<'DstVar>, 'Error, 'Var> =
     // TODO(CaptainHayashi): proper doc comment.
     let toExpr = ignoreContext (Int >> ok)
     let fromExpr = ignoreContext expectInt
@@ -665,8 +686,8 @@ let traverseIntAsExpr
 ///     <paramref name="sub">, lifted to return expressions.
 /// </returns>
 let tliftToExprDest
-  (sub : Traversal<CTyped<'SrcVar>, CTyped<'DstVar>, 'Error>)
-  : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error> =
+  (sub : Traversal<CTyped<'SrcVar>, CTyped<'DstVar>, 'Error, 'Var>)
+  : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error, 'Var> =
     fun ctx -> sub ctx >> lift (pairMap id mkVarExp)
 
 /// <summary>
@@ -686,8 +707,8 @@ let tliftToExprDest
 ///     <paramref name="sub">, lifted over expressions.
 /// </returns>
 let tliftOverExpr
-  (sub : Traversal<CTyped<'SrcVar>, CTyped<'DstVar>, 'Error>)
-  : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error> =
+  (sub : Traversal<CTyped<'SrcVar>, CTyped<'DstVar>, 'Error, 'Var>)
+  : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error, 'Var> =
     sub |> tliftToExprDest |> tliftToExprSrc
 
 /// <summary>
@@ -717,37 +738,19 @@ let vAfter (expr : Expr<Var>) : Result<Expr<MarkedVar>, TraversalError<'Error>> 
 /// <summary>
 ///     Updates a context with a new variable.
 /// <summary>
-let pushVar (ctx : TraversalContext) (v : TypedVar)
-  : Result<TraversalContext, TraversalError<'Error>>=
+let pushVar (ctx : TraversalContext<'Var>) (v : CTyped<'Var>)
+  : Result<TraversalContext<'Var>, TraversalError<'Error>>=
     // TODO(CaptainHayashi): proper doc comment.
     match ctx with
     | Vars vs -> ok (Vars (v::vs))
-    | c -> fail (ContextMismatch ("vars context", c))
+    | c -> fail (ContextMismatch ("vars context", stripVars c))
 
 /// <summary>
-///     Traversal for accumulating <c>Var</c>s.
+///     Traversal for accumulating variables.
 /// <summary>
-let collectVars : Traversal<TypedVar, TypedVar, 'Error>  =
+let collectVars : Traversal<CTyped<'Var>, CTyped<'Var>, 'Error, 'Var>  =
     // TODO(CaptainHayashi): proper doc comment.
     fun ctx v -> lift (fun ctx -> (ctx, v)) (pushVar ctx v)
-
-/// <summary>
-///     Updates a context with a new marked variable.
-/// <summary>
-let pushMarkedVar (ctx : TraversalContext) (v : CTyped<MarkedVar>)
-  : Result<TraversalContext, TraversalError<'Error>> =
-    // TODO(CaptainHayashi): proper doc comment.
-    match ctx with
-    | MarkedVars vs -> ok (MarkedVars (v::vs))
-    | c -> fail (ContextMismatch ("markedvars context", c))
-
-/// <summary>
-///     Traversal for accumulating <c>MarkedVar</c>s.
-/// <summary>
-let collectMarkedVars
-  : Traversal<CTyped<MarkedVar>, CTyped<MarkedVar>, 'Error> =
-    // TODO(CaptainHayashi): proper doc comment.
-    fun ctx v -> lift (fun ctx -> (ctx, v)) (pushMarkedVar ctx v)
 
 /// <summary>
 ///     Wrapper for running a <see cref="collectVars"/>-style traversal
@@ -769,47 +772,16 @@ let collectMarkedVars
 ///     The set of variables found in the expression.
 /// </returns>
 let findVars
-  (t : Traversal<'Subject, 'Subject, 'Error>)
+  (t : Traversal<'Subject, 'Subject, 'Error, 'Var>)
   (subject : 'Subject)
-  : Result<Set<CTyped<Var>>, TraversalError<'Error>> =
+  : Result<Set<CTyped<'Var>>, TraversalError<'Error>> =
     subject
     |> t (Vars [])
     |> bind
         (function
          | (Vars xs, _) -> ok (Set.ofList xs)
-         | (x, _) -> fail (ContextMismatch ("variable list", x)))
+         | (x, _) -> fail (ContextMismatch ("variable list", stripVars x)))
 
-/// <summary>
-///     Wrapper for running a <see cref="collectMarkedVars"/>-style traversal
-///     on a traversable construct.
-/// <summary>
-/// <param name="t">
-///     The traversal to wrap.
-/// </param>
-/// <param name="subject">
-///     The item in which to find marked vars.
-/// </param>
-/// <typeparam name="Subject">
-///     The type of the item in which to find marked vars.
-/// </typeparam>
-/// <typeparam name="Errors">
-///     The type of errors that can occur in the traversal.
-/// </typeparam>
-/// <returns>
-///     The set of variables found in the expression.
-/// </returns>
-let findMarkedVars
-  (t : Traversal<'Subject, 'Subject, 'Error>)
-  (subject : 'Subject)
-  : Result<Set<CTyped<MarkedVar>>, TraversalError<'Error>> =
-    subject
-    |> t (MarkedVars [])
-    |> bind
-        (function
-         | (MarkedVars xs, _) -> ok (Set.ofList xs)
-         | (x, _) -> fail (ContextMismatch ("marked variable list", x)))
-
-/// <summary>
 ///     Pretty printers for <c>Sub</c>.
 /// </summary>
 module Pretty =
@@ -821,24 +793,21 @@ module Pretty =
     /// <summary>
     ///     Pretty-prints a <see cref="TraversalContext"/>.
     /// </summary>
-    let printTraversalContext : TraversalContext -> Doc =
+    let printTraversalContext (ctx: TraversalContext<unit>) : Doc =
         // TODO(CaptainHayashi): proper doc comment.
         let printPosition =
             function
             | Positive -> String "+"
             | Negative -> String "-"
 
-        function
+        match ctx with
         | NoCtx -> String "(no context)"
         | InIndex true -> String "in index"
         | InIndex false -> String "not in index"
         | Positions [] -> String "(empty position stack)"
         | Positions xs -> colonSep [ String "position stack"
                                      hjoin (List.map printPosition xs) ]
-        | Vars xs -> colonSep [ String "variables"
-                                commaSep (List.map printTypedVar xs) ]
-        | MarkedVars xs -> colonSep [ String "marked variables"
-                                      commaSep (List.map (printCTyped printMarkedVar) xs) ]
+        | Vars xs -> String "(variables)"
 
     /// <summary>
     ///     Pretty-prints a <see cref="TraversalError"/>.

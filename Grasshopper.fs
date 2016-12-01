@@ -93,7 +93,7 @@ module Pretty =
     let findVarsGrass (zterm : Backends.Z3.Types.ZTerm) : seq<MarkedVar> = 
         // TODO @(septract) Should this conjoin the command as well? 
         BAnd [zterm.SymBool.WPre; zterm.SymBool.Goal] 
-        |> findMarkedVars (tliftToBoolSrc (tliftToExprDest collectSymMarkedVars)) 
+        |> findVars (tliftToBoolSrc (tliftToExprDest collectSymVars))
         |> lift (Set.map valueOf >> Set.toSeq) 
         |> returnOrFail
 
