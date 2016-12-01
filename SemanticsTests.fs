@@ -388,68 +388,7 @@ module MicrocodeToBool =
                 Int (siVar "s") *<- Int (mkSub2 (siVar "s") (IInt 1L)) ] ]
 
     [<Test>]
-    let ``pre-state havocs are translated properly`` () =
-        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-               [ iEq (siAfter "serving") (siBefore "serving")
-                 iEq (siAfter "ticket") (siBefore "ticket")
-                 iEq (siAfter "s") (siBefore "s")
-                 iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L))
-                 iEq (siAfter "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ] )
-            [ [ havoc (Int (siVar "t")) ]
-              [ Int (siVar "t") *<- Int (mkAdd2 (siVar "t") (IInt 1L)) ]
-              [ Int (siVar "t") *<- Int (mkAdd2 (siVar "t") (IInt 1L)) ] ]
-
-    [<Test>]
-    let ``intermediate havocs are translated properly`` () =
-        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-               [ iEq (siAfter "serving") (siBefore "serving")
-                 iEq (siAfter "ticket") (siBefore "ticket")
-                 iEq (siAfter "s") (siBefore "s")
-                 iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
-                 iEq (siAfter "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ] )
-            [ [ Int (siVar "t") *<- Int (mkAdd2 (siVar "t") (IInt 1L)) ]
-              [ havoc (Int (siVar "t")) ]
-              [ Int (siVar "t") *<- Int (mkAdd2 (siVar "t") (IInt 1L)) ] ]
-
-    [<Test>]
-    let ``post-state havocs are translated properly`` () =
-        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-               [ iEq (siAfter "serving") (siBefore "serving")
-                 iEq (siAfter "ticket") (siBefore "ticket")
-                 iEq (siAfter "s") (siBefore "s")
-                 iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
-                 iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L)) ] )
-            [ [ Int (siVar "t") *<- Int (mkAdd2 (siVar "t") (IInt 1L)) ]
-              [ Int (siVar "t") *<- Int (mkAdd2 (siVar "t") (IInt 1L)) ]
-              [ havoc (Int (siVar "t")) ] ]
-
-    [<Test>]
-    let ``single-dimensional arrays are normalised and translated properly`` () =
-        check testShared2 testThread
-            (BAnd
-                [ iEq (siAfter "x") (siBefore "x")
-                  iEq (siAfter "y") (siBefore "y")
-                  BEq
-                    (Array (Bool (), Some 10, AVar (Reg (After "foo"))),
-                     aupd (Bool ()) (Some 10)
-                         (aupd' (Bool ()) (Some 10)
-                            (AVar (Reg (Before "foo")))
-                            (siBefore "x")
-                            (Bool BTrue))
-                        (siBefore "y")
-                        (Bool BFalse)) ])
-            [ [ Expr.Bool
-                    (BIdx (Bool (), Some 10, AVar (Reg "foo"), IVar (Reg "x")))
-                *<- Expr.Bool BTrue
-                Expr.Bool
-                    (BIdx (Bool (), Some 10, AVar (Reg "foo"), IVar (Reg "y")))
-                *<- Expr.Bool BFalse ] ]
-
-    [<Test>]
-    let ``multi-dimensional arrays are normalised and translated properly`` () =
+    let ``arrays are normalised and translated properly`` () =
         check testShared testThread
             (BAnd
                 [ iEq (siAfter "x") (siBefore "x")
@@ -493,19 +432,18 @@ module MicrocodeToBool =
                             AVar (Reg "grid"),
                             IVar (Reg "x")),
                         IVar (Reg "y")))
-                *<-
-                Expr.Int
-                    (mkAdd2
-                        (IIdx
-                            (Int (),
-                             Some 320,
-                             AIdx
-                                (Array (Int (), Some 320, ()),
-                                 Some 240,
-                                 AVar (Reg "grid"),
-                                 (siVar "x")),
-                             (siVar "y")))
-                        (IInt 1L)) ] ]
+                *<- Expr.Int
+                        (mkAdd2
+                            (IIdx
+                                (Int (),
+                                 Some 320,
+                                 AIdx
+                                    (Array (Int (), Some 320, ()),
+                                     Some 240,
+                                     AVar (Reg "grid"),
+                                     (siVar "x")),
+                                 (siVar "y")))
+                            (IInt 1L)) ] ]
 
 
 module CommandTests =
