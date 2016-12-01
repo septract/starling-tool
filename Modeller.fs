@@ -156,10 +156,10 @@ module Types =
         | BadType of expr : AST.Types.Expression * err : TypeError
         /// A prim has no effect.
         | Useless
-        /// <summary>
-        ///     A prim is not yet implemented in Starling.
-        /// </summary>
+        /// <summary>A prim is not yet implemented in Starling.</summary>
         | PrimNotImplemented of what : string
+        /// <summary>Handling variables in symbolic prims caused an error.</summary>
+        | SymVarError of err : VarMapError
 
     /// Represents an error when converting a method.
     type MethodError =
@@ -365,7 +365,9 @@ module Pretty =
             errorStr "primitive command"
             <+> quoted (String what)
             <+> errorStr "not yet implemented"
-
+        | SymVarError err ->
+            errorStr "error in translating symbolic command"
+            <&> printVarMapError err
 
     /// Pretty-prints method errors.
     let printMethodError (err : MethodError) : Doc =
@@ -1499,6 +1501,39 @@ let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> 
             e
             |> wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
             |> lift (Expr.Bool >> List.singleton >> command "Assume" [])
+        | SymAtomic (sym, working) ->
+            // TODO(CaptainHayashi): split out.
+            let allVarsR =
+                mapMessages SymVarError (VarMap.combine ctx.ThreadVars ctx.SharedVars)
+            let symArgsMR =
+                bind
+                    (fun allVars ->
+                        (collect
+                            (List.map
+                                (wrapMessages BadExpr
+                                    (modelExpr allVars ctx.ThreadVars id))
+                                sym.Args)))
+                    allVarsR
+            let workingMR =
+                bind
+                    (fun allVars ->
+                        lift (Set.ofList)
+                            (collect
+                                (List.map
+                                    (VarMap.lookup allVars >> mapMessages SymVarError)
+                                    working)))
+                    allVarsR
+
+            lift2
+                (fun symArgsM workingM ->
+                    SymC
+                        { Symbol =
+                            { Sentence = sym.Sentence
+                              Args = symArgsM }
+                          Working = workingM })
+                symArgsMR
+                workingMR
+
     lift
         (function
          | Stored cmd -> Stored { cmd with Node = Some a }

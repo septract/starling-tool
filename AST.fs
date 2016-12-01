@@ -70,7 +70,10 @@ module Types =
         | Fetch of Expression * Expression * FetchMode // <a = b??>
         | Postfix of Expression * FetchMode // <a++> or <a-->
         | Id // <id>
-        | Assume of Expression // <assume(e)
+        | Assume of Expression // <assume(e)>
+        | SymAtomic of
+            symbol : Symbolic<Expression>
+            * working : string list // %{xyz}(x, y)[z]
     and Atomic = Node<Atomic'>
 
     /// <summary>
@@ -367,6 +370,9 @@ module Pretty =
             hjoin [ printExpression l; printFetchMode m ]
         | Id -> String "id"
         | Assume e -> func "assume" [ printExpression e ]
+        | SymAtomic (sym, working) ->
+            printSymbolic sym
+            <-> squared (commaSep (List.map String working))
     let printAtomic (x : Atomic) : Doc = printAtomic' x.Node
 
     /// Pretty-prints viewed commands with the given indent level (in spaces).
