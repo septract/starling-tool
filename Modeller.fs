@@ -1499,7 +1499,11 @@ let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> 
             e
             |> wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
             |> lift (Expr.Bool >> List.singleton >> command "Assume" [])
-    lift (fun cmd -> { cmd with Node = Some a }) prim
+    lift
+        (function
+         | Stored cmd -> Stored { cmd with Node = Some a }
+         | x -> x)
+        prim
 
 /// Converts a local variable assignment to a Prim.
 and modelAssign

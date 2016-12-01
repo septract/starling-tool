@@ -38,8 +38,8 @@ module Types =
         /// There was an error instantiating a semantic definition.
         | Instantiate of prim: PrimCommand
                        * error: Error
-        /// A primitive has a missing semantic definition.
-        | MissingDef of prim: PrimCommand
+        /// A stored command  has a missing semantic definition.
+        | MissingDef of prim: StoredCommand
         /// Got unexpected number of arguments
         | CountMismatch of expected: int * actual: int
         | TypeMismatch of param: TypedVar * atype: Type
@@ -97,7 +97,7 @@ module Pretty =
                 printSemanticsError error ]
         | MissingDef prim ->
             fmt "primitive '{0}' has no semantic definition"
-                [ printPrimCommand prim ]
+                [ printStoredCommand prim ]
         | TypeMismatch (par, atype) ->
             fmt "parameter '{0}' conflicts with argument of type '{1}'"
                 [ printTypedVar par; printType atype ]
@@ -350,7 +350,7 @@ let rec normaliseMicrocode
         assigns'Result
 
 let primParamSubFun
-  (cmd : PrimCommand)
+  (cmd : StoredCommand)
   (sem : PrimSemantics)
   : Traversal<TypedVar, Expr<Sym<Var>>, Error, unit> =
 
@@ -370,18 +370,18 @@ let primParamSubFun
                 else fail (Inner (TypeMismatch (v, typeOf tvar)))
             | None -> fail (Inner (FreeVarInSub v)))
 
-let checkParamCountPrim (prim : PrimCommand) (def : PrimSemantics) : Result<PrimSemantics, Error> =
+let checkParamCountPrim (prim : StoredCommand) (def : PrimSemantics) : Result<PrimSemantics, Error> =
     let fn = List.length prim.Args
     let dn = List.length def.Args
     if fn = dn then ok def else fail (CountMismatch (fn, dn))
 
-let lookupPrim (prim : PrimCommand) (map : PrimSemanticsMap) : Result<PrimSemantics, Error>  =
+let lookupPrim (prim : StoredCommand) (map : PrimSemanticsMap) : Result<PrimSemantics, Error>  =
     maybe
         (fail (MissingDef prim))
         (checkParamCountPrim prim)
         (map.TryFind prim.Name)
 
-let checkParamTypesPrim (prim : PrimCommand) (sem : PrimSemantics) : Result<PrimSemantics, Error> =
+let checkParamTypesPrim (prim : StoredCommand) (sem : PrimSemantics) : Result<PrimSemantics, Error> =
     List.map2
         (fun fp dp ->
             if typesCompatible (typeOf fp) (typeOf dp)
@@ -619,15 +619,28 @@ let instantiateToMicrocode
   (semantics : PrimSemanticsMap)
   (prim : PrimCommand)
   : Result<Microcode<Expr<Sym<Var>>, Sym<Var>> list, Error> =
-    let primDefR = lookupPrim prim semantics
-    let typeCheckedDefR = bind (checkParamTypesPrim prim) primDefR
+    match prim with
+    | SymC s ->
+        (* A symbol is translated into an assume of the symbol itself,
+           followed by havoc for each variable mentioned in the symbol. *)
+        let symAssume = Assume (BVar (Sym s.Symbol))
 
-    let instantiate (s : PrimSemantics) =
-        let subInMCode =
-                tchainL (tliftToMicrocode (primParamSubFun prim s)) id
-        mapMessages Traversal (mapTraversal subInMCode s.Body)
+        let toHavoc var =
+            havoc (varToExpr (mapCTyped Reg var))
+        let havocs = Set.toList (Set.map toHavoc s.Working)
 
-    bind instantiate typeCheckedDefR
+        ok (symAssume :: havocs)
+    | Stored sc ->
+        // A stored command is a lookup into a microcode table.
+        let primDefR = lookupPrim sc semantics
+        let typeCheckedDefR = bind (checkParamTypesPrim sc) primDefR
+
+        let instantiate (s : PrimSemantics) =
+            let subInMCode =
+                    tchainL (tliftToMicrocode (primParamSubFun sc s)) id
+            mapMessages Traversal (mapTraversal subInMCode s.Body)
+
+        bind instantiate typeCheckedDefR
 
 /// <summary>
 ///     Translates a command to a multi-state Boolean expression.

@@ -42,17 +42,43 @@ module Types =
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         A PrimCommand is implemented as a triple of a name, the input arguments (the expressions that are evaluated and read)
-    ///         and the output results (the variable that are written)
+    ///         These are implemented as triples of name, input arguments (the expressions that are evaluated and read)
+    ///         and output results (the variable that are written)
     ///
     ///         for example <x = y++> is translated approximately to { Name = "!ILoad++"; Results = [ siVar "x"; siVar "y" ]; Args = [ siVar "y" ] }
     ///     </para>
     /// </remarks>
-    type PrimCommand =
+    type StoredCommand =
         { Name : string
           Results : SVExpr list
           Args : SVExpr list
           Node : AST.Types.Atomic option }
+        override this.ToString() = sprintf "%A" this
+
+    /// <summary>
+    ///     A fully symbolic atomic command.
+    ///
+    ///     <para>
+    ///         A symbolic command has unknown semantics to Starling.  As such,
+    ///         we cannot track exactly how it modifies state, and must instead
+    ///         take a broad 'working set' of (entire!) variables the command can
+    ///         modify (in any way whatsoever).
+    ///     </para>
+    /// </summary>
+    type SymCommand =
+        { /// <summary>The symbol representing the command.</summary>
+          Symbol : Symbolic<Expr<Sym<Var>>>
+          /// <summary>The set of variables this command invalidates.</summary>
+          Working : Set<TypedVar> }
+
+    /// <summary>
+    ///     A primitive atomic command.
+    /// </summary>
+    type PrimCommand =
+        /// <summary>A lookup into the model's commands table.</summary>
+        | Stored of StoredCommand
+        /// <summary>An entirely symbolic command.</summary>
+        | SymC of SymCommand
         override this.ToString() = sprintf "%A" this
 
     /// <summary>
@@ -127,29 +153,40 @@ module Queries =
     /// <summary>
     ///     Decides whether a program command is a no-op.
     /// </summary>
-    /// <param name="_arg1">
+    /// <param name="command">
     ///     The command, as a <c>Command</c>.
     /// </param>
     /// <returns>
     ///     <c>true</c> if the command is a no-op;
     ///     <c>false</c> otherwise.
     /// </returns>
-    let isNop : Command -> bool =
-        List.forall (fun { Results = ps } -> List.isEmpty ps )
+    let isNop (command : Command) : bool =
+        let isPrimNop prim =
+            match prim with
+            | Stored { Results = ps } -> List.isEmpty ps
+            | SymC _ -> false
+        List.forall isPrimNop command
 
     /// <summary>
     ///     Active pattern matching assume commands.
     /// </summary>
     let (|Assume|_|) : Command -> SVBoolExpr option =
         function
-        | [ { Name = n ; Args = [ SVExpr.Bool b ] } ]
+        | [ Stored { Name = n ; Args = [ SVExpr.Bool b ] } ]
           when n = "Assume" -> Some b
         | _ -> None
 
 
     /// Combines the results of each command into a list of all results
     let commandResults cs =
-        List.fold (fun a c -> a @ c.Results) [] cs
+        // TODO(CaptainHayashi): are sym working variables really results?
+        let primResults prim =
+            match prim with
+            | Stored { Results = rs } -> rs
+            | SymC { Working = ws } ->
+                Set.toList (Set.map (mapCTyped Reg >> varToExpr) ws)
+
+        List.fold (fun a c -> a @ primResults c) [] cs
 
     /// <summary>
     ///     Gets all variables mentioned in the results of a command.
@@ -169,8 +206,12 @@ module Queries =
 
     /// Retrieves the type annotated vars from the arguments to a
     /// command as a list
-    let commandArgs cmd =
-        let f c = List.map symExprVars c.Args
+    let commandArgs (cmd : Command) =
+        let f prim =
+            match prim with
+            // TODO(CaptainHayashi): is this sensible!?
+            | Stored { Args = xs }
+            | SymC { Symbol = { Args = xs } } -> List.map symExprVars xs
         let vars = collect (concatMap f cmd)
         lift Set.unionMany vars
 
@@ -299,10 +340,10 @@ module SymRemove =
 
 module Create =
     let command (name : string) (results : SVExpr list) (args : SVExpr list) : PrimCommand =
-        { Name = name; Results = results; Args = args; Node = None }
+        Stored { Name = name; Results = results; Args = args; Node = None }
 
     let command' (name : string) (ast : AST.Types.Atomic) (results : SVExpr list) (args : SVExpr list) : PrimCommand =
-        { Name = name; Results = results; Args = args; Node = Some ast }
+        Stored { Name = name; Results = results; Args = args; Node = Some ast }
 
 /// <summary>
 ///     Pretty printers for commands.
@@ -314,11 +355,25 @@ module Pretty =
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Symbolic.Pretty
 
-    /// Pretty-prints a Command.
-    let printPrimCommand { Name = name; Args = xs; Results = ys } =
+    /// Pretty-prints a StoredCommand.
+    let printStoredCommand { Name = name; Args = xs; Results = ys } =
         hjoin [ commaSep <| Seq.map (printExpr (printSym printVar)) ys
                 " <- " |> String; name |> String; String " "; commaSep <| Seq.map printSVExpr xs ]
 
+    /// Pretty-prints a SymCommand.
+    let printSymCommand { Symbol = sym; Working = wk } : Doc =
+        commaSep (Seq.map printTypedVar wk)
+        <+> String "<-%{"
+        <-> printInterpolatedSymbolicSentence (printExpr (printSym printVar)) sym.Sentence sym.Args
+        <-> String "}"
+
+    /// Pretty-prints a PrimCommand.
+    let printPrimCommand (prim : PrimCommand) : Doc =
+        match prim with
+        | Stored s -> printStoredCommand s
+        | SymC s -> printSymCommand s
+
+    /// Pretty-prints a Command.
     let printCommand : Command -> Doc = List.map printPrimCommand >> semiSep
 
     /// Printing a CommandSemantics prints just the semantic boolexpr associated with it
