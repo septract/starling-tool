@@ -19,81 +19,6 @@ open Starling.Core.Model
 open Starling.Semantics
 open Starling.Tests.Studies
 
-/// Tests for the semantic transformer.
-module Compositions =
-    let check xs expectedExprList =
-        match seqComposition xs with
-        | Ok (BAnd ands, _) ->
-            assertEqual (Set.ofList expectedExprList) (Set.ofList ands)
-        | Bad x ->
-            Assert.Fail (sprintf "sequential composition failed: %A" x)
-        | y -> Assert.Fail (sprintf "Expected %A but got %A" expectedExprList y)
-
-    [<Test>]
-    let ``Compose two basic assignments`` () =
-        check
-            <| [ bEq (sbAfter "foo") (sbBefore "bar")
-                 bEq (sbAfter "baz") (sbBefore "foo") ]
-            <| [ bEq (sbInter 0I "foo") (sbBefore "bar")
-                 bEq (sbInter 0I "baz") (sbInter 0I "foo") ]
-
-    [<Test>]
-    let ``Compose two compositions`` () =
-        check
-            <| [ BAnd
-                  [ bEq (sbInter 0I "foo") (sbBefore "bar")
-                    bEq (sbAfter "baz") (sbInter 0I "foo") ]
-                 BAnd
-                  [ bEq (sbInter 0I "flop") (sbBefore "baz")
-                    bEq (sbAfter "froz") (sbInter 0I "flop") ] ]
-            <| [
-                 bEq (sbInter 0I "foo") (sbBefore "bar")
-                 bEq (sbInter 0I "baz") (sbInter 0I "foo")
-                 bEq (sbInter 0I "flop") (sbInter 0I "baz")
-                 bEq (sbInter 0I "froz") (sbInter 0I "flop")
-               ]
-
-    [<Test>]
-    let ``Compose simple`` () =
-        check
-            <| [ bEq (sbAfter "t") (sbBefore "t")
-                 bEq (sbAfter "g") (sbBefore "t") ]
-            <| [ bEq (sbInter 0I "t") (sbBefore "t")
-                 bEq (sbInter 0I "g") (sbInter 0I "t") ]
-
-    [<Test>]
-    let ``Compose multi`` () =
-        check
-            <| [ iEq (siAfter "t") (mkAdd2 (siBefore "t") (IInt 1L))
-                 iEq (siAfter "t") (mkAdd2 (siBefore "t") (IInt 1L))
-                 iEq (siAfter "t") (mkAdd2 (siBefore "t") (IInt 1L)) ]
-            <| [ iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
-                 iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L))
-                 iEq (siInter 2I "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ]
-    [<Test>]
-    let ``Compose multi after`` () =
-        check
-            <| [ BAnd
-                    [ (iEq (siAfter "t") (mkAdd2 (siBefore "t") (IInt 1L)))
-                      (iEq (siAfter "t") (mkAdd2 (siBefore "t") (IInt 3L))) ]
-                 iEq (siAfter "t") (mkAdd2 (siBefore "t") (IInt 1L)) ]
-            <| [ iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
-                 iEq (siInter 0I "t") (mkAdd2 (siBefore "t" )(IInt 3L))
-                 iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L)) ]
-
-    [<Test>]
-    let ``Compose multiCmd list`` () =
-        check
-            <| [ BAnd
-                    [ (iEq (siAfter "t") (mkAdd2 (siBefore "t") (IInt 1L)))
-                      (iEq (siAfter "t") (mkAdd2 (siBefore "t") (IInt 2L))) ]
-                 iEq (siAfter "t") (mkAdd2 (siBefore "t") (IInt 3L))
-                 iEq (siAfter "g") (siBefore "t") ]
-            <| [ iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
-                 iEq (siInter 0I "t") (mkAdd2 (siBefore "t" )(IInt 2L))
-                 iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t" )(IInt 3L))
-                 iEq (siInter 0I "g") (siInter 1I "t") ]
-
 
 module WriteMaps =
     [<Test>]
@@ -223,156 +148,6 @@ module Normalisation =
                    Assign (Int d6, Int x3) ])
             ]
 
-/// <summary>
-///     Tests for microcode compilation to Boolean expressions.
-/// </summary>
-module MicrocodeToBool =
-    /// <summary>
-    ///     Checks a microcode instruction set against an expected
-    ///     Boolean expression.
-    /// </summary>
-    /// <param name="expected">The expected expression.</param>
-    /// <param name="instrs">The instructions to convert.</param>
-    let check
-      (expected : BoolExpr<Sym<MarkedVar>>)
-      (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list list)
-      : unit =
-        // Try to make the check order-independent.
-        let rec trySort bool =
-            match bool with
-            | BAnd xs -> BAnd (List.sort (List.map trySort xs))
-            | BOr xs -> BOr (List.sort (List.map trySort xs))
-            | x -> x
-
-        let svars = VarMap.toTypedVarSeq ticketLockModel.SharedVars
-        let tvars = VarMap.toTypedVarSeq ticketLockModel.ThreadVars
-        let vars = List.ofSeq (Seq.append svars tvars)
-
-        assertOkAndEqual
-            (trySort expected)
-            (lift trySort (microcodeRoutineToBool vars instrs))
-            (Pretty.printSemanticsError >> Core.Pretty.printUnstyled)
-
-    [<Test>]
-    let ``lone assumes are translated properly`` () =
-        check
-            (BAnd
-                [ iEq (siAfter "serving") (siBefore "serving")
-                  iEq (siAfter "ticket") (siBefore "ticket")
-                  iEq (siAfter "s") (siBefore "s")
-                  iEq (siAfter "t") (siBefore "t")
-                  iEq (siBefore "s") (siBefore "t") ])
-            [ [ Assume (iEq (siVar "s") (siVar "t")) ] ]
-
-    [<Test>]
-    let ``lone assigns are translated properly`` () =
-        check
-            (BAnd
-                [ iEq (siAfter "serving") (siBefore "serving")
-                  iEq (siAfter "ticket") (siBefore "ticket")
-                  iEq (siAfter "s") (siBefore "t")
-                  iEq (siAfter "t") (siBefore "t") ])
-            [ [ Assign (Int (siVar "s"), Int (siVar "t")) ] ]
-
-    [<Test>]
-    let ``unchained assigns are translated properly`` () =
-        check
-            (BAnd
-                [ iEq (siAfter "serving") (siBefore "serving")
-                  iEq (siAfter "ticket") (siBefore "ticket")
-                  iEq (siAfter "s") (siBefore "t")
-                  iEq (siAfter "t") (siBefore "t")
-                  iEq (siInter 0I "s") (siBefore "serving") ])
-            [ [ Assign (Int (siVar "s"), Int (siVar "serving")) ]
-              [ Assign (Int (siVar "s"), Int (siVar "t")) ]  ]
-
-    [<Test>]
-    let ``chained assigns are translated properly`` () =
-        check
-            (BAnd
-                [ iEq (siAfter "serving") (siBefore "serving")
-                  iEq (siAfter "ticket") (siBefore "ticket")
-                  iEq (siAfter "s") (siInter 0I "t")
-                  iEq (siAfter "t") (siInter 0I "t")
-                  iEq (siInter 0I "t") (siBefore "serving") ])
-            [ [ Assign (Int (siVar "t"), Int (siVar "serving")) ]
-              [ Assign (Int (siVar "s"), Int (siVar "t")) ] ]
-
-    [<Test>]
-    let ``chained assigns and assumptions are translated properly`` () =
-        check
-            (BAnd
-                [ iEq (siAfter "serving") (siBefore "serving")
-                  iEq (siAfter "ticket") (siBefore "ticket")
-                  iEq (siAfter "s") (siBefore "s")
-                  iEq (siBefore "s") (siInter 0I "t")
-                  iEq (siAfter "t") (siInter 0I "t")
-                  iEq (siInter 0I "t") (siBefore "serving") ])
-            [ [ Assign (Int (siVar "t"), Int (siVar "serving")) ]
-              [ Assume (iEq (siVar "s") (siVar "t")) ] ]
-
-    [<Test>]
-    let ``well-formed branches are translated properly`` () =
-        check
-            (BAnd
-                [ iEq (siAfter "serving") (siBefore "serving")
-                  iEq (siAfter "ticket") (siBefore "ticket")
-                  iEq (siAfter "s") (siBefore "s")
-                  (mkImplies
-                    (iEq (siBefore "s") (siBefore "t"))
-                    (iEq (siAfter "t") (siBefore "serving")))
-                  (mkImplies
-                    (mkNot (iEq (siBefore "s") (siBefore "t")))
-                    (iEq (siAfter "t") (siBefore "ticket"))) ])
-            [ [ Branch
-                    (iEq (siVar "s") (siVar "t"),
-                     [ Assign (Int (siVar "t"), Int (siVar "serving")) ],
-                     [ Assign (Int (siVar "t"), Int (siVar "ticket")) ]) ] ]
-
-
-module Frames =
-    let check var expectedFramedExpr =
-        expectedFramedExpr ?=? (frameVar Before var)
-
-    let checkExpr expr framedExpr =
-        assertOkAndEqual
-            framedExpr
-            (frame
-                (ticketLockModel.SharedVars)
-                (ticketLockModel.ThreadVars)
-                expr)
-            (Starling.Core.Traversal.Pretty.printTraversalError
-                Starling.Semantics.Pretty.printSemanticsError
-             >> Starling.Core.Pretty.printUnstyled)
-
-    [<Test>]
-    let ``Frame an integer variable`` () =
-        check (Int "foo") (iEq (siAfter "foo") (siBefore "foo"))
-
-    [<Test>]
-    let ``Frame a boolean variable`` () =
-        check (Bool "bar") (bEq (sbAfter "bar") (sbBefore "bar"))
-
-    // Test cases for the expression framer.
-    [<Test>]
-    let ``Frame id using the ticket lock model`` () =
-        checkExpr BTrue
-              <| [ iEq (siAfter "serving") (siBefore "serving")
-                   iEq (siAfter "ticket") (siBefore "ticket")
-                   iEq (siAfter "s") (siBefore "s")
-                   iEq (siAfter "t") (siBefore "t") ]
-
-    [<Test>]
-    let ``Frame a simple command expression using the ticket lock model`` () =
-          checkExpr
-            <| BAnd
-                   [ BGt(siAfter "ticket", siBefore "ticket")
-                     BLe(siAfter "serving", siBefore "serving")
-                     iEq (siBefore "s") (siBefore "t") ]
-
-            <| [ iEq (siAfter "s") (siBefore "s")
-                 iEq (siAfter "t") (siBefore "t") ]
-
 
 let testShared =
     Map.ofList
@@ -389,69 +164,235 @@ let testThread =
           ("y", Type.Int ()) ]
 
 
-module PrimInstantiateTests =
-    let check svars tvars prim expectedValues =
-        let actualValues =
-            instantiateSemanticsOfPrim (Starling.Lang.Modeller.coreSemantics)
-                prim
-        let pError =
-            Starling.Semantics.Pretty.printSemanticsError
-            >> Starling.Core.Pretty.printUnstyled
+/// <summary>
+///     Tests for microcode compilation to Boolean expressions.
+/// </summary>
+module MicrocodeToBool =
+    /// <summary>
+    ///     Checks a microcode instruction set against an expected
+    ///     Boolean expression.
+    /// </summary>
+    /// <param name="expected">The expected expression.</param>
+    /// <param name="instrs">The instructions to convert.</param>
+    let check
+      (svars : VarMap)
+      (tvars : VarMap)
+      (expected : BoolExpr<Sym<MarkedVar>>)
+      (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list list)
+      : unit =
+        // Try to make the check order-independent.
+        let rec trySort bool =
+            match bool with
+            | BAnd xs -> BAnd (List.sort (List.map trySort xs))
+            | BOr xs -> BOr (List.sort (List.map trySort xs))
+            | x -> x
 
-        assertOkAndEqual expectedValues actualValues pError
+        let svars = VarMap.toTypedVarSeq svars
+        let tvars = VarMap.toTypedVarSeq tvars
+        let vars = List.ofSeq (Seq.append svars tvars)
+
+        assertOkAndEqual
+            (trySort expected)
+            (lift trySort (microcodeRoutineToBool vars instrs))
+            (Pretty.printSemanticsError >> Core.Pretty.printUnstyled)
 
     [<Test>]
-    let ``Instantiate <grid[x][y]++>``() =
+    let ``the empty command is translated properly`` () =
+        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
+            (BAnd
+                [ iEq (siAfter "serving") (siBefore "serving")
+                  iEq (siAfter "ticket") (siBefore "ticket")
+                  iEq (siAfter "s") (siBefore "s")
+                  iEq (siAfter "t") (siBefore "t") ] )
+            []
+
+    [<Test>]
+    let ``the singleton empty command is translated properly`` () =
+        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
+            (BAnd
+                [ iEq (siAfter "serving") (siBefore "serving")
+                  iEq (siAfter "ticket") (siBefore "ticket")
+                  iEq (siAfter "s") (siBefore "s")
+                  iEq (siAfter "t") (siBefore "t") ] )
+            [ [] ]
+
+    [<Test>]
+    let ``a composition of empty commands is translated properly`` () =
+        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
+            (BAnd
+                [ iEq (siAfter "serving") (siBefore "serving")
+                  iEq (siAfter "ticket") (siBefore "ticket")
+                  iEq (siAfter "s") (siBefore "s")
+                  iEq (siAfter "t") (siBefore "t") ] )
+            [ []; []; []; ]
+
+    [<Test>]
+    let ``lone assumes are translated properly`` () =
+        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
+            (BAnd
+                [ iEq (siAfter "serving") (siBefore "serving")
+                  iEq (siAfter "ticket") (siBefore "ticket")
+                  iEq (siAfter "s") (siBefore "s")
+                  iEq (siAfter "t") (siBefore "t")
+                  iEq (siBefore "s") (siBefore "t") ])
+            [ [ Assume (iEq (siVar "s") (siVar "t")) ] ]
+
+    [<Test>]
+    let ``lone assigns are translated properly`` () =
+        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
+            (BAnd
+                [ iEq (siAfter "serving") (siBefore "serving")
+                  iEq (siAfter "ticket") (siBefore "ticket")
+                  iEq (siAfter "s") (siBefore "t")
+                  iEq (siAfter "t") (siBefore "t") ])
+            [ [ Assign (Int (siVar "s"), Int (siVar "t")) ] ]
+
+    [<Test>]
+    let ``unchained assigns are translated properly`` () =
+        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
+            (BAnd
+                [ iEq (siAfter "serving") (siBefore "serving")
+                  iEq (siAfter "ticket") (siBefore "ticket")
+                  iEq (siAfter "s") (siBefore "t")
+                  iEq (siAfter "t") (siBefore "t")
+                  iEq (siInter 0I "s") (siBefore "serving") ])
+            [ [ Assign (Int (siVar "s"), Int (siVar "serving")) ]
+              [ Assign (Int (siVar "s"), Int (siVar "t")) ]  ]
+
+    [<Test>]
+    let ``chained assigns are translated properly`` () =
+        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
+            (BAnd
+                [ iEq (siAfter "serving") (siBefore "serving")
+                  iEq (siAfter "ticket") (siBefore "ticket")
+                  iEq (siAfter "s") (siInter 0I "t")
+                  iEq (siAfter "t") (siInter 0I "t")
+                  iEq (siInter 0I "t") (siBefore "serving") ])
+            [ [ Assign (Int (siVar "t"), Int (siVar "serving")) ]
+              [ Assign (Int (siVar "s"), Int (siVar "t")) ] ]
+
+    [<Test>]
+    let ``chained assigns and assumptions are translated properly`` () =
+        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
+            (BAnd
+                [ iEq (siAfter "serving") (siBefore "serving")
+                  iEq (siAfter "ticket") (siBefore "ticket")
+                  iEq (siAfter "s") (siBefore "s")
+                  iEq (siBefore "s") (siInter 0I "t")
+                  iEq (siAfter "t") (siInter 0I "t")
+                  iEq (siInter 0I "t") (siBefore "serving") ])
+            [ [ Assign (Int (siVar "t"), Int (siVar "serving")) ]
+              [ Assume (iEq (siVar "s") (siVar "t")) ] ]
+
+    [<Test>]
+    let ``well-formed branches are translated properly`` () =
+        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
+            (BAnd
+                [ iEq (siAfter "serving") (siBefore "serving")
+                  iEq (siAfter "ticket") (siBefore "ticket")
+                  iEq (siAfter "s") (siBefore "s")
+                  (mkImplies
+                    (iEq (siBefore "s") (siBefore "t"))
+                    (iEq (siAfter "t") (siBefore "serving")))
+                  (mkImplies
+                    (mkNot (iEq (siBefore "s") (siBefore "t")))
+                    (iEq (siAfter "t") (siBefore "ticket"))) ])
+            [ [ Branch
+                    (iEq (siVar "s") (siVar "t"),
+                     [ Assign (Int (siVar "t"), Int (siVar "serving")) ],
+                     [ Assign (Int (siVar "t"), Int (siVar "ticket")) ]) ] ]
+
+    [<Test>]
+    let ``long compositions are translated properly`` () =
+        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
+            (BAnd
+               [ iEq (siAfter "serving") (siBefore "serving")
+                 iEq (siAfter "ticket") (siBefore "ticket")
+                 iEq (siAfter "s") (siBefore "s")
+                 iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
+                 iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L))
+                 iEq (siAfter "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ] )
+            [ [ Assign (Int (siVar "t"), Int (mkAdd2 (siVar "t") (IInt 1L))) ]
+              [ Assign (Int (siVar "t"), Int (mkAdd2 (siVar "t") (IInt 1L))) ]
+              [ Assign (Int (siVar "t"), Int (mkAdd2 (siVar "t") (IInt 1L))) ] ]
+
+    [<Test>]
+    let ``parallel compositions are translated properly`` () =
+        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
+            (BAnd
+               [ iEq (siAfter "serving") (siBefore "serving")
+                 iEq (siAfter "ticket") (siBefore "ticket")
+                 iEq (siInter 0I "s") (mkSub2 (siBefore "s") (IInt 1L))
+                 iEq (siInter 1I "s") (mkSub2 (siInter 0I "s") (IInt 1L))
+                 iEq (siAfter "s") (mkSub2 (siInter 1I "s") (IInt 1L))
+                 iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
+                 iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L))
+                 iEq (siAfter "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ] )
+            [ [ Assign (Int (siVar "t"), Int (mkAdd2 (siVar "t") (IInt 1L)))
+                Assign (Int (siVar "s"), Int (mkSub2 (siVar "s") (IInt 1L))) ]
+              [ Assign (Int (siVar "t"), Int (mkAdd2 (siVar "t") (IInt 1L)))
+                Assign (Int (siVar "s"), Int (mkSub2 (siVar "s") (IInt 1L))) ]
+              [ Assign (Int (siVar "t"), Int (mkAdd2 (siVar "t") (IInt 1L)))
+                Assign (Int (siVar "s"), Int (mkSub2 (siVar "s") (IInt 1L))) ] ]
+
+    [<Test>]
+    let ``arrays are normalised and translated properly`` () =
         check testShared testThread
-            (command "!I++"
-                [ Int
-                    (IIdx
-                        (Int (),
-                         Some 320,
-                         AIdx
-                            (Array (Int (), Some 320, ()),
-                             Some 240,
-                             AVar (Reg "grid"),
-                             IVar (Reg "x")),
-                         IVar (Reg "y"))) ]
-                [ Expr.Int
-                    (IIdx
-                        (Int (),
-                         Some 320,
-                         AIdx
-                            (Array (Int (), Some 320, ()),
-                             Some 240,
-                             AVar (Reg "grid"),
-                             (siVar "x")),
-                         (siVar "y"))) ])
-            (BEq
-                (Array
-                    (Array (Int (), Some 320, ()), Some 240,
-                     AVar (Reg (After "grid"))),
-                 aupd
-                    (Array (Int (), Some 320, ()))
-                    (Some 240)
-                    (AVar (Reg (Before "grid")))
-                    (siBefore "x")
-                    (aupd
-                        (Int ())
-                        (Some 320)
-                        (AIdx
-                            (Array (Int (), Some 320, ()), Some 240,
-                                AVar (Reg (Before "grid")),
-                                siBefore "x"))
-                        (siBefore "y")
-                        (Int <| mkAdd2
+            (BAnd
+                [ iEq (siAfter "x") (siBefore "x")
+                  iEq (siAfter "y") (siBefore "y")
+                  bEq (sbAfter "test") (sbBefore "test")
+                  BEq
+                    (Array
+                        (Array (Int (), Some 320, ()), Some 240,
+                         AVar (Reg (After "grid"))),
+                     aupd
+                        (Array (Int (), Some 320, ()))
+                        (Some 240)
+                        (AVar (Reg (Before "grid")))
+                        (siBefore "x")
+                        (aupd
+                            (Int ())
+                            (Some 320)
+                            (AIdx
+                                (Array (Int (), Some 320, ()), Some 240,
+                                    AVar (Reg (Before "grid")),
+                                    siBefore "x"))
+                            (siBefore "y")
+                            (Int <| mkAdd2
+                                (IIdx
+                                    (Int (),
+                                     Some 320,
+                                     AIdx
+                                        (Array (Int (), Some 320, ()),
+                                         Some 240,
+                                         AVar (Reg (Before "grid")),
+                                         (siBefore "x")),
+                                     (siBefore "y")))
+                                (IInt 1L)))) ] )
+            [ [ Assign
+                    (Expr.Int
+                        (IIdx
+                            (Int (),
+                             Some 320,
+                             AIdx
+                                (Array (Int (), Some 320, ()),
+                                 Some 240,
+                                 AVar (Reg "grid"),
+                                 IVar (Reg "x")),
+                             IVar (Reg "y"))),
+                     Expr.Int
+                        (mkAdd2
                             (IIdx
                                 (Int (),
                                  Some 320,
                                  AIdx
                                     (Array (Int (), Some 320, ()),
                                      Some 240,
-                                     AVar (Reg (Before "grid")),
-                                     (siBefore "x")),
-                                 (siBefore "y")))
-                            (IInt 1L)))))
+                                     AVar (Reg "grid"),
+                                     (siVar "x")),
+                                 (siVar "y")))
+                            (IInt 1L))) ] ]
 
 
 module CommandTests =
@@ -515,13 +456,6 @@ module CommandTests =
                 (Array
                     (Array (Int (), Some 320, ()), Some 240,
                      AVar (Reg (After "grid"))),
-                (Array
-                    (Array (Int (), Some 320, ()), Some 240,
-                     AVar (Reg (Intermediate (0I, "grid")))))))
-              (BEq
-                (Array
-                    (Array (Int (), Some 320, ()), Some 240,
-                     AVar (Reg (Intermediate (0I, "grid")))),
                  aupd
                     (Array (Int (), Some 320, ()))
                     (Some 240)
@@ -554,9 +488,8 @@ module CommandTests =
         <| Some (Set.ofList
             [
                 iEq (siAfter "s") (siBefore "s")
-                iEq (siAfter "serving") (siInter 0I "serving")
                 iEq (siAfter "t") (siBefore "t")
                 iEq (siAfter "ticket") (siBefore "ticket")
                 iEq (siAfter "ticket") (siBefore "ticket")
-                iEq (siInter 0I "serving") (mkAdd2 (siBefore "serving") (IInt 1L))
+                iEq (siAfter "serving") (mkAdd2 (siBefore "serving") (IInt 1L))
             ])
