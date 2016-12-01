@@ -401,6 +401,7 @@ let checkParamTypesPrim (prim : PrimCommand) (sem : PrimSemantics) : Result<Prim
 /// <typeparam name="RV">The type of input rvalue variables.</typeparam>
 /// <typeparam name="LO">The type of output lvalue.</typeparam>
 /// <typeparam name="RVO">The type of output rvalue variables.</typeparam>
+/// <typeparam name="Var">The type of context variables.</typeparam>
 /// <returns>
 ///     A traversal that visits all of the lvalues and rvalues in a microcode
 ///     instruction, applying the given traversals to each.
