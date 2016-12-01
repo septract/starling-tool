@@ -28,10 +28,10 @@ module WriteMaps =
                Indices <| Map.ofList
                 [ (IInt 3L,
                     Indices <| Map.ofList
-                        [ (IVar (Reg "i"), Entire (Int (IInt 3L))) ]) ] )
+                        [ (IVar (Reg "i"), Entire (Some (Int (IInt 3L)))) ]) ] )
               (Array (Int (), Some 320, "y"),
                Indices <| Map.ofList
-                [ (IVar (Reg "j"), Entire (Int (IInt 4L))) ] ) ]
+                [ (IVar (Reg "j"), Entire (Some (Int (IInt 4L)))) ] ) ]
         ?=?
         makeWriteMap
             [ (Int
@@ -44,18 +44,20 @@ module WriteMaps =
                          AVar (Reg "x"),
                          IInt 3L),
                      IVar (Reg "i"))),
-               Int (IInt 3L))
+               Some (Int (IInt 3L)))
               (Int
                 (IIdx
                     (Int (),
                      Some 320,
                      AVar (Reg "y"),
                      (IVar (Reg "j")))),
-               Int (IInt 4L)) ]
+               Some (Int (IInt 4L))) ]
 
 /// Shorthand for expressing an array update.
+let aupd' eltype length arr idx var =
+    AUpd (eltype, length, arr, idx, var)
 let aupd eltype length arr idx var =
-    Array (eltype, length, AUpd (eltype, length, arr, idx, var))
+    Array (eltype, length, aupd' eltype length arr idx var)
 
 /// <summary>
 ///     Tests for microcode normalisation.
@@ -80,7 +82,7 @@ module Normalisation =
     let ``assign normalisation of x[3][i] <- 3; y[j] <- 4 is correct`` () =
         checkAssigns
             [ (Array (Array (Int (), Some 320, ()), Some 240, "x"),
-               aupd (Array (Int (), Some 320, ())) (Some 240) (AVar (Reg "x"))
+               Some <| aupd (Array (Int (), Some 320, ())) (Some 240) (AVar (Reg "x"))
                 (IInt 3L)
                 (aupd
                     (Int ())
@@ -93,7 +95,7 @@ module Normalisation =
                     (IVar (Reg "i"))
                     (Int (IInt 3L))))
               (Array (Int (), Some 320, "y"),
-               aupd (Int()) (Some 320) (AVar (Reg "y"))
+               Some <| aupd (Int()) (Some 320) (AVar (Reg "y"))
                     (IVar (Reg "j"))
                     (Int (IInt 4L))) ]
             [ (Int
@@ -106,14 +108,14 @@ module Normalisation =
                          AVar (Reg "x"),
                          IInt 3L),
                      IVar (Reg "i"))),
-               Int (IInt 3L))
+               Some (Int (IInt 3L)))
               (Int
                 (IIdx
                     (Int (),
                      Some 320,
                      AVar (Reg "y"),
                      (IVar (Reg "j")))),
-               Int (IInt 4L)) ]
+               Some (Int (IInt 4L))) ]
 
     [<Test>]
     let ``microcode normalisation of CAS(x[3], d[6], 2) is correct`` () =
@@ -135,17 +137,17 @@ module Normalisation =
             // TODO(CaptainHayashi): order shouldn't matter in branches.
             [ Branch
                 (iEq x3 d6,
-                 [ Assign (dar, d6upd (Int d6))
-                   Assign (xar, x3upd (Int (IInt 2L))) ],
-                 [ Assign (dar, d6upd (Int x3))
-                   Assign (xar, x3upd (Int x3)) ])
+                 [ dar *<- d6upd (Int d6)
+                   xar *<- x3upd (Int (IInt 2L)) ],
+                 [ dar *<- d6upd (Int x3)
+                   xar *<- x3upd (Int x3) ])
             ]
             [ Branch
                 (iEq x3 d6,
-                 [ Assign (Int x3, Int (IInt 2L))
-                   Assign (Int d6, Int d6) ],
-                 [ Assign (Int x3, Int x3)
-                   Assign (Int d6, Int x3) ])
+                 [ Int x3 *<- Int (IInt 2L)
+                   Int d6 *<- Int d6 ],
+                 [ Int x3 *<- Int x3
+                   Int d6 *<- Int x3 ])
             ]
 
 
@@ -157,6 +159,10 @@ let testShared =
                     Some 240,
                     ()))
           ("test", Type.Bool ()) ]
+
+let testShared2 =
+    Map.ofList
+        [ ("foo", Type.Array (Type.Bool (), Some 10, ())) ]
 
 let testThread =
     Map.ofList
@@ -238,6 +244,15 @@ module MicrocodeToBool =
             [ [ Assume (iEq (siVar "s") (siVar "t")) ] ]
 
     [<Test>]
+    let ``lone havocs are translated properly`` () =
+        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
+            (BAnd
+                [ iEq (siAfter "serving") (siBefore "serving")
+                  iEq (siAfter "ticket") (siBefore "ticket")
+                  iEq (siAfter "t") (siBefore "t") ])
+            [ [ havoc (Int (siVar "s")) ] ]
+
+    [<Test>]
     let ``lone assigns are translated properly`` () =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
             (BAnd
@@ -245,7 +260,7 @@ module MicrocodeToBool =
                   iEq (siAfter "ticket") (siBefore "ticket")
                   iEq (siAfter "s") (siBefore "t")
                   iEq (siAfter "t") (siBefore "t") ])
-            [ [ Assign (Int (siVar "s"), Int (siVar "t")) ] ]
+            [ [ Int (siVar "s") *<- Int (siVar "t") ] ]
 
     [<Test>]
     let ``unchained assigns are translated properly`` () =
@@ -256,8 +271,8 @@ module MicrocodeToBool =
                   iEq (siAfter "s") (siBefore "t")
                   iEq (siAfter "t") (siBefore "t")
                   iEq (siInter 0I "s") (siBefore "serving") ])
-            [ [ Assign (Int (siVar "s"), Int (siVar "serving")) ]
-              [ Assign (Int (siVar "s"), Int (siVar "t")) ]  ]
+            [ [ Int (siVar "s") *<- Int (siVar "serving") ]
+              [ Int (siVar "s") *<- Int (siVar "t") ]  ]
 
     [<Test>]
     let ``chained assigns are translated properly`` () =
@@ -268,8 +283,8 @@ module MicrocodeToBool =
                   iEq (siAfter "s") (siInter 0I "t")
                   iEq (siAfter "t") (siInter 0I "t")
                   iEq (siInter 0I "t") (siBefore "serving") ])
-            [ [ Assign (Int (siVar "t"), Int (siVar "serving")) ]
-              [ Assign (Int (siVar "s"), Int (siVar "t")) ] ]
+            [ [ Int (siVar "t") *<- Int (siVar "serving") ]
+              [ Int (siVar "s") *<- Int (siVar "t") ] ]
 
     [<Test>]
     let ``chained assigns and assumptions are translated properly`` () =
@@ -281,7 +296,7 @@ module MicrocodeToBool =
                   iEq (siBefore "s") (siInter 0I "t")
                   iEq (siAfter "t") (siInter 0I "t")
                   iEq (siInter 0I "t") (siBefore "serving") ])
-            [ [ Assign (Int (siVar "t"), Int (siVar "serving")) ]
+            [ [ Int (siVar "t") *<- Int (siVar "serving") ]
               [ Assume (iEq (siVar "s") (siVar "t")) ] ]
 
     [<Test>]
@@ -299,8 +314,8 @@ module MicrocodeToBool =
                     (iEq (siAfter "t") (siBefore "ticket"))) ])
             [ [ Branch
                     (iEq (siVar "s") (siVar "t"),
-                     [ Assign (Int (siVar "t"), Int (siVar "serving")) ],
-                     [ Assign (Int (siVar "t"), Int (siVar "ticket")) ]) ] ]
+                     [ Int (siVar "t") *<- Int (siVar "serving") ],
+                     [ Int (siVar "t") *<- Int (siVar "ticket") ]) ] ]
 
     [<Test>]
     let ``long compositions are translated properly`` () =
@@ -312,9 +327,9 @@ module MicrocodeToBool =
                  iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
                  iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L))
                  iEq (siAfter "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ] )
-            [ [ Assign (Int (siVar "t"), Int (mkAdd2 (siVar "t") (IInt 1L))) ]
-              [ Assign (Int (siVar "t"), Int (mkAdd2 (siVar "t") (IInt 1L))) ]
-              [ Assign (Int (siVar "t"), Int (mkAdd2 (siVar "t") (IInt 1L))) ] ]
+            [ [ Int (siVar "t") *<- Int (mkAdd2 (siVar "t") (IInt 1L)) ]
+              [ Int (siVar "t") *<- Int (mkAdd2 (siVar "t") (IInt 1L)) ]
+              [ Int (siVar "t") *<- Int (mkAdd2 (siVar "t") (IInt 1L)) ] ]
 
     [<Test>]
     let ``parallel compositions are translated properly`` () =
@@ -328,15 +343,76 @@ module MicrocodeToBool =
                  iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
                  iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L))
                  iEq (siAfter "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ] )
-            [ [ Assign (Int (siVar "t"), Int (mkAdd2 (siVar "t") (IInt 1L)))
-                Assign (Int (siVar "s"), Int (mkSub2 (siVar "s") (IInt 1L))) ]
-              [ Assign (Int (siVar "t"), Int (mkAdd2 (siVar "t") (IInt 1L)))
-                Assign (Int (siVar "s"), Int (mkSub2 (siVar "s") (IInt 1L))) ]
-              [ Assign (Int (siVar "t"), Int (mkAdd2 (siVar "t") (IInt 1L)))
-                Assign (Int (siVar "s"), Int (mkSub2 (siVar "s") (IInt 1L))) ] ]
+            [ [ Int (siVar "t") *<- Int (mkAdd2 (siVar "t") (IInt 1L))
+                Int (siVar "s") *<- Int (mkSub2 (siVar "s") (IInt 1L)) ]
+              [ Int (siVar "t") *<- Int (mkAdd2 (siVar "t") (IInt 1L))
+                Int (siVar "s") *<- Int (mkSub2 (siVar "s") (IInt 1L)) ]
+              [ Int (siVar "t") *<- Int (mkAdd2 (siVar "t") (IInt 1L))
+                Int (siVar "s") *<- Int (mkSub2 (siVar "s") (IInt 1L)) ] ]
 
     [<Test>]
-    let ``arrays are normalised and translated properly`` () =
+    let ``pre-state havocs are translated properly`` () =
+        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
+            (BAnd
+               [ iEq (siAfter "serving") (siBefore "serving")
+                 iEq (siAfter "ticket") (siBefore "ticket")
+                 iEq (siAfter "s") (siBefore "s")
+                 iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L))
+                 iEq (siAfter "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ] )
+            [ [ havoc (Int (siVar "t")) ]
+              [ Int (siVar "t") *<- Int (mkAdd2 (siVar "t") (IInt 1L)) ]
+              [ Int (siVar "t") *<- Int (mkAdd2 (siVar "t") (IInt 1L)) ] ]
+
+    [<Test>]
+    let ``intermediate havocs are translated properly`` () =
+        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
+            (BAnd
+               [ iEq (siAfter "serving") (siBefore "serving")
+                 iEq (siAfter "ticket") (siBefore "ticket")
+                 iEq (siAfter "s") (siBefore "s")
+                 iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
+                 iEq (siAfter "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ] )
+            [ [ Int (siVar "t") *<- Int (mkAdd2 (siVar "t") (IInt 1L)) ]
+              [ havoc (Int (siVar "t")) ]
+              [ Int (siVar "t") *<- Int (mkAdd2 (siVar "t") (IInt 1L)) ] ]
+
+    [<Test>]
+    let ``post-state havocs are translated properly`` () =
+        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
+            (BAnd
+               [ iEq (siAfter "serving") (siBefore "serving")
+                 iEq (siAfter "ticket") (siBefore "ticket")
+                 iEq (siAfter "s") (siBefore "s")
+                 iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
+                 iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L)) ] )
+            [ [ Int (siVar "t") *<- Int (mkAdd2 (siVar "t") (IInt 1L)) ]
+              [ Int (siVar "t") *<- Int (mkAdd2 (siVar "t") (IInt 1L)) ]
+              [ havoc (Int (siVar "t")) ] ]
+
+    [<Test>]
+    let ``single-dimensional arrays are normalised and translated properly`` () =
+        check testShared2 testThread
+            (BAnd
+                [ iEq (siAfter "x") (siBefore "x")
+                  iEq (siAfter "y") (siBefore "y")
+                  BEq
+                    (Array (Bool (), Some 10, AVar (Reg (After "foo"))),
+                     aupd (Bool ()) (Some 10)
+                         (aupd' (Bool ()) (Some 10)
+                            (AVar (Reg (Before "foo")))
+                            (siBefore "x")
+                            (Bool BTrue))
+                        (siBefore "y")
+                        (Bool BFalse)) ])
+            [ [ Expr.Bool
+                    (BIdx (Bool (), Some 10, AVar (Reg "foo"), IVar (Reg "x")))
+                *<- Expr.Bool BTrue
+                Expr.Bool
+                    (BIdx (Bool (), Some 10, AVar (Reg "foo"), IVar (Reg "y")))
+                *<- Expr.Bool BFalse ] ]
+
+    [<Test>]
+    let ``multi-dimensional arrays are normalised and translated properly`` () =
         check testShared testThread
             (BAnd
                 [ iEq (siAfter "x") (siBefore "x")
@@ -370,8 +446,19 @@ module MicrocodeToBool =
                                          (siBefore "x")),
                                      (siBefore "y")))
                                 (IInt 1L)))) ] )
-            [ [ Assign
-                    (Expr.Int
+            [ [ Expr.Int
+                   (IIdx
+                       (Int (),
+                        Some 320,
+                        AIdx
+                           (Array (Int (), Some 320, ()),
+                            Some 240,
+                            AVar (Reg "grid"),
+                            IVar (Reg "x")),
+                        IVar (Reg "y")))
+                *<-
+                Expr.Int
+                    (mkAdd2
                         (IIdx
                             (Int (),
                              Some 320,
@@ -379,20 +466,9 @@ module MicrocodeToBool =
                                 (Array (Int (), Some 320, ()),
                                  Some 240,
                                  AVar (Reg "grid"),
-                                 IVar (Reg "x")),
-                             IVar (Reg "y"))),
-                     Expr.Int
-                        (mkAdd2
-                            (IIdx
-                                (Int (),
-                                 Some 320,
-                                 AIdx
-                                    (Array (Int (), Some 320, ()),
-                                     Some 240,
-                                     AVar (Reg "grid"),
-                                     (siVar "x")),
-                                 (siVar "y")))
-                            (IInt 1L))) ] ]
+                                 (siVar "x")),
+                             (siVar "y")))
+                        (IInt 1L)) ] ]
 
 
 module CommandTests =
