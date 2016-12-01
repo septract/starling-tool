@@ -98,11 +98,6 @@ module Pretty =
         | Traversal err ->
             Starling.Core.Traversal.Pretty.printTraversalError printSemanticsError err
 
-/// Generates a framing relation for a given variable.
-let frameVar ctor (par : CTyped<Var>) : SMBoolExpr =
-    BEq (par |> mapCTyped (After >> Reg) |> mkVarExp,
-         par |> mapCTyped (ctor >> Reg) |> mkVarExp)
-
 /// <summary>
 ///     A write record for an variable.
 ///
