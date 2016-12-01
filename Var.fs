@@ -119,7 +119,7 @@ let unmarkVar : MarkedVar -> Var =
     | Goal(i, c) -> sprintf "V%sGOAL%A" c i
 
 // TODO(CaptainHayashi): clean this up?
-let varToExpr (v : TypedVar) : Expr<Var> =
+let varToExpr (v : CTyped<'Var>) : Expr<'Var> =
     match v with
     | Int iv -> Int (IVar iv)
     | Bool bv -> Bool (BVar bv)
