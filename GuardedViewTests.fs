@@ -33,13 +33,13 @@ module Tests =
         let ptsVar ctx tv =
             let exp =
                 match (typeOf tv) with
-                | Int () ->
+                | AnInt ->
                     match ctx with
                     | Positions (Positive::xs) -> IInt 1L
                     | Positions (Negative::xs) -> IInt 0L
                     | _ -> IInt -1L
                     |> Int
-                | Array (eltype, length, ()) ->
+                | AnArray (eltype, length) ->
                     Array
                         (eltype,
                          length,
@@ -47,7 +47,7 @@ module Tests =
                          | Positions (Positive::xs) -> AVar "pos"
                          | Positions (Negative::xs) -> AVar "neg"
                          | _ -> AVar "?")
-                | Bool () ->
+                | ABool ->
                     match ctx with
                     | Positions (x::xs) -> Context.overapprox x
                     | _ -> BVar "?"
