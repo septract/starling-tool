@@ -23,14 +23,9 @@ open Starling.Utils
 
 
 /// <summary>
-///     An extended type record for integer types.
+///     An extended type record for primitive types.
 /// </summary>
-type IntTypeRec = unit
-
-/// <summary>
-///     An extended type record for Boolean types.
-/// </summary>
-type BoolTypeRec = unit
+type PrimTypeRec = unit
 
 /// <summary>
 ///     An extended type record for array types.
@@ -54,26 +49,22 @@ type ArrayTypeRec =
 ///     The meta-type of the item when it is typed as <c>Array</c>.
 /// </typeparam>
 and Typed<'Int, 'Bool, 'Array> =
-    /// <summary>
-    ///    An item of integral type.
-    /// </summary>
-    | Int of 'Int
+    /// <summary>An item of integral type.</summary>
+    | Int of typerec : PrimTypeRec * value : 'Int
     /// <summary>
     ///    An item of Boolean type.
     /// </summary>
-    | Bool of 'Bool
+    | Bool of typerec : PrimTypeRec * value: 'Bool
     /// <summary>
     ///    An item of array type, annotated by the type of the array element
     ///    and an optional length.
     /// </summary>
-    | Array of eltype : Typed<unit, unit, unit>
-             * length : int option
-             * value  : 'Array
+    | Array of typerec : ArrayTypeRec * value : 'Array
     override this.ToString() =
         match this with
-        | Int x -> sprintf "I(%A)" x
-        | Bool x -> sprintf "B(%A)" x
-        | Array (eltype, length, x) -> sprintf "A<%A, %A>(%A)" eltype length x
+        | Int (_, x) -> sprintf "I(%A)" x
+        | Bool (_, x) -> sprintf "B(%A)" x
+        | Array ({ ElementType = eltype; Length = length}, x) -> sprintf "A<%A, %A>(%A)" eltype length x
 
 /// <summary>
 ///     A typed item where every type leads to the same meta-type.
@@ -89,56 +80,16 @@ and CTyped<'T> = Typed<'T, 'T, 'T>
 and Type = CTyped<unit>
 
 /// <summary>
-///     Maps over the contents of a <see cref="CTyped"/>.
-/// </summary>
-/// <param name="f">
-///     The function to map.
-/// </param>
-/// <returns>
-///     A function applying <paramref name="f"/> on a <see cref="CTyped"/>.
-/// </returns>
-/// <typeparam name="Src">
-///     The meta-type of items entering the map.
-/// </typeparam>
-/// <typeparam name="Dst">
-///     The meta-type of items leaving the map.
-/// </typeparam>
-let mapCTyped (f : 'Src -> 'Dst) : CTyped<'Src> -> CTyped<'Dst> =
-    function
-    | Int i -> Int (f i)
-    | Bool b -> Bool (f b)
-    | Array (eltype, length, a) -> Array (eltype, length, f a)
-
-/// <summary>
-///     Checks whether two types are compatible.
-/// </summary>
-/// <param name="x">The first type to check.</param>
-/// <param name="y">The second type to check.</param>
-/// <returns>
-///     True if <paramref name="x"/> can be made compatible with
-///     <paramref name="y"/>, or vice versa; false otherwise.
-/// </returns>
-let rec typesCompatible (x : Type) (y : Type) : bool =
-    (* Technically, if this was proper unification, we'd want to return a
-       record of the substitutions made. *)
-    match (x, y) with
-    (* Arrays are compatible when their element types are compatible and their
-       lengths are not both defined as contradictory values. *)
-    | (Type.Array (ex, Some _ , ()), Type.Array (ey, None   , ()))
-    | (Type.Array (ex, None   , ()), Type.Array (ey, Some _ , ()))
-    | (Type.Array (ex, None   , ()), Type.Array (ey, None   , ())) ->
-        typesCompatible ex ey
-    | (Type.Array (ex, Some lx, x), Typed.Array (ey, Some ly, y)) ->
-        typesCompatible ex ey && lx = ly
-    // For primitive types, structural equality suffices.
-    | x, y -> x = y
-
-
-/// <summary>
 ///     Functions for working with <c>Typed</c> values.
 /// </summary>
 [<AutoOpen>]
 module Typed =
+    /// <summary>Constructs an integer item with a base extended type.</summary>
+    let mkInt v = Int ((), v)
+
+    /// <summary>Constructs an integer item with a base extended type.</summary>
+    let mkBool v = Bool ((), v)
+
     /// <summary>
     ///     Extracts the <c>Type</c> of a <c>Typed</c> item.
     /// </summary>
@@ -150,9 +101,29 @@ module Typed =
     /// </returns>
     let typeOf : Typed<_, _, _> -> Type =
         function
-        | Bool _ -> Bool ()
-        | Int _ -> Int ()
-        | Array (eltype, length, _) -> Array (eltype, length, ())
+        | Bool (t, _) -> Bool (t, ())
+        | Int (t, _) -> Int (t, ())
+        | Array (t, _) -> Array (t, ())
+
+    /// <summary>
+    ///     Maps over the contents of a <see cref="CTyped"/>.
+    /// </summary>
+    /// <param name="f">The function to map.</param>
+    /// <param name="ctyped">The <see cref="CTyped"/> to map.</param>
+    /// <returns>
+    ///     The result of applying <paramref name="f"/> on <paramref name="CTyped"/>.
+    /// </returns>
+    /// <typeparam name="Src">
+    ///     The meta-type of items entering the map.
+    /// </typeparam>
+    /// <typeparam name="Dst">
+    ///     The meta-type of items leaving the map.
+    /// </typeparam>
+    let mapCTyped (f : 'Src -> 'Dst) (ctyped : CTyped<'Src>) : CTyped<'Dst> =
+        match ctyped with
+        | Int (t, i) -> Int (t, f i)
+        | Bool (t, b) -> Bool (t, f b)
+        | Array (t, a) -> Array (t, f a)
 
     /// <summary>
     ///     Combines a <c>Type</c> with an item to make it
@@ -184,7 +155,7 @@ module Typed =
     /// </returns>
     let valueOf (typed : CTyped<'a>) : 'a =
         match typed with
-        | Int a | Bool a | Array (_, _, a) -> a
+        | Int (_, a) | Bool (_, a) | Array (_, a) -> a
 
     /// <summary>
     ///     Active pattern splitting a CTyped item into its item and type.
@@ -198,7 +169,108 @@ module Typed =
         match typed with
         | Int _ -> AnInt
         | Bool _ -> ABool
-        | Array (eltype, length, _) -> AnArray (eltype, length)
+        | Array ({ ElementType = eltype; Length = length }, _) -> AnArray (eltype, length)
+
+    /// <summary>
+    ///     Active pattern extracting the full root type of a typed item.
+    /// </summary>
+    let (|AnIntR|ABoolR|AnArrayR|) (typed : Typed<'I, 'B, 'A>) =
+        match typed with
+        | Int (t, _) -> AnIntR t
+        | Bool (t, _) -> ABoolR t
+        | Array (t, _) -> AnArrayR t
+
+/// <summary>
+///     Tries to unify a list of primitive type records.
+/// </summary>
+/// <param name="xs">The possibly empty list of type records to check.</param>
+/// <returns>
+///     The unified record, if unification is possible; None otherwise.
+/// </returns>
+let rec unifyPrimTypeRecs (xs : PrimTypeRec list) : PrimTypeRec option =
+    // TODO(CaptainHayashi): add to this when PrimTypeRec expands.
+    match xs with
+    | [] -> Some ()
+    | x::xs -> Some x
+
+/// <summary>
+///     Checks whether two primitive type records are compatible.
+/// </summary>
+/// <param name="x">The first type record to check.</param>
+/// <param name="y">The second type record to check.</param>
+/// <returns>
+///     True if <paramref name="x"/> can be made compatible with
+///     <paramref name="y"/>, or vice versa; false otherwise.
+/// </returns>
+let rec primTypeRecsCompatible (x : PrimTypeRec) (y : PrimTypeRec) : bool =
+    match unifyPrimTypeRecs [x; y] with
+    | Some _ -> true
+    | None -> false
+
+/// <summary>
+///     Tries to unify a list of primitive type records.
+/// </summary>
+/// <param name="xs">The possibly empty list of type records to check.</param>
+/// <returns>
+///     The unified record, if unification is possible; None otherwise.
+/// </returns>
+let rec unifyArrayTypeRecs (xs : ArrayTypeRec list) : ArrayTypeRec option =
+    // TODO(CaptainHayashi): add to this when PrimTypeRec expands.
+    match xs with
+    | [] -> None
+    | x::xs ->
+        (* TODO(CaptainHayashi): this is way too strong and order-dependent.
+           It's also somewhat broken, but in mostly inconsequential ways. *)
+        let foldRecs recSoFar nextRec =
+            match recSoFar with
+            | None -> None
+            | Some rs ->
+                // TODO(CaptainHayashi): unify element types.
+                if typesCompatible rs.ElementType nextRec.ElementType
+                then
+                    (* Currently, favour the type with the most defined length.
+                       This should really pull the unified type from above
+                       instead of taking one or the other. *)
+                    match (rs.Length, nextRec.Length) with
+                    | Some _, None | None, None -> Some rs
+                    | None, Some _ -> Some nextRec
+                    | _ -> None
+                else None
+        List.fold foldRecs (Some x) xs
+
+/// <summary>
+///     Checks whether two array type records are compatible.
+/// </summary>
+/// <param name="x">The first type record to check.</param>
+/// <param name="y">The second type record to check.</param>
+/// <returns>
+///     True if <paramref name="x"/> can be made compatible with
+///     <paramref name="y"/>, or vice versa; false otherwise.
+/// </returns>
+and arrayTypeRecsCompatible (x : ArrayTypeRec) (y : ArrayTypeRec) : bool =
+    match unifyArrayTypeRecs [x; y] with
+    | Some _ -> true
+    | None -> false
+
+/// <summary>
+///     Checks whether two types are compatible.
+/// </summary>
+/// <param name="x">The first type to check.</param>
+/// <param name="y">The second type to check.</param>
+/// <returns>
+///     True if <paramref name="x"/> can be made compatible with
+///     <paramref name="y"/>, or vice versa; false otherwise.
+/// </returns>
+and typesCompatible (x : Type) (y : Type) : bool =
+    (* Technically, if this was proper unification, we'd want to return a
+       record of the substitutions made. *)
+    match (x, y) with
+    (* Types are compatible when their base types are equal and their
+       extended type records are compatible. *)
+    | (AnIntR xr, AnIntR yr)
+    | (ABoolR xr, ABoolR yr) -> primTypeRecsCompatible xr yr
+    | (AnArrayR xr, AnArrayR yr) -> arrayTypeRecsCompatible xr yr
+    | _ -> false
 
 
 /// <summary>
@@ -257,9 +329,9 @@ module Pretty =
 
         let valDoc =
             match typed with
-            | Int a -> pInt a
-            | Bool a -> pBool a
-            | Array (eltype, length, a) -> pArray eltype length a
+            | Int (_, a) -> pInt a
+            | Bool (_, a) -> pBool a
+            | Array ({ ElementType = eltype; Length = length }, a) -> pArray eltype length a
 
         let sexprContents =
             match valDoc with

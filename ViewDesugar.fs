@@ -226,6 +226,6 @@ module Tests =
         /// </summary>
         member x.``Marked views desugar properly into ViewExprs`` v =
              let fg = freshGen ()
-             desugarView (Map.ofList [ ("s", Type.Int ())
-                                       ("t", Type.Int ()) ])
+             desugarView (Map.ofList [ ("s", Type.Int ((), ()))
+                                       ("t", Type.Int ((), ())) ])
                          fg v

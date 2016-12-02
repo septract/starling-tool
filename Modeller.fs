@@ -75,13 +75,23 @@ module Types =
     type ModellerMethod = Method<ModellerViewExpr, ModellerPartCmd>
 
     /// <summary>
+    ///     A type, or maybe just a string description of one.
+    /// </summary>
+    type FuzzyType =
+        /// <summary>A definite type.</summary>
+        | Exact of Type
+        /// <summary>A not so definite type.</summary>
+        | Fuzzy of string
+
+    /// <summary>
     ///     An error originating from the type system.
     /// </summary>
     type TypeError =
         /// <summary>
         ///     Two items that should have been the same type were not.
+        ///     We know the expected type completely.
         /// </summary>
-        | TypeMismatch of expected : string * got : Type
+        | TypeMismatch of expected : FuzzyType * got : FuzzyType
         /// <summary>
         ///     A language type literal is inexpressible in Starling.
         /// </summary>
@@ -442,73 +452,73 @@ let coreSemantics : PrimSemanticsMap =
       (*
        * CAS
        *)
-      (mkPrim "ICAS" [ Int "destA"; Int "testA" ] [ Int "destB"; Int "testB"; Int "set" ]
+      (mkPrim "ICAS" [ mkInt "destA"; mkInt "testA" ] [ mkInt "destB"; mkInt "testB"; mkInt "set" ]
            [ Branch
                 (iEq (IVar "destB") (IVar "testB"),
-                 [ Int "destA" *<- Int (IVar "set")
-                   Int "testA" *<- Int (IVar "testB") ],
-                 [ Int "destA" *<- Int (IVar "destB")
-                   Int "testA" *<- Int (IVar "destB") ] ) ] )
+                 [ mkInt "destA" *<- mkInt (IVar "set")
+                   mkInt "testA" *<- mkInt (IVar "testB") ],
+                 [ mkInt "destA" *<- mkInt (IVar "destB")
+                   mkInt "testA" *<- mkInt (IVar "destB") ] ) ] )
       // Boolean CAS
-      (mkPrim "BCAS" [ Bool "destA"; Bool "testA" ] [ Bool "destB"; Bool "testB"; Bool "set" ]
+      (mkPrim "BCAS" [ mkBool "destA"; mkBool "testA" ] [ mkBool "destB"; mkBool "testB"; mkBool "set" ]
            [ Branch
                 (bEq (BVar "destB") (BVar "testB"),
-                 [ Bool "destA" *<- Bool (BVar "set")
-                   Bool "testA" *<- Bool (BVar "testB") ],
-                 [ Bool "destA" *<- Bool (BVar "destB")
-                   Bool "testA" *<- Bool (BVar "destB") ] ) ] )
+                 [ mkBool "destA" *<- mkBool (BVar "set")
+                   mkBool "testA" *<- mkBool (BVar "testB") ],
+                 [ mkBool "destA" *<- mkBool (BVar "destB")
+                   mkBool "testA" *<- mkBool (BVar "destB") ] ) ] )
       (*
        * Atomic load
        *)
       // Integer load
-      (mkPrim "!ILoad"  [ Int "dest" ] [ Int "src" ]
-            [ Int "dest" *<- Int (IVar "src") ] )
+      (mkPrim "!ILoad"  [ mkInt "dest" ] [ mkInt "src" ]
+            [ mkInt "dest" *<- mkInt (IVar "src") ] )
 
       // Integer load-and-increment
-      (mkPrim "!ILoad++"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
-            [ Int "dest" *<- Int (IVar "srcB")
-              Int "srcA" *<- Int (mkAdd2 (IVar "srcB") (IInt 1L)) ] )
+      (mkPrim "!ILoad++"  [ mkInt "dest"; mkInt "srcA" ] [ mkInt "srcB" ]
+            [ mkInt "dest" *<- mkInt (IVar "srcB")
+              mkInt "srcA" *<- mkInt (mkAdd2 (IVar "srcB") (IInt 1L)) ] )
 
       // Integer load-and-decrement
-      (mkPrim "!ILoad--"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
-            [ Int "dest" *<- Int (IVar "srcB")
-              Int "srcA" *<- Int (mkSub2 (IVar "srcB") (IInt 1L)) ] )
+      (mkPrim "!ILoad--"  [ mkInt "dest"; mkInt "srcA" ] [ mkInt "srcB" ]
+            [ mkInt "dest" *<- mkInt (IVar "srcB")
+              mkInt "srcA" *<- mkInt (mkSub2 (IVar "srcB") (IInt 1L)) ] )
 
       // Integer increment
-      (mkPrim "!I++"  [ Int "srcA" ] [ Int "srcB" ]
-            [ Int "srcA" *<- Int (mkAdd2 (IVar "srcB") (IInt 1L)) ] )
+      (mkPrim "!I++"  [ mkInt "srcA" ] [ mkInt "srcB" ]
+            [ mkInt "srcA" *<- mkInt (mkAdd2 (IVar "srcB") (IInt 1L)) ] )
 
       // Integer decrement
-      (mkPrim "!I--"  [ Int "srcA" ] [ Int "srcB" ]
-            [ Int "srcA" *<- Int (mkSub2 (IVar "srcB") (IInt 1L)) ] )
+      (mkPrim "!I--"  [ mkInt "srcA" ] [ mkInt "srcB" ]
+            [ mkInt "srcA" *<- mkInt (mkSub2 (IVar "srcB") (IInt 1L)) ] )
 
       // Boolean load
-      (mkPrim "!BLoad"  [ Bool "dest" ] [ Bool "src" ]
-            [ Bool "dest" *<- Bool (BVar "src") ] )
+      (mkPrim "!BLoad"  [ mkBool "dest" ] [ mkBool "src" ]
+            [ mkBool "dest" *<- mkBool (BVar "src") ] )
 
       (*
        * Atomic store
        *)
 
       // Integer store
-      (mkPrim "!IStore" [ Int "dest" ] [ Int "src" ]
-            [ Int "dest" *<- Int (IVar "src") ] )
+      (mkPrim "!IStore" [ mkInt "dest" ] [ mkInt "src" ]
+            [ mkInt "dest" *<- mkInt (IVar "src") ] )
 
       // Boolean store
-      (mkPrim "!BStore" [ Bool "dest" ] [ Bool "src" ]
-            [ Bool "dest" *<- Bool (BVar "src") ] )
+      (mkPrim "!BStore" [ mkBool "dest" ] [ mkBool "src" ]
+            [ mkBool "dest" *<- mkBool (BVar "src") ] )
 
       (*
        * Local set
        *)
 
       // Integer local set
-      (mkPrim "!ILSet" [ Int "dest" ] [ Int "src" ]
-            [ Int "dest" *<- Int (IVar "src") ] )
+      (mkPrim "!ILSet" [ mkInt "dest" ] [ mkInt "src" ]
+            [ mkInt "dest" *<- mkInt (IVar "src") ] )
 
       // Boolean store
-      (mkPrim "!BLSet" [ Bool "dest" ] [ Bool "src" ]
-            [ Bool "dest" *<- Bool (BVar "src") ] )
+      (mkPrim "!BLSet" [ mkBool "dest" ] [ mkBool "src" ]
+            [ mkBool "dest" *<- mkBool (BVar "src") ] )
 
       (*
        * Assumptions
@@ -518,7 +528,7 @@ let coreSemantics : PrimSemanticsMap =
       (mkPrim "Id" [] [] [])
 
       // Assume
-      (mkPrim "Assume" [] [Bool "expr"] [ Microcode.Assume (BVar "expr") ]) ]
+      (mkPrim "Assume" [] [mkBool "expr"] [ Microcode.Assume (BVar "expr") ]) ]
 
 (*
  * Expression translation
@@ -575,13 +585,12 @@ let rec modelExpr
            determined by the type of the variable.  If the variable is
            symbolic, then we have ambiguity. *)
         | Identifier v ->
-            v
-            |> wrapMessages Var (VarMap.lookup env)
-            |> bind (
-                liftWithoutContext
+            bind
+                (liftWithoutContext
                     (varF >> Reg >> ok)
                     (tliftOverCTyped >> tliftToExprDest)
-                >> mapMessages BadSub)
+                 >> mapMessages BadSub)
+                (wrapMessages Var (VarMap.lookup env) v)
         | Symbolic sym ->
             fail (AmbiguousSym sym)
         (* If we have an array, then work out what the type of the array's
@@ -590,18 +599,17 @@ let rec modelExpr
             let arrResult = modelArrayExpr env idxEnv varF arr
             let idxResult = modelIntExpr idxEnv idxEnv varF idx
             lift2
-                (fun (eltype, length, arrE) idxE ->
-                    match eltype with
-                    | AnInt -> Int (IIdx (eltype, length, arrE, idxE))
-                    | ABool -> Bool (BIdx (eltype, length, arrE, idxE))
-                    | AnArray (ieltype, ilength) ->
-                        Array (ieltype, ilength, AIdx (eltype, length, arrE, idxE)))
+                (fun arrE idxE ->
+                    match arrE.SRec.ElementType with
+                    | AnIntR r -> Expr.Int (r, IIdx (arrE, idxE))
+                    | ABoolR r -> Expr.Bool (r, BIdx (arrE, idxE))
+                    | AnArrayR r -> Expr.Array (r, AIdx (arrE, idxE)))
                 arrResult idxResult
         (* We can use the active patterns above to figure out whether we
          * need to treat this expression as arithmetic or Boolean.
          *)
-        | ArithExp' _ -> lift Expr.Int (modelIntExpr env idxEnv varF e)
-        | BoolExp' _ -> lift Expr.Bool (modelBoolExpr env idxEnv varF e)
+        | ArithExp' _ -> lift (liftTypedSub Expr.Int) (modelIntExpr env idxEnv varF e)
+        | BoolExp' _ -> lift (liftTypedSub Expr.Bool) (modelBoolExpr env idxEnv varF e)
         | _ -> failwith "unreachable[modelExpr]"
 
 /// <summary>
@@ -642,74 +650,94 @@ and modelBoolExpr
   (env : VarMap)
   (idxEnv : VarMap)
   (varF : Var -> 'var)
-  (expr : Expression) : Result<BoolExpr<Sym<'var>>, ExprError> =
+  (expr : Expression) : Result<TypedBoolExpr<Sym<'var>>, ExprError> =
     let mi = modelIntExpr env idxEnv varF
     let me = modelExpr env idxEnv varF
     let ma = modelArrayExpr env idxEnv varF
 
     let rec mb e =
         match e.Node with
-        | True -> BTrue |> ok
-        | False -> BFalse |> ok
+        | True -> ok (mkTypedSub () BTrue)
+        | False -> ok (mkTypedSub () BFalse)
         | Identifier v ->
             (* Look-up the variable to ensure it a) exists and b) is of a
              * Boolean type.
              *)
-            v
-            |> wrapMessages Var (VarMap.lookup env)
-            |> bind (function
-                     | Typed.Bool vn -> vn |> varF |> Reg |> BVar |> ok
-                     | vr ->
-                        fail
-                            (VarBadType
-                                (v,
-                                 TypeMismatch
-                                    (expected = "bool", got = typeOf vr))))
+            bind
+                (function
+                 | Typed.Bool (t, vn) ->
+                     ok (mkTypedSub t (BVar (Reg (varF vn))))
+                 | vr ->
+                    fail
+                        (VarBadType
+                            (v,
+                             TypeMismatch
+                                (expected = "bool", got = typeOf vr))))
+                (wrapMessages Var (VarMap.lookup env) v)
         | Symbolic { Sentence = sen; Args = args } ->
             args
             |> List.map me
             |> collect
-            |> lift (fun a -> BVar (Sym { Sentence = sen; Args = a }))
+            |> lift (fun a -> mkTypedSub () (BVar (Sym { Sentence = sen; Args = a })))
         | ArraySubscript (arr, idx) ->
             let arrResult = ma arr
             // Bind array index using its own environment.
             let idxResult = modelIntExpr idxEnv idxEnv varF idx
             bind2
-                (fun (eltype, length, arrE) idxE ->
-                    match eltype with
-                    | ABool -> ok (BIdx (eltype, length, arrE, idxE))
+                (fun arrE idxE ->
+                    match arrE.SRec.ElementType with
+                    | ABoolR r -> ok (mkTypedSub r (BIdx (arrE, idxE)))
                     | t ->
                         fail (ExprBadType (TypeMismatch (expected = "bool[]", got = t))))
                 arrResult idxResult
         | BopExpr(BoolOp as op, l, r) ->
             match op with
             | ArithIn as o ->
-                lift2 (match o with
-                       | Gt -> mkGt
-                       | Ge -> mkGe
-                       | Le -> mkLe
-                       | Lt -> mkLt
-                       | _ -> failwith "unreachable[modelBoolExpr::ArithIn]")
-                      (mi l)
-                      (mi r)
+                let oper =
+                    match o with
+                    | Gt -> mkGt
+                    | Ge -> mkGe
+                    | Le -> mkLe
+                    | Lt -> mkLt
+                    | _ -> failwith "unreachable[modelBoolExpr::ArithIn]"
+
+                lift (mkTypedSub ()) (lift2 oper (mi l) (mi r))
             | BoolIn as o ->
-                lift2 (match o with
-                       | And -> mkAnd2
-                       | Or -> mkOr2
-                       | Imp -> mkImpl
-                       | _ -> failwith "unreachable[modelBoolExpr::BoolIn]")
-                      (mb l)
-                      (mb r)
+                let oper =
+                    match o with
+                    | And -> mkAnd2
+                    | Or -> mkOr2
+                    | Imp -> mkImpl
+                    | _ -> failwith "unreachable[modelBoolExpr::BoolIn]"
+
+                (* Both sides of the expression need to be unifiable to the
+                   same type. *)
+                bind2
+                    (fun ml mr ->
+                        match unifyPrimTypeRecs [ ml.SRec; mr.SRec ] with
+                        | Some t ->
+                            ok (mkTypedSub t (oper (stripTypeRec ml) (stripTypeRec mr)))
+                        | None ->
+                            fail
+                                (ExprBadType
+                                    (TypeMismatch
+                                        (expected = Exact (Type.Bool (ml.SRec, ())),
+                                         got = Exact (Type.Bool (mr.SRec, ()))))))
+                    (mb l)
+                    (mb r)
             | AnyIn as o ->
-                lift2 (match o with
-                       | Eq -> mkEq
-                       | Neq -> mkNeq
-                       | _ -> failwith "unreachable[modelBoolExpr::AnyIn]")
-                      (me l)
-                      (me r)
-        | UopExpr (Neg,e) -> lift mkNot (mb e) 
+                let oper =
+                    match o with
+                    | Eq -> mkEq
+                    | Neq -> mkNeq
+                    | _ -> failwith "unreachable[modelBoolExpr::AnyIn]"
+
+                lift (mkTypedSub ()) (lift2 oper (me l) (me r))
+        | UopExpr (Neg,e) -> lift (mkNot >> mkTypedSub ()) (mb e) 
         | _ ->
-            fail (ExprBadType (TypeMismatch (expected = "bool", got = Int ())))
+            fail
+                (ExprBadType
+                    (TypeMismatch (expected = Fuzzy "bool", got = Fuzzy "non-bool")))
     mb expr
 
 /// <summary>
@@ -750,7 +778,7 @@ and modelIntExpr
   (env : VarMap)
   (idxEnv : VarMap)
   (varF : Var -> 'var)
-  (expr : Expression) : Result<IntExpr<Sym<'var>>, ExprError> =
+  (expr : Expression) : Result<TypedIntExpr<Sym<'var>>, ExprError> =
     let me = modelExpr env idxEnv varF
     let ma = modelArrayExpr env idxEnv varF
 
@@ -840,7 +868,7 @@ and modelArrayExpr
   (idxEnv : VarMap)
   (varF : Var -> 'var)
   (expr : Expression)
-  : Result<Type * int option * ArrayExpr<Sym<'var>>, ExprError> =
+  : Result<TypedArrayExpr<Sym<'var>>, ExprError> =
     let mi = modelIntExpr env idxEnv varF
 
     let rec ma e =

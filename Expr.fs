@@ -13,6 +13,17 @@ open Starling.Core.TypeSystem
 [<AutoOpen>]
 module Types =
     /// <summary>
+    ///     A subtyped expression carrying an extended type record.
+    /// </summary>
+    /// <typeparam name="Sub">The type of the inner expression.</typeparam>
+    /// <typeparam name="Rec">The type of the type record.</typeparam>
+    type TypedSubExpr<'Sub, 'Rec> when 'Sub : equality =
+        { /// <summary>The extended type record.</summary>
+          SRec : 'Rec
+          /// <summary>The expression itself.</summary>
+          SExpr : 'Sub }
+
+    /// <summary>
     ///     An expression of arbitrary type.
     /// </summary>
     /// <typeparam name="Var">
@@ -29,10 +40,7 @@ module Types =
     /// </typeparam>
     and IntExpr<'Var> when 'Var : equality =
         | IVar of 'Var
-        | IIdx of eltype : Type
-                * length : int option
-                * arr : ArrayExpr<'Var>
-                * idx : IntExpr<'Var>
+        | IIdx of arr : TypedArrayExpr<'Var> * idx : TypedIntExpr<'Var>
         | IInt of int64
         | IAdd of IntExpr<'Var> list
         | ISub of IntExpr<'Var> list
@@ -42,6 +50,15 @@ module Types =
         override this.ToString () = sprintf "%A" this
 
     /// <summary>
+    ///     An integral expression carrying an extended type record.
+    /// </summary>
+    /// <typeparam name="Var">
+    ///     The type of variables in the expression.
+    /// </typeparam>
+    and TypedIntExpr<'Var> when 'Var : equality =
+        TypedSubExpr<IntExpr<'Var>, PrimTypeRec>
+
+    /// <summary>
     ///     A Boolean expression.
     /// </summary>
     /// <typeparam name="Var">
@@ -49,22 +66,28 @@ module Types =
     /// </typeparam>
     and BoolExpr<'Var> when 'Var : equality =
         | BVar of 'Var
-        | BIdx of eltype : Type
-                * length : int option
-                * arr : ArrayExpr<'Var>
-                * idx : IntExpr<'Var>
+        | BIdx of arr : TypedArrayExpr<'Var> * idx : TypedIntExpr<'Var>
         | BTrue
         | BFalse
         | BAnd of BoolExpr<'Var> list
         | BOr of BoolExpr<'Var> list
         | BImplies of BoolExpr<'Var> * BoolExpr<'Var>
         | BEq of Expr<'Var> * Expr<'Var>
-        | BGt of IntExpr<'Var> * IntExpr<'Var>
-        | BGe of IntExpr<'Var> * IntExpr<'Var>
-        | BLe of IntExpr<'Var> * IntExpr<'Var>
-        | BLt of IntExpr<'Var> * IntExpr<'Var>
+        | BGt of TypedIntExpr<'Var> * TypedIntExpr<'Var>
+        | BGe of TypedIntExpr<'Var> * TypedIntExpr<'Var>
+        | BLe of TypedIntExpr<'Var> * TypedIntExpr<'Var>
+        | BLt of TypedIntExpr<'Var> * TypedIntExpr<'Var>
         | BNot of BoolExpr<'Var>
         override this.ToString () = sprintf "%A" this
+
+    /// <summary>
+    ///     A Boolean expression carrying an extended type record.
+    /// </summary>
+    /// <typeparam name="Var">
+    ///     The type of variables in the expression.
+    /// </typeparam>
+    and TypedBoolExpr<'Var> when 'Var : equality =
+        TypedSubExpr<BoolExpr<'Var>, PrimTypeRec>
 
     /// <summary>
     ///     An array expression.
@@ -78,24 +101,68 @@ module Types =
         /// <summary>
         ///     An index into an array <c>arr</c> of type <c>eltype[length]</c>.
         /// </summary>
-        | AIdx of eltype : Type
-                * length : int option
-                * arr : ArrayExpr<'Var>
-                * idx : IntExpr<'Var>
+        | AIdx of arr : TypedArrayExpr<'Var> * idx : TypedIntExpr<'Var>
         /// <summary>
         ///     A functional update of an array <c>arr</c> of type
         ///     <c>eltype[length]</c>, overriding index <c>idx</c> with value
         ///     <c>var</c>.
         /// </summary>
-        | AUpd of eltype : Type
-                * length : int option
-                * arr : ArrayExpr<'Var>
-                * idx : IntExpr<'Var>
+        | AUpd of arr : ArrayExpr<'Var>
+                * idx : TypedIntExpr<'Var>
                 * nval : Expr<'Var>
+
+    /// <summary>
+    ///     An array expression carrying an extended type record.
+    /// </summary>
+    /// <typeparam name="Var">
+    ///     The type of variables in the expression.
+    /// </typeparam>
+    and TypedArrayExpr<'Var> when 'Var : equality =
+        TypedSubExpr<ArrayExpr<'Var>, ArrayTypeRec>
 
     /// Type for fresh variable generators.
     type FreshGen = bigint ref
 
+/// <summary>
+///     Creates a typed sub-expression.
+/// </summary>
+/// <param name="trec">The type record of the sub-expression.</param>
+/// <param name="inner">The inner sub-expression to update.</param>
+/// <typeparam name="Sub">The type of the new sub-expression.</typeparam>
+/// <typeparam name="Sub">The inner record of the new sub-expression.</typeparam>
+/// <returns>The resulting typed sub-expression.</returns>
+let mkTypedSub (trec : 'Rec) (inner : 'Sub)
+  : TypedSubExpr<'Sub, 'Rec> =
+      { SRec = trec; SExpr = inner }
+
+/// <summary>
+///     Replaces the internals of a typed sub-expression with another
+///     sub-expression.
+/// </summary>
+/// <param name="sub">The sub-expression to update.</param>
+/// <param name="inner">The new inner sub-expression to add.</param>
+/// <typeparam name="Sub">The type of the new sub-expression.</typeparam>
+/// <typeparam name="Rec">The inner record of the sub-expression.</typeparam>
+/// <returns>The resulting typed sub-expression.</returns>
+let updateTypedSub (sub : TypedSubExpr<_, 'Rec>) (inner : 'Sub)
+  : TypedSubExpr<'Sub, 'Rec> =
+      mkTypedSub sub.SRec inner
+
+/// <summary>
+///     Strips the extended type record of a typed sub-expression.
+/// </summary>
+/// <param name="sub">The sub-expression to strip.</param>
+/// <typeparam name="Sub">The type of the sub-expression.</typeparam>
+/// <returns>The inner sub-expression inside the typed container.</returns>
+let stripTypeRec (sub : TypedSubExpr<'Sub, _>) : 'Sub =
+    sub.SExpr
+
+/// <summary>
+///     Lifts an type-annotated sub-expression through a constructor.
+/// </summary>
+let liftTypedSub (f : ('Rec * 'Sub) -> 'T) (sub : TypedSubExpr<'Sub, 'Rec>) : 'T =
+    // TODO(CaptainHayashi): proper doc comment.
+    f (sub.SRec, sub.SExpr)
 
 /// <summary>
 ///     Pretty printers for expressions.
@@ -131,11 +198,11 @@ module Pretty =
         cmdSexpr "select" [ printIntExpr pVar idx; printArrayExpr pVar arr ]
 
     /// Pretty-prints an arithmetic expression.
-    and printIntExpr (pVar : 'Var -> Doc) : IntExpr<'Var> -> Doc =
-        function
+    and printIntExpr (pVar : 'Var -> Doc) (int : IntExpr<'Var>) : Doc =
+        match int with
         | IVar c -> pVar c
         | IInt i -> i |> sprintf "%i" |> String
-        | IIdx (_, _, arr, idx) -> printIdx pVar arr idx
+        | IIdx (arr, idx) -> printIdx pVar (stripTypeRec arr) (stripTypeRec idx)
         | IAdd xs -> sexpr "+" (printIntExpr pVar) xs
         | ISub xs -> sexpr "-" (printIntExpr pVar) xs
         | IMul xs -> sexpr "*" (printIntExpr pVar) xs
@@ -143,51 +210,53 @@ module Pretty =
         | IMod (x, y) -> sexpr "%" (printIntExpr pVar) [x; y]
 
     /// Pretty-prints a Boolean expression.
-    and printBoolExpr (pVar : 'Var -> Doc) : BoolExpr<'Var> -> Doc =
-        function
+    and printBoolExpr (pVar : 'Var -> Doc) (bool : BoolExpr<'Var>) : Doc =
+        match bool with
         | BVar c -> pVar c
-        | BIdx (_, _, arr, idx) -> printIdx pVar arr idx
+        | BIdx (arr, idx) -> printIdx pVar (stripTypeRec arr) (stripTypeRec idx)
         | BTrue -> String "true"
         | BFalse -> String "false"
         | BAnd xs -> svexpr "and" (printBoolExpr pVar) xs
         | BOr xs -> svexpr "or" (printBoolExpr pVar) xs
         | BImplies (x, y) -> svexpr "=>" (printBoolExpr pVar) [x; y]
         | BEq (x, y) -> sexpr "=" (printExpr pVar) [x; y]
-        | BGt (x, y) -> sexpr ">" (printIntExpr pVar) [x; y]
-        | BGe (x, y) -> sexpr ">=" (printIntExpr pVar) [x; y]
-        | BLe (x, y) -> sexpr "<=" (printIntExpr pVar) [x; y]
-        | BLt (x, y) -> sexpr "<" (printIntExpr pVar) [x; y]
+        | BGt (x, y) -> sexpr ">" (stripTypeRec >> printIntExpr pVar) [x; y]
+        | BGe (x, y) -> sexpr ">=" (stripTypeRec >> printIntExpr pVar) [x; y]
+        | BLe (x, y) -> sexpr "<=" (stripTypeRec >> printIntExpr pVar) [x; y]
+        | BLt (x, y) -> sexpr "<" (stripTypeRec >> printIntExpr pVar) [x; y]
         | BNot x -> sexpr "not" (printBoolExpr pVar) [x]
 
     /// Pretty-prints an array expression.
-    and printArrayExpr (pVar : 'Var -> Doc) : ArrayExpr<'Var> -> Doc =
-        function
+    and printArrayExpr (pVar : 'Var -> Doc) (arr : ArrayExpr<'Var>) : Doc =
+        match arr with
         | AVar c -> pVar c
-        | AIdx (_, _, arr, idx) -> printIdx pVar arr idx
-        | AUpd (_, _, arr, idx, value) ->
+        | AIdx (arr, idx) -> printIdx pVar (stripTypeRec arr) (stripTypeRec idx)
+        | AUpd (arr, idx, value) ->
             cmdSexpr "store"
-                [ printIntExpr pVar idx
+                [ printIntExpr pVar (stripTypeRec idx)
                   printExpr pVar value
                   printArrayExpr pVar arr ]
 
     /// Pretty-prints an expression.
     and printExpr (pVar : 'Var -> Doc) : Expr<'Var> -> Doc =
         function
-        | Int i -> printIntExpr pVar i
-        | Bool b -> printBoolExpr pVar b
-        | Array (_, _, a) -> printArrayExpr pVar a
+        | Int (_, i) -> printIntExpr pVar i
+        | Bool (_, b) -> printBoolExpr pVar b
+        | Array (_, a) -> printArrayExpr pVar a
 
 
 /// Partial pattern that matches a Boolean equality on arithmetic expressions.
-let (|BAEq|_|) : BoolExpr<'var> -> (IntExpr<'var> * IntExpr<'var>) option =
-    function
-    | BEq (Int x, Int y) -> Some (x, y)
+let (|BIEq|_|) (bool : BoolExpr<'var>)
+  : ((PrimTypeRec * IntExpr<'var>) * (PrimTypeRec * IntExpr<'var>)) option =
+    match bool with
+    | BEq (Int (xr, x), Int (yr, y)) -> Some ((xr, x), (yr, y))
     | _ -> None
 
 /// Partial pattern that matches a Boolean equality on Boolean expressions.
-let (|BBEq|_|) : BoolExpr<'var> -> (BoolExpr<'var> * BoolExpr<'var>) option =
-    function
-    | BEq (Bool x, Bool y) -> Some (x, y)
+let (|BBEq|_|) (bool : BoolExpr<'var>)
+  : ((PrimTypeRec * BoolExpr<'var>) * (PrimTypeRec * BoolExpr<'var>)) option =
+    match bool with
+    | BEq (Bool (xr, x), Bool (yr, y)) -> Some ((xr, x), (yr, y))
     | _ -> None
 
 
@@ -277,7 +346,8 @@ let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
            | xs  -> BAnd (List.rev xs)
         | None     -> BFalse
     // A Boolean equality between two contradictions or tautologies is always true.
-    | BBEq (x, y)  ->
+    // Currently we ignore the type of the expressions.
+    | BBEq ((xr, x), (yr, y))  ->
         match simp x, simp y with
         | BFalse, BFalse
         | BTrue, BTrue      -> BTrue
@@ -288,7 +358,7 @@ let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
         | BTrue, x          -> x
         | x, BFalse         -> simp (BNot x)
         | BFalse, x         -> simp (BNot x)
-        | x, y              -> BEq(Bool x, Bool y)
+        | x, y              -> BEq(Bool (xr, x), Bool (yr, y))
     | x -> x
 
 /// Returns true if the expression is definitely false.
@@ -308,9 +378,9 @@ let isTrue (expr : BoolExpr<_>) : bool =
 /// Converts a typed variable to an expression.
 let mkVarExp (var : CTyped<'Var>) : Expr<'Var> =
     match var with
-    | CTyped.Int i -> Expr.Int (IVar i)
-    | CTyped.Bool b -> Expr.Bool (BVar b)
-    | CTyped.Array (eltype, length, a) -> Expr.Array (eltype, length, AVar a)
+    | CTyped.Int (t, i) -> Expr.Int (t, IVar i)
+    | CTyped.Bool (t, b) -> Expr.Bool (t, BVar b)
+    | CTyped.Array (t, a) -> Expr.Array (t, AVar a)
 
 /// Converts a VarMap to a sequence of expressions.
 let varMapToExprs
@@ -324,26 +394,26 @@ let varMapToExprs
 // function and hook it up to simp.
 
 /// Curried wrapper over BGt.
-let mkGt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
-    match (a, b) with
+let mkGt (a : TypedIntExpr<'var>) (b : TypedIntExpr<'var>) : BoolExpr<'var> =
+    match (stripTypeRec a, stripTypeRec b) with
     | IInt x, IInt y when x >  y -> BTrue
     | IInt x, IInt y when x <= y -> BFalse
     | _ -> BGt (a, b)
 /// Curried wrapper over BGe.
-let mkGe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
-    match (a, b) with
+let mkGe (a : TypedIntExpr<'var>) (b : TypedIntExpr<'var>) : BoolExpr<'var> =
+    match (stripTypeRec a, stripTypeRec b) with
     | IInt x, IInt y when x >= y -> BTrue
     | IInt x, IInt y when x <  y -> BFalse
     | _ -> BGe (a, b)
 /// Curried wrapper over BLt.
-let mkLt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
-    match (a, b) with
+let mkLt (a : TypedIntExpr<'var>) (b : TypedIntExpr<'var>) : BoolExpr<'var> =
+    match (stripTypeRec a, stripTypeRec b) with
     | IInt x, IInt y when x <  y -> BTrue
     | IInt x, IInt y when x >= y -> BFalse
     | _ -> BLt (a, b)
 /// Curried wrapper over BLe.
-let mkLe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
-    match (a, b) with
+let mkLe (a : TypedIntExpr<'var>) (b : TypedIntExpr<'var>) : BoolExpr<'var> =
+    match (stripTypeRec a, stripTypeRec b) with
     | IInt x, IInt y when x <= y -> BTrue
     | IInt x, IInt y when x >  y -> BFalse
     | _ -> BLe (a, b)
@@ -351,13 +421,13 @@ let mkLe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
 /// Curried wrapper over BEq.
 let mkEq (a : Expr<'var>) (b : Expr<'var>) : BoolExpr<'var> = BEq (a, b)
 
-/// Makes an arithmetic equality.
+/// Makes an arithmetic equality with a plain Int type.
 let iEq (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
-    BEq (Int a, Int b)
+    BEq (Int ((), a), Int ((), b))
 
-/// Makes a Boolean equality.
+/// Makes a Boolean equality with a plain Boolean type.
 let bEq (a : BoolExpr<'var>) (b : BoolExpr<'var>) : BoolExpr<'var> =
-    BEq (Bool a, Bool b)
+    BEq (Bool ((), a), Bool ((), b))
 
 /// Curried wrapper over IDiv.
 let mkDiv (a : IntExpr<'var>) (b : IntExpr<'var>) : IntExpr<'var> = IDiv (a, b)
@@ -459,8 +529,8 @@ let (|SimpleBool|CompoundBool|) : BoolExpr<_> -> Choice<unit, unit> =
 /// Categorises expressions into simple or compound.
 let (|SimpleExpr|CompoundExpr|) : Expr<_> -> Choice<unit, unit> =
     function
-    | Bool (SimpleBool) -> SimpleExpr
-    | Int (SimpleInt) -> SimpleExpr
+    | Bool (_, SimpleBool) -> SimpleExpr
+    | Int (_, SimpleInt) -> SimpleExpr
     | _ -> CompoundExpr
 
 /// <summary>
