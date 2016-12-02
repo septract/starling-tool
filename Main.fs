@@ -69,6 +69,8 @@ type Request =
     | MuZ3 of Backends.MuZ3.Types.Request
     /// Run the HSF backend (experimental).
     | HSF
+    /// Run the Grasshopper backend (experimental) 
+    | Grasshopper 
 
 /// Map of -s stage names to Request items.
 let requestList : (string * (string * Request)) list =
@@ -146,7 +148,10 @@ let requestList : (string * (string * Request)) list =
         Request.MuZ3 Backends.MuZ3.Types.Request.Sat))
       ("hsf",
        ("Outputs a proof in HSF format.",
-        Request.HSF)) ]
+        Request.HSF)) 
+      ("grass",
+       ("Outputs a proof in Grasshopper format.",
+        Request.Grasshopper))]
 
 /// Converts an optional -s stage name to a request item.
 /// If none is given, the latest stage is selected.
@@ -202,6 +207,8 @@ type Response =
     | MuZ3 of Backends.MuZ3.Types.Response
     /// The result of HSF processing.
     | HSF of Backends.Horn.Types.Horn list
+    /// The results of Grasshopper 
+    | Grasshopper of Backends.Grasshopper.Types.GrassModel
 
 
 /// Pretty-prints a response.
@@ -242,6 +249,7 @@ let printResponse (mview : ModelView) : Response -> Doc =
     | SMTProof z -> Backends.Z3.Pretty.printResponse mview z
     | MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
     | HSF h -> Backends.Horn.Pretty.printHorns h
+    | Grasshopper g -> Backends.Grasshopper.Pretty.printQuery g 
 
 
 /// A top-level program error.
@@ -254,6 +262,8 @@ type Error =
     ///     An error occurred in the HSF backend.
     /// </summary>
     | HSF of Backends.Horn.Types.Error
+    /// An error occurred in the Grasshopper backend. 
+    | Grasshopper of Backends.Grasshopper.Types.Error
     /// <summary>
     ///     An error occurred in the MuZ3 backend.
     /// </summary>
@@ -320,6 +330,7 @@ let rec printError (err : Error) : Doc =
     | IterLowerError e ->
         headed "Iterator lowering failed"
                [ TermGen.Iter.printError e ]
+    | Grasshopper e -> Backends.Grasshopper.Pretty.printGrassError e 
     | ModelFilterError e ->
         headed "View definitions are incompatible with this backend"
                [ Core.Instantiate.Pretty.printError e ]
@@ -477,6 +488,9 @@ let runStarling (request : Request)
         bind (Starling.Semantics.translate
               >> mapMessages Error.Semantics)
     let axiomatise = lift Starling.Core.Graph.axiomatise
+    let grasshopper = 
+        bind (Backends.Grasshopper.grassModel 
+              >> mapMessages Error.Grasshopper) 
 
     // Prepares a model for insertion into a Horn clause solver, by trying to
     // throw away symbols and removing already-proven-by-Z3 clauses.
@@ -507,7 +521,7 @@ let runStarling (request : Request)
     let eliminate : Result<Model<_, _>, Error> -> Result<Model<_, _>, Error>  =
         lift (Backends.Z3.runZ3OnModel shouldUseRealsForInts)
 
-    let backend m =
+    let backend (m : Result<Backends.Z3.Types.ZModel, Error>) : Result<Response,Error>  =
         let phase op response =
             let time = System.Diagnostics.Stopwatch.StartNew()
             op m
@@ -519,6 +533,7 @@ let runStarling (request : Request)
         // TODO: plug eliminate into HSF
         | Request.HSF         -> phase (prepareForHorn >> hsf) Response.HSF
         | Request.MuZ3 rq     -> phase (prepareForHorn >> muz3 rq) Response.MuZ3
+        | Request.Grasshopper -> phase grasshopper Response.Grasshopper  
         | _                   -> fail (Error.Other "Internal")
 
     //Build a phase with
@@ -588,3 +603,5 @@ let main (argv : string[]) : int =
     | _ ->
         printfn "parse result of unknown type"
         3
+
+
