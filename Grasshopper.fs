@@ -19,8 +19,8 @@ open Starling.Core.Traversal
 
 [<AutoOpen>] 
 module Types =
-    type GrassModel = Backends.Z3.Types.ZModel // Just piggyback on Z3 model for now.  
-    type Error = unit 
+    type GrassModel = Backends.Z3.Types.ZModel  // Just piggyback on Z3 model.  
+    type Error = unit                           // No Grasshopper-specific errors yet. 
 
 module Pretty = 
     open Starling.Core.Pretty
@@ -28,6 +28,20 @@ module Pretty =
     open Starling.Core.Expr.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Symbolic.Pretty
+
+    // Print infix operator across multiple lines
+    let infexprV (op : string) (pxs : 'x -> Doc) (xs : seq<'x>) : Doc = 
+        let mapped = Seq.map pxs xs 
+        let resseq = Seq.map (fun x -> vsep [(String op); Indent x]) (Seq.tail mapped) 
+        hsep [Seq.head mapped; (hsep resseq)] 
+        |> parened 
+
+    // Print infix operator on one line
+    let infexpr (op : string) (pxs : 'x -> Doc) (xs : seq<'x>) : Doc = 
+        let mapped = Seq.map pxs xs 
+        let resseq = Seq.map (fun x -> hsep [(String op); x]) (Seq.tail mapped) 
+        hsep [Seq.head mapped; (hsep resseq)] 
+        |> parened 
 
     /// Prints a marked Var 
     let printMarkedVarGrass (v : MarkedVar) : Doc =
@@ -43,20 +57,6 @@ module Pretty =
         | Int name -> String name  
         | Bool name -> String name  
         | _ -> failwith "Unimplemented for Grasshopper backend." 
-
-    // Print infix operator across multiple lines
-    let infexprV (op : string) (pxs : 'x -> Doc) (xs : seq<'x>) : Doc = 
-        let mapped = Seq.map pxs xs 
-        let resseq = Seq.map (fun x -> vsep [(String op); Indent x]) (Seq.tail mapped) 
-        hsep [Seq.head mapped; (hsep resseq)] 
-        |> parened 
-
-    // Print infix operator on one line
-    let infexpr (op : string) (pxs : 'x -> Doc) (xs : seq<'x>) : Doc = 
-        let mapped = Seq.map pxs xs 
-        let resseq = Seq.map (fun x -> hsep [(String op); x]) (Seq.tail mapped) 
-        hsep [Seq.head mapped; (hsep resseq)] 
-        |> parened 
 
     /// Pretty-prints an arithmetic expression.
     let rec printIntExprG (pVar : 'Var -> Doc) : IntExpr<'Var> -> Doc =
@@ -91,9 +91,7 @@ module Pretty =
             parened
                 (printInterpolatedSymbolicSentence pArg ws xs)
 
-    let printExprGrass (a : BoolExpr<Sym<MarkedVar>>) : Doc  = 
-        printBoolExprG (printSymGrass printMarkedVarGrass) a 
-
+    /// Get the set of accessed variables. 
     let findVarsGrass (zterm : Backends.Z3.Types.ZTerm) : seq<MarkedVar> = 
         // TODO @(septract) Should this conjoin the command as well? 
         BAnd [zterm.SymBool.WPre; zterm.SymBool.Goal] 
@@ -102,21 +100,26 @@ module Pretty =
         |> lift (Set.toSeq) 
         |> returnOrFail
 
-
+    /// Print a single Grasshopper query from a ZTerm 
     let printZTermGrass (svars : VarMap) 
-                   (name : string) 
-                   (zterm: Backends.Z3.Types.ZTerm) : Doc =
+                        (name : string) 
+                        (zterm: Backends.Z3.Types.ZTerm) : Doc =
+
+        // TODO @(septract) print variable types
         let svarprint = VarMap.toTypedVarSeq svars
                         |> Seq.map printTypedVarGrass 
-
         let varprint = Seq.map printMarkedVarGrass (findVarsGrass zterm) 
                        |> Seq.append svarprint 
                        |> (fun x -> VSep(x,String ",")) 
                        |> Indent 
+
+        // Print the requires / ensures clauses 
         let wpreprint = zterm.SymBool.WPre 
-                        |> printExprGrass 
+                        |> printBoolExprG (printSymGrass printMarkedVarGrass) 
         let goalprint = zterm.SymBool.Goal 
-                        |> printExprGrass 
+                        |> printBoolExprG (printSymGrass printMarkedVarGrass) 
+
+        // TODO @(septract) print command properly 
         let cmdprint = zterm.SymBool.Cmd 
                        |> (Core.Expr.Pretty.printBoolExpr (printSymGrass printMarkedVarGrass))
         vsep [ String "procedure" <+> String name <+> (varprint |> parened) 
@@ -129,13 +132,15 @@ module Pretty =
                     |> Indent |> braced 
              ]  
 
+    /// Print all the Grasshopper queries for a model.      
     let printQuery (model: GrassModel) : Doc = 
         Map.toSeq model.Axioms 
         |> Seq.map (fun (name,term) -> printZTermGrass model.SharedVars name term) 
         |> vsep
 
-    let printGrassError e = 
-        failwith "not implemented yet" 
+    /// Print a Grasshopper error. 
+    let printGrassError e = failwith "not implemented yet" 
 
+/// Generate a grasshopper model (currently doesn't do anything) 
 let grassModel (i : Backends.Z3.Types.ZModel) : Result<GrassModel,Error>  = 
   ok i 
