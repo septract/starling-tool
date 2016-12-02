@@ -23,6 +23,25 @@ open Starling.Utils
 
 
 /// <summary>
+///     An extended type record for integer types.
+/// </summary>
+type IntTypeRec = unit
+
+/// <summary>
+///     An extended type record for Boolean types.
+/// </summary>
+type BoolTypeRec = unit
+
+/// <summary>
+///     An extended type record for array types.
+/// </summary>
+type ArrayTypeRec =
+    { /// <summary>The element type of the array.</summary>
+      ElementType : Type
+      /// <summary>The length of the array.</summary>
+      Length : int option }
+
+/// <summary>
 ///     A typed item.
 /// </summary>
 /// <typeparam name="Int">
@@ -34,7 +53,7 @@ open Starling.Utils
 /// <typeparam name="Array">
 ///     The meta-type of the item when it is typed as <c>Array</c>.
 /// </typeparam>
-type Typed<'Int, 'Bool, 'Array> =
+and Typed<'Int, 'Bool, 'Array> =
     /// <summary>
     ///    An item of integral type.
     /// </summary>
@@ -62,7 +81,12 @@ type Typed<'Int, 'Bool, 'Array> =
 /// <typeparam name="T">
 ///     The meta-type to use for all <c>Typed</c> parameters.
 /// </typeparam>
-type CTyped<'T> = Typed<'T, 'T, 'T>
+and CTyped<'T> = Typed<'T, 'T, 'T>
+
+/// <summary>
+///     A standalone type annotation.
+/// </summary>
+and Type = CTyped<unit>
 
 /// <summary>
 ///     Maps over the contents of a <see cref="CTyped"/>.
@@ -84,11 +108,6 @@ let mapCTyped (f : 'Src -> 'Dst) : CTyped<'Src> -> CTyped<'Dst> =
     | Int i -> Int (f i)
     | Bool b -> Bool (f b)
     | Array (eltype, length, a) -> Array (eltype, length, f a)
-
-/// <summary>
-///     A standalone type annotation.
-/// </summary>
-type Type = CTyped<unit>
 
 /// <summary>
 ///     Checks whether two types are compatible.
@@ -152,10 +171,7 @@ module Typed =
     ///     A <c>CTyped</c> with <paramref name="item"/> as its value.
     /// </returns>
     let withType (ty : Type) (item : 'a) : CTyped<'a> =
-        match ty with
-        | Bool () -> Bool item
-        | Int () -> Int item
-        | Array (eltype, length, ()) -> Array (eltype, length, item)
+        mapCTyped (fun _ -> item) ty
 
     /// <summary>
     ///     Extracts the value of a <c>CTyped</c> item.
@@ -175,6 +191,15 @@ module Typed =
     /// </summary>
     let (|WithType|) x = (valueOf x, typeOf x)
 
+    /// <summary>
+    ///     Active pattern extracting the root type of a typed item.
+    /// </summary>
+    let (|AnInt|ABool|AnArray|) (typed : Typed<'I, 'B, 'A>) =
+        match typed with
+        | Int _ -> AnInt
+        | Bool _ -> ABool
+        | Array (eltype, length, _) -> AnArray (eltype, length)
+
 
 /// <summary>
 ///     Pretty printers for the type system.
@@ -187,9 +212,9 @@ module Pretty =
     /// </summary>
     let rec printType : Type -> Doc =
         function
-        | Int () -> "int" |> String
-        | Bool () -> "bool" |> String
-        | Array (eltype, len, ()) ->
+        | AnInt -> "int" |> String
+        | ABool -> "bool" |> String
+        | AnArray (eltype, len) ->
             parened
                 (String "array"
                  <+> printType eltype

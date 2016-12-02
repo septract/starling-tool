@@ -592,9 +592,9 @@ let rec modelExpr
             lift2
                 (fun (eltype, length, arrE) idxE ->
                     match eltype with
-                    | Int () -> Int (IIdx (eltype, length, arrE, idxE))
-                    | Bool () -> Bool (BIdx (eltype, length, arrE, idxE))
-                    | Array (ieltype, ilength, ()) ->
+                    | AnInt -> Int (IIdx (eltype, length, arrE, idxE))
+                    | ABool -> Bool (BIdx (eltype, length, arrE, idxE))
+                    | AnArray (ieltype, ilength) ->
                         Array (ieltype, ilength, AIdx (eltype, length, arrE, idxE)))
                 arrResult idxResult
         (* We can use the active patterns above to figure out whether we
@@ -677,7 +677,7 @@ and modelBoolExpr
             bind2
                 (fun (eltype, length, arrE) idxE ->
                     match eltype with
-                    | Bool () -> ok (BIdx (eltype, length, arrE, idxE))
+                    | ABool -> ok (BIdx (eltype, length, arrE, idxE))
                     | t ->
                         fail (ExprBadType (TypeMismatch (expected = "bool[]", got = t))))
                 arrResult idxResult
@@ -783,7 +783,7 @@ and modelIntExpr
             bind2
                 (fun (eltype, length, arrE) idxE ->
                     match eltype with
-                    | Int () -> ok (IIdx (eltype, length, arrE, idxE))
+                    | AnInt -> ok (IIdx (eltype, length, arrE, idxE))
                     | t ->
                         fail (ExprBadType (TypeMismatch (expected = "int[]", got = t))))
                 arrResult idxResult
