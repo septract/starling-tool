@@ -4,7 +4,6 @@ shared int heap;
 shared int head;
 shared int ub; // upper bound on the list
 
-thread int lheap; // local copy of the heap  
 thread int prev;
 thread int curr;
 

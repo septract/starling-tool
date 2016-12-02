@@ -372,50 +372,58 @@ let tliftOverCTyped
     // TODO(CaptainHayashi): proper doc comment.
     fun ctx ->
         function
-        | CTyped.Int i -> lift (pairMap id Int) (sub ctx i)
-        | CTyped.Bool b -> lift (pairMap id Bool) (sub ctx b)
-        | CTyped.Array (eltype, length, a) ->
-            lift (pairMap id (fun a -> Array (eltype, length, a))) (sub ctx a)
+        | CTyped.Int   (t, i) -> lift (fun (ctx, i') -> (ctx, Int   (t, i'))) (sub ctx i)
+        | CTyped.Bool  (t, b) -> lift (fun (ctx, b') -> (ctx, Bool  (t, b'))) (sub ctx b)
+        | CTyped.Array (t, a) -> lift (fun (ctx, a') -> (ctx, Array (t, a'))) (sub ctx a)
 
 /// <summary>
 ///     Tries to extract an <see cref="ArrayExpr"/> out of an
 ///     <see cref="Expr"/>, failing if the expression is not of that type
 ///     or the element type or array is wrong.
 /// </summary>
-let expectArray
-  (eltype : Type)
-  (length : int option)
-  (expr : Expr<'Var>)
+/// <param name="typerec">The expected type record of the expression.</param>
+/// <param name="expr">The expression from which we are extracting.</param>
+/// <returns>
+///     On success, the array expression nested inside <paramref name="expr"/>.
+///     On failure, a <see cref="TraversalError"/> explaining why.
+/// </returns>
+let expectArray (typerec : ArrayTypeRec) (expr : Expr<'Var>)
   : Result<ArrayExpr<'Var>, TraversalError<_>> =
-    // TODO(CaptainHayashi): proper doc comment.
     match expr with
-    | Expr.Array (_, _, ae)
-        when typesCompatible (Type.Array (eltype, length, ())) (typeOf expr) ->
-        ok ae
-    | _ ->
-        fail
-            (BadType
-                (expected = Type.Array (eltype, length, ()), got = typeOf expr))
+    | Expr.Array (t, x) when arrayTypeRecsCompatible typerec t -> ok x
+    | e -> fail (BadType (expected = Type.Array (typerec, ()), got = typeOf e))
 
 /// <summary>
 ///     Tries to extract an <see cref="IntExpr"/> out of an
 ///     <see cref="Expr"/>, failing if the expression is not of that type.
 /// </summary>
-let expectInt : Expr<'Var> -> Result<IntExpr<'Var>, TraversalError<_>> =
-    // TODO(CaptainHayashi): proper doc comment.
-    function
-    | Int x -> ok x
-    | tx -> fail (BadType (expected = Type.Int (), got = typeOf tx))
+/// <param name="typerec">The expected type record of the expression.</param>
+/// <param name="expr">The expression from which we are extracting.</param>
+/// <returns>
+///     On success, the array expression nested inside <paramref name="expr"/>.
+///     On failure, a <see cref="TraversalError"/> explaining why.
+/// </returns>
+let expectInt (typerec : PrimTypeRec) (expr : Expr<'Var>)
+  : Result<IntExpr<'Var>, TraversalError<_>> =
+    match expr with
+    | Expr.Int (t, x) when primTypeRecsCompatible typerec t -> ok x
+    | e -> fail (BadType (expected = Type.Int (typerec, ()), got = typeOf e))
 
 /// <summary>
 ///     Tries to extract an <see cref="BoolExpr"/> out of an
 ///     <see cref="Expr"/>, failing if the expression is not of that type.
 /// </summary>
-let expectBool : Expr<'Var> -> Result<BoolExpr<'Var>, TraversalError<_>> =
-    // TODO(CaptainHayashi): proper doc comment.
-    function
-    | Bool x -> ok x
-    | tx -> fail (BadType (expected = Type.Bool (), got = typeOf tx))
+/// <param name="typerec">The expected type record of the expression.</param>
+/// <param name="expr">The expression from which we are extracting.</param>
+/// <returns>
+///     On success, the array expression nested inside <paramref name="expr"/>.
+///     On failure, a <see cref="TraversalError"/> explaining why.
+/// </returns>
+let expectBool (typerec : PrimTypeRec) (expr : Expr<'Var>) 
+  : Result<BoolExpr<'Var>, TraversalError<_>> =
+    match expr with
+    | Expr.Bool (t, x) when primTypeRecsCompatible typerec t -> ok x
+    | e -> fail (BadType (expected = Type.Bool (typerec, ()), got = typeOf e))
 
 /// <summary>
 ///     Maps a traversal over an item, feeds the result into a function,
@@ -507,50 +515,54 @@ let tchain3
         }
 
 /// <summary>
+///     Re-annotates a pair of expressions with types before feeding them to a
+///     constructor.
+/// </summary>
+let retype2 x y f (x', y') =
+    f (updateTypedSub x x', updateTypedSub y y')
+
+/// <summary>
 ///     Converts a traversal from typed variables to expressions to one from
 ///     Boolean expressions to Boolean expressions.
 /// </summary>
 let rec tliftToBoolSrc
     (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error, 'Var>)
-    : Traversal<BoolExpr<'SrcVar>, BoolExpr<'DstVar>, 'Error, 'Var> =
+    : Traversal<TypedBoolExpr<'SrcVar>, BoolExpr<'DstVar>, 'Error, 'Var> =
     // TODO(CaptainHayashi): proper doc comment.
 
     // We do some tricky inserting and removing of positions on the stack
     // to ensure the correct position appears in the correct place, and
     // is removed when we pop back up the expression stack.
-    let bsv f x = Context.changePos f (tliftToBoolSrc sub) x
     let isv x = Context.changePos id (tliftToIntSrc sub) x
     let esv x = Context.changePos id (tliftToExprSrc sub) x
     let asv x = Context.changePos id (tliftToArraySrc sub) x
 
     let neg = Context.negate
 
-    fun ctx ->
-        function
-        | BVar x ->
-            x
-            |> CTyped.Bool
-            |> Context.changePos id sub ctx
-            |> bind (uncurry (ignoreContext expectBool))
-        | BIdx (eltype, length, arr, ix) ->
-            let assemble (arr', ix') =
-                ok (BIdx (eltype, length, arr', ix'))
-            let tResult =
-                tchain2 asv (Context.inIndex isv) assemble ctx ((eltype, length, arr), ix)
+    fun ctx b ->
+        let bsv f ctx x = Context.changePos f (tliftToBoolSrc sub) ctx (updateTypedSub b x)
 
+        match stripTypeRec b with
+        | BVar x ->
+            bind (uncurry (ignoreContext (expectBool b.SRec)))
+                (Context.changePos id sub ctx (CTyped.Bool (b.SRec, x)))
+        | BIdx (arr, ix) ->
+            let tResult =
+                tchain2 asv (Context.inIndex isv) (retype2 arr ix BIdx >> ok) ctx (arr, ix)
             // Remove the nested result.
             bind (uncurry (ignoreContext id)) tResult
         | BTrue -> ok (ctx, BTrue)
         | BFalse -> ok (ctx, BFalse)
         | BAnd xs -> tchainL (bsv id) BAnd ctx xs
-        | BOr xs -> tchainL (bsv id) BOr ctx xs
+        | BOr xs  -> tchainL (bsv id) BOr ctx xs
         // The LHS of an implies is in negative position.
         | BImplies (x, y) -> tchain2 (bsv neg) (bsv id) BImplies ctx (x, y)
         | BEq (x, y) -> tchain2 esv esv BEq ctx (x, y)
-        | BGt (x, y) -> tchain2 isv isv BGt ctx (x, y)
-        | BGe (x, y) -> tchain2 isv isv BGe ctx (x, y)
-        | BLe (x, y) -> tchain2 isv isv BLe ctx (x, y)
-        | BLt (x, y) -> tchain2 isv isv BLt ctx (x, y)
+        // These are complex because they encode the type of their integer arguments.
+        | BGt (x, y) -> tchain2 isv isv (retype2 x y BGt) ctx (x, y)
+        | BGe (x, y) -> tchain2 isv isv (retype2 x y BGe) ctx (x, y)
+        | BLe (x, y) -> tchain2 isv isv (retype2 x y BLe) ctx (x, y)
+        | BLt (x, y) -> tchain2 isv isv (retype2 x y BLt) ctx (x, y)
         | BNot x -> tchain (bsv neg) BNot ctx x
 
 /// <summary>
@@ -559,24 +571,26 @@ let rec tliftToBoolSrc
 /// </summary>
 and tliftToIntSrc
   (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error, 'Var>)
-  : Traversal<IntExpr<'SrcVar>, IntExpr<'DstVar>, 'Error, 'Var> =
-    let isv x = Context.changePos id (tliftToIntSrc sub) x
-    let asv x = Context.changePos id (tliftToArraySrc sub) x
+  : Traversal<TypedIntExpr<'SrcVar>, IntExpr<'DstVar>, 'Error, 'Var> =
     // TODO(CaptainHayashi): proper doc comment.
+    let asv ctx = Context.changePos id (tliftToArraySrc sub) ctx
+    // Integral traversal with a different type from this expression
+    let tisv ctx = Context.changePos id (tliftToIntSrc sub) ctx
 
-    fun ctx ->
-        function
+    fun ctx i ->
+        // Integral traversal with the same type as this expression
+        let isv ctx x = Context.changePos id (tliftToIntSrc sub) ctx (updateTypedSub i x)
+
+        match stripTypeRec i with
         | IVar x ->
-            x
-            |> CTyped.Int
-            |> Context.changePos id sub ctx
-            |> bind (uncurry (ignoreContext expectInt))
-        | IIdx (eltype, length, arr, ix) ->
-            let assemble (arr', ix') =
-                ok (IIdx (eltype, length, arr', ix'))
+            bind (uncurry (ignoreContext (expectInt i.SRec)))
+                (Context.changePos id sub ctx (CTyped.Int (i.SRec, x)))
+        | IIdx (arr, ix) ->
             let tResult =
-                tchain2 asv (Context.inIndex isv) assemble ctx ((eltype, length, arr), ix)
-
+                tchain2
+                    asv
+                    (Context.inIndex tisv)
+                    (retype2 arr ix IIdx >> ok) ctx (arr, ix)
             // Remove the nested result.
             bind (uncurry (ignoreContext id)) tResult
         | IInt i -> ok (ctx, IInt i)
@@ -592,42 +606,45 @@ and tliftToIntSrc
 /// </summary>
 and tliftToArraySrc
   (sub : Traversal<CTyped<'SrcVar>, Expr<'DstVar>, 'Error, 'Var>)
-  : Traversal<(Type * int option * ArrayExpr<'SrcVar>),
-              ArrayExpr<'DstVar>, 'Error, 'Var> =
+  : Traversal<TypedArrayExpr<'SrcVar>, ArrayExpr<'DstVar>, 'Error, 'Var> =
     // TODO(CaptainHayashi): proper doc comment.
     let isv x = Context.changePos id (tliftToIntSrc sub) x
-    let asv x = Context.changePos id (tliftToArraySrc sub) x
     let esv x = Context.changePos id (tliftToExprSrc sub) x
+    // Array traversal with a different type from this expression
+    let tasv ctx = Context.changePos id (tliftToArraySrc sub) ctx
 
-    fun ctx (eltype, length, arrayExpr) ->
-        match arrayExpr with
+    fun ctx a ->
+        // Array traversal with the same type as this expression
+        let asv ctx x = Context.changePos id (tliftToArraySrc sub) ctx (updateTypedSub a x)
+
+        match stripTypeRec a with
         | AVar x ->
-            let typedVar = CTyped.Array (eltype, length, x)
-            let exprResult = Context.changePos id sub ctx typedVar
-            bind
-                (uncurry (ignoreContext (expectArray eltype length)))
-                exprResult
-        | AIdx (eltype, length, arr, ix) ->
-            let assemble (arr', ix') =
-                ok (AIdx (eltype, length, arr', ix'))
+            bind (uncurry (ignoreContext (expectArray a.SRec)))
+                (Context.changePos id sub ctx (CTyped.Array (a.SRec, x)))
+        | AIdx (arr, ix) ->
             let tResult =
-                tchain2 asv (Context.inIndex isv) assemble ctx ((eltype, length, arr), ix)
-
+                tchain2
+                    tasv
+                    (Context.inIndex (Context.changePos id (tliftToIntSrc sub)))
+                    (retype2 arr ix AIdx >> ok) ctx (arr, ix)
             // Remove the nested result.
             bind (uncurry (ignoreContext id)) tResult
-        | AUpd (eltype, length, arr, ix, value) ->
-            // Ensure the traversal doesn't change the type of value.
-            let assemble (arr', ix', value') =
+        | AUpd (arr, ix, value) ->
+            let assemble (arrUntyped, ixUntyped, value') =
+                // arr' will have the same type as a, so no need to type it.
+                let ix' = updateTypedSub ix ixUntyped
+
+                // Ensure the traversal doesn't change the type of value.
                 let vt, vt' = typeOf value, typeOf value'
                 if typesCompatible vt vt'
-                then ok (AUpd (eltype, length, arr', ix', value'))
+                then ok (AUpd (arrUntyped, ix', value'))
                 else fail (BadType (expected = vt, got = vt'))
             let tResult =
                 tchain3
                     asv
                     (Context.inIndex isv)
                     esv
-                    assemble ctx ((eltype, length, arr), ix, value)
+                    assemble ctx (arr, ix, value)
 
             // Remove the nested result.
             bind (uncurry (ignoreContext id)) tResult
@@ -638,12 +655,18 @@ and tliftToExprSrc
     // TODO(CaptainHayashi): proper doc comment.
     fun ctx ->
         function
-        | Bool b -> b |> tliftToBoolSrc sub ctx |> lift (pairMap id Bool)
-        | Int i -> i |> tliftToIntSrc sub ctx |> lift (pairMap id Int)
-        | Array (eltype, length, a) ->
-            lift
-                (fun (ctx', a') -> (ctx', Array (eltype, length, a')))
-                (tliftToArraySrc sub ctx (eltype, length, a))
+        | Bool (t, b) ->
+            let tb = mkTypedSub t b
+            let tR = tliftToBoolSrc sub ctx tb
+            lift (fun (ctx, b') -> (ctx, Bool (t, b'))) tR
+        | Int (t, i) ->
+            let ti = mkTypedSub t i
+            let tR = tliftToIntSrc sub ctx ti
+            lift (fun (ctx, i') -> (ctx, Int (t, i'))) tR
+        | Array (t, a) ->
+            let ta = mkTypedSub t a
+            let tR = tliftToArraySrc sub ctx ta
+            lift (fun (ctx, a') -> (ctx, Array (t, a'))) tR
 
 /// <summary>
 ///     Adapts an expression traversal to work on Boolean expressions.
@@ -651,11 +674,12 @@ and tliftToExprSrc
 /// </summary>
 let traverseBoolAsExpr
   (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error, 'Var>)
-  : Traversal<BoolExpr<'SrcVar>, BoolExpr<'DstVar>, 'Error, 'Var> =
+  : Traversal<TypedBoolExpr<'SrcVar>, BoolExpr<'DstVar>, 'Error, 'Var> =
     // TODO(CaptainHayashi): proper doc comment.
-    let toExpr = ignoreContext (Bool >> ok)
-    let fromExpr = ignoreContext expectBool
-    fun ctx expr -> toExpr ctx expr >>= uncurry traversal >>= uncurry fromExpr
+    fun ctx bool ->
+        let expr = Expr.Bool (bool.SRec, bool.SExpr)
+        let R = traversal ctx expr
+        bind (uncurry (ignoreContext (expectBool bool.SRec))) R
 
 /// <summary>
 ///     Adapts an expression traversal to work on integer expressions.
@@ -663,11 +687,12 @@ let traverseBoolAsExpr
 /// </summary>
 let traverseIntAsExpr
   (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error, 'Var>)
-  : Traversal<IntExpr<'SrcVar>, IntExpr<'DstVar>, 'Error, 'Var> =
+  : Traversal<TypedIntExpr<'SrcVar>, IntExpr<'DstVar>, 'Error, 'Var> =
     // TODO(CaptainHayashi): proper doc comment.
-    let toExpr = ignoreContext (Int >> ok)
-    let fromExpr = ignoreContext expectInt
-    fun ctx expr -> toExpr ctx expr >>= uncurry traversal >>= uncurry fromExpr
+    fun ctx int ->
+        let expr = Expr.Int (int.SRec, int.SExpr)
+        let R = traversal ctx expr
+        bind (uncurry (ignoreContext (expectInt int.SRec))) R
 
 /// <summary>
 ///     Converts a traversal from typed variables to typed variables to one from

@@ -236,7 +236,8 @@ let instantiate
             (function
              | None -> ok None
              | Some (dfunc, defn) ->
-                lift Some (mapTraversal (subInBool dfunc) defn))
+                // Definitions have no extended type
+                lift Some (mapTraversal (subInBool dfunc) (mkTypedSub () defn)))
             (mapMessages Inner dfuncResult)
 
     mapMessages Traversal result
@@ -282,7 +283,7 @@ module DefinerFilter =
         |> List.map
                (fun (f, d) ->
                     let trav = removeSymFromBoolExpr UnwantedSym
-                    let result = mapTraversal trav d
+                    let result = mapTraversal trav (mkTypedSub () d)
                     lift (mkPair f) result)
         |> collect
 
@@ -415,7 +416,7 @@ module Phase =
             (* The above might have left some symbols, eg in integer position.
                Try to remove them, and fail if we can't. *)
             let elimBoolExprR =
-                bind (mapTraversal (removeSymFromBoolExpr UnwantedSym))
+                bind (mkTypedSub () >> mapTraversal (removeSymFromBoolExpr UnwantedSym))
                     approxBoolExprR
             // Finally, tidy up the resulting expression.
             mapMessages Traversal (lift simp elimBoolExprR)
@@ -427,13 +428,14 @@ module Phase =
                approximated by removing certain part-symbolic parts of them.
 
                Commands appear on the LHS of a term, thus in -ve position. *)
-            tryApproxInBool (Context.negative ())
-              (Starling.Core.Command.SymRemove.removeSym cmdSemantics)
+            let removed = 
+                Starling.Core.Command.SymRemove.removeSym cmdSemantics
+            tryApproxInBool (Context.negative ()) (mkTypedSub () removed)
 
         // Weakest precondition is on the LHS of a term, thus in -ve position.
-        let mapWPre wPre = tryApproxInBool (Context.negative ()) wPre
+        let mapWPre wPre = tryApproxInBool (Context.negative ()) (mkTypedSub () wPre)
         // Goal is on the RHS of a term, thus in +ve position.
-        let mapGoal goal = tryApproxInBool (Context.positive ()) goal
+        let mapGoal goal = tryApproxInBool (Context.positive ()) (mkTypedSub () goal)
 
         tryMapTerm mapCmd mapWPre mapGoal symterm
 
