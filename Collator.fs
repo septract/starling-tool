@@ -33,6 +33,8 @@ module Types =
           ///     </para>
           /// </remarks>
           Search : int option
+          /// <summary>The typedef list.</summary>
+          Typedefs : (TypeLiteral * string) list
           VProtos : ViewProto list
           Constraints : (ViewSignature * Expression option) list
           Methods : CMethod<Marked<View>> list }
@@ -88,6 +90,7 @@ module Pretty =
 let empty : CollatedScript =
     { Constraints = []
       Methods = []
+      Typedefs = []
       Search = None
       VProtos = []
       SharedVars = []
@@ -153,6 +156,8 @@ let collate (script : ScriptItem list) : CollatedScript =
 
     let collateStep item (cs : CollatedScript) =
         match item.Node with
+        | Typedef (t, d) ->
+            { cs with Typedefs = (t, d) :: cs.Typedefs }
         | SharedVars { VarType = t; VarNames = vs } ->
             // Flatten eg. 'int x, y, z' into 'int x; int y; int z'.
             let s = List.map (mkPair t) vs

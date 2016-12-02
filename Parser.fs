@@ -359,7 +359,11 @@ let parseViewLike basic join =
 /// Parses a type identifier.
 let parseType : Parser<TypeLiteral, unit> =
     let parsePrimType =
-        stringReturn "int" TInt <|> stringReturn "bool" TBool
+        choice [
+            stringReturn "int" TInt 
+            stringReturn "bool" TBool
+            parseIdentifier |>> TUser
+        ]
 
     let parseArray = inSquareBrackets pint32 |>> curry TArray
     let parseSuffixes = many parseArray
