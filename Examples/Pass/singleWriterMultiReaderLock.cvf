@@ -81,7 +81,7 @@ view holdTick(int t);
 view holdInnerLock();
 view holdWriteLock();
 view canHoldReadLock();
-view iter[n] holdReadLock();
+view iter holdReadLock();
 
 // Invariant
 constraint emp                                  -> ticket >= serving && readCount >= 0 && maxCount > 0;

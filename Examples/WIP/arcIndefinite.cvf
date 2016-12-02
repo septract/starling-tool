@@ -42,7 +42,7 @@ method drop() {
 }
 
 view error();
-view iter[n] arc();
+view iter arc();
 view noCnt();
 view noArc();
 
