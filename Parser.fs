@@ -468,12 +468,9 @@ do parseViewSignatureRef := parseViewLike parseBasicViewSignature ViewSignature.
 /// Parses a view prototype (a LHS followed optionally by an iterator).
 let parseViewProto =
     // TODO (CaptainHayashi): so much backtracking...
-    // (parseIteratedContainer
-    //     (parseFunc parseParam)
-    //     (fun i f -> WithIterator (f, i))) 
     (pstring "iter" >>. ws >>. 
       (parseFunc parseParam
-         |>> (fun lhs -> WithIterator (lhs)))) 
+         |>> (fun lhs -> WithIterator lhs))) 
     <|> 
       (parseFunc parseParam
          |>> (fun lhs -> NoIterator (lhs, false)))

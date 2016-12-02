@@ -138,7 +138,7 @@ module Types =
         /// <summary>
         ///     An iterated view prototype; cannot be anonymous
         /// </summary>
-        | WithIterator of Func: Func<'Param> //  * Iterator: string
+        | WithIterator of Func: Func<'Param>
 
     /// A view prototype with Param parameters.
     type ViewProto = GeneralViewProto<Param>
