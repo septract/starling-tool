@@ -121,8 +121,8 @@ let andEquiv (x : Equiv<'var>) (y : Equiv<'var>) : Equiv<'var> =
 /// </remarks>
 let equiv (x : BoolExpr<'var>) (y : BoolExpr<'var>) : Equiv<'var> =
     fun toVar ctx ->
-        let sx, sy = (x |> simp |> Expr.boolToZ3 false toVar ctx,
-                      y |> simp |> Expr.boolToZ3 false toVar ctx)
+        let sx = Expr.boolToZ3 false toVar ctx (mkTypedSub () (simp x))
+        let sy = Expr.boolToZ3 false toVar ctx (mkTypedSub () (simp y))
         ctx.MkIff (sx, sy)
 
 /// <summary>

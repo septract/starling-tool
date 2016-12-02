@@ -143,7 +143,7 @@ module Traversal =
         fun ctx { Cmd = c; Microcode = m; Assigns = a; Semantics = s } ->
             let swapSemantics s' =
                 { Cmd = c; Microcode = m; Assigns = a; Semantics = s' }
-            let result = traverseBoolAsExpr traversal ctx s
+            let result = traverseBoolAsExpr traversal ctx (mkTypedSub () s)
             lift (pairMap id swapSemantics) result
 
 /// <summary>
@@ -172,7 +172,7 @@ module Queries =
     /// </summary>
     let (|Assume|_|) : Command -> SVBoolExpr option =
         function
-        | [ Stored { Name = n ; Args = [ SVExpr.Bool b ] } ]
+        | [ Stored { Name = n ; Args = [ SVExpr.Bool (_, b) ] } ]
           when n = "Assume" -> Some b
         | _ -> None
 
@@ -184,7 +184,7 @@ module Queries =
             match prim with
             | Stored { Results = rs } -> rs
             | SymC { Working = ws } ->
-                Set.toList (Set.map (mapCTyped Reg >> varToExpr) ws)
+                Set.toList (Set.map (mapCTyped Reg >> mkVarExp) ws)
 
         List.fold (fun a c -> a @ primResults c) [] cs
 
@@ -240,8 +240,10 @@ module Compose =
         | IDiv (x, y) | IMod (x, y) ->
             maxOpt (getIntIntermediate var x) (getIntIntermediate var y)
         // TODO(CaptainHayashi): need to convince myself this is correct.
-        | IIdx (_, _, arr, idx) ->
-            maxOpt (getArrayIntermediate var arr) (getIntIntermediate var idx)
+        | IIdx (arr, idx) ->
+            maxOpt
+                (getArrayIntermediate var (stripTypeRec arr))
+                (getIntIntermediate var (stripTypeRec idx))
         | _ -> None
 
     /// Gets the highest intermediate number for some variable in a given
@@ -258,12 +260,16 @@ module Compose =
             maxOpt (getBoolIntermediate var x) (getBoolIntermediate var y)
         | BNot x -> getBoolIntermediate var x
         | BGt (x, y) | BLt (x, y) | BGe (x, y) | BLe (x, y) ->
-            maxOpt (getIntIntermediate var x) (getIntIntermediate var y)
+            maxOpt
+                (getIntIntermediate var (stripTypeRec x))
+                (getIntIntermediate var (stripTypeRec y))
         | BEq (x, y) ->
             maxOpt (getIntermediate var x) (getIntermediate var y)
         // TODO(CaptainHayashi): need to convince myself this is correct.
-        | BIdx (_, _, arr, idx) ->
-            maxOpt (getArrayIntermediate var arr) (getIntIntermediate var idx)
+        | BIdx (arr, idx) ->
+            maxOpt
+                (getArrayIntermediate var (stripTypeRec arr))
+                (getIntIntermediate var (stripTypeRec idx))
         | _ -> None
 
     /// Gets the highest intermediate number for some variable in a given
@@ -275,22 +281,26 @@ module Compose =
         | AVar (Sym { Args = xs } ) ->
             Seq.fold maxOpt None (Seq.map (getIntermediate var) xs)
         // TODO(CaptainHayashi): need to convince myself this is correct.
-        | AIdx (_, _, arr, idx) ->
-            maxOpt (getArrayIntermediate var arr) (getIntIntermediate var idx)
+        | AIdx (arr, idx) ->
+            maxOpt
+                (getArrayIntermediate var (stripTypeRec arr))
+                (getIntIntermediate var (stripTypeRec idx))
         | AVar _ -> None
-        | AUpd (_, _, arr, idx, upd) ->
+        | AUpd (arr, idx, upd) ->
             maxOpt
                 (getArrayIntermediate var arr)
-                (maxOpt (getIntIntermediate var idx) (getIntermediate var upd))
+                (maxOpt
+                    (getIntIntermediate var (stripTypeRec idx))
+                    (getIntermediate var upd))
 
     /// Gets the highest intermediate stage number for a given variable name
     /// in some expression.
     and getIntermediate
       (var : Var) (expr : Expr<Sym<MarkedVar>>) : bigint option =
         match expr with
-        | Int x -> getIntIntermediate var x
-        | Bool x -> getBoolIntermediate var x
-        | Array (_, _, x) -> getArrayIntermediate var x
+        | Int (_, x) -> getIntIntermediate var x
+        | Bool (_, x) -> getBoolIntermediate var x
+        | Array (_, x) -> getArrayIntermediate var x
 
 /// <summary>
 ///     Functions for removing symbols from commands.
@@ -313,14 +323,14 @@ module SymRemove =
       -> (Expr<Sym<'var>> * Expr<Sym<'var>>) option =
         // TODO(CaptainHayashi): sound and/or complete?
         function
-        | BEq ((Expr.Bool (BVar (Sym _)) as lhs),
+        | BEq ((Expr.Bool (_, BVar (Sym _)) as lhs),
                (Expr.Bool _ as rhs))
         | BEq ((Expr.Bool _ as lhs),
-               (Expr.Bool (BVar (Sym _)) as rhs))
-        | BEq ((Expr.Int (IVar (Sym _)) as lhs),
+               (Expr.Bool (_, BVar (Sym _)) as rhs))
+        | BEq ((Expr.Int (_, IVar (Sym _)) as lhs),
                (Expr.Int _ as rhs))
         | BEq ((Expr.Int _ as lhs),
-               (Expr.Int (IVar (Sym _)) as rhs)) -> Some (lhs, rhs)
+               (Expr.Int (_, IVar (Sym _)) as rhs)) -> Some (lhs, rhs)
         | _ -> None
 
     /// <summary>

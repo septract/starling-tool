@@ -274,7 +274,7 @@ module Traversal =
     ///     Boolean expressions.
     /// </returns>
     let removeSymFromBoolExpr (err : SymbolicSentence -> 'Error)
-      : Traversal<BoolExpr<Sym<'Var>>, BoolExpr<'Var>, 'Error, 'VarB> =
+      : Traversal<TypedBoolExpr<Sym<'Var>>, BoolExpr<'Var>, 'Error, 'VarB> =
         tliftToBoolSrc
             (tliftToExprDest
                 (tliftOverCTyped (removeSymFromVar err)))
@@ -358,10 +358,10 @@ module Traversal =
         let rec sub ctx =
             // Only symbolic Booleans are handled specially.
             function
-            | Bool (Sym x) ->
+            | Bool (t, Sym x) ->
                 match ctx with
                 | Positions (position::_) ->
-                    ok (ctx, position |> Context.underapprox |> Bool)
+                    ok (ctx, Bool (t, Context.underapprox position))
                 | c -> fail (ContextMismatch ("position context", c))
             (* Everything else just has approximation bubbled through
                in a type-generic way. *)

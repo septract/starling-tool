@@ -607,7 +607,8 @@ module Traversal =
             tchain2 (changePos negate tBool) tFunc
                 (fun (cond', item') -> { Cond = cond'; Item = item' })
                 ctx
-                (cond, item)
+                // Internal value, so it doesn't have an extended type
+                (mkTypedSub () cond, item)
 
     /// <summary>
     ///     Lifts a <c>Traversal</c> over all expressions in an iterated
@@ -637,7 +638,8 @@ module Traversal =
             tchain2 tInt tGFunc
                 (fun (iter', func') -> { Iterator = iter'; Func = func' })
                 ctx
-                (iter, func)
+                // Internal value, so it doesn't have an extended type
+                (mkTypedSub () iter, func)
 
     /// <summary>
     ///     Lifts a <c>Traversal</c> over all variables in a <see cref="Term"/>.
@@ -672,7 +674,8 @@ module Traversal =
             tchain3 (changePos negate tCmd) (changePos negate tWPre) tGoal
                 (fun (c', w', g') -> { Cmd = c'; WPre = w'; Goal = g' })
                 ctx
-                (c, w, g)
+                // None of these items can have extended types, I think?
+                (mkTypedSub () c, w, g)
 
     /// <summary>
     ///     Lifts a <c>Traversal</c> over all variables in a
