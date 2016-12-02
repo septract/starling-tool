@@ -19,17 +19,18 @@ open Starling.Core.Traversal
 
 [<AutoOpen>] 
 module Types =
-    type Grass = Backends.Z3.Types.ZModel // Just piggyback on Z3 model for now.  
+    type GrassModel = Backends.Z3.Types.ZModel // Just piggyback on Z3 model for now.  
     type Error = unit 
 
 module Pretty = 
     open Starling.Core.Pretty
+    open Starling.Core.Var.Pretty
     open Starling.Core.Expr.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Symbolic.Pretty
 
     /// Prints a marked Var 
-    let printMarkedVar (v : MarkedVar) : Doc =
+    let printMarkedVarGrass (v : MarkedVar) : Doc =
         match v with 
         | Before s -> String "before_" <-> String s 
         | After s -> String "after_" <-> String s
@@ -51,13 +52,13 @@ module Pretty =
         |> parened 
 
     /// Pretty-prints an arithmetic expression.
-    let rec printIntExpr (pVar : 'Var -> Doc) : IntExpr<'Var> -> Doc =
+    let rec printIntExprG (pVar : 'Var -> Doc) : IntExpr<'Var> -> Doc =
         function
         | IVar c -> pVar c
         | _ -> failwith "Unimplemented for Grasshopper backend." 
 
     /// Pretty-prints a Boolean expression.
-    and printBoolExpr (pVar : 'Var -> Doc) : BoolExpr<'Var> -> Doc =
+    and printBoolExprG (pVar : 'Var -> Doc) : BoolExpr<'Var> -> Doc =
         function
         | BVar c -> pVar c
         | BAnd xs -> infexprV "&&" (printBoolExpr pVar) xs
@@ -68,14 +69,14 @@ module Pretty =
         | _ -> failwith "Unimplemented for Grasshopper backend." 
 
     /// Pretty-prints an expression.
-    and printExpr (pVar : 'Var -> Doc) : Expr<'Var> -> Doc =
+    and printExprG (pVar : 'Var -> Doc) : Expr<'Var> -> Doc =
         function
         | Int i -> printIntExpr pVar i
         | Bool b -> printBoolExpr pVar b
         | _ -> failwith "Unimplemented for Grasshopper backend." 
 
     /// Pretty-prints a symbolic sentence 
-    let rec printSym (pReg : 'Reg -> Doc) (sym : Sym<'Reg>) : Doc =
+    let rec printSymGrass (pReg : 'Reg -> Doc) (sym : Sym<'Reg>) : Doc =
         match sym with
         | Reg r -> pReg r
         | Sym { Sentence = ws; Args = xs } ->
@@ -84,7 +85,7 @@ module Pretty =
                 (printInterpolatedSymbolicSentence pArg ws xs)
 
     let printExprGrass (a : BoolExpr<Sym<MarkedVar>>) : Doc  = 
-        printBoolExpr (printSym printMarkedVar) a 
+        printBoolExprG (printSymGrass printMarkedVarGrass) a 
 
     let findVarsGrass (zterm : Backends.Z3.Types.ZTerm) : seq<MarkedVar> = 
         // TODO @(septract) Should this conjoin the command as well? 
@@ -94,8 +95,21 @@ module Pretty =
         |> lift (Set.toSeq) 
         |> returnOrFail
 
-    let printQuery (zterm: Backends.Z3.Types.ZTerm) : Doc =
-        let varprint = Seq.map printMarkedVar (findVarsGrass zterm) 
+    let printTypedVarGrass (v : TypedVar) = 
+        match v with 
+        | Int name -> String name  
+        | Bool name -> String name  
+        | _ -> failwith "Unimplemented for Grasshopper backend." 
+
+
+    let printZTermGrass (svars : VarMap) 
+                   (name : string) 
+                   (zterm: Backends.Z3.Types.ZTerm) : Doc =
+        let svarprint = VarMap.toTypedVarSeq svars
+                        |> Seq.map printTypedVarGrass 
+
+        let varprint = Seq.map printMarkedVarGrass (findVarsGrass zterm) 
+                       |> Seq.append svarprint 
                        |> (fun x -> VSep(x,String ",")) 
                        |> Indent 
         let wpreprint = zterm.SymBool.WPre 
@@ -103,18 +117,24 @@ module Pretty =
         let goalprint = zterm.SymBool.Goal 
                         |> printExprGrass 
         let cmdprint = zterm.SymBool.Cmd 
-                       |> (Core.Expr.Pretty.printBoolExpr (printSym printMarkedVar))
-        vsep [ String "procedure test" <+> (varprint |> parened) 
+                       |> (Core.Expr.Pretty.printBoolExpr (printSymGrass printMarkedVarGrass))
+        vsep [ String "procedure" <+> String name <+> (varprint |> parened) 
                String "requires" 
                Indent wpreprint <+> String ";" 
                String "ensures" 
                Indent goalprint <+> String ";" 
-               String "{}"   
-               headed "Command" (cmdprint |> Seq.singleton)
+               cmdprint 
+                    |> ssurround "/*" "*/" 
+                    |> Indent |> braced 
              ]  
+
+    let printQuery (model: GrassModel) : Doc = 
+        Map.toSeq model.Axioms 
+        |> Seq.map (fun (name,term) -> printZTermGrass model.SharedVars name term) 
+        |> vsep
 
     let printGrassError e = 
         failwith "not implemented yet" 
 
-let grassModel (i : Backends.Z3.Types.ZModel) : Result<Grass,Error>  = 
+let grassModel (i : Backends.Z3.Types.ZModel) : Result<GrassModel,Error>  = 
   ok i 

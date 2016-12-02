@@ -208,7 +208,7 @@ type Response =
     /// The result of HSF processing.
     | HSF of Backends.Horn.Types.Horn list
     /// The results of Grasshopper 
-    | Grasshopper of Backends.Grasshopper.Types.Grass 
+    | Grasshopper of Backends.Grasshopper.Types.GrassModel
 
 
 /// Pretty-prints a response.
@@ -249,7 +249,7 @@ let printResponse (mview : ModelView) : Response -> Doc =
     | SMTProof z -> Backends.Z3.Pretty.printResponse mview z
     | MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
     | HSF h -> Backends.Horn.Pretty.printHorns h
-    | Grasshopper g -> printUModel Backends.Grasshopper.Pretty.printQuery g 
+    | Grasshopper g -> Backends.Grasshopper.Pretty.printQuery g 
 
 
 /// A top-level program error.
