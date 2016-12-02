@@ -5,9 +5,10 @@ module Starling.Backends.Grasshopper
 
 open Chessie.ErrorHandling
 
-open Starling 
+open Starling
 open Starling.Collections
 open Starling.Utils
+open Starling.Core.Command
 open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.Expr
@@ -83,9 +84,11 @@ module Pretty =
                match x with 
                | NoSym y -> String "!" <+> (printBoolExprG pVar fr x) |> parened 
                | _ -> failwith "[printBoolExprG] Grasshopper can't negate spatial things." 
-           | BEq (x, y) -> infexpr "==" (printExprG pVar fr) [x; y]
-           | BGt (x, y) -> infexpr ">" (printIntExprG pVar) [x; y]
+           | BEq (x, y) -> infexpr "==" (printExprG pVar) [x; y]
            | BLt (x, y) -> infexpr "<" (printIntExprG pVar) [x; y]
+           | BLe (x, y) -> infexpr "<=" (printIntExprG pVar) [x; y]
+           | BGe (x, y) -> infexpr ">=" (printIntExprG pVar) [x; y]
+           | BGt (x, y) -> infexpr ">" (printIntExprG pVar) [x; y]
            | _ -> failwith "[printBoolExprG] Case unimplemented for Grasshopper backend."  
        
     /// Pretty-prints an expression.
@@ -95,14 +98,15 @@ module Pretty =
         | Bool b -> printBoolExprG pVar fr b
         | _ -> failwith "[printExprG] Case unimplemented for Grasshopper backend." 
 
+    let printSymbolicGrass (pArg : 'Arg -> Doc) (s : Symbolic<'Arg>) : Doc =
+        let { Sentence = ws; Args = xs } = s
+        parened (printInterpolatedSymbolicSentence pArg ws xs)
+
     /// Pretty-prints a symbolic sentence 
     let rec printSymGrass (pReg : MarkedVar -> Doc) (sym : Sym<MarkedVar>) : Doc =
         match sym with
         | Reg r -> pReg r
-        | Sym { Sentence = ws; Args = xs } ->
-            let pArg = printExprG (printSym pReg) false
-            printInterpolatedSymbolicSentence pArg ws xs
-            |> parened 
+        | Sym s -> printSymbolicGrass (printExpr (printSym pReg)) s
 
     /// Get the set of accessed variables. 
     let findVarsGrass (zterm : Backends.Z3.Types.ZTerm) : seq<MarkedVar> = 
@@ -130,15 +134,50 @@ module Pretty =
                         |> printBoolExprG (printSymGrass printMarkedVarGrass) true
 
         // TODO @(septract) print command properly 
-        let cmdprint = zterm.SymBool.Cmd 
-                       |> (Core.Expr.Pretty.printBoolExpr (printSymGrass printMarkedVarGrass))
-        vsep [ String "procedure" <+> String name 
-               varprint |> Indent |> parened 
+        let cmdprint =
+            let rec matchSymC cmd xs =
+                match cmd with
+                | [] -> Some xs
+                | SymC { Symbol = sym }::cmd' -> matchSymC cmd' (sym::xs)
+                | _ -> None
+
+            (* TODO(CaptainHayashi):
+               Currently, the command is not marked with pre-and-post-states.
+               This means that we have to do this marking ourselves, and we 
+               can't easily do this marking soundly with sequential composition.
+
+               For now, we issue a health warning if we spot a sequential
+               composition.  This could do with fixing though... somehow. *)
+            let hackilyPrintVarGrass (v : Var) : Doc =
+                printMarkedVarGrass (Before v)
+
+            match matchSymC zterm.Original.Cmd.Cmd [] with
+            | Some [x] ->
+                  printSymbolicGrass (printExprG (printSymGrass hackilyPrintVarGrass)) x
+            | Some xs ->
+                vsep
+                    [ String "/* WARNING: translation of sequential composition may be unsound. */"
+                      (semiSep
+                          (List.map
+                              (printSymbolicGrass (printExprG (printSymGrass hackilyPrintVarGrass)))
+                          xs)) ]
+            | None ->
+                // TODO(CaptainHayashi): is this the right fallback?
+                vsep
+                    [ String "/* WARNING: Given a non-symbolic command, which is unsupported."
+                      String "   Boolean translation is below."
+                      Indent
+                        (printBoolExprG
+                            (printSymGrass printMarkedVarGrass)
+                            zterm.SymBool.Cmd)
+                      String "   */"
+                    ]
+        vsep [ String "procedure" <+> String name <+> (varprint |> parened) 
                String "requires" 
                Indent wpreprint 
                String "ensures" 
                Indent goalprint
-               cmdprint |> ssurround "/*" "*/" |> Indent |> braced 
+               Indent (braced cmdprint)
              ]  
 
     /// Print all the Grasshopper queries that haven't been eliminated by Z3.      
