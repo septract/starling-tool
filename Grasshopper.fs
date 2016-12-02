@@ -37,6 +37,13 @@ module Pretty =
         | Intermediate (i, s) -> String "inter_" <-> String (sprintf "%A_" i) <-> String s 
         | Goal (i, s) -> String "goal_" <-> String (sprintf "%A_" i) <-> String s 
 
+    /// Prints a typed Var 
+    let printTypedVarGrass (v : TypedVar) = 
+        match v with 
+        | Int name -> String name  
+        | Bool name -> String name  
+        | _ -> failwith "Unimplemented for Grasshopper backend." 
+
     // Print infix operator across multiple lines
     let infexprV (op : string) (pxs : 'x -> Doc) (xs : seq<'x>) : Doc = 
         let mapped = Seq.map pxs xs 
@@ -61,18 +68,18 @@ module Pretty =
     and printBoolExprG (pVar : 'Var -> Doc) : BoolExpr<'Var> -> Doc =
         function
         | BVar c -> pVar c
-        | BAnd xs -> infexprV "&&" (printBoolExpr pVar) xs
-        | BOr xs -> infexprV "||" (printBoolExpr pVar) xs
-        | BImplies (x, y) -> infexprV "==>" (printBoolExpr pVar)  [x; y]
-        | BNot (BEq (x, y)) -> infexpr "!=" (printExpr pVar) [x; y]
-        | BEq (x, y) -> infexpr "==" (printExpr pVar) [x; y]
+        | BAnd xs -> infexprV "&&" (printBoolExprG pVar) xs
+        | BOr xs -> infexprV "||" (printBoolExprG pVar) xs
+        | BImplies (x, y) -> infexprV "==>" (printBoolExprG pVar)  [x; y]
+        | BNot (BEq (x, y)) -> infexpr "!=" (printExprG pVar) [x; y]
+        | BEq (x, y) -> infexpr "==" (printExprG pVar) [x; y]
         | _ -> failwith "Unimplemented for Grasshopper backend." 
 
     /// Pretty-prints an expression.
     and printExprG (pVar : 'Var -> Doc) : Expr<'Var> -> Doc =
         function
-        | Int i -> printIntExpr pVar i
-        | Bool b -> printBoolExpr pVar b
+        | Int i -> printIntExprG pVar i
+        | Bool b -> printBoolExprG pVar b
         | _ -> failwith "Unimplemented for Grasshopper backend." 
 
     /// Pretty-prints a symbolic sentence 
@@ -80,7 +87,7 @@ module Pretty =
         match sym with
         | Reg r -> pReg r
         | Sym { Sentence = ws; Args = xs } ->
-            let pArg = printExpr (printSym pReg)
+            let pArg = printExprG (printSym pReg)
             parened
                 (printInterpolatedSymbolicSentence pArg ws xs)
 
@@ -94,12 +101,6 @@ module Pretty =
         |> lift (Set.map valueOf) 
         |> lift (Set.toSeq) 
         |> returnOrFail
-
-    let printTypedVarGrass (v : TypedVar) = 
-        match v with 
-        | Int name -> String name  
-        | Bool name -> String name  
-        | _ -> failwith "Unimplemented for Grasshopper backend." 
 
 
     let printZTermGrass (svars : VarMap) 
