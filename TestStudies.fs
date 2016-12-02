@@ -327,7 +327,8 @@ let ticketLockParsed =
 
 /// The collated form of the ticket lock.
 let ticketLockCollated =
-    { CollatedScript.SharedVars =
+    { Typedefs = []
+      CollatedScript.SharedVars =
           [ (TInt, "ticket")
             (TInt, "serving") ]
       ThreadVars =

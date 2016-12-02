@@ -1720,16 +1720,27 @@ let modelViewProtos (protos : #(DesugaredViewProto seq))
 /// </summary>
 /// <param name="lit">The type literal to convert.</param>
 /// <param name="name">The variable name to use.</param>
+/// <param name="types">The map of typedefs in operation.</param>
 /// <returns>
 ///     If the type literal is expressible in Starling's type system, the
 ///     corresponding type; otherwise, an error.
 /// </returns>
-let convertTypedVar (lit : AST.Types.TypeLiteral) (name : string)
+let convertTypedVar
+  (lit : AST.Types.TypeLiteral)
+  (name : string)
+  (types : Map<string, TypeLiteral>)
   : Result<TypedVar, TypeError> =
     let rec convType =
         function
         | TInt -> ok (Int ())
         | TBool -> ok (Bool ())
+        | TUser ty ->
+            match types.TryFind ty with
+            // TODO(CaptainHayashi): this is to prevent recursion, but is too strong
+            | Some (TUser _) -> fail (ImpossibleType (lit, "Typedef cannot reference a typedef"))
+            | Some t -> convType t
+            // TODO(CaptainHayashi): bad error
+            | None -> fail (ImpossibleType (lit, "Used nonexistent typedef"))
         | TArray (len, elt) ->
             lift
                 (fun eltype -> Array (eltype, Some len, ()))
@@ -1741,15 +1752,19 @@ let convertTypedVar (lit : AST.Types.TypeLiteral) (name : string)
 /// <summary>
 ///     Converts a type-variable list to a variable map.
 /// </summary>
+/// <param name="types">The map of typedefs in operation.</param>
 /// <param name="tvs">The list to convert.</param>
 /// <param name="scope">The name of the scope of the variables.</param>
 /// <returns>
 ///     If the variables' types are expressible in Starling's type system, the
 ///     corresponding variable map of the variables; otherwise, an error.
 /// </returns>
-let modelVarMap (tvs : (TypeLiteral * string) list) (scope : string)
+let modelVarMap
+  (types : Map<string, TypeLiteral>)
+  (tvs : (TypeLiteral * string) list)
+  (scope : string)
   : Result<VarMap, ModelError> =
-    let cvt (t, v) = mapMessages (curry BadVarType v) (convertTypedVar t v)
+    let cvt (t, v) = mapMessages (curry BadVarType v) (convertTypedVar t v types)
     let varsResult = collect (List.map cvt tvs)
 
     bind (VarMap.ofTypedVarSeq >> mapMessages (curry BadVar scope)) varsResult
@@ -1757,24 +1772,29 @@ let modelVarMap (tvs : (TypeLiteral * string) list) (scope : string)
 /// <summary>
 ///     Converts a parameter to a typed variable.
 /// </summary>
+/// <param name="types">The map of typedefs in operation.</param>
 /// <param name="par">The parameter to convert.</param>
 /// <returns>
 ///     If the parameter is expressible in Starling's type system, the
 ///     corresponding type; otherwise, an error.
 /// </returns>
-let convertParam (par : AST.Types.Param) : Result<TypedVar, TypeError> =
+let convertParam
+  (types : Map<string, TypeLiteral>)
+  (par : AST.Types.Param) : Result<TypedVar, TypeError> =
     let { ParamType = ptype; ParamName = pname } = par
-    convertTypedVar ptype pname
+    convertTypedVar ptype pname types
 
 /// <summary>
 ///     Converts view prototypes from the Starling language's type system
 ///     to Starling's type system.
 /// </summary>
-let convertViewProtos (vps : ViewProto list)
+let convertViewProtos
+  (types : Map<string, TypeLiteral>)
+  (vps : ViewProto list)
   : Result<DesugaredViewProto list, ModelError> =
     // TODO(CaptainHayashi): proper doc comment.
     let convertViewFunc vp { Name = n; Params = ps } =
-        let conv = wrapMessages (fun (p, e) -> BadVProtoParamType (vp, p, e)) convertParam
+        let conv = wrapMessages (fun (p, e) -> BadVProtoParamType (vp, p, e)) (convertParam types)
         let ps'Result = ps |> List.map conv |> collect
         lift (func n) ps'Result
 
@@ -1792,14 +1812,16 @@ let model
   (collated : CollatedScript)
   : Result<Model<ModellerMethod, ViewDefiner<SVBoolExpr option>>, ModelError> =
     trial {
+        let types = Map.ofSeq (Seq.map (fun (x, y) -> (y, x)) collated.Typedefs)
+
         // Make variable maps out of the shared and thread variable definitions.
-        let! svars = modelVarMap collated.SharedVars "shared"
-        let! tvars = modelVarMap collated.ThreadVars "thread"
+        let! svars = modelVarMap types collated.SharedVars "shared"
+        let! tvars = modelVarMap types collated.ThreadVars "thread"
 
         let desugaredMethods, unknownProtos =
             desugar tvars collated.Methods
 
-        let! cprotos = convertViewProtos collated.VProtos
+        let! cprotos = convertViewProtos types collated.VProtos
         let! vprotos = modelViewProtos (Seq.append cprotos unknownProtos)
 
         let! constraints = modelViewDefs svars vprotos collated
