@@ -29,19 +29,17 @@ module Pretty =
     open Starling.Core.Model.Pretty
     open Starling.Core.Symbolic.Pretty
 
-    // Print infix operator across multiple lines
+    /// Print infix operator across multiple lines
     let infexprV (op : string) (pxs : 'x -> Doc) (xs : seq<'x>) : Doc = 
         let mapped = Seq.map pxs xs 
         let resseq = Seq.map (fun x -> vsep [(String op); Indent x]) (Seq.tail mapped) 
-        hsep [Seq.head mapped; (hsep resseq)] 
-        |> parened 
+        parened (hsep [Seq.head mapped; (hsep resseq)]) 
 
-    // Print infix operator on one line
+    /// Print infix operator on one line
     let infexpr (op : string) (pxs : 'x -> Doc) (xs : seq<'x>) : Doc = 
         let mapped = Seq.map pxs xs 
         let resseq = Seq.map (fun x -> hsep [(String op); x]) (Seq.tail mapped) 
-        hsep [Seq.head mapped; (hsep resseq)] 
-        |> parened 
+        parened (hsep [Seq.head mapped; (hsep resseq)]) 
 
     /// Prints a marked Var 
     let printMarkedVarGrass (v : MarkedVar) : Doc =
@@ -96,8 +94,7 @@ module Pretty =
         // TODO @(septract) Should this conjoin the command as well? 
         BAnd [zterm.SymBool.WPre; zterm.SymBool.Goal] 
         |> findMarkedVars (tliftToBoolSrc (tliftToExprDest collectSymMarkedVars)) 
-        |> lift (Set.map valueOf) 
-        |> lift (Set.toSeq) 
+        |> lift (Set.map valueOf >> Set.toSeq) 
         |> returnOrFail
 
     /// Print a single Grasshopper query from a ZTerm 
@@ -113,7 +110,7 @@ module Pretty =
                        |> (fun x -> VSep(x,String ",")) 
                        |> Indent 
 
-        // Print the requires / ensures clauses 
+        /// Print the requires / ensures clauses 
         let wpreprint = zterm.SymBool.WPre 
                         |> printBoolExprG (printSymGrass printMarkedVarGrass) 
         let goalprint = zterm.SymBool.Goal 
@@ -138,7 +135,7 @@ module Pretty =
         |> Seq.map (fun (name,term) -> printZTermGrass model.SharedVars name term) 
         |> vsep
 
-    /// Print a Grasshopper error. 
+    /// Print a Grasshopper error (not implemented yet)
     let printGrassError e = failwith "not implemented yet" 
 
 /// Generate a grasshopper model (currently doesn't do anything) 
