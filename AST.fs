@@ -119,6 +119,8 @@ module Types =
         | TInt
         /// <summary>A Boolean type.</summary>
         | TBool
+        /// <summary>An unknown, and probably user-defined, type.</summary>
+        | TUser of name : string
         /// <summary>An array type.</summary>
         | TArray of length : int * contentT : TypeLiteral
 
@@ -215,6 +217,7 @@ module Types =
 
     /// A top-level item in a Starling script.
     type ScriptItem' =
+        | Typedef of TypeLiteral * string // typedef int Node;
         | SharedVars of VarDecl // shared int name1, name2, name3;
         | ThreadVars of VarDecl // thread int name1, name2, name3;
         | Method of CMethod<Marked<View>> // method main(argv, argc) { ... }
@@ -403,6 +406,7 @@ module Pretty =
             match lit with
             | TInt -> syntaxIdent (String ("int")) <-> suffix
             | TBool -> syntaxIdent (String ("bool")) <-> suffix
+            | TUser s -> syntaxLiteral (String s) <-> suffix
             | TArray (len, contents) ->
                 let lenSuffix = squared (String (sprintf "%d" len))
                 pl contents (suffix <-> lenSuffix)
@@ -497,6 +501,8 @@ module Pretty =
     /// Pretty-prints script lines.
     let printScriptItem' : ScriptItem' -> Doc =
         function
+        | Typedef (ty, name) ->
+            withSemi (syntaxIdent (String "typedef") <+> printTypeLiteral ty <+> String name)
         | SharedVars vs -> printScriptVars "shared" vs
         | ThreadVars vs -> printScriptVars "thread" vs
         | Method m ->
