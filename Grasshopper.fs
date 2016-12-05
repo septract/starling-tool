@@ -16,6 +16,7 @@ open Starling.Core.Symbolic
 open Starling.Core.Instantiate
 open Starling.Core.GuardedView
 open Starling.Core.Traversal
+open Starling.Backends.Z3
 
 [<AutoOpen>] 
 module Types =
@@ -63,18 +64,18 @@ module Pretty =
         | _ -> failwith "[printIntExprG] Unimplemented for Grasshopper backend." 
 
     /// Pretty-prints a Boolean expression.
-    and printBoolExprG (pVar : 'Var -> Doc) : BoolExpr<'Var> -> Doc =
-        function
+    and printBoolExprG (pVar : 'Var -> Doc) (b : BoolExpr<'Var>) : Doc =
+        match b with 
         | BVar c -> pVar c
-        | BAnd xs -> infexprV "&&" (printBoolExprG pVar) xs
+        | BAnd xs -> infexprV "&&" (printBoolExprG pVar) xs 
         | BOr xs -> infexprV "||" (printBoolExprG pVar) xs
         | BImplies (x, y) -> infexprV "==>" (printBoolExprG pVar)  [x; y]
         | BNot (BEq (x, y)) -> infexpr "!=" (printExprG pVar) [x; y]
         | BEq (x, y) -> infexpr "==" (printExprG pVar) [x; y]
         | BGt (x, y) -> infexpr ">" (printIntExprG pVar) [x; y]
         | BLt (x, y) -> infexpr "<" (printIntExprG pVar) [x; y]
-        | _ -> failwith "[printBoolExprG] Unimplemented for Grasshopper backend." 
-
+        | _ -> failwith "[printBoolExprG] Unimplemented for Grasshopper backend."  
+       
     /// Pretty-prints an expression.
     and printExprG (pVar : 'Var -> Doc) : Expr<'Var> -> Doc =
         function
@@ -88,8 +89,7 @@ module Pretty =
         | Reg r -> pReg r
         | Sym { Sentence = ws; Args = xs } ->
             let pArg = printExprG (printSym pReg)
-            parened
-                (printInterpolatedSymbolicSentence pArg ws xs)
+            printInterpolatedSymbolicSentence pArg ws xs
 
     /// Get the set of accessed variables. 
     let findVarsGrass (zterm : Backends.Z3.Types.ZTerm) : seq<MarkedVar> = 
@@ -98,6 +98,25 @@ module Pretty =
         |> findMarkedVars (tliftToBoolSrc (tliftToExprDest collectSymMarkedVars)) 
         |> lift (Set.map valueOf >> Set.toSeq) 
         |> returnOrFail
+
+    /// Add a spatial frame if an expression isn't symbolic
+    // TODO @(septract) this is extremely naive at the moment. 
+    let makeFrame b = 
+        let exprdoc = 
+           printBoolExprG (printSymGrass printMarkedVarGrass) b 
+        match b with 
+        | BVar (Sym s) -> exprdoc 
+        | _ ->  String "sTrue() &*&" <+> exprdoc  |>  parened 
+
+    /// Print top-level requires / ensures clauses 
+    let printConstrGrass (s : Doc) (b : BoolExpr<Sym<MarkedVar>>) : Doc = 
+        match b with 
+        | BAnd xs ->  
+              Seq.map makeFrame xs 
+              |> Seq.map (hsep2 Nop s) 
+              |> vsep 
+        | x -> makeFrame x 
+               |> hsep2 Nop s
 
     /// Print a single Grasshopper query from a ZTerm 
     let printZTermGrass (svars : VarMap) 
@@ -122,18 +141,20 @@ module Pretty =
         let cmdprint = zterm.SymBool.Cmd 
                        |> (Core.Expr.Pretty.printBoolExpr (printSymGrass printMarkedVarGrass))
         vsep [ String "procedure" <+> String name <+> (varprint |> parened) 
-               String "requires" 
-               Indent wpreprint <+> String ";" 
-               String "ensures" 
-               Indent goalprint <+> String ";" 
+               // String "requires" 
+               (printConstrGrass (String "requires ") zterm.SymBool.WPre) 
+               (printConstrGrass (String "ensures  ") zterm.SymBool.Goal) 
+               // String "ensures" 
+               // Indent goalprint <+> String ";" 
                cmdprint 
                     |> ssurround "/*" "*/" 
                     |> Indent |> braced 
              ]  
 
-    /// Print all the Grasshopper queries for a model.      
+    /// Print all the Grasshopper queries that haven't been eliminated by Z3.      
     let printQuery (model: GrassModel) : Doc = 
-        Map.toSeq model.Axioms 
+        let fails = extractFailures model 
+        Map.toSeq fails 
         |> Seq.map (fun (name,term) -> printZTermGrass model.SharedVars name term) 
         |> vsep
 
