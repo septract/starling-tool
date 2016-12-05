@@ -136,6 +136,7 @@ module Types =
         | BadVar of err : VarMapError
         /// A viewdef conflicted with the shared variables.
         | SVarConflict of err : VarMapError
+        override this.ToString () = sprintf "%A" this
 
     /// Represents an error when converting a constraint.
     type ConstraintError =
@@ -456,73 +457,73 @@ let coreSemantics : PrimSemanticsMap =
       (*
        * CAS
        *)
-      (mkPrim "ICAS" [ mkInt "destA"; mkInt "testA" ] [ mkInt "destB"; mkInt "testB"; mkInt "set" ]
+      (mkPrim "ICAS" [ normalIntVar "destA"; normalIntVar "testA" ] [ normalIntVar "destB"; normalIntVar "testB"; normalIntVar "set" ]
            [ Branch
                 (iEq (IVar "destB") (IVar "testB"),
-                 [ mkInt "destA" *<- mkInt (IVar "set")
-                   mkInt "testA" *<- mkInt (IVar "testB") ],
-                 [ mkInt "destA" *<- mkInt (IVar "destB")
-                   mkInt "testA" *<- mkInt (IVar "destB") ] ) ] )
+                 [ normalIntVar "destA" *<- normalIntExpr (IVar "set")
+                   normalIntVar "testA" *<- normalIntExpr (IVar "testB") ],
+                 [ normalIntVar "destA" *<- normalIntExpr (IVar "destB")
+                   normalIntVar "testA" *<- normalIntExpr (IVar "destB") ] ) ] )
       // Boolean CAS
-      (mkPrim "BCAS" [ mkBool "destA"; mkBool "testA" ] [ mkBool "destB"; mkBool "testB"; mkBool "set" ]
+      (mkPrim "BCAS" [ normalBoolVar "destA"; normalBoolVar "testA" ] [ normalBoolVar "destB"; normalBoolVar "testB"; normalBoolVar "set" ]
            [ Branch
                 (bEq (BVar "destB") (BVar "testB"),
-                 [ mkBool "destA" *<- mkBool (BVar "set")
-                   mkBool "testA" *<- mkBool (BVar "testB") ],
-                 [ mkBool "destA" *<- mkBool (BVar "destB")
-                   mkBool "testA" *<- mkBool (BVar "destB") ] ) ] )
+                 [ normalBoolVar "destA" *<- normalBoolExpr (BVar "set")
+                   normalBoolVar "testA" *<- normalBoolExpr (BVar "testB") ],
+                 [ normalBoolVar "destA" *<- normalBoolExpr (BVar "destB")
+                   normalBoolVar "testA" *<- normalBoolExpr (BVar "destB") ] ) ] )
       (*
        * Atomic load
        *)
       // Integer load
-      (mkPrim "!ILoad"  [ mkInt "dest" ] [ mkInt "src" ]
-            [ mkInt "dest" *<- mkInt (IVar "src") ] )
+      (mkPrim "!ILoad"  [ normalIntVar "dest" ] [ normalIntVar "src" ]
+            [ normalIntVar "dest" *<- normalIntExpr (IVar "src") ] )
 
       // Integer load-and-increment
-      (mkPrim "!ILoad++"  [ mkInt "dest"; mkInt "srcA" ] [ mkInt "srcB" ]
-            [ mkInt "dest" *<- mkInt (IVar "srcB")
-              mkInt "srcA" *<- mkInt (mkAdd2 (IVar "srcB") (IInt 1L)) ] )
+      (mkPrim "!ILoad++"  [ normalIntVar "dest"; normalIntVar "srcA" ] [ normalIntVar "srcB" ]
+            [ normalIntVar "dest" *<- normalIntExpr (IVar "srcB")
+              normalIntVar "srcA" *<- normalIntExpr (mkAdd2 (IVar "srcB") (IInt 1L)) ] )
 
       // Integer load-and-decrement
-      (mkPrim "!ILoad--"  [ mkInt "dest"; mkInt "srcA" ] [ mkInt "srcB" ]
-            [ mkInt "dest" *<- mkInt (IVar "srcB")
-              mkInt "srcA" *<- mkInt (mkSub2 (IVar "srcB") (IInt 1L)) ] )
+      (mkPrim "!ILoad--"  [ normalIntVar "dest"; normalIntVar "srcA" ] [ normalIntVar "srcB" ]
+            [ normalIntVar "dest" *<- normalIntExpr (IVar "srcB")
+              normalIntVar "srcA" *<- normalIntExpr (mkSub2 (IVar "srcB") (IInt 1L)) ] )
 
       // Integer increment
-      (mkPrim "!I++"  [ mkInt "srcA" ] [ mkInt "srcB" ]
-            [ mkInt "srcA" *<- mkInt (mkAdd2 (IVar "srcB") (IInt 1L)) ] )
+      (mkPrim "!I++"  [ normalIntVar "srcA" ] [ normalIntVar "srcB" ]
+            [ normalIntVar "srcA" *<- normalIntExpr (mkAdd2 (IVar "srcB") (IInt 1L)) ] )
 
       // Integer decrement
-      (mkPrim "!I--"  [ mkInt "srcA" ] [ mkInt "srcB" ]
-            [ mkInt "srcA" *<- mkInt (mkSub2 (IVar "srcB") (IInt 1L)) ] )
+      (mkPrim "!I--"  [ normalIntVar "srcA" ] [ normalIntVar "srcB" ]
+            [ normalIntVar "srcA" *<- normalIntExpr (mkSub2 (IVar "srcB") (IInt 1L)) ] )
 
       // Boolean load
-      (mkPrim "!BLoad"  [ mkBool "dest" ] [ mkBool "src" ]
-            [ mkBool "dest" *<- mkBool (BVar "src") ] )
+      (mkPrim "!BLoad"  [ normalBoolVar "dest" ] [ normalBoolVar "src" ]
+            [ normalBoolVar "dest" *<- normalBoolExpr (BVar "src") ] )
 
       (*
        * Atomic store
        *)
 
       // Integer store
-      (mkPrim "!IStore" [ mkInt "dest" ] [ mkInt "src" ]
-            [ mkInt "dest" *<- mkInt (IVar "src") ] )
+      (mkPrim "!IStore" [ normalIntVar "dest" ] [ normalIntVar "src" ]
+            [ normalIntVar "dest" *<- normalIntExpr (IVar "src") ] )
 
       // Boolean store
-      (mkPrim "!BStore" [ mkBool "dest" ] [ mkBool "src" ]
-            [ mkBool "dest" *<- mkBool (BVar "src") ] )
+      (mkPrim "!BStore" [ normalBoolVar "dest" ] [ normalBoolVar "src" ]
+            [ normalBoolVar "dest" *<- normalBoolExpr (BVar "src") ] )
 
       (*
        * Local set
        *)
 
       // Integer local set
-      (mkPrim "!ILSet" [ mkInt "dest" ] [ mkInt "src" ]
-            [ mkInt "dest" *<- mkInt (IVar "src") ] )
+      (mkPrim "!ILSet" [ normalIntVar "dest" ] [ normalIntVar "src" ]
+            [ normalIntVar "dest" *<- normalIntExpr (IVar "src") ] )
 
       // Boolean store
-      (mkPrim "!BLSet" [ mkBool "dest" ] [ mkBool "src" ]
-            [ mkBool "dest" *<- mkBool (BVar "src") ] )
+      (mkPrim "!BLSet" [ normalBoolVar "dest" ] [ normalBoolVar "src" ]
+            [ normalBoolVar "dest" *<- normalBoolExpr (BVar "src") ] )
 
       (*
        * Assumptions
@@ -532,7 +533,7 @@ let coreSemantics : PrimSemanticsMap =
       (mkPrim "Id" [] [] [])
 
       // Assume
-      (mkPrim "Assume" [] [mkBool "expr"] [ Microcode.Assume (BVar "expr") ]) ]
+      (mkPrim "Assume" [] [normalBoolVar "expr"] [ Microcode.Assume (BVar "expr") ]) ]
 
 (*
  * Expression translation
@@ -735,8 +736,9 @@ and modelBoolExpr
 
     let rec mb e : Result<TypedBoolExpr<Sym<'var>>, ExprError> =
         match e.Node with
-        | True -> ok (mkTypedSub () BTrue)
-        | False -> ok (mkTypedSub () BFalse)
+        // These two have a indefinite subtype.
+        | True -> ok (indefBool BTrue)
+        | False -> ok (indefBool BFalse)
         | Identifier v ->
             (* Look-up the variable to ensure it a) exists and b) is of a
              * Boolean type.
@@ -753,10 +755,11 @@ and modelBoolExpr
                                 (expected = Fuzzy "bool", got = Exact (typeOf vr)))))
                 (wrapMessages Var (VarMap.lookup env) v)
         | Symbolic { Sentence = sen; Args = args } ->
+            // Symbols have an indefinite subtype.
             args
             |> List.map me
             |> collect
-            |> lift (fun a -> mkTypedSub () (BVar (Sym { Sentence = sen; Args = a })))
+            |> lift (fun a -> indefBool (BVar (Sym { Sentence = sen; Args = a })))
         | ArraySubscript (arr, idx) ->
             let arrR = ma arr
             // Indices always have to be of type 'int'.
@@ -780,8 +783,8 @@ and modelBoolExpr
                     | Le -> mkLe
                     | Lt -> mkLt
                     | _ -> failwith "unreachable[modelBoolExpr::ArithIn]"
-
-                lift (mkTypedSub ()) (lift2 oper (mi l) (mi r))
+                // We don't know the subtype of this yet...
+                lift indefBool (lift2 oper (mi l) (mi r))
             | BoolIn as o ->
                 let oper =
                     match o with
@@ -811,8 +814,8 @@ and modelBoolExpr
                     | Eq -> mkEq
                     | Neq -> mkNeq
                     | _ -> failwith "unreachable[modelBoolExpr::AnyIn]"
-
-                lift (mkTypedSub ()) (lift2 oper (me l) (me r))
+                // We don't know the subtype of this yet...
+                lift indefBool (lift2 oper (me l) (me r))
         | UopExpr (Neg,e) -> lift (mapTypedSub mkNot) (mb e) 
         | _ ->
             fail
@@ -864,7 +867,8 @@ and modelIntExpr
 
     let rec mi e =
         match e.Node with
-        | Num i -> ok (mkTypedSub () (IInt i))
+        // Numbers have indefinite subtype.
+        | Num i -> ok (indefInt (IInt i))
         | Identifier v ->
             (* Look-up the variable to ensure it a) exists and b) is of an
              * arithmetic type.
@@ -881,10 +885,11 @@ and modelIntExpr
                                  TypeMismatch
                                     (expected = Fuzzy "int", got = Exact (typeOf vr)))))
          | Symbolic { Sentence = sen; Args = args } ->
+            // Symbols have indefinite subtype.
             args
             |> List.map me
             |> collect
-            |> lift (fun a -> mkTypedSub () (IVar (Sym { Sentence = sen; Args = a })))
+            |> lift (fun a -> indefInt (IVar (Sym { Sentence = sen; Args = a })))
         | ArraySubscript (arr, idx) ->
             let arrR = ma arr
             // Indices always have to be of type 'int'.
@@ -1050,7 +1055,8 @@ let rec modelViewSignature (protos : FuncDefiner<ProtoInfo>) =
                                           let! rM = modelViewSignature protos r
                                           return Multiset.append lM rM }
     | ViewSignature.Iterated(dfunc, e) ->
-        let updateFunc (s : string) f = { Func = f; Iterator = Some (Int ((), s)) }
+        // Iterators have the 'int' subtype.
+        let updateFunc (s : string) f = { Func = f; Iterator = Some (Int (normalIntRec, s)) }
         let modelledDFunc = modelDFunc protos dfunc
         lift (Multiset.map (updateFunc e)) modelledDFunc
 
@@ -1935,25 +1941,30 @@ let convertTypedVar
   (name : string)
   (types : Map<string, TypeLiteral>)
   : Result<TypedVar, TypeError> =
-    let rec convType =
+    let rec convType currentTypedef =
         function
-        // TODO(CaptainHayashi): respect typedefs.
-        | TInt -> ok (Int ((), ()))
-        | TBool -> ok (Bool ((), ()))
+        // TODO(CaptainHayashi): make typedefs less awful
+        | TInt ->
+            let tr = maybe normalIntRec (fun t -> { TypeName = Some t }) currentTypedef
+            ok (Int (tr, ()))
+        | TBool ->
+            let tr = maybe normalBoolRec (fun t -> { TypeName = Some t }) currentTypedef
+            ok (Bool (tr, ()))
         | TUser ty ->
             match types.TryFind ty with
             // TODO(CaptainHayashi): this is to prevent recursion, but is too strong
             | Some (TUser _) -> fail (ImpossibleType (lit, "Typedef cannot reference a typedef"))
-            | Some t -> convType t
+            | Some (TArray _) -> fail (ImpossibleType (lit, "Typedef cannot reference array type"))
+            | Some t -> convType (Some ty) t
             // TODO(CaptainHayashi): bad error
             | None -> fail (ImpossibleType (lit, "Used nonexistent typedef"))
         | TArray (len, elt) ->
             lift
                 (fun eltype -> Array ({ ElementType = eltype; Length = Some len }, ()))
-                (convType elt)
+                (convType None elt)
         (* At some point, this may (and once did) return ImpossibleType,
            hence why it is a Result. *)
-    lift (fun ty -> withType ty name) (convType lit)
+    lift (fun ty -> withType ty name) (convType None lit)
 
 /// <summary>
 ///     Converts a type-variable list to a variable map.

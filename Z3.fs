@@ -162,7 +162,7 @@ module Expr =
             use ctx = new Z3.Context ()
             assertEqual
                 (ctx.MkMod (ctx.MkIntConst "foo", ctx.MkInt 5L) :> Z3.ArithExpr)
-                (intToZ3 false id ctx (mkTypedSub () (mkMod (IVar "foo") (IInt 5L))))
+                (intToZ3 false id ctx (normalInt (mkMod (IVar "foo") (IInt 5L))))
 
 /// <summary>
 ///     Z3 invocation.

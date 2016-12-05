@@ -25,7 +25,12 @@ open Starling.Utils
 /// <summary>
 ///     An extended type record for primitive types.
 /// </summary>
-type PrimTypeRec = unit
+type PrimTypeRec =
+    { /// <summary>
+      ///     The name of the primitive type used.
+      ///     If this is None, then the type is not fixed.
+      /// </summary>
+      TypeName : string option }
 
 /// <summary>
 ///     An extended type record for array types.
@@ -84,12 +89,6 @@ and Type = CTyped<unit>
 /// </summary>
 [<AutoOpen>]
 module Typed =
-    /// <summary>Constructs an integer item with a base extended type.</summary>
-    let mkInt v = Int ((), v)
-
-    /// <summary>Constructs an integer item with a base extended type.</summary>
-    let mkBool v = Bool ((), v)
-
     /// <summary>
     ///     Extracts the <c>Type</c> of a <c>Typed</c> item.
     /// </summary>
@@ -188,10 +187,21 @@ module Typed =
 ///     The unified record, if unification is possible; None otherwise.
 /// </returns>
 let rec unifyPrimTypeRecs (xs : PrimTypeRec list) : PrimTypeRec option =
-    // TODO(CaptainHayashi): add to this when PrimTypeRec expands.
     match xs with
-    | [] -> Some ()
-    | x::xs -> Some x
+    | [] -> Some { TypeName = None }
+    | x::xs ->
+        (* TODO(CaptainHayashi): this is way too strong and order-dependent.
+           It's also somewhat broken, but in mostly inconsequential ways. *)
+        let foldRecs recSoFar nextRec =
+            match recSoFar with
+            | None -> None
+            | Some rs ->
+                match (rs.TypeName, nextRec.TypeName) with
+                | Some _, None | None, None -> Some rs
+                | None, Some _ -> Some nextRec
+                | Some x, Some y when x = y -> Some rs
+                | _ -> None
+        List.fold foldRecs (Some x) xs
 
 /// <summary>
 ///     Checks whether two primitive type records are compatible.

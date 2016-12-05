@@ -97,7 +97,7 @@ module ViewFail =
           ([ LookupError
                ( "holdTick",
                  Error.TypeMismatch
-                   (Int (normalBoolRec, "t"), Type.Bool (normalBoolRec, ()))) ])
+                   (Int (normalIntRec, "t"), Type.Bool (indefBoolRec, ()))) ])
 
 
 module ArithmeticExprs =
@@ -117,7 +117,7 @@ module ArithmeticExprs =
                                    freshNode <| BopExpr(Mul, freshNode (Num 1L), freshNode (Num 3L)),
                                    freshNode (Num 2L) ))
             // TODO (CaptainHayashi): this shouldn't be optimised?
-            (normalInt (IInt 1L))
+            (indefInt (IInt 1L))
 
     [<Test>]
     let ``test modelling (1 * 2) + 3`` ()=
@@ -126,7 +126,7 @@ module ArithmeticExprs =
                                    freshNode <| BopExpr(Mul, freshNode (Num 1L), freshNode (Num 2L)),
                                    freshNode (Num 3L) ))
             // TODO (CaptainHayashi): this shouldn't be optimised?
-            (normalInt (IInt 5L))
+            (indefInt (IInt 5L))
 
     [<Test>]
     let ``test modelling shared array access nums[foo + 1]`` ()=
@@ -175,7 +175,7 @@ module BooleanExprs =
     let ``model (true || true) && false`` () =
         check environ
             (freshNode <| BopExpr(And, freshNode <| BopExpr(Or, freshNode True, freshNode True), freshNode False))
-            (normalBool BFalse)
+            (indefBool BFalse)
 
 
 module VarLists =
@@ -262,7 +262,7 @@ module Atomics =
             ast
             (command' "!IStore" ast
                 [ normalIntExpr (siVar "x") ]
-                [ normalIntExpr (IVar (sym [ SymString "foo" ] [ normalBoolExpr (sbVar "baz") ] )) ])
+                [ indefIntExpr (IVar (sym [ SymString "foo" ] [ normalBoolExpr (sbVar "baz") ] )) ])
 
 
 module CommandAxioms =
@@ -323,7 +323,7 @@ module CommandAxioms =
             (Prim
                 [ command "!BLSet"
                     [ normalBoolExpr (sbVar "baz") ]
-                    [ normalBoolExpr
+                    [ indefBoolExpr
                         (BVar
                             (sym
                                 [ SymString "foo" ]

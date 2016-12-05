@@ -111,7 +111,7 @@ module Traversal =
                   'Error, 'Var> =
         fun ctx { Cmd = c; Semantics = s } ->
             let swapSemantics s' = { Cmd = c; Semantics = s' }
-            let result = traverseBoolAsExpr traversal ctx (mkTypedSub () s)
+            let result = traverseBoolAsExpr traversal ctx (normalBool s)
             lift (pairMap id swapSemantics) result
 
 /// <summary>
