@@ -61,7 +61,7 @@ method deleteVal(int v) {
   {| emp |}
 }
 
-constraint emp -> %{ isList(head,ub) }(); 
+constraint emp -> %{ isListG(head,ub) }(); 
 
 constraint wf(v) -> v < ub;
 

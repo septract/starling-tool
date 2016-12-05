@@ -16,9 +16,12 @@ procedure sTrue_test2(x: Node)
 // procedure sTrue_test3(x: Node) 
 //   requires sTrue() &*& sTrue(); 
 //   ensures sTrue() &*& sTrue(); 
-// { 
-// }  
+// { }  
 
+procedure sTrue_test4() 
+  requires sTrue() &*& sTrue(); 
+  ensures sTrue(); 
+{ }  
 
 // Tests of overlap (+) and inclusion (-**) 
 
@@ -42,3 +45,16 @@ procedure test_list (head: Node, a: Node, b: Node)
   a.next := null; 
 } 
 
+
+// `requires' conjunction test
+
+procedure test_req (a: Node, b: Node) 
+  requires acc(a) &*& sTrue()
+  requires acc(a) &*& acc(b)
+  ensures false; 
+{} 
+
+// procedure test_conj (a: Node, b: Node) 
+//   requires acc(a) &*& acc(b)
+//   ensures false
+// {} 
