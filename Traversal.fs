@@ -548,7 +548,11 @@ let rec tliftToBoolSrc
                 (Context.changePos id sub ctx (CTyped.Bool (b.SRec, x)))
         | BIdx (arr, ix) ->
             let tResult =
-                tchain2 asv (Context.inIndex isv) (retype2 arr ix BIdx >> ok) ctx (arr, ix)
+                tchain2 asv
+                    (Context.inIndex isv)
+                    (fun (a, i) -> ok (BIdx (updateTypedSub arr a, i)))
+                    ctx
+                    (arr, mkTypedSub normalIntRec ix)
             // Remove the nested result.
             bind (uncurry (ignoreContext id)) tResult
         | BTrue -> ok (ctx, BTrue)
@@ -590,7 +594,9 @@ and tliftToIntSrc
                 tchain2
                     asv
                     (Context.inIndex tisv)
-                    (retype2 arr ix IIdx >> ok) ctx (arr, ix)
+                    (fun (a, i) -> ok (IIdx (updateTypedSub arr a, i)))
+                    ctx
+                    (arr, mkTypedSub normalIntRec ix)
             // Remove the nested result.
             bind (uncurry (ignoreContext id)) tResult
         | IInt i -> ok (ctx, IInt i)
@@ -625,26 +631,25 @@ and tliftToArraySrc
             let tResult =
                 tchain2
                     tasv
-                    (Context.inIndex (Context.changePos id (tliftToIntSrc sub)))
-                    (retype2 arr ix AIdx >> ok) ctx (arr, ix)
+                    (Context.inIndex isv)
+                    (fun (a, i) -> ok (AIdx (updateTypedSub arr a, i)))
+                    ctx
+                    (arr, mkTypedSub normalIntRec ix)
             // Remove the nested result.
             bind (uncurry (ignoreContext id)) tResult
         | AUpd (arr, ix, value) ->
-            let assemble (arrUntyped, ixUntyped, value') =
-                // arr' will have the same type as a, so no need to type it.
-                let ix' = updateTypedSub ix ixUntyped
-
+            let assemble (arr', ix', value') =
                 // Ensure the traversal doesn't change the type of value.
                 let vt, vt' = typeOf value, typeOf value'
                 if typesCompatible vt vt'
-                then ok (AUpd (arrUntyped, ix', value'))
+                then ok (AUpd (arr', ix', value'))
                 else fail (BadType (expected = vt, got = vt'))
             let tResult =
                 tchain3
                     asv
                     (Context.inIndex isv)
                     esv
-                    assemble ctx (arr, ix, value)
+                    assemble ctx (arr, mkTypedSub normalIntRec ix, value)
 
             // Remove the nested result.
             bind (uncurry (ignoreContext id)) tResult
@@ -797,7 +802,7 @@ let collectVars : Traversal<CTyped<'Var>, CTyped<'Var>, 'Error, 'Var>  =
 ///     The set of variables found in the expression.
 /// </returns>
 let findVars
-  (t : Traversal<'Subject, 'Subject, 'Error, 'Var>)
+  (t : Traversal<'Subject, _, 'Error, 'Var>)
   (subject : 'Subject)
   : Result<Set<CTyped<'Var>>, TraversalError<'Error>> =
     subject

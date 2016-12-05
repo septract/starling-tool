@@ -367,7 +367,7 @@ let holdLock =
 
 /// The conditional holdTick view.
 let holdTick =
-    { Func = Func (svfunc "holdTick" [SVExpr.Int (siVar "t")])
+    { Func = Func (svfunc "holdTick" [normalIntExpr (siVar "t")])
       Iterator = None }
 
 
@@ -382,7 +382,7 @@ let gHoldLock cnd : IteratedGFunc<Sym<Var>> =
 
 /// The guarded holdTick view.
 let gHoldTick cnd : IteratedGFunc<Sym<Var>> =
-    oneGFunc cnd "holdTick" [SVExpr.Int (siVar "t")]
+    oneGFunc cnd "holdTick" [normalIntExpr (siVar "t")]
 
 /// Produces the expression 's!before == t!before'.
 let sIsT = iEq (siVar "s") (siVar "t")
@@ -395,8 +395,8 @@ let ticketLockLock =
           Contents =
             [ { Command =
                     command "!ILoad++"
-                        [ Int (siVar "t"); Int (siVar "ticket") ]
-                        [ Int (siVar "ticket") ]
+                        [ normalIntExpr (siVar "t"); normalIntExpr (siVar "ticket") ]
+                        [ normalIntExpr (siVar "ticket") ]
                     |> List.singleton |> Prim
                 Post = Mandatory <| sing holdTick }
               { Command =
@@ -406,8 +406,8 @@ let ticketLockLock =
                                { Pre = Mandatory <| sing holdTick
                                  Contents =
                                      [ { Command =
-                                             command "!ILoad" [ Int (siVar "s") ]
-                                                  [ Int (siVar "serving") ]
+                                             command "!ILoad" [ normalIntExpr (siVar "s") ]
+                                                  [ normalIntExpr (siVar "serving") ]
                                              |> List.singleton |> Prim
                                          Post =
                                             { Func =
@@ -428,7 +428,7 @@ let ticketLockUnlock =
             // constraint holdTick(ta) * holdTick(tb) -> ta != tb;
             Contents =
                 [ { Command =
-                        command "!I++" [ Int (siVar "serving") ] [ Int (siVar "serving") ]
+                        command "!I++" [ normalIntExpr (siVar "serving") ] [ normalIntExpr (siVar "serving") ]
                         |> List.singleton |> Prim
                     Post = Mandatory <| Multiset.empty }]}}
 
@@ -446,9 +446,9 @@ let ticketLockGuardedLock : GuarderMethod =
             Contents =
                 [ { Command =
                         command "!ILoad++"
-                             [ Int (siVar "t"); Int (siVar "ticket") ]
-                             [ Int (siVar "t");
-                               Int (siVar "ticket"); ]
+                             [ normalIntExpr (siVar "t"); normalIntExpr (siVar "ticket") ]
+                             [ normalIntExpr (siVar "t");
+                               normalIntExpr (siVar "ticket"); ]
                         |> List.singleton |> Prim
                     Post = Mandatory <| sing (gHoldTick BTrue) }
                   { Command =
@@ -459,8 +459,8 @@ let ticketLockGuardedLock : GuarderMethod =
                                      Contents =
                                          [ { Command =
                                                  command "!ILoad"
-                                                      [ Int (siVar "s") ]
-                                                      [ Int (siVar "serving"); ]
+                                                      [ normalIntExpr (siVar "s") ]
+                                                      [ normalIntExpr (siVar "serving"); ]
                                                  |> List.singleton |> Prim
                                              Post =
                                                  Mandatory <|
@@ -476,28 +476,28 @@ let ticketLockGuardedUnlock : GuarderMethod =
           { Pre = Mandatory <| sing (gHoldLock BTrue)
             Contents =
                 [ { Command =
-                        command "!I++" [ Int (siVar "serving") ] [ Int (siVar "serving") ]
+                        command "!I++" [ normalIntExpr (siVar "serving") ] [ normalIntExpr (siVar "serving") ]
                         |> List.singleton |> Prim
                     Post = Mandatory <| Multiset.empty } ] } }
 
 /// The view definitions of the ticket lock model.
 let ticketLockViewDefs =
     [([],
-      Some <| BGe(siVar "ticket", siVar "serving"))
-     ([ { Func = { Name = "holdTick"; Params = [ Int "t" ] }
+      Some <| BGe(normalInt (siVar "ticket"), normalInt (siVar "serving")))
+     ([ { Func = { Name = "holdTick"; Params = [ TypedVar.Int (normalIntRec, "t") ] }
           Iterator = None } ],
-      Some <| BGt(siVar "ticket", siVar "t"))
+      Some <| BGt(normalInt (siVar "ticket"), normalInt (siVar "t")))
      ([ { Func = { Name = "holdLock"; Params = [] }
           Iterator = None } ],
       Some <| BNot (iEq (siVar "ticket") (siVar "serving")))
      ([ { Func = { Name = "holdLock"; Params = [] }
           Iterator = None }
-        { Func = { Name = "holdTick"; Params = [ Int "t" ] }
+        { Func = { Name = "holdTick"; Params = [ TypedVar.Int (normalIntRec, "t") ] }
           Iterator = None } ],
       Some <| BNot(iEq (siVar "serving") (siVar "t")))
-     ([ { Func = { Name = "holdTick"; Params = [ Int "ta" ] }
+     ([ { Func = { Name = "holdTick"; Params = [ TypedVar.Int (normalIntRec, "ta") ] }
           Iterator = None }
-        { Func = { Name = "holdTick"; Params = [ Int "tb" ] }
+        { Func = { Name = "holdTick"; Params = [ TypedVar.Int (normalIntRec, "tb") ] }
           Iterator = None } ],
       Some <| BNot(iEq (siVar "ta") (siVar "tb")))
      ([ { Func = { Name = "holdLock"; Params = [] }
@@ -508,19 +508,19 @@ let ticketLockViewDefs =
 
 let ticketLockViewProtos : FuncDefiner<ProtoInfo> =
     FuncDefiner.ofSeq
-        [ ({ Name = "holdTick"; Params = [ Int "t" ] },
+        [ ({ Name = "holdTick"; Params = [ TypedVar.Int (normalIntRec, "t") ] },
            { IsIterated = false; IsAnonymous = false })
           ({ Name = "holdLock"; Params = [] },
            { IsIterated = false; IsAnonymous = false }) ]
 
 /// The model of the ticket lock.
-let ticketLockModel : Model<ModellerMethod, ViewDefiner<SVBoolExpr option>> =
+let ticketLockModel : Model<ModellerMethod, ViewDefiner<BoolExpr<Sym<Var>> option>> =
     { SharedVars =
-          Map.ofList [ ("serving", Type.Int ())
-                       ("ticket", Type.Int ()) ]
+          Map.ofList [ ("serving", Type.Int (normalIntRec, ()))
+                       ("ticket", Type.Int (normalIntRec, ())) ]
       ThreadVars =
-          Map.ofList [ ("s", Type.Int ())
-                       ("t", Type.Int ()) ]
+          Map.ofList [ ("s", Type.Int (normalIntRec, ()))
+                       ("t", Type.Int (normalIntRec, ())) ]
       Axioms = ticketLockMethods
       ViewDefs = ticketLockViewDefs
       ViewProtos = ticketLockViewProtos

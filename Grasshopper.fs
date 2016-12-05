@@ -55,9 +55,10 @@ module Pretty =
 
     /// Prints a typed Var 
     let printTypedVarGrass (v : TypedVar) = 
+        // TODO(CaptainHayashi): print type using value in type record.
         match v with 
-        | Int name -> String name  
-        | Bool name -> String name  
+        | Int (_, name) -> String name  
+        | Bool (_, name) -> String name  
         | _ -> failwith "[printTypedVarGrass] Case unimplemented for Grasshopper backend." 
 
     /// Pretty-prints an arithmetic expression.
@@ -84,19 +85,18 @@ module Pretty =
                match x with 
                | NoSym y -> String "!" <+> (printBoolExprG pVar fr x) |> parened 
                | _ -> failwith "[printBoolExprG] Grasshopper can't negate spatial things." 
-           | BEq (x, y) -> infexpr "==" (printExprG pVar) [x; y]
-           | BLt (x, y) -> infexpr "<" (printIntExprG pVar) [x; y]
-           | BLe (x, y) -> infexpr "<=" (printIntExprG pVar) [x; y]
-           | BGe (x, y) -> infexpr ">=" (printIntExprG pVar) [x; y]
-           | BGt (x, y) -> infexpr ">" (printIntExprG pVar) [x; y]
-           | _ -> failwith "[printBoolExprG] Case unimplemented for Grasshopper backend."  
-       
+           | BEq (x, y) -> infexpr "==" (printExprG pVar fr) [x; y]
+           | BLt (x, y) -> infexpr "<" (stripTypeRec >> printIntExprG pVar) [x; y]
+           | BLe (x, y) -> infexpr "<=" (stripTypeRec >> printIntExprG pVar) [x; y]
+           | BGe (x, y) -> infexpr ">=" (stripTypeRec >> printIntExprG pVar) [x; y]
+           | BGt (x, y) -> infexpr ">" (stripTypeRec >> printIntExprG pVar) [x; y]
+           | _ -> failwith "[printBoolExprG] Case unimplemented for Grasshopper backend."
     /// Pretty-prints an expression.
-    and printExprG (pVar : Sym<MarkedVar> -> Doc) (fr : bool) (b : Expr<Sym<MarkedVar>>) : Doc =
-        match b with 
-        | Int i -> printIntExprG pVar i
-        | Bool b -> printBoolExprG pVar fr b
-        | _ -> failwith "[printExprG] Case unimplemented for Grasshopper backend." 
+    and printExprG (pVar : Sym<MarkedVar> -> Doc) (fr : bool) (e : Expr<Sym<MarkedVar>>) : Doc =
+        match e with
+        | Int (_, i) -> printIntExprG pVar i
+        | Bool (_, b) -> printBoolExprG pVar fr b
+        | _ -> failwith "Unimplemented for Grasshopper backend." 
 
     let printSymbolicGrass (pArg : 'Arg -> Doc) (s : Symbolic<'Arg>) : Doc =
         let { Sentence = ws; Args = xs } = s
@@ -106,11 +106,11 @@ module Pretty =
     let rec printSymGrass (pReg : MarkedVar -> Doc) (sym : Sym<MarkedVar>) : Doc =
         match sym with
         | Reg r -> pReg r
-        | Sym s -> printSymbolicGrass (printExpr (printSym pReg)) s
+        | Sym s -> printSymbolicGrass (printExprG (printSym pReg) false) s
 
     /// Get the set of accessed variables. 
     let findVarsGrass (zterm : Backends.Z3.Types.ZTerm) : seq<MarkedVar> = 
-        BAnd [zterm.SymBool.WPre; zterm.SymBool.Goal; zterm.SymBool.Cmd] 
+        normalBool (BAnd [zterm.SymBool.WPre; zterm.SymBool.Goal; zterm.SymBool.Cmd] )
         |> findVars (tliftToBoolSrc (tliftToExprDest collectSymVars)) 
         |> lift (Set.map valueOf >> Set.toSeq) 
         |> returnOrFail
@@ -148,19 +148,26 @@ module Pretty =
 
                For now, we issue a health warning if we spot a sequential
                composition.  This could do with fixing though... somehow. *)
-            let hackilyPrintVarGrass (v : Var) : Doc =
-                printMarkedVarGrass (Before v)
-
+            let hackilyMakeBefore (expr : Expr<Sym<Var>>) : Expr<Sym<MarkedVar>> =
+                returnOrFail (before expr)
+            let hackilyMakeSymBefore x =
+                { Sentence =  x.Sentence
+                  Args = (List.map hackilyMakeBefore x.Args) }
             match matchSymC zterm.Original.Cmd.Cmd [] with
             | Some [x] ->
-                  printSymbolicGrass (printExprG (printSymGrass hackilyPrintVarGrass)) x
+                let x' = hackilyMakeSymBefore x
+
+                // TODO(CaptainHayashi): framing?
+                printSymbolicGrass (printExprG (printSymGrass printMarkedVarGrass) false) x'
             | Some xs ->
+                let xs' = List.map hackilyMakeSymBefore xs
+
                 vsep
                     [ String "/* WARNING: translation of sequential composition may be unsound. */"
                       (semiSep
                           (List.map
-                              (printSymbolicGrass (printExprG (printSymGrass hackilyPrintVarGrass)))
-                          xs)) ]
+                              (printSymbolicGrass (printExprG (printSymGrass printMarkedVarGrass) false))
+                          xs')) ]
             | None ->
                 // TODO(CaptainHayashi): is this the right fallback?
                 vsep
@@ -169,6 +176,7 @@ module Pretty =
                       Indent
                         (printBoolExprG
                             (printSymGrass printMarkedVarGrass)
+                            false
                             zterm.SymBool.Cmd)
                       String "   */"
                     ]

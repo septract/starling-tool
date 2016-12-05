@@ -170,7 +170,7 @@ module Downclosure =
         let fOnIter (var : TypedVar) : Result<Expr<Sym<Var>>, Error> =
             ok
                 (match var with
-                 | Int v when v = iterator -> Int (f v)
+                 | Int (t, v) when v = iterator -> Int (t, f v)
                  | tv -> mkVarExp (mapCTyped Reg tv))
 
         let mapper =
@@ -178,7 +178,7 @@ module Downclosure =
                 fOnIter
                 (tliftToTypedSymVarSrc >> tliftToBoolSrc)
 
-        mapMessages Traversal (mapper defn)
+        mapMessages Traversal (mapper (mkTypedSub normalBoolRec defn))
 
     /// <summary>
     ///     Runs a downclosure check using Z3.
@@ -193,7 +193,9 @@ module Downclosure =
         // Expression equivalence cannot handle symbols, so try remove them.
         // TODO(CaptainHayashi): is it sound to approximate here?
         let removeResult =
-            mapTraversal (removeSymFromBoolExpr SymInIteratedConstraint) check
+            mapTraversal
+                (removeSymFromBoolExpr SymInIteratedConstraint)
+                (mkTypedSub normalBoolRec check)
         // If check is a tautology, it will be equivalent to 'true'.
         lift
             (equiv BTrue >> equivHolds id)
@@ -288,7 +290,7 @@ module Downclosure =
                 (fun succDefn ->
                     mkImplies
                         (mkAnd2
-                            (mkLe (IInt 0L) (IVar (Reg iterator)))
+                            (mkIntLe (IInt 0L) (IVar (Reg iterator)))
                             succDefn)
                         defn)
                 succDefnR
@@ -326,7 +328,7 @@ module Downclosure =
         let checkIterator =
             function
             | None -> fail (MissingIterator [func])
-            | Some (Int v) -> ok v
+            | Some (Int (_, v)) -> ok v
             | Some v -> fail (BadIteratorType ([func], typeOf v))
 
         (* Delegate any checks on indefinite viewdefs to the backends, eg HSF
@@ -644,7 +646,7 @@ let reifySingleDef
                        pattern match guards above, it short-circuits to
                        false and kills off the entire view. *)
 
-                    let nIsPos = mkGt v.Iterator (IInt 0L)
+                    let nIsPos = mkIntGt v.Iterator (IInt 0L)
                     let func = { v.Func with Cond = mkAnd2 v.Func.Cond nIsPos }
 
                     let result =

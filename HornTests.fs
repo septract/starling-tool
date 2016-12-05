@@ -19,45 +19,45 @@ module Tests =
     /// The globals environment used in the tests.
     let SharedVars : VarMap =
         returnOrFail <| VarMap.ofTypedVarSeq
-            [ TypedVar.Int "serving"
-              TypedVar.Int "ticket" ]
+            [ normalIntVar "serving"
+              normalIntVar "ticket" ]
 
     [<Test>]
     let ``Refuse modulo expressions``() =
         assertEqual
-            (Some [ UnsupportedExpr (Int (IMod (IInt 5L, IVar "foo"))) ])
+            (Some [ UnsupportedExpr (normalIntExpr (IMod (IInt 5L, IVar "foo"))) ])
             (checkArith id (IMod (IInt 5L, IVar "foo")) |> failOption)
 
     [<Test>]
     let ``Model the ticket lock view definitions as Horn clauses``() =
         let x : (DFunc * BoolExpr<string> option) list =
             [ ( { Name = "emp"
-                  Params = [ Int "serving"
-                             Int "ticket" ] },
-                Some <| BGe(IVar "ticket", IVar "serving"))
+                  Params = [ normalIntVar "serving"
+                             normalIntVar "ticket" ] },
+                Some <| BGe(normalInt (IVar "ticket"), normalInt (IVar "serving")))
               ( { Name = "v_holdTick"
-                  Params = [ Int "serving"
-                             Int "ticket"
-                             Int "t" ] },
-                Some <| BGt(IVar "ticket", IVar "t"))
+                  Params = [ normalIntVar "serving"
+                             normalIntVar "ticket"
+                             normalIntVar "t" ] },
+                Some <| BGt(normalInt (IVar "ticket"), normalInt (IVar "t")))
               ( { Name = "v_holdLock"
-                  Params = [ Int "serving"
-                             Int "ticket" ] },
-                Some <| BGt(IVar "ticket", IVar "serving"))
+                  Params = [ normalIntVar "serving"
+                             normalIntVar "ticket" ] },
+                Some <| BGt(normalInt (IVar "ticket"), normalInt (IVar "serving")))
               ( { Name = "v_holdLock_holdTick"
-                  Params = [ Int "serving"
-                             Int "ticket"
-                             Int "t" ] },
+                  Params = [ normalIntVar "serving"
+                             normalIntVar "ticket"
+                             normalIntVar "t" ] },
                 Some <| BNot(iEq (IVar "serving") (IVar "t")))
               ( { Name = "v_holdTick_holdTick"
-                  Params = [ Int "serving"
-                             Int "ticket"
-                             Int "ta"
-                             Int "tb" ] },
+                  Params = [ normalIntVar "serving"
+                             normalIntVar "ticket"
+                             normalIntVar "ta"
+                             normalIntVar "tb" ] },
                 Some <| BNot(iEq (IVar "ta") (IVar "tb")))
               ( { Name = "v_holdLock_holdLock"
-                  Params = [ Int "serving"
-                             Int "ticket" ] },
+                  Params = [ normalIntVar "serving"
+                             normalIntVar "ticket" ] },
                 Some <| BFalse ) ]
         Assert.That
             (x

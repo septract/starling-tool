@@ -45,7 +45,7 @@ module ParamEqualities =
         [] ?=?
         paramEqualities
             [ iteratedFunc "A"
-                [ Int (siBefore "x1"); Int (siBefore "y1") ]
+                [ normalIntExpr (siBefore "x1"); normalIntExpr (siBefore "y1") ]
                 (IInt 1L) ]
 
     [<Test>]
@@ -68,16 +68,16 @@ module ParamEqualities =
           bEq (sbBefore "z1") (sbBefore "z4") ] ?=?
         paramEqualities
             [ iteratedFunc "A"
-                [ Int (siBefore "x1"); Int (siAfter "y1"); Bool (sbBefore "z1") ]
+                [ normalIntExpr (siBefore "x1"); normalIntExpr (siAfter "y1"); normalBoolExpr (sbBefore "z1") ]
                 (IInt 1L)
               iteratedFunc "A"
-                [ Int (siBefore "x2"); Int (siAfter "y2"); Bool (sbBefore "z2") ]
+                [ normalIntExpr (siBefore "x2"); normalIntExpr (siAfter "y2"); normalBoolExpr (sbBefore "z2") ]
                 (IInt 10L)
               iteratedFunc "A"
-                [ Int (siBefore "x3"); Int (siAfter "y3"); Bool (sbBefore "z3") ]
+                [ normalIntExpr (siBefore "x3"); normalIntExpr (siAfter "y3"); normalBoolExpr (sbBefore "z3") ]
                 (siBefore "i")
               iteratedFunc "A"
-                [ Int (siBefore "x4"); Int (siAfter "y4"); Bool (sbBefore "z4") ]
+                [ normalIntExpr (siBefore "x4"); normalIntExpr (siAfter "y4"); normalBoolExpr (sbBefore "z4") ]
                 (IMul [ siAfter "j"; IInt 6L ]) ]
 
 /// <summary>
@@ -93,9 +93,9 @@ module ViewPreprocess =
     /// </summary>
     let protos : FuncDefiner<ProtoInfo> =
         FuncDefiner.ofSeq
-            [ (dfunc "A" [ Int "x"; Int "y"; Bool "z" ],
+            [ (dfunc "A" [ normalIntVar "x"; normalIntVar "y"; normalBoolVar "z" ],
                { IsIterated = true ; IsAnonymous = false })
-              (dfunc "B" [ Int "n" ],
+              (dfunc "B" [ normalIntVar "n" ],
                { IsIterated = false ; IsAnonymous = false }) ]
 
     [<Test>]
@@ -108,12 +108,12 @@ module ViewPreprocess =
         [ iteratedGFunc
             (sbBefore "G2")
             "B"
-            [ Int (siAfter "n2") ]
+            [ normalIntExpr (siAfter "n2") ]
             (siAfter "k")
           iteratedGFunc
             (sbBefore "G1")
             "B"
-            [ Int (siBefore "n1") ]
+            [ normalIntExpr (siBefore "n1") ]
             (IInt 5L) ]
         ?=?
         preprocessView protos
@@ -121,12 +121,12 @@ module ViewPreprocess =
                 [ iteratedGFunc
                     (sbBefore "G1")
                     "B"
-                    [ Int (siBefore "n1") ]
+                    [ normalIntExpr (siBefore "n1") ]
                     (IInt 5L)
                   iteratedGFunc
                     (sbBefore "G2")
                     "B"
-                    [ Int (siAfter "n2") ]
+                    [ normalIntExpr (siAfter "n2") ]
                     (siAfter "k") ])
 
     [<Test>]
@@ -137,17 +137,17 @@ module ViewPreprocess =
                      iEq (siAfter "y2") (siBefore "y1")
                      bEq (sbAfter "z2") (sbBefore "z1") ])
             "A"
-            [ Int (siAfter "x2"); Int (siAfter "y2"); Bool (sbAfter "z2") ]
+            [ normalIntExpr (siAfter "x2"); normalIntExpr (siAfter "y2"); normalBoolExpr (sbAfter "z2") ]
             (mkAdd2 (siAfter "k") (IInt 5L))
           iteratedGFunc
             (sbBefore "G1")
             "A"
-            [ Int (siBefore "x1"); Int (siBefore "y1"); Bool (sbBefore "z1") ]
+            [ normalIntExpr (siBefore "x1"); normalIntExpr (siBefore "y1"); normalBoolExpr (sbBefore "z1") ]
             (IInt 5L)
           iteratedGFunc
             (sbBefore "G2")
             "A"
-            [ Int (siAfter "x2"); Int (siAfter "y2"); Bool (sbAfter "z2") ]
+            [ normalIntExpr (siAfter "x2"); normalIntExpr (siAfter "y2"); normalBoolExpr (sbAfter "z2") ]
             (siAfter "k") ]
         ?=?
         preprocessView protos
@@ -155,10 +155,10 @@ module ViewPreprocess =
                 [ iteratedGFunc
                     (sbBefore "G2")
                     "A"
-                    [ Int (siAfter "x2"); Int (siAfter "y2"); Bool (sbAfter "z2") ]
+                    [ normalIntExpr (siAfter "x2"); normalIntExpr (siAfter "y2"); normalBoolExpr (sbAfter "z2") ]
                     (siAfter "k")
                   iteratedGFunc
                     (sbBefore "G1")
                     "A"
-                    [ Int (siBefore "x1"); Int (siBefore "y1"); Bool (sbBefore "z1") ]
+                    [ normalIntExpr (siBefore "x1"); normalIntExpr (siBefore "y1"); normalBoolExpr (sbBefore "z1") ]
                     (IInt 5L) ])

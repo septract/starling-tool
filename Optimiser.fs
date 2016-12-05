@@ -614,10 +614,9 @@ module Graph =
     /// </summary>
     let (|NoSym|_|) (bexpr : BoolExpr<Sym<'Var>>) : BoolExpr<'Var> option =
         bexpr
-        // |> mkTypedSub normalBoolRec
+        |> mkTypedSub normalBoolRec
         |> mapTraversal (removeSymFromBoolExpr ignore)
         |> okOption
-
 
     /// <summary>
     ///     Active pattern matching on if-then-else guard multisets.
@@ -644,7 +643,7 @@ module Graph =
             Some (xc, Multiset.singleton { Func = { Cond = BTrue; Item = xi }; Iterator = xit },
                   yc, Multiset.singleton { Func = { Cond = BTrue; Item = yi }; Iterator = yit })
         // {| G -> P |} is trivially equivalent to {| G -> P * ¬G -> emp |}.
-        | [ { Func = { Cond = (NoSym xc); Item = xi }; Iterator = it } ] ->
+        | [ { Func = { Cond = NoSym xc; Item = xi }; Iterator = it } ] ->
             Some (xc, Multiset.singleton { Func = { Cond = BTrue; Item = xi }; Iterator = it },
                   mkNot xc, Multiset.empty)
         | _ -> None
@@ -951,7 +950,8 @@ module Term =
     /// constant.
     let rec (|ConstantBoolFunction|_|) (x : BoolExpr<Sym<MarkedVar>>)
       : MarkedVar option =
-        x
+        let tx = mkTypedSub normalBoolRec x
+        tx
         |> findVars (tliftToBoolSrc (tliftToExprDest collectSymVars))
         |> okOption |> Option.map (Seq.map valueOf) |> Option.bind onlyOne
 
@@ -959,7 +959,8 @@ module Term =
     /// constant.
     let rec (|ConstantIntFunction|_|) (x : IntExpr<Sym<MarkedVar>>)
       : MarkedVar option =
-        x
+        let tx = mkTypedSub normalIntRec x
+        tx
         |> findVars (tliftToIntSrc (tliftToExprDest collectSymVars))
         |> okOption |> Option.map (Seq.map valueOf) |> Option.bind onlyOne
 
@@ -969,10 +970,10 @@ module Term =
     let rec findArithAfters
       : BoolExpr<Sym<MarkedVar>> -> (Var * IntExpr<Sym<MarkedVar>>) list =
         function
-        | BAEq(IVar (Reg (After x)), (ConstantIntFunction (Before y) as fx))
+        | BIEq(IVar (Reg (After x)), (ConstantIntFunction (Before y) as fx))
             when x = y
             -> [(x, fx)]
-        | BAEq(ConstantIntFunction (Before y) as fx, IVar (Reg (After x)))
+        | BIEq(ConstantIntFunction (Before y) as fx, IVar (Reg (After x)))
             when x = y
             -> [(x, fx)]
         | BAnd xs -> concatMap findArithAfters xs
@@ -1024,18 +1025,18 @@ module Term =
       : BoolExpr<Sym<MarkedVar>>
         -> ((bigint * Var) * IntExpr<Sym<MarkedVar>>) list =
         function
-        | BAEq (IVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Intermediate(k, y)) as fx))
-        | BAEq (ConstantIntFunction (Intermediate(k, y)) as fx, IVar (Reg (Intermediate(i, x))))
+        | BIEq (IVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Intermediate(k, y)) as fx))
+        | BIEq (ConstantIntFunction (Intermediate(k, y)) as fx, IVar (Reg (Intermediate(i, x))))
             when x = y
             ->
                 if i > k then
                     [((i, x), fx)]
                 else
                     []
-        | BAEq (IVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Before y) as fx))
-        | BAEq (IVar (Reg (Intermediate(i, x))), (ConstantIntFunction (After y) as fx))
-        | BAEq (ConstantIntFunction (Before y) as fx, IVar (Reg (Intermediate(i, x))))
-        | BAEq (ConstantIntFunction (After y) as fx, IVar (Reg (Intermediate(i, x))))
+        | BIEq (IVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Before y) as fx))
+        | BIEq (IVar (Reg (Intermediate(i, x))), (ConstantIntFunction (After y) as fx))
+        | BIEq (ConstantIntFunction (Before y) as fx, IVar (Reg (Intermediate(i, x))))
+        | BIEq (ConstantIntFunction (After y) as fx, IVar (Reg (Intermediate(i, x))))
             when x = y
             -> [((i, x), fx)]
         | BAnd xs -> concatMap findArithInters xs
@@ -1047,13 +1048,14 @@ module Term =
       (bsubs : Map<Var, BoolExpr<Sym<MarkedVar>>>)
       : Traversal<CTyped<MarkedVar>, Expr<Sym<MarkedVar>>, TermOptError, unit> =
         (* TODO(CaptainHayashi): just use one Map<Var, Expr<_>>, and raise a
-           traversal error if we get the wrong type out. *)
+           traversal error if we get the wrong type out.
+           TODO(CaptainHayashi): type safety? *)
         let switch =
             function
-            | Int (After a) ->
-                Map.tryFind a isubs |> withDefault (siAfter a) |> Int
-            | Bool (After a) ->
-                Map.tryFind a bsubs |> withDefault (sbAfter a) |> Bool
+            | Int (ty, After a) ->
+                Int (ty, Map.tryFind a isubs |> withDefault (siAfter a))
+            | Bool (ty, After a) ->
+                Bool (ty, Map.tryFind a bsubs |> withDefault (sbAfter a))
             | x -> mkVarExp (mapCTyped Reg x)
         ignoreContext (switch >> ok)
 
@@ -1063,13 +1065,14 @@ module Term =
       (bsubs : Map<bigint * Var, BoolExpr<Sym<MarkedVar>>>)
       : Traversal<CTyped<MarkedVar>, Expr<Sym<MarkedVar>>, TermOptError, unit> =
         (* TODO(CaptainHayashi): just use one Map<Var, Expr<_>>, and raise a
-           traversal error if we get the wrong type out. *)
+           traversal error if we get the wrong type out.
+           TODO(CaptainHayashi): type safety? *)
         let switch =
             function
-            | Int (Intermediate (i, a)) ->
-                Map.tryFind (i, a) isubs |> withDefault (siInter i a) |> Int
-            | Bool (Intermediate (i, a)) ->
-                Map.tryFind (i, a) bsubs |> withDefault (sbInter i a) |> Bool
+            | Int (ty, Intermediate (i, a)) ->
+                Int (ty, Map.tryFind (i, a) isubs |> withDefault (siInter i a))
+            | Bool (ty, Intermediate (i, a)) ->
+                Bool (ty, Map.tryFind (i, a) bsubs |> withDefault (sbInter i a))
             | x -> mkVarExp (mapCTyped Reg x)
         ignoreContext (switch >> ok)
 
@@ -1127,7 +1130,11 @@ module Term =
         | x when Set.contains (mkNot x) fs -> BFalse
         | BAnd xs -> mkAnd (List.map (reduce fs) xs)
         | BOr xs -> mkOr (List.map (reduce fs) xs)
-        | BBEq (x, y) -> mkEq (reduce fs x |> Expr.Bool) (reduce fs y |> Expr.Bool)
+        // TODO(CaptainHayashi: handle subtypes properly here?)
+        | TBBEq (x, y) ->
+            mkEq
+                (typedBoolToExpr (mapTypedSub (reduce fs) x))
+                (typedBoolToExpr (mapTypedSub (reduce fs) y))
         | BNot x -> mkNot (reduce fs x)
         | x -> x
 
@@ -1157,7 +1164,7 @@ module Term =
                   TermOptError> =
         let simpExpr : Expr<Sym<MarkedVar>> -> Expr<Sym<MarkedVar>> =
             function
-            | Bool b -> Bool (simp b)
+            | Bool (ty, b) -> Bool (ty, simp b)
             | x -> x
         let sub = ignoreContext (simpExpr >> ok)
         let trav = tliftOverCmdTerm sub

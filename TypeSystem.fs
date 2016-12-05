@@ -234,6 +234,7 @@ let rec unifyArrayTypeRecs (xs : ArrayTypeRec list) : ArrayTypeRec option =
                     match (rs.Length, nextRec.Length) with
                     | Some _, None | None, None -> Some rs
                     | None, Some _ -> Some nextRec
+                    | Some x, Some y when x = y -> Some rs
                     | _ -> None
                 else None
         List.fold foldRecs (Some x) xs
@@ -253,6 +254,26 @@ and arrayTypeRecsCompatible (x : ArrayTypeRec) (y : ArrayTypeRec) : bool =
     | None -> false
 
 /// <summary>
+///     Tries to unify two types.
+/// </summary>
+/// <param name="x">The first type to unify.</param>
+/// <param name="y">The second type to unify.</param>
+/// <returns>
+///     The unified record, if unification is possible; None otherwise.
+/// </returns>
+and unifyTwoTypes (x : Type) (y : Type) : Type option =
+    (* Types are can be unified when their base types are equal and their
+       extended type records are unifiable. *)
+    match (x, y) with
+    | (AnIntR xr, AnIntR yr) ->
+        Option.map (fun tr -> Int (tr, ())) (unifyPrimTypeRecs [xr; yr])
+    | (ABoolR xr, ABoolR yr) ->
+        Option.map (fun tr -> Bool (tr, ())) (unifyPrimTypeRecs [xr; yr])
+    | (AnArrayR xr, AnArrayR yr) ->
+        Option.map (fun tr -> Array (tr, ())) (unifyArrayTypeRecs [xr; yr])
+    | _ -> None
+
+/// <summary>
 ///     Checks whether two types are compatible.
 /// </summary>
 /// <param name="x">The first type to check.</param>
@@ -262,15 +283,9 @@ and arrayTypeRecsCompatible (x : ArrayTypeRec) (y : ArrayTypeRec) : bool =
 ///     <paramref name="y"/>, or vice versa; false otherwise.
 /// </returns>
 and typesCompatible (x : Type) (y : Type) : bool =
-    (* Technically, if this was proper unification, we'd want to return a
-       record of the substitutions made. *)
-    match (x, y) with
-    (* Types are compatible when their base types are equal and their
-       extended type records are compatible. *)
-    | (AnIntR xr, AnIntR yr)
-    | (ABoolR xr, ABoolR yr) -> primTypeRecsCompatible xr yr
-    | (AnArrayR xr, AnArrayR yr) -> arrayTypeRecsCompatible xr yr
-    | _ -> false
+    match unifyTwoTypes x y with
+    | Some _ -> true
+    | None -> false
 
 
 /// <summary>
