@@ -69,7 +69,7 @@ module Pretty =
     and printBoolExprG (pVar : Sym<MarkedVar> -> Doc) (fr : bool) (b : BoolExpr<Sym<MarkedVar>>) : Doc =
         match b, fr with 
         | NoSym x, true ->   
-           String "sTrue() &*& " <+> printBoolExprG pVar false b |> parened 
+           String "sTrue() &*&" <+> printBoolExprG pVar false b |> parened 
         | _ -> 
            match b with 
            | BVar c -> pVar c
@@ -79,7 +79,10 @@ module Pretty =
                /// Convert implications to disjunctive form
                printBoolExprG pVar fr (BOr [BNot x; y]) 
            | BNot (BEq (x, y)) -> infexpr "!=" (printExprG pVar fr) [x; y]
-           | BNot x -> String "~" <+> (printBoolExprG pVar fr x) |> parened 
+           | BNot x -> 
+               match x with 
+               | NoSym y -> String "~" <+> (printBoolExprG pVar fr x) |> parened 
+               | _ -> failwith "[printBoolExprG] Grasshopper can't negate spatial things." 
            | BEq (x, y) -> infexpr "==" (printExprG pVar fr) [x; y]
            | BGt (x, y) -> infexpr ">" (printIntExprG pVar) [x; y]
            | BLt (x, y) -> infexpr "<" (printIntExprG pVar) [x; y]
