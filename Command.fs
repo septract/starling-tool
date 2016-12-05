@@ -143,7 +143,7 @@ module Traversal =
         fun ctx { Cmd = c; Microcode = m; Assigns = a; Semantics = s } ->
             let swapSemantics s' =
                 { Cmd = c; Microcode = m; Assigns = a; Semantics = s' }
-            let result = traverseBoolAsExpr traversal ctx (mkTypedSub () s)
+            let result = traverseBoolAsExpr traversal ctx (normalBool s)
             lift (pairMap id swapSemantics) result
 
 /// <summary>
