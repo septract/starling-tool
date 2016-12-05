@@ -237,7 +237,7 @@ let instantiate
              | None -> ok None
              | Some (dfunc, defn) ->
                 // Definitions have no extended type
-                lift Some (mapTraversal (subInBool dfunc) (mkTypedSub () defn)))
+                lift Some (mapTraversal (subInBool dfunc) (normalBool defn)))
             (mapMessages Inner dfuncResult)
 
     mapMessages Traversal result
@@ -283,7 +283,7 @@ module DefinerFilter =
         |> List.map
                (fun (f, d) ->
                     let trav = removeSymFromBoolExpr UnwantedSym
-                    let result = mapTraversal trav (mkTypedSub () d)
+                    let result = mapTraversal trav (normalBool d)
                     lift (mkPair f) result)
         |> collect
 
@@ -416,7 +416,7 @@ module Phase =
             (* The above might have left some symbols, eg in integer position.
                Try to remove them, and fail if we can't. *)
             let elimBoolExprR =
-                bind (mkTypedSub () >> mapTraversal (removeSymFromBoolExpr UnwantedSym))
+                bind (normalBool >> mapTraversal (removeSymFromBoolExpr UnwantedSym))
                     approxBoolExprR
             // Finally, tidy up the resulting expression.
             mapMessages Traversal (lift simp elimBoolExprR)
@@ -430,12 +430,12 @@ module Phase =
                Commands appear on the LHS of a term, thus in -ve position. *)
             let removed = 
                 Starling.Core.Command.SymRemove.removeSym cmdSemantics
-            tryApproxInBool (Context.negative ()) (mkTypedSub () removed)
+            tryApproxInBool (Context.negative ()) (normalBool removed)
 
         // Weakest precondition is on the LHS of a term, thus in -ve position.
-        let mapWPre wPre = tryApproxInBool (Context.negative ()) (mkTypedSub () wPre)
+        let mapWPre wPre = tryApproxInBool (Context.negative ()) (normalBool wPre)
         // Goal is on the RHS of a term, thus in +ve position.
-        let mapGoal goal = tryApproxInBool (Context.positive ()) (mkTypedSub () goal)
+        let mapGoal goal = tryApproxInBool (Context.positive ()) (normalBool goal)
 
         tryMapTerm mapCmd mapWPre mapGoal symterm
 

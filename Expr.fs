@@ -181,15 +181,13 @@ let liftTypedSub (f : ('Rec * 'Sub) -> 'T) (sub : TypedSubExpr<'Sub, 'Rec>) : 'T
 ///     The type record for a 'normal' Boolean expression.
 /// </summary>
 let normalBoolRec : PrimTypeRec =
-    // TODO(CaptainHayashi): eventually this will be filled in.
-    ()
+    { TypeName = Some "bool" }
 
 /// <summary>
 ///     The type record for an indefinitely typed Boolean expression.
 /// </summary>
 let indefBoolRec : PrimTypeRec =
-    // TODO(CaptainHayashi): eventually this will be filled in.
-    ()
+    { TypeName = None }
 
 /// <summary>
 ///     Converts a TypedBoolExpr to a Type.
@@ -213,12 +211,26 @@ let normalBool (bool : BoolExpr<'Var>) : TypedBoolExpr<'Var> =
     mkTypedSub normalBoolRec bool
 
 /// <summary>
+///     Converts a BoolExpr to a TypedBoolExpr using the indefinite type.
+/// </summary>
+let indefBool (bool : BoolExpr<'Var>) : TypedBoolExpr<'Var> =
+    // TODO(CaptainHayashi): proper doc comment.
+    mkTypedSub indefBoolRec bool
+
+/// <summary>
 ///     Converts a BoolExpr to an Expr using the normal type.
 /// </summary>
 let normalBoolExpr (bool : BoolExpr<'Var>) : Expr<'Var> =
     // TODO(CaptainHayashi): proper doc comment.
     typedBoolToExpr (normalBool bool)
-    ///
+
+/// <summary>
+///     Converts a BoolExpr to an Expr using the indefinite type.
+/// </summary>
+let indefBoolExpr (bool : BoolExpr<'Var>) : Expr<'Var> =
+    // TODO(CaptainHayashi): proper doc comment.
+    typedBoolToExpr (indefBool bool)
+
 /// <summary>
 ///     Constructs a Boolean typed variable from a variable using the normal type.
 /// </summary>
@@ -232,14 +244,14 @@ let normalBoolVar (var : 'Var) : CTyped<'Var> =
 /// </summary>
 let normalIntRec : PrimTypeRec =
     // TODO(CaptainHayashi): eventually this will be filled in.
-    ()
+    { TypeName = Some "int" }
 
 /// <summary>
 ///     The type record for an indefinitely typed Integer expression.
 /// </summary>
 let indefIntRec : PrimTypeRec =
     // TODO(CaptainHayashi): eventually this will be filled in.
-    ()
+    { TypeName = None }
 
 /// <summary>
 ///     Converts a TypedIntExpr to a Type.
@@ -263,6 +275,13 @@ let normalInt (int : IntExpr<'Var>) : TypedIntExpr<'Var> =
     mkTypedSub normalIntRec int
 
 /// <summary>
+///     Converts an IntExpr to a TypedIntExpr using the indefinite type.
+/// </summary>
+let indefInt (int : IntExpr<'Var>) : TypedIntExpr<'Var> =
+    // TODO(CaptainHayashi): proper doc comment.
+    mkTypedSub indefBoolRec int
+
+/// <summary>
 ///     Constructs an integer typed variable from a variable using the normal type.
 /// </summary>
 let normalIntVar (var : 'Var) : CTyped<'Var> =
@@ -275,6 +294,13 @@ let normalIntVar (var : 'Var) : CTyped<'Var> =
 let normalIntExpr (int : IntExpr<'Var>) : Expr<'Var> =
     // TODO(CaptainHayashi): proper doc comment.
     typedIntToExpr (normalInt int)
+
+/// <summary>
+///     Converts an IntExpr to an Expr using the indefinite type.
+/// </summary>
+let indefIntExpr (int : IntExpr<'Var>) : Expr<'Var> =
+    // TODO(CaptainHayashi): proper doc comment.
+    typedIntToExpr (indefInt int)
 
 /// <summary>
 ///     Constructs an array type record.

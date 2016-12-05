@@ -608,7 +608,7 @@ module Traversal =
                 (fun (cond', item') -> { Cond = cond'; Item = item' })
                 ctx
                 // Internal value, so it doesn't have an extended type
-                (mkTypedSub () cond, item)
+                (normalBool cond, item)
 
     /// <summary>
     ///     Lifts a <c>Traversal</c> over all expressions in an iterated
@@ -639,7 +639,7 @@ module Traversal =
                 (fun (iter', func') -> { Iterator = iter'; Func = func' })
                 ctx
                 // Internal value, so it doesn't have an extended type
-                (mkTypedSub () iter, func)
+                (normalInt iter, func)
 
     /// <summary>
     ///     Lifts a <c>Traversal</c> over all variables in a <see cref="Term"/>.
@@ -675,7 +675,7 @@ module Traversal =
                 (fun (c', w', g') -> { Cmd = c'; WPre = w'; Goal = g' })
                 ctx
                 // None of these items can have extended types, I think?
-                (mkTypedSub () c, w, g)
+                (normalBool c, w, g)
 
     /// <summary>
     ///     Lifts a <c>Traversal</c> over all variables in a
