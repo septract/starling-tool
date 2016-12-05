@@ -39,7 +39,7 @@ method drop() {
 }
 
 view error();
-view iter[n] arc();
+view iter arc();
 view noCnt();
 
 // These views just add free=f and count=c to the final proof predicates

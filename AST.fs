@@ -138,7 +138,7 @@ module Types =
         /// <summary>
         ///     An iterated view prototype; cannot be anonymous
         /// </summary>
-        | WithIterator of Func: Func<'Param> * Iterator: string
+        | WithIterator of Func: Func<'Param>
 
     /// A view prototype with Param parameters.
     type ViewProto = GeneralViewProto<Param>
@@ -464,8 +464,8 @@ module Pretty =
         match vp with
         | NoIterator (Func = { Name = n; Params = ps }; IsAnonymous = _) ->
             func n (List.map pParam ps)
-        | WithIterator (Func = { Name = n; Params = ps }; Iterator = i) ->
-            (String "iter" <-> squared (String i))
+        | WithIterator (Func = { Name = n; Params = ps }) ->
+            (String "iter")
             <+> func n (List.map pParam ps)
 
     /// Pretty-prints a view prototype.

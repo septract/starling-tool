@@ -1648,7 +1648,7 @@ let modelMethod
 let checkViewProtoDuplicates (proto : DesugaredViewProto)
   : Result<DesugaredViewProto, ViewProtoError> =
     match proto with
-    | NoIterator (f, _) | WithIterator (f, _) ->
+    | NoIterator (f, _) | WithIterator f ->
         f.Params
         |> Seq.map valueOf
         |> findDuplicates
@@ -1667,7 +1667,7 @@ let modelViewProtos (protos : #(DesugaredViewProto seq))
                (function
                 | NoIterator (f, isAnonymous) ->
                     (f, { IsIterated = false; IsAnonymous = isAnonymous; } )
-                | WithIterator (f, _) ->
+                | WithIterator f ->
                     (f, { IsIterated = true; IsAnonymous = false; } ))
 
     protos
@@ -1742,8 +1742,8 @@ let convertViewProtos (vps : ViewProto list)
         match vp with
         | NoIterator (func, isAnonymous) ->
             lift (fun f -> NoIterator (f, isAnonymous)) (convertViewFunc vp func)
-        | WithIterator (func, iterator) ->
-            lift (fun f -> WithIterator (f, iterator)) (convertViewFunc vp func)
+        | WithIterator func ->
+            lift (fun f -> WithIterator f) (convertViewFunc vp func)
 
     collect (List.map convertViewProto vps)
 
