@@ -13,10 +13,12 @@ open Starling.Core.Var
 open Starling.Core.Expr
 open Starling.Core.Model
 open Starling.Core.Symbolic
+open Starling.Core.Symbolic.Traversal
 open Starling.Core.Instantiate
 open Starling.Core.GuardedView
 open Starling.Core.Traversal
 open Starling.Backends.Z3
+open Starling.Optimiser.Graph
 
 [<AutoOpen>] 
 module Types =
@@ -55,41 +57,49 @@ module Pretty =
         match v with 
         | Int name -> String name  
         | Bool name -> String name  
-        | _ -> failwith "[printTypedVarGrass] Unimplemented for Grasshopper backend." 
+        | _ -> failwith "[printTypedVarGrass] Case unimplemented for Grasshopper backend." 
 
     /// Pretty-prints an arithmetic expression.
     let rec printIntExprG (pVar : 'Var -> Doc) : IntExpr<'Var> -> Doc =
         function
         | IVar c -> pVar c
-        | _ -> failwith "[printIntExprG] Unimplemented for Grasshopper backend." 
+        | _ -> failwith "[printIntExprG] Case unimplemented for Grasshopper backend." 
 
     /// Pretty-prints a Boolean expression.
-    and printBoolExprG (pVar : 'Var -> Doc) (b : BoolExpr<'Var>) : Doc =
-        match b with 
-        | BVar c -> pVar c
-        | BAnd xs -> infexprV "&&" (printBoolExprG pVar) xs 
-        | BOr xs -> infexprV "||" (printBoolExprG pVar) xs
-        | BImplies (x, y) -> infexprV "==>" (printBoolExprG pVar)  [x; y]
-        | BNot (BEq (x, y)) -> infexpr "!=" (printExprG pVar) [x; y]
-        | BEq (x, y) -> infexpr "==" (printExprG pVar) [x; y]
-        | BGt (x, y) -> infexpr ">" (printIntExprG pVar) [x; y]
-        | BLt (x, y) -> infexpr "<" (printIntExprG pVar) [x; y]
-        | _ -> failwith "[printBoolExprG] Unimplemented for Grasshopper backend."  
+    and printBoolExprG (pVar : Sym<MarkedVar> -> Doc) (fr : bool) (b : BoolExpr<Sym<MarkedVar>>) : Doc =
+        match b, fr with 
+        | NoSym x, true ->   
+           String "sTrue() &*& " <+> printBoolExprG pVar false b |> parened 
+        | _ -> 
+           match b with 
+           | BVar c -> pVar c
+           | BAnd xs -> infexprV "&&" (printBoolExprG pVar fr) xs 
+           | BOr xs -> infexprV "||" (printBoolExprG pVar fr) xs
+           | BImplies (x, y) -> 
+               /// Convert implications to disjunctive form
+               printBoolExprG pVar fr (BOr [BNot x; y]) 
+           | BNot (BEq (x, y)) -> infexpr "!=" (printExprG pVar fr) [x; y]
+           | BNot x -> String "~" <+> (printBoolExprG pVar fr x) |> parened 
+           | BEq (x, y) -> infexpr "==" (printExprG pVar fr) [x; y]
+           | BGt (x, y) -> infexpr ">" (printIntExprG pVar) [x; y]
+           | BLt (x, y) -> infexpr "<" (printIntExprG pVar) [x; y]
+           | _ -> failwith "[printBoolExprG] Case unimplemented for Grasshopper backend."  
        
     /// Pretty-prints an expression.
-    and printExprG (pVar : 'Var -> Doc) : Expr<'Var> -> Doc =
-        function
+    and printExprG (pVar : Sym<MarkedVar> -> Doc) (fr : bool) (b : Expr<Sym<MarkedVar>>) : Doc =
+        match b with 
         | Int i -> printIntExprG pVar i
-        | Bool b -> printBoolExprG pVar b
-        | _ -> failwith "[printExprG] Unimplemented for Grasshopper backend." 
+        | Bool b -> printBoolExprG pVar fr b
+        | _ -> failwith "[printExprG] Case unimplemented for Grasshopper backend." 
 
     /// Pretty-prints a symbolic sentence 
-    let rec printSymGrass (pReg : 'Reg -> Doc) (sym : Sym<'Reg>) : Doc =
+    let rec printSymGrass (pReg : MarkedVar -> Doc) (sym : Sym<MarkedVar>) : Doc =
         match sym with
         | Reg r -> pReg r
         | Sym { Sentence = ws; Args = xs } ->
-            let pArg = printExprG (printSym pReg)
+            let pArg = printExprG (printSym pReg) false
             printInterpolatedSymbolicSentence pArg ws xs
+            |> parened 
 
     /// Get the set of accessed variables. 
     let findVarsGrass (zterm : Backends.Z3.Types.ZTerm) : seq<MarkedVar> = 
@@ -99,24 +109,29 @@ module Pretty =
         |> lift (Set.map valueOf >> Set.toSeq) 
         |> returnOrFail
 
-    /// Add a spatial frame if an expression isn't symbolic
-    // TODO @(septract) this is extremely naive at the moment. 
-    let makeFrame b = 
-        let exprdoc = 
-           printBoolExprG (printSymGrass printMarkedVarGrass) b 
-        match b with 
-        | BVar (Sym s) -> exprdoc 
-        | _ ->  String "sTrue() &*&" <+> exprdoc  |>  parened 
+    ///// Add a spatial frame if an expression isn't symbolic
+    //// TODO @(septract) this is extremely naive at the moment. 
+    //let makeFrame b = 
+    //    let exprdoc = 
+    //       printBoolExprG (printSymGrass printMarkedVarGrass) true  
+    //    match b with 
+    //    | BVar (Sym s) -> exprdoc b 
+    //    // | BImplies (x, BVar (Sym s)) -> 
+    //    //     parened (String "STrue() &*&" <+> exprdoc x) 
+    //    //     <+> String "||" 
+    //    //     parened (exprdoc (BVar (Sym s))) 
+    //    //   |> parened 
+    //    | _ ->  String "sTrue() &*&" <+> exprdoc b |>  parened 
 
-    /// Print top-level requires / ensures clauses 
-    let printConstrGrass (s : Doc) (b : BoolExpr<Sym<MarkedVar>>) : Doc = 
-        match b with 
-        | BAnd xs ->  
-              Seq.map makeFrame xs 
-              |> Seq.map (hsep2 Nop s) 
-              |> vsep 
-        | x -> makeFrame x 
-               |> hsep2 Nop s
+    ///// Print top-level requires / ensures clauses 
+    //let printConstrGrass (s : Doc) (b : BoolExpr<Sym<MarkedVar>>) : Doc = 
+    //    match b with 
+    //    | BAnd xs ->  
+    //          Seq.map makeFrame xs 
+    //          |> Seq.map (hsep2 Nop s) 
+    //          |> vsep 
+    //    | x -> makeFrame x 
+    //           |> hsep2 Nop s
 
     /// Print a single Grasshopper query from a ZTerm 
     let printZTermGrass (svars : VarMap) 
@@ -133,19 +148,21 @@ module Pretty =
 
         /// Print the requires / ensures clauses 
         let wpreprint = zterm.SymBool.WPre 
-                        |> printBoolExprG (printSymGrass printMarkedVarGrass) 
+                        |> printBoolExprG (printSymGrass printMarkedVarGrass) true
         let goalprint = zterm.SymBool.Goal 
-                        |> printBoolExprG (printSymGrass printMarkedVarGrass) 
+                        |> printBoolExprG (printSymGrass printMarkedVarGrass) true
 
         // TODO @(septract) print command properly 
         let cmdprint = zterm.SymBool.Cmd 
                        |> (Core.Expr.Pretty.printBoolExpr (printSymGrass printMarkedVarGrass))
         vsep [ String "procedure" <+> String name <+> (varprint |> parened) 
                // String "requires" 
-               (printConstrGrass (String "requires ") zterm.SymBool.WPre) 
-               (printConstrGrass (String "ensures  ") zterm.SymBool.Goal) 
-               // String "ensures" 
-               // Indent goalprint <+> String ";" 
+               //(printConstrGrass (String "requires ") zterm.SymBool.WPre) 
+               //(printConstrGrass (String "ensures  ") zterm.SymBool.Goal) 
+               String "requires" 
+               Indent wpreprint 
+               String "ensures" 
+               Indent goalprint
                cmdprint 
                     |> ssurround "/*" "*/" 
                     |> Indent |> braced 
