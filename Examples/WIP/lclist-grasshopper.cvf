@@ -11,77 +11,75 @@ thread int curr;
 thread int v;
 thread int cv;
 
+view wf(int v);
 view isHead(int node); 
 view isVal(int v, int node);
-view isList(int v);
 view has1Lock(int x, int y);
-view has1LockDangle(int x);
+view has1LockAnon(int x);
 view has2Lock(int x, int y);
 
 method deleteVal(int v) {
-  {| isList(v) |}
+  {| wf(v) |}
     <prev = head>;
-  {| isList(v) * isHead(prev) |} 
+  {| wf(v) * isHead(prev) |} 
    <{ lheap = heap; heap = (%{ takeLock(#2) }(lheap, prev)); }>;
-  {| isList(v) * has1LockDangle(prev) * isHead(prev) |}
+  {| wf(v) * has1LockAnon(prev) * isHead(prev) |}
    <lheap = heap>; curr = (%{ #2.next }(lheap, curr)); 
-  {| isList(v) * has1Lock(prev, curr) |}
+  {| wf(v) * has1Lock(prev, curr) |}
    <{ lheap = heap; heap = (%{ takeLock(#2) }(lheap, curr)); }>;
-  {| isList(v) * has2Lock(prev, curr) |}
+  {| wf(v) * has2Lock(prev, curr) |}
    <lheap = heap>; cv = (%{ #2.val }(lheap, curr)); 
-  {| isList(v) * has2Lock(prev,curr) * isVal(curr, cv) |}
+  {| wf(v) * has2Lock(prev,curr) * isVal(curr, cv) |}
     while (cv < v ) {
-      {| isList(v) * has2Lock(prev, curr) * isVal(curr, cv) |}
+      {| wf(v) * has2Lock(prev, curr) * isVal(curr, cv) |}
         <{ lheap = heap; heap = (%{ releaseLock(#2) }(lheap, prev)); }>; 
-      {| isList(v) * has1LockDangle(curr) * isVal(curr, cv) |}
+      {| wf(v) * has1LockAnon(curr) * isVal(curr, cv) |}
         prev = curr;
         <lheap = heap>; curr = (%{ #2->next }(lheap, curr));  
-      {| isList(v) * has1Lock(prev, curr) * isVal(prev,cv) |}
+      {| wf(v) * has1Lock(prev, curr) * isVal(prev,cv) |}
         <{ lheap = heap; heap = (%{ takeLock(#2) }(lheap, curr)); }>; 
-      {| isList(v) * has2Lock(prev, curr) |}
+      {| wf(v) * has2Lock(prev, curr) |}
         <lheap = heap>; cv = (%{ #2.val }(lheap, curr)); 
-      {| isList(v) * has1Lock(prev, curr) * isVal(curr,cv) |}
+      {| wf(v) * has1Lock(prev, curr) * isVal(curr,cv) |}
     }
-  {| isList(v) * has2Lock(prev, curr) * isVal(curr, cv) |}
+  {| has2Lock(prev, curr) |}
     if ( cv == v) {
-      {| isList(v) * has2Lock(prev, curr) * isVal(curr, cv) |}
+      {| has2Lock(prev, curr) |}
         // Merged these two to avoid dangling nodes. 
         <{ lheap = heap; 
            heap = (%{ #2.next := #3.next }(lheap, prev, curr)); 
            lheap = heap; heap = (%{ disposeNode(#2) }(lheap, curr)); }>; 
-      {| isList(v) * has1LockDangle(prev) |}
+      {| has1LockAnon(prev) |}
     } 
     else {
-      {| has1Lock(prev, curr) |}
+      {| has2Lock(prev, curr) |}
         <{ lheap = heap; heap = (%{ releaseLock(#1)}(curr)); }>; 
-      {| has1LockDangle(prev) |}
+      {| has1LockAnon(prev) |}
     }
-  {| has1LockDangle(prev) |}
+  {| has1LockAnon(prev) |}
     <{ lheap = heap; heap = (%{ releaseLock(#2) }(lheap, prev)); }>; 
   {| emp |}
 }
 
-constraint isHead(x) -> x == head;
+constraint emp -> %{ isList(head,ub) }(); 
 
-constraint isList(v) -> %{ isListG(head,ub,#1) }(v);
+constraint wf(v) -> v < ub;
+
+constraint isHead(x) -> x == head;
 
 constraint has1Lock(a,b) -> %{ has1LockG(head,#1,#2) }(a, b);
 
-constraint has1LockDangle(a) -> %{ exists e: Node :: has1LockG(head,#1,e) }(a);
+constraint has1LockAnon(a) -> %{ exists e: Node :: has1LockG(head,#1,e) }(a);
 
 constraint has2Lock(a,b)  -> %{ has2LockG(head,#1,#2) }(a, b);
 
 constraint isVal(node, v) -> %{ isValG(head, #1, #2) &*& #2 < ub }(node, v);
 
 
-// // Are the constraints below necessary? 
-// 
-// // Constraints on views
-// constraint has1Lock(a,b) * has1Lock(c,d)   -> a != c;
-// constraint has1Lock(a,b) * has2Lock(c,d)   -> a != c && a != d;
-// constraint has2Lock(a,b) * has2Lock(c,d)   -> a != c && a != d && b != c && b != d;
-// // constraint has1Lock(a,b) * dangleNode(c)   -> a != c;
-// // constraint has2Lock(a,b) * dangleNode(c)   -> a != c && b != c;
-// 
-// // // Could maybe replace some of the constraints above?
-// // constraint has2Lock(a,b) -> %{ has1Lock(#1,_) &*& has1Lock(#2,_) }(a, b);
+// Constraints on view interactions
+constraint has1Lock(a,b)   * has1Lock(c,d)    ->  a != c;
+constraint has1Lock(a,b)   * has1LockAnon(c)  ->  a != c;
+constraint has1LockAnon(a) * has1LockAnon(c)  ->  a != c;
+constraint has1Lock(a,b)   * has2Lock(c,d)    ->  a != c && a != d;
+constraint has1LockAnon(a) * has2Lock(c,d)    ->  a != c && a != d;
+constraint has2Lock(a,b)   * has2Lock(c,d)    ->  a != c && a != d && b != c && b != d;

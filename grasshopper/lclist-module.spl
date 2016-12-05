@@ -78,8 +78,8 @@ procedure disposeNode(x: Node)
 
 // Equivalents to Starling predicates. 
 
-predicate isListG (head: Node, ub: Int, v: Int) { 
-  llseg(head, null, ub) &*& head != null &*& v < ub 
+predicate isListG (head: Node, ub: Int) { 
+  llseg(head, null, ub) &*& head != null
 } 
 
 predicate has1LockG(head: Node, a: Node, b: Node) 
