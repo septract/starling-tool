@@ -91,8 +91,8 @@ type OptimiserTests() =
           TestCaseData(BImplies ((bAfter "s"), BTrue))
             .Returns(BTrue : MBoolExpr)
             .SetName("Simplify =>True into a True")
-          TestCaseData(BImplies (BGt ((iAfter "s"), (iAfter "t")), BFalse))
-            .Returns(BLe ((iAfter "s"), (iAfter "t" )))
+          TestCaseData(BImplies (BGt (normalInt (iAfter "s"), normalInt (iAfter "t")), BFalse))
+            .Returns(BLe (normalInt (iAfter "s"), normalInt (iAfter "t" )))
             .SetName("Simplify =>False wrapped around a > into <=")
           TestCaseData(BImplies (BTrue, (bAfter "s")))
             .Returns((bAfter "s"))
@@ -121,7 +121,7 @@ module AfterExprs =
             tliftToBoolSrc
                 (tliftToTypedSymVarSrc
                     (afterSubs OptimiserTests.AfterArithSubs OptimiserTests.AfterBoolSubs))
-        let result = mapTraversal trav case
+        let result = mapTraversal trav (normalBool case)
         assertOkAndEqual expected result
             (printTraversalError printTermOptError >> printUnstyled)
 
@@ -146,8 +146,8 @@ module AfterExprs =
     [<Test>]
     let ``Remove arithmetic afters only if in the environment`` () =
         check
-            (BGt (IAdd [ siBefore "serving"; IInt 1L ], siAfter "t"))
-            (BGt (siAfter "serving", siAfter "t"))
+            (BGt (normalInt (IAdd [ siBefore "serving"; IInt 1L ]), normalInt (siAfter "t")))
+            (BGt (normalInt (siAfter "serving"), normalInt (siAfter "t")))
 
     [<Test>]
     let ``Remove Boolean afters in a simple equality`` () =
@@ -173,10 +173,10 @@ module AfterExprs =
     let ``Remove afters of both types simultaneously`` () =
         check
             (BAnd
-                [ BGt ((IAdd [ siBefore "serving"; IInt 1L ] ), siAfter "t")
+                [ BGt (normalInt (IAdd [ siBefore "serving"; IInt 1L ] ), normalInt (siAfter "t"))
                   BOr [ BNot (sbBefore "flag"); sbAfter "pole" ]] )
             (BAnd
-                   [ BGt (siAfter "serving", siAfter "t")
+                   [ BGt (normalInt (siAfter "serving"), normalInt (siAfter "t"))
                      BOr [ sbAfter "flag"; sbAfter "pole" ]] )
 
     [<Test>]
@@ -185,11 +185,11 @@ module AfterExprs =
             (BNot
                 (BImplies
                     (BNot (sbBefore "flag"),
-                    BGt (IAdd [siBefore "serving"; IInt 1L], siAfter "t"))))
+                    BGt (normalInt (IAdd [siBefore "serving"; IInt 1L]), normalInt (siAfter "t")))))
             (BNot
                 (BImplies
                     (sbAfter "flag",
-                    BGt (siAfter "serving", siAfter "t"))))
+                    BGt (normalInt (siAfter "serving"), normalInt (siAfter "t")))))
 
 
 /// Test cases for substituting afters in a func.
@@ -214,8 +214,8 @@ module AfterFuncs =
     let ``Substitute afters in a func with all-after params`` () =
         check
             { Name = "foo"
-              Params = [ SMExpr.Int (IAdd [siBefore "serving"; IInt 1L])
-                         SMExpr.Bool (BNot (sbBefore "flag")) ] }
+              Params = [ normalIntExpr (IAdd [siBefore "serving"; IInt 1L])
+                         normalBoolExpr (BNot (sbBefore "flag")) ] }
             { Name = "foo"
-              Params = [ SMExpr.Int (siAfter "serving")
-                         SMExpr.Bool (sbAfter "flag") ] }
+              Params = [ normalIntExpr (siAfter "serving")
+                         normalBoolExpr (sbAfter "flag") ] }

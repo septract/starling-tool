@@ -255,13 +255,17 @@ let runZ3OnModel (shouldUseRealsForInts : bool)
     use ctx = new Z3.Context ()
 
     // Save us from having to supply all of these arguments every time.
-    let toZ3 b = Expr.boolToZ3 shouldUseRealsForInts unmarkVar ctx b
+    // TODO(CaptainHayashi): subtypes?
+    let toZ3 b = Expr.boolToZ3 shouldUseRealsForInts unmarkVar ctx (mkTypedSub normalBoolRec b)
 
     (* Try to remove symbols from boolean expressions.
        Suppress the Chessie error that happens if we can't, because in that case
        we just return a 'Z3 can't prove this' result. *)
     let removeSym bexp =
-        let result = mapTraversal (removeSymFromBoolExpr ignore) bexp
+        // TODO(CaptainHayashi): subtypes?
+        let bexpT = mkTypedSub normalBoolRec bexp
+
+        let result = mapTraversal (removeSymFromBoolExpr ignore) bexpT
         okOption result
 
     let z3Term (term : SymProofTerm) : ZTerm =

@@ -190,28 +190,28 @@ let varAndIdxPath (expr : Expr<Sym<Var>>)
     // TODO(CaptainHayashi): error perhaps if given a non-lvalue
 
     let rec getInBool bx path =
-        match bx with
-        | BVar (Reg v) -> Some (Bool v, path)
+        match stripTypeRec bx with
+        | BVar (Reg v) -> Some (Bool (bx.SRec, v), path)
         // Symbols are not lvalues, so we can't process them.
-        | BIdx (e, l, a, i) -> getInArray e l a (i::path)
+        | BIdx (a, i) -> getInArray a (i::path)
         | _ -> None
     and getInInt ix path =
-        match ix with
-        | IVar (Reg v) -> Some (Int v, path)
+        match stripTypeRec ix with
+        | IVar (Reg v) -> Some (Int (ix.SRec, v), path)
         // Symbols are not lvalues, so we can't process them.
-        | IIdx (e, l, a, i) -> getInArray e l a (i::path)
+        | IIdx (a, i) -> getInArray a (i::path)
         | _ -> None
-    and getInArray eltype length ax path =
-        match ax with
-        | AVar (Reg v) -> Some (Array (eltype, length, v), path)
+    and getInArray ax path =
+        match stripTypeRec ax with
+        | AVar (Reg v) -> Some (Array (ax.SRec, v), path)
         // Symbols are not lvalues, so we can't process them.
-        | AIdx (e, l, a, i) -> getInArray e l a (i::path)
+        | AIdx (a, i) -> getInArray a (i::path)
         | _ -> None
 
     match expr with
-    | Int ix -> getInInt ix []
-    | Bool bx -> getInBool bx []
-    | Array (eltype, length, ax) -> getInArray eltype length ax []
+    | Int (ty, ix) -> getInInt (mkTypedSub ty ix) []
+    | Bool (ty, bx) -> getInBool (mkTypedSub ty bx) []
+    | Array (ty, ax) -> getInArray (mkTypedSub ty ax) []
 
 /// <summary>
 ///     Generates a write record map for a given assignment list.
@@ -249,20 +249,15 @@ let partitionMicrocode (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
 /// <summary>
 ///     Generates a well-typed expression for a subscript of a given array.
 /// </summary>
-/// <param name="eltype">The type of elements in the array.</param>
-/// <param name="length">The length of the array.</param>
-/// <param name="array">The array to subscript.</param>
+/// <param name="array">The fully typed array to subscript.</param>
 /// <param name="idx">The index to subscript by.</param>
 /// <returns>A well-typed <see cref="Expr"/> capturing the subscript.</returns>
-let mkIdx (eltype : Type) (length : int option) (arr : ArrayExpr<Sym<Var>>)
-  (idx : IntExpr<Sym<Var>>)
+let mkIdx (arr : TypedArrayExpr<Sym<Var>>) (idx : IntExpr<Sym<Var>>)
   : Expr<Sym<Var>> =
-    let record = (eltype, length, arr, idx)
-
-    match eltype with
-    | Type.Int () -> Expr.Int (IIdx record)
-    | Type.Bool () -> Expr.Bool (BIdx record)
-    | Type.Array (eltype', length', ()) -> Expr.Array (eltype', length', AIdx record)
+    match arr.SRec.ElementType with
+    | Type.Int (ty, ()) -> Expr.Int (ty, IIdx (arr, idx))
+    | Type.Bool (ty, ()) -> Expr.Bool (ty, BIdx (arr, idx))
+    | Type.Array (ty, ()) -> Expr.Array (ty, AIdx (arr, idx))
 
 /// <summary>
 ///     Normalises a list of assignments such that they represent
@@ -298,18 +293,17 @@ let normaliseAssigns (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>> option) list)
                    information away! *)
                 match lhs' with
                 | None -> ok None
-                | Some (Array (eltype, length, alhs)) ->
+                | Some (Array (atype, alhs)) ->
                     (* Need to translate any further subscripts inside value.
                        But, to do that, we need to know what the LHS of those
                        subscripts is! *)
-                    let vlhs = mkIdx eltype length alhs index
+                    let talhs = mkTypedSub atype alhs
+                    let vlhs = mkIdx talhs index
                     let vrhsResult = translateRhs vlhs value
                     lift
                         (Option.map
                             (fun vrhs ->
-                                 Expr.Array
-                                    (eltype, length,
-                                     AUpd (eltype, length, alhs, index, vrhs))))
+                                 Expr.Array (atype, AUpd (alhs, index, vrhs))))
                         vrhsResult
                 | _ -> fail (BadSemantics "tried to index into a non-array")
             seqBind addUpdate (Some lhs) (Map.toSeq ixmap)
@@ -420,8 +414,8 @@ let traverseMicrocode
             tchain2 ltrav rtrav (pairMap id Some >> Assign) ctx (lv, rv)
         | Assign (lv, None) ->
             tchain ltrav (flip mkPair None >> Assign) ctx lv
-        | Assume assumption -> tchain brtrav Assume ctx assumption
-        | Branch (i, t, e) -> tchain3 brtrav tml tml Branch ctx (i, t, e)
+        | Assume assumption -> tchain brtrav Assume ctx (mkTypedSub normalBoolRec assumption)
+        | Branch (i, t, e) -> tchain3 brtrav tml tml Branch ctx (mkTypedSub normalBoolRec i, t, e)
     tm
 
 /// <summary>
@@ -605,8 +599,7 @@ let instantiateToMicrocode
            followed by havoc for each variable mentioned in the symbol. *)
         let symAssume = Assume (BVar (Sym s.Symbol))
 
-        let toHavoc var =
-            havoc (varToExpr (mapCTyped Reg var))
+        let toHavoc var = havoc (mkVarExp (mapCTyped Reg var))
         let havocs = Set.toList (Set.map toHavoc s.Working)
 
         ok (symAssume :: havocs)

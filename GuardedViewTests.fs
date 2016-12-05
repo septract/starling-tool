@@ -32,26 +32,27 @@ module Tests =
     let positionTestSub : Traversal<Expr<Var>, Expr<Var>, unit, unit> =
         let ptsVar ctx tv =
             let exp =
-                match (typeOf tv) with
-                | AnInt ->
-                    match ctx with
-                    | Positions (Positive::xs) -> IInt 1L
-                    | Positions (Negative::xs) -> IInt 0L
-                    | _ -> IInt -1L
-                    |> Int
-                | AnArray (eltype, length) ->
-                    Array
-                        (eltype,
-                         length,
-                         match ctx with
-                         | Positions (Positive::xs) -> AVar "pos"
-                         | Positions (Negative::xs) -> AVar "neg"
-                         | _ -> AVar "?")
-                | ABool ->
-                    match ctx with
-                    | Positions (x::xs) -> Context.overapprox x
-                    | _ -> BVar "?"
-                    |> Bool
+                match typeOf tv with
+                | AnIntR ty ->
+                    let v =
+                        match ctx with
+                        | Positions (Positive::xs) -> IInt 1L
+                        | Positions (Negative::xs) -> IInt 0L
+                        | _ -> IInt -1L
+                    Expr.Int (ty, v)
+                | AnArrayR ty ->
+                    let v =
+                        match ctx with
+                        | Positions (Positive::xs) -> AVar "pos"
+                        | Positions (Negative::xs) -> AVar "neg"
+                        | _ -> AVar "?"
+                    Expr.Array (ty, v)
+                | ABoolR ty ->
+                    let v =
+                        match ctx with
+                        | Positions (x::xs) -> Context.overapprox x
+                        | _ -> BVar "?"
+                    Expr.Bool (ty, v)
             ok (ctx, exp)
         tliftToExprSrc ptsVar
 
@@ -84,11 +85,11 @@ module Tests =
                   WPre =
                     Multiset.ofFlatList
                         [ gfunc BTrue "bar"
-                            [ Typed.Int (IInt 0L); Typed.Bool BFalse ]
-                          gfunc (BGt (IInt 1L, IInt 1L)) "barbaz"
-                            [ Typed.Int (IAdd [ IInt 0L; IInt 0L ]) ] ]
+                            [ normalIntExpr (IInt 0L); normalBoolExpr BFalse ]
+                          gfunc (BGt (normalInt (IInt 1L), normalInt (IInt 1L))) "barbaz"
+                            [ normalIntExpr (IAdd [ IInt 0L; IInt 0L ]) ] ]
                   Goal =
-                    (vfunc "bar" [ Typed.Int (IInt 1L); Typed.Bool BTrue ]) }
+                    (vfunc "bar" [ normalIntExpr (IInt 1L); normalBoolExpr BTrue ]) }
                 (Context.positive ())
                 { Cmd =
                     BAnd
@@ -97,15 +98,15 @@ module Tests =
                   WPre =
                     Multiset.ofFlatList
                         [ gfunc (BVar "foo") "bar"
-                            [ Typed.Int (IVar "baz")
-                              Typed.Bool (BVar "fizz") ]
-                          gfunc (BGt (IVar "foobar", IVar "barbar")) "barbaz"
-                            [ Typed.Int
+                            [ normalIntExpr (IVar "baz")
+                              normalBoolExpr (BVar "fizz") ]
+                          gfunc (BGt (normalInt (IVar "foobar"), normalInt (IVar "barbar"))) "barbaz"
+                            [ normalIntExpr
                                 (IAdd [ IVar "foobaz"; IVar "bazbaz" ]) ] ]
                   Goal =
                     vfunc "bar"
-                        [ Typed.Int (IVar "baz")
-                          Typed.Bool (BVar "barbaz") ] }
+                        [ normalIntExpr (IVar "baz")
+                          normalBoolExpr (BVar "barbaz") ] }
 
 
         [<Test>]
@@ -115,11 +116,11 @@ module Tests =
                   WPre =
                     Multiset.ofFlatList
                         [ gfunc BFalse "bar"
-                            [ Typed.Int (IInt 1L); Typed.Bool BTrue ]
-                          gfunc (BGt (IInt 0L, IInt 0L)) "barbaz"
-                            [ Typed.Int (IAdd [ IInt 1L; IInt 1L ]) ] ]
+                            [ normalIntExpr (IInt 1L); normalBoolExpr BTrue ]
+                          gfunc (BGt (normalInt (IInt 0L), normalInt (IInt 0L))) "barbaz"
+                            [ normalIntExpr (IAdd [ IInt 1L; IInt 1L ]) ] ]
                   Goal =
-                    vfunc "bar" [ Typed.Int (IInt 0L); Typed.Bool BFalse ] }
+                    vfunc "bar" [ normalIntExpr (IInt 0L); normalBoolExpr BFalse ] }
                 (Context.negative ())
                 { Cmd =
                     BAnd
@@ -128,13 +129,13 @@ module Tests =
                   WPre =
                     Multiset.ofFlatList
                         [ gfunc (BVar "foo") "bar"
-                            [ Typed.Int (IVar "baz"); Typed.Bool (BVar "fizz") ]
-                          gfunc (BGt (IVar "foobar", IVar "barbar")) "barbaz"
-                            [ Typed.Int
+                            [ normalIntExpr (IVar "baz"); normalBoolExpr (BVar "fizz") ]
+                          gfunc (BGt (normalInt (IVar "foobar"), normalInt (IVar "barbar"))) "barbaz"
+                            [ normalIntExpr
                                 (IAdd [ IVar "foobaz"; IVar "bazbaz" ]) ] ]
                   Goal =
                     vfunc "bar"
-                       [ Typed.Int (IVar "baz"); Typed.Bool (BVar "barbaz") ] }
+                       [ normalIntExpr (IVar "baz"); normalBoolExpr (BVar "barbaz") ] }
 
     /// <summary>
     ///     Case studies for testing GFunc traversal.
@@ -160,18 +161,18 @@ module Tests =
         [<Test>]
         let ``GFunc substitution in +ve case works properly`` () =
             check
-                (gfunc BFalse "bar" [ Typed.Int (IInt 1L); Typed.Bool BTrue ] )
+                (gfunc BFalse "bar" [ normalIntExpr (IInt 1L); normalBoolExpr BTrue ] )
                 (Context.positive ())
                 (gfunc (BVar "foo") "bar"
-                    [ Typed.Int (IVar "baz"); Typed.Bool (BVar "fizz") ] )
+                    [ normalIntExpr (IVar "baz"); normalBoolExpr (BVar "fizz") ] )
 
         [<Test>]
         let ``GFunc substitution in -ve case works properly`` () =
             check
-                (gfunc BTrue "bar" [ Typed.Int (IInt 0L); Typed.Bool BFalse ] )
+                (gfunc BTrue "bar" [ normalIntExpr (IInt 0L); normalBoolExpr BFalse ] )
                 (Context.negative ())
                 (gfunc (BVar "foo") "bar"
-                    [ Typed.Int (IVar "baz"); Typed.Bool (BVar "fizz") ])
+                    [ normalIntExpr (IVar "baz"); normalBoolExpr (BVar "fizz") ])
 
 
     /// <summary>
@@ -208,43 +209,43 @@ module Tests =
             check
                 (Multiset.singleton
                     (gfunc BFalse "bar"
-                        [ Typed.Int (IInt 1L)
-                          Typed.Bool BTrue ] ))
+                        [ normalIntExpr (IInt 1L)
+                          normalBoolExpr BTrue ] ))
                 (Context.positive ())
                 (Multiset.singleton
                     (gfunc (BVar "foo") "bar"
-                        [ Typed.Int (IVar "baz")
-                          Typed.Bool (BVar "fizz") ] ))
+                        [ normalIntExpr (IVar "baz")
+                          normalBoolExpr (BVar "fizz") ] ))
 
         [<Test>]
         let ``Singleton GView substitution in -ve case works properly`` () =
             check
                 (Multiset.singleton
                     (gfunc BTrue "bar"
-                        [ Typed.Int (IInt 0L); Typed.Bool BFalse ] ))
+                        [ normalIntExpr (IInt 0L); normalBoolExpr BFalse ] ))
                 (Context.negative ())
                 (Multiset.singleton
                     (gfunc (BVar "foo") "bar"
-                        [ Typed.Int (IVar "baz")
-                          Typed.Bool (BVar "fizz") ] ))
+                        [ normalIntExpr (IVar "baz")
+                          normalBoolExpr (BVar "fizz") ] ))
 
         [<Test>]
         let ``Multi GView substitution in +ve case works properly`` () =
             check
                 (Multiset.ofFlatList
                     [ gfunc BFalse "bar"
-                        [ Typed.Int (IInt 1L)
-                          Typed.Bool BTrue ]
-                      gfunc (BGt (IInt 0L, IInt 0L)) "barbaz"
-                        [ Typed.Int
+                        [ normalIntExpr (IInt 1L)
+                          normalBoolExpr BTrue ]
+                      gfunc (BGt (normalInt (IInt 0L), normalInt (IInt 0L))) "barbaz"
+                        [ normalIntExpr
                               (IAdd [ IInt 1L; IInt 1L ]) ] ] )
                 (Context.positive ())
                 (Multiset.ofFlatList
                     [ gfunc (BVar "foo") "bar"
-                        [ Typed.Int (IVar "baz")
-                          Typed.Bool (BVar "fizz") ]
-                      gfunc (BGt (IVar "foobar", IVar "barbar")) "barbaz"
-                        [ Typed.Int
+                        [ normalIntExpr (IVar "baz")
+                          normalBoolExpr (BVar "fizz") ]
+                      gfunc (BGt (normalInt (IVar "foobar"), normalInt (IVar "barbar"))) "barbaz"
+                        [ normalIntExpr
                               (IAdd [ IVar "foobaz"; IVar "bazbaz" ]) ] ] )
 
         [<Test>]
@@ -252,13 +253,13 @@ module Tests =
             check
                 (Multiset.ofFlatList
                     [ gfunc BTrue "bar"
-                        [ Typed.Int (IInt 0L); Typed.Bool BFalse ]
-                      gfunc (BGt (IInt 1L, IInt 1L)) "barbaz"
-                        [ Typed.Int (IAdd [ IInt 0L; IInt 0L ]) ] ] )
+                        [ normalIntExpr (IInt 0L); normalBoolExpr BFalse ]
+                      gfunc (BGt (normalInt (IInt 1L), normalInt (IInt 1L))) "barbaz"
+                        [ normalIntExpr (IAdd [ IInt 0L; IInt 0L ]) ] ] )
                 (Context.negative ())
                 (Multiset.ofFlatList
                     [ gfunc (BVar "foo") "bar"
-                        [ Typed.Int (IVar "baz"); Typed.Bool (BVar "fizz") ]
-                      gfunc (BGt (IVar "foobar", IVar "barbar")) "barbaz"
-                        [ Typed.Int
+                        [ normalIntExpr (IVar "baz"); normalBoolExpr (BVar "fizz") ]
+                      gfunc (BGt (normalInt (IVar "foobar"), normalInt (IVar "barbar"))) "barbaz"
+                        [ normalIntExpr
                               (IAdd [ IVar "foobaz"; IVar "bazbaz" ]) ] ] )

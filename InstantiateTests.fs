@@ -26,10 +26,10 @@ module FuncInstantiate =
     let TestFuncs =
         [ (dfunc "foo" [],
            iEq (IInt 5L : SVIntExpr) (IInt 6L))
-          (dfunc "bar" [ Int "quux" ],
+          (dfunc "bar" [ Int (normalIntRec, "quux") ],
            iEq (siVar "quux") (IInt 6L))
-          (dfunc "baz" [ Int "quux" ; Bool "flop" ],
-           BAnd [sbVar "flop"; BGt (siVar "quux", siVar "quux")]) ]
+          (dfunc "baz" [ Int (normalIntRec, "quux") ; Bool (normalBoolRec, "flop") ],
+           BAnd [sbVar "flop"; BGt (normalInt (siVar "quux"), normalInt (siVar "quux"))]) ]
 
     let checkInstantiate expected case : unit =
         assertOkAndEqual
@@ -58,15 +58,16 @@ module FuncInstantiate =
     let ``Instantiate func with one integer argument``() =
         checkInstantiate
             (Some (iEq (IInt 101L) (IInt 6L : SMIntExpr)))
-            (smvfunc "bar" [ IInt 101L |> Expr.Int ])
+            (smvfunc "bar" [ normalIntExpr (IInt 101L) ])
 
     [<Test>]
     let ``Instantiate func with two arguments of different types``() =
         checkInstantiate
-            (Some (BAnd [ BTrue; BGt (siAfter "burble", siAfter "burble") ]))
+            (Some (BAnd [ BTrue; BGt (normalInt (siAfter "burble"),
+                                      normalInt (siAfter "burble")) ]))
             (smvfunc "baz"
-                [ siAfter "burble" |> Expr.Int
-                  BTrue |> Expr.Bool ])
+                [ normalIntExpr (siAfter "burble")
+                  normalBoolExpr BTrue ])
 
     [<Test>]
     let ``Instantiate func with too many arguments``() =
@@ -74,9 +75,9 @@ module FuncInstantiate =
             [ Traversal
                 (Inner
                     (BadFuncLookup
-                        (smvfunc "foo" [ IInt 101L |> Expr.Int ],
+                        (smvfunc "foo" [ normalIntExpr (IInt 101L) ],
                          CountMismatch(1, 0)))) ]
-        ?=? testInstantiateFail (smvfunc "foo" [ IInt 101L |> Expr.Int ])
+        ?=? testInstantiateFail (smvfunc "foo" [ normalIntExpr (IInt 101L) ])
 
     [<Test>]
     let ``Instantiate func with too few arguments``() =
@@ -95,18 +96,18 @@ module FuncInstantiate =
                 (Inner
                     (BadFuncLookup
                         (smvfunc "baz"
-                            [ BTrue |> Expr.Bool
-                              siAfter "burble" |> Expr.Int ],
-                         TypeMismatch (Int "quux", Bool ()))))
+                            [ normalBoolExpr BTrue
+                              normalIntExpr (siAfter "burble") ],
+                         TypeMismatch (Int (normalIntRec, "quux"), Bool (normalBoolRec, ())))))
               Traversal
                 (Inner
                     (BadFuncLookup
                         (smvfunc "baz"
-                            [ BTrue |> Expr.Bool
-                              siAfter "burble" |> Expr.Int ],
-                         TypeMismatch (Bool "flop", Int ())))) ]
+                            [ normalBoolExpr BTrue
+                              normalIntExpr (siAfter "burble") ],
+                         TypeMismatch (Bool (normalBoolRec, "flop"), Int (normalIntRec, ()))))) ]
         ?=?
             testInstantiateFail
                 (smvfunc "baz"
-                    [ BTrue |> Expr.Bool
-                      siAfter "burble" |> Expr.Int ])
+                    [ normalBoolExpr BTrue
+                      normalIntExpr (siAfter "burble") ])
