@@ -44,7 +44,7 @@ module Tests =
 
         /// The guarded holdTick view.
         let gHoldTick cnd : IteratedGFunc<Sym<Var>> =
-            oneGFunc cnd "holdTick" [Expr.Int (siVar "t")]
+            oneGFunc cnd "holdTick" [normalIntExpr (siVar "t")]
 
         let ticketLockLockGraph : Graph =
             { Name = "lock"
@@ -57,10 +57,10 @@ module Tests =
                                 OutEdge.Dest = "lock_V001"
                                 OutEdge.Command =
                                     [ command "!ILoad++"
-                                           [ Expr.Int (siVar "t")
-                                             Expr.Int (siVar "ticket") ]
-                                           [ Expr.Int (siVar "t")
-                                             Expr.Int (siVar "ticket")]] },
+                                           [ normalIntExpr (siVar "t")
+                                             normalIntExpr (siVar "ticket") ]
+                                           [ normalIntExpr (siVar "t")
+                                             normalIntExpr (siVar "ticket")]] },
                            Set.empty,
                            Entry)))
                         ("lock_V001",
@@ -74,10 +74,10 @@ module Tests =
                                 Src = "lock_V000"
                                 Command =
                                     [ command "!ILoad++"
-                                           [ Expr.Int (siVar "t")
-                                             Expr.Int (siVar "ticket"); ]
-                                           [ Expr.Int (siVar "t")
-                                             Expr.Int (siVar "ticket") ]] },
+                                           [ normalIntExpr (siVar "t")
+                                             normalIntExpr (siVar "ticket"); ]
+                                           [ normalIntExpr (siVar "t")
+                                             normalIntExpr (siVar "ticket") ]] },
                           Normal ))
                         ("lock_V002",
                          (Mandatory <| Multiset.singleton (gHoldLock BTrue),
@@ -87,7 +87,7 @@ module Tests =
                                 Src = "lock_V004"
                                 Command =
                                     [ command "Assume" []
-                                           [ Expr.Bool
+                                           [ normalBoolExpr
                                                  (iEq (siVar "s")
                                                       (siVar "t")) ]] },
                            Exit))
@@ -98,14 +98,14 @@ module Tests =
                                 Dest = "lock_V004"
                                 Command =
                                     [ command "!ILoad"
-                                           [ Expr.Int (siVar "s") ]
-                                           [ Expr.Int (siVar "serving") ]] },
+                                           [ normalIntExpr (siVar "s") ]
+                                           [ normalIntExpr (siVar "serving") ]] },
                           Set.ofList
                               [ { Name = "lock_C002"
                                   Src = "lock_V004"
                                   Command =
                                       [ command "Assume" []
-                                             [ Expr.Bool
+                                             [ normalBoolExpr
                                                    (BNot (iEq (siVar "s")
                                                               (siVar "t"))) ]] }
                                 { Name = "lock_C004"
@@ -122,14 +122,14 @@ module Tests =
                                   Dest = "lock_V003"
                                   Command =
                                       [ command "Assume" []
-                                             [ Expr.Bool
+                                             [ normalBoolExpr
                                                    (BNot (iEq (siVar "s")
                                                               (siVar "t"))) ]] }
                                 { Name = "lock_C003"
                                   Dest = "lock_V002"
                                   Command =
                                       [ command "Assume" []
-                                             [ Expr.Bool
+                                             [ normalBoolExpr
                                                    (iEq (siVar "s")
                                                         (siVar "t")) ]] } ],
                           Set.singleton
@@ -137,8 +137,8 @@ module Tests =
                                 Src = "lock_V003"
                                 Command =
                                     [ command "!ILoad"
-                                           [ Expr.Int (siVar "s") ]
-                                           [ Expr.Int (siVar "serving") ]] },
+                                           [ normalIntExpr (siVar "s") ]
+                                           [ normalIntExpr (siVar "serving") ]] },
 
                           Normal)) ] }
 
@@ -156,8 +156,8 @@ module Tests =
                                 Dest = "unlock_V001"
                                 Command =
                                     [ command "!I++"
-                                           [ Expr.Int (siVar "serving") ]
-                                           [ Expr.Int (siVar "serving") ]] },
+                                           [ normalIntExpr (siVar "serving") ]
+                                           [ normalIntExpr (siVar "serving") ]] },
                           Set.empty,
                           Entry))
                         ("unlock_V001",
@@ -168,8 +168,8 @@ module Tests =
                                 Src = "unlock_V000"
                                 Command =
                                     [ command "!I++"
-                                           [ Expr.Int (siVar "serving") ]
-                                           [ Expr.Int (siVar "serving") ]] },
+                                           [ normalIntExpr (siVar "serving") ]
+                                           [ normalIntExpr (siVar "serving") ]] },
                            Exit)) ] }
 
         /// The partial CFG for the ticket lock lock method.
@@ -191,22 +191,22 @@ module Tests =
                       [ ("lock_C000",
                              edge "lock_V000"
                                   [ command "!ILoad++"
-                                         [ Expr.Int (siVar "t")
-                                           Expr.Int (siVar "ticket") ]
-                                         [ Expr.Int (siVar "t")
-                                           Expr.Int (siVar "ticket") ]]
+                                         [ normalIntExpr (siVar "t")
+                                           normalIntExpr (siVar "ticket") ]
+                                         [ normalIntExpr (siVar "t")
+                                           normalIntExpr (siVar "ticket") ]]
                                   "lock_V001")
                         ("lock_C001",
                              edge "lock_V003"
                                   [ command "!ILoad"
-                                         [ Expr.Int (siVar "s") ]
-                                         [ Expr.Int (siVar "serving") ]]
+                                         [ normalIntExpr (siVar "s") ]
+                                         [ normalIntExpr (siVar "serving") ]]
                                   "lock_V004")
                         ("lock_C002",
                              edge "lock_V004"
                                   [ command "Assume"
                                          []
-                                         [ Expr.Bool
+                                         [ normalBoolExpr
                                                (BNot (iEq (siVar "s")
                                                           (siVar "t"))) ]]
                                   "lock_V003")
@@ -214,7 +214,7 @@ module Tests =
                              edge "lock_V004"
                                   [ command "Assume"
                                          []
-                                         [ Expr.Bool
+                                         [ normalBoolExpr
                                                (iEq (siVar "s")
                                                     (siVar "t")) ]]
                                   "lock_V002")
@@ -237,8 +237,8 @@ module Tests =
                       [ ("unlock_C000",
                              edge "unlock_V000"
                                   [ command "!I++"
-                                         [ Expr.Int (siVar "serving") ]
-                                         [ Expr.Int (siVar "serving") ]]
+                                         [ normalIntExpr (siVar "serving") ]
+                                         [ normalIntExpr (siVar "serving") ]]
                                   "unlock_V001" ) ] }
 
 
@@ -263,8 +263,8 @@ module Tests =
                                 Dest = "unlock_V001"
                                 Command =
                                     [ command "!I++"
-                                           [ Expr.Int (siVar "serving") ]
-                                           [ Expr.Int (siVar "serving") ]] },
+                                           [ normalIntExpr (siVar "serving") ]
+                                           [ normalIntExpr (siVar "serving") ]] },
                           Set.singleton
                               { Name = "unlock_N0"
                                 Src = "unlock_V001"
@@ -281,8 +281,8 @@ module Tests =
                                 Src = "unlock_V000"
                                 Command =
                                     [ command "!I++"
-                                           [ Expr.Int (siVar "serving") ]
-                                           [ Expr.Int (siVar "serving") ]] },
+                                           [ normalIntExpr (siVar "serving") ]
+                                           [ normalIntExpr (siVar "serving") ]] },
                           Exit)) ] )
                 .SetName("Adding a valid, unique edge to unlock works")]
 
@@ -316,8 +316,8 @@ module Tests =
                               [ ("unlock_C000",
                                  edge "unlock_V000"
                                       [ command "!I++"
-                                              [ Expr.Int (siVar "serving") ]
-                                              [ Expr.Int (siVar "serving") ]]
+                                              [ normalIntExpr (siVar "serving") ]
+                                              [ normalIntExpr (siVar "serving") ]]
                                       "unlock_V000" ) ] } )
                 .SetName("unify C1 into C0 on the ticket lock 'unlock'")
               TestCaseData(("unlock_V000", "unlock_V001"))
@@ -332,8 +332,8 @@ module Tests =
                               [ ("unlock_C000",
                                  edge "unlock_V001"
                                       [ command "!I++"
-                                              [ Expr.Int (siVar "serving") ]
-                                              [ Expr.Int (siVar "serving") ]]
+                                              [ normalIntExpr (siVar "serving") ]
+                                              [ normalIntExpr (siVar "serving") ]]
                                       "unlock_V001" ) ] } )
                 .SetName("unify C0 into C1 on the ticket lock 'unlock'")
               TestCaseData(("unlock_V000", "unlock_V002"))
@@ -390,10 +390,10 @@ module Tests =
               TestCaseData(Advisory
                                (Multiset.singleton
                                     (smgfunc BTrue "holdTick"
-                                         [ Expr.Int (siBefore "t") ] )))
+                                         [ normalIntExpr (siBefore "t") ] )))
                   .Returns(Multiset.singleton
                                (smgfunc BTrue "holdTick"
-                                    [ Expr.Int (siBefore "t") ] ))
+                                    [ normalIntExpr (siBefore "t") ] ))
                   .SetName("Flattening an advisory viewexpr returns its view") ]
 
         /// <summary>

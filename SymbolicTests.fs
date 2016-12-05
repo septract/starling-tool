@@ -25,7 +25,7 @@ module PostStateRewrite =
     let checkInt (expected : IntExpr<Sym<MarkedVar>>) (expr : IntExpr<Sym<Var>>)
       : unit =
         let trav = tliftToExprDest (traverseTypedSymWithMarker After)
-        let res = mapTraversal (tliftToIntSrc trav) expr
+        let res = mapTraversal (tliftToIntSrc trav) (normalInt expr)
 
         assertOkAndEqual expected res
             (printTraversalError (fun () -> String "?" ) >> printUnstyled)
@@ -60,7 +60,7 @@ module BoolApprox =
       (ctx : TraversalContext<unit>)
       (expr : BoolExpr<Sym<MarkedVar>>)
       : unit =
-        let result = tliftToBoolSrc approx ctx expr
+        let result = tliftToBoolSrc approx ctx (normalBool expr)
         assertOkAndEqual (ctx, expected) result
             (printTraversalError (fun () -> String "?" ) >> printUnstyled)
 
@@ -69,11 +69,11 @@ module BoolApprox =
         check
             (BAnd
                 [ bEq (sbBefore "foo") (sbAfter "bar")
-                  BGt (siBefore "baz", IInt 1L) ] )
+                  BGt (normalInt (siBefore "baz"), normalInt (IInt 1L)) ] )
             (Context.positive ())
             (BAnd
                 [ bEq (sbBefore "foo") (sbAfter "bar")
-                  BGt (siBefore "baz", IInt 1L) ] )
+                  BGt (normalInt (siBefore "baz"), normalInt (IInt 1L)) ] )
 
     [<Test>]
     let ``Rewrite +ve param-less Bool symbol to false`` () =
@@ -98,8 +98,8 @@ module BoolApprox =
                 (Sym
                     { Sentence = [ SymString "test" ]
                       Args =
-                        [ Expr.Int (siBefore "foo")
-                          Expr.Bool (sbAfter "bar") ] } ))
+                        [ normalIntExpr (siBefore "foo")
+                          normalBoolExpr (sbAfter "bar") ] } ))
 
     [<Test>]
     let ``Rewrite -ve Reg-params Bool symbol to true`` () =
@@ -110,8 +110,8 @@ module BoolApprox =
                 (Sym
                     { Sentence = [ SymString "test" ]
                       Args =
-                        [ Expr.Int (siBefore "foo")
-                          Expr.Bool (sbAfter "bar") ] } ))
+                        [ normalIntExpr (siBefore "foo")
+                          normalBoolExpr (sbAfter "bar") ] } ))
 
     [<Test>]
     let ``Rewrite +ve implication correctly`` () =
@@ -123,14 +123,14 @@ module BoolApprox =
                     (Sym
                         { Sentence = [ SymString "test1" ]
                           Args =
-                            [ Expr.Int (siBefore "foo")
-                              Expr.Bool (sbAfter "bar") ] } ),
+                            [ normalIntExpr (siBefore "foo")
+                              normalBoolExpr (sbAfter "bar") ] } ),
                  BVar
                     (Sym
                         { Sentence = [ SymString "test2" ]
                           Args =
-                              [ Expr.Int (siBefore "baz")
-                                Expr.Bool (sbAfter "barbaz") ] } )))
+                              [ normalIntExpr (siBefore "baz")
+                                normalBoolExpr (sbAfter "barbaz") ] } )))
 
     [<Test>]
     let ``Rewrite -ve implication correctly`` () =
@@ -142,14 +142,14 @@ module BoolApprox =
                     (Sym
                         { Sentence = [ SymString "test1" ]
                           Args =
-                            [ Expr.Int (siBefore "foo")
-                              Expr.Bool (sbAfter "bar") ] } ),
+                            [ normalIntExpr (siBefore "foo")
+                              normalBoolExpr (sbAfter "bar") ] } ),
                  BVar
                     (Sym
                         { Sentence = [ SymString "test2" ]
                           Args =
-                            [ Expr.Int (siBefore "baz")
-                              Expr.Bool (sbAfter "barbaz") ] } )))
+                            [ normalIntExpr (siBefore "baz")
+                              normalBoolExpr (sbAfter "barbaz") ] } )))
 
 
 /// <summary>
@@ -170,40 +170,40 @@ module FindSMVarsCases =
 
     [<Test>]
     let ``Finding vars in a Boolean primitive returns empty`` () =
-        check [] (Expr.Bool BTrue)
+        check [] (normalBoolExpr BTrue)
 
     [<Test>]
     let ``Finding vars in an integer primitive returns empty`` () =
-        check [] (Expr.Int (IInt 1L))
+        check [] (normalIntExpr (IInt 1L))
 
     [<Test>]
     let ``Finding vars in a Boolean var returns that var`` () =
-        check [ CTyped.Bool (Before "foo") ] (Expr.Bool (sbBefore "foo"))
+        check [ normalBoolVar (Before "foo") ] (normalBoolExpr (sbBefore "foo"))
 
     [<Test>]
     let ``Finding vars in an integer var returns that var`` () =
-        check [ CTyped.Int (After "bar") ] (Expr.Int (siAfter "bar"))
+        check [ normalIntVar (After "bar") ] (normalIntExpr (siAfter "bar"))
 
     [<Test>]
     let ``Finding vars in a Boolean expression works correctly`` () =
         check
-            [ CTyped.Bool (Before "foo")
-              CTyped.Bool (After "baz")
-              CTyped.Int (Before "foobar")
-              CTyped.Int (After "barbaz") ]
-            (Expr.Bool
+            [ normalBoolVar (Before "foo")
+              normalBoolVar (After "baz")
+              normalIntVar (Before "foobar")
+              normalIntVar (After "barbaz") ]
+            (normalBoolExpr
                 (BAnd
                     [ BOr [ sbBefore "foo"; sbAfter "baz" ]
-                      BGt ( siBefore "foobar", siAfter "barbaz" ) ] ))
+                      BGt ( normalInt (siBefore "foobar"), normalInt (siAfter "barbaz")) ] ))
 
     [<Test>]
     let ``Finding vars in an integer expression works correctly`` () =
         check
-            [ CTyped.Int (Before "foo")
-              CTyped.Int (After "bar")
-              CTyped.Int (Before "foobar")
-              CTyped.Int (After "barbaz") ]
-            (Expr.Int
+            [ normalIntVar (Before "foo")
+              normalIntVar (After "bar")
+              normalIntVar (Before "foobar")
+              normalIntVar (After "barbaz") ]
+            (normalIntExpr
                 (IAdd
                     [ ISub [ siBefore "foo"; siAfter "bar" ]
                       IMul [ siBefore "foobar"; siAfter "barbaz" ]] ))
@@ -211,23 +211,23 @@ module FindSMVarsCases =
     [<Test>]
     let ``Finding vars in an Boolean symbol works correctly`` () =
         check
-            [ CTyped.Int (Before "bar")
-              CTyped.Bool (After "baz") ]
-            (Expr.Bool
+            [ normalIntVar (Before "bar")
+              normalBoolVar (After "baz") ]
+            (normalBoolExpr
                 (BVar
                     (sym [ SymString "foo" ]
-                        [ Expr.Int (siBefore "bar")
-                          Expr.Bool (sbAfter "baz") ] )))
+                        [ normalIntExpr (siBefore "bar")
+                          normalBoolExpr (sbAfter "baz") ] )))
 
     [<Test>]
     let ``Finding vars in an integer symbol works correctly`` () =
         check
-            [ CTyped.Int (Before "bar"); CTyped.Bool (After "baz") ]
-            (Expr.Int
+            [ normalIntVar (Before "bar"); normalBoolVar (After "baz") ]
+            (normalIntExpr
                 (IVar
                     (sym [ SymString "foo" ]
-                        [ Expr.Int (siBefore "bar")
-                          Expr.Bool (sbAfter "baz") ] )))
+                        [ normalIntExpr (siBefore "bar")
+                          normalBoolExpr (sbAfter "baz") ] )))
 
 
 /// <summary>
@@ -255,7 +255,7 @@ module Pretty =
               SymString ", "
               SymParamRef 1
               SymString ")" ]
-        let args = [ Int (siVar "bar"); Bool (sbVar "baz") ]
+        let args = [ normalIntExpr (siVar "bar"); normalBoolExpr (sbVar "baz") ]
 
         "(sym 'foo(baz, bar)')"
             ?=? printUnstyled (printSym String (sym sentence args))
@@ -270,7 +270,7 @@ module Pretty =
               SymString ", "
               SymParamRef 3 // error
               SymString ")" ]
-        let args = [ Int (siVar "bar"); Bool (sbVar "baz") ]
+        let args = [ normalIntExpr (siVar "bar"); normalBoolExpr (sbVar "baz") ]
 
         "(sym 'nope(baz, #ERROR#, #ERROR#)')"
             ?=? printUnstyled (printSym String (sym sentence args))

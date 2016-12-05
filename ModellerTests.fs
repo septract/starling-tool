@@ -25,24 +25,23 @@ open Starling.Tests.Studies
 let ticketLockProtos: FuncDefiner<ProtoInfo> =
     FuncDefiner.ofSeq
         [ (func "holdLock" [], { IsIterated = false ; IsAnonymous = false })
-          (func "holdTick" [ Int "t" ], { IsIterated = false ; IsAnonymous = false }) ]
+          (func "holdTick" [ Int (normalIntRec, "t") ], { IsIterated = false ; IsAnonymous = false }) ]
 
 let environ =
-    Map.ofList [ ("foo", Type.Int ())
-                 ("bar", Type.Int ())
-                 ("baz", Type.Bool ())
-                 ("emp", Type.Bool ())
+    Map.ofList [ ("foo", Type.Int (normalIntRec, ()))
+                 ("bar", Type.Int (normalIntRec, ()))
+                 ("baz", Type.Bool (normalBoolRec, ()))
+                 ("emp", Type.Bool (normalBoolRec, ()))
                  // Multi-dimensional arrays
                  ("grid",
-                    Type.Array
-                        (Type.Array (Type.Int (), Some 320, ()),
-                         Some 240,
-                         ())) ]
+                  mkArrayType
+                    (mkArrayType (Type.Int (normalIntRec, ())) (Some 320))
+                    (Some 240)) ]
 
 let shared =
-    Map.ofList [ ("nums", Type.Array (Type.Int(), Some 10, ()))
-                 ("x", Type.Int ())
-                 ("y", Type.Bool ()) ]
+    Map.ofList [ ("nums", mkArrayType (Type.Int (normalIntRec, ())) (Some 10))
+                 ("x", Type.Int (normalIntRec, ()))
+                 ("y", Type.Bool (normalBoolRec, ())) ]
 
 let context =
     { ViewProtos = ticketLockProtos
@@ -98,14 +97,14 @@ module ViewFail =
           ([ LookupError
                ( "holdTick",
                  Error.TypeMismatch
-                   (Int "t", Type.Bool ())) ])
+                   (Int (normalBoolRec, "t"), Type.Bool (normalBoolRec, ()))) ])
 
 
 module ArithmeticExprs =
     open Starling.Core.Pretty
     open Starling.Lang.Modeller.Pretty
 
-    let check (env : VarMap) (ast : Expression) (expectedExpr : IntExpr<Sym<Var>>) =
+    let check (env : VarMap) (ast : Expression) (expectedExpr : TypedIntExpr<Sym<Var>>) =
         assertOkAndEqual
             expectedExpr
             (modelIntExpr env environ id ast)
@@ -118,7 +117,7 @@ module ArithmeticExprs =
                                    freshNode <| BopExpr(Mul, freshNode (Num 1L), freshNode (Num 3L)),
                                    freshNode (Num 2L) ))
             // TODO (CaptainHayashi): this shouldn't be optimised?
-            (IInt 1L)
+            (normalInt (IInt 1L))
 
     [<Test>]
     let ``test modelling (1 * 2) + 3`` ()=
@@ -127,7 +126,7 @@ module ArithmeticExprs =
                                    freshNode <| BopExpr(Mul, freshNode (Num 1L), freshNode (Num 2L)),
                                    freshNode (Num 3L) ))
             // TODO (CaptainHayashi): this shouldn't be optimised?
-            (IInt 5L)
+            (normalInt (IInt 5L))
 
     [<Test>]
     let ``test modelling shared array access nums[foo + 1]`` ()=
@@ -138,11 +137,12 @@ module ArithmeticExprs =
                     (Add,
                      freshNode (Identifier "foo"),
                      freshNode (Num 3L))))
-            (IIdx
-                (Int (),
-                 Some 10,
-                 AVar (Reg "nums"),
-                 IAdd [ IVar (Reg "foo"); IInt 3L ]))
+            (normalInt
+                (IIdx
+                    (mkTypedSub
+                        (mkArrayTypeRec (Int (normalIntRec, ())) (Some 10))
+                        (AVar (Reg "nums")),
+                     IAdd [ IVar (Reg "foo"); IInt 3L ])))
 
     [<Test>]
     let ``test modelling local array access grid[x][y]`` () =
@@ -152,19 +152,22 @@ module ArithmeticExprs =
                      (freshNode (Identifier "grid"),
                       freshNode (Identifier "foo")),
                  freshNode (Identifier "bar")))
-            (IIdx
-                (Int (),
-                 Some 320,
-                 AIdx
-                    (Array (Int (), Some 320, ()),
-                     Some 240,
-                     AVar (Reg "grid"),
-                     IVar (Reg "foo")),
-                 IVar (Reg "bar")))
+            (normalInt
+                (IIdx
+                    (mkTypedSub
+                        (mkArrayTypeRec (Int (normalIntRec, ())) (Some 320))
+                        (AIdx
+                            (mkTypedSub
+                                (mkArrayTypeRec
+                                    (mkArrayType (Int (normalIntRec, ())) (Some 320))
+                                    (Some 240))
+                                (AVar (Reg "grid")),
+                            (IVar (Reg "foo")))),
+                      IVar (Reg "bar"))))
 
 
 module BooleanExprs =
-    let check (env : VarMap) (ast : Expression) (expectedExpr : BoolExpr<Sym<Var>>) =
+    let check (env : VarMap) (ast : Expression) (expectedExpr : TypedBoolExpr<Sym<Var>>) =
         let actualBoolExpr = okOption <| modelBoolExpr env environ id ast
         AssertAreEqual(Some expectedExpr, actualBoolExpr)
 
@@ -172,7 +175,7 @@ module BooleanExprs =
     let ``model (true || true) && false`` () =
         check environ
             (freshNode <| BopExpr(And, freshNode <| BopExpr(Or, freshNode True, freshNode True), freshNode False))
-            (BFalse : BoolExpr<Sym<Var>>)
+            (normalBool BFalse)
 
 
 module VarLists =
@@ -193,28 +196,28 @@ module VarLists =
     [<Test>]
     let ``valid singleton list makes var map`` () =
         checkPass
-            [ Int "bar" ]
-            (Map.ofList [ ("bar", Int ()) ])
+            [ Int (normalIntRec, "bar") ]
+            (Map.ofList [ ("bar", Int (normalIntRec, ())) ])
 
     [<Test>]
     let ``valid multi list makes var map`` () =
         checkPass
-            [ Int "bar"; Bool "baz" ]
-            (Map.ofList [ ("bar", Int ())
-                          ("baz", Bool ()) ])
+            [ Int (normalIntRec, "bar"); Bool (normalBoolRec, "baz") ]
+            (Map.ofList [ ("bar", Int (normalIntRec, ()))
+                          ("baz", Bool (normalBoolRec, ())) ])
 
     [<Test>]
     let ``duplicate vars of same type fail in VarMap.ofTypedVarSeq`` () =
         checkFail
-            ([ Bool "foo"
-               Bool "foo" ])
+            ([ Bool (normalBoolRec, "foo")
+               Bool (normalBoolRec, "foo") ])
             ([ VarMapError.Duplicate "foo" ])
 
     [<Test>]
     let ``duplicate var with different type fails in VarMap.ofTypedVarSeq`` () =
         checkFail
-            ([ Bool "foo"
-               Int  "foo" ])
+            ([ Bool (normalBoolRec, "foo")
+               Int  (normalIntRec,  "foo") ])
             ([ VarMapError.Duplicate "foo" ])
 
 module Atomics =
@@ -234,15 +237,15 @@ module Atomics =
             ast
             <| command' "!ILoad++"
                 ast
-                [ Int (siVar "foo"); Int (siVar "x") ]
-                [ Int (siVar "x") ]
+                [ normalIntExpr (siVar "foo"); normalIntExpr (siVar "x") ]
+                [ normalIntExpr (siVar "x") ]
 
     [<Test>]
     let ``model Boolean load primitive <baz = y>`` ()=
         let ast = freshNode (Fetch(freshNode (Identifier "baz"), freshNode (Identifier "y"), Direct))
         check
             ast
-            (command' "!BLoad" ast [ Bool (sbVar "baz") ] [ Bool (sbVar "y") ])
+            (command' "!BLoad" ast [ normalBoolExpr (sbVar "baz") ] [ normalBoolExpr (sbVar "y") ])
 
     [<Test>]
     let ``model symbolic store <x = %{foo}(baz)>`` () =
@@ -258,8 +261,8 @@ module Atomics =
         check
             ast
             (command' "!IStore" ast
-                [ Int (siVar "x") ]
-                [ Int (IVar (sym [ SymString "foo" ] [ Bool (sbVar "baz") ] )) ])
+                [ normalIntExpr (siVar "x") ]
+                [ normalIntExpr (IVar (sym [ SymString "foo" ] [ normalBoolExpr (sbVar "baz") ] )) ])
 
 
 module CommandAxioms =
@@ -292,8 +295,8 @@ module CommandAxioms =
             (prim <| ast)
             <| Prim ([ command' "!ILoad++"
                         ast
-                        [ Int (siVar "foo"); Int (siVar "x") ]
-                        [ Int (siVar "x") ] ])
+                        [ normalIntExpr (siVar "foo"); normalIntExpr (siVar "x") ]
+                        [ normalIntExpr (siVar "x") ] ])
 
     [<Test>]
     let ``modelling command <baz = y> passes`` () =
@@ -302,8 +305,8 @@ module CommandAxioms =
             (prim <| ast)
             <| Prim ([ command' "!BLoad"
                         ast
-                        [ Bool (sbVar "baz") ]
-                        [ Bool (sbVar "y") ] ])
+                        [ normalBoolExpr (sbVar "baz") ]
+                        [ normalBoolExpr (sbVar "y") ] ])
 
     [<Test>]
     let ``model local Boolean symbolic load {baz = %{foo}(bar)}`` () =
@@ -319,12 +322,12 @@ module CommandAxioms =
             ast
             (Prim
                 [ command "!BLSet"
-                    [ Bool (sbVar "baz") ]
-                    [ Bool
+                    [ normalBoolExpr (sbVar "baz") ]
+                    [ normalBoolExpr
                         (BVar
                             (sym
                                 [ SymString "foo" ]
-                                [ Int (siVar "bar") ] )) ] ])
+                                [ normalIntExpr (siVar "bar") ] )) ] ])
 
 
 module ViewDefs =
@@ -372,7 +375,7 @@ module ViewDefs =
             (indefinites
                 [ []
                   [ iterated (func "holdLock" []) None ]
-                  [ iterated (func "holdTick" [ Int "t0" ]) None ] ])
+                  [ iterated (func "holdTick" [ Int (normalIntRec, "t0") ]) None ] ])
 
     [<Test>]
     let ``Search for size-2 viewdefs yields viewdefs up to size 2``() =
@@ -383,7 +386,7 @@ module ViewDefs =
                   [ iterated (func "holdLock" []) None
                     iterated (func "holdLock" []) None ]
                   [ iterated (func "holdLock" []) None
-                    iterated (func "holdTick" [ Int "t0" ]) None ]
-                  [ iterated (func "holdTick" [ Int "t0" ]) None ]
-                  [ iterated (func "holdTick" [ Int "t0" ]) None
-                    iterated (func "holdTick" [ Int "t1" ]) None ] ] )
+                    iterated (func "holdTick" [ Int (normalIntRec, "t0") ]) None ]
+                  [ iterated (func "holdTick" [ Int (normalIntRec, "t0") ]) None ]
+                  [ iterated (func "holdTick" [ Int (normalIntRec, "t0") ]) None
+                    iterated (func "holdTick" [ Int (normalIntRec, "t1") ]) None ] ] )

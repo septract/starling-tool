@@ -243,7 +243,7 @@ module Compose =
         | IIdx (arr, idx) ->
             maxOpt
                 (getArrayIntermediate var (stripTypeRec arr))
-                (getIntIntermediate var (stripTypeRec idx))
+                (getIntIntermediate var idx)
         | _ -> None
 
     /// Gets the highest intermediate number for some variable in a given
@@ -269,7 +269,7 @@ module Compose =
         | BIdx (arr, idx) ->
             maxOpt
                 (getArrayIntermediate var (stripTypeRec arr))
-                (getIntIntermediate var (stripTypeRec idx))
+                (getIntIntermediate var idx)
         | _ -> None
 
     /// Gets the highest intermediate number for some variable in a given
@@ -284,13 +284,13 @@ module Compose =
         | AIdx (arr, idx) ->
             maxOpt
                 (getArrayIntermediate var (stripTypeRec arr))
-                (getIntIntermediate var (stripTypeRec idx))
+                (getIntIntermediate var idx)
         | AVar _ -> None
         | AUpd (arr, idx, upd) ->
             maxOpt
                 (getArrayIntermediate var arr)
                 (maxOpt
-                    (getIntIntermediate var (stripTypeRec idx))
+                    (getIntIntermediate var idx)
                     (getIntermediate var upd))
 
     /// Gets the highest intermediate stage number for a given variable name

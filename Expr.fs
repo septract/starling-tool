@@ -40,7 +40,7 @@ module Types =
     /// </typeparam>
     and IntExpr<'Var> when 'Var : equality =
         | IVar of 'Var
-        | IIdx of arr : TypedArrayExpr<'Var> * idx : TypedIntExpr<'Var>
+        | IIdx of arr : TypedArrayExpr<'Var> * idx : IntExpr<'Var>
         | IInt of int64
         | IAdd of IntExpr<'Var> list
         | ISub of IntExpr<'Var> list
@@ -66,7 +66,7 @@ module Types =
     /// </typeparam>
     and BoolExpr<'Var> when 'Var : equality =
         | BVar of 'Var
-        | BIdx of arr : TypedArrayExpr<'Var> * idx : TypedIntExpr<'Var>
+        | BIdx of arr : TypedArrayExpr<'Var> * idx : IntExpr<'Var>
         | BTrue
         | BFalse
         | BAnd of BoolExpr<'Var> list
@@ -101,14 +101,14 @@ module Types =
         /// <summary>
         ///     An index into an array <c>arr</c> of type <c>eltype[length]</c>.
         /// </summary>
-        | AIdx of arr : TypedArrayExpr<'Var> * idx : TypedIntExpr<'Var>
+        | AIdx of arr : TypedArrayExpr<'Var> * idx : IntExpr<'Var>
         /// <summary>
         ///     A functional update of an array <c>arr</c> of type
         ///     <c>eltype[length]</c>, overriding index <c>idx</c> with value
         ///     <c>var</c>.
         /// </summary>
         | AUpd of arr : ArrayExpr<'Var>
-                * idx : TypedIntExpr<'Var>
+                * idx : IntExpr<'Var>
                 * nval : Expr<'Var>
 
     /// <summary>
@@ -178,6 +178,143 @@ let liftTypedSub (f : ('Rec * 'Sub) -> 'T) (sub : TypedSubExpr<'Sub, 'Rec>) : 'T
     f (sub.SRec, sub.SExpr)
 
 /// <summary>
+///     The type record for a 'normal' Boolean expression.
+/// </summary>
+let normalBoolRec : PrimTypeRec =
+    // TODO(CaptainHayashi): eventually this will be filled in.
+    ()
+
+/// <summary>
+///     The type record for an indefinitely typed Boolean expression.
+/// </summary>
+let indefBoolRec : PrimTypeRec =
+    // TODO(CaptainHayashi): eventually this will be filled in.
+    ()
+
+/// <summary>
+///     Converts a TypedBoolExpr to a Type.
+/// </summary>
+let typedBoolToType (bsub : TypedBoolExpr<'Var>) : Type =
+    // TODO(CaptainHayashi): proper doc comment.
+    Type.Bool (bsub.SRec, ())
+
+/// <summary>
+///     Converts a TypedBoolExpr to an Expr.
+/// </summary>
+let typedBoolToExpr (bsub : TypedBoolExpr<'Var>) : Expr<'Var> =
+    // TODO(CaptainHayashi): proper doc comment.
+    liftTypedSub Expr.Bool bsub
+
+/// <summary>
+///     Converts a BoolExpr to a TypedBoolExpr using the normal type.
+/// </summary>
+let normalBool (bool : BoolExpr<'Var>) : TypedBoolExpr<'Var> =
+    // TODO(CaptainHayashi): proper doc comment.
+    mkTypedSub normalBoolRec bool
+
+/// <summary>
+///     Converts a BoolExpr to an Expr using the normal type.
+/// </summary>
+let normalBoolExpr (bool : BoolExpr<'Var>) : Expr<'Var> =
+    // TODO(CaptainHayashi): proper doc comment.
+    typedBoolToExpr (normalBool bool)
+    ///
+/// <summary>
+///     Constructs a Boolean typed variable from a variable using the normal type.
+/// </summary>
+let normalBoolVar (var : 'Var) : CTyped<'Var> =
+    // TODO(CaptainHayashi): proper doc comment.
+    Bool (normalBoolRec,  var)
+
+
+/// <summary>
+///     The type record for a 'normal' Integer expression.
+/// </summary>
+let normalIntRec : PrimTypeRec =
+    // TODO(CaptainHayashi): eventually this will be filled in.
+    ()
+
+/// <summary>
+///     The type record for an indefinitely typed Integer expression.
+/// </summary>
+let indefIntRec : PrimTypeRec =
+    // TODO(CaptainHayashi): eventually this will be filled in.
+    ()
+
+/// <summary>
+///     Converts a TypedIntExpr to a Type.
+/// </summary>
+let typedIntToType (bsub : TypedIntExpr<'Var>) : Type =
+    // TODO(CaptainHayashi): proper doc comment.
+    Type.Int (bsub.SRec, ())
+
+/// <summary>
+///     Converts a TypedIntExpr to an Expr.
+/// </summary>
+let typedIntToExpr (bsub : TypedIntExpr<'Var>) : Expr<'Var> =
+    // TODO(CaptainHayashi): proper doc comment.
+    liftTypedSub Expr.Int bsub
+
+/// <summary>
+///     Converts an IntExpr to a TypedIntExpr using the normal type.
+/// </summary>
+let normalInt (int : IntExpr<'Var>) : TypedIntExpr<'Var> =
+    // TODO(CaptainHayashi): proper doc comment.
+    mkTypedSub normalIntRec int
+
+/// <summary>
+///     Constructs an integer typed variable from a variable using the normal type.
+/// </summary>
+let normalIntVar (var : 'Var) : CTyped<'Var> =
+    // TODO(CaptainHayashi): proper doc comment.
+    Int (normalIntRec,  var)
+
+/// <summary>
+///     Converts an IntExpr to an Expr using the normal type.
+/// </summary>
+let normalIntExpr (int : IntExpr<'Var>) : Expr<'Var> =
+    // TODO(CaptainHayashi): proper doc comment.
+    typedIntToExpr (normalInt int)
+
+/// <summary>
+///     Constructs an array type record.
+/// </summary>
+/// <param name="eltype">The inner element type.</param>
+/// <param name="length">The optional length.</param>
+/// <returns>The corresponding array type record.</returns>
+let mkArrayTypeRec (eltype : Type) (length : int option) : ArrayTypeRec =
+    { ElementType = eltype; Length = length }
+
+/// <summary>
+///     Constructs an array type.
+/// </summary>
+/// <param name="eltype">The inner element type.</param>
+/// <param name="length">The optional length.</param>
+/// <returns>The corresponding array type.</returns>
+let mkArrayType (eltype : Type) (length : int option) : Type =
+    Array (mkArrayTypeRec eltype length, ())
+
+/// <summary>
+///     Constructs an typed array expression.
+/// </summary>
+/// <param name="eltype">The inner element type.</param>
+/// <param name="length">The optional length.</param>
+/// <param name="inner">The inner array expression.</param>
+/// <typeparam name="Var">Type of variables inside the expression.</typeparam>
+/// <returns>The corresponding array type record.</returns>
+let mkTypedArrayExpr (eltype : Type) (length : int option) (inner : ArrayExpr<'Var>)
+  : TypedArrayExpr<'Var> =
+    mkTypedSub (mkArrayTypeRec eltype length) inner
+
+/// <summary>
+///     Converts a TypedArrayExpr to an Expr.
+/// </summary>
+let typedArrayToExpr (bsub : TypedArrayExpr<'Var>) : Expr<'Var> =
+    // TODO(CaptainHayashi): proper doc comment.
+    liftTypedSub Expr.Array bsub
+
+
+/// <summary>
 ///     Pretty printers for expressions.
 ///
 ///     <para>
@@ -215,7 +352,7 @@ module Pretty =
         match int with
         | IVar c -> pVar c
         | IInt i -> i |> sprintf "%i" |> String
-        | IIdx (arr, idx) -> printIdx pVar (stripTypeRec arr) (stripTypeRec idx)
+        | IIdx (arr, idx) -> printIdx pVar (stripTypeRec arr) idx
         | IAdd xs -> sexpr "+" (printIntExpr pVar) xs
         | ISub xs -> sexpr "-" (printIntExpr pVar) xs
         | IMul xs -> sexpr "*" (printIntExpr pVar) xs
@@ -226,7 +363,7 @@ module Pretty =
     and printBoolExpr (pVar : 'Var -> Doc) (bool : BoolExpr<'Var>) : Doc =
         match bool with
         | BVar c -> pVar c
-        | BIdx (arr, idx) -> printIdx pVar (stripTypeRec arr) (stripTypeRec idx)
+        | BIdx (arr, idx) -> printIdx pVar (stripTypeRec arr) idx
         | BTrue -> String "true"
         | BFalse -> String "false"
         | BAnd xs -> svexpr "and" (printBoolExpr pVar) xs
@@ -243,10 +380,10 @@ module Pretty =
     and printArrayExpr (pVar : 'Var -> Doc) (arr : ArrayExpr<'Var>) : Doc =
         match arr with
         | AVar c -> pVar c
-        | AIdx (arr, idx) -> printIdx pVar (stripTypeRec arr) (stripTypeRec idx)
+        | AIdx (arr, idx) -> printIdx pVar (stripTypeRec arr) idx
         | AUpd (arr, idx, value) ->
             cmdSexpr "store"
-                [ printIntExpr pVar (stripTypeRec idx)
+                [ printIntExpr pVar idx
                   printExpr pVar value
                   printArrayExpr pVar arr ]
 
@@ -260,16 +397,33 @@ module Pretty =
 
 /// Partial pattern that matches a Boolean equality on arithmetic expressions.
 let (|BIEq|_|) (bool : BoolExpr<'var>)
-  : ((PrimTypeRec * IntExpr<'var>) * (PrimTypeRec * IntExpr<'var>)) option =
+  : (IntExpr<'var> * IntExpr<'var>) option =
     match bool with
-    | BEq (Int (xr, x), Int (yr, y)) -> Some ((xr, x), (yr, y))
+    | BEq (Int (_, x), Int (_, y)) -> Some (x, y)
     | _ -> None
+
+/// Partial pattern that matches a Boolean equality on arithmetic expressions.
+/// and preserves the extended type record.
+let (|TBIEq|_|) (bool : BoolExpr<'var>)
+  : (TypedIntExpr<'var> * TypedIntExpr<'var>) option =
+    match bool with
+    | BEq (Int (xr, x), Int (yr, y)) -> Some (mkTypedSub xr x, mkTypedSub yr y)
+    | _ -> None
+
 
 /// Partial pattern that matches a Boolean equality on Boolean expressions.
 let (|BBEq|_|) (bool : BoolExpr<'var>)
-  : ((PrimTypeRec * BoolExpr<'var>) * (PrimTypeRec * BoolExpr<'var>)) option =
+  : (BoolExpr<'var> * BoolExpr<'var>) option =
     match bool with
-    | BEq (Bool (xr, x), Bool (yr, y)) -> Some ((xr, x), (yr, y))
+    | BEq (Bool (_, x), Bool (_, y)) -> Some (x, y)
+    | _ -> None
+
+/// Partial pattern that matches a Boolean equality on Boolean expressions
+/// and preserves the extended type record.
+let (|TBBEq|_|) (bool : BoolExpr<'var>)
+  : (TypedBoolExpr<'var> * TypedBoolExpr<'var>) option =
+    match bool with
+    | BEq (Bool (xr, x), Bool (yr, y)) -> Some (mkTypedSub xr x, mkTypedSub yr y)
     | _ -> None
 
 
@@ -360,7 +514,7 @@ let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
         | None     -> BFalse
     // A Boolean equality between two contradictions or tautologies is always true.
     // Currently we ignore the type of the expressions.
-    | BBEq ((xr, x), (yr, y))  ->
+    | TBBEq ({ SRec = xr; SExpr = x }, { SRec = yr; SExpr = y }) ->
         match simp x, simp y with
         | BFalse, BFalse
         | BTrue, BTrue      -> BTrue
@@ -412,35 +566,47 @@ let mkGt (a : TypedIntExpr<'var>) (b : TypedIntExpr<'var>) : BoolExpr<'var> =
     | IInt x, IInt y when x >  y -> BTrue
     | IInt x, IInt y when x <= y -> BFalse
     | _ -> BGt (a, b)
+/// As mkGt, but uses the 'int' subtype.
+let mkIntGt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
+    mkGt (mkTypedSub normalIntRec a) (mkTypedSub normalIntRec b)
 /// Curried wrapper over BGe.
 let mkGe (a : TypedIntExpr<'var>) (b : TypedIntExpr<'var>) : BoolExpr<'var> =
     match (stripTypeRec a, stripTypeRec b) with
     | IInt x, IInt y when x >= y -> BTrue
     | IInt x, IInt y when x <  y -> BFalse
     | _ -> BGe (a, b)
+/// As mkGe, but uses the 'int' subtype.
+let mkIntGe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
+    mkGe (mkTypedSub normalIntRec a) (mkTypedSub normalIntRec b)
 /// Curried wrapper over BLt.
 let mkLt (a : TypedIntExpr<'var>) (b : TypedIntExpr<'var>) : BoolExpr<'var> =
     match (stripTypeRec a, stripTypeRec b) with
     | IInt x, IInt y when x <  y -> BTrue
     | IInt x, IInt y when x >= y -> BFalse
     | _ -> BLt (a, b)
+/// As mkLt, but uses the 'int' subtype.
+let mkIntLt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
+    mkLt (mkTypedSub normalIntRec a) (mkTypedSub normalIntRec b)
 /// Curried wrapper over BLe.
 let mkLe (a : TypedIntExpr<'var>) (b : TypedIntExpr<'var>) : BoolExpr<'var> =
     match (stripTypeRec a, stripTypeRec b) with
     | IInt x, IInt y when x <= y -> BTrue
     | IInt x, IInt y when x >  y -> BFalse
     | _ -> BLe (a, b)
+/// As mkLe, but uses the 'int' subtype.
+let mkIntLe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
+    mkLe (mkTypedSub normalIntRec a) (mkTypedSub normalIntRec b)
 
 /// Curried wrapper over BEq.
 let mkEq (a : Expr<'var>) (b : Expr<'var>) : BoolExpr<'var> = BEq (a, b)
 
 /// Makes an arithmetic equality with a plain Int type.
 let iEq (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
-    BEq (Int ((), a), Int ((), b))
+    BEq (Int (normalIntRec, a), Int (normalIntRec, b))
 
 /// Makes a Boolean equality with a plain Boolean type.
 let bEq (a : BoolExpr<'var>) (b : BoolExpr<'var>) : BoolExpr<'var> =
-    BEq (Bool ((), a), Bool ((), b))
+    BEq (Bool (normalBoolRec, a), Bool (normalBoolRec, b))
 
 /// Curried wrapper over IDiv.
 let mkDiv (a : IntExpr<'var>) (b : IntExpr<'var>) : IntExpr<'var> = IDiv (a, b)

@@ -25,17 +25,17 @@ module Nops =
 
     [<Test>]
     let ``Classify Assume(x!before) as a no-op``() =
-        check [ command "Assume" [] [ Bool (sbVar "x") ] ]
+        check [ command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]
     let ``Reject baz <- Foo(bar) as a no-op``() =
-        checkNot [ command "Foo" [ Int (siVar "baz") ] [ Int (siVar "bar") ] ]
+        checkNot [ command "Foo" [ normalIntExpr (siVar "baz") ] [ normalIntExpr (siVar "bar") ] ]
 
     [<Test>]
     let ``Reject Assume (x!before); baz <- Foo(bar) as a no-op``() =
         checkNot
-            [ command "Assume" [] [ Bool (sbVar "x") ]
-              command "Foo" [ Int (siVar "baz") ] [ Int (siVar "bar") ] ]
+            [ command "Assume" [] [ normalBoolExpr (sbVar "x") ]
+              command "Foo" [ normalIntExpr (siVar "baz") ] [ normalIntExpr (siVar "bar") ] ]
 
 module Assumes =
     let isAssume c =
@@ -52,77 +52,77 @@ module Assumes =
 
     [<Test>]
     let ``Classify Assume(x!before) as an assume``() =
-        check [ command "Assume" [] [ Bool (sbVar "x") ] ]
+        check [ command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]
     let ``Reject baz <- Foo(bar); Assume(x!before) as an Assume`` ()=
-        checkNot [ command "Foo" [ Int (siVar "baz") ] [ Int (siVar "bar") ]
-                   command "Assume" [] [ Bool (sbVar "x") ] ]
+        checkNot [ command "Foo" [ normalIntExpr (siVar "baz") ] [ normalIntExpr (siVar "bar") ]
+                   command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
 
 
     let checkIntermediate v i e = assertEqual i (getIntermediate v e)
 
     [<Test>]
     let ``getIntermediate on given Bool intermediate returns its intermediate``() =
-        checkIntermediate "foo" (Some 5I) (SMExpr.Bool (sbInter 5I "foo"))
+        checkIntermediate "foo" (Some 5I) (normalBoolExpr (sbInter 5I "foo"))
 
     [<Test>]
     let ``getIntermediate on given Bool before returns nothing``() =
-        checkIntermediate "foo" None (SMExpr.Bool (sbBefore "foo"))
+        checkIntermediate "foo" None (normalBoolExpr (sbBefore "foo"))
 
     [<Test>]
     let ``getIntermediate on given Bool after returns nothing``() =
-        checkIntermediate "foo" None (SMExpr.Bool (sbAfter "foo"))
+        checkIntermediate "foo" None (normalBoolExpr (sbAfter "foo"))
 
     [<Test>]
     let ``getIntermediate on other Bool intermediate returns nothing``() =
-        checkIntermediate "bar" None (SMExpr.Bool (sbInter 5I "foo"))
+        checkIntermediate "bar" None (normalBoolExpr (sbInter 5I "foo"))
 
     [<Test>]
     let ``getIntermediate on other Bool before returns nothing``() =
-        checkIntermediate "bar" None (SMExpr.Bool (sbBefore "foo"))
+        checkIntermediate "bar" None (normalBoolExpr (sbBefore "foo"))
 
     [<Test>]
     let ``getIntermediate on other Bool after returns nothing``() =
-        checkIntermediate "bar" None (SMExpr.Bool (sbAfter "foo"))
+        checkIntermediate "bar" None (normalBoolExpr (sbAfter "foo"))
 
     [<Test>]
     let ``getIntermediate on given Int intermediate returns its intermediate``() =
-        checkIntermediate "foo" (Some 10I) (SMExpr.Int (siInter 10I "foo"))
+        checkIntermediate "foo" (Some 10I) (normalIntExpr (siInter 10I "foo"))
 
     [<Test>]
     let ``getIntermediate on given Int before returns nothing``() =
-        checkIntermediate "foo" None (SMExpr.Int (siBefore "foo"))
+        checkIntermediate "foo" None (normalIntExpr (siBefore "foo"))
 
     [<Test>]
     let ``getIntermediate on given Int after returns nothing``() =
-        checkIntermediate "foo" None (SMExpr.Int (siAfter "foo"))
+        checkIntermediate "foo" None (normalIntExpr (siAfter "foo"))
 
     [<Test>]
     let ``getIntermediate on other Int intermediate returns nothing``() =
-        checkIntermediate "bar" None (SMExpr.Int (siInter 5I "foo"))
+        checkIntermediate "bar" None (normalIntExpr (siInter 5I "foo"))
 
     [<Test>]
     let ``getIntermediate on other Int before returns nothing``() =
-        checkIntermediate "bar" None (SMExpr.Int (siBefore "foo"))
+        checkIntermediate "bar" None (normalIntExpr (siBefore "foo"))
 
     [<Test>]
     let ``getIntermediate on other Int after returns nothing``() =
-        checkIntermediate "bar" None (SMExpr.Int (siAfter "foo"))
+        checkIntermediate "bar" None (normalIntExpr (siAfter "foo"))
 
     [<Test>]
     let ``getIntermediate on 'not' passes through``() =
-        checkIntermediate "bar" (Some 10I) (SMExpr.Bool (BNot (sbInter 10I "bar")))
+        checkIntermediate "bar" (Some 10I) (normalBoolExpr (BNot (sbInter 10I "bar")))
 
     [<Test>]
     let ``getIntermediate on 'implies' is max of its arguments matching the name``() =
         checkIntermediate "a" (Some 6I)
-            (SMExpr.Bool (BImplies (sbInter 6I "a", sbInter 11I "b")))
+            (normalBoolExpr (BImplies (sbInter 6I "a", sbInter 11I "b")))
 
     [<Test>]
     let ``getIntermediate on 'add' is max of the addends matching the name``() =
         checkIntermediate "a" (Some 2I)
-            (SMExpr.Int
+            (normalIntExpr
                 (IAdd
                     [ siInter 1I "a"
                       siAfter "b"
@@ -133,4 +133,4 @@ module Assumes =
     [<Test>]
     let ``getIntermediate on 'modulo' is max of its arguments matching the name`` () =
         checkIntermediate "a" (Some 11I)
-            (SMExpr.Int (IMod (siInter 6I "a", siInter 11I "a")))
+            (normalIntExpr (IMod (siInter 6I "a", siInter 11I "a")))

@@ -423,13 +423,17 @@ module Translator =
         Multiset.toFlatSeq
         >> Seq.choose
                (fun { Cond = g ; Item = v } ->
-                    let vZ = translateVFunc reals toVar ctx funcDecls v
-                    if (vZ.IsTrue)
-                    then None
-                    else Some <|
-                         if (isTrue g)
-                         then vZ
-                         else (ctx.MkImplies (boolToZ3 reals toVar ctx g, vZ)))
+                   // Guards are always 'bool'
+                   let gT = mkTypedSub normalBoolRec g
+
+                   let vZ = translateVFunc reals toVar ctx funcDecls v
+                   if (vZ.IsTrue)
+                   then None
+                   else
+                        Some
+                            (if (isTrue g)
+                             then vZ
+                             else (ctx.MkImplies (boolToZ3 reals toVar ctx gT, vZ))))
         >> Seq.toArray
         >> (fun a -> ctx.MkAnd a)
 
@@ -551,7 +555,7 @@ module Translator =
         trial {
             // First, make everything use string variables.
             let! bodyExpr' =
-                mapMessages Traversal (mapTraversal toVarTravBool bodyExpr)
+                mapMessages Traversal (mapTraversal toVarTravBool (mkTypedSub normalBoolRec bodyExpr))
             let! bodyView' =
                 mapMessages Traversal (mapTraversal toVarTravGView bodyView)
             let! head' =
@@ -559,7 +563,7 @@ module Translator =
 
             // Then, collect those variables.
             let! bodyExprVars =
-                mapMessages Traversal (findVars findVarTravBool bodyExpr')
+                mapMessages Traversal (findVars findVarTravBool (mkTypedSub normalBoolRec bodyExpr'))
             let! bodyViewVars =
                 mapMessages Traversal (findVars findVarTravGView bodyView')
             let! headVars =
@@ -573,7 +577,7 @@ module Translator =
             let varConstSet = Set.map varToConst varSet
             let vars = Set.toArray varConstSet
 
-            let bodyExprZ = boolToZ3 reals id ctx bodyExpr'
+            let bodyExprZ = boolToZ3 reals id ctx (mkTypedSub normalBoolRec bodyExpr')
 
             let bodyZ =
                 if (Multiset.length bodyView = 0)
@@ -598,8 +602,8 @@ module Translator =
     let instantiate (iterator : Var) (f : Var -> IntExpr<Var>) (dfunc : DFunc) : GFunc<Var> =
         let trans param =
             match param with
-            | Int var when var = iterator -> Int (f var)
-            | v -> varToExpr v
+            | Int (t, var) when var = iterator -> Int (t, f var)
+            | v -> mkVarExp v
         gfunc BTrue dfunc.Name (List.map trans dfunc.Params)
 
     /// Converts a downclosure func into an ordinary func, instantiating the
@@ -608,8 +612,8 @@ module Translator =
     let instantiateFunc (iterator : Var) (f : Var -> IntExpr<Var>) (dfunc : DFunc) : Func<Expr<Var>> =
         let trans param =
             match param with
-            | Int var when var = iterator -> Int (f var)
-            | v -> varToExpr v
+            | Int (t, var) when var = iterator -> Int (t, f var)
+            | v -> mkVarExp v
         func dfunc.Name (List.map trans dfunc.Params)
 
     /// <summary>
@@ -626,8 +630,9 @@ module Translator =
         let svarSeq = VarMap.toTypedVarSeq svars
 
         let iterVarR =
+            // TODO(CaptainHayashi): subtypes?
             match func.Iterator with
-            | Some (Int x) -> ok x
+            | Some (Int (_, x)) -> ok x
             | _ ->
                 let check = NeedsBaseDownclosure (func, reason)
                 fail (CannotCheckDeferred (check, "malformed iterator"))
@@ -643,7 +648,7 @@ module Translator =
 
         // TODO(CaptainHayashi): using a round peg in a square hole here.
         let empFunc =
-            Multiset.singleton (gfunc BTrue "emp" (Seq.map varToExpr svarSeq))
+            Multiset.singleton (gfunc BTrue "emp" (Seq.map mkVarExp svarSeq))
 
         let ruleR =
             bind
@@ -670,8 +675,9 @@ module Translator =
 
         // See above for caveats.
         let iterVarResult =
+            // TODO(CaptainHayashi): subtypes?
             match func.Iterator with
-            | Some (Int x) -> ok x
+            | Some (Int (_, x)) -> ok x
             | _ ->
                 let check = NeedsInductiveDownclosure (func, reason)
                 fail (CannotCheckDeferred (check, "malformed iterator"))
@@ -679,12 +685,12 @@ module Translator =
         let flatDFunc = Starling.Flattener.flattenDView svarSeq [func]
 
         let normFuncResult =
-            ok (vfunc flatDFunc.Name (List.map varToExpr flatDFunc.Params))
+            ok (vfunc flatDFunc.Name (List.map mkVarExp flatDFunc.Params))
         let succFuncResult =
             lift (fun it -> instantiate it incVar flatDFunc) iterVarResult
         let succViewResult = lift Multiset.singleton succFuncResult
         let guardResult =
-            lift (fun it -> mkGe (IVar it) (IInt 0L)) iterVarResult
+            lift (fun it -> mkIntGe (IVar it) (IInt 0L)) iterVarResult
 
         let ruleResult =
             bind3
@@ -752,8 +758,8 @@ module Translator =
 
         let defaultVal =
             function
-            | Expr.Int _ -> ok (Expr.Int (IInt 0L))
-            | Expr.Bool _ -> ok (Expr.Bool BFalse)
+            | Expr.Int (t, _) -> ok (Expr.Int (t, IInt 0L))
+            | Expr.Bool (t, _) -> ok (Expr.Bool (t, BFalse))
             (* TODO(CaptainHayashi): this needs implementing.
                Will requires array literal support. *)
             | Expr.Array _ -> fail ArraysNotSupported
@@ -884,6 +890,8 @@ module Run =
       (view : VFunc<Var>)
       (def : BoolExpr<Var>)
       : Result<unit, Error> =
+        let tdef = mkTypedSub normalBoolRec def
+
         (* To model a view definition, we introduce an if and only if.
            This can't be modelled directly in MuZ3, so instead we split it
            into two implications.
@@ -897,7 +905,7 @@ module Run =
 
         // TODO(CaptainHayashi): de-duplicate this with mkRule?
         let defVarsR =
-            findVars (tliftToBoolSrc (tliftToExprDest collectVars)) def
+            findVars (tliftToBoolSrc (tliftToExprDest collectVars)) tdef
         let paramVarsR =
             findVars
                 (tchainL (tliftOverExpr collectVars) id)
@@ -928,7 +936,7 @@ module Run =
                     Translator.mkQuantifiedEntailment
                         ctx
                         z3Vars
-                        (ctx.MkAnd [| boolToZ3 shouldUseRealsForInts id ctx (mkNot def)
+                        (ctx.MkAnd [| boolToZ3 shouldUseRealsForInts id ctx (mapTypedSub mkNot tdef)
                                       Translator.translateVFunc shouldUseRealsForInts id ctx funcDecls view |])
                         unsafeapp)
                 z3VarsR
