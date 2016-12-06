@@ -358,7 +358,7 @@ let primParamSubFun
          | WithType (var, vtype) as v ->
             match pmap.TryFind var with
             | Some tvar ->
-                if vtype = typeOf tvar
+                if typesCompatible vtype (typeOf tvar)
                 then ok tvar
                 else fail (Inner (TypeMismatch (v, typeOf tvar)))
             | None -> fail (Inner (FreeVarInSub v)))
@@ -408,6 +408,7 @@ let traverseMicrocode
 
     let rec tm ctx mc =
         let tml = tchainL tm id
+        printfn "mc: %A" mc
 
         match mc with
         | Assign (lv, Some rv) ->
@@ -447,9 +448,12 @@ let rec markMicrocode
     let lf var = ok (postMark var)
     let rf var =
         match preStates.TryFind var with
-         // TODO(CaptainHayashi): proper error
-         | None -> fail (Inner (BadSemantics "somehow referenced variable not in scope"))
-         | Some mv -> ok (withType (typeOf var) (Reg mv))
+        // TODO(CaptainHayashi): proper error
+        | None ->
+             printfn "map: %A" preStates
+             printfn "var: %A" var
+             fail (Inner (BadSemantics "somehow referenced variable not in scope"))
+        | Some mv -> ok (withType (typeOf var) (Reg mv))
 
     // ...then use them in a traversal.
     let lt = tliftOverCTyped (ignoreContext lf)

@@ -53,13 +53,13 @@ module Pretty =
         | Intermediate (i, s) -> String "inter_" <-> String (sprintf "%A_" i) <-> String s 
         | Goal (i, s) -> String "goal_" <-> String (sprintf "%A_" i) <-> String s 
 
+    let printTypedGrass (pVar : 'Var -> Doc) (var : CTyped<'Var>) : Doc = 
+        // TODO(CaptainHayashi): is printType correct?
+        colonSep [ pVar (valueOf var); Starling.Core.TypeSystem.Pretty.printType (typeOf var)]
+
     /// Prints a typed Var 
-    let printTypedVarGrass (v : TypedVar) = 
-        // TODO(CaptainHayashi): print type using value in type record.
-        match v with 
-        | Int (_, name) -> String name  
-        | Bool (_, name) -> String name  
-        | _ -> failwith "[printTypedVarGrass] Case unimplemented for Grasshopper backend." 
+    let printTypedVarGrass (v : TypedVar) : Doc = 
+        printTypedGrass String v
 
     /// Pretty-prints an arithmetic expression.
     let rec printIntExprG (pVar : 'Var -> Doc) : IntExpr<'Var> -> Doc =
@@ -109,10 +109,10 @@ module Pretty =
         | Sym s -> printSymbolicGrass (printExprG (printSym pReg) false) s
 
     /// Get the set of accessed variables. 
-    let findVarsGrass (zterm : Backends.Z3.Types.ZTerm) : seq<MarkedVar> = 
+    let findVarsGrass (zterm : Backends.Z3.Types.ZTerm) : CTyped<MarkedVar> seq = 
         normalBool (BAnd [zterm.SymBool.WPre; zterm.SymBool.Goal; zterm.SymBool.Cmd] )
         |> findVars (tliftToBoolSrc (tliftToExprDest collectSymVars)) 
-        |> lift (Set.map valueOf >> Set.toSeq) 
+        |> lift Set.toSeq
         |> returnOrFail
 
     /// Print a single Grasshopper query from a ZTerm 
@@ -123,9 +123,9 @@ module Pretty =
         // TODO @(septract) print variable types
         let svarprint = VarMap.toTypedVarSeq svars
                         |> Seq.map printTypedVarGrass 
-        let varprint = Seq.map printMarkedVarGrass (findVarsGrass zterm) 
+        let varprint = Seq.map (printTypedGrass printMarkedVarGrass) (findVarsGrass zterm) 
                        |> Seq.append svarprint 
-                       |> (fun x -> VSep(x,String ",")) 
+                       |> (fun x -> Indent (VSep(x,String ",")))
 
         /// Print the requires / ensures clauses 
         let wpreprint = zterm.SymBool.WPre 

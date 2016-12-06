@@ -236,17 +236,20 @@ let rec unifyArrayTypeRecs (xs : ArrayTypeRec list) : ArrayTypeRec option =
             | None -> None
             | Some rs ->
                 // TODO(CaptainHayashi): unify element types.
-                if typesCompatible rs.ElementType nextRec.ElementType
-                then
+                match unifyTwoTypes rs.ElementType nextRec.ElementType with
+                | Some et ->
                     (* Currently, favour the type with the most defined length.
                        This should really pull the unified type from above
                        instead of taking one or the other. *)
                     match (rs.Length, nextRec.Length) with
-                    | Some _, None | None, None -> Some rs
-                    | None, Some _ -> Some nextRec
-                    | Some x, Some y when x = y -> Some rs
+                    | Some l, None | None, Some l ->
+                        Some { ElementType = et; Length = Some l }
+                    | None, None ->
+                        Some { ElementType = et; Length = None }
+                    | Some x, Some y when x = y ->
+                        Some { ElementType = et; Length = Some x }
                     | _ -> None
-                else None
+                | None -> None
         List.fold foldRecs (Some x) xs
 
 /// <summary>
@@ -307,11 +310,11 @@ module Pretty =
     /// <summary>
     ///     Pretty-prints a type.
     /// </summary>
-    let rec printType : Type -> Doc =
-        function
-        | AnInt -> "int" |> String
-        | ABool -> "bool" |> String
-        | AnArray (eltype, len) ->
+    let rec printType (ty : Type) : Doc =
+        match ty with
+        | AnIntR { TypeName = n } -> String (withDefault "int?" n)
+        | ABoolR { TypeName = n } -> String (withDefault "bool?" n)
+        | AnArrayR { ElementType = eltype; Length = len } ->
             parened
                 (String "array"
                  <+> printType eltype

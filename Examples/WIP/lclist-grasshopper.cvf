@@ -1,21 +1,26 @@
 /* Revised lclist-starling.cvf to fit more nicely with GRASShopper. */
 
-shared int heap; 
-shared int head;
-shared int ub; // upper bound on the list
+typedef int Node;
+typedef int Value;
+typedef int Heap;
 
-thread int prev;
-thread int curr;
+shared Heap heap; 
+shared Node head;
+shared Value ub; // upper bound on the list
 
-thread int v;
-thread int cv;
+thread Heap lheap;
+thread Node prev;
+thread Node curr;
 
-view wf(int v);
-view isHead(int node); 
-view isVal(int v, int node);
-view has1Lock(int x, int y);
-view has1LockAnon(int x);
-view has2Lock(int x, int y);
+thread Value v;
+thread Value cv;
+
+view wf(Value v);
+view isHead(Node node); 
+view isVal(Node node, Value v);
+view has1Lock(Node x, Node y);
+view has1LockAnon(Node x);
+view has2Lock(Node x, Node y);
 
 method deleteVal(int v) {
   {| wf(v) |}
