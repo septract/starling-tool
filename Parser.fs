@@ -356,14 +356,17 @@ let parseViewLike basic join =
  * Types.
  *)
 
+/// Parses a builtin primitive type.
+let parseBuiltinPrimType : Parser<TypeLiteral, unit> =
+    choice [
+        stringReturn "int" TInt 
+        stringReturn "bool" TBool
+    ]
+
 /// Parses a type identifier.
 let parseType : Parser<TypeLiteral, unit> =
     let parsePrimType =
-        choice [
-            stringReturn "int" TInt 
-            stringReturn "bool" TBool
-            parseIdentifier |>> TUser
-        ]
+        parseBuiltinPrimType <|> (parseIdentifier |>> TUser)
 
     let parseArray = inSquareBrackets pint32 |>> curry TArray
     let parseSuffixes = many parseArray
@@ -654,6 +657,19 @@ let parseSearch =
                      // ^- ... <depth>
                      .>> wsSemi
 
+/// Parses a typedef.
+let parseTypedef =
+    // TODO(CaptainHayashi): forbid 'typedef bool int'.
+    // TODO(CaptainHayashi): maybe one day permit 'typedef int[] heap'.
+    // TODO(CaptainHayashi): maybe one day permit 'typedef typedef1 typedef2'.
+    skipString "typedef"
+    >>. ws >>.
+    pipe2ws
+        parseBuiltinPrimType
+        parseIdentifier
+        (fun ty id -> Typedef (ty, id))
+    .>> wsSemi
+
 /// Parses a script of zero or more methods, including leading and trailing whitespace.
 let parseScript =
     // TODO(CaptainHayashi): parse things that aren't methods:
@@ -672,6 +688,8 @@ let parseScript =
                              //  | view <identifier> <view-proto-param-list> ;
                              parseSearch |>> Search
                              // ^- search 0;
+                             parseTypedef
+                             // ^- typedef int Node;
                              parseVarDecl "shared" SharedVars
                              // ^- shared <type> <identifier> ;
                              parseVarDecl "thread" ThreadVars]) .>> ws ) eof

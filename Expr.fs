@@ -238,6 +238,12 @@ let normalBoolVar (var : 'Var) : CTyped<'Var> =
     // TODO(CaptainHayashi): proper doc comment.
     Bool (normalBoolRec,  var)
 
+/// <summary>
+///     Constructs a Boolean typed variable from a variable using the indefinite type.
+/// </summary>
+let indefBoolVar (var : 'Var) : CTyped<'Var> =
+    // TODO(CaptainHayashi): proper doc comment.
+    Bool (indefBoolRec,  var)
 
 /// <summary>
 ///     The type record for a 'normal' Integer expression.
@@ -287,6 +293,13 @@ let indefInt (int : IntExpr<'Var>) : TypedIntExpr<'Var> =
 let normalIntVar (var : 'Var) : CTyped<'Var> =
     // TODO(CaptainHayashi): proper doc comment.
     Int (normalIntRec,  var)
+
+/// <summary>
+///     Constructs an integer typed variable from a variable using the indefinite type.
+/// </summary>
+let indefIntVar (var : 'Var) : CTyped<'Var> =
+    // TODO(CaptainHayashi): proper doc comment.
+    Int (indefIntRec,  var)
 
 /// <summary>
 ///     Converts an IntExpr to an Expr using the normal type.

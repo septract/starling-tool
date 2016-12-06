@@ -293,11 +293,15 @@ module Pretty =
     open Starling.Core.View.Pretty
 
     /// Pretty-prints instantiation errors.
-    let printError : Error -> Doc =
-        function
+    let printError (err : Error) : Doc =
+        match err with
         | TypeMismatch (par, atype) ->
-            fmt "parameter '{0}' conflicts with argument of type '{1}'"
-                [ printTypedVar par; printType atype ]
+            errorStr "parameter"
+            <+> quoted (printTypedVar par)
+            <+> errorStr "conflicts with argument of type"
+            <+> quoted (printType atype)
         | CountMismatch (fn, dn) ->
-            fmt "view usage has {0} parameter(s), but its definition has {1}"
-                [ fn |> sprintf "%d" |> String; dn |> sprintf "%d" |> String ]
+            errorStr "view usage has"
+            <+> errorStr (sprintf "%d" fn)
+            <&> errorStr "arguments, but its definition has"
+            <+> errorStr (sprintf "%d" fn)
