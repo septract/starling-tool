@@ -260,9 +260,16 @@ module Atomics =
                      Direct))
         check
             ast
-            (command' "!IStore" ast
-                [ normalIntExpr (siVar "x") ]
-                [ indefIntExpr (IVar (sym [ SymString "foo" ] [ normalBoolExpr (sbVar "baz") ] )) ])
+            (Intrinsic
+                (IAssign
+                    { AssignType = Store
+                      TypeRec = normalIntRec
+                      LValue = IVar (Reg "x")
+                      RValue =
+                        IVar
+                            (sym
+                                [ SymString "foo" ]
+                                [ normalBoolExpr (BVar (Reg "baz")) ] ) } ))
 
 
 module CommandAxioms =
@@ -321,13 +328,16 @@ module CommandAxioms =
         check
             ast
             (Prim
-                [ command "!BLSet"
-                    [ normalBoolExpr (sbVar "baz") ]
-                    [ indefBoolExpr
-                        (BVar
-                            (sym
-                                [ SymString "foo" ]
-                                [ normalIntExpr (siVar "bar") ] )) ] ])
+                [ Intrinsic
+                    ( BAssign
+                        { AssignType = Local
+                          TypeRec = normalBoolRec
+                          LValue = BVar (Reg "baz")
+                          RValue =
+                            BVar
+                                (sym
+                                    [ SymString "foo" ]
+                                    [ normalIntExpr (IVar (Reg "bar")) ])})])
 
 
 module ViewDefs =
