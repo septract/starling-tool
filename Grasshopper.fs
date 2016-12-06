@@ -106,35 +106,10 @@ module Pretty =
 
     /// Get the set of accessed variables. 
     let findVarsGrass (zterm : Backends.Z3.Types.ZTerm) : seq<MarkedVar> = 
-        // TODO @(septract) Should this conjoin the command as well? 
-        BAnd [zterm.SymBool.WPre; zterm.SymBool.Goal] 
+        BAnd [zterm.SymBool.WPre; zterm.SymBool.Goal; zterm.SymBool.Cmd] 
         |> findMarkedVars (tliftToBoolSrc (tliftToExprDest collectSymMarkedVars)) 
         |> lift (Set.map valueOf >> Set.toSeq) 
         |> returnOrFail
-
-    ///// Add a spatial frame if an expression isn't symbolic
-    //// TODO @(septract) this is extremely naive at the moment. 
-    //let makeFrame b = 
-    //    let exprdoc = 
-    //       printBoolExprG (printSymGrass printMarkedVarGrass) true  
-    //    match b with 
-    //    | BVar (Sym s) -> exprdoc b 
-    //    // | BImplies (x, BVar (Sym s)) -> 
-    //    //     parened (String "STrue() &*&" <+> exprdoc x) 
-    //    //     <+> String "||" 
-    //    //     parened (exprdoc (BVar (Sym s))) 
-    //    //   |> parened 
-    //    | _ ->  String "sTrue() &*&" <+> exprdoc b |>  parened 
-
-    ///// Print top-level requires / ensures clauses 
-    //let printConstrGrass (s : Doc) (b : BoolExpr<Sym<MarkedVar>>) : Doc = 
-    //    match b with 
-    //    | BAnd xs ->  
-    //          Seq.map makeFrame xs 
-    //          |> Seq.map (hsep2 Nop s) 
-    //          |> vsep 
-    //    | x -> makeFrame x 
-    //           |> hsep2 Nop s
 
     /// Print a single Grasshopper query from a ZTerm 
     let printZTermGrass (svars : VarMap) 
@@ -147,7 +122,6 @@ module Pretty =
         let varprint = Seq.map printMarkedVarGrass (findVarsGrass zterm) 
                        |> Seq.append svarprint 
                        |> (fun x -> VSep(x,String ",")) 
-                       |> Indent 
 
         /// Print the requires / ensures clauses 
         let wpreprint = zterm.SymBool.WPre 
@@ -158,17 +132,13 @@ module Pretty =
         // TODO @(septract) print command properly 
         let cmdprint = zterm.SymBool.Cmd 
                        |> (Core.Expr.Pretty.printBoolExpr (printSymGrass printMarkedVarGrass))
-        vsep [ String "procedure" <+> String name <+> (varprint |> parened) 
-               // String "requires" 
-               //(printConstrGrass (String "requires ") zterm.SymBool.WPre) 
-               //(printConstrGrass (String "ensures  ") zterm.SymBool.Goal) 
+        vsep [ String "procedure" <+> String name 
+               varprint |> Indent |> parened 
                String "requires" 
                Indent wpreprint 
                String "ensures" 
                Indent goalprint
-               cmdprint 
-                    |> ssurround "/*" "*/" 
-                    |> Indent |> braced 
+               cmdprint |> ssurround "/*" "*/" |> Indent |> braced 
              ]  
 
     /// Print all the Grasshopper queries that haven't been eliminated by Z3.      
@@ -176,7 +146,7 @@ module Pretty =
         let fails = extractFailures model 
         Map.toSeq fails 
         |> Seq.map (fun (name,term) -> printZTermGrass model.SharedVars name term) 
-        |> vsep
+        |> (fun x -> (VSep (x,VSkip))) 
 
     /// Print a Grasshopper error (not implemented yet)
     let printGrassError e = failwith "not implemented yet" 
