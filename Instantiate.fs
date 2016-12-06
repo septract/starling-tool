@@ -28,6 +28,7 @@ open Starling.Core.Model
 open Starling.Core.Traversal
 open Starling.Core.Symbolic
 open Starling.Core.Symbolic.Traversal
+open Starling.Core.TypeSystem
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Traversal
 
@@ -196,7 +197,7 @@ let paramSubFun
         (function
          | WithType (var, vtype) as v ->
             match pmap.TryFind var with
-            | Some expr when vtype = typeOf expr -> ok expr
+            | Some expr when typesCompatible vtype (typeOf expr) -> ok expr
             | Some expr -> fail (Inner (BadFuncLookup (vfunc, TypeMismatch (v, typeOf expr))))
             | None -> fail (Inner (FreeVarInSub v)))
 
