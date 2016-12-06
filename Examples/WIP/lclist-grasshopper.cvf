@@ -61,19 +61,19 @@ method deleteVal(int v) {
   {| emp |}
 }
 
-constraint emp -> %{ isListG(head,ub) }(); 
+constraint emp -> %{ isListG(#1,#2) }(head,ub); 
 
 constraint wf(v) -> v < ub;
 
 constraint isHead(x) -> x == head;
 
-constraint has1Lock(a,b) -> %{ has1LockG(head,#1,#2) }(a, b);
+constraint has1Lock(a,b) -> %{ has1LockG(#1,#2,#3) }(head,a,b);
 
-constraint has1LockAnon(a) -> %{ exists e: Node :: has1LockG(head,#1,e) }(a);
+constraint has1LockAnon(a) -> %{ exists e: Node :: has1LockG(#1,#2,e) }(head,a);
 
-constraint has2Lock(a,b)  -> %{ has2LockG(head,#1,#2) }(a, b);
+constraint has2Lock(a,b)  -> %{ has2LockG(#1,#2,#3) }(head,a,b);
 
-constraint isVal(node, v) -> %{ isValG(head, #1, #2) &*& #2 < ub }(node, v);
+constraint isVal(node,v) -> %{ isValG(#1,#2,#3) &*& #3 < ub }(head,node,v);
 
 
 // Constraints on view interactions
