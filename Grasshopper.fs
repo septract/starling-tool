@@ -81,7 +81,7 @@ module Pretty =
            | BNot (BEq (x, y)) -> infexpr "!=" (printExprG pVar fr) [x; y]
            | BNot x -> 
                match x with 
-               | NoSym y -> String "~" <+> (printBoolExprG pVar fr x) |> parened 
+               | NoSym y -> String "!" <+> (printBoolExprG pVar fr x) |> parened 
                | _ -> failwith "[printBoolExprG] Grasshopper can't negate spatial things." 
            | BEq (x, y) -> infexpr "==" (printExprG pVar fr) [x; y]
            | BGt (x, y) -> infexpr ">" (printIntExprG pVar) [x; y]
