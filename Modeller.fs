@@ -1420,17 +1420,27 @@ let modelIntLoad
                            the source must be a SHARED integral lvalue;
                            and the fetch mode is unconstrained. *)
     let modelWithExprs dstE srcE =
-        // Both expressions must have unifiable types.
-        if primTypeRecsCompatible dstE.SRec srcE.SRec
-        then
-            let cmd, results =
-                match mode with
-                | Direct -> "!ILoad", [ typedIntToExpr dstE ]
-                | Increment -> "!ILoad++", [ typedIntToExpr dstE; typedIntToExpr srcE ]
-                | Decrement -> "!ILoad--", [ typedIntToExpr dstE; typedIntToExpr srcE ]
-            printfn "dst : %A src : %A" dstE srcE
-            ok (command cmd results [ typedIntToExpr srcE ])
-        else  // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
+        match unifyPrimTypeRecs [ dstE.SRec; srcE.SRec ] with
+        | Some srec ->
+            // Direct loading is an intrinsic; the others aren't.
+            let mkStored cmd =
+                ok
+                    (command cmd
+                        [ typedIntToExpr dstE; typedIntToExpr srcE ]
+                        [ typedIntToExpr srcE ])
+
+            match mode with
+            | Direct ->
+                ok
+                    (Intrinsic
+                        (IAssign
+                            { AssignType = Load
+                              TypeRec = srec
+                              LValue = stripTypeRec dstE
+                              RValue = stripTypeRec srcE } ))
+            | Increment -> mkStored "!ILoad++"
+            | Decrement -> mkStored "!ILoad--"
+        | None ->  // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
             fail
                 (primTypeMismatch src
                     (Exact (typedIntToType dstE))
@@ -1479,15 +1489,27 @@ let modelIntStore
                              the source must be THREAD and integral;
                              and the fetch mode is unconstrained.  *)
     let modelWithExprs dstE srcE =
-        if primTypeRecsCompatible dstE.SRec srcE.SRec
-        then
-            let cmd, results =
-                match mode with
-                | Direct -> "!IStore", [ typedIntToExpr dstE ]
-                | Increment -> "!IStore++", [ typedIntToExpr dstE; typedIntToExpr srcE ]
-                | Decrement -> "!IStore--", [ typedIntToExpr dstE; typedIntToExpr srcE ]
-            ok (command cmd results [ liftTypedSub Int srcE ])
-        else  // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
+        match unifyPrimTypeRecs [ dstE.SRec; srcE.SRec ] with
+        | Some srec ->
+            // Direct storage is an intrinsic; the others aren't.
+            let mkStored cmd =
+                ok
+                    (command cmd
+                        [ typedIntToExpr dstE; typedIntToExpr srcE ]
+                        [ typedIntToExpr srcE ])
+
+            match mode with
+            | Direct ->
+                ok
+                    (Intrinsic
+                        (IAssign
+                            { AssignType = Store
+                              TypeRec = srec
+                              LValue = stripTypeRec dstE
+                              RValue = stripTypeRec srcE } ))
+            | Increment -> mkStored "!IStore++"
+            | Decrement -> mkStored "!IStore--"
+        | None ->  // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
             fail
                 (primTypeMismatch src
                     (Exact (typedIntToType dstE))
@@ -1752,14 +1774,44 @@ and modelAssign
        We thus also have to make sure that src is the correct type. *)
     let modelWithDest destM =
         match destM with
-        | Int _ ->
-            let srcR =
-                modelIntWithType (typeOf destM) ctx.ThreadVars ctx.ThreadVars src
-            lift (fun srcM -> command "!ILSet" [ destM ] [ typedIntToExpr srcM ]) srcR
-        | Bool _ ->
-            let srcR =
-                modelBoolWithType (typeOf destM) ctx.ThreadVars ctx.ThreadVars src
-            lift (fun srcM -> command "!BLSet" [ destM ] [ typedBoolToExpr srcM ]) srcR
+        | Int (dt, d) ->
+            let srcR = modelIntExpr ctx.ThreadVars ctx.ThreadVars id src
+            let modelWithSrc srcE =
+                match unifyPrimTypeRecs [ dt; srcE.SRec ] with
+                | Some dst ->
+                    ok
+                        (Intrinsic
+                            (IAssign
+                                { AssignType = Local
+                                  TypeRec = dst
+                                  LValue = d
+                                  RValue = stripTypeRec srcE } ))
+                | None ->
+                    // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
+                    fail
+                        (primTypeMismatch src
+                            (Exact (Int (dt, ())))
+                            (Exact (typedIntToType srcE)))
+            bind modelWithSrc (mapMessages (curry BadExpr src) srcR)
+        | Bool (dt, d) ->
+            let srcR = modelBoolExpr ctx.ThreadVars ctx.ThreadVars id src
+            let modelWithSrc srcE =
+                match unifyPrimTypeRecs [ dt; srcE.SRec ] with
+                | Some dst ->
+                    ok
+                        (Intrinsic
+                            (BAssign
+                                { AssignType = Local
+                                  TypeRec = dst
+                                  LValue = d
+                                  RValue = stripTypeRec srcE } ))
+                | None ->
+                    // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
+                    fail
+                        (primTypeMismatch src
+                            (Exact (Bool (dt, ())))
+                            (Exact (typedBoolToType srcE)))
+            bind modelWithSrc (mapMessages (curry BadExpr src) srcR)
         | Array (_, _) ->
             fail (PrimNotImplemented "array local assign")
 

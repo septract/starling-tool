@@ -135,11 +135,34 @@ module Pretty =
 
         // TODO @(septract) print command properly 
         let cmdprint =
-            let rec matchSymC cmd xs =
-                match cmd with
-                | [] -> Some xs
-                | SymC { Symbol = sym }::cmd' -> matchSymC cmd' (sym::xs)
-                | _ -> None
+            let primPrint markL markR prim =
+                match prim with
+                | SymC { Symbol = sym } ->
+                    // TODO(CaptainHayashi): proper Chessie failure.
+                    let sym' =
+                        { Sentence = sym.Sentence
+                          Args = (List.map markR sym.Args) }
+
+                    printSymbolicGrass (printExprG (printSymGrass printMarkedVarGrass) false) sym'
+                | Intrinsic (IAssign { LValue = l; RValue = r }) ->
+                    // TODO(CaptainHayashi): correct?
+                    printExprG (printSymGrass printMarkedVarGrass) false (markL (normalIntExpr l))
+                    <+> String "="
+                    <+> printExprG (printSymGrass printMarkedVarGrass) false (markR (normalIntExpr r))
+                | Intrinsic (BAssign { LValue = l; RValue = r }) ->
+                    // TODO(CaptainHayashi): correct?
+                    printExprG (printSymGrass printMarkedVarGrass) false (markL (normalBoolExpr l))
+                    <+> String "="
+                    <+> printExprG (printSymGrass printMarkedVarGrass) false (markR (normalBoolExpr r))
+                | Stored cmd ->
+                    String "/* error: somehow found a stored command! */"
+
+            let rec hasStored cmd =
+                let isStored =
+                    function
+                    | Stored _ -> true
+                    | _ -> false
+                List.exists isStored cmd
 
             (* TODO(CaptainHayashi):
                Currently, the command is not marked with pre-and-post-states.
@@ -153,22 +176,10 @@ module Pretty =
             let hackilyMakeSymBefore x =
                 { Sentence =  x.Sentence
                   Args = (List.map hackilyMakeBefore x.Args) }
-            match matchSymC zterm.Original.Cmd.Cmd [] with
-            | Some [x] ->
-                let x' = hackilyMakeSymBefore x
 
-                // TODO(CaptainHayashi): framing?
-                printSymbolicGrass (printExprG (printSymGrass printMarkedVarGrass) false) x'
-            | Some xs ->
-                let xs' = List.map hackilyMakeSymBefore xs
-
-                vsep
-                    [ String "/* WARNING: translation of sequential composition may be unsound. */"
-                      (semiSep
-                          (List.map
-                              (printSymbolicGrass (printExprG (printSymGrass printMarkedVarGrass) false))
-                          xs')) ]
-            | None ->
+            // Can't print a command with any stored components, for now.
+            if hasStored zterm.Original.Cmd.Cmd
+            then
                 // TODO(CaptainHayashi): is this the right fallback?
                 vsep
                     [ String "/* WARNING: Given a non-symbolic command, which is unsupported."
@@ -180,6 +191,20 @@ module Pretty =
                             zterm.SymBool.Cmd)
                       String "   */"
                     ]
+            else
+                // TODO(CaptainHayashi): fix sequential composition as above.
+                match zterm.Original.Cmd.Cmd with
+                | [x] ->
+                    primPrint (after >> returnOrFail) (before >> returnOrFail) x
+                | xs ->
+                    vsep
+                        [ String "/* WARNING: translation of sequential composition is unsound. */"
+                          semiSep
+                              (List.map
+                                (primPrint
+                                    (after >> returnOrFail)
+                                    (before >> returnOrFail))
+                                xs) ]
         vsep [ String "procedure" <+> String name <+> (varprint |> parened) 
                String "requires" 
                Indent wpreprint 
