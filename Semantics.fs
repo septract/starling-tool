@@ -409,7 +409,6 @@ let traverseMicrocode
 
     let rec tm ctx mc =
         let tml = tchainL tm id
-        printfn "mc: %A" mc
 
         match mc with
         | Assign (lv, Some rv) ->
