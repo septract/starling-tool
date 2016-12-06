@@ -627,6 +627,14 @@ let instantiateToMicrocode
         let havocs = Set.toList (Set.map toHavoc s.Working)
 
         ok (symAssume :: havocs)
+    | Intrinsic s ->
+        (* An intrinsic can be directly converted into microcode,
+           throwing away the actual direction of the intrinsic. *)
+        match s with
+        | IAssign { TypeRec = ty; LValue = x; RValue = y } ->
+            ok [ Expr.Int (ty, x) *<- Expr.Int (ty, y) ]
+        | BAssign { TypeRec = ty; LValue = x; RValue = y } ->
+            ok [ Expr.Bool (ty, x) *<- Expr.Bool (ty, y) ]
     | Stored sc ->
         // A stored command is a lookup into a microcode table.
         let primDefR = lookupPrim sc semantics

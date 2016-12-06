@@ -56,6 +56,44 @@ module Types =
         override this.ToString() = sprintf "%A" this
 
     /// <summary>
+    ///     An intrinsic assignment type.
+    /// </summary>
+    type AssignType =
+        /// <summary>Loading into thread lvalue from shared lvalue.</summary>
+        | Load
+        /// <summary>Storing into shared lvalue from thread expression.</summary>
+        | Store
+        /// <summary>Storing into thread lvalue from thread expression.</summary>
+        | Local
+
+    /// <summary>
+    ///     An intrinsic primitive assignment record.
+    /// </summary>
+    type Assignment<'Expr> =
+        { /// <summary>The type of assignment being done.</summary>
+          AssignType : AssignType
+          /// <summary>The extended type record of both sides of the assignment.</summary>
+          TypeRec : PrimTypeRec
+          /// <summary>The lvalue of the assignment.</summary>
+          LValue : 'Expr
+          /// <summary>The rvalue of the assignment.</summary>
+          RValue : 'Expr }
+
+    /// <summary>
+    ///     A built-in Starling command.
+    ///
+    ///     <para>
+    ///         Intrinsic commands are basic commands such as assignment that
+    ///         need to be handled in a high-level manner.
+    ///     </para>
+    /// </summary>
+    type IntrinsicCommand =
+        /// <summary>An atomic integer assign.</summary>
+        | IAssign of Assignment<IntExpr<Sym<Var>>>
+        /// <summary>An atomic Boolean assign.</summary>
+        | BAssign of Assignment<BoolExpr<Sym<Var>>>
+
+    /// <summary>
     ///     A fully symbolic atomic command.
     ///
     ///     <para>
@@ -75,6 +113,8 @@ module Types =
     ///     A primitive atomic command.
     /// </summary>
     type PrimCommand =
+        /// <summary>An intrinsic command.</summary>
+        | Intrinsic of IntrinsicCommand
         /// <summary>A lookup into the model's commands table.</summary>
         | Stored of StoredCommand
         /// <summary>An entirely symbolic command.</summary>
@@ -163,6 +203,8 @@ module Queries =
     let isNop (command : Command) : bool =
         let isPrimNop prim =
             match prim with
+            // No Intrinsic commands are no-ops at the moment.
+            | Intrinsic _ -> false
             | Stored { Results = ps } -> List.isEmpty ps
             | SymC _ -> false
         List.forall isPrimNop command
@@ -172,6 +214,7 @@ module Queries =
     /// </summary>
     let (|Assume|_|) : Command -> SVBoolExpr option =
         function
+        // No Intrinsic commands are assumes at the moment.
         | [ Stored { Name = n ; Args = [ SVExpr.Bool (_, b) ] } ]
           when n = "Assume" -> Some b
         | _ -> None
@@ -182,6 +225,8 @@ module Queries =
         // TODO(CaptainHayashi): are sym working variables really results?
         let primResults prim =
             match prim with
+            | Intrinsic (IAssign r) -> [ Expr.Int (r.TypeRec, r.LValue) ]
+            | Intrinsic (BAssign r) -> [ Expr.Bool (r.TypeRec, r.LValue) ]
             | Stored { Results = rs } -> rs
             | SymC { Working = ws } ->
                 Set.toList (Set.map (mapCTyped Reg >> mkVarExp) ws)
@@ -212,6 +257,8 @@ module Queries =
             // TODO(CaptainHayashi): is this sensible!?
             | Stored { Args = xs }
             | SymC { Symbol = { Args = xs } } -> List.map symExprVars xs
+            | Intrinsic (IAssign { RValue = y } ) -> [ symExprVars (indefIntExpr y) ]
+            | Intrinsic (BAssign { RValue = y } ) -> [ symExprVars (indefBoolExpr y) ]
         let vars = collect (concatMap f cmd)
         lift Set.unionMany vars
 
@@ -365,6 +412,29 @@ module Pretty =
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Symbolic.Pretty
 
+    /// <summary>Pretty-prints an AssignType.</summary>
+    let printAssignType (a : AssignType) : Doc =
+        String
+            (match a with
+             | Store -> "store"
+             | Load  -> "load"
+             | Local -> "local")
+
+    /// <summary>Pretty-prints an IntrinsicCommand.</summary>
+    let printIntrinsicCommand (cmd : IntrinsicCommand) : Doc =
+        match cmd with
+        | BAssign { AssignType = a; TypeRec = ty; LValue = x; RValue = y } ->
+            parened <| hsep
+                [ String "assign<bool:" <-> printType (Int (ty, ())) <-> String ":" <-> printAssignType a <-> String ">"
+                  printBoolExpr (printSym printVar) x
+                  printBoolExpr (printSym printVar) y ]
+        | IAssign { AssignType = a; TypeRec = ty; LValue = x; RValue = y } ->
+            parened <| hsep
+                [ String "assign<int:" <-> printType (Int (ty, ())) <-> String ":" <-> printAssignType a <-> String ">"
+                  printIntExpr (printSym printVar) x
+                  printIntExpr (printSym printVar) y ]
+
+
     /// Pretty-prints a StoredCommand.
     let printStoredCommand { Name = name; Args = xs; Results = ys } =
         hjoin [ commaSep <| Seq.map (printExpr (printSym printVar)) ys
@@ -380,6 +450,7 @@ module Pretty =
     /// Pretty-prints a PrimCommand.
     let printPrimCommand (prim : PrimCommand) : Doc =
         match prim with
+        | Intrinsic s -> printIntrinsicCommand s
         | Stored s -> printStoredCommand s
         | SymC s -> printSymCommand s
 

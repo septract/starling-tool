@@ -457,73 +457,73 @@ let coreSemantics : PrimSemanticsMap =
       (*
        * CAS
        *)
-      (mkPrim "ICAS" [ indefIntVar "destA"; indefIntVar "testA" ] [ indefIntVar "destB"; indefIntVar "testB"; indefIntVar "set" ]
+      (mkPrim "ICAS" [ normalIntVar "destA"; normalIntVar "testA" ] [ normalIntVar "destB"; normalIntVar "testB"; normalIntVar "set" ]
            [ Branch
                 (iEq (IVar "destB") (IVar "testB"),
-                 [ indefIntVar "destA" *<- indefIntExpr (IVar "set")
-                   indefIntVar "testA" *<- indefIntExpr (IVar "testB") ],
-                 [ indefIntVar "destA" *<- indefIntExpr (IVar "destB")
-                   indefIntVar "testA" *<- indefIntExpr (IVar "destB") ] ) ] )
+                 [ normalIntVar "destA" *<- normalIntExpr (IVar "set")
+                   normalIntVar "testA" *<- normalIntExpr (IVar "testB") ],
+                 [ normalIntVar "destA" *<- normalIntExpr (IVar "destB")
+                   normalIntVar "testA" *<- normalIntExpr (IVar "destB") ] ) ] )
       // Boolean CAS
-      (mkPrim "BCAS" [ indefBoolVar "destA"; indefBoolVar "testA" ] [ indefBoolVar "destB"; indefBoolVar "testB"; indefBoolVar "set" ]
+      (mkPrim "BCAS" [ normalBoolVar "destA"; normalBoolVar "testA" ] [ normalBoolVar "destB"; normalBoolVar "testB"; normalBoolVar "set" ]
            [ Branch
                 (bEq (BVar "destB") (BVar "testB"),
-                 [ indefBoolVar "destA" *<- indefBoolExpr (BVar "set")
-                   indefBoolVar "testA" *<- indefBoolExpr (BVar "testB") ],
-                 [ indefBoolVar "destA" *<- indefBoolExpr (BVar "destB")
-                   indefBoolVar "testA" *<- indefBoolExpr (BVar "destB") ] ) ] )
+                 [ normalBoolVar "destA" *<- normalBoolExpr (BVar "set")
+                   normalBoolVar "testA" *<- normalBoolExpr (BVar "testB") ],
+                 [ normalBoolVar "destA" *<- normalBoolExpr (BVar "destB")
+                   normalBoolVar "testA" *<- normalBoolExpr (BVar "destB") ] ) ] )
       (*
        * Atomic load
        *)
       // Integer load
-      (mkPrim "!ILoad"  [ indefIntVar "dest" ] [ indefIntVar "src" ]
-            [ indefIntVar "dest" *<- indefIntExpr (IVar "src") ] )
+      (mkPrim "!ILoad"  [ normalIntVar "dest" ] [ normalIntVar "src" ]
+            [ normalIntVar "dest" *<- normalIntExpr (IVar "src") ] )
 
       // Integer load-and-increment
-      (mkPrim "!ILoad++"  [ indefIntVar "dest"; indefIntVar "srcA" ] [ indefIntVar "srcB" ]
-            [ indefIntVar "dest" *<- indefIntExpr (IVar "srcB")
-              indefIntVar "srcA" *<- indefIntExpr (mkAdd2 (IVar "srcB") (IInt 1L)) ] )
+      (mkPrim "!ILoad++"  [ normalIntVar "dest"; normalIntVar "srcA" ] [ normalIntVar "srcB" ]
+            [ normalIntVar "dest" *<- normalIntExpr (IVar "srcB")
+              normalIntVar "srcA" *<- normalIntExpr (mkAdd2 (IVar "srcB") (IInt 1L)) ] )
 
       // Integer load-and-decrement
-      (mkPrim "!ILoad--"  [ indefIntVar "dest"; indefIntVar "srcA" ] [ indefIntVar "srcB" ]
-            [ indefIntVar "dest" *<- indefIntExpr (IVar "srcB")
-              indefIntVar "srcA" *<- indefIntExpr (mkSub2 (IVar "srcB") (IInt 1L)) ] )
+      (mkPrim "!ILoad--"  [ normalIntVar "dest"; normalIntVar "srcA" ] [ normalIntVar "srcB" ]
+            [ normalIntVar "dest" *<- normalIntExpr (IVar "srcB")
+              normalIntVar "srcA" *<- normalIntExpr (mkSub2 (IVar "srcB") (IInt 1L)) ] )
 
       // Integer increment
-      (mkPrim "!I++"  [ indefIntVar "srcA" ] [ indefIntVar "srcB" ]
-            [ indefIntVar "srcA" *<- indefIntExpr (mkAdd2 (IVar "srcB") (IInt 1L)) ] )
+      (mkPrim "!I++"  [ normalIntVar "srcA" ] [ normalIntVar "srcB" ]
+            [ normalIntVar "srcA" *<- normalIntExpr (mkAdd2 (IVar "srcB") (IInt 1L)) ] )
 
       // Integer decrement
-      (mkPrim "!I--"  [ indefIntVar "srcA" ] [ indefIntVar "srcB" ]
-            [ indefIntVar "srcA" *<- indefIntExpr (mkSub2 (IVar "srcB") (IInt 1L)) ] )
+      (mkPrim "!I--"  [ normalIntVar "srcA" ] [ normalIntVar "srcB" ]
+            [ normalIntVar "srcA" *<- normalIntExpr (mkSub2 (IVar "srcB") (IInt 1L)) ] )
 
       // Boolean load
-      (mkPrim "!BLoad"  [ indefBoolVar "dest" ] [ indefBoolVar "src" ]
-            [ indefBoolVar "dest" *<- indefBoolExpr (BVar "src") ] )
+      (mkPrim "!BLoad"  [ normalBoolVar "dest" ] [ normalBoolVar "src" ]
+            [ normalBoolVar "dest" *<- normalBoolExpr (BVar "src") ] )
 
       (*
        * Atomic store
        *)
 
       // Integer store
-      (mkPrim "!IStore" [ indefIntVar "dest" ] [ indefIntVar "src" ]
-            [ indefIntVar "dest" *<- indefIntExpr (IVar "src") ] )
+      (mkPrim "!IStore" [ normalIntVar "dest" ] [ normalIntVar "src" ]
+            [ normalIntVar "dest" *<- normalIntExpr (IVar "src") ] )
 
       // Boolean store
-      (mkPrim "!BStore" [ indefBoolVar "dest" ] [ indefBoolVar "src" ]
-            [ indefBoolVar "dest" *<- indefBoolExpr (BVar "src") ] )
+      (mkPrim "!BStore" [ normalBoolVar "dest" ] [ normalBoolVar "src" ]
+            [ normalBoolVar "dest" *<- normalBoolExpr (BVar "src") ] )
 
       (*
        * Local set
        *)
 
       // Integer local set
-      (mkPrim "!ILSet" [ indefIntVar "dest" ] [ indefIntVar "src" ]
-            [ indefIntVar "dest" *<- indefIntExpr (IVar "src") ] )
+      (mkPrim "!ILSet" [ normalIntVar "dest" ] [ normalIntVar "src" ]
+            [ normalIntVar "dest" *<- normalIntExpr (IVar "src") ] )
 
       // Boolean store
-      (mkPrim "!BLSet" [ indefBoolVar "dest" ] [ indefBoolVar "src" ]
-            [ indefBoolVar "dest" *<- indefBoolExpr (BVar "src") ] )
+      (mkPrim "!BLSet" [ normalBoolVar "dest" ] [ normalBoolVar "src" ]
+            [ normalBoolVar "dest" *<- normalBoolExpr (BVar "src") ] )
 
       (*
        * Assumptions
@@ -533,7 +533,7 @@ let coreSemantics : PrimSemanticsMap =
       (mkPrim "Id" [] [] [])
 
       // Assume
-      (mkPrim "Assume" [] [indefBoolVar "expr"] [ Microcode.Assume (BVar "expr") ]) ]
+      (mkPrim "Assume" [] [normalBoolVar "expr"] [ Microcode.Assume (BVar "expr") ]) ]
 
 (*
  * Expression translation

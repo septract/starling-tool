@@ -579,10 +579,12 @@ module Graph =
             match prim with
             | // TODO(CaptainHayashi): too conservative?
               SymC _ -> false
+            | Intrinsic (IAssign { AssignType = t })
+            | Intrinsic (BAssign { AssignType = t }) -> t = Local
             | Stored { Args = ps } -> Seq.forall isLocalArg ps
 
         List.forall isLocalPrim cmd
-                        
+
     /// Decides whether a given Command contains any `assume` command
     /// in any of the sequentially composed primitives inside it
     let hasAssume : Command -> bool =
