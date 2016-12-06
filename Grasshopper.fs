@@ -13,9 +13,12 @@ open Starling.Core.Var
 open Starling.Core.Expr
 open Starling.Core.Model
 open Starling.Core.Symbolic
+open Starling.Core.Symbolic.Traversal
 open Starling.Core.Instantiate
 open Starling.Core.GuardedView
 open Starling.Core.Traversal
+open Starling.Backends.Z3
+open Starling.Optimiser.Graph
 
 [<AutoOpen>] 
 module Types =
@@ -54,45 +57,56 @@ module Pretty =
         match v with 
         | Int name -> String name  
         | Bool name -> String name  
-        | _ -> failwith "Unimplemented for Grasshopper backend." 
+        | _ -> failwith "[printTypedVarGrass] Case unimplemented for Grasshopper backend." 
 
     /// Pretty-prints an arithmetic expression.
     let rec printIntExprG (pVar : 'Var -> Doc) : IntExpr<'Var> -> Doc =
         function
         | IVar c -> pVar c
-        | _ -> failwith "Unimplemented for Grasshopper backend." 
+        | _ -> failwith "[printIntExprG] Case unimplemented for Grasshopper backend." 
 
     /// Pretty-prints a Boolean expression.
-    and printBoolExprG (pVar : 'Var -> Doc) : BoolExpr<'Var> -> Doc =
-        function
-        | BVar c -> pVar c
-        | BAnd xs -> infexprV "&&" (printBoolExprG pVar) xs
-        | BOr xs -> infexprV "||" (printBoolExprG pVar) xs
-        | BImplies (x, y) -> infexprV "==>" (printBoolExprG pVar)  [x; y]
-        | BNot (BEq (x, y)) -> infexpr "!=" (printExprG pVar) [x; y]
-        | BEq (x, y) -> infexpr "==" (printExprG pVar) [x; y]
-        | _ -> failwith "Unimplemented for Grasshopper backend." 
-
+    and printBoolExprG (pVar : Sym<MarkedVar> -> Doc) (fr : bool) (b : BoolExpr<Sym<MarkedVar>>) : Doc =
+        match b, fr with 
+        | NoSym x, true ->   
+           String "sTrue() &*&" <+> printBoolExprG pVar false b |> parened 
+        | _ -> 
+           match b with 
+           | BVar c -> pVar c
+           | BAnd xs -> infexprV "&&" (printBoolExprG pVar fr) xs 
+           | BOr xs -> infexprV "||" (printBoolExprG pVar fr) xs
+           | BImplies (x, y) -> 
+               /// Convert implications to disjunctive form
+               printBoolExprG pVar fr (BOr [BNot x; y]) 
+           | BNot (BEq (x, y)) -> infexpr "!=" (printExprG pVar fr) [x; y]
+           | BNot x -> 
+               match x with 
+               | NoSym y -> String "!" <+> (printBoolExprG pVar fr x) |> parened 
+               | _ -> failwith "[printBoolExprG] Grasshopper can't negate spatial things." 
+           | BEq (x, y) -> infexpr "==" (printExprG pVar fr) [x; y]
+           | BGt (x, y) -> infexpr ">" (printIntExprG pVar) [x; y]
+           | BLt (x, y) -> infexpr "<" (printIntExprG pVar) [x; y]
+           | _ -> failwith "[printBoolExprG] Case unimplemented for Grasshopper backend."  
+       
     /// Pretty-prints an expression.
-    and printExprG (pVar : 'Var -> Doc) : Expr<'Var> -> Doc =
-        function
+    and printExprG (pVar : Sym<MarkedVar> -> Doc) (fr : bool) (b : Expr<Sym<MarkedVar>>) : Doc =
+        match b with 
         | Int i -> printIntExprG pVar i
-        | Bool b -> printBoolExprG pVar b
-        | _ -> failwith "Unimplemented for Grasshopper backend." 
+        | Bool b -> printBoolExprG pVar fr b
+        | _ -> failwith "[printExprG] Case unimplemented for Grasshopper backend." 
 
     /// Pretty-prints a symbolic sentence 
-    let rec printSymGrass (pReg : 'Reg -> Doc) (sym : Sym<'Reg>) : Doc =
+    let rec printSymGrass (pReg : MarkedVar -> Doc) (sym : Sym<MarkedVar>) : Doc =
         match sym with
         | Reg r -> pReg r
         | Sym { Sentence = ws; Args = xs } ->
-            let pArg = printExprG (printSym pReg)
-            parened
-                (printInterpolatedSymbolicSentence pArg ws xs)
+            let pArg = printExprG (printSym pReg) false
+            printInterpolatedSymbolicSentence pArg ws xs
+            |> parened 
 
     /// Get the set of accessed variables. 
     let findVarsGrass (zterm : Backends.Z3.Types.ZTerm) : seq<MarkedVar> = 
-        // TODO @(septract) Should this conjoin the command as well? 
-        BAnd [zterm.SymBool.WPre; zterm.SymBool.Goal] 
+        BAnd [zterm.SymBool.WPre; zterm.SymBool.Goal; zterm.SymBool.Cmd] 
         |> findMarkedVars (tliftToBoolSrc (tliftToExprDest collectSymMarkedVars)) 
         |> lift (Set.map valueOf >> Set.toSeq) 
         |> returnOrFail
@@ -108,32 +122,31 @@ module Pretty =
         let varprint = Seq.map printMarkedVarGrass (findVarsGrass zterm) 
                        |> Seq.append svarprint 
                        |> (fun x -> VSep(x,String ",")) 
-                       |> Indent 
 
         /// Print the requires / ensures clauses 
         let wpreprint = zterm.SymBool.WPre 
-                        |> printBoolExprG (printSymGrass printMarkedVarGrass) 
+                        |> printBoolExprG (printSymGrass printMarkedVarGrass) true
         let goalprint = zterm.SymBool.Goal 
-                        |> printBoolExprG (printSymGrass printMarkedVarGrass) 
+                        |> printBoolExprG (printSymGrass printMarkedVarGrass) true
 
         // TODO @(septract) print command properly 
         let cmdprint = zterm.SymBool.Cmd 
                        |> (Core.Expr.Pretty.printBoolExpr (printSymGrass printMarkedVarGrass))
-        vsep [ String "procedure" <+> String name <+> (varprint |> parened) 
+        vsep [ String "procedure" <+> String name 
+               varprint |> Indent |> parened 
                String "requires" 
-               Indent wpreprint <+> String ";" 
+               Indent wpreprint 
                String "ensures" 
-               Indent goalprint <+> String ";" 
-               cmdprint 
-                    |> ssurround "/*" "*/" 
-                    |> Indent |> braced 
+               Indent goalprint
+               cmdprint |> ssurround "/*" "*/" |> Indent |> braced 
              ]  
 
-    /// Print all the Grasshopper queries for a model.      
+    /// Print all the Grasshopper queries that haven't been eliminated by Z3.      
     let printQuery (model: GrassModel) : Doc = 
-        Map.toSeq model.Axioms 
+        let fails = extractFailures model 
+        Map.toSeq fails 
         |> Seq.map (fun (name,term) -> printZTermGrass model.SharedVars name term) 
-        |> vsep
+        |> (fun x -> (VSep (x,VSkip))) 
 
     /// Print a Grasshopper error (not implemented yet)
     let printGrassError e = failwith "not implemented yet" 
