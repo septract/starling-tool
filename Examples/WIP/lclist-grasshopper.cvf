@@ -33,7 +33,7 @@ method deleteVal(int v) {
   {| wf(v) * has2Lock(prev, curr) |}
    <lheap = heap>; cv = (%{ #2.val }(lheap, curr)); 
   {| wf(v) * has2Lock(prev,curr) * isVal(curr, cv) |}
-    while (cv < v ) {
+    while (cv < v) {
       {| wf(v) * has2Lock(prev, curr) * isVal(curr, cv) |}
         <{ lheap = heap; heap = (%{ releaseLock(#2) }(lheap, prev)); }>; 
       {| wf(v) * has1LockAnon(curr) * isVal(curr, cv) |}
@@ -76,7 +76,7 @@ constraint has1LockAnon(a) -> %{ exists e: Node :: has1LockG(#1,#2,e) }(head,a);
 
 constraint has2Lock(a,b)  -> %{ has2LockG(#1,#2,#3) }(head,a,b);
 
-constraint isVal(node,v) -> %{ isValG(#1,#2,#3) &*& #3 < ub }(head,node,v);
+constraint isVal(node,v) -> %{ isValG(#1,#2,#3) &*& #3 < #4 }(head,node,v,ub);
 
 
 // Constraints on view interactions
