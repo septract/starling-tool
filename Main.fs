@@ -384,9 +384,9 @@ let rawproof
 type BackendParams =
     // TODO(CaptainHayashi): distribute into the target backends?
     { /// <summary>
-      ///     Whether symbols are being approximated.
+      ///     The approximation mode to use.
       /// </summary>
-      Approx : bool
+      ApproxMode : ApproxMode
       /// <summary>
       ///     Whether SMT reduction is being suppressed.
       /// </summary>
@@ -406,7 +406,12 @@ let rec backendParams ()
            ("Replace all symbols in a proof with their under-approximation.\n\
              Allows some symbolic terms to be discharged by SMT, but the \
              resulting proof may be incomplete.",
-             fun ps -> { ps with Approx = true } ))
+             fun ps -> { ps with ApproxMode = Approx } ))
+          ("try-approx",
+           ("As 'approx', but don't fail if a term cannot be approximated.\
+             Instead, proceed for that term as if approximation was not\
+             requested.",
+             fun ps -> { ps with ApproxMode = TryApprox } ))
           ("no-smt-reduce",
            ("Don't remove SMT-solved proof terms before applying the backend.\n\
              This can speed up some solvers due to overconstraining the search \
@@ -449,7 +454,7 @@ let runStarling (request : Request)
         |> Optimiser.Utils.parseOptimisationString
 
     let bp = backendParams ()
-    let { Approx = shouldApprox
+    let { ApproxMode = approxMode
           NoSMTReduce = noSMTReduce
           Reals = shouldUseRealsForInts } =
         config.backendOpts
@@ -462,7 +467,7 @@ let runStarling (request : Request)
                         eprintfn "unknown backend param %s ignored (try 'list')"
                             str
                         opts)
-               { Approx = false; NoSMTReduce = false; Reals = false }
+               { ApproxMode = NoApprox; NoSMTReduce = false; Reals = false }
 
     // Shorthand for the various stages available.
     let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
@@ -516,7 +521,7 @@ let runStarling (request : Request)
                 mapMessages ModelFilterError npmNoSymbolicConstraintsR)
 
     let symproof : Result<Model<_, _>, Error> -> Result<Model<_, _>, Error> =
-        bind (Core.Instantiate.Phase.run shouldApprox
+        bind (Core.Instantiate.Phase.run approxMode
               >> mapMessages Error.ModelFilterError)
     let eliminate : Result<Model<_, _>, Error> -> Result<Model<_, _>, Error>  =
         lift (Backends.Z3.runZ3OnModel shouldUseRealsForInts)

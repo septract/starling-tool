@@ -99,6 +99,21 @@ module Types =
     /// Terms in a Proof are over boolean expressions
     type ProofTerm = CmdTerm<MBoolExpr, MBoolExpr, MBoolExpr>
 
+    /// <summary>
+    ///     The approximation mode.
+    /// </summary>
+    type ApproxMode =
+        | /// <summary>Don't approximate at all.</summary>
+          NoApprox
+        | /// <summary>
+          ///     Approximate, and ignore any failures.
+          /// </summary>
+          TryApprox
+        | /// <summary>
+          ///     Approximate, but fail if approximations are impossible.
+          /// </summary>
+          Approx
+
 /// <summary>
 ///     Pretty printers used in func instantiation.
 /// </summary>
@@ -443,7 +458,7 @@ module Phase =
     /// Interprets all of the views in a term over the given definer.
     let interpretTerm
       (definer : FuncDefiner<SVBoolExpr>)
-      (shouldApprox : bool)
+      (approxMode : ApproxMode)
       (term : FinalTerm)
       : Result<SymProofTerm, Error> =
         let interpretedR =
@@ -454,9 +469,12 @@ module Phase =
                 term
 
         let approxR =
-            if shouldApprox
-            then lift Some (bind approxTerm interpretedR)
-            else ok None
+            (* TODO(CaptainHayashi): check the errors to make sure we're not
+               throwing away genuine failures. *)
+            match approxMode with
+            | NoApprox -> ok None
+            | TryApprox -> ok (okOption (bind approxTerm interpretedR))
+            | Approx -> lift Some (bind approxTerm interpretedR)
 
         lift2
             (fun interpreted approx ->
@@ -521,15 +539,15 @@ module Phase =
     ///         This consumes the view definitions.
     ///     </para>
     /// </summary>
-    /// <param name="shouldApprox">Whether to build approximates.</param>
+    /// <param name="approxMode">The approximation mode to use.</param>
     /// <param name="model">The model to instantiate.</param>
     /// <returns>
     ///     The model with all views instantiated.
     /// </returns>
     let run
-      (shouldApprox : bool)
+      (approxMode : ApproxMode)
       (model : Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
                      FuncDefiner<SVBoolExpr option>>)
       : Result<Model<SymProofTerm, FuncDefiner<SVBoolExpr option>>, Error> =
       let vsR = symboliseIndefinites model.ViewDefs
-      bind (fun vs -> tryMapAxioms (interpretTerm vs shouldApprox) model) vsR
+      bind (fun vs -> tryMapAxioms (interpretTerm vs approxMode) model) vsR
