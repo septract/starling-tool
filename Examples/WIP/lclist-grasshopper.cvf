@@ -1,22 +1,25 @@
 /* Revised lclist-starling.cvf to fit more nicely with GRASShopper. */
 
-shared int heap; 
-shared int head;
-shared int ub; // upper bound on the list
+typedef int Node;
+typedef int Int;
 
-thread int lheap; // local copy of the heap  
-thread int prev;
-thread int curr;
+shared Int heap; 
+shared Node head;
+shared Int ub; // upper bound on the list
 
-thread int v;
-thread int cv;
+thread Int lheap;
+thread Node prev;
+thread Node curr;
 
-view wf(int v);
-view isHead(int node); 
-view isVal(int v, int node);
-view has1Lock(int x, int y);
-view has1LockAnon(int x);
-view has2Lock(int x, int y);
+thread Int v;
+thread Int cv;
+
+view wf(Int v);
+view isHead(Node node); 
+view isVal(Node node, Int v);
+view has1Lock(Node x, Node y);
+view has1LockAnon(Node x);
+view has2Lock(Node x, Node y);
 
 method deleteVal(int v) {
   {| wf(v) |}
@@ -35,7 +38,7 @@ method deleteVal(int v) {
         <{ lheap = heap; heap = (%{ releaseLock(#2) }(lheap, prev)); }>; 
       {| wf(v) * has1LockAnon(curr) * isVal(curr, cv) |}
         prev = curr;
-        <lheap = heap>; curr = (%{ #2->next }(lheap, curr));  
+        <lheap = heap>; curr = (%{ #2.next }(lheap, curr));  
       {| wf(v) * has1Lock(prev, curr) * isVal(prev,cv) |}
         <{ lheap = heap; heap = (%{ takeLock(#2) }(lheap, curr)); }>; 
       {| wf(v) * has2Lock(prev, curr) |}
