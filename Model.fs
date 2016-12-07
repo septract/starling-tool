@@ -514,16 +514,21 @@ let withAxioms (xs : Map<string, 'y>) (model : Model<'x, 'dview>)
 let mapAxioms (f : 'x -> 'y) (model : Model<'x, 'dview>) : Model<'y, 'dview> =
     withAxioms (model |> axioms |> Map.map (fun _ -> f)) model
 
-/// Maps a failing function f over the axioms of a model.
-let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x, 'dview>)
+/// Maps a failing function f over the names and axioms of a model.
+let tryMapAxiomsWithNames (f : string -> 'x -> Result<'y, 'e>) (model : Model<'x, 'dview>)
     : Result<Model<'y, 'dview>, 'e> =
     lift (fun x -> withAxioms x model)
          (model
           |> axioms
           |> Map.toSeq
-          |> Seq.map (fun (k, v) -> v |> f |> lift (mkPair k))
+          |> Seq.map (fun (k, v) -> lift (mkPair k) (f k v))
           |> collect
           |> lift Map.ofList)
+
+/// Maps a failing function f over the axioms of a model.
+let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x, 'dview>)
+    : Result<Model<'y, 'dview>, 'e> =
+    tryMapAxiomsWithNames (fun _ -> f) model
 
 /// Returns the viewdefs of a model.
 let viewDefs ({ViewDefs = ds} : Model<_, 'Definer>) : 'Definer = ds

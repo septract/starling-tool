@@ -23,7 +23,6 @@ module Types =
     type GuarderViewExpr = ViewExpr<GuarderView>
     type GuarderPartCmd = PartCmd<GuarderViewExpr>
     type GuarderBlock = Block<GuarderViewExpr, GuarderPartCmd>
-    type GuarderMethod = Method<GuarderViewExpr, GuarderPartCmd>
 
 /// Resolves a full condition-view multiset into a guarded-view multiset.
 let guardCView (cview : CView) : GuarderView =
@@ -74,12 +73,6 @@ and guardPartCmd : ModellerPartCmd -> GuarderPartCmd =
     | ITE (expr, inTrue, inFalse) ->
         ITE (expr, guardBlock inTrue, Option.map guardBlock inFalse)
 
-/// Converts a method to guarded views.
-let guardMethod
-  ({ Signature = signature; Body = body } : ModellerMethod)
-  : GuarderMethod =
-    { Signature = signature; Body = guardBlock body }
-
 /// Converts an entire model to guarded views.
-let guard (model : Model<ModellerMethod, ViewDefiner<SVBoolExpr option>>) : Model<GuarderMethod, ViewDefiner<SVBoolExpr option>> =
-    mapAxioms guardMethod model
+let guard (model : Model<ModellerBlock, ViewDefiner<SVBoolExpr option>>) : Model<GuarderBlock, ViewDefiner<SVBoolExpr option>> =
+    mapAxioms guardBlock model

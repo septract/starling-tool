@@ -37,7 +37,14 @@ module Types =
           Typedefs : (TypeLiteral * string) list
           VProtos : ViewProto list
           Constraints : (ViewSignature * Expression option) list
-          Methods : CMethod<Marked<View>> list }
+          /// <summary>
+          ///     Map from method names to their bodies.
+          ///     <para>
+          ///         At this stage, we have already dealt with the method
+          ///         parameters.
+          ///    </para>
+          /// </summary>
+          Methods : Map<string, CBlock<Marked<View>>> }
 
 
 /// <summary>
@@ -69,11 +76,11 @@ module Pretty =
               vsep <| Seq.map (printScriptVar "shared") cs.SharedVars
               vsep <| Seq.map (printScriptVar "thread") cs.ThreadVars
               vsep <| Seq.map (uncurry printConstraint) cs.Constraints
-              VSep(List.map (printMethod
-                                 (printMarkedView printView)
-                                 (printCommand (printMarkedView printView)))
-                            cs.Methods,
-                   VSkip)]
+              printMap Indented String
+                (printBlock
+                     (printMarkedView printView)
+                     (printCommand (printMarkedView printView)))
+                cs.Methods ]
 
         // Add in search, but only if it actually exists.
         let all =
@@ -89,7 +96,7 @@ module Pretty =
 /// </summary>
 let empty : CollatedScript =
     { Constraints = []
-      Methods = []
+      Methods = Map.empty
       Typedefs = []
       Search = None
       VProtos = []
@@ -168,7 +175,8 @@ let collate (script : ScriptItem list) : CollatedScript =
             { cs with ThreadVars = s @ cs.ThreadVars }
         | ViewProtos v -> { cs with VProtos = v @ cs.VProtos }
         | Search i -> { cs with Search = Some i }
-        | Method m -> { cs with Methods = m::cs.Methods }
+        | Method { Signature = sigt; Body = body } ->
+            { cs with Methods = cs.Methods.Add(sigt.Name, body) }
         | Constraint (v, d) -> { cs with Constraints = (v, d)::cs.Constraints }
         | Exclusive xs -> 
             let views = List.map ViewSignature.Func xs 

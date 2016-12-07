@@ -24,10 +24,10 @@ module Tests =
     let ``Convert the ticket lock 'lock' method to a subgraph`` () =
         assertEqual
             (Some ticketLockLockSubgraph)
-            (okOption (lift toSubgraph (graphMethod ticketLockGuardedLock)))
+            (okOption (lift toSubgraph (graphMethod "lock" ticketLockGuardedLock)))
 
     [<Test>]
     let ``Convert the ticket lock 'unlock' method to a subgraph`` () =
         assertEqual
             (Some ticketLockUnlockSubgraph)
-            (okOption (lift toSubgraph (graphMethod ticketLockGuardedUnlock)))
+            (okOption (lift toSubgraph (graphMethod "unlock" ticketLockGuardedUnlock)))
