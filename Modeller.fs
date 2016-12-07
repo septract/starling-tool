@@ -72,7 +72,6 @@ module Types =
     type ModellerPartCmd = PartCmd<ModellerViewExpr>
     type ModellerBlock = Block<ModellerViewExpr, ModellerPartCmd>
     type ModellerViewedCommand = ViewedCommand<ModellerViewExpr, ModellerPartCmd>
-    type ModellerMethod = Method<ModellerViewExpr, ModellerPartCmd>
 
     /// <summary>
     ///     A type, or maybe just a string description of one.
@@ -1940,14 +1939,11 @@ and modelBlock
 /// The converted method is enclosed in a Chessie result.
 let modelMethod
   (ctx : MethodContext)
-  ({ Signature = sg ; Body = b }
-     : Method<ViewExpr<View>, Command<ViewExpr<View>>>)
-  : Result<string * ModellerMethod, ModelError> =
-    // TODO(CaptainHayashi): method parameters
-    b
-    |> modelBlock ctx
-    |> lift (fun c -> (sg.Name, { Signature = sg ; Body = c }))
-    |> mapMessages (curry BadMethod sg.Name)
+  (meth : string * Block<ViewExpr<View>, Command<ViewExpr<View>>>)
+  : Result<string * ModellerBlock, ModelError> =
+    let (n, b) = meth
+    let bmR = mapMessages (curry BadMethod n) (modelBlock ctx b)
+    lift (mkPair n) bmR
 
 /// Checks a view prototype to see if it contains duplicate parameters.
 let checkViewProtoDuplicates (proto : DesugaredViewProto)
@@ -2081,7 +2077,7 @@ let convertViewProtos
 /// Converts a collated script to a model.
 let model
   (collated : CollatedScript)
-  : Result<Model<ModellerMethod, ViewDefiner<SVBoolExpr option>>, ModelError> =
+  : Result<Model<ModellerBlock, ViewDefiner<SVBoolExpr option>>, ModelError> =
     trial {
         let types = Map.ofSeq (Seq.map (fun (x, y) -> (y, x)) collated.Typedefs)
 
@@ -2103,6 +2099,7 @@ let model
               ThreadVars = tvars }
         let! axioms =
             desugaredMethods
+            |> Map.toSeq
             |> Seq.map (modelMethod mctx)
             |> collect
             |> lift Map.ofSeq

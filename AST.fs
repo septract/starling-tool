@@ -215,6 +215,9 @@ module Types =
     /// Synonym for methods over CommandTypes.
     type CMethod<'view> = Method<'view, Command<'view>>
 
+    /// Synonym for blocks over CommandTypes.
+    type CBlock<'view> = Block<'view, Command<'view>>
+
     /// A top-level item in a Starling script.
     type ScriptItem' =
         | Typedef of TypeLiteral * string // typedef int Node;

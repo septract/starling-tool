@@ -60,9 +60,9 @@ type Response =
     /// Output of the parsing and collation steps.
     | Collate of Collator.Types.CollatedScript
     /// Output of the parsing, collation, and modelling steps.
-    | Model of Model<ModellerMethod, ViewDefiner<BoolExpr<Sym<Var>> option>>
+    | Model of Model<ModellerBlock, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// Output of the parsing, collation, modelling, and guarding stages.
-    | Guard of Model<GuarderMethod, ViewDefiner<BoolExpr<Sym<Var>> option>>
+    | Guard of Model<GuarderBlock, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// Output of the parsing, collation, modelling, guarding and destructuring stages.
     | Graph of Model<Graph, ViewDefiner<BoolExpr<Sym<Var>> option>>
 
@@ -108,13 +108,13 @@ let printResponse (mview : ModelView) : Response -> Doc =
     | Response.Collate c -> Lang.Collator.Pretty.printCollatedScript c
     | Response.Model m ->
         printVModel
-            (printMethod (printViewExpr printCView)
+            (printBlock (printViewExpr printCView)
                          (printPartCmd (printViewExpr printCView)))
             m
     | Response.Guard m ->
         printVModel
-            (printMethod (printViewExpr (printIteratedGView (printSym String)))
-                         (printPartCmd (printViewExpr (printIteratedGView (printSym String)))))
+            (printBlock (printViewExpr (printIteratedGView (printSym String)))
+                        (printPartCmd (printViewExpr (printIteratedGView (printSym String)))))
             m
     | Response.Graph m ->
         printVModel printGraph m

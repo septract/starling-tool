@@ -318,11 +318,9 @@ and graphBlock
     lift (fun gr -> (oP, oQ, gr)) graphR
 
 /// <summary>
-///     Constructs a control-flow graph for a method.
+///     Constructs a control-flow graph for an outer block representing a method.
 /// </summary>
-let graphMethod
-  ({ Signature = { Name = name }; Body = body } : GuarderMethod)
-  : Result<Graph, Error> =
+let graphMethod (name : string) (body : GuarderBlock) : Result<Graph, Error> =
     let vgen = freshGen ()
     let viewName () =
        getFresh vgen
@@ -348,5 +346,5 @@ let graphMethod
 ///     A model whose axioms are the graphs resulting from the
 ///     methods of <paramref name="model"/>.
 /// </returns>
-let graph (model : Model<GuarderMethod, _>) : Result<Model<Graph, _>, Error> =
-    tryMapAxioms graphMethod model
+let graph (model : Model<GuarderBlock, _>) : Result<Model<Graph, _>, Error> =
+    tryMapAxiomsWithNames graphMethod model
