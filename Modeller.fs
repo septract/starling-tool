@@ -114,6 +114,7 @@ module Types =
         | BadSub of err : TraversalError<unit>
         /// A symbolic expression appeared in an ambiguous position.
         | AmbiguousSym of sym : Symbolic<Expression>
+        override this.ToString() = sprintf "%A" this
 
     /// Represents an error when converting a view prototype.
     type ViewProtoError =

@@ -22,6 +22,7 @@ module Types =
           SRec : 'Rec
           /// <summary>The expression itself.</summary>
           SExpr : 'Sub }
+        override this.ToString() = sprintf "%A" this
 
     /// <summary>
     ///     An expression of arbitrary type.

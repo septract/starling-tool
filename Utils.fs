@@ -376,6 +376,22 @@ module Testing =
     let assertEqual (a : 'a) (b : 'a) = Assert.AreEqual(a, b)
     let AssertAreEqual(a, b) = assertEqual a b
 
+    /// <summary>
+    ///     Asserts that a Chessie result failed with a given result list.
+    /// </summary>
+    let assertFail
+      (expected: 'Error list)
+      (actualResult : Result<'Val, 'Error>)
+      (pVal : 'Val -> string)
+      : unit =
+        match actualResult with
+        | Fail actuals ->
+            assertEqual (List.sort expected) (List.sort actuals)
+        | Warn (v, _) | Pass v ->
+            let fmsg = sprintf "Got successful result:\n%s" (pVal v)
+            Assert.Fail(fmsg)
+
+
     let assertOkAndEqual
       (expected: 'Val)
       (actualResult : Result<'Val, 'Error>)
@@ -385,8 +401,8 @@ module Testing =
         | Pass actual -> assertEqual expected actual
         | Warn (_, warns) | Fail warns ->
             let warnstr = String.concat "\n" (List.map pError warns)
-            let fmsg = sprintf "Got warnings:\n%s" warnstr
-            Assert.Fail(warnstr)
+            let fmsg = sprintf "Got errors:\n%s" warnstr
+            Assert.Fail(fmsg)
 
     let inline (?=?) a b = assertEqual a b
 
