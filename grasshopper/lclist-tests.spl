@@ -77,22 +77,23 @@ procedure conj_sat_test3 (X: Set<Node>, head: Node, a: Node, v: Int)
 procedure sTrue_test(X: Set<Node>, a: Int, b:Int) 
   requires ((a=b) &*& sTrue(X)) || ((a!=b) &*& sTrue(X)) 
   ensures sTrue(X) 
-{ }  
+{}  
 
 procedure sTrue_test3(X: Set<Node>) 
   requires sTrue(X) && sTrue(X) 
   ensures sTrue(X) && sTrue(X) 
-{ }  
+{}  
 
 procedure sTrue_test4(X: Set<Node>) 
   requires sTrue(X) && sTrue(X) 
   ensures sTrue(X) 
-{ }  
+{}  
 
 procedure sTrue_test5 (a: Node, b: Node) 
   requires acc(a) &*& acc(b)
   ensures (exists X : Set<Node> :: sTrue(X)) 
 {} 
+
 
 // Tests of overlap (+) and inclusion (-**) 
 
@@ -102,7 +103,7 @@ procedure inclusion_test (X: Set<Node>, a: Node)
 {} 
 
 procedure sharing_test (X: Set<Node>, a: Node, b: Node) 
-  requires acc(a) && acc(b)
+  requires acc(a) &+& acc(b)
   ensures (acc(a) &*& acc(b)) || acc(a) 
 {}
 
@@ -167,4 +168,27 @@ procedure takeLock_sat_test (X: Set<Node>, head: Node, ub: Int, a: Node, b: Node
 { 
    takeLock(b); 
 } 
+
+procedure releaseLock_test (X: Set<Node>, head: Node, ub: Int, a: Node, b: Node, c: Node, v: Int) 
+  requires (
+    isListG(X, head, ub) && 
+    has2LockG(X, a, b, c) 
+  ) 
+  ensures  
+    has1LockG(X, b, c) 
+{ 
+   releaseLock(a); 
+} 
+
+procedure releaseLock_sat_test (X: Set<Node>, head: Node, ub: Int, a: Node, b: Node, c: Node, v: Int) 
+  requires (
+    isListG(X, head, ub) && 
+    has2LockG(X, a, b, c) 
+  ) 
+  ensures  
+    false 
+{ 
+   releaseLock(a); 
+} 
+
 
