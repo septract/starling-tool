@@ -17,7 +17,6 @@ open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Core.TypeSystem
 open Starling.Core.Command
-open Starling.Core.Command.Compose
 open Starling.Core.GuardedView
 open Starling.Core.Expr
 open Starling.Core.Var
