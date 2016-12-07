@@ -119,8 +119,6 @@ module Pretty =
     let printZTermGrass (svars : VarMap) 
                         (name : string) 
                         (zterm: Backends.Z3.Types.ZTerm) : Doc =
-
-        // TODO @(septract) print variable types
         let svarprint = VarMap.toTypedVarSeq svars
                         |> Seq.map printTypedVarGrass 
         let varprint = Seq.map (printTypedGrass printMarkedVarGrass) (findVarsGrass zterm) 
