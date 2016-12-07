@@ -32,6 +32,8 @@ let environ =
                  ("bar", Type.Int (normalIntRec, ()))
                  ("baz", Type.Bool (normalBoolRec, ()))
                  ("emp", Type.Bool (normalBoolRec, ()))
+                 // Subtyped variables
+                 ("lnode", Type.Int ({ TypeName = Some "Node" }, ()))
                  // Multi-dimensional arrays
                  ("grid",
                   mkArrayType
@@ -41,7 +43,8 @@ let environ =
 let shared =
     Map.ofList [ ("nums", mkArrayType (Type.Int (normalIntRec, ())) (Some 10))
                  ("x", Type.Int (normalIntRec, ()))
-                 ("y", Type.Bool (normalBoolRec, ())) ]
+                 ("y", Type.Bool (normalBoolRec, ()))
+                 ("node", Type.Int ({ TypeName = Some "Node" }, ())) ]
 
 let context =
     { ViewProtos = ticketLockProtos
@@ -79,19 +82,19 @@ module ViewFail =
         AssertAreEqual(Some expectedFailures, actualErrors)
 
     [<Test>]
-    let ``test unknown func``() =
+    let ``test unknown func`` () =
         check
             (View.Func <| afunc "badfunc" [])
             ([ NoSuchView "badfunc" ])
 
     [<Test>]
-    let ``test missing parameter``() =
+    let ``test missing parameter`` () =
         check
             (View.Func <| afunc "holdTick" [])
             ([ LookupError ("holdTick", CountMismatch(0, 1)) ])
 
     [<Test>]
-    let ``test bad parameter type``() =
+    let ``test bad parameter type`` () =
         check
           (View.Func <| afunc "holdTick" [freshNode Expression'.True])
           ([ LookupError
@@ -99,9 +102,21 @@ module ViewFail =
                  Error.TypeMismatch
                    (Int (normalIntRec, "t"), Type.Bool (indefBoolRec, ()))) ])
 
+    [<Test>]
+    let ``test bad parameter subtype`` () =
+        check
+          (View.Func <| afunc "holdTick" [freshNode (Identifier "lnode")])
+          ([ LookupError
+               ( "holdTick",
+                 Error.TypeMismatch
+                   (normalIntVar "t", Type.Int ({ TypeName = Some "Node" }, ()))) ])
+
 
 module ArithmeticExprs =
     open Starling.Core.Pretty
+    open Starling.Core.Expr.Pretty
+    open Starling.Core.Symbolic.Pretty
+    open Starling.Core.Var.Pretty
     open Starling.Lang.Modeller.Pretty
 
     let check (env : VarMap) (ast : Expression) (expectedExpr : TypedIntExpr<Sym<Var>>) =
@@ -109,6 +124,12 @@ module ArithmeticExprs =
             expectedExpr
             (modelIntExpr env environ id ast)
             (printExprError >> printUnstyled)
+
+    let checkFail (env : VarMap) (ast : Expression) (expectedErrors : ExprError list) =
+        assertFail
+            expectedErrors
+            (modelIntExpr env environ id ast)
+            (stripTypeRec >> printIntExpr (printSym printVar) >> printUnstyled)
 
     [<Test>]
     let ``test modelling (1 * 3) % 2`` ()=
@@ -129,6 +150,45 @@ module ArithmeticExprs =
             (indefInt (IInt 5L))
 
     [<Test>]
+    let ``test modelling (foo + bar) succeeds with type 'int'`` () =
+        // These two are of different subtypes.
+        check environ
+            (freshNode <| BopExpr( Add,
+                                   freshNode (Identifier "foo"),
+                                   freshNode (Identifier "bar")))
+            (normalInt (mkAdd2 (siVar "foo") (siVar "bar")))
+
+    [<Test>]
+    let ``test modelling (foo + 3) succeeds with type 'int'`` () =
+        // These two are of different subtypes.
+        check environ
+            (freshNode <| BopExpr( Add,
+                                   freshNode (Identifier "foo"),
+                                   freshNode (Num 3L)))
+            (normalInt (mkAdd2 (siVar "foo") (IInt 3L)))
+
+    [<Test>]
+    let ``test modelling (lnode + 3) succeeds with type 'Node'`` () =
+        // These two are of different subtypes.
+        check environ
+            (freshNode <| BopExpr( Add,
+                                   freshNode (Identifier "lnode"),
+                                   freshNode (Num 3L)))
+            (mkTypedSub { TypeName = Some "Node"} (mkAdd2 (siVar "lnode") (IInt 3L)))
+
+    [<Test>]
+    let ``test modelling (foo + lnode) fails`` () =
+        // These two are of different subtypes.
+        checkFail environ
+            (freshNode <| BopExpr( Add,
+                                   freshNode (Identifier "foo"),
+                                   freshNode (Identifier "lnode")))
+            // This shouldn't really be order-sensitive.
+            [ exprTypeMismatch
+                (Exact (Int (normalIntRec, ())))
+                (Exact (Int ({ TypeName = Some "Node" }, ()))) ]
+
+    [<Test>]
     let ``test modelling shared array access nums[foo + 1]`` ()=
         check shared
             (freshNode <| ArraySubscript
@@ -143,6 +203,20 @@ module ArithmeticExprs =
                         (mkArrayTypeRec (Int (normalIntRec, ())) (Some 10))
                         (AVar (Reg "nums")),
                      IAdd [ IVar (Reg "foo"); IInt 3L ])))
+
+    [<Test>]
+    let ``test modelling shared array access nums[lnode + 1] fails`` ()=
+        // We shouldn't be able to index arrays by things that aren't int.
+        checkFail shared
+            (freshNode <| ArraySubscript
+                (freshNode (Identifier "nums"),
+                 freshNode <| BopExpr
+                    (Add,
+                     freshNode (Identifier "lnode"),
+                     freshNode (Num 3L))))
+            [ exprTypeMismatch
+                (Exact (Int (normalIntRec, ())))
+                (Exact (Int ({ TypeName = Some "Node" }, ()))) ]
 
     [<Test>]
     let ``test modelling local array access grid[x][y]`` () =
