@@ -146,14 +146,16 @@ module Pretty =
                     printSymbolicGrass (printExprG (printSymGrass printMarkedVarGrass) false) sym'
                 | Intrinsic (IAssign { LValue = l; RValue = r }) ->
                     // TODO(CaptainHayashi): correct?
-                    printExprG (printSymGrass printMarkedVarGrass) false (markL (normalIntExpr l))
-                    <+> String "="
-                    <+> printExprG (printSymGrass printMarkedVarGrass) false (markR (normalIntExpr r))
+                    withSemi
+                        (printExprG (printSymGrass printMarkedVarGrass) false (markL (normalIntExpr l))
+                         <+> String ":="
+                         <+> printExprG (printSymGrass printMarkedVarGrass) false (markR (normalIntExpr r)))
                 | Intrinsic (BAssign { LValue = l; RValue = r }) ->
                     // TODO(CaptainHayashi): correct?
-                    printExprG (printSymGrass printMarkedVarGrass) false (markL (normalBoolExpr l))
-                    <+> String "="
-                    <+> printExprG (printSymGrass printMarkedVarGrass) false (markR (normalBoolExpr r))
+                    withSemi
+                        (printExprG (printSymGrass printMarkedVarGrass) false (markL (normalBoolExpr l))
+                        <+> String ":="
+                        <+> printExprG (printSymGrass printMarkedVarGrass) false (markR (normalBoolExpr r)))
                 | Stored cmd ->
                     String "/* error: somehow found a stored command! */"
 
@@ -199,7 +201,7 @@ module Pretty =
                 | xs ->
                     vsep
                         [ String "/* WARNING: translation of sequential composition is unsound. */"
-                          semiSep
+                          vsep
                               (List.map
                                 (primPrint
                                     (after >> returnOrFail)
