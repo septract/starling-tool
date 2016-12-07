@@ -11,7 +11,6 @@ thread Int lheap;
 thread Node prev;
 thread Node curr;
 
-thread Int v;
 thread Int cv;
 
 view wf(Int v);
@@ -21,7 +20,7 @@ view has1Lock(Node x, Node y);
 view has1LockAnon(Node x);
 view has2Lock(Node x, Node y);
 
-method deleteVal(int v) {
+method deleteVal(Int v) {
   {| wf(v) |}
     <prev = head>;
   {| wf(v) * isHead(prev) |} 
