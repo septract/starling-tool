@@ -91,6 +91,40 @@ let aupd' arr idx var : ArrayExpr<'Var> =
 let aupd arr idx var =
     typedArrayToExpr (mkTypedSub arr.SRec (aupd' arr idx var))
 
+
+/// <summary>
+///     Tests for frame generation.
+/// </summary>
+module MakeFrame =
+    /// <summary>
+    ///     Checks the frame generated from an assign map against a given
+    ///     Boolean expression.
+    /// </summary>
+    /// <param name="expected">The expected list of frame expressions.</param>
+    /// <param name="toFrame">The assign map to convert to a frame.</param>
+    let check
+      (expected : BoolExpr<Sym<MarkedVar>> list)
+      (toFrame : Map<TypedVar, MarkedVar>)
+      : unit =
+        List.sort expected ?=? List.sort (makeFrame toFrame) 
+
+    [<Test>]
+    let ``the empty assign list generates the empty frame`` () =
+        check [] Map.empty
+
+    [<Test>]
+    let ``only non-after variables are framed`` () =
+        check
+            [ iEq (siAfter "serving") (siBefore "serving")
+              iEq (siAfter "ticket") (siBefore "ticket")
+              iEq (siAfter "t") (siInter 0I "t") ]
+            (Map.ofList
+                [ (Int (normalIntRec, "serving"), Before "serving")
+                  (Int (normalIntRec, "ticket"), Before "ticket")
+                  (Int (normalIntRec, "t"), Intermediate (0I, "t"))
+                  (Int (normalIntRec, "s"), After "s") ] )
+
+
 /// <summary>
 ///     Tests for microcode normalisation.
 /// </summary>
