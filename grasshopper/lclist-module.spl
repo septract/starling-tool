@@ -20,6 +20,8 @@ predicate lseg(X: Set<Node>, x: Node, y: Node)
   X = { z: Node :: Btwn(next, x, z, y) && z != y } 
   &*& 
   Btwn(next, x, y, y) 
+  &*& 
+  (exists y: Node :: (y in X &*& y != x)) 
 }
 
 predicate lseg_upperbound(X: Set<Node>, ub: Int)
