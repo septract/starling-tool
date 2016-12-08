@@ -1,6 +1,7 @@
 include "./lclist-module.spl"; 
 
 // Test that the basic predicates are satisfiable. 
+// All of these tests should fail. 
 
 procedure pred_sat_test0 (X: Set<Node>, head: Node) 
   requires lseg(X, head, null)
@@ -191,4 +192,130 @@ procedure releaseLock_sat_test (X: Set<Node>, head: Node, ub: Int, a: Node, b: N
    releaseLock(a); 
 } 
 
+// More complicated program tests
 
+procedure deleteVal_C003_000 (
+    X: Set<Node>, 
+    before_23_1_v: Int,
+    before_ub: Int,
+    before_curr: Node,
+    before_head: Node,
+    before_prev: Node
+)
+requires (
+    (isListG(X, before_head,before_ub) ) 
+      &&
+    (has1LockG(X,before_prev,before_curr) ) 
+      &&
+    (sTrue(X) &*& (before_23_1_v < before_ub))
+  )
+ensures
+    (isListG(X, before_head,before_ub) )
+{
+    takeLock(before_curr); 
+}
+
+procedure deleteVal_sat_C003_000 (
+    X: Set<Node>, 
+    before_23_1_v: Int,
+    before_ub: Int,
+    before_curr: Node,
+    before_head: Node,
+    before_prev: Node
+)
+requires (
+    (isListG(X, before_head,before_ub) ) 
+      &&
+    (has1LockG(X,before_prev,before_curr) ) 
+      &&
+    (sTrue(X) &*& (before_23_1_v < before_ub))
+  )
+ensures
+    false
+{
+    takeLock(before_curr); 
+}
+
+procedure deleteVal_C003_005 (
+    X: Set<Node>, 
+    before_23_1_v: Int,
+    before_ub: Int,
+    before_curr: Node,
+    before_head: Node,
+    before_prev: Node,
+    goal_350_a: Node,
+    goal_350_b: Node
+)
+requires (
+     (isListG(X, before_head,before_ub) ) 
+   &&
+     (has1LockG(X,before_prev,before_curr) ) 
+   &&
+       ( sTrue(X) 
+     &*&  
+        (before_23_1_v < before_ub) ) 
+   &&
+       (sTrue(X) 
+     &*&  
+        ( (! ((goal_350_b != before_curr) ||
+               (goal_350_a != before_prev))) 
+        ||
+          ((before_prev != goal_350_a) &&
+                 (before_prev != goal_350_b))) 
+       ) 
+   &&
+       ((sTrue(X) 
+          &*& 
+         (! ((goal_350_b != before_curr) ||
+             (goal_350_a != before_prev)))) 
+      ||
+        (exists c : Node :: (has2LockG(X,goal_350_a,goal_350_b,c) ))
+       )
+  )
+ensures
+    (exists c : Node :: has2LockG(X,goal_350_a,goal_350_b,c) )
+{ 
+    takeLock(before_curr); 
+}
+
+procedure deleteVal_sat_C003_005 (
+    X: Set<Node>, 
+    before_23_1_v: Int,
+    before_ub: Int,
+    before_curr: Node,
+    before_head: Node,
+    before_prev: Node,
+    goal_350_a: Node,
+    goal_350_b: Node
+)
+requires (
+     (isListG(X, before_head,before_ub) ) 
+   &&
+     (has1LockG(X,before_prev,before_curr) ) 
+   &&
+       ( sTrue(X) 
+     &*&  
+        (before_23_1_v < before_ub) ) 
+   &&
+       (sTrue(X) 
+     &*&  
+        ( (! ((goal_350_b != before_curr) ||
+               (goal_350_a != before_prev))) 
+        ||
+          ((before_prev != goal_350_a) &&
+                 (before_prev != goal_350_b))) 
+       ) 
+   &&
+       ((sTrue(X) 
+          &*& 
+         (! ((goal_350_b != before_curr) ||
+             (goal_350_a != before_prev)))) 
+      ||
+        (exists c : Node :: (has2LockG(X,goal_350_a,goal_350_b,c) ))
+       )
+  )
+ensures
+   false
+{ 
+    takeLock(before_curr); 
+}
