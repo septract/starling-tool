@@ -230,21 +230,23 @@ let makeWriteMap (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>> option) list)
 /// </summary>
 /// <param name="instrs">The instructions to partition.</param>
 /// <returns>
-///     A triple containing a list of assignments, a list of assumptions,
-///     and a list of (unpartitioned) microcode branches.
+///     A triple containing a list of symbolics, a list of assignments, a list
+///     of assumptions, and a list of (unpartitioned) microcode branches.
 /// </returns>
 let partitionMicrocode (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
-  : ((Expr<Sym<Var>> * Expr<Sym<Var>> option) list
+  : (Symbolic<Expr<Sym<Var>>> list
+     * (Expr<Sym<Var>> * Expr<Sym<Var>> option) list
      * BoolExpr<Sym<Var>> list
      * (BoolExpr<Sym<Var>>
         * Microcode<Expr<Sym<Var>>, Sym<Var>> list
         * Microcode<Expr<Sym<Var>>, Sym<Var>> list) list) =
-    let partitionStep (assigns, assumes, branches) instr =
+    let partitionStep (symbols, assigns, assumes, branches) instr =
         match instr with
-        | Assign (l, r) -> ((l, r)::assigns, assumes, branches)
-        | Assume s -> (assigns, s::assumes, branches)
-        | Branch (i, t, e) -> (assigns, assumes, (i, t, e)::branches)
-    List.fold partitionStep ([], [], []) instrs
+        | Symbol s -> (s::symbols, assigns, assumes, branches)
+        | Assign (l, r) -> (symbols, (l, r)::assigns, assumes, branches)
+        | Assume s -> (symbols, assigns, s::assumes, branches)
+        | Branch (i, t, e) -> (symbols, assigns, assumes, (i, t, e)::branches)
+    List.fold partitionStep ([], [], [], []) instrs
 
 /// <summary>
 ///     Generates a well-typed expression for a subscript of a given array.
@@ -323,7 +325,7 @@ let normaliseAssigns (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>> option) list)
 let rec normaliseMicrocode
   (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
   : Result<Microcode<TypedVar, Sym<Var>> list, Error> =
-    let assigns, assumes, branches = partitionMicrocode instrs
+    let symbols, assigns, assumes, branches = partitionMicrocode instrs
 
     let normaliseBranch (i, t, e) =
         let t'Result = normaliseMicrocode t
@@ -336,7 +338,8 @@ let rec normaliseMicrocode
     lift2
         (fun branches' assigns' ->
             List.concat
-                [ List.map Assign assigns'
+                [ List.map Symbol symbols
+                  List.map Assign assigns'
                   List.map Assume assumes
                   List.map Branch branches' ])
         branches'Result
@@ -410,6 +413,8 @@ let traverseMicrocode
         let tml = tchainL tm id
 
         match mc with
+        | Symbol { Sentence = s; Args = xs } ->
+            tchainL rtrav (fun xs' -> Symbol { Sentence = s; Args = xs' }) ctx xs
         | Assign (lv, Some rv) ->
             tchain2 ltrav rtrav (pairMap id Some >> Assign) ctx (lv, rv)
         | Assign (lv, None) ->
@@ -471,13 +476,13 @@ let rec updateState
     let updateOne (s : Map<TypedVar, MarkedVar>) m =
         // TODO(CaptainHayashi): de-duplicate this
         match m with
+        | Symbol _ | Assume _ -> s
         | Assign (lv, rv) ->
             // Assumption: this is monotone, eg. rv >= s.[lv]
             // TODO(CaptainHayashi): check this?
             match (valueOf lv) with
             | Before l | After l | Intermediate (_, l) | Goal (_, l) ->
                 s.Add(withType (typeOf lv) l, valueOf lv)
-        | Assume _ -> s
         | Branch (i, t, e) ->
             updateState (updateState s t) e
     List.fold updateOne state listing
@@ -490,6 +495,7 @@ let rec markedMicrocodeToBool
   : BoolExpr<Sym<MarkedVar>> =
     let translateInstr instr =
         match instr with
+        | Symbol s -> BVar (Sym s)
         // Havoc
         | Assign (x, None) -> BTrue
         // Deterministic assignment
@@ -617,14 +623,11 @@ let instantiateToMicrocode
   : Result<Microcode<Expr<Sym<Var>>, Sym<Var>> list, Error> =
     match prim with
     | SymC s ->
-        (* A symbol is translated into an assume of the symbol itself,
+        (* A symbol is translated into the symbol itself,
            followed by havoc for each variable mentioned in the symbol. *)
-        let symAssume = Assume (BVar (Sym s.Symbol))
-
         let toHavoc var = havoc (mkVarExp (mapCTyped Reg var))
         let havocs = Set.toList (Set.map toHavoc s.Working)
-
-        ok (symAssume :: havocs)
+        ok (Symbol s.Symbol :: havocs)
     | Intrinsic s ->
         (* An intrinsic can be directly converted into microcode,
            throwing away the actual direction of the intrinsic. *)

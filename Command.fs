@@ -27,6 +27,8 @@ module Types =
     /// <typeparam name="L">The type of lvalues.</typeparam>
     /// <typeparam name="RV">The type of rvalue variables.</typeparam>
     type Microcode<'L, 'RV> when 'RV : equality =
+        /// <summary>A symbolic command.</summary>
+        | Symbol of Symbolic<Expr<'RV>>
         /// <summary>An assignment, perhaps nondeterministic.</summary>
         | Assign of lvalue : 'L * rvalue : Expr<'RV> option
         /// <summary>A diverging assertion.</summary>
