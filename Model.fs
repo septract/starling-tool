@@ -52,23 +52,6 @@ open Starling.Core.Command
 /// </summary>
 [<AutoOpen>]
 module Types =
-    /// <summary>
-    ///     Mid-level register transfer logic used to encode Starling
-    ///     commands.
-    /// </summary>
-    /// <typeparam name="L">The type of lvalues.</typeparam>
-    /// <typeparam name="RV">The type of rvalue variables.</typeparam>
-    type Microcode<'L, 'RV> when 'RV : equality =
-        /// <summary>An assignment, perhaps nondeterministic.</summary>
-        | Assign of lvalue : 'L * rvalue : Expr<'RV> option
-        /// <summary>A diverging assertion.</summary>
-        | Assume of assumption : BoolExpr<'RV>
-        /// <summary>A conditional.</summary>
-        | Branch of conditional : BoolExpr<'RV>
-                  * ifTrue : Microcode<'L, 'RV> list
-                  * ifFalse : Microcode<'L, 'RV> list
-        override this.ToString() = sprintf "%A" this
-
     (*
      * Terms
      *)
