@@ -229,17 +229,19 @@ let makeWriteMap (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>> option) list)
 ///     Partitions a list of microcode instructions.
 /// </summary>
 /// <param name="instrs">The instructions to partition.</param>
+/// <typeparam name="L">The type of lvalues.</typeparam>
+/// <typeparam name="RV">The type of rvalue variables.</typeparam>
 /// <returns>
 ///     A triple containing a list of symbolics, a list of assignments, a list
 ///     of assumptions, and a list of (unpartitioned) microcode branches.
 /// </returns>
-let partitionMicrocode (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
-  : (Symbolic<Expr<Sym<Var>>> list
-     * (Expr<Sym<Var>> * Expr<Sym<Var>> option) list
-     * BoolExpr<Sym<Var>> list
-     * (BoolExpr<Sym<Var>>
-        * Microcode<Expr<Sym<Var>>, Sym<Var>> list
-        * Microcode<Expr<Sym<Var>>, Sym<Var>> list) list) =
+let partitionMicrocode (instrs : Microcode<'L, 'RV> list)
+  : (Symbolic<Expr<'RV>> list
+     * ('L * Expr<'RV> option) list
+     * BoolExpr<'RV> list
+     * (BoolExpr<'RV>
+        * Microcode<'L, 'RV> list
+        * Microcode<'L, 'RV> list) list) =
     let partitionStep (symbols, assigns, assumes, branches) instr =
         match instr with
         | Symbol s -> (s::symbols, assigns, assumes, branches)
