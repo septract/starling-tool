@@ -252,9 +252,12 @@ module MicrocodeToBool =
         let tvars = VarMap.toTypedVarSeq tvars
         let vars = List.ofSeq (Seq.append svars tvars)
 
+        let processedR = processMicrocodeRoutine vars instrs
+        let microcodeR = lift (uncurry microcodeRoutineToBool) processedR
+
         assertOkAndEqual
             (trySort expected)
-            (lift trySort (microcodeRoutineToBool vars instrs))
+            (lift trySort microcodeR)
             (Pretty.printSemanticsError >> Core.Pretty.printUnstyled)
 
     [<Test>]

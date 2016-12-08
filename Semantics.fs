@@ -517,12 +517,27 @@ let makeFrame (states : Map<TypedVar, MarkedVar>) : BoolExpr<Sym<MarkedVar>> =
     mkAnd (List.choose maybeFrame (Map.toList states))
 
 /// <summary>
-///     Converts a microcode routine into a two-state Boolean predicate.
+///     Normalises and marks an entire microcode routine with variable states.
 /// </summary>
-let microcodeRoutineToBool
+/// <param name="vars">The list of variables available to the routine.</param>
+/// <param name="routine">The routine to mark.</param>
+/// <returns>
+///     A Chessie result, containing, on success, a pair of the marked
+///     microcode routine and a map from variable post-states to their last
+///     assignment in the microcode routine.  The latter is useful for
+///     calculating frames.
+///     The order of the routine is not guaranteed (but is no longer relevant
+///     after processing anyway).
+/// </returns>
+let processMicrocodeRoutine
   (vars : TypedVar list)
   (routine : Microcode<Expr<Sym<Var>>, Sym<Var>> list list)
-  : Result<BoolExpr<Sym<MarkedVar>>, Error> =
+  : Result<( Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list list
+             * Map<TypedVar, MarkedVar> ),
+           Error> =
+    // TODO(CaptainHayashi): flatten into a single list
+    // TODO(CaptainHayashi): compose array accesses properly
+
     (* Each item in 'routine' represents a stage in the sequential composition
        of microcode listings.  Each stage has a corresponding variable state:
        the first is Intermediate 0, the second Intermediate 1, and so on until
@@ -551,7 +566,7 @@ let microcodeRoutineToBool
 
        This way, 'state' always tells us which values were assigned in the last
        stage, several stages ago, or not at all. *)
-    let listingToBool (listing, marker) (state, xs) =
+    let processListing (listing, marker) (xs, state) =
         (* First, normalise the listing.
            This ensures only whole variables are written to, which allows us to
            track the assignment later. *)
@@ -569,17 +584,21 @@ let microcodeRoutineToBool
             bind makeAware normalisedR
 
         (* Finally, we need to repopulate the table with all assignments made
-           in this command, and actually translate the listing to a Boolean. *)
+           in this command, and return the listing. *)
         lift
-            (fun stateAware ->
-                (updateState state stateAware, markedMicrocodeToBool stateAware :: xs))
+            (fun stateAware -> (stateAware :: xs, updateState state stateAware))
             stateAwareR
-    let processedR = seqBind listingToBool (initialState, []) markedStages
-    (* Finally, decide the frame and conjoin it with the listings.
-       The frame is (x!after = x!z) where x!z is the last assignment of x and
-       z is not after. *)
-    lift (fun (assigns, bools) -> mkAnd (makeFrame assigns :: bools))
-        processedR 
+    seqBind processListing ([], initialState) markedStages
+
+/// <summary>
+///     Converts a processed microcode routine into a two-state Boolean predicate.
+/// </summary>
+let microcodeRoutineToBool
+  (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list list)
+  (assignMap : Map<TypedVar, MarkedVar>)
+  : BoolExpr<Sym<MarkedVar>> =
+    let bools = List.map markedMicrocodeToBool routine
+    mkAnd (makeFrame assignMap :: bools)
 
 /// <summary>
 ///     Converts a primitive command to its representation as a disjoint
@@ -643,7 +662,7 @@ let semanticsOfCommand
     // First, get the microcode representation of each part of the command.
     let microcodeR = collect (Seq.map (instantiateToMicrocode semantics) cmd)
 
-    (* Then, translate the microcode to a framed Boolean expression.
+    (* Then, normalise and mark the microcode, and get the assign map.
        This requires us to provide all variables in the environment for framing
        purposes. *)
     let vars =
@@ -651,10 +670,20 @@ let semanticsOfCommand
             (Seq.append
                 (VarMap.toTypedVarSeq svars)
                 (VarMap.toTypedVarSeq tvars))
-    let semanticsR = bind (microcodeRoutineToBool vars) microcodeR
+
+    let processedR = bind (processMicrocodeRoutine vars) microcodeR
+
+    // Finally, convert the microcode and assign map to a framed expression.
+    let semanticsR = lift (uncurry microcodeRoutineToBool) processedR
 
     // Finally, collect all of these results into a CommandSemantics record.
-    lift (fun semantics -> { Cmd = cmd; Semantics = semantics }) semanticsR
+    lift2
+        (fun (processed, _) semantics ->
+            { Cmd = cmd
+              Microcode = processed
+              Semantics = semantics })
+        processedR
+        semanticsR
 
 open Starling.Core.Axiom.Types
 /// Translate a model over Prims to a model over semantic expressions.
