@@ -376,3 +376,41 @@ module Pretty =
     /// Printing a CommandSemantics prints just the semantic boolexpr associated with it
     let printCommandSemantics pSem sem =
         pSem sem.Semantics
+
+    /// <summary>
+    ///     Prints a microcode instruction.
+    /// </summary>
+    /// <param name="pL">The printer for lvalues.</param>
+    /// <param name="pRV">The printer for rvalue variables.</param>
+    /// <param name="instr">The instruction to print.</param>
+    /// <typeparam name="pL">The type for lvalues.</typeparam>
+    /// <typeparam name="pRV">The type for rvalue variables.</typeparam>
+    /// <returns>
+    ///     The <see cref="Doc"/> representing <paramref name="instr"/>.
+    /// </returns>
+    let rec printMicrocode
+      (pL : 'L -> Doc)
+      (pRV : 'RV -> Doc)
+      (instr : Microcode<'L, 'RV>)
+      : Doc =
+        match instr with
+        | Symbol sym ->
+            String "SYMBOL"
+            <+> braced
+                (printInterpolatedSymbolicSentence (printExpr pRV)
+                    sym.Sentence
+                    sym.Args)
+        | Assign (lvalue, Some rvalue) ->
+            String "ASSIGN" <+> pL lvalue <&> printExpr pRV rvalue
+        | Assign (lvalue, None) ->
+            String "HAVOC" <+> pL lvalue
+        | Assume assumption ->
+            String "ASSUME" <+> printBoolExpr pRV assumption
+        | Branch (conditional, ifTrue, ifFalse) ->
+            vsep
+                [ String "IF" <+> printBoolExpr pRV conditional
+                  String "THEN"
+                  ivsep (List.map (printMicrocode pL pRV) ifTrue)
+                  String "ELSE"
+                  ivsep (List.map (printMicrocode pL pRV) ifFalse) ]
+ 

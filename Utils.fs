@@ -297,6 +297,20 @@ let lift3
             let! cv = c
             return f av bv cv }
 
+/// Extends lift to functions of 4 arguments.
+let lift4
+  (f: 'A -> 'B -> 'C -> 'D -> 'Value)
+  (a : Result<'A, 'Error>)
+  (b : Result<'B, 'Error>)
+  (c : Result<'C, 'Error>)
+  (d : Result<'D, 'Error>)
+  : Result<'Value, 'Error> =
+    trial { let! av = a
+            let! bv = b
+            let! cv = c
+            let! dv = d
+            return f av bv cv dv }
+
 /// Converts a Result into an option with Some x if the result was Ok x _.
 let okOption : Result<'Value, _> -> 'Value option =
     function

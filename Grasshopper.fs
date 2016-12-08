@@ -9,6 +9,7 @@ open Starling
 open Starling.Collections
 open Starling.Utils
 open Starling.Core.Command
+open Starling.Core.Definer
 open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.Expr
@@ -23,15 +24,74 @@ open Starling.Optimiser.Graph
 
 [<AutoOpen>] 
 module Types =
-    type GrassModel = Backends.Z3.Types.ZModel  // Just piggyback on Z3 model.  
-    type Error = unit                           // No Grasshopper-specific errors yet. 
+    /// <summary>A Grasshopper term (procedure).</summary>
+    type GrassTerm =
+        { /// <summary>The variable list for this term.</summary>
+          Vars : CTyped<MarkedVar> list
+          /// <summary>The 'requires' part of the procedure.</summary>
+          Requires : BoolExpr<Sym<MarkedVar>>
+          /// <summary>The 'ensures' part of the procedure.</summary>
+          Ensures : BoolExpr<Sym<MarkedVar>>
+          /// <summary>The command part of the procedure.</summary>
+          Commands : Symbolic<Expr<Sym<MarkedVar>>> list }
+
+    type GrassModel = Model<GrassTerm, FuncDefiner<BoolExpr<Sym<Var>> option>>
+
+    /// <summary>
+    ///     Errors raised by the Grasshopper backend.
+    /// </summary>
+    type Error =
+        | /// <summary>
+          ///     The given microcode command cannot be expressed in Grasshopper.
+          /// </summary>
+          CommandNotImplemented of cmd : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list
+                                 * why : string
+        | /// <summary>
+          ///     The given expression cannot be expressed in Grasshopper.
+          /// </summary>
+          ExpressionNotImplemented of expr : Expr<Sym<MarkedVar>>
+                                    * why : string
+        | /// <summary>
+          ///     Some traversal blew up.
+          /// </summary>
+          Traversal of TraversalError<Error>
+
 
 module Pretty = 
     open Starling.Core.Pretty
     open Starling.Core.Var.Pretty
+    open Starling.Core.Command.Pretty
     open Starling.Core.Expr.Pretty
     open Starling.Core.Model.Pretty
     open Starling.Core.Symbolic.Pretty
+    open Starling.Core.Traversal.Pretty
+    open Starling.Core.TypeSystem.Pretty
+
+    /// <summary>
+    ///     Prints a Grasshopper frontend error.
+    /// </summary>
+    /// <param name="error">The error to print.</param>
+    /// <returns>
+    ///     A <see cref="Doc"/> representing <paramref name="error"/>.
+    /// </returns>
+    let rec printError (error : Error) : Doc =
+        match error with
+        | CommandNotImplemented (cmd, why) ->
+            vsep
+                [ cmdHeaded (errorStr "Encountered a command incompatible with Grasshopper")
+                    (List.map
+                        (printMicrocode
+                            (printCTyped printMarkedVar)
+                            (printSym printMarkedVar))
+                        cmd)
+                  errorInfo (String "Reason:" <+> String why) ]
+        | ExpressionNotImplemented (expr, why) ->
+            vsep
+                [ cmdHeaded (errorStr "Encountered an expression incompatible with Grasshopper")
+                    [ printExpr (printSym printMarkedVar) expr ]
+                  errorInfo (String "Reason:" <+> String why) ]
+        | Traversal err -> printTraversalError printError err
+
 
     /// Print infix operator across multiple lines
     let infexprV (op : string) (pxs : 'x -> Doc) (xs : seq<'x>) : Doc = 
@@ -115,21 +175,19 @@ module Pretty =
         |> lift Set.toSeq
         |> returnOrFail
 
-    /// Print a single Grasshopper query from a ZTerm 
-    let printZTermGrass (svars : VarMap) 
-                        (name : string) 
-                        (zterm: Backends.Z3.Types.ZTerm) : Doc =
-        let svarprint = VarMap.toTypedVarSeq svars
-                        |> Seq.map printTypedVarGrass 
-        let varprint = Seq.map (printTypedGrass printMarkedVarGrass) (findVarsGrass zterm) 
-                       |> Seq.append svarprint 
-                       |> (fun x -> Indent (VSep(x,String ",")))
+    /// Print a single Grasshopper query.
+    let printGrassTerm (name : string) (term : GrassTerm) : Doc =
+        let varprint =
+            Indent
+                (VSep
+                    (Seq.map (printTypedGrass printMarkedVarGrass) term.Vars,
+                     String ","))
 
         /// Print the requires / ensures clauses 
-        let wpreprint = zterm.SymBool.WPre 
-                        |> printBoolExprG (printSymGrass printMarkedVarGrass) true
-        let goalprint = zterm.SymBool.Goal 
-                        |> printBoolExprG (printSymGrass printMarkedVarGrass) true
+        let reprint expr = 
+            printBoolExprG (printSymGrass printMarkedVarGrass) true expr
+        let reqprint = reprint term.Requires
+        let ensprint = reprint term.Ensures
 
         // TODO @(septract) print command properly 
         let cmdprint =
@@ -207,22 +265,77 @@ module Pretty =
                                 xs) ]
         vsep [ String "procedure" <+> String name <+> (varprint |> parened) 
                String "requires" 
-               Indent wpreprint 
+               Indent reqprint 
                String "ensures" 
-               Indent goalprint
+               Indent ensprint
                Indent (braced cmdprint)
              ]  
 
-    /// Print all the Grasshopper queries that haven't been eliminated by Z3.      
+    /// Print all the Grasshopper queries that haven't been eliminated by Z3.
     let printQuery (model: GrassModel) : Doc = 
-        let fails = extractFailures model 
-        Map.toSeq fails 
-        |> Seq.map (fun (name,term) -> printZTermGrass model.SharedVars name term) 
-        |> (fun x -> (VSep (x,VSkip))) 
+        let axseq = Map.toSeq model.Axioms
+        let docseq =
+            Seq.map (fun (name,term) -> printGrassTerm model.SharedVars name term)
+                axseq
+        VSep (docSeq, VSkip)
 
     /// Print a Grasshopper error (not implemented yet)
     let printGrassError e = failwith "not implemented yet" 
 
+/// <summary>
+///     Get the set of accessed local variables in a term. 
+/// </summary>
+let findVars (term : Backends.Z3.Types.ZTerm)
+  : Result<CTyped<MarkedVar> list, Error> =
+    (* All of the accessed variables will be in the Boolean
+       representation, so just use that. *)
+    let fullExpr =
+        normalBool (BAnd [term.SymBool.WPre; term.SymBool.Goal; term.SymBool.Cmd])
+    let varsR = findVars (tliftToBoolSrc (tliftToExprDest collectSymVars)) fullExpr
+    mapMessages Traversal (lift Set.toList varsR)
+
+/// <summary>
+///     Tries to convert microcode to Grasshopper
+
+/// <summary>
+///     Generates a Grasshopper term.
+/// </summary>
+/// <param name="svars">The map of shared variables in the model.</param>
+/// <param name="term">The term to convert to Grasshopper.</param>
+/// <returns>
+///     A Chessie result, containing the converted term on success.
+/// </returns>
+let grassTerm
+  (term : Backends.Z3.Types.ZTerm) : Result<GrassTerm, Error> =
+    let requiresR = ok term.SymBool.WPre
+    let plainEnsuresR = ok term.SymBool.Goal
+    let commandsAndCmdEnsuresR = grassMicrocode term.Cmd.Microcode
+
+    let commandsR = lift fst commandsAndCmdEnsuresR
+    let ensuresR =
+        lift2 (fun (_, cmdEnsures) ensures -> mkAnd2 cmdEnsures ensures)
+            commandsAndCmdEnsuresR
+            plainEnsuresR
+
+    let varsR = findVars term
+
+    lift4
+        (fun vars requires ensures commands ->
+            { Vars = vars
+              Requires = requires
+              Ensures = ensures
+              Commands = commands } )
+        varsR requiresR ensuresR commandsR
+
+
 /// Generate a grasshopper model (currently doesn't do anything) 
-let grassModel (i : Backends.Z3.Types.ZModel) : Result<GrassModel,Error>  = 
-  ok i 
+let grassModel (model : Backends.Z3.Types.ZModel) : Result<GrassModel,Error> = 
+    let fails = extractFailures model
+    let failSeq = Map.toSeq fails
+
+    let grassTermPair (name, term) = lift (mkPair name) (grassTerm term)
+    let grassTermPairsR = collect (Seq.map grassTermPair failSeq)
+
+    let grassTermsR = lift Map.ofSeq grassTermPairsR
+
+    lift (fun terms -> withAxioms terms model) grassTermsR
