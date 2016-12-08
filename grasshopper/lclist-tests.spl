@@ -268,7 +268,6 @@ ensures
     takeLock(before_curr); 
 }
 
-
 procedure deleteVal_C003_005 (
     X: Set<Node>, 
     before_23_1_v: Int,
