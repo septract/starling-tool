@@ -73,6 +73,13 @@ module Types =
           Cmd : Command
           /// <summary>The command's microcode instantiation.</summary>
           Microcode : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list list
+          /// <summary>
+          ///     The assignment map for the command.
+          ///     This maps the post-state of each variable reachable by the
+          ///     command to the last assignment made in Microcode for that
+          ///     variable.
+          /// <summary>
+          Assigns : Map<TypedVar, MarkedVar>
           /// <summary>The Boolean translation.</summary>
           Semantics : 'Semantics }
         override this.ToString() = sprintf "%A" this
@@ -107,8 +114,9 @@ module Traversal =
       : Traversal<CommandSemantics<BoolExpr<'SrcVar>>,
                   CommandSemantics<BoolExpr<'DstVar>>,
                   'Error, 'Var> =
-        fun ctx { Cmd = c; Microcode = m; Semantics = s } ->
-            let swapSemantics s' = { Cmd = c; Microcode = m; Semantics = s' }
+        fun ctx { Cmd = c; Microcode = m; Assigns = a; Semantics = s } ->
+            let swapSemantics s' =
+                { Cmd = c; Microcode = m; Assigns = a; Semantics = s' }
             let result = traverseBoolAsExpr traversal ctx s
             lift (pairMap id swapSemantics) result
 

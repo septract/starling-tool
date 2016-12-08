@@ -665,9 +665,10 @@ let semanticsOfCommand
 
     // Finally, collect all of these results into a CommandSemantics record.
     lift2
-        (fun (processed, _) semantics ->
+        (fun (processed, assigns) semantics ->
             { Cmd = cmd
               Microcode = processed
+              Assigns = assigns
               Semantics = semantics })
         processedR
         semanticsR
