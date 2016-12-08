@@ -15,9 +15,8 @@ predicate sTrue (X: Set<Node>) {
 // List segment definitions
 
 predicate lseg(X: Set<Node>, x: Node, y: Node) 
+  requires acc(X) 
 {
-  acc(X) 
-  &*&
   X = { z: Node :: Btwn(next, x, z, y) && z != y } 
   &*& 
   Btwn(next, x, y, y) 
@@ -35,7 +34,9 @@ predicate lseg_terminal(X: Set<Node>, ub: Int)
   forall z: Node :: (z in X && z.next == null) ==> z.val = ub 
 } 
 
-predicate llseg(X: Set<Node>, x: Node, y: Node, ub: Int) {
+predicate llseg(X: Set<Node>, x: Node, y: Node, ub: Int) 
+  requires acc(X) 
+{
   lseg(X, x, y)
   &*&
   lseg_upperbound(X,ub)
@@ -80,21 +81,27 @@ procedure disposeNode(x: Node)
 
 // Equivalents to Starling predicates. 
 
-predicate isListG (X: Set<Node>, head: Node, ub: Int) { 
+predicate isListG (X: Set<Node>, head: Node, ub: Int) 
+  requires acc(X) 
+{ 
   llseg(X, head, null, ub) &*& head != null
 } 
 
 predicate has1LockG(X: Set<Node>, a: Node, b: Node) 
+  requires acc(X) 
 { 
-   acc(X) &*& a in X &*& nodeLocked(a, b)
+  a in X &*& nodeLocked(a, b)
 } 
 
-predicate has2LockG(X: Set<Node>, a: Node, b: Node, c: Node) { 
-   acc(X) &*& a in X &*& b in X &*& nodeLocked(a, b) &*& nodeLocked(b,c)
+predicate has2LockG(X: Set<Node>, a: Node, b: Node, c: Node) 
+  requires acc(X) 
+{ 
+  a in X &*& b in X &*& nodeLocked(a, b) &*& nodeLocked(b,c)
 } 
 
 predicate isValG(X: Set<Node>, n: Node, v: Int) 
+  requires acc(X)
 { 
-  acc(X) &*& n in X &*& n.val == v
+  n in X &*& n.val == v
 } 
 
