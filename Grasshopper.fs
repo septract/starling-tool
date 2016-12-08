@@ -14,6 +14,7 @@ open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.Expr
 open Starling.Core.Model
+open Starling.Semantics
 open Starling.Core.Symbolic
 open Starling.Core.Symbolic.Traversal
 open Starling.Core.Instantiate
@@ -191,78 +192,12 @@ module Pretty =
 
         // TODO @(septract) print command properly 
         let cmdprint =
-            let primPrint markL markR prim =
-                match prim with
-                | SymC { Symbol = sym } ->
-                    // TODO(CaptainHayashi): proper Chessie failure.
-                    let sym' =
-                        { Sentence = sym.Sentence
-                          Args = (List.map markR sym.Args) }
+            vsep
+                (List.map
+                    (printSymbolicGrass (printExprG (printSymGrass printMarkedVarGrass) false)
+                     >> withSemi)
+                    term.Commands)
 
-                    printSymbolicGrass (printExprG (printSymGrass printMarkedVarGrass) false) sym'
-                | Intrinsic (IAssign { LValue = l; RValue = r }) ->
-                    // TODO(CaptainHayashi): correct?
-                    withSemi
-                        (printExprG (printSymGrass printMarkedVarGrass) false (markL (normalIntExpr l))
-                         <+> String ":="
-                         <+> printExprG (printSymGrass printMarkedVarGrass) false (markR (normalIntExpr r)))
-                | Intrinsic (BAssign { LValue = l; RValue = r }) ->
-                    // TODO(CaptainHayashi): correct?
-                    withSemi
-                        (printExprG (printSymGrass printMarkedVarGrass) false (markL (normalBoolExpr l))
-                        <+> String ":="
-                        <+> printExprG (printSymGrass printMarkedVarGrass) false (markR (normalBoolExpr r)))
-                | Stored cmd ->
-                    String "/* error: somehow found a stored command! */"
-
-            let rec hasStored cmd =
-                let isStored =
-                    function
-                    | Stored _ -> true
-                    | _ -> false
-                List.exists isStored cmd
-
-            (* TODO(CaptainHayashi):
-               Currently, the command is not marked with pre-and-post-states.
-               This means that we have to do this marking ourselves, and we 
-               can't easily do this marking soundly with sequential composition.
-
-               For now, we issue a health warning if we spot a sequential
-               composition.  This could do with fixing though... somehow. *)
-            let hackilyMakeBefore (expr : Expr<Sym<Var>>) : Expr<Sym<MarkedVar>> =
-                returnOrFail (before expr)
-            let hackilyMakeSymBefore x =
-                { Sentence =  x.Sentence
-                  Args = (List.map hackilyMakeBefore x.Args) }
-
-            // Can't print a command with any stored components, for now.
-            if hasStored zterm.Original.Cmd.Cmd
-            then
-                // TODO(CaptainHayashi): is this the right fallback?
-                vsep
-                    [ String "/* WARNING: Given a non-symbolic command, which is unsupported."
-                      String "   Boolean translation is below."
-                      Indent
-                        (printBoolExprG
-                            (printSymGrass printMarkedVarGrass)
-                            false
-                            zterm.SymBool.Cmd)
-                      String "   */"
-                    ]
-            else
-                // TODO(CaptainHayashi): fix sequential composition as above.
-                match zterm.Original.Cmd.Cmd with
-                | [x] ->
-                    primPrint (after >> returnOrFail) (before >> returnOrFail) x
-                | xs ->
-                    vsep
-                        [ String "/* WARNING: translation of sequential composition is unsound. */"
-                          vsep
-                              (List.map
-                                (primPrint
-                                    (after >> returnOrFail)
-                                    (before >> returnOrFail))
-                                xs) ]
         vsep [ String "procedure" <+> String name <+> (varprint |> parened) 
                String "requires" 
                Indent reqprint 
@@ -275,9 +210,8 @@ module Pretty =
     let printQuery (model: GrassModel) : Doc = 
         let axseq = Map.toSeq model.Axioms
         let docseq =
-            Seq.map (fun (name,term) -> printGrassTerm model.SharedVars name term)
-                axseq
-        VSep (docSeq, VSkip)
+            Seq.map (fun (name,term) -> printGrassTerm name term) axseq
+        VSep (docseq, VSkip)
 
     /// Print a Grasshopper error (not implemented yet)
     let printGrassError e = failwith "not implemented yet" 
@@ -295,7 +229,32 @@ let findVars (term : Backends.Z3.Types.ZTerm)
     mapMessages Traversal (lift Set.toList varsR)
 
 /// <summary>
-///     Tries to convert microcode to Grasshopper
+///     Tries to convert microcode to Grasshopper commands and ensures.
+/// </summary>
+/// <param name="routine">The microcode routine to convert.</param>
+/// <returns>
+///     A Chessie result, containing a list of symbolic commands over heaps
+///     and a Boolean expression over multi-state variable on success.
+/// </returns>
+let grassMicrocode (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list list)
+  : Result<(Symbolic<Expr<Sym<MarkedVar>>> list * BoolExpr<Sym<MarkedVar>>), Error> =
+    let translateAssign (x, y) =
+        maybe BTrue (mkEq (mkVarExp (mapCTyped Reg x))) y
+
+    let grassMicrocodeEntry ent =
+        match partitionMicrocode ent with
+        | (_, _, _, x::xs) ->
+            fail
+                (CommandNotImplemented
+                    (cmd = ent,
+                     why = "Cannot encode commands with inner conditionals."))
+        | (symbols, assigns, assumes, []) ->
+            ok
+                (symbols,
+                 mkAnd (List.map translateAssign assigns @ assumes))
+
+    let entsR = collect (List.map grassMicrocodeEntry routine)
+    lift (List.unzip >> pairMap List.concat mkAnd) entsR
 
 /// <summary>
 ///     Generates a Grasshopper term.
@@ -309,7 +268,7 @@ let grassTerm
   (term : Backends.Z3.Types.ZTerm) : Result<GrassTerm, Error> =
     let requiresR = ok term.SymBool.WPre
     let plainEnsuresR = ok term.SymBool.Goal
-    let commandsAndCmdEnsuresR = grassMicrocode term.Cmd.Microcode
+    let commandsAndCmdEnsuresR = grassMicrocode term.Original.Cmd.Microcode
 
     let commandsR = lift fst commandsAndCmdEnsuresR
     let ensuresR =
