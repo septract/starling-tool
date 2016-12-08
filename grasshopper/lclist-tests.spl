@@ -268,7 +268,6 @@ ensures
     takeLock(before_curr); 
 }
 
-
 procedure deleteVal_C003_005 (
     X: Set<Node>, 
     before_23_1_v: Int,
@@ -344,3 +343,57 @@ ensures
 { 
     takeLock(before_curr); 
 }
+
+procedure deleteVal_C013_000 (
+    X: Set<Node>, 
+    before_ub: Int,
+    before_curr: Node,
+    before_head: Node,
+    before_prev: Node, 
+    v : Int
+)
+requires (
+    acc(X) 
+   &*& 
+    (isListG(X, before_head,before_ub) ) 
+   &*&
+    (exists e : Node :: has2LockG(X,before_prev,before_curr, e) )
+   &*& 
+    isValG(X, before_curr, v) 
+   &*&
+    v < before_ub 
+  )
+ensures
+    (exists X2 : Set<Node> :: 
+       acc(X2) &*& isListG(X2,before_head,before_ub) )
+{
+    before_prev.next := before_curr.next; 
+    disposeNode(before_curr); 
+}
+
+procedure deleteVal_sat_C013_000 (
+    X: Set<Node>, 
+    before_ub: Int,
+    before_curr: Node,
+    before_head: Node,
+    before_prev: Node, 
+    v : Int
+)
+requires (
+    acc(X) 
+   &*& 
+    (isListG(X, before_head,before_ub) ) 
+   &*&
+    (exists e : Node :: has2LockG(X,before_prev,before_curr, e) )
+   &*& 
+    isValG(X, before_curr, v) 
+   &*&
+    v < before_ub 
+  )
+ensures
+  false
+{
+    before_prev.next := before_curr.next; 
+    disposeNode(before_curr); 
+}
+
