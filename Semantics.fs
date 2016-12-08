@@ -25,6 +25,7 @@ open Starling.Core.Symbolic
 open Starling.Core.Symbolic.Traversal
 open Starling.Core.Model
 open Starling.Core.Traversal
+open Starling.Core.Axiom.Types
 
 
 /// <summary>
@@ -56,6 +57,23 @@ module Types =
         ///     This error may contain nested semantics errors!
         /// </summary>
         | Traversal of TraversalError<Error>
+
+    /// <summary>
+    ///     A write record for an variable.
+    ///
+    ///     <para>
+    ///         Write records are used to build frames, by calculating which bits
+    ///         of an variable have been modified by a command.
+    /// </summary>
+    type Write =
+        /// <summary>The entire lvalue has been written to or havoc'd.</summary>
+        | Entire of newVal : Expr<Sym<Var>> option
+        /// <summary>
+        ///     Only certain parts of the lvalue have been written to,
+        ///     and their recursive write records are enclosed.
+        /// </summary>
+        | Indices of Map<IntExpr<Sym<Var>>, Write>
+        override this.ToString () = sprintf "%A" this
 
 
 /// <summary>
@@ -97,23 +115,6 @@ module Pretty =
                       String "' has no substitution" ])
         | Traversal err ->
             Starling.Core.Traversal.Pretty.printTraversalError printSemanticsError err
-
-/// <summary>
-///     A write record for an variable.
-///
-///     <para>
-///         Write records are used to build frames, by calculating which bits
-///         of an variable have been modified by a command.
-/// </summary>
-type Write =
-    /// <summary>The entire lvalue has been written to or havoc'd.</summary>
-    | Entire of newVal : Expr<Sym<Var>> option
-    /// <summary>
-    ///     Only certain parts of the lvalue have been written to,
-    ///     and their recursive write records are enclosed.
-    /// </summary>
-    | Indices of Map<IntExpr<Sym<Var>>, Write>
-    override this.ToString () = sprintf "%A" this
 
 /// <summary>
 ///     Records a write into a write map.
@@ -510,7 +511,7 @@ let rec markedMicrocodeToBool
 /// <summary>
 ///     Generates a frame from a state assignment map.
 /// </summary>
-let makeFrame (states : Map<TypedVar, MarkedVar>) : BoolExpr<Sym<MarkedVar>> =
+let makeFrame (states : Map<TypedVar, MarkedVar>) : BoolExpr<Sym<MarkedVar>> list =
     let maybeFrame (var, state) =
         match state with
         // If the variable was last assigned an After, it needs no framing.
@@ -521,7 +522,7 @@ let makeFrame (states : Map<TypedVar, MarkedVar>) : BoolExpr<Sym<MarkedVar>> =
                 (mkEq
                     (mkVarExp (mapCTyped (After >> Reg) var))
                     (mkVarExp (withType (typeOf var) (Reg state))))
-    mkAnd (List.choose maybeFrame (Map.toList states))
+    List.choose maybeFrame (Map.toList states)
 
 /// <summary>
 ///     Normalises and marks an entire microcode routine with variable states.
@@ -605,7 +606,7 @@ let microcodeRoutineToBool
   (assignMap : Map<TypedVar, MarkedVar>)
   : BoolExpr<Sym<MarkedVar>> =
     let bools = List.map markedMicrocodeToBool routine
-    mkAnd (makeFrame assignMap :: bools)
+    mkAnd (makeFrame assignMap @ bools)
 
 /// <summary>
 ///     Converts a primitive command to its representation as a disjoint
@@ -673,7 +674,6 @@ let semanticsOfCommand
         processedR
         semanticsR
 
-open Starling.Core.Axiom.Types
 /// Translate a model over Prims to a model over semantic expressions.
 let translate
   (model : Model<GoalAxiom<Command>, 'viewdef>)
