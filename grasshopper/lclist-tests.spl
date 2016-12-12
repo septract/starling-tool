@@ -279,7 +279,23 @@ procedure releaseLock_sat_test (X: Set<Node>, head: Node, ub: Int, a: Node, b: N
    releaseLock(a); 
 } 
 
+procedure assume_test (x: Node, z: Node) 
+  requires acc({x}) 
+  ensures acc({x}) 
+{ 
+  var y : Node; 
+  y := x.next; 
+  pure assume (y == null);  
+} 
 
+procedure assume_sat_test (x: Node, z: Node) 
+  requires acc({x}) 
+  ensures false
+{ 
+  var y : Node; 
+  y := x.next; 
+  pure assume (y == null);  
+} 
 
 // More complicated program tests
 
@@ -476,4 +492,85 @@ ensures
     before_prev.next := before_curr.next; 
     disposeNode(before_curr); 
 }
+
+procedure deleteVal_C008_006 (
+    before_23_1_v: Int,
+    before_ub: Int,
+    after_cv: Int,
+    goal_197_v: Int,
+    before_curr: Node,
+    before_head: Node,
+    before_prev: Node,
+    goal_197_node: Node
+)
+requires (
+  exists X : Set<Node> :: ( 
+     acc(X) 
+    &*& 
+     (isListG(X, before_head,before_ub) ) 
+    &*&
+     (exists e : Node :: has2LockG(X,before_prev,before_curr, e) ) 
+    &*&
+     (before_23_1_v < before_ub) 
+    &*&
+     ( 
+      (! ((goal_197_v != after_cv) || (goal_197_node != before_curr))) 
+     ||
+      ( isValG(X,goal_197_node,goal_197_v) 
+       &*& 
+        goal_197_v < before_ub )
+     )
+  ) 
+)
+ensures (
+  exists X : Set<Node> :: ( 
+     acc(X) 
+     &*& 
+      isValG(X,goal_197_node,goal_197_v) 
+     &*&  
+      goal_197_v <= before_ub 
+  )
+) 
+{
+    var cv_var: Int; 
+    cv_var := before_curr.val;
+    pure assume (after_cv == cv_var); 
+}
+
+procedure deleteVal_sat_C008_006 (
+    before_23_1_v: Int,
+    before_ub: Int,
+    after_cv: Int,
+    goal_197_v: Int,
+    before_curr: Node,
+    before_head: Node,
+    before_prev: Node,
+    goal_197_node: Node
+)
+requires (
+  exists X : Set<Node> :: ( 
+     acc(X) 
+    &*& 
+     (isListG(X, before_head,before_ub) ) 
+    &*&
+     (exists e : Node :: has2LockG(X,before_prev,before_curr, e) ) 
+    &*&
+     (before_23_1_v < before_ub) 
+    &*&
+     ( 
+      (! ((goal_197_v != after_cv) || (goal_197_node != before_curr))) 
+     ||
+      ( isValG(X,goal_197_node,goal_197_v) 
+       &*& 
+        goal_197_v < before_ub )
+     )
+  ) 
+)
+ensures false
+{
+    var cv_var: Int; 
+    cv_var := before_curr.val;
+    pure assume (after_cv == cv_var); 
+} 
+
 
