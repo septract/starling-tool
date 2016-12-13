@@ -387,17 +387,28 @@ let grassMicrocode (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list 
 /// <summary>
 ///     Generates pure assumptions for the Starling variable frame associated
 ///     with a given state assignment map.
+///     <para>
+///         Because Grasshopper procedures are quantified by a subset of the
+///         Starling variable state, we don't emit framing predicates for
+///         variables not mentioned in the term being framed.
+///     </para>
 /// </summary>
 /// <param name="assignMap">The map to convert to a frame.</param>
+/// <param name="vars">The set of variables mentioned in the term.</param>
 /// <returns>
 ///     If all went well, a list of Grasshopper commands pure-assuming the
 ///     variable frame.
 /// </returns>
 let grassFrame
   (assignMap : Map<TypedVar, MarkedVar>)
+  (vars : Set<Var>)
   : Result<GrassCommand list, Error> =
+    // Only frame things we use in the term.
+    let isUsed var _ = vars.Contains (valueOf var)
+    let strippedMap = Map.filter isUsed assignMap
+
     // We can just adapt the normal frame generator.
-    let normalFrame = makeFrame assignMap
+    let normalFrame = makeFrame strippedMap
 
     let grassify x =
         // Pure assumption.
@@ -423,9 +434,19 @@ let grassTerm
     let requiresR = ok term.SymBool.WPre
     let ensuresR = ok term.SymBool.Goal
     let commandsR = grassMicrocode term.Original.Cmd.Microcode
-    let frameR = grassFrame term.Original.Cmd.Assigns
-    let framedCommandsR = lift2 (@) commandsR frameR
     let varsR = findVars term
+    let frameR =
+        bind
+            (fun vars ->
+                // Only frame for things where we actually _use_ the post-state
+                let getAfter =
+                    function
+                    | WithType (After l, _) -> Some l
+                    | _ -> None
+                let varSet = Set.ofList (List.choose getAfter vars)
+                grassFrame term.Original.Cmd.Assigns varSet)
+            varsR
+    let framedCommandsR = lift2 (@) commandsR frameR
 
     lift4
         (fun vars requires ensures commands ->
