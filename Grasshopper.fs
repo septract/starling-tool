@@ -212,13 +212,13 @@ module Pretty =
 
     let printSymbolicGrass (pArg : 'Arg -> Doc) (s : Symbolic<'Arg>) : Doc =
         let { Sentence = ws; Args = xs } = s
-        parened (printInterpolatedSymbolicSentence pArg ws xs)
+        printInterpolatedSymbolicSentence pArg ws xs
 
     /// Pretty-prints a symbolic sentence 
     let rec printSymGrass (pReg : 'Var -> Doc) (sym : Sym<'Var>) : Doc =
         match sym with
         | Reg r -> pReg r
-        | Sym s -> printSymbolicGrass (printExprG (printSym pReg) false) s
+        | Sym s -> parened (printSymbolicGrass (printExprG (printSym pReg) false) s)
 
     /// <summary>
     ///     Pretty-prints a Grasshopper primitive command.
@@ -385,6 +385,32 @@ let grassMicrocode (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list 
     lift List.concat (collect (List.map grassMicrocodeEntry routine))
 
 /// <summary>
+///     Generates pure assumptions for the Starling variable frame associated
+///     with a given state assignment map.
+/// </summary>
+/// <param name="assignMap">The map to convert to a frame.</param>
+/// <returns>
+///     If all went well, a list of Grasshopper commands pure-assuming the
+///     variable frame.
+/// </returns>
+let grassFrame
+  (assignMap : Map<TypedVar, MarkedVar>)
+  : Result<GrassCommand list, Error> =
+    // We can just adapt the normal frame generator.
+    let normalFrame = makeFrame assignMap
+
+    let grassify x =
+        // Pure assumption.
+        let grassifyR =
+            liftWithoutContext
+                (Starling >> ok)
+                (tliftOverSym >> tliftOverCTyped >> tliftToExprDest >> tliftToBoolSrc)
+                (normalBool x)
+        lift PureAssume (mapMessages Traversal grassifyR)
+
+    collect (List.map grassify normalFrame)
+
+/// <summary>
 ///     Generates a Grasshopper term.
 /// </summary>
 /// <param name="svars">The map of shared variables in the model.</param>
@@ -397,6 +423,8 @@ let grassTerm
     let requiresR = ok term.SymBool.WPre
     let ensuresR = ok term.SymBool.Goal
     let commandsR = grassMicrocode term.Original.Cmd.Microcode
+    let frameR = grassFrame term.Original.Cmd.Assigns
+    let framedCommandsR = lift2 (@) commandsR frameR
     let varsR = findVars term
 
     lift4
@@ -405,7 +433,7 @@ let grassTerm
               Requires = requires
               Ensures = ensures
               Commands = commands } )
-        varsR requiresR ensuresR commandsR
+        varsR requiresR ensuresR framedCommandsR
 
 
 /// Generate a grasshopper model (currently doesn't do anything) 
