@@ -249,13 +249,6 @@ module Pretty =
                     <+> printBoolExprG (printSymGrass printGrassVar) false assumption
         withSemi c
 
-    /// Get the set of accessed variables. 
-    let findVarsGrass (zterm : Backends.Z3.Types.ZTerm) : CTyped<MarkedVar> seq = 
-        normalBool (BAnd [zterm.SymBool.WPre; zterm.SymBool.Goal; zterm.SymBool.Cmd] )
-        |> findVars (tliftToBoolSrc (tliftToExprDest collectSymVars)) 
-        |> lift Set.toSeq
-        |> returnOrFail
-
     /// Print a single Grasshopper query.
     let printGrassTerm (name : string) (term : GrassTerm) : Doc =
         let varprint =
