@@ -277,7 +277,7 @@ module Pretty =
                Indent reqprint 
                String "ensures" 
                Indent ensprint
-               Indent (braced cmdprint)
+               braced (Indent cmdprint)
              ]  
 
     /// Print all the Grasshopper queries that haven't been eliminated by Z3.
