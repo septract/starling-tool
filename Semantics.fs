@@ -400,15 +400,16 @@ let checkParamTypesPrim (prim : StoredCommand) (sem : PrimSemantics) : Result<Pr
 /// <typeparam name="LO">The type of output lvalue.</typeparam>
 /// <typeparam name="RVO">The type of output rvalue variables.</typeparam>
 /// <typeparam name="Var">The type of context variables.</typeparam>
+/// <typeparam name="Error">The type of traversal errors.</typeparam>
 /// <returns>
 ///     A traversal that visits all of the lvalues and rvalues in a microcode
 ///     instruction, applying the given traversals to each.
 /// </returns>
 let traverseMicrocode
-  (ltrav : Traversal<'L, 'LO, Error, 'Var>)
-  (rtrav : Traversal<Expr<'RV>, Expr<'RVO>, Error, 'Var>)
+  (ltrav : Traversal<'L, 'LO, 'Error, 'Var>)
+  (rtrav : Traversal<Expr<'RV>, Expr<'RVO>, 'Error, 'Var>)
   : Traversal<Microcode<'L, 'RV>,
-              Microcode<'LO, 'RVO>, Error, 'Var> =
+              Microcode<'LO, 'RVO>, 'Error, 'Var> =
     let brtrav = traverseBoolAsExpr rtrav
 
     let rec tm ctx mc =

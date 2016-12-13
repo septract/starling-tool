@@ -301,16 +301,39 @@ module Pretty =
     let printGrassError e = failwith "not implemented yet" 
 
 /// <summary>
-///     Get the set of accessed local variables in a term. 
+///     Get the set of accessed variables in a term. 
 /// </summary>
 let findVars (term : Backends.Z3.Types.ZTerm)
   : Result<CTyped<MarkedVar> list, Error> =
-    (* All of the accessed variables will be in the Boolean
-       representation, so just use that. *)
-    let fullExpr =
-        normalBool (BAnd [term.SymBool.WPre; term.SymBool.Goal; term.SymBool.Cmd])
-    let varsR = findVars (tliftToBoolSrc (tliftToExprDest collectSymVars)) fullExpr
-    mapMessages Traversal (lift Set.toList varsR)
+    (* For the WPre and Goal, we can just use the symbool representation:
+       it's easy to traverse and should be precise.  If we conjoin the two,
+       we need only traverse one expression.
+
+       We don't use the symbool for the command, because it has been framed,
+       often with variables we don't care about.  Worse, it could have been
+       optimised, causing variables we _do_ care about to be lost.  Instead,
+       we extract variables out of the microcode. *)
+    let goalAndWPre =
+        normalBool (mkAnd2 term.SymBool.WPre term.SymBool.Goal)
+    let goalAndWPreVarsR =
+        findVars (tliftToBoolSrc (tliftToExprDest collectSymVars)) goalAndWPre
+
+    // Remember, traversing a list of lists of microcode!  (Oh the humanity.)
+    let cmdVarsT =
+        tchainL
+            (tchainL
+                (traverseMicrocode
+                    collectVars
+                    (tliftOverExpr collectSymVars))
+                id)
+            id
+    let cmdVarsR =
+        findVars cmdVarsT term.Original.Cmd.Microcode
+
+    mapMessages Traversal
+        (lift2 (fun gv cv -> Set.toList (Set.union gv cv))
+            goalAndWPreVarsR
+            cmdVarsR)
 
 /// <summary>
 ///     Tries to convert microcode to Grasshopper commands and ensures.
