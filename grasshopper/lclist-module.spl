@@ -14,12 +14,15 @@ predicate sTrue (X: Set<Node>) {
 
 // List segment definitions
 
+// TODO: change y -> null? 
 predicate lseg(X: Set<Node>, x: Node, y: Node) 
   requires acc(X) 
 {
   X = { z: Node :: Btwn(next, x, z, y) && z != y } 
   &*& 
   Btwn(next, x, y, y) 
+  &*& 
+  (exists end: Node :: (end in X &*& end != x)) 
 }
 
 predicate lseg_upperbound(X: Set<Node>, ub: Int)
@@ -59,8 +62,8 @@ procedure takeLock(x: Node)
   requires acc(x); 
   ensures acc(x) &*& nodeLocked(x,x.next); 
 { 
-  // while (x.lock == true) {} 
-  assume x.lock == false; 
+  while (x.lock == true) {} 
+  //assume x.lock == false; 
   x.lock := true; 
 }  
 

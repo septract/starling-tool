@@ -192,6 +192,65 @@ procedure takeLock_sat_test (X: Set<Node>, head: Node, ub: Int, a: Node, b: Node
    takeLock(b); 
 } 
 
+
+procedure take1Lock_head_test 
+     (X: Set<Node>, head: Node, ub: Int) 
+  requires (
+     acc(X) 
+    &*& 
+     isListG(X, head, ub) 
+  ) 
+  ensures  
+    acc(X) &*& (exists b: Node :: has1LockG(X, head, b)) 
+{ 
+   takeLock(head); 
+} 
+
+
+procedure take1Lock_head_sat_test 
+     (X: Set<Node>, head: Node, ub: Int) 
+  requires (
+     acc(X) 
+    &*& 
+     isListG(X, head, ub) 
+  ) 
+  ensures  
+    false;
+{ 
+   takeLock(head); 
+} 
+
+procedure take2Lock_head_test 
+     (X: Set<Node>, head: Node, ub: Int, a: Node) 
+  requires (
+     acc(X) 
+    &*& 
+     isListG(X, head, ub) 
+    &*&
+     has1LockG(X, head, a) 
+  ) 
+  ensures  
+    acc(X) &*& (exists b: Node :: has2LockG(X, head, a, b)) 
+{ 
+   takeLock(a); 
+} 
+
+// Tricky because it depends on there being at least two nodes in a. 
+procedure take2Lock_head_sat_test 
+     (X: Set<Node>, head: Node, ub: Int, a: Node) 
+  requires (
+     acc(X) 
+    &*& 
+     isListG(X, head, ub) 
+    &*&
+     has1LockG(X, head, a) 
+  ) 
+  ensures  
+    false
+{ 
+   takeLock(a); 
+} 
+
 procedure releaseLock_test (X: Set<Node>, head: Node, ub: Int, a: Node, b: Node, c: Node, v: Int) 
   requires (
      acc(X) 
@@ -220,10 +279,27 @@ procedure releaseLock_sat_test (X: Set<Node>, head: Node, ub: Int, a: Node, b: N
    releaseLock(a); 
 } 
 
+procedure assume_test (x: Node, z: Node) 
+  requires acc({x}) 
+  ensures acc({x}) 
+{ 
+  var y : Node; 
+  y := x.next; 
+  pure assume (y == null);  
+} 
+
+procedure assume_sat_test (x: Node, z: Node) 
+  requires acc({x}) 
+  ensures false
+{ 
+  var y : Node; 
+  y := x.next; 
+  pure assume (y == null);  
+} 
+
 // More complicated program tests
 
 procedure deleteVal_C003_000 (
-    X: Set<Node>, 
     before_23_1_v: Int,
     before_ub: Int,
     before_curr: Node,
@@ -231,6 +307,7 @@ procedure deleteVal_C003_000 (
     before_prev: Node
 )
 requires (
+  exists X : Set<Node> :: ( 
     acc(X) 
       &*& 
     (isListG(X,before_head,before_ub) ) 
@@ -238,15 +315,20 @@ requires (
     (has1LockG(X,before_prev,before_curr) ) 
       &*&
     (before_23_1_v < before_ub)
-  )
-ensures
-    (acc(X) &*& isListG(X, before_head,before_ub))
+      &*& 
+    isValG(X,before_curr, before_23_1_v) 
+  ) 
+)
+ensures (
+  exists X : Set<Node> :: ( 
+    acc(X) &*& isListG(X, before_head,before_ub)
+  ) 
+)
 {
     takeLock(before_curr); 
 }
 
 procedure deleteVal_sat_C003_000 (
-    X: Set<Node>, 
     before_23_1_v: Int,
     before_ub: Int,
     before_curr: Node,
@@ -254,6 +336,7 @@ procedure deleteVal_sat_C003_000 (
     before_prev: Node
 )
 requires (
+  exists X : Set<Node> :: ( 
     acc(X) 
       &*& 
     (isListG(X,before_head,before_ub) ) 
@@ -261,7 +344,10 @@ requires (
     (has1LockG(X,before_prev,before_curr) ) 
       &*&
     (before_23_1_v < before_ub)
-  )
+      &*& 
+    isValG(X,before_curr, before_23_1_v) 
+  ) 
+)
 ensures
     false
 {
@@ -284,6 +370,8 @@ requires (
      (isListG(X, before_head,before_ub) ) 
    &*&
      (has1LockG(X,before_prev,before_curr) ) 
+   &*& 
+    isValG(X,before_curr, before_23_1_v) 
    &*&
      (before_23_1_v < before_ub) 
    &*&
@@ -322,6 +410,8 @@ requires (
      (isListG(X, before_head,before_ub) ) 
    &*&
      (has1LockG(X,before_prev,before_curr) ) 
+   &*& 
+    isValG(X,before_curr, before_23_1_v) 
    &*&
      (before_23_1_v < before_ub) 
    &*&
@@ -345,7 +435,6 @@ ensures
 }
 
 procedure deleteVal_C013_000 (
-    X: Set<Node>, 
     before_ub: Int,
     before_curr: Node,
     before_head: Node,
@@ -353,26 +442,31 @@ procedure deleteVal_C013_000 (
     v : Int
 )
 requires (
-    acc(X) 
-   &*& 
-    (isListG(X, before_head,before_ub) ) 
-   &*&
-    (exists e : Node :: has2LockG(X,before_prev,before_curr, e) )
-   &*& 
-    isValG(X, before_curr, v) 
-   &*&
-    v < before_ub 
-  )
-ensures
-    (exists X2 : Set<Node> :: 
-       acc(X2) &*& isListG(X2,before_head,before_ub) )
+  exists X: Set<Node> :: ( 
+     acc(X) 
+    &*& 
+     (isListG(X, before_head,before_ub) ) 
+    &*&
+     (exists e : Node :: has2LockG(X,before_prev,before_curr, e) )
+    &*& 
+     isValG(X, before_curr, v) 
+    &*&
+     v < before_ub 
+  ) 
+)
+ensures (
+  exists X : Set<Node> :: ( 
+     acc(X) 
+    &*& 
+     isListG(X,before_head,before_ub) 
+  ) 
+)
 {
     before_prev.next := before_curr.next; 
     disposeNode(before_curr); 
 }
 
 procedure deleteVal_sat_C013_000 (
-    X: Set<Node>, 
     before_ub: Int,
     before_curr: Node,
     before_head: Node,
@@ -380,20 +474,103 @@ procedure deleteVal_sat_C013_000 (
     v : Int
 )
 requires (
-    acc(X) 
-   &*& 
-    (isListG(X, before_head,before_ub) ) 
-   &*&
-    (exists e : Node :: has2LockG(X,before_prev,before_curr, e) )
-   &*& 
-    isValG(X, before_curr, v) 
-   &*&
-    v < before_ub 
-  )
+  exists X: Set<Node> :: ( 
+     acc(X) 
+    &*& 
+     (isListG(X, before_head,before_ub) ) 
+    &*&
+     (exists e : Node :: has2LockG(X,before_prev,before_curr, e) )
+    &*& 
+     isValG(X, before_curr, v) 
+    &*&
+     v < before_ub 
+  ) 
+)
 ensures
   false
 {
     before_prev.next := before_curr.next; 
     disposeNode(before_curr); 
 }
+
+procedure deleteVal_C008_006 (
+    before_23_1_v: Int,
+    before_ub: Int,
+    after_cv: Int,
+    goal_197_v: Int,
+    before_curr: Node,
+    before_head: Node,
+    before_prev: Node,
+    goal_197_node: Node
+)
+requires (
+  exists X : Set<Node> :: ( 
+     acc(X) 
+    &*& 
+     (isListG(X, before_head,before_ub) ) 
+    &*&
+     (exists e : Node :: has2LockG(X,before_prev,before_curr, e) ) 
+    &*&
+     (before_23_1_v < before_ub) 
+    &*&
+     ( 
+      (! ((goal_197_v != after_cv) || (goal_197_node != before_curr))) 
+     ||
+      ( isValG(X,goal_197_node,goal_197_v) 
+       &*& 
+        goal_197_v < before_ub )
+     )
+  ) 
+)
+ensures (
+  exists X : Set<Node> :: ( 
+     acc(X) 
+     &*& 
+      isValG(X,goal_197_node,goal_197_v) 
+     &*&  
+      goal_197_v <= before_ub 
+  )
+) 
+{
+    var cv_var: Int; 
+    cv_var := before_curr.val;
+    pure assume (after_cv == cv_var); 
+}
+
+procedure deleteVal_sat_C008_006 (
+    before_23_1_v: Int,
+    before_ub: Int,
+    after_cv: Int,
+    goal_197_v: Int,
+    before_curr: Node,
+    before_head: Node,
+    before_prev: Node,
+    goal_197_node: Node
+)
+requires (
+  exists X : Set<Node> :: ( 
+     acc(X) 
+    &*& 
+     (isListG(X, before_head,before_ub) ) 
+    &*&
+     (exists e : Node :: has2LockG(X,before_prev,before_curr, e) ) 
+    &*&
+     (before_23_1_v < before_ub) 
+    &*&
+     ( 
+      (! ((goal_197_v != after_cv) || (goal_197_node != before_curr))) 
+     ||
+      ( isValG(X,goal_197_node,goal_197_v) 
+       &*& 
+        goal_197_v < before_ub )
+     )
+  ) 
+)
+ensures false
+{
+    var cv_var: Int; 
+    cv_var := before_curr.val;
+    pure assume (after_cv == cv_var); 
+} 
+
 
