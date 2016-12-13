@@ -315,9 +315,10 @@ module Traversal =
     /// <summary>
     ///     Traversal for converting symbolic expressions with a marker.
     /// </summary>
+    /// <typeparam name="MVar">The type of marked variables.</typeparam>
     let traverseSymWithMarker
-      (marker : Var -> MarkedVar)
-      : Traversal<Sym<Var>, Sym<MarkedVar>, 'Error, 'Var> =
+      (marker : Var -> 'MVar)
+      : Traversal<Sym<Var>, Sym<'MVar>, 'Error, 'Var> =
         tliftOverSym (ignoreContext (marker >> ok))
 
     /// <summary>
@@ -325,29 +326,45 @@ module Traversal =
     ///     marker.
     /// </summary>
     /// <param name="marker">The marker to lift into a traversal.</param>
+    /// <typeparam name="MVar">The type of marked variables.</typeparam>
     /// <returns>
     ///     The marker function <paramref name="marker"/>, lifted into a
     ///     <see cref="Traversal"/> over symbolic <see cref="Var"/>s annotated
     ///     using <see cref="CTyped"/>.
     /// </returns>
     let traverseTypedSymWithMarker
-      (marker : Var -> MarkedVar)
-      : Traversal<CTyped<Sym<Var>>, CTyped<Sym<MarkedVar>>, 'Error, 'Var> =
+      (marker : Var -> 'MVar)
+      : Traversal<CTyped<Sym<Var>>, CTyped<Sym<'MVar>>, 'Error, 'Var> =
         tliftOverCTyped (traverseSymWithMarker marker)
+
+    /// <summary>
+    ///     Traversal for converting symbolic expressions with a marker.
+    /// </summary>
+    /// <param name="marker">The marker to lift into a traversal.</param>
+    /// <typeparam name="MVar">The type of marked variables.</typeparam>
+    /// <returns>
+    ///     The marker function <paramref name="marker"/>, lifted into a
+    ///     <see cref="Traversal"/> over symbolic <see cref="Var"/>s annotated
+    ///     using <see cref="CTyped"/>.
+    /// </returns>
+    let traverseSymExprWithMarker
+      (marker : Var -> 'MVar)
+      : Traversal<Expr<Sym<Var>>, Expr<Sym<'MVar>>, 'Error, 'Var> =
+        tliftOverExpr (traverseTypedSymWithMarker marker)
 
     /// <summary>
     ///     Converts a symbolic expression to its pre-state.
     /// </summary>
     let before (expr : Expr<Sym<Var>>)
       : Result<Expr<Sym<MarkedVar>>, TraversalError<'Error>> =
-        mapTraversal (tliftOverExpr (traverseTypedSymWithMarker Before)) expr
+        mapTraversal (traverseSymExprWithMarker Before) expr
 
     /// <summary>
     ///     Converts a symbolic expression to its post-state.
     /// </summary>
     let after (expr : Expr<Sym<Var>>)
-      : Result<Expr<Sym<MarkedVar>>, TraversalError<unit>> =
-        mapTraversal (tliftOverExpr (traverseTypedSymWithMarker After)) expr
+      : Result<Expr<Sym<MarkedVar>>, TraversalError<'Error>> =
+        mapTraversal (traverseSymExprWithMarker After) expr
 
     /// <summary>
     ///     Replaces symbols in a Boolean position with their
