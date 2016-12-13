@@ -1,5 +1,7 @@
 /* Revised lclist-starling.cvf to fit more nicely with GRASShopper. */
 
+pragma grasshopper_include {./grasshopper/lclist-module.spl};
+
 typedef int Node;
 typedef int Int; 
 

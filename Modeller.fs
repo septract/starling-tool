@@ -2104,8 +2104,11 @@ let model
             |> collect
             |> lift Map.ofSeq
 
+        let pragmata = List.map (fun p -> (p.Key, p.Value)) collated.Pragmata
+
         return
-            { SharedVars = svars
+            { Pragmata = pragmata
+              SharedVars = svars
               ThreadVars = tvars
               ViewDefs = constraints
               Semantics = coreSemantics

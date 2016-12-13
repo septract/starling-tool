@@ -21,7 +21,11 @@ module Types =
     ///     A script whose items have been partitioned by type.
     /// </summary>
     type CollatedScript =
-        { SharedVars : (TypeLiteral * string) list
+        { /// <summary>The list of all pragma directives found.</summary>
+          Pragmata : Pragma list
+          /// <summary>The shared variables declared.</summary>
+          SharedVars : (TypeLiteral * string) list
+          /// <summary>The thread-local variables declared.</summary>
           ThreadVars : (TypeLiteral * string) list
           /// <summary>
           ///     The search depth, defaulting to <c>None</c> (no search).
@@ -95,7 +99,8 @@ module Pretty =
 ///     The empty collated script.
 /// </summary>
 let empty : CollatedScript =
-    { Constraints = []
+    { Pragmata = []
+      Constraints = []
       Methods = Map.empty
       Typedefs = []
       Search = None
@@ -270,6 +275,8 @@ let collate (script : ScriptItem list) : CollatedScript =
 
     let collateStep item (cs : CollatedScript) =
         match item.Node with
+        | Pragma p ->
+            { cs with Pragmata = p :: cs.Pragmata }
         | Typedef (t, d) ->
             { cs with Typedefs = (t, d) :: cs.Typedefs }
         | SharedVars { VarType = t; VarNames = vs } ->

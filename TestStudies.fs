@@ -327,7 +327,8 @@ let ticketLockParsed =
 
 /// The collated form of the ticket lock.
 let ticketLockCollated =
-    { Typedefs = []
+    { Pragmata = []
+      Typedefs = []
       CollatedScript.SharedVars =
           [ (TInt, "ticket")
             (TInt, "serving") ]
@@ -514,7 +515,8 @@ let ticketLockViewProtos : FuncDefiner<ProtoInfo> =
 
 /// The model of the ticket lock.
 let ticketLockModel : Model<ModellerBlock, ViewDefiner<BoolExpr<Sym<Var>> option>> =
-    { SharedVars =
+    { Pragmata = []
+      SharedVars =
           Map.ofList [ ("serving", Type.Int (normalIntRec, ()))
                        ("ticket", Type.Int (normalIntRec, ())) ]
       ThreadVars =

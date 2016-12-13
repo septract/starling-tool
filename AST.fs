@@ -218,8 +218,23 @@ module Types =
     /// Synonym for blocks over CommandTypes.
     type CBlock<'view> = Block<'view, Command<'view>>
 
+    /// <summary>A GRASShopper-specific directive.</summary>
+    type GrasshopperPragma =
+        | ///<summary>An include.</summary>
+          Include of file : string
+
+    /// <summary>
+    ///     A directive for adding backend-specific information.
+    /// </summary>
+    type Pragma =
+        { ///<summary>The key of the pragma.</summary>
+          Key : string
+          ///<summary>The value of the pragma.</summary>
+          Value : string }
+
     /// A top-level item in a Starling script.
     type ScriptItem' =
+        | Pragma of Pragma // pragma ...;
         | Typedef of TypeLiteral * string // typedef int Node;
         | SharedVars of VarDecl // shared int name1, name2, name3;
         | ThreadVars of VarDecl // thread int name1, name2, name3;
@@ -501,9 +516,18 @@ module Pretty =
     let printScriptVars (cls : string) (vs : VarDecl) : Doc =
         withSemi (hsep [ String cls |> syntax; printVarDecl vs ])
 
+    /// <summary>Prints a pragma.</summary>
+    /// <param name="pragma">The pragma to print.</summary>
+    /// <returns>
+    ///     A <see cref="Doc"/> for printing <paramref name="pragma"/>.
+    /// </returns>
+    let printPragma (pragma : Pragma) : Doc =
+        String pragma.Key <+> braced (String pragma.Value)
+
     /// Pretty-prints script lines.
-    let printScriptItem' : ScriptItem' -> Doc =
-        function
+    let printScriptItem' (item : ScriptItem') : Doc =
+        match item with
+        | Pragma p -> withSemi (printPragma p)
         | Typedef (ty, name) ->
             withSemi (syntaxIdent (String "typedef") <+> printTypeLiteral ty <+> String name)
         | SharedVars vs -> printScriptVars "shared" vs
