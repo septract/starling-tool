@@ -612,13 +612,22 @@ module Graph =
             maybeVars
 
     /// <summary>
-    ///     Partial active pattern matching <c>Sym</c>-less expressions.
+    ///     Partial active pattern matching <c>Sym</c>-less Boolean expressions.
     /// </summary>
     let (|NoSym|_|) (bexpr : BoolExpr<Sym<'Var>>) : BoolExpr<'Var> option =
         bexpr
         |> mkTypedSub normalBoolRec
         |> mapTraversal (removeSymFromBoolExpr ignore)
         |> okOption
+
+    /// <summary>
+    ///     Partial active pattern matching <c>Sym</c>-less expressions.
+    /// </summary>
+    let (|NoSymE|_|) (expr : Expr<Sym<'Var>>) : Expr<'Var> option =
+        expr
+        |> mapTraversal (removeSymFromExpr ignore)
+        |> okOption
+
 
     /// <summary>
     ///     Active pattern matching on if-then-else guard multisets.

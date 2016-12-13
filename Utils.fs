@@ -41,6 +41,11 @@ module Config =
           showModel : bool
           [<Option('O', HelpText = "Switches given optimisations on or off.")>]
           optimisers : string option
+          [<Option(
+                'V',
+                HelpText =
+                    "Comma-delimited set of output options (pass 'list' for details)")>]
+          viewOpts : string option
           [<Option("times", HelpText = "Print times for each phase.")>]
           times : bool
           [<Option('v', HelpText = "Increases verbosity.")>]
@@ -61,6 +66,7 @@ module Config =
         term            = None;
         showModel       = false;
         optimisers      = None;
+        viewOpts        = None;
         times           = false;
         verbose         = false;
         input           = None;

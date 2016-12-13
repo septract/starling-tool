@@ -25,6 +25,34 @@ open Starling.Optimiser.Graph
 
 [<AutoOpen>] 
 module Types =
+    /// <summary>A Grasshopper variable shadowing a Starling variable.</summary>
+    type ShadowVar =
+        { /// <summary>The original Starling variable.</summary>
+          Original : MarkedVar }
+
+    /// <summary>A Grasshopper variable.</summary>
+    type GrassVar =
+        | /// <summary>A Starling variable.</summary>
+          Starling of MarkedVar
+        | /// <summary>A shadow variable.</summary>
+          Shadow of ShadowVar
+
+    /// <summary>A primitive Grasshopper command.</summary>
+    type GrassPrim =
+        // Shallow encoding!
+        Symbolic<Expr<Sym<MarkedVar>>>
+
+    /// <summary>A Grasshopper procedure command.</summary>
+    type GrassCommand =
+        | /// <summary>A variable declaration.</summary>
+          VarDecl of var : CTyped<ShadowVar>
+        | /// <summary>A command with no assignment.</summary>
+          NoAssign of prim : GrassPrim
+        | /// <summary>A command with an assignment to a shadow variable.
+          Assign of lvalue : ShadowVar * prim : GrassPrim
+        | /// <summary>A pure assumption.</summary>
+          PureAssume of assumption : BoolExpr<Sym<GrassVar>>
+
     /// <summary>A Grasshopper term (procedure).</summary>
     type GrassTerm =
         { /// <summary>The variable list for this term.</summary>
@@ -34,7 +62,7 @@ module Types =
           /// <summary>The 'ensures' part of the procedure.</summary>
           Ensures : BoolExpr<Sym<MarkedVar>>
           /// <summary>The command part of the procedure.</summary>
-          Commands : Symbolic<Expr<Sym<MarkedVar>>> list }
+          Commands : GrassCommand list }
 
     type GrassModel = Model<GrassTerm, FuncDefiner<BoolExpr<Sym<Var>> option>>
 
@@ -114,6 +142,28 @@ module Pretty =
         | Intermediate (i, s) -> String "inter_" <-> String (sprintf "%A_" i) <-> String s 
         | Goal (i, s) -> String "goal_" <-> String (sprintf "%A_" i) <-> String s 
 
+    /// <summary>
+    ///     Prints a shadow variable.
+    /// </summary>
+    /// <param name="var">The shadow variable to print.</param>
+    /// <returns>
+    ///     A <see cref="Doc"/> representing <paramref name="var"/>.
+    /// </returns>
+    let printShadowVar (var : ShadowVar) : Doc =
+        String "shadow_" <-> printMarkedVarGrass var.Original
+
+    /// <summary>
+    ///     Prints a general Grasshopper variable.
+    /// </summary>
+    /// <param name="var">The variable to print.</param>
+    /// <returns>
+    ///     A <see cref="Doc"/> representing <paramref name="var"/>.
+    /// </returns>
+    let printGrassVar (var : GrassVar) : Doc =
+        match var with
+        | Starling stvar -> printMarkedVarGrass stvar
+        | Shadow shvar -> printShadowVar shvar
+
     let printTypedGrass (pVar : 'Var -> Doc) (var : CTyped<'Var>) : Doc = 
         // TODO(CaptainHayashi): is printType correct?
         colonSep [ pVar (valueOf var); Starling.Core.TypeSystem.Pretty.printType (typeOf var)]
@@ -123,13 +173,13 @@ module Pretty =
         printTypedGrass String v
 
     /// Pretty-prints an arithmetic expression.
-    let rec printIntExprG (pVar : 'Var -> Doc) : IntExpr<'Var> -> Doc =
+    let rec printIntExprG (pVar : Sym<'Var> -> Doc) : IntExpr<Sym<'Var>> -> Doc =
         function
         | IVar c -> pVar c
         | _ -> failwith "[printIntExprG] Case unimplemented for Grasshopper backend." 
 
     /// Pretty-prints a Boolean expression.
-    and printBoolExprG (pVar : Sym<MarkedVar> -> Doc) (fr : bool) (b : BoolExpr<Sym<MarkedVar>>) : Doc =
+    and printBoolExprG (pVar : Sym<'Var> -> Doc) (fr : bool) (b : BoolExpr<Sym<'Var>>) : Doc =
         match b, fr with 
         | NoSym x, true ->   
            String "sTrue() &*&" <+> printBoolExprG pVar false b |> parened 
@@ -153,7 +203,7 @@ module Pretty =
            | BGt (x, y) -> infexpr ">" (stripTypeRec >> printIntExprG pVar) [x; y]
            | _ -> failwith "[printBoolExprG] Case unimplemented for Grasshopper backend."
     /// Pretty-prints an expression.
-    and printExprG (pVar : Sym<MarkedVar> -> Doc) (fr : bool) (e : Expr<Sym<MarkedVar>>) : Doc =
+    and printExprG (pVar : Sym<'Var> -> Doc) (fr : bool) (e : Expr<Sym<'Var>>) : Doc =
         match e with
         | Int (_, i) -> printIntExprG pVar i
         | Bool (_, b) -> printBoolExprG pVar fr b
@@ -164,10 +214,39 @@ module Pretty =
         parened (printInterpolatedSymbolicSentence pArg ws xs)
 
     /// Pretty-prints a symbolic sentence 
-    let rec printSymGrass (pReg : MarkedVar -> Doc) (sym : Sym<MarkedVar>) : Doc =
+    let rec printSymGrass (pReg : 'Var -> Doc) (sym : Sym<'Var>) : Doc =
         match sym with
         | Reg r -> pReg r
         | Sym s -> printSymbolicGrass (printExprG (printSym pReg) false) s
+
+    /// <summary>
+    ///     Pretty-prints a Grasshopper primitive command.
+    /// </summary>
+    /// <param name="prim">The Grasshopper primitive command to print.</param>
+    /// <returns>
+    ///     A <see cref="Doc"/> representing <paramref name="prim"/>.
+    /// </returns>
+    let printPrim (prim : GrassPrim) : Doc =
+        printSymbolicGrass (printExprG (printSymGrass printMarkedVarGrass) false) prim
+
+    /// <summary>
+    ///     Pretty-prints a Grasshopper command.
+    /// </summary>
+    /// <param name="cmd">The Grasshopper command to print.</param>
+    /// <returns>
+    ///     A <see cref="Doc"/> representing <paramref name="cmd"/>.
+    /// </returns>
+    let printCommand (cmd : GrassCommand) : Doc =
+        let c =
+            match cmd with
+            | VarDecl var -> String "var" <+> printTypedGrass printShadowVar var
+            | NoAssign prim -> printPrim prim
+            | Assign (lvalue, prim) ->
+                printShadowVar lvalue <+> String ":=" <+> printPrim prim
+            | PureAssume assumption ->
+                String "pure assume"
+                    <+> printBoolExprG (printSymGrass printGrassVar) false assumption
+        withSemi c
 
     /// Get the set of accessed variables. 
     let findVarsGrass (zterm : Backends.Z3.Types.ZTerm) : CTyped<MarkedVar> seq = 
@@ -190,13 +269,7 @@ module Pretty =
         let reqprint = reprint term.Requires
         let ensprint = reprint term.Ensures
 
-        // TODO @(septract) print command properly 
-        let cmdprint =
-            vsep
-                (List.map
-                    (printSymbolicGrass (printExprG (printSymGrass printMarkedVarGrass) false)
-                     >> withSemi)
-                    term.Commands)
+        let cmdprint = vsep (List.map printCommand term.Commands)
 
         vsep [ String "procedure" <+> String name <+> (varprint |> parened) 
                String "requires" 
@@ -233,28 +306,82 @@ let findVars (term : Backends.Z3.Types.ZTerm)
 /// </summary>
 /// <param name="routine">The microcode routine to convert.</param>
 /// <returns>
-///     A Chessie result, containing a list of symbolic commands over heaps
-///     and a Boolean expression over multi-state variable on success.
+///     A Chessie result, containing a list of Grasshopper commands.
 /// </returns>
 let grassMicrocode (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list list)
-  : Result<(Symbolic<Expr<Sym<MarkedVar>>> list * BoolExpr<Sym<MarkedVar>>), Error> =
+  : Result<GrassCommand list, Error> =
     let translateAssign (x, y) =
         maybe BTrue (mkEq (mkVarExp (mapCTyped Reg x))) y
 
     let grassMicrocodeEntry ent =
-        match partitionMicrocode ent with
-        | (_, _, _, x::xs) ->
-            fail
-                (CommandNotImplemented
-                    (cmd = ent,
-                     why = "Cannot encode commands with inner conditionals."))
-        | (symbols, assigns, assumes, []) ->
-            ok
-                (symbols,
-                 mkAnd (List.map translateAssign assigns @ assumes))
+        let grassMicrocodeInstruction =
+            function
+            | Branch _ ->
+                fail
+                    (CommandNotImplemented
+                        (cmd = ent,
+                         why = "Cannot encode commands with inner conditionals."))
+            | Symbol cmd ->
+                // These translate directly into Grasshopper primitive commands.
+                ok [ NoAssign cmd ]
+            | Microcode.Assign (x, None) ->
+                // These only affect framing.
+                ok []
+            (* We can only translate pure assignments and fully spatial
+               (symbolic) assignments. *)
+            | Microcode.Assign (x, Some (Int (_, IVar (Sym s))))
+            | Microcode.Assign (x, Some (Bool (_, BVar (Sym s))))
+            | Microcode.Assign (x, Some (Array (_, AVar (Sym s)))) ->
+                (* Fully spatial assignment.
+                   Need to create a shadow variable for the command, and use
+                   it as a temporary for the assignment itself. *)
+                let shadow = { Original = valueOf x }
+                let gshadow = Shadow shadow
 
-    let entsR = collect (List.map grassMicrocodeEntry routine)
-    lift (List.unzip >> pairMap List.concat mkAnd) entsR
+                let shadowBind =
+                    mkEq
+                        (mkVarExp (mapCTyped (Starling >> Reg) x))
+                        (mkVarExp (withType (typeOf x) (Reg gshadow)))
+
+                ok
+                    [ VarDecl (withType (typeOf x) shadow)
+                      Assign (shadow, s)
+                      PureAssume shadowBind ]
+            | Microcode.Assign (x, Some (NoSymE y)) ->
+                // Fully pure assignment, turn into pure assume.
+                let grassifyR =
+                    liftWithoutContext
+                        (Starling >> Reg >> ok)
+                        (tliftOverCTyped >> tliftOverExpr)
+                        y
+                let cont grassify =
+                    let bind =
+                        mkEq
+                            (mkVarExp (mapCTyped (Starling >> Reg) x))
+                            grassify
+                    [ PureAssume bind ]
+                lift cont (mapMessages Traversal grassifyR)
+            | Microcode.Assign _ ->
+                fail
+                    (CommandNotImplemented
+                        (cmd = ent,
+                         why = "Assignments cannot mix symbols and pure expressions."))
+            | Assume (NoSym x) ->
+                // Pure assumption.
+                let grassifyR =
+                    liftWithoutContext
+                        (Starling >> Reg >> ok)
+                        (tliftOverCTyped >> tliftToExprDest >> tliftToBoolSrc)
+                        (normalBool x)
+                lift (fun x -> [ PureAssume x ]) (mapMessages Traversal grassifyR)
+            | Assume _ ->
+                fail
+                    (CommandNotImplemented
+                        (cmd = ent,
+                         why = "Impure assumptions not yet supported."))
+
+        lift List.concat (collect (List.map grassMicrocodeInstruction ent))
+    lift List.concat (collect (List.map grassMicrocodeEntry routine))
 
 /// <summary>
 ///     Generates a Grasshopper term.
@@ -267,15 +394,8 @@ let grassMicrocode (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list 
 let grassTerm
   (term : Backends.Z3.Types.ZTerm) : Result<GrassTerm, Error> =
     let requiresR = ok term.SymBool.WPre
-    let plainEnsuresR = ok term.SymBool.Goal
-    let commandsAndCmdEnsuresR = grassMicrocode term.Original.Cmd.Microcode
-
-    let commandsR = lift fst commandsAndCmdEnsuresR
-    let ensuresR =
-        lift2 (fun (_, cmdEnsures) ensures -> mkAnd2 cmdEnsures ensures)
-            commandsAndCmdEnsuresR
-            plainEnsuresR
-
+    let ensuresR = ok term.SymBool.Goal
+    let commandsR = grassMicrocode term.Original.Cmd.Microcode
     let varsR = findVars term
 
     lift4
