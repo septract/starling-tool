@@ -190,12 +190,13 @@ module Pretty =
            | BOr xs -> infexprV "||" (printBoolExprG pVar fr) xs
            | BImplies (x, y) -> 
                /// Convert implications to disjunctive form
-               printBoolExprG pVar fr (BOr [BNot x; y]) 
+               printBoolExprG pVar fr (simp (BOr [BNot x; y])) 
            | BNot (BEq (x, y)) -> infexpr "!=" (printExprG pVar fr) [x; y]
            | BNot x -> 
-               match x with 
-               | NoSym y -> String "!" <+> (printBoolExprG pVar fr x) |> parened 
-               | _ -> failwith "[printBoolExprG] Grasshopper can't negate spatial things." 
+              // match x with 
+              // | NoSym y -> 
+                  String "!" <+> (printBoolExprG pVar fr x) |> parened 
+              // | _ -> failwith "[printBoolExprG] Grasshopper can't negate spatial things." 
            | BEq (x, y) -> infexpr "==" (printExprG pVar fr) [x; y]
            | BLt (x, y) -> infexpr "<" (stripTypeRec >> printIntExprG pVar) [x; y]
            | BLe (x, y) -> infexpr "<=" (stripTypeRec >> printIntExprG pVar) [x; y]

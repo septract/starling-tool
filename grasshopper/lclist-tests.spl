@@ -1,60 +1,399 @@
 include "./lclist-module.spl"; 
 
+// Test that the basic predicates are satisfiable. 
+// All of these tests should fail. 
 
-// Spatial true tests
-procedure sTrue_test(a: Int, b:Int) 
-  requires ((a=b) &*& sTrue()) || ((a!=b) &*& sTrue()); 
-  ensures sTrue(); 
-{ }  
+procedure pred_sat_test0 (X: Set<Node>, head: Node) 
+  requires acc(X) &*& lseg(X, head, null)
+  ensures false  
+{} 
 
-procedure sTrue_test2(x: Node) 
-  requires acc(x) &*& sTrue(); 
-  ensures sTrue(); 
-{ }  
+procedure pred_sat_test1 (X: Set<Node>, head: Node, ub: Int) 
+  requires acc(X) &*& isListG(X, head, ub)
+  ensures false  
+{} 
 
-// // Should hold but diverges. 
-// procedure sTrue_test3(x: Node) 
-//   requires sTrue() &*& sTrue(); 
-//   ensures sTrue() &*& sTrue(); 
-// { }  
+procedure pred_sat_test2 (X: Set<Node>, head: Node, a: Node, v: Int) 
+  requires acc(X) &*& isValG(X, a, v)
+  ensures false  
+{} 
 
-procedure sTrue_test4() 
-  requires sTrue() &*& sTrue(); 
-  ensures sTrue(); 
-{ }  
+procedure pred_sat_test3 (X: Set<Node>, head: Node, a: Node, b: Node) 
+  requires acc(X) &*& has1LockG(X, a, b)
+  ensures false  
+{} 
+
+procedure pred_sat_test4 (X: Set<Node>, head: Node, a: Node, b: Node, c: Node) 
+  requires acc(X) &*& has2LockG(X, a, b, c)
+  ensures false  
+{} 
+
+procedure pred_sat_test5 (X: Set<Node>) 
+  requires sTrue(X)
+  ensures false  
+{} 
+
+// Test that conjunctions of predicates are satisfiable. 
+// All of these tests should fail. 
+
+//procedure conj_sat_test0 (X: Set<Node>, head: Node) 
+//  requires (
+//    (acc(X) &*& lseg(X, head, null)) 
+//     && 
+//    sTrue(X) 
+//  ) 
+//  ensures false  
+//{} 
+
+procedure conj_sat_test1 (X: Set<Node>, head: Node, a: Node, b: Node) 
+  requires (
+    acc(X) 
+     &*& 
+    lseg(X, head, null) 
+     &*& 
+    has1LockG(X, a, b) 
+  ) 
+  ensures false  
+{} 
+
+procedure conj_sat_test2 (X: Set<Node>, head: Node, a: Node, b: Node, c: Node) 
+  requires (
+    acc(X) 
+     &*& 
+    lseg(X, head, null) 
+     &*& 
+    has2LockG(X, a, b, c) 
+  ) 
+  ensures false  
+{} 
+
+procedure conj_sat_test3 (X: Set<Node>, head: Node, a: Node, v: Int) 
+  requires (
+    acc(X) 
+     &*& 
+    lseg(X, head, null) 
+     &*& 
+    isValG(X, a, v) 
+  ) 
+  ensures false  
+{} 
+
+
+// // Spatial true tests
+// 
+// procedure sTrue_test(X: Set<Node>, a: Int, b:Int) 
+//   requires ((a=b) &*& sTrue(X)) || ((a!=b) &*& sTrue(X)) 
+//   ensures sTrue(X) 
+// {}  
+// 
+// procedure sTrue_test3(X: Set<Node>) 
+//   requires sTrue(X) && sTrue(X) 
+//   ensures sTrue(X) && sTrue(X) 
+// {}  
+// 
+// procedure sTrue_test4(X: Set<Node>) 
+//   requires sTrue(X) && sTrue(X) 
+//   ensures sTrue(X) 
+// {}  
+// 
+// procedure sTrue_test5 (a: Node, b: Node) 
+//   requires acc(a) &*& acc(b)
+//   ensures (exists X : Set<Node> :: sTrue(X)) 
+// {} 
+
 
 // Tests of overlap (+) and inclusion (-**) 
 
-procedure test_inclusion (a: Node, X: Set<Node>) 
-  requires acc(X) &*& a in X; 
-  ensures acc(a) -** acc(X) ; 
+procedure inclusion_test (X: Set<Node>, a: Node) 
+  requires acc(X) &*& a in X 
+  ensures acc(a) -** acc(X)  
 {} 
 
-procedure test_sharing (a: Node, b: Node) 
-  requires acc(a) &+& acc(b);
-  ensures (acc(a) &*& acc(b)) || acc(a); 
+procedure sharing_test (X: Set<Node>, a: Node, b: Node) 
+  requires acc(a) &+& acc(b)
+  ensures (acc(a) &*& acc(b)) || acc(a) 
 {}
 
 
-// List tests 
+// Lock tests 
 
-procedure test_list (head: Node, a: Node, b: Node) 
-  requires has1LockG(head, a, b);
-  ensures acc(a) -** sTrue();  
-{ 
-  a.next := null; 
-} 
-
-
-// `requires' conjunction test
-
-procedure test_req (a: Node, b: Node) 
-  requires acc(a) &*& sTrue()
-  requires acc(a) &*& acc(b)
-  ensures false; 
+procedure lock_test0 (X: Set<Node>, a: Node, b: Node) 
+  requires acc(X) &*& has1LockG(X, a, b)
+  ensures acc(a) -** sTrue(X)  
 {} 
 
-// procedure test_conj (a: Node, b: Node) 
-//   requires acc(a) &*& acc(b)
-//   ensures false
-// {} 
+procedure lock_test1 (X: Set<Node>, a: Node, b: Node, c: Node) 
+  requires (
+      acc(X) 
+     &*&  
+      has1LockG(X, a, b) 
+     &*& 
+      has1LockG(X, b, c)
+  ) 
+  ensures acc(X) &*& has2LockG(X, a, b, c)   
+{} 
+
+procedure lock_sat_test1 (X: Set<Node>, a: Node, b: Node, c: Node) 
+  requires (
+      acc(X) 
+     &*&  
+      has1LockG(X, a, b) 
+     &*& 
+      has1LockG(X, b, c)
+  ) 
+  ensures false   
+{} 
+
+
+// requires conjunction test
+
+procedure test_req (a: Node, b: Node) 
+  requires acc(a) &*& (exists X : Set<Node> :: sTrue(X)) 
+  requires acc(a) &*& acc(b)
+  ensures acc(a) &*& acc(b) 
+{} 
+
+
+// Simple program tests
+
+procedure takeLock_test (X: Set<Node>, head: Node, ub: Int, a: Node, b: Node, v: Int) 
+  requires (
+     acc(X) 
+    &*& 
+     isListG(X, head, ub) 
+    &*& 
+     has1LockG(X, a, b)  
+    &*& 
+     isValG(X,a,v) 
+    &*& 
+     v < ub
+  ) 
+  ensures  
+    acc(X) &*& (exists c: Node :: has2LockG(X, a, b, c)) 
+{ 
+   takeLock(b); 
+} 
+
+procedure takeLock_sat_test (X: Set<Node>, head: Node, ub: Int, a: Node, b: Node, v: Int) 
+  requires (
+     acc(X) 
+    &*& 
+     isListG(X, head, ub) 
+    &*& 
+     has1LockG(X, a, b)  
+    &*& 
+     isValG(X,a,v) 
+    &*& 
+     v < ub
+  ) 
+  ensures  
+    false
+{ 
+   takeLock(b); 
+} 
+
+procedure releaseLock_test (X: Set<Node>, head: Node, ub: Int, a: Node, b: Node, c: Node, v: Int) 
+  requires (
+     acc(X) 
+    &*&
+     isListG(X, head, ub) 
+    &*& 
+     has2LockG(X, a, b, c) 
+  ) 
+  ensures  
+    acc(X) &*& has1LockG(X, b, c) 
+{ 
+   releaseLock(a); 
+} 
+
+procedure releaseLock_sat_test (X: Set<Node>, head: Node, ub: Int, a: Node, b: Node, c: Node, v: Int) 
+  requires (
+     acc(X) 
+    &*&
+     isListG(X, head, ub) 
+    &*& 
+     has2LockG(X, a, b, c) 
+  ) 
+  ensures  
+    false 
+{ 
+   releaseLock(a); 
+} 
+
+// More complicated program tests
+
+procedure deleteVal_C003_000 (
+    X: Set<Node>, 
+    before_23_1_v: Int,
+    before_ub: Int,
+    before_curr: Node,
+    before_head: Node,
+    before_prev: Node
+)
+requires (
+    acc(X) 
+      &*& 
+    (isListG(X,before_head,before_ub) ) 
+      &*&
+    (has1LockG(X,before_prev,before_curr) ) 
+      &*&
+    (before_23_1_v < before_ub)
+  )
+ensures
+    (acc(X) &*& isListG(X, before_head,before_ub))
+{
+    takeLock(before_curr); 
+}
+
+procedure deleteVal_sat_C003_000 (
+    X: Set<Node>, 
+    before_23_1_v: Int,
+    before_ub: Int,
+    before_curr: Node,
+    before_head: Node,
+    before_prev: Node
+)
+requires (
+    acc(X) 
+      &*& 
+    (isListG(X,before_head,before_ub) ) 
+      &*&
+    (has1LockG(X,before_prev,before_curr) ) 
+      &*&
+    (before_23_1_v < before_ub)
+  )
+ensures
+    false
+{
+    takeLock(before_curr); 
+}
+
+procedure deleteVal_C003_005 (
+    X: Set<Node>, 
+    before_23_1_v: Int,
+    before_ub: Int,
+    before_curr: Node,
+    before_head: Node,
+    before_prev: Node,
+    goal_350_a: Node,
+    goal_350_b: Node
+)
+requires (
+     acc(X) 
+   &*& 
+     (isListG(X, before_head,before_ub) ) 
+   &*&
+     (has1LockG(X,before_prev,before_curr) ) 
+   &*&
+     (before_23_1_v < before_ub) 
+   &*&
+     ( (! ((goal_350_b != before_curr) ||
+            (goal_350_a != before_prev))) 
+     ||
+       ((before_prev != goal_350_a) &&
+              (before_prev != goal_350_b))
+     ) 
+   &*&
+     (( (! ((goal_350_b != before_curr) ||
+            (goal_350_a != before_prev)))) 
+     ||
+       (exists c : Node :: (has2LockG(X,goal_350_a,goal_350_b,c) ))
+     ) 
+  )
+ensures
+    acc(X) &*& (exists c : Node :: has2LockG(X,goal_350_a,goal_350_b,c) )
+{ 
+    takeLock(before_curr); 
+}
+
+procedure deleteVal_sat_C003_005 (
+    X: Set<Node>, 
+    before_23_1_v: Int,
+    before_ub: Int,
+    before_curr: Node,
+    before_head: Node,
+    before_prev: Node,
+    goal_350_a: Node,
+    goal_350_b: Node
+)
+requires (
+     acc(X) 
+   &*& 
+     (isListG(X, before_head,before_ub) ) 
+   &*&
+     (has1LockG(X,before_prev,before_curr) ) 
+   &*&
+     (before_23_1_v < before_ub) 
+   &*&
+     ( (! ((goal_350_b != before_curr) ||
+            (goal_350_a != before_prev))) 
+     ||
+       ((before_prev != goal_350_a) &&
+              (before_prev != goal_350_b))
+     ) 
+   &*&
+     (( (! ((goal_350_b != before_curr) ||
+            (goal_350_a != before_prev)))) 
+     ||
+       (exists c : Node :: (has2LockG(X,goal_350_a,goal_350_b,c) ))
+     ) 
+  )
+ensures
+   false
+{ 
+    takeLock(before_curr); 
+}
+
+procedure deleteVal_C013_000 (
+    X: Set<Node>, 
+    before_ub: Int,
+    before_curr: Node,
+    before_head: Node,
+    before_prev: Node, 
+    v : Int
+)
+requires (
+    acc(X) 
+   &*& 
+    (isListG(X, before_head,before_ub) ) 
+   &*&
+    (exists e : Node :: has2LockG(X,before_prev,before_curr, e) )
+   &*& 
+    isValG(X, before_curr, v) 
+   &*&
+    v < before_ub 
+  )
+ensures
+    (exists X2 : Set<Node> :: 
+       acc(X2) &*& isListG(X2,before_head,before_ub) )
+{
+    before_prev.next := before_curr.next; 
+    disposeNode(before_curr); 
+}
+
+procedure deleteVal_sat_C013_000 (
+    X: Set<Node>, 
+    before_ub: Int,
+    before_curr: Node,
+    before_head: Node,
+    before_prev: Node, 
+    v : Int
+)
+requires (
+    acc(X) 
+   &*& 
+    (isListG(X, before_head,before_ub) ) 
+   &*&
+    (exists e : Node :: has2LockG(X,before_prev,before_curr, e) )
+   &*& 
+    isValG(X, before_curr, v) 
+   &*&
+    v < before_ub 
+  )
+ensures
+  false
+{
+    before_prev.next := before_curr.next; 
+    disposeNode(before_curr); 
+}
+
