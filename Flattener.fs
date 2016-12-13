@@ -116,7 +116,8 @@ let flatten
     /// Build a list of global parameters, for view definitions.
     let globalsP = VarMap.toTypedVarSeq model.SharedVars
 
-    { SharedVars = model.SharedVars
+    { Pragmata = model.Pragmata
+      SharedVars = model.SharedVars
       ThreadVars = model.ThreadVars
       Axioms = Map.map (fun _ x -> flattenTerm globalsF x) model.Axioms
       ViewDefs =

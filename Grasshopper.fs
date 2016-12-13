@@ -280,11 +280,28 @@ module Pretty =
                braced (Indent cmdprint)
              ]  
 
+    /// <summary>
+    ///     Print a pragma if it has some meaning in GRASShopper.
+    /// </summary>
+    /// <param name="pragma">The pragma to print.</param>
+    /// <returns>
+    ///     A document representing the pragma, if it has meaning in
+    ///     GRASShopper.
+    /// </returns>
+    let printPragma (pragma : string * string) : Doc option =
+        match pragma with
+        | (s, import) when s = "grasshopper_include" ->
+            Some
+                (String "include \"" <-> String import <-> String "\";")
+        | _ -> None
+
     /// Print all the Grasshopper queries that haven't been eliminated by Z3.
     let printQuery (model: GrassModel) : Doc = 
         let axseq = Map.toSeq model.Axioms
-        let docseq =
-            Seq.map (fun (name,term) -> printGrassTerm name term) axseq
+        let tseq = Seq.map (fun (name,term) -> printGrassTerm name term) axseq
+        let pragseq = Seq.choose printPragma model.Pragmata 
+        let docseq = Seq.append pragseq tseq
+
         VSep (docseq, VSkip)
 
     /// Print a Grasshopper error (not implemented yet)

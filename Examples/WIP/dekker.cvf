@@ -3,61 +3,70 @@
  * UNFINISHED
  */
 
-view AReady();
-view AHasLock();
+view Idle(int tid), Want(int tid), Acquiring(int tid), MightBackOff(int tid), BackingOff(int tid), BackedOff(int tid), Resuming(int tid), HoldLock(int tid), Releasing(int tid);
 
-view BReady();
-view BHasLock();
-
-shared bool a_want;
-shared bool b_want;
-
-shared bool a_turn; /* True if A's turn; false if B's turn. */
+shared bool[2] want;
+shared int turn;
 
 thread bool other_wants;
+thread int other_turn;
 
-constraint AReady() => a_want;
-constraint BReady() => b_want;
+constraint emp -> turn == 0 || turn == 1;
 
-constraint AHasLock() => a_turn == true;
-constraint BHasLock() => a_turn == false;
+constraint Idle(tid)         -> tid == 0 || tid == 1;
+constraint Want(tid)         -> tid == 0 || tid == 1;
+constraint Acquiring(tid)    -> tid == 0 || tid == 1;
+constraint MightBackOff(tid) -> tid == 0 || tid == 1;
+constraint BackingOff(tid)   -> tid == 0 || tid == 1;
+constraint BackedOff(tid)    -> tid == 0 || tid == 1;
+constraint Resuming(tid)     -> tid == 0 || tid == 1;
+constraint HoldLock(tid)     -> tid == 0 || tid == 1;
+constraint Releasing(tid)    -> tid == 0 || tid == 1;
 
-constraint AHasLock() * BHasLock() => false;
+constraint Idle(x) * Idle(y) -> x != y;
+constraint Want(x) * Want(y) -> x != y;
+constraint Acquiring(x) * Acquiring(y) -> x != y;
+constraint MightBackOff(x) * MightBackOff(y) -> x != y;
+constraint BackingOff(x) * BackingOff(y) -> x != y;
+constraint Resuming(x) * Resuming(y) -> x != y;
+constraint Releasing(x) * Releasing(y) -> x != y;
 
-method ALock() {
-  {| emp |}
-    <a_want = (true)>
-  {| AReady() |}
-    do {
-      {| AReady() |}
-        other_wants = b_want;
-      {| AReady() * if want then BReady() else emp |}
-        if want {
-          {| AReady() * BReady() |}
-          <a_want = (false)>;
-          {| BReady() |}
+constraint HoldLock(x) * HoldLock(y) -> false;
 
-        } else {
-          {| AReady() |}
-          ;
-          {| AReady() |}
+method lock(int tid) {
+    {| Idle(tid) |}
+        <want[tid] = true>;
+    {| Want(tid) |}
+        <other_wants = want[tid]>;
+    {| if other_wants then MightBackOff(tid) else HoldLock(tid) |}
+        while (other_wants) {
+            {| MightBackOff(tid) |}
+                <other_turn = turn>;
+            {| if other_turn != tid then BackingOff(tid) else Want(tid) |}
+                if (other_turn != tid) {
+                    {| BackingOff(tid) |}
+                        <want[tid] = false>;
+                    {| BackedOff(tid) |}
+                        do {
+                            {| BackedOff(tid) |}
+                            <other_turn = turn>;
+                            {| if other_turn != tid then BackedOff(tid) else Resuming(tid) |}
+                        } while (other_turn != tid);
+                    {| Resuming(tid) |}
+                        <want[tid] = true>;
+                    {| Want(tid) |}
+                }
+            {| Want(tid) |}
+                <other_wants = want[tid]>;
+            {| if other_wants then MightBackOff(tid) else HoldLock(tid) |}
         }
-   wants_to_enter[0] ← true
-   while wants_to_enter[1] {
-      if turn ≠ 0 {
-         wants_to_enter[0] ← false
-         while turn ≠ 0 {
-           // busy wait
-         }
-         wants_to_enter[0] ← true
-      }
-   }
+    {| HoldLock(tid) |}
 }
 
-method AUnlock() {
-  {| AHasLock() * AReady() |}
-    <a_turn = (false)>;
-  {| AReady() |}
-    <a_want = (false)>;
-  {| emp |}
+method unlock(int tid) {
+    {| HoldLock(tid) |}
+        <turn = (tid + 1)%2>;
+    {| Releasing(tid) |}
+        <want[tid] = false>;
+    {| Idle(tid) |}
 }

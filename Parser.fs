@@ -670,12 +670,24 @@ let parseTypedef =
         (fun ty id -> Typedef (ty, id))
     .>> wsSemi
 
+/// Parses a pragma.
+let parsePragma =
+    skipString "pragma"
+    >>. ws >>.
+    pipe2ws
+        parseIdentifier
+        (inBraces (manyChars (noneOf "}")))
+        (fun k v -> { Key = k; Value = v })
+    .>> wsSemi
+
 /// Parses a script of zero or more methods, including leading and trailing whitespace.
 let parseScript =
     // TODO(CaptainHayashi): parse things that aren't methods:
     //   axioms definitions, etc
     ws >>. manyTill (choice (List.map nodify
-                            [parseMethod |>> Method
+                            [parsePragma |>> Pragma
+                             // ^- pragma <identifier> { ... };
+                             parseMethod |>> Method
                              // ^- method <identifier> <arg-list> <block>
                              parseConstraint |>> Constraint
                              // ^- constraint <view> -> <expression> ;
