@@ -1,11 +1,13 @@
 /* Revised lclist-starling.cvf to fit more nicely with GRASShopper. */
 
 pragma grasshopper_include {./grasshopper/lclist-module.spl};
+pragma grasshopper_footprint {X : Set<Node>};
+pragma grasshopper_strue {sTrue(X)};
 
 typedef int Node;
-typedef int Int; 
+typedef int Int;
 
-shared Int heap; 
+shared Int heap;
 shared Node head;
 shared Int ub; // upper bound on the list
 

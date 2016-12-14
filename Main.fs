@@ -330,7 +330,7 @@ let rec printError (err : Error) : Doc =
     | IterLowerError e ->
         headed "Iterator lowering failed"
                [ TermGen.Iter.printError e ]
-    | Grasshopper e -> Backends.Grasshopper.Pretty.printGrassError e 
+    | Grasshopper e -> Backends.Grasshopper.Pretty.printError e 
     | ModelFilterError e ->
         headed "View definitions are incompatible with this backend"
                [ Core.Instantiate.Pretty.printError e ]

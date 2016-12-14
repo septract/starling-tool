@@ -486,6 +486,21 @@ let rec remExprDup (xs: List<BoolExpr<'var>>) : List<BoolExpr<'var>> =
       if (List.exists (eqBoolExpr x) xs) then xs2 else x::xs2
   | x -> x
 
+/// <summary>
+///     Unfolds all top-level conjunctions in a Boolean expression,
+///     returning a list of all conjoined expressions.
+/// </summary>
+/// <param name="expr">The Boolean expression to unfold.</param>
+/// <typeparam name="Var">Type of variables in the expression.</typeparam>
+/// <returns>
+///     The list of all Boolean expressions reachable from
+///     <paramref name="expr"/> by walking through top-level
+///     conjunctions.
+/// </returns>
+let rec unfoldAnds (expr : BoolExpr<'Var>) : BoolExpr<'Var> list =
+    match expr with
+    | BAnd xs -> concatMap unfoldAnds xs
+    | x -> [x]
 
 /// Recursively simplify a formula
 /// Note: this does _not_ simplify variables.
