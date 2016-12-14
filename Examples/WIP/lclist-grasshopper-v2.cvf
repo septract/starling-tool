@@ -1,8 +1,8 @@
 /* Revised lclist-starling.cvf to fit more nicely with GRASShopper. */
 
 pragma grasshopper_include {./grasshopper/lclist-module.spl};
-pragma grasshopper_footprint {X : Set<Node>};
-pragma grasshopper_strue {sTrue(X)};
+pragma grasshopper_footprint {X};
+pragma grasshopper_footprint_sort {Set<Node>};
 
 typedef int Node;
 typedef int Int;
@@ -66,19 +66,19 @@ method deleteVal(Int v) {
   {| emp |}
 }
 
-constraint emp -> %{ acc(X) &*& isListG(X, #1,#2) }(head,ub); 
+constraint emp -> %{ isListG(X, #1,#2) }(head,ub); 
 
 constraint wf(v) -> v < ub;
 
 constraint isHead(x) -> x == head;
 
-constraint has1Lock(a,b) -> %{ has1LockG(X, #1,#2,#3) }(head,a,b);
+constraint has1Lock(a,b) -> %{ has1LockG(X, #1,#2) }(a,b);
 
-constraint has1LockAnon(a) -> %{ exists e: Node :: has1LockG(X, #1,#2,e) }(head,a);
+constraint has1LockAnon(a) -> %{ exists e: Node :: has1LockG(X, #1, e) }(a);
 
-constraint has2Lock(a,b)  -> %{ has2LockG(X, #1,#2) }(a,b);
+constraint has2Lock(a,b)  -> %{ exists e: Node :: has2LockG(X, #1, #2, e) }(a,b);
 
-constraint isVal(node,v) -> %{ isValG(X,#1,#2) &*& #2 < #3 }(node,v,ub);
+constraint isVal(node,v) -> %{ isValG(X,#1,#2) }(node, v) && v < ub;
 
 // Constraints on view interactions
 constraint has1Lock(a,b)   * has1Lock(c,d)    ->  a != c;

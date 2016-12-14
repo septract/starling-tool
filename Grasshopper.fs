@@ -53,27 +53,13 @@ module Types =
         | /// <summary>A pure assumption.</summary>
           PureAssume of assumption : BoolExpr<Sym<GrassVar>>
 
-    /// <summary>A Grasshopper spatial Boolean expression.</summary>
-    type Spatial =
-        // TODO(CaptainHayashi): don't stringly type strue.
-        | /// <summary>A pure expression with a spatial true.</summary>
-          Pure of strue : string * body : BoolExpr<MarkedVar>
-        | /// <summary>A spatial conjunction.</summary>
-          SAnd of l : Spatial * r : Spatial
-        | /// <summary>A spatial fact, encoded as a symbol.</summary>
-          SFact of Symbolic<Expr<Sym<MarkedVar>>>
-        | /// <summary>An implication.</summary>
-          SImpl of body : BoolExpr<MarkedVar> * head : Spatial
-        | /// <summary>A lone spatial true.</summary>
-          STrue of strue : string
-
     /// <summary>A Grasshopper formula.</summary>
     type Formula =
         // TODO(CaptainHayashi): don't stringly type footprint.
         | /// <summary>A formula with no footprint.</summary>
-          NoFootprint of body : Spatial
+          NoFootprint of body : BoolExpr<Sym<MarkedVar>>
         | /// <summary>A formula with a footprint.</summary>
-          Footprint of spec : string * body : Spatial
+          Footprint of name : string * sort : string * body : BoolExpr<Sym<MarkedVar>>
 
     /// <summary>A Grasshopper term (procedure).</summary>
     type GrassTerm =
@@ -264,28 +250,6 @@ module Pretty =
                     <+> printBoolExprG (printSymGrass printGrassVar) assumption
         withSemi c
 
-    /// <summary>
-    ///     Prints a spatial Boolean expression.
-    /// </summary>
-    /// <param name="spat">The spatial expression to print.</param>
-    /// <returns>
-    ///     A <see cref="Doc"/> representing <paramref name="spat"/>.
-    /// </returns>
-    let rec printSpatial (spat : Spatial) : Doc =
-        match spat with
-        | Pure (strue, body) ->
-            String strue <+> String "&&" <+> printBoolExprG printMarkedVarGrass body
-        | SAnd (l, r) ->
-            printSpatial l <+> String "&*&" <+> printSpatial r
-        | SImpl (l, r) ->
-            parened
-                ( parened (printBoolExprG printMarkedVarGrass (BNot l))
-                  <+> String "||"
-                  <+> parened (printSpatial r))
-        | SFact f ->
-            printSymbolicGrass (printExprG (printSymGrass printMarkedVarGrass)) f
-        | STrue strue -> String strue
-
     /// Print a single Grasshopper query.
     let printGrassTerm (name : string) (term : GrassTerm) : Doc =
         let varprint =
@@ -296,11 +260,13 @@ module Pretty =
 
         /// Print the requires / ensures clauses 
         let reprint expr = 
+            let pbool = printBoolExprG (printSymGrass printMarkedVarGrass)
             match expr with
-            | NoFootprint b -> printSpatial b
-            | Footprint (spec, b) ->
-                String "exists" <+> String spec <+> String "::"
-                <+> parened (ivsep [printSpatial b])
+            | NoFootprint b -> pbool b
+            | Footprint (name, sort, b) ->
+                let acc = String "acc" <-> parened (String name) <+> String "&*&"
+                String "exists" <+> String name <-> String ":" <-> String sort <+> String "::"
+                <+> parened (ivsep [acc ; parened (ivsep [ pbool b ] ) ] )
         let reqprint = reprint term.Requires
         let ensprint = reprint term.Ensures
 
@@ -373,58 +339,6 @@ let findVars (term : Backends.Z3.Types.ZTerm)
         (lift2 (fun gv cv -> Set.toList (Set.union gv cv))
             goalAndWPreVarsR
             cmdVarsR)
-
-/// <summary>
-///     Tries to convert a Boolean expression into a spatial expression.
-///     <para>
-///         This first unfolds all top-level conjunctions, then tries to sort
-///         the resulting fact list into spatial and non-spatial parts.
-///         If it cannot cleanly separate the two, it fails.
-///         The spatial part is then spatially conjoined, and further
-///         conjoined to a pure lifting of the non-spatial part.
-///     </para>
-/// </summary>
-/// <param name="strue">
-///     The string representing, in Grasshopper syntax, the spatial true used
-///     to lift pure observations to spatials.
-/// </param>
-/// <param name="expr">The Boolean expression to convert.</param>
-/// <returns>If successful, the resulting spatial expression.</param>
-let rec makeSpatial
-  (strue : string)
-  (expr : BoolExpr<Sym<MarkedVar>>)
-  : Result<Spatial, Error> =
-    // TODO(CaptainHayashi): this is probably wrong.
-
-    let partitionSpatial bool (ss, ns) =
-        match bool with
-        | NoSym n -> ok (ss, n::ns)
-        | BImplies (NoSym x, y) ->
-            lift
-                (fun y' -> (SImpl (x, y')::ss, ns))
-                    (makeSpatial strue y)
-        | BVar (Sym s) -> ok (SFact s::ss, ns)
-        | x ->
-            fail
-                (ExpressionNotImplemented
-                    (expr = normalBoolExpr x,
-                     why = "incorrectly mixes spatial and non-spatial parts"))
-
-    let unfolded = unfoldAnds expr
-    let partitionedR = seqBind partitionSpatial ([], []) unfolded
-
-    // Optimised conjunction
-    let sand x y =
-        match (x, y) with
-        | (STrue _, s) | (s, STrue _) -> s
-        | _ -> SAnd (x, y)
-
-    let combineSpatial spatials nonspatials =
-        let cspatials = Seq.fold sand (STrue strue) spatials
-        let lifted = Pure (strue, BAnd nonspatials)
-        sand lifted cspatials
-
-    lift (uncurry combineSpatial) partitionedR
 
 /// <summary>
 ///     Tries to convert microcode to Grasshopper commands and ensures.
@@ -548,21 +462,21 @@ let grassFrame
 /// <summary>
 ///     Generates a Grasshopper term.
 /// </summary>
-/// <param name="strue">The 'spatial true' predicate.</param>
-/// <param name="footprint">An optional 'name : type' footprint spec.</param>
+/// <param name="footprint">An optional footprint name.</param>
+/// <param name="footprintSort">The sort of the footprint, if it exists.</param>
 /// <param name="term">The term to convert to Grasshopper.</param>
 /// <returns>
 ///     A Chessie result, containing the converted term on success.
 /// </returns>
 let grassTerm
-  (strue : string)
   (footprint : string option)
+  (footprintSort : string)
   (term : Backends.Z3.Types.ZTerm) : Result<GrassTerm, Error> =
     let addFootprint =
-        maybe NoFootprint (fun f b -> Footprint (f, b)) footprint
+        maybe NoFootprint (fun f b -> Footprint (f, footprintSort, b)) footprint
 
-    let requiresR = lift addFootprint (makeSpatial strue term.SymBool.WPre)
-    let ensuresR = lift addFootprint (makeSpatial strue term.SymBool.Goal)
+    let requiresR = ok (addFootprint term.SymBool.WPre)
+    let ensuresR = ok (addFootprint term.SymBool.Goal)
     let commandsR = grassMicrocode term.Original.Cmd.Microcode
     let varsR = findVars term
     let frameR =
@@ -598,15 +512,15 @@ let grassModel (model : Backends.Z3.Types.ZModel) : Result<GrassModel,Error> =
         List.tryPick
             (fun (x, y) -> if x = "grasshopper_footprint" then Some y else None)
             model.Pragmata
-    let strue' =
+    let footprintSort' =
         List.tryPick
-            (fun (x, y) -> if x = "grasshopper_strue" then Some y else None)
+            (fun (x, y) -> if x = "grasshopper_footprint_sort" then Some y else None)
             model.Pragmata
     // TODO(CaptainHayashi): clean this up...
-    let strue = withDefault "sTrue()" strue'
+    let footprintSort = withDefault "Set<Node>" footprintSort'
 
 
-    let grassTermPair (name, term) = lift (mkPair name) (grassTerm strue footprint term)
+    let grassTermPair (name, term) = lift (mkPair name) (grassTerm footprint footprintSort term)
     let grassTermPairsR = collect (Seq.map grassTermPair failSeq)
 
     let grassTermsR = lift Map.ofSeq grassTermPairsR
