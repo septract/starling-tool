@@ -1126,13 +1126,6 @@ module Term =
      * Guard reduction
      *)
 
-    /// Return all known facts inside a conjunctive Boolean expression.
-    let rec facts
-      : BoolExpr<Sym<MarkedVar>> -> BoolExpr<Sym<MarkedVar>> list =
-        function
-        | BAnd xs -> concatMap facts xs
-        | x -> [x]
-
     /// Reduce a Boolean expression, given some known facts.
     let rec reduce (fs : Set<BoolExpr<Sym<MarkedVar>>>)
       : BoolExpr<Sym<MarkedVar>> -> BoolExpr<Sym<MarkedVar>> =
@@ -1161,7 +1154,7 @@ module Term =
       : Result<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
                TermOptError> =
 
-        let fs = c.Semantics |> facts |> Set.ofList
+        let fs = Set.ofList (unfoldAnds c.Semantics)
         ok {Cmd = c; WPre = reduceGView fs w; Goal = g}
 
     (*
