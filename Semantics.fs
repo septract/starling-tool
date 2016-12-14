@@ -536,8 +536,7 @@ let makeFrame (states : Map<TypedVar, MarkedVar>) : BoolExpr<Sym<MarkedVar>> lis
 ///     microcode routine and a map from variable post-states to their last
 ///     assignment in the microcode routine.  The latter is useful for
 ///     calculating frames.
-///     The order of the routine is not guaranteed (but is no longer relevant
-///     after processing anyway).
+///     The order of the routine is preserved.
 /// </returns>
 let processMicrocodeRoutine
   (vars : TypedVar list)
@@ -598,7 +597,10 @@ let processMicrocodeRoutine
         lift
             (fun stateAware -> (stateAware :: xs, updateState state stateAware))
             stateAwareR
-    seqBind processListing ([], initialState) markedStages
+    // The listing is being built up in reverse order, so correct that.
+    lift
+        (pairMap List.rev id)
+        (seqBind processListing ([], initialState) markedStages)
 
 /// <summary>
 ///     Converts a processed microcode routine into a two-state Boolean predicate.

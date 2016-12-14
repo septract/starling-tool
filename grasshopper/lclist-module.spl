@@ -58,12 +58,17 @@ predicate nodeLocked(x: Node, y: Node) {
 
 // Calls to helper procedures
 
+procedure spin(x: Node)
+  requires acc(x);
+  ensures acc(x) &*& nodeUnlocked(x, x.next);
+{
+  while (x.lock == true) {}
+}
+
 procedure takeLock(x: Node)
-  requires acc(x); 
+  requires acc(x) &*& nodeUnlocked(x, x.next); 
   ensures acc(x) &*& nodeLocked(x,x.next); 
 { 
-  while (x.lock == true) {} 
-  //assume x.lock == false; 
   x.lock := true; 
 }  
 
