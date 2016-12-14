@@ -49,11 +49,11 @@ method deleteVal(Int v) {
            %{ takeLock(#1) }(curr)[heap]; }>;
       {| wf(v) * has2Lock(prev, curr) |}
         cv = (%{ #1.val }(curr));
-      {| wf(v) * has1Lock(prev, curr) * isVal(curr,cv) |}
+      {| wf(v) * has2Lock(prev, curr) * isVal(curr,cv) |}
     }
-  {| has2Lock(prev, curr) |}
+  {| wf(v) * has2Lock(prev, curr) * isVal(curr, cv) |}
     if ( cv == v) {
-      {| has2Lock(prev, curr) |}
+      {| wf(cv) * has2Lock(prev, curr) * isVal(curr, cv) |}
         // Merged these two to avoid dangling nodes
         <{ %{ #1.next := #2.next }(prev, curr)[heap];
            %{ disposeNode(#1) }(curr)[heap]; }>;
@@ -81,7 +81,9 @@ constraint has1LockAnon(a) -> %{ exists e: Node :: has1LockG(X, #1, e) }(a);
 
 constraint has2Lock(a,b)  -> %{ exists e: Node :: has2LockG(X, #1, #2, e) }(a,b);
 
-constraint isVal(node,v) -> %{ isValG(X,#1,#2) }(node, v);
+constraint has1Lock(a, b)  * isVal(node,v) -> a == node => %{ isValG(X,#1,#2) }(node, v);
+constraint has1LockAnon(a) * isVal(node,v) -> a == node => %{ isValG(X,#1,#2) }(node, v);
+constraint has2Lock(a, b)  * isVal(node,v) -> b == node => %{ isValG(X,#1,#2) }(node, v);
 
 // Constraints on view interactions
 constraint has1Lock(a,b)   * has1Lock(c,d)    ->  a != c;
