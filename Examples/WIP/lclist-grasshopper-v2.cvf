@@ -7,34 +7,25 @@ pragma grasshopper_footprint_sort {Set<Node>};
 typedef int Node;
 typedef int Int;
 
-shared Int heap;
-shared Node head;
-shared Int ub; // upper bound on the list
+shared Int heap;  // represent side-effects through the heap
+shared Int ub;    // upper bound on the list
+shared Node head; // start of the list
 
-thread Node prev;
-thread Node curr;
+thread Node prev, curr;
+thread Int v, cv;
 
-thread Int v;
-thread Int cv;
-
-view wf(Int v);
-view isHead(Node node);
-view isVal(Node node, Int v);
-view has1Lock(Node x, Node y);
-view has1LockAnon(Node x);
-view has2Lock(Node x, Node y);
+view wf(Int v), isHead(Node node), isVal(Node node, Int v);
+view has1Lock(Node x, Node y), has1LockAnon(Node x), has2Lock(Node x, Node y);
 
 method deleteVal(Int v) {
   {| wf(v) |}
     <prev = head>;
   {| wf(v) * isHead(prev) |}
-   <{ %{ spin(#1) }(prev)[heap];
-      %{ takeLock(#1) }(prev)[heap]; }>;
+   <{ %{ waitLock(#1); takeLock(#1) }(prev)[heap]; }>;
   {| wf(v) * has1LockAnon(prev) * isHead(prev) |}
    curr = (%{ #1.next }(prev));
   {| wf(v) * has1Lock(prev, curr) * isHead(prev) |}
-   <{ %{ spin(#1) }(curr)[heap];
-      %{ takeLock(#1) }(curr)[heap]; }>;
+   <{ %{ waitLock(#1); takeLock(#1) }(curr)[heap]; }>;
   {| wf(v) * has2Lock(prev, curr) |}
    cv = (%{ #1.val }(curr));
   {| wf(v) * has2Lock(prev,curr) * isVal(curr, cv) |}
@@ -45,8 +36,7 @@ method deleteVal(Int v) {
         prev = curr;
         curr = (%{ #1.next }(curr));
       {| wf(v) * wf(cv) * has1Lock(prev, curr) * isVal(prev,cv) |}
-        <{ %{ spin(#1) }(curr)[heap];
-           %{ takeLock(#1) }(curr)[heap]; }>;
+        <{ %{ waitLock(#1); takeLock(#1) }(curr)[heap]; }>;
       {| wf(v) * has2Lock(prev, curr) |}
         cv = (%{ #1.val }(curr));
       {| wf(v) * has2Lock(prev, curr) * isVal(curr,cv) |}
@@ -71,19 +61,16 @@ method deleteVal(Int v) {
 
 constraint emp -> %{ isListG(X, #1,#2) }(head,ub);
 
-constraint wf(v) -> v < ub;
+constraint wf(v)      ->  v < ub;
+constraint isHead(x)  ->  x == head;
 
-constraint isHead(x) -> x == head;
+constraint has1Lock(a,b)    ->  %{ has1LockG(X, #1,#2) }(a,b);
+constraint has1LockAnon(a)  ->  %{ exists e: Node :: has1LockG(X, #1, e) }(a);
+constraint has2Lock(a,b)    ->  %{ exists e: Node :: has2LockG(X, #1, #2, e) }(a,b);
 
-constraint has1Lock(a,b) -> %{ has1LockG(X, #1,#2) }(a,b);
-
-constraint has1LockAnon(a) -> %{ exists e: Node :: has1LockG(X, #1, e) }(a);
-
-constraint has2Lock(a,b)  -> %{ exists e: Node :: has2LockG(X, #1, #2, e) }(a,b);
-
-constraint has1Lock(a, b)  * isVal(node,v) -> a == node => %{ isValG(X,#1,#2) }(node, v);
-constraint has1LockAnon(a) * isVal(node,v) -> a == node => %{ isValG(X,#1,#2) }(node, v);
-constraint has2Lock(a, b)  * isVal(node,v) -> b == node => %{ isValG(X,#1,#2) }(node, v);
+constraint has1Lock(a, b)  * isVal(node,v)  ->  a == node => %{ isValG(X,#1,#2) }(node, v);
+constraint has1LockAnon(a) * isVal(node,v)  ->  a == node => %{ isValG(X,#1,#2) }(node, v);
+constraint has2Lock(a, b)  * isVal(node,v)  ->  b == node => %{ isValG(X,#1,#2) }(node, v);
 
 // Constraints on view interactions
 constraint has1Lock(a,b)   * has1Lock(c,d)    ->  a != c;
