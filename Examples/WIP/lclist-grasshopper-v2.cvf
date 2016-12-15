@@ -29,7 +29,7 @@ method deleteVal(Int v) {
   {| wf(v) * has2Lock(prev, curr) |}
    cv = (%{ #1.val }(curr));
   {| wf(v) * has2Lock(prev,curr) * isVal(curr, cv) |}
-    while (cv < v ) {
+    while (cv < v) {
       {| wf(v) * wf(cv) * has2Lock(prev, curr) * isVal(curr, cv) |}
         <%{ releaseLock(#1) }(prev)[heap]>;
       {| wf(v) * wf(cv) * has1LockAnon(curr) * isVal(curr, cv) |}

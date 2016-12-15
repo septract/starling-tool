@@ -162,6 +162,132 @@ let requestFromStage (ostage : string option) : Request option =
     |> pickStage
     |> Option.map (snd >> snd)
 
+/// <summary>
+///     Parses a parameter string and populates a configuration structure
+///     with it.
+/// </summary>
+let parseParams
+  (manifest : Map<string, (string * ('Params -> 'Params))>)
+  (initial : 'Params)
+  (paramStr : string option)
+  : 'Params =
+    let parsed = maybe Seq.empty Utils.parseOptionString paramStr
+    Seq.fold
+        (fun opts str ->
+            match (manifest.TryFind str) with
+            | Some (_, f) -> f opts
+            | None ->
+                eprintfn "unknown backend param %s ignored (try 'list')"
+                    str
+                opts)
+        initial
+        parsed
+
+
+/// <summary>
+///     Type of the backend parameter structure.
+/// </summary>
+type BackendParams =
+    // TODO(CaptainHayashi): distribute into the target backends?
+    { /// <summary>
+      ///     The approximation mode to use.
+      /// </summary>
+      ApproxMode : ApproxMode
+      /// <summary>
+      ///     Whether SMT reduction is being suppressed.
+      /// </summary>
+      NoSMTReduce : bool
+      /// <summary>
+      ///     Whether reals are being substituted for integers in Z3 proofs.
+      /// </summary>
+      Reals : bool }
+
+/// <summary>
+///     Map of known backend parameters.
+/// </summary>
+let rec backendParams ()
+  : Map<string, string * (BackendParams -> BackendParams)> =
+    Map.ofList
+        [ ("approx",
+           ("Replace all symbols in a proof with their under-approximation.\n\
+             Allows some symbolic terms to be discharged by SMT, but the \
+             resulting proof may be incomplete.",
+             fun ps -> { ps with ApproxMode = Approx } ))
+          ("try-approx",
+           ("As 'approx', but don't fail if a term cannot be approximated.\
+             Instead, proceed for that term as if approximation was not\
+             requested.",
+             fun ps -> { ps with ApproxMode = TryApprox } ))
+          ("no-smt-reduce",
+           ("Don't remove SMT-solved proof terms before applying the backend.\n\
+             This can speed up some solvers due to overconstraining the search \
+             space.",
+             fun ps -> { ps with NoSMTReduce = true } ))
+          ("reals",
+           ("In Z3/muZ3 proofs, model integers as reals.\n\
+             This may speed up the proof at the cost of soundness.",
+             fun ps -> { ps with Reals = true } ))
+          ("list",
+           ("Lists all backend parameters.",
+            fun ps ->
+                eprintfn "Backend parameters:\n"
+                Map.iter
+                    (fun name (descr, _) -> eprintfn "%s: %s\n" name descr)
+                    (backendParams ())
+                eprintfn "--\n"
+                ps)) ]
+
+/// <summary>
+///     Parses a parameter string and populates the backend parameters structure
+///     with it.
+/// </summary>
+let parseBackendParams (paramStr : string option) : BackendParams =
+    parseParams
+        (backendParams ())
+        { ApproxMode = NoApprox; NoSMTReduce = false; Reals = false }
+        paramStr
+
+/// <summary>
+///     Type of the view parameter structure.
+/// </summary>
+type DisplayParams =
+    { /// <summary>Whether to emit colour codes.</summary>
+      UseColour : bool
+      /// <summary>Whether to emit LaTeX.</summary>
+      UseLatex : bool }
+
+/// <summary>
+///     Map of known display parameters.
+/// </summary>
+let rec displayParams ()
+  : Map<string, string * (DisplayParams -> DisplayParams)> =
+    Map.ofList
+        [ ("no-colour",
+           ("Don't emit colour codes.",
+             fun ps -> { ps with UseColour = false } ))
+          ("latex",
+           ("Emit LaTeX commands where possible, for typesetting Starling\
+             proofs.",
+             fun ps -> { ps with UseLatex = true } ))
+          ("list",
+           ("Lists all display parameters.",
+            fun ps ->
+                eprintfn "Display parameters:\n"
+                Map.iter
+                    (fun name (descr, _) -> eprintfn "%s: %s\n" name descr)
+                    (displayParams ())
+                eprintfn "--\n"
+                ps)) ]
+
+/// <summary>
+///     Parses a parameter string and populates the display parameters structure
+///     with it.
+/// </summary>
+let parseDisplayParams (paramStr : string option) : DisplayParams =
+    parseParams
+        (displayParams ())
+        { UseColour = true; UseLatex = false }
+        paramStr
 
 /// Type of possible outputs from a Starling run.
 [<NoComparison>]
@@ -344,28 +470,42 @@ let rec printError (err : Error) : Doc =
     | Traversal err -> Core.Traversal.Pretty.printTraversalError printError err
 
 /// Prints an ok result to stdout.
-let printOk (pOk : 'Ok -> Doc) (pBad : 'Warn -> Doc)
-  : ('Ok * 'Warn list) -> unit =
-    pairMap pOk (List.map pBad)
-    >> function
-       | (ok, []) -> ok
-       | (ok, ws) -> vsep [ ok
-                            VSkip
-                            Separator
-                            VSkip
-                            headed "Warnings" ws ]
-    >> print
-    >> printfn "%s"
+let printOk
+  (opts : DisplayParams)
+  (pOk : 'Ok -> Doc)
+  (pBad : 'Warn -> Doc)
+  (result : ('Ok * 'Warn list))
+  : unit =
+    let fdoc =
+        match (pairMap pOk (List.map pBad) result) with
+        | (ok, []) -> ok
+        | (ok, ws) ->
+            vsep
+                [ ok
+                  VSkip
+                  Separator
+                  VSkip
+                  headed "Warnings" ws ]
+    printfn "%s" (print opts.UseColour opts.UseLatex fdoc)
 
 /// Prints an err result to stderr.
-let printErr (pBad : 'Error -> Doc) : 'Error list -> unit =
-    List.map pBad >> headed "Errors" >> print >> eprintfn "%s"
+let printErr
+  (opts : DisplayParams)
+  (pBad : 'Error -> Doc)
+  (errors : 'Error list)
+  : unit =
+    let fdoc = headed "Errors" (List.map pBad errors)
+    eprintfn "%s" (print opts.UseColour opts.UseLatex fdoc)
 
 /// Pretty-prints a Chessie result, given printers for the successful
 /// case and failure messages.
-let printResult (pOk : 'Ok -> Doc) (pBad : 'Error -> Doc)
-  : Result<'Ok, 'Error> -> unit =
-    either (printOk pOk pBad) (printErr pBad)
+let printResult
+  (opts : DisplayParams)
+  (pOk : 'Ok -> Doc)
+  (pBad : 'Error -> Doc)
+  (res : Result<'Ok, 'Error>)
+  : unit =
+    either (printOk opts pOk pBad) (printErr opts pBad) res
 
 /// Shorthand for the raw proof output stage.
 /// TODO: Keep around the CommandSemantics types longer
@@ -377,59 +517,6 @@ let rawproof
              (fun { Cmd = c; WPre = w; Goal = g } ->
                   Core.Expr.mkImplies (Core.Expr.mkAnd2 c.Semantics w) g))
         res
-
-/// <summary>
-///     Type of the backend parameter structure.
-/// </summary>
-type BackendParams =
-    // TODO(CaptainHayashi): distribute into the target backends?
-    { /// <summary>
-      ///     The approximation mode to use.
-      /// </summary>
-      ApproxMode : ApproxMode
-      /// <summary>
-      ///     Whether SMT reduction is being suppressed.
-      /// </summary>
-      NoSMTReduce : bool
-      /// <summary>
-      ///     Whether reals are being substituted for integers in Z3 proofs.
-      /// </summary>
-      Reals : bool }
-
-/// <summary>
-///     Map of known backend parameters.
-/// </summary>
-let rec backendParams ()
-  : Map<string, string * (BackendParams -> BackendParams)> =
-    Map.ofList
-        [ ("approx",
-           ("Replace all symbols in a proof with their under-approximation.\n\
-             Allows some symbolic terms to be discharged by SMT, but the \
-             resulting proof may be incomplete.",
-             fun ps -> { ps with ApproxMode = Approx } ))
-          ("try-approx",
-           ("As 'approx', but don't fail if a term cannot be approximated.\
-             Instead, proceed for that term as if approximation was not\
-             requested.",
-             fun ps -> { ps with ApproxMode = TryApprox } ))
-          ("no-smt-reduce",
-           ("Don't remove SMT-solved proof terms before applying the backend.\n\
-             This can speed up some solvers due to overconstraining the search \
-             space.",
-             fun ps -> { ps with NoSMTReduce = true } ))
-          ("reals",
-           ("In Z3/muZ3 proofs, model integers as reals.\n\
-             This may speed up the proof at the cost of soundness.",
-             fun ps -> { ps with Reals = true } ))
-          ("list",
-           ("Lists all backend parameters.",
-            fun ps ->
-                eprintfn "Backend parameters:\n"
-                Map.iter
-                    (fun name (descr, _) -> eprintfn "%s: %s\n" name descr)
-                    (backendParams ())
-                eprintfn "--\n"
-                ps)) ]
 
 /// <summary>
 ///     Runs a Starling request.
@@ -457,17 +544,7 @@ let runStarling (request : Request)
     let { ApproxMode = approxMode
           NoSMTReduce = noSMTReduce
           Reals = shouldUseRealsForInts } =
-        config.backendOpts
-        |> maybe (Seq.empty) Utils.parseOptionString
-        |> Seq.fold
-               (fun opts str ->
-                    match (bp.TryFind str) with
-                    | Some (_, f) -> f opts
-                    | None ->
-                        eprintfn "unknown backend param %s ignored (try 'list')"
-                            str
-                        opts)
-               { ApproxMode = NoApprox; NoSMTReduce = false; Reals = false }
+        parseBackendParams config.backendOpts
 
     // Shorthand for the various stages available.
     let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
@@ -596,7 +673,8 @@ let mainWithOptions (options : Options) : int =
     let pfn =
         if config.raw then (sprintf "%A" >> String)
                       else printResponse mview
-    printResult pfn printError starlingR
+    let opts = parseDisplayParams config.displayOpts
+    printResult opts pfn printError starlingR
     0
 
 [<EntryPoint>]

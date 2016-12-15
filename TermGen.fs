@@ -303,18 +303,20 @@ module Iter =
                 (Core.Pretty.String func)
                 (Core.Definer.Pretty.printError error)
         | ProtoMissing func ->
-            Core.Pretty.fmt
-                "prototype missing for func '{0}'"
-                [ Core.Pretty.String func ]
+            Core.Pretty.hsep
+                [ Core.Pretty.String "prototype missing for func"
+                  Core.Pretty.quoted (Core.Pretty.String func) ]
         | CannotEvalIterator (func, iterator) ->
-            Core.Pretty.fmt
-                "non-iterated func '{0}' is used with iterator '{1}', which
-                 cannot be resolved to an integer"
-                [ Core.View.Pretty.printSMVFunc func
-                  Core.Expr.Pretty.printIntExpr
-                      (Core.Symbolic.Pretty.printSym
-                           Core.Var.Pretty.printMarkedVar)
-                      iterator ]
+            Core.Pretty.hsep
+                [ Core.Pretty.String "non-iterated func"
+                  Core.Pretty.quoted (Core.View.Pretty.printSMVFunc func)
+                  Core.Pretty.String "is used with iterator"
+                  Core.Pretty.quoted
+                      (Core.Expr.Pretty.printIntExpr
+                          (Core.Symbolic.Pretty.printSym
+                               Core.Var.Pretty.printMarkedVar)
+                          iterator)
+                  Core.Pretty.String "which cannot be resolved to an integer" ]
 
     /// <summary>
     ///     Decides whether a func should be interpreted as iterated by looking

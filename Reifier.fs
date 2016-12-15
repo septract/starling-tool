@@ -777,15 +777,21 @@ module Pretty =
                           iterator is zero"
                     [ errorInfo <| printBoolExpr (printSym printVar) emp ] ]
         | TooManyIteratedFuncs (view, count) ->
-            fmt "constraint '{0}' contains {1} iterated funcs, but iterated \
+            String "constraint"
+            <+> quoted (printDView view)
+            <+> String "contains"
+            <+> String (sprintf "%i" count)
+            <+> String
+                "iterated funcs, but iterated \
                  definitions can only contain at most one"
-                [ printDView view
-                  String (sprintf "%i" count) ]
         | MixedFuncType view ->
-            fmt "constraint '{0}' mixes iterated and non-iterated views"
-                [ printDView view ]
-        | NoSuchView name
-            -> fmt "no view prototype for '{0}'" [ printDFunc name ]
+            String "constraint"
+            <+> quoted (printDView view)
+            <+> String "mixes iterated and non-iterated views"
+        | NoSuchView func ->
+            String "atom"
+            <+> quoted (printDFunc func)
+            <+> String "has no prototype"
         | LookupError(func, err) ->
             wrapped "lookup for view"
                 (printDFunc func)
@@ -807,14 +813,18 @@ module Pretty =
                         func)
             <+> errorStr "is not iterated, but used as iterated in a constraint"
         | BadIteratorType (view, ty) ->
-            fmt "iterator on constraint '{0}' is of type {1}, should be int"
-                [ printDView view
-                  printType ty ]
+            String "constraint"
+            <+> quoted (printDView view)
+            <+> String "has an iterator of type"
+            <+> quoted (printType ty)
+            <&> String "should be 'int'"
         | MissingIterator view ->
-            fmt "constraint '{0}' should have an iterator, but does not"
-                [ printDView view ]
+            String "constraint"
+            <+> quoted (printDView view)
+            <+> String "is missing an iterator"
         | SymInIteratedConstraint sym ->
-            fmt "symbol '{0}' not allowed in an iterated constraint"
-                [ printSymbolicSentence sym ]
+            String "symbol"
+            <+> quoted (printSymbolicSentence sym)
+            <+> String "not allowed in an iterated constraint"
         | Traversal err -> printTraversalError printError err
         |> error

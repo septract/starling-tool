@@ -851,8 +851,12 @@ module Pretty =
         function
         | Inner e -> pInner e
         | BadType (expected, got) ->
-            fmt "Type mismatch after substitution: expected {0}, got {1}"
-                [ printType expected; printType got ]
+            String "Type mismatch after substitution: expected"
+            <+> printType expected
+            <&> String "got"
+            <+> printType got
         | ContextMismatch (expected, got) ->
-            fmt "Internal context mismatch: expected {0}, got {1}"
-                [ String expected; printTraversalContext got ]
+            String "Internal context mismatch: expected"
+            <+> String expected
+            <&> String "got"
+            <+> printTraversalContext got

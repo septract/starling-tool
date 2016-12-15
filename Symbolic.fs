@@ -428,7 +428,11 @@ module Pretty =
         let printSymbolicWord =
             function
             | SymString s -> String s
-            | SymParamRef i -> String (sprintf "#%d" i)
+            | SymParamRef i ->
+                Latex
+                    ({ Name = "symarg";
+                       Args = [ String (sprintf "%d" i) ] },
+                     String (sprintf "#%d" i))
 
         hjoin (List.map printSymbolicWord s)
 

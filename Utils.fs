@@ -45,13 +45,11 @@ module Config =
                 'V',
                 HelpText =
                     "Comma-delimited set of output options (pass 'list' for details)")>]
-          viewOpts : string option
+          displayOpts : string option
           [<Option("times", HelpText = "Print times for each phase.")>]
           times : bool
           [<Option('v', HelpText = "Increases verbosity.")>]
           verbose : bool
-          [<Option('c', HelpText = "Enable color printing")>]
-          color : bool
           [<Value(
                 0,
                 MetaName = "input",
@@ -66,11 +64,10 @@ module Config =
         term            = None;
         showModel       = false;
         optimisers      = None;
-        viewOpts        = None;
+        displayOpts     = None;
         times           = false;
         verbose         = false;
         input           = None;
-        color           = false;
     }
 
     let _configRef : Options ref = ref _emptyOpts

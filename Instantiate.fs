@@ -135,12 +135,13 @@ module Pretty =
                 (printVFunc (printSym printMarkedVar) func)
                 (Starling.Core.Definer.Pretty.printError err)
         | IndefiniteConstraint (view) ->
-            fmt "indefinite 'constraint {0} -> ?' not allowed here"
-                [ printDFunc view ]
+            String "indefinite 'constraint"
+            <+> printDFunc view
+            <+> String "-> ?' not allowed here"
         | UnwantedSym sym ->
             // TODO(CaptainHayashi): this is a bit shoddy.
-            fmt "encountered uninterpreted symbol {0}"
-                [ printSymbolicSentence sym ]
+            String "encountered uninterpreted symbol"
+            <+> quoted (printSymbolicSentence sym)
         | FreeVarInSub var ->
             // TODO(CaptainHayashi): this is a bit shoddy.
             error

@@ -10,13 +10,35 @@ open Starling.Utils.Config
 type FontColor =
     Black | Red | Green | Yellow | Blue | Magenta | Cyan | White
 
-/// Type of pretty-printer commands.
+/// <summary>
+///     Type of LaTeX commands.
+/// </summary>
+[<NoComparison>]
+type LatexCmd<'A> =
+    { /// <summary>The name of the command.</summary>
+      Name : string
+      /// <summary>The arguments of the command.</summary>
+      Args : 'A list }
+
+/// <summary>
+///     Type of pretty-printer commands.
+/// </summary>
 [<NoComparison>]
 type Doc =
     | Header of heading : Doc * Doc
     | Separator
     | String of string
     | Styled of style: FontColor list * cmd : Doc
+    | /// <summary>
+      ///    A document that should be output in typewriter font in LaTeX mode.
+      /// </summary>
+      Verbatim of Doc
+    | /// <summary>
+      ///    A document that has a separate LaTeX version.
+      ///    The LaTeX version is stored as a func and emitted as a command
+      ///    \name{arg}{arg}...
+      /// </summary>
+      Latex of latexVar : LatexCmd<Doc> * normalVar : Doc
     | Surround of left : Doc * mid : Doc * right : Doc
     | Indent of Doc
     | VSkip
@@ -44,10 +66,15 @@ let lnIndent level = "\n" + indent level
 /// Helpers for turning a Doc into a Styled
 /// for syntax highlighting keywords, literals, identifiers and view syntax
 /// respectively
-let syntax d = Styled([Magenta], d)
-let syntaxLiteral d = Styled([Blue], d)
-let syntaxIdent d = Styled([Cyan], d)
-let syntaxView d = Styled([Yellow], d)
+let syntax d = Verbatim(Styled([Magenta], d))
+let syntaxLiteral d = Verbatim(Styled([Blue], d))
+let syntaxIdent d = Verbatim(Styled([Cyan], d))
+let syntaxView d = Verbatim(Styled([Yellow], d))
+
+let syntaxStr d = syntax (String d)
+let syntaxLiteralStr d = syntaxLiteral (String d)
+let syntaxIdentStr d = syntaxIdent (String d)
+let syntaxViewStr d = syntaxView (String d)
 
 (* Helpers for styling Docs for errors. *)
 let error d = Styled([Red], d)
@@ -58,7 +85,42 @@ let success d = Styled([Green], d)
 let inconclusive d = Styled([Blue], d)
 
 let errorStr s = error (String s)
-let errorInfoStr s = error (String s)
+let errorInfoStr s = errorInfo (String s)
+
+/// <summary>
+///     Styles a string with LaTeX (xcolor) escape sequences.
+/// </summary>
+/// <param name="s">
+///     The list of styles to turn into xcolor directives and apply to the result.
+/// </param>
+/// <param name="l">
+///     The optional list of styles previously in effect (ignored).
+/// </param>
+/// <param name="d">
+///     The string to stylise.
+/// </param>
+/// <returns>
+///     The stylised (xcolor-annotated) string.
+/// </param>
+let latexStylise s l d =
+    let colName =
+        function
+        | Black -> "black"
+        | Red -> "red"
+        | Green -> "green"
+        | Yellow -> "yellow"
+        | Blue -> "blue"
+        | Magenta -> "magenta"
+        | Cyan -> "cyan"
+        | White -> "white"
+
+    let rec build pre suf =
+        function
+        | [] -> pre + d + suf
+        | x::xs -> build (sprintf "%s{\\color{%s}" pre (colName x)) ("}" + suf) xs
+
+    build "" "" s
+
 
 /// <summary>
 ///     Styles a string with ANSI escape sequences.
@@ -75,7 +137,7 @@ let errorInfoStr s = error (String s)
 /// <returns>
 ///     The stylised (ANSI-escaped) string.
 /// </param>
-let stylise s l d =
+let ansiStylise s l d =
     let colCode =
         function
         | Black -> 0
@@ -105,9 +167,19 @@ type PrintState =
       Level : int
 
       /// <summary>
+      ///     Whether or not we have escaped into a LaTeX command.
+      /// </summary>
+      InLatex : bool
+
+      /// <summary>
       ///     The current style in use.
       /// </summary>
       CurrentStyle : (FontColor list) option
+
+      /// <summary>
+      ///     Whether or not we are emitting LaTeX.
+      /// </summary>
+      EmitLatex : bool
 
       /// <summary>
       ///     Whether or not styling is to be used.
@@ -129,10 +201,31 @@ let rec printState (state : PrintState) (doc : Doc) : string =
     | Separator ->
         "----"
     | Styled (s, d) when state.UseStyles ->
-        let state' = { state with CurrentStyle = Some s }
-        stylise s state.CurrentStyle (printState state' d)
+        let state' = { state with InLatex = true; CurrentStyle = Some s }
+        let stylise = if state.EmitLatex then latexStylise else ansiStylise
+        let cmd = stylise s state.CurrentStyle (printState state' d)
+        // Escape the first foray into LaTeX with $$, so it works with our
+        // listings setup.
+        if (not state.EmitLatex) || state.InLatex then cmd else sprintf "$%s$" cmd
     | Styled (s, d) ->
         printState state d
+    | Latex (l, _) when state.EmitLatex ->
+        let state' = { state with InLatex = true }
+        let args = List.map (printState state' >> sprintf "{%s}") l.Args
+
+        let name = sprintf "\\%s" l.Name
+        let cmd = String.concat "" (name :: args)
+
+        // Escape the first foray into LaTeX with $$, so it works with our
+        // listings setup.
+        if state.InLatex then cmd else sprintf "$%s$" cmd
+    | Latex (_, r) -> printState state r
+    | Verbatim x ->
+        // TODO(CaptainHayashi): this is a nasty hack.
+        let xd = printState state x
+        if state.EmitLatex && state.InLatex
+        then sprintf "\\texttt{%s}" xd
+        else xd
     | VSkip ->
         lnIndent state.Level
     | String s ->
@@ -153,45 +246,31 @@ let rec printState (state : PrintState) (doc : Doc) : string =
 /// <summary>
 ///     Prints a <see cref="Doc"/> with full styling.
 /// </summary>
-let printStyled = printState { Level = 0; CurrentStyle = None; UseStyles = true }
+let printStyled = printState { Level = 0; InLatex = false; CurrentStyle = None; UseStyles = true; EmitLatex = false }
 
 /// <summary>
 ///     Prints a <see cref="Doc"/> with no styling.
 /// </summary>
-let printUnstyled = printState { Level = 0; CurrentStyle = None; UseStyles = false }
+let printUnstyled = printState { Level = 0; InLatex = false; CurrentStyle = None; UseStyles = false; EmitLatex = false }
 
 
 /// <summary>
 ///     Prints a <see cref="Doc"/>.
 /// </summary>
-let print = if config().color then printStyled else printUnstyled
+let print (useColour : bool) (useLatex : bool) : Doc -> string =
+    let initialState =
+        { Level = 0
+          InLatex = false
+          CurrentStyle = None
+          UseStyles = useColour
+          EmitLatex = useLatex }
+    printState initialState
 
 
 (*
  * Shortcuts
  *)
 
-
-// Hacky merge between two VSep sequences
-let vmerge a b =
-  let rec interleave = function //same as: let rec interleave (xs, ys) = match xs, ys with
-    |([], ys) -> ys
-    |(xs, []) -> xs
-    |(x::xs, y::ys) -> x :: y :: interleave (xs,ys)
-
-  match a, b with
-    | (VSep (xs, i), VSep (ys, j))  ->
-           let xy = interleave (List.ofSeq xs, List.ofSeq ys) in
-           VSep (Seq.ofList xy, Nop)
-    | _ -> Nop
-
-
-let fmt fstr xs =
-    (* This weird casting dance is how we tell Format to use the obj[] overload.
-     * Otherwise, it might try to print xss as if it's one argument!
-     *)
-    let xss : obj[] = xs |> Seq.map (print >> fun x -> x :> obj) |> Seq.toArray
-    System.String.Format(fstr, xss) |> String
 let vsep xs = VSep(xs, Nop)
 let hsepStr s c = HSep(c, String s)
 
@@ -307,7 +386,7 @@ let printList pItem lst =
 
 /// Formats an error that is wrapping another error.
 let wrapped wholeDesc whole err =
-    headed (sprintf "In %s '%s'" wholeDesc (print whole)) [ err ]
+    cmdHeaded (String "In" <+> String wholeDesc <+> quoted whole) [ err ]
 
 /// <summary>
 ///     Prints an integer.

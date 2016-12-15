@@ -304,19 +304,22 @@ module Pretty =
             cmdHeaded header [ printTypeError err ]
         | Var(var, err) -> wrapped "variable" (var |> String) (err |> printVarMapError)
         | BadSub err ->
-            fmt "Substitution error: {0}" [ printTraversalError (fun _ -> String "()") err ]
+            String "Substitution error"
+            <&> printTraversalError (fun _ -> String "()") err 
         | AmbiguousSym sym ->
-            fmt
-                "symbolic var '{0}' has ambiguous type: \
+            String "symbolic var"
+            <+> quoted (printSymbolic sym)
+            <+> String
+                "has ambiguous type: \
                  place it inside an expression with non-symbolic components"
-                [ printSymbolic sym ]
 
     /// Pretty-prints view conversion errors.
     let printViewError : ViewError -> Doc =
         function
         | ViewError.BadExpr(expr, err) ->
             wrapped "expression" (printExpression expr) (printExprError err)
-        | NoSuchView name -> fmt "no view prototype for '{0}'" [ String name ]
+        | NoSuchView name ->
+            String "no view prototype for" <+> quoted (String name)
         | LookupError(name, err) ->
             wrapped "lookup for view"
                 (String name)
@@ -340,8 +343,10 @@ module Pretty =
     let printViewProtoError : ViewProtoError -> Doc =
         function
         | VPEDuplicateParam(vp, param) ->
-            fmt "view proto '{0}' has duplicate param {1}"
-                [ printGeneralViewProto printTypedVar vp; String param ]
+            String "view proto"
+            <+> quoted (printGeneralViewProto printTypedVar vp)
+            <+> String "has duplicate param"
+            <+> String param
         | BadParamType (proto, par, err) ->
             cmdHeaded
                 (errorStr "parameter"
@@ -361,20 +366,20 @@ module Pretty =
             wrapped "expression" (printExpression expr)
                                  (printExprError err)
         | IncExpr expr ->
-            fmt "cannot increment an expression ('{0}')"
-                [ printExpression expr ]
+            String "cannot increment an expression"
+            <+> quoted ( printExpression expr )
         | DecExpr expr ->
-            fmt "cannot decrement an expression ('{0}')"
-                [ printExpression expr ]
+            String "cannot decrement an expression"
+            <+> quoted ( printExpression expr )
         | IncBool expr ->
-            fmt "cannot increment a Boolean ('{0}')"
-                [ printExpression expr ]
+            String "cannot increment a Boolean"
+            <+> quoted ( printExpression expr )
         | DecBool expr ->
-            fmt "cannot decrement a Boolean ('{0}')"
-                [ printExpression expr ]
+            String "cannot decrement a Boolean"
+            <+> quoted ( printExpression expr )
         | LoadNonLV expr ->
-            fmt "cannot load from non-lvalue expression '{0}'"
-                [ printExpression expr ]
+            String "cannot load from non-lvalue expression"
+            <+> quoted ( printExpression expr )
         | Useless -> String "command has no effect"
         | PrimNotImplemented what ->
             errorStr "primitive command"
@@ -401,9 +406,9 @@ module Pretty =
             wrapped "view expression" (printViewExpr printView view)
                                       (printViewError err)
         | CommandNotImplemented cmd ->
-            fmt "command {0} not yet implemented"
-                [ printCommand (printViewExpr printView) cmd ]
-
+            String "command"
+            <+> printCommand (printViewExpr printView) cmd
+            <+> String "not yet implemented"
     /// Pretty-prints model conversion errors.
     let printModelError (err : ModelError) : Doc =
         match err with

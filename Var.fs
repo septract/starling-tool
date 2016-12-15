@@ -135,8 +135,14 @@ module Pretty =
     /// Pretty-prints variable conversion errors.
     let printVarMapError =
         function
-        | Duplicate vn -> fmt "variable '{0}' is defined multiple times" [ String vn ]
-        | NotFound vn -> fmt "variable '{0}' not in environment" [ String vn ]
+        | Duplicate vn ->
+            String "variable"
+            <+> quoted (String vn)
+            <+> String "is defined multiple times"
+        | NotFound vn ->
+            String "variable"
+            <+> quoted (String vn)
+            <+> String "not in environment"
 
     /// <summary>
     ///     Pretty-prints a <c>MarkedVar</c>.

@@ -281,13 +281,23 @@ module Pretty =
         | Neg -> "!" 
         >> String >> syntax 
 
+    /// <summary>
+    ///     Pretty-prints a view atom.
+    /// </summary>
+    let printAtom (pArg : 'Arg -> Doc) (f : Func<'Arg>) : Doc =
+        Latex
+            ({ Name = "atom"
+               Args = [ String f.Name
+                        commaSep (List.map pArg f.Params) ] },
+             printFunc pArg f)
+
     /// Pretty-prints expressions.
     /// This is not guaranteed to produce an optimal expression.
     let rec printExpression' (expr : Expression') : Doc =
         match expr with
-        | True -> String "true" |> syntaxLiteral
-        | False -> String "false" |> syntaxLiteral
-        | Num i -> i.ToString() |> String |> syntaxLiteral
+        | True -> syntaxLiteralStr "true"
+        | False -> syntaxLiteralStr "false"
+        | Num i -> syntaxLiteralStr (i.ToString())
         | Identifier x -> syntaxIdent (String x)
         | Symbolic sym -> printSymbolic sym
         | BopExpr(op, a, b) ->
@@ -309,45 +319,67 @@ module Pretty =
     ///     The <see cref="Doc"/> resulting from printing <paramref name="s"/>.
     /// </returns> 
     and printSymbolic (s : Symbolic<Expression>) : Doc =
-        String "%"
-        <-> printSymbolicSentence s.Sentence
-        <-> parened (commaSep (List.map printExpression s.Args))
+        let argdoc = commaSep (List.map printExpression s.Args)
+        Latex
+            ({ Name = "symbolic"
+               Args = [ printSymbolicSentence s.Sentence; argdoc ] },
+             String "%"
+             <-> braced (printSymbolicSentence s.Sentence)
+             <-> parened argdoc)
 
     /// Pretty-prints views.
     let rec printView : View -> Doc =
         function
-        | View.Func f -> printFunc printExpression f
-        | View.Unit -> String "emp" |> syntaxView
+        | View.Func f -> printAtom printExpression f
+        | View.Unit ->
+            Latex
+                ({ Name = "emp"; Args = [] },
+                 syntaxView (String "emp"))
         | View.Join(l, r) -> binop "*" (printView l) (printView r)
         | View.If(e, l, r) ->
-            hsep [ String "if" |> syntaxView
-                   printExpression e
-                   String "then" |> syntaxView
-                   printView l
-                   String "else" |> syntaxView
-                   printView r ]
+            Latex
+                ({ Name = "cview"
+                   Args = 
+                       [ printExpression e
+                         printView l
+                         printView r ] },
+                 hsep
+                    [ syntaxViewStr "if" |> syntaxView
+                      printExpression e
+                      syntaxViewStr "then" |> syntaxView
+                      printView l
+                      syntaxViewStr "else" |> syntaxView
+                      printView r ])
 
     /// Pretty-prints marked view lines.
     let rec printMarkedView (pView : 'view -> Doc) : Marked<'view> -> Doc =
+        let mkView vdoc =
+            Latex ({ Name = "view"; Args = [ vdoc ] },
+                   ssurround "{| " " |}" vdoc)
+
         function
         | Unmarked v -> pView v
         | Questioned v -> hjoin [ pView v ; String "?" |> syntaxView ]
         | Unknown -> String "?" |> syntaxView
-        >> ssurround "{| " " |}"
+        >> mkView
 
     /// Pretty-prints view definitions.
     let rec printViewSignature : ViewSignature -> Doc =
         function
-        | ViewSignature.Func f -> printFunc String f
-        | ViewSignature.Unit -> String "emp" |> syntaxView
+        | ViewSignature.Func f -> printAtom syntaxIdentStr f
+        | ViewSignature.Unit ->
+            Latex
+                ({ Name = "emp"; Args = [] },
+                 syntaxView (String "emp"))
         | ViewSignature.Join(l, r) -> binop "*" (printViewSignature l) (printViewSignature r)
         | ViewSignature.Iterated(f, e) -> hsep [String "iter" |> syntaxView; hjoin [String "[" |> syntaxView; String e; String "]" |> syntaxView]; printFunc String f]
 
     /// Pretty-prints constraints.
     let printConstraint (view : ViewSignature) (def : Expression option) : Doc =
-        hsep [ String "constraint" |> syntax
-               printViewSignature view
-               String "->" |> syntax
+        let vdoc = printViewSignature view
+        hsep [ syntaxStr "constraint"
+               Latex ({ Name = "viewlet"; Args = [ vdoc ] }, vdoc)
+               syntaxStr "->"
                (match def with
                 | Some d -> printExpression d
                 | None _ -> String "?" |> syntax) ]
@@ -432,9 +464,9 @@ module Pretty =
 
     /// Pretty-prints parameters.
     let printParam (par : Param) : Doc =
-        hsep
-            [ printTypeLiteral par.ParamType
-              syntaxLiteral (String par.ParamName) ]
+        let tlit = printTypeLiteral par.ParamType
+        let nlit = syntaxLiteralStr par.ParamName
+        Latex ({ Name = "param"; Args = [ tlit; nlit ] }, tlit <-> nlit)
 
     /// Pretty-prints methods.
     let printMethod (pView : 'view -> Doc)
@@ -447,15 +479,20 @@ module Pretty =
 
     /// Pretty-prints commands.
     let rec printCommand' (pView : 'view -> Doc) : Command'<'view> -> Doc =
+        let printAtomics =
+            function
+            | [] -> Nop
+            | [x] -> angled (printAtomic x)
+            | xs ->
+                angled (braced (withSemi (semiSep (List.map printAtomic xs))))
+
         function
         (* The trick here is to make Prim [] appear as ;, but
            Prim [x; y; z] appear as x; y; z;, and to do the same with
            atomic lists. *)
         | Command'.Prim { PreAssigns = ps; Atomics = ts; PostAssigns = qs } ->
             seq { yield! Seq.map (uncurry printAssign) ps
-                  yield (ts
-                         |> Seq.map printAtomic
-                         |> semiSep |> withSemi |> braced |> angled)
+                  if not (Seq.isEmpty ts) then yield (printAtomics ts)
                   yield! Seq.map (uncurry printAssign) qs }
             |> semiSep |> withSemi
         | Command'.If(c, t, fo) ->
@@ -490,15 +527,12 @@ module Pretty =
     /// Pretty-prints a general view prototype.
     let printGeneralViewProto (pParam : 'Param -> Doc)(vp : GeneralViewProto<'Param>) : Doc =
         match vp with
-        | NoIterator (Func = { Name = n; Params = ps }; IsAnonymous = _) ->
-            func n (List.map pParam ps)
-        | WithIterator (Func = { Name = n; Params = ps }) ->
-            (String "iter")
-            <+> func n (List.map pParam ps)
+        | NoIterator ( Func = atom; IsAnonymous = _) -> printAtom pParam atom
+        | WithIterator atom -> String "iter" <+> printAtom pParam atom
 
     /// Pretty-prints a view prototype.
     let printViewProtoList (vps : ViewProto list) : Doc =
-        hsep [ syntax (String "view")
+        hsep [ syntaxStr "view"
                commaSep (List.map (printGeneralViewProto printParam) vps) ]
         |> withSemi
 
@@ -522,14 +556,14 @@ module Pretty =
     ///     A <see cref="Doc"/> for printing <paramref name="pragma"/>.
     /// </returns>
     let printPragma (pragma : Pragma) : Doc =
-        String pragma.Key <+> braced (String pragma.Value)
+        syntaxLiteral (String pragma.Key) <+> braced (String pragma.Value)
 
     /// Pretty-prints script lines.
     let printScriptItem' (item : ScriptItem') : Doc =
         match item with
-        | Pragma p -> withSemi (printPragma p)
+        | Pragma p -> withSemi (syntax (String "pragma") <+> printPragma p)
         | Typedef (ty, name) ->
-            withSemi (syntaxIdent (String "typedef") <+> printTypeLiteral ty <+> String name)
+            withSemi (syntax (String "typedef") <+> printTypeLiteral ty <+> String name)
         | SharedVars vs -> printScriptVars "shared" vs
         | ThreadVars vs -> printScriptVars "thread" vs
         | Method m ->
