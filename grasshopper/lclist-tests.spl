@@ -29,21 +29,21 @@ procedure pred_sat_test4 (X: Set<Node>, head: Node, a: Node, b: Node, c: Node)
 {} 
 
 procedure pred_sat_test5 (X: Set<Node>) 
-  requires sTrue(X)
+  requires acc(X)
   ensures false  
 {} 
 
 // Test that conjunctions of predicates are satisfiable. 
 // All of these tests should fail. 
 
-//procedure conj_sat_test0 (X: Set<Node>, head: Node) 
-//  requires (
-//    (acc(X) &*& lseg(X, head, null)) 
-//     && 
-//    sTrue(X) 
-//  ) 
-//  ensures false  
-//{} 
+procedure conj_sat_test0 (X: Set<Node>, head: Node) 
+  requires (
+    (acc(X) &*& lseg(X, head, null)) 
+     && 
+    acc(X) 
+  ) 
+  ensures false  
+{} 
 
 procedure conj_sat_test1 (X: Set<Node>, head: Node, a: Node, b: Node) 
   requires (
@@ -79,27 +79,27 @@ procedure conj_sat_test3 (X: Set<Node>, head: Node, a: Node, v: Int)
 {} 
 
 
-// // Spatial true tests
-// 
-// procedure sTrue_test(X: Set<Node>, a: Int, b:Int) 
-//   requires ((a=b) &*& sTrue(X)) || ((a!=b) &*& sTrue(X)) 
-//   ensures sTrue(X) 
-// {}  
-// 
-// procedure sTrue_test3(X: Set<Node>) 
-//   requires sTrue(X) && sTrue(X) 
-//   ensures sTrue(X) && sTrue(X) 
-// {}  
-// 
-// procedure sTrue_test4(X: Set<Node>) 
-//   requires sTrue(X) && sTrue(X) 
-//   ensures sTrue(X) 
-// {}  
-// 
-// procedure sTrue_test5 (a: Node, b: Node) 
-//   requires acc(a) &*& acc(b)
-//   ensures (exists X : Set<Node> :: sTrue(X)) 
-// {} 
+// Acc tests
+
+procedure acc_test(X: Set<Node>, a: Int, b:Int) 
+  requires ((a=b) &*& acc(X)) || ((a!=b) &*& acc(X)) 
+  ensures acc(X) 
+{}  
+
+procedure acc_test3(X: Set<Node>) 
+  requires acc(X) && acc(X) 
+  ensures acc(X) && acc(X) 
+{}  
+
+procedure acc_test4(X: Set<Node>) 
+  requires acc(X) && acc(X) 
+  ensures acc(X) 
+{}  
+
+procedure acc_test5 (a: Node, b: Node) 
+  requires acc(a) &*& acc(b)
+  ensures (exists X : Set<Node> :: acc(X)) 
+{} 
 
 
 // Tests of overlap (+) and inclusion (-**) 
@@ -119,7 +119,7 @@ procedure sharing_test (X: Set<Node>, a: Node, b: Node)
 
 procedure lock_test0 (X: Set<Node>, a: Node, b: Node) 
   requires acc(X) &*& has1LockG(X, a, b)
-  ensures acc(a) -** sTrue(X)  
+  ensures acc(a) -** acc(X)  
 {} 
 
 procedure lock_test1 (X: Set<Node>, a: Node, b: Node, c: Node) 
@@ -148,7 +148,7 @@ procedure lock_sat_test1 (X: Set<Node>, a: Node, b: Node, c: Node)
 // requires conjunction test
 
 procedure test_req (a: Node, b: Node) 
-  requires acc(a) &*& (exists X : Set<Node> :: sTrue(X)) 
+  requires acc(a) &*& (exists X : Set<Node> :: acc(X)) 
   requires acc(a) &*& acc(b)
   ensures acc(a) &*& acc(b) 
 {} 
@@ -171,7 +171,7 @@ procedure takeLock_test (X: Set<Node>, head: Node, ub: Int, a: Node, b: Node, v:
   ensures  
     acc(X) &*& (exists c: Node :: has2LockG(X, a, b, c)) 
 { 
-   spin(b); 
+   waitLock(b); 
    takeLock(b); 
 } 
 
@@ -190,7 +190,7 @@ procedure takeLock_sat_test (X: Set<Node>, head: Node, ub: Int, a: Node, b: Node
   ensures  
     false
 { 
-   spin(b);
+   waitLock(b);
    takeLock(b); 
 } 
 
@@ -205,7 +205,7 @@ procedure take1Lock_head_test
   ensures  
     acc(X) &*& (exists b: Node :: has1LockG(X, head, b)) 
 { 
-   spin(head);
+   waitLock(head);
    takeLock(head); 
 } 
 
@@ -220,7 +220,7 @@ procedure take1Lock_head_sat_test
   ensures  
     false;
 { 
-   spin(head);
+   waitLock(head);
    takeLock(head); 
 } 
 
@@ -236,7 +236,7 @@ procedure take2Lock_head_test
   ensures  
     acc(X) &*& (exists b: Node :: has2LockG(X, head, a, b)) 
 { 
-   spin(head);
+   waitLock(head);
    takeLock(a); 
 } 
 
@@ -253,7 +253,7 @@ procedure take2Lock_head_sat_test
   ensures  
     false
 { 
-   spin(head);
+   waitLock(head);
    takeLock(a); 
 } 
 

@@ -6,29 +6,19 @@ struct Node {
   var val: Int; 
 }
 
-// Utility predicates 
-
-predicate sTrue (X: Set<Node>) { 
-  acc(X) 
-} 
-
 // List segment definitions
-
-// TODO: change y -> null? 
 predicate lseg(X: Set<Node>, x: Node, y: Node) 
   requires acc(X) 
 {
   X = { z: Node :: Btwn(next, x, z, y) && z != y } 
-  &*& 
+  && 
   Btwn(next, x, y, y) 
-  &*& 
-  (exists end: Node :: (end in X &*& end != x)) 
 }
 
 predicate lseg_upperbound(X: Set<Node>, ub: Int)
   requires acc(X)
 {
-  forall z: Node :: z in X ==> z.val <= ub
+  forall z: Node :: z in X ==> (z.val <= ub)
 }
 
 predicate lseg_terminal(X: Set<Node>, ub: Int) 
@@ -37,51 +27,48 @@ predicate lseg_terminal(X: Set<Node>, ub: Int)
   forall z: Node :: (z in X && z.next == null) ==> z.val = ub 
 } 
 
-predicate llseg(X: Set<Node>, x: Node, y: Node, ub: Int) 
-  requires acc(X) 
-{
-  lseg(X, x, y)
-  &*&
-  lseg_upperbound(X,ub)
-  &*& 
-  lseg_terminal(X,ub) 
-}
+predicate lseg_headtail(X: Set<Node>, head: Node) 
+{ 
+  head in X 
+  && 
+  (exists tail: Node :: (tail in X && tail != head)) 
+} 
 
 predicate nodeUnlocked(x: Node, y: Node) { 
-  x.next == y &*& x.lock == false
+  x.next == y && x.lock == false
 } 
 
 predicate nodeLocked(x: Node, y: Node) { 
-  x.next == y &*& x.lock == true  
+  x.next == y && x.lock == true  
 } 
 
 
 // Calls to helper procedures
 
-procedure spin(x: Node)
-  requires acc(x);
-  ensures acc(x) &*& nodeUnlocked(x, x.next);
+procedure waitLock(x: Node)
+  requires acc(x)
+  ensures acc(x) &*& nodeUnlocked(x, x.next)
 {
-  while (x.lock == true) {}
+  assume (x.lock == false); 
 }
 
 procedure takeLock(x: Node)
-  requires acc(x) &*& nodeUnlocked(x, x.next); 
-  ensures acc(x) &*& nodeLocked(x,x.next); 
+  requires acc(x) &*& nodeUnlocked(x, x.next) 
+  ensures acc(x) &*& nodeLocked(x,x.next) 
 { 
   x.lock := true; 
 }  
 
 procedure releaseLock(x: Node)
-  requires acc(x) &*& nodeLocked(x,x.next); 
-  ensures acc(x) &*& nodeUnlocked(x,x.next); 
+  requires acc(x) &*& nodeLocked(x,x.next) 
+  ensures acc(x) &*& nodeUnlocked(x,x.next) 
 { 
   x.lock := false; 
 }  
 
 procedure disposeNode(x: Node) 
-  requires acc(x); 
-  ensures emp; 
+  requires acc(x) 
+  ensures emp 
 { 
   free(x); 
 } 
@@ -92,24 +79,40 @@ procedure disposeNode(x: Node)
 predicate isListG (X: Set<Node>, head: Node, ub: Int) 
   requires acc(X) 
 { 
-  llseg(X, head, null, ub) &*& head != null
+  lseg(X, head, null)
+  &&
+  lseg_upperbound(X,ub)
+  && 
+  lseg_terminal(X,ub) 
+  && 
+  lseg_headtail(X,head) 
 } 
 
 predicate has1LockG(X: Set<Node>, a: Node, b: Node) 
   requires acc(X) 
 { 
-  a in X &*& nodeLocked(a, b)
+  a in X 
+  && 
+  nodeLocked(a, b)
 } 
 
 predicate has2LockG(X: Set<Node>, a: Node, b: Node, c: Node) 
   requires acc(X) 
 { 
-  a in X &*& b in X &*& nodeLocked(a, b) &*& nodeLocked(b,c)
+  a in X 
+  && 
+  b in X 
+  && 
+  nodeLocked(a, b) 
+  && 
+  nodeLocked(b,c)
 } 
 
 predicate isValG(X: Set<Node>, n: Node, v: Int) 
   requires acc(X)
 { 
-  n in X &*& n.val == v
+  n in X 
+  && 
+  n.val == v
 } 
 
