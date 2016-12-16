@@ -1,25 +1,26 @@
-typedef int Lock;  
-typedef bool Bool;  
+typedef int Lock;
+typedef int Int;
+typedef bool Bool;
 
 pragma grasshopper_include {./grasshopper/spinlock-module.spl};
-pragma grasshopper_footprint {LockF};
+pragma grasshopper_footprint {LockFoot};
 pragma grasshopper_footprint_sort {Set<Lock>};
 
-shared int heap; 
+shared Int heap;
 
-thread Lock x, ret;  
+thread Lock x, ret;
 thread Bool test;  // Used when trying to take the lock.
 
 view holdLock(Lock x);
-view isLock(Lock x); 
+view isLock(Lock x);
 
-method newLock() { 
-  {| emp |} 
-    ret = %{new Node}(); 
-  {| isLock(ret) |} 
+method newLock() {
+  {| emp |}
+    ret = %{new Lock}();
+  {| isLock(ret) |}
     <%{#1.lock := false}(ret)[heap]>;
-  {| isLock(ret) |} 
-} 
+  {| isLock(ret) |}
+}
 
 method lock(Lock x) {
   {| isLock(x) |}
@@ -39,19 +40,19 @@ method unlock(Lock x) {
   {| isLock(x) |}
 }
 
-method split(Lock x) { 
-  {| isLock(x) |} 
-    ; 
-  {| isLock(x) * isLock(x) |} 
-} 
+method split(Lock x) {
+  {| isLock(x) |}
+    ;
+  {| isLock(x) * isLock(x) |}
+}
 
 // False is a hack to implement local variable reasoning.
 view False();
 constraint False() -> false;
 
-constraint holdLock(x) * holdLock(y) -> x != y; 
+constraint holdLock(x) * holdLock(y) -> x != y;
 
-constraint holdLock(x)  ->  %{ #1 in LockFoot && #1.lock == true }(x); 
+constraint holdLock(x)  ->  %{ #1 in LockFoot && #1.lock == true }(x);
 
-constraint isLock(x)  ->  %{ #1 in LockFoot }(x); 
+constraint isLock(x)  ->  %{ #1 in LockFoot }(x);
 
