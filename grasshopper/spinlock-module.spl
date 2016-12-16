@@ -1,0 +1,18 @@
+// Lock module 
+
+struct Lock { 
+  var lock: Bool; 
+} 
+
+procedure CAS_to_true(x: Lock, implicit ghost lstate: Bool) 
+          returns (res: Bool) 
+  requires acc(x) &*& x.lock == lstate 
+  ensures acc(x) &*& res == (! lstate) 
+{ 
+  if (x.lock == false) { 
+    x.lock := true; 
+    return true; 
+  } else { 
+    return false; 
+  } 
+} 
