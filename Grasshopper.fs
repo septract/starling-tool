@@ -184,12 +184,18 @@ module Pretty =
     let rec printIntExprG (pVar : 'Var -> Doc) (i : IntExpr<'Var>) : Doc =
         match i with
         | IVar c -> pVar c
-        | _ -> failwith "[printIntExprG] Case unimplemented for Grasshopper backend." 
+        | x ->
+            failwith
+                (sprintf
+                    "[printIntExprG] Unimplemented for Grasshopper: %A"
+                    x)
 
     /// Pretty-prints a Boolean expression.
     and printBoolExprG (pVar : 'Var -> Doc) (b : BoolExpr<'Var>) : Doc =
         match b with 
         | BVar c -> pVar c
+        | BTrue -> String "true"
+        | BFalse -> String "false"
         | BAnd xs -> infexprV "&&" (printBoolExprG pVar) xs 
         | BOr xs -> infexprV "||" (printBoolExprG pVar) xs
         | BImplies (x, y) -> 
@@ -203,13 +209,21 @@ module Pretty =
         | BLe (x, y) -> infexpr "<=" (stripTypeRec >> printIntExprG pVar) [x; y]
         | BGe (x, y) -> infexpr ">=" (stripTypeRec >> printIntExprG pVar) [x; y]
         | BGt (x, y) -> infexpr ">" (stripTypeRec >> printIntExprG pVar) [x; y]
-        | _ -> failwith "[printBoolExprG] Case unimplemented for Grasshopper backend."
+        | x ->
+            failwith
+                (sprintf
+                    "[printBoolExprG] Unimplemented for Grasshopper: %A"
+                    x)
     /// Pretty-prints an expression.
     and printExprG (pVar : 'Var -> Doc) (e : Expr<'Var>) : Doc =
         match e with
         | Int (_, i) -> printIntExprG pVar i
         | Bool (_, b) -> printBoolExprG pVar b
-        | _ -> failwith "Unimplemented for Grasshopper backend." 
+        | x ->
+            failwith
+                (sprintf
+                    "[printExprG] Unimplemented for Grasshopper: %A"
+                    x)
 
     let printSymbolicGrass (pArg : 'Arg -> Doc) (s : Symbolic<'Arg>) : Doc =
         let { Sentence = ws; Args = xs } = s

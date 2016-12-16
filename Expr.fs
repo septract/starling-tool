@@ -567,15 +567,15 @@ let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
            | [x] -> x
            | xs  -> BAnd (List.rev xs)
         | None     -> BFalse
+    // We can recursively simplify equality providing it's between two 'bool's.
     // A Boolean equality between two contradictions or tautologies is always true.
-    // Currently we ignore the type of the expressions.
-    | TBBEq ({ SRec = xr; SExpr = x }, { SRec = yr; SExpr = y }) ->
+    | TBBEq ({ SRec = xr; SExpr = x }, { SRec = yr; SExpr = y })
+        when unifyPrimTypeRecs [ normalBoolRec; xr; yr ] <> None ->
         match simp x, simp y with
         | BFalse, BFalse
         | BTrue, BTrue      -> BTrue
         | BTrue, BFalse
         | BFalse, BTrue     -> BFalse
-        // A Boolean equality between something and True reduces to that something.
         | x, BTrue          -> x
         | BTrue, x          -> x
         | x, BFalse         -> simp (BNot x)

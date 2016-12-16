@@ -457,8 +457,6 @@ let rec markMicrocode
         match preStates.TryFind var with
         // TODO(CaptainHayashi): proper error
         | None ->
-             printfn "map: %A" preStates
-             printfn "var: %A" var
              fail (Inner (BadSemantics "somehow referenced variable not in scope"))
         | Some mv -> ok (withType (typeOf var) (Reg mv))
 
