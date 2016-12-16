@@ -193,34 +193,61 @@ module Traversal =
 /// </summary>
 module Queries =
     /// <summary>
-    ///     Decides whether a program command is a no-op.
+    ///     Decides whether a primitive command is a no-op.
     /// </summary>
-    /// <param name="command">
-    ///     The command, as a <c>Command</c>.
-    /// </param>
+    /// <param name="prim">The prim, as a <c>PrimCmd</c>.</param>
     /// <returns>
     ///     <c>true</c> if the command is a no-op;
     ///     <c>false</c> otherwise.
     /// </returns>
-    let isNop (command : Command) : bool =
-        let isPrimNop prim =
-            match prim with
-            // No Intrinsic commands are no-ops at the moment.
-            | Intrinsic _ -> false
-            | Stored { Results = ps } -> List.isEmpty ps
-            | SymC _ -> false
-        List.forall isPrimNop command
+    let isNop (prim : PrimCommand) : bool =
+        match prim with
+        // No Intrinsic commands are no-ops at the moment.
+        | Intrinsic _ -> false
+        | Stored { Results = ps } -> List.isEmpty ps
+        | SymC _ -> false
+    
+    /// <summary>
+    ///     Active pattern matching no-operation commands.
+    /// </summary>
+    let (|NopCmd|_|) : Command -> Command option =
+        function
+        | c when List.forall isNop c -> Some c
+        | _ -> None
 
+    /// <summary>
+    ///     If a primitive command is an assume, return its assumption.
+    /// </summary>
+    /// <param name="prim">The prim, as a <c>PrimCmd</c>.</param>
+    /// <returns>
+    ///     An option, containing the assumption if
+    ///     <paramref name="prim"/> is indeed an assumption.
+    /// </returns>
+    let assumptionOf (prim : PrimCommand) : BoolExpr<Sym<Var>> option =
+        match prim with
+        // TODO (CaptainHayashi): more deep analysis here
+        | Stored { Name = n; Args = [ Bool (_, e) ] } when n = "Assume" ->
+            Some e
+        | _ -> None
+
+    /// <summary>
+    ///     Decides whether a primitive command is an assume.
+    /// </summary>
+    /// <param name="prim">The prim, as a <c>PrimCmd</c>.</param>
+    /// <returns>
+    ///     <c>true</c> if the command is an assume;
+    ///     <c>false</c> otherwise.
+    /// </returns>
+    let isAssume (prim : PrimCommand) : bool =
+        match assumptionOf prim with | Some _ -> true | None -> false
+ 
     /// <summary>
     ///     Active pattern matching assume commands.
     /// </summary>
     let (|Assume|_|) : Command -> SVBoolExpr option =
         function
-        // No Intrinsic commands are assumes at the moment.
-        | [ Stored { Name = n ; Args = [ SVExpr.Bool (_, b) ] } ]
-          when n = "Assume" -> Some b
+        | [x] -> assumptionOf x
         | _ -> None
-
 
     /// Combines the results of each command into a list of all results
     let commandResults cs =
@@ -264,6 +291,73 @@ module Queries =
         let vars = collect (concatMap f cmd)
         lift Set.unionMany vars
 
+    /// Determines if some given Command is local with respect to the given
+    /// map of thread-local variables
+    let isLocalResults (tvars : VarMap) (command : Command) : bool =
+        (* We need to see if any of the variables named in the results
+           are local.  This can fail, but currently the optimiser can't.
+           For now we just assume the command is _not_ local if the
+           variable getter failed. *)
+        let maybeVars = okOption (commandResultVars command)
+
+        let isVarLocal v =
+            maybe false (fun x -> typeOf v = x) (tvars.TryFind (valueOf v))
+
+        maybe false
+            (Set.toList >> List.forall isVarLocal)
+            maybeVars
+
+    /// <summary>
+    ///     Determines whether a command is 'observable' after the effects of
+    ///     another command non-atomically sequentially composed after it.
+    ///     <para>
+    ///         An observable command is one that can diverge, modify shared
+    ///         state, or is not referentially transparent, whose assignment
+    ///         footprint is not a subset of the other command, or whose
+    ///         assignment footprint is not disjoint from the input of the
+    ///         other command.
+    ///     </para>
+    /// <summary>
+    /// <param name="tvars">The thread variable map for locality checks.</param>
+    /// <param name="c">The command to check for observability.</param>
+    /// <param name="d">The command running after <paramref name="c"/>.</param>
+    /// <typeparam name="Error">The inner traversal error type.</typeparam>
+    /// <returns>
+    ///     A Chessie result that is True if <paramref name="c"/> is observable
+    ///     after <paramref name="d"/>; false otherwise.
+    /// </returns>
+    let isObservable
+      (tvars : VarMap) (c : Command) (d : Command)
+      : Result<bool, TraversalError<'Error>> =
+        let cVarsR = commandResultVars c
+        let dVarsR = commandResultVars d
+        let dArgsR = commandArgs d
+
+        let obsv cVars dArgs dVars =
+            let canDiverge =
+                // TODO(CaptainHayashi): this is an under-approximation, and
+                // possibly even an over-approximation.
+                List.exists isAssume c ||
+                // TODO(CaptainHayashi): is this even necessary?
+                List.exists isAssume d 
+
+            let canModifyShared = not (isLocalResults tvars c)
+
+            // TODO(CaptainHayashi): this is an over-approximation.
+            let isSymC = function | SymC _ -> true | _ -> false
+            let isReferentiallyOpaque = List.exists isSymC c
+
+            let footprintSubset = Set.isSubset cVars dVars
+            let footprintInputDisjoint = Set.isEmpty (Set.intersect cVars dArgs)
+            let hasObservableFootprint =
+                (not footprintSubset) && (not footprintInputDisjoint)
+
+            canDiverge ||
+            canModifyShared ||
+            isReferentiallyOpaque || 
+            hasObservableFootprint
+
+        lift3 obsv cVarsR dArgsR dVarsR
 
 /// <summary>
 ///     Functions for removing symbols from commands.

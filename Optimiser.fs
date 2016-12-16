@@ -477,7 +477,7 @@ module Graph =
         // Connected?
         && not (Seq.isEmpty cons)
         // All edges from x to y and y to x are nop?
-        && Seq.forall (fun { OutEdge.Command = c } -> isNop c) cons
+        && Seq.forall (fun { OutEdge.Command = c } -> List.forall isNop c) cons
 
     /// <summary>
     ///     Plumbs a function over various properties of a graph and
@@ -493,21 +493,25 @@ module Graph =
     ///     the out-edges of the node;
     ///     the in-edges of the node.
     ///
-    ///     It should return a transformation context.
+    ///     It should return a transformation sequence.
     /// </param>
     /// <returns>
     ///     If <paramref name="node" /> exists in the graph, the result of
-    ///     calling <paramref name="f" />.  Else, the original context.
+    ///     calling <paramref name="f" /> and running the resulting
+    ///     transformations.
+    ///     Else, the original context.
     /// </returns>
     let expandNodeIn
       (ctx : TransformContext)
       (f : NodeID -> GraphViewExpr -> Set<OutEdge> -> Set<InEdge>
-           -> NodeKind -> TransformContext)
+           -> NodeKind -> Transform seq)
       : TransformContext =
-        match (Option.bind (fun n -> Map.tryFind n ctx.Graph.Contents
-                                     |> Option.map (fun r -> (n, r)))
-                           ctx.Node) with
-        | Some (nN, (nV, outs, ins, nk)) -> f nN nV outs ins nk
+        let findNode n = Option.map (mkPair n) (ctx.Graph.Contents.TryFind n)
+
+        match Option.bind findNode ctx.Node with
+        | Some (nN, (nV, outs, ins, nk)) ->
+            let xforms = f nN nV outs ins nk
+            runTransforms xforms ctx
         | None -> ctx
 
     /// <summary>
@@ -525,25 +529,21 @@ module Graph =
     ///     equivalent and connected only by no-op commands.
     /// </returns>
     let collapseNops (ctx : TransformContext) : TransformContext =
-        expandNodeIn ctx <|
-            fun node nView outEdges inEdges nk ->
-                let outNodes = outEdges
-                               |> Set.toSeq
-                               |> Seq.map (fun { Dest = d } -> d)
-                let inNodes = inEdges
-                              |> Set.toSeq
-                              |> Seq.map (fun { Src = s } -> s)
+        let opt node nView outEdges inEdges nk =
+            let outNodes = outEdges
+                           |> Set.toSeq
+                           |> Seq.map (fun { Dest = d } -> d)
+            let inNodes = inEdges
+                          |> Set.toSeq
+                          |> Seq.map (fun { Src = s } -> s)
 
-                let xforms =
-                    Seq.append outNodes inNodes
-                    // Then, find out which ones are nop-connected.
-                    |> Seq.filter (nopConnected ctx.Graph node)
-                    (* If we found any nodes, then unify them.
-                       We must also remove the edges between the nodes. *)
-                    |> Seq.map
-                        (fun other -> Unify (other, node, RemoveConnections))
-
-                runTransforms xforms ctx
+            Seq.append outNodes inNodes
+            // Then, find out which ones are nop-connected.
+            |> Seq.filter (nopConnected ctx.Graph node)
+            (* If we found any nodes, then unify them.
+               We must also remove the edges between the nodes. *)
+            |> Seq.map (fun other -> Unify (other, node, RemoveConnections))
+        expandNodeIn ctx opt
 
     /// <summary>
     ///     Decides whether a command is local.
@@ -557,6 +557,7 @@ module Graph =
     ///     the given command is local (uses only local variables).
     /// </returns>
     let isLocalCommand (tVars : VarMap) (cmd : Command) : bool =
+        // TODO(CaptainHayashi): overlap with isLocalResults?
         let typedVarIsThreadLocal var =
              match tVars.TryFind (valueOf var) with
              | Some _ -> true
@@ -587,29 +588,9 @@ module Graph =
 
     /// Decides whether a given Command contains any `assume` command
     /// in any of the sequentially composed primitives inside it
-    let hasAssume : Command -> bool =
-        fun c ->
-            c |>
-            List.forall (
-                function
-                | Stored { Name = "Assume" } -> true;
-                | _ -> false)
+    let hasAssume (c : Command) : bool =
+        List.exists isAssume c
 
-    /// Determines if some given Command is local with respect to the given
-    /// map of thread-local variables
-    let isLocalResults (tvars : VarMap) (command : Command) : bool =
-        (* We need to see if any of the variables named in the results
-           are local.  This can fail, but currently the optimiser can't.
-           For now we just assume the command is _not_ local if the
-           variable getter failed. *)
-        let maybeVars = okOption (commandResultVars command)
-
-        let isVarLocal v =
-            maybe false (fun x -> typeOf v = x) (tvars.TryFind (valueOf v))
-
-        maybe false
-            (Set.toList >> List.forall isVarLocal)
-            maybeVars
 
     /// <summary>
     ///     Partial active pattern matching <c>Sym</c>-less Boolean expressions.
@@ -677,46 +658,46 @@ module Graph =
     ///     not removed.
     /// </returns>
     let collapseITEs (ctx : TransformContext) : TransformContext =
-        expandNodeIn ctx <|
-            fun node nView outEdges inEdges nk ->
-                match nView with
-                | InnerView(ITEGuards (xc, xv, yc, yv)) ->
-                    match (Set.toList outEdges, Set.toList inEdges) with
-                    (* Are there only two out edges, and only one in edge?
-                       Are the out edges assumes, and are they non-symbolic? *)
-                    | ( [ { Dest = out1D
-                            Command = Assume (NoSym out1P) } as out1
-                          { Dest = out2D
-                            Command = Assume (NoSym out2P) } as out2
-                        ],
-                        [ inE ] )
-                        when (// Is the first one x and the second y?
-                              (equivHolds
-                                   id
-                                   (andEquiv (equiv out1P xc)
-                                             (equiv out2P yc))
-                               && nodeHasView out1D xv ctx.Graph
-                               && nodeHasView out2D yv ctx.Graph)
-                              // Or is the first one y and the second x?
-                              || (equivHolds
-                                      id
-                                      (andEquiv (equiv out2P xc)
-                                                (equiv out1P yc))
-                                  && nodeHasView out2D xv ctx.Graph
-                                  && nodeHasView out1D yv ctx.Graph)) ->
-                        let xforms =
-                            seq { // Remove the existing edges first.
-                                  yield RmInEdge (inE, node)
-                                  yield RmOutEdge (node, out1)
-                                  yield RmOutEdge (node, out2)
-                                  // Then, remove the node.
-                                  yield RmNode node
-                                  // Then, add the new edges.
-                                  yield MkCombinedEdge (inE, out1)
-                                  yield MkCombinedEdge (inE, out2) }
-                        runTransforms xforms ctx
-                    | _ -> ctx
-                | _ -> ctx
+        (* This checks whether, given a pairs (x, y) of assume A and target
+           view V, they project onto a pair (i, j) of assume A and target
+           node N in the given order. *)
+        let iteProjectsInOrder xA xV yA yV iA iN jA jN =
+            let projectA =
+                equivHolds id (andEquiv (equiv xA iA) (equiv yA jA))
+            let projectP =
+                nodeHasView iN xV ctx.Graph && nodeHasView jN yV ctx.Graph
+            projectA && projectP
+
+        (* As above, but in either order:
+           either (x, y) maps onto (i, j), or (x, y) maps onto (j, i). *)
+        let iteProjects xA xV yA yV iA iN jA jN =
+            // Is the first one x and the second y?
+            iteProjectsInOrder xA xV yA yV iA iN jA jN
+            // Or is the first one y and the second x?
+            || iteProjectsInOrder xA xV yA yV jA jN iA iN
+
+        let opt node nView outEdges inEdges nk =
+            match nView with
+            | InnerView(ITEGuards (xA, xV, yA, yV)) ->
+                match (Set.toList outEdges, Set.toList inEdges) with
+                (* Are there only two out edges, and only one in edge?
+                    Are the out edges assumes, and are they non-symbolic? *)
+                | ( [ { Dest = iN; Command = Assume (NoSym iA) } as out1
+                      { Dest = jN; Command = Assume (NoSym jA) } as out2 ],
+                    [ inE ] )
+                    when iteProjects xA xV yA yV iA iN jA jN ->
+                        seq { // Remove the existing edges first.
+                              yield RmInEdge (inE, node)
+                              yield RmOutEdge (node, out1)
+                              yield RmOutEdge (node, out2)
+                              // Then, remove the node.
+                              yield RmNode node
+                              // Then, add the new edges.
+                              yield MkCombinedEdge (inE, out1)
+                              yield MkCombinedEdge (inE, out2) }
+                | _ -> Seq.empty
+            | _ -> Seq.empty
+        expandNodeIn ctx opt
 
     /// <summary>
     ///     Removes views where either all of the entry commands are local,
@@ -736,130 +717,117 @@ module Graph =
     /// </returns>
     let dropLocalMidView (locals : VarMap) (ctx : TransformContext)
       : TransformContext =
-        expandNodeIn ctx <|
-            fun nName nView outEdges inEdges nk ->
-                (* TODO @mjp41: Need to check nView is not something with a real definition *)
+        let opt nName nView outEdges inEdges nk =
+            (* TODO @mjp41: Need to check nView is not something with a real definition *)
 
-                if nk = Normal  // Check it is not an Entry or Exit node.
-                   (* Only continue if there is one edge for either the in or
-                      out direction. *)
-                   && ((Set.count outEdges < 2) || (Set.count inEdges < 2))
-                   && ((Set.count outEdges > 0) && (Set.count inEdges > 0))
-                   // Only continue if the node can be safely removed.
-                   && isAdvisory nView
-                  (* Only continue if there are no cycles *)
-                   && (Set.forall (fun (e : OutEdge) -> e.Dest <> nName) outEdges)
-                   && (Set.forall (fun (e : InEdge) -> e.Src <> nName) inEdges)
-                   (* Commands must be local on either the in or the out.*)
-                   && ((Set.forall (fun (e : OutEdge) -> isLocalCommand locals e.Command) outEdges)
-                      || (Set.forall (fun (e : InEdge) -> isLocalCommand locals e.Command) inEdges))
-                then
-                    let xforms = seq {
-                        for inE in inEdges do
-                            yield RmInEdge (inE, nName)
-
-                            for outE in outEdges do
-                                yield MkCombinedEdge (inE, outE)
+            if nk = Normal  // Check it is not an Entry or Exit node.
+               (* Only continue if there is one edge for either the in or
+                  out direction. *)
+               && ((Set.count outEdges < 2) || (Set.count inEdges < 2))
+               && ((Set.count outEdges > 0) && (Set.count inEdges > 0))
+               // Only continue if the node can be safely removed.
+               && isAdvisory nView
+              (* Only continue if there are no cycles *)
+               && (Set.forall (fun (e : OutEdge) -> e.Dest <> nName) outEdges)
+               && (Set.forall (fun (e : InEdge) -> e.Src <> nName) inEdges)
+               (* Commands must be local on either the in or the out.*)
+               && ((Set.forall (fun (e : OutEdge) -> isLocalCommand locals e.Command) outEdges)
+                  || (Set.forall (fun (e : InEdge) -> isLocalCommand locals e.Command) inEdges))
+            then
+                seq {
+                    for inE in inEdges do
+                        yield RmInEdge (inE, nName)
 
                         for outE in outEdges do
-                            yield RmOutEdge (nName, outE)
+                            yield MkCombinedEdge (inE, outE)
 
-                        yield RmNode nName
-                    }
+                    for outE in outEdges do
+                        yield RmOutEdge (nName, outE)
 
-                    runTransforms xforms ctx
-                else
-                    ctx
+                    yield RmNode nName
+                }
+            else Seq.empty
+        expandNodeIn ctx opt
 
     /// Drops edges with local results that are disjoint from
     /// the vars in the pre/post condition views
     /// i.e. given {| p |} c {| p |} drop iff Vars(p) n Vars(c) = {}
     let dropLocalEdges (locals : VarMap) (ctx : TransformContext)
       : TransformContext =
-        expandNodeIn ctx <|
-            fun node nView outEdges inEdges nk ->
-                let disjoint (a : TypedVar list) (b : Set<TypedVar>) = List.forall (b.Contains >> not) a
-                let processEdge ctx (e : OutEdge) =
-                    if isLocalResults locals e.Command
-                    then
-                        let pViewexpr = nView
-                        let qViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[e.Dest]
-                        // strip away mandatory/advisory and just look at the internal view
-                        // (TODO: do something with the ViewExpr annotations?)
-                        match (pViewexpr, qViewexpr) with
-                        | InnerView pView, InnerView qView ->
-                            let varResultSet = Set.map iteratedGFuncVars (Multiset.toSet pView)
-                            let varsResults = lift Set.unionMany (collect varResultSet)
-                            let cmdVarsResults = commandResultVars e.Command
+        let opt node nView outEdges inEdges nk =
+            let disjoint (a : TypedVar list) (b : Set<TypedVar>) = List.forall (b.Contains >> not) a
+
+            let processEdge (e : OutEdge) =
+                if isLocalResults locals e.Command
+                then
+                    let pViewexpr = nView
+                    let qViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[e.Dest]
+                    // strip away mandatory/advisory and just look at the internal view
+                    // (TODO: do something with the ViewExpr annotations?)
+                    match (pViewexpr, qViewexpr) with
+                    | InnerView pView, InnerView qView ->
+                        let varResultSet = Set.map iteratedGFuncVars (Multiset.toSet pView)
+                        let varsResults = lift Set.unionMany (collect varResultSet)
+                        let cmdVarsResults = commandResultVars e.Command
+                        // TODO: Better equality?
+                        match varsResults, cmdVarsResults with
+                        | Ok (vars, _), Ok (cmdVars, _) ->
                             // TODO: Better equality?
-                            match varsResults, cmdVarsResults with
-                            | Ok (vars, _), Ok (cmdVars, _) ->
-                                // TODO: Better equality?
-                                if pView = qView && disjoint (Set.toList cmdVars) vars
-                                then
-                                    (flip runTransforms) ctx
-                                    <| seq {
-                                        yield RmOutEdge (node, e)
-                                        yield Unify (node, e.Dest, OnlyIfNoConnections)
-                                    }
-                                else ctx
-                            | _, _ -> ctx
-                    else ctx
-                Set.fold processEdge ctx outEdges
+                            if pView = qView && disjoint (Set.toList cmdVars) vars
+                            then
+                                seq {
+                                    yield RmOutEdge (node, e)
+                                    yield Unify (node, e.Dest, OnlyIfNoConnections)
+                                }
+                            else Seq.empty
+                        | _, _ -> Seq.empty
+                else Seq.empty
+            seq { for e in outEdges do yield! (processEdge e) }
+
+        expandNodeIn ctx opt
 
     /// Collapses edges {p}c{q}d{r} to {p}d{r} iff c is unobservable
     /// i.e. c writes to local variables overwritten by d
     /// d does not read outputs of c,
     /// and there are no assumes adding information
-    let collapseUnobservableEdges (locals : VarMap) (ctx : TransformContext)
+    let collapseUnobservableEdges (tvars : VarMap) (ctx : TransformContext)
       : TransformContext =
-        expandNodeIn ctx <|
-            fun node nViewexpr outEdges inEdges nodeKind ->
-                let pViewexpr = nViewexpr
-                let disjoint (a : Set<'a>) (b : Set<'a>) =
-                    Set.empty = Set.filter b.Contains a
-                let processCEdge cEdge =
-                    let dEdges = (fun (_, outs, _, _) -> outs) <| ctx.Graph.Contents.[cEdge.Dest]
-                    let processDEdge dEdge =
-                        (pViewexpr, cEdge, dEdge)
-                    Set.map processDEdge dEdges
+        let opt node pViewexpr outEdges inEdges nodeKind =
+            let disjoint (a : Set<'a>) (b : Set<'a>) =
+                Set.empty = Set.filter b.Contains a
+            let processCEdge cEdge =
+                let dEdges = (fun (_, outs, _, _) -> outs) <| ctx.Graph.Contents.[cEdge.Dest]
+                let processDEdge dEdge =
+                    (pViewexpr, cEdge, dEdge)
+                Set.map processDEdge dEdges
 
-                let processTriple ctx (pViewexpr, (cEdge : OutEdge), (dEdge : OutEdge)) =
-                    let c, d = cEdge.Command, dEdge.Command
+            let processTriple (pViewexpr, (cEdge : OutEdge), (dEdge : OutEdge)) =
+                let c, d = cEdge.Command, dEdge.Command
 
-                    let qViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[cEdge.Dest]
-                    let rViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[dEdge.Dest]
+                let qViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[cEdge.Dest]
+                let rViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[dEdge.Dest]
 
-                    match (pViewexpr, qViewexpr, rViewexpr) with
-                    | InnerView pView, InnerView qView, InnerView rView ->
-                        let cVarResult = commandResultVars c
-                        let dVarResult = commandResultVars d
-                        match (commandArgs d, cVarResult, dVarResult) with
-                        | Ok (dArgs, _), Ok (cVars, _), Ok (dVars, _) ->
-                            if Set.isSubset cVars dVars
-                                && disjoint cVars dArgs
-                                && isLocalResults locals c
-                                && not (hasAssume c)  // TODO: is this too broad?
-                                && not (hasAssume d)  // TODO: is this necessary?
-                                then
-                                    (flip runTransforms) ctx
-                                    <| seq {
-                                          // Remove the {p}c{q} edge
-                                          yield RmOutEdge (node, cEdge)
-                                          // Remove the {q}d{r} edge
-                                          yield RmOutEdge (cEdge.Dest, dEdge)
-                                          // Remove q
-                                          yield RmNode cEdge.Dest
-                                          // Then, add the new edges {p}d{q}
-                                          yield MkCombinedEdge
-                                              ({ Name = node;       Src = dEdge.Dest;   Command = d },
-                                              { Name = dEdge.Dest;  Dest = node;        Command = d })
-                                    }
-                                else ctx
-                        | _ -> ctx
+                match (pViewexpr, qViewexpr, rViewexpr) with
+                | InnerView pView, InnerView qView, InnerView rView ->
+                    match isObservable tvars c d with
+                    | Pass false ->
+                        seq {
+                            // Remove the {p}c{q} edge
+                            yield RmOutEdge (node, cEdge)
+                            // Remove the {q}d{r} edge
+                            yield RmOutEdge (cEdge.Dest, dEdge)
+                            // Remove q
+                            yield RmNode cEdge.Dest
+                            // Then, add the new edges {p}d{q}
+                            yield MkCombinedEdge
+                                ({ Name = node;       Src = dEdge.Dest;   Command = d },
+                                 { Name = dEdge.Dest; Dest = node;        Command = d })
+                        }
+                    | _ -> Seq.empty
 
-                let triples = Set.fold (+) Set.empty <| Set.map processCEdge outEdges
-                Set.fold processTriple ctx triples
+            let triples = Set.fold (+) Set.empty <| Set.map processCEdge outEdges
+            seq { for triple in triples do yield! (processTriple triple) }
+        expandNodeIn ctx opt
 
 
     /// <summary>
