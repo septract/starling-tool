@@ -350,7 +350,7 @@ module Queries =
             let footprintSubset = Set.isSubset cVars dVars
             let footprintInputDisjoint = Set.isEmpty (Set.intersect cVars dArgs)
             let hasObservableFootprint =
-                (not footprintSubset) && (not footprintInputDisjoint)
+                (not footprintSubset) || (not footprintInputDisjoint)
 
             canDiverge ||
             canModifyShared ||
