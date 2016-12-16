@@ -21,7 +21,28 @@ then
 fi
 
 echo "--- STARLING ---"
-./starling.sh -sgrass -Btry-approx $* | tee $tempfile
+
+if ./starling.sh -sgrass -Btry-approx $* > $tempfile;
+then
+	echo "Starling succeeded:"
+	cat $tempfile
+else
+	starling_exitc=$?
+	echo "Starling FAILED."
+	rm $tempfile
+	exit $starling_exitc
+fi
+
 echo "--- GRASSHOPPER ---"
-$GRASSHOPPER -robust $tempfile && echo "success"
+
+if $GRASSHOPPER -robust $tempfile;
+then
+	echo "GRASShopper succeeded."
+else
+	gh_exitc=$?
+	echo "GRASShopper FAILED."
+	rm $tempfile
+	exit $gh_exitc
+fi
+
 rm $tempfile

@@ -361,12 +361,6 @@ let printOk (pOk : 'Ok -> Doc) (pBad : 'Warn -> Doc)
 let printErr (pBad : 'Error -> Doc) : 'Error list -> unit =
     List.map pBad >> headed "Errors" >> print >> eprintfn "%s"
 
-/// Pretty-prints a Chessie result, given printers for the successful
-/// case and failure messages.
-let printResult (pOk : 'Ok -> Doc) (pBad : 'Error -> Doc)
-  : Result<'Ok, 'Error> -> unit =
-    either (printOk pOk pBad) (printErr pBad)
-
 /// Shorthand for the raw proof output stage.
 /// TODO: Keep around the CommandSemantics types longer
 let rawproof
@@ -596,8 +590,11 @@ let mainWithOptions (options : Options) : int =
     let pfn =
         if config.raw then (sprintf "%A" >> String)
                       else printResponse mview
-    printResult pfn printError starlingR
-    0
+
+    either
+        (printOk pfn printError >> fun _ -> 0)
+        (printErr printError >> fun _ -> 1)
+        starlingR
 
 [<EntryPoint>]
 let main (argv : string[]) : int =
