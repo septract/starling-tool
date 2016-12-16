@@ -14,11 +14,7 @@ fi
 
 tempfile=grass.tmp
 
-if [ -e $tempfile ]
-then
-   echo "Temp file already exists: " $tempfile
-   exit 1
-fi
+rm $tempfile
 
 echo "--- STARLING ---"
 
@@ -29,7 +25,6 @@ then
 else
 	starling_exitc=$?
 	echo "Starling FAILED."
-	rm $tempfile
 	exit $starling_exitc
 fi
 
@@ -41,8 +36,5 @@ then
 else
 	gh_exitc=$?
 	echo "GRASShopper FAILED."
-	rm $tempfile
 	exit $gh_exitc
 fi
-
-rm $tempfile
