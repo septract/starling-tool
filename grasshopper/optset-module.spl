@@ -116,12 +116,20 @@ predicate phiLess(X : Set<Entry>)
 		z.key < z.next.key
 }
 
+// The tail entry is reachable from some entry
+predicate phiRT_local(X : Set<Entry>, x : Entry, tail : Entry)
+  requires acc(X) {
+	x in X && x != tail ==> (
+	exists R : Set<Entry> ::
+		R = { z : Entry :: z in X && Btwn(next, x, z, tail) && z != tail }
+		&& Btwn(next, x, tail, tail)
+	)
+}
+
 // The tail entry is reachable from every entry
 predicate phiRT(X : Set<Entry>, tail : Entry)
   requires acc(X) {
-  	tail in X ==> (
-	forall z : Entry :: (z in X && z != tail) ==>
-		Btwn(next, z, tail, tail))
+	forall x : Entry :: phiRT_local(X, x, tail)
 }
 
 // There are no cyclic heap paths in the heap
@@ -145,15 +153,27 @@ predicate phiUB(X : Set<Entry>, head : Entry, tail : Entry)
 		Btwn(next, head, z, tail)
 }
 
-predicate isSetG(X: Set<Entry>, head : Entry, tail : Entry, lb : Int, ub : Int)
+// Grouping of local shape predicates.
+predicate localShape(X : Set<Entry>, head : Entry, tail : Entry)
   requires acc(X) {
 	phiH(X, head) &&
 	phiT(X, tail) &&
 	phiTnoNext(X, tail) &&
-	phiNext(X, tail) &&
+	phiNext(X, tail)
+}
+
+// Grouping of local data predicates.
+predicate localData(X : Set<Entry>, head : Entry, tail : Entry, lb : Int, ub : Int)
+  requires acc(X) {
 	phiUb(X, tail, ub) &&
 	phiLb(X, head, lb) &&
-	phiLess(X) &&
+	phiLess(X)
+}
+
+predicate isSetG(X: Set<Entry>, head : Entry, tail : Entry, lb : Int, ub : Int)
+  requires acc(X) {
+	localShape(X, head, tail) &&
+	localData(X, head, tail, lb, ub) &&
 	phiRT(X, tail) &&
 	phiAC(X) &&
 	phiS(X) &&
