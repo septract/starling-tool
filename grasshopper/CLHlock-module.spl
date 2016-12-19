@@ -1,0 +1,25 @@
+// CLH lock module
+
+struct Node {
+  var lock: Bool;
+  var pred: Node; 
+}
+
+predicate CLHfoot(Foot: Set<Node>, head: Node, tail: Node) 
+  requires acc(Foot)
+{ 
+  exists Queue : Set<Node> :: ( 
+    Queue = { z : Node :: z in Foot && Btwn(pred,tail,head,z) } 
+    && 
+    tail in Queue 
+    && 
+    head in Queue 
+    && 
+    (forall x: Node :: 
+        (x in Foot && x.lock == true) ==> x in Queue)
+    && 
+    (forall x: Node :: 
+        (x in Queue && x != head) ==> x.lock == true)
+        
+  ) 
+} 
