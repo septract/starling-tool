@@ -9,6 +9,36 @@ struct Entry {
 	var lock : Bool;  // in the original, this is of type Lock.
 }
 
+/*
+ * Return value properties
+ */
+
+predicate removedG(X : Set<Entry>, k : Int) {
+	exists e : Entry :: e in X && e.key == k && e.marked == true
+}
+
+/*
+ * Locks
+ */
+
+procedure waitLock(x: Entry)
+  requires acc(x)
+  ensures acc(x) &*& entryUnlocked(x, x.next) {
+	assume (x.lock == false);
+}
+
+procedure takeLock(x: Entry)
+  requires acc(x) &*& entryUnlocked(x, x.next)
+  ensures acc(x) &*& entryLocked(x,x.next) {
+	x.lock := true;
+}
+
+procedure releaseLock(x: Entry)
+  requires acc(x) &*& entryLocked(x,x.next)
+  ensures acc(x) &*& entryUnlocked(x,x.next) {
+	x.lock := false;
+}
+
 predicate entryLocked(x : Entry, y : Entry) {
 	x.next == y && x.lock == true
 }
@@ -17,15 +47,30 @@ predicate entryUnlocked(x : Entry, y : Entry) {
 	x.next == y && x.lock == false
 }
 
-predicate has1LockG(X : Set<Entry>, a : Entry, b : Entry) 
+predicate has1LockG(X : Set<Entry>, a : Entry, b : Entry)
   requires acc(X) {
 	a in X && entryLocked(a, b)
 }
 
-predicate has2LockG(X : Set<Entry>, a : Entry, b : Entry, c : Entry) 
+predicate has2LockG(X : Set<Entry>, a : Entry, b : Entry, c : Entry)
   requires acc(X) {
 	a in X && b in X && entryLocked(a, b) && entryLocked(b,c)
 }
+
+/*
+ * Validation
+ */
+function validate(pred : Entry, curr : Entry)
+  returns (B : Bool)
+  requires acc(pred) &*& acc(curr)
+  ensures (B == (!pred.marked && !curr.marked && pred.next == curr));
+
+/*
+ * Grasshopper versions of phi predicates
+ *
+ * These are represented as a single Starling view 'isSet' that is always
+ * asserted.
+ */
 
 // H has a non-null value (ie. the head value exists)
 predicate phiH(X : Set<Entry>, head : Entry)
@@ -39,39 +84,39 @@ predicate phiT(X : Set<Entry>, tail : Entry)
 	tail in X
 }
 
-// The tail node has no successor
+// The tail entry has no successor
 predicate phiTnoNext(X : Set<Entry>, tail : Entry)
   requires acc(X) {
 	tail.next == null
 }
 
-// Every node other than the tail node has a successor
+// Every entry other than the tail entry has a successor
 predicate phiNext(X : Set<Entry>, tail : Entry)
   requires acc(X) {
 	forall z : Entry :: (z in X && z != tail) ==>
 		(exists n : Entry :: n in X && z.next == n)
 }
 
-// The key of the tail node is the upper bound
+// The key of the tail entry is the upper bound
 predicate phiUb(X : Set<Entry>, tail : Entry, ub : Int)
   requires acc(X) {
 	tail.key == ub
 }
 
-// The key of the head node is the lower bound
+// The key of the head entry is the lower bound
 predicate phiLb(X : Set<Entry>, head : Entry, lb : Int)
   requires acc(X) {
 	head.key == lb
 }
 
-// The key of every node is smaller than the key of its successor
+// The key of every entry is smaller than the key of its successor
 predicate phiLess(X : Set<Entry>)
   requires acc(X) {
 	forall z : Entry :: (z in X && z.next != null) ==>
 		z.key < z.next.key
 }
 
-// The tail node is reachable from every node
+// The tail entry is reachable from every entry
 predicate phiRT(X : Set<Entry>, tail : Entry)
   requires acc(X) {
 	forall z : Entry :: (z in X && z != tail) ==>
@@ -84,7 +129,7 @@ predicate phiAC(X : Set<Entry>)
 	forall z : Entry :: z in X ==> !(Btwn(next, z, z, z))
 }
 
-// Every list of nodes is sorted.
+// Every list of entries is sorted.
 predicate phiS(X : Set<Entry>)
   requires acc(X) {
 	forall x : Entry, y : Entry :: x in X && y in X && Btwn(next, x, y, y) ==>
@@ -92,7 +137,7 @@ predicate phiS(X : Set<Entry>)
 			z.key < z.next.key && z.key < y.key)
 }
 
-// A node is unmarked if and only if it is a backbone node.
+// A entry is unmarked if and only if it is a backbone entry.
 predicate phiUB(X : Set<Entry>, head : Entry, tail : Entry)
   requires acc(X) {
 	forall z : Entry :: (z in X && z.marked == false) ==>
@@ -112,4 +157,15 @@ predicate isSetG(X: Set<Entry>, head : Entry, tail : Entry, lb : Int, ub : Int)
 	phiAC(X) &&
 	phiS(X) &&
 	phiUB(X, head, tail)
+}
+
+/*
+ * Sigma predicates are modelled as separate, unasserted views.
+ * Here are some helper procedures for some of those predicates:
+ */
+
+// n is an exterior entry (and, as this is a view, it can never become backbone)
+predicate sigmaE(X : Set<Entry>, head : Entry, tail : Entry, n : Entry)
+  requires acc(X) {
+	n in { z : Entry :: z in X && !(Btwn(next, head, z, tail)) }
 }

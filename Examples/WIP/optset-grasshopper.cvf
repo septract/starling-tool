@@ -1,78 +1,110 @@
 pragma grasshopper_include {./grasshopper/optset-module.spl};
+pragma grasshopper_footprint {X};
+pragma grasshopper_footprint_sort {Set<Entry>};
 
 typedef int Entry;
 typedef int Int;
+typedef bool Bool;
 
-shared Entry head;
+shared Entry head, tail;
+shared Int ub, lb;
 
-thread bool found, absent;
+thread Bool present, done;
 thread Int ckey;
 thread Entry pred, curr;
 
-view has1Lock(Entry p, Entry c);
+view isHead(Entry h), isTail(Entry t), isEntry(Entry t);
+view keyIs(Int k, Entry e), isMarked(Entry e), isExterior(Entry e);
+view wf(Int key);
+
+view has1Lock(Entry p);
+view has1Of2Lock(Entry p, Entry c);
 view has2Lock(Entry p, Entry c);
 
+view removed(Int k);
+
 method remove(Int key) {
-    {| ? |}
-        found = false;
-        absent = false;
-    {| ? |}
+    {| wf(key) |}
         do {
-            {| ? |}
+            {| wf(key) |}
                 <pred = head>;
-            {| ? |}
-                <curr = %{ #1.next% }(head)>;
-            {| ? |}
-                <ckey = %{ #1.key% }(curr)>;
-            {| ? |}
+            {| wf(key) * isHead(pred) |}
+                curr = %{ #1.next }(pred);
+            {| wf(key) * isHead(pred) * isEntry(curr) |}
+                ckey = %{ #1.key }(curr);
+            {| wf(key) * isHead(pred) * isEntry(curr) * keyIs(ckey, curr) |}
                 while (ckey < key) {
-                    {| ? |}
+                    {| wf(key) * isEntry(curr) |}
                         pred = curr;
-                    {| ? |}
-                        <curr = %{ #1.next% }(curr)>;
-                    {| ? |}
-                        <ckey = %{ #1.key% }(curr)>;
-                    {| ? |}
+                    {| wf(key) * isEntry(pred) * isEntry(curr) |}
+                        curr = %{ #1.next }(curr);
+                    {| wf(key) * isEntry(pred) * isEntry(curr) |}
+                        ckey = %{ #1.key }(curr);
+                    {| wf(key) * isEntry(pred) * isEntry(curr) * keyIs(ckey, curr) |}
                 }
-            {| ? |}
-                <%{ waitLock(#1); takeLock(#1)% }(pred)[]>;
-            {| ? * has1Of2Lock(pred, curr) |}
-                <%{ waitLock(#1); takeLock(#1)% }(curr)[]>;
-            {| ? * has2Lock(pred, curr) |}
-                if (%{ validate(#1, #2)% }(pred, curr) == true) {
-                    {| ? * has2Lock(pred, curr) |}
-                        <ckey = %{ #1.key% }(curr)>;
-                    {| ? * has2Lock(pred, curr) |}
+            {| wf(key) * isEntry(pred) * isEntry(curr) * keyIs(ckey, curr) |}
+                <%{ waitLock(#1); takeLock(#1) }(pred)[]>;
+            {| wf(key) * has1Of2Lock(pred, curr) |}
+                <%{ waitLock(#1); takeLock(#1) }(curr)[]>;
+            {| wf(key) * has2Lock(pred, curr) |}
+                if (%{ validate(#1, #2) == true }(pred, curr)) {
+                    {| wf(key) * has2Lock(pred, curr) |}
+                        ckey = %{ #1.key }(curr);
+                    {| wf(key) * has2Lock(pred, curr) |}
                         if (ckey != key) {
-                            {| ? * has2Lock(pred, curr) |}
-                                absent = true;
-                            {| ? * has2Lock(pred, curr) |}
+                            {| wf(key) * has2Lock(pred, curr) |}
+                                present = false;
+                                done = true;
+                            {| wf(key) * has2Lock(pred, curr) * if present == true then removed(key) else emp |}
                         } else {
-                            {| ? * has2Lock(pred, curr) |}
-                                <%{ #1.marked := true% }(curr)[]>;
-                            {| ? * has2Lock(pred, curr) |}
-                                <{
-                                   %{ #1.next := #2.next% }(pred, curr)[];
-                                   %{ disposeNode(#1)% }(curr)[];
-                                 }>;
-                            {| ? * has1Lock(pred) * Has1Lock(curr) |}
+                            {| wf(key) * has2Lock(pred, curr) |}
+                                <%{ #1.marked := true }(curr)[]>;
+                            {| wf(key) * has2Lock(pred, curr) |}
+                                <%{ #1.next := #2.next }(pred, curr)[]>;
+                            {| wf(key) * has1Lock(pred) * has1Lock(curr) * removed(key) |}
                                 present = true;
-                            {| ? * has1Lock(pred) * Has1Lock(curr) |}
+                                done = true;
+                            {| wf(key) * has1Lock(pred) * has1Lock(curr) * if present == true then removed(key) else emp |}
                         }
-                    {| ? * has1Lock(pred) * Has1Lock(curr) |}
+                    {| wf(key) * has1Lock(pred) * has1Lock(curr) * if present == true then removed(key) else emp |}
                 }
-            {| ? * has1Lock(pred) * Has1Lock(curr) |}
-                <%{ disposeLock(#1)% }(curr)[]>;
-            {| ? * has1Lock(pred) |}
-                <%{ disposeLock(#1)% }(pred)[]>;
-            {| ? |}
-        } while (!found && !absent);
-    {| ? |}
+            {| wf(key) * has1Lock(pred) * has1Lock(curr) * if present == true then removed(key) else emp |}
+                <%{ releaseLock(#1) }(curr)[]>;
+            {| wf(key) * has1Lock(pred) * if present == true then removed(key) else emp |}
+                <%{ releaseLock(#1) }(pred)[]>;
+            {| wf(key) * if present == true then removed(key) else emp |}
+        } while (done == false);
+    {| if present == true then removed(key) else emp |}
 }
 
-constraint has1Lock(a)       ->  %{ exists e: Node :: has1LockG(X, #1, e) }(a);
+// The invariant is 'isSetG', which conjoins all the phi-predicates.
+constraint emp -> %{ isSetG(X, #1, #2, #3, #4) }(head, tail, lb, ub);
+
+// A key is wf if it is between the bounds.
+constraint wf(key) -> lb < key && key < ub;
+
+// This view encodes sigmaH.
+constraint isHead(h) -> h == head;
+
+// This view encodes sigmaT.
+constraint isTail(t) -> t == tail;
+
+constraint isEntry(e) -> %{ #1 in X }(e);
+
+// This view encodes sigmaK.
+constraint keyIs(k, n) -> %{ #1 in X ==> #1.key == #2 }(n, k);
+
+// This view encodes sigmaM.
+constraint isMarked(n) -> %{ #1 in X ==> #1.marked == true }(n);
+
+// This view encodes sigmaE.
+constraint isExterior(n) -> %{ sigmaE(X, #1, #2, #3) }(head, tail, n);
+
+constraint removed(k) -> %{ removedG(X, #1) }(k);
+
+constraint has1Lock(a)       ->  %{ exists e: Entry :: has1LockG(X, #1, e) }(a);
 constraint has1Of2Lock(a,b)  ->  %{ has1LockG(X, #1,#2) }(a,b);
-constraint has2Lock(a,b)     ->  %{ exists e: Node :: has2LockG(X, #1, #2, e) }(a,b);
+constraint has2Lock(a,b)     ->  %{ exists e: Entry :: has2LockG(X, #1, #2, e) }(a,b);
 
 constraint has1Of2Lock(a,b)  * has1Of2Lock(c,d)  ->  a != c;
 constraint has1Of2Lock(a,b)  * has1Lock(c)       ->  a != c;
