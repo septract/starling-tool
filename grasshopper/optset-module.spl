@@ -1,0 +1,115 @@
+/* See 'A Lazy Concurrent List-Based Set Algorithm'
+   by Heller et al.
+   DOI: 10.1007/11795490_3 */
+
+struct Entry {
+	var key : Int;
+	var next : Entry;
+	var marked : Bool;
+	var lock : Bool;  // in the original, this is of type Lock.
+}
+
+predicate entryLocked(x : Entry, y : Entry) {
+	x.next == y && x.lock == true
+}
+
+predicate entryUnlocked(x : Entry, y : Entry) {
+	x.next == y && x.lock == false
+}
+
+predicate has1LockG(X : Set<Entry>, a : Entry, b : Entry) 
+  requires acc(X) {
+	a in X && entryLocked(a, b)
+}
+
+predicate has2LockG(X : Set<Entry>, a : Entry, b : Entry, c : Entry) 
+  requires acc(X) {
+	a in X && b in X && entryLocked(a, b) && entryLocked(b,c)
+}
+
+// H has a non-null value (ie. the head value exists)
+predicate phiH(X : Set<Entry>, head : Entry)
+  requires acc(X) {
+	head in X
+}
+
+// T has a non-null value (ie. the tail value exists)
+predicate phiT(X : Set<Entry>, tail : Entry)
+  requires acc(X) {
+	tail in X
+}
+
+// The tail node has no successor
+predicate phiTnoNext(X : Set<Entry>, tail : Entry)
+  requires acc(X) {
+	tail.next == null
+}
+
+// Every node other than the tail node has a successor
+predicate phiNext(X : Set<Entry>, tail : Entry)
+  requires acc(X) {
+	forall z : Entry :: (z in X && z != tail) ==>
+		(exists n : Entry :: n in X && z.next == n)
+}
+
+// The key of the tail node is the upper bound
+predicate phiUb(X : Set<Entry>, tail : Entry, ub : Int)
+  requires acc(X) {
+	tail.key == ub
+}
+
+// The key of the head node is the lower bound
+predicate phiLb(X : Set<Entry>, head : Entry, lb : Int)
+  requires acc(X) {
+	head.key == lb
+}
+
+// The key of every node is smaller than the key of its successor
+predicate phiLess(X : Set<Entry>)
+  requires acc(X) {
+	forall z : Entry :: (z in X && z.next != null) ==>
+		z.key < z.next.key
+}
+
+// The tail node is reachable from every node
+predicate phiRT(X : Set<Entry>, tail : Entry)
+  requires acc(X) {
+	forall z : Entry :: (z in X && z != tail) ==>
+		Btwn(next, z, tail, tail)
+}
+
+// There are no cyclic heap paths in the heap
+predicate phiAC(X : Set<Entry>)
+  requires acc(X) {
+	forall z : Entry :: z in X ==> !(Btwn(next, z, z, z))
+}
+
+// Every list of nodes is sorted.
+predicate phiS(X : Set<Entry>)
+  requires acc(X) {
+	forall x : Entry, y : Entry :: x in X && y in X && Btwn(next, x, y, y) ==>
+		(forall z : Entry :: z in X && Btwn(next, x, z, y) ==>
+			z.key < z.next.key && z.key < y.key)
+}
+
+// A node is unmarked if and only if it is a backbone node.
+predicate phiUB(X : Set<Entry>, head : Entry, tail : Entry)
+  requires acc(X) {
+	forall z : Entry :: (z in X && z.marked == false) ==>
+		Btwn(next, head, z, tail)
+}
+
+predicate isSetG(X: Set<Entry>, head : Entry, tail : Entry, lb : Int, ub : Int)
+  requires acc(X) {
+	phiH(X, head) &&
+	phiT(X, tail) &&
+	phiTnoNext(X, tail) &&
+	phiNext(X, tail) &&
+	phiUb(X, tail, ub) &&
+	phiLb(X, head, lb) &&
+	phiLess(X) &&
+	phiRT(X, tail) &&
+	phiAC(X) &&
+	phiS(X) &&
+	phiUB(X, head, tail)
+}

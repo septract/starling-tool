@@ -1,0 +1,82 @@
+pragma grasshopper_include {./grasshopper/optset-module.spl};
+
+typedef int Entry;
+typedef int Int;
+
+shared Entry head;
+
+thread bool found, absent;
+thread Int ckey;
+thread Entry pred, curr;
+
+view has1Lock(Entry p, Entry c);
+view has2Lock(Entry p, Entry c);
+
+method remove(Int key) {
+    {| ? |}
+        found = false;
+        absent = false;
+    {| ? |}
+        do {
+            {| ? |}
+                <pred = head>;
+            {| ? |}
+                <curr = %{ #1.next% }(head)>;
+            {| ? |}
+                <ckey = %{ #1.key% }(curr)>;
+            {| ? |}
+                while (ckey < key) {
+                    {| ? |}
+                        pred = curr;
+                    {| ? |}
+                        <curr = %{ #1.next% }(curr)>;
+                    {| ? |}
+                        <ckey = %{ #1.key% }(curr)>;
+                    {| ? |}
+                }
+            {| ? |}
+                <%{ waitLock(#1); takeLock(#1)% }(pred)[]>;
+            {| ? * has1Of2Lock(pred, curr) |}
+                <%{ waitLock(#1); takeLock(#1)% }(curr)[]>;
+            {| ? * has2Lock(pred, curr) |}
+                if (%{ validate(#1, #2)% }(pred, curr) == true) {
+                    {| ? * has2Lock(pred, curr) |}
+                        <ckey = %{ #1.key% }(curr)>;
+                    {| ? * has2Lock(pred, curr) |}
+                        if (ckey != key) {
+                            {| ? * has2Lock(pred, curr) |}
+                                absent = true;
+                            {| ? * has2Lock(pred, curr) |}
+                        } else {
+                            {| ? * has2Lock(pred, curr) |}
+                                <%{ #1.marked := true% }(curr)[]>;
+                            {| ? * has2Lock(pred, curr) |}
+                                <{
+                                   %{ #1.next := #2.next% }(pred, curr)[];
+                                   %{ disposeNode(#1)% }(curr)[];
+                                 }>;
+                            {| ? * has1Lock(pred) * Has1Lock(curr) |}
+                                present = true;
+                            {| ? * has1Lock(pred) * Has1Lock(curr) |}
+                        }
+                    {| ? * has1Lock(pred) * Has1Lock(curr) |}
+                }
+            {| ? * has1Lock(pred) * Has1Lock(curr) |}
+                <%{ disposeLock(#1)% }(curr)[]>;
+            {| ? * has1Lock(pred) |}
+                <%{ disposeLock(#1)% }(pred)[]>;
+            {| ? |}
+        } while (!found && !absent);
+    {| ? |}
+}
+
+constraint has1Lock(a)       ->  %{ exists e: Node :: has1LockG(X, #1, e) }(a);
+constraint has1Of2Lock(a,b)  ->  %{ has1LockG(X, #1,#2) }(a,b);
+constraint has2Lock(a,b)     ->  %{ exists e: Node :: has2LockG(X, #1, #2, e) }(a,b);
+
+constraint has1Of2Lock(a,b)  * has1Of2Lock(c,d)  ->  a != c;
+constraint has1Of2Lock(a,b)  * has1Lock(c)       ->  a != c;
+constraint has1Lock(a)       * has1Lock(c)       ->  a != c;
+constraint has1Of2Lock(a,b)  * has2Lock(c,d)     ->  a != c && a != d;
+constraint has1Lock(a)       * has2Lock(c,d)     ->  a != c && a != d;
+constraint has2Lock(a,b)     * has2Lock(c,d)     ->  a != c && a != d && b != c && b != d;
