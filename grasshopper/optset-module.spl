@@ -94,19 +94,19 @@ predicate phiTnoNext(X : Set<Entry>, tail : Entry)
 predicate phiNext(X : Set<Entry>, tail : Entry)
   requires acc(X) {
 	forall z : Entry :: (z in X && z != tail) ==>
-		(exists n : Entry :: n in X && z.next == n)
+		(exists n : Entry :: n in X && z != n && z.next == n)
 }
 
 // The key of the tail entry is the upper bound
 predicate phiUb(X : Set<Entry>, tail : Entry, ub : Int)
   requires acc(X) {
-	tail.key == ub
+	tail in X ==> tail.key == ub
 }
 
 // The key of the head entry is the lower bound
 predicate phiLb(X : Set<Entry>, head : Entry, lb : Int)
   requires acc(X) {
-	head.key == lb
+	head in X ==> head.key == lb
 }
 
 // The key of every entry is smaller than the key of its successor
@@ -119,8 +119,9 @@ predicate phiLess(X : Set<Entry>)
 // The tail entry is reachable from every entry
 predicate phiRT(X : Set<Entry>, tail : Entry)
   requires acc(X) {
+  	tail in X ==> (
 	forall z : Entry :: (z in X && z != tail) ==>
-		Btwn(next, z, tail, tail)
+		Btwn(next, z, tail, tail))
 }
 
 // There are no cyclic heap paths in the heap
