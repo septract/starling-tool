@@ -1,12 +1,11 @@
 typedef int Lock;
-typedef int Int;
 typedef bool Bool;
 
 pragma grasshopper_include {./grasshopper/spinlock-module.spl};
 pragma grasshopper_footprint {LockFoot};
 pragma grasshopper_footprint_sort {Set<Lock>};
 
-shared Int heap;
+shared int heap;
 
 thread Lock x, ret;
 thread Bool test;  // Used when trying to take the lock.
