@@ -2,34 +2,70 @@ include "./optset-module.spl";
 
 /*
 procedure isSet_stable(head : Entry, tail : Entry, ub : Int, lb : Int)
-  requires exists X : Set<Entry> :: isSetG(X, head, tail, ub, lb)
-  ensures exists X : Set<Entry> :: isSetG(X, head, tail, ub, lb)
+  requires exists X : Set<Entry> :: acc(X) &*& isSetG(X, head, tail, ub, lb)
+  ensures exists X : Set<Entry> :: acc(X) &*& isSetG(X, head, tail, ub, lb)
 {}
 */
 
 procedure phiS_stable()
-  requires exists X : Set<Entry> :: phiS(X)
-  ensures exists X : Set<Entry> :: phiS(X)
+  requires exists X : Set<Entry> :: acc(X) &*& phiS(X)
+  ensures exists X : Set<Entry> :: acc(X) &*& phiS(X)
 {}
 
 procedure phiUB_stable(head : Entry, tail : Entry)
-  requires exists X : Set<Entry> :: phiUB(X, head, tail)
-  ensures exists X : Set<Entry> :: phiUB(X, head, tail)
+  requires exists X : Set<Entry> :: acc(X) &*& phiUB(X, head, tail)
+  ensures exists X : Set<Entry> :: acc(X) &*& phiUB(X, head, tail)
 {}
 
-/*
+procedure phiRT_stable(tail : Entry)
+  requires exists X : Set<Entry> :: acc(X) &*& phiRT(X, tail)
+  ensures exists X : Set<Entry> :: acc(X) &*& phiRT(X, tail)
+{}
+
 procedure phiAC_stable()
-  requires exists X : Set<Entry> :: phiAC(X)
-  ensures exists X : Set<Entry> :: phiAC(X)
+  requires exists X : Set<Entry> :: acc(X) &*& phiAC(X)
+  ensures exists X : Set<Entry> :: acc(X) &*& phiAC(X)
 {}
-*/
 
-/*
-procedure global_stable(head : Entry, tail : Entry)
-  requires exists X : Set<Entry> :: global(X, head, tail)
-  ensures exists X : Set<Entry> :: global(X, head, tail)
+procedure globalShape_stable(tail : Entry)
+  requires exists X : Set<Entry> :: acc(X) &*& globalShape(X, tail)
+  ensures exists X : Set<Entry> :: acc(X) &*& globalShape(X, tail)
 {}
-*/
+
+procedure globalShape_S_stable(tail : Entry)
+  requires exists X : Set<Entry> :: acc(X) &*& (globalShape(X, tail) && phiS(X))
+  ensures exists X : Set<Entry> :: acc(X) &*& (globalShape(X, tail) && phiS(X))
+{}
+
+procedure globalShape_UB_stable(head : Entry, tail : Entry)
+  requires exists X : Set<Entry> :: acc(X) &*& (globalShape(X, tail) && phiUB(X, head, tail))
+  ensures exists X : Set<Entry> :: acc(X) &*& (globalShape(X, tail) && phiUB(X, head, tail))
+{}
+
+procedure S_UB_stable(head : Entry, tail : Entry)
+  requires exists X : Set<Entry> :: acc(X) &*& (phiS(X) && phiUB(X, head, tail))
+  ensures exists X : Set<Entry> :: acc(X) &*& (phiS(X) && phiUB(X, head, tail))
+{}
+
+procedure RT_S_UB_stable(head : Entry, tail : Entry)
+  requires exists X : Set<Entry> :: acc(X) &*& (phiRT(X, tail) && phiS(X) && phiUB(X, head, tail))
+  ensures exists X : Set<Entry> :: acc(X) &*& (phiRT(X, tail) && phiS(X) && phiUB(X, head, tail))
+{}
+
+procedure AC_S_UB_stable(head : Entry, tail : Entry)
+  requires exists X : Set<Entry> :: acc(X) &*& (phiAC(X) && phiS(X) && phiUB(X, head, tail))
+  ensures exists X : Set<Entry> :: acc(X) &*& (phiAC(X) && phiS(X) && phiUB(X, head, tail))
+{}
+
+procedure global2_stable(head : Entry, tail : Entry)
+  requires exists X : Set<Entry> :: acc(X) &*& (phiAC(X) && phiS(X) && phiUB(X, head, tail) && phiRT(X, tail))
+  ensures exists X : Set<Entry> :: acc(X) &*& (phiAC(X) && phiS(X) && phiUB(X, head, tail) && phiRT(X, tail))
+{}
+
+procedure global_stable(head : Entry, tail : Entry)
+  requires exists X : Set<Entry> :: acc(X) &*& global(X, head, tail)
+  ensures exists X : Set<Entry> :: acc(X) &*& global(X, head, tail)
+{}
 
 
 // These should fail

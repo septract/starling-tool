@@ -132,30 +132,36 @@ predicate phiRT(X : Set<Entry>, tail : Entry)
 // There are no cyclic heap paths in the heap
 predicate phiAC(X : Set<Entry>)
   requires acc(X) {
-	forall x : Entry, y : Entry :: (x in X && y in X && x.next == y) ==>
-		x != y && !Btwn(next, y, x, x)
+	forall x : Entry ::
+		(x in X && x.next != null) ==>
+		(x.next != x)
+//		 && (!Btwn(next, x.next, x, x)))
 }
 
 predicate sortedList(X : Set<Entry>, x : Entry, y : Entry)
   requires acc(X) {
+  	(x in X && y in X) ==>
 	(forall z : Entry ::
-		z in X
-		==> z.key <= z.key)
+		(Btwn(next, x, z, y)
+		 && Btwn(next, z, y, y)
+		 && z != y)
+		==> z.key < z.next.key)
 }
 
 // Every list of entries is sorted.
 predicate phiS(X : Set<Entry>)
   requires acc(X) {
-	(forall z : Entry ::
-		z in X
-		==> z.key <= z.key)
+	forall x : Entry, y : Entry :: sortedList(X, x, y)
 }
 
 // A entry is unmarked if and only if it is a backbone entry.
 predicate phiUB(X : Set<Entry>, head : Entry, tail : Entry)
   requires acc(X) {
-	forall z : Entry :: (z in X && z.marked == false) ==>
-		Btwn(next, head, z, tail)
+	(forall z : Entry :: (z in X && z != head && z != tail && z.marked == false) ==>
+		Btwn(next, head, z, tail))
+	&&
+	(forall z : Entry :: (z in X && z != head && z != tail && Btwn(next, head, z, tail)) ==>
+		z.marked == false)
 }
 
 // Grouping of local shape predicates.
