@@ -5,6 +5,7 @@
 # ${GRASSHOPPER}.
 
 GRASSHOPPER=${GRASSHOPPER:-"grasshopper.native"}
+GHARGS=${GHARGS:="-robust"}
 
 if [ $# -lt 1 ];
 then
@@ -30,7 +31,7 @@ fi
 
 echo "--- GRASSHOPPER ---"
 
-if $GRASSHOPPER -robust $tempfile;
+if $GRASSHOPPER ${GHARGS} $tempfile;
 then
 	echo "GRASShopper succeeded."
 else

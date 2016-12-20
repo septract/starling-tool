@@ -1,0 +1,113 @@
+include "./optset-module.spl";
+
+/*
+procedure isSet_stable(head : Entry, tail : Entry, ub : Int, lb : Int)
+  requires exists X : Set<Entry> :: isSetG(X, head, tail, ub, lb)
+  ensures exists X : Set<Entry> :: isSetG(X, head, tail, ub, lb)
+{}
+*/
+
+procedure phiS_stable()
+  requires exists X : Set<Entry> :: phiS(X)
+  ensures exists X : Set<Entry> :: phiS(X)
+{}
+
+procedure phiUB_stable(head : Entry, tail : Entry)
+  requires exists X : Set<Entry> :: phiUB(X, head, tail)
+  ensures exists X : Set<Entry> :: phiUB(X, head, tail)
+{}
+
+/*
+procedure phiAC_stable()
+  requires exists X : Set<Entry> :: phiAC(X)
+  ensures exists X : Set<Entry> :: phiAC(X)
+{}
+*/
+
+/*
+procedure global_stable(head : Entry, tail : Entry)
+  requires exists X : Set<Entry> :: global(X, head, tail)
+  ensures exists X : Set<Entry> :: global(X, head, tail)
+{}
+*/
+
+
+// These should fail
+
+/*
+procedure phiH_sat(X : Set<Entry>, head : Entry)
+  requires acc(X) &*& phiH(X, head)
+  ensures false {}
+
+procedure phiT_sat(X : Set<Entry>, tail : Entry)
+  requires acc(X) &*& phiT(X, tail)
+  ensures false {}
+
+procedure phiTnoNext_sat(X : Set<Entry>, tail : Entry)
+  requires acc(X) &*& phiTnoNext(X, tail)
+  ensures false {}
+
+procedure phiNext_sat(X : Set<Entry>, tail : Entry)
+  requires acc(X) &*& phiNext(X, tail)
+  ensures false {}
+
+procedure phiLess_sat(X : Set<Entry>)
+  requires acc(X) &*& phiLess(X)
+  ensures false {}
+
+procedure phiU_sat(X : Set<Entry>, tail : Entry, ub : Int)
+  requires acc(X) &*& phiU(X, tail, ub)
+  ensures false {}
+
+procedure phiL_sat(X : Set<Entry>, head : Entry, lb : Int)
+  requires acc(X) &*& phiL(X, head, lb)
+  ensures false {}
+
+procedure phiRT_local_sat(X : Set<Entry>, x : Entry, tail : Entry)
+  requires acc(X) &*& phiRT_local(X, x, tail)
+  ensures false {}
+
+procedure phiRT_sat(X : Set<Entry>, tail : Entry)
+  requires acc(X) &*& phiRT(X, tail)
+  ensures false {}
+
+procedure phiAC_sat(X : Set<Entry>)
+  requires acc(X) &*& phiAC(X)
+  ensures false {}
+
+procedure phiS_sat(X : Set<Entry>)
+  requires acc(X) &*& phiS(X)
+  ensures false {}
+
+procedure phiUB_sat(X : Set<Entry>, head : Entry, tail : Entry)
+  requires acc(X) &*& phiUB(X, head, tail)
+  ensures false {}
+
+procedure localShape_sat(X : Set<Entry>, head : Entry, tail : Entry)
+  requires acc(X) &*& localShape(X, head, tail)
+  ensures false {}
+
+procedure localData_sat(X : Set<Entry>, head : Entry, tail : Entry, lb : Int, ub : Int)
+  requires acc(X) &*& localData(X, head, tail, lb, ub)
+  ensures false {}
+
+procedure local_sat(X : Set<Entry>, head : Entry, tail : Entry, lb : Int, ub : Int)
+  requires acc(X) &*& local(X, head, tail, lb, ub)
+  ensures false {}
+
+procedure globalShape_sat(X : Set<Entry>, tail : Entry)
+  requires acc(X) &*& globalShape(X, tail)
+  ensures false {}
+
+procedure shape_sat(X : Set<Entry>, head : Entry, tail : Entry)
+  requires acc(X) &*& localShape(X, head, tail) &*& globalShape(X, tail)
+  ensures false {}
+
+procedure global_sat(X : Set<Entry>, head : Entry, tail : Entry)
+  requires acc(X) &*& global(X, head, tail)
+  ensures false {}
+
+procedure isSetG_sat(X : Set<Entry>, head : Entry, tail : Entry, lb : Int, ub : Int)
+  requires acc(X) &*& isSetG(X, head, tail, lb, ub)
+  ensures false {}
+*/
