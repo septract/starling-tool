@@ -19,6 +19,8 @@ open Starling.Core.Symbolic
 open Starling.Core.Symbolic.Traversal
 open Starling.Core.Instantiate
 open Starling.Core.GuardedView
+open Starling.Core.GuardedView.Traversal
+open Starling.Core.View.Traversal
 open Starling.Core.Traversal
 open Starling.Backends.Z3
 open Starling.Optimiser.Graph
@@ -324,18 +326,16 @@ module Pretty =
 /// </summary>
 let findVars (term : Backends.Z3.Types.ZTerm)
   : Result<CTyped<MarkedVar> list, Error> =
-    (* For the WPre and Goal, we can just use the symbool representation:
-       it's easy to traverse and should be precise.  If we conjoin the two,
-       we need only traverse one expression.
+    (* For the WPre and Goal, we used to just use the symbool representation,
+       but this can under-approximate the variable accesses if the symbool was
+       optimised. *)
+    let exprVarsT = tliftOverExpr collectSymVars
 
-       We don't use the symbool for the command, because it has been framed,
-       often with variables we don't care about.  Worse, it could have been
-       optimised, causing variables we _do_ care about to be lost.  Instead,
-       we extract variables out of the microcode. *)
-    let goalAndWPre =
-        normalBool (mkAnd2 term.SymBool.WPre term.SymBool.Goal)
-    let goalAndWPreVarsR =
-        findVars (tliftToBoolSrc (tliftToExprDest collectSymVars)) goalAndWPre
+    let goalVarsL = findVars (tliftOverFunc exprVarsT) term.Original.Goal
+    let wPreVarsL =
+        findVars (tchainM (tliftOverGFunc exprVarsT) id) term.Original.WPre
+
+    let goalAndWPreVarsR = lift2 Set.union goalVarsL wPreVarsL
 
     // Remember, traversing a list of lists of microcode!  (Oh the humanity.)
     let cmdVarsT =
