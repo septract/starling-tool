@@ -133,16 +133,16 @@ predicate phiRT(X : Set<Entry>, tail : Entry)
 predicate phiAC(X : Set<Entry>)
   requires acc(X) {
 	forall x : Entry ::
-		(x in X && x.next != null) ==>
-		(x.next != x)
-//		 && (!Btwn(next, x.next, x, x)))
+		(x in X && (exists y : Entry :: y in X && x.next == y)) ==>
+		(x != x.next && (!Btwn(next, x.next, x, x)))
 }
 
 predicate sortedList(X : Set<Entry>, x : Entry, y : Entry)
   requires acc(X) {
-  	(x in X && y in X) ==>
+	(x in X && y in X) ==>
 	(forall z : Entry ::
-		(Btwn(next, x, z, y)
+		(z in X
+		 && Btwn(next, x, z, y)
 		 && Btwn(next, z, y, y)
 		 && z != y)
 		==> z.key < z.next.key)
@@ -196,7 +196,10 @@ predicate globalShape(X : Set<Entry>, tail : Entry)
 // Grouping of global shape predicates.
 predicate global(X : Set<Entry>, head : Entry, tail : Entry)
   requires acc(X) {
-	globalShape(X, tail) && phiS(X) && phiUB(X, head, tail)
+	phiRT(X, tail) && 
+	phiAC(X) &&
+	phiS(X) && 
+	phiUB(X, head, tail)
 }
 
 predicate isSetG(X: Set<Entry>, head : Entry, tail : Entry, lb : Int, ub : Int)

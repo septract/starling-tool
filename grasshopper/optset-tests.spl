@@ -62,6 +62,12 @@ procedure global2_stable(head : Entry, tail : Entry)
   ensures exists X : Set<Entry> :: acc(X) &*& (phiAC(X) && phiS(X) && phiUB(X, head, tail) && phiRT(X, tail))
 {}
 
+procedure isSetG_stable(head : Entry, tail : Entry, lb : Int, ub : Int)
+  requires exists X : Set<Entry> :: acc(X) &*& isSetG(X, head, tail, lb, ub)
+  ensures exists X : Set<Entry> :: acc(X) &*& isSetG(X, head, tail, lb, ub)
+{}
+
+
 procedure global_stable(head : Entry, tail : Entry)
   requires exists X : Set<Entry> :: acc(X) &*& global(X, head, tail)
   ensures exists X : Set<Entry> :: acc(X) &*& global(X, head, tail)
