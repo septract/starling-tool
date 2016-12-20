@@ -146,7 +146,7 @@ predicate sortedList(X : Set<Entry>, x : Entry, y : Entry)
 // Every list of entries is sorted.
 predicate phiS(X : Set<Entry>)
   requires acc(X) {
-	(forall x : Entry ::
+	(forall z : Entry ::
 		z in X
 		==> z.key <= z.key)
 }
