@@ -23,38 +23,32 @@ predicate removedG(X : Set<Entry>, k : Int) {
 
 procedure waitLock(x: Entry)
   requires acc(x)
-  ensures acc(x) &*& entryUnlocked(x, x.next) {
+  ensures acc(x) &*& entryUnlocked(x) {
 	assume (x.lock == false);
 }
 
 procedure takeLock(x: Entry)
-  requires acc(x) &*& entryUnlocked(x, x.next)
-  ensures acc(x) &*& entryLocked(x,x.next) {
+  requires acc(x) &*& entryUnlocked(x)
+  ensures acc(x) &*& entryLocked(x) {
 	x.lock := true;
 }
 
 procedure releaseLock(x: Entry)
-  requires acc(x) &*& entryLocked(x,x.next)
-  ensures acc(x) &*& entryUnlocked(x,x.next) {
+  requires acc(x) &*& entryLocked(x)
+  ensures acc(x) &*& entryUnlocked(x) {
 	x.lock := false;
 }
 
-predicate entryLocked(x : Entry, y : Entry) {
-	x.next == y && x.lock == true
+predicate entryLocked(x : Entry) {
+	x.lock == true
 }
 
-predicate entryUnlocked(x : Entry, y : Entry) {
-	x.next == y && x.lock == false
+predicate entryUnlocked(x : Entry) {
+	x.lock == false
 }
 
-predicate has1LockG(X : Set<Entry>, a : Entry, b : Entry)
-  requires acc(X) {
-	a in X && entryLocked(a, b)
-}
-
-predicate has2LockG(X : Set<Entry>, a : Entry, b : Entry, c : Entry)
-  requires acc(X) {
-	a in X && b in X && entryLocked(a, b) && entryLocked(b,c)
+predicate has2Locked(x : Entry, y : Entry) {
+	x.next == y && x.lock == true && y.lock == true
 }
 
 /*

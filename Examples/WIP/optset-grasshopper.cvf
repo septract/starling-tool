@@ -17,9 +17,7 @@ view isHead(Entry h), isTail(Entry t), isEntry(Entry t), isEntryOrTail(Entry t);
 view keyIs(Int k, Entry e), isMarked(Entry e), isExterior(Entry e);
 view wf(Int key);
 
-view has1Lock(Entry p);
-view has1Of2Lock(Entry p, Entry c);
-view has2Lock(Entry p, Entry c);
+view hasLock(Entry p), has2Lock(Entry p, Entry q);
 
 view removed(Int k);
 
@@ -44,33 +42,31 @@ method remove(Int key) {
                 }
             {| wf(key) * isEntry(pred) * isEntryOrTail(curr) * keyIs(ckey, curr) |}
                 <%{ waitLock(#1); takeLock(#1) }(pred)[]>;
-            {| wf(key) * has1Of2Lock(pred, curr) |}
+            {| wf(key) * hasLock(pred) * isEntryOrTail(curr) * keyIs(ckey, curr) |}
                 <%{ waitLock(#1); takeLock(#1) }(curr)[]>;
-            {| wf(key) * has2Lock(pred, curr) |}
+            {| wf(key) * hasLock(pred) * hasLock(curr) * keyIs(ckey, curr) |}
                 if (%{ validate(#1, #2) == true }(pred, curr)) {
-                    {| wf(key) * has2Lock(pred, curr) |}
-                        ckey = %{ #1.key }(curr);
-                    {| wf(key) * has2Lock(pred, curr) |}
+                    {| wf(key) * has2Lock(pred, curr) * keyIs(ckey, curr) |}
                         if (ckey != key) {
                             {| wf(key) * has2Lock(pred, curr) |}
                                 present = false;
                                 done = true;
-                            {| wf(key) * has2Lock(pred, curr) * if present == true then removed(key) else emp |}
+                            {| wf(key) * hasLock(pred) * hasLock(curr) * if present == true then removed(key) else emp |}
                         } else {
-                            {| wf(key) * has2Lock(pred, curr) |}
+                            {| wf(key) * isEntry(curr) * has2Lock(pred, curr) |}
                                 <%{ #1.marked := true }(curr)[]>;
                             {| wf(key) * has2Lock(pred, curr) |}
                                 <%{ #1.next := #2.next }(pred, curr)[]>;
-                            {| wf(key) * has1Lock(pred) * has1Lock(curr) * removed(key) |}
+                            {| wf(key) * hasLock(pred) * hasLock(curr) * removed(key) |}
                                 present = true;
                                 done = true;
-                            {| wf(key) * has1Lock(pred) * has1Lock(curr) * if present == true then removed(key) else emp |}
+                            {| wf(key) * hasLock(pred) * hasLock(curr) * if present == true then removed(key) else emp |}
                         }
-                    {| wf(key) * has1Lock(pred) * has1Lock(curr) * if present == true then removed(key) else emp |}
+                    {| wf(key) * hasLock(pred) * hasLock(curr) * if present == true then removed(key) else emp |}
                 }
-            {| wf(key) * has1Lock(pred) * has1Lock(curr) * if present == true then removed(key) else emp |}
+            {| wf(key) * hasLock(pred) * hasLock(curr) * if present == true then removed(key) else emp |}
                 <%{ releaseLock(#1) }(curr)[]>;
-            {| wf(key) * has1Lock(pred) * if present == true then removed(key) else emp |}
+            {| wf(key) * hasLock(pred) * if present == true then removed(key) else emp |}
                 <%{ releaseLock(#1) }(pred)[]>;
             {| wf(key) * if present == true then removed(key) else emp |}
         } while (done == false);
@@ -103,13 +99,9 @@ constraint isExterior(n) -> %{ sigmaE(X, #1, #2, #3) }(head, tail, n);
 
 constraint removed(k) -> %{ removedG(X, #1) }(k);
 
-constraint has1Lock(a)       ->  %{ exists e: Entry :: has1LockG(X, #1, e) }(a);
-constraint has1Of2Lock(a,b)  ->  %{ has1LockG(X, #1,#2) }(a,b);
-constraint has2Lock(a,b)     ->  %{ exists e: Entry :: has2LockG(X, #1, #2, e) }(a,b);
+constraint hasLock(a)       ->  %{ #1 in X && entryLocked(#1) }(a);
+constraint has2Lock(a, b)   ->  %{ #1 in X && #2 in X && has2Locked(#1, #2) }(a, b);
 
-constraint has1Of2Lock(a,b)  * has1Of2Lock(c,d)  ->  a != c;
-constraint has1Of2Lock(a,b)  * has1Lock(c)       ->  a != c;
-constraint has1Lock(a)       * has1Lock(c)       ->  a != c;
-constraint has1Of2Lock(a,b)  * has2Lock(c,d)     ->  a != c && a != d;
-constraint has1Lock(a)       * has2Lock(c,d)     ->  a != c && a != d;
-constraint has2Lock(a,b)     * has2Lock(c,d)     ->  a != c && a != d && b != c && b != d;
+constraint hasLock(a)      * hasLock(b)       ->  a != b;
+constraint hasLock(a)      * has2Lock(b, c)   ->  a != b && a != c;
+constraint has2Lock(a, b)  * has2Lock(c, d)   ->  a != c && a != d && b != c && b != d;
