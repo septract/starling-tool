@@ -154,13 +154,11 @@ predicate phiS(X : Set<Entry>)
 	forall x : Entry, y : Entry :: sortedList(X, x, y)
 }
 
-// A entry is unmarked if and only if it is a backbone entry.
+// If an entry is unmarked, it is a backbone node.
 predicate phiUB(X : Set<Entry>, head : Entry, tail : Entry)
   requires acc(X) {
 	(forall z : Entry :: (z in X && z != head && z != tail)
-		==>
-			((z.marked == false ==> Btwn(next, head, z, z)) &&
-			 (Btwn(next, head, z, z) ==> z.marked == false)))
+		==> (z.marked == false ==> Btwn(next, head, z, z)))
 }
 
 predicate isSetG(X: Set<Entry>, head : Entry, tail : Entry, lb : Int, ub : Int)

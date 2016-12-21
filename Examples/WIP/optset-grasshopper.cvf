@@ -13,7 +13,7 @@ thread Bool present, done;
 thread Int ckey;
 thread Entry pred, curr;
 
-view isHead(Entry h), isTail(Entry t), isEntry(Entry t);
+view isHead(Entry h), isTail(Entry t), isEntry(Entry t), isEntryOrTail(Entry t);
 view keyIs(Int k, Entry e), isMarked(Entry e), isExterior(Entry e);
 view wf(Int key);
 
@@ -30,19 +30,19 @@ method remove(Int key) {
                 <pred = head>;
             {| wf(key) * isHead(pred) |}
                 curr = %{ #1.next }(pred);
-            {| wf(key) * isHead(pred) * isEntry(curr) |}
+            {| wf(key) * isHead(pred) * isEntryOrTail(curr) |}
                 ckey = %{ #1.key }(curr);
-            {| wf(key) * isHead(pred) * isEntry(curr) * keyIs(ckey, curr) |}
+            {| wf(key) * isHead(pred) * isEntryOrTail(curr) * keyIs(ckey, curr) |}
                 while (ckey < key) {
                     {| wf(key) * isEntry(curr) |}
                         pred = curr;
                     {| wf(key) * isEntry(pred) * isEntry(curr) |}
                         curr = %{ #1.next }(curr);
-                    {| wf(key) * isEntry(pred) * isEntry(curr) |}
+                    {| wf(key) * isEntry(pred) * isEntryOrTail(curr) |}
                         ckey = %{ #1.key }(curr);
-                    {| wf(key) * isEntry(pred) * isEntry(curr) * keyIs(ckey, curr) |}
+                    {| wf(key) * isEntry(pred) * isEntryOrTail(curr) * keyIs(ckey, curr) |}
                 }
-            {| wf(key) * isEntry(pred) * isEntry(curr) * keyIs(ckey, curr) |}
+            {| wf(key) * isEntry(pred) * isEntryOrTail(curr) * keyIs(ckey, curr) |}
                 <%{ waitLock(#1); takeLock(#1) }(pred)[]>;
             {| wf(key) * has1Of2Lock(pred, curr) |}
                 <%{ waitLock(#1); takeLock(#1) }(curr)[]>;
@@ -89,7 +89,8 @@ constraint isHead(h) -> h == head;
 // This view encodes sigmaT.
 constraint isTail(t) -> t == tail;
 
-constraint isEntry(e) -> %{ #1 in X }(e);
+constraint isEntry(e) -> %{ #1 in X && #1 != #2 }(e, tail);
+constraint isEntryOrTail(e) -> %{ #1 in X }(e);
 
 // This view encodes sigmaK.
 constraint keyIs(k, n) -> %{ #1 in X ==> #1.key == #2 }(n, k);
