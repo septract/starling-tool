@@ -163,47 +163,21 @@ predicate phiUB(X : Set<Entry>, head : Entry, tail : Entry)
 			 (Btwn(next, head, z, z) ==> z.marked == false)))
 }
 
-// Grouping of local shape predicates.
-predicate localShape(X : Set<Entry>, head : Entry, tail : Entry)
+predicate isSetG(X: Set<Entry>, head : Entry, tail : Entry, lb : Int, ub : Int)
   requires acc(X) {
+	lb < ub &&
+	head != tail &&
 	phiH(X, head) &&
 	phiT(X, tail) &&
 	phiTnoNext(X, tail) &&
-	phiNext(X, tail)
-}
-
-// Grouping of local data predicates.
-predicate localData(X : Set<Entry>, head : Entry, tail : Entry, lb : Int, ub : Int)
-  requires acc(X) {
+	phiNext(X, tail) &&
 	phiU(X, tail, ub) &&
 	phiL(X, head, lb) &&
-	phiLess(X)
-}
-
-// Grouping of local predicates.
-predicate local(X : Set<Entry>, head : Entry, tail : Entry, lb : Int, ub : Int)
-  requires acc(X) {
-	localShape(X, head, tail) && localData(X, head, tail, lb, ub)
-}
-
-// Grouping of global shape predicates.
-predicate globalShape(X : Set<Entry>, tail : Entry)
-  requires acc(X) {
-	phiRT(X, tail) && phiAC(X)
-}
-
-// Grouping of global shape predicates.
-predicate global(X : Set<Entry>, head : Entry, tail : Entry)
-  requires acc(X) {
+	phiLess(X) &&
 	phiRT(X, tail) && 
 	phiAC(X) &&
 	phiS(X) && 
 	phiUB(X, head, tail)
-}
-
-predicate isSetG(X: Set<Entry>, head : Entry, tail : Entry, lb : Int, ub : Int)
-  requires acc(X) {
-	local(X, head, tail, lb, ub) && global(X, head, tail)
 }
 
 /*
