@@ -157,11 +157,10 @@ predicate phiS(X : Set<Entry>)
 // A entry is unmarked if and only if it is a backbone entry.
 predicate phiUB(X : Set<Entry>, head : Entry, tail : Entry)
   requires acc(X) {
-	(forall z : Entry :: (z in X && z != head && z != tail && z.marked == false) ==>
-		Btwn(next, head, z, tail))
-	&&
-	(forall z : Entry :: (z in X && z != head && z != tail && Btwn(next, head, z, tail)) ==>
-		z.marked == false)
+	(forall z : Entry :: (z in X && z != head && z != tail)
+		==>
+			((z.marked == false ==> Btwn(next, head, z, z)) &&
+			 (Btwn(next, head, z, z) ==> z.marked == false)))
 }
 
 // Grouping of local shape predicates.
