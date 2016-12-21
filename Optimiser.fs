@@ -786,6 +786,32 @@ module Graph =
 
         expandNodeIn ctx opt
 
+    /// <summary>
+    ///     Decides whether a system {p}c{q}d{r} can be collapsed to {p}d{r}.
+    /// </summary>
+    let canCollapseUnobservable
+      (tvars : VarMap)
+      (graph : Graph)
+      (p : NodeID)
+      (c : Command)
+      (q : NodeID)
+      (d : Command)
+      (r : NodeID)
+      : bool =
+        // We can't collapse {p}c{p}d{r} or {p}c{r}d{r}.
+        let noCycle = p <> q && q <> r
+
+        // We can't collapse if {q} is mandatory.
+        let qViewexpr, _, _, _ = graph.Contents.[q]
+        let qAdvisory = match qViewexpr with | Advisory _ -> true | _ -> false
+
+        let cHidden =
+            match isObservable tvars c d with
+            | Pass false -> true
+            | _ -> false
+
+        noCycle && qAdvisory && cHidden
+
     /// Collapses edges {p}c{q}d{r} to {p}d{r} iff c is unobservable
     /// i.e. c writes to local variables overwritten by d
     /// d does not read outputs of c,
@@ -803,27 +829,21 @@ module Graph =
 
             let processTriple (pViewexpr, (cEdge : OutEdge), (dEdge : OutEdge)) =
                 let c, d = cEdge.Command, dEdge.Command
-
-                let qViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[cEdge.Dest]
-                let rViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[dEdge.Dest]
-
-                match (pViewexpr, qViewexpr, rViewexpr) with
-                | InnerView pView, InnerView qView, InnerView rView ->
-                    match isObservable tvars c d with
-                    | Pass false ->
-                        seq {
-                            // Remove the {p}c{q} edge
-                            yield RmOutEdge (node, cEdge)
-                            // Remove the {q}d{r} edge
-                            yield RmOutEdge (cEdge.Dest, dEdge)
-                            // Remove q
-                            yield RmNode cEdge.Dest
-                            // Then, add the new edges {p}d{q}
-                            yield MkCombinedEdge
-                                ({ Name = node;       Src = dEdge.Dest;   Command = d },
-                                 { Name = dEdge.Dest; Dest = node;        Command = d })
-                        }
-                    | _ -> Seq.empty
+                if canCollapseUnobservable tvars ctx.Graph node c cEdge.Dest d dEdge.Dest
+                then
+                    seq {
+                        // Remove the {p}c{q} edge
+                        yield RmOutEdge (node, cEdge)
+                        // Remove the {q}d{r} edge
+                        yield RmOutEdge (cEdge.Dest, dEdge)
+                        // Remove q
+                        yield RmNode cEdge.Dest
+                        // Then, add the new edges {p}d{q}
+                        yield MkCombinedEdge
+                            ({ Name = node;       Src = dEdge.Dest;   Command = d },
+                             { Name = dEdge.Dest; Dest = node;        Command = d })
+                    }
+                else Seq.empty
 
             let triples = Set.fold (+) Set.empty <| Set.map processCEdge outEdges
             seq { for triple in triples do yield! (processTriple triple) }

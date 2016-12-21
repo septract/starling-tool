@@ -219,3 +219,32 @@ module AfterFuncs =
             { Name = "foo"
               Params = [ normalIntExpr (siAfter "serving")
                          normalBoolExpr (sbAfter "flag") ] }
+
+
+/// <summary>
+///     Test cases for deciding whether to allow graph optimisations.
+/// </summary>
+module GraphOptGuards =
+    open Starling.Core.Graph
+
+    /// A graph consisting of one no-operation cycle.
+    let nopCycle =
+        { Name = "test"
+          Contents =
+              Map.ofList
+                [ ("x",
+                    (Advisory (Multiset.empty),
+                     Set.ofList
+                        [ { Name = "xloop"; Dest = "x"; Command = [] } ],
+                     Set.ofList
+                        [ { Name = "xloop"; Src = "x"; Command = [] } ],
+                     Normal)
+                  ) ] }
+
+    [<Test>]
+    let ``nopConnected cannot select the target node`` () =
+        Assert.False (nopConnected nopCycle "x" "x")
+
+    [<Test>]
+    let ``canCollapseUnobservable cannot collapse {p}nop{p}nop{p}`` () =
+        Assert.False (canCollapseUnobservable Map.empty nopCycle "x" [] "x" [] "x")
