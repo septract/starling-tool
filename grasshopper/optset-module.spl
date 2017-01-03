@@ -57,7 +57,10 @@ predicate has2Locked(x : Entry, y : Entry) {
 function validate(pred : Entry, curr : Entry)
   returns (B : Bool)
   requires acc(pred) &*& acc(curr)
-  ensures (B == (!pred.marked && !curr.marked && pred.next == curr));
+  ensures (
+      (B == (!pred.marked && !curr.marked && pred.next == curr))
+      && (B ==> pred.key < curr.key)
+  );
 
 /*
  * Grasshopper versions of phi predicates

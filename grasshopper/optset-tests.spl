@@ -1,5 +1,35 @@
 include "./optset-module.spl";
 
+procedure remove_C016_000 (
+    before_curr: Entry,
+    before_pred: Entry
+)
+requires
+    exists X:Set<Entry> :: (
+        acc(X) &*&
+        (
+            before_pred in X &&
+            before_curr in X &&
+            before_pred.next == before_curr &&
+            before_pred.key < before_curr.next.key &&
+            (exists n : Entry :: n in X && before_curr != n && before_curr.next == n) &&
+            (forall x : Entry ::
+                (x in X && (exists y : Entry :: y in X && x.next == y)) ==>
+                (x != x.next && (!Btwn(next, x.next, x, x)))) &&
+            (forall z : Entry :: (z in X && z.next != null) ==> z.key < z.next.key)
+        )
+    )
+ensures
+    exists X:Set<Entry> :: (
+        acc(X) &*&
+        (
+            forall z : Entry :: (z in X && z.next != null) ==> z.key < z.next.key
+        )
+    )
+{
+    before_pred.next := before_curr.next ;
+}
+
 /*
 procedure phiS_stable()
   requires exists X : Set<Entry> :: acc(X) &*& phiS(X)
@@ -55,7 +85,6 @@ procedure global2_stable(head : Entry, tail : Entry)
   requires exists X : Set<Entry> :: acc(X) &*& (phiAC(X) && phiS(X) && phiUB(X, head, tail) && phiRT(X, tail))
   ensures exists X : Set<Entry> :: acc(X) &*& (phiAC(X) && phiS(X) && phiUB(X, head, tail) && phiRT(X, tail))
 {}
-*/
 
 procedure isSetG_stable(head : Entry, tail : Entry, lb : Int, ub : Int)
   requires exists X : Set<Entry> :: acc(X) &*& isSetG(X, head, tail, lb, ub)
@@ -65,9 +94,9 @@ procedure isSetG_stable(head : Entry, tail : Entry, lb : Int, ub : Int)
 // Grouping of smaller set global shape predicates.
 predicate globalRTSUB(X : Set<Entry>, head : Entry, tail : Entry)
   requires acc(X) {
-	phiRT(X, tail) && 
-	phiS(X) &&
-	phiUB(X, head, tail) 
+        phiRT(X, tail) && 
+        phiS(X) &&
+        phiUB(X, head, tail) 
 }
 procedure globalRTSUB_stable(head : Entry, tail : Entry)
   requires exists X : Set<Entry> :: acc(X) &*& globalRTSUB(X, head, tail)
@@ -77,9 +106,9 @@ procedure globalRTSUB_stable(head : Entry, tail : Entry)
 // Grouping of smaller set global shape predicates.
 predicate globalRTACUB(X : Set<Entry>, head : Entry, tail : Entry)
   requires acc(X) {
-	phiRT(X, tail) && 
-	phiAC(X) &&
-	phiUB(X, head, tail) 
+        phiRT(X, tail) && 
+        phiAC(X) &&
+        phiUB(X, head, tail) 
 }
 procedure globalRTACUB_stable(head : Entry, tail : Entry)
   requires exists X : Set<Entry> :: acc(X) &*& globalRTACUB(X, head, tail)
@@ -89,11 +118,12 @@ procedure globalRTACUB_stable(head : Entry, tail : Entry)
 // Grouping of smaller set global shape predicates.
 predicate globalRTACS(X : Set<Entry>, head : Entry, tail : Entry)
   requires acc(X) {
-	phiRT(X, tail) && 
-	phiAC(X) &&
-	phiS(X) 
+        phiRT(X, tail) && 
+        phiAC(X) &&
+        phiS(X) 
 }
 procedure globalRTACS_stable(head : Entry, tail : Entry)
   requires exists X : Set<Entry> :: acc(X) &*& globalRTACS(X, head, tail)
   ensures exists X : Set<Entry> :: acc(X) &*& globalRTACS(X, head, tail)
 {}
+*/

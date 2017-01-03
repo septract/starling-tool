@@ -95,7 +95,7 @@ method remove(Int key) {
                         present = false;
                         done = false;
                     {| wf(key) * hasLock(pred) * hasLock(curr) * if present == true then removed(key) else emp |}
-                }     
+                }
             {| wf(key) * hasLock(pred) * hasLock(curr) * if present == true then removed(key) else emp |}
                 <%{ releaseLock(#1) }(curr)[]>;
             {| wf(key) * hasLock(pred) * if present == true then removed(key) else emp |}
@@ -129,7 +129,7 @@ constraint isMarked(n) -> %{ #1 in X ==> #1.marked == true }(n);
 // This view encodes sigmaE.
 constraint isExterior(n) -> %{ sigmaE(X, #1, #2, #3) }(head, tail, n);
 
-constraint less(x, y) -> %{ #1.key < #2.key }(x, y);
+constraint less(x, y) -> %{ (#1 in X && #2 in X) ==> #1.key < #2.key }(x, y);
 
 constraint removed(k) -> %{ removedG(X, #1) }(k);
 
