@@ -59,7 +59,7 @@ method remove(Int key) {
                 <%{ waitLock(#1); takeLock(#1) }(curr)[]>;
             {| wf(key) * hasLock(pred) * hasLock(curr) * keyIs(ckey, curr) |}
                 if (%{ validate(#1, #2) == true }(pred, curr)) {
-                    {| wf(key) * has2Lock(pred, curr) * keyIs(ckey, curr) * less(pred, curr) |}
+                    {| wf(key) * has2Lock(pred, curr) * keyIs(ckey, curr) |}
                         if (ckey != key) {
                             {| wf(key) * has2Lock(pred, curr) |}
                                 present = false;
@@ -69,16 +69,12 @@ method remove(Int key) {
                             {| wf(key)
                                * isEntry(curr)  // from wf(key) and ckey == key
                                * has2Lock(pred, curr)
-                               * less(pred, curr)
                                * keyIs(key, curr)
                             |}
                                 <%{ #1.marked := true }(curr)[]>;
-                            {| wf(key) * isEntry(curr) * has2Lock(pred, curr) * less(pred, curr)
+                            {| wf(key) * isEntry(curr) //* has2Lock(pred, curr)
                                * isMarked(curr)  // From the previous action
                                * removed(key)    // From the previous action
-                               // phiLess and isEntry should imply that
-                               // less(pred, curr.next).
-                               // TODO: they don't.
                             |}
                                 <%{ #1.next := #2.next }(pred, curr)[]>;
                             {| wf(key) * hasLock(pred) * hasLock(curr) * removed(key)
@@ -129,12 +125,15 @@ constraint isMarked(n) -> %{ #1 in X ==> #1.marked == true }(n);
 // This view encodes sigmaE.
 constraint isExterior(n) -> %{ sigmaE(X, #1, #2, #3) }(head, tail, n);
 
-constraint less(x, y) -> %{ (#1 in X && #2 in X) ==> #1.key < #2.key }(x, y);
+constraint less(x, y) -> %{ #1.key < #2.key }(x, y);
 
 constraint removed(k) -> %{ removedG(X, #1) }(k);
 
 constraint hasLock(a)       ->  %{ #1 in X && entryLocked(#1) }(a);
 constraint has2Lock(a, b)   ->  %{ #1 in X && #2 in X && has2Locked(#1, #2) }(a, b);
+
+
+constraint has2Lock(a, b) * isEntry(c) -> (b == c) => %{ #1.key < #2.next.key }(a, b);
 
 constraint hasLock(a)      * hasLock(b)       ->  a != b;
 constraint hasLock(a)      * has2Lock(b, c)   ->  a != b && a != c;

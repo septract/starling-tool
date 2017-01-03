@@ -48,7 +48,7 @@ predicate entryUnlocked(x : Entry) {
 }
 
 predicate has2Locked(x : Entry, y : Entry) {
-	x.next == y && x.lock == true && y.lock == true
+	x.next == y && x.key < y.key && x.lock == true && y.lock == true
 }
 
 /*
@@ -59,7 +59,6 @@ function validate(pred : Entry, curr : Entry)
   requires acc(pred) &*& acc(curr)
   ensures (
       (B == (!pred.marked && !curr.marked && pred.next == curr))
-      && (B ==> pred.key < curr.key)
   );
 
 /*
@@ -148,7 +147,10 @@ predicate sortedList(X : Set<Entry>, x : Entry, y : Entry)
 // Every list of entries is sorted.
 predicate phiS(X : Set<Entry>)
   requires acc(X) {
-	forall x : Entry, y : Entry :: sortedList(X, x, y)
+	forall x : Entry, y : Entry ::
+	((x in X) ==>
+	    (Btwn(next, x, y, y) ==> x.key <= y.key) &&
+	    ((x.key == y.key) ==> x == y))
 }
 
 // If an entry is unmarked, it is a backbone node.
