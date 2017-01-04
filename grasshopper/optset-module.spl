@@ -13,6 +13,13 @@ struct Entry {
  * Return value properties
  */
 
+// k was in the optimistic set at some point, or still is.
+predicate existsG(X : Set<Entry>, k : Int) {
+	exists e : Entry :: e in X && e.key == k
+}
+
+// k was in the optimistic set at some point, but has been removed at least
+// once.
 predicate removedG(X : Set<Entry>, k : Int) {
 	exists e : Entry :: e in X && e.key == k && e.marked == true
 }
@@ -47,8 +54,13 @@ predicate entryUnlocked(x : Entry) {
 	x.lock == false
 }
 
-predicate has2Locked(x : Entry, y : Entry) {
-	x.next == y && x.key < y.key && x.lock == true && y.lock == true
+predicate lockedAndValidatedG(x : Entry, y : Entry) {
+	x.next == y 
+	&& x.key < y.key
+	&& x.marked == false
+	&& y.marked == false
+	&& x.lock == true
+	&& y.lock == true
 }
 
 /*
@@ -115,8 +127,7 @@ predicate phiLess(X : Set<Entry>)
 // The tail entry is reachable from some entry
 predicate phiRT_local(X : Set<Entry>, x : Entry, tail : Entry)
   requires acc(X) {
-	(x in X && x != tail) ==>
-		(exists R : Set<Entry> :: R = { z: Entry :: z in X && Btwn(next, x, z, tail) && z != tail } && Btwn(next, x, tail, tail))
+	x in X ==> Btwn(next, x, tail, tail)
 }
 
 // The tail entry is reachable from every entry

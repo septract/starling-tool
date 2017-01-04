@@ -128,3 +128,46 @@ procedure globalRTACS_stable(head : Entry, tail : Entry)
   ensures exists X : Set<Entry> :: acc(X) &*& globalRTACS(X, head, tail)
 {}
 */
+
+procedure add_C015_001 (
+    before_102_1_key: Int,
+    before_lb: Int,
+    before_ub: Int,
+    before_curr: Entry,
+    before_head: Entry,
+    before_pred: Entry,
+    before_tail: Entry
+)
+requires
+    exists X:Set<Entry> :: (
+        acc(X) &*&
+        (
+            ((isSetG(X, before_head, before_tail, before_lb, before_ub) ) &&
+                (before_pred.key < before_102_1_key && before_102_1_key < before_curr.key ) &&
+                (before_pred in X && before_curr in X && lockedAndValidatedG(before_pred, before_curr) ) &&
+                (before_pred.key < before_curr.next.key ) &&
+                (before_curr in X && before_curr != before_tail ) &&
+                (before_pred in X && before_pred != before_tail ) &&
+                (before_102_1_key < before_ub) &&
+                (before_lb < before_102_1_key))
+
+                && (before_pred == before_head || before_pred.marked == false)
+        )
+    )
+ensures
+    exists X:Set<Entry> :: (
+        acc(X) &*&
+        (
+            (phiUB(X, before_head, before_tail))
+        )
+    )
+{
+    var e : Entry;
+                                        e := new Entry;
+                                        pure assert (!Btwn(next, before_curr, e, e));
+                                        e.key := before_102_1_key;
+                                        pure assume (!Btwn(next, e, before_tail, before_tail));
+                                        e.next := before_curr;
+                                        e.marked := false;
+                                        before_pred.next := e ;
+}

@@ -16,7 +16,7 @@ view keyIs(int k, Entry e), isMarked(Entry e), isExterior(Entry e);
 view wf(int key);
 view less(Entry x, Entry y);
 
-view hasLock(Entry p), has2Lock(Entry p, Entry q);
+view hasLock(Entry p), lockedAndValidated(Entry p, Entry q);
 
 view removed(int k);
 
@@ -57,20 +57,20 @@ method remove(int key) {
                 <%{ waitLock(#1); takeLock(#1) }(curr)[]>;
             {| wf(key) * hasLock(pred) * hasLock(curr) * keyIs(ckey, curr) |}
                 if (%{ validate(#1, #2) == true }(pred, curr)) {
-                    {| wf(key) * has2Lock(pred, curr) * keyIs(ckey, curr) |}
+                    {| wf(key) * lockedAndValidated(pred, curr) * keyIs(ckey, curr) |}
                         if (ckey != key) {
-                            {| wf(key) * has2Lock(pred, curr) |}
+                            {| wf(key) * lockedAndValidated(pred, curr) |}
                                 present = false;
                                 done = true;
                             {| wf(key) * hasLock(pred) * hasLock(curr) * if present == true then removed(key) else emp |}
                         } else {
                             {| wf(key)
                                * isEntry(curr)  // from wf(key) and ckey == key
-                               * has2Lock(pred, curr)
+                               * lockedAndValidated(pred, curr)
                                * keyIs(key, curr)
                             |}
                                 <%{ #1.marked := true }(curr)[]>;
-                            {| wf(key) * isEntry(curr) * has2Lock(pred, curr)
+                            {| wf(key) * isEntry(curr) * lockedAndValidated(pred, curr)
                                * isMarked(curr)  // From the previous action
                                * removed(key)    // From the previous action
                             |}
@@ -99,6 +99,85 @@ method remove(int key) {
     {| if present == true then removed(key) else emp |}
 }
 
+method add(int key) {
+    {| wf(key) |}
+        // This proceeds exactly as remove, until we validate.
+        do {
+            {| wf(key) |}
+                <pred = head>;
+            {| wf(key) * isHead(pred) |}
+                curr = %{ #1.next }(pred);
+            {| wf(key) * isHead(pred) * isEntryOrTail(curr) |}
+                ckey = %{ #1.key }(curr);
+            {| wf(key) * isHead(pred) * isEntryOrTail(curr)
+               * keyIs(ckey, curr)
+            |}
+                while (ckey < key) {
+                    {| wf(key) * isEntry(curr) |}
+                        pred = curr;
+                    {| wf(key) * isEntry(pred) * isEntry(curr) |}
+                        curr = %{ #1.next }(pred);
+                    {| wf(key) * isEntry(pred)
+                       * isEntryOrTail(curr) // See above.
+                    |}
+                        ckey = %{ #1.key }(curr);
+                    {| wf(key) * isEntry(pred) * isEntryOrTail(curr)
+                       * keyIs(ckey, curr)  // See above.
+                    |}
+                }
+            {| wf(key) * isEntry(pred) * isEntryOrTail(curr) * keyIs(ckey, curr) |}
+                <%{ waitLock(#1); takeLock(#1) }(pred)[]>;
+            {| wf(key) * hasLock(pred) * isEntryOrTail(curr) * keyIs(ckey, curr) |}
+                <%{ waitLock(#1); takeLock(#1) }(curr)[]>;
+            {| wf(key) * hasLock(pred) * hasLock(curr) * keyIs(ckey, curr) |}
+                if (%{ validate(#1, #2) == true }(pred, curr)) {
+                    {| wf(key) * lockedAndValidated(pred, curr) * keyIs(ckey, curr) |}
+                        if (ckey == key) {
+                            {| wf(key) * lockedAndValidated(pred, curr) * exists(key) |}
+                                // Already exists
+                                present = true;
+                                done = true;
+                            {| wf(key) * hasLock(pred) * hasLock(curr) * if done then exists(key) else emp |}
+                        } else {
+                            {| wf(key) * isEntry(curr) * lockedAndValidated(pred, curr)
+                               * between(pred, key, curr)
+                            |}
+                                // TODO: the pure assume here is bonkers--
+                                // it should be a tautology--but it's
+                                // apparently required.
+                                <%{ var e : Entry;
+                                    e := new Entry;
+                                    e.key := #1;
+                                    pure assume (!Btwn(next, e, before_tail, before_tail));
+                                    e.next := #2;
+                                    e.marked := false;
+                                    #3.next := e }(key, curr, pred)[]>;
+                            {| wf(key) * hasLock(pred) * hasLock(curr) * exists(key) |}
+                                present = false;
+                                done = true;
+                            {| wf(key) * hasLock(pred) * hasLock(curr) * if done then exists(key) else emp |}
+                        }
+                    {| wf(key) * hasLock(pred) * hasLock(curr) * if done then exists(key) else emp |}
+                } else {
+                    {| wf(key) * hasLock(pred) * hasLock(curr) |}
+                        // We shouldn't need to do this...?
+                        present = false;
+                        done = false;
+                    {| wf(key) * hasLock(pred) * hasLock(curr) * if done then exists(key) else emp |}
+                }
+            {| wf(key) * hasLock(pred) * hasLock(curr) * if done then exists(key) else emp |}
+                <%{ releaseLock(#1) }(curr)[]>;
+            {| wf(key) * hasLock(pred) * if done then exists(key) else emp |}
+                <%{ releaseLock(#1) }(pred)[]>;
+            {| wf(key) * if done then exists(key) else emp |}
+        } while (!done);
+    {| wf(key) * exists(key) |}
+
+}
+
+view exists(int key);
+constraint exists(key) -> %{ existsG(X, #1) }(key);
+
 // The invariant is 'isSetG', which conjoins all the phi-predicates.
 constraint emp -> %{ isSetG(X, #1, #2, #3, #4) }(head, tail, lb, ub);
 
@@ -125,14 +204,17 @@ constraint isExterior(n) -> %{ sigmaE(X, #1, #2, #3) }(head, tail, n);
 
 constraint less(x, y) -> %{ #1.key < #2.key }(x, y);
 
+view between(Entry x, int k, Entry y);
+constraint between(x, k, y) -> %{ #1.key < #2 && #2 < #3.key }(x, k, y);
+
 constraint removed(k) -> %{ removedG(X, #1) }(k);
 
 constraint hasLock(a)       ->  %{ #1 in X && entryLocked(#1) }(a);
-constraint has2Lock(a, b)   ->  %{ #1 in X && #2 in X && has2Locked(#1, #2) }(a, b);
+constraint lockedAndValidated(a, b) -> %{ #1 in X && #2 in X && lockedAndValidatedG(#1, #2) }(a, b);
 
 
-constraint has2Lock(a, b) * isEntry(c) -> (b == c) => %{ #1.key < #2.next.key }(a, b);
+constraint lockedAndValidated(a, b) * isEntry(c) -> (b == c) => %{ #1.key < #2.next.key }(a, b);
 
 constraint hasLock(a)      * hasLock(b)       ->  a != b;
-constraint hasLock(a)      * has2Lock(b, c)   ->  a != b && a != c;
-constraint has2Lock(a, b)  * has2Lock(c, d)   ->  a != c && a != d && b != c && b != d;
+constraint hasLock(a)      * lockedAndValidated(b, c)   ->  a != b && a != c;
+constraint lockedAndValidated(a, b)  * lockedAndValidated(c, d)   ->  a != c && a != d && b != c && b != d;
