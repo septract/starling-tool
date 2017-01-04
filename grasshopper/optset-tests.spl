@@ -12,11 +12,7 @@ requires
             before_curr in X &&
             before_pred.next == before_curr &&
             before_pred.key < before_curr.next.key &&
-	(forall x : Entry, y : Entry ::
-	((x in X) ==>
-	    (Btwn(next, x, y, y) ==> x.key <= y.key) &&
-	    ((x.key == y.key) ==> x == y))) &&
-
+    phiS(X) &&
             (exists n : Entry :: n in X && before_curr != n && before_curr.next == n) &&
             (forall x : Entry ::
                 (x in X && (exists y : Entry :: y in X && x.next == y)) ==>

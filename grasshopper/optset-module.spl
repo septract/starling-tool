@@ -149,8 +149,8 @@ predicate phiS(X : Set<Entry>)
   requires acc(X) {
 	forall x : Entry, y : Entry ::
 	((x in X) ==>
-	    (Btwn(next, x, y, y) ==> x.key <= y.key) &&
-	    ((x.key == y.key) ==> x == y))
+	    (Btwn(next, x, y, y) ==> (x.key <= y.key &&
+	    ((x.key == y.key) ==> x == y))))
 }
 
 // If an entry is unmarked, it is a backbone node.
@@ -171,7 +171,7 @@ predicate isSetG(X: Set<Entry>, head : Entry, tail : Entry, lb : Int, ub : Int)
 	phiU(X, tail, ub) &&
 	phiL(X, head, lb) &&
 	phiLess(X) &&
-	phiRT(X, tail) && 
+	phiRT(X, tail) &&
 	phiAC(X) &&
 	phiS(X) && 
 	phiUB(X, head, tail)
@@ -185,5 +185,5 @@ predicate isSetG(X: Set<Entry>, head : Entry, tail : Entry, lb : Int, ub : Int)
 // n is an exterior entry (and, as this is a view, it can never become backbone)
 predicate sigmaE(X : Set<Entry>, head : Entry, tail : Entry, n : Entry)
   requires acc(X) {
-	n in { z : Entry :: z in X && !(Btwn(next, head, z, tail)) }
+        n in X && !(Btwn(next, head, n, tail))
 }

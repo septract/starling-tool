@@ -72,7 +72,7 @@ method remove(Int key) {
                                * keyIs(key, curr)
                             |}
                                 <%{ #1.marked := true }(curr)[]>;
-                            {| wf(key) * isEntry(curr) //* has2Lock(pred, curr)
+                            {| wf(key) * isEntry(curr) * has2Lock(pred, curr)
                                * isMarked(curr)  // From the previous action
                                * removed(key)    // From the previous action
                             |}
