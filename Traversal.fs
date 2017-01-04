@@ -552,7 +552,7 @@ let rec tliftToBoolSrc
                     (Context.inIndex isv)
                     (fun (a, i) -> ok (BIdx (updateTypedSub arr a, i)))
                     ctx
-                    (arr, mkTypedSub normalIntRec ix)
+                    (arr, mkTypedSub normalRec ix)
             // Remove the nested result.
             bind (uncurry (ignoreContext id)) tResult
         | BTrue -> ok (ctx, BTrue)
@@ -596,7 +596,7 @@ and tliftToIntSrc
                     (Context.inIndex tisv)
                     (fun (a, i) -> ok (IIdx (updateTypedSub arr a, i)))
                     ctx
-                    (arr, mkTypedSub normalIntRec ix)
+                    (arr, mkTypedSub normalRec ix)
             // Remove the nested result.
             bind (uncurry (ignoreContext id)) tResult
         | IInt i -> ok (ctx, IInt i)
@@ -634,7 +634,7 @@ and tliftToArraySrc
                     (Context.inIndex isv)
                     (fun (a, i) -> ok (AIdx (updateTypedSub arr a, i)))
                     ctx
-                    (arr, mkTypedSub normalIntRec ix)
+                    (arr, mkTypedSub normalRec ix)
             // Remove the nested result.
             bind (uncurry (ignoreContext id)) tResult
         | AUpd (arr, ix, value) ->
@@ -649,7 +649,7 @@ and tliftToArraySrc
                     asv
                     (Context.inIndex isv)
                     esv
-                    assemble ctx (arr, mkTypedSub normalIntRec ix, value)
+                    assemble ctx (arr, mkTypedSub normalRec ix, value)
 
             // Remove the nested result.
             bind (uncurry (ignoreContext id)) tResult

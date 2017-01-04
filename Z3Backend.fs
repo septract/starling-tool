@@ -256,14 +256,14 @@ let runZ3OnModel (shouldUseRealsForInts : bool)
 
     // Save us from having to supply all of these arguments every time.
     // TODO(CaptainHayashi): subtypes?
-    let toZ3 b = Expr.boolToZ3 shouldUseRealsForInts unmarkVar ctx (mkTypedSub normalBoolRec b)
+    let toZ3 b = Expr.boolToZ3 shouldUseRealsForInts unmarkVar ctx (mkTypedSub normalRec b)
 
     (* Try to remove symbols from boolean expressions.
        Suppress the Chessie error that happens if we can't, because in that case
        we just return a 'Z3 can't prove this' result. *)
     let removeSym bexp =
         // TODO(CaptainHayashi): subtypes?
-        let bexpT = mkTypedSub normalBoolRec bexp
+        let bexpT = mkTypedSub normalRec bexp
 
         let result = mapTraversal (removeSymFromBoolExpr ignore) bexpT
         okOption result

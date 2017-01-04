@@ -178,7 +178,7 @@ module Downclosure =
                 fOnIter
                 (tliftToTypedSymVarSrc >> tliftToBoolSrc)
 
-        mapMessages Traversal (mapper (mkTypedSub normalBoolRec defn))
+        mapMessages Traversal (mapper (mkTypedSub normalRec defn))
 
     /// <summary>
     ///     Runs a downclosure check using Z3.
@@ -195,7 +195,7 @@ module Downclosure =
         let removeResult =
             mapTraversal
                 (removeSymFromBoolExpr SymInIteratedConstraint)
-                (mkTypedSub normalBoolRec check)
+                (mkTypedSub normalRec check)
         // If check is a tautology, it will be equivalent to 'true'.
         lift
             (equiv BTrue >> equivHolds id)

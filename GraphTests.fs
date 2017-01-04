@@ -78,7 +78,7 @@ module Tests =
                                              normalIntExpr (siVar "ticket"); ]
                                            [ normalIntExpr (siVar "t")
                                              normalIntExpr (siVar "ticket") ]] },
-                          Normal ))
+                          NodeKind.Normal ))
                         ("lock_V002",
                          (Mandatory <| Multiset.singleton (gHoldLock BTrue),
                           Set.empty,
@@ -111,7 +111,7 @@ module Tests =
                                 { Name = "lock_C004"
                                   Src = "lock_V001"
                                   Command = [] } ],
-                           Normal))
+                           NodeKind.Normal))
                         ("lock_V004",
                          (Mandatory <|
                           Multiset.ofFlatList
@@ -140,7 +140,7 @@ module Tests =
                                            [ normalIntExpr (siVar "s") ]
                                            [ normalIntExpr (siVar "serving") ]] },
 
-                          Normal)) ] }
+                          NodeKind.Normal)) ] }
 
         /// The CFG for the ticket lock unlock method.
         let ticketLockUnlockGraph : Graph =
@@ -178,14 +178,14 @@ module Tests =
                   Map.ofList
                       [ ("lock_V000",
                              (Mandatory <| Multiset.empty, Entry))
-                        ("lock_V001", (Mandatory <| Multiset.singleton (gHoldTick BTrue), Normal))
+                        ("lock_V001", (Mandatory <| Multiset.singleton (gHoldTick BTrue), NodeKind.Normal))
                         ("lock_V002", (Mandatory <| Multiset.singleton (gHoldLock BTrue), Exit))
-                        ("lock_V003", (Mandatory <| Multiset.singleton (gHoldTick BTrue), Normal))
+                        ("lock_V003", (Mandatory <| Multiset.singleton (gHoldTick BTrue), NodeKind.Normal))
                         ("lock_V004",
                              (Mandatory <|
                               Multiset.ofFlatList
                                  [ gHoldLock (iEq (siVar "s") (siVar "t"))
-                                   gHoldTick (BNot (iEq (siVar "s") (siVar "t"))) ], Normal)) ]
+                                   gHoldTick (BNot (iEq (siVar "s") (siVar "t"))) ], NodeKind.Normal)) ]
               Edges =
                   Map.ofList
                       [ ("lock_C000",

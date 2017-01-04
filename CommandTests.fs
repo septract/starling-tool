@@ -81,8 +81,8 @@ module Observable =
 
     let tvars =
         Map.ofList
-            [ ("x", Bool (normalBoolRec, ()))
-              ("y", Int (normalIntRec, ())) ]
+            [ ("x", Bool (normalRec, ()))
+              ("y", Int (normalRec, ())) ]
 
     let check v c d : unit =
         assertOkAndEqual
@@ -152,13 +152,13 @@ module Observable =
             [ Intrinsic
                 (IAssign
                     { AssignType = Local
-                      TypeRec = normalIntRec
+                      TypeRec = normalRec
                       LValue = siVar "y"
                       RValue = mkAdd2 (siVar "y") (IInt 1L) } ) ]
             [ Intrinsic
                 (IAssign
                     { AssignType = Store
-                      TypeRec = normalIntRec
+                      TypeRec = normalRec
                       LValue = siVar "g"
                       RValue = mkAdd2 (siVar "y") (IInt 1L) } ) ]
 
@@ -169,13 +169,13 @@ module Observable =
             [ Intrinsic
                 (IAssign
                     { AssignType = Local
-                      TypeRec = normalIntRec
+                      TypeRec = normalRec
                       LValue = siVar "y"
                       RValue = mkAdd2 (siVar "y") (IInt 1L) } ) ]
             [ Intrinsic
                 (IAssign
                     { AssignType = Store
-                      TypeRec = normalIntRec
+                      TypeRec = normalRec
                       LValue = siVar "g"
                       RValue = siVar "y" } ) ]
 
@@ -185,13 +185,13 @@ module Observable =
             [ Intrinsic
                 (IAssign
                     { AssignType = Local
-                      TypeRec = normalIntRec
+                      TypeRec = normalRec
                       LValue = siVar "y"
                       RValue = mkAdd2 (siVar "y") (IInt 1L) } ) ]
             [ Intrinsic
                 (IAssign
                     { AssignType = Load
-                      TypeRec = normalIntRec
+                      TypeRec = normalRec
                       LValue = siVar "y"
                       RValue = siVar "g" } ) ]
 

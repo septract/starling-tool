@@ -597,7 +597,7 @@ module Graph =
     /// </summary>
     let (|NoSym|_|) (bexpr : BoolExpr<Sym<'Var>>) : BoolExpr<'Var> option =
         bexpr
-        |> mkTypedSub normalBoolRec
+        |> mkTypedSub normalRec
         |> mapTraversal (removeSymFromBoolExpr ignore)
         |> okOption
 
@@ -949,7 +949,7 @@ module Term =
     /// constant.
     let rec (|ConstantBoolFunction|_|) (x : BoolExpr<Sym<MarkedVar>>)
       : MarkedVar option =
-        let tx = mkTypedSub normalBoolRec x
+        let tx = mkTypedSub normalRec x
         tx
         |> findVars (tliftToBoolSrc (tliftToExprDest collectSymVars))
         |> okOption |> Option.map (Seq.map valueOf) |> Option.bind onlyOne
@@ -958,7 +958,7 @@ module Term =
     /// constant.
     let rec (|ConstantIntFunction|_|) (x : IntExpr<Sym<MarkedVar>>)
       : MarkedVar option =
-        let tx = mkTypedSub normalIntRec x
+        let tx = mkTypedSub normalRec x
         tx
         |> findVars (tliftToIntSrc (tliftToExprDest collectSymVars))
         |> okOption |> Option.map (Seq.map valueOf) |> Option.bind onlyOne

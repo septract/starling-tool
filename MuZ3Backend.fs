@@ -424,7 +424,7 @@ module Translator =
         >> Seq.choose
                (fun { Cond = g ; Item = v } ->
                    // Guards are always 'bool'
-                   let gT = mkTypedSub normalBoolRec g
+                   let gT = mkTypedSub normalRec g
 
                    let vZ = translateVFunc reals toVar ctx funcDecls v
                    if (vZ.IsTrue)
@@ -555,7 +555,7 @@ module Translator =
         trial {
             // First, make everything use string variables.
             let! bodyExpr' =
-                mapMessages Traversal (mapTraversal toVarTravBool (mkTypedSub normalBoolRec bodyExpr))
+                mapMessages Traversal (mapTraversal toVarTravBool (mkTypedSub normalRec bodyExpr))
             let! bodyView' =
                 mapMessages Traversal (mapTraversal toVarTravGView bodyView)
             let! head' =
@@ -563,7 +563,7 @@ module Translator =
 
             // Then, collect those variables.
             let! bodyExprVars =
-                mapMessages Traversal (findVars findVarTravBool (mkTypedSub normalBoolRec bodyExpr'))
+                mapMessages Traversal (findVars findVarTravBool (mkTypedSub normalRec bodyExpr'))
             let! bodyViewVars =
                 mapMessages Traversal (findVars findVarTravGView bodyView')
             let! headVars =
@@ -577,7 +577,7 @@ module Translator =
             let varConstSet = Set.map varToConst varSet
             let vars = Set.toArray varConstSet
 
-            let bodyExprZ = boolToZ3 reals id ctx (mkTypedSub normalBoolRec bodyExpr')
+            let bodyExprZ = boolToZ3 reals id ctx (mkTypedSub normalRec bodyExpr')
 
             let bodyZ =
                 if (Multiset.length bodyView = 0)
@@ -890,7 +890,7 @@ module Run =
       (view : VFunc<Var>)
       (def : BoolExpr<Var>)
       : Result<unit, Error> =
-        let tdef = mkTypedSub normalBoolRec def
+        let tdef = mkTypedSub normalRec def
 
         (* To model a view definition, we introduce an if and only if.
            This can't be modelled directly in MuZ3, so instead we split it

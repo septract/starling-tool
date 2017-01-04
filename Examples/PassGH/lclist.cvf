@@ -5,19 +5,18 @@ pragma grasshopper_footprint {X};
 pragma grasshopper_footprint_sort {Set<Node>};
 
 typedef int Node;
-typedef int Int;
 
-shared Int heap;  // represent side-effects through the heap
-shared Int ub;    // upper bound on the list
+shared int heap;  // represent side-effects through the heap
+shared int ub;    // upper bound on the list
 shared Node head; // start of the list
 
 thread Node prev, curr;
-thread Int v, cv;
+thread int v, cv;
 
-view wf(Int v), isHead(Node node), isVal(Node node, Int v);
+view wf(int v), isHead(Node node), isVal(Node node, int v);
 view has1Lock(Node x, Node y), has1LockAnon(Node x), has2Lock(Node x, Node y);
 
-method deleteVal(Int v) {
+method deleteVal(int v) {
   {| wf(v) |}
     <prev = head>;
   {| wf(v) * isHead(prev) |}

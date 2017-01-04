@@ -23,14 +23,22 @@ open Starling.Utils
 
 
 /// <summary>
+///     A subtype definition.
+/// </summary>
+type Subtype =
+    | /// <summary>The subtype of this item is not fixed yet.</summary>
+      Indef
+    | /// <summary>This item has the 'normal' subtype.</summary>
+      Normal
+    | /// <summary>This item has a named subtype.</summary>
+      Named of string
+
+/// <summary>
 ///     An extended type record for primitive types.
 /// </summary>
 type PrimTypeRec =
-    { /// <summary>
-      ///     The name of the primitive type used.
-      ///     If this is None, then the type is not fixed.
-      /// </summary>
-      TypeName : string option }
+    { /// <summary>The subtype of this primitive type.</summary>
+      PrimSubtype : Subtype }
 
 /// <summary>
 ///     An extended type record for array types.
@@ -188,7 +196,7 @@ module Typed =
 /// </returns>
 let rec unifyPrimTypeRecs (xs : PrimTypeRec list) : PrimTypeRec option =
     match xs with
-    | [] -> Some { TypeName = None }
+    | [] -> Some { PrimSubtype = Indef }
     | x::xs ->
         (* TODO(CaptainHayashi): this is way too strong and order-dependent.
            It's also somewhat broken, but in mostly inconsequential ways. *)
@@ -196,10 +204,11 @@ let rec unifyPrimTypeRecs (xs : PrimTypeRec list) : PrimTypeRec option =
             match recSoFar with
             | None -> None
             | Some rs ->
-                match (rs.TypeName, nextRec.TypeName) with
-                | Some _, None | None, None -> Some rs
-                | None, Some _ -> Some nextRec
-                | Some x, Some y when x = y -> Some rs
+                match rs.PrimSubtype, nextRec.PrimSubtype with
+                | _, Indef -> Some rs
+                | Indef, _ -> Some nextRec
+                | Normal, Normal -> Some rs
+                | Named x, Named y when x = y -> Some rs
                 | _ -> None
         List.fold foldRecs (Some x) xs
 
@@ -312,8 +321,12 @@ module Pretty =
     /// </summary>
     let rec printType (ty : Type) : Doc =
         match ty with
-        | AnIntR { TypeName = n } -> String (withDefault "int?" n)
-        | ABoolR { TypeName = n } -> String (withDefault "bool?" n)
+        | AnIntR { PrimSubtype = Indef } -> String "int?"
+        | AnIntR { PrimSubtype = Normal } -> String "int"
+        | AnIntR { PrimSubtype = Named x } -> String x
+        | ABoolR { PrimSubtype = Indef } -> String "bool?"
+        | ABoolR { PrimSubtype = Normal } -> String "bool"
+        | ABoolR { PrimSubtype = Named x } -> String x
         | AnArrayR { ElementType = eltype; Length = len } ->
             parened
                 (String "array"

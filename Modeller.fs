@@ -576,12 +576,12 @@ let primTypeMismatch
 // </returns>
 let checkIntIsNormalType (int : TypedIntExpr<'Var>)
   : Result<IntExpr<'Var>, TypeError> =
-    if primTypeRecsCompatible int.SRec normalIntRec
+    if primTypeRecsCompatible int.SRec normalRec
     then ok int.SExpr
     else
         fail
             (TypeMismatch
-                (expected = Exact (Typed.Int (normalIntRec, ())),
+                (expected = Exact (Typed.Int (normalRec, ())),
                  got = Exact (Typed.Int (int.SRec, ()))))
 
 // <summary>
@@ -601,12 +601,12 @@ let checkIntIsNormalType (int : TypedIntExpr<'Var>)
 // </returns>
 let checkBoolIsNormalType (bool : TypedBoolExpr<'Var>)
   : Result<BoolExpr<'Var>, TypeError> =
-    if primTypeRecsCompatible bool.SRec normalBoolRec
+    if primTypeRecsCompatible bool.SRec normalRec
     then ok bool.SExpr
     else
         fail
             (TypeMismatch
-                (expected = Exact (Typed.Bool (normalBoolRec, ())),
+                (expected = Exact (Typed.Bool (normalRec, ())),
                  got = Exact (Typed.Bool (bool.SRec, ()))))
 
 
@@ -1056,7 +1056,7 @@ let rec modelViewSignature (protos : FuncDefiner<ProtoInfo>) =
                                           return Multiset.append lM rM }
     | ViewSignature.Iterated(dfunc, e) ->
         // Iterators have the 'int' subtype.
-        let updateFunc (s : string) f = { Func = f; Iterator = Some (Int (normalIntRec, s)) }
+        let updateFunc (s : string) f = { Func = f; Iterator = Some (Int (normalRec, s)) }
         let modelledDFunc = modelDFunc protos dfunc
         lift (Multiset.map (updateFunc e)) modelledDFunc
 
@@ -1995,10 +1995,10 @@ let convertTypedVar
         function
         // TODO(CaptainHayashi): make typedefs less awful
         | TInt ->
-            let tr = maybe normalIntRec (fun t -> { TypeName = Some t }) currentTypedef
+            let tr = maybe normalRec (fun t -> { PrimSubtype = Named t }) currentTypedef
             ok (Int (tr, ()))
         | TBool ->
-            let tr = maybe normalBoolRec (fun t -> { TypeName = Some t }) currentTypedef
+            let tr = maybe normalRec (fun t -> { PrimSubtype = Named t }) currentTypedef
             ok (Bool (tr, ()))
         | TUser ty ->
             match types.TryFind ty with

@@ -26,9 +26,9 @@ module FuncInstantiate =
     let TestFuncs =
         [ (dfunc "foo" [],
            iEq (IInt 5L : SVIntExpr) (IInt 6L))
-          (dfunc "bar" [ Int (normalIntRec, "quux") ],
+          (dfunc "bar" [ Int (normalRec, "quux") ],
            iEq (siVar "quux") (IInt 6L))
-          (dfunc "baz" [ Int (normalIntRec, "quux") ; Bool (normalBoolRec, "flop") ],
+          (dfunc "baz" [ Int (normalRec, "quux") ; Bool (normalRec, "flop") ],
            BAnd [sbVar "flop"; BGt (normalInt (siVar "quux"), normalInt (siVar "quux"))]) ]
 
     let checkInstantiate expected case : unit =
@@ -98,14 +98,14 @@ module FuncInstantiate =
                         (smvfunc "baz"
                             [ normalBoolExpr BTrue
                               normalIntExpr (siAfter "burble") ],
-                         TypeMismatch (Int (normalIntRec, "quux"), Bool (normalBoolRec, ())))))
+                         TypeMismatch (Int (normalRec, "quux"), Bool (normalRec, ())))))
               Traversal
                 (Inner
                     (BadFuncLookup
                         (smvfunc "baz"
                             [ normalBoolExpr BTrue
                               normalIntExpr (siAfter "burble") ],
-                         TypeMismatch (Bool (normalBoolRec, "flop"), Int (normalIntRec, ()))))) ]
+                         TypeMismatch (Bool (normalRec, "flop"), Int (normalRec, ()))))) ]
         ?=?
             testInstantiateFail
                 (smvfunc "baz"

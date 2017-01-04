@@ -25,26 +25,26 @@ open Starling.Tests.Studies
 let ticketLockProtos: FuncDefiner<ProtoInfo> =
     FuncDefiner.ofSeq
         [ (func "holdLock" [], { IsIterated = false ; IsAnonymous = false })
-          (func "holdTick" [ Int (normalIntRec, "t") ], { IsIterated = false ; IsAnonymous = false }) ]
+          (func "holdTick" [ Int (normalRec, "t") ], { IsIterated = false ; IsAnonymous = false }) ]
 
 let environ =
-    Map.ofList [ ("foo", Type.Int (normalIntRec, ()))
-                 ("bar", Type.Int (normalIntRec, ()))
-                 ("baz", Type.Bool (normalBoolRec, ()))
-                 ("emp", Type.Bool (normalBoolRec, ()))
+    Map.ofList [ ("foo", Type.Int (normalRec, ()))
+                 ("bar", Type.Int (normalRec, ()))
+                 ("baz", Type.Bool (normalRec, ()))
+                 ("emp", Type.Bool (normalRec, ()))
                  // Subtyped variables
-                 ("lnode", Type.Int ({ TypeName = Some "Node" }, ()))
+                 ("lnode", Type.Int ({ PrimSubtype = Named "Node" }, ()))
                  // Multi-dimensional arrays
                  ("grid",
                   mkArrayType
-                    (mkArrayType (Type.Int (normalIntRec, ())) (Some 320))
+                    (mkArrayType (Type.Int (normalRec, ())) (Some 320))
                     (Some 240)) ]
 
 let shared =
-    Map.ofList [ ("nums", mkArrayType (Type.Int (normalIntRec, ())) (Some 10))
-                 ("x", Type.Int (normalIntRec, ()))
-                 ("y", Type.Bool (normalBoolRec, ()))
-                 ("node", Type.Int ({ TypeName = Some "Node" }, ())) ]
+    Map.ofList [ ("nums", mkArrayType (Type.Int (normalRec, ())) (Some 10))
+                 ("x", Type.Int (normalRec, ()))
+                 ("y", Type.Bool (normalRec, ()))
+                 ("node", Type.Int ({ PrimSubtype = Named "Node" }, ())) ]
 
 let context =
     { ViewProtos = ticketLockProtos
@@ -100,7 +100,7 @@ module ViewFail =
           ([ LookupError
                ( "holdTick",
                  Error.TypeMismatch
-                   (Int (normalIntRec, "t"), Type.Bool (indefBoolRec, ()))) ])
+                   (Int (normalRec, "t"), Type.Bool (indefRec, ()))) ])
 
     [<Test>]
     let ``test bad parameter subtype`` () =
@@ -109,7 +109,7 @@ module ViewFail =
           ([ LookupError
                ( "holdTick",
                  Error.TypeMismatch
-                   (normalIntVar "t", Type.Int ({ TypeName = Some "Node" }, ()))) ])
+                   (normalIntVar "t", Type.Int ({ PrimSubtype = Named "Node" }, ()))) ])
 
 
 module ArithmeticExprs =
@@ -174,7 +174,7 @@ module ArithmeticExprs =
             (freshNode <| BopExpr( Add,
                                    freshNode (Identifier "lnode"),
                                    freshNode (Num 3L)))
-            (mkTypedSub { TypeName = Some "Node"} (mkAdd2 (siVar "lnode") (IInt 3L)))
+            (mkTypedSub { PrimSubtype = Named "Node"} (mkAdd2 (siVar "lnode") (IInt 3L)))
 
     [<Test>]
     let ``test modelling (foo + lnode) fails`` () =
@@ -185,8 +185,8 @@ module ArithmeticExprs =
                                    freshNode (Identifier "lnode")))
             // This shouldn't really be order-sensitive.
             [ exprTypeMismatch
-                (Exact (Int (normalIntRec, ())))
-                (Exact (Int ({ TypeName = Some "Node" }, ()))) ]
+                (Exact (Int (normalRec, ())))
+                (Exact (Int ({ PrimSubtype = Named "Node" }, ()))) ]
 
     [<Test>]
     let ``test modelling shared array access nums[foo + 1]`` ()=
@@ -200,7 +200,7 @@ module ArithmeticExprs =
             (normalInt
                 (IIdx
                     (mkTypedSub
-                        (mkArrayTypeRec (Int (normalIntRec, ())) (Some 10))
+                        (mkArrayTypeRec (Int (normalRec, ())) (Some 10))
                         (AVar (Reg "nums")),
                      IAdd [ IVar (Reg "foo"); IInt 3L ])))
 
@@ -215,8 +215,8 @@ module ArithmeticExprs =
                      freshNode (Identifier "lnode"),
                      freshNode (Num 3L))))
             [ exprTypeMismatch
-                (Exact (Int (normalIntRec, ())))
-                (Exact (Int ({ TypeName = Some "Node" }, ()))) ]
+                (Exact (Int (normalRec, ())))
+                (Exact (Int ({ PrimSubtype = Named "Node" }, ()))) ]
 
     [<Test>]
     let ``test modelling local array access grid[x][y]`` () =
@@ -229,11 +229,11 @@ module ArithmeticExprs =
             (normalInt
                 (IIdx
                     (mkTypedSub
-                        (mkArrayTypeRec (Int (normalIntRec, ())) (Some 320))
+                        (mkArrayTypeRec (Int (normalRec, ())) (Some 320))
                         (AIdx
                             (mkTypedSub
                                 (mkArrayTypeRec
-                                    (mkArrayType (Int (normalIntRec, ())) (Some 320))
+                                    (mkArrayType (Int (normalRec, ())) (Some 320))
                                     (Some 240))
                                 (AVar (Reg "grid")),
                             (IVar (Reg "foo")))),
@@ -270,28 +270,28 @@ module VarLists =
     [<Test>]
     let ``valid singleton list makes var map`` () =
         checkPass
-            [ Int (normalIntRec, "bar") ]
-            (Map.ofList [ ("bar", Int (normalIntRec, ())) ])
+            [ Int (normalRec, "bar") ]
+            (Map.ofList [ ("bar", Int (normalRec, ())) ])
 
     [<Test>]
     let ``valid multi list makes var map`` () =
         checkPass
-            [ Int (normalIntRec, "bar"); Bool (normalBoolRec, "baz") ]
-            (Map.ofList [ ("bar", Int (normalIntRec, ()))
-                          ("baz", Bool (normalBoolRec, ())) ])
+            [ Int (normalRec, "bar"); Bool (normalRec, "baz") ]
+            (Map.ofList [ ("bar", Int (normalRec, ()))
+                          ("baz", Bool (normalRec, ())) ])
 
     [<Test>]
     let ``duplicate vars of same type fail in VarMap.ofTypedVarSeq`` () =
         checkFail
-            ([ Bool (normalBoolRec, "foo")
-               Bool (normalBoolRec, "foo") ])
+            ([ Bool (normalRec, "foo")
+               Bool (normalRec, "foo") ])
             ([ VarMapError.Duplicate "foo" ])
 
     [<Test>]
     let ``duplicate var with different type fails in VarMap.ofTypedVarSeq`` () =
         checkFail
-            ([ Bool (normalBoolRec, "foo")
-               Int  (normalIntRec,  "foo") ])
+            ([ Bool (normalRec, "foo")
+               Int  (normalRec,  "foo") ])
             ([ VarMapError.Duplicate "foo" ])
 
 module Atomics =
@@ -337,7 +337,7 @@ module Atomics =
             (Intrinsic
                 (IAssign
                     { AssignType = Store
-                      TypeRec = normalIntRec
+                      TypeRec = normalRec
                       LValue = IVar (Reg "x")
                       RValue =
                         IVar
@@ -405,7 +405,7 @@ module CommandAxioms =
                 [ Intrinsic
                     ( BAssign
                         { AssignType = Local
-                          TypeRec = normalBoolRec
+                          TypeRec = normalRec
                           LValue = BVar (Reg "baz")
                           RValue =
                             BVar
@@ -459,7 +459,7 @@ module ViewDefs =
             (indefinites
                 [ []
                   [ iterated (func "holdLock" []) None ]
-                  [ iterated (func "holdTick" [ Int (normalIntRec, "t0") ]) None ] ])
+                  [ iterated (func "holdTick" [ Int (normalRec, "t0") ]) None ] ])
 
     [<Test>]
     let ``Search for size-2 viewdefs yields viewdefs up to size 2``() =
@@ -470,7 +470,7 @@ module ViewDefs =
                   [ iterated (func "holdLock" []) None
                     iterated (func "holdLock" []) None ]
                   [ iterated (func "holdLock" []) None
-                    iterated (func "holdTick" [ Int (normalIntRec, "t0") ]) None ]
-                  [ iterated (func "holdTick" [ Int (normalIntRec, "t0") ]) None ]
-                  [ iterated (func "holdTick" [ Int (normalIntRec, "t0") ]) None
-                    iterated (func "holdTick" [ Int (normalIntRec, "t1") ]) None ] ] )
+                    iterated (func "holdTick" [ Int (normalRec, "t0") ]) None ]
+                  [ iterated (func "holdTick" [ Int (normalRec, "t0") ]) None ]
+                  [ iterated (func "holdTick" [ Int (normalRec, "t0") ]) None
+                    iterated (func "holdTick" [ Int (normalRec, "t1") ]) None ] ] )

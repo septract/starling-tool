@@ -3,26 +3,24 @@ pragma grasshopper_footprint {X};
 pragma grasshopper_footprint_sort {Set<Entry>};
 
 typedef int Entry;
-typedef int Int;
-typedef bool Bool;
 
 shared Entry head, tail;
-shared Int ub, lb;
+shared int ub, lb;
 
-thread Bool present, done;
-thread Int ckey;
+thread bool present, done;
+thread int ckey;
 thread Entry pred, curr;
 
 view isHead(Entry h), isTail(Entry t), isEntry(Entry t), isEntryOrTail(Entry t);
-view keyIs(Int k, Entry e), isMarked(Entry e), isExterior(Entry e);
-view wf(Int key);
+view keyIs(int k, Entry e), isMarked(Entry e), isExterior(Entry e);
+view wf(int key);
 view less(Entry x, Entry y);
 
 view hasLock(Entry p), has2Lock(Entry p, Entry q);
 
-view removed(Int k);
+view removed(int k);
 
-method remove(Int key) {
+method remove(int key) {
     {| wf(key) |}
         do {
             {| wf(key) |}

@@ -64,7 +64,7 @@ module Expr =
             | IIdx (arr, idx) ->
                 // TODO(CaptainHayashi): ensure eltype is Int?
                 let arrZ3 = arrayToZ3 reals toStr ctx arr
-                let idxZ3 = intToZ3 reals toStr ctx (mkTypedSub normalIntRec idx)
+                let idxZ3 = intToZ3 reals toStr ctx (mkTypedSub normalRec idx)
                 // TODO(CaptainHayashi): make this not crash if the select is not an ArithExpr.
                 ctx.MkSelect (arrZ3, idxZ3) :?> Z3.ArithExpr
             | IInt i when reals -> (i |> ctx.MkReal) :> Z3.ArithExpr
@@ -92,7 +92,7 @@ module Expr =
             | BIdx (arr, idx) ->
                 // TODO(CaptainHayashi): ensure eltype is Bool?
                 let arrZ3 = arrayToZ3 reals toStr ctx arr
-                let idxZ3 = intToZ3 reals toStr ctx (mkTypedSub normalIntRec idx)
+                let idxZ3 = intToZ3 reals toStr ctx (mkTypedSub normalRec idx)
                 // TODO(CaptainHayashi): make this not crash if the select is not a BoolExpr.
                 ctx.MkSelect (arrZ3, idxZ3) :?> Z3.BoolExpr
             | BTrue -> ctx.MkTrue ()
@@ -126,12 +126,12 @@ module Expr =
         | AIdx (arr',  idx) ->
             // TODO(CaptainHayashi): ensure eltype is Array?
             let arrZ3 = arrayToZ3 reals toStr ctx arr'
-            let idxZ3 = intToZ3 reals toStr ctx (mkTypedSub normalIntRec idx)
+            let idxZ3 = intToZ3 reals toStr ctx (mkTypedSub normalRec idx)
             // TODO(CaptainHayashi): make this not crash if the select is not an ArrayExpr.
             ctx.MkSelect (arrZ3, idxZ3) :?> Z3.ArrayExpr
         | AUpd (arr', idx, upd) ->
             let arrZ3 = arrayToZ3 reals toStr ctx (updateTypedSub arr arr')
-            let idxZ3 = intToZ3 reals toStr ctx (mkTypedSub normalIntRec idx)
+            let idxZ3 = intToZ3 reals toStr ctx (mkTypedSub normalRec idx)
             let updZ3 = exprToZ3 reals toStr ctx upd
             ctx.MkStore (arrZ3, idxZ3, updZ3)
 

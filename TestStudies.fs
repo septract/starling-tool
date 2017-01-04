@@ -484,7 +484,7 @@ let ticketLockGuardedUnlock : GuarderBlock =
 let ticketLockViewDefs =
     [([],
       Some <| BGe(normalInt (siVar "ticket"), normalInt (siVar "serving")))
-     ([ { Func = { Name = "holdTick"; Params = [ TypedVar.Int (normalIntRec, "t") ] }
+     ([ { Func = { Name = "holdTick"; Params = [ TypedVar.Int (normalRec, "t") ] }
           Iterator = None } ],
       Some <| BGt(normalInt (siVar "ticket"), normalInt (siVar "t")))
      ([ { Func = { Name = "holdLock"; Params = [] }
@@ -492,12 +492,12 @@ let ticketLockViewDefs =
       Some <| BNot (iEq (siVar "ticket") (siVar "serving")))
      ([ { Func = { Name = "holdLock"; Params = [] }
           Iterator = None }
-        { Func = { Name = "holdTick"; Params = [ TypedVar.Int (normalIntRec, "t") ] }
+        { Func = { Name = "holdTick"; Params = [ TypedVar.Int (normalRec, "t") ] }
           Iterator = None } ],
       Some <| BNot(iEq (siVar "serving") (siVar "t")))
-     ([ { Func = { Name = "holdTick"; Params = [ TypedVar.Int (normalIntRec, "ta") ] }
+     ([ { Func = { Name = "holdTick"; Params = [ TypedVar.Int (normalRec, "ta") ] }
           Iterator = None }
-        { Func = { Name = "holdTick"; Params = [ TypedVar.Int (normalIntRec, "tb") ] }
+        { Func = { Name = "holdTick"; Params = [ TypedVar.Int (normalRec, "tb") ] }
           Iterator = None } ],
       Some <| BNot(iEq (siVar "ta") (siVar "tb")))
      ([ { Func = { Name = "holdLock"; Params = [] }
@@ -508,7 +508,7 @@ let ticketLockViewDefs =
 
 let ticketLockViewProtos : FuncDefiner<ProtoInfo> =
     FuncDefiner.ofSeq
-        [ ({ Name = "holdTick"; Params = [ TypedVar.Int (normalIntRec, "t") ] },
+        [ ({ Name = "holdTick"; Params = [ TypedVar.Int (normalRec, "t") ] },
            { IsIterated = false; IsAnonymous = false })
           ({ Name = "holdLock"; Params = [] },
            { IsIterated = false; IsAnonymous = false }) ]
@@ -517,11 +517,11 @@ let ticketLockViewProtos : FuncDefiner<ProtoInfo> =
 let ticketLockModel : Model<ModellerBlock, ViewDefiner<BoolExpr<Sym<Var>> option>> =
     { Pragmata = []
       SharedVars =
-          Map.ofList [ ("serving", Type.Int (normalIntRec, ()))
-                       ("ticket", Type.Int (normalIntRec, ())) ]
+          Map.ofList [ ("serving", Type.Int (normalRec, ()))
+                       ("ticket", Type.Int (normalRec, ())) ]
       ThreadVars =
-          Map.ofList [ ("s", Type.Int (normalIntRec, ()))
-                       ("t", Type.Int (normalIntRec, ())) ]
+          Map.ofList [ ("s", Type.Int (normalRec, ()))
+                       ("t", Type.Int (normalRec, ())) ]
       Axioms = ticketLockMethods
       ViewDefs = ticketLockViewDefs
       ViewProtos = ticketLockViewProtos

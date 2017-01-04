@@ -422,8 +422,8 @@ let traverseMicrocode
             tchain2 ltrav rtrav (pairMap id Some >> Assign) ctx (lv, rv)
         | Assign (lv, None) ->
             tchain ltrav (flip mkPair None >> Assign) ctx lv
-        | Assume assumption -> tchain brtrav Assume ctx (mkTypedSub normalBoolRec assumption)
-        | Branch (i, t, e) -> tchain3 brtrav tml tml Branch ctx (mkTypedSub normalBoolRec i, t, e)
+        | Assume assumption -> tchain brtrav Assume ctx (mkTypedSub normalRec assumption)
+        | Branch (i, t, e) -> tchain3 brtrav tml tml Branch ctx (mkTypedSub normalRec i, t, e)
     tm
 
 /// <summary>

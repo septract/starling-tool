@@ -29,7 +29,7 @@ let cId : Command = []
    are in pre-state position.  When we move to type-safe renaming this
    change should happen *here*. *)
 let cAssume (expr : SVBoolExpr) : Command =
-    command "Assume" [] [ Expr.Bool (normalBoolRec, simp expr) ] |> List.singleton
+    command "Assume" [] [ Expr.Bool (normalRec, simp expr) ] |> List.singleton
 let cAssumeNot : SVBoolExpr -> Command = mkNot >> cAssume
 
 /// <summary>
@@ -156,7 +156,7 @@ and graphITE
                     (tliftToBoolSrc
                         (tliftToExprDest
                             (traverseTypedSymWithMarker Before)))
-                    (mkTypedSub normalBoolRec expr))
+                    (mkTypedSub normalRec expr))
 
         (* We definitely have an inner graph for the true leg, so get that
            out of the way first. *)

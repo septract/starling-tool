@@ -27,7 +27,7 @@ module WriteMaps =
             (TypedVar.Array
                 (mkArrayTypeRec
                     (mkArrayType
-                        (Int (normalIntRec, ()))
+                        (Int (normalRec, ()))
                         (Some 320))
                     (Some 240),
                  "x"),
@@ -36,11 +36,11 @@ module WriteMaps =
                 (normalIntExpr
                     (IIdx
                         (mkTypedSub
-                             (mkArrayTypeRec (Int (normalIntRec, ())) (Some 320))
+                             (mkArrayTypeRec (Int (normalRec, ())) (Some 320))
                              (AIdx
                                  (mkTypedSub
                                     (mkArrayTypeRec
-                                        (mkArrayType (Int (normalIntRec, ())) (Some 320))
+                                        (mkArrayType (Int (normalRec, ())) (Some 320))
                                         (Some 240))
                                     (AVar (Reg "x")),
                                   IInt 3L)),
@@ -51,7 +51,7 @@ module WriteMaps =
         Map.ofList
             [ (Array
                 (mkArrayTypeRec
-                    (mkArrayType (Int (normalIntRec, ())) (Some 320))
+                    (mkArrayType (Int (normalRec, ())) (Some 320))
                     (Some 240),
                     "x"),
                Indices <| Map.ofList
@@ -59,7 +59,7 @@ module WriteMaps =
                     Indices <| Map.ofList
                         [ (IVar (Reg "i"), Entire (Some (normalIntExpr (IInt 3L)))) ]) ] )
               (Array
-                (mkArrayTypeRec (Int (normalIntRec, ())) (Some 320), "y"),
+                (mkArrayTypeRec (Int (normalRec, ())) (Some 320), "y"),
                Indices <| Map.ofList
                 [ (IVar (Reg "j"), Entire (Some (normalIntExpr (IInt 4L)))) ] ) ]
         ?=?
@@ -67,23 +67,23 @@ module WriteMaps =
             [ (normalIntExpr
                 (IIdx
                     (mkTypedSub
-                         (mkArrayTypeRec (Int (normalIntRec, ())) (Some 320))
+                         (mkArrayTypeRec (Int (normalRec, ())) (Some 320))
                          (AIdx
                              (mkTypedSub
                                 (mkArrayTypeRec
-                                    (mkArrayType (Int (normalIntRec, ())) (Some 320))
+                                    (mkArrayType (Int (normalRec, ())) (Some 320))
                                     (Some 240))
                                 (AVar (Reg "x")),
                               IInt 3L)),
                      IVar (Reg "i"))),
-               Some (Int (normalIntRec, IInt 3L)))
+               Some (Int (normalRec, IInt 3L)))
               (normalIntExpr
                 (IIdx
                     (mkTypedSub
-                        (mkArrayTypeRec (Int (normalIntRec, ())) (Some 320))
+                        (mkArrayTypeRec (Int (normalRec, ())) (Some 320))
                         (AVar (Reg "y")),
                      (IVar (Reg "j")))),
-               Some (Int (normalIntRec, IInt 4L))) ]
+               Some (Int (normalRec, IInt 4L))) ]
 
 /// Shorthand for expressing an array update.
 let aupd' arr idx var : ArrayExpr<'Var> =
@@ -119,10 +119,10 @@ module MakeFrame =
               iEq (siAfter "ticket") (siBefore "ticket")
               iEq (siAfter "t") (siInter 0I "t") ]
             (Map.ofList
-                [ (Int (normalIntRec, "serving"), Before "serving")
-                  (Int (normalIntRec, "ticket"), Before "ticket")
-                  (Int (normalIntRec, "t"), Intermediate (0I, "t"))
-                  (Int (normalIntRec, "s"), After "s") ] )
+                [ (Int (normalRec, "serving"), Before "serving")
+                  (Int (normalRec, "ticket"), Before "ticket")
+                  (Int (normalRec, "t"), Intermediate (0I, "t"))
+                  (Int (normalRec, "s"), After "s") ] )
 
 
 /// <summary>
@@ -150,33 +150,33 @@ module Normalisation =
             [ (TypedVar.Array
                    (mkArrayTypeRec
                         (mkArrayType
-                            (Int (normalIntRec, ()))
+                            (Int (normalRec, ()))
                             (Some 320))
                         (Some 240),
                         "x"),
                Some <| aupd
                    (mkTypedArrayExpr
-                        (mkArrayType (Int (normalIntRec, ())) (Some 320))
+                        (mkArrayType (Int (normalRec, ())) (Some 320))
                         (Some 240)
                         (AVar (Reg "x")))
                    (IInt 3L)
                    (aupd
                         (mkTypedArrayExpr
-                            (Int (normalIntRec, ()))
+                            (Int (normalRec, ()))
                             (Some 320)
                             (AIdx
                                 (mkTypedArrayExpr
-                                    (mkArrayType (Int (normalIntRec, ())) (Some 320))
+                                    (mkArrayType (Int (normalRec, ())) (Some 320))
                                     (Some 240)
                                     (AVar (Reg "x")),
                                  IInt 3L)))
                         (IVar (Reg "i"))
                         (normalIntExpr (IInt 3L))))
               (TypedVar.Array
-                   (mkArrayTypeRec (Int (normalIntRec, ())) (Some 320), "y"),
+                   (mkArrayTypeRec (Int (normalRec, ())) (Some 320), "y"),
                Some <| aupd
                    (mkTypedArrayExpr
-                        (Int (normalIntRec, ()))
+                        (Int (normalRec, ()))
                         (Some 320)
                         (AVar (Reg "y")))
                    (IVar (Reg "j"))
@@ -184,11 +184,11 @@ module Normalisation =
             [ (normalIntExpr
                 (IIdx
                     (mkTypedArrayExpr
-                         (Int (normalIntRec, ()))
+                         (Int (normalRec, ()))
                          (Some 320)
                          (AIdx
                              (mkTypedArrayExpr
-                                 (mkArrayType (Int (normalIntRec, ())) (Some 320))
+                                 (mkArrayType (Int (normalRec, ())) (Some 320))
                                  (Some 240)
                                  (AVar (Reg "x")),
                               IInt 3L)),
@@ -197,7 +197,7 @@ module Normalisation =
               (normalIntExpr
                 (IIdx
                     (mkTypedArrayExpr
-                        (Int (normalIntRec, ()))
+                        (Int (normalRec, ()))
                         (Some 320)
                         (AVar (Reg "y")),
                      (IVar (Reg "j")))),
@@ -205,7 +205,7 @@ module Normalisation =
 
     [<Test>]
     let ``microcode normalisation of CAS(x[3], d[6], 2) is correct`` () =
-        let xel = Int (normalIntRec, ())
+        let xel = Int (normalRec, ())
         let xlen = Some 10
         let xname = "x"
         let xtr = mkArrayTypeRec xel xlen
@@ -214,7 +214,7 @@ module Normalisation =
         let x3 = IIdx (xav, IInt 3L)
         let x3upd v = aupd xav (IInt 3L) v
 
-        let del = Int (normalIntRec, ())
+        let del = Int (normalRec, ())
         let dlen = Some 10
         let dname = "d"
         let dtr = mkArrayTypeRec del dlen
@@ -245,18 +245,18 @@ let testShared =
     Map.ofList
         [ ("grid",
             mkArrayType
-                (mkArrayType (Type.Int (normalIntRec, ())) (Some 320))
+                (mkArrayType (Type.Int (normalRec, ())) (Some 320))
                 (Some 240))
-          ("test", Type.Bool (normalBoolRec, ())) ]
+          ("test", Type.Bool (normalRec, ())) ]
 
 let testShared2 =
     Map.ofList
-        [ ("foo", mkArrayType (Type.Bool (normalBoolRec, ())) (Some 10)) ]
+        [ ("foo", mkArrayType (Type.Bool (normalRec, ())) (Some 10)) ]
 
 let testThread =
     Map.ofList
-        [ ("x", Type.Int (normalIntRec, ()))
-          ("y", Type.Int (normalIntRec, ())) ]
+        [ ("x", Type.Int (normalRec, ()))
+          ("y", Type.Int (normalRec, ())) ]
 
 
 /// <summary>
@@ -476,14 +476,14 @@ module MicrocodeToBool =
                   iEq (siAfter "y") (siBefore "y")
                   BEq
                     (typedArrayToExpr
-                        (mkTypedArrayExpr (Bool (normalBoolRec, ())) (Some 10) (AVar (Reg (After "foo")))),
+                        (mkTypedArrayExpr (Bool (normalRec, ())) (Some 10) (AVar (Reg (After "foo")))),
                      aupd
                         (mkTypedArrayExpr
-                            (Bool (normalBoolRec, ()))
+                            (Bool (normalRec, ()))
                             (Some 10)
                             (aupd'
                                 (mkTypedArrayExpr
-                                    (Bool (normalBoolRec, ()))
+                                    (Bool (normalRec, ()))
                                     (Some 10)
                                     (AVar (Reg (Before "foo"))))
                                 (siBefore "x")
@@ -492,12 +492,12 @@ module MicrocodeToBool =
                         (normalBoolExpr  BFalse)) ])
             [ [ normalBoolExpr
                     (BIdx
-                        (mkTypedArrayExpr (Bool (normalBoolRec, ())) (Some 10) (AVar (Reg "foo")),
+                        (mkTypedArrayExpr (Bool (normalRec, ())) (Some 10) (AVar (Reg "foo")),
                          IVar (Reg "x")))
                 *<- normalBoolExpr BTrue
                 normalBoolExpr
                     (BIdx
-                        (mkTypedArrayExpr (Bool (normalBoolRec, ())) (Some 10) (AVar (Reg "foo")),
+                        (mkTypedArrayExpr (Bool (normalRec, ())) (Some 10) (AVar (Reg "foo")),
                          IVar (Reg "y")))
                 *<- normalBoolExpr BFalse ] ]
 
@@ -505,23 +505,23 @@ module MicrocodeToBool =
     let ``multi-dimensional arrays are normalised and translated properly`` () =
         let grid marker = 
             (mkTypedArrayExpr
-                (mkArrayType (Int (normalIntRec, ())) (Some 320))
+                (mkArrayType (Int (normalRec, ())) (Some 320))
                 (Some 240)
                 (AVar (Reg (marker "grid"))))
         let gridx marker =
             (mkTypedArrayExpr
-                (Int (normalIntRec, ()))
+                (Int (normalRec, ()))
                 (Some 320)
                 (AIdx (grid marker, IVar (Reg (marker "x")))))
 
         let gridv = 
             (mkTypedArrayExpr
-                (mkArrayType (Int (normalIntRec, ())) (Some 320))
+                (mkArrayType (Int (normalRec, ())) (Some 320))
                 (Some 240)
                 (AVar (Reg "grid")))
         let gridxv =
             (mkTypedArrayExpr
-                (Int (normalIntRec, ()))
+                (Int (normalRec, ()))
                 (Some 320)
                 (AIdx (gridv, siVar "x")))
 
@@ -579,23 +579,23 @@ module CommandTests =
     let ``Semantically translate <grid[x][y]++> using the test environments``() =
         let grid marker = 
             (mkTypedArrayExpr
-                (mkArrayType (Int (normalIntRec, ())) (Some 320))
+                (mkArrayType (Int (normalRec, ())) (Some 320))
                 (Some 240)
                 (AVar (Reg (marker "grid"))))
         let gridx marker =
             (mkTypedArrayExpr
-                (Int (normalIntRec, ()))
+                (Int (normalRec, ()))
                 (Some 320)
                 (AIdx (grid marker, IVar (Reg (marker "x")))))
 
         let gridv = 
             (mkTypedArrayExpr
-                (mkArrayType (Int (normalIntRec, ())) (Some 320))
+                (mkArrayType (Int (normalRec, ())) (Some 320))
                 (Some 240)
                 (AVar (Reg "grid")))
         let gridxv =
             (mkTypedArrayExpr
-                (Int (normalIntRec, ()))
+                (Int (normalRec, ()))
                 (Some 320)
                 (AIdx (gridv, siVar "x")))
 

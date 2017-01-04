@@ -255,8 +255,8 @@ module Tests =
         module TestLowerGuards =
             let protos =
                 FuncDefiner.ofSeq
-                    [ (dfunc "f" [Bool (normalBoolRec, "x")], { IsIterated = true; IsAnonymous = false })
-                      (dfunc "g" [Bool (normalBoolRec, "x")], { IsIterated = false; IsAnonymous = false }) ]
+                    [ (dfunc "f" [Bool (normalRec, "x")], { IsIterated = true; IsAnonymous = false })
+                      (dfunc "g" [Bool (normalRec, "x")], { IsIterated = false; IsAnonymous = false }) ]
 
             [<Test>]
             let ``Drop iterated subview down to non-iterated subview`` ()=

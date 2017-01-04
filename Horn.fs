@@ -279,7 +279,7 @@ let checkArith
             (* Need to convert this expression into an Expr<Var> for the
                error message, which is somewhat painful and can itself fail! *)
             // TODO(CaptainHayashi): subtypes?
-            let xExpr = Expr.Int (normalIntRec, x)
+            let xExpr = Expr.Int (normalRec, x)
             let xVarExprR =
                 liftWithoutContext
                     (toVar >> ok) (tliftOverCTyped >> tliftOverExpr)
@@ -332,7 +332,7 @@ let boolExpr
                 liftWithoutContext (toVar >> ok)
                     (tliftOverCTyped >> tliftOverExpr)
                 >> mapMessages Traversal
-            bind (UnsupportedExpr >> fail) (everythingToVar (Bool (normalBoolRec, x)))
+            bind (UnsupportedExpr >> fail) (everythingToVar (Bool (normalRec, x)))
     be
 
 (*

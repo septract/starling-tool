@@ -397,7 +397,7 @@ module Iter =
             |> lift
                 (function
                  // TODO(CaptainHayashi): assuming n here is silly
-                 | true -> func dfunc.Name (withDefault (Int (normalIntRec, "n")) it :: dfunc.Params)
+                 | true -> func dfunc.Name (withDefault (Int (normalRec, "n")) it :: dfunc.Params)
                  | false -> dfunc)
 
     /// <summary>
@@ -417,7 +417,7 @@ module Iter =
                 (function
                  | Some k -> [ for i in 1L .. k -> vfunc ]
                  | None ->
-                    [ func vfunc.Name (Int (normalIntRec, it) :: vfunc.Params) ])
+                    [ func vfunc.Name (Int (normalRec, it) :: vfunc.Params) ])
 
     /// flattens an entire IteratedSubview into a flat GView
     let lowerIteratedSubview

@@ -24,8 +24,8 @@ module Tests =
     /// </summary>
     let svars : VarMap =
         returnOrFail <| VarMap.ofTypedVarSeq
-            [ TypedVar.Int (normalIntRec, "serving")
-              TypedVar.Int (normalIntRec, "ticket") ]
+            [ TypedVar.Int (normalRec, "serving")
+              TypedVar.Int (normalRec, "ticket") ]
 
     /// <summary>
     ///     The globals environment as a typed variable sequence.
@@ -69,13 +69,13 @@ module Tests =
         let ``Convert non-iterated DView to defining func`` () =
             assertEqual
                 (dfunc "v_holdLock_holdTick"
-                    [ TypedVar.Int (normalIntRec, "serving")
-                      TypedVar.Int (normalIntRec, "ticket")
-                      TypedVar.Int (normalIntRec, "t") ] )
+                    [ TypedVar.Int (normalRec, "serving")
+                      TypedVar.Int (normalRec, "ticket")
+                      TypedVar.Int (normalRec, "t") ] )
                 (flattenDView
                     svarSeq
                     [ iterated (dfunc "holdLock" []) None
-                      iterated (dfunc "holdTick" [ TypedVar.Int (normalIntRec, "t") ]) None ])
+                      iterated (dfunc "holdTick" [ TypedVar.Int (normalRec, "t") ]) None ])
 
         // TODO(CaptainHayashi): iterated DView tests
         //   (that, or move the iterator lowering to IterLower where it belongs)

@@ -174,9 +174,18 @@ module Pretty =
         | Starling stvar -> printMarkedVarGrass stvar
         | Shadow shvar -> printShadowVar shvar
 
-    let printTypedGrass (pVar : 'Var -> Doc) (var : CTyped<'Var>) : Doc = 
+    /// <summary>
+    ///     Pretty-prints a type using Grasshopper's type names.
+    /// </summary>
+    let rec printType (ty : Type) : Doc =
+        match ty with
+        | AnIntR { PrimSubtype = Normal } -> String "Int"
+        | ABoolR { PrimSubtype = Normal } -> String "Bool"
         // TODO(CaptainHayashi): is printType correct?
-        colonSep [ pVar (valueOf var); Starling.Core.TypeSystem.Pretty.printType (typeOf var)]
+        | x -> Starling.Core.TypeSystem.Pretty.printType x
+
+    let printTypedGrass (pVar : 'Var -> Doc) (var : CTyped<'Var>) : Doc = 
+        colonSep [ pVar (valueOf var); printType (typeOf var)]
 
     /// Prints a typed Var 
     let printTypedVarGrass (v : TypedVar) : Doc = 
