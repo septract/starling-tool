@@ -158,15 +158,15 @@ ensures
     exists X:Set<Entry> :: (
         acc(X) &*&
         (
-            (phiUB(X, before_head, before_tail))
+            (isSetG(X, before_head, before_tail, before_lb, before_ub))
         )
     )
 {
     var e : Entry;
                                         e := new Entry;
-                                        pure assert (!Btwn(next, before_curr, e, e));
-                                        e.key := before_102_1_key;
+                                        pure assume (!Btwn(next, before_curr, e, e));
                                         pure assume (!Btwn(next, e, before_tail, before_tail));
+                                        e.key := before_102_1_key;
                                         e.next := before_curr;
                                         e.marked := false;
                                         before_pred.next := e ;

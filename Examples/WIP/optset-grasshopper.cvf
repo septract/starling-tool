@@ -147,8 +147,9 @@ method add(int key) {
                                 // apparently required.
                                 <%{ var e : Entry;
                                     e := new Entry;
-                                    e.key := #1;
+                                    pure assume (!Btwn(next, before_curr, e, e));
                                     pure assume (!Btwn(next, e, before_tail, before_tail));
+                                    e.key := #1;
                                     e.next := #2;
                                     e.marked := false;
                                     #3.next := e }(key, curr, pred)[]>;
