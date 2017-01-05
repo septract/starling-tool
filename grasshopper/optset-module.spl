@@ -3,6 +3,7 @@
    DOI: 10.1007/11795490_3 */
 
 struct Entry {
+	var fresh : Bool;
 	var key : Int;
 	var next : Entry;
 	var marked : Bool;
@@ -15,13 +16,13 @@ struct Entry {
 
 // k was in the optimistic set at some point, or still is.
 predicate existsG(X : Set<Entry>, k : Int) {
-	exists e : Entry :: e in X && e.key == k
+	exists e : Entry :: e in X && !e.fresh && e.key == k
 }
 
 // k was in the optimistic set at some point, but has been removed at least
 // once.
 predicate removedG(X : Set<Entry>, k : Int) {
-	exists e : Entry :: e in X && e.key == k && e.marked == true
+	exists e : Entry :: e in X && !e.fresh && e.key == k && e.marked
 }
 
 /*
@@ -47,20 +48,23 @@ procedure releaseLock(x: Entry)
 }
 
 predicate entryLocked(x : Entry) {
-	x.lock == true
+	!x.fresh && x.lock == true
 }
 
 predicate entryUnlocked(x : Entry) {
-	x.lock == false
+	!x.fresh && x.lock == false
 }
 
-predicate lockedAndValidatedG(x : Entry, y : Entry) {
+predicate lockedAndValidatedG(head : Entry, x : Entry, y : Entry) {
 	x.next == y 
 	&& x.key < y.key
-	&& x.marked == false
-	&& y.marked == false
-	&& x.lock == true
-	&& y.lock == true
+	&& !x.marked
+	&& !y.marked
+	&& Btwn(next, head, x, x)
+	&& x.lock
+	&& y.lock
+	&& !x.fresh
+	&& !y.fresh
 }
 
 /*
@@ -83,13 +87,13 @@ function validate(pred : Entry, curr : Entry)
 // H has a non-null value (ie. the head value exists)
 predicate phiH(X : Set<Entry>, head : Entry)
   requires acc(X) {
-	head in X
+	head in X && !head.fresh
 }
 
 // T has a non-null value (ie. the tail value exists)
 predicate phiT(X : Set<Entry>, tail : Entry)
   requires acc(X) {
-	tail in X
+	tail in X && !tail.fresh
 }
 
 // The tail entry has no successor
@@ -101,33 +105,33 @@ predicate phiTnoNext(X : Set<Entry>, tail : Entry)
 // Every entry other than the tail entry has a successor
 predicate phiNext(X : Set<Entry>, tail : Entry)
   requires acc(X) {
-	forall z : Entry :: (z in X && z != tail) ==>
-		(exists n : Entry :: n in X && z != n && z.next == n)
+	forall z : Entry :: ((z in X && z != tail && !z.fresh) ==>
+		(exists n : Entry :: n in X && z != n && !n.fresh && z.next == n))
 }
 
 // The key of the tail entry is the upper bound
 predicate phiU(X : Set<Entry>, tail : Entry, ub : Int)
   requires acc(X) {
-	tail in X ==> tail.key == ub
+	tail.key == ub
 }
 
 // The key of the head entry is the lower bound
 predicate phiL(X : Set<Entry>, head : Entry, lb : Int)
   requires acc(X) {
-	head in X ==> head.key == lb
+	head.key == lb
 }
 
 // The key of every entry is smaller than the key of its successor
 predicate phiLess(X : Set<Entry>)
   requires acc(X) {
-	forall z : Entry :: (z in X && z.next != null) ==>
+	forall z : Entry :: (z in X && !z.fresh && z.next != null) ==>
 		z.key < z.next.key
 }
 
 // The tail entry is reachable from some entry
 predicate phiRT_local(X : Set<Entry>, x : Entry, tail : Entry)
   requires acc(X) {
-	x in X ==> Btwn(next, x, tail, tail)
+	(x in X && !x.fresh) ==> Btwn(next, x, tail, tail)
 }
 
 // The tail entry is reachable from every entry
@@ -140,18 +144,19 @@ predicate phiRT(X : Set<Entry>, tail : Entry)
 predicate phiAC(X : Set<Entry>)
   requires acc(X) {
 	forall x : Entry ::
-		(x in X && (exists y : Entry :: y in X && x.next == y)) ==>
-		(x != x.next && (!Btwn(next, x.next, x, x)))
+		(x in X && !x.fresh && (exists y : Entry :: y in X && x.next == y)) ==>
+		(x != x.next && !x.next.fresh && (!Btwn(next, x.next, x, x)))
 }
 
 predicate sortedList(X : Set<Entry>, x : Entry, y : Entry)
   requires acc(X) {
-	(x in X && y in X) ==>
+	(x in X && y in X && !x.fresh && !y.fresh) ==>
 	(forall z : Entry ::
 		(z in X
 		 && Btwn(next, x, z, y)
 		 && Btwn(next, z, y, y)
-		 && z != y)
+		 && z != y
+		 && !z.fresh)
 		==> z.key < z.next.key)
 }
 
@@ -159,7 +164,7 @@ predicate sortedList(X : Set<Entry>, x : Entry, y : Entry)
 predicate phiS(X : Set<Entry>)
   requires acc(X) {
 	forall x : Entry, y : Entry ::
-	((x in X) ==>
+	((x in X && !x.fresh) ==>
 	    (Btwn(next, x, y, y) ==> (x.key <= y.key &&
 	    ((x.key == y.key) ==> x == y))))
 }
@@ -167,25 +172,30 @@ predicate phiS(X : Set<Entry>)
 // If an entry is unmarked, it is a backbone node.
 predicate phiUB(X : Set<Entry>, head : Entry, tail : Entry)
   requires acc(X) {
-	(forall z : Entry :: (z in X && z != head && z != tail)
-		==> (z.marked == false ==> Btwn(next, head, z, z)))
+	(forall z : Entry :: (z in X && z != head && z != tail && !z.fresh && !z.marked)
+		==> Btwn(next, head, z, z))
 }
 
 predicate isSetG(X: Set<Entry>, head : Entry, tail : Entry, lb : Int, ub : Int)
   requires acc(X) {
-	lb < ub &&
-	head != tail &&
-	phiH(X, head) &&
-	phiT(X, tail) &&
-	phiTnoNext(X, tail) &&
-	phiNext(X, tail) &&
-	phiU(X, tail, ub) &&
-	phiL(X, head, lb) &&
-	phiLess(X) &&
-	phiRT(X, tail) &&
-	phiAC(X) &&
-	phiS(X) && 
-	phiUB(X, head, tail)
+        head in X
+	&& tail in X
+	&& head != tail
+	&& tail.next == null
+	&& !tail.fresh && !head.fresh
+	&& lb < ub
+	//&& head != tail
+	//&& phiH(X, head)
+	//&& phiT(X, tail)
+	//&& phiTnoNext(X, tail)
+	&& phiNext(X, tail)
+	&& phiU(X, tail, ub)
+	&& phiL(X, head, lb)
+	&& phiLess(X)
+	&& phiRT(X, tail)
+	&& phiAC(X)
+	&& phiS(X)
+	&& phiUB(X, head, tail)
 }
 
 /*
@@ -196,5 +206,5 @@ predicate isSetG(X: Set<Entry>, head : Entry, tail : Entry, lb : Int, ub : Int)
 // n is an exterior entry (and, as this is a view, it can never become backbone)
 predicate sigmaE(X : Set<Entry>, head : Entry, tail : Entry, n : Entry)
   requires acc(X) {
-        n in X && !(Btwn(next, head, n, tail))
+        n in X && !n.fresh && !(Btwn(next, head, n, tail))
 }

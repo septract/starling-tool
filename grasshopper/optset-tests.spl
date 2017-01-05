@@ -8,9 +8,10 @@ requires
     exists X:Set<Entry> :: (
         acc(X) &*&
         (
-            before_pred in X &&
-            before_curr in X &&
+            before_pred in X && !before_pred.fresh &&
+            before_curr in X && !before_curr.fresh &&
             before_pred.next == before_curr &&
+            !before_curr.next.fresh &&
             before_pred.key < before_curr.next.key &&
     phiS(X) &&
             (exists n : Entry :: n in X && before_curr != n && before_curr.next == n) &&
@@ -24,14 +25,13 @@ ensures
     exists X:Set<Entry> :: (
         acc(X) &*&
         (
-            forall z : Entry :: (z in X && z.next != null) ==> z.key < z.next.key
+            (forall z : Entry :: (z in X && !z.fresh && z.next != null) ==> z.key < z.next.key)
         )
     )
 {
     before_pred.next := before_curr.next ;
 }
 
-/*
 procedure phiS_stable()
   requires exists X : Set<Entry> :: acc(X) &*& phiS(X)
   ensures exists X : Set<Entry> :: acc(X) &*& phiS(X)
@@ -50,21 +50,6 @@ procedure phiRT_stable(tail : Entry)
 procedure phiAC_stable()
   requires exists X : Set<Entry> :: acc(X) &*& phiAC(X)
   ensures exists X : Set<Entry> :: acc(X) &*& phiAC(X)
-{}
-
-procedure globalShape_stable(tail : Entry)
-  requires exists X : Set<Entry> :: acc(X) &*& globalShape(X, tail)
-  ensures exists X : Set<Entry> :: acc(X) &*& globalShape(X, tail)
-{}
-
-procedure globalShape_S_stable(tail : Entry)
-  requires exists X : Set<Entry> :: acc(X) &*& (globalShape(X, tail) && phiS(X))
-  ensures exists X : Set<Entry> :: acc(X) &*& (globalShape(X, tail) && phiS(X))
-{}
-
-procedure globalShape_UB_stable(head : Entry, tail : Entry)
-  requires exists X : Set<Entry> :: acc(X) &*& (globalShape(X, tail) && phiUB(X, head, tail))
-  ensures exists X : Set<Entry> :: acc(X) &*& (globalShape(X, tail) && phiUB(X, head, tail))
 {}
 
 procedure S_UB_stable(head : Entry, tail : Entry)
@@ -92,6 +77,7 @@ procedure isSetG_stable(head : Entry, tail : Entry, lb : Int, ub : Int)
   ensures exists X : Set<Entry> :: acc(X) &*& isSetG(X, head, tail, lb, ub)
 {}
 
+/*
 // Grouping of smaller set global shape predicates.
 predicate globalRTSUB(X : Set<Entry>, head : Entry, tail : Entry)
   requires acc(X) {
@@ -129,45 +115,13 @@ procedure globalRTACS_stable(head : Entry, tail : Entry)
 {}
 */
 
-procedure add_C015_001 (
-    before_102_1_key: Int,
-    before_lb: Int,
-    before_ub: Int,
-    before_curr: Entry,
-    before_head: Entry,
-    before_pred: Entry,
-    before_tail: Entry
-)
-requires
-    exists X:Set<Entry> :: (
-        acc(X) &*&
-        (
-            ((isSetG(X, before_head, before_tail, before_lb, before_ub) ) &&
-                (before_pred.key < before_102_1_key && before_102_1_key < before_curr.key ) &&
-                (before_pred in X && before_curr in X && lockedAndValidatedG(before_pred, before_curr) ) &&
-                (before_pred.key < before_curr.next.key ) &&
-                (before_curr in X && before_curr != before_tail ) &&
-                (before_pred in X && before_pred != before_tail ) &&
-                (before_102_1_key < before_ub) &&
-                (before_lb < before_102_1_key))
+procedure existsG_stable(k : Int)
+  requires exists X : Set<Entry> :: acc(X) &*& existsG(X, k)
+  ensures exists X : Set<Entry> :: acc(X) &*& existsG(X, k)
+{}
 
-                && (before_pred == before_head || before_pred.marked == false)
-        )
-    )
-ensures
-    exists X:Set<Entry> :: (
-        acc(X) &*&
-        (
-            (isSetG(X, before_head, before_tail, before_lb, before_ub))
-        )
-    )
-{
-    var e : Entry;
-                                        e := new Entry;
-                                        pure assume (!Btwn(next, before_curr, e, e));
-                                        pure assume (!Btwn(next, e, before_tail, before_tail));
-                                        e.key := before_102_1_key;
-                                        e.next := before_curr;
-                                        e.marked := false;
-                                        before_pred.next := e ;
-}
+procedure removedG_stable(k : Int)
+  requires exists X : Set<Entry> :: acc(X) &*& removedG(X, k)
+  ensures exists X : Set<Entry> :: acc(X) &*& removedG(X, k)
+{}
+

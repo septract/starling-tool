@@ -58,10 +58,10 @@ module Types =
     /// <summary>A Grasshopper formula.</summary>
     type Formula =
         // TODO(CaptainHayashi): don't stringly type footprint.
-        | /// <summary>A formula with no footprint.</summary>
-          NoFootprint of body : BoolExpr<Sym<MarkedVar>>
-        | /// <summary>A formula with a footprint.</summary>
-          Footprint of name : string * sort : string * body : BoolExpr<Sym<MarkedVar>>
+        { /// <summary>A list of all footprint name-sort pairs.</summary>
+          Footprints : (string * string) list
+          /// <summary>The body of the formula.</summary>
+          Body : BoolExpr<Sym<MarkedVar>> }
 
     /// <summary>A Grasshopper term (procedure).</summary>
     type GrassTerm =
@@ -90,6 +90,10 @@ module Types =
           /// </summary>
           ExpressionNotImplemented of expr : Expr<Sym<MarkedVar>>
                                     * why : string
+        | /// <summary>
+          ///     The number of footprint names and sorts doesn't match up.
+          /// </summary>
+          FootprintMismatch
         | /// <summary>
           ///     Some traversal blew up.
           /// </summary>
@@ -129,6 +133,7 @@ module Pretty =
                 [ cmdHeaded (errorStr "Encountered an expression incompatible with Grasshopper")
                     [ printExpr (printSym printMarkedVar) expr ]
                   errorInfo (String "Reason:" <+> String why) ]
+        | FootprintMismatch -> errorStr "different number of footprint names and sorts"
         | Traversal err -> printTraversalError printError err
 
 
@@ -285,13 +290,20 @@ module Pretty =
 
         /// Print the requires / ensures clauses 
         let reprint expr = 
-            let pbool = printBoolExprG (printSymGrass printMarkedVarGrass)
-            match expr with
-            | NoFootprint b -> pbool b
-            | Footprint (name, sort, b) ->
-                let acc = String "acc" <-> parened (String name) <+> String "&*&"
-                String "exists" <+> String name <-> String ":" <-> String sort <+> String "::"
-                <+> parened (ivsep [acc ; parened (ivsep [ pbool b ] ) ] )
+            let body = printBoolExprG (printSymGrass printMarkedVarGrass) expr.Body
+            match expr.Footprints with
+            | [] -> body
+            | fps ->
+                let accs = List.map (fst >> String >> parened >> hsep2 Nop (String "acc")) fps
+                let acc = HSep (accs, String " &*& ")
+
+                let pdecl (name, sort) = String name <-> String ":" <-> String sort
+                let decls = List.map pdecl fps
+                let decl = commaSep decls
+
+                let inner = parened (ivsep [acc <+> String "&*&" ; parened (ivsep [ body ] ) ] )
+
+                String "exists" <+> decl <+> String "::" <+> inner
         let reqprint = reprint term.Requires
         let ensprint = reprint term.Ensures
 
@@ -501,14 +513,19 @@ let grassFrame
 ///     A Chessie result, containing the converted term on success.
 /// </returns>
 let grassTerm
-  (footprint : string option)
-  (footprintSort : string)
+  (footprintNames : string list)
+  (footprintSorts : string list)
   (term : Backends.Z3.Types.ZTerm) : Result<GrassTerm, Error> =
-    let addFootprint =
-        maybe NoFootprint (fun f b -> Footprint (f, footprintSort, b)) footprint
+    let footprintsR =
+        if footprintNames.Length <> footprintSorts.Length
+        then fail FootprintMismatch
+        else ok (List.zip footprintNames footprintSorts)
 
-    let requiresR = ok (addFootprint term.SymBool.WPre)
-    let ensuresR = ok (addFootprint term.SymBool.Goal)
+    let addFootprint b fs =
+        { Footprints = fs; Body = b }
+
+    let requiresR = lift (addFootprint term.SymBool.WPre) footprintsR
+    let ensuresR = lift (addFootprint term.SymBool.Goal) footprintsR
     let commandsR = grassMicrocode term.Original.Cmd.Microcode
     let varsR = findVars term
     let frameR =
@@ -540,19 +557,16 @@ let grassModel (model : Backends.Z3.Types.ZModel) : Result<GrassModel,Error> =
 
     // Pick out some necessary pragmata.
     // TODO(CaptainHayashi): make these not necessary, somehow.
-    let footprint =
-        List.tryPick
+    let footprintNames =
+        List.choose
             (fun (x, y) -> if x = "grasshopper_footprint" then Some y else None)
             model.Pragmata
-    let footprintSort' =
-        List.tryPick
+    let footprintSorts =
+        List.choose
             (fun (x, y) -> if x = "grasshopper_footprint_sort" then Some y else None)
             model.Pragmata
-    // TODO(CaptainHayashi): clean this up...
-    let footprintSort = withDefault "Set<Node>" footprintSort'
 
-
-    let grassTermPair (name, term) = lift (mkPair name) (grassTerm footprint footprintSort term)
+    let grassTermPair (name, term) = lift (mkPair name) (grassTerm footprintNames footprintSorts term)
     let grassTermPairsR = collect (Seq.map grassTermPair failSeq)
 
     let grassTermsR = lift Map.ofSeq grassTermPairsR

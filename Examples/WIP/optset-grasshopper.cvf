@@ -1,6 +1,6 @@
 pragma grasshopper_include {./grasshopper/optset-module.spl};
 pragma grasshopper_footprint {X};
-pragma grasshopper_footprint_sort {Set<Entry>};
+pragma grasshopper_footprint_sort {Set<Entry>}; // X
 
 typedef int Entry;
 
@@ -99,82 +99,79 @@ method remove(int key) {
     {| if present == true then removed(key) else emp |}
 }
 
-method add(int key) {
-    {| wf(key) |}
+method add(Entry e, int key) {
+    {| fresh(e, key) |}
         // This proceeds exactly as remove, until we validate.
         do {
-            {| wf(key) |}
+            {| fresh(e, key) |}
                 <pred = head>;
-            {| wf(key) * isHead(pred) |}
+            {| fresh(e, key) * isHead(pred) |}
                 curr = %{ #1.next }(pred);
-            {| wf(key) * isHead(pred) * isEntryOrTail(curr) |}
+            {| fresh(e, key) * isHead(pred) * isEntryOrTail(curr) |}
                 ckey = %{ #1.key }(curr);
-            {| wf(key) * isHead(pred) * isEntryOrTail(curr)
+            {| fresh(e, key) * isHead(pred) * isEntryOrTail(curr)
                * keyIs(ckey, curr)
             |}
                 while (ckey < key) {
-                    {| wf(key) * isEntry(curr) |}
+                    {| fresh(e, key) * isEntry(curr) |}
                         pred = curr;
-                    {| wf(key) * isEntry(pred) * isEntry(curr) |}
+                    {| fresh(e, key) * isEntry(pred) * isEntry(curr) |}
                         curr = %{ #1.next }(pred);
-                    {| wf(key) * isEntry(pred)
+                    {| fresh(e, key) * isEntry(pred)
                        * isEntryOrTail(curr) // See above.
                     |}
                         ckey = %{ #1.key }(curr);
-                    {| wf(key) * isEntry(pred) * isEntryOrTail(curr)
+                    {| fresh(e, key) * isEntry(pred) * isEntryOrTail(curr)
                        * keyIs(ckey, curr)  // See above.
                     |}
                 }
-            {| wf(key) * isEntry(pred) * isEntryOrTail(curr) * keyIs(ckey, curr) |}
+            {| fresh(e, key) * isEntry(pred) * isEntryOrTail(curr) * keyIs(ckey, curr) |}
                 <%{ waitLock(#1); takeLock(#1) }(pred)[]>;
-            {| wf(key) * hasLock(pred) * isEntryOrTail(curr) * keyIs(ckey, curr) |}
+            {| fresh(e, key) * hasLock(pred) * isEntryOrTail(curr) * keyIs(ckey, curr) |}
                 <%{ waitLock(#1); takeLock(#1) }(curr)[]>;
-            {| wf(key) * hasLock(pred) * hasLock(curr) * keyIs(ckey, curr) |}
+            {| fresh(e, key) * hasLock(pred) * hasLock(curr) * keyIs(ckey, curr) |}
                 if (%{ validate(#1, #2) == true }(pred, curr)) {
-                    {| wf(key) * lockedAndValidated(pred, curr) * keyIs(ckey, curr) |}
+                    {| fresh(e, key) * lockedAndValidated(pred, curr) * keyIs(ckey, curr) |}
                         if (ckey == key) {
-                            {| wf(key) * lockedAndValidated(pred, curr) * exists(key) |}
+                            {| fresh(e, key) * lockedAndValidated(pred, curr) * exists(key) |}
                                 // Already exists
                                 present = true;
                                 done = true;
-                            {| wf(key) * hasLock(pred) * hasLock(curr) * if done then exists(key) else emp |}
+                            {| fresh(e, key) * hasLock(pred) * hasLock(curr) * if done then exists(key) else emp |}
                         } else {
-                            {| wf(key) * isEntry(curr) * lockedAndValidated(pred, curr)
-                               * between(pred, key, curr)
+                            {| fresh(e, key) * isEntry(curr) * lockedAndValidated(pred, curr)
+                               * less(pred, e) * less(e, curr)
                             |}
-                                // TODO: the pure assume here is bonkers--
-                                // it should be a tautology--but it's
-                                // apparently required.
-                                <%{ var e : Entry;
-                                    e := new Entry;
-                                    pure assume (!Btwn(next, before_curr, e, e));
-                                    pure assume (!Btwn(next, e, before_tail, before_tail));
-                                    e.key := #1;
-                                    e.next := #2;
-                                    e.marked := false;
-                                    #3.next := e }(key, curr, pred)[]>;
-                            {| wf(key) * hasLock(pred) * hasLock(curr) * exists(key) |}
+                                <%{ #1.next := #2;
+                                    #1.marked := false;
+                                    #1.fresh := false;
+                                    #3.next := #1 }(e, curr, pred)[]>;
+                            {| hasLock(pred) * hasLock(curr) * exists(key) |}
                                 present = false;
                                 done = true;
-                            {| wf(key) * hasLock(pred) * hasLock(curr) * if done then exists(key) else emp |}
+                            {| hasLock(pred) * hasLock(curr) * if done then exists(key) else emp |}
                         }
-                    {| wf(key) * hasLock(pred) * hasLock(curr) * if done then exists(key) else emp |}
+                    {| hasLock(pred) * hasLock(curr) * if done then exists(key) else emp |}
                 } else {
-                    {| wf(key) * hasLock(pred) * hasLock(curr) |}
+                    {| hasLock(pred) * hasLock(curr) |}
                         // We shouldn't need to do this...?
                         present = false;
                         done = false;
-                    {| wf(key) * hasLock(pred) * hasLock(curr) * if done then exists(key) else emp |}
+                    {| hasLock(pred) * hasLock(curr) * if done then exists(key) else emp |}
                 }
-            {| wf(key) * hasLock(pred) * hasLock(curr) * if done then exists(key) else emp |}
+            {| hasLock(pred) * hasLock(curr) * if done then exists(key) else emp |}
                 <%{ releaseLock(#1) }(curr)[]>;
-            {| wf(key) * hasLock(pred) * if done then exists(key) else emp |}
+            {| hasLock(pred) * if done then exists(key) else emp |}
                 <%{ releaseLock(#1) }(pred)[]>;
-            {| wf(key) * if done then exists(key) else emp |}
+            {| if done then exists(key) else emp |}
         } while (!done);
-    {| wf(key) * exists(key) |}
-
+    {| exists(key) |}
 }
+
+view fresh(Entry e, int key);
+constraint fresh(e, key) ->
+    lb < key && key < ub && %{#1 in X && #1.key == #2 && #1.fresh}(e, key);
+constraint fresh(e1, k1) * fresh(e2, k2) -> e1 != e2;
 
 view exists(int key);
 constraint exists(key) -> %{ existsG(X, #1) }(key);
@@ -191,27 +188,27 @@ constraint isHead(h) -> h == head;
 // This view encodes sigmaT.
 constraint isTail(t) -> t == tail;
 
-constraint isEntry(e) -> %{ #1 in X && #1 != #2 }(e, tail);
-constraint isEntryOrTail(e) -> %{ #1 in X }(e);
+constraint isEntry(e) -> %{ #1 in X && #1 != #2 && !#1.fresh }(e, tail);
+constraint isEntryOrTail(e) -> %{ #1 in X && !#1.fresh }(e);
+
+view nonfresh(Entry k);
+constraint nonfresh(k) -> %{ !#1.fresh }(k);
 
 // This view encodes sigmaK.
 constraint keyIs(k, n) -> %{ #1 in X ==> #1.key == #2 }(n, k);
 
 // This view encodes sigmaM.
-constraint isMarked(n) -> %{ #1 in X ==> #1.marked == true }(n);
+constraint nonfresh(k) * isMarked(n) -> (k == n => %{ #1 in X ==> #1.marked }(n));
 
 // This view encodes sigmaE.
 constraint isExterior(n) -> %{ sigmaE(X, #1, #2, #3) }(head, tail, n);
 
 constraint less(x, y) -> %{ #1.key < #2.key }(x, y);
 
-view between(Entry x, int k, Entry y);
-constraint between(x, k, y) -> %{ #1.key < #2 && #2 < #3.key }(x, k, y);
-
 constraint removed(k) -> %{ removedG(X, #1) }(k);
 
 constraint hasLock(a)       ->  %{ #1 in X && entryLocked(#1) }(a);
-constraint lockedAndValidated(a, b) -> %{ #1 in X && #2 in X && lockedAndValidatedG(#1, #2) }(a, b);
+constraint lockedAndValidated(a, b) -> %{ #1 in X && #2 in X && lockedAndValidatedG(#3, #1, #2) }(a, b, head);
 
 
 constraint lockedAndValidated(a, b) * isEntry(c) -> (b == c) => %{ #1.key < #2.next.key }(a, b);
