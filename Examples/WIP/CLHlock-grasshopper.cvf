@@ -4,52 +4,59 @@ pragma grasshopper_include {./grasshopper/CLHlock-module.spl};
 pragma grasshopper_footprint {Foot};
 pragma grasshopper_footprint_sort {Set<Node>};
 
-shared int heap;
 shared Node head, tail;
 
 thread Node mynode, mypred;
 thread bool test;  // Used when trying to take the lock.
 
-view isNode(Node x);
+view isMyNode(Node x);
 view isActive(Node x);
+view loose(Node x);
+view queued(Node x);
 view holdLock(Node x);
 
 method lock(Node mynode) {
-  {| isNode(mynode) |}
-    < %{ #1.lock := true }(mynode)[heap] >;
-  {| isActive(mynode) |}
+  {| isMyNode(mynode) * loose(mynode) |}
+    < %{ #1.lock := true }(mynode)[] >;
+  {| isMyNode(mynode) * isActive(mynode) * loose(mynode) |}
     <{ mypred = tail;
        tail = mynode;
-       %{#1.pred := #2}(mynode, mypred)[heap]; }>;  // Ghost code
-  {| isActive(mynode) * isNode(mypred) |}
+       %{#1.pred := #2}(tail, mypred)[]; }>;  // Ghost code
+  {| isMyNode(mynode) * isActive(mynode) * queued(mypred) |}
     do {
-      {| isActive(mynode) * isNode(mypred) |}
+      {| isMyNode(mynode) * isActive(mynode) * queued(mypred) |}
         test = %{ #1.lock }(mypred);
-      {| if !test
-         then holdLock(mynode) * isNode(mypred)
-         else isActive(mynode) * isNode(mypred) |}
+      {| isMyNode(mynode)
+         * if !test
+         then holdLock(mynode) * queued(mypred)
+         else isActive(mynode) * queued(mypred) |}
     } while (!test);
-  {| holdLock(mynode) * isNode(mypred) |}
+  {| isMyNode(mynode) * holdLock(mynode) * queued(mypred) |}
     <head = mynode>;                                // Ghost code
-  {| holdLock(mynode) * isNode(mypred) |}
+  {| isMyNode(mynode) * holdLock(mynode) * queued(mypred) |}
 }
 
 method unlock(Node mynode, Node mypred) {
-  {| holdLock(mynode) * isNode(mypred) |}
-    < %{ #1.lock := false }(mynode)[heap] >;
-  {| isNode(mypred) |}
+  {| holdLock(mynode) * queued(mypred) |}
+    < %{ #1.lock := false }(mynode)[] >;
+  {| queued(mypred) |}
     mynode = mypred;
-  {| isNode(mynode) |}
+  {| isMyNode(mynode) |}
 }
 
 constraint emp -> %{ CLHfoot(Foot, #1, #2) }(head, tail);
 
-constraint isNode(a) -> %{ #1 in Foot && #1 != #2 }(a, tail);
+constraint isMyNode(a) -> %{ #1 in Foot }(a);
+constraint isMyNode(a) * isMyNode(b) -> a != b;
 
-constraint isActive(a) -> %{ #1 in Foot && #1.lock == true }(a);
+constraint queued(a) -> %{ #1 in Foot && Btwn(pred, #3, #1, #2) }(a, head, tail);
 
-constraint holdLock(a) -> %{ #1 in Foot && #1.lock == true }(a);
+// Loose means the node is either the head of the queue, or unlinked from it.
+constraint isMyNode(a) * loose(b) -> a == b => %{ #1 in Foot && (#1 == #2 || (#1.pred == null && (forall x : Node :: x in Foot ==> x.pred != #1))) }(a, head, tail);
 
-constraint isNode(a) * isNode(b)     -> (a == b) => false;
+constraint isActive(a) -> %{ #1 in Foot && #1.lock == true }(a, head);
+
+constraint holdLock(a) -> %{ #1 in Foot && #1.lock == true && #1.pred != null && #1.pred.lock == false }(a);
+
 constraint holdLock(a) * holdLock(b) -> false;
 
