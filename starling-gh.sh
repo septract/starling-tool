@@ -13,7 +13,7 @@ then
 	exit 1
 fi
 
-tempfile=grass.tmp
+tempfile=grass.tmp.spl
 
 rm $tempfile
 
