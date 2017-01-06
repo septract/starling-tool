@@ -16,9 +16,9 @@ view queued(Node x);
 view holdLock(Node x);
 
 method lock(Node mynode) {
-  {| isMyNode(mynode) * loose(mynode) |}
+  {| loose(mynode) |}
     < %{ #1.lock := true }(mynode)[] >;
-  {| isMyNode(mynode) * isActive(mynode) * loose(mynode) |}
+  {| isActive(mynode) * loose(mynode) |}
     <{ mypred = tail;
        tail = mynode;
        %{#1.pred := #2}(tail, mypred)[]; }>;  // Ghost code
@@ -26,19 +26,18 @@ method lock(Node mynode) {
     do {
       {| isMyNode(mynode) * isActive(mynode) * queued(mypred) |}
         test = %{ #1.lock }(mypred);
-      {| isMyNode(mynode)
-         * if !test
-         then holdLock(mynode) * queued(mypred)
-         else isActive(mynode) * queued(mypred) |}
-    } while (!test);
-  {| isMyNode(mynode) * holdLock(mynode) * queued(mypred) |}
-    <head = mynode>;                                // Ghost code
+      {| isMyNode(mynode) * queued(mypred)
+         * if !test then holdLock(mynode) else isActive(mynode) |}
+    } while (test);
   {| isMyNode(mynode) * holdLock(mynode) * queued(mypred) |}
 }
 
 method unlock(Node mynode, Node mypred) {
-  {| holdLock(mynode) * queued(mypred) |}
-    < %{ #1.lock := false }(mynode)[] >;
+  {| isMyNode(mynode) * holdLock(mynode) * queued(mypred) |}
+    <{ %{ #1.lock := false }(mynode)[];
+       %{ #1.pred := null }(mynode)[]; // ghost code
+       head = mynode;
+       }>; // ghost code
   {| queued(mypred) |}
     mynode = mypred;
   {| isMyNode(mynode) |}
@@ -49,14 +48,16 @@ constraint emp -> %{ CLHfoot(Foot, #1, #2) }(head, tail);
 constraint isMyNode(a) -> %{ #1 in Foot }(a);
 constraint isMyNode(a) * isMyNode(b) -> a != b;
 
-constraint queued(a) -> %{ #1 in Foot && Btwn(pred, #3, #1, #2) }(a, head, tail);
+constraint queued(a) -> %{ #1 in Foot && #1 != #2 && Btwn(pred, #3, #1, #2) }(a, head, tail);
 
-// Loose means the node is either the head of the queue, or unlinked from it.
-constraint isMyNode(a) * loose(b) -> a == b => %{ #1 in Foot && (#1 == #2 || (#1.pred == null && (forall x : Node :: x in Foot ==> x.pred != #1))) }(a, head, tail);
+// Loose means the node is unlinked from the queue.
+constraint loose(a) -> %{ #1 in Foot && #1 != #2 && #1 != #3 && #1.pred == null && (forall x : Node :: x in Foot ==> !Reach(pred, x, #1)) }(a, tail, head);
+constraint loose(a) * loose(b) -> a != b;
+constraint loose(a) * isMyNode(b) -> a != b;
 
-constraint isActive(a) -> %{ #1 in Foot && #1.lock == true }(a, head);
+constraint isActive(a) -> %{ #1 in Foot && #1.lock == true }(a);
 
-constraint holdLock(a) -> %{ #1 in Foot && #1.lock == true && #1.pred != null && #1.pred.lock == false }(a);
+constraint holdLock(a) -> %{ #1 in Foot && #1.lock == true && #1.pred != null && #1.pred.lock == false && #1.pred == #2 }(a, head);
 
 constraint holdLock(a) * holdLock(b) -> false;
 

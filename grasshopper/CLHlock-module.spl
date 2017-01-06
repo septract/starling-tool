@@ -9,16 +9,14 @@ predicate CLHfoot(Foot: Set<Node>, head: Node, tail: Node)
   requires acc(Foot)
 { 
   exists Queue : Set<Node> :: ( 
-    Queue = { z : Node :: z in Foot && Btwn(pred,tail,z,head) } 
+    Queue = { z : Node :: z in Foot && z != head && Btwn(pred,tail,z,head) } 
     &&
-    tail in Foot
+    Btwn(pred, tail, head, head)
     &&
     head in Foot
     &&
-    Reach(pred, tail, head)
-    &&
     (forall x : Node :: (x in Queue && x != head) ==> x.lock)
     &&
-    (forall x : Node :: (x.lock && x != head && x.pred != null) ==> x in Queue)
+    (forall x : Node :: (x.lock && x.pred != null) ==> x in Queue)
   ) 
 } 
