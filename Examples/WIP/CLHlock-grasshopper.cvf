@@ -1,57 +1,55 @@
-typedef int Int;
 typedef int Node;
-typedef bool Bool;
 
 pragma grasshopper_include {./grasshopper/CLHlock-module.spl};
 pragma grasshopper_footprint {Foot};
 pragma grasshopper_footprint_sort {Set<Node>};
 
-shared Int heap;
-shared Node head, tail; 
+shared int heap;
+shared Node head, tail;
 
 thread Node mynode, mypred;
-thread Bool test;  // Used when trying to take the lock.
+thread bool test;  // Used when trying to take the lock.
 
-view isNode(Node x); 
-view isActive(Node x); 
-view holdLock(Node x); 
+view isNode(Node x);
+view isActive(Node x);
+view holdLock(Node x);
 
-method lock(Node mynode) { 
-  {| isNode(mynode) |}  
-    < %{ #1.lock := true }(mynode)[heap] >;  
-  {| isActive(mynode) |}  
-    <{ mypred = tail; 
-       tail = mynode; 
+method lock(Node mynode) {
+  {| isNode(mynode) |}
+    < %{ #1.lock := true }(mynode)[heap] >;
+  {| isActive(mynode) |}
+    <{ mypred = tail;
+       tail = mynode;
        %{#1.pred := #2}(mynode, mypred)[heap]; }>;  // Ghost code
-  {| isActive(mynode) * isNode(mypred) |}  
-    do { 
-      {| isActive(mynode) * isNode(mypred) |}  
-        test = %{ #1.lock }(mypred); 
-      {| if test == false 
-         then holdLock(mynode) * isNode(mypred) 
-         else isActive(mynode) * isNode(mypred) |} 
-    } while (test == false); 
-  {| holdLock(mynode) * isNode(mypred) |} 
+  {| isActive(mynode) * isNode(mypred) |}
+    do {
+      {| isActive(mynode) * isNode(mypred) |}
+        test = %{ #1.lock }(mypred);
+      {| if !test
+         then holdLock(mynode) * isNode(mypred)
+         else isActive(mynode) * isNode(mypred) |}
+    } while (!test);
+  {| holdLock(mynode) * isNode(mypred) |}
     <head = mynode>;                                // Ghost code
-  {| holdLock(mynode) * isNode(mypred) |} 
-} 
+  {| holdLock(mynode) * isNode(mypred) |}
+}
 
-method unlock(Node mynode, Node mypred) { 
-  {| holdLock(mynode) * isNode(mypred) |} 
-    < %{ #1.lock := false }(mynode)[heap] >; 
-  {| isNode(mypred) |} 
-    mynode = mypred; 
-  {| isNode(mynode) |} 
-} 
+method unlock(Node mynode, Node mypred) {
+  {| holdLock(mynode) * isNode(mypred) |}
+    < %{ #1.lock := false }(mynode)[heap] >;
+  {| isNode(mypred) |}
+    mynode = mypred;
+  {| isNode(mynode) |}
+}
 
-constraint emp -> %{ CLHfoot(Foot, #1, #2) }(head, tail); 
+constraint emp -> %{ CLHfoot(Foot, #1, #2) }(head, tail);
 
-constraint isNode(a) -> %{ #1 in Foot && #1 != #2 }(a, tail); 
+constraint isNode(a) -> %{ #1 in Foot && #1 != #2 }(a, tail);
 
-constraint isActive(a) -> %{ #1 in Foot && #1.lock == true }(a); 
+constraint isActive(a) -> %{ #1 in Foot && #1.lock == true }(a);
 
-constraint holdLock(a) -> %{ #1 in Foot && #1.lock == true }(a); 
+constraint holdLock(a) -> %{ #1 in Foot && #1.lock == true }(a);
 
-constraint isNode(a) * isNode(b)     -> (a == b) => false; 
-constraint holdLock(a) * holdLock(b) -> false; 
+constraint isNode(a) * isNode(b)     -> (a == b) => false;
+constraint holdLock(a) * holdLock(b) -> false;
 
