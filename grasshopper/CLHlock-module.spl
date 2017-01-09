@@ -15,8 +15,34 @@ predicate CLHfoot(Foot: Set<Node>, head: Node, tail: Node)
     &&
     head in Foot
     &&
-    (forall x : Node :: (x in Queue && x != head) ==> x.lock)
+    !head.lock
     &&
-    (forall x : Node :: (x.lock && x.pred != null) ==> x in Queue)
+    (forall x : Node :: x in Queue ==> x.lock)
+    &&
+    (forall x : Node :: (x in Foot && x.lock && x.pred != null) ==> x in Queue)
+    &&
+    (forall x : Node :: (x in Foot && !x.lock) ==> x.pred == null)
+    &&
+    (forall x : Node :: (x in Foot && x.pred != null && !x.pred.lock) ==> x.pred == head)
   ) 
 } 
+
+predicate looseG(Foot : Set<Node>, a : Node, head : Node, tail : Node)
+requires acc(Foot)
+{
+    a in Foot
+    && a != tail
+    && a != head
+    && !a.lock
+    && a.pred == null
+}
+
+predicate queuedG(Foot : Set<Node>, a : Node, head : Node, tail : Node, ap : Node)
+requires acc(Foot)
+{
+    a in Foot
+    && a.pred == ap
+    && Btwn(pred, tail, a, head)
+    && ap in Foot
+    && a != ap
+}
