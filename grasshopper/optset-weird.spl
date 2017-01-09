@@ -1,0 +1,31 @@
+struct Entry {
+	var next : Entry;
+}
+
+predicate globalShape(X : Set<Entry>, head : Entry, tail : Entry)
+  requires acc(X) {
+	(forall x : Entry :: (true && (x in X ==> x != x.next)))
+}
+
+predicate global(X : Set<Entry>, head : Entry, tail : Entry)
+  requires acc(X) {
+        globalShape(X, head, tail) &&
+	(forall z : Entry :: true)
+}
+
+procedure global_stable(head : Entry, tail : Entry)
+  requires exists X : Set<Entry> :: acc(X) &*& global(X, head, tail)
+  ensures exists X : Set<Entry> :: acc(X) &*& global(X, head, tail)
+{}
+
+predicate global2(X : Set<Entry>, head : Entry, tail : Entry)
+  requires acc(X) {
+	(forall x : Entry :: (true && (x in X ==> x != x.next))) &&
+	(forall z : Entry :: true)
+}
+
+procedure global2_stable(head : Entry, tail : Entry)
+  requires exists X : Set<Entry> :: acc(X) &*& global2(X, head, tail)
+  ensures exists X : Set<Entry> :: acc(X) &*& global2(X, head, tail)
+{}
+
