@@ -53,13 +53,11 @@ constraint loose(a) * loose(b) -> a != b;
 
 constraint active(a) -> %{ looseG(Foot, #1, #2, #3) && #1.lock }(a, head, tail);
 constraint active(a) * active(b) -> a != b;
-constraint active(a) * loose(b) -> a != b;
 // active and queued are contradictory by definition
+// as are active and loose
 
 constraint holdLock(a, ap) -> %{ queuedG(Foot, #1, #2, #3, #4) && #4 == #2 }(a, head, tail, ap);
 
 constraint holdLock(a, ap) * queued(b, bp) -> a != b;
-constraint holdLock(a, ap) * loose(b) -> ap != b;
-
 constraint holdLock(a, ap) * holdLock(b, bp) -> false;
 
