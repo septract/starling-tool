@@ -1,49 +1,30 @@
 // CLH lock module
 
 struct Node {
-  var lock: Bool;
-  var pred: Node;
+    var lock: Bool;
+    var pred: Node;
 }
 
 predicate CLHfoot(Foot: Set<Node>, head: Node, tail: Node) 
-  requires acc(Foot)
-{ 
-  exists Queue : Set<Node> :: ( 
-    Queue = { z : Node :: z in Foot && z != head && Btwn(pred,tail,z,head) } 
-    &&
-    Btwn(pred, tail, head, head)
-    &&
+requires acc(Foot) { 
     head in Foot
-    &&
-    tail in Foot
-    &&
-    !head.lock
-    &&
-    (forall x : Node :: x in Queue ==> x.lock)
-    &&
-    (forall x : Node :: (x in Foot && x.lock && x.pred != null) ==> x in Queue)
-    &&
-    (forall x : Node :: (x in Foot && !x.lock) ==> x.pred == null)
-    &&
-    (forall x : Node :: (x in Foot && x.pred != null && !x.pred.lock) ==> x.pred == head)
-  ) 
-} 
+    && tail in Foot
+    && Reach(pred, tail, head)
+    && !head.lock
+    && (forall x : Node :: (x in Foot && !x.lock) ==> x.pred == null)
+}
 
-predicate looseG(Foot : Set<Node>, a : Node, head : Node, tail : Node)
-requires acc(Foot)
-{
+predicate looseG(Foot : Set<Node>, a : Node, head : Node)
+requires acc(Foot) {
     a in Foot
-    && a != tail
     && a != head
     && a.pred == null
 }
 
 predicate queuedG(Foot : Set<Node>, a : Node, head : Node, tail : Node, ap : Node)
-requires acc(Foot)
-{
+requires acc(Foot) {
     a in Foot
     && a.pred == ap
     && Btwn(pred, tail, a, head)
     && ap in Foot
-    && a != ap
 }

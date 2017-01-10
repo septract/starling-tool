@@ -46,7 +46,7 @@ constraint queued(a, ap) -> %{ queuedG(Foot, #1, #2, #3, #4) }(a, head, tail, ap
 constraint queued(a, ap) * queued(b, bp) -> a != b;
 
 // Loose means the node is unlinked from the queue.
-constraint loose(a, l) -> %{ looseG(Foot, #1, #2, #3) && #1.lock == #4 }(a, head, tail, l);
+constraint loose(a, l) -> %{ looseG(Foot, #1, #2) && #1.lock == #3 }(a, head, l);
 constraint loose(a, al) * loose(b, bl) -> a != b;
 // loose and queued are contradictory by definition
 
