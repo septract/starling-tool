@@ -9,15 +9,14 @@ shared Node head, tail;
 thread Node mynode, mypred;
 thread bool test;  // Used when trying to take the lock.
 
-view active(Node x);
-view loose(Node x);
+view loose(Node x, bool isLocked);
 view queued(Node x, Node xp);
 view holdLock(Node x, Node xp);
 
 method lock(Node mynode) {
-  {| loose(mynode) |}
+  {| loose(mynode, false) |}
     < %{ #1.lock := true }(mynode)[] >;
-  {| active(mynode) |}
+  {| loose(mynode, true) |}
     <{ mypred = tail;
        tail = mynode;
        %{#1.pred := #2}(tail, mypred)[]; }>;  // Ghost code
@@ -33,12 +32,12 @@ method lock(Node mynode) {
 method unlock(Node mynode, Node mypred) {
   {| holdLock(mynode, mypred) |}
     <{ %{ #1.lock := false }(mynode)[];
-       %{ #1.pred := null }(mynode)[]; // ghost code
-       head = mynode;
-       }>; // ghost code
-  {| loose(mypred) |}
+       %{ #1.pred := null }(mynode)[];  // Ghost code
+       head = mynode;  // Ghost code
+       }>;
+  {| loose(mypred, false) |}
     mynode = mypred;
-  {| loose(mynode) |}
+  {| loose(mynode, false) |}
 }
 
 constraint emp -> %{ CLHfoot(Foot, #1, #2) }(head, tail);
@@ -47,14 +46,9 @@ constraint queued(a, ap) -> %{ queuedG(Foot, #1, #2, #3, #4) }(a, head, tail, ap
 constraint queued(a, ap) * queued(b, bp) -> a != b;
 
 // Loose means the node is unlinked from the queue.
-constraint loose(a) -> %{ looseG(Foot, #1, #2, #3) && !#1.lock }(a, head, tail);
-constraint loose(a) * loose(b) -> a != b;
+constraint loose(a, l) -> %{ looseG(Foot, #1, #2, #3) && #1.lock == #4 }(a, head, tail, l);
+constraint loose(a, al) * loose(b, bl) -> a != b;
 // loose and queued are contradictory by definition
-
-constraint active(a) -> %{ looseG(Foot, #1, #2, #3) && #1.lock }(a, head, tail);
-constraint active(a) * active(b) -> a != b;
-// active and queued are contradictory by definition
-// as are active and loose
 
 constraint holdLock(a, ap) -> %{ queuedG(Foot, #1, #2, #3, #4) && #4 == #2 }(a, head, tail, ap);
 
