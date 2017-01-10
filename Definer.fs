@@ -303,5 +303,5 @@ module Pretty =
         | CountMismatch (fn, dn) ->
             errorStr "view usage has"
             <+> errorStr (sprintf "%d" fn)
-            <&> errorStr "arguments, but its definition has"
-            <+> errorStr (sprintf "%d" fn)
+            <+> errorStr "arguments, but its definition has"
+            <+> errorStr (sprintf "%d" dn)
