@@ -1,3 +1,5 @@
+// Allocatable version of Examples/Pass/spinLock.cvf.
+
 typedef int Lock;
 typedef bool Bool;
 

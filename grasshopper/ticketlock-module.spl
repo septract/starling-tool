@@ -1,0 +1,80 @@
+// Lock module
+
+struct Lock {
+  var ticket: Int;
+  var serving: Int;
+}
+
+/*
+// Satisfiability tests (uncomment to check, all should fail)
+
+procedure newLock_sat(LockFoot : Set<Lock>, x : Lock)
+  requires x in LockFoot
+  ensures false
+{}
+
+procedure isLock_sat(LockFoot : Set<Lock>, x : Lock)
+  requires x in LockFoot && x.ticket >= x.serving
+  ensures false
+{}
+
+procedure holdTick_sat(LockFoot : Set<Lock>, x : Lock, t : Int)
+  requires x in LockFoot && x.ticket >= x.serving && x.ticket > t
+  ensures false
+{}
+
+procedure holdLock_sat(LockFoot : Set<Lock>, x : Lock)
+  requires x in LockFoot && x.ticket > x.serving
+  ensures false
+{}
+
+procedure holdLock_holdTick_sat(LockFoot : Set<Lock>, x : Lock, y : Lock, t : Int)
+  requires x in LockFoot && x.ticket > x.serving
+        && y in LockFoot && y.ticket >= y.serving && y.ticket > t
+        && (x != y || y.serving != t)
+  ensures false
+{}
+
+procedure holdTick_holdTick_sat(LockFoot : Set<Lock>, x : Lock, y : Lock, ta : Int, tb : Int)
+  requires x in LockFoot && x.ticket >= x.serving && x.ticket > ta
+        && y in LockFoot && y.ticket >= y.serving && y.ticket > tb
+        && (x != y || ta != tb)
+  ensures false
+{}
+
+procedure holdLock_holdLock_sat(LockFoot : Set<Lock>, x : Lock, y : Lock)
+  requires x in LockFoot && x.ticket > x.serving
+        && y in LockFoot && y.ticket > y.serving
+        && x != y
+  ensures false
+{}
+
+procedure isLock_newLock_sat(LockFoot : Set<Lock>, x : Lock, y : Lock)
+  requires x in LockFoot && x.ticket >= x.serving
+        && y in LockFoot
+        && x != y
+  ensures false
+{}
+
+procedure holdTick_newLock_sat(LockFoot : Set<Lock>, x : Lock, t : Int, y : Lock)
+  requires x in LockFoot && x.ticket >= x.serving && x.ticket > t
+        && y in LockFoot
+        && x != y
+  ensures false
+{}
+
+procedure holdLock_newLock_sat(LockFoot : Set<Lock>, x : Lock, y : Lock)
+  requires x in LockFoot && x.ticket > x.serving
+        && y in LockFoot
+        && x != y
+  ensures false
+{}
+
+procedure newLock_newLock_sat(LockFoot : Set<Lock>, x : Lock, y : Lock)
+  requires x in LockFoot
+        && y in LockFoot
+        && x != y
+  ensures false
+{}
+
+*/

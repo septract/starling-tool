@@ -1,0 +1,59 @@
+// Allocatable version of Examples/Pass/ticketLock.cvf.
+
+typedef int Lock;
+
+pragma grasshopper_include {./grasshopper/ticketlock-module.spl};
+pragma grasshopper_footprint {LockFoot};
+pragma grasshopper_footprint_sort {Set<Lock>};
+
+thread Lock x, ret;
+thread int t, s;
+
+view newLock(Lock x), holdTick(Lock x, int t), holdLock(Lock x), isLock(Lock x);
+
+method newLock() {
+  {| emp |}
+    ret = %{new Lock}();
+  {| newLock(ret) |} 
+    <%{#1.ticket := 0; #1.serving := 0}(ret)[]>;
+  {| isLock(ret) |}
+}
+
+method lock(Lock x) {
+  {| isLock(x) |}
+    t = %{ #1.ticket }(x);
+    <%{ #1.ticket := #1.ticket + 1 }(x)[]>;
+  {| holdTick(x, t) |}
+    do {
+      {| holdTick(x, t) |}
+        s = %{ #1.serving }(x);
+      {| if s == t then holdLock(x) else holdTick(x, t) |}
+    } while (s != t);
+  {| holdLock(x) |}
+}
+
+method unlock(Lock x) {
+  {| holdLock(x) |}
+    <%{#1.serving := #1.serving + 1}(x)[]>;
+  {| isLock(x) |}
+}
+
+method split(Lock x) {
+  {| isLock(x) |}
+    ;
+  {| isLock(x) * isLock(x) |}
+}
+
+constraint newLock(x)     -> %{ #1 in LockFoot }(x);
+constraint isLock(x)      -> %{ #1 in LockFoot && #1.ticket >= #1.serving }(x);
+constraint holdTick(x, t) -> %{ #1 in LockFoot && #1.ticket >= #1.serving && #1.ticket > #2 }(x, t);
+constraint holdLock(x)    -> %{ #1 in LockFoot && #1.ticket >  #1.serving }(x);
+
+constraint holdLock(x)     * holdTick(y, t)  -> x != y || %{ #1.serving != #2 }(y, t);
+constraint holdTick(x, ta) * holdTick(y, tb) -> x != y || ta != tb;
+
+constraint holdLock(x)    * holdLock(y) -> x != y;
+constraint isLock(x)      * newLock(y)  -> x != y; 
+constraint holdTick(x, t) * newLock(y)  -> x != y; 
+constraint holdLock(x)    * newLock(y)  -> x != y; 
+constraint newLock(x)     * newLock(y)  -> x != y; 
