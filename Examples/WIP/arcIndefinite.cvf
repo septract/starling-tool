@@ -2,73 +2,50 @@
  * Example taken from Derek: http://www.mpi-sws.org/~dreyer/talks/talk-dagstuhl16.pdf
  */
 
+// Variable declarations
 shared int free, count;
-thread int f, c;
+thread int c;
+
+// View atom declarations
+view noArc(), countWas(int c);
+view iter arc();  // The arc() view can be iterated
 
 method init() {
   {| noArc() |}
-    <{ free = (0); count = (1); }>;
+    <{free = 0; count = 1;}>;
   {| arc() |}
 }
 
-// Assumption: clone() cannot be called when there are no references
 method clone() {
-  {| arc() |} < count++ >; {| arc() * arc() |}
-}
-
-// Try to prove that print() when holding a reference is always valid
-// i.e. free can never be true when {| arc() |} is held
-method print() {
   {| arc() |}
-    <f = free>;
-  {| arc() * freeVal(f) |}
-    // Test for disposal
-    if (f != 0) {
-      {| error() |} ; {| error() |}
-    }
-  {| arc() |}
+    <count++>;
+  {| arc() * arc() |}
 }
 
 method drop() {
   {| arc() |}
-    < c = count-- >;
-  {| countVal(c) |}
+    <c = count-->;
+  {| countWas(c) |}  // A snapshot of the counter
     if (c == 1) {
-      {| noCnt() |}
-        <free = (1)>;
-      {| emp |}
+      {| ? |}
+        <free = 1>;  // Dispose the object
+      {| ? |}
     }
   {| emp |}
 }
 
-view error();
-view iter arc();
-view noCnt();
-view noArc();
+// Global invariant
+constraint emp -> count >= 0;
 
-// These views just add free=f and count=c to the final proof predicates
-view countVal(int c);
-view freeVal(int f);
+// Core specification of arc()
+constraint iter[n] arc() ->
+    (n > 0) => (free == 0) && // Can’t dispose if a clone exists
+    n <= count; // Reference count is correct
 
-
-constraint emp -> count >= 0 && free >= 0 && free <= 1;
-constraint noCnt() -> count == 0;
-
+// Exclusive initialisation
 constraint noArc() -> count == 0 && free == 1;
-// noArc has to have exclusivity over threads.
 constraint noArc() * noArc() -> false;
-constraint noArc() * noCnt() -> false;
-constraint noArc() * freeVal(f) -> false;
-constraint noArc() * countVal(f) -> false;
+constraint noArc() * countWas(c) -> false;
 
-constraint countVal(c) -> c == 1 => count == 0;
-
-// freeVal(f) * arc() -> f = free;
-constraint freeVal(f) -> count > 0 => f == free;
-
-// holds less than count arc()'s
-//  and if holding at least 1 then it can't have been freed
-constraint iter[n] arc() -> ?;
-
-// goal
-constraint error() -> false;
+// Infer a meaning for countWas(c)
+constraint countWas(c) -> ?;
