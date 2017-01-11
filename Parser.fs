@@ -50,8 +50,10 @@ let pipe2ws x y f = pipe2 (x .>> ws) (y .>> ws) f
 let pipe3ws x y z f = pipe3 (x .>> ws) (y .>> ws) (z .>> ws) f
 
 /// Parses an identifier.
-let parseIdentifier = many1Chars2 (pchar '_' <|> asciiLetter)
-                                  (pchar '_' <|> asciiLetter <|> digit)
+let parseIdentifier =
+    (many1Chars2
+        (pchar '_' <|> asciiLetter)
+        (pchar '_' <|> asciiLetter <|> digit)) <?> "identifier"
 
 
 // Bracket parsers.
@@ -163,10 +165,10 @@ let parseSymbolicSentence =
 ///     </para>
 /// </summary>
 let parseSymbolic =
-    pipe2ws
+    (pipe2ws
         (pstring "%" >>. inBraces parseSymbolicSentence)
         (parseParamList parseExpression)
-        (fun s es -> { Sentence = s; Args = es })
+        (fun s es -> { Sentence = s; Args = es })) <?> "symbolic"
 
 /// Parser for primary expressions.
 let parsePrimaryExpression =
@@ -260,7 +262,7 @@ let parseOrExpression =
     parseBinaryExpressionLevel parseAndExpression
         [ ("||", Or) ]
 
-do parseExpressionRef := parseOrExpression
+do parseExpressionRef := parseOrExpression <?> "expression"
 
 
 (*
