@@ -205,7 +205,7 @@ let parseBinaryExpressionLevel nextLevel expList =
 let parsePostfixExpression, parsePostfixExpressionRef = createParserForwardedToRef<Expression, unit> ()
 do parsePostfixExpressionRef :=
     let parseArraySubscript pex
-        = nodify (inSquareBrackets parseExpression
+        = nodify ((inSquareBrackets parseExpression <?> "array subscript")
                   >>= fun a -> preturn (ArraySubscript (pex, a)))
           <|> preturn pex
 
