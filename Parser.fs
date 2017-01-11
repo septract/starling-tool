@@ -308,19 +308,17 @@ let parseAssign =
                   //             ... = <expression> ;
             mkPair
 
-/// Parser for symbolic atomic actions.
-let parseSymbolicAtomic =
-    pipe2ws
-        parseSymbolic
-        (inSquareBrackets (parseParams parseIdentifier))
-        (curry SymAtomic)
+/// Parser for havoc actions.
+let parseHavoc =
+    skipString "havoc" >>. ws >>. parseIdentifier
 
 /// Parser for atomic actions.
 let parseAtomic =
     choice [ (stringReturn "id" Id)
              // This needs to fire before parseFetchOrPostfix due to
              // ambiguity.
-             parseSymbolicAtomic
+             parseSymbolic |>> SymAtomic
+             parseHavoc |>> Havoc
              parseAssume
              parseCAS
              parseFetchOrPostfix ]

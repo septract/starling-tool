@@ -1724,7 +1724,19 @@ let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> 
             e
             |> wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
             |> lift (typedBoolToExpr >> List.singleton >> command "Assume" [])
-        | SymAtomic (sym, working) ->
+        | Havoc var ->
+            let allVarsR =
+                mapMessages SymVarError (VarMap.combine ctx.ThreadVars ctx.SharedVars)
+            let varMR =
+                bind
+                    (fun allVars ->
+                        mapMessages SymVarError
+                            (VarMap.lookup allVars var))
+                    allVarsR
+            lift (fun varM -> Intrinsic (IntrinsicCommand.Havoc varM)) varMR
+
+
+        | SymAtomic sym ->
             // TODO(CaptainHayashi): split out.
             let allVarsR =
                 mapMessages SymVarError (VarMap.combine ctx.ThreadVars ctx.SharedVars)
@@ -1737,25 +1749,12 @@ let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> 
                                     (modelExpr allVars ctx.ThreadVars id))
                                 sym.Args)))
                     allVarsR
-            let workingMR =
-                bind
-                    (fun allVars ->
-                        lift (Set.ofList)
-                            (collect
-                                (List.map
-                                    (VarMap.lookup allVars >> mapMessages SymVarError)
-                                    working)))
-                    allVarsR
-
-            lift2
-                (fun symArgsM workingM ->
+            lift
+                (fun symArgsM ->
                     SymC
-                        { Symbol =
-                            { Sentence = sym.Sentence
-                              Args = symArgsM }
-                          Working = workingM })
+                        { Sentence = sym.Sentence
+                          Args = symArgsM })
                 symArgsMR
-                workingMR
 
     lift
         (function

@@ -94,22 +94,8 @@ module Types =
         | IAssign of Assignment<IntExpr<Sym<Var>>>
         /// <summary>An atomic Boolean assign.</summary>
         | BAssign of Assignment<BoolExpr<Sym<Var>>>
-
-    /// <summary>
-    ///     A fully symbolic atomic command.
-    ///
-    ///     <para>
-    ///         A symbolic command has unknown semantics to Starling.  As such,
-    ///         we cannot track exactly how it modifies state, and must instead
-    ///         take a broad 'working set' of (entire!) variables the command can
-    ///         modify (in any way whatsoever).
-    ///     </para>
-    /// </summary>
-    type SymCommand =
-        { /// <summary>The symbol representing the command.</summary>
-          Symbol : Symbolic<Expr<Sym<Var>>>
-          /// <summary>The set of variables this command invalidates.</summary>
-          Working : Set<TypedVar> }
+        /// <summary>A havoc action.</summary>
+        | Havoc of TypedVar
 
     /// <summary>
     ///     A primitive atomic command.
@@ -120,7 +106,7 @@ module Types =
         /// <summary>A lookup into the model's commands table.</summary>
         | Stored of StoredCommand
         /// <summary>An entirely symbolic command.</summary>
-        | SymC of SymCommand
+        | SymC of Symbolic<Expr<Sym<Var>>>
         override this.ToString() = sprintf "%A" this
 
     /// <summary>
@@ -256,9 +242,9 @@ module Queries =
             match prim with
             | Intrinsic (IAssign r) -> [ Expr.Int (r.TypeRec, r.LValue) ]
             | Intrinsic (BAssign r) -> [ Expr.Bool (r.TypeRec, r.LValue) ]
+            | Intrinsic (Havoc v) -> [ mkVarExp (mapCTyped Reg v) ]
             | Stored { Results = rs } -> rs
-            | SymC { Working = ws } ->
-                Set.toList (Set.map (mapCTyped Reg >> mkVarExp) ws)
+            | SymC _ -> []
 
         List.fold (fun a c -> a @ primResults c) [] cs
 
@@ -285,9 +271,10 @@ module Queries =
             match prim with
             // TODO(CaptainHayashi): is this sensible!?
             | Stored { Args = xs }
-            | SymC { Symbol = { Args = xs } } -> List.map symExprVars xs
+            | SymC {  Args = xs } -> List.map symExprVars xs
             | Intrinsic (IAssign { RValue = y } ) -> [ symExprVars (indefIntExpr y) ]
             | Intrinsic (BAssign { RValue = y } ) -> [ symExprVars (indefBoolExpr y) ]
+            | Intrinsic (Havoc _) -> []
         let vars = collect (concatMap f cmd)
         lift Set.unionMany vars
 
@@ -443,6 +430,10 @@ module Pretty =
                 [ String "assign<int:" <-> printType (Int (ty, ())) <-> String ":" <-> printAssignType a <-> String ">"
                   printIntExpr (printSym printVar) x
                   printIntExpr (printSym printVar) y ]
+        | Havoc v ->
+            parened <| hsep
+                [ String "havoc"
+                  printTypedVar v ]
 
 
     /// Pretty-prints a StoredCommand.
@@ -451,9 +442,9 @@ module Pretty =
                 " <- " |> String; name |> String; String " "; commaSep <| Seq.map printSVExpr xs ]
 
     /// Pretty-prints a SymCommand.
-    let printSymCommand { Symbol = sym; Working = wk } : Doc =
-        commaSep (Seq.map printTypedVar wk)
-        <+> String "<-%{"
+    let printSymCommand (sym : Symbolic<Expr<Sym<Var>>>) : Doc =
+        // TODO(CaptainHayashi): redundant?
+        String "%{"
         <-> printInterpolatedSymbolicSentence (printExpr (printSym printVar)) sym.Sentence sym.Args
         <-> String "}"
 

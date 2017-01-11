@@ -626,11 +626,8 @@ let instantiateToMicrocode
   : Result<Microcode<Expr<Sym<Var>>, Sym<Var>> list, Error> =
     match prim with
     | SymC s ->
-        (* A symbol is translated into the symbol itself,
-           followed by havoc for each variable mentioned in the symbol. *)
-        let toHavoc var = havoc (mkVarExp (mapCTyped Reg var))
-        let havocs = Set.toList (Set.map toHavoc s.Working)
-        ok (Symbol s.Symbol :: havocs)
+        (* A symbol is passed through directly. *)
+        ok [ Symbol s]
     | Intrinsic s ->
         (* An intrinsic can be directly converted into microcode,
            throwing away the actual direction of the intrinsic. *)
@@ -639,6 +636,9 @@ let instantiateToMicrocode
             ok [ Expr.Int (ty, x) *<- Expr.Int (ty, y) ]
         | BAssign { TypeRec = ty; LValue = x; RValue = y } ->
             ok [ Expr.Bool (ty, x) *<- Expr.Bool (ty, y) ]
+        | Havoc var ->
+            (* A havoc is converted to an expression. *)
+            ok [ havoc (mkVarExp (mapCTyped Reg var)) ]
     | Stored sc ->
         // A stored command is a lookup into a microcode table.
         let primDefR = lookupPrim sc semantics

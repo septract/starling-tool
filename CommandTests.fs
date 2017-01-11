@@ -126,24 +126,21 @@ module Observable =
             [ command "Foo" [ normalIntExpr (siVar "g") ] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]
-    let ``symbolics with no havoc are observable after the empty command`` () =
+    let ``symbolics with are observable after the empty command`` () =
         check true
-            [ SymC { Symbol = { Sentence = [ SymString "foo" ]; Args = [] }
-                     Working = Set.empty } ]
+            [ SymC { Sentence = [ SymString "foo" ]; Args = [] } ]
             []
 
     [<Test>]
-    let ``symbolics with no havoc are observable after a local stored command`` () =
+    let ``symbolics are observable after a local stored command`` () =
         check true
-            [ SymC { Symbol = { Sentence = [ SymString "foo" ]; Args = [] }
-                     Working = Set.empty } ]
+            [ SymC { Sentence = [ SymString "foo" ]; Args = [] } ]
             [ command "Foo" [ normalIntExpr (siVar "y") ] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]
-    let ``symbolics with no havoc are observable after a nonlocal stored command`` () =
+    let ``symbolics are observable after a nonlocal stored command`` () =
         check true
-            [ SymC { Symbol = { Sentence = [ SymString "foo" ]; Args = [] }
-                     Working = Set.empty } ]
+            [ SymC { Sentence = [ SymString "foo" ]; Args = [] } ]
             [ command "Foo" [ normalIntExpr (siVar "g") ] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]

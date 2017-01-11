@@ -616,16 +616,15 @@ module CommandTests =
                             (IInt 1L)))) ] )
 
     [<Test>]
-    let ``Semantically translate <%{foo(#1)}(serving)[t]> using the ticket lock model``() =
+    let ``Semantically translate <%{foo(#1)}(serving)> using the ticket lock model``() =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
               [ SymC
-                    { Symbol =
-                        { Sentence = [ SymString "foo("; SymParamRef 1; SymString ")" ]
-                          Args = [ normalIntExpr (siVar "serving") ] }
-                      Working = Set.singleton (normalIntVar "t") } ]
+                    { Sentence = [ SymString "foo("; SymParamRef 1; SymString ")" ]
+                      Args = [ normalIntExpr (siVar "serving") ] } ]
         <| Some (Set.ofList
             [
                 iEq (siAfter "s") (siBefore "s")
+                iEq (siAfter "t") (siBefore "t")
                 iEq (siAfter "ticket") (siBefore "ticket")
                 iEq (siAfter "serving") (siBefore "serving")
                 BVar (

@@ -199,8 +199,9 @@ module ParamDesugar =
                     Postfix (rewriteExpression e, fm)
                 | Id -> Id
                 | Assume e -> Assume (rewriteExpression e)
-                | SymAtomic (sym, working) ->
-                    SymAtomic (rewriteSymbolic sym, List.map rewriteVar working)
+                | SymAtomic sym ->
+                    SymAtomic (rewriteSymbolic sym)
+                | Havoc v -> Havoc (rewriteVar v)
             { atom with Node = rewriteAtomic' atom.Node }
 
         let rewritePrimSet { PreAssigns = ps; Atomics = ts; PostAssigns = qs } =

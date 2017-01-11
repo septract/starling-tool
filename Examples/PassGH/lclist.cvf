@@ -19,22 +19,22 @@ method deleteVal(int v) {
   {| wf(v) |}
     <prev = head>;
   {| wf(v) * isHead(prev) |}
-   <{ %{ waitLock(#1); takeLock(#1) }(prev)[]; }>;
+   <{ %{ waitLock(#1); takeLock(#1) }(prev); }>;
   {| wf(v) * has1LockAnon(prev) * isHead(prev) |}
    curr = (%{ #1.next }(prev));
   {| wf(v) * has1Lock(prev, curr) * isHead(prev) |}
-   <{ %{ waitLock(#1); takeLock(#1) }(curr)[]; }>;
+   <{ %{ waitLock(#1); takeLock(#1) }(curr); }>;
   {| wf(v) * has2Lock(prev, curr) |}
    cv = (%{ #1.val }(curr));
   {| wf(v) * has2Lock(prev,curr) * isVal(curr, cv) |}
     while (cv < v ) {
       {| wf(v) * wf(cv) * has2Lock(prev, curr) * isVal(curr, cv) |}
-        <%{ releaseLock(#1) }(prev)[]>;
+        <%{ releaseLock(#1) }(prev)>;
       {| wf(v) * wf(cv) * has1LockAnon(curr) * isVal(curr, cv) |}
         prev = curr;
         curr = (%{ #1.next }(curr));
       {| wf(v) * wf(cv) * has1Lock(prev, curr) * isVal(prev,cv) |}
-        <{ %{ waitLock(#1); takeLock(#1) }(curr)[]; }>;
+        <{ %{ waitLock(#1); takeLock(#1) }(curr); }>;
       {| wf(v) * has2Lock(prev, curr) |}
         cv = (%{ #1.val }(curr));
       {| wf(v) * has2Lock(prev, curr) * isVal(curr,cv) |}
@@ -43,17 +43,17 @@ method deleteVal(int v) {
     if ( cv == v) {
       {| wf(cv) * has2Lock(prev, curr) * isVal(curr, cv) |}
         // Merged these two to avoid dangling nodes
-        <{ %{ #1.next := #2.next }(prev, curr)[];
-           %{ disposeNode(#1) }(curr)[]; }>;
+        <{ %{ #1.next := #2.next }(prev, curr);
+           %{ disposeNode(#1) }(curr); }>;
       {| has1LockAnon(prev) |}
     }
     else {
       {| has2Lock(prev, curr) |}
-        <%{ releaseLock(#1)}(curr)[]>;
+        <%{ releaseLock(#1)}(curr)>;
       {| has1LockAnon(prev) |}
     }
   {| has1LockAnon(prev) |}
-    <%{ releaseLock(#1) }(prev)[]>;
+    <%{ releaseLock(#1) }(prev)>;
   {| emp |}
 }
 

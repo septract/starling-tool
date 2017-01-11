@@ -17,7 +17,7 @@ method newLock() {
   {| emp |}
     ret = %{new Lock}();
   {| newLock(ret) |}
-    <%{#1.lock := false}(ret)[]>;
+    <%{#1.lock := false}(ret)>;
   {| isLock(ret) |}
 }
 
@@ -35,7 +35,7 @@ method lock(Lock x) {
 
 method unlock(Lock x) {
   {| holdLock(x) |}
-    <%{#1.lock := false}(x)[]>;
+    <%{#1.lock := false}(x)>;
   {| isLock(x) |}
 }
 

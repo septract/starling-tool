@@ -220,16 +220,19 @@ module AtomicActionTests =
                  node "" 1L 15L (Num 2L)))
 
     [<Test>]
+    let ``parse havoc``() =
+        check parseAtomic "havoc y" (node "" 1L 1L <| Havoc "y")
+
+    [<Test>]
     let ``parse symbolic atomic``() =
-        check parseAtomic "%{foo(#1)}(x)[y, z]"
+        check parseAtomic "%{foo(#1)}(x)"
             (node "" 1L 1L <| SymAtomic
-                ({ Sentence =
+                { Sentence =
                        [ SymString "foo("
                          SymParamRef 1
                          SymString ")" ]
-                   Args =
-                       [ node "" 1L 12L (Identifier "x") ] },
-                 [ "y"; "z" ]))
+                  Args =
+                       [ node "" 1L 12L (Identifier "x") ] } )
 
 
 module AtomicSetTests =

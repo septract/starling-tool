@@ -15,14 +15,14 @@ method newLock() {
   {| emp |}
     ret = %{new Lock}();
   {| newLock(ret) |} 
-    <%{#1.ticket := 0; #1.serving := 0}(ret)[]>;
+    <%{#1.ticket := 0; #1.serving := 0}(ret)>;
   {| isLock(ret) |}
 }
 
 method lock(Lock x) {
   {| isLock(x) |}
     t = %{ #1.ticket }(x);
-    <%{ #1.ticket := #1.ticket + 1 }(x)[]>;
+    <%{ #1.ticket := #1.ticket + 1 }(x)>;
   {| holdTick(x, t) |}
     do {
       {| holdTick(x, t) |}
@@ -34,7 +34,7 @@ method lock(Lock x) {
 
 method unlock(Lock x) {
   {| holdLock(x) |}
-    <%{#1.serving := #1.serving + 1}(x)[]>;
+    <%{#1.serving := #1.serving + 1}(x)>;
   {| isLock(x) |}
 }
 

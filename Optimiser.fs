@@ -582,6 +582,8 @@ module Graph =
               SymC _ -> false
             | Intrinsic (IAssign { AssignType = t })
             | Intrinsic (BAssign { AssignType = t }) -> t = Local
+            | // TODO(CaptainHayashi): is this correct?
+              Intrinsic (Havoc v) -> typedVarIsThreadLocal v
             | Stored { Args = ps } -> Seq.forall isLocalArg ps
 
         List.forall isLocalPrim cmd
