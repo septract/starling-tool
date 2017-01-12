@@ -90,11 +90,10 @@ let parseViewSignature, parseViewSignatureRef =
 
 /// Parser for commands.
 let parseCommand, parseCommandRef =
-    createParserForwardedToRef<Command<Marked<View>>, unit> ()
+    createParserForwardedToRef<Command, unit> ()
 /// Parser for blocks.
 let parseBlock, parseBlockRef
-    = createParserForwardedToRef<Block<Marked<View>, Command<Marked<View>>>,
-                                 unit> ()
+    = createParserForwardedToRef<Command list, unit> ()
 /// Parser for expressions.
 /// The expression parser is split into several chains as per
 /// preference rank.
@@ -530,18 +529,34 @@ let parseIf =
 
 /// Parser for prim compositions.
 let parsePrimSet =
-    (* We can parse only one atomic, but any number of assigns before it.
-       We must ensure there is a ; between the last assign and the atomic. *)
-    pipe3 (many (parseAssign .>> wsSemi .>> ws))
-          (* The atomic can be missing, and we can check unambiguously by
-             trying to parse a < here. *)
-          (opt (parseAtomicSet .>> wsSemi .>> ws))
+    (* Possible configurations:
+       1) At least one non-atomic followed by, optionally, an atomic and
+          zero or more non-atomics;
+       2) An atomic, followed by zero or more non-atomics.
+
+       2 is easier to spot, so we try it first. *)
+    let parseAtomicFirstPrimSet =
+        pipe2
+          (parseAtomicSet .>> wsSemi .>> ws)
           (many (parseAssign .>> wsSemi .>> ws))
-          (fun lassigns atom rassigns ->
-               { PreAssigns = lassigns
-                 Atomics = withDefault [] atom
-                 PostAssigns = rassigns }
-               |> Prim)
+          (fun atom rassigns ->
+              Prim { PreAssigns = []; Atomics = atom; PostAssigns = rassigns } )
+
+    let parseNonAtomicFirstPrimSet =
+        pipe2
+            (many1 (parseAssign .>> wsSemi .>> ws))
+            (opt
+                (parseAtomicSet .>> wsSemi .>> ws
+                 .>>. many (parseAssign .>> wsSemi .>> ws)))
+            (fun lassigns tail ->
+               let (atom, rassigns) = withDefault ([], []) tail
+               Prim
+                ( { PreAssigns = lassigns
+                    Atomics = atom
+                    PostAssigns = rassigns } ))
+
+    parseAtomicFirstPrimSet <|> parseNonAtomicFirstPrimSet
+
 
 /// Parser for `skip` commands.
 /// Skip is inserted when we're in command position, but see a semicolon.
@@ -556,6 +571,8 @@ do parseCommandRef :=
     nodify <|
     (choice [parseSkip
              // ^- ;
+             parseViewExpr |>> ViewExpr
+             // ^ {| ... |}
              parseIf
              // ^- if ( <expression> ) <block> <block>
              parseDoWhile
@@ -571,25 +588,10 @@ do parseCommandRef :=
  * Blocks.
  *)
 
-/// Parser for lists of semicolon-delimited, postconditioned
-/// commands.
-let parseCommands =
-    many1
-    <| pipe2ws parseCommand
-               // ^- <command> ...
-               parseViewExpr
-               // ^-           ... <view-line>
-               (fun c v -> { Command = c; Post = v })
-               //  |             <command> ... <view-line> ... <commands>
+/// Parser for lists of semicolon-terminated commands.
+let parseCommands = many (parseCommand .>> ws)
 
-do parseBlockRef :=
-    inBraces
-    <| pipe2ws parseViewExpr
-        // ^- {       ...                            ... }
-               // ^- ... <view-line> ...
-               parseCommands
-               //                    ... <commands> ...
-               (fun p c -> { Pre = p; Contents = c })
+do parseBlockRef := inBraces parseCommands
 
 
 (*

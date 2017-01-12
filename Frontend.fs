@@ -24,6 +24,7 @@ open Starling.Core.Var.Pretty
 open Starling.Lang.AST.Pretty
 open Starling.Lang.Modeller
 open Starling.Lang.Modeller.Pretty
+open Starling.Lang.ViewDesugar.Pretty
 open Starling.Lang.Guarder
 
 
@@ -108,13 +109,15 @@ let printResponse (mview : ModelView) : Response -> Doc =
     | Response.Collate c -> Lang.Collator.Pretty.printCollatedScript c
     | Response.Model m ->
         printVModel
-            (printBlock (printViewExpr printCView)
-                         (printPartCmd (printViewExpr printCView)))
+            (printFullBlock
+                (printViewExpr printCView)
+                (printPartCmd (printViewExpr printCView)))
             m
     | Response.Guard m ->
         printVModel
-            (printBlock (printViewExpr (printIteratedGView (printSym String)))
-                        (printPartCmd (printViewExpr (printIteratedGView (printSym String)))))
+            (printFullBlock
+                (printViewExpr (printIteratedGView (printSym String)))
+                (printPartCmd (printViewExpr (printIteratedGView (printSym String)))))
             m
     | Response.Graph m ->
         printVModel printGraph m

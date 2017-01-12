@@ -1,7 +1,9 @@
 /// <summary>
-///     Module for desugaring <c>{|?|}</c> views into fresh views.
+///     Module for inserting and expanding out unknown views.
 /// </summary>
 module Starling.Lang.ViewDesugar
+
+open Chessie.ErrorHandling
 
 open Starling.Collections
 open Starling.Utils
@@ -11,11 +13,40 @@ open Starling.Core.Var
 open Starling.Core.Expr
 open Starling.Lang.AST
 
+
 /// <summary>
 ///     A partly modelled view prototype, whose parameters use Starling's type
 ///     system rather than the language's.
 /// </summary>
 type DesugaredViewProto = GeneralViewProto<TypedVar>
+
+/// <summary>
+///     A block whose missing views have been filled up.
+/// </summary>
+and FullBlock<'view, 'cmd> =
+    { /// <summary> The precondition of the block.</summary>
+      Pre : 'view
+      /// <summary>
+      ///     The commands in the block, and their subsequent views.
+      /// </summary>
+      Cmds : ('cmd * 'view) list }
+
+/// <summary>A non-view command with FullBlocks.</summary>
+type FullCommand' =
+    /// A set of sequentially composed primitives.
+    | FPrim of PrimSet
+    /// An if-then-else statement, with optional else.
+    | FIf of ifCond : Expression
+          * thenBlock : FullBlock<ViewExpr<View>, FullCommand>
+          * elseBlock : FullBlock<ViewExpr<View>, FullCommand> option
+    /// A while loop.
+    | FWhile of Expression * FullBlock<ViewExpr<View>, FullCommand>
+    /// A do-while loop.
+    | FDoWhile of FullBlock<ViewExpr<View>, FullCommand>
+               * Expression // do { b } while (e)
+    /// A list of parallel-composed blocks.
+    | FBlocks of FullBlock<ViewExpr<View>, FullCommand> list
+and FullCommand = Node<FullCommand'>
 
 /// <summary>
 ///     Generates a new view from an unknown view expression.
@@ -38,6 +69,82 @@ let makeFreshView (tvars : VarMap) (fg : FreshGen) : View * DesugaredViewProto =
     let viewParams = VarMap.toTypedVarSeq tvars
 
     (Func (func viewName viewArgs), NoIterator (func viewName viewParams, false))
+
+module Pretty =
+    open Starling.Core.Pretty
+    open Starling.Core.View.Pretty
+    open Starling.Lang.AST.Pretty
+
+    /// <summary>
+    ///     Prints a <see cref="FullCommand'"/>.
+    /// </summary>
+    /// <param name="pView">Pretty-printer for views.</param>
+    /// <param name="pCmd">Pretty-printer for commands.</param>
+    /// <param name="fb">The <see cref="FullBlock'"/> to print.</param>
+    /// <typeparam name="View">Type of views in the block.</typeparam>
+    /// <typeparam name="Cmd">Type of commands in the block.</typeparam>
+    /// <returns>
+    ///     The <see cref="Doc"/> representing <paramref name="fc"/>.
+    /// </returns>
+    let printFullBlock (pView : 'View -> Doc) (pCmd : 'Cmd -> Doc)
+      (fb : FullBlock<'View, 'Cmd>) : Doc =
+        let printStep (c, v) = vsep [ Indent (pCmd c); pView v ]
+        let indocs = pView fb.Pre :: List.map printStep fb.Cmds
+        braced (ivsep indocs)
+
+    /// <summary>
+    ///     Prints a <see cref="FullCommand'"/>.
+    /// </summary>
+    /// <param name="fc">The <see cref="FullCommand'"/> to print.</param>
+    /// <returns>
+    ///     The <see cref="Doc"/> representing <paramref name="fc"/>.
+    /// </returns>
+    let rec printFullCommand' (fc : FullCommand') : Doc =
+        // TODO(CaptainHayashi): dedupe with PrintCommand'.
+        match fc with
+        (* The trick here is to make Prim [] appear as ;, but
+           Prim [x; y; z] appear as x; y; z;, and to do the same with
+           atomic lists. *)
+        | FPrim { PreAssigns = ps; Atomics = ts; PostAssigns = qs } ->
+            seq { yield! Seq.map (uncurry printAssign) ps
+                  yield (ts
+                         |> Seq.map printAtomic
+                         |> semiSep |> withSemi |> braced |> angled)
+                  yield! Seq.map (uncurry printAssign) qs }
+            |> semiSep |> withSemi
+        | FIf(c, t, fo) ->
+            hsep [ "if" |> String |> syntax
+                   c |> printExpression |> parened
+                   t |> printFullBlock (printViewExpr printView) printFullCommand
+                   (maybe Nop
+                        (fun f ->
+                            hsep
+                                [ "else" |> String |> syntax
+                                  printFullBlock (printViewExpr printView) printFullCommand f ])
+                        fo) ]
+        | FWhile(c, b) ->
+            hsep [ "while" |> String |> syntax
+                   parened (printExpression c)
+                   b |> printFullBlock (printViewExpr printView) printFullCommand ]
+        | FDoWhile(b, c) ->
+            hsep [ "do" |> String |> syntax
+                   printFullBlock (printViewExpr printView) printFullCommand b
+                   "while" |> String |> syntax
+                   parened (printExpression c) ]
+            |> withSemi
+        | FBlocks bs ->
+            bs
+            |> List.map (printFullBlock (printViewExpr printView) printFullCommand)
+            |> hsepStr "||"
+    /// <summary>
+    ///     Prints a <see cref="FullCommand"/>.
+    /// </summary>
+    /// <param name="fc">The <see cref="FullCommand"/> to print.</param>
+    /// <returns>
+    ///     The <see cref="Doc"/> representing <paramref name="fc"/>.
+    /// </returns>
+    and printFullCommand (fc : FullCommand) : Doc = printFullCommand' fc.Node
+
 
 /// <summary>
 ///     Converts a possibly-unknown view into a block over known views.
@@ -81,58 +188,32 @@ let desugarView (tvars : VarMap) (fg : FreshGen)
 ///     generated inside it.
 /// </returns>
 let rec desugarCommand (tvars : VarMap) (fg : FreshGen)
-  (cmd : Command<Marked<View>>)
-    : Command<ViewExpr<View>> * DesugaredViewProto seq =
+  (cmd : Command)
+    : FullCommand * DesugaredViewProto seq =
     let f = fun (a, b) -> (cmd |=> a, b)
     f <| match cmd.Node with
+            | ViewExpr v -> failwith "should have been handled at block level"
             | If (e, t, fo) ->
                 let t', tv = desugarBlock tvars fg t
                 let f', fv =
                     match fo with
                     | None -> None, Seq.empty
                     | Some f -> f |> desugarBlock tvars fg |> pairMap Some id
-                let ast = If (e, t', f')
+                let ast = FIf (e, t', f')
                 (ast, Seq.append tv fv)
             | While (e, b) ->
                 let b', bv = desugarBlock tvars fg b
-                (While (e, b'), bv)
+                (FWhile (e, b'), bv)
             | DoWhile (b, e) ->
                 let b', bv = desugarBlock tvars fg b
-                (DoWhile (b', e), bv)
+                (FDoWhile (b', e), bv)
             | Blocks bs ->
                 let bs', bsvs =
                     bs
                     |> List.map (desugarBlock tvars fg)
                     |> List.unzip
-                (Blocks bs', Seq.concat bsvs)
-            | Prim ps -> (Prim ps, Seq.empty)
-
-/// <summary>
-///     Converts a viewed command whose views can be unknown into one
-///     over known views.
-/// </summary>
-/// <param name="tvars">
-///     The <c>VarMap</c> of thread-local variables.
-/// </param>
-/// <param name="fg">
-///     The fresh-number generator used to name the views.
-/// </param>
-/// <param name="_arg1">
-///     The viewed command whose views are to be converted.
-/// </param>
-/// <returns>
-///     A pair of the desugared viewed command and the view prototypes
-///     generated inside it.
-/// </returns>
-and desugarViewedCommand (tvars : VarMap) (fg : FreshGen)
-  ({ Command = c ; Post = q }
-     : ViewedCommand<Marked<View>, Command<Marked<View>>>)
-  : ViewedCommand<ViewExpr<View>, Command<ViewExpr<View>>> * DesugaredViewProto seq =
-    let c', cProtos = desugarCommand tvars fg c
-    let q', qProtos = desugarView tvars fg q
-
-    let block' = { Command = c' ; Post = q' }
-    (block', Seq.append qProtos cProtos)
+                (FBlocks bs', Seq.concat bsvs)
+            | Prim ps -> (FPrim ps, Seq.empty)
 
 /// <summary>
 ///     Converts a block whose views can be unknown into a block over known
@@ -144,25 +225,73 @@ and desugarViewedCommand (tvars : VarMap) (fg : FreshGen)
 /// <param name="fg">
 ///     The fresh-number generator used to name the views.
 /// </param>
-/// <param name="_arg1">
+/// <param name="block">
 ///     The block whose views are to be converted.
 /// </param>
 /// <returns>
 ///     A pair of the desugared block and the view prototypes generated
 ///     inside it.
 /// </returns>
-and desugarBlock (tvars: Map<string, Type>) (fg: bigint ref) (blk: Block<Marked<View>, Command<Marked<View>>>)
-    : Block<ViewExpr<View>, Command<ViewExpr<View>>> * DesugaredViewProto seq =
-    let p, cs = blk.Pre, blk.Contents
-    let p', pProtos = desugarView tvars fg p
-    let cs', csProtos =
-        cs
-        |> List.map (desugarViewedCommand tvars fg)
-        |> List.unzip
+and desugarBlock (tvars: Map<string, Type>) (fg: bigint ref)
+  (block: Command list)
+  : FullBlock<ViewExpr<View>, FullCommand>
+    * DesugaredViewProto seq = 
+    (* Desugaring a block happens in two stages.
+       - First, we fill in every gap where a view should be, but isn't, with
+         an unknown view.
+       - Next, we convert the unknown views to fresh known views. *)
 
-    let block' = { Pre = p' ; Contents = cs' }
-    let res = (block', Seq.concat (pProtos :: csProtos))
-    res
+    // Add an Unknown view to the start of a block without one.
+    let cap l =
+        match l with
+        | { Node = ViewExpr v } :: _ -> (l, v)
+        | _ -> (freshNode (ViewExpr Unknown) :: l, Unknown)
+
+    (* If the first item isn't a view, we have to synthesise a block
+       precondition. *)
+    let (blockP, pre) = cap block
+    (* If the last item isn't a view, we have to synthesise a block
+       postcondition.
+       (TODO(CaptainHayashi): do this efficiently) *)
+    let blockPQ = List.rev (fst (cap (List.rev blockP)))
+
+    (* Next, we have to slide down the entire block pairwise.
+       1. If we see ({| view |}, {| view |}), insert a skip between them.
+       2. If we see (cmd, {| view |}), add it directly to the full block;
+       3. If we see ({| view |}, cmd), ignore it.  Either the view is the
+          precondition at the start, which is accounted for, or it was just
+          added through rule 1. and can be ignored;
+       3. If we see (cmd, cmd), add (cmd, {| ? |}) to the full block.
+          We'll add the next command on the next pass. *)
+    let blockPairs = Seq.windowed 2 blockPQ
+
+    let skip () =
+        freshNode (Prim { PreAssigns = []; Atomics = []; PostAssigns = [] })
+
+    let fillBlock bsf pair =
+        match pair with
+        | [| { Node = ViewExpr x }; { Node = ViewExpr y } |] -> (skip (), x) :: bsf
+        | [| cx                   ; { Node = ViewExpr y } |] -> (cx, y) :: bsf
+        | [| { Node = ViewExpr x }; cx                    |] -> bsf
+        | [| cx                   : _                     |] -> (cx, Unknown) :: bsf
+        | _                            -> failwith "unexpected window size"
+
+    // The above built the block backwards, so reverse it.
+    let cmds = List.rev (Seq.fold fillBlock [] blockPairs)
+
+    // Now we can desugar each view in the block contents.
+    let desugarViewedCommand (cmd, post) =
+        let cmd', cProtos = desugarCommand tvars fg cmd
+        let post', pProtos = desugarView tvars fg post
+        ((cmd', post'), Seq.append cProtos pProtos)
+
+    let pre', pProtos = desugarView tvars fg pre
+    let cmds', csProtos =
+         List.unzip (List.map desugarViewedCommand cmds)
+
+    let block' = { Pre = pre' ; Cmds = cmds' }
+    (block', Seq.concat (pProtos :: csProtos))
+
 
 /// <summary>
 ///     Converts a sequence of methods whose views can be unknown into
@@ -186,8 +315,8 @@ and desugarBlock (tvars: Map<string, Type>) (fg: bigint ref) (blk: Block<Marked<
 /// </returns>
 let desugar
   (tvars : VarMap)
-  (methods : Map<string, Block<Marked<View>, Command<Marked<View>>>>)
-  : (Map<string, Block<ViewExpr<View>, Command<ViewExpr<View>>>> * DesugaredViewProto seq) =
+  (methods : Map<string, Command list>)
+  : (Map<string, FullBlock<ViewExpr<View>, FullCommand>> * DesugaredViewProto seq) =
     let fg = freshGen ()
     let desugaredSeq =
         Seq.map

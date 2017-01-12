@@ -16,13 +16,14 @@ open Starling.Core.View
 open Starling.Core.GuardedView
 open Starling.Lang.AST
 open Starling.Lang.Modeller
+open Starling.Lang.ViewDesugar
 
 [<AutoOpen>]
 module Types =
     type GuarderView = IteratedGView<Sym<Var>>
     type GuarderViewExpr = ViewExpr<GuarderView>
     type GuarderPartCmd = PartCmd<GuarderViewExpr>
-    type GuarderBlock = Block<GuarderViewExpr, GuarderPartCmd>
+    type GuarderBlock = FullBlock<GuarderViewExpr, GuarderPartCmd>
 
 /// Resolves a full condition-view multiset into a guarded-view multiset.
 let guardCView (cview : CView) : GuarderView =
@@ -51,18 +52,16 @@ let guardCViewExpr : ModellerViewExpr -> GuarderViewExpr =
     | Advisory v -> Advisory (guardCView v)
 
 /// Converts a viewed command to guarded views.
-let rec guardViewedCommand
-  ({ Command = command ; Post = post }
-     : ViewedCommand<ModellerViewExpr, ModellerPartCmd>)
-  : ViewedCommand<GuarderViewExpr, GuarderPartCmd> =
-    { Command = guardPartCmd command ; Post = guardCViewExpr post }
+let rec guardViewedCommand (vc : ModellerPartCmd * ModellerViewExpr)
+  : (GuarderPartCmd * GuarderViewExpr) =
+    pairMap guardPartCmd guardCViewExpr vc
 
 /// Converts a block to guarded views.
 and guardBlock
-  ({Pre = pre; Contents = contents} : ModellerBlock)
+  ({Pre = pre; Cmds = contents} : ModellerBlock)
   : GuarderBlock =
     { Pre = guardCViewExpr pre
-      Contents = List.map guardViewedCommand contents }
+      Cmds = List.map guardViewedCommand contents }
 
 /// Converts a PartCmd to guarded views.
 and guardPartCmd : ModellerPartCmd -> GuarderPartCmd =

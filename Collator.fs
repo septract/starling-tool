@@ -48,7 +48,7 @@ module Types =
           ///         parameters.
           ///    </para>
           /// </summary>
-          Methods : Map<string, CBlock<Marked<View>>> }
+          Methods : Map<string, Command list> }
 
 
 /// <summary>
@@ -80,11 +80,7 @@ module Pretty =
               vsep <| Seq.map (printScriptVar "shared") cs.SharedVars
               vsep <| Seq.map (printScriptVar "thread") cs.ThreadVars
               vsep <| Seq.map (uncurry printConstraint) cs.Constraints
-              printMap Indented String
-                (printBlock
-                     (printMarkedView printView)
-                     (printCommand (printMarkedView printView)))
-                cs.Methods ]
+              printMap Indented String (printBlock printCommand) cs.Methods ]
 
         // Add in search, but only if it actually exists.
         let all =
@@ -164,8 +160,8 @@ module ParamDesugar =
     /// <summary>
     ///     Rewrites a block with a variable rewriting map.
     /// </summary>
-    let rec rewriteBlock (rmap : Map<string, string>) (block : CBlock<Marked<View>>)
-      : CBlock<Marked<View>> =
+    let rec rewriteBlock (rmap : Map<string, string>) (block : Command list)
+      : Command list =
         // TODO(CaptainHayashi): this is a royal mess...
         let rewriteVar n = withDefault n (rmap.TryFind n)
 
@@ -220,6 +216,7 @@ module ParamDesugar =
         and rewriteCommand cmd =
             let rewriteCommand' =
                 function
+                | ViewExpr v -> ViewExpr (rewriteMarkedView v)
                 | Prim ps -> Prim (rewritePrimSet ps)
                 | If (i, t, e) -> If (rewriteExpression i, rewriteBlock rmap t, Option.map (rewriteBlock rmap) e)
                 | While (c, b) -> While (rewriteExpression c, rewriteBlock rmap b)
@@ -231,11 +228,7 @@ module ParamDesugar =
             | Unmarked v -> Unmarked (rewriteView v)
             | Questioned v -> Questioned (rewriteView v)
             | Unknown -> Unknown
-        and rewriteViewedCommand { Command = c; Post = v } =
-            { Command = rewriteCommand c; Post = rewriteMarkedView v }
-
-        { Pre = rewriteMarkedView block.Pre
-          Contents = List.map rewriteViewedCommand block.Contents }
+        List.map rewriteCommand block
 
     /// <summary>
     ///     Converts method parameters to thread-local variables.

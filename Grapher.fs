@@ -248,8 +248,7 @@ and graphBlockStep
   (vg : unit -> NodeID)
   (cg : unit -> EdgeID)
   ((iP, oGraphR) : NodeID * Result<Subgraph, Error>)
-  ({ViewedCommand.Command = cmd; Post = iQview}
-     : ViewedCommand<GuarderViewExpr, GuarderPartCmd>)
+  ((cmd, iQview) : GuarderPartCmd * GuarderViewExpr)
   : NodeID * Result<Subgraph, Error> =
     (* We already know the precondition's ID--it's in pre.
      * However, we now need to create an ID for the postcondition.
@@ -290,7 +289,7 @@ and graphBlock
   (topLevel : bool)
   (vg : unit -> NodeID)
   (cg : unit -> NodeID)
-  ({Pre = bPre; Contents = bContents} : GuarderBlock)
+  ({Pre = bPre; Cmds = bContents} : GuarderBlock)
   : Result<NodeID * NodeID * Subgraph, Error> =
     // First, generate the ID for the precondition.
     let oP = vg ()

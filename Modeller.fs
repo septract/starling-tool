@@ -40,15 +40,15 @@ module Types =
 
     /// A partially resolved command.
     type PartCmd<'view> =
-        | Prim of Command
+        | Prim of Starling.Core.Command.Types.Command
         | While of
             isDo : bool
             * expr : SVBoolExpr
-            * inner : Block<'view, PartCmd<'view>>
+            * inner : FullBlock<'view, PartCmd<'view>>
         | ITE of
             expr : SVBoolExpr
-            * inTrue : Block<'view, PartCmd<'view>>
-            * inFalse : Block<'view, PartCmd<'view>> option
+            * inTrue : FullBlock<'view, PartCmd<'view>>
+            * inFalse : FullBlock<'view, PartCmd<'view>> option
         override this.ToString() = sprintf "PartCmd(%A)" this
 
     /// <summary>
@@ -70,8 +70,7 @@ module Types =
 
     type ModellerViewExpr = ViewExpr<CView>
     type ModellerPartCmd = PartCmd<ModellerViewExpr>
-    type ModellerBlock = Block<ModellerViewExpr, ModellerPartCmd>
-    type ModellerViewedCommand = ViewedCommand<ModellerViewExpr, ModellerPartCmd>
+    type ModellerBlock = FullBlock<ModellerViewExpr, PartCmd<ModellerViewExpr>>
 
     /// <summary>
     ///     A type, or maybe just a string description of one.
@@ -185,7 +184,7 @@ module Types =
         /// The method contains a bad view.
         | BadView of view : ViewExpr<AST.Types.View> * err : ViewError
         /// The method contains an command not yet implemented in Starling.
-        | CommandNotImplemented of cmd : AST.Types.Command<ViewExpr<View>>
+        | CommandNotImplemented of cmd : FullCommand
 
     /// Represents an error when converting a model.
     type ModelError =
@@ -217,6 +216,7 @@ module Pretty =
     open Starling.Core.Symbolic.Pretty
     open Starling.Core.View.Pretty
     open Starling.Lang.AST.Pretty
+    open Starling.Lang.ViewDesugar.Pretty
 
     /// Pretty-prints a CFunc.
     let rec printCFunc : CFunc -> Doc =
@@ -237,21 +237,18 @@ module Pretty =
         >> ssurround "[|" "|]"
 
     /// Pretty-prints a part-cmd at the given indent level.
-    let rec printPartCmd (pView : 'view -> Doc) : PartCmd<'view> -> Doc =
-        function
+    let rec printPartCmd (pView : 'view -> Doc) (pc : PartCmd<'view>) : Doc =
+        let pfb = printFullBlock pView (printPartCmd pView)
+        match pc with
         | PartCmd.Prim prim -> Command.Pretty.printCommand prim
         | PartCmd.While(isDo, expr, inner) ->
             cmdHeaded (hsep [ String(if isDo then "Do-while" else "While")
                               (printSVBoolExpr expr) ])
-                      [printBlock pView (printPartCmd pView) inner]
+                      [ pfb inner ]
         | PartCmd.ITE(expr, inTrue, inFalse) ->
-            cmdHeaded (hsep [String "begin if"
-                             (printSVBoolExpr expr) ])
-                      [headed "True" [printBlock pView (printPartCmd pView) inTrue]
-                       maybe Nop
-                            (fun f ->
-                                headed "False" [printBlock pView (printPartCmd pView) f])
-                            inFalse ]
+            cmdHeaded (hsep [ String "begin if"; printSVBoolExpr expr ])
+                      [ headed "True" [ pfb inTrue ]
+                        maybe Nop (fun f -> headed "False" [ pfb f]) inFalse ]
 
     /// <summary>
     ///     Pretty-prints fuzzy type identifiers.
@@ -401,8 +398,7 @@ module Pretty =
             wrapped "view expression" (printViewExpr printView view)
                                       (printViewError err)
         | CommandNotImplemented cmd ->
-            fmt "command {0} not yet implemented"
-                [ printCommand (printViewExpr printView) cmd ]
+            fmt "command {0} not yet implemented" [ printFullCommand cmd ]
 
     /// Pretty-prints model conversion errors.
     let printModelError (err : ModelError) : Doc =
@@ -1823,8 +1819,8 @@ and modelAssign
 and modelITE
   (ctx : MethodContext)
   (i : Expression)
-  (t : Block<ViewExpr<View>, Command<ViewExpr<View>>>)
-  (fo : Block<ViewExpr<View>, Command<ViewExpr<View>>> option)
+  (t : FullBlock<ViewExpr<View>, FullCommand>)
+  (fo : FullBlock<ViewExpr<View>, FullCommand> option)
   : Result<ModellerPartCmd, MethodError> =
     let iuR =
         wrapMessages
@@ -1855,7 +1851,7 @@ and modelWhile
   (isDo : bool)
   (ctx : MethodContext)
   (e : Expression)
-  (b : Block<ViewExpr<View>, Command<ViewExpr<View>>>)
+  (b : FullBlock<ViewExpr<View>, FullCommand>)
   : Result<ModellerPartCmd, MethodError> =
     (* A while is also not fully resolved.
      * Similarly, we convert the condition, recursively find the axioms,
@@ -1895,13 +1891,13 @@ and modelPrim
 /// The list is enclosed in a Chessie result.
 and modelCommand
   (ctx : MethodContext)
-  (n : Command<ViewExpr<View>>)
+  (n : FullCommand)
   : Result<ModellerPartCmd, MethodError> =
     match n.Node with
-    | Command'.Prim p -> modelPrim ctx p
-    | Command'.If(i, t, e) -> modelITE ctx i t e
-    | Command'.While(e, b) -> modelWhile false ctx e b
-    | Command'.DoWhile(b, e) -> modelWhile true ctx e b
+    | FPrim p -> modelPrim ctx p
+    | FIf(i, t, e) -> modelITE ctx i t e
+    | FWhile(e, b) -> modelWhile false ctx e b
+    | FDoWhile(b, e) -> modelWhile true ctx e b
     | _ -> fail (CommandNotImplemented n)
 
 /// Converts a view expression into a CView.
@@ -1911,34 +1907,32 @@ and modelViewExpr (ctx : MethodContext)
     | Mandatory v -> modelCView ctx v |> lift Mandatory
     | Advisory v -> modelCView ctx v |> lift Advisory
 
-/// Converts the view and command in a ViewedCommand.
+/// Converts a pair of view and command.
 and modelViewedCommand
   (ctx : MethodContext)
-  ({Post = post; Command = command}
-     : ViewedCommand<ViewExpr<View>, Command<ViewExpr<View>>>)
-  : Result<ModellerViewedCommand, MethodError> =
-    lift2 (fun postM commandM -> {Post = postM; Command = commandM})
+  (vc : FullCommand * ViewExpr<View>)
+      : Result<ModellerPartCmd * ModellerViewExpr, MethodError> =
+    let command, post = vc
+    lift2 mkPair
+          (modelCommand ctx command)
           (post |> modelViewExpr ctx
                 |> mapMessages (curry MethodError.BadView post))
-          (command |> modelCommand ctx)
 
 /// Converts the views and commands in a block.
 /// The converted block is enclosed in a Chessie result.
 and modelBlock
   (ctx : MethodContext)
-  ({Pre = bPre; Contents = bContents} :
-       Block<ViewExpr<View>, Command<ViewExpr<View>>>)
+  (block : FullBlock<ViewExpr<View>, FullCommand>)
   : Result<ModellerBlock, MethodError> =
-    lift2 (fun bPreM bContentsM -> {Pre = bPreM; Contents = bContentsM})
-          (bPre |> modelViewExpr ctx
-                |> mapMessages (curry MethodError.BadView bPre))
-          (bContents |> Seq.map (modelViewedCommand ctx) |> collect)
+    lift2 (fun bPreM bContentsM -> {Pre = bPreM; Cmds = bContentsM})
+          (wrapMessages MethodError.BadView (modelViewExpr ctx) block.Pre)
+          (block.Cmds |> Seq.map (modelViewedCommand ctx) |> collect)
 
 /// Converts a method's views and commands.
 /// The converted method is enclosed in a Chessie result.
 let modelMethod
   (ctx : MethodContext)
-  (meth : string * Block<ViewExpr<View>, Command<ViewExpr<View>>>)
+  (meth : string * FullBlock<ViewExpr<View>, FullCommand>)
   : Result<string * ModellerBlock, ModelError> =
     let (n, b) = meth
     let bmR = mapMessages (curry BadMethod n) (modelBlock ctx b)

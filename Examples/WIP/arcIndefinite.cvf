@@ -27,9 +27,7 @@ method drop() {
     <c = count-->;
   {| countWas(c) |}  // A snapshot of the counter
     if (c == 1) {
-      {| ? |}
         <free = 1>;  // Dispose the object
-      {| ? |}
     }
   {| emp |}
 }

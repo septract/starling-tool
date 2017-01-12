@@ -18,6 +18,7 @@ open Starling.Core.Command
 open Starling.Core.Command.Create
 open Starling.Core.Instantiate
 open Starling.Lang.AST
+open Starling.Lang.ViewDesugar
 open Starling.Core.Model
 open Starling.Lang.Modeller
 open Starling.Tests.Studies
@@ -350,24 +351,23 @@ module CommandAxioms =
     open Starling.Core.Pretty
     open Starling.Lang.Modeller.Pretty
 
-    let check (c : Command<ViewExpr<View>>) (cmd : ModellerPartCmd) : unit =
+    let check (c : FullCommand) (cmd : ModellerPartCmd) : unit =
         assertOkAndEqual
             cmd
             (modelCommand sharedContext c)
             (printMethodError >> printUnstyled)
 
-    let prim (atom : Atomic) : Command<ViewExpr<View>> =
+    let prim (atom : Atomic) : FullCommand =
         freshNode
-        <| Command'.Prim { PreAssigns = []
-                           Atomics = [ atom ]
-                           PostAssigns = [] }
+        <| FPrim { PreAssigns = []
+                   Atomics = [ atom ]
+                   PostAssigns = [] }
 
-    let local (lvalue : Expression) (rvalue : Expression)
-      : Command<ViewExpr<View>> =
+    let local (lvalue : Expression) (rvalue : Expression) : FullCommand =
         freshNode
-        <| Command'.Prim { PreAssigns = [ (lvalue, rvalue) ]
-                           Atomics = []
-                           PostAssigns = [] }
+        <| FPrim { PreAssigns = [ (lvalue, rvalue) ]
+                   Atomics = []
+                   PostAssigns = [] }
 
     [<Test>]
     let ``modelling command <foo = x++> passes`` () =
