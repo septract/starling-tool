@@ -538,7 +538,7 @@ let parsePrimSet =
     let parseAtomicFirstPrimSet =
         pipe2
           (parseAtomicSet .>> wsSemi .>> ws)
-          (many (parseAssign .>> wsSemi .>> ws))
+          (many (attempt (parseAssign .>> wsSemi .>> ws)))
           (fun atom rassigns ->
               Prim { PreAssigns = []; Atomics = atom; PostAssigns = rassigns } )
 

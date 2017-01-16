@@ -250,10 +250,23 @@ and desugarBlock (tvars: Map<string, Type>) (fg: bigint ref)
     (* If the first item isn't a view, we have to synthesise a block
        precondition. *)
     let (blockP, pre) = cap block
+
+    (* If there is only one thing in the block so far, then it should be a block
+       precondition, since otherwise we'd have added a second item.  So,
+       add a skip to the end to make the next bit of logic work. *)
+
+    let skip () =
+        freshNode (Prim { PreAssigns = []; Atomics = []; PostAssigns = [] })
+
+    let blockPC =
+        match blockP with
+        | [ x ] -> [ x; skip () ]
+        | xs -> xs
+
     (* If the last item isn't a view, we have to synthesise a block
        postcondition.
        (TODO(CaptainHayashi): do this efficiently) *)
-    let blockPQ = List.rev (fst (cap (List.rev blockP)))
+    let blockPQ = List.rev (fst (cap (List.rev blockPC)))
 
     (* Next, we have to slide down the entire block pairwise.
        1. If we see ({| view |}, {| view |}), insert a skip between them.
@@ -265,16 +278,13 @@ and desugarBlock (tvars: Map<string, Type>) (fg: bigint ref)
           We'll add the next command on the next pass. *)
     let blockPairs = Seq.windowed 2 blockPQ
 
-    let skip () =
-        freshNode (Prim { PreAssigns = []; Atomics = []; PostAssigns = [] })
-
     let fillBlock bsf pair =
         match pair with
         | [| { Node = ViewExpr x }; { Node = ViewExpr y } |] -> (skip (), x) :: bsf
         | [| cx                   ; { Node = ViewExpr y } |] -> (cx, y) :: bsf
         | [| { Node = ViewExpr x }; cx                    |] -> bsf
-        | [| cx                   : _                     |] -> (cx, Unknown) :: bsf
-        | _                            -> failwith "unexpected window size"
+        | [| cx                   ; _                     |] -> (cx, Unknown) :: bsf
+        | x -> failwith (sprintf "unexpected window in fillBlock: %A" x)
 
     // The above built the block backwards, so reverse it.
     let cmds = List.rev (Seq.fold fillBlock [] blockPairs)

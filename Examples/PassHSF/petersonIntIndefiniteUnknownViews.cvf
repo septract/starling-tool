@@ -48,15 +48,10 @@ method init() {
 method lockA() {
   {| aFlagDown() |}
     <aFlag = 1>;
-  {| ? |}
     <turn = 0>;
-  {| ? |}
     do {
-      {| ? |}
         <oFlag = bFlag>;
-      {| ? |}
         <oTurn = turn>;
-      {| ? |}
     } while (oFlag == 1 && oTurn == 0);
   {| aHoldLock() |}
 }
@@ -76,15 +71,10 @@ method unlockA() {
 method lockB() {
   {| bFlagDown() |}
     <bFlag = 1>;
-  {| ? |}
     <turn = 1>;
-  {| ? |}
     do {
-      {| ? |}
         <oFlag = aFlag>;
-      {| ? |}
         <oTurn = turn>;
-      {| ? |}
     } while (oFlag == 1 && oTurn == 1);
   {| bHoldLock() |}
 }
