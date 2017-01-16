@@ -105,16 +105,6 @@ module Types =
         /// </summary>
         | MissingIterator of view : DView
         /// <summary>
-        ///     An iterated view constraint contained a symbol where we didn't
-        ///     expect one.
-        ///
-        ///     <para>
-        ///         This is a fairly restrictive error and may be relaxed
-        ///         later on.
-        ///     </para>
-        /// </summary>
-        | SymInIteratedConstraint of sym : SymbolicSentence
-        /// <summary>
         ///     An expression traversal went belly-up.
         /// </summary>
         | Traversal of TraversalError<Error>
@@ -180,26 +170,35 @@ module Downclosure =
 
         mapMessages Traversal (mapper (mkTypedSub normalRec defn))
 
+    /// <summary>Type of downclosure check results.</summary>
+    type DownclosureResult =
+        | /// <summary>Downclosure has been proven.</summary>
+          Proven
+        | /// <summary>Downclosure has been refuted.</summary>
+          Refuted
+        | /// <summary>Downclosure cannot be decided: reason given.</summary>
+          Inconclusive of reason : string
+
     /// <summary>
     ///     Runs a downclosure check using Z3.
     /// </summary>
     /// <param name="check">The check to run.</param>
     /// <returns>
-    ///     True if <paramref name="check"/> succeeds (is a tautology);
-    ///     false if not; an error if <paramref name="check"/> contains
-    ///     symbols or otherwise cannot be decided by Z3.
+    ///     The result of the downclosure check.
     /// </returns>
-    let runDownclosureCheck (check : BoolExpr<Sym<Var>>) : Result<bool, Error> =
+    let runDownclosureCheck (check : BoolExpr<Sym<Var>>) : DownclosureResult =
         // Expression equivalence cannot handle symbols, so try remove them.
+        // If we can't, then we just kick downclosure down to the backend.
         // TODO(CaptainHayashi): is it sound to approximate here?
         let removeResult =
             mapTraversal
-                (removeSymFromBoolExpr SymInIteratedConstraint)
+                (removeSymFromBoolExpr id)
                 (mkTypedSub normalRec check)
+        match removeResult with
         // If check is a tautology, it will be equivalent to 'true'.
-        lift
-            (equiv BTrue >> equivHolds id)
-            (mapMessages Traversal removeResult)
+        | Pass r ->
+            if equivHolds id (equiv BTrue r) then Proven else Refuted
+        | _ -> Inconclusive "check is symbolic"
 
     /// <summary>
     ///     Checks the base downclosure property.
@@ -244,12 +243,14 @@ module Downclosure =
                The definition of emp can only mention global variables, so it
                need not need to be freshened. *)
             let checkR = lift (mkImplies ed) baseDefnR
-            let baseHoldsR = bind runDownclosureCheck checkR
+            let baseHoldsR = lift runDownclosureCheck checkR
             bind
                 (fun baseHolds ->
-                    if baseHolds
-                    then ok deferred
-                    else fail (BaseDownclosureError ([func], defn, ed)))
+                    match baseHolds with
+                    | Proven -> ok deferred
+                    | Refuted -> fail (BaseDownclosureError ([func], defn, ed))
+                    | Inconclusive reason ->
+                        ok (NeedsBaseDownclosure (func, reason)::deferred))
                 baseHoldsR
 
     /// <summary>
@@ -295,17 +296,16 @@ module Downclosure =
                         defn)
                 succDefnR
 
-        let indHoldsR = bind runDownclosureCheck checkR
+        let indHoldsR = lift runDownclosureCheck checkR
 
-        bind
-            (fun indHolds ->
-                if indHolds
-                then ok deferred
-                else
-                    bind
-                        (fun succDefn ->
-                            fail (InductiveDownclosureError ([func], succDefn, defn)))
-                        succDefnR)
+        bind2
+            (fun succDefn indHolds ->
+                match indHolds with
+                | Proven -> ok deferred
+                | Refuted -> fail (InductiveDownclosureError ([func], succDefn, defn))
+                | Inconclusive reason ->
+                    ok (NeedsInductiveDownclosure (func, reason)::deferred))
+            succDefnR
             indHoldsR
 
     /// <summary>
@@ -813,8 +813,5 @@ module Pretty =
         | MissingIterator view ->
             fmt "constraint '{0}' should have an iterator, but does not"
                 [ printDView view ]
-        | SymInIteratedConstraint sym ->
-            fmt "symbol '{0}' not allowed in an iterated constraint"
-                [ printSymbolicSentence sym ]
         | Traversal err -> printTraversalError printError err
         |> error
