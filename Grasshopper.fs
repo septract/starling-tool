@@ -1,7 +1,7 @@
 ﻿/// <summary>
 ///     Backend for emitting verification conditions in Grasshopper format
 /// </summary>
-module Starling.Backends.Grasshopper 
+module Starling.Backends.Grasshopper
 
 open Chessie.ErrorHandling
 
@@ -26,7 +26,7 @@ open Starling.Core.Traversal
 open Starling.Backends.Z3
 open Starling.Optimiser.Graph
 
-[<AutoOpen>] 
+[<AutoOpen>]
 module Types =
     /// <summary>A Grasshopper variable shadowing a Starling variable.</summary>
     type ShadowVar =
@@ -105,7 +105,7 @@ module Types =
           Traversal of TraversalError<Error>
 
 
-module Pretty = 
+module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.Command.Pretty
@@ -147,26 +147,27 @@ module Pretty =
                  <+> String why)
         | Traversal err -> printTraversalError printError err
 
+    /// Print infix operator (generic)
+    let infexprG (combine : string -> Doc -> Doc) (op : string) (pxs : 'x -> Doc) (xs : seq<'x>) : Doc =
+        let mapped = Seq.map pxs xs
+        let resseq = Seq.map (combine op) (Seq.tail mapped)
+        parened (hsep [Seq.head mapped; (hsep resseq)])
 
     /// Print infix operator across multiple lines
-    let infexprV (op : string) (pxs : 'x -> Doc) (xs : seq<'x>) : Doc = 
-        let mapped = Seq.map pxs xs 
-        let resseq = Seq.map (fun x -> vsep [(String op); Indent x]) (Seq.tail mapped) 
-        parened (hsep [Seq.head mapped; (hsep resseq)]) 
+    let infexprV (op : string) (pxs : 'x -> Doc) (xs : seq<'x>) : Doc =
+        infexprG (fun o x -> vsep [(String o); Indent x]) op pxs xs
 
     /// Print infix operator on one line
-    let infexpr (op : string) (pxs : 'x -> Doc) (xs : seq<'x>) : Doc = 
-        let mapped = Seq.map pxs xs 
-        let resseq = Seq.map (fun x -> hsep [(String op); x]) (Seq.tail mapped) 
-        parened (hsep [Seq.head mapped; (hsep resseq)]) 
+    let infexpr (op : string) (pxs : 'x -> Doc) (xs : seq<'x>) : Doc =
+        infexprG (fun o x -> hsep [(String o); x]) op pxs xs
 
-    /// Prints a marked Var 
+    /// Prints a marked Var
     let printMarkedVarGrass (v : MarkedVar) : Doc =
-        match v with 
-        | Before s -> String "before_" <-> String s 
+        match v with
+        | Before s -> String "before_" <-> String s
         | After s -> String "after_" <-> String s
-        | Intermediate (i, s) -> String "inter_" <-> String (sprintf "%A_" i) <-> String s 
-        | Goal (i, s) -> String "goal_" <-> String (sprintf "%A_" i) <-> String s 
+        | Intermediate (i, s) -> String "inter_" <-> String (sprintf "%A_" i) <-> String s
+        | Goal (i, s) -> String "goal_" <-> String (sprintf "%A_" i) <-> String s
 
     /// <summary>
     ///     Prints a shadow variable.
@@ -200,37 +201,44 @@ module Pretty =
         // TODO(CaptainHayashi): is printType correct?
         | x -> Starling.Core.TypeSystem.Pretty.printType x
 
-    let printTypedGrass (pVar : 'Var -> Doc) (var : CTyped<'Var>) : Doc = 
+    let printTypedGrass (pVar : 'Var -> Doc) (var : CTyped<'Var>) : Doc =
         colonSep [ pVar (valueOf var); printType (typeOf var)]
 
-    /// Prints a typed Var 
-    let printTypedVarGrass (v : TypedVar) : Doc = 
+    /// Prints a typed Var
+    let printTypedVarGrass (v : TypedVar) : Doc =
         printTypedGrass String v
 
     /// Pretty-prints an arithmetic expression.
     let rec printIntExprG (pVar : 'Var -> Doc) (i : IntExpr<'Var>) : Doc =
         match i with
         | IVar c -> pVar c
-        | x ->
+        | IAdd xs -> infexpr "+" (printIntExprG pVar) xs
+        | IMul xs -> infexpr "*" (printIntExprG pVar) xs
+        | ISub xs -> infexpr "-" (printIntExprG pVar) xs
+        | IDiv (x, y) -> infexpr "/" (printIntExprG pVar) [ x ; y ]
+        | IMod (x, y) -> infexpr "%" (printIntExprG pVar) [ x ; y ]
+        | IInt k -> String (sprintf "%i" k)
+        | IIdx _ as x ->
             failwith
                 (sprintf
                     "[printIntExprG] Unimplemented for Grasshopper: %A"
                     x)
 
+
     /// Pretty-prints a Boolean expression.
     and printBoolExprG (pVar : 'Var -> Doc) (b : BoolExpr<'Var>) : Doc =
-        match b with 
+        match b with
         | BVar c -> pVar c
         | BTrue -> String "true"
         | BFalse -> String "false"
-        | BAnd xs -> infexprV "&&" (printBoolExprG pVar) xs 
+        | BAnd xs -> infexprV "&&" (printBoolExprG pVar) xs
         | BOr xs -> infexprV "||" (printBoolExprG pVar) xs
-        | BImplies (x, y) -> 
+        | BImplies (x, y) ->
             /// Convert implications to disjunctive form
-            printBoolExprG pVar (simp (BOr [BNot x; y])) 
+            printBoolExprG pVar (simp (BOr [BNot x; y]))
         | BNot (BEq (x, y)) -> infexpr "!=" (printExprG pVar) [x; y]
-        | BNot x -> 
-            String "!" <+> (printBoolExprG pVar x) |> parened 
+        | BNot x ->
+            String "!" <+> (printBoolExprG pVar x) |> parened
         | BEq (x, y) -> infexpr "==" (printExprG pVar) [x; y]
         | BLt (x, y) -> infexpr "<" (stripTypeRec >> printIntExprG pVar) [x; y]
         | BLe (x, y) -> infexpr "<=" (stripTypeRec >> printIntExprG pVar) [x; y]
@@ -256,7 +264,7 @@ module Pretty =
         let { Sentence = ws; Args = xs } = s
         printInterpolatedSymbolicSentence pArg ws xs
 
-    /// Pretty-prints a symbolic sentence 
+    /// Pretty-prints a symbolic sentence
     let rec printSymGrass (pReg : 'Var -> Doc) (sym : Sym<'Var>) : Doc =
         match sym with
         | Reg r -> pReg r
@@ -299,8 +307,8 @@ module Pretty =
                     (Seq.map (printTypedGrass printMarkedVarGrass) term.Vars,
                      String ","))
 
-        /// Print the requires / ensures clauses 
-        let reprint expr = 
+        /// Print the requires / ensures clauses
+        let reprint expr =
             let body = printBoolExprG (printSymGrass printMarkedVarGrass) expr.Body
             match expr.Footprints with
             | [] -> body
@@ -320,13 +328,13 @@ module Pretty =
 
         let cmdprint = vsep (List.map printCommand term.Commands)
 
-        vsep [ String "procedure" <+> String name <+> (varprint |> parened) 
-               String "requires" 
-               Indent reqprint 
-               String "ensures" 
+        vsep [ String "procedure" <+> String name <+> (varprint |> parened)
+               String "requires"
+               Indent reqprint
+               String "ensures"
                Indent ensprint
                braced (Indent cmdprint)
-             ]  
+             ]
 
     /// <summary>
     ///     Print a pragma if it has some meaning in GRASShopper.
@@ -344,17 +352,17 @@ module Pretty =
         | _ -> None
 
     /// Print all the Grasshopper queries that haven't been eliminated by Z3.
-    let printQuery (model: GrassModel) : Doc = 
+    let printQuery (model: GrassModel) : Doc =
         let axseq = Map.toSeq model.Axioms
         let tseq = Seq.map (fun (name,term) -> printGrassTerm name term) axseq
-        let pragseq = Seq.choose printPragma model.Pragmata 
+        let pragseq = Seq.choose printPragma model.Pragmata
         let docseq = Seq.append pragseq tseq
 
         VSep (docseq, VSkip)
 
 
 /// <summary>
-///     Get the set of accessed variables in a term. 
+///     Get the set of accessed variables in a term.
 /// </summary>
 let findTermVars (term : Backends.Z3.Types.ZTerm)
   : Result<CTyped<MarkedVar> list, Error> =
@@ -643,7 +651,7 @@ let grassModelBaseDownclosure
                 bdBeforeR
         bind mkProc baseDefnR
     | _ ->
-        fail 
+        fail
             (CannotCheckDeferred
                 (NeedsBaseDownclosure (func, reason), "emp is indefinite"))
 
@@ -762,7 +770,7 @@ let grassModelDeferred
 ///     This model contains procedures for each term in the existing model,
 ///     as well as procedures for deferred checks.
 /// </summary>
-let grassModel (model : Backends.Z3.Types.ZModel) : Result<GrassModel,Error> = 
+let grassModel (model : Backends.Z3.Types.ZModel) : Result<GrassModel,Error> =
     let fails = extractFailures model
     let failSeq = Map.toSeq fails
 
