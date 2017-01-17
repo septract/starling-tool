@@ -9,9 +9,7 @@ pragma grasshopper_footprint {ArcFoot};
 pragma grasshopper_footprint_sort {Set<ArcNode>};
 
 view iter arc(ArcNode x); 
-view newArc(ArcNode x); 
 view countCopy(ArcNode x, Int C); 
-view arcZero(ArcNode x); 
 
 thread ArcNode x, ret; 
 thread Int c, pval; 
@@ -24,6 +22,12 @@ method init() {
   {| arc(ret) |} 
 }
 
+method clone(ArcNode x) {
+  {| arc(x) |} 
+    <%{#1.count := #1.count + 1}(x)>;
+  {| arc(x) * arc(x) |} 
+}
+
 method print(ArcNode x) { 
   {| arc(x) |} 
     // TODO: broken local command syntax. 
@@ -31,20 +35,14 @@ method print(ArcNode x) {
   {| arc(x) |} 
 } 
 
-method clone(ArcNode x) {
-  {| arc(x) |} 
-    <%{#1.count := #1.count + 1}(x)>;
-  {| arc(x) * arc(x) |} 
-}
-
 method drop(ArcNode x) {
   {| arc(x) |}
     // TODO: broken local command syntax. 
     c = %{ #1.count }(x); 
     <%{ #1.count := #1.count - 1 }(x)>; 
-  {| arc(x) * countCopy(x, c) |}
+  {| countCopy(x, c) |}
     if (c == 1) {
-      {| arc(x) * countCopy(x, 1) |}
+      {| countCopy(x, 1) |}
          < %{ free(#1) }(x) >; 
       {| emp |}
     }
@@ -54,10 +52,13 @@ method drop(ArcNode x) {
 constraint emp -> 
     %{ forall x : ArcNode :: x in ArcFoot ==> x.count >= 0 }(); 
 
-constraint countCopy(x, c) ->   
-    c == 1 => %{ #1.count == 0 }(x); 
-
 constraint iter[n] arc(x) -> 
-    (n > 0 => %{ #1 in ArcFoot }(x) )
-     && 
-    %{#1 <= #2.count}(n, x); 
+    n > 0 => %{ #2 in ArcFoot && #1 <= #2.count}(n, x); 
+
+constraint countCopy(x, c) ->   
+    c == 1 => %{ #1 in ArcFoot && #1.count == 0}(x); 
+
+constraint countCopy(x, m) * countCopy(y, n) -> 
+    x == y => ((m != 1) || (n != 1));  
+
+       
