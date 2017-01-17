@@ -1,0 +1,63 @@
+// Allocatable version of Examples/Pass/arc.cvf
+
+typedef int ArcNode; 
+typedef bool Bool; 
+typedef int Int; 
+
+pragma grasshopper_include {./grasshopper/arc-module.spl};
+pragma grasshopper_footprint {ArcFoot};
+pragma grasshopper_footprint_sort {Set<ArcNode>};
+
+view iter arc(ArcNode x); 
+view newArc(ArcNode x); 
+view countCopy(ArcNode x, Int C); 
+view arcZero(ArcNode x); 
+
+thread ArcNode x, ret; 
+thread Int c, pval; 
+
+method init() {
+  {| emp |}
+    // TODO: broken local command syntax. 
+    ret = %{new ArcNode}(); 
+    <%{#1.count := 1}(ret)>; 
+  {| arc(ret) |} 
+}
+
+method print(ArcNode x) { 
+  {| arc(x) |} 
+    // TODO: broken local command syntax. 
+    pval = %{ #1.val }(x); 
+  {| arc(x) |} 
+} 
+
+method clone(ArcNode x) {
+  {| arc(x) |} 
+    <%{#1.count := #1.count + 1}(x)>;
+  {| arc(x) * arc(x) |} 
+}
+
+method drop(ArcNode x) {
+  {| arc(x) |}
+    // TODO: broken local command syntax. 
+    c = %{ #1.count }(x); 
+    <%{ #1.count := #1.count - 1 }(x)>; 
+  {| arc(x) * countCopy(x, c) |}
+    if (c == 1) {
+      {| arc(x) * countCopy(x, 1) |}
+         < %{ free(#1) }(x) >; 
+      {| emp |}
+    }
+  {| emp |}
+}
+
+constraint emp -> 
+    %{ forall x : ArcNode :: x in ArcFoot ==> x.count >= 0 }(); 
+
+constraint countCopy(x, c) ->   
+    c == 1 => %{ #1.count == 0 }(x); 
+
+constraint iter[n] arc(x) -> 
+    (n > 0 => %{ #1 in ArcFoot }(x) )
+     && 
+    %{#1 <= #2.count}(n, x); 
