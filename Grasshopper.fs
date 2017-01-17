@@ -20,6 +20,7 @@ open Starling.Core.Symbolic.Traversal
 open Starling.Core.Instantiate
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Traversal
+open Starling.Core.View
 open Starling.Core.View.Traversal
 open Starling.Core.Traversal
 open Starling.Backends.Z3
@@ -95,6 +96,10 @@ module Types =
           /// </summary>
           FootprintMismatch
         | /// <summary>
+          ///     GRASShopper can't check the given deferred check.
+          /// </summary>
+          CannotCheckDeferred of check : DeferredCheck * why : string
+        | /// <summary>
           ///     Some traversal blew up.
           /// </summary>
           Traversal of TraversalError<Error>
@@ -117,8 +122,8 @@ module Pretty =
     /// <returns>
     ///     A <see cref="Doc"/> representing <paramref name="error"/>.
     /// </returns>
-    let rec printError (error : Error) : Doc =
-        match error with
+    let rec printError (err : Error) : Doc =
+        match err with
         | CommandNotImplemented (cmd, why) ->
             vsep
                 [ cmdHeaded (errorStr "Encountered a command incompatible with Grasshopper")
@@ -134,6 +139,12 @@ module Pretty =
                     [ printExpr (printSym printMarkedVar) expr ]
                   errorInfo (String "Reason:" <+> String why) ]
         | FootprintMismatch -> errorStr "different number of footprint names and sorts"
+        | CannotCheckDeferred (check, why) ->
+            error
+                (String "deferred sanity check '"
+                 <-> printDeferredCheck check
+                 <-> String "' failed:"
+                 <+> String why)
         | Traversal err -> printTraversalError printError err
 
 
@@ -345,7 +356,7 @@ module Pretty =
 /// <summary>
 ///     Get the set of accessed variables in a term. 
 /// </summary>
-let findVars (term : Backends.Z3.Types.ZTerm)
+let findTermVars (term : Backends.Z3.Types.ZTerm)
   : Result<CTyped<MarkedVar> list, Error> =
     (* For the WPre and Goal, we used to just use the symbool representation,
        but this can under-approximate the variable accesses if the symbool was
@@ -506,28 +517,18 @@ let grassFrame
 /// <summary>
 ///     Generates a Grasshopper term.
 /// </summary>
-/// <param name="footprint">An optional footprint name.</param>
-/// <param name="footprintSort">The sort of the footprint, if it exists.</param>
+/// <param name="addFoot">Function for adding footprints to Booleans.</param>
 /// <param name="term">The term to convert to Grasshopper.</param>
 /// <returns>
 ///     A Chessie result, containing the converted term on success.
 /// </returns>
 let grassTerm
-  (footprintNames : string list)
-  (footprintSorts : string list)
+  (addFoot : BoolExpr<Sym<MarkedVar>> -> Formula)
   (term : Backends.Z3.Types.ZTerm) : Result<GrassTerm, Error> =
-    let footprintsR =
-        if footprintNames.Length <> footprintSorts.Length
-        then fail FootprintMismatch
-        else ok (List.zip footprintNames footprintSorts)
-
-    let addFootprint b fs =
-        { Footprints = fs; Body = b }
-
-    let requiresR = lift (addFootprint term.SymBool.WPre) footprintsR
-    let ensuresR = lift (addFootprint term.SymBool.Goal) footprintsR
+    let requires = addFoot term.SymBool.WPre
+    let ensures = addFoot term.SymBool.Goal
     let commandsR = grassMicrocode term.Original.Cmd.Microcode
-    let varsR = findVars term
+    let varsR = findTermVars term
     let frameR =
         bind
             (fun vars ->
@@ -541,16 +542,226 @@ let grassTerm
             varsR
     let framedCommandsR = lift2 (@) commandsR frameR
 
-    lift4
-        (fun vars requires ensures commands ->
+    lift2
+        (fun vars commands ->
             { Vars = vars
               Requires = requires
               Ensures = ensures
               Commands = commands } )
-        varsR requiresR ensuresR framedCommandsR
+        varsR framedCommandsR
+
+/// <summary>
+///     Checks the base downclosure property.
+///     <para>
+///         This states that, for all iterated views <c>A(x)[n]</c>,
+///         <c>D(emp) => D(A(x)[0])</c>: their definitions are no stronger
+///         than that of the empty view.  If there is no <c>D(emp)</c>, we
+///         instead must prove <c>D(A(x)[0])</c> is a tautology.
+///     </para>
+/// </summary>
+/// <param name="definer">The active func definer.</param>
+/// <param name="addFoot">Function for adding footprints to Booleans.</param>
+/// <param name="func">The iterated func to check, <c>A(x)[n]</c>.</param>
+/// <param name="reason">The original reason for the deferred check.</param>
+/// <returns>
+///     If the base downclosure property can be checked by GRASShopper, a
+///     pair of the resulting procedure's name and body; an error otherwise.
+/// </returns>
+let grassModelBaseDownclosure
+  (definer : FuncDefiner<BoolExpr<Sym<Var>> option>)
+  (addFoot : BoolExpr<Sym<MarkedVar>> -> Formula)
+  (func : IteratedDFunc)
+  (reason : string)
+  : Result<string * GrassTerm, Error> =
+    (* To do the base downclosure, we need to replace all instances of the
+       iterator in the definition with 0. *)
+    let iteratorR =
+        // TODO(CaptainHayashi): subtypes?
+        match func.Iterator with
+        | Some (Int (_, x)) -> ok x
+        | _ ->
+            fail
+                (CannotCheckDeferred
+                    (NeedsBaseDownclosure (func, reason), "malformed iterator"))
+
+    let defnR =
+        match FuncDefiner.lookup func.Func definer with
+        | Pass (Some (_, Some d)) -> ok d
+        | _ ->
+            fail
+                (CannotCheckDeferred
+                    (NeedsBaseDownclosure (func, reason), "func not in definer"))
+
+    let baseDefnR =
+        bind2
+            (fun i d ->
+                mapMessages Traversal
+                    (mapOverIteratorUses (fun _ -> IInt 0L) i d))
+            iteratorR
+            defnR
+
+    // If emp is indefinite (None), we can't check downclosure.
+    // TODO(CaptainHayashi): this is pretty grim.
+    let empDefn =
+        Seq.tryFind
+            (fun (dfunc : DFunc, _) -> dfunc.Name = "emp")
+            (FuncDefiner.toSeq definer)
+    match empDefn with
+    | Some (_, Some ed) ->
+        (* Base downclosure for a view V[n](x):
+             D(emp) => D(V[0](x))
+           That is, the definition of V when the iterator is 0 can be no
+           stricter than the definition of emp.
+
+           The definition of emp can only mention global variables, so it
+           need not need to be freshened. *)
+        let mkProc baseDefn =
+            (* All of the GRASShopper machinery is expecting the definitions to
+               use MarkedVars, but they currently use Vars.  A hacky fix is to
+               convert everything to pre-state: *)
+            let edBeforeR = beforeBool (normalBool ed)
+            let bdBeforeR = beforeBool (normalBool baseDefn)
+
+            let getVars =
+                normalBool
+                >> findVars (tliftToBoolSrc (tliftToExprDest collectSymVars))
+            let empDefnVarsR = bind getVars edBeforeR
+            let baseDefnVarsR = bind getVars bdBeforeR
+            let varsR = lift2 Set.union empDefnVarsR baseDefnVarsR
+
+            let name = sprintf "%s_base_dc" func.Func.Name
+
+            mapMessages Traversal <| lift3
+                (fun vars edBefore bdBefore ->
+                    (name,
+                     { Vars = Set.toList vars
+                       Requires = addFoot edBefore
+                       Ensures = addFoot bdBefore
+                       Commands = [] } ))
+                varsR
+                edBeforeR
+                bdBeforeR
+        bind mkProc baseDefnR
+    | _ ->
+        fail 
+            (CannotCheckDeferred
+                (NeedsBaseDownclosure (func, reason), "emp is indefinite"))
+
+/// <summary>
+///     Checks the inductive downclosure property.
+///     <para>
+///         This states that, for all iterated views <c>A(x)[n]</c>,
+///         for all positive <c>n</c>, <c>D(A(x)[n+1]) => D(A(x)[n])</c>:
+///         iterated view definitions must be monotonic over the iterator.
+///         This, coupled with base downclosure, allows us to consider only
+///         the highest iterator of an iterated func during reification,
+///         instead of needing to take all funcs with an iterator less than
+///         or equal to it.
+///     </para>
+/// </summary>
+/// <param name="definer">The active func definer.</param>
+/// <param name="addFoot">Function for adding footprints to Booleans.</param>
+/// <param name="func">The iterated func to check, <c>A(x)[n]</c>.</param>
+/// <param name="reason">The original reason for the deferred check.</param>
+/// <returns>
+///     If the base downclosure property can be checked by GRASShopper, a
+///     pair of the resulting procedure's name and body; an error otherwise.
+/// </returns>
+let grassModelInductiveDownclosure
+  (definer : FuncDefiner<BoolExpr<Sym<Var>> option>)
+  (addFoot : BoolExpr<Sym<MarkedVar>> -> Formula)
+  (func : IteratedDFunc)
+  (reason : string)
+  : Result<string * GrassTerm, Error> =
+    // TODO(CaptainHayashi): de-duplicate this with base DC.
+    let iteratorR =
+        // TODO(CaptainHayashi): subtypes?
+        match func.Iterator with
+        | Some (Int (_, x)) -> ok x
+        | _ ->
+            fail
+                (CannotCheckDeferred
+                    (NeedsBaseDownclosure (func, reason), "malformed iterator"))
+
+    let baseDefnR =
+        match FuncDefiner.lookup func.Func definer with
+        | Pass (Some (_, Some d)) -> ok d
+        | _ ->
+            fail
+                (CannotCheckDeferred
+                    (NeedsBaseDownclosure (func, reason), "func not in definer"))
 
 
-/// Generate a grasshopper model (currently doesn't do anything) 
+    (* To do the inductive downclosure, we need to replace all instances of
+       the iterator in the definition with (iterator + 1) in one version. *)
+    let succDefnR =
+        bind2
+            (fun i d ->
+                mapMessages Traversal
+                    (mapOverIteratorUses (Reg >> incVar) i d))
+            iteratorR
+            baseDefnR
+
+    (* Inductive downclosure for a view V[n](x):
+         (0 <= n && D(V[n+1](x)) => D(V[n](x)))
+       That is, the definition of V when the iterator is n+1 implies the
+       definition of V when the iterator is n, for all positive n. *)
+    let mkProc succDefn baseDefn =
+        (* All of the GRASShopper machinery is expecting the definitions to
+           use MarkedVars, but they currently use Vars.  A hacky fix is to
+           convert everything to pre-state: *)
+        let sdBeforeR = beforeBool (normalBool succDefn)
+        let bdBeforeR = beforeBool (normalBool baseDefn)
+
+        let getVars =
+            normalBool
+            >> findVars (tliftToBoolSrc (tliftToExprDest collectSymVars))
+        let succDefnVarsR = bind getVars sdBeforeR
+        let baseDefnVarsR = bind getVars bdBeforeR
+        let varsR = lift2 Set.union succDefnVarsR baseDefnVarsR
+
+        let name = sprintf "%s_ind_dc" func.Func.Name
+
+        mapMessages Traversal <| lift3
+            (fun vars sdBefore bdBefore ->
+                (name,
+                 { Vars = Set.toList vars
+                   Requires = addFoot sdBefore
+                   Ensures = addFoot bdBefore
+                   Commands = [] } ))
+            varsR
+            sdBeforeR
+            bdBeforeR
+    bind2 mkProc succDefnR baseDefnR
+
+
+/// <summary>
+///     Converts deferred checks into GRASShopper procedures.
+/// </summary>
+/// <param name="model">
+///     The <see cref="ZModel"/> whose deferred checks are being converted.
+/// </param>
+/// <returns>
+///     Unless a deferred check was found that cannot be modelled, a list of
+///     GRASShopper procedures that exercise the given deferred checks.
+/// </returns>
+let grassModelDeferred
+  (model : ZModel)
+  (addFoot : BoolExpr<Sym<MarkedVar>> -> Formula)
+  : Result<(string * GrassTerm) list, Error> =
+    let modelDC =
+        function
+        | NeedsBaseDownclosure (func, reason) ->
+            grassModelBaseDownclosure model.ViewDefs addFoot func reason
+        | NeedsInductiveDownclosure (func, reason) ->
+            grassModelInductiveDownclosure model.ViewDefs addFoot func reason
+    collect (List.map modelDC model.DeferredChecks)
+
+/// <summary>
+///     Generate a GRASShopper model.
+///     This model contains procedures for each term in the existing model,
+///     as well as procedures for deferred checks.
+/// </summary>
 let grassModel (model : Backends.Z3.Types.ZModel) : Result<GrassModel,Error> = 
     let fails = extractFailures model
     let failSeq = Map.toSeq fails
@@ -565,10 +776,24 @@ let grassModel (model : Backends.Z3.Types.ZModel) : Result<GrassModel,Error> =
         List.choose
             (fun (x, y) -> if x = "grasshopper_footprint_sort" then Some y else None)
             model.Pragmata
+    let footprintsR =
+        if footprintNames.Length <> footprintSorts.Length
+        then fail FootprintMismatch
+        else ok (List.zip footprintNames footprintSorts)
+    let addFootprintR =
+        lift (fun fs b -> { Footprints = fs; Body = b }) footprintsR
 
-    let grassTermPair (name, term) = lift (mkPair name) (grassTerm footprintNames footprintSorts term)
-    let grassTermPairsR = collect (Seq.map grassTermPair failSeq)
+    let grassTermsR =
+        bind
+            (fun addFootprint ->
+                let grassTermPair (name, term) =
+                    lift (mkPair name) (grassTerm addFootprint term)
+                let grassTermPairsR = collect (Seq.map grassTermPair failSeq)
+                let dcR = grassModelDeferred model addFootprint
 
-    let grassTermsR = lift Map.ofSeq grassTermPairsR
+                let unifiedR = lift2 (@) grassTermPairsR dcR
+                lift Map.ofSeq unifiedR)
+            addFootprintR
+
 
     lift (fun terms -> withAxioms terms model) grassTermsR

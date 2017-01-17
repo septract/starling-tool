@@ -353,6 +353,16 @@ module Traversal =
         tliftOverExpr (traverseTypedSymWithMarker marker)
 
     /// <summary>
+    ///     Converts a symbolic Boolean to its pre-state.
+    /// </summary>
+    let beforeBool (expr : TypedBoolExpr<Sym<Var>>)
+      : Result<BoolExpr<Sym<MarkedVar>>, TraversalError<'Error>> =
+        mapTraversal
+            (tliftToBoolSrc
+                (tliftToExprDest 
+                    (traverseTypedSymWithMarker Before))) expr
+
+    /// <summary>
     ///     Converts a symbolic expression to its pre-state.
     /// </summary>
     let before (expr : Expr<Sym<Var>>)

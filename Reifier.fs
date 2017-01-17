@@ -139,37 +139,6 @@ module Downclosure =
         let record = wrapMessages LookupError look func
         lift (Option.map snd) record
 
-    /// <summary>
-    ///     Maps a substitution function over all of the uses of an iterator
-    ///     variable in a view definition.
-    /// </summary>
-    /// <param name="f">
-    ///     The function used to substitute expressions for instances of the
-    ///     iterator.
-    /// </param>
-    /// <param name="iterator">The variable representing the iterator.</param>
-    /// <param name="defn">The view definition to transform.</param>
-    /// <returns>
-    ///     The result of transforming every occurrence of the integer variable
-    ///     <paramref name="iterator"/> using <paramref name="f"/>.
-    /// </returns>
-    let mapOverIteratorUses (f : Var -> IntExpr<Sym<Var>>)
-      (iterator : Var)
-      (defn : BoolExpr<Sym<Var>>)
-      : Result<BoolExpr<Sym<Var>>, Error> =
-        let fOnIter (var : TypedVar) : Result<Expr<Sym<Var>>, Error> =
-            ok
-                (match var with
-                 | Int (t, v) when v = iterator -> Int (t, f v)
-                 | tv -> mkVarExp (mapCTyped Reg tv))
-
-        let mapper =
-            liftWithoutContext
-                fOnIter
-                (tliftToTypedSymVarSrc >> tliftToBoolSrc)
-
-        mapMessages Traversal (mapper (mkTypedSub normalRec defn))
-
     /// <summary>Type of downclosure check results.</summary>
     type DownclosureResult =
         | /// <summary>Downclosure has been proven.</summary>
@@ -228,7 +197,8 @@ module Downclosure =
         (* To do the base downclosure, we need to replace all instances of the
            iterator in the definition with 0. *)
         let baseDefnR =
-            mapOverIteratorUses (fun _ -> IInt 0L) iterator defn
+             mapMessages Traversal
+                (mapOverIteratorUses (fun _ -> IInt 0L) iterator defn)
 
         // If emp is indefinite (None), defer this base downclosure check.
         match empDefn with
@@ -280,7 +250,9 @@ module Downclosure =
       : Result<DeferredCheck list, Error> =
         (* To do the inductive downclosure, we need to replace all instances of
            the iterator in the definition with (iterator + 1) in one version. *)
-        let succDefnR = mapOverIteratorUses (Reg >> incVar) iterator defn
+        let succDefnR =
+            mapMessages Traversal
+                (mapOverIteratorUses (Reg >> incVar) iterator defn)
 
         (* Inductive downclosure for a view V[n](x):
              (0 <= n && D(V[n+1](x)) => D(V[n](x)))

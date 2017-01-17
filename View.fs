@@ -11,6 +11,8 @@ open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
+open Starling.Core.Symbolic.Traversal
+open Starling.Core.Traversal
 
 
 /// <summary>
@@ -99,6 +101,37 @@ module Types =
 
     /// An iterated view-definition func.
     type IteratedDFunc = IteratedContainer<DFunc, TypedVar option>
+
+    /// <summary>
+    ///     Maps a substitution function over all of the uses of an iterator
+    ///     variable in a view definition.
+    /// </summary>
+    /// <param name="f">
+    ///     The function used to substitute expressions for instances of the
+    ///     iterator.
+    /// </param>
+    /// <param name="iterator">The variable representing the iterator.</param>
+    /// <param name="defn">The view definition to transform.</param>
+    /// <returns>
+    ///     The result of transforming every occurrence of the integer variable
+    ///     <paramref name="iterator"/> using <paramref name="f"/>.
+    /// </returns>
+    let mapOverIteratorUses (f : Var -> IntExpr<Sym<Var>>)
+      (iterator : Var)
+      (defn : BoolExpr<Sym<Var>>)
+      : Result<BoolExpr<Sym<Var>>, TraversalError<'Error>> =
+        let fOnIter (var : TypedVar) : Result<Expr<Sym<Var>>, 'Error> =
+            ok
+                (match var with
+                 | Int (t, v) when v = iterator -> Int (t, f v)
+                 | tv -> mkVarExp (mapCTyped Reg tv))
+
+        let mapper =
+            liftWithoutContext
+                fOnIter
+                (tliftToTypedSymVarSrc >> tliftToBoolSrc)
+
+        mapper (mkTypedSub normalRec defn)
 
     (*
      * Views
