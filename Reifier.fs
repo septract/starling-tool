@@ -203,7 +203,7 @@ module Downclosure =
         // If emp is indefinite (None), defer this base downclosure check.
         match empDefn with
         | None ->
-            ok (NeedsBaseDownclosure (func, "emp is indefinite")::deferred)
+            ok (NeedsBaseDownclosure (func, Some defn, "emp is indefinite")::deferred)
         | Some ed ->
             (* Base downclosure for a view V[n](x):
                  D(emp) => D(V[0](x))
@@ -220,7 +220,7 @@ module Downclosure =
                     | Proven -> ok deferred
                     | Refuted -> fail (BaseDownclosureError ([func], defn, ed))
                     | Inconclusive reason ->
-                        ok (NeedsBaseDownclosure (func, reason)::deferred))
+                        ok (NeedsBaseDownclosure (func, Some defn, reason)::deferred))
                 baseHoldsR
 
     /// <summary>
@@ -276,7 +276,7 @@ module Downclosure =
                 | Proven -> ok deferred
                 | Refuted -> fail (InductiveDownclosureError ([func], succDefn, defn))
                 | Inconclusive reason ->
-                    ok (NeedsInductiveDownclosure (func, reason)::deferred))
+                    ok (NeedsInductiveDownclosure (func, Some defn, reason)::deferred))
             succDefnR
             indHoldsR
 
@@ -309,8 +309,8 @@ module Downclosure =
         match defn with
         | None ->
             ok
-                (NeedsBaseDownclosure (func, "func is indefinite")
-                :: NeedsInductiveDownclosure (func, "func is indefinite")
+                (NeedsBaseDownclosure (func, None, "func is indefinite")
+                :: NeedsInductiveDownclosure (func, None, "func is indefinite")
                 :: deferred)
         | Some d ->
             let checkedIterR = checkIterator func.Iterator

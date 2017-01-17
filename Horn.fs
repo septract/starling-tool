@@ -14,6 +14,7 @@ open Starling.Core.Expr
 open Starling.Core.View
 open Starling.Core.Traversal
 open Starling.Core.Model
+open Starling.Core.Symbolic
 open Starling.Core.Instantiate
 open Starling.Core.GuardedView
 
@@ -555,7 +556,9 @@ let mapIteratorParam
 ///     Constructs a Horn clause for a base downclosure check on a given func.
 /// </summary>
 let hsfModelBaseDownclosure
-  (svars : VarMap) (func : IteratedDFunc) (reason : string)
+  (svars : VarMap) (func : IteratedDFunc)
+  (defn : BoolExpr<Sym<Var>> option)
+  (reason : string)
   : Result<Horn list, Error> =
     // TODO(CaptainHayashi): proper doc comment.
     let svarSeq = VarMap.toTypedVarSeq svars
@@ -575,7 +578,7 @@ let hsfModelBaseDownclosure
         | _ ->
             fail
                 (CannotCheckDeferred
-                    (NeedsBaseDownclosure (func, reason), "malformed iterator"))
+                    (NeedsBaseDownclosure (func, defn, reason), "malformed iterator"))
 
     (* Base downclosure for a view V[n](x):
          D(emp) => D(V[0](x))
@@ -612,7 +615,7 @@ let hsfModelBaseDownclosure
 ///     func.
 /// </summary>
 let hsfModelInductiveDownclosure
-  (svars : VarMap) (func : IteratedDFunc) (reason : string)
+  (svars : VarMap) (func : IteratedDFunc) (defn : BoolExpr<Sym<Var>> option) (reason : string)
   : Result<Horn list, Error> =
     // TODO(CaptainHayashi): proper doc comment.
     let svarSeq = VarMap.toTypedVarSeq svars
@@ -629,7 +632,7 @@ let hsfModelInductiveDownclosure
         | _ ->
             fail
                 (CannotCheckDeferred
-                    (NeedsInductiveDownclosure (func, reason),
+                    (NeedsInductiveDownclosure (func, defn, reason),
                      "malformed iterator"))
 
     (* Inductive downclosure for a view V[n](x):
@@ -669,10 +672,10 @@ let hsfModelInductiveDownclosure
 let hsfModelDeferredCheck (svars : VarMap) (check : DeferredCheck)
   : Result<Horn list, Error> =
     match check with
-    | NeedsBaseDownclosure (func, reason) ->
-        hsfModelBaseDownclosure svars func reason
-    | NeedsInductiveDownclosure (func, reason) ->
-        hsfModelInductiveDownclosure svars func reason
+    | NeedsBaseDownclosure (func, defn, reason) ->
+        hsfModelBaseDownclosure svars func defn reason
+    | NeedsInductiveDownclosure (func, defn, reason) ->
+        hsfModelInductiveDownclosure svars func defn reason
 
 /// Constructs a HSF script for a model.
 let hsfModel

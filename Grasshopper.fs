@@ -570,6 +570,7 @@ let grassTerm
 /// <param name="definer">The active func definer.</param>
 /// <param name="addFoot">Function for adding footprints to Booleans.</param>
 /// <param name="func">The iterated func to check, <c>A(x)[n]</c>.</param>
+/// <param name="defn">The definition of the func to check.</param>
 /// <param name="reason">The original reason for the deferred check.</param>
 /// <returns>
 ///     If the base downclosure property can be checked by GRASShopper, a
@@ -579,6 +580,7 @@ let grassModelBaseDownclosure
   (definer : FuncDefiner<BoolExpr<Sym<Var>> option>)
   (addFoot : BoolExpr<Sym<MarkedVar>> -> Formula)
   (func : IteratedDFunc)
+  (defn : BoolExpr<Sym<Var>> option)
   (reason : string)
   : Result<string * GrassTerm, Error> =
     (* To do the base downclosure, we need to replace all instances of the
@@ -590,15 +592,15 @@ let grassModelBaseDownclosure
         | _ ->
             fail
                 (CannotCheckDeferred
-                    (NeedsBaseDownclosure (func, reason), "malformed iterator"))
+                    (NeedsBaseDownclosure (func, defn, reason), "malformed iterator"))
 
     let defnR =
-        match FuncDefiner.lookup func.Func definer with
-        | Pass (Some (_, Some d)) -> ok d
+        match defn with
+        | Some d -> ok d
         | _ ->
             fail
                 (CannotCheckDeferred
-                    (NeedsBaseDownclosure (func, reason), "func not in definer"))
+                    (NeedsBaseDownclosure (func, defn, reason), "can't infer func"))
 
     let baseDefnR =
         bind2
@@ -653,7 +655,7 @@ let grassModelBaseDownclosure
     | _ ->
         fail
             (CannotCheckDeferred
-                (NeedsBaseDownclosure (func, reason), "emp is indefinite"))
+                (NeedsBaseDownclosure (func, defn, reason), "emp is indefinite"))
 
 /// <summary>
 ///     Checks the inductive downclosure property.
@@ -667,18 +669,18 @@ let grassModelBaseDownclosure
 ///         or equal to it.
 ///     </para>
 /// </summary>
-/// <param name="definer">The active func definer.</param>
 /// <param name="addFoot">Function for adding footprints to Booleans.</param>
 /// <param name="func">The iterated func to check, <c>A(x)[n]</c>.</param>
+/// <param name="defn">The definition of the func to check.</param>
 /// <param name="reason">The original reason for the deferred check.</param>
 /// <returns>
 ///     If the base downclosure property can be checked by GRASShopper, a
 ///     pair of the resulting procedure's name and body; an error otherwise.
 /// </returns>
 let grassModelInductiveDownclosure
-  (definer : FuncDefiner<BoolExpr<Sym<Var>> option>)
   (addFoot : BoolExpr<Sym<MarkedVar>> -> Formula)
   (func : IteratedDFunc)
+  (defn : BoolExpr<Sym<Var>> option)
   (reason : string)
   : Result<string * GrassTerm, Error> =
     // TODO(CaptainHayashi): de-duplicate this with base DC.
@@ -689,15 +691,15 @@ let grassModelInductiveDownclosure
         | _ ->
             fail
                 (CannotCheckDeferred
-                    (NeedsBaseDownclosure (func, reason), "malformed iterator"))
+                    (NeedsBaseDownclosure (func, defn, reason), "malformed iterator"))
 
     let baseDefnR =
-        match FuncDefiner.lookup func.Func definer with
-        | Pass (Some (_, Some d)) -> ok d
+        match defn with
+        | Some d -> ok d
         | _ ->
             fail
                 (CannotCheckDeferred
-                    (NeedsBaseDownclosure (func, reason), "func not in definer"))
+                    (NeedsBaseDownclosure (func, defn, reason), "cannot infer func"))
 
 
     (* To do the inductive downclosure, we need to replace all instances of
@@ -759,10 +761,10 @@ let grassModelDeferred
   : Result<(string * GrassTerm) list, Error> =
     let modelDC =
         function
-        | NeedsBaseDownclosure (func, reason) ->
-            grassModelBaseDownclosure model.ViewDefs addFoot func reason
-        | NeedsInductiveDownclosure (func, reason) ->
-            grassModelInductiveDownclosure model.ViewDefs addFoot func reason
+        | NeedsBaseDownclosure (func, defn, reason) ->
+            grassModelBaseDownclosure model.ViewDefs addFoot func defn reason
+        | NeedsInductiveDownclosure (func, defn, reason) ->
+            grassModelInductiveDownclosure addFoot func defn reason
     collect (List.map modelDC model.DeferredChecks)
 
 /// <summary>

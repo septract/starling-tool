@@ -140,12 +140,18 @@ module Types =
         ///     The given iterated func needs its definition checking for base
         ///     downclosure.
         /// </summary>
-        | NeedsBaseDownclosure of func : IteratedDFunc * why : string
+        | NeedsBaseDownclosure of
+            func : IteratedDFunc
+          * defn : BoolExpr<Sym<Var>> option
+          * why : string
         /// <summary>
         ///     The given iterated func needs its definition checking for
         ///     inductive downclosure.
         /// </summary>
-        | NeedsInductiveDownclosure of func : IteratedDFunc * why : string
+        | NeedsInductiveDownclosure of
+            func : IteratedDFunc
+          * defn : BoolExpr<Sym<Var>> option
+          * why : string
 
     (*
      * Models
@@ -240,12 +246,12 @@ module Pretty =
     let printDeferredCheck (check : DeferredCheck) : Doc =
         warning <|
             match check with
-            | NeedsBaseDownclosure (func, why) ->
+            | NeedsBaseDownclosure (func, _, why) ->
                 colonSep
                     [ String "base downclosure check for iterated func"
                         <+> printIteratedDFunc func
                       String why ]
-            | NeedsInductiveDownclosure (func, why) ->
+            | NeedsInductiveDownclosure (func, _, why) ->
                 colonSep
                     [ hsep
                         [ String "inductive downclosure check for iterated func"

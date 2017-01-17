@@ -41,6 +41,7 @@ open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Traversal
 open Starling.Core.Instantiate
 open Starling.Core.Traversal
+open Starling.Core.Symbolic
 open Starling.Core.Z3
 open Starling.Reifier
 open Starling.Optimiser
@@ -624,7 +625,9 @@ module Translator =
       (ctx : Z3.Context)
       (funcDecls : Map<string, Z3.FuncDecl>)
       (svars : VarMap)
-      (func : IteratedDFunc) (reason : string)
+      (func : IteratedDFunc) 
+      (defn : BoolExpr<Sym<Var>> option)
+      (reason : string)
       : Result<(string * Z3.BoolExpr) option, Error> =
         // TODO(CaptainHayashi): proper doc comment.
         let svarSeq = VarMap.toTypedVarSeq svars
@@ -634,7 +637,7 @@ module Translator =
             match func.Iterator with
             | Some (Int (_, x)) -> ok x
             | _ ->
-                let check = NeedsBaseDownclosure (func, reason)
+                let check = NeedsBaseDownclosure (func, defn, reason)
                 fail (CannotCheckDeferred (check, "malformed iterator"))
 
         (* TODO(CaptainHayashi): We're given the func needing downclosure in
@@ -668,7 +671,9 @@ module Translator =
       (ctx : Z3.Context)
       (funcDecls : Map<string, Z3.FuncDecl>)
       (svars : VarMap)
-      (func : IteratedDFunc) (reason : string)
+      (func : IteratedDFunc)
+      (defn : BoolExpr<Sym<Var>> option)
+      (reason : string)
       : Result<(string * Z3.BoolExpr) option, Error> =
         // TODO(CaptainHayashi): proper doc comment.
         let svarSeq = VarMap.toTypedVarSeq svars
@@ -679,7 +684,7 @@ module Translator =
             match func.Iterator with
             | Some (Int (_, x)) -> ok x
             | _ ->
-                let check = NeedsInductiveDownclosure (func, reason)
+                let check = NeedsInductiveDownclosure (func, defn, reason)
                 fail (CannotCheckDeferred (check, "malformed iterator"))
 
         let flatDFunc = Starling.Flattener.flattenDView svarSeq [func]
@@ -724,10 +729,10 @@ module Translator =
       (check : DeferredCheck)
       : Result<(string * Z3.BoolExpr) option, Error> =
         match check with
-        | NeedsBaseDownclosure (func, reason) ->
-            translateBaseDownclosure reals ctx funcDecls svars func reason
-        | NeedsInductiveDownclosure (func, reason) ->
-            translateInductiveDownclosure reals ctx funcDecls svars func reason
+        | NeedsBaseDownclosure (func, defn, reason) ->
+            translateBaseDownclosure reals ctx funcDecls svars func defn reason
+        | NeedsInductiveDownclosure (func, defn, reason) ->
+            translateInductiveDownclosure reals ctx funcDecls svars func defn reason
 
     (*
      * Variables
