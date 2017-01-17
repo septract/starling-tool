@@ -9,7 +9,7 @@ pragma grasshopper_footprint {ArcFoot};
 pragma grasshopper_footprint_sort {Set<ArcNode>};
 
 view iter arc(ArcNode x); 
-view countCopy(ArcNode x, Int C); 
+view countCopy(ArcNode x, Int c); 
 
 thread ArcNode x, ret; 
 thread Int c, pval; 
@@ -49,11 +49,13 @@ method drop(ArcNode x) {
   {| emp |}
 }
 
-constraint emp -> 
-    %{ forall x : ArcNode :: x in ArcFoot ==> x.count >= 0 }(); 
+constraint emp -> true; 
+
+// // Redundant?
+//    %{ forall x : ArcNode :: x in ArcFoot ==> x.count >= 0 }(); 
 
 constraint iter[n] arc(x) -> 
-    n > 0 => %{ #2 in ArcFoot && #1 <= #2.count}(n, x); 
+    n > 0 => %{ #1 in ArcFoot && #2 <= #1.count}(x, n); 
 
 constraint countCopy(x, c) ->   
     c == 1 => %{ #1 in ArcFoot && #1.count == 0}(x); 
