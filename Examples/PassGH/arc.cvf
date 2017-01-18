@@ -1,4 +1,7 @@
-// Allocatable version of Examples/Pass/arc.cvf
+/* Atomic reference counter  
+ * Example taken from Derek / Rust: http://www.mpi-sws.org/~dreyer/talks/talk-dagstuhl16.pdf
+ * Allocated version of Examples/Pass/arc2.cvf
+ */ 
 
 typedef int ArcNode; 
 typedef bool Bool; 
@@ -49,10 +52,8 @@ method drop(ArcNode x) {
   {| emp |}
 }
 
+// TODO: shouldn't be necessary
 constraint emp -> true; 
-
-// // Redundant?
-//    %{ forall x : ArcNode :: x in ArcFoot ==> x.count >= 0 }(); 
 
 constraint iter[n] arc(x) -> 
     n > 0 => %{ #1 in ArcFoot && #2 <= #1.count}(x, n); 
