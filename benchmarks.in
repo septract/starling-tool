@@ -2,18 +2,17 @@
 #
 # Each line is formatted as follows:
 #
-# Group:Name:Path:Run unoptimised Z3?:Run unoptimised HSF?:Run optimised Z3?:Run optimised HSF?
+# Name:Path:backend
 #
 # Benchmarks are emitted as a LaTeX table, sorted alphabetically and grouped by Group.
 #
-# For the last four fields, type 'yes' to enable, and 'no' to disable (case sensitive).
-#
 # Lines starting with # are discarded.  Whitespace is significant.
-Ticket lock:with conditional view:Examples/Pass/ticketLock.cvf:yes:no:yes:no
-Ticket lock:without conditional view:Examples/Pass/ticketLockNoIf.cvf:yes:no:yes:no
-Ticket lock:with integers and indefinite views:Examples/PassHSF/ticketLockIndefinite.cvf:no:no:no:yes
-Peterson:double methods:Examples/Pass/peterson.cvf:yes:no:yes:no
-Peterson:double methods and ints:Examples/Pass/petersonInt.cvf:yes:no:yes:yes
-ARC:definite, Boolean free, no init:Examples/Pass/arc.cvf:yes:no:yes:no
-Spin lock:definite, Boolean lock:Examples/Pass/spinLock.cvf:yes:no:yes:no
-Spin lock:definite, integer lock:Examples/Pass/spinLockInt.cvf:yes:yes:yes:yes
+Static ARC:Examples/Pass/arc.cvf:z3
+Static ticket lock:Examples/Pass/ticketLock.cvf:z3
+Static spinlock:Examples/Pass/spinLock.cvf:z3
+Peterson's algorithm with arrays:Examples/Pass/petersonArray.cvf:z3
+Allocatable ARC:Examples/PassGH/arc.cvf:gh
+Allocatable ticket lock:Examples/PassGH/ticketLock.cvf:gh
+Allocatable spin lock:Examples/PassGH/spinLock.cvf:gh
+CLH lock:Examples/PassGH/CLHLock.cvf:gh
+Lock-coupling list:Examples/PassGH/lclist.cvf:gh
