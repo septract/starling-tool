@@ -251,43 +251,40 @@ and desugarBlock (tvars: Map<string, Type>) (fg: bigint ref)
        precondition. *)
     let (blockP, pre) = cap block
 
-    (* If there is only one thing in the block so far, then it should be a block
-       precondition, since otherwise we'd have added a second item.  So,
-       add a skip to the end to make the next bit of logic work. *)
-
     let skip () =
         freshNode (Prim { PreAssigns = []; Atomics = []; PostAssigns = [] })
-
-    let blockPC =
-        match blockP with
-        | [ x ] -> [ x; skip () ]
-        | xs -> xs
 
     (* If the last item isn't a view, we have to synthesise a block
        postcondition.
        (TODO(CaptainHayashi): do this efficiently) *)
-    let blockPQ = List.rev (fst (cap (List.rev blockPC)))
+    let blockPQ = List.rev (fst (cap (List.rev blockP)))
 
-    (* Next, we have to slide down the entire block pairwise.
-       1. If we see ({| view |}, {| view |}), insert a skip between them.
-       2. If we see (cmd, {| view |}), add it directly to the full block;
-       3. If we see ({| view |}, cmd), ignore it.  Either the view is the
-          precondition at the start, which is accounted for, or it was just
-          added through rule 1. and can be ignored;
-       3. If we see (cmd, cmd), add (cmd, {| ? |}) to the full block.
-          We'll add the next command on the next pass. *)
-    let blockPairs = Seq.windowed 2 blockPQ
+    (* If there is only one item in the block, then by the above it must be
+       a view, so we can skip processing commands. *)
+    let cmds =
+        match blockPQ with
+        | [x] -> []
+        | _ ->
+        (* Next, we have to slide down the entire block pairwise.
+           1. If we see ({| view |}, {| view |}), insert a skip between them.
+           2. If we see (cmd, {| view |}), add it directly to the full block;
+           3. If we see ({| view |}, cmd), ignore it.  Either the view is the
+              precondition at the start, which is accounted for, or it was just
+              added through rule 1. and can be ignored;
+           3. If we see (cmd, cmd), add (cmd, {| ? |}) to the full block.
+              We'll add the next command on the next pass. *)
+        let blockPairs = Seq.windowed 2 blockPQ
 
-    let fillBlock bsf pair =
-        match pair with
-        | [| { Node = ViewExpr x }; { Node = ViewExpr y } |] -> (skip (), x) :: bsf
-        | [| cx                   ; { Node = ViewExpr y } |] -> (cx, y) :: bsf
-        | [| { Node = ViewExpr x }; cx                    |] -> bsf
-        | [| cx                   ; _                     |] -> (cx, Unknown) :: bsf
-        | x -> failwith (sprintf "unexpected window in fillBlock: %A" x)
+        let fillBlock bsf pair =
+            match pair with
+            | [| { Node = ViewExpr x }; { Node = ViewExpr y } |] -> (skip (), x) :: bsf
+            | [| cx                   ; { Node = ViewExpr y } |] -> (cx, y) :: bsf
+            | [| { Node = ViewExpr x }; cx                    |] -> bsf
+            | [| cx                   ; _                     |] -> (cx, Unknown) :: bsf
+            | x -> failwith (sprintf "unexpected window in fillBlock: %A" x)
 
-    // The above built the block backwards, so reverse it.
-    let cmds = List.rev (Seq.fold fillBlock [] blockPairs)
+        // The above built the block backwards, so reverse it.
+        List.rev (Seq.fold fillBlock [] blockPairs)
 
     // Now we can desugar each view in the block contents.
     let desugarViewedCommand (cmd, post) =

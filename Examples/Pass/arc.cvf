@@ -21,7 +21,7 @@ method print() {
   {| arc() * specialViewForFree(f) |}
     // Test for disposal
     if (f == true) {
-      {| error() |} ; {| error() |}
+      {| error() |}
     }
   {| arc() |}
 }
