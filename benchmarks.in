@@ -2,17 +2,17 @@
 #
 # Each line is formatted as follows:
 #
-# Name:Path:backend
+# Backend:Name:Path
 #
 # Benchmarks are emitted as a LaTeX table, sorted alphabetically and grouped by Group.
 #
 # Lines starting with # are discarded.  Whitespace is significant.
-Static ARC:Examples/Pass/arc.cvf:z3
-Static ticket lock:Examples/Pass/ticketLock.cvf:z3
-Static spinlock:Examples/Pass/spinLock.cvf:z3
-Peterson's algorithm with arrays:Examples/Pass/petersonArray.cvf:z3
-Allocatable ARC:Examples/PassGH/arc.cvf:gh
-Allocatable ticket lock:Examples/PassGH/ticketLock.cvf:gh
-Allocatable spin lock:Examples/PassGH/spinLock.cvf:gh
-CLH lock:Examples/PassGH/CLHLock.cvf:gh
-Lock-coupling list:Examples/PassGH/lclist.cvf:gh
+z3:Static ARC:Examples/Pass/arc.cvf
+z3:Static ticket lock:Examples/Pass/ticketLock.cvf
+z3:Static spinlock:Examples/Pass/spinLock.cvf
+z3:Peterson's algorithm with arrays:Examples/Pass/petersonArray.cvf
+gh:Allocatable ARC:Examples/PassGH/arc.cvf
+gh:Allocatable ticket lock:Examples/PassGH/ticketLock.cvf
+gh:Allocatable spin lock:Examples/PassGH/spinLock.cvf
+gh:CLH lock:Examples/PassGH/CLHLock.cvf
+gh:Lock-coupling list:Examples/PassGH/lclist.cvf

@@ -6,16 +6,26 @@
 
 IFS=:
 cat=""
-sed -e 's/#.*$//' -e '/^$/d' ./benchmarks.in | while read category name path z3 hsf oz3 ohsf; do
-	# Print category header if we're on a new category.
-	if [ "${category}" != "${cat}" ];
+sed -e 's/#.*$//' -e '/^$/d' ./benchmarks.in | while read mode name path; do
+	# Print backend header if we're on a new backend.
+	if [ "${mode}" != "${cat}" ];
 	then
+		if [ "${mode}" = "gh" ];
+		then
+			fmode="GRASShopper"
+		elif [ "${mode}" = "z3" ];
+		then
+			fmode="Z3"
+		else
+			fmode="??"
+		fi
+
 		echo "\\midrule"
-		echo "${category}&&&&&&&&"'\\\\'
-		cat="$category"
+		echo "${fmode}&&&&&&&&"'\\\\'
+		cat="$mode"
 	fi
 
-	>&2 echo "--- ${category} : ${name} (${path}) ---"
+	>&2 echo "--- ${name} : ${path} (${mode}) ---"
 
-	./benchone.sh "${name}" "${path}" "${z3}" "${hsf}" "${oz3}" "${ohsf}"
+	./benchone.sh "${name}" "${path}" "${mode}"
 done
