@@ -616,8 +616,10 @@ let grassModelBaseDownclosure
         Seq.tryFind
             (fun (dfunc : DFunc, _) -> dfunc.Name = "emp")
             (FuncDefiner.toSeq definer)
-    match empDefn with
-    | Some (_, Some ed) ->
+    // None implies emp is absent, ie True.
+    // Some _, None implies emp is indefinite.
+    match maybe (Some BTrue) snd empDefn with
+    | Some ed ->
         (* Base downclosure for a view V[n](x):
              D(emp) => D(V[0](x))
            That is, the definition of V when the iterator is 0 can be no

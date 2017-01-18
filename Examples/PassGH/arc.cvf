@@ -3,65 +3,60 @@
  * Allocated version of Examples/Pass/arc2.cvf
  */ 
 
-typedef int ArcNode; 
-typedef bool Bool; 
-typedef int Int; 
+typedef int ArcNode;
+typedef bool Bool;
+typedef int Int;
 
 pragma grasshopper_include {./grasshopper/arc-module.spl};
 pragma grasshopper_footprint {ArcFoot};
 pragma grasshopper_footprint_sort {Set<ArcNode>};
 
-view iter arc(ArcNode x); 
-view countCopy(ArcNode x, Int c); 
+view iter arc(ArcNode x);
+view countCopy(ArcNode x, Int c);
 
-thread ArcNode x, ret; 
-thread Int c, pval; 
+thread ArcNode x, ret;
+thread Int c, pval;
 
 method init() {
   {| emp |}
-    // TODO: broken local command syntax. 
-    ret = %{new ArcNode}(); 
-    <%{#1.count := 1}(ret)>; 
-  {| arc(ret) |} 
+    // TODO: broken local command syntax.
+    ret = %{new ArcNode}();
+    <%{#1.count := 1}(ret)>;
+  {| arc(ret) |}
 }
 
 method clone(ArcNode x) {
-  {| arc(x) |} 
+  {| arc(x) |}
     <%{#1.count := #1.count + 1}(x)>;
-  {| arc(x) * arc(x) |} 
+  {| arc(x) * arc(x) |}
 }
 
-method print(ArcNode x) { 
-  {| arc(x) |} 
-    // TODO: broken local command syntax. 
-    pval = %{ #1.val }(x); 
-  {| arc(x) |} 
-} 
+method print(ArcNode x) {
+  {| arc(x) |}
+    // TODO: broken local command syntax.
+    pval = %{ #1.val }(x);
+  {| arc(x) |}
+}
 
 method drop(ArcNode x) {
   {| arc(x) |}
-    // TODO: broken local command syntax. 
-    c = %{ #1.count }(x); 
-    <%{ #1.count := #1.count - 1 }(x)>; 
+    // TODO: broken local command syntax.
+    c = %{ #1.count }(x);
+    <%{ #1.count := #1.count - 1 }(x)>;
   {| countCopy(x, c) |}
     if (c == 1) {
       {| countCopy(x, 1) |}
-         < %{ free(#1) }(x) >; 
+         < %{ free(#1) }(x) >;
       {| emp |}
     }
   {| emp |}
 }
 
-// TODO: shouldn't be necessary
-constraint emp -> true; 
+constraint iter[n] arc(x) ->
+    n > 0 => %{ #1 in ArcFoot && #2 <= #1.count}(x, n);
 
-constraint iter[n] arc(x) -> 
-    n > 0 => %{ #1 in ArcFoot && #2 <= #1.count}(x, n); 
+constraint countCopy(x, c) ->
+    c == 1 => %{ #1 in ArcFoot && #1.count == 0}(x);
 
-constraint countCopy(x, c) ->   
-    c == 1 => %{ #1 in ArcFoot && #1.count == 0}(x); 
-
-constraint countCopy(x, m) * countCopy(y, n) -> 
-    x == y => ((m != 1) || (n != 1));  
-
-       
+constraint countCopy(x, m) * countCopy(y, n) ->
+    x == y => ((m != 1) || (n != 1));
