@@ -27,9 +27,6 @@ method print() {
     <f = free>;
   {| if f == true then error() else arc() |}
     if (f == true) {
-      // TODO: broken syntax
-      {| error() |} 
-      ; 
       {| error() |} 
     }
   {| arc() |}
