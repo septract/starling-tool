@@ -1355,6 +1355,17 @@ let modelIntLValue
     | RValue r -> fail (NeedLValue r)
     | LValue l -> wrapMessages BadExpr (modelIntExpr env idxEnv marker) l
 
+/// Model an expr that's either an IntLValue or a Symbolic Command
+let modelIntLValueOrSymbol
+  (env : VarMap) (idxEnv : VarMap) (marker : Var -> 'Var) (ex : Expression)
+  : Result<TypedIntExpr<Sym<'Var>>, PrimError> =
+    match ex with
+    | RValue r -> 
+        match unwrap r with
+        | Symbolic _ -> wrapMessages BadExpr (modelIntExpr env idxEnv marker) r
+        | _          -> fail (NeedLValue r)
+    | LValue l -> wrapMessages BadExpr (modelIntExpr env idxEnv marker) l
+
 /// <summary>
 ///     Models an lvalue given a potentially valid expression and
 ///     environment.
@@ -1438,7 +1449,7 @@ let modelIntLoad
 
     bind2 modelWithExprs
         (modelIntLValue ctx.ThreadVars ctx.ThreadVars id dest)
-        (modelIntLValue ctx.SharedVars ctx.ThreadVars id src)
+        (modelIntLValueOrSymbol ctx.SharedVars ctx.ThreadVars id src)
 
 /// Converts a Boolean store to a Prim.
 let modelBoolStore

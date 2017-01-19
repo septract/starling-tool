@@ -586,6 +586,8 @@ let node (streamname : string)
          : Node<'a> =
     { Position = { StreamName = streamname; Line = line; Column = column }; Node = a }
 
+let unwrap { Node = n } = n;
+
 /// <summary>
 ///     Type-constrained version of <c>func</c> for <c>AFunc</c>s.
 /// </summary>
