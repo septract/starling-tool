@@ -12,6 +12,7 @@ open Starling.Core.Definer
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
+open Starling.Core.Var.VarMap
 open Starling.Core.Symbolic
 open Starling.Core.Model
 open Starling.Core.View
@@ -1360,8 +1361,8 @@ let modelIntLValueOrSymbol
   (env : VarMap) (idxEnv : VarMap) (marker : Var -> 'Var) (ex : Expression)
   : Result<TypedIntExpr<Sym<'Var>>, PrimError> =
     match ex with
-    | RValue r -> 
-        match unwrap r with
+    | RValue r ->
+        match r.Node with
         | Symbolic _ -> wrapMessages BadExpr (modelIntExpr env idxEnv marker) r
         | _          -> fail (NeedLValue r)
     | LValue l -> wrapMessages BadExpr (modelIntExpr env idxEnv marker) l
@@ -1447,9 +1448,15 @@ let modelIntLoad
                     (Exact (typedIntToType dstE))
                     (Exact (typedIntToType srcE)))
 
-    bind2 modelWithExprs
-        (modelIntLValue ctx.ThreadVars ctx.ThreadVars id dest)
-        (modelIntLValueOrSymbol ctx.SharedVars ctx.ThreadVars id src)
+    match combine ctx.ThreadVars ctx.SharedVars with
+    // { there might be a nicer way of doing this
+    | Bad []            -> Bad []
+    | Bad (x :: xs)     ->   mergeMessages (List.map SymVarError xs) <| fail (SymVarError x)
+    // }
+    | Ok(rv, _) ->
+        bind2 modelWithExprs
+            (modelIntLValue ctx.ThreadVars ctx.ThreadVars id dest)
+            (modelIntLValueOrSymbol rv ctx.ThreadVars id src)
 
 /// Converts a Boolean store to a Prim.
 let modelBoolStore
