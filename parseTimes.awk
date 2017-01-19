@@ -1,4 +1,5 @@
-# Parses the output of 'count' repetitions of `./starling.sh --times BLAH.cvf`.
+# Parses the output of 'count' repetitions of
+# `./starling.sh --metrics BLAH.cvf`, averaging and totalling the results.
 # Use with `awk -f parseTimes.cvf -v count=X`.
 
 BEGIN {
@@ -25,24 +26,20 @@ BEGIN {
 	backendPhases["Eliminate"] = 0;
 	backendPhases["Backend"] = 0;
 
-	for (phase in frontendPhases) times[phase] = 0;
-	for (phase in proofgenPhases) times[phase] = 0;
-	for (phase in optimisePhases) times[phase] = 0;
-	for (phase in backendPhases) times[phase] = 0;
-
 	terms["Success"] = 0;
 	terms["NotSMT"] = 0;
 }
 
 # This should hopefully not capture method names
 /^Phase [A-Z][A-Za-z]+;/ {
-	# Name is always trailed by a semicolon
+	# Name is always trailed by a semicolon
 	name = substr($2, 0, length($2) - 1);
-	# Time is always trailed by a semicolon
+	# Metric is always trailed by a colon
+	metric = substr($3, 0, length($3) - 1);
+	# Time is always trailed by 'ms'
 	time = substr($4, 0, length($4) - 2);
 
-	times[name] += time;
-	print "Phase:" name, time;
+	metrics[metric ":" name] += time;
 }
 
 # Assuming all terms are successful or not SMT solvable!
@@ -54,22 +51,30 @@ BEGIN {
 }
 
 END {
+	for (metric in metrics) {
+		# Report memory metrics as a rounded integer, and times exactly
+		if (metric ~ /Elapsed:.*/)
+			print metric, metrics[metric] / count;
+		else
+			print metric, int((metrics[metric] / count)+0.5);
+	}
+
 	frontend = 0
-	for (phase in frontendPhases) frontend += times[phase];
+	for (phase in frontendPhases) frontend += metrics["Elapsed:" phase];
 	proofgen = 0
-	for (phase in proofgenPhases) proofgen += times[phase];
+	for (phase in proofgenPhases) proofgen += metrics["Elapsed:" phase];
 	optimise = 0
-	for (phase in optimisePhases) optimise += times[phase];
+	for (phase in optimisePhases) optimise += metrics["Elapsed:" phase];
 	backend = 0
-	for (phase in backendPhases) backend += times[phase];
+	for (phase in backendPhases) backend += metrics["Elapsed:" phase];
 
 	total = frontend + proofgen + optimise + backend;
 
-	print "Total:Frontend", frontend / count;
-	print "Total:Proofgen", proofgen / count;
-	print "Total:Optimise", optimise / count;
-	print "Total:Backend", backend / count;
-	print "Total:*", total / count;
+	print "Total:Elapsed:Frontend", frontend / count;
+	print "Total:Elapsed:Proofgen", proofgen / count;
+	print "Total:Elapsed:Optimise", optimise / count;
+	print "Total:Elapsed:Backend", backend / count;
+	print "Total:Elapsed:*", total / count;
 
 	tterms = 0;
 	for (termtype in terms) {

@@ -373,6 +373,24 @@ let rawproof
         res
 
 /// <summary>
+///     Map of known profiler flags.
+/// </summary>
+let rec profilerFlags ()
+  : Map<string, string * ProfilerFlag> =
+    Map.ofList
+        [ ("phase-time",
+           ("Emit elapsed time per phase.", PhaseTime))
+          ("phase-working-set",
+           ("Emit current working set size at the end of each phase.",
+            PhaseWorkingSet))
+          ("phase-virtual",
+           ("Emit current virtual memory size at the end of each phase.",
+            PhaseVirtual))
+          ("list",
+           ("Lists all profiler flags.",
+            ListProfilerFlags)) ]
+
+/// <summary>
 ///     Type of the backend parameter structure.
 /// </summary>
 type BackendParams =
@@ -463,14 +481,42 @@ let runStarling (request : Request)
                         opts)
                { ApproxMode = NoApprox; NoSMTReduce = false; Reals = false }
 
+    let pf = profilerFlags ()
+
+    let pfset =
+        config.profilerFlags
+        |> maybe (Seq.empty) Utils.parseOptionString
+        |> Seq.fold
+               (fun flags str ->
+                    match (pf.TryFind str) with
+                    | Some (_, p) -> Set.add p flags
+                    | None ->
+                        eprintfn "unknown profiler flag %s ignored (try 'list')"
+                            str
+                        flags)
+               Set.empty
+
+    if pfset.Contains ListProfilerFlags
+    then
+        eprintfn "Profiler flags:\n"
+        Map.iter
+            (fun name (descr, _) -> eprintfn "%s: %s\n" name descr)
+            (profilerFlags ())
+        eprintfn "--\n"
+
+    let printTimes = pfset.Contains PhaseTime
+    let printWS = pfset.Contains PhaseWorkingSet
+    let printVM = pfset.Contains PhaseVirtual
+    let withProfiling = profilePhase printTimes printWS printVM
+
     // Shorthand for the various stages available.
     let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)
     let smt rq = lift (Backends.Z3.backend rq)
     let muz3 rq =
         bind (Backends.MuZ3.run shouldUseRealsForInts rq
               >> mapMessages Error.MuZ3)
-    let frontend times rq =
-        Lang.Frontend.run times rq Response.Frontend Error.Frontend
+    let frontend rq =
+        Lang.Frontend.run pfset rq Response.Frontend Error.Frontend
     let graphOptimise =
         (fix (bind (Starling.Optimiser.Graph.optimise opts
                     >> mapMessages Error.GraphOptimiser)))
@@ -522,10 +568,9 @@ let runStarling (request : Request)
 
     let backend (m : Result<Backends.Z3.Types.ZModel, Error>) : Result<Response,Error>  =
         let phase op response =
-            let time = System.Diagnostics.Stopwatch.StartNew()
-            op m
-            |>  (time.Stop(); (if config.times then printfn "Phase Backend; Elapsed: %dms" time.ElapsedMilliseconds); id)
-            |> lift response
+            lift response
+                // TODO(MattWindsor91): we should be able to lambda abstract this, but can't
+                (profilePhase printTimes printWS printVM "Backend" (fun () -> op m))
 
         match request with
         | Request.SMTProof rq -> phase (smt rq) Response.SMTProof
@@ -540,9 +585,8 @@ let runStarling (request : Request)
     //  if request is test, then we output the results
     //  otherwise we continue with the rest of the phases.
     let phase op test output continuation m =
-        let time = System.Diagnostics.Stopwatch.StartNew()
-        op m
-        |> (time.Stop(); (if config.times then printfn "Phase %A; Elapsed: %dms" test time.ElapsedMilliseconds); id)
+        // TODO(MattWindsor91): we should be able to lambda abstract this, but can't
+        profilePhase printTimes printWS printVM (sprintf "%A" test) (fun () -> op m)
         |> if request = test then lift output else continuation
 
     // Left pipe is not right associative
@@ -550,10 +594,9 @@ let runStarling (request : Request)
     let ( ** ) = ( <| )
 
     if config.verbose
-    then
-        eprintfn "Z3 version: %s" (Microsoft.Z3.Version.ToString ())
+    then eprintfn "Z3 version: %s" (Microsoft.Z3.Version.ToString ())
 
-    frontend config.times (match request with | Request.Frontend rq -> rq | _ -> Lang.Frontend.Request.Continuation)
+    frontend (match request with | Request.Frontend rq -> rq | _ -> Lang.Frontend.Request.Continuation)
     ** phase  graphOptimise  Request.GraphOptimise  Response.GraphOptimise
     ** phase  axiomatise     Request.Axiomatise     Response.Axiomatise
     ** phase  goalAdd        Request.GoalAdd        Response.GoalAdd

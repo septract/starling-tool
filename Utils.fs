@@ -46,10 +46,13 @@ module Config =
                 HelpText =
                     "Comma-delimited set of output options (pass 'list' for details)")>]
           viewOpts : string option
-          [<Option("times", HelpText = "Print times for each phase.")>]
-          times : bool
           [<Option('v', HelpText = "Increases verbosity.")>]
           verbose : bool
+          [<Option(
+                'P',
+                HelpText =
+                    "Comma-delimited set of profiling options (pass 'list' for details")>]
+          profilerFlags : string option
           [<Option('c', HelpText = "Enable color printing")>]
           color : bool
           [<Value(
@@ -67,8 +70,8 @@ module Config =
         showModel       = false;
         optimisers      = None;
         viewOpts        = None;
-        times           = false;
         verbose         = false;
+        profilerFlags   = None;
         input           = None;
         color           = false;
     }
@@ -386,6 +389,42 @@ let fix f v =
         if v0 = v1 || (n >= !fix_bound && !fix_bound > 0) then v0 else fixiter f v1 (f v1) (n + 1)
     fixiter f v (f v) 0
 
+/// <summary>
+///     Profiler option flags.
+/// </summary>
+type ProfilerFlag =
+    | /// <summary>Print elapsed time per phase.</summary>
+      PhaseTime
+    | /// <summary>Print working set at end of each phase.</summary>
+      PhaseWorkingSet
+    | /// <summary>Print virtual memory at end of each phase.</summary>
+      PhaseVirtual
+    | /// <summary>Emit the list of profiler flags.</summary>
+      ListProfilerFlags
+
+
+/// <summary>
+///     Wraps a Starling phase generator in a profiler.
+/// </summary>
+let profilePhase<'A> (printTimes : bool) (printWS : bool) (printVM : bool) (pname : string) (f : unit -> 'A) =
+    let res =
+        if printTimes
+        then
+            let time = System.Diagnostics.Stopwatch.StartNew()
+            let r = f ()
+            time.Stop()
+            eprintfn "Phase %s; Elapsed: %dms" pname time.ElapsedMilliseconds
+            r
+        else f ()
+
+    if printWS || printVM then
+        use proc = System.Diagnostics.Process.GetCurrentProcess ()
+        if printWS then
+            eprintfn "Phase %s; WorkingSet: %d" pname (proc.WorkingSet64)
+        if printVM then
+            eprintfn "Phase %s; Virtual: %d" pname (proc.VirtualMemorySize64)
+
+    res
 
 /// <summary>
 ///    Utilities for testing.
