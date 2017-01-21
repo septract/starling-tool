@@ -1340,6 +1340,18 @@ let modelBoolLValue
     | RValue r -> fail (NeedLValue r)
     | LValue l -> wrapMessages BadExpr (modelBoolExpr env idxEnv marker) l
 
+// Models a boolean <LValue | Symbolic>
+// in an analogous way to ``modelIntLValueOrSymbol``
+let modelBoolLValueOrSymbol
+  (env : VarMap) (idxEnv : VarMap) (marker : Var -> 'Var) (ex : Expression)
+  : Result<TypedBoolExpr<Sym<'Var>>, PrimError> =
+    match ex with
+    | RValue r ->
+        match r.Node with
+        | Symbolic _ -> wrapMessages BadExpr (modelBoolExpr env idxEnv marker) r
+        | _          -> fail (NeedLValue r)
+    | LValue l -> wrapMessages BadExpr (modelBoolExpr env idxEnv marker) l
+
 /// <summary>
 ///     Models an integer lvalue given a potentially valid expression and
 ///     environment.
@@ -1448,6 +1460,7 @@ let modelIntLoad
                     (Exact (typedIntToType dstE))
                     (Exact (typedIntToType srcE)))
 
+    // for symbolics, use combined environment for input variables
     match combine ctx.ThreadVars ctx.SharedVars with
     // { there might be a nicer way of doing this
     | Bad []            -> Bad []
@@ -1482,9 +1495,14 @@ let modelBoolStore
                     (Exact (typedBoolToType dstE))
                     (Exact (typedBoolToType srcE)))
 
-    bind2 modelWithExprs
-        (modelBoolLValue ctx.SharedVars ctx.ThreadVars id dest)
-        (wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id) src)
+    // for symbolics, use combined environment for input variables
+    match combine ctx.ThreadVars ctx.SharedVars with
+    | Bad []            -> Bad []
+    | Bad (x :: xs)     ->   mergeMessages (List.map SymVarError xs) <| fail (SymVarError x)
+    | Ok(rv, _) ->
+        bind2 modelWithExprs
+            (modelBoolLValue ctx.SharedVars ctx.ThreadVars id dest)
+            (modelBoolLValueOrSymbol rv ctx.ThreadVars id src)
 
 /// Converts an integral store to a Prim.
 let modelIntStore
