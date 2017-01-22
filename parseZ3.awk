@@ -54,7 +54,8 @@ END {
 	for (metric in metrics) {
 		# Report memory metrics as a rounded integer, and times exactly
 		if (metric ~ /Elapsed:.*/)
-			print metric, metrics[metric] / count;
+			# / 1000 is to convert from msec into sec
+			printf("%s %.2f", metric, metrics[metric] / (count * 1000));
 		else
 			print metric, int((metrics[metric] / count)+0.5);
 	}
@@ -70,11 +71,13 @@ END {
 
 	total = frontend + proofgen + optimise + backend;
 
-	print "Total:Elapsed:Frontend", frontend / count;
-	print "Total:Elapsed:Proofgen", proofgen / count;
-	print "Total:Elapsed:Optimise", optimise / count;
-	print "Total:Elapsed:Backend", backend / count;
-	print "Total:Elapsed:*", total / count;
+	# / 1000 is to convert from msec into sec
+
+	printf("Total:Elapsed:Frontend %.2f\n", frontend / (count * 1000));
+	printf("Total:Elapsed:Proofgen %.2f\n", proofgen / (count * 1000));
+	printf("Total:Elapsed:Optimise %.2f\n", optimise / (count * 1000));
+	printf("Total:Elapsed:Backend %.2f\n", backend / (count * 1000));
+	printf("Total:Elapsed:* %.2f\n", total / (count * 1000));
 
 	tterms = 0;
 	for (termtype in terms) {

@@ -21,11 +21,13 @@ sed -e 's/#.*$//' -e '/^$/d' ./benchmarks.in | while read mode name path; do
 		fi
 
 		echo "\\midrule"
-		echo "${fmode}&&&&&&&&"'\\\\'
+		echo "${fmode}&&&&&&&&&"'\\\\'
 		cat="$mode"
 	fi
 
 	>&2 echo "--- ${name} : ${path} (${mode}) ---"
 
+	printf "${name}"
 	./benchone.sh "${name}" "${path}" "${mode}"
+	echo '\\\\'
 done
