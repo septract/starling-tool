@@ -7,12 +7,13 @@
 # Benchmarks are emitted as a LaTeX table, sorted alphabetically and grouped by Group.
 #
 # Lines starting with # are discarded.  Whitespace is significant.
-z3:Static ARC:Examples/Pass/arc.cvf
-z3:Static ticket lock:Examples/Pass/ticketLock.cvf
-z3:Static spinlock:Examples/Pass/spinLock.cvf
+z3:ARC (static):Examples/Pass/arc.cvf
+z3:Ticket lock (static):Examples/Pass/ticketLock.cvf
+z3:Spinlock (static):Examples/Pass/spinLock.cvf
+z3:Reader/writer lock:Examples/Pass/singleWriterMultiReaderLock.cvf
 z3:Peterson's algorithm:Examples/Pass/petersonArray.cvf
-gh:Allocatable ARC:Examples/PassGH/arc.cvf
-gh:Allocatable ticket lock:Examples/PassGH/ticketLock.cvf
-gh:Allocatable spin lock:Examples/PassGH/spinLock.cvf
-gh:CLH lock:Examples/PassGH/CLHLock.cvf
+gh:ARC (allocated):Examples/PassGH/arc.cvf
+gh:Ticket lock (allocated):Examples/PassGH/ticketLock.cvf
+gh:Spin lock (allocated):Examples/PassGH/spinLock.cvf
+gh:CLH queue-lock:Examples/PassGH/CLHLock.cvf
 gh:Lock-coupling list:Examples/PassGH/lclist.cvf

@@ -25,13 +25,13 @@ sed -e 's/#.*$//' -e '/^$/d' ./benchmarks.in | while read mode name path; do
 			fmode="GRASShopper"
 		elif [ "${mode}" = "z3" ];
 		then
-			fmode="Z3"
+			fmode="SMT/Z3"
 		else
 			fmode="??"
 		fi
 
 		echo "\\midrule"
-		echo "${fmode}&&&&&&&&&"'\\\\ \\cmidrule{1-1}'
+		echo "{\scriptsize \emph{${fmode}:}}"'\\\\'
 		cat="$mode"
 	fi
 
