@@ -5,6 +5,16 @@
 #
 
 IFS=:
+
+if [ "$1" == "no-approx" ];
+then
+	approx=""
+	opt="-Ono-all"
+else
+	approx="-Btry-approx"
+	opt=""
+fi
+
 cat=""
 sed -e 's/#.*$//' -e '/^$/d' ./benchmarks.in | while read mode name path; do
 	# Print backend header if we're on a new backend.
@@ -21,13 +31,13 @@ sed -e 's/#.*$//' -e '/^$/d' ./benchmarks.in | while read mode name path; do
 		fi
 
 		echo "\\midrule"
-		echo "${fmode}&&&&&&&&&"'\\\\'
+		echo "${fmode}&&&&&&&&&"'\\\\ \\cmidrule{1-1}'
 		cat="$mode"
 	fi
 
 	>&2 echo "--- ${name} : ${path} (${mode}) ---"
 
 	printf "${name}"
-	./benchone.sh "${name}" "${path}" "${mode}"
+	./benchone.sh "${name}" "${path}" "${mode}" "${approx}" "${opt}"
 	echo '\\\\'
 done

@@ -8,6 +8,8 @@ NGH=10
 name=$1
 path=$2
 mode=$3
+approx=$4
+opt=$5
 
 TMPZ3="benchone.z3.tmp"
 TMPAWK="benchone.awk.tmp"
@@ -29,9 +31,9 @@ printf "LOC:Starling %d\n" "${loc}" > ${TMPAWK}
 COUNT=3
 for i in $(seq 1 ${COUNT});
 do
-	./starling.sh -Pphase-time,phase-working-set,phase-virtual "${path}" >> ${TMPZ3} 2>&1
+	./starling.sh "${approx}" "${opt}" -Pphase-time,phase-working-set,phase-virtual "${path}" >> ${TMPZ3} 2>&1
 done
-awk -f ./parseZ3.awk -v count="${COUNT}" ${TMPZ3} >> ${TMPAWK}
+awk -f ./benchmark-awk/parseZ3.awk -v count="${COUNT}" ${TMPZ3} >> ${TMPAWK}
 
 #
 # Second pass: call GRASShopper if needed
@@ -39,7 +41,7 @@ awk -f ./parseZ3.awk -v count="${COUNT}" ${TMPZ3} >> ${TMPAWK}
 
 if [ "${mode}" = "gh" ];
 then
-	./starling.sh -sgrass "${path}" > "${TMPSPL}"
+	./starling.sh "${approx}" "${opt}" -sgrass "${path}" > "${TMPSPL}"
 
 	# Get lines of GRASShopper code.
 	gloc=$(wc -l "${TMPSPL}" | sed 's/^ *\([0-9]\{1,\}\).*/\1/')
@@ -56,4 +58,4 @@ then
 	printf "Elapsed:GH %.2f\n" "${gtime}" >> ${TMPAWK}
 fi
 
-awk -f benchToLatex.awk -v mode="${mode}" "${TMPAWK}"
+awk -f ./benchmark-awk/benchToLatex.awk -v mode="${mode}" "${TMPAWK}"
