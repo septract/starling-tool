@@ -16,28 +16,25 @@ else
 fi
 
 cat=""
-sed -e 's/#.*$//' -e '/^$/d' ./benchmarks.in | while read mode name path; do
-	# Print backend header if we're on a new backend.
-	if [ "${mode}" != "${cat}" ];
+sed -e 's/#.*$//' -e '/^$/d' ./benchmarks.in | while read name path spl; do
+	if [ -n "${spl}" ];
 	then
-		if [ "${mode}" = "gh" ];
-		then
-			fmode="GRASShopper"
-		elif [ "${mode}" = "z3" ];
-		then
-			fmode="SMT/Z3"
-		else
-			fmode="??"
-		fi
-
-		echo "\\midrule"
-		echo "{\scriptsize \emph{${fmode}:}}"'\\\\'
-		cat="$mode"
+		fmode="GRASShopper"
+	else
+		fmode="SMT/Z3"
 	fi
 
-	>&2 echo "--- ${name} : ${path} (${mode}) ---"
+	# Print backend header if we're on a new backend.
+	if [ "${fmode}" != "${cat}" ];
+	then
+		echo "\\midrule"
+		echo "{\scriptsize \emph{${fmode}:}}"'\\\\'
+		cat="$fmode"
+	fi
+
+	>&2 echo "--- ${name} : ${path} (${fmode}) ---"
 
 	printf "${name}"
-	./benchone.sh "${name}" "${path}" "${mode}" "${approx}" "${opt}"
+	./benchone.sh "${name}" "${path}" "${spl}" "${approx}" "${opt}"
 	echo '\\\\'
 done

@@ -2,18 +2,20 @@
 #
 # Each line is formatted as follows:
 #
-# Backend:Name:Path
+# Name:Path:GRASShopper module path
+#
+# If the third is missing, the proof is run as a Z3 proof.
 #
 # Benchmarks are emitted as a LaTeX table, sorted alphabetically and grouped by Group.
 #
 # Lines starting with # are discarded.  Whitespace is significant.
-z3:ARC (static):Examples/Pass/arc.cvf
-z3:Ticket lock (static):Examples/Pass/ticketLock.cvf
-z3:Spinlock (static):Examples/Pass/spinLock.cvf
-z3:Reader/writer lock:Examples/Pass/singleWriterMultiReaderLock.cvf
-z3:Peterson's algorithm:Examples/Pass/petersonArray.cvf
-gh:ARC (allocated):Examples/PassGH/arc.cvf
-gh:Ticket lock (allocated):Examples/PassGH/ticketLock.cvf
-gh:Spin lock (allocated):Examples/PassGH/spinLock.cvf
-gh:CLH queue-lock:Examples/PassGH/CLHLock.cvf
-gh:Lock-coupling list:Examples/PassGH/lclist.cvf
+ARC (static):Examples/Pass/arc.cvf:
+Ticket lock (static):Examples/Pass/ticketLock.cvf:
+Spinlock (static):Examples/Pass/spinLock.cvf:
+Reader/writer lock:Examples/Pass/singleWriterMultiReaderLock.cvf:
+Peterson's algorithm:Examples/Pass/petersonArray.cvf:
+ARC (allocated):Examples/PassGH/arc.cvf:grasshopper/arc-module.spl
+Ticket lock (allocated):Examples/PassGH/ticketLock.cvf:grasshopper/ticketlock-module.spl
+Spin lock (allocated):Examples/PassGH/spinLock.cvf:grasshopper/spinlock-module.spl
+CLH queue-lock:Examples/PassGH/CLHLock.cvf:grasshopper/CLHlock-module.spl
+Lock-coupling list:Examples/PassGH/lclist.cvf:grasshopper/lclist-module.spl

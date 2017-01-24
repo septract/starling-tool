@@ -7,22 +7,49 @@ NGH=10
 
 name=$1
 path=$2
-mode=$3
+spl=$3
 approx=$4
 opt=$5
 
+if [ -n "${spl}" ];
+then
+	mode="gh"
+else
+	mode="z3"
+fi
+
+TMPCVF="benchone.cvf.tmp"
 TMPZ3="benchone.z3.tmp"
 TMPAWK="benchone.awk.tmp"
 TMPSPL="benchone.spl.tmp"
 TMPGH="benchone.z3.gh"
-rm -f $TMPZ3 $TMPAWK $TMPSPL $TMPGH
+rm -f $TMPCVF $TMPZ3 $TMPAWK $TMPSPL $TMPGH
 
 #
-# Zeroth pass: dump proof LoC into awk file
+# Zeroth pass: dump total and proof LoC into awk file
 #
 
-loc=$(wc -l "${path}" | sed 's/^ *\([0-9]\{1,\}\).*/\1/')
+if [ -n "${spl}" ];
+then
+	cat "${path}" "${spl}" > "${TMPCVF}"
+else
+	cp "${path}" "${TMPCVF}"
+fi
+
+loc=$(wc -l "${TMPCVF}" | sed 's/^ *\([0-9]\{1,\}\).*/\1/')
 printf "LOC:Starling %d\n" "${loc}" > ${TMPAWK}
+
+# Now the same but filtering the CVF (not the SPL!) for proof lines
+
+if [ -n "${spl}" ];
+then
+	awk -f ./benchmark-awk/proofOnly.awk "${path}" | cat - "${spl}" > "${TMPCVF}"
+else
+	awk -f ./benchmark-awk/proofOnly.awk "${path}" > "${TMPCVF}"
+fi
+
+ploc=$(wc -l "${TMPCVF}" | sed 's/^ *\([0-9]\{1,\}\).*/\1/')
+printf "LOC:StarlingProof %d\n" "${ploc}" >> ${TMPAWK}
 
 #
 # First pass: get SMT results and format them
