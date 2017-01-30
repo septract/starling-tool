@@ -1,0 +1,57 @@
+typedef int Node;
+
+pragma grasshopper_include {./grasshopper/CLHlock-module.spl};
+pragma grasshopper_footprint {Foot};
+pragma grasshopper_footprint_sort {Set<Node>};
+
+shared Node head, tail;
+
+thread Node mynode, mypred;
+thread bool test;  // Used when trying to take the lock.
+
+view loose(Node x, bool isLocked);
+view queued(Node x, Node xp);
+view holdLock(Node x, Node xp);
+
+method lock(Node mynode) {
+  {| loose(mynode, false) |}
+    < %{ #1.lock := true }(mynode) >;
+  {| loose(mynode, true) |}
+    <{ mypred = tail;
+       tail = mynode;
+       %{#1.pred := #2}(tail, mypred); }>;  // Ghost code
+  {| queued(mynode, mypred) |}
+    do {
+      {| queued(mynode, mypred) |}
+        test = %{ #1.lock }(mypred);
+      {| if test then queued(mynode, mypred) else holdLock(mynode, mypred) |}
+    } while (test);
+  {| holdLock(mynode, mypred) |}
+}
+
+method unlock(Node mynode, Node mypred) {
+  {| holdLock(mynode, mypred) |}
+    <{ %{ #1.lock := false }(mynode);
+       %{ #1.pred := null }(mynode);  // Ghost code
+       head = mynode;  // Ghost code
+       }>;
+  {| loose(mypred, false) |}
+    mynode = mypred;
+  {| loose(mynode, false) |}
+}
+
+constraint emp -> %{ CLHfoot(Foot, #1, #2) }(head, tail);
+
+constraint queued(a, ap) -> %{ queuedG(Foot, #1, #2, #3, #4) }(a, head, tail, ap);
+constraint queued(a, ap) * queued(b, bp) -> a != b;
+
+// Loose means the node is unlinked from the queue.
+constraint loose(a, l) -> %{ looseG(Foot, #1, #2) && #1.lock == #3 }(a, head, l);
+constraint loose(a, al) * loose(b, bl) -> a != b;
+// loose and queued are contradictory by definition
+
+constraint holdLock(a, ap) -> %{ queuedG(Foot, #1, #2, #3, #4) && #4 == #2 }(a, head, tail, ap);
+
+constraint holdLock(a, ap) * queued(b, bp) -> a != b;
+constraint holdLock(a, ap) * holdLock(b, bp) -> false;
+

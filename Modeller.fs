@@ -40,15 +40,15 @@ module Types =
 
     /// A partially resolved command.
     type PartCmd<'view> =
-        | Prim of Command
+        | Prim of Starling.Core.Command.Types.Command
         | While of
             isDo : bool
             * expr : SVBoolExpr
-            * inner : Block<'view, PartCmd<'view>>
+            * inner : FullBlock<'view, PartCmd<'view>>
         | ITE of
             expr : SVBoolExpr
-            * inTrue : Block<'view, PartCmd<'view>>
-            * inFalse : Block<'view, PartCmd<'view>> option
+            * inTrue : FullBlock<'view, PartCmd<'view>>
+            * inFalse : FullBlock<'view, PartCmd<'view>> option
         override this.ToString() = sprintf "PartCmd(%A)" this
 
     /// <summary>
@@ -70,9 +70,16 @@ module Types =
 
     type ModellerViewExpr = ViewExpr<CView>
     type ModellerPartCmd = PartCmd<ModellerViewExpr>
-    type ModellerBlock = Block<ModellerViewExpr, ModellerPartCmd>
-    type ModellerViewedCommand = ViewedCommand<ModellerViewExpr, ModellerPartCmd>
-    type ModellerMethod = Method<ModellerViewExpr, ModellerPartCmd>
+    type ModellerBlock = FullBlock<ModellerViewExpr, PartCmd<ModellerViewExpr>>
+
+    /// <summary>
+    ///     A type, or maybe just a string description of one.
+    /// </summary>
+    type FuzzyType =
+        /// <summary>A definite type.</summary>
+        | Exact of Type
+        /// <summary>A not so definite type.</summary>
+        | Fuzzy of string
 
     /// <summary>
     ///     An error originating from the type system.
@@ -80,8 +87,9 @@ module Types =
     type TypeError =
         /// <summary>
         ///     Two items that should have been the same type were not.
+        ///     We know the expected type completely.
         /// </summary>
-        | TypeMismatch of expected : string * got : Type
+        | TypeMismatch of expected : FuzzyType * got : FuzzyType
         /// <summary>
         ///     A language type literal is inexpressible in Starling.
         /// </summary>
@@ -104,6 +112,7 @@ module Types =
         | BadSub of err : TraversalError<unit>
         /// A symbolic expression appeared in an ambiguous position.
         | AmbiguousSym of sym : Symbolic<Expression>
+        override this.ToString() = sprintf "%A" this
 
     /// Represents an error when converting a view prototype.
     type ViewProtoError =
@@ -126,6 +135,7 @@ module Types =
         | BadVar of err : VarMapError
         /// A viewdef conflicted with the shared variables.
         | SVarConflict of err : VarMapError
+        override this.ToString () = sprintf "%A" this
 
     /// Represents an error when converting a constraint.
     type ConstraintError =
@@ -152,14 +162,12 @@ module Types =
         | DecBool of expr : AST.Types.Expression
         /// A prim tried to atomic-load from a non-lvalue expression.
         | LoadNonLV of expr : AST.Types.Expression
-        /// A prim had a type error in it.
-        | BadType of expr : AST.Types.Expression * err : TypeError
         /// A prim has no effect.
         | Useless
-        /// <summary>
-        ///     A prim is not yet implemented in Starling.
-        /// </summary>
+        /// <summary>A prim is not yet implemented in Starling.</summary>
         | PrimNotImplemented of what : string
+        /// <summary>Handling variables in symbolic prims caused an error.</summary>
+        | SymVarError of err : VarMapError
 
     /// Represents an error when converting a method.
     type MethodError =
@@ -176,7 +184,7 @@ module Types =
         /// The method contains a bad view.
         | BadView of view : ViewExpr<AST.Types.View> * err : ViewError
         /// The method contains an command not yet implemented in Starling.
-        | CommandNotImplemented of cmd : AST.Types.Command<ViewExpr<View>>
+        | CommandNotImplemented of cmd : FullCommand
 
     /// Represents an error when converting a model.
     type ModelError =
@@ -208,6 +216,7 @@ module Pretty =
     open Starling.Core.Symbolic.Pretty
     open Starling.Core.View.Pretty
     open Starling.Lang.AST.Pretty
+    open Starling.Lang.ViewDesugar.Pretty
 
     /// Pretty-prints a CFunc.
     let rec printCFunc : CFunc -> Doc =
@@ -228,21 +237,30 @@ module Pretty =
         >> ssurround "[|" "|]"
 
     /// Pretty-prints a part-cmd at the given indent level.
-    let rec printPartCmd (pView : 'view -> Doc) : PartCmd<'view> -> Doc =
-        function
+    let rec printPartCmd (pView : 'view -> Doc) (pc : PartCmd<'view>) : Doc =
+        let pfb = printFullBlock pView (printPartCmd pView)
+        match pc with
         | PartCmd.Prim prim -> Command.Pretty.printCommand prim
         | PartCmd.While(isDo, expr, inner) ->
             cmdHeaded (hsep [ String(if isDo then "Do-while" else "While")
                               (printSVBoolExpr expr) ])
-                      [printBlock pView (printPartCmd pView) inner]
+                      [ pfb inner ]
         | PartCmd.ITE(expr, inTrue, inFalse) ->
-            cmdHeaded (hsep [String "begin if"
-                             (printSVBoolExpr expr) ])
-                      [headed "True" [printBlock pView (printPartCmd pView) inTrue]
-                       maybe Nop
-                            (fun f ->
-                                headed "False" [printBlock pView (printPartCmd pView) f])
-                            inFalse ]
+            cmdHeaded (hsep [ String "begin if"; printSVBoolExpr expr ])
+                      [ headed "True" [ pfb inTrue ]
+                        maybe Nop (fun f -> headed "False" [ pfb f]) inFalse ]
+
+    /// <summary>
+    ///     Pretty-prints fuzzy type identifiers.
+    /// </summary>
+    /// <param name="ft">The fuzzy type to print.</param>
+    /// <returns>
+    ///     A pretty-printer command that prints <paramref name="ft" />.
+    /// </returns>
+    let printFuzzyType (ft : FuzzyType) : Doc =
+        match ft with
+        | Fuzzy descr -> String descr
+        | Exact ty -> quoted (printType ty)
 
     /// <summary>
     ///     Pretty-prints type errors.
@@ -255,9 +273,9 @@ module Pretty =
         match err with
         | TypeMismatch (expected, got) ->
             errorStr "expected"
-            <+> errorStr expected
+            <+> error (printFuzzyType expected)
             <&> errorStr "got"
-            <+> quoted (printType got)
+            <+> error (printFuzzyType got)
         | ImpossibleType (lit, why) ->
             let header =
                 errorStr "type literal"
@@ -355,17 +373,13 @@ module Pretty =
             fmt "cannot load from non-lvalue expression '{0}'"
                 [ printExpression expr ]
         | Useless -> String "command has no effect"
-        | BadType (expr, err) ->
-            let header =
-                errorStr "expression"
-                <+> quoted (printExpression expr)
-                <+> errorStr "has incorrect type"
-            cmdHeaded header [ printTypeError err ]
         | PrimNotImplemented what ->
             errorStr "primitive command"
             <+> quoted (String what)
             <+> errorStr "not yet implemented"
-
+        | SymVarError err ->
+            errorStr "error in translating symbolic command"
+            <&> printVarMapError err
 
     /// Pretty-prints method errors.
     let printMethodError (err : MethodError) : Doc =
@@ -384,8 +398,7 @@ module Pretty =
             wrapped "view expression" (printViewExpr printView view)
                                       (printViewError err)
         | CommandNotImplemented cmd ->
-            fmt "command {0} not yet implemented"
-                [ printCommand (printViewExpr printView) cmd ]
+            fmt "command {0} not yet implemented" [ printFullCommand cmd ]
 
     /// Pretty-prints model conversion errors.
     let printModelError (err : ModelError) : Doc =
@@ -440,73 +453,73 @@ let coreSemantics : PrimSemanticsMap =
       (*
        * CAS
        *)
-      (mkPrim "ICAS" [ Int "destA"; Int "testA" ] [ Int "destB"; Int "testB"; Int "set" ]
+      (mkPrim "ICAS" [ normalIntVar "destA"; normalIntVar "testA" ] [ normalIntVar "destB"; normalIntVar "testB"; normalIntVar "set" ]
            [ Branch
                 (iEq (IVar "destB") (IVar "testB"),
-                 [ Int "destA" *<- Int (IVar "set")
-                   Int "testA" *<- Int (IVar "testB") ],
-                 [ Int "destA" *<- Int (IVar "destB")
-                   Int "testA" *<- Int (IVar "destB") ] ) ] )
+                 [ normalIntVar "destA" *<- normalIntExpr (IVar "set")
+                   normalIntVar "testA" *<- normalIntExpr (IVar "testB") ],
+                 [ normalIntVar "destA" *<- normalIntExpr (IVar "destB")
+                   normalIntVar "testA" *<- normalIntExpr (IVar "destB") ] ) ] )
       // Boolean CAS
-      (mkPrim "BCAS" [ Bool "destA"; Bool "testA" ] [ Bool "destB"; Bool "testB"; Bool "set" ]
+      (mkPrim "BCAS" [ normalBoolVar "destA"; normalBoolVar "testA" ] [ normalBoolVar "destB"; normalBoolVar "testB"; normalBoolVar "set" ]
            [ Branch
                 (bEq (BVar "destB") (BVar "testB"),
-                 [ Bool "destA" *<- Bool (BVar "set")
-                   Bool "testA" *<- Bool (BVar "testB") ],
-                 [ Bool "destA" *<- Bool (BVar "destB")
-                   Bool "testA" *<- Bool (BVar "destB") ] ) ] )
+                 [ normalBoolVar "destA" *<- normalBoolExpr (BVar "set")
+                   normalBoolVar "testA" *<- normalBoolExpr (BVar "testB") ],
+                 [ normalBoolVar "destA" *<- normalBoolExpr (BVar "destB")
+                   normalBoolVar "testA" *<- normalBoolExpr (BVar "destB") ] ) ] )
       (*
        * Atomic load
        *)
       // Integer load
-      (mkPrim "!ILoad"  [ Int "dest" ] [ Int "src" ]
-            [ Int "dest" *<- Int (IVar "src") ] )
+      (mkPrim "!ILoad"  [ normalIntVar "dest" ] [ normalIntVar "src" ]
+            [ normalIntVar "dest" *<- normalIntExpr (IVar "src") ] )
 
       // Integer load-and-increment
-      (mkPrim "!ILoad++"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
-            [ Int "dest" *<- Int (IVar "srcB")
-              Int "srcA" *<- Int (mkAdd2 (IVar "srcB") (IInt 1L)) ] )
+      (mkPrim "!ILoad++"  [ normalIntVar "dest"; normalIntVar "srcA" ] [ normalIntVar "srcB" ]
+            [ normalIntVar "dest" *<- normalIntExpr (IVar "srcB")
+              normalIntVar "srcA" *<- normalIntExpr (mkAdd2 (IVar "srcB") (IInt 1L)) ] )
 
       // Integer load-and-decrement
-      (mkPrim "!ILoad--"  [ Int "dest"; Int "srcA" ] [ Int "srcB" ]
-            [ Int "dest" *<- Int (IVar "srcB")
-              Int "srcA" *<- Int (mkSub2 (IVar "srcB") (IInt 1L)) ] )
+      (mkPrim "!ILoad--"  [ normalIntVar "dest"; normalIntVar "srcA" ] [ normalIntVar "srcB" ]
+            [ normalIntVar "dest" *<- normalIntExpr (IVar "srcB")
+              normalIntVar "srcA" *<- normalIntExpr (mkSub2 (IVar "srcB") (IInt 1L)) ] )
 
       // Integer increment
-      (mkPrim "!I++"  [ Int "srcA" ] [ Int "srcB" ]
-            [ Int "srcA" *<- Int (mkAdd2 (IVar "srcB") (IInt 1L)) ] )
+      (mkPrim "!I++"  [ normalIntVar "srcA" ] [ normalIntVar "srcB" ]
+            [ normalIntVar "srcA" *<- normalIntExpr (mkAdd2 (IVar "srcB") (IInt 1L)) ] )
 
       // Integer decrement
-      (mkPrim "!I--"  [ Int "srcA" ] [ Int "srcB" ]
-            [ Int "srcA" *<- Int (mkSub2 (IVar "srcB") (IInt 1L)) ] )
+      (mkPrim "!I--"  [ normalIntVar "srcA" ] [ normalIntVar "srcB" ]
+            [ normalIntVar "srcA" *<- normalIntExpr (mkSub2 (IVar "srcB") (IInt 1L)) ] )
 
       // Boolean load
-      (mkPrim "!BLoad"  [ Bool "dest" ] [ Bool "src" ]
-            [ Bool "dest" *<- Bool (BVar "src") ] )
+      (mkPrim "!BLoad"  [ normalBoolVar "dest" ] [ normalBoolVar "src" ]
+            [ normalBoolVar "dest" *<- normalBoolExpr (BVar "src") ] )
 
       (*
        * Atomic store
        *)
 
       // Integer store
-      (mkPrim "!IStore" [ Int "dest" ] [ Int "src" ]
-            [ Int "dest" *<- Int (IVar "src") ] )
+      (mkPrim "!IStore" [ normalIntVar "dest" ] [ normalIntVar "src" ]
+            [ normalIntVar "dest" *<- normalIntExpr (IVar "src") ] )
 
       // Boolean store
-      (mkPrim "!BStore" [ Bool "dest" ] [ Bool "src" ]
-            [ Bool "dest" *<- Bool (BVar "src") ] )
+      (mkPrim "!BStore" [ normalBoolVar "dest" ] [ normalBoolVar "src" ]
+            [ normalBoolVar "dest" *<- normalBoolExpr (BVar "src") ] )
 
       (*
        * Local set
        *)
 
       // Integer local set
-      (mkPrim "!ILSet" [ Int "dest" ] [ Int "src" ]
-            [ Int "dest" *<- Int (IVar "src") ] )
+      (mkPrim "!ILSet" [ normalIntVar "dest" ] [ normalIntVar "src" ]
+            [ normalIntVar "dest" *<- normalIntExpr (IVar "src") ] )
 
       // Boolean store
-      (mkPrim "!BLSet" [ Bool "dest" ] [ Bool "src" ]
-            [ Bool "dest" *<- Bool (BVar "src") ] )
+      (mkPrim "!BLSet" [ normalBoolVar "dest" ] [ normalBoolVar "src" ]
+            [ normalBoolVar "dest" *<- normalBoolExpr (BVar "src") ] )
 
       (*
        * Assumptions
@@ -516,11 +529,82 @@ let coreSemantics : PrimSemanticsMap =
       (mkPrim "Id" [] [] [])
 
       // Assume
-      (mkPrim "Assume" [] [Bool "expr"] [ Microcode.Assume (BVar "expr") ]) ]
+      (mkPrim "Assume" [] [normalBoolVar "expr"] [ Microcode.Assume (BVar "expr") ]) ]
 
 (*
  * Expression translation
  *)
+
+/// <summary>
+///     Constructs an expression-level type mismatch error.
+/// </summary>
+/// <param name="expected">The expected type of the expression.</param>
+/// <param name="got">The actual type of the expression.</param>
+/// <returns>An <see cref="ExprError"/> representing a type mismatch.</returns>
+let exprTypeMismatch (expected : FuzzyType) (got : FuzzyType) : ExprError =
+    ExprBadType (TypeMismatch (expected = expected, got = got))
+
+/// <summary>
+///     Constructs a primitive-level expression type mismatch error.
+/// </summary>
+/// <param name="expr">The AST of the expression being modelled.</param>
+/// <param name="expected">The expected type of the expression.</param>
+/// <param name="got">The actual type of the expression.</param>
+/// <returns>An <see cref="PrimError"/> representing a type mismatch.</returns>
+let primTypeMismatch
+  (expr : Expression) (expected : FuzzyType) (got : FuzzyType) : PrimError =
+    BadExpr (expr, exprTypeMismatch expected got)
+
+// <summary>
+//     Given a subtyped integer expression, check whether it can be used as a
+//     'normal'-typed integer expression.
+//
+//     <para>
+//         This is used whenever integer expressions need to be used as
+//         indices to arrays.
+//     </para>
+// </summary>
+// <param name="int">The integer to check for type compatibility.</param>
+// <typeparam name="Var">The type of variables in the expression.</typeparm>
+// <returns>
+//     If the expression is compatible with 'int', the modelled expression.
+//     Else, a type error.
+// </returns>
+let checkIntIsNormalType (int : TypedIntExpr<'Var>)
+  : Result<IntExpr<'Var>, TypeError> =
+    if primTypeRecsCompatible int.SRec normalRec
+    then ok int.SExpr
+    else
+        fail
+            (TypeMismatch
+                (expected = Exact (Typed.Int (normalRec, ())),
+                 got = Exact (Typed.Int (int.SRec, ()))))
+
+// <summary>
+//     Given a subtyped Boolean expression, check whether it can be used as a
+//     'normal'-typed Boolean expression.
+//
+//     <para>
+//         This is used whenever Boolean expressions need to be used as
+//         predicates, ie as view conditions or view definitions.
+//     </para>
+// </summary>
+// <param name="bool">The Boolean to check for type compatibility.</param>
+// <typeparam name="Var">The type of variables in the expression.</typeparm>
+// <returns>
+//     If the expression is compatible with 'bool', the modelled expression.
+//     Else, a type error.
+// </returns>
+let checkBoolIsNormalType (bool : TypedBoolExpr<'Var>)
+  : Result<BoolExpr<'Var>, TypeError> =
+    if primTypeRecsCompatible bool.SRec normalRec
+    then ok bool.SExpr
+    else
+        fail
+            (TypeMismatch
+                (expected = Exact (Typed.Bool (normalRec, ())),
+                 got = Exact (Typed.Bool (bool.SRec, ()))))
+
 
 /// <summary>
 ///     Models a Starling expression as an <c>Expr</c>.
@@ -573,33 +657,34 @@ let rec modelExpr
            determined by the type of the variable.  If the variable is
            symbolic, then we have ambiguity. *)
         | Identifier v ->
-            v
-            |> wrapMessages Var (VarMap.lookup env)
-            |> bind (
-                liftWithoutContext
+            bind
+                (liftWithoutContext
                     (varF >> Reg >> ok)
                     (tliftOverCTyped >> tliftToExprDest)
-                >> mapMessages BadSub)
+                 >> mapMessages BadSub)
+                (wrapMessages Var (VarMap.lookup env) v)
         | Symbolic sym ->
             fail (AmbiguousSym sym)
         (* If we have an array, then work out what the type of the array's
            elements are, then walk back from there. *)
         | ArraySubscript (arr, idx) ->
-            let arrResult = modelArrayExpr env idxEnv varF arr
-            let idxResult = modelIntExpr idxEnv idxEnv varF idx
+            let arrR = modelArrayExpr env idxEnv varF arr
+            // Indices always have to be of type 'int'.
+            let idxuR = modelIntExpr idxEnv idxEnv varF idx
+            let idxR = bind (checkIntIsNormalType >> mapMessages ExprBadType) idxuR
+
             lift2
-                (fun (eltype, length, arrE) idxE ->
-                    match eltype with
-                    | Int () -> Int (IIdx (eltype, length, arrE, idxE))
-                    | Bool () -> Bool (BIdx (eltype, length, arrE, idxE))
-                    | Array (ieltype, ilength, ()) ->
-                        Array (ieltype, ilength, AIdx (eltype, length, arrE, idxE)))
-                arrResult idxResult
+                (fun arrE idxE ->
+                    match arrE.SRec.ElementType with
+                    | AnIntR r -> Expr.Int (r, IIdx (arrE, idxE))
+                    | ABoolR r -> Expr.Bool (r, BIdx (arrE, idxE))
+                    | AnArrayR r -> Expr.Array (r, AIdx (arrE, idxE)))
+                arrR idxR
         (* We can use the active patterns above to figure out whether we
          * need to treat this expression as arithmetic or Boolean.
          *)
-        | ArithExp' _ -> lift Expr.Int (modelIntExpr env idxEnv varF e)
-        | BoolExp' _ -> lift Expr.Bool (modelBoolExpr env idxEnv varF e)
+        | ArithExp' _ -> lift (liftTypedSub Expr.Int) (modelIntExpr env idxEnv varF e)
+        | BoolExp' _ -> lift (liftTypedSub Expr.Bool) (modelBoolExpr env idxEnv varF e)
         | _ -> failwith "unreachable[modelExpr]"
 
 /// <summary>
@@ -640,74 +725,98 @@ and modelBoolExpr
   (env : VarMap)
   (idxEnv : VarMap)
   (varF : Var -> 'var)
-  (expr : Expression) : Result<BoolExpr<Sym<'var>>, ExprError> =
+  (expr : Expression) : Result<TypedBoolExpr<Sym<'var>>, ExprError> =
     let mi = modelIntExpr env idxEnv varF
     let me = modelExpr env idxEnv varF
     let ma = modelArrayExpr env idxEnv varF
 
-    let rec mb e =
+    let rec mb e : Result<TypedBoolExpr<Sym<'var>>, ExprError> =
         match e.Node with
-        | True -> BTrue |> ok
-        | False -> BFalse |> ok
+        // These two have a indefinite subtype.
+        | True -> ok (indefBool BTrue)
+        | False -> ok (indefBool BFalse)
         | Identifier v ->
             (* Look-up the variable to ensure it a) exists and b) is of a
              * Boolean type.
              *)
-            v
-            |> wrapMessages Var (VarMap.lookup env)
-            |> bind (function
-                     | Typed.Bool vn -> vn |> varF |> Reg |> BVar |> ok
-                     | vr ->
-                        fail
-                            (VarBadType
-                                (v,
-                                 TypeMismatch
-                                    (expected = "bool", got = typeOf vr))))
+            bind
+                (function
+                 | Typed.Bool (t, vn) ->
+                     ok (mkTypedSub t (BVar (Reg (varF vn))))
+                 | vr ->
+                    fail
+                        (VarBadType
+                            (v,
+                             TypeMismatch
+                                (expected = Fuzzy "bool", got = Exact (typeOf vr)))))
+                (wrapMessages Var (VarMap.lookup env) v)
         | Symbolic { Sentence = sen; Args = args } ->
+            // Symbols have an indefinite subtype.
             args
             |> List.map me
             |> collect
-            |> lift (fun a -> BVar (Sym { Sentence = sen; Args = a }))
+            |> lift (fun a -> indefBool (BVar (Sym { Sentence = sen; Args = a })))
         | ArraySubscript (arr, idx) ->
-            let arrResult = ma arr
+            let arrR = ma arr
+            // Indices always have to be of type 'int'.
             // Bind array index using its own environment.
-            let idxResult = modelIntExpr idxEnv idxEnv varF idx
+            let idxuR = modelIntExpr idxEnv idxEnv varF idx
+            let idxR = bind (checkIntIsNormalType >> mapMessages ExprBadType) idxuR
+
             bind2
-                (fun (eltype, length, arrE) idxE ->
-                    match eltype with
-                    | Bool () -> ok (BIdx (eltype, length, arrE, idxE))
-                    | t ->
-                        fail (ExprBadType (TypeMismatch (expected = "bool[]", got = t))))
-                arrResult idxResult
+                (fun arrE idxE ->
+                    match arrE.SRec.ElementType with
+                    | ABoolR r -> ok (mkTypedSub r (BIdx (arrE, idxE)))
+                    | t -> fail (exprTypeMismatch (Fuzzy "bool[]") (Exact t)))
+                arrR idxR
         | BopExpr(BoolOp as op, l, r) ->
             match op with
             | ArithIn as o ->
-                lift2 (match o with
-                       | Gt -> mkGt
-                       | Ge -> mkGe
-                       | Le -> mkLe
-                       | Lt -> mkLt
-                       | _ -> failwith "unreachable[modelBoolExpr::ArithIn]")
-                      (mi l)
-                      (mi r)
+                let oper =
+                    match o with
+                    | Gt -> mkGt
+                    | Ge -> mkGe
+                    | Le -> mkLe
+                    | Lt -> mkLt
+                    | _ -> failwith "unreachable[modelBoolExpr::ArithIn]"
+                // We don't know the subtype of this yet...
+                lift indefBool (lift2 oper (mi l) (mi r))
             | BoolIn as o ->
-                lift2 (match o with
-                       | And -> mkAnd2
-                       | Or -> mkOr2
-                       | Imp -> mkImpl
-                       | _ -> failwith "unreachable[modelBoolExpr::BoolIn]")
-                      (mb l)
-                      (mb r)
+                let oper =
+                    match o with
+                    | And -> mkAnd2
+                    | Or -> mkOr2
+                    | Imp -> mkImpl
+                    | _ -> failwith "unreachable[modelBoolExpr::BoolIn]"
+
+                (* Both sides of the expression need to be unifiable to the
+                   same type. *)
+                bind2
+                    (fun ml mr ->
+                        match unifyPrimTypeRecs [ ml.SRec; mr.SRec ] with
+                        | Some t ->
+                            ok (mkTypedSub t (oper (stripTypeRec ml) (stripTypeRec mr)))
+                        | None ->
+                            fail
+                                (ExprBadType
+                                    (TypeMismatch
+                                        (expected = Exact (Type.Bool (ml.SRec, ())),
+                                         got = Exact (Type.Bool (mr.SRec, ()))))))
+                    (mb l)
+                    (mb r)
             | AnyIn as o ->
-                lift2 (match o with
-                       | Eq -> mkEq
-                       | Neq -> mkNeq
-                       | _ -> failwith "unreachable[modelBoolExpr::AnyIn]")
-                      (me l)
-                      (me r)
-        | UopExpr (Neg,e) -> lift mkNot (mb e) 
+                let oper =
+                    match o with
+                    | Eq -> mkEq
+                    | Neq -> mkNeq
+                    | _ -> failwith "unreachable[modelBoolExpr::AnyIn]"
+                // We don't know the subtype of this yet...
+                lift indefBool (lift2 oper (me l) (me r))
+        | UopExpr (Neg,e) -> lift (mapTypedSub mkNot) (mb e) 
         | _ ->
-            fail (ExprBadType (TypeMismatch (expected = "bool", got = Int ())))
+            fail
+                (ExprBadType
+                    (TypeMismatch (expected = Fuzzy "bool", got = Fuzzy "unknown non-bool")))
     mb expr
 
 /// <summary>
@@ -748,13 +857,14 @@ and modelIntExpr
   (env : VarMap)
   (idxEnv : VarMap)
   (varF : Var -> 'var)
-  (expr : Expression) : Result<IntExpr<Sym<'var>>, ExprError> =
+  (expr : Expression) : Result<TypedIntExpr<Sym<'var>>, ExprError> =
     let me = modelExpr env idxEnv varF
     let ma = modelArrayExpr env idxEnv varF
 
     let rec mi e =
         match e.Node with
-        | Num i -> i |> IInt |> ok
+        // Numbers have indefinite subtype.
+        | Num i -> ok (indefInt (IInt i))
         | Identifier v ->
             (* Look-up the variable to ensure it a) exists and b) is of an
              * arithmetic type.
@@ -762,41 +872,58 @@ and modelIntExpr
             v
             |> wrapMessages Var (VarMap.lookup env)
             |> bind (function
-                     | Typed.Int vn -> vn |> varF |> Reg |> IVar |> ok
+                     | Typed.Int (ty, vn) ->
+                         ok (mkTypedSub ty (IVar (Reg (varF vn))))
                      | vr ->
                         fail
                             (VarBadType
                                 (v,
                                  TypeMismatch
-                                    (expected = "int", got = typeOf vr))))
+                                    (expected = Fuzzy "int", got = Exact (typeOf vr)))))
          | Symbolic { Sentence = sen; Args = args } ->
+            // Symbols have indefinite subtype.
             args
             |> List.map me
             |> collect
-            |> lift (fun a -> IVar (Sym { Sentence = sen; Args = a }))           
+            |> lift (fun a -> indefInt (IVar (Sym { Sentence = sen; Args = a })))
         | ArraySubscript (arr, idx) ->
-            let arrResult = ma arr
+            let arrR = ma arr
+            // Indices always have to be of type 'int'.
             // Bind array index using its own environment.
-            let idxResult = modelIntExpr idxEnv idxEnv varF idx
+            let idxuR = modelIntExpr idxEnv idxEnv varF idx
+            let idxR = bind (checkIntIsNormalType >> mapMessages ExprBadType) idxuR
+
             bind2
-                (fun (eltype, length, arrE) idxE ->
-                    match eltype with
-                    | Int () -> ok (IIdx (eltype, length, arrE, idxE))
-                    | t ->
-                        fail (ExprBadType (TypeMismatch (expected = "int[]", got = t))))
-                arrResult idxResult
+                (fun arrE idxE ->
+                    match arrE.SRec.ElementType with
+                    | AnIntR ty -> ok (mkTypedSub ty (IIdx (arrE, idxE)))
+                    | t -> fail (exprTypeMismatch (Fuzzy "int[]") (Exact (typeOf (liftTypedSub Array arrE)))))
+                arrR idxR
         | BopExpr(ArithOp as op, l, r) ->
-            lift2 (match op with
-                   | Mul -> mkMul2
-                   | Mod -> mkMod
-                   | Div -> mkDiv
-                   | Add -> mkAdd2
-                   | Sub -> mkSub2
-                   | _ -> failwith "unreachable[modelIntExpr]")
-                  (mi l)
-                  (mi r)
-        | _ ->
-            fail (ExprBadType (TypeMismatch (expected = "int", got = Bool ())))
+            let oper =
+                match op with
+                | Mul -> mkMul2
+                | Mod -> mkMod
+                | Div -> mkDiv
+                | Add -> mkAdd2
+                | Sub -> mkSub2
+                | _ -> failwith "unreachable[modelIntExpr]"
+
+            bind2
+                (fun ll lr ->
+                    (* We need to make sure that 'll' 'lr' have compatible inner
+                       type by unifying their extended type records. *)
+                    match unifyPrimTypeRecs [ ll.SRec; lr.SRec ] with
+                    | Some srec ->
+                        ok (mkTypedSub srec (oper (stripTypeRec ll) (stripTypeRec lr)))
+                    | None ->
+                        fail
+                            (ExprBadType
+                                (TypeMismatch
+                                    (expected = Exact (typeOf (liftTypedSub Int ll)),
+                                     got = Exact (typeOf (liftTypedSub Int lr))))))
+                (mi l) (mi r)
+        | _ -> fail (exprTypeMismatch (Fuzzy "int") (Fuzzy "unknown non-int"))
     mi expr
 
 /// <summary>
@@ -838,7 +965,7 @@ and modelArrayExpr
   (idxEnv : VarMap)
   (varF : Var -> 'var)
   (expr : Expression)
-  : Result<Type * int option * ArrayExpr<Sym<'var>>, ExprError> =
+  : Result<TypedArrayExpr<Sym<'var>>, ExprError> =
     let mi = modelIntExpr env idxEnv varF
 
     let rec ma e =
@@ -850,35 +977,34 @@ and modelArrayExpr
             v
             |> wrapMessages Var (VarMap.lookup env)
             |> bind (function
-                     | Typed.Array (eltype, length, vn) ->
-                        ok (eltype, length, AVar (Reg (varF vn)))
+                     | Typed.Array (t, vn) ->
+                        ok (mkTypedSub t (AVar (Reg (varF vn))))
                      | vr ->
                         fail
                             (VarBadType
                                 (v,
                                  TypeMismatch
-                                    (expected = "array", got = typeOf vr))))
+                                    (expected = Fuzzy "array", got = Exact (typeOf vr)))))
         | Symbolic sym ->
             (* TODO(CaptainHayashi): a symbolic array is ambiguously typed.
                Maybe when modelling we should take our 'best guess' at
                eltype and length from any subscripting expression? *)
             fail (AmbiguousSym sym)
         | ArraySubscript (arr, idx) ->
-            let arrResult = ma arr
-            let idxResult = mi idx
+            let arrR = ma arr
+            // Indices always have to be of type 'int'.
+            let idxuR = modelIntExpr idxEnv idxEnv varF idx
+            let idxR = bind (checkIntIsNormalType >> mapMessages ExprBadType) idxuR
+
             bind2
-                (fun (eltype, length, arrE) idxE ->
-                    match eltype with
-                    | Array (eltype', length', ()) ->
-                        ok (eltype', length', AIdx (eltype, length, arrE, idxE))
-                    | t ->
-                        // TODO(CaptainHayashi): more sensible error?
-                        fail (ExprBadType (TypeMismatch (expected = "array[]", got = t))))
-                arrResult idxResult
-        | ArithExp' _ ->
-            fail (ExprBadType (TypeMismatch (expected = "array", got = Int ())))
-        | BoolExp' _ ->
-            fail (ExprBadType (TypeMismatch (expected = "array", got = Bool ())))
+                (fun arrE idxE ->
+                    match arrE.SRec.ElementType with
+                    | AnArrayR r -> ok (mkTypedSub r (AIdx (arrE, idxE)))
+                    // TODO(CaptainHayashi): more sensible error?
+                    | t -> fail (exprTypeMismatch (Fuzzy "array[]") (Exact t)))
+                arrR idxR
+        | ArithExp' _ -> fail (exprTypeMismatch (Fuzzy "array") (Fuzzy "integer"))
+        | BoolExp' _ -> fail (exprTypeMismatch (Fuzzy "array") (Fuzzy "Boolean"))
         // We should have covered all expressions by here.
         | _ -> failwith "unreachable?[modelArrayExpr]"
     ma expr
@@ -925,15 +1051,16 @@ let rec modelViewSignature (protos : FuncDefiner<ProtoInfo>) =
                                           let! rM = modelViewSignature protos r
                                           return Multiset.append lM rM }
     | ViewSignature.Iterated(dfunc, e) ->
-        let updateFunc (s : string) f = { Func = f; Iterator = Some (Int s) }
+        // Iterators have the 'int' subtype.
+        let updateFunc (s : string) f = { Func = f; Iterator = Some (Int (normalRec, s)) }
         let modelledDFunc = modelDFunc protos dfunc
         lift (Multiset.map (updateFunc e)) modelledDFunc
 
 let makeIteratorMap : TypedVar option -> VarMap =
     function
-    | None         -> Map.empty
-    | Some (Int v) -> Map.ofList [ v, Type.Int () ]
-    | _            -> failwith "Iterator in iterated views must be Int type"
+    | None              -> Map.empty
+    | Some (Int (t, v)) -> Map.ofList [ v, Type.Int (t, ()) ]
+    | _                 -> failwith "Iterator in iterated views must be Int type"
 
 /// Produces the environment created by interpreting the viewdef vds using the
 /// view prototype map vpm.
@@ -961,12 +1088,14 @@ let modelViewDef
         let! vms = wrapMessages CEView (modelViewSignature vprotos) av
         let  v = vms |> Multiset.toFlatList
         let! e = envOfViewDef svars v |> mapMessages (curry CEView av)
-        let! d = (match ad with
-                  | Some dad ->
-                      dad
-                      |> wrapMessages CEExpr (modelBoolExpr e e id)
-                      |> lift Some
-                  | None _ -> ok None)
+        let! d =
+            match ad with
+            | Some dad ->
+                dad
+                |> wrapMessages CEExpr (modelBoolExpr e e id)
+                |> bind (checkBoolIsNormalType >> mapMessages (fun t -> CEExpr (dad, ExprBadType t)))
+                |> lift Some
+            | None _ -> ok None
         return (v, d)
     }
     |> mapMessages (curry BadConstraint av)
@@ -1172,9 +1301,22 @@ let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
     | View.Func afunc ->
         modelCFunc ctx afunc |> lift mkCView
     | View.If(e, l, r) ->
-        lift3 (fun em lm rm -> CFunc.ITE(em, lm, rm) |> mkCView)
-              (e |> modelBoolExpr ctx.ThreadVars ctx.ThreadVars id
-                 |> mapMessages (curry ViewError.BadExpr e))
+        (* Booleans in the condition position must be of type 'bool',
+           not a subtype. *)
+        let teR =
+            wrapMessages ViewError.BadExpr
+                (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
+                e
+        let eR =
+            bind
+                (checkBoolIsNormalType
+                 >> mapMessages (ExprBadType >> fun r -> ViewError.BadExpr (e, r)))
+                teR
+
+
+
+        lift3 (fun em lm rm -> mkCView (CFunc.ITE(em, lm, rm)))
+              eR
               (modelCView ctx l)
               (modelCView ctx r)
     | Unit -> Multiset.empty |> ok
@@ -1198,7 +1340,7 @@ let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
 /// <returns>If the subject is a valid lvalue, the result expression.</returns>
 let modelBoolLValue
   (env : VarMap) (idxEnv : VarMap) (marker : Var -> 'Var) (ex : Expression)
-  : Result<BoolExpr<Sym<'Var>>, PrimError> =
+  : Result<TypedBoolExpr<Sym<'Var>>, PrimError> =
     match ex with
     | RValue r -> fail (NeedLValue r)
     | LValue l -> wrapMessages BadExpr (modelBoolExpr env idxEnv marker) l
@@ -1214,7 +1356,7 @@ let modelBoolLValue
 /// <returns>If the subject is a valid lvalue, the result expression.</returns>
 let modelIntLValue
   (env : VarMap) (idxEnv : VarMap) (marker : Var -> 'Var) (ex : Expression)
-  : Result<IntExpr<Sym<'Var>>, PrimError> =
+  : Result<TypedIntExpr<Sym<'Var>>, PrimError> =
     match ex with
     | RValue r -> fail (NeedLValue r)
     | LValue l -> wrapMessages BadExpr (modelIntExpr env idxEnv marker) l
@@ -1246,10 +1388,18 @@ let modelBoolLoad
                           the source must be a SHARED Boolean lvalue;
                           and the fetch mode must be Direct. *)
     let modelWithExprs dstE srcE =
-        match mode with
-        | Direct -> ok (command "!BLoad" [ Bool dstE ] [ Bool srcE ])
-        | Increment -> fail (IncBool src)
-        | Decrement -> fail (DecBool src)
+        // Both expressions must have unifiable types.
+        if primTypeRecsCompatible dstE.SRec srcE.SRec
+        then
+            match mode with
+            | Direct -> ok (command "!BLoad" [ liftTypedSub Bool dstE ] [ liftTypedSub Bool srcE ])
+            | Increment -> fail (IncBool src)
+            | Decrement -> fail (DecBool src)
+        else  // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
+            fail
+                (primTypeMismatch src
+                    (Exact (typedBoolToType dstE))
+                    (Exact (typedBoolToType srcE)))
 
     bind2 modelWithExprs
         (modelBoolLValue ctx.ThreadVars ctx.ThreadVars id dest)
@@ -1266,14 +1416,33 @@ let modelIntLoad
                            the source must be a SHARED integral lvalue;
                            and the fetch mode is unconstrained. *)
     let modelWithExprs dstE srcE =
-        let cmd, results =
-            match mode with
-            | Direct -> "!ILoad", [ dstE ]
-            | Increment -> "!ILoad++", [ dstE; srcE ]
-            | Decrement -> "!ILoad--", [ dstE; srcE ]
-        command cmd (List.map Int results) [ Int srcE ]
+        match unifyPrimTypeRecs [ dstE.SRec; srcE.SRec ] with
+        | Some srec ->
+            // Direct loading is an intrinsic; the others aren't.
+            let mkStored cmd =
+                ok
+                    (command cmd
+                        [ typedIntToExpr dstE; typedIntToExpr srcE ]
+                        [ typedIntToExpr srcE ])
 
-    lift2 modelWithExprs
+            match mode with
+            | Direct ->
+                ok
+                    (Intrinsic
+                        (IAssign
+                            { AssignType = Load
+                              TypeRec = srec
+                              LValue = stripTypeRec dstE
+                              RValue = stripTypeRec srcE } ))
+            | Increment -> mkStored "!ILoad++"
+            | Decrement -> mkStored "!ILoad--"
+        | None ->  // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
+            fail
+                (primTypeMismatch src
+                    (Exact (typedIntToType dstE))
+                    (Exact (typedIntToType srcE)))
+
+    bind2 modelWithExprs
         (modelIntLValue ctx.ThreadVars ctx.ThreadVars id dest)
         (modelIntLValue ctx.SharedVars ctx.ThreadVars id src)
 
@@ -1288,10 +1457,18 @@ let modelBoolStore
                            the source must be THREAD Boolean;
                            and the fetch mode must be Direct. *)
     let modelWithExprs dstE srcE =
-        match mode with
-        | Direct -> ok (command "!BStore" [ Bool dstE ] [ Bool srcE ])
-        | Increment -> fail (IncBool src)
-        | Decrement -> fail (DecBool src)
+        // Both expressions must have unifiable types.
+        if primTypeRecsCompatible dstE.SRec srcE.SRec
+        then
+            match mode with
+            | Direct -> ok (command "!BStore" [ typedBoolToExpr dstE ] [ typedBoolToExpr srcE ])
+            | Increment -> fail (IncBool src)
+            | Decrement -> fail (DecBool src)
+        else  // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
+            fail
+                (primTypeMismatch src
+                    (Exact (typedBoolToType dstE))
+                    (Exact (typedBoolToType srcE)))
 
     bind2 modelWithExprs
         (modelBoolLValue ctx.SharedVars ctx.ThreadVars id dest)
@@ -1304,21 +1481,77 @@ let modelIntStore
   (src : Expression)
   (mode : FetchMode)
   : Result<PrimCommand, PrimError> =
-    (* In an integral store, the destination must be GLOBAL and integral;
-     *                       the source must be LOCAL and integral;
-     *                       and the fetch mode must be Direct.
-     *)
-    let modelWithExprs dst src =
-        let cmd, reads =
-            match mode with
-            | Direct -> "!IStore", [ dst ]
-            | Increment -> "!IStore++", [ dst; src ]
-            | Decrement -> "!IStore--", [ dst; src ]
-        command cmd (List.map Int reads) [ Int src ]
+    (* In an integral store, the destination must be SHARED and integral;
+                             the source must be THREAD and integral;
+                             and the fetch mode is unconstrained.  *)
+    let modelWithExprs dstE srcE =
+        match unifyPrimTypeRecs [ dstE.SRec; srcE.SRec ] with
+        | Some srec ->
+            // Direct storage is an intrinsic; the others aren't.
+            let mkStored cmd =
+                ok
+                    (command cmd
+                        [ typedIntToExpr dstE; typedIntToExpr srcE ]
+                        [ typedIntToExpr srcE ])
 
-    lift2 modelWithExprs
+            match mode with
+            | Direct ->
+                ok
+                    (Intrinsic
+                        (IAssign
+                            { AssignType = Store
+                              TypeRec = srec
+                              LValue = stripTypeRec dstE
+                              RValue = stripTypeRec srcE } ))
+            | Increment -> mkStored "!IStore++"
+            | Decrement -> mkStored "!IStore--"
+        | None ->  // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
+            fail
+                (primTypeMismatch src
+                    (Exact (typedIntToType dstE))
+                    (Exact (typedIntToType srcE)))
+
+    bind2 modelWithExprs
         (modelIntLValue ctx.SharedVars ctx.ThreadVars id dest)
         (wrapMessages BadExpr (modelIntExpr ctx.ThreadVars ctx.ThreadVars id) src)
+
+/// <summary>
+///     Models an Int and checks that it is type-compatible with another type.
+/// </summary>
+let modelIntWithType
+  (rtype : Type)
+  (env : VarMap)
+  (idxEnv : VarMap)
+  (expr : Expression)
+  : Result<TypedIntExpr<Sym<Var>>, PrimError> =
+    // TODO(CaptainHayashi): proper doc comment.
+    let eR = wrapMessages BadExpr (modelIntExpr env idxEnv id) expr
+
+    let checkType e =
+        let etype = typedIntToType e
+        if typesCompatible rtype etype
+        then ok e
+        else fail (primTypeMismatch expr (Exact rtype) (Exact etype))
+    bind checkType eR
+
+/// <summary>
+///     Models a Bool and checks that it is type-compatible with another type.
+/// </summary>
+let modelBoolWithType
+  (rtype : Type)
+  (env : VarMap)
+  (idxEnv : VarMap)
+  (expr : Expression)
+  : Result<TypedBoolExpr<Sym<Var>>, PrimError> =
+    // TODO(CaptainHayashi): proper doc comment.
+    let eR = wrapMessages BadExpr (modelBoolExpr env idxEnv id) expr
+
+    let checkType e =
+        let etype = typedBoolToType e
+        if typesCompatible rtype etype
+        then ok e
+        else fail (primTypeMismatch expr (Exact rtype) (Exact etype))
+    bind checkType eR
 
 /// Converts a CAS to part-commands.
 let modelCAS
@@ -1337,43 +1570,31 @@ let modelCAS
         (* Determine from destPreLV and testPreLV what the type of the CAS is.
            Assume that the post-states are of the same type. *)
         match destLV, testLV with
-        | Bool dlB, Bool tlB ->
-            let setResult =
-                wrapMessages BadExpr
-                    (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
-                    set
-
-            lift
-                (fun s ->
-                    command "BCAS"
-                        [ destLV; testLV ]
-                        [ Expr.Bool dlB; Bool tlB; Bool s ] )
-                setResult
-        | Int dlI, Int tlI ->
-            let setResult =
-                wrapMessages BadExpr
-                    (modelIntExpr ctx.ThreadVars ctx.ThreadVars id)
-                    set
-
-            lift
-                (fun s ->
-                    command "ICAS"
-                        [ destLV; testLV ]
-                        [ Int dlI; Int tlI; Int s ] )
-                setResult
+        | Bool (dr, dlB), Bool (tr, tlB)
+            when primTypeRecsCompatible dr tr ->
+            // set has to be type-compatible with destLV, of course.
+            let setR =
+                modelBoolWithType (typeOf destLV) ctx.ThreadVars ctx.ThreadVars set 
+            let modelWithSet setE =
+                command "BCAS"
+                    [ destLV; testLV ]
+                    [ destLV; testLV; typedBoolToExpr setE ]
+            lift modelWithSet setR
+        | Int (dr, dlI), Int (tr, tlI)
+            when primTypeRecsCompatible dr tr ->
+            // set has to be type-compatible with destLV, of course.
+            let setR =
+                modelIntWithType (typeOf destLV) ctx.ThreadVars ctx.ThreadVars set 
+            let modelWithSet setE =
+                command "ICAS"
+                    [ destLV; testLV ]
+                    [ destLV; testLV; typedIntToExpr setE ]
+            lift modelWithSet setR
         | d, t ->
             (* Oops, we have a type error.
                Arbitrarily single out test as the cause of it. *)
-            fail
-                (BadType
-                    (test,
-                     TypeMismatch
-                        // TODO(CaptainHayashi): clean this up
-                        (Starling.Core.Pretty.printUnstyled
-                            (Starling.Core.TypeSystem.Pretty.printType (typeOf d)), typeOf t)))
+            fail (primTypeMismatch test (Exact (typeOf d)) (Exact (typeOf t)))
 
-    (* We need the unmarked version of dest and test for the outputs,
-       and the marked version for the inputs. *)
     let mdl vars = modelLValue vars ctx.ThreadVars id
     bind2 modelWithDestAndTest
         (mdl ctx.SharedVars dest)
@@ -1411,7 +1632,7 @@ let typeOfLValue (env : VarMap) (lv : Expression) : Type option =
        an Array type. *)
     let matchArray var =
         match var with
-        | Array (eltype, _, _) -> Some eltype
+        | Array ({ ElementType = eltype }, _) -> Some eltype
         | _ -> None
 
     // This is the part that actually traverses the expression.
@@ -1498,8 +1719,44 @@ let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> 
         | Assume e ->
             e
             |> wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
-            |> lift (Expr.Bool >> List.singleton >> command "Assume" [])
-    lift (fun cmd -> { cmd with Node = Some a }) prim
+            |> lift (typedBoolToExpr >> List.singleton >> command "Assume" [])
+        | Havoc var ->
+            let allVarsR =
+                mapMessages SymVarError (VarMap.combine ctx.ThreadVars ctx.SharedVars)
+            let varMR =
+                bind
+                    (fun allVars ->
+                        mapMessages SymVarError
+                            (VarMap.lookup allVars var))
+                    allVarsR
+            lift (fun varM -> Intrinsic (IntrinsicCommand.Havoc varM)) varMR
+
+
+        | SymAtomic sym ->
+            // TODO(CaptainHayashi): split out.
+            let allVarsR =
+                mapMessages SymVarError (VarMap.combine ctx.ThreadVars ctx.SharedVars)
+            let symArgsMR =
+                bind
+                    (fun allVars ->
+                        (collect
+                            (List.map
+                                (wrapMessages BadExpr
+                                    (modelExpr allVars ctx.ThreadVars id))
+                                sym.Args)))
+                    allVarsR
+            lift
+                (fun symArgsM ->
+                    SymC
+                        { Sentence = sym.Sentence
+                          Args = symArgsM })
+                symArgsMR
+
+    lift
+        (function
+         | Stored cmd -> Stored { cmd with Node = Some a }
+         | x -> x)
+        prim
 
 /// Converts a local variable assignment to a Prim.
 and modelAssign
@@ -1512,19 +1769,45 @@ and modelAssign
        We thus also have to make sure that src is the correct type. *)
     let modelWithDest destM =
         match destM with
-        | Int _ ->
-            let srcResult =
-                wrapMessages BadExpr
-                    (modelIntExpr ctx.ThreadVars ctx.ThreadVars id)
-                    src
-            lift (fun srcM -> command "!ILSet" [ destM ] [ Int srcM ]) srcResult
-        | Bool _ ->
-            let srcResult =
-                wrapMessages BadExpr
-                    (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
-                    src
-            lift (fun srcM -> command "!BLSet" [ destM ] [ Bool srcM ]) srcResult
-        | Array (_, _, _) ->
+        | Int (dt, d) ->
+            let srcR = modelIntExpr ctx.ThreadVars ctx.ThreadVars id src
+            let modelWithSrc srcE =
+                match unifyPrimTypeRecs [ dt; srcE.SRec ] with
+                | Some dst ->
+                    ok
+                        (Intrinsic
+                            (IAssign
+                                { AssignType = Local
+                                  TypeRec = dst
+                                  LValue = d
+                                  RValue = stripTypeRec srcE } ))
+                | None ->
+                    // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
+                    fail
+                        (primTypeMismatch src
+                            (Exact (Int (dt, ())))
+                            (Exact (typedIntToType srcE)))
+            bind modelWithSrc (mapMessages (curry BadExpr src) srcR)
+        | Bool (dt, d) ->
+            let srcR = modelBoolExpr ctx.ThreadVars ctx.ThreadVars id src
+            let modelWithSrc srcE =
+                match unifyPrimTypeRecs [ dt; srcE.SRec ] with
+                | Some dst ->
+                    ok
+                        (Intrinsic
+                            (BAssign
+                                { AssignType = Local
+                                  TypeRec = dst
+                                  LValue = d
+                                  RValue = stripTypeRec srcE } ))
+                | None ->
+                    // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
+                    fail
+                        (primTypeMismatch src
+                            (Exact (Bool (dt, ())))
+                            (Exact (typedBoolToType srcE)))
+            bind modelWithSrc (mapMessages (curry BadExpr src) srcR)
+        | Array (_, _) ->
             fail (PrimNotImplemented "array local assign")
 
     (* The permitted type of src depends on the type of dest.
@@ -1534,26 +1817,32 @@ and modelAssign
 
 /// Creates a partially resolved axiom for an if-then-else.
 and modelITE
-  : MethodContext
-    -> Expression
-    -> Block<ViewExpr<View>, Command<ViewExpr<View>>>
-    -> Block<ViewExpr<View>, Command<ViewExpr<View>>> option
-    -> Result<ModellerPartCmd, MethodError> =
-    fun ctx i t fo ->
-        trial { let! iM =
-                    wrapMessages
-                        BadITECondition
-                        (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
-                        i
-                (* We need to calculate the recursive axioms first, because we
-                 * need the inner cpairs for each to store the ITE placeholder.
-                 *)
-                let! tM = modelBlock ctx t
-                let! fM =
-                    match fo with
-                    | Some f -> modelBlock ctx f |> lift Some
-                    | None -> ok None
-                return ITE(iM, tM, fM) }
+  (ctx : MethodContext)
+  (i : Expression)
+  (t : FullBlock<ViewExpr<View>, FullCommand>)
+  (fo : FullBlock<ViewExpr<View>, FullCommand> option)
+  : Result<ModellerPartCmd, MethodError> =
+    let iuR =
+        wrapMessages
+            BadITECondition
+            (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
+            i
+    // An if condition needs to be of type 'bool', not a subtype.
+    let iR =
+        bind
+            (checkBoolIsNormalType
+             >> mapMessages (fun m -> BadITECondition (i, ExprBadType m)))
+            iuR
+
+    (* We need to calculate the recursive axioms first, because we
+       need the inner cpairs for each to store the ITE placeholder.  *)
+    let tR = modelBlock ctx t
+    let fR =
+        match fo with
+        | Some f -> lift Some (modelBlock ctx f)
+        | None -> ok None
+
+    lift3 (curry3 ITE) iR tR fR
 
 /// Converts a while or do-while to a PartCmd.
 /// Which is being modelled is determined by the isDo parameter.
@@ -1562,18 +1851,27 @@ and modelWhile
   (isDo : bool)
   (ctx : MethodContext)
   (e : Expression)
-  (b : Block<ViewExpr<View>, Command<ViewExpr<View>>>)
+  (b : FullBlock<ViewExpr<View>, FullCommand>)
   : Result<ModellerPartCmd, MethodError> =
     (* A while is also not fully resolved.
      * Similarly, we convert the condition, recursively find the axioms,
      * inject a placeholder, and add in the recursive axioms.
      *)
-    lift2 (fun eM bM -> PartCmd.While(isDo, eM, bM))
-          (wrapMessages
-               BadWhileCondition
-               (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
-               e)
-          (modelBlock ctx b)
+    let euR = 
+        wrapMessages
+            BadWhileCondition
+            (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
+            e
+    // While conditions have to be of type 'bool', not a subtype.
+    let eR =
+        bind
+            (checkBoolIsNormalType
+             >> mapMessages (fun m -> BadWhileCondition (e, ExprBadType m)))
+            euR
+
+    let bR = modelBlock ctx b
+
+    lift2 (fun eM bM -> PartCmd.While(isDo, eM, bM)) eR bR
 
 /// Converts a PrimSet to a PartCmd.
 and modelPrim
@@ -1593,13 +1891,13 @@ and modelPrim
 /// The list is enclosed in a Chessie result.
 and modelCommand
   (ctx : MethodContext)
-  (n : Command<ViewExpr<View>>)
+  (n : FullCommand)
   : Result<ModellerPartCmd, MethodError> =
     match n.Node with
-    | Command'.Prim p -> modelPrim ctx p
-    | Command'.If(i, t, e) -> modelITE ctx i t e
-    | Command'.While(e, b) -> modelWhile false ctx e b
-    | Command'.DoWhile(b, e) -> modelWhile true ctx e b
+    | FPrim p -> modelPrim ctx p
+    | FIf(i, t, e) -> modelITE ctx i t e
+    | FWhile(e, b) -> modelWhile false ctx e b
+    | FDoWhile(b, e) -> modelWhile true ctx e b
     | _ -> fail (CommandNotImplemented n)
 
 /// Converts a view expression into a CView.
@@ -1609,41 +1907,36 @@ and modelViewExpr (ctx : MethodContext)
     | Mandatory v -> modelCView ctx v |> lift Mandatory
     | Advisory v -> modelCView ctx v |> lift Advisory
 
-/// Converts the view and command in a ViewedCommand.
+/// Converts a pair of view and command.
 and modelViewedCommand
   (ctx : MethodContext)
-  ({Post = post; Command = command}
-     : ViewedCommand<ViewExpr<View>, Command<ViewExpr<View>>>)
-  : Result<ModellerViewedCommand, MethodError> =
-    lift2 (fun postM commandM -> {Post = postM; Command = commandM})
+  (vc : FullCommand * ViewExpr<View>)
+      : Result<ModellerPartCmd * ModellerViewExpr, MethodError> =
+    let command, post = vc
+    lift2 mkPair
+          (modelCommand ctx command)
           (post |> modelViewExpr ctx
                 |> mapMessages (curry MethodError.BadView post))
-          (command |> modelCommand ctx)
 
 /// Converts the views and commands in a block.
 /// The converted block is enclosed in a Chessie result.
 and modelBlock
   (ctx : MethodContext)
-  ({Pre = bPre; Contents = bContents} :
-       Block<ViewExpr<View>, Command<ViewExpr<View>>>)
+  (block : FullBlock<ViewExpr<View>, FullCommand>)
   : Result<ModellerBlock, MethodError> =
-    lift2 (fun bPreM bContentsM -> {Pre = bPreM; Contents = bContentsM})
-          (bPre |> modelViewExpr ctx
-                |> mapMessages (curry MethodError.BadView bPre))
-          (bContents |> Seq.map (modelViewedCommand ctx) |> collect)
+    lift2 (fun bPreM bContentsM -> {Pre = bPreM; Cmds = bContentsM})
+          (wrapMessages MethodError.BadView (modelViewExpr ctx) block.Pre)
+          (block.Cmds |> Seq.map (modelViewedCommand ctx) |> collect)
 
 /// Converts a method's views and commands.
 /// The converted method is enclosed in a Chessie result.
 let modelMethod
   (ctx : MethodContext)
-  ({ Signature = sg ; Body = b }
-     : Method<ViewExpr<View>, Command<ViewExpr<View>>>)
-  : Result<string * ModellerMethod, ModelError> =
-    // TODO(CaptainHayashi): method parameters
-    b
-    |> modelBlock ctx
-    |> lift (fun c -> (sg.Name, { Signature = sg ; Body = c }))
-    |> mapMessages (curry BadMethod sg.Name)
+  (meth : string * FullBlock<ViewExpr<View>, FullCommand>)
+  : Result<string * ModellerBlock, ModelError> =
+    let (n, b) = meth
+    let bmR = mapMessages (curry BadMethod n) (modelBlock ctx b)
+    lift (mkPair n) bmR
 
 /// Checks a view prototype to see if it contains duplicate parameters.
 let checkViewProtoDuplicates (proto : DesugaredViewProto)
@@ -1681,36 +1974,57 @@ let modelViewProtos (protos : #(DesugaredViewProto seq))
 /// </summary>
 /// <param name="lit">The type literal to convert.</param>
 /// <param name="name">The variable name to use.</param>
+/// <param name="types">The map of typedefs in operation.</param>
 /// <returns>
 ///     If the type literal is expressible in Starling's type system, the
 ///     corresponding type; otherwise, an error.
 /// </returns>
-let convertTypedVar (lit : AST.Types.TypeLiteral) (name : string)
+let convertTypedVar
+  (lit : AST.Types.TypeLiteral)
+  (name : string)
+  (types : Map<string, TypeLiteral>)
   : Result<TypedVar, TypeError> =
-    let rec convType =
+    let rec convType currentTypedef =
         function
-        | TInt -> ok (Int ())
-        | TBool -> ok (Bool ())
+        // TODO(CaptainHayashi): make typedefs less awful
+        | TInt ->
+            let tr = maybe normalRec (fun t -> { PrimSubtype = Named t }) currentTypedef
+            ok (Int (tr, ()))
+        | TBool ->
+            let tr = maybe normalRec (fun t -> { PrimSubtype = Named t }) currentTypedef
+            ok (Bool (tr, ()))
+        | TUser ty ->
+            match types.TryFind ty with
+            // TODO(CaptainHayashi): this is to prevent recursion, but is too strong
+            | Some (TUser _) -> fail (ImpossibleType (lit, "Typedef cannot reference a typedef"))
+            | Some (TArray _) -> fail (ImpossibleType (lit, "Typedef cannot reference array type"))
+            | Some t -> convType (Some ty) t
+            // TODO(CaptainHayashi): bad error
+            | None -> fail (ImpossibleType (lit, "Used nonexistent typedef"))
         | TArray (len, elt) ->
             lift
-                (fun eltype -> Array (eltype, Some len, ()))
-                (convType elt)
+                (fun eltype -> Array ({ ElementType = eltype; Length = Some len }, ()))
+                (convType None elt)
         (* At some point, this may (and once did) return ImpossibleType,
            hence why it is a Result. *)
-    lift (fun ty -> withType ty name) (convType lit)
+    lift (fun ty -> withType ty name) (convType None lit)
 
 /// <summary>
 ///     Converts a type-variable list to a variable map.
 /// </summary>
+/// <param name="types">The map of typedefs in operation.</param>
 /// <param name="tvs">The list to convert.</param>
 /// <param name="scope">The name of the scope of the variables.</param>
 /// <returns>
 ///     If the variables' types are expressible in Starling's type system, the
 ///     corresponding variable map of the variables; otherwise, an error.
 /// </returns>
-let modelVarMap (tvs : (TypeLiteral * string) list) (scope : string)
+let modelVarMap
+  (types : Map<string, TypeLiteral>)
+  (tvs : (TypeLiteral * string) list)
+  (scope : string)
   : Result<VarMap, ModelError> =
-    let cvt (t, v) = mapMessages (curry BadVarType v) (convertTypedVar t v)
+    let cvt (t, v) = mapMessages (curry BadVarType v) (convertTypedVar t v types)
     let varsResult = collect (List.map cvt tvs)
 
     bind (VarMap.ofTypedVarSeq >> mapMessages (curry BadVar scope)) varsResult
@@ -1718,24 +2032,29 @@ let modelVarMap (tvs : (TypeLiteral * string) list) (scope : string)
 /// <summary>
 ///     Converts a parameter to a typed variable.
 /// </summary>
+/// <param name="types">The map of typedefs in operation.</param>
 /// <param name="par">The parameter to convert.</param>
 /// <returns>
 ///     If the parameter is expressible in Starling's type system, the
 ///     corresponding type; otherwise, an error.
 /// </returns>
-let convertParam (par : AST.Types.Param) : Result<TypedVar, TypeError> =
+let convertParam
+  (types : Map<string, TypeLiteral>)
+  (par : AST.Types.Param) : Result<TypedVar, TypeError> =
     let { ParamType = ptype; ParamName = pname } = par
-    convertTypedVar ptype pname
+    convertTypedVar ptype pname types
 
 /// <summary>
 ///     Converts view prototypes from the Starling language's type system
 ///     to Starling's type system.
 /// </summary>
-let convertViewProtos (vps : ViewProto list)
+let convertViewProtos
+  (types : Map<string, TypeLiteral>)
+  (vps : ViewProto list)
   : Result<DesugaredViewProto list, ModelError> =
     // TODO(CaptainHayashi): proper doc comment.
     let convertViewFunc vp { Name = n; Params = ps } =
-        let conv = wrapMessages (fun (p, e) -> BadVProtoParamType (vp, p, e)) convertParam
+        let conv = wrapMessages (fun (p, e) -> BadVProtoParamType (vp, p, e)) (convertParam types)
         let ps'Result = ps |> List.map conv |> collect
         lift (func n) ps'Result
 
@@ -1751,16 +2070,18 @@ let convertViewProtos (vps : ViewProto list)
 /// Converts a collated script to a model.
 let model
   (collated : CollatedScript)
-  : Result<Model<ModellerMethod, ViewDefiner<SVBoolExpr option>>, ModelError> =
+  : Result<Model<ModellerBlock, ViewDefiner<SVBoolExpr option>>, ModelError> =
     trial {
+        let types = Map.ofSeq (Seq.map (fun (x, y) -> (y, x)) collated.Typedefs)
+
         // Make variable maps out of the shared and thread variable definitions.
-        let! svars = modelVarMap collated.SharedVars "shared"
-        let! tvars = modelVarMap collated.ThreadVars "thread"
+        let! svars = modelVarMap types collated.SharedVars "shared"
+        let! tvars = modelVarMap types collated.ThreadVars "thread"
 
         let desugaredMethods, unknownProtos =
             desugar tvars collated.Methods
 
-        let! cprotos = convertViewProtos collated.VProtos
+        let! cprotos = convertViewProtos types collated.VProtos
         let! vprotos = modelViewProtos (Seq.append cprotos unknownProtos)
 
         let! constraints = modelViewDefs svars vprotos collated
@@ -1771,12 +2092,16 @@ let model
               ThreadVars = tvars }
         let! axioms =
             desugaredMethods
+            |> Map.toSeq
             |> Seq.map (modelMethod mctx)
             |> collect
             |> lift Map.ofSeq
 
+        let pragmata = List.map (fun p -> (p.Key, p.Value)) collated.Pragmata
+
         return
-            { SharedVars = svars
+            { Pragmata = pragmata
+              SharedVars = svars
               ThreadVars = tvars
               ViewDefs = constraints
               Semantics = coreSemantics

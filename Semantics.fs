@@ -17,7 +17,6 @@ open Chessie.ErrorHandling
 open Starling.Collections
 open Starling.Core.TypeSystem
 open Starling.Core.Command
-open Starling.Core.Command.Compose
 open Starling.Core.GuardedView
 open Starling.Core.Expr
 open Starling.Core.Var
@@ -38,8 +37,8 @@ module Types =
         /// There was an error instantiating a semantic definition.
         | Instantiate of prim: PrimCommand
                        * error: Error
-        /// A primitive has a missing semantic definition.
-        | MissingDef of prim: PrimCommand
+        /// A stored command  has a missing semantic definition.
+        | MissingDef of prim: StoredCommand
         /// Got unexpected number of arguments
         | CountMismatch of expected: int * actual: int
         | TypeMismatch of param: TypedVar * atype: Type
@@ -97,7 +96,7 @@ module Pretty =
                 printSemanticsError error ]
         | MissingDef prim ->
             fmt "primitive '{0}' has no semantic definition"
-                [ printPrimCommand prim ]
+                [ printStoredCommand prim ]
         | TypeMismatch (par, atype) ->
             fmt "parameter '{0}' conflicts with argument of type '{1}'"
                 [ printTypedVar par; printType atype ]
@@ -191,28 +190,28 @@ let varAndIdxPath (expr : Expr<Sym<Var>>)
     // TODO(CaptainHayashi): error perhaps if given a non-lvalue
 
     let rec getInBool bx path =
-        match bx with
-        | BVar (Reg v) -> Some (Bool v, path)
+        match stripTypeRec bx with
+        | BVar (Reg v) -> Some (Bool (bx.SRec, v), path)
         // Symbols are not lvalues, so we can't process them.
-        | BIdx (e, l, a, i) -> getInArray e l a (i::path)
+        | BIdx (a, i) -> getInArray a (i::path)
         | _ -> None
     and getInInt ix path =
-        match ix with
-        | IVar (Reg v) -> Some (Int v, path)
+        match stripTypeRec ix with
+        | IVar (Reg v) -> Some (Int (ix.SRec, v), path)
         // Symbols are not lvalues, so we can't process them.
-        | IIdx (e, l, a, i) -> getInArray e l a (i::path)
+        | IIdx (a, i) -> getInArray a (i::path)
         | _ -> None
-    and getInArray eltype length ax path =
-        match ax with
-        | AVar (Reg v) -> Some (Array (eltype, length, v), path)
+    and getInArray ax path =
+        match stripTypeRec ax with
+        | AVar (Reg v) -> Some (Array (ax.SRec, v), path)
         // Symbols are not lvalues, so we can't process them.
-        | AIdx (e, l, a, i) -> getInArray e l a (i::path)
+        | AIdx (a, i) -> getInArray a (i::path)
         | _ -> None
 
     match expr with
-    | Int ix -> getInInt ix []
-    | Bool bx -> getInBool bx []
-    | Array (eltype, length, ax) -> getInArray eltype length ax []
+    | Int (ty, ix) -> getInInt (mkTypedSub ty ix) []
+    | Bool (ty, bx) -> getInBool (mkTypedSub ty bx) []
+    | Array (ty, ax) -> getInArray (mkTypedSub ty ax) []
 
 /// <summary>
 ///     Generates a write record map for a given assignment list.
@@ -230,40 +229,39 @@ let makeWriteMap (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>> option) list)
 ///     Partitions a list of microcode instructions.
 /// </summary>
 /// <param name="instrs">The instructions to partition.</param>
+/// <typeparam name="L">The type of lvalues.</typeparam>
+/// <typeparam name="RV">The type of rvalue variables.</typeparam>
 /// <returns>
-///     A triple containing a list of assignments, a list of assumptions,
-///     and a list of (unpartitioned) microcode branches.
+///     A triple containing a list of symbolics, a list of assignments, a list
+///     of assumptions, and a list of (unpartitioned) microcode branches.
 /// </returns>
-let partitionMicrocode (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
-  : ((Expr<Sym<Var>> * Expr<Sym<Var>> option) list
-     * BoolExpr<Sym<Var>> list
-     * (BoolExpr<Sym<Var>>
-        * Microcode<Expr<Sym<Var>>, Sym<Var>> list
-        * Microcode<Expr<Sym<Var>>, Sym<Var>> list) list) =
-    let partitionStep (assigns, assumes, branches) instr =
+let partitionMicrocode (instrs : Microcode<'L, 'RV> list)
+  : (Symbolic<Expr<'RV>> list
+     * ('L * Expr<'RV> option) list
+     * BoolExpr<'RV> list
+     * (BoolExpr<'RV>
+        * Microcode<'L, 'RV> list
+        * Microcode<'L, 'RV> list) list) =
+    let partitionStep (symbols, assigns, assumes, branches) instr =
         match instr with
-        | Assign (l, r) -> ((l, r)::assigns, assumes, branches)
-        | Assume s -> (assigns, s::assumes, branches)
-        | Branch (i, t, e) -> (assigns, assumes, (i, t, e)::branches)
-    List.fold partitionStep ([], [], []) instrs
+        | Symbol s -> (s::symbols, assigns, assumes, branches)
+        | Assign (l, r) -> (symbols, (l, r)::assigns, assumes, branches)
+        | Assume s -> (symbols, assigns, s::assumes, branches)
+        | Branch (i, t, e) -> (symbols, assigns, assumes, (i, t, e)::branches)
+    List.fold partitionStep ([], [], [], []) instrs
 
 /// <summary>
 ///     Generates a well-typed expression for a subscript of a given array.
 /// </summary>
-/// <param name="eltype">The type of elements in the array.</param>
-/// <param name="length">The length of the array.</param>
-/// <param name="array">The array to subscript.</param>
+/// <param name="array">The fully typed array to subscript.</param>
 /// <param name="idx">The index to subscript by.</param>
 /// <returns>A well-typed <see cref="Expr"/> capturing the subscript.</returns>
-let mkIdx (eltype : Type) (length : int option) (arr : ArrayExpr<Sym<Var>>)
-  (idx : IntExpr<Sym<Var>>)
+let mkIdx (arr : TypedArrayExpr<Sym<Var>>) (idx : IntExpr<Sym<Var>>)
   : Expr<Sym<Var>> =
-    let record = (eltype, length, arr, idx)
-
-    match eltype with
-    | Type.Int () -> Expr.Int (IIdx record)
-    | Type.Bool () -> Expr.Bool (BIdx record)
-    | Type.Array (eltype', length', ()) -> Expr.Array (eltype', length', AIdx record)
+    match arr.SRec.ElementType with
+    | Type.Int (ty, ()) -> Expr.Int (ty, IIdx (arr, idx))
+    | Type.Bool (ty, ()) -> Expr.Bool (ty, BIdx (arr, idx))
+    | Type.Array (ty, ()) -> Expr.Array (ty, AIdx (arr, idx))
 
 /// <summary>
 ///     Normalises a list of assignments such that they represent
@@ -299,18 +297,17 @@ let normaliseAssigns (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>> option) list)
                    information away! *)
                 match lhs' with
                 | None -> ok None
-                | Some (Array (eltype, length, alhs)) ->
+                | Some (Array (atype, alhs)) ->
                     (* Need to translate any further subscripts inside value.
                        But, to do that, we need to know what the LHS of those
                        subscripts is! *)
-                    let vlhs = mkIdx eltype length alhs index
+                    let talhs = mkTypedSub atype alhs
+                    let vlhs = mkIdx talhs index
                     let vrhsResult = translateRhs vlhs value
                     lift
                         (Option.map
                             (fun vrhs ->
-                                 Expr.Array
-                                    (eltype, length,
-                                     AUpd (eltype, length, alhs, index, vrhs))))
+                                 Expr.Array (atype, AUpd (alhs, index, vrhs))))
                         vrhsResult
                 | _ -> fail (BadSemantics "tried to index into a non-array")
             seqBind addUpdate (Some lhs) (Map.toSeq ixmap)
@@ -330,7 +327,7 @@ let normaliseAssigns (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>> option) list)
 let rec normaliseMicrocode
   (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
   : Result<Microcode<TypedVar, Sym<Var>> list, Error> =
-    let assigns, assumes, branches = partitionMicrocode instrs
+    let symbols, assigns, assumes, branches = partitionMicrocode instrs
 
     let normaliseBranch (i, t, e) =
         let t'Result = normaliseMicrocode t
@@ -343,14 +340,15 @@ let rec normaliseMicrocode
     lift2
         (fun branches' assigns' ->
             List.concat
-                [ List.map Assign assigns'
+                [ List.map Symbol symbols
+                  List.map Assign assigns'
                   List.map Assume assumes
                   List.map Branch branches' ])
         branches'Result
         assigns'Result
 
 let primParamSubFun
-  (cmd : PrimCommand)
+  (cmd : StoredCommand)
   (sem : PrimSemantics)
   : Traversal<TypedVar, Expr<Sym<Var>>, Error, unit> =
 
@@ -365,23 +363,23 @@ let primParamSubFun
          | WithType (var, vtype) as v ->
             match pmap.TryFind var with
             | Some tvar ->
-                if vtype = typeOf tvar
+                if typesCompatible vtype (typeOf tvar)
                 then ok tvar
                 else fail (Inner (TypeMismatch (v, typeOf tvar)))
             | None -> fail (Inner (FreeVarInSub v)))
 
-let checkParamCountPrim (prim : PrimCommand) (def : PrimSemantics) : Result<PrimSemantics, Error> =
+let checkParamCountPrim (prim : StoredCommand) (def : PrimSemantics) : Result<PrimSemantics, Error> =
     let fn = List.length prim.Args
     let dn = List.length def.Args
     if fn = dn then ok def else fail (CountMismatch (fn, dn))
 
-let lookupPrim (prim : PrimCommand) (map : PrimSemanticsMap) : Result<PrimSemantics, Error>  =
+let lookupPrim (prim : StoredCommand) (map : PrimSemanticsMap) : Result<PrimSemantics, Error>  =
     maybe
         (fail (MissingDef prim))
         (checkParamCountPrim prim)
         (map.TryFind prim.Name)
 
-let checkParamTypesPrim (prim : PrimCommand) (sem : PrimSemantics) : Result<PrimSemantics, Error> =
+let checkParamTypesPrim (prim : StoredCommand) (sem : PrimSemantics) : Result<PrimSemantics, Error> =
     List.map2
         (fun fp dp ->
             if typesCompatible (typeOf fp) (typeOf dp)
@@ -401,27 +399,31 @@ let checkParamTypesPrim (prim : PrimCommand) (sem : PrimSemantics) : Result<Prim
 /// <typeparam name="RV">The type of input rvalue variables.</typeparam>
 /// <typeparam name="LO">The type of output lvalue.</typeparam>
 /// <typeparam name="RVO">The type of output rvalue variables.</typeparam>
+/// <typeparam name="Var">The type of context variables.</typeparam>
+/// <typeparam name="Error">The type of traversal errors.</typeparam>
 /// <returns>
 ///     A traversal that visits all of the lvalues and rvalues in a microcode
 ///     instruction, applying the given traversals to each.
 /// </returns>
 let traverseMicrocode
-  (ltrav : Traversal<'L, 'LO, Error, 'Var>)
-  (rtrav : Traversal<Expr<'RV>, Expr<'RVO>, Error, 'Var>)
+  (ltrav : Traversal<'L, 'LO, 'Error, 'Var>)
+  (rtrav : Traversal<Expr<'RV>, Expr<'RVO>, 'Error, 'Var>)
   : Traversal<Microcode<'L, 'RV>,
-              Microcode<'LO, 'RVO>, Error, 'Var> =
+              Microcode<'LO, 'RVO>, 'Error, 'Var> =
     let brtrav = traverseBoolAsExpr rtrav
 
     let rec tm ctx mc =
         let tml = tchainL tm id
 
         match mc with
+        | Symbol { Sentence = s; Args = xs } ->
+            tchainL rtrav (fun xs' -> Symbol { Sentence = s; Args = xs' }) ctx xs
         | Assign (lv, Some rv) ->
             tchain2 ltrav rtrav (pairMap id Some >> Assign) ctx (lv, rv)
         | Assign (lv, None) ->
             tchain ltrav (flip mkPair None >> Assign) ctx lv
-        | Assume assumption -> tchain brtrav Assume ctx assumption
-        | Branch (i, t, e) -> tchain3 brtrav tml tml Branch ctx (i, t, e)
+        | Assume assumption -> tchain brtrav Assume ctx (mkTypedSub normalRec assumption)
+        | Branch (i, t, e) -> tchain3 brtrav tml tml Branch ctx (mkTypedSub normalRec i, t, e)
     tm
 
 /// <summary>
@@ -437,10 +439,6 @@ let tliftToMicrocode
   (trav : Traversal<TypedVar, Expr<Sym<Var>>, Error, 'Var>)
   : Traversal<Microcode<TypedVar, Var>,
               Microcode<Expr<Sym<Var>>, Sym<Var>>, Error, 'Var> =
-    let travE : Traversal<Expr<Var>, Expr<Sym<Var>>, Error, 'Var> =
-        tliftToExprSrc trav
-    let travB : Traversal<BoolExpr<Var>, BoolExpr<Sym<Var>>, Error, 'Var> =
-        tliftToBoolSrc trav
     traverseMicrocode trav (tliftToExprSrc trav)
 
 /// <summary>
@@ -457,9 +455,10 @@ let rec markMicrocode
     let lf var = ok (postMark var)
     let rf var =
         match preStates.TryFind var with
-         // TODO(CaptainHayashi): proper error
-         | None -> fail (Inner (BadSemantics "somehow referenced variable not in scope"))
-         | Some mv -> ok (withType (typeOf var) (Reg mv))
+        // TODO(CaptainHayashi): proper error
+        | None ->
+             fail (Inner (BadSemantics "somehow referenced variable not in scope"))
+        | Some mv -> ok (withType (typeOf var) (Reg mv))
 
     // ...then use them in a traversal.
     let lt = tliftOverCTyped (ignoreContext lf)
@@ -478,13 +477,13 @@ let rec updateState
     let updateOne (s : Map<TypedVar, MarkedVar>) m =
         // TODO(CaptainHayashi): de-duplicate this
         match m with
+        | Symbol _ | Assume _ -> s
         | Assign (lv, rv) ->
             // Assumption: this is monotone, eg. rv >= s.[lv]
             // TODO(CaptainHayashi): check this?
             match (valueOf lv) with
             | Before l | After l | Intermediate (_, l) | Goal (_, l) ->
                 s.Add(withType (typeOf lv) l, valueOf lv)
-        | Assume _ -> s
         | Branch (i, t, e) ->
             updateState (updateState s t) e
     List.fold updateOne state listing
@@ -497,6 +496,7 @@ let rec markedMicrocodeToBool
   : BoolExpr<Sym<MarkedVar>> =
     let translateInstr instr =
         match instr with
+        | Symbol s -> BVar (Sym s)
         // Havoc
         | Assign (x, None) -> BTrue
         // Deterministic assignment
@@ -534,8 +534,7 @@ let makeFrame (states : Map<TypedVar, MarkedVar>) : BoolExpr<Sym<MarkedVar>> lis
 ///     microcode routine and a map from variable post-states to their last
 ///     assignment in the microcode routine.  The latter is useful for
 ///     calculating frames.
-///     The order of the routine is not guaranteed (but is no longer relevant
-///     after processing anyway).
+///     The order of the routine is preserved.
 /// </returns>
 let processMicrocodeRoutine
   (vars : TypedVar list)
@@ -596,7 +595,10 @@ let processMicrocodeRoutine
         lift
             (fun stateAware -> (stateAware :: xs, updateState state stateAware))
             stateAwareR
-    seqBind processListing ([], initialState) markedStages
+    // The listing is being built up in reverse order, so correct that.
+    lift
+        (pairMap List.rev id)
+        (seqBind processListing ([], initialState) markedStages)
 
 /// <summary>
 ///     Converts a processed microcode routine into a two-state Boolean predicate.
@@ -622,15 +624,32 @@ let instantiateToMicrocode
   (semantics : PrimSemanticsMap)
   (prim : PrimCommand)
   : Result<Microcode<Expr<Sym<Var>>, Sym<Var>> list, Error> =
-    let primDefR = lookupPrim prim semantics
-    let typeCheckedDefR = bind (checkParamTypesPrim prim) primDefR
+    match prim with
+    | SymC s ->
+        (* A symbol is passed through directly. *)
+        ok [ Symbol s]
+    | Intrinsic s ->
+        (* An intrinsic can be directly converted into microcode,
+           throwing away the actual direction of the intrinsic. *)
+        match s with
+        | IAssign { TypeRec = ty; LValue = x; RValue = y } ->
+            ok [ Expr.Int (ty, x) *<- Expr.Int (ty, y) ]
+        | BAssign { TypeRec = ty; LValue = x; RValue = y } ->
+            ok [ Expr.Bool (ty, x) *<- Expr.Bool (ty, y) ]
+        | Havoc var ->
+            (* A havoc is converted to an expression. *)
+            ok [ havoc (mkVarExp (mapCTyped Reg var)) ]
+    | Stored sc ->
+        // A stored command is a lookup into a microcode table.
+        let primDefR = lookupPrim sc semantics
+        let typeCheckedDefR = bind (checkParamTypesPrim sc) primDefR
 
-    let instantiate (s : PrimSemantics) =
-        let subInMCode =
-                tchainL (tliftToMicrocode (primParamSubFun prim s)) id
-        mapMessages Traversal (mapTraversal subInMCode s.Body)
+        let instantiate (s : PrimSemantics) =
+            let subInMCode =
+                    tchainL (tliftToMicrocode (primParamSubFun sc s)) id
+            mapMessages Traversal (mapTraversal subInMCode s.Body)
 
-    bind instantiate typeCheckedDefR
+        bind instantiate typeCheckedDefR
 
 /// <summary>
 ///     Translates a command to a multi-state Boolean expression.

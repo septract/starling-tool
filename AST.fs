@@ -70,7 +70,9 @@ module Types =
         | Fetch of Expression * Expression * FetchMode // <a = b??>
         | Postfix of Expression * FetchMode // <a++> or <a-->
         | Id // <id>
-        | Assume of Expression // <assume(e)
+        | Assume of Expression // <assume(e)>
+        | SymAtomic of symbol : Symbolic<Expression> // %{xyz}(x, y)
+        | Havoc of var : string // havoc var
     and Atomic = Node<Atomic'>
 
     /// <summary>
@@ -116,6 +118,8 @@ module Types =
         | TInt
         /// <summary>A Boolean type.</summary>
         | TBool
+        /// <summary>An unknown, and probably user-defined, type.</summary>
+        | TUser of name : string
         /// <summary>An array type.</summary>
         | TArray of length : int * contentT : TypeLiteral
 
@@ -174,47 +178,50 @@ module Types =
           PostAssigns: (Expression * Expression) list }
 
     /// A statement in the command language.
-    type Command'<'view> =
+    type Command' =
+        /// A view expression.
+        | ViewExpr of Marked<View>
         /// A set of sequentially composed primitives.
         | Prim of PrimSet
         /// An if-then-else statement, with optional else.
         | If of ifCond : Expression
-              * thenBlock : Block<'view, Command<'view>>
-              * elseBlock : Block<'view, Command<'view>> option
+              * thenBlock : Command list
+              * elseBlock : Command list option
         /// A while loop.
-        | While of Expression
-                 * Block<'view, Command<'view>>
+        | While of Expression * Command list
         /// A do-while loop.
-        | DoWhile of Block<'view, Command<'view>>
+        | DoWhile of Command list
                    * Expression // do { b } while (e)
         /// A list of parallel-composed blocks.
-        | Blocks of Block<'view, Command<'view>> list
-    and Command<'view> = Node<Command'<'view>>
-
-    /// A combination of a command and its postcondition view.
-    and ViewedCommand<'view, 'cmd> =
-        { Command : 'cmd // <a := b++>;
-          Post : 'view } // {| a = b |}
-
-    /// A block or method body.
-    and Block<'view, 'cmd> =
-        { Pre : 'view
-          // Post-condition is that in the last Seq.
-          Contents : ViewedCommand<'view, 'cmd> list }
+        | Blocks of Command list list
+    and Command = Node<Command'>
 
     /// A method.
-    type Method<'view, 'cmd> =
+    type Method<'cmd> =
         { Signature : Func<Param> // main (argv, argc) ...
-          Body : Block<'view, 'cmd> } // ... { ... }
+          Body : 'cmd list } // ... { ... }
 
-    /// Synonym for methods over CommandTypes.
-    type CMethod<'view> = Method<'view, Command<'view>>
+    /// <summary>A GRASShopper-specific directive.</summary>
+    type GrasshopperPragma =
+        | ///<summary>An include.</summary>
+          Include of file : string
+
+    /// <summary>
+    ///     A directive for adding backend-specific information.
+    /// </summary>
+    type Pragma =
+        { ///<summary>The key of the pragma.</summary>
+          Key : string
+          ///<summary>The value of the pragma.</summary>
+          Value : string }
 
     /// A top-level item in a Starling script.
     type ScriptItem' =
+        | Pragma of Pragma // pragma ...;
+        | Typedef of TypeLiteral * string // typedef int Node;
         | SharedVars of VarDecl // shared int name1, name2, name3;
         | ThreadVars of VarDecl // thread int name1, name2, name3;
-        | Method of CMethod<Marked<View>> // method main(argv, argc) { ... }
+        | Method of Method<Command> // method main(argv, argc) { ... }
         | Search of int // search 0;
         | ViewProtos of ViewProto list // view name(int arg);
         | Constraint of ViewSignature * Expression option // constraint emp => true
@@ -367,59 +374,19 @@ module Pretty =
             hjoin [ printExpression l; printFetchMode m ]
         | Id -> String "id"
         | Assume e -> func "assume" [ printExpression e ]
+        | SymAtomic sym -> printSymbolic sym
+        | Havoc var -> String "havoc" <+> String var
     let printAtomic (x : Atomic) : Doc = printAtomic' x.Node
 
-    /// Pretty-prints viewed commands with the given indent level (in spaces).
-    let printViewedCommand (pView : 'view -> Doc)
-                           (pCmd : 'cmd -> Doc)
-                           ({ Command = c; Post = p } : ViewedCommand<'view, 'cmd>)
-                           : Doc =
-        vsep [ pCmd c ; pView p ]
-
     /// Pretty-prints blocks with the given indent level (in spaces).
-    let printBlock (pView : 'view -> Doc)
-                   (pCmd : 'cmd -> Doc)
-                   ({ Pre = p; Contents = c } : Block<'view, 'cmd>)
+    let printBlock (pCmd : 'cmd -> Doc)
+                   (c : 'cmd list)
                    : Doc =
-        vsep ((p |> pView |> Indent)
-              :: List.map (printViewedCommand pView pCmd >> Indent) c)
-        |> braced
-
-    /// <summary>
-    ///     Pretty-prints a type literal.
-    /// </summary>
-    /// <param name="lit">The <see cref="TypeLiteral"/> to print.</param>
-    /// <returns>
-    ///     A <see cref="Doc"/> representing the given type literal.
-    /// </returns>
-    let printTypeLiteral (lit : TypeLiteral) : Doc =
-        let rec pl lit suffix =
-            match lit with
-            | TInt -> syntaxIdent (String ("int")) <-> suffix
-            | TBool -> syntaxIdent (String ("bool")) <-> suffix
-            | TArray (len, contents) ->
-                let lenSuffix = squared (String (sprintf "%d" len))
-                pl contents (suffix <-> lenSuffix)
-        pl lit Nop
-
-    /// Pretty-prints parameters.
-    let printParam (par : Param) : Doc =
-        hsep
-            [ printTypeLiteral par.ParamType
-              syntaxLiteral (String par.ParamName) ]
-
-    /// Pretty-prints methods.
-    let printMethod (pView : 'view -> Doc)
-                    (pCmd : 'cmd -> Doc)
-                    ({ Signature = s; Body = b } : Method<'view, 'cmd>)
-                    : Doc =
-        hsep [ "method" |> String |> syntax
-               printFunc (printParam >> syntaxIdent) s
-               printBlock pView pCmd b ]
+        braced (ivsep (List.map (pCmd >> Indent) c))
 
     /// Pretty-prints commands.
-    let rec printCommand' (pView : 'view -> Doc) : Command'<'view> -> Doc =
-        function
+    let rec printCommand' (cmd : Command') : Doc =
+        match cmd with
         (* The trick here is to make Prim [] appear as ;, but
            Prim [x; y; z] appear as x; y; z;, and to do the same with
            atomic lists. *)
@@ -433,31 +400,61 @@ module Pretty =
         | Command'.If(c, t, fo) ->
             hsep [ "if" |> String |> syntax
                    c |> printExpression |> parened
-                   t |> printBlock pView (printCommand pView)
+                   t |> printBlock printCommand
                    (maybe Nop
                         (fun f ->
                             hsep
                                 [ "else" |> String |> syntax
-                                  printBlock pView (printCommand pView) f ])
+                                  printBlock printCommand f ])
                         fo) ]
         | Command'.While(c, b) ->
             hsep [ "while" |> String |> syntax
                    c |> printExpression |> parened
-                   b |> printBlock pView (printCommand pView) ]
+                   b |> printBlock printCommand ]
         | Command'.DoWhile(b, c) ->
             hsep [ "do" |> String |> syntax
-                   b |> printBlock pView (printCommand pView)
+                   b |> printBlock printCommand
                    "while" |> String |> syntax
                    c |> printExpression |> parened ]
             |> withSemi
         | Command'.Blocks bs ->
             bs
-            |> List.map (printBlock pView (printCommand pView))
+            |> List.map (printBlock printCommand)
             |> hsepStr "||"
-    and printCommand (pView : 'view -> Doc)
-                     (x : Command<'view>)
-                     : Doc =
-        printCommand' pView x.Node
+        | Command'.ViewExpr v -> printMarkedView printView v
+    and printCommand (x : Command) : Doc = printCommand' x.Node
+
+    /// <summary>
+    ///     Pretty-prints a type literal.
+    /// </summary>
+    /// <param name="lit">The <see cref="TypeLiteral"/> to print.</param>
+    /// <returns>
+    ///     A <see cref="Doc"/> representing the given type literal.
+    /// </returns>
+    let printTypeLiteral (lit : TypeLiteral) : Doc =
+        let rec pl lit suffix =
+            match lit with
+            | TInt -> syntaxIdent (String ("int")) <-> suffix
+            | TBool -> syntaxIdent (String ("bool")) <-> suffix
+            | TUser s -> syntaxLiteral (String s) <-> suffix
+            | TArray (len, contents) ->
+                let lenSuffix = squared (String (sprintf "%d" len))
+                pl contents (suffix <-> lenSuffix)
+        pl lit Nop
+
+    /// Pretty-prints parameters.
+    let printParam (par : Param) : Doc =
+        hsep
+            [ printTypeLiteral par.ParamType
+              syntaxLiteral (String par.ParamName) ]
+
+    /// Pretty-prints methods.
+    let printMethod (pCmd : 'cmd -> Doc)
+                    ({ Signature = s; Body = b } : Method<'cmd>)
+                    : Doc =
+        hsep [ "method" |> String |> syntax
+               printFunc (printParam >> syntaxIdent) s
+               printBlock pCmd b ]
 
     /// Pretty-prints a general view prototype.
     let printGeneralViewProto (pParam : 'Param -> Doc)(vp : GeneralViewProto<'Param>) : Doc =
@@ -488,14 +485,25 @@ module Pretty =
     let printScriptVars (cls : string) (vs : VarDecl) : Doc =
         withSemi (hsep [ String cls |> syntax; printVarDecl vs ])
 
+    /// <summary>Prints a pragma.</summary>
+    /// <param name="pragma">The pragma to print.</summary>
+    /// <returns>
+    ///     A <see cref="Doc"/> for printing <paramref name="pragma"/>.
+    /// </returns>
+    let printPragma (pragma : Pragma) : Doc =
+        String pragma.Key <+> braced (String pragma.Value)
+
     /// Pretty-prints script lines.
-    let printScriptItem' : ScriptItem' -> Doc =
-        function
+    let printScriptItem' (item : ScriptItem') : Doc =
+        match item with
+        | Pragma p -> withSemi (printPragma p)
+        | Typedef (ty, name) ->
+            withSemi (syntaxIdent (String "typedef") <+> printTypeLiteral ty <+> String name)
         | SharedVars vs -> printScriptVars "shared" vs
         | ThreadVars vs -> printScriptVars "thread" vs
         | Method m ->
             fun mdoc -> vsep [Nop; mdoc; Nop]
-            <| printMethod (printMarkedView printView) (printCommand (printMarkedView printView)) m
+            <| printMethod printCommand m
         | ViewProtos v -> printViewProtoList v
         | Search i -> printSearch i
         | Constraint (view, def) -> printConstraint view def

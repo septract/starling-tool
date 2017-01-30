@@ -29,11 +29,11 @@ module Tests =
             let ``normalise converts 3 instances of A(x)[4] to A(x)[12]`` () =
                 assertEqual
                     (iterated
-                        (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
+                        (gfunc BTrue "A" [ normalBoolExpr (sbBefore "x") ] )
                         (IInt 12L : IntExpr<Sym<MarkedVar>>))
                     (normalise
                         (iterated
-                            (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
+                            (gfunc BTrue "A" [ normalBoolExpr (sbBefore "x") ] )
                             (IInt 4L : IntExpr<Sym<MarkedVar>>))
                         3)
 
@@ -42,11 +42,11 @@ module Tests =
             let ``normalise converts 6 instances of A(x)[n] to A(x)[6*n]`` () =
                 assertEqual
                     (iterated
-                        (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
+                        (gfunc BTrue "A" [ normalBoolExpr (sbBefore "x") ] )
                         (IMul [ siBefore "n"; IInt 6L ]))
                     (normalise
                         (iterated
-                            (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
+                            (gfunc BTrue "A" [ normalBoolExpr (sbBefore "x") ] )
                             (siBefore "n"))
                         6)
 
@@ -54,11 +54,11 @@ module Tests =
             let ``normalise converts 1 instances of A(x)[n] to A(x)[n]`` () =
                 assertEqual
                     (iterated
-                        (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
+                        (gfunc BTrue "A" [ normalBoolExpr (sbBefore "x") ] )
                         (siBefore "n"))
                     (normalise
                         (iterated
-                            (gfunc BTrue "A" [ Bool (sbBefore "x") ] )
+                            (gfunc BTrue "A" [ normalBoolExpr (sbBefore "x") ] )
                             (siBefore "n"))
                         1)
 
@@ -71,15 +71,15 @@ module Tests =
                 assertEqual
                     (Multiset.singleton <|
                         iterated
-                            (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                             (IInt 1L))
                     (termGenWPreMinus
                         [ iterated
-                            (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (smvfunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                             (IInt 1L) ]
                         (Multiset.singleton
                             (iterated
-                                (smgfunc BTrue "blop" [ Expr.Bool (sbGoal 0I "bar") ])
+                                (smgfunc BTrue "blop" [ normalBoolExpr (sbGoal 0I "bar") ])
                                 (IInt 11L))))
 
             [<Test>]
@@ -87,11 +87,11 @@ module Tests =
                 assertEqual
                     (Multiset.singleton <|
                         iterated
-                            (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                             (IInt 1L))
                     (termGenWPreMinus
                         [ iterated
-                            (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (smvfunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                             (IInt 1L) ]
                         Multiset.empty)
 
@@ -103,7 +103,7 @@ module Tests =
                         []
                         (Multiset.singleton
                             (iterated
-                                (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                                (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                                 (IInt 1L))))
 
             [<Test>]
@@ -111,11 +111,11 @@ module Tests =
                 assertEqual
                     (Multiset.singleton <|
                         iterated
-                            (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                             (IInt 10L))
                     (termGenWPreMinus
                         [ iterated
-                            (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (smvfunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                             (IInt 10L) ]
                         Multiset.empty)
 
@@ -125,11 +125,11 @@ module Tests =
                     Multiset.empty
                     (termGenWPreMinus
                         [ iterated
-                            (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (smvfunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                             (IInt 9L) ]
                         (Multiset.singleton
                             (iterated
-                                (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                                (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                                 (IInt 9L))))
 
             [<Test>]
@@ -138,11 +138,11 @@ module Tests =
                     Multiset.empty
                     (termGenWPreMinus
                         [ iterated
-                            (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (smvfunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                             (IInt 10L) ]
                         (Multiset.singleton
                             (iterated
-                                (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                                (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                                 (IInt 11L))))
 
             [<Test>]
@@ -150,15 +150,15 @@ module Tests =
                 assertEqual
                     (Multiset.singleton <|
                         iterated
-                            (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                             (IInt 4L))
                     (termGenWPreMinus
                         [ iterated
-                            (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (smvfunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                             (IInt 10L) ]
                         (Multiset.singleton
                             (iterated
-                                (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                                (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                                 (IInt 6L))))
 
             [<Test>]
@@ -166,18 +166,18 @@ module Tests =
                 assertEqual
                     (Multiset.singleton <|
                         iterated
-                            (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                             (IInt 2L))
                     (termGenWPreMinus
                         [ iterated
-                            (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (smvfunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                             (IInt 5L)
                           iterated
-                            (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (smvfunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                             (IInt 3L) ]
                         (Multiset.singleton
                             (iterated
-                                (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                                (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                                 (IInt 6L))))
 
             [<Test>]
@@ -185,18 +185,18 @@ module Tests =
                 assertEqual
                     (Multiset.singleton <|
                         iterated
-                            (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                             (IInt 2L))
                     (termGenWPreMinus
                         [ iterated
-                            (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (smvfunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                             (IInt 10L) ]
                         (Multiset.ofFlatList
                             [ iterated
-                                (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                                (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                                 (IInt 5L)
                               iterated
-                                (smgfunc BTrue "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                                (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                                 (IInt 3L) ] ))
 
 
@@ -208,15 +208,15 @@ module Tests =
                             (smgfunc
                                (BNot (bEq (sbGoal 0I "bar")
                                           (sbAfter "baz")))
-                               "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                               "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                             (IInt 1L)))
                     (termGenWPreMinus
                         [ iterated
-                            (smvfunc "foo" [ Expr.Bool (sbGoal 0I "bar") ])
+                            (smvfunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                             (IInt 1L) ]
                         (Multiset.singleton
                             (iterated
-                                (smgfunc BTrue "foo" [ Expr.Bool (sbAfter "baz") ])
+                                (smgfunc BTrue "foo" [ normalBoolExpr (sbAfter "baz") ])
                                 (IInt 1L))))
 
             [<Test>]
@@ -229,23 +229,23 @@ module Tests =
                                     (mkAnd
                                         [ sbBefore "G"
                                           bEq (sbAfter "x") (sbAfter "y") ]))
-                               "A" [ Expr.Bool (sbAfter "x") ])
+                               "A" [ normalBoolExpr (sbAfter "x") ])
                             (siAfter "n"))
                           (iterated
                             (smgfunc
                                 (BAnd
                                     [ sbBefore "G"
                                       bEq (sbAfter "x") (sbAfter "y")
-                                      mkGt (siAfter "n") (siAfter "k") ])
-                               "A" [ Expr.Bool (sbAfter "x") ])
+                                      mkIntGt (siAfter "n") (siAfter "k") ])
+                               "A" [ normalBoolExpr (sbAfter "x") ])
                             (mkSub2 (siAfter "n") (siAfter "k"))) ])
                     (termGenWPreMinus
                         [ iterated
-                            (smvfunc "A" [ Expr.Bool (sbAfter "x") ])
+                            (smvfunc "A" [ normalBoolExpr (sbAfter "x") ])
                             (siAfter "n") ]
                         (Multiset.singleton
                             (iterated
-                                (smgfunc (sbBefore "G") "A" [ Expr.Bool (sbAfter "y") ])
+                                (smgfunc (sbBefore "G") "A" [ normalBoolExpr (sbAfter "y") ])
                                 (siAfter "k"))))
 
 
@@ -255,8 +255,8 @@ module Tests =
         module TestLowerGuards =
             let protos =
                 FuncDefiner.ofSeq
-                    [ (dfunc "f" [Bool "x"], { IsIterated = true; IsAnonymous = false })
-                      (dfunc "g" [Bool "x"], { IsIterated = false; IsAnonymous = false }) ]
+                    [ (dfunc "f" [Bool (normalRec, "x")], { IsIterated = true; IsAnonymous = false })
+                      (dfunc "g" [Bool (normalRec, "x")], { IsIterated = false; IsAnonymous = false }) ]
 
             [<Test>]
             let ``Drop iterated subview down to non-iterated subview`` ()=
@@ -267,12 +267,12 @@ module Tests =
                         { Cond = BTrue
                           Item =
                             [ iterated
-                                (smvfunc "f" [Bool BTrue])
+                                (smvfunc "f" [normalBoolExpr BTrue])
                                 (IInt 3L) ] },
                     Is.EqualTo(
                         Some <|
                         { Cond = (BTrue : BoolExpr<Sym<MarkedVar>>)
-                          Item = [ smvfunc "f" [Int (IInt 3L); Bool BTrue] ] }))
+                          Item = [ smvfunc "f" [normalIntExpr (IInt 3L); normalBoolExpr BTrue] ] }))
 
             [<Test>]
             let ``Drop iterated SMVFunc down to non-iterated SMVFunc`` ()=
@@ -281,13 +281,13 @@ module Tests =
                     lowerIterSMVFunc
                         protos
                         (iterated
-                            (smvfunc "f" [Bool (sbAfter "x")])
+                            (smvfunc "f" [normalBoolExpr (sbAfter "x")])
                             (mkMul2 (IInt 2L) (siBefore "n"))),
                     Is.EqualTo(
                         Some <|
                         [ smvfunc "f"
-                            [ Int <| mkMul2 (IInt 2L) (siBefore "n")
-                              Bool (sbAfter "x") ]]))
+                            [ normalIntExpr (mkMul2 (IInt 2L) (siBefore "n"))
+                              normalBoolExpr (sbAfter "x") ]]))
 
             [<Test>]
             let ``Drop non-iterated IteratedSMVFunc's down to non-iterated SMVFunc`` ()=
@@ -296,11 +296,11 @@ module Tests =
                     lowerIterSMVFunc
                         protos
                         (iterated
-                            (smvfunc "g" [Bool (sbAfter "z")])
+                            (smvfunc "g" [normalBoolExpr (sbAfter "z")])
                             (IInt 4L)),
                     Is.EqualTo(
                         Some <|
-                        [ for x in 1..4 -> smvfunc "g" [ Bool (sbAfter "z") ]]))
+                        [ for x in 1..4 -> smvfunc "g" [ normalBoolExpr (sbAfter "z") ]]))
 (*
  *  old termgen test before iterated views were added
  *

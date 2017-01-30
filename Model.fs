@@ -140,12 +140,18 @@ module Types =
         ///     The given iterated func needs its definition checking for base
         ///     downclosure.
         /// </summary>
-        | NeedsBaseDownclosure of func : IteratedDFunc * why : string
+        | NeedsBaseDownclosure of
+            func : IteratedDFunc
+          * defn : BoolExpr<Sym<Var>> option
+          * why : string
         /// <summary>
         ///     The given iterated func needs its definition checking for
         ///     inductive downclosure.
         /// </summary>
-        | NeedsInductiveDownclosure of func : IteratedDFunc * why : string
+        | NeedsInductiveDownclosure of
+            func : IteratedDFunc
+          * defn : BoolExpr<Sym<Var>> option
+          * why : string
 
     (*
      * Models
@@ -153,33 +159,21 @@ module Types =
 
     /// A parameterised model of a Starling program.
     type Model<'axiom, 'viewdefs> =
-        { /// <summary>
-          ///     The shared variable environment.
-          /// </summary>
+        { /// <summary>Special instructions to backends.</summary>
+          Pragmata : (string * string) list
+          /// <summary>The shared variable environment.</summary>
           SharedVars : VarMap
-          /// <summary>
-          ///     The thread-local variable environment.
-          /// </summary>
+          /// <summary>The thread-local variable environment.</summary>
           ThreadVars : VarMap
-          /// <summary>
-          ///     The set of proof terms in the model.
-          /// </summary>
+          /// <summary>The set of proof terms in the model.</summary>
           Axioms : Map<string, 'axiom>
-          /// <summary>
-          ///     The semantic function for this model.
-          /// </summary>
+          /// <summary>The semantic function for this model.</summary>
           Semantics : PrimSemanticsMap
-          /// <summary>
-          ///     This corresponds to the function D.
-          /// </summary>
+          /// <summary>This corresponds to the function D.</summary>
           ViewDefs : 'viewdefs
-          /// <summary>
-          ///     The view prototypes defined in this model.
-          /// </summary>
+          /// <summary>The view prototypes defined in this model.</summary>
           ViewProtos : FuncDefiner<ProtoInfo>
-          /// <summary>
-          ///     A log of any deferred checks the backend must do.
-          /// </summary>
+          /// <summary>A log of deferred checks the backend must do.</summary>
           DeferredChecks : DeferredCheck list }
 
 
@@ -252,12 +246,12 @@ module Pretty =
     let printDeferredCheck (check : DeferredCheck) : Doc =
         warning <|
             match check with
-            | NeedsBaseDownclosure (func, why) ->
+            | NeedsBaseDownclosure (func, _, why) ->
                 colonSep
                     [ String "base downclosure check for iterated func"
                         <+> printIteratedDFunc func
                       String why ]
-            | NeedsInductiveDownclosure (func, why) ->
+            | NeedsInductiveDownclosure (func, _, why) ->
                 colonSep
                     [ hsep
                         [ String "inductive downclosure check for iterated func"
@@ -468,6 +462,18 @@ let svfunc (name : string) (pars : SVExpr seq) : SVFunc = vfunc name pars
 /// </returns>
 let smvfunc (name : string) (pars : SMExpr seq) : SMVFunc = vfunc name pars
 
+/// <summary>
+///     Constructs a term.
+/// </summary>
+/// <param name="cmd">The command part of the term.</param>
+/// <param name="wpre">The weakest-precondition part of the term.</param>
+/// <param name="goal">The goal part of the term.</param>
+/// <typeparam name="Cmd">The type of the command.</typeparam>
+/// <typeparam name="WPre">The type of the weakest-precondition.</typeparam>
+/// <typeparam name="Goal">The type of the goal.</typeparam>
+/// <returns>The resulting <see cref="Term"/>.</returns>
+let term (cmd : 'Cmd) (wpre : 'WPre) (goal : 'Goal) : Term<'Cmd, 'WPre, 'Goal> =
+    { Cmd = cmd; WPre = wpre; Goal = goal }
 
 /// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
 /// and its Goal with fG.
@@ -475,9 +481,9 @@ let mapTerm
   (fC : 'SrcCmd -> 'DstCmd)
   (fW : 'SrcWPre -> 'DstWPre)
   (fG : 'SrcGoal -> 'DstGoal)
-  ( { Cmd = c; WPre = w; Goal = g } : Term<'SrcCmd, 'SrcWPre, 'SrcGoal> )
+  (t : Term<'SrcCmd, 'SrcWPre, 'SrcGoal> )
   : Term<'DstCmd, 'DstWPre, 'DstGoal> =
-    { Cmd = fC c; WPre = fW w; Goal = fG g }
+    term (fC t.Cmd) (fW t.WPre) (fG t.Goal)
 
 /// Rewrites a Term by transforming its Cmd with fC, its WPre with fW,
 /// and its Goal with fG.
@@ -486,14 +492,9 @@ let tryMapTerm
   (fC : 'SrcCmd -> Result<'DstCmd, 'Error>)
   (fW : 'SrcWPre -> Result<'DstWPre, 'Error>)
   (fG : 'SrcGoal -> Result<'DstGoal, 'Error>)
-  ({Cmd = c; WPre = w; Goal = g} : Term<'SrcCmd, 'SrcWPre, 'SrcGoal>)
+  (t : Term<'SrcCmd, 'SrcWPre, 'SrcGoal>)
   : Result<Term<'DstCmd, 'DstWPre, 'DstGoal>, 'Error> =
-    trial {
-        let! cR = fC c;
-        let! wR = fW w;
-        let! gR = fG g;
-        return {Cmd = cR; WPre = wR; Goal = gR}
-    }
+    lift3 term (fC t.Cmd) (fW t.WPre) (fG t.Goal)
 
 /// Returns the axioms of a model.
 let axioms ({Axioms = xs} : Model<'Axiom, _>) : Map<string, 'Axiom> = xs
@@ -502,7 +503,8 @@ let axioms ({Axioms = xs} : Model<'Axiom, _>) : Map<string, 'Axiom> = xs
 /// The axiom set may be of a different type.
 let withAxioms (xs : Map<string, 'y>) (model : Model<'x, 'dview>)
     : Model<'y, 'dview> =
-    { SharedVars = model.SharedVars
+    { Pragmata = model.Pragmata
+      SharedVars = model.SharedVars
       ThreadVars = model.ThreadVars
       ViewDefs = model.ViewDefs
       Semantics = model.Semantics
@@ -514,16 +516,21 @@ let withAxioms (xs : Map<string, 'y>) (model : Model<'x, 'dview>)
 let mapAxioms (f : 'x -> 'y) (model : Model<'x, 'dview>) : Model<'y, 'dview> =
     withAxioms (model |> axioms |> Map.map (fun _ -> f)) model
 
-/// Maps a failing function f over the axioms of a model.
-let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x, 'dview>)
+/// Maps a failing function f over the names and axioms of a model.
+let tryMapAxiomsWithNames (f : string -> 'x -> Result<'y, 'e>) (model : Model<'x, 'dview>)
     : Result<Model<'y, 'dview>, 'e> =
     lift (fun x -> withAxioms x model)
          (model
           |> axioms
           |> Map.toSeq
-          |> Seq.map (fun (k, v) -> v |> f |> lift (mkPair k))
+          |> Seq.map (fun (k, v) -> lift (mkPair k) (f k v))
           |> collect
           |> lift Map.ofList)
+
+/// Maps a failing function f over the axioms of a model.
+let tryMapAxioms (f : 'x -> Result<'y, 'e>) (model : Model<'x, 'dview>)
+    : Result<Model<'y, 'dview>, 'e> =
+    tryMapAxiomsWithNames (fun _ -> f) model
 
 /// Returns the viewdefs of a model.
 let viewDefs ({ViewDefs = ds} : Model<_, 'Definer>) : 'Definer = ds
@@ -533,7 +540,8 @@ let viewDefs ({ViewDefs = ds} : Model<_, 'Definer>) : 'Definer = ds
 let withViewDefs (ds : 'Definer2)
                  (model : Model<'Axiom, 'Definer1>)
                  : Model<'Axiom, 'Definer2> =
-    { SharedVars = model.SharedVars
+    { Pragmata = model.Pragmata
+      SharedVars = model.SharedVars
       ThreadVars = model.ThreadVars
       ViewDefs = ds
       Semantics = model.Semantics

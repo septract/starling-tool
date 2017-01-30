@@ -33,34 +33,34 @@ module Tests =
     let ``Convert a flat CondView-list to a GuarView-list with no guard`` () =
         assertEqual
             (Multiset.ofFlatList
-                [ oneGFunc BTrue "foo" [ Expr.Int (siVar "bar") ]
-                  oneGFunc BTrue "bar" [ Expr.Int (siVar "baz") ]] )
+                [ oneGFunc BTrue "foo" [ normalIntExpr (siVar "bar") ]
+                  oneGFunc BTrue "bar" [ normalIntExpr (siVar "baz") ]] )
             (guardCView
                 (Multiset.ofFlatList
                     [ iterated
-                        (Func <| svfunc "foo" [ Expr.Int (siVar "bar") ])
+                        (Func <| svfunc "foo" [ normalIntExpr (siVar "bar") ])
                         None
                       iterated
-                        (Func <| svfunc "bar" [ Expr.Int (siVar "baz") ] )
+                        (Func <| svfunc "bar" [ normalIntExpr (siVar "baz") ] )
                         None ] ))
 
     [<Test>]
     let ``Convert a singly-nested CondView-list to a GuarView-list with unit guard`` () =
         assertEqual
             (Multiset.ofFlatList
-                [ oneGFunc (sbVar "s") "foo" [ Expr.Int (siVar "bar") ]
-                  oneGFunc (BNot (sbVar "s")) "bar" [ Expr.Int (siVar "baz") ]] )
+                [ oneGFunc (sbVar "s") "foo" [ normalIntExpr (siVar "bar") ]
+                  oneGFunc (BNot (sbVar "s")) "bar" [ normalIntExpr (siVar "baz") ]] )
             (guardCView <| Multiset.ofFlatList
                 [ iterated
                     (CFunc.ITE
                         (sbVar "s",
                          Multiset.ofFlatList
                             [ iterated
-                                (Func <| svfunc "foo" [ Expr.Int (siVar "bar") ] )
+                                (Func <| svfunc "foo" [ normalIntExpr (siVar "bar") ] )
                                 None ],
                          Multiset.ofFlatList
                             [ iterated
-                                (Func <| svfunc "bar" [ Expr.Int (siVar "baz") ] )
+                                (Func <| svfunc "bar" [ normalIntExpr (siVar "baz") ] )
                                 None ] ))
                     None ] )
 
@@ -70,19 +70,19 @@ module Tests =
             (Multiset.ofFlatList
                 [ oneGFunc (BAnd [ sbVar "s"; sbVar "t" ] )
                     "foo"
-                    [ Expr.Int (siVar "bar") ]
+                    [ normalIntExpr (siVar "bar") ]
                   oneGFunc (BAnd [ sbVar "s"; sbVar "t" ] )
                     "bar"
-                    [ Expr.Int (siVar "baz") ]
+                    [ normalIntExpr (siVar "baz") ]
                   oneGFunc (BAnd [ sbVar "s"; BNot (sbVar "t") ] )
                     "fizz"
-                    [ Expr.Int (siVar "buzz") ]
+                    [ normalIntExpr (siVar "buzz") ]
                   oneGFunc (sbVar "s")
                     "in"
-                    [ Expr.Int (siVar "out") ]
+                    [ normalIntExpr (siVar "out") ]
                   oneGFunc (BNot (sbVar "s"))
                     "ding"
-                    [ Expr.Int (siVar "dong") ]] )
+                    [ normalIntExpr (siVar "dong") ]] )
             (guardCView <| Multiset.ofFlatList
                 [ iterated
                     (CFunc.ITE
@@ -95,29 +95,29 @@ module Tests =
                                             [ iterated
                                                 (Func <| svfunc
                                                     "foo"
-                                                    [ Expr.Int (siVar "bar") ] )
+                                                    [ normalIntExpr (siVar "bar") ] )
                                                 None
                                               iterated
                                                 (Func <| svfunc
                                                     "bar"
-                                                    [ Expr.Int (siVar "baz") ] )
+                                                    [ normalIntExpr (siVar "baz") ] )
                                                 None],
                                         Multiset.ofFlatList
                                             [ iterated
                                                 (Func <| svfunc
                                                     "fizz"
-                                                    [ Expr.Int (siVar "buzz") ] )
+                                                    [ normalIntExpr (siVar "buzz") ] )
                                                 None]))
                                 None
                               iterated
                                 (Func <| svfunc
                                     "in"
-                                    [ Expr.Int (siVar "out") ])
+                                    [ normalIntExpr (siVar "out") ])
                                 None],
                          Multiset.ofFlatList
                             [ iterated
                                 (Func <| svfunc
                                     "ding"
-                                    [ Expr.Int (siVar "dong") ])
+                                    [ normalIntExpr (siVar "dong") ])
                                 None] ))
                     None ] )

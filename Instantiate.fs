@@ -28,6 +28,7 @@ open Starling.Core.Model
 open Starling.Core.Traversal
 open Starling.Core.Symbolic
 open Starling.Core.Symbolic.Traversal
+open Starling.Core.TypeSystem
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Traversal
 
@@ -97,6 +98,21 @@ module Types =
 
     /// Terms in a Proof are over boolean expressions
     type ProofTerm = CmdTerm<MBoolExpr, MBoolExpr, MBoolExpr>
+
+    /// <summary>
+    ///     The approximation mode.
+    /// </summary>
+    type ApproxMode =
+        | /// <summary>Don't approximate at all.</summary>
+          NoApprox
+        | /// <summary>
+          ///     Approximate, and ignore any failures.
+          /// </summary>
+          TryApprox
+        | /// <summary>
+          ///     Approximate, but fail if approximations are impossible.
+          /// </summary>
+          Approx
 
 /// <summary>
 ///     Pretty printers used in func instantiation.
@@ -196,7 +212,7 @@ let paramSubFun
         (function
          | WithType (var, vtype) as v ->
             match pmap.TryFind var with
-            | Some expr when vtype = typeOf expr -> ok expr
+            | Some expr when typesCompatible vtype (typeOf expr) -> ok expr
             | Some expr -> fail (Inner (BadFuncLookup (vfunc, TypeMismatch (v, typeOf expr))))
             | None -> fail (Inner (FreeVarInSub v)))
 
@@ -236,7 +252,8 @@ let instantiate
             (function
              | None -> ok None
              | Some (dfunc, defn) ->
-                lift Some (mapTraversal (subInBool dfunc) defn))
+                // Definitions have no extended type
+                lift Some (mapTraversal (subInBool dfunc) (normalBool defn)))
             (mapMessages Inner dfuncResult)
 
     mapMessages Traversal result
@@ -282,7 +299,7 @@ module DefinerFilter =
         |> List.map
                (fun (f, d) ->
                     let trav = removeSymFromBoolExpr UnwantedSym
-                    let result = mapTraversal trav d
+                    let result = mapTraversal trav (normalBool d)
                     lift (mkPair f) result)
         |> collect
 
@@ -415,7 +432,7 @@ module Phase =
             (* The above might have left some symbols, eg in integer position.
                Try to remove them, and fail if we can't. *)
             let elimBoolExprR =
-                bind (mapTraversal (removeSymFromBoolExpr UnwantedSym))
+                bind (normalBool >> mapTraversal (removeSymFromBoolExpr UnwantedSym))
                     approxBoolExprR
             // Finally, tidy up the resulting expression.
             mapMessages Traversal (lift simp elimBoolExprR)
@@ -427,20 +444,21 @@ module Phase =
                approximated by removing certain part-symbolic parts of them.
 
                Commands appear on the LHS of a term, thus in -ve position. *)
-            tryApproxInBool (Context.negative ())
-              (Starling.Core.Command.SymRemove.removeSym cmdSemantics)
+            let removed = 
+                Starling.Core.Command.SymRemove.removeSym cmdSemantics
+            tryApproxInBool (Context.negative ()) (normalBool removed)
 
         // Weakest precondition is on the LHS of a term, thus in -ve position.
-        let mapWPre wPre = tryApproxInBool (Context.negative ()) wPre
+        let mapWPre wPre = tryApproxInBool (Context.negative ()) (normalBool wPre)
         // Goal is on the RHS of a term, thus in +ve position.
-        let mapGoal goal = tryApproxInBool (Context.positive ()) goal
+        let mapGoal goal = tryApproxInBool (Context.positive ()) (normalBool goal)
 
         tryMapTerm mapCmd mapWPre mapGoal symterm
 
     /// Interprets all of the views in a term over the given definer.
     let interpretTerm
       (definer : FuncDefiner<SVBoolExpr>)
-      (shouldApprox : bool)
+      (approxMode : ApproxMode)
       (term : FinalTerm)
       : Result<SymProofTerm, Error> =
         let interpretedR =
@@ -451,9 +469,12 @@ module Phase =
                 term
 
         let approxR =
-            if shouldApprox
-            then lift Some (bind approxTerm interpretedR)
-            else ok None
+            (* TODO(CaptainHayashi): check the errors to make sure we're not
+               throwing away genuine failures. *)
+            match approxMode with
+            | NoApprox -> ok None
+            | TryApprox -> ok (okOption (bind approxTerm interpretedR))
+            | Approx -> lift Some (bind approxTerm interpretedR)
 
         lift2
             (fun interpreted approx ->
@@ -518,15 +539,15 @@ module Phase =
     ///         This consumes the view definitions.
     ///     </para>
     /// </summary>
-    /// <param name="shouldApprox">Whether to build approximates.</param>
+    /// <param name="approxMode">The approximation mode to use.</param>
     /// <param name="model">The model to instantiate.</param>
     /// <returns>
     ///     The model with all views instantiated.
     /// </returns>
     let run
-      (shouldApprox : bool)
+      (approxMode : ApproxMode)
       (model : Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
                      FuncDefiner<SVBoolExpr option>>)
       : Result<Model<SymProofTerm, FuncDefiner<SVBoolExpr option>>, Error> =
       let vsR = symboliseIndefinites model.ViewDefs
-      bind (fun vs -> tryMapAxioms (interpretTerm vs shouldApprox) model) vsR
+      bind (fun vs -> tryMapAxioms (interpretTerm vs approxMode) model) vsR

@@ -125,13 +125,13 @@ let rec minusViewByFunc (qstep : IteratedGFunc<TermGenVar>)
 
                 let barEq = List.map2 mkEq xbar ybar |> mkAnd
 
-                let rSuccG = mkAnd [ g1; g2; barEq; mkGt n k ]
+                let rSuccG = mkAnd [ g1; g2; barEq; mkIntGt n k ]
                 let rSucc = mkfunc rSuccG xbar (mkSub2 n k)
 
                 let rFailG = mkAnd [ g1; mkNot (mkAnd2 g2 barEq) ]
                 let rFail = mkfunc rFailG xbar n
 
-                let qSuccG = mkAnd [ g2; g1; barEq; mkGt k n ]
+                let qSuccG = mkAnd [ g2; g1; barEq; mkIntGt k n ]
                 let qSucc = mkfunc qSuccG ybar (mkSub2 k n)
 
                 let qFailG = mkAnd [ g2; mkNot (mkAnd2 g1 barEq) ]
@@ -397,7 +397,7 @@ module Iter =
             |> lift
                 (function
                  // TODO(CaptainHayashi): assuming n here is silly
-                 | true -> func dfunc.Name (withDefault (Int "n") it :: dfunc.Params)
+                 | true -> func dfunc.Name (withDefault (Int (normalRec, "n")) it :: dfunc.Params)
                  | false -> dfunc)
 
     /// <summary>
@@ -417,7 +417,7 @@ module Iter =
                 (function
                  | Some k -> [ for i in 1L .. k -> vfunc ]
                  | None ->
-                    [ func vfunc.Name (Int it :: vfunc.Params) ])
+                    [ func vfunc.Name (Int (normalRec, it) :: vfunc.Params) ])
 
     /// flattens an entire IteratedSubview into a flat GView
     let lowerIteratedSubview

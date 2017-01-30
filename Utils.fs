@@ -41,10 +41,18 @@ module Config =
           showModel : bool
           [<Option('O', HelpText = "Switches given optimisations on or off.")>]
           optimisers : string option
-          [<Option("times", HelpText = "Print times for each phase.")>]
-          times : bool
+          [<Option(
+                'V',
+                HelpText =
+                    "Comma-delimited set of output options (pass 'list' for details)")>]
+          viewOpts : string option
           [<Option('v', HelpText = "Increases verbosity.")>]
           verbose : bool
+          [<Option(
+                'P',
+                HelpText =
+                    "Comma-delimited set of profiling options (pass 'list' for details")>]
+          profilerFlags : string option
           [<Option('c', HelpText = "Enable color printing")>]
           color : bool
           [<Value(
@@ -61,8 +69,9 @@ module Config =
         term            = None;
         showModel       = false;
         optimisers      = None;
-        times           = false;
+        viewOpts        = None;
         verbose         = false;
+        profilerFlags   = None;
         input           = None;
         color           = false;
     }
@@ -297,6 +306,20 @@ let lift3
             let! cv = c
             return f av bv cv }
 
+/// Extends lift to functions of 4 arguments.
+let lift4
+  (f: 'A -> 'B -> 'C -> 'D -> 'Value)
+  (a : Result<'A, 'Error>)
+  (b : Result<'B, 'Error>)
+  (c : Result<'C, 'Error>)
+  (d : Result<'D, 'Error>)
+  : Result<'Value, 'Error> =
+    trial { let! av = a
+            let! bv = b
+            let! cv = c
+            let! dv = d
+            return f av bv cv dv }
+
 /// Converts a Result into an option with Some x if the result was Ok x _.
 let okOption : Result<'Value, _> -> 'Value option =
     function
@@ -366,6 +389,42 @@ let fix f v =
         if v0 = v1 || (n >= !fix_bound && !fix_bound > 0) then v0 else fixiter f v1 (f v1) (n + 1)
     fixiter f v (f v) 0
 
+/// <summary>
+///     Profiler option flags.
+/// </summary>
+type ProfilerFlag =
+    | /// <summary>Print elapsed time per phase.</summary>
+      PhaseTime
+    | /// <summary>Print working set at end of each phase.</summary>
+      PhaseWorkingSet
+    | /// <summary>Print virtual memory at end of each phase.</summary>
+      PhaseVirtual
+    | /// <summary>Emit the list of profiler flags.</summary>
+      ListProfilerFlags
+
+
+/// <summary>
+///     Wraps a Starling phase generator in a profiler.
+/// </summary>
+let profilePhase<'A> (printTimes : bool) (printWS : bool) (printVM : bool) (pname : string) (f : unit -> 'A) =
+    let res =
+        if printTimes
+        then
+            let time = System.Diagnostics.Stopwatch.StartNew()
+            let r = f ()
+            time.Stop()
+            eprintfn "Phase %s; Elapsed: %dms" pname time.ElapsedMilliseconds
+            r
+        else f ()
+
+    if printWS || printVM then
+        use proc = System.Diagnostics.Process.GetCurrentProcess ()
+        if printWS then
+            eprintfn "Phase %s; WorkingSet: %d" pname (proc.WorkingSet64)
+        if printVM then
+            eprintfn "Phase %s; Virtual: %d" pname (proc.VirtualMemorySize64)
+
+    res
 
 /// <summary>
 ///    Utilities for testing.
@@ -376,6 +435,22 @@ module Testing =
     let assertEqual (a : 'a) (b : 'a) = Assert.AreEqual(a, b)
     let AssertAreEqual(a, b) = assertEqual a b
 
+    /// <summary>
+    ///     Asserts that a Chessie result failed with a given result list.
+    /// </summary>
+    let assertFail
+      (expected: 'Error list)
+      (actualResult : Result<'Val, 'Error>)
+      (pVal : 'Val -> string)
+      : unit =
+        match actualResult with
+        | Fail actuals ->
+            assertEqual (List.sort expected) (List.sort actuals)
+        | Warn (v, _) | Pass v ->
+            let fmsg = sprintf "Got successful result:\n%s" (pVal v)
+            Assert.Fail(fmsg)
+
+
     let assertOkAndEqual
       (expected: 'Val)
       (actualResult : Result<'Val, 'Error>)
@@ -385,8 +460,8 @@ module Testing =
         | Pass actual -> assertEqual expected actual
         | Warn (_, warns) | Fail warns ->
             let warnstr = String.concat "\n" (List.map pError warns)
-            let fmsg = sprintf "Got warnings:\n%s" warnstr
-            Assert.Fail(warnstr)
+            let fmsg = sprintf "Got errors:\n%s" warnstr
+            Assert.Fail(fmsg)
 
     let inline (?=?) a b = assertEqual a b
 

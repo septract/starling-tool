@@ -50,8 +50,10 @@ let pipe2ws x y f = pipe2 (x .>> ws) (y .>> ws) f
 let pipe3ws x y z f = pipe3 (x .>> ws) (y .>> ws) (z .>> ws) f
 
 /// Parses an identifier.
-let parseIdentifier = many1Chars2 (pchar '_' <|> asciiLetter)
-                                  (pchar '_' <|> asciiLetter <|> digit)
+let parseIdentifier =
+    (many1Chars2
+        (pchar '_' <|> asciiLetter)
+        (pchar '_' <|> asciiLetter <|> digit)) <?> "identifier"
 
 
 // Bracket parsers.
@@ -88,11 +90,10 @@ let parseViewSignature, parseViewSignatureRef =
 
 /// Parser for commands.
 let parseCommand, parseCommandRef =
-    createParserForwardedToRef<Command<Marked<View>>, unit> ()
+    createParserForwardedToRef<Command, unit> ()
 /// Parser for blocks.
 let parseBlock, parseBlockRef
-    = createParserForwardedToRef<Block<Marked<View>, Command<Marked<View>>>,
-                                 unit> ()
+    = createParserForwardedToRef<Command list, unit> ()
 /// Parser for expressions.
 /// The expression parser is split into several chains as per
 /// preference rank.
@@ -163,10 +164,10 @@ let parseSymbolicSentence =
 ///     </para>
 /// </summary>
 let parseSymbolic =
-    pipe2ws
+    (pipe2ws
         (pstring "%" >>. inBraces parseSymbolicSentence)
         (parseParamList parseExpression)
-        (fun s es -> { Sentence = s; Args = es })
+        (fun s es -> { Sentence = s; Args = es })) <?> "symbolic"
 
 /// Parser for primary expressions.
 let parsePrimaryExpression =
@@ -203,7 +204,7 @@ let parseBinaryExpressionLevel nextLevel expList =
 let parsePostfixExpression, parsePostfixExpressionRef = createParserForwardedToRef<Expression, unit> ()
 do parsePostfixExpressionRef :=
     let parseArraySubscript pex
-        = nodify (inSquareBrackets parseExpression
+        = nodify ((inSquareBrackets parseExpression <?> "array subscript")
                   >>= fun a -> preturn (ArraySubscript (pex, a)))
           <|> preturn pex
 
@@ -260,7 +261,7 @@ let parseOrExpression =
     parseBinaryExpressionLevel parseAndExpression
         [ ("||", Or) ]
 
-do parseExpressionRef := parseOrExpression
+do parseExpressionRef := parseOrExpression <?> "expression"
 
 
 (*
@@ -308,9 +309,17 @@ let parseAssign =
                   //             ... = <expression> ;
             mkPair
 
+/// Parser for havoc actions.
+let parseHavoc =
+    skipString "havoc" >>. ws >>. parseIdentifier
+
 /// Parser for atomic actions.
 let parseAtomic =
     choice [ (stringReturn "id" Id)
+             // This needs to fire before parseFetchOrPostfix due to
+             // ambiguity.
+             parseSymbolic |>> SymAtomic
+             parseHavoc |>> Havoc
              parseAssume
              parseCAS
              parseFetchOrPostfix ]
@@ -346,10 +355,17 @@ let parseViewLike basic join =
  * Types.
  *)
 
+/// Parses a builtin primitive type.
+let parseBuiltinPrimType : Parser<TypeLiteral, unit> =
+    choice [
+        stringReturn "int" TInt 
+        stringReturn "bool" TBool
+    ]
+
 /// Parses a type identifier.
 let parseType : Parser<TypeLiteral, unit> =
     let parsePrimType =
-        stringReturn "int" TInt <|> stringReturn "bool" TBool
+        parseBuiltinPrimType <|> (parseIdentifier |>> TUser)
 
     let parseArray = inSquareBrackets pint32 |>> curry TArray
     let parseSuffixes = many parseArray
@@ -513,18 +529,34 @@ let parseIf =
 
 /// Parser for prim compositions.
 let parsePrimSet =
-    (* We can parse only one atomic, but any number of assigns before it.
-       We must ensure there is a ; between the last assign and the atomic. *)
-    pipe3 (many (parseAssign .>> wsSemi .>> ws))
-          (* The atomic can be missing, and we can check unambiguously by
-             trying to parse a < here. *)
-          (opt (parseAtomicSet .>> wsSemi .>> ws))
-          (many (parseAssign .>> wsSemi .>> ws))
-          (fun lassigns atom rassigns ->
-               { PreAssigns = lassigns
-                 Atomics = withDefault [] atom
-                 PostAssigns = rassigns }
-               |> Prim)
+    (* Possible configurations:
+       1) At least one non-atomic followed by, optionally, an atomic and
+          zero or more non-atomics;
+       2) An atomic, followed by zero or more non-atomics.
+
+       2 is easier to spot, so we try it first. *)
+    let parseAtomicFirstPrimSet =
+        pipe2
+          (parseAtomicSet .>> wsSemi .>> ws)
+          (many (attempt (parseAssign .>> wsSemi .>> ws)))
+          (fun atom rassigns ->
+              Prim { PreAssigns = []; Atomics = atom; PostAssigns = rassigns } )
+
+    let parseNonAtomicFirstPrimSet =
+        pipe2
+            (many1 (parseAssign .>> wsSemi .>> ws))
+            (opt
+                (parseAtomicSet .>> wsSemi .>> ws
+                 .>>. many (parseAssign .>> wsSemi .>> ws)))
+            (fun lassigns tail ->
+               let (atom, rassigns) = withDefault ([], []) tail
+               Prim
+                ( { PreAssigns = lassigns
+                    Atomics = atom
+                    PostAssigns = rassigns } ))
+
+    parseAtomicFirstPrimSet <|> parseNonAtomicFirstPrimSet
+
 
 /// Parser for `skip` commands.
 /// Skip is inserted when we're in command position, but see a semicolon.
@@ -539,6 +571,8 @@ do parseCommandRef :=
     nodify <|
     (choice [parseSkip
              // ^- ;
+             parseViewExpr |>> ViewExpr
+             // ^ {| ... |}
              parseIf
              // ^- if ( <expression> ) <block> <block>
              parseDoWhile
@@ -554,25 +588,10 @@ do parseCommandRef :=
  * Blocks.
  *)
 
-/// Parser for lists of semicolon-delimited, postconditioned
-/// commands.
-let parseCommands =
-    many1
-    <| pipe2ws parseCommand
-               // ^- <command> ...
-               parseViewExpr
-               // ^-           ... <view-line>
-               (fun c v -> { Command = c; Post = v })
-               //  |             <command> ... <view-line> ... <commands>
+/// Parser for lists of semicolon-terminated commands.
+let parseCommands = many (parseCommand .>> ws)
 
-do parseBlockRef :=
-    inBraces
-    <| pipe2ws parseViewExpr
-        // ^- {       ...                            ... }
-               // ^- ... <view-line> ...
-               parseCommands
-               //                    ... <commands> ...
-               (fun p c -> { Pre = p; Contents = c })
+do parseBlockRef := inBraces parseCommands
 
 
 (*
@@ -640,12 +659,37 @@ let parseSearch =
                      // ^- ... <depth>
                      .>> wsSemi
 
+/// Parses a typedef.
+let parseTypedef =
+    // TODO(CaptainHayashi): forbid 'typedef bool int'.
+    // TODO(CaptainHayashi): maybe one day permit 'typedef int[] heap'.
+    // TODO(CaptainHayashi): maybe one day permit 'typedef typedef1 typedef2'.
+    skipString "typedef"
+    >>. ws >>.
+    pipe2ws
+        parseBuiltinPrimType
+        parseIdentifier
+        (fun ty id -> Typedef (ty, id))
+    .>> wsSemi
+
+/// Parses a pragma.
+let parsePragma =
+    skipString "pragma"
+    >>. ws >>.
+    pipe2ws
+        parseIdentifier
+        (inBraces (manyChars (noneOf "}")))
+        (fun k v -> { Key = k; Value = v })
+    .>> wsSemi
+
 /// Parses a script of zero or more methods, including leading and trailing whitespace.
 let parseScript =
     // TODO(CaptainHayashi): parse things that aren't methods:
     //   axioms definitions, etc
     ws >>. manyTill (choice (List.map nodify
-                            [parseMethod |>> Method
+                            [parsePragma |>> Pragma
+                             // ^- pragma <identifier> { ... };
+                             parseMethod |>> Method
                              // ^- method <identifier> <arg-list> <block>
                              parseConstraint |>> Constraint
                              // ^- constraint <view> -> <expression> ;
@@ -658,6 +702,8 @@ let parseScript =
                              //  | view <identifier> <view-proto-param-list> ;
                              parseSearch |>> Search
                              // ^- search 0;
+                             parseTypedef
+                             // ^- typedef int Node;
                              parseVarDecl "shared" SharedVars
                              // ^- shared <type> <identifier> ;
                              parseVarDecl "thread" ThreadVars]) .>> ws ) eof

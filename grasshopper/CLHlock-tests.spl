@@ -1,0 +1,33 @@
+// Scratchpad for working out bits of the CLH lock
+
+include "./CLHlock-module.spl";
+
+procedure CLHfoot_sat(Foot : Set<Node>, head : Node, tail : Node)
+  requires CLHfoot(Foot, head, tail)
+  ensures false
+{}
+
+procedure looseG_sat(Foot : Set<Node>, head : Node, tail : Node, a : Node)
+  requires looseG(Foot, a, head, tail)
+  ensures false
+{}
+
+procedure loose_sat(Foot : Set<Node>, head : Node, tail : Node, a : Node)
+  requires looseG(Foot, a, head, tail) && !a.lock
+  ensures false
+{}
+
+procedure active_sat(Foot : Set<Node>, head : Node, tail : Node, a : Node)
+  requires looseG(Foot, a, head, tail) && a.lock
+  ensures false
+{}
+
+procedure queuedG_sat(Foot : Set<Node>, head : Node, tail : Node, a : Node, ap : Node)
+  requires queuedG(Foot, a, head, tail, ap)
+  ensures false
+{}
+
+procedure holdLock_sat(Foot : Set<Node>, head : Node, tail : Node, a : Node, ap : Node)
+  requires queuedG(Foot, a, head, tail, ap) && ap == head
+  ensures false
+{}

@@ -29,7 +29,7 @@ let cId : Command = []
    are in pre-state position.  When we move to type-safe renaming this
    change should happen *here*. *)
 let cAssume (expr : SVBoolExpr) : Command =
-    command "Assume" [] [ simp expr |> Expr.Bool ] |> List.singleton
+    command "Assume" [] [ Expr.Bool (normalRec, simp expr) ] |> List.singleton
 let cAssumeNot : SVBoolExpr -> Command = mkNot >> cAssume
 
 /// <summary>
@@ -156,7 +156,7 @@ and graphITE
                     (tliftToBoolSrc
                         (tliftToExprDest
                             (traverseTypedSymWithMarker Before)))
-                    expr)
+                    (mkTypedSub normalRec expr))
 
         (* We definitely have an inner graph for the true leg, so get that
            out of the way first. *)
@@ -248,8 +248,7 @@ and graphBlockStep
   (vg : unit -> NodeID)
   (cg : unit -> EdgeID)
   ((iP, oGraphR) : NodeID * Result<Subgraph, Error>)
-  ({ViewedCommand.Command = cmd; Post = iQview}
-     : ViewedCommand<GuarderViewExpr, GuarderPartCmd>)
+  ((cmd, iQview) : GuarderPartCmd * GuarderViewExpr)
   : NodeID * Result<Subgraph, Error> =
     (* We already know the precondition's ID--it's in pre.
      * However, we now need to create an ID for the postcondition.
@@ -290,7 +289,7 @@ and graphBlock
   (topLevel : bool)
   (vg : unit -> NodeID)
   (cg : unit -> NodeID)
-  ({Pre = bPre; Contents = bContents} : GuarderBlock)
+  ({Pre = bPre; Cmds = bContents} : GuarderBlock)
   : Result<NodeID * NodeID * Subgraph, Error> =
     // First, generate the ID for the precondition.
     let oP = vg ()
@@ -318,11 +317,9 @@ and graphBlock
     lift (fun gr -> (oP, oQ, gr)) graphR
 
 /// <summary>
-///     Constructs a control-flow graph for a method.
+///     Constructs a control-flow graph for an outer block representing a method.
 /// </summary>
-let graphMethod
-  ({ Signature = { Name = name }; Body = body } : GuarderMethod)
-  : Result<Graph, Error> =
+let graphMethod (name : string) (body : GuarderBlock) : Result<Graph, Error> =
     let vgen = freshGen ()
     let viewName () =
        getFresh vgen
@@ -348,5 +345,5 @@ let graphMethod
 ///     A model whose axioms are the graphs resulting from the
 ///     methods of <paramref name="model"/>.
 /// </returns>
-let graph (model : Model<GuarderMethod, _>) : Result<Model<Graph, _>, Error> =
-    tryMapAxioms graphMethod model
+let graph (model : Model<GuarderBlock, _>) : Result<Model<Graph, _>, Error> =
+    tryMapAxiomsWithNames graphMethod model

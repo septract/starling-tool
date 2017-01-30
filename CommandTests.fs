@@ -9,15 +9,31 @@ open Starling.Utils.Testing
 
 open Starling.Core.Command
 open Starling.Core.Command.Create
-open Starling.Core.Command.Compose
 open Starling.Core.Model
 open Starling.Core.Var
 open Starling.Core.Symbolic
 open Starling.Core.Expr
 
 module Nops =
-    let check a = Assert.IsTrue ( Queries.isNop [] )
-    let checkNot a = Assert.IsTrue ( Queries.isNop [] )
+    let check n : unit =
+        match n with
+        | Queries.NopCmd _ -> ()
+        | n ->
+            Assert.Fail
+                (Starling.Core.Pretty.printUnstyled
+                    (Starling.Core.Pretty.headed
+                        "Command is not a nop but should be one"
+                        [ Pretty.printCommand n ] ))
+
+    let checkNot n : unit =
+        match n with
+        | Queries.NopCmd _ ->
+            Assert.Fail
+                (Starling.Core.Pretty.printUnstyled
+                    (Starling.Core.Pretty.headed
+                        "Command is a nop but shouldn't be one"
+                        [ Pretty.printCommand n ] ))
+        | n -> ()
 
     [<Test>]
     let ``Classify [] as a no-op``() =
@@ -25,17 +41,17 @@ module Nops =
 
     [<Test>]
     let ``Classify Assume(x!before) as a no-op``() =
-        check [ command "Assume" [] [ Bool (sbVar "x") ] ]
+        check [ command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]
     let ``Reject baz <- Foo(bar) as a no-op``() =
-        checkNot [ command "Foo" [ Int (siVar "baz") ] [ Int (siVar "bar") ] ]
+        checkNot [ command "Foo" [ normalIntExpr (siVar "baz") ] [ normalIntExpr (siVar "bar") ] ]
 
     [<Test>]
     let ``Reject Assume (x!before); baz <- Foo(bar) as a no-op``() =
         checkNot
-            [ command "Assume" [] [ Bool (sbVar "x") ]
-              command "Foo" [ Int (siVar "baz") ] [ Int (siVar "bar") ] ]
+            [ command "Assume" [] [ normalBoolExpr (sbVar "x") ]
+              command "Foo" [ normalIntExpr (siVar "baz") ] [ normalIntExpr (siVar "bar") ] ]
 
 module Assumes =
     let isAssume c =
@@ -52,85 +68,127 @@ module Assumes =
 
     [<Test>]
     let ``Classify Assume(x!before) as an assume``() =
-        check [ command "Assume" [] [ Bool (sbVar "x") ] ]
+        check [ command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]
     let ``Reject baz <- Foo(bar); Assume(x!before) as an Assume`` ()=
-        checkNot [ command "Foo" [ Int (siVar "baz") ] [ Int (siVar "bar") ]
-                   command "Assume" [] [ Bool (sbVar "x") ] ]
+        checkNot [ command "Foo" [ normalIntExpr (siVar "baz") ] [ normalIntExpr (siVar "bar") ]
+                   command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
 
+module Observable =
+    open Starling.Core.Command.Queries
+    open Starling.Core.Pretty
 
-    let checkIntermediate v i e = assertEqual i (getIntermediate v e)
+    let tvars =
+        Map.ofList
+            [ ("x", Bool (normalRec, ()))
+              ("y", Int (normalRec, ())) ]
 
-    [<Test>]
-    let ``getIntermediate on given Bool intermediate returns its intermediate``() =
-        checkIntermediate "foo" (Some 5I) (SMExpr.Bool (sbInter 5I "foo"))
-
-    [<Test>]
-    let ``getIntermediate on given Bool before returns nothing``() =
-        checkIntermediate "foo" None (SMExpr.Bool (sbBefore "foo"))
-
-    [<Test>]
-    let ``getIntermediate on given Bool after returns nothing``() =
-        checkIntermediate "foo" None (SMExpr.Bool (sbAfter "foo"))
-
-    [<Test>]
-    let ``getIntermediate on other Bool intermediate returns nothing``() =
-        checkIntermediate "bar" None (SMExpr.Bool (sbInter 5I "foo"))
+    let check v c d : unit =
+        assertOkAndEqual
+            v
+            (isObservable tvars c d)
+            (Starling.Core.Traversal.Pretty.printTraversalError (fun _ -> String "?")
+             >> printUnstyled)
 
     [<Test>]
-    let ``getIntermediate on other Bool before returns nothing``() =
-        checkIntermediate "bar" None (SMExpr.Bool (sbBefore "foo"))
+    let ``the empty command is unobservable after the empty command`` () =
+        check false [] []
 
     [<Test>]
-    let ``getIntermediate on other Bool after returns nothing``() =
-        checkIntermediate "bar" None (SMExpr.Bool (sbAfter "foo"))
+    let ``the empty command is unobservable after a local stored command`` () =
+        check false
+            []
+            [ command "Foo" [ normalIntExpr (siVar "y") ] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]
-    let ``getIntermediate on given Int intermediate returns its intermediate``() =
-        checkIntermediate "foo" (Some 10I) (SMExpr.Int (siInter 10I "foo"))
+    let ``the empty command is unobservable after a nonlocal stored command`` () =
+        check false
+            []
+            [ command "Foo" [ normalIntExpr (siVar "g") ] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]
-    let ``getIntermediate on given Int before returns nothing``() =
-        checkIntermediate "foo" None (SMExpr.Int (siBefore "foo"))
+    let ``assumes are observable after the empty command`` () =
+        check true
+            [ command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
+            []
 
     [<Test>]
-    let ``getIntermediate on given Int after returns nothing``() =
-        checkIntermediate "foo" None (SMExpr.Int (siAfter "foo"))
+    let ``assumes are observable after a local stored command`` () =
+        check true
+            [ command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
+            [ command "Foo" [ normalIntExpr (siVar "y") ] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]
-    let ``getIntermediate on other Int intermediate returns nothing``() =
-        checkIntermediate "bar" None (SMExpr.Int (siInter 5I "foo"))
+    let ``assumes are observable after a nonlocal stored command`` () =
+        check true
+            [ command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
+            [ command "Foo" [ normalIntExpr (siVar "g") ] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]
-    let ``getIntermediate on other Int before returns nothing``() =
-        checkIntermediate "bar" None (SMExpr.Int (siBefore "foo"))
+    let ``symbolics with are observable after the empty command`` () =
+        check true
+            [ SymC { Sentence = [ SymString "foo" ]; Args = [] } ]
+            []
 
     [<Test>]
-    let ``getIntermediate on other Int after returns nothing``() =
-        checkIntermediate "bar" None (SMExpr.Int (siAfter "foo"))
+    let ``symbolics are observable after a local stored command`` () =
+        check true
+            [ SymC { Sentence = [ SymString "foo" ]; Args = [] } ]
+            [ command "Foo" [ normalIntExpr (siVar "y") ] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]
-    let ``getIntermediate on 'not' passes through``() =
-        checkIntermediate "bar" (Some 10I) (SMExpr.Bool (BNot (sbInter 10I "bar")))
+    let ``symbolics are observable after a nonlocal stored command`` () =
+        check true
+            [ SymC { Sentence = [ SymString "foo" ]; Args = [] } ]
+            [ command "Foo" [ normalIntExpr (siVar "g") ] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]
-    let ``getIntermediate on 'implies' is max of its arguments matching the name``() =
-        checkIntermediate "a" (Some 6I)
-            (SMExpr.Bool (BImplies (sbInter 6I "a", sbInter 11I "b")))
+    let ``local assignment is observable after a disjoint assignment`` () =
+        check true
+            [ Intrinsic
+                (IAssign
+                    { AssignType = Local
+                      TypeRec = normalRec
+                      LValue = siVar "y"
+                      RValue = mkAdd2 (siVar "y") (IInt 1L) } ) ]
+            [ Intrinsic
+                (IAssign
+                    { AssignType = Store
+                      TypeRec = normalRec
+                      LValue = siVar "g"
+                      RValue = mkAdd2 (siVar "y") (IInt 1L) } ) ]
+
 
     [<Test>]
-    let ``getIntermediate on 'add' is max of the addends matching the name``() =
-        checkIntermediate "a" (Some 2I)
-            (SMExpr.Int
-                (IAdd
-                    [ siInter 1I "a"
-                      siAfter "b"
-                      siInter 3I "b"
-                      siBefore "c"
-                      siInter 2I "a" ]))
+    let ``local assignment is observable after a chained assignment`` () =
+        check true
+            [ Intrinsic
+                (IAssign
+                    { AssignType = Local
+                      TypeRec = normalRec
+                      LValue = siVar "y"
+                      RValue = mkAdd2 (siVar "y") (IInt 1L) } ) ]
+            [ Intrinsic
+                (IAssign
+                    { AssignType = Store
+                      TypeRec = normalRec
+                      LValue = siVar "g"
+                      RValue = siVar "y" } ) ]
 
     [<Test>]
-    let ``getIntermediate on 'modulo' is max of its arguments matching the name`` () =
-        checkIntermediate "a" (Some 11I)
-            (SMExpr.Int (IMod (siInter 6I "a", siInter 11I "a")))
+    let ``local assignment is unobservable after an overwiting assignment`` () =
+        check false
+            [ Intrinsic
+                (IAssign
+                    { AssignType = Local
+                      TypeRec = normalRec
+                      LValue = siVar "y"
+                      RValue = mkAdd2 (siVar "y") (IInt 1L) } ) ]
+            [ Intrinsic
+                (IAssign
+                    { AssignType = Load
+                      TypeRec = normalRec
+                      LValue = siVar "y"
+                      RValue = siVar "g" } ) ]
+

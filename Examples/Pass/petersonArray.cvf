@@ -14,7 +14,6 @@ shared int turn;        // Whichever thread locked most recently has this.
 
 thread bool oFlag;      // The thread's view of its opponent's flag state.
 thread int oTurn;       // The thread's view of the current turn.
-thread int i;           // The thread's turn identifier.
 
 view flagDown(int me);  // 'me' does not hold the lock and is not seeking it.
 view flagUp(int me);    // 'me' has put its flag up, but isn't waiting yet.
@@ -25,7 +24,7 @@ view holdLock(int me);  // 'me' holds the lock.
 /*
  * Locks the Peterson lock.
  */
-method lock() {
+method lock(int i) {
   {| flagDown(i) |}
     <flag[i] = true>;
   {| flagUp(i) |}
@@ -44,7 +43,7 @@ method lock() {
 /*
  * Unlocks the Peterson lock.
  */
-method unlock() {
+method unlock(int i) {
   {| holdLock(i) |}
     <flag[i] = false>;
   {| flagDown(i) |}

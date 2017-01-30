@@ -105,16 +105,6 @@ module Types =
         /// </summary>
         | MissingIterator of view : DView
         /// <summary>
-        ///     An iterated view constraint contained a symbol where we didn't
-        ///     expect one.
-        ///
-        ///     <para>
-        ///         This is a fairly restrictive error and may be relaxed
-        ///         later on.
-        ///     </para>
-        /// </summary>
-        | SymInIteratedConstraint of sym : SymbolicSentence
-        /// <summary>
         ///     An expression traversal went belly-up.
         /// </summary>
         | Traversal of TraversalError<Error>
@@ -149,55 +139,35 @@ module Downclosure =
         let record = wrapMessages LookupError look func
         lift (Option.map snd) record
 
-    /// <summary>
-    ///     Maps a substitution function over all of the uses of an iterator
-    ///     variable in a view definition.
-    /// </summary>
-    /// <param name="f">
-    ///     The function used to substitute expressions for instances of the
-    ///     iterator.
-    /// </param>
-    /// <param name="iterator">The variable representing the iterator.</param>
-    /// <param name="defn">The view definition to transform.</param>
-    /// <returns>
-    ///     The result of transforming every occurrence of the integer variable
-    ///     <paramref name="iterator"/> using <paramref name="f"/>.
-    /// </returns>
-    let mapOverIteratorUses (f : Var -> IntExpr<Sym<Var>>)
-      (iterator : Var)
-      (defn : BoolExpr<Sym<Var>>)
-      : Result<BoolExpr<Sym<Var>>, Error> =
-        let fOnIter (var : TypedVar) : Result<Expr<Sym<Var>>, Error> =
-            ok
-                (match var with
-                 | Int v when v = iterator -> Int (f v)
-                 | tv -> mkVarExp (mapCTyped Reg tv))
-
-        let mapper =
-            liftWithoutContext
-                fOnIter
-                (tliftToTypedSymVarSrc >> tliftToBoolSrc)
-
-        mapMessages Traversal (mapper defn)
+    /// <summary>Type of downclosure check results.</summary>
+    type DownclosureResult =
+        | /// <summary>Downclosure has been proven.</summary>
+          Proven
+        | /// <summary>Downclosure has been refuted.</summary>
+          Refuted
+        | /// <summary>Downclosure cannot be decided: reason given.</summary>
+          Inconclusive of reason : string
 
     /// <summary>
     ///     Runs a downclosure check using Z3.
     /// </summary>
     /// <param name="check">The check to run.</param>
     /// <returns>
-    ///     True if <paramref name="check"/> succeeds (is a tautology);
-    ///     false if not; an error if <paramref name="check"/> contains
-    ///     symbols or otherwise cannot be decided by Z3.
+    ///     The result of the downclosure check.
     /// </returns>
-    let runDownclosureCheck (check : BoolExpr<Sym<Var>>) : Result<bool, Error> =
+    let runDownclosureCheck (check : BoolExpr<Sym<Var>>) : DownclosureResult =
         // Expression equivalence cannot handle symbols, so try remove them.
+        // If we can't, then we just kick downclosure down to the backend.
         // TODO(CaptainHayashi): is it sound to approximate here?
         let removeResult =
-            mapTraversal (removeSymFromBoolExpr SymInIteratedConstraint) check
+            mapTraversal
+                (removeSymFromBoolExpr id)
+                (mkTypedSub normalRec check)
+        match removeResult with
         // If check is a tautology, it will be equivalent to 'true'.
-        lift
-            (equiv BTrue >> equivHolds id)
-            (mapMessages Traversal removeResult)
+        | Pass r ->
+            if equivHolds id (equiv BTrue r) then Proven else Refuted
+        | _ -> Inconclusive "check is symbolic"
 
     /// <summary>
     ///     Checks the base downclosure property.
@@ -227,12 +197,13 @@ module Downclosure =
         (* To do the base downclosure, we need to replace all instances of the
            iterator in the definition with 0. *)
         let baseDefnR =
-            mapOverIteratorUses (fun _ -> IInt 0L) iterator defn
+             mapMessages Traversal
+                (mapOverIteratorUses (fun _ -> IInt 0L) iterator defn)
 
         // If emp is indefinite (None), defer this base downclosure check.
         match empDefn with
         | None ->
-            ok (NeedsBaseDownclosure (func, "emp is indefinite")::deferred)
+            ok (NeedsBaseDownclosure (func, Some defn, "emp is indefinite")::deferred)
         | Some ed ->
             (* Base downclosure for a view V[n](x):
                  D(emp) => D(V[0](x))
@@ -242,12 +213,14 @@ module Downclosure =
                The definition of emp can only mention global variables, so it
                need not need to be freshened. *)
             let checkR = lift (mkImplies ed) baseDefnR
-            let baseHoldsR = bind runDownclosureCheck checkR
+            let baseHoldsR = lift runDownclosureCheck checkR
             bind
                 (fun baseHolds ->
-                    if baseHolds
-                    then ok deferred
-                    else fail (BaseDownclosureError ([func], defn, ed)))
+                    match baseHolds with
+                    | Proven -> ok deferred
+                    | Refuted -> fail (BaseDownclosureError ([func], defn, ed))
+                    | Inconclusive reason ->
+                        ok (NeedsBaseDownclosure (func, Some defn, reason)::deferred))
                 baseHoldsR
 
     /// <summary>
@@ -277,7 +250,9 @@ module Downclosure =
       : Result<DeferredCheck list, Error> =
         (* To do the inductive downclosure, we need to replace all instances of
            the iterator in the definition with (iterator + 1) in one version. *)
-        let succDefnR = mapOverIteratorUses (Reg >> incVar) iterator defn
+        let succDefnR =
+            mapMessages Traversal
+                (mapOverIteratorUses (Reg >> incVar) iterator defn)
 
         (* Inductive downclosure for a view V[n](x):
              (0 <= n && D(V[n+1](x)) => D(V[n](x)))
@@ -288,22 +263,21 @@ module Downclosure =
                 (fun succDefn ->
                     mkImplies
                         (mkAnd2
-                            (mkLe (IInt 0L) (IVar (Reg iterator)))
+                            (mkIntLe (IInt 0L) (IVar (Reg iterator)))
                             succDefn)
                         defn)
                 succDefnR
 
-        let indHoldsR = bind runDownclosureCheck checkR
+        let indHoldsR = lift runDownclosureCheck checkR
 
-        bind
-            (fun indHolds ->
-                if indHolds
-                then ok deferred
-                else
-                    bind
-                        (fun succDefn ->
-                            fail (InductiveDownclosureError ([func], succDefn, defn)))
-                        succDefnR)
+        bind2
+            (fun succDefn indHolds ->
+                match indHolds with
+                | Proven -> ok deferred
+                | Refuted -> fail (InductiveDownclosureError ([func], succDefn, defn))
+                | Inconclusive reason ->
+                    ok (NeedsInductiveDownclosure (func, Some defn, reason)::deferred))
+            succDefnR
             indHoldsR
 
     /// <summary>
@@ -326,7 +300,7 @@ module Downclosure =
         let checkIterator =
             function
             | None -> fail (MissingIterator [func])
-            | Some (Int v) -> ok v
+            | Some (Int (_, v)) -> ok v
             | Some v -> fail (BadIteratorType ([func], typeOf v))
 
         (* Delegate any checks on indefinite viewdefs to the backends, eg HSF
@@ -335,8 +309,8 @@ module Downclosure =
         match defn with
         | None ->
             ok
-                (NeedsBaseDownclosure (func, "func is indefinite")
-                :: NeedsInductiveDownclosure (func, "func is indefinite")
+                (NeedsBaseDownclosure (func, None, "func is indefinite")
+                :: NeedsInductiveDownclosure (func, None, "func is indefinite")
                 :: deferred)
         | Some d ->
             let checkedIterR = checkIterator func.Iterator
@@ -644,7 +618,7 @@ let reifySingleDef
                        pattern match guards above, it short-circuits to
                        false and kills off the entire view. *)
 
-                    let nIsPos = mkGt v.Iterator (IInt 0L)
+                    let nIsPos = mkIntGt v.Iterator (IInt 0L)
                     let func = { v.Func with Cond = mkAnd2 v.Func.Cond nIsPos }
 
                     let result =
@@ -811,8 +785,5 @@ module Pretty =
         | MissingIterator view ->
             fmt "constraint '{0}' should have an iterator, but does not"
                 [ printDView view ]
-        | SymInIteratedConstraint sym ->
-            fmt "symbol '{0}' not allowed in an iterated constraint"
-                [ printSymbolicSentence sym ]
         | Traversal err -> printTraversalError printError err
         |> error

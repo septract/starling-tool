@@ -24,8 +24,8 @@ module Tests =
     /// </summary>
     let svars : VarMap =
         returnOrFail <| VarMap.ofTypedVarSeq
-            [ TypedVar.Int "serving"
-              TypedVar.Int "ticket" ]
+            [ TypedVar.Int (normalRec, "serving")
+              TypedVar.Int (normalRec, "ticket") ]
 
     /// <summary>
     ///     The globals environment as a typed variable sequence.
@@ -39,10 +39,9 @@ module Tests =
     let svarExprSeq : Expr<Sym<MarkedVar>> seq =
         Seq.map
             (function
-             | TypedVar.Int x -> x |> siBefore |> Expr.Int
-             | TypedVar.Bool x -> x |> sbBefore |> Expr.Bool
-             | TypedVar.Array (eltype, length, x) ->
-                Expr.Array (eltype, length, AVar (Reg (Before x))))
+             | TypedVar.Int (t, x) -> Expr.Int (t, siBefore x)
+             | TypedVar.Bool (t, x) -> Expr.Bool (t, sbBefore x)
+             | TypedVar.Array (t, x) -> Expr.Array (t, AVar (Reg (Before x))))
             svarSeq
 
 
@@ -70,13 +69,13 @@ module Tests =
         let ``Convert non-iterated DView to defining func`` () =
             assertEqual
                 (dfunc "v_holdLock_holdTick"
-                    [ Int "serving"
-                      Int "ticket"
-                      Int "t" ] )
+                    [ TypedVar.Int (normalRec, "serving")
+                      TypedVar.Int (normalRec, "ticket")
+                      TypedVar.Int (normalRec, "t") ] )
                 (flattenDView
                     svarSeq
                     [ iterated (dfunc "holdLock" []) None
-                      iterated (dfunc "holdTick" [ Int "t" ]) None ])
+                      iterated (dfunc "holdTick" [ TypedVar.Int (normalRec, "t") ]) None ])
 
         // TODO(CaptainHayashi): iterated DView tests
         //   (that, or move the iterator lowering to IterLower where it belongs)
@@ -90,10 +89,10 @@ module Tests =
         let ``Convert arity-2 OView to func`` () =
             assertEqual
                 (smvfunc "v_holdLock_holdTick"
-                    [ Expr.Int (siBefore "serving")
-                      Expr.Int (siBefore "ticket")
-                      Expr.Int (siBefore "t") ] )
+                    [ normalIntExpr (siBefore "serving")
+                      normalIntExpr (siBefore "ticket")
+                      normalIntExpr (siBefore "t") ] )
                 (flattenOView
                     svarExprSeq
                     [ smvfunc "holdLock" []
-                      smvfunc "holdTick" [ Expr.Int (siBefore "t") ]])
+                      smvfunc "holdTick" [ normalIntExpr (siBefore "t") ]])

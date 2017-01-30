@@ -477,7 +477,7 @@ module Graph =
         // Connected?
         && not (Seq.isEmpty cons)
         // All edges from x to y and y to x are nop?
-        && Seq.forall (fun { OutEdge.Command = c } -> isNop c) cons
+        && Seq.forall (fun { OutEdge.Command = c } -> List.forall isNop c) cons
 
     /// <summary>
     ///     Plumbs a function over various properties of a graph and
@@ -493,21 +493,25 @@ module Graph =
     ///     the out-edges of the node;
     ///     the in-edges of the node.
     ///
-    ///     It should return a transformation context.
+    ///     It should return a transformation sequence.
     /// </param>
     /// <returns>
     ///     If <paramref name="node" /> exists in the graph, the result of
-    ///     calling <paramref name="f" />.  Else, the original context.
+    ///     calling <paramref name="f" /> and running the resulting
+    ///     transformations.
+    ///     Else, the original context.
     /// </returns>
     let expandNodeIn
       (ctx : TransformContext)
       (f : NodeID -> GraphViewExpr -> Set<OutEdge> -> Set<InEdge>
-           -> NodeKind -> TransformContext)
+           -> NodeKind -> Transform seq)
       : TransformContext =
-        match (Option.bind (fun n -> Map.tryFind n ctx.Graph.Contents
-                                     |> Option.map (fun r -> (n, r)))
-                           ctx.Node) with
-        | Some (nN, (nV, outs, ins, nk)) -> f nN nV outs ins nk
+        let findNode n = Option.map (mkPair n) (ctx.Graph.Contents.TryFind n)
+
+        match Option.bind findNode ctx.Node with
+        | Some (nN, (nV, outs, ins, nk)) ->
+            let xforms = f nN nV outs ins nk
+            runTransforms xforms ctx
         | None -> ctx
 
     /// <summary>
@@ -525,25 +529,21 @@ module Graph =
     ///     equivalent and connected only by no-op commands.
     /// </returns>
     let collapseNops (ctx : TransformContext) : TransformContext =
-        expandNodeIn ctx <|
-            fun node nView outEdges inEdges nk ->
-                let outNodes = outEdges
-                               |> Set.toSeq
-                               |> Seq.map (fun { Dest = d } -> d)
-                let inNodes = inEdges
-                              |> Set.toSeq
-                              |> Seq.map (fun { Src = s } -> s)
+        let opt node nView outEdges inEdges nk =
+            let outNodes = outEdges
+                           |> Set.toSeq
+                           |> Seq.map (fun { Dest = d } -> d)
+            let inNodes = inEdges
+                          |> Set.toSeq
+                          |> Seq.map (fun { Src = s } -> s)
 
-                let xforms =
-                    Seq.append outNodes inNodes
-                    // Then, find out which ones are nop-connected.
-                    |> Seq.filter (nopConnected ctx.Graph node)
-                    (* If we found any nodes, then unify them.
-                       We must also remove the edges between the nodes. *)
-                    |> Seq.map
-                        (fun other -> Unify (other, node, RemoveConnections))
-
-                runTransforms xforms ctx
+            Seq.append outNodes inNodes
+            // Then, find out which ones are nop-connected.
+            |> Seq.filter (nopConnected ctx.Graph node)
+            (* If we found any nodes, then unify them.
+               We must also remove the edges between the nodes. *)
+            |> Seq.map (fun other -> Unify (other, node, RemoveConnections))
+        expandNodeIn ctx opt
 
     /// <summary>
     ///     Decides whether a command is local.
@@ -551,71 +551,64 @@ module Graph =
     /// <param name="tVars">
     ///     A <c>VarMap</c> of thread-local variables.
     /// </param>
+    /// <param name="cmd">The command to check.</param>
     /// <returns>
     ///     A function returning True only if (but not necessarily if)
     ///     the given command is local (uses only local variables).
     /// </returns>
-    let isLocalCommand (tVars : VarMap) : Command -> bool =
-        // A command is local if, for all of its funcs...
-        List.forall
-            (fun { Args = ps } ->
-                // ...for all of the parameters in said funcs...
-                Seq.forall
-                    (fun p ->
-                        // ...there are no symbols, and...
-                        match (mapTraversal (removeSymFromExpr ignore) p) with
-                        // TODO(CaptainHayashi): propagate if traversal error
-                        | Bad _ -> false
-                        | Ok (sp, _) ->
-                            // ...for all of the variables in said parameters...
-                            let getVars = tliftOverExpr collectVars
-                            match findVars getVars sp with
-                            | Bad _ -> false
-                            | Ok (pvars, _) ->
-                                let pvseq = Set.toSeq pvars
-                                Seq.forall
-                                    (// ...the variable is thread-local.
-                                     valueOf
-                                     >> tVars.TryFind
-                                     >> function
-                                        | Some _ -> true
-                                        | _ -> false)
-                                    pvseq)
-                     ps)
+    let isLocalCommand (tVars : VarMap) (cmd : Command) : bool =
+        // TODO(CaptainHayashi): overlap with isLocalResults?
+        let typedVarIsThreadLocal var =
+             match tVars.TryFind (valueOf var) with
+             | Some _ -> true
+             | _ -> false
+
+        let isLocalArg arg =
+            // Forbid symbols in arguments.
+            match (mapTraversal (removeSymFromExpr ignore) arg) with
+                // TODO(CaptainHayashi): propagate if traversal error
+                | Bad _ -> false
+                | Ok (sp, _) ->
+                    // Now check if all the variables in the argument are local.
+                    let getVars = tliftOverExpr collectVars
+                    match findVars getVars sp with
+                    | Bad _ -> false
+                    | Ok (pvars, _) ->
+                        Seq.forall typedVarIsThreadLocal (Set.toSeq pvars)
+
+        let isLocalPrim prim =
+            match prim with
+            | // TODO(CaptainHayashi): too conservative?
+              SymC _ -> false
+            | Intrinsic (IAssign { AssignType = t })
+            | Intrinsic (BAssign { AssignType = t }) -> t = Local
+            | // TODO(CaptainHayashi): is this correct?
+              Intrinsic (Havoc v) -> typedVarIsThreadLocal v
+            | Stored { Args = ps } -> Seq.forall isLocalArg ps
+
+        List.forall isLocalPrim cmd
 
     /// Decides whether a given Command contains any `assume` command
     /// in any of the sequentially composed primitives inside it
-    let hasAssume : Command -> bool =
-        fun c ->
-            c |>
-            List.forall (
-                function
-                | { Name = "Assume" } -> true;
-                | _ -> false)
+    let hasAssume (c : Command) : bool =
+        List.exists isAssume c
 
-    /// Determines if some given Command is local with respect to the given
-    /// map of thread-local variables
-    let isLocalResults (tvars : VarMap) (command : Command) : bool =
-        (* We need to see if any of the variables named in the results
-           are local.  This can fail, but currently the optimiser can't.
-           For now we just assume the command is _not_ local if the
-           variable getter failed. *)
-        let maybeVars = okOption (commandResultVars command)
 
-        let isVarLocal v =
-            maybe false (fun x -> typeOf v = x) (tvars.TryFind (valueOf v))
-
-        maybe false
-            (Set.toList >> List.forall isVarLocal)
-            maybeVars
+    /// <summary>
+    ///     Partial active pattern matching <c>Sym</c>-less Boolean expressions.
+    /// </summary>
+    let (|NoSym|_|) (bexpr : BoolExpr<Sym<'Var>>) : BoolExpr<'Var> option =
+        bexpr
+        |> mkTypedSub normalRec
+        |> mapTraversal (removeSymFromBoolExpr ignore)
+        |> okOption
 
     /// <summary>
     ///     Partial active pattern matching <c>Sym</c>-less expressions.
     /// </summary>
-    let (|NoSym|_|) (bexpr : BoolExpr<Sym<'Var>>) : BoolExpr<'Var> option =
-        bexpr
-        // |> mkTypedSub normalBoolRec
-        |> mapTraversal (removeSymFromBoolExpr ignore)
+    let (|NoSymE|_|) (expr : Expr<Sym<'Var>>) : Expr<'Var> option =
+        expr
+        |> mapTraversal (removeSymFromExpr ignore)
         |> okOption
 
 
@@ -644,7 +637,7 @@ module Graph =
             Some (xc, Multiset.singleton { Func = { Cond = BTrue; Item = xi }; Iterator = xit },
                   yc, Multiset.singleton { Func = { Cond = BTrue; Item = yi }; Iterator = yit })
         // {| G -> P |} is trivially equivalent to {| G -> P * ¬G -> emp |}.
-        | [ { Func = { Cond = (NoSym xc); Item = xi }; Iterator = it } ] ->
+        | [ { Func = { Cond = NoSym xc; Item = xi }; Iterator = it } ] ->
             Some (xc, Multiset.singleton { Func = { Cond = BTrue; Item = xi }; Iterator = it },
                   mkNot xc, Multiset.empty)
         | _ -> None
@@ -667,46 +660,46 @@ module Graph =
     ///     not removed.
     /// </returns>
     let collapseITEs (ctx : TransformContext) : TransformContext =
-        expandNodeIn ctx <|
-            fun node nView outEdges inEdges nk ->
-                match nView with
-                | InnerView(ITEGuards (xc, xv, yc, yv)) ->
-                    match (Set.toList outEdges, Set.toList inEdges) with
-                    (* Are there only two out edges, and only one in edge?
-                       Are the out edges assumes, and are they non-symbolic? *)
-                    | ( [ { Dest = out1D
-                            Command = Assume (NoSym out1P) } as out1
-                          { Dest = out2D
-                            Command = Assume (NoSym out2P) } as out2
-                        ],
-                        [ inE ] )
-                        when (// Is the first one x and the second y?
-                              (equivHolds
-                                   id
-                                   (andEquiv (equiv out1P xc)
-                                             (equiv out2P yc))
-                               && nodeHasView out1D xv ctx.Graph
-                               && nodeHasView out2D yv ctx.Graph)
-                              // Or is the first one y and the second x?
-                              || (equivHolds
-                                      id
-                                      (andEquiv (equiv out2P xc)
-                                                (equiv out1P yc))
-                                  && nodeHasView out2D xv ctx.Graph
-                                  && nodeHasView out1D yv ctx.Graph)) ->
-                        let xforms =
-                            seq { // Remove the existing edges first.
-                                  yield RmInEdge (inE, node)
-                                  yield RmOutEdge (node, out1)
-                                  yield RmOutEdge (node, out2)
-                                  // Then, remove the node.
-                                  yield RmNode node
-                                  // Then, add the new edges.
-                                  yield MkCombinedEdge (inE, out1)
-                                  yield MkCombinedEdge (inE, out2) }
-                        runTransforms xforms ctx
-                    | _ -> ctx
-                | _ -> ctx
+        (* This checks whether, given a pairs (x, y) of assume A and target
+           view V, they project onto a pair (i, j) of assume A and target
+           node N in the given order. *)
+        let iteProjectsInOrder xA xV yA yV iA iN jA jN =
+            let projectA =
+                equivHolds id (andEquiv (equiv xA iA) (equiv yA jA))
+            let projectP =
+                nodeHasView iN xV ctx.Graph && nodeHasView jN yV ctx.Graph
+            projectA && projectP
+
+        (* As above, but in either order:
+           either (x, y) maps onto (i, j), or (x, y) maps onto (j, i). *)
+        let iteProjects xA xV yA yV iA iN jA jN =
+            // Is the first one x and the second y?
+            iteProjectsInOrder xA xV yA yV iA iN jA jN
+            // Or is the first one y and the second x?
+            || iteProjectsInOrder xA xV yA yV jA jN iA iN
+
+        let opt node nView outEdges inEdges nk =
+            match nView with
+            | InnerView(ITEGuards (xA, xV, yA, yV)) ->
+                match (Set.toList outEdges, Set.toList inEdges) with
+                (* Are there only two out edges, and only one in edge?
+                    Are the out edges assumes, and are they non-symbolic? *)
+                | ( [ { Dest = iN; Command = Assume (NoSym iA) } as out1
+                      { Dest = jN; Command = Assume (NoSym jA) } as out2 ],
+                    [ inE ] )
+                    when iteProjects xA xV yA yV iA iN jA jN ->
+                        seq { // Remove the existing edges first.
+                              yield RmInEdge (inE, node)
+                              yield RmOutEdge (node, out1)
+                              yield RmOutEdge (node, out2)
+                              // Then, remove the node.
+                              yield RmNode node
+                              // Then, add the new edges.
+                              yield MkCombinedEdge (inE, out1)
+                              yield MkCombinedEdge (inE, out2) }
+                | _ -> Seq.empty
+            | _ -> Seq.empty
+        expandNodeIn ctx opt
 
     /// <summary>
     ///     Removes views where either all of the entry commands are local,
@@ -726,130 +719,137 @@ module Graph =
     /// </returns>
     let dropLocalMidView (locals : VarMap) (ctx : TransformContext)
       : TransformContext =
-        expandNodeIn ctx <|
-            fun nName nView outEdges inEdges nk ->
-                (* TODO @mjp41: Need to check nView is not something with a real definition *)
+        let opt nName nView outEdges inEdges nk =
+            (* TODO @mjp41: Need to check nView is not something with a real definition *)
 
-                if nk = Normal  // Check it is not an Entry or Exit node.
-                   (* Only continue if there is one edge for either the in or
-                      out direction. *)
-                   && ((Set.count outEdges < 2) || (Set.count inEdges < 2))
-                   && ((Set.count outEdges > 0) && (Set.count inEdges > 0))
-                   // Only continue if the node can be safely removed.
-                   && isAdvisory nView
-                  (* Only continue if there are no cycles *)
-                   && (Set.forall (fun (e : OutEdge) -> e.Dest <> nName) outEdges)
-                   && (Set.forall (fun (e : InEdge) -> e.Src <> nName) inEdges)
-                   (* Commands must be local on either the in or the out.*)
-                   && ((Set.forall (fun (e : OutEdge) -> isLocalCommand locals e.Command) outEdges)
-                      || (Set.forall (fun (e : InEdge) -> isLocalCommand locals e.Command) inEdges))
-                then
-                    let xforms = seq {
-                        for inE in inEdges do
-                            yield RmInEdge (inE, nName)
-
-                            for outE in outEdges do
-                                yield MkCombinedEdge (inE, outE)
+            if nk = Normal  // Check it is not an Entry or Exit node.
+               (* Only continue if there is one edge for either the in or
+                  out direction. *)
+               && ((Set.count outEdges < 2) || (Set.count inEdges < 2))
+               && ((Set.count outEdges > 0) && (Set.count inEdges > 0))
+               // Only continue if the node can be safely removed.
+               && isAdvisory nView
+              (* Only continue if there are no cycles *)
+               && (Set.forall (fun (e : OutEdge) -> e.Dest <> nName) outEdges)
+               && (Set.forall (fun (e : InEdge) -> e.Src <> nName) inEdges)
+               (* Commands must be local on either the in or the out.*)
+               && ((Set.forall (fun (e : OutEdge) -> isLocalCommand locals e.Command) outEdges)
+                  || (Set.forall (fun (e : InEdge) -> isLocalCommand locals e.Command) inEdges))
+            then
+                seq {
+                    for inE in inEdges do
+                        yield RmInEdge (inE, nName)
 
                         for outE in outEdges do
-                            yield RmOutEdge (nName, outE)
+                            yield MkCombinedEdge (inE, outE)
 
-                        yield RmNode nName
-                    }
+                    for outE in outEdges do
+                        yield RmOutEdge (nName, outE)
 
-                    runTransforms xforms ctx
-                else
-                    ctx
+                    yield RmNode nName
+                }
+            else Seq.empty
+        expandNodeIn ctx opt
 
     /// Drops edges with local results that are disjoint from
     /// the vars in the pre/post condition views
     /// i.e. given {| p |} c {| p |} drop iff Vars(p) n Vars(c) = {}
     let dropLocalEdges (locals : VarMap) (ctx : TransformContext)
       : TransformContext =
-        expandNodeIn ctx <|
-            fun node nView outEdges inEdges nk ->
-                let disjoint (a : TypedVar list) (b : Set<TypedVar>) = List.forall (b.Contains >> not) a
-                let processEdge ctx (e : OutEdge) =
-                    if isLocalResults locals e.Command
-                    then
-                        let pViewexpr = nView
-                        let qViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[e.Dest]
-                        // strip away mandatory/advisory and just look at the internal view
-                        // (TODO: do something with the ViewExpr annotations?)
-                        match (pViewexpr, qViewexpr) with
-                        | InnerView pView, InnerView qView ->
-                            let varResultSet = Set.map iteratedGFuncVars (Multiset.toSet pView)
-                            let varsResults = lift Set.unionMany (collect varResultSet)
-                            let cmdVarsResults = commandResultVars e.Command
+        let opt node nView outEdges inEdges nk =
+            let disjoint (a : TypedVar list) (b : Set<TypedVar>) = List.forall (b.Contains >> not) a
+
+            let processEdge (e : OutEdge) =
+                if isLocalResults locals e.Command
+                then
+                    let pViewexpr = nView
+                    let qViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[e.Dest]
+                    // strip away mandatory/advisory and just look at the internal view
+                    // (TODO: do something with the ViewExpr annotations?)
+                    match (pViewexpr, qViewexpr) with
+                    | InnerView pView, InnerView qView ->
+                        let varResultSet = Set.map iteratedGFuncVars (Multiset.toSet pView)
+                        let varsResults = lift Set.unionMany (collect varResultSet)
+                        let cmdVarsResults = commandResultVars e.Command
+                        // TODO: Better equality?
+                        match varsResults, cmdVarsResults with
+                        | Ok (vars, _), Ok (cmdVars, _) ->
                             // TODO: Better equality?
-                            match varsResults, cmdVarsResults with
-                            | Ok (vars, _), Ok (cmdVars, _) ->
-                                // TODO: Better equality?
-                                if pView = qView && disjoint (Set.toList cmdVars) vars
-                                then
-                                    (flip runTransforms) ctx
-                                    <| seq {
-                                        yield RmOutEdge (node, e)
-                                        yield Unify (node, e.Dest, OnlyIfNoConnections)
-                                    }
-                                else ctx
-                            | _, _ -> ctx
-                    else ctx
-                Set.fold processEdge ctx outEdges
+                            if pView = qView && disjoint (Set.toList cmdVars) vars
+                            then
+                                seq {
+                                    yield RmOutEdge (node, e)
+                                    yield Unify (node, e.Dest, OnlyIfNoConnections)
+                                }
+                            else Seq.empty
+                        | _, _ -> Seq.empty
+                else Seq.empty
+            seq { for e in outEdges do yield! (processEdge e) }
+
+        expandNodeIn ctx opt
+
+    /// <summary>
+    ///     Decides whether a system {p}c{q}d{r} can be collapsed to {p}d{r}.
+    /// </summary>
+    let canCollapseUnobservable
+      (tvars : VarMap)
+      (graph : Graph)
+      (p : NodeID)
+      (c : Command)
+      (q : NodeID)
+      (d : Command)
+      (r : NodeID)
+      : bool =
+        // We can't collapse {p}c{p}d{r} or {p}c{r}d{r}.
+        let noCycle = p <> q && q <> r
+
+        // We can't collapse if {q} is mandatory.
+        let qViewexpr, _, _, _ = graph.Contents.[q]
+        let qAdvisory = match qViewexpr with | Advisory _ -> true | _ -> false
+
+        let cHidden =
+            match isObservable tvars c d with
+            | Pass false -> true
+            | _ -> false
+
+        noCycle && qAdvisory && cHidden
 
     /// Collapses edges {p}c{q}d{r} to {p}d{r} iff c is unobservable
     /// i.e. c writes to local variables overwritten by d
     /// d does not read outputs of c,
     /// and there are no assumes adding information
-    let collapseUnobservableEdges (locals : VarMap) (ctx : TransformContext)
+    let collapseUnobservableEdges (tvars : VarMap) (ctx : TransformContext)
       : TransformContext =
-        expandNodeIn ctx <|
-            fun node nViewexpr outEdges inEdges nodeKind ->
-                let pViewexpr = nViewexpr
-                let disjoint (a : Set<'a>) (b : Set<'a>) =
-                    Set.empty = Set.filter b.Contains a
-                let processCEdge cEdge =
-                    let dEdges = (fun (_, outs, _, _) -> outs) <| ctx.Graph.Contents.[cEdge.Dest]
-                    let processDEdge dEdge =
-                        (pViewexpr, cEdge, dEdge)
-                    Set.map processDEdge dEdges
+        let opt node pViewexpr outEdges inEdges nodeKind =
+            let disjoint (a : Set<'a>) (b : Set<'a>) =
+                Set.empty = Set.filter b.Contains a
+            let processCEdge cEdge =
+                let dEdges = (fun (_, outs, _, _) -> outs) <| ctx.Graph.Contents.[cEdge.Dest]
+                let processDEdge dEdge =
+                    (pViewexpr, cEdge, dEdge)
+                Set.map processDEdge dEdges
 
-                let processTriple ctx (pViewexpr, (cEdge : OutEdge), (dEdge : OutEdge)) =
-                    let c, d = cEdge.Command, dEdge.Command
+            let processTriple (pViewexpr, (cEdge : OutEdge), (dEdge : OutEdge)) =
+                let c, d = cEdge.Command, dEdge.Command
+                if canCollapseUnobservable tvars ctx.Graph node c cEdge.Dest d dEdge.Dest
+                then
+                    seq {
+                        // Remove the {p}c{q} edge
+                        yield RmOutEdge (node, cEdge)
+                        // Remove the {q}d{r} edge
+                        yield RmOutEdge (cEdge.Dest, dEdge)
+                        // Remove q
+                        yield RmNode cEdge.Dest
+                        // Then, add the new edges {p}d{q}
+                        yield MkCombinedEdge
+                            ({ Name = node;       Src = dEdge.Dest;   Command = d },
+                             { Name = dEdge.Dest; Dest = node;        Command = d })
+                    }
+                else Seq.empty
 
-                    let qViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[cEdge.Dest]
-                    let rViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[dEdge.Dest]
-
-                    match (pViewexpr, qViewexpr, rViewexpr) with
-                    | InnerView pView, InnerView qView, InnerView rView ->
-                        let cVarResult = commandResultVars c
-                        let dVarResult = commandResultVars d
-                        match (commandArgs d, cVarResult, dVarResult) with
-                        | Ok (dArgs, _), Ok (cVars, _), Ok (dVars, _) ->
-                            if Set.isSubset cVars dVars
-                                && disjoint cVars dArgs
-                                && isLocalResults locals c
-                                && not (hasAssume c)  // TODO: is this too broad?
-                                && not (hasAssume d)  // TODO: is this necessary?
-                                then
-                                    (flip runTransforms) ctx
-                                    <| seq {
-                                          // Remove the {p}c{q} edge
-                                          yield RmOutEdge (node, cEdge)
-                                          // Remove the {q}d{r} edge
-                                          yield RmOutEdge (cEdge.Dest, dEdge)
-                                          // Remove q
-                                          yield RmNode cEdge.Dest
-                                          // Then, add the new edges {p}d{q}
-                                          yield MkCombinedEdge
-                                              ({ Name = node;       Src = dEdge.Dest;   Command = d },
-                                              { Name = dEdge.Dest;  Dest = node;        Command = d })
-                                    }
-                                else ctx
-                        | _ -> ctx
-
-                let triples = Set.fold (+) Set.empty <| Set.map processCEdge outEdges
-                Set.fold processTriple ctx triples
+            let triples = Set.fold (+) Set.empty <| Set.map processCEdge outEdges
+            seq { for triple in triples do yield! (processTriple triple) }
+        expandNodeIn ctx opt
 
 
     /// <summary>
@@ -951,7 +951,8 @@ module Term =
     /// constant.
     let rec (|ConstantBoolFunction|_|) (x : BoolExpr<Sym<MarkedVar>>)
       : MarkedVar option =
-        x
+        let tx = mkTypedSub normalRec x
+        tx
         |> findVars (tliftToBoolSrc (tliftToExprDest collectSymVars))
         |> okOption |> Option.map (Seq.map valueOf) |> Option.bind onlyOne
 
@@ -959,7 +960,8 @@ module Term =
     /// constant.
     let rec (|ConstantIntFunction|_|) (x : IntExpr<Sym<MarkedVar>>)
       : MarkedVar option =
-        x
+        let tx = mkTypedSub normalRec x
+        tx
         |> findVars (tliftToIntSrc (tliftToExprDest collectSymVars))
         |> okOption |> Option.map (Seq.map valueOf) |> Option.bind onlyOne
 
@@ -969,10 +971,10 @@ module Term =
     let rec findArithAfters
       : BoolExpr<Sym<MarkedVar>> -> (Var * IntExpr<Sym<MarkedVar>>) list =
         function
-        | BAEq(IVar (Reg (After x)), (ConstantIntFunction (Before y) as fx))
+        | BIEq(IVar (Reg (After x)), (ConstantIntFunction (Before y) as fx))
             when x = y
             -> [(x, fx)]
-        | BAEq(ConstantIntFunction (Before y) as fx, IVar (Reg (After x)))
+        | BIEq(ConstantIntFunction (Before y) as fx, IVar (Reg (After x)))
             when x = y
             -> [(x, fx)]
         | BAnd xs -> concatMap findArithAfters xs
@@ -1024,18 +1026,18 @@ module Term =
       : BoolExpr<Sym<MarkedVar>>
         -> ((bigint * Var) * IntExpr<Sym<MarkedVar>>) list =
         function
-        | BAEq (IVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Intermediate(k, y)) as fx))
-        | BAEq (ConstantIntFunction (Intermediate(k, y)) as fx, IVar (Reg (Intermediate(i, x))))
+        | BIEq (IVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Intermediate(k, y)) as fx))
+        | BIEq (ConstantIntFunction (Intermediate(k, y)) as fx, IVar (Reg (Intermediate(i, x))))
             when x = y
             ->
                 if i > k then
                     [((i, x), fx)]
                 else
                     []
-        | BAEq (IVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Before y) as fx))
-        | BAEq (IVar (Reg (Intermediate(i, x))), (ConstantIntFunction (After y) as fx))
-        | BAEq (ConstantIntFunction (Before y) as fx, IVar (Reg (Intermediate(i, x))))
-        | BAEq (ConstantIntFunction (After y) as fx, IVar (Reg (Intermediate(i, x))))
+        | BIEq (IVar (Reg (Intermediate(i, x))), (ConstantIntFunction (Before y) as fx))
+        | BIEq (IVar (Reg (Intermediate(i, x))), (ConstantIntFunction (After y) as fx))
+        | BIEq (ConstantIntFunction (Before y) as fx, IVar (Reg (Intermediate(i, x))))
+        | BIEq (ConstantIntFunction (After y) as fx, IVar (Reg (Intermediate(i, x))))
             when x = y
             -> [((i, x), fx)]
         | BAnd xs -> concatMap findArithInters xs
@@ -1047,13 +1049,14 @@ module Term =
       (bsubs : Map<Var, BoolExpr<Sym<MarkedVar>>>)
       : Traversal<CTyped<MarkedVar>, Expr<Sym<MarkedVar>>, TermOptError, unit> =
         (* TODO(CaptainHayashi): just use one Map<Var, Expr<_>>, and raise a
-           traversal error if we get the wrong type out. *)
+           traversal error if we get the wrong type out.
+           TODO(CaptainHayashi): type safety? *)
         let switch =
             function
-            | Int (After a) ->
-                Map.tryFind a isubs |> withDefault (siAfter a) |> Int
-            | Bool (After a) ->
-                Map.tryFind a bsubs |> withDefault (sbAfter a) |> Bool
+            | Int (ty, After a) ->
+                Int (ty, Map.tryFind a isubs |> withDefault (siAfter a))
+            | Bool (ty, After a) ->
+                Bool (ty, Map.tryFind a bsubs |> withDefault (sbAfter a))
             | x -> mkVarExp (mapCTyped Reg x)
         ignoreContext (switch >> ok)
 
@@ -1063,13 +1066,14 @@ module Term =
       (bsubs : Map<bigint * Var, BoolExpr<Sym<MarkedVar>>>)
       : Traversal<CTyped<MarkedVar>, Expr<Sym<MarkedVar>>, TermOptError, unit> =
         (* TODO(CaptainHayashi): just use one Map<Var, Expr<_>>, and raise a
-           traversal error if we get the wrong type out. *)
+           traversal error if we get the wrong type out.
+           TODO(CaptainHayashi): type safety? *)
         let switch =
             function
-            | Int (Intermediate (i, a)) ->
-                Map.tryFind (i, a) isubs |> withDefault (siInter i a) |> Int
-            | Bool (Intermediate (i, a)) ->
-                Map.tryFind (i, a) bsubs |> withDefault (sbInter i a) |> Bool
+            | Int (ty, Intermediate (i, a)) ->
+                Int (ty, Map.tryFind (i, a) isubs |> withDefault (siInter i a))
+            | Bool (ty, Intermediate (i, a)) ->
+                Bool (ty, Map.tryFind (i, a) bsubs |> withDefault (sbInter i a))
             | x -> mkVarExp (mapCTyped Reg x)
         ignoreContext (switch >> ok)
 
@@ -1112,13 +1116,6 @@ module Term =
      * Guard reduction
      *)
 
-    /// Return all known facts inside a conjunctive Boolean expression.
-    let rec facts
-      : BoolExpr<Sym<MarkedVar>> -> BoolExpr<Sym<MarkedVar>> list =
-        function
-        | BAnd xs -> concatMap facts xs
-        | x -> [x]
-
     /// Reduce a Boolean expression, given some known facts.
     let rec reduce (fs : Set<BoolExpr<Sym<MarkedVar>>>)
       : BoolExpr<Sym<MarkedVar>> -> BoolExpr<Sym<MarkedVar>> =
@@ -1127,7 +1124,11 @@ module Term =
         | x when Set.contains (mkNot x) fs -> BFalse
         | BAnd xs -> mkAnd (List.map (reduce fs) xs)
         | BOr xs -> mkOr (List.map (reduce fs) xs)
-        | BBEq (x, y) -> mkEq (reduce fs x |> Expr.Bool) (reduce fs y |> Expr.Bool)
+        // TODO(CaptainHayashi: handle subtypes properly here?)
+        | TBBEq (x, y) ->
+            mkEq
+                (typedBoolToExpr (mapTypedSub (reduce fs) x))
+                (typedBoolToExpr (mapTypedSub (reduce fs) y))
         | BNot x -> mkNot (reduce fs x)
         | x -> x
 
@@ -1143,7 +1144,7 @@ module Term =
       : Result<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
                TermOptError> =
 
-        let fs = c.Semantics |> facts |> Set.ofList
+        let fs = Set.ofList (unfoldAnds c.Semantics)
         ok {Cmd = c; WPre = reduceGView fs w; Goal = g}
 
     (*
@@ -1157,7 +1158,7 @@ module Term =
                   TermOptError> =
         let simpExpr : Expr<Sym<MarkedVar>> -> Expr<Sym<MarkedVar>> =
             function
-            | Bool b -> Bool (simp b)
+            | Bool (ty, b) -> Bool (ty, simp b)
             | x -> x
         let sub = ignoreContext (simpExpr >> ok)
         let trav = tliftOverCmdTerm sub

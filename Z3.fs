@@ -44,10 +44,10 @@ module Expr =
     /// </returns>
     let rec typeToSort (reals : bool) (ctx : Z3.Context) (ty : Type) : Z3.Sort =
         match ty with
-        | Type.Int () when reals -> ctx.MkRealSort () :> Z3.Sort
-        | Type.Int () -> ctx.MkIntSort () :> Z3.Sort
-        | Type.Bool () -> ctx.MkBoolSort () :> Z3.Sort
-        | Type.Array (eltype, _, ()) ->
+        | AnInt when reals -> ctx.MkRealSort () :> Z3.Sort
+        | AnInt -> ctx.MkIntSort () :> Z3.Sort
+        | ABool -> ctx.MkBoolSort () :> Z3.Sort
+        | AnArray (eltype, _) ->
             let elZ3 = typeToSort reals ctx eltype
             ctx.MkArraySort (range = ctx.MkIntSort (), domain = elZ3) :> Z3.Sort
 
@@ -56,15 +56,15 @@ module Expr =
       (reals : bool)
       (toStr : 'Var -> string)
       (ctx : Z3.Context)
-      (int : IntExpr<'Var>) : Z3.ArithExpr =
+      (int : TypedIntExpr<'Var>) : Z3.ArithExpr =
         let rec iz =
             function
             | IVar c when reals -> c |> toStr |> ctx.MkRealConst :> Z3.ArithExpr
             | IVar c -> c |> toStr |> ctx.MkIntConst :> Z3.ArithExpr
-            | IIdx (eltype, _, arr, idx) ->
+            | IIdx (arr, idx) ->
                 // TODO(CaptainHayashi): ensure eltype is Int?
-                let arrZ3 = arrayToZ3 reals toStr ctx eltype arr
-                let idxZ3 = intToZ3 reals toStr ctx idx
+                let arrZ3 = arrayToZ3 reals toStr ctx arr
+                let idxZ3 = intToZ3 reals toStr ctx (mkTypedSub normalRec idx)
                 // TODO(CaptainHayashi): make this not crash if the select is not an ArithExpr.
                 ctx.MkSelect (arrZ3, idxZ3) :?> Z3.ArithExpr
             | IInt i when reals -> (i |> ctx.MkReal) :> Z3.ArithExpr
@@ -75,24 +75,24 @@ module Expr =
             | IDiv (x, y) -> ctx.MkDiv (iz x, iz y)
             // TODO(CaptainHayashi): refuse AMod when reals is true.
             | IMod (x, y) -> ctx.MkMod (iz x :?> Z3.IntExpr, iz y :?> Z3.IntExpr) :> Z3.ArithExpr
-        iz int
+        iz (stripTypeRec int)
 
     /// Converts a Starling Boolean expression to a Z3 ArithExpr.
     and boolToZ3
       (reals : bool)
       (toStr : 'Var -> string)
       (ctx: Z3.Context)
-      (bool : BoolExpr<'Var>) : Z3.BoolExpr =
-        let iz = intToZ3 reals toStr ctx
+      (bool : TypedBoolExpr<'Var>) : Z3.BoolExpr =
+        let iz x = intToZ3 reals toStr ctx x
         let ez = exprToZ3 reals toStr ctx
 
         let rec bz =
             function
             | BVar c -> c |> toStr |> ctx.MkBoolConst
-            | BIdx (eltype, _, arr, idx) ->
+            | BIdx (arr, idx) ->
                 // TODO(CaptainHayashi): ensure eltype is Bool?
-                let arrZ3 = arrayToZ3 reals toStr ctx eltype arr
-                let idxZ3 = intToZ3 reals toStr ctx idx
+                let arrZ3 = arrayToZ3 reals toStr ctx arr
+                let idxZ3 = intToZ3 reals toStr ctx (mkTypedSub normalRec idx)
                 // TODO(CaptainHayashi): make this not crash if the select is not a BoolExpr.
                 ctx.MkSelect (arrZ3, idxZ3) :?> Z3.BoolExpr
             | BTrue -> ctx.MkTrue ()
@@ -106,31 +106,32 @@ module Expr =
             | BLe (x, y) -> ctx.MkLe (iz x, iz y)
             | BLt (x, y) -> ctx.MkLt (iz x, iz y)
             | BNot x -> x |> bz |> ctx.MkNot
-        bz bool
+        bz (stripTypeRec bool)
 
     /// Converts a Starling array expression to a Z3 Expr.
     and arrayToZ3
       (reals : bool)
       (toStr : 'Var -> string)
       (ctx: Z3.Context)
-      (eltype : Type)
-      (arr : ArrayExpr<'Var>)
+      (arr : TypedArrayExpr<'Var>)
       : Z3.ArrayExpr =
-        match arr with
+        let eltype = arr.SRec.ElementType
+
+        match stripTypeRec arr with
         | AVar c ->
             ctx.MkArrayConst
                 (name = toStr c,
                  domain = ctx.MkIntSort (),
                  range = typeToSort reals ctx eltype)
-        | AIdx (eltype, _, arr, idx) ->
+        | AIdx (arr',  idx) ->
             // TODO(CaptainHayashi): ensure eltype is Array?
-            let arrZ3 = arrayToZ3 reals toStr ctx eltype arr
-            let idxZ3 = intToZ3 reals toStr ctx idx
+            let arrZ3 = arrayToZ3 reals toStr ctx arr'
+            let idxZ3 = intToZ3 reals toStr ctx (mkTypedSub normalRec idx)
             // TODO(CaptainHayashi): make this not crash if the select is not an ArrayExpr.
             ctx.MkSelect (arrZ3, idxZ3) :?> Z3.ArrayExpr
-        | AUpd (eltype, _, arr, idx, upd) ->
-            let arrZ3 = arrayToZ3 reals toStr ctx eltype arr
-            let idxZ3 = intToZ3 reals toStr ctx idx
+        | AUpd (arr', idx, upd) ->
+            let arrZ3 = arrayToZ3 reals toStr ctx (updateTypedSub arr arr')
+            let idxZ3 = intToZ3 reals toStr ctx (mkTypedSub normalRec idx)
             let updZ3 = exprToZ3 reals toStr ctx upd
             ctx.MkStore (arrZ3, idxZ3, updZ3)
 
@@ -143,9 +144,9 @@ module Expr =
       (expr : Expr<'Var>)
       : Z3.Expr =
         match expr with
-        | Expr.Bool b -> boolToZ3 reals toStr ctx b :> Z3.Expr
-        | Expr.Int a -> intToZ3 reals toStr ctx a :> Z3.Expr
-        | Expr.Array (eltype, _, a) -> arrayToZ3 reals toStr ctx eltype a :> Z3.Expr
+        | Expr.Bool (t, b) -> boolToZ3 reals toStr ctx (mkTypedSub t b) :> Z3.Expr
+        | Expr.Int (t, i) -> intToZ3 reals toStr ctx (mkTypedSub t i) :> Z3.Expr
+        | Expr.Array (t, a) -> arrayToZ3 reals toStr ctx (mkTypedSub t a) :> Z3.Expr
 
     /// <summary>
     ///     Z3 tests for expressions.
@@ -161,7 +162,7 @@ module Expr =
             use ctx = new Z3.Context ()
             assertEqual
                 (ctx.MkMod (ctx.MkIntConst "foo", ctx.MkInt 5L) :> Z3.ArithExpr)
-                (intToZ3 false id ctx (mkMod (IVar "foo") (IInt 5L)))
+                (intToZ3 false id ctx (normalInt (mkMod (IVar "foo") (IInt 5L))))
 
 /// <summary>
 ///     Z3 invocation.

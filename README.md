@@ -14,20 +14,22 @@ For a quick example of the flavour of Starling scripts, see
 
 Starling is a work in progress, but currently it can check
 correctness of fully-specified programs written in a limited command
-language (integer and Boolean variables; basic statements; atomic
+language (integer and Boolean variables; arrays; basic statements; atomic
 assignment and compare-and-swap; parameter-less methods with no
 calling).
 
-Examples of programs it can prove sound can be found in the
-`Examples/Pass` directory; examples of programs it can prove unsound,
-likewise, inhabit `Examples/Fail`.
+Starling can be used on its own to check complete proofs of programs
+using the `Z3` SMT solver, or combined with other tools:
+
+* With the `HSF` Horn clause solver, Starling can perform limited definition
+  inference for proofs, helping to complete partial proofs;
+* (Experimental.)  With the `GRASShopper` separation logic solver, Starling can
+  prove properties of programs using linked heap-based data structures.
 
 ## Future work
 
-* Inference of constraints for unspecified view assertions, using
-  backends such as HSF;
 * Methods with call/return syntax;
-* Compound data types (eg arrays, structs, ...);
+* Structs;
 * Proof of soundness of the tool itself;
 * Clean-up and general user interface polish.
 
@@ -46,24 +48,32 @@ useable version of `qarmc`](https://www7.in.tum.de/~popeea/research/synthesis/)
 is available.  Install it in your `PATH` to be able to use
 `starling-hsf.sh`.
 
+To use GRASShopper, you will need a copy of `grasshopper.native`.
+This can be compiled from source available at
+[this GitHub repository](https://github.com/wies/grasshopper).  Install it
+in your `PATH` to be able to use `starling-gh.sh`.
+
 ## Usage
 
-* To check a Starling file using Z3, use `./starling.sh -ssat /path/to/file`.
-* To investigate a failure (of the form `XX: fail` where `XX` is a number),
-  use `./trace.sh /path/to/file XX`.
+* To check a Starling file using Z3, use `./starling.sh -ssmt-failures /path/to/file`.
+  Examples using Z3 can be found in `Examples/Pass` and `Examples/Fail`.
 * To check a Starling file using HSF/qarmc, use `./starling-hsf.sh /path/to/file`.
+  Examples using HSF can be found in `Examples/PassHSF`.
+* To check a Starling file using `GRASShopper`, use `./starling-gh.sh /path/to/file`.
+  Examples using GRASShopper can be found in `Examples/PassGH`.
 * To run the regression tests, use `./regress.sh`.
 
 ## Editor support
 
 A very basic major mode (highlighting only) for GNU Emacs, based on `cc-mode`,
-is available in `syntax/starling-mode.el`.
+is available in `syntax/starling-mode.el`.  This is fairly outdated.
 
 ## People
 
 * [Matthew Windsor](https://www-users.cs.york.ac.uk/~mbw500/)
 * [Mike Dodds](https://www-users.cs.york.ac.uk/~miked/)
 * [Matthew Parkinson](http://research.microsoft.com/en-us/people/mattpark/) 
+* Ben Simner
 
 ## Licence
 

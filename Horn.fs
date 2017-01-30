@@ -14,6 +14,7 @@ open Starling.Core.Expr
 open Starling.Core.View
 open Starling.Core.Traversal
 open Starling.Core.Model
+open Starling.Core.Symbolic
 open Starling.Core.Instantiate
 open Starling.Core.GuardedView
 
@@ -278,7 +279,8 @@ let checkArith
         | x ->
             (* Need to convert this expression into an Expr<Var> for the
                error message, which is somewhat painful and can itself fail! *)
-            let xExpr = Expr.Int x
+            // TODO(CaptainHayashi): subtypes?
+            let xExpr = Expr.Int (normalRec, x)
             let xVarExprR =
                 liftWithoutContext
                     (toVar >> ok) (tliftOverCTyped >> tliftOverExpr)
@@ -308,6 +310,7 @@ let boolExpr
   (toVar : 'var -> Var)
   : BoolExpr<'var> -> Result<Literal, Error> =
     let ca = checkArith toVar
+    let tca = stripTypeRec >> ca
 
     let rec be =
         function
@@ -316,20 +319,21 @@ let boolExpr
         | BOr xs -> xs |> List.map be |> collect |> lift Or
         | BTrue -> ok <| True
         | BFalse -> ok <| False
-        | BEq(Expr.Int x, Expr.Int y) -> lift2 (curry Eq) (ca x) (ca y)
-        | BNot(BEq(Expr.Int x, Expr.Int y)) -> lift2 (curry Neq) (ca x) (ca y)
+        // TODO(CaptainHayashi): should we be throwing away int subtypes?
+        | BEq(Expr.Int (_, x), Expr.Int (_, y)) -> lift2 (curry Eq) (ca x) (ca y)
+        | BNot(BEq(Expr.Int (_, x), Expr.Int (_, y))) -> lift2 (curry Neq) (ca x) (ca y)
         // TODO(CaptainHayashi): is implies allowed natively?
         | BImplies(x, y) -> be (mkOr [ mkNot x ; y ])
-        | BGt(x, y) -> lift2 (curry Gt) (ca x) (ca y)
-        | BGe(x, y) -> lift2 (curry Ge) (ca x) (ca y)
-        | BLe(x, y) -> lift2 (curry Le) (ca x) (ca y)
-        | BLt(x, y) -> lift2 (curry Lt) (ca x) (ca y)
+        | BGt(x, y) -> lift2 (curry Gt) (tca x) (tca y)
+        | BGe(x, y) -> lift2 (curry Ge) (tca x) (tca y)
+        | BLe(x, y) -> lift2 (curry Le) (tca x) (tca y)
+        | BLt(x, y) -> lift2 (curry Lt) (tca x) (tca y)
         | x ->
             let everythingToVar =
                 liftWithoutContext (toVar >> ok)
                     (tliftOverCTyped >> tliftOverExpr)
                 >> mapMessages Traversal
-            bind (UnsupportedExpr >> fail) (everythingToVar (Bool x))
+            bind (UnsupportedExpr >> fail) (everythingToVar (Bool (normalRec, x)))
     be
 
 (*
@@ -346,14 +350,15 @@ let boolExpr
 ///     Fails with <see cref="UnsupportedExpr"/> if the expression is
 ///     Boolean.
 /// </returns>
-let tryIntExpr (expr : MExpr) : Result<IntExpr<Var>, Error> =
+let tryIntExpr (expr : Expr<MarkedVar>) : Result<IntExpr<Var>, Error> =
     let mapper =
         liftWithoutContext (unmarkVar >> ok)
             (tliftOverCTyped >> tliftOverExpr)
 
     let filterExpr =
+        // TODO(CaptainHayashi): subtypes?
         function
-        | Expr.Int x -> ok x
+        | Expr.Int (_, x) -> ok x
         | e -> fail (UnsupportedExpr e)
 
     bind filterExpr (mapMessages Traversal (mapper expr))
@@ -367,8 +372,9 @@ let makeHSFVar : string -> string = (+) "V"
 
 /// Ensures a param in a viewdef multiset is arithmetic.
 let ensureArith : TypedVar -> Result<IntExpr<Var>, Error> =
+    // TODO(CaptainHayashi): subtypes?
     function
-    | Int x -> x |> makeHSFVar |> IVar |> ok
+    | Int (_, x) -> x |> makeHSFVar |> IVar |> ok
     | x -> x |> NonArithParam |> fail
 
 /// Constructs a pred from a Func, given a set of active globals,
@@ -422,8 +428,9 @@ let predOfEmp (svars : VarMap) : Result<Func<VIntExpr>, Error> =
     let empParamsR =
         collect
             (Seq.map
+                // TODO(CaptainHayashi): subtypes?
                 (function
-                 | Int name -> ok (IVar (makeHSFVar name))
+                 | Int (_, name) -> ok (IVar (makeHSFVar name))
                  | var -> fail (NonArithVar var))
                 svarSeq)
 
@@ -549,7 +556,9 @@ let mapIteratorParam
 ///     Constructs a Horn clause for a base downclosure check on a given func.
 /// </summary>
 let hsfModelBaseDownclosure
-  (svars : VarMap) (func : IteratedDFunc) (reason : string)
+  (svars : VarMap) (func : IteratedDFunc)
+  (defn : BoolExpr<Sym<Var>> option)
+  (reason : string)
   : Result<Horn list, Error> =
     // TODO(CaptainHayashi): proper doc comment.
     let svarSeq = VarMap.toTypedVarSeq svars
@@ -563,12 +572,13 @@ let hsfModelBaseDownclosure
     // TODO(CaptainHayashi): lots of duplication here.
     let iterator = func.Iterator
     let iterVarR =
+        // TODO(CaptainHayashi): subtypes?
         match iterator with
-        | Some (Int x) -> ok x
+        | Some (Int (_, x)) -> ok x
         | _ ->
             fail
                 (CannotCheckDeferred
-                    (NeedsBaseDownclosure (func, reason), "malformed iterator"))
+                    (NeedsBaseDownclosure (func, defn, reason), "malformed iterator"))
 
     (* Base downclosure for a view V[n](x):
          D(emp) => D(V[0](x))
@@ -605,7 +615,7 @@ let hsfModelBaseDownclosure
 ///     func.
 /// </summary>
 let hsfModelInductiveDownclosure
-  (svars : VarMap) (func : IteratedDFunc) (reason : string)
+  (svars : VarMap) (func : IteratedDFunc) (defn : BoolExpr<Sym<Var>> option) (reason : string)
   : Result<Horn list, Error> =
     // TODO(CaptainHayashi): proper doc comment.
     let svarSeq = VarMap.toTypedVarSeq svars
@@ -616,12 +626,13 @@ let hsfModelInductiveDownclosure
 
     let iterator = func.Iterator
     let iterVarR =
+        // TODO(CaptainHayashi): subtypes?
         match iterator with
-        | Some (Int x) -> ok x
+        | Some (Int (_, x)) -> ok x
         | _ ->
             fail
                 (CannotCheckDeferred
-                    (NeedsInductiveDownclosure (func, reason),
+                    (NeedsInductiveDownclosure (func, defn, reason),
                      "malformed iterator"))
 
     (* Inductive downclosure for a view V[n](x):
@@ -661,10 +672,10 @@ let hsfModelInductiveDownclosure
 let hsfModelDeferredCheck (svars : VarMap) (check : DeferredCheck)
   : Result<Horn list, Error> =
     match check with
-    | NeedsBaseDownclosure (func, reason) ->
-        hsfModelBaseDownclosure svars func reason
-    | NeedsInductiveDownclosure (func, reason) ->
-        hsfModelInductiveDownclosure svars func reason
+    | NeedsBaseDownclosure (func, defn, reason) ->
+        hsfModelBaseDownclosure svars func defn reason
+    | NeedsInductiveDownclosure (func, defn, reason) ->
+        hsfModelInductiveDownclosure svars func defn reason
 
 /// Constructs a HSF script for a model.
 let hsfModel

@@ -1,0 +1,13 @@
+// ARC module
+
+struct ArcNode {
+  var count: Int;
+  var val: Int; 
+}
+
+// procedure testint (x : ArcNode) 
+//    requires acc(x) &*& x.count == 1
+// {   
+//    free(x); 
+// }
+

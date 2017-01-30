@@ -24,6 +24,7 @@ open Starling.Core.Var.Pretty
 open Starling.Lang.AST.Pretty
 open Starling.Lang.Modeller
 open Starling.Lang.Modeller.Pretty
+open Starling.Lang.ViewDesugar.Pretty
 open Starling.Lang.Guarder
 
 
@@ -60,9 +61,9 @@ type Response =
     /// Output of the parsing and collation steps.
     | Collate of Collator.Types.CollatedScript
     /// Output of the parsing, collation, and modelling steps.
-    | Model of Model<ModellerMethod, ViewDefiner<BoolExpr<Sym<Var>> option>>
+    | Model of Model<ModellerBlock, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// Output of the parsing, collation, modelling, and guarding stages.
-    | Guard of Model<GuarderMethod, ViewDefiner<BoolExpr<Sym<Var>> option>>
+    | Guard of Model<GuarderBlock, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// Output of the parsing, collation, modelling, guarding and destructuring stages.
     | Graph of Model<Graph, ViewDefiner<BoolExpr<Sym<Var>> option>>
 
@@ -108,13 +109,15 @@ let printResponse (mview : ModelView) : Response -> Doc =
     | Response.Collate c -> Lang.Collator.Pretty.printCollatedScript c
     | Response.Model m ->
         printVModel
-            (printMethod (printViewExpr printCView)
-                         (printPartCmd (printViewExpr printCView)))
+            (printFullBlock
+                (printViewExpr printCView)
+                (printPartCmd (printViewExpr printCView)))
             m
     | Response.Guard m ->
         printVModel
-            (printMethod (printViewExpr (printIteratedGView (printSym String)))
-                         (printPartCmd (printViewExpr (printIteratedGView (printSym String)))))
+            (printFullBlock
+                (printViewExpr (printIteratedGView (printSym String)))
+                (printPartCmd (printViewExpr (printIteratedGView (printSym String)))))
             m
     | Response.Graph m ->
         printVModel printGraph m
@@ -133,14 +136,14 @@ let printError : Error -> Doc =
  *)
 
 /// Runs the Starling frontend.
-/// Takes six arguments: the first is whether to output times; the second is the
-/// `Response` telling the frontend what
+/// Takes six arguments: the first is the set of profiling flags to use; the
+/// second is a `Response` telling the frontend what
 /// to output; the third, and fourth, are functions to connect the successful, and
 /// error, output with the surrounding pipeline; the fifth is a continuation for the
 /// surrounding pipeline; and final is an optional filename from which the frontend
 /// should read (if empty, read from stdin).
 let run
-  (times : bool)
+  (pfset : Set<ProfilerFlag>)
   (request : Request)
   (success : Response -> 'response)
   (error : Error -> 'error)
@@ -148,10 +151,14 @@ let run
      : Result<Model<Graph, ViewDefiner<BoolExpr<Sym<Var>> option>>, 'error>
      -> Result<'response, 'error>)
   : string option -> Result<'response, 'error> =
+    let printTimes = pfset.Contains PhaseTime
+    let printWS = pfset.Contains PhaseWorkingSet
+    let printVM = pfset.Contains PhaseVirtual
+
     let phase op test output continuation m =
         let time = System.Diagnostics.Stopwatch.StartNew()
-        op m
-        |> (time.Stop(); (if times then printfn "Phase %A; Elapsed: %dms" test time.ElapsedMilliseconds); id)
+        // TODO(MattWindsor91): we should be able to lambda abstract this, but can't
+        profilePhase printTimes printWS printVM (sprintf "%A" test) (fun () -> op m)
         |> if request = test then lift (output >> success) >> mapMessages error else continuation
 
     let parse = Parser.parseFile >> mapMessages Error.Parse
