@@ -443,6 +443,19 @@ module MicrocodeToBool =
                 normalIntExpr (siVar "s") *<- normalIntExpr (mkSub2 (siVar "s") (IInt 1L)) ] ]
 
     [<Test>]
+    let ``pre-state havocs are translated properly`` () =
+        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
+            (BAnd
+               [ iEq (siAfter "serving") (siBefore "serving")
+                 iEq (siAfter "ticket") (siBefore "ticket")
+                 iEq (siAfter "s") (siBefore "s")
+                 iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L))
+                 iEq (siAfter "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ] )
+            [ [ havoc (normalIntExpr (siVar "t")) ]
+              [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ]
+              [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ] ]
+
+    [<Test>]
     let ``intermediate havocs are translated properly`` () =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
             (BAnd
