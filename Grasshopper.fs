@@ -107,7 +107,7 @@ module Pretty =
     /// Get the set of accessed variables. 
     let findVarsGrass (zterm : Backends.Z3.Types.ZTerm) : seq<MarkedVar> = 
         BAnd [zterm.SymBool.WPre; zterm.SymBool.Goal; zterm.SymBool.Cmd] 
-        |> findMarkedVars (tliftToBoolSrc (tliftToExprDest collectSymMarkedVars)) 
+        |> findVars (tliftToBoolSrc (tliftToExprDest collectSymVars)) 
         |> lift (Set.map valueOf >> Set.toSeq) 
         |> returnOrFail
 

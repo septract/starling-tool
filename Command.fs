@@ -73,12 +73,13 @@ module Traversal =
     /// <typeparam name="Error">
     ///     The type of any returned errors.
     /// </typeparam>
+    /// <typeparam name="Var">The type of context variables.</typeparam>
     /// <returns>The lifted <see cref="Traversal"/>.</returns>
     let tliftOverCommandSemantics
-      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error>)
+      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error, 'Var>)
       : Traversal<CommandSemantics<BoolExpr<'SrcVar>>,
                   CommandSemantics<BoolExpr<'DstVar>>,
-                  'Error> =
+                  'Error, 'Var> =
         fun ctx { Cmd = c; Semantics = s } ->
             let swapSemantics s' = { Cmd = c; Semantics = s' }
             let result = traverseBoolAsExpr traversal ctx s
@@ -134,7 +135,7 @@ module Queries =
     /// Retrieves the type annotated vars from the arguments to a
     /// command as a list
     let commandArgs cmd =
-        let f c = List.map SVExprVars c.Args
+        let f c = List.map symExprVars c.Args
         let vars = collect (concatMap f cmd)
         lift Set.unionMany vars
 
