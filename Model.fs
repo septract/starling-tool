@@ -52,23 +52,6 @@ open Starling.Core.Command
 /// </summary>
 [<AutoOpen>]
 module Types =
-    /// <summary>
-    ///     Mid-level register transfer logic used to encode Starling
-    ///     commands.
-    /// </summary>
-    /// <typeparam name="L">The type of lvalues.</typeparam>
-    /// <typeparam name="RV">The type of rvalue variables.</typeparam>
-    type Microcode<'L, 'RV> when 'RV : equality =
-        /// <summary>An assignment.</summary>
-        | Assign of lvalue : 'L * rvalue : Expr<'RV>
-        /// <summary>A diverging assertion.</summary>
-        | Assume of assumption : BoolExpr<'RV>
-        /// <summary>A conditional.</summary>
-        | Branch of conditional : BoolExpr<'RV>
-                  * ifTrue : Microcode<'L, 'RV> list
-                  * ifFalse : Microcode<'L, 'RV> list
-        override this.ToString() = sprintf "%A" this
-
     (*
      * Terms
      *)
@@ -198,6 +181,19 @@ module Types =
           ///     A log of any deferred checks the backend must do.
           /// </summary>
           DeferredChecks : DeferredCheck list }
+
+
+/// <summary>
+///     Creates a deterministic assign.
+/// </summary>
+let ( *<- ) (lv : 'L) (rv : Expr<'RV>) : Microcode<'L, 'RV> =
+    Assign (lv, Some rv)
+
+/// <summary>
+///     Creates a nondeterministic assign.
+/// </summary>
+let havoc (lv : 'L) : Microcode<'L, 'RV> =
+    Assign (lv, None)
 
 
 /// <summary>

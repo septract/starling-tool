@@ -25,6 +25,7 @@ open Starling.Core.Symbolic
 open Starling.Core.Symbolic.Traversal
 open Starling.Core.Model
 open Starling.Core.Traversal
+open Starling.Core.Axiom.Types
 
 
 /// <summary>
@@ -56,6 +57,23 @@ module Types =
         ///     This error may contain nested semantics errors!
         /// </summary>
         | Traversal of TraversalError<Error>
+
+    /// <summary>
+    ///     A write record for an variable.
+    ///
+    ///     <para>
+    ///         Write records are used to build frames, by calculating which bits
+    ///         of an variable have been modified by a command.
+    /// </summary>
+    type Write =
+        /// <summary>The entire lvalue has been written to or havoc'd.</summary>
+        | Entire of newVal : Expr<Sym<Var>> option
+        /// <summary>
+        ///     Only certain parts of the lvalue have been written to,
+        ///     and their recursive write records are enclosed.
+        /// </summary>
+        | Indices of Map<IntExpr<Sym<Var>>, Write>
+        override this.ToString () = sprintf "%A" this
 
 
 /// <summary>
@@ -98,28 +116,6 @@ module Pretty =
         | Traversal err ->
             Starling.Core.Traversal.Pretty.printTraversalError printSemanticsError err
 
-/// Generates a framing relation for a given variable.
-let frameVar ctor (par : CTyped<Var>) : SMBoolExpr =
-    BEq (par |> mapCTyped (After >> Reg) |> mkVarExp,
-         par |> mapCTyped (ctor >> Reg) |> mkVarExp)
-
-/// <summary>
-///     A write record for an variable.
-///
-///     <para>
-///         Write records are used to build frames, by calculating which bits
-///         of an variable have been modified by a command.
-/// </summary>
-type Write =
-    /// <summary>The entire lvalue has been written to.</summary>
-    | Entire of newVal : Expr<Sym<Var>>
-    /// <summary>
-    ///     Only certain parts of the lvalue have been written to,
-    ///     and their recursive write records are enclosed.
-    /// </summary>
-    | Indices of Map<IntExpr<Sym<Var>>, Write>
-    override this.ToString () = sprintf "%A" this
-
 /// <summary>
 ///     Records a write into a write map.
 /// </summary>
@@ -131,10 +127,10 @@ type Write =
 /// <param name="value">The value written to the eventual destination.</param>
 /// <param name="map">The write map being extended.</param>
 /// <returns>The extended write map.</returns>
-let markWrite (var : CTyped<Sym<Var>>) (idxPath : IntExpr<Sym<Var>> list)
-  (value : Expr<Sym<Var>>)
-  (map : Map<CTyped<Sym<Var>>, Write>)
-  : Map<CTyped<Sym<Var>>, Write> =
+let markWrite (var : TypedVar) (idxPath : IntExpr<Sym<Var>> list)
+  (value : Expr<Sym<Var>> option)
+  (map : Map<TypedVar, Write>)
+  : Map<TypedVar, Write> =
     (* First, consider what it means to add an index write to an index write
        map. *)
     let rec markWriteIdx
@@ -189,26 +185,29 @@ let markWrite (var : CTyped<Sym<Var>>) (idxPath : IntExpr<Sym<Var>> list)
 ///     Tries to extract the variable and index path from a lvalue.
 /// </summary>
 let varAndIdxPath (expr : Expr<Sym<Var>>)
-  : (CTyped<Sym<Var>> * IntExpr<Sym<Var>> list) option =
+  : (TypedVar * IntExpr<Sym<Var>> list) option =
     // TODO(CaptainHayashi): proper doc comment.
     // TODO(CaptainHayashi): merge with type lookup stuff in Modeller?
+    // TODO(CaptainHayashi): error perhaps if given a non-lvalue
 
     let rec getInBool bx path =
         match bx with
-        | BVar v -> Some (Bool v, path)
+        | BVar (Reg v) -> Some (Bool v, path)
+        // Symbols are not lvalues, so we can't process them.
         | BIdx (e, l, a, i) -> getInArray e l a (i::path)
         | _ -> None
     and getInInt ix path =
         match ix with
-        | IVar v -> Some (Int v, path)
+        | IVar (Reg v) -> Some (Int v, path)
+        // Symbols are not lvalues, so we can't process them.
         | IIdx (e, l, a, i) -> getInArray e l a (i::path)
         | _ -> None
     and getInArray eltype length ax path =
         match ax with
-        | AVar v -> Some (Array (eltype, length, v), path)
+        | AVar (Reg v) -> Some (Array (eltype, length, v), path)
+        // Symbols are not lvalues, so we can't process them.
         | AIdx (e, l, a, i) -> getInArray e l a (i::path)
-        // TODO(CaptainHayashi): do something useful here.
-        | AUpd (_, _, a, i, _) -> None
+        | _ -> None
 
     match expr with
     | Int ix -> getInInt ix []
@@ -220,8 +219,8 @@ let varAndIdxPath (expr : Expr<Sym<Var>>)
 /// </summary>
 /// <param name="assigns">The assignment list to investigate.</param>
 /// <returns>The write map for that microcode list.</returns>
-let makeWriteMap (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>>) list)
-  : Map<CTyped<Sym<Var>>, Write> =
+let makeWriteMap (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>> option) list)
+  : Map<TypedVar, Write> =
     let addToWriteMap map (lv, rv) =
         // TODO(CaptainHayashi): complain if lv isn't a lvalue?
         maybe map (fun (var, idx) -> markWrite var idx rv map) (varAndIdxPath lv)
@@ -236,7 +235,7 @@ let makeWriteMap (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>>) list)
 ///     and a list of (unpartitioned) microcode branches.
 /// </returns>
 let partitionMicrocode (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
-  : ((Expr<Sym<Var>> * Expr<Sym<Var>>) list
+  : ((Expr<Sym<Var>> * Expr<Sym<Var>> option) list
      * BoolExpr<Sym<Var>> list
      * (BoolExpr<Sym<Var>>
         * Microcode<Expr<Sym<Var>>, Sym<Var>> list
@@ -280,40 +279,45 @@ let mkIdx (eltype : Type) (length : int option) (arr : ArrayExpr<Sym<Var>>)
 /// <returns>
 ///     The assignments in entire-variable form, in arbitrary order.
 /// </returns>
-let normaliseAssigns (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>>) list)
-  : Result<(CTyped<Sym<Var>> * Expr<Sym<Var>>) list, Error> =
+let normaliseAssigns (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>> option) list)
+  : Result<(TypedVar * Expr<Sym<Var>> option) list, Error> =
     // First, we convert the assigns to a write map.
     let wmap = makeWriteMap assigns
     (* Then, each item in the write map represents an assignment.
        We need to convert each write map entry into an array update or a
        direct value. *)
-    let rec translateRhs lhs =
-        function
+    let rec translateRhs lhs (value : Write) =
+        match value with
         | Entire v -> ok v
         | Indices ixmap ->
             // TODO(CaptainHayashi): proper errors.
-            match lhs with
-            | Array (eltype, length, alhs) ->
-                let addUpdate
-                  (index : IntExpr<Sym<Var>>, value : Write) (lhs' : Expr<Sym<Var>>)
-                  : Result<Expr<Sym<Var>>, Error> =
+            let addUpdate
+              (index : IntExpr<Sym<Var>>, value : Write) (lhs' : Expr<Sym<Var>> option)
+              : Result<Expr<Sym<Var>> option, Error> =
+                (* TODO(CaptainHayashi): currently, if an array update havocs,
+                   any future updates also havoc.  This perhaps throws too much
+                   information away! *)
+                match lhs' with
+                | None -> ok None
+                | Some (Array (eltype, length, alhs)) ->
                     (* Need to translate any further subscripts inside value.
                        But, to do that, we need to know what the LHS of those
                        subscripts is! *)
                     let vlhs = mkIdx eltype length alhs index
                     let vrhsResult = translateRhs vlhs value
                     lift
-                        (fun vrhs ->
-                            Expr.Array
-                                (eltype, length,
-                                 AUpd (eltype, length, alhs, index, vrhs)))
+                        (Option.map
+                            (fun vrhs ->
+                                 Expr.Array
+                                    (eltype, length,
+                                     AUpd (eltype, length, alhs, index, vrhs))))
                         vrhsResult
-                seqBind addUpdate lhs (Map.toSeq ixmap)
-            | _ -> fail (BadSemantics "tried to index into a non-array")
+                | _ -> fail (BadSemantics "tried to index into a non-array")
+            seqBind addUpdate (Some lhs) (Map.toSeq ixmap)
 
-    let translateAssign (lhs, rhs) =
+    let translateAssign (lhs : TypedVar, rhs) =
         // lhs is a typed variable here, but must be an expression for the above
-        let lhsE = mkVarExp lhs
+        let lhsE = mkVarExp (mapCTyped Reg lhs)
         lift (mkPair lhs) (translateRhs lhsE rhs)
 
     collect (Seq.map translateAssign (Map.toSeq wmap))
@@ -325,7 +329,7 @@ let normaliseAssigns (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>>) list)
 /// <returns>On success, the normalised listing (in arbitrary order).</returns>
 let rec normaliseMicrocode
   (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
-  : Result<Microcode<CTyped<Sym<Var>>, Sym<Var>> list, Error> =
+  : Result<Microcode<TypedVar, Sym<Var>> list, Error> =
     let assigns, assumes, branches = partitionMicrocode instrs
 
     let normaliseBranch (i, t, e) =
@@ -344,47 +348,6 @@ let rec normaliseMicrocode
                   List.map Branch branches' ])
         branches'Result
         assigns'Result
-
-/// Generates a frame for a given expression.
-/// The frame is a relation a!after = a!before for every a not mentioned in the expression.
-let frame svars tvars expr =
-    (* First, we need to find all the bound post-variables in the expression.
-       We do this by finding _all_ variables, then filtering. *)
-    let varsInExprResult =
-        findVars
-            (tliftToBoolSrc (tliftToExprDest collectSymVars))
-            expr
-    let untypedVarsInExprResult = lift (Seq.map valueOf) varsInExprResult
-
-    let aftersInExprResult =
-        lift (Seq.choose (function After x -> Some x | _ -> None))
-            untypedVarsInExprResult
-
-    let evarsResult = lift Set.ofSeq aftersInExprResult
-
-
-    (* Then, for all of the variables in the model, choose those not in evars,
-       and make frame expressions for them. *)
-    let allVars = Seq.append (Map.toSeq svars) (Map.toSeq tvars)
-
-    let makeFrames evars =
-    // TODO(CaptainHayashi): this is fairly inefficient.
-        let varsNotInEvars =
-            Seq.filter (fun (name, _) -> not (Set.contains name evars)) allVars
-
-        let markedVarsNotInEvars =
-            Seq.map
-                (fun (name, ty) ->
-                    let next = getBoolIntermediate name expr
-                    match next with
-                    | None   -> (name, ty, Before)
-                    | Some i -> (name, ty, (fun x -> (Intermediate(i, x)))))
-                varsNotInEvars
-
-        Seq.map (fun (name, ty, ctor) -> frameVar ctor (withType ty name))
-            markedVarsNotInEvars
-
-    lift makeFrames evarsResult
 
 let primParamSubFun
   (cmd : PrimCommand)
@@ -407,19 +370,18 @@ let primParamSubFun
                 else fail (Inner (TypeMismatch (v, typeOf tvar)))
             | None -> fail (Inner (FreeVarInSub v)))
 
-let checkParamCountPrim (prim : PrimCommand) (opt : PrimSemantics option) : Result<PrimSemantics option, Error> =
-    match opt with
-    | None -> ok None
-    | Some def ->
-        let fn = List.length prim.Args
-        let dn = List.length def.Args
-        if fn = dn then ok (Some def) else CountMismatch (fn, dn) |> fail
+let checkParamCountPrim (prim : PrimCommand) (def : PrimSemantics) : Result<PrimSemantics, Error> =
+    let fn = List.length prim.Args
+    let dn = List.length def.Args
+    if fn = dn then ok def else fail (CountMismatch (fn, dn))
 
-let lookupPrim (prim : PrimCommand) (map : PrimSemanticsMap) : Result<PrimSemantics option, Error>  =
-    checkParamCountPrim prim
-    <| Map.tryFind prim.Name map
+let lookupPrim (prim : PrimCommand) (map : PrimSemanticsMap) : Result<PrimSemantics, Error>  =
+    maybe
+        (fail (MissingDef prim))
+        (checkParamCountPrim prim)
+        (map.TryFind prim.Name)
 
-let checkParamTypesPrim (prim : PrimCommand) (sem : PrimSemantics) : Result<PrimCommand, Error> =
+let checkParamTypesPrim (prim : PrimCommand) (sem : PrimSemantics) : Result<PrimSemantics, Error> =
     List.map2
         (fun fp dp ->
             if typesCompatible (typeOf fp) (typeOf dp)
@@ -428,7 +390,39 @@ let checkParamTypesPrim (prim : PrimCommand) (sem : PrimSemantics) : Result<Prim
         prim.Args
         sem.Args
     |> collect
-    |> lift (fun _ -> prim)
+    |> lift (fun _ -> sem)
+
+/// <summary>
+///     Lifts lvalue and rvalue traversals onto a microcode instruction.
+/// </summary>
+/// <param name="ltrav">The lvalue traversal to lift onto microcode.</param>
+/// <param name="rtrav">The rvalue traversal to lift onto microcode.</param>
+/// <typeparam name="L">The type of input lvalues.</typeparam>
+/// <typeparam name="RV">The type of input rvalue variables.</typeparam>
+/// <typeparam name="LO">The type of output lvalue.</typeparam>
+/// <typeparam name="RVO">The type of output rvalue variables.</typeparam>
+/// <returns>
+///     A traversal that visits all of the lvalues and rvalues in a microcode
+///     instruction, applying the given traversals to each.
+/// </returns>
+let traverseMicrocode
+  (ltrav : Traversal<'L, 'LO, Error, 'Var>)
+  (rtrav : Traversal<Expr<'RV>, Expr<'RVO>, Error, 'Var>)
+  : Traversal<Microcode<'L, 'RV>,
+              Microcode<'LO, 'RVO>, Error, 'Var> =
+    let brtrav = traverseBoolAsExpr rtrav
+
+    let rec tm ctx mc =
+        let tml = tchainL tm id
+
+        match mc with
+        | Assign (lv, Some rv) ->
+            tchain2 ltrav rtrav (pairMap id Some >> Assign) ctx (lv, rv)
+        | Assign (lv, None) ->
+            tchain ltrav (flip mkPair None >> Assign) ctx lv
+        | Assume assumption -> tchain brtrav Assume ctx assumption
+        | Branch (i, t, e) -> tchain3 brtrav tml tml Branch ctx (i, t, e)
+    tm
 
 /// <summary>
 ///     Lifts a parameter instantiation traversal onto a microcode instruction.
@@ -447,189 +441,239 @@ let tliftToMicrocode
         tliftToExprSrc trav
     let travB : Traversal<BoolExpr<Var>, BoolExpr<Sym<Var>>, Error, 'Var> =
         tliftToBoolSrc trav
+    traverseMicrocode trav (tliftToExprSrc trav)
 
-    let rec tm ctx mc =
-        let tml = tchainL tm id
+/// <summary>
+///     Traversal that marks a microcode instruction with its pre- and
+///     post-state.
+/// </summary>
+let rec markMicrocode
+  (postMark : Var -> MarkedVar)
+  (preStates : Map<TypedVar, MarkedVar>)
+  : Traversal<Microcode<TypedVar, Sym<Var>>,
+              Microcode<CTyped<MarkedVar>, Sym<MarkedVar>>,
+              Error, 'Var> =
+    // Define marker functions for lvalues and rvalues...
+    let lf var = ok (postMark var)
+    let rf var =
+        match preStates.TryFind var with
+         // TODO(CaptainHayashi): proper error
+         | None -> fail (Inner (BadSemantics "somehow referenced variable not in scope"))
+         | Some mv -> ok (withType (typeOf var) (Reg mv))
 
-        match mc with
-        | Assign (lv, rv) -> tchain2 trav travE Assign ctx (lv, rv)
-        | Assume assumption -> tchain travB Assume ctx assumption
-        | Branch (i, t, e) -> tchain3 travB tml tml Branch ctx (i, t, e)
-    tm
+    // ...then use them in a traversal.
+    let lt = tliftOverCTyped (ignoreContext lf)
+    let rt = tliftToExprSrc (tliftToTypedSymVarSrc (tliftToExprDest (ignoreContext rf)))
+
+    traverseMicrocode lt rt
+
+/// <summary>
+///     Updates a map from variables to their last marker with the assignments
+///     in a microcode listing.
+/// </summary>
+let rec updateState
+  (state : Map<TypedVar, MarkedVar>)
+  (listing : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
+  : Map<TypedVar, MarkedVar> =
+    let updateOne (s : Map<TypedVar, MarkedVar>) m =
+        // TODO(CaptainHayashi): de-duplicate this
+        match m with
+        | Assign (lv, rv) ->
+            // Assumption: this is monotone, eg. rv >= s.[lv]
+            // TODO(CaptainHayashi): check this?
+            match (valueOf lv) with
+            | Before l | After l | Intermediate (_, l) | Goal (_, l) ->
+                s.Add(withType (typeOf lv) l, valueOf lv)
+        | Assume _ -> s
+        | Branch (i, t, e) ->
+            updateState (updateState s t) e
+    List.fold updateOne state listing
 
 /// <summary>
 ///     Converts a microcode instruction set into a two-state Boolean predicate.
 /// </summary>
-let microcodeToBool
-  (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
-  : Result<BoolExpr<Sym<MarkedVar>>, Error> =
-    (* First, normalise the expression: this will make framing much easier
-       later. *)
-    let normalisedResult = normaliseMicrocode instrs
+let rec markedMicrocodeToBool
+  (instrs : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
+  : BoolExpr<Sym<MarkedVar>> =
+    let translateInstr instr =
+        match instr with
+        // Havoc
+        | Assign (x, None) -> BTrue
+        // Deterministic assignment
+        | Assign (x, Some y) -> mkEq (mkVarExp (mapCTyped Reg x)) y
+        | Assume x -> x
+        | Branch (i, t, e) ->
+            let tX = markedMicrocodeToBool t
+            let eX = markedMicrocodeToBool e
+            mkAnd2 (mkImplies i tX) (mkImplies (mkNot i) eX)
+    mkAnd (List.map translateInstr instrs)
 
-    (* We need some traversals to rewrite the expressions to their
-       pre- and post-states.  The normalisation has already sifted things that
-       are post-states onto the LHS of an Assign, and pre-states everywhere
-       else. *)
-    let toAfter = traverseTypedSymWithMarker After
-    let toAfterV =
-        mapTraversal (tliftToExprDest toAfter)
-        >> mapMessages Traversal
-    let toBefore = traverseTypedSymWithMarker Before
-    let toBeforeE =
-        mapTraversal (tliftOverExpr toBefore) >> mapMessages Traversal
-    let toBeforeB =
-        mapTraversal (tliftToBoolSrc (tliftToExprDest toBefore))
-        >> mapMessages Traversal
+/// <summary>
+///     Generates a frame from a state assignment map.
+/// </summary>
+let makeFrame (states : Map<TypedVar, MarkedVar>) : BoolExpr<Sym<MarkedVar>> list =
+    let maybeFrame (var, state) =
+        match state with
+        // If the variable was last assigned an After, it needs no framing.
+        | After _ -> None
+        // Otherwise, we need to bind After to its last assigned state.
+        | _ ->
+            Some
+                (mkEq
+                    (mkVarExp (mapCTyped (After >> Reg) var))
+                    (mkVarExp (withType (typeOf var) (Reg state))))
+    List.choose maybeFrame (Map.toList states)
 
-    let rec translateInstrs is =
-        // TODO(CaptainHayashi): convert to variable LVs.
-        // TODO(CaptainHayashi): framing (currently done elsewhere).
-        let translateInstr =
-            function
-            | Assign (x, y) -> lift2 mkEq (toAfterV x) (toBeforeE y)
-            | Assume x -> toBeforeB x
-            | Branch (i, t, e) ->
-                lift3
-                    (fun iX tX eX ->
-                        mkAnd2 (mkImplies iX tX) (mkImplies (mkNot iX) eX))
-                    (toBeforeB i)
-                    (translateInstrs t)
-                    (translateInstrs e)
-        lift mkAnd (collect (List.map translateInstr is))
+/// <summary>
+///     Normalises and marks an entire microcode routine with variable states.
+/// </summary>
+/// <param name="vars">The list of variables available to the routine.</param>
+/// <param name="routine">The routine to mark.</param>
+/// <returns>
+///     A Chessie result, containing, on success, a pair of the marked
+///     microcode routine and a map from variable post-states to their last
+///     assignment in the microcode routine.  The latter is useful for
+///     calculating frames.
+///     The order of the routine is not guaranteed (but is no longer relevant
+///     after processing anyway).
+/// </returns>
+let processMicrocodeRoutine
+  (vars : TypedVar list)
+  (routine : Microcode<Expr<Sym<Var>>, Sym<Var>> list list)
+  : Result<( Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list list
+             * Map<TypedVar, MarkedVar> ),
+           Error> =
+    // TODO(CaptainHayashi): flatten into a single list
+    // TODO(CaptainHayashi): compose array accesses properly
 
-    bind translateInstrs normalisedResult
+    (* Each item in 'routine' represents a stage in the sequential composition
+       of microcode listings.  Each stage has a corresponding variable state:
+       the first is Intermediate 0, the second Intermediate 1, and so on until
+       the last stage assigns to After.
 
-/// Instantiates a PrimCommand from a PrimSemantics instance
-let instantiatePrim
-  (smap : PrimSemanticsMap)
-  (prim : PrimCommand)
-  : Result<SMBoolExpr option, Error> =
-    let primDefResult = lookupPrim prim smap
-    let typeCheckedDefResult =
-        bind
-            (function
-             | None -> ok None
-             | Some sem ->
-                lift (fun _ -> Some sem) (checkParamTypesPrim prim sem))
-            primDefResult
+       To begin translation, we annotate each stage with the corresponding
+       state marker. *)
+    let decideMarker index stage =
+        (stage,
+         if index = routine.Length - 1
+         then After
+         else (curry Intermediate (bigint index)))
+    let markedStages = Seq.mapi decideMarker routine
 
-    let instantiate =
-        function
-        | None -> ok None
-        | Some s ->
-            let subInMCode =
-                    tchainL (tliftToMicrocode (primParamSubFun prim s)) id
-            let subbedMCode =
-                mapMessages Traversal (mapTraversal subInMCode s.Body)
-            let subbed = bind microcodeToBool subbedMCode
-            lift Some subbed
+    (* Throughout the translation, we keep a record of the last variable state
+       that was assigned to for each variable.  To begin with, each variable
+       is assigned its own pre-state. *)
+    let initialState =
+        Map.ofSeq (Seq.map (fun var -> (var, Before (valueOf var))) vars)
 
-    bind instantiate typeCheckedDefResult
+    (* The main process is a fold over all of the individual stages.
+       For each, we normalise the listing to assign whole variables instead of
+       lvalues, then translate the lvalues to the last assigned state of their
+       variable and rvalues to the expected assigned state of this stage.
+       Finally, we repopulate the state with the new assignments.
 
-/// Translate a primitive command to an expression characterising it
-/// by instantiating the semantics from the core semantics map with
-/// the variables from the command
-let instantiateSemanticsOfPrim
+       This way, 'state' always tells us which values were assigned in the last
+       stage, several stages ago, or not at all. *)
+    let processListing (listing, marker) (xs, state) =
+        (* First, normalise the listing.
+           This ensures only whole variables are written to, which allows us to
+           track the assignment later. *)
+        let normalisedR = normaliseMicrocode listing
+
+        (* Next, make the microcode state-aware.
+           This means that each lvalue is translated with this
+           stage's marker, and each rvalue is translated according to the state
+           map. *)
+        let stateAwareR =
+            let makeAware normalised =
+                mapMessages Traversal
+                    (mapTraversal (tchainL (markMicrocode marker state) id)
+                        normalised)
+            bind makeAware normalisedR
+
+        (* Finally, we need to repopulate the table with all assignments made
+           in this command, and return the listing. *)
+        lift
+            (fun stateAware -> (stateAware :: xs, updateState state stateAware))
+            stateAwareR
+    seqBind processListing ([], initialState) markedStages
+
+/// <summary>
+///     Converts a processed microcode routine into a two-state Boolean predicate.
+/// </summary>
+let microcodeRoutineToBool
+  (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list list)
+  (assignMap : Map<TypedVar, MarkedVar>)
+  : BoolExpr<Sym<MarkedVar>> =
+    let bools = List.map markedMicrocodeToBool routine
+    mkAnd (makeFrame assignMap @ bools)
+
+/// <summary>
+///     Converts a primitive command to its representation as a disjoint
+///     parallel composition of microcode instructions.
+/// </summary>
+/// <param name="semantics">The map from command to microcode schemata.</param>
+/// <param name="prim">The primitive command to instantiate.</param>
+/// <returns>
+///     If the instantiation succeeded, the resulting list of parallel-composed
+///     <see cref="Microcode"/> instructions.
+/// </returns>
+let instantiateToMicrocode
   (semantics : PrimSemanticsMap)
   (prim : PrimCommand)
-  : Result<SMBoolExpr, Error> =
-    (* First, instantiate according to the semantics.
-     * This can succeed but return None.  This means there is no
-     * entry (erroneous or otherwise) in the semantics for this prim.
-     * Since this is an error in this case, make it one.
-     *)
-    prim
-    |> wrapMessages Instantiate (instantiatePrim semantics)
-    |> bind (failIfNone (MissingDef prim))
+  : Result<Microcode<Expr<Sym<Var>>, Sym<Var>> list, Error> =
+    let primDefR = lookupPrim prim semantics
+    let typeCheckedDefR = bind (checkParamTypesPrim prim) primDefR
 
-/// Given a list of BoolExpr's it sequentially composes them together
-/// this works by taking each BoolExpr in turn,
-///     converting *all* After variables to (Intermediate i) variables
-///     converts any Before variables where an Intermediate exists, to that Intermediate
-///
-/// the frame can then be constructed by taking the BoolExpr and looking for the aforementioned Intermediate
-/// variables and adding a (= (After v) (Intermediate maxInterValue v)) if it finds one
-let seqComposition (xs : BoolExpr<Sym<MarkedVar>> list)
-  : Result<BoolExpr<Sym<MarkedVar>>, Error> =
-    // since we are trying to keep track of explicit state (where we are in terms of the intermediate variables)
-    // it's _okay_ to include actual mutable state here!
-    let mutable dict = System.Collections.Generic.Dictionary<Var, bigint>()
+    let instantiate (s : PrimSemantics) =
+        let subInMCode =
+                tchainL (tliftToMicrocode (primParamSubFun prim s)) id
+        mapMessages Traversal (mapTraversal subInMCode s.Body)
 
-    let mapper x =
-        let dict2 = System.Collections.Generic.Dictionary<Var, bigint>(dict)
-        let isSet = System.Collections.Generic.HashSet<Var>()
+    bind instantiate typeCheckedDefR
 
-        let xRewriteVar =
-            function
-            | Before v as v' ->
-                if dict.ContainsKey (v) then
-                    let iv = dict.[v]
-                    Reg (Intermediate(iv, v))
-                else
-                    Reg v'
-            | After v ->
-                /// Have not set After v to a new Intermediate yet
-                if not (isSet.Contains(v)) then
-                    ignore <| isSet.Add(v)
-
-                    if dict2.ContainsKey(v) then
-                        let nLevel = dict2.[v] + 1I
-                        ignore <| dict2.Remove(v)
-                        dict2.Add(v, nLevel)
-                        Reg (Intermediate (nLevel, v))
-                    else
-                        dict2.Add(v, 0I)
-                        Reg (Intermediate (0I, v))
-                else
-                    Reg (Intermediate (dict2.[v], v))
-            | v -> Reg v
-
-        let xRewriteBool =
-            tliftToBoolSrc
-                (tliftToExprDest
-                    (tliftOverCTyped
-                        (tliftToSymSrc
-                            (ignoreContext (xRewriteVar >> ok)))))
-
-        let bexprResult = mapTraversal xRewriteBool x
-        dict <- dict2
-        bexprResult
-
-    let rec mapping =
-        function
-        | []        ->  ok BTrue
-        | x :: ys   ->  lift2 mkAnd2 (mapper x) (mapping ys)
-
-    mapMessages Traversal (mapping xs)
-
-/// Given a BoolExpr add the frame and return the new BoolExpr
-let addFrame svars tvars bexpr =
-    let frameSeqResult = frame svars tvars bexpr
-    let frameResult = lift (List.ofSeq >> mkAnd) frameSeqResult
-    let addResult = lift (flip mkAnd2 bexpr) frameResult
-    mapMessages Traversal addResult
-
-/// Translate a command to an expression characterising it.
-/// This is the sequential composition of the translations of each
-/// primitive inside it.
+/// <summary>
+///     Translates a command to a multi-state Boolean expression.
+/// </summary>
+/// <param name="semantics">The map from command to microcode schemata.</param>
+/// <param name="svars">The shared variable environment.</param>
+/// <param name="tvars">The thread-local variable environment.</param>
+/// <param name="cmd">The command to instantiate.</param>
+/// <returns>
+///     If the instantiation succeeded, the resulting Boolean expression.
+/// </returns>
 let semanticsOfCommand
   (semantics : PrimSemanticsMap)
   (svars : VarMap)
   (tvars : VarMap)
   (cmd : Command) : Result<CommandSemantics<SMBoolExpr>, Error> =
-    // Instantiate the semantic function of each primitive
-    Seq.map (instantiateSemanticsOfPrim semantics) cmd
-    |> collect
+    // First, get the microcode representation of each part of the command.
+    let microcodeR = collect (Seq.map (instantiateToMicrocode semantics) cmd)
 
-    // Compose them together with intermediates
-    |> bind seqComposition
+    (* Then, normalise and mark the microcode, and get the assign map.
+       This requires us to provide all variables in the environment for framing
+       purposes. *)
+    let vars =
+        List.ofSeq
+            (Seq.append
+                (VarMap.toTypedVarSeq svars)
+                (VarMap.toTypedVarSeq tvars))
 
-    // Add the frame
-    |> bind (addFrame svars tvars)
-    |> lift (fun bexpr -> { Cmd = cmd; Semantics = bexpr })
+    let processedR = bind (processMicrocodeRoutine vars) microcodeR
 
-open Starling.Core.Axiom.Types
+    // Finally, convert the microcode and assign map to a framed expression.
+    let semanticsR = lift (uncurry microcodeRoutineToBool) processedR
+
+    // Finally, collect all of these results into a CommandSemantics record.
+    lift2
+        (fun (processed, assigns) semantics ->
+            { Cmd = cmd
+              Microcode = processed
+              Assigns = assigns
+              Semantics = semantics })
+        processedR
+        semanticsR
+
 /// Translate a model over Prims to a model over semantic expressions.
 let translate
   (model : Model<GoalAxiom<Command>, 'viewdef>)

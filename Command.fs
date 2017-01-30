@@ -21,12 +21,24 @@ open Starling.Core.Traversal
 [<AutoOpen>]
 module Types =
     /// <summary>
-    ///     A command.
-    ///
-    ///     <para>
-    ///         A command is a list, representing a sequential composition
-    ///         of primitives represented as <c>PrimCommand</c>s.
-    ///     </para>
+    ///     Mid-level register transfer logic used to encode Starling
+    ///     commands.
+    /// </summary>
+    /// <typeparam name="L">The type of lvalues.</typeparam>
+    /// <typeparam name="RV">The type of rvalue variables.</typeparam>
+    type Microcode<'L, 'RV> when 'RV : equality =
+        /// <summary>An assignment, perhaps nondeterministic.</summary>
+        | Assign of lvalue : 'L * rvalue : Expr<'RV> option
+        /// <summary>A diverging assertion.</summary>
+        | Assume of assumption : BoolExpr<'RV>
+        /// <summary>A conditional.</summary>
+        | Branch of conditional : BoolExpr<'RV>
+                  * ifTrue : Microcode<'L, 'RV> list
+                  * ifFalse : Microcode<'L, 'RV> list
+        override this.ToString() = sprintf "%A" this
+
+    /// <summary>
+    ///     A reference into the model's atomic commands table.
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -43,11 +55,33 @@ module Types =
           Node : AST.Types.Atomic option }
         override this.ToString() = sprintf "%A" this
 
+    /// <summary>
+    ///     A command.
+    ///
+    ///     <para>
+    ///         A command is a list, representing a sequential composition
+    ///         of primitives represented as <c>PrimCommand</c>s.
+    ///     </para>
+    /// </summary>
     type Command = PrimCommand list
 
-    /// The Semantics of a Command is a pair of the original command and its boolean expr
+    /// <summary>
+    ///     A command, coupled with its various semantic translations.
+    /// </summary>
     type CommandSemantics<'Semantics> =
-        { Cmd : Command; Semantics : 'Semantics }
+        { /// <summary>The original command.</summary>
+          Cmd : Command
+          /// <summary>The command's microcode instantiation.</summary>
+          Microcode : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list list
+          /// <summary>
+          ///     The assignment map for the command.
+          ///     This maps the post-state of each variable reachable by the
+          ///     command to the last assignment made in Microcode for that
+          ///     variable.
+          /// <summary>
+          Assigns : Map<TypedVar, MarkedVar>
+          /// <summary>The Boolean translation.</summary>
+          Semantics : 'Semantics }
         override this.ToString() = sprintf "%A" this
 
 /// <summary>
@@ -80,8 +114,9 @@ module Traversal =
       : Traversal<CommandSemantics<BoolExpr<'SrcVar>>,
                   CommandSemantics<BoolExpr<'DstVar>>,
                   'Error, 'Var> =
-        fun ctx { Cmd = c; Semantics = s } ->
-            let swapSemantics s' = { Cmd = c; Semantics = s' }
+        fun ctx { Cmd = c; Microcode = m; Assigns = a; Semantics = s } ->
+            let swapSemantics s' =
+                { Cmd = c; Microcode = m; Assigns = a; Semantics = s' }
             let result = traverseBoolAsExpr traversal ctx s
             lift (pairMap id swapSemantics) result
 
