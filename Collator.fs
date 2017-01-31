@@ -165,8 +165,12 @@ module ParamDesugar =
         // TODO(CaptainHayashi): this is a royal mess...
         let rewriteVar n = withDefault n (rmap.TryFind n)
 
-        let rec rewriteSymbolic { Sentence = s; Args = xs } =
-            { Sentence = s; Args = List.map rewriteExpression xs }
+        let rec rewriteSymbolic s =
+            List.map
+                (function
+                 | SymArg a -> SymArg (rewriteExpression a)
+                 | SymString t -> SymString t)
+                s
         and rewriteExpression expr =
             let rewriteExpression' =
                 function

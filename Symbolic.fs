@@ -43,28 +43,22 @@ module Types =
     /// <summary>
     ///     A fragment of a symbolic sentence.
     /// </summary>
-    type SymbolicWord =
+    /// <typeparam name="Expr">The type of argument expressions.</typeparam>
+    type SymbolicWord<'Expr> =
         /// <summary>
         ///     A string part of a symbolic sentence.
         /// </summary>
         | SymString of string
         /// <summary>
-        ///     A param reference part of a symbolic sentence.
+        ///     An argument part of a symbolic sentence.
         /// </summary>
-        | SymParamRef of index: int
-
-    /// <summary>
-    ///     The uninterpreted body of a symbolic.
-    /// </summary>
-    type SymbolicSentence = SymbolicWord list
+        | SymArg of 'Expr
 
     /// <summary>
     ///     A symbolic, parameterised over arbitrary expressions.
     /// </summary>
     /// <typeparam name="Expr">The type of argument expressions.</typeparam>
-    type Symbolic<'Expr> =
-        { Sentence : SymbolicSentence
-          Args : 'Expr list }
+    type Symbolic<'Expr> = SymbolicWord<'Expr> list
 
     /// <summary>
     ///     A variable reference that may be symbolic.
@@ -128,10 +122,6 @@ module SymExprs =
 /// </summary>
 [<AutoOpen>]
 module Create =
-    /// Creates a symbolic variable given its body and parameters.
-    let sym (sentence : SymbolicSentence) (xs : Expr<Sym<'Var>> list) : Sym<'Var> =
-        Sym { Sentence = sentence; Args = xs }
-
     /// Creates an integer sym-variable.
     let siVar c = c |> Reg |> IVar
 
@@ -168,25 +158,60 @@ module Create =
 /// </summary>
 module Traversal =
     /// <summary>
+    ///     Lifts a traversal over expressions to one over symbolic words.
+    /// </summary>
+    let rec tliftOverSymbolicWord
+      (sub : Traversal<'SrcExpr, 'DstExpr, 'Error, 'Var>)
+      : Traversal<SymbolicWord<'SrcExpr>,
+                  SymbolicWord<'DstExpr>, 'Error, 'Var> =
+        fun ctx ->
+            function
+            | SymString s -> ok (ctx, SymString s)
+            | SymArg a -> tchain sub SymArg ctx a
+
+    /// <summary>
+    ///     Lifts a traversal from typed variables to symbolic expressions
+    ///     such that it now takes typed symbolic variables as input.
+    ///     <para>
+    ///         This is needed because <see cref="tliftToExprSrc"/>
+    ///         and other such traversals don't play well with symbolics.
+    ///     </para>
+    /// </summary>
+    /// <param name="traversal">The <see cref="Traversal"/> to lift.</param>
+    /// <typeparam name="SrcVar">Type of variables entering traversal.</param>
+    /// <typeparam name="DstVar">Type of variables leaving traversal.</param>
+    /// <typeparam name="Var">The type of variables inside the context.</typeparam>
+    /// <returns>The lifted <see cref="Traversal"/>.</returns>
+    let rec tliftToTypedSymVarSrc
+      (traversal : Traversal<CTyped<'SrcVar>, Expr<Sym<'DstVar>>, 'Error, 'Var>)
+      : Traversal<CTyped<Sym<'SrcVar>>, Expr<Sym<'DstVar>>, 'Error, 'Var> =
+        let rec subInTypedSym ctx sym =
+            match (valueOf sym) with
+            | Reg r -> traversal ctx (withType (typeOf sym) r)
+            | Sym s ->
+                tchainL (tliftOverSymbolicWord sub)
+                    (fun s' -> mkVarExp (withType (typeOf sym) (Sym s')))
+                    ctx s
+        and sub = tliftToExprSrc subInTypedSym
+        subInTypedSym
+
+    /// <summary>
     ///     Lifts a Traversal from variables to symbolic variables to accept
     ///     symbolic variables.
     /// </summary>
-    let rec tliftToSymSrc
+    and tliftToSymSrc
       (sub : Traversal<'SrcVar, Sym<'DstVar>, 'Error, 'Var>)
       : Traversal<Sym<'SrcVar>, Sym<'DstVar>, 'Error, 'Var> =
         fun ctx ->
             function
             | Reg r -> sub ctx r
-            | Sym { Sentence = body; Args = rs } ->
-                // TODO(CaptainHayashi): this is horrible.
-                // Are our abstractions wrong?
-                tchainL
-                    (sub
-                     |> tliftToSymSrc
-                     |> tliftOverCTyped
-                     |> tliftOverExpr)
-                    (sym body)
-                    ctx rs
+            | Sym s ->
+                let wsub =
+                    tliftOverSymbolicWord
+                        (tliftToExprSrc 
+                            (tliftToTypedSymVarSrc
+                                (tliftToExprDest (tliftOverCTyped sub))))
+                tchainL wsub Sym ctx s
 
     /// <summary>
     ///     Lifts a Traversal from variables to variables to return
@@ -226,11 +251,11 @@ module Traversal =
     ///     A <see cref="Traversal"/> trying to remove symbols from
     ///     variables.
     /// </returns>
-    let removeSymFromVar (err : SymbolicSentence -> 'Error)
+    let removeSymFromVar (err : Symbolic<Expr<Sym<'Var>>> -> 'Error)
       : Traversal<Sym<'Var>, 'Var, 'Error, 'VarB> =
         ignoreContext
             (function
-             | Sym s -> s.Sentence |> err |> Inner |> fail
+             | Sym s -> s |> err |> Inner |> fail
              | Reg f -> ok f)
 
     /// <summary>
@@ -251,7 +276,7 @@ module Traversal =
     ///     A <see cref="Traversal"/> trying to remove symbols from
     ///     expressions.
     /// </returns>
-    let removeSymFromExpr (err : SymbolicSentence -> 'Error)
+    let removeSymFromExpr (err : Symbolic<Expr<Sym<'Var>>> -> 'Error)
       : Traversal<Expr<Sym<'Var>>, Expr<'Var>, 'Error, 'VarB> =
         (tliftOverExpr (tliftOverCTyped (removeSymFromVar err)))
 
@@ -273,44 +298,11 @@ module Traversal =
     ///     A <see cref="Traversal"/> trying to remove symbols from
     ///     Boolean expressions.
     /// </returns>
-    let removeSymFromBoolExpr (err : SymbolicSentence -> 'Error)
+    let removeSymFromBoolExpr (err : Symbolic<Expr<Sym<'Var>>> -> 'Error)
       : Traversal<TypedBoolExpr<Sym<'Var>>, BoolExpr<'Var>, 'Error, 'VarB> =
         tliftToBoolSrc
             (tliftToExprDest
                 (tliftOverCTyped (removeSymFromVar err)))
-
-    (*
-     * Common traversals
-     *)
-
-    /// <summary>
-    ///     Lifts a traversal from typed variables to symbolic expressions
-    ///     such that it now takes typed symbolic variables as input.
-    ///     <para>
-    ///         This is needed because <see cref="tliftToExprSrc"/>
-    ///         and other such traversals don't play well with symbolics.
-    ///     </para>
-    /// </summary>
-    /// <param name="traversal">The <see cref="Traversal"/> to lift.</param>
-    /// <typeparam name="SrcVar">Type of variables entering traversal.</param>
-    /// <typeparam name="DstVar">Type of variables leaving traversal.</param>
-    /// <typeparam name="Var">The type of variables inside the context.</typeparam>
-    /// <returns>The lifted <see cref="Traversal"/>.</returns>
-    let rec tliftToTypedSymVarSrc
-      (traversal : Traversal<CTyped<'SrcVar>, Expr<Sym<'DstVar>>, 'Error, 'Var>)
-      : Traversal<CTyped<Sym<'SrcVar>>, Expr<Sym<'DstVar>>, 'Error, 'Var> =
-        let rec subInTypedSym ctx sym =
-            match (valueOf sym) with
-            | Reg r -> traversal ctx (withType (typeOf sym) r)
-            | Sym { Sentence = n; Args = ps } ->
-                tchainL sub
-                    (fun ps' ->
-                        mkVarExp
-                            (withType (typeOf sym)
-                                (Sym { Sentence = n; Args = ps' })))
-                    ctx ps
-        and sub = tliftToExprSrc subInTypedSym
-        subInTypedSym
 
     /// <summary>
     ///     Traversal for converting symbolic expressions with a marker.
@@ -392,8 +384,8 @@ module Traversal =
                 | c -> fail (ContextMismatch ("position context", c))
             (* Everything else just has approximation bubbled through
                in a type-generic way. *)
-            | WithType (Sym { Sentence = body; Args = rs }, t) ->
-                tchainL rmap (sym body >> withType t >> mkVarExp) ctx rs
+            | WithType (Sym s, t) ->
+                tchainL (tliftOverSymbolicWord rmap) (Sym >> withType t >> mkVarExp) ctx s
             | WithType (Reg x, t) ->
                 ok (ctx, mkVarExp (withType t (Reg x)))
         and sf = tliftToExprSrc sub
@@ -413,11 +405,29 @@ let rec collectSymVars
             lift
                 (fun ctx -> (ctx, withType tc (Reg v)))
                 (pushVar ctx (withType tc v))
-        | WithType (Sym { Sentence = body; Args = ps }, tc) ->
+        | WithType (Sym s, tc) ->
             tchainL
-                (tliftOverExpr collectSymVars)
-                (sym body >> withType tc)
-                ctx ps
+                (Traversal.tliftOverSymbolicWord (tliftOverExpr collectSymVars))
+                (Sym >> withType tc)
+                ctx s
+
+/// <summary>
+///     Maps a Chessie function over all arguments in a symbol.
+/// </summary>
+/// <param name="f">The function to map.</param>
+/// <param name="sym">The symbol to map over.</param>
+/// <typeparam name="Src">The type of arguments before the map.</param>
+/// <typeparam name="Dst">The type of arguments after the map.</param>
+/// <typeparam name="Error">The type of Chessie errors.</param>
+/// <returns>The resulting symbol, if all maps succeeded.</returns>
+let tryMapSym (f : 'Src -> Result<'Dst, 'Error>) (sym : Symbolic<'Src>)
+  : Result<Symbolic<'Dst>, 'Error> =
+    collect
+        (List.map
+            (function
+             | SymString s -> ok (SymString s)
+             | SymArg a -> lift SymArg (f a))
+            sym)
 
 /// <summary>
 ///     Pretty printers for symbolics.
@@ -428,40 +438,18 @@ module Pretty =
     open Starling.Core.Var.Pretty
 
     /// <summary>
-    ///     Pretty-prints a symbolic sentence without interpolation.
-    /// </summary>
-    /// <param name="s">The symbolic sentence to print.</param>
-    /// <returns>
-    ///     The <see cref="Doc"/> resulting from printing <paramref name="s"/>.
-    /// </returns>
-    let printSymbolicSentence (s : SymbolicSentence) : Doc =
-        let printSymbolicWord =
-            function
-            | SymString s -> String s
-            | SymParamRef i -> String (sprintf "#%d" i)
-
-        hjoin (List.map printSymbolicWord s)
-
-    /// <summary>
-    ///     Pretty-prints a symbolic sentence with interpolation.
-    ///     <para>
-    ///         Invalid arguments are replaced with '#ERROR#'.
-    ///     </para>
+    ///     Pretty-prints a symbolic sentence.
     /// </summary>
     /// <param name="pArg">Pretty-printer for arguments.</param>
     /// <param name="s">The symbolic sentence to print.</param>
-    /// <param name="args">The sentence arguments to print.</param>
-    /// <typeparam name="Arg">The type of sentence arguments.</param>
     /// <returns>
     ///     The <see cref="Doc"/> resulting from printing <paramref name="s"/>.
     /// </returns>
-    let printInterpolatedSymbolicSentence
-      (pArg : 'Arg -> Doc) (s : SymbolicSentence) (args : 'Arg list) : Doc =
+    let printSymbolic (pArg : 'Arg -> Doc) (s : Symbolic<'Arg>) : Doc =
         let printSymbolicWord =
             function
             | SymString s -> String s
-            | SymParamRef i when i > 0 && i <= args.Length -> pArg args.[i - 1]
-            | _ -> String "#ERROR#"
+            | SymArg i -> ssurround "[|" "|]" (pArg i)
 
         hjoin (List.map printSymbolicWord s)
 
@@ -481,11 +469,9 @@ module Pretty =
     let rec printSym (pReg : 'Reg -> Doc) (sym : Sym<'Reg>) : Doc =
         match sym with
         | Reg r -> pReg r
-        | Sym { Sentence = ws; Args = xs } ->
+        | Sym s -> 
             let pArg = printExpr (printSym pReg)
-            parened
-                (String "sym"
-                 <+> quoted (printInterpolatedSymbolicSentence pArg ws xs))
+            parened (String "sym" <+> quoted (printSymbolic pArg s))
 
     /// Pretty-prints a SVExpr.
     let printSVExpr = printExpr (printSym String)

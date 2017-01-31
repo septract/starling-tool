@@ -40,13 +40,11 @@ let ( ** ) = ( <| )
 
 module SymbolicTests =
     [<Test>]
-    let ``Test symbolic %{foo #1 bar}(x) is parsed correctly`` () =
-        check parseSymbolic "%{foo #1 bar}(x)"
-            { Sentence =
-                [ SymString "foo "; SymParamRef 1; SymString " bar" ]
-              Args =
-                [ node "" 1L 15L (Identifier "x") ] }
-
+    let ``Test symbolic %{foo [|x|] bar} is parsed correctly`` () =
+        check parseSymbolic "%{foo [|x|] bar}"
+            [ SymString "foo "
+              SymArg ( node "" 1L 9L (Identifier "x") )
+              SymString " bar" ]
 
 module ViewProtoTests =
     [<Test>]
@@ -225,14 +223,11 @@ module AtomicActionTests =
 
     [<Test>]
     let ``parse symbolic atomic``() =
-        check parseAtomic "%{foo(#1)}(x)"
+        check parseAtomic "%{foo([|x|])}"
             (node "" 1L 1L <| SymAtomic
-                { Sentence =
-                       [ SymString "foo("
-                         SymParamRef 1
-                         SymString ")" ]
-                  Args =
-                       [ node "" 1L 12L (Identifier "x") ] } )
+               [ SymString "foo("
+                 SymArg ( node "" 1L 9L (Identifier "x") )
+                 SymString ")" ] )
 
 
 module AtomicSetTests =

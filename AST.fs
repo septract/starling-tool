@@ -292,9 +292,7 @@ module Pretty =
     ///     The <see cref="Doc"/> resulting from printing <paramref name="s"/>.
     /// </returns> 
     and printSymbolic (s : Symbolic<Expression>) : Doc =
-        String "%"
-        <-> printSymbolicSentence s.Sentence
-        <-> parened (commaSep (List.map printExpression s.Args))
+        String "%" <-> braced (printSymbolic s)
 
     /// Pretty-prints views.
     let rec printView : View -> Doc =

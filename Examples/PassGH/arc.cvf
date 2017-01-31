@@ -20,43 +20,43 @@ thread Int c, pval;
 method init() {
   {| emp |}
     // TODO: broken local command syntax.
-    ret = %{new ArcNode}();
-    <%{#1.count := 1}(ret)>;
+    ret = %{new ArcNode};
+    <%{[|ret|].count := 1}>;
   {| arc(ret) |}
 }
 
 method clone(ArcNode x) {
   {| arc(x) |}
-    <%{#1.count := #1.count + 1}(x)>;
+    <%{[|x|].count := [|x|].count + 1}>;
   {| arc(x) * arc(x) |}
 }
 
 method print(ArcNode x) {
   {| arc(x) |}
     // TODO: broken local command syntax.
-    pval = %{ #1.val }(x);
+    pval = %{ [|x|].val };
   {| arc(x) |}
 }
 
 method drop(ArcNode x) {
   {| arc(x) |}
     // TODO: broken local command syntax.
-    c = %{ #1.count }(x);
-    <%{ #1.count := #1.count - 1 }(x)>;
+    c = %{ [|x|].count };
+    <%{ [|x|].count := [|x|].count - 1 }>;
   {| countCopy(x, c) |}
     if (c == 1) {
       {| countCopy(x, 1) |}
-         < %{ free(#1) }(x) >;
+         < %{ free([|x|]) } >;
       {| emp |}
     }
   {| emp |}
 }
 
 constraint iter[n] arc(x) ->
-    n > 0 => %{ #1 in ArcFoot && #2 <= #1.count}(x, n);
+    n > 0 => %{ [|x|] in ArcFoot && [|n|] <= [|x|].count};
 
 constraint countCopy(x, c) ->
-    c == 1 => %{ #1 in ArcFoot && #1.count == 0}(x);
+    c == 1 => %{ [|x|] in ArcFoot && [|x|].count == 0};
 
 constraint countCopy(x, m) * countCopy(y, n) ->
     x == y => ((m != 1) || (n != 1));

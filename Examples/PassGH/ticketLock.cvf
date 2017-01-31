@@ -13,20 +13,20 @@ view newLock(Lock x), holdTick(Lock x, int t), holdLock(Lock x), isLock(Lock x);
 
 method newLock() {
   {| emp |}
-    ret = %{new Lock}();
+    ret = %{new Lock};
   {| newLock(ret) |} 
-    <%{#1.ticket := 0; #1.serving := 0}(ret)>;
+    <%{[|ret|].ticket := 0; [|ret|].serving := 0}>;
   {| isLock(ret) |}
 }
 
 method lock(Lock x) {
   {| isLock(x) |}
-    t = %{ #1.ticket }(x);
-    <%{ #1.ticket := #1.ticket + 1 }(x)>;
+    t = %{ [|x|].ticket };
+    <%{ [|x|].ticket := [|x|].ticket + 1 }>;
   {| holdTick(x, t) |}
     do {
       {| holdTick(x, t) |}
-        s = %{ #1.serving }(x);
+        s = %{ [|x|].serving };
       {| if s == t then holdLock(x) else holdTick(x, t) |}
     } while (s != t);
   {| holdLock(x) |}
@@ -34,7 +34,7 @@ method lock(Lock x) {
 
 method unlock(Lock x) {
   {| holdLock(x) |}
-    <%{#1.serving := #1.serving + 1}(x)>;
+    <%{[|x|].serving := [|x|].serving + 1}>;
   {| isLock(x) |}
 }
 
@@ -44,12 +44,12 @@ method split(Lock x) {
   {| isLock(x) * isLock(x) |}
 }
 
-constraint newLock(x)     -> %{ #1 in LockFoot }(x);
-constraint isLock(x)      -> %{ #1 in LockFoot && #1.ticket >= #1.serving }(x);
-constraint holdTick(x, t) -> %{ #1 in LockFoot && #1.ticket >= #1.serving && #1.ticket > #2 }(x, t);
-constraint holdLock(x)    -> %{ #1 in LockFoot && #1.ticket >  #1.serving }(x);
+constraint newLock(x)     -> %{ [|x|] in LockFoot };
+constraint isLock(x)      -> %{ [|x|] in LockFoot && [|x|].ticket >= [|x|].serving };
+constraint holdTick(x, t) -> %{ [|x|] in LockFoot && [|x|].ticket >= [|x|].serving && [|x|].ticket > [|t|] };
+constraint holdLock(x)    -> %{ [|x|] in LockFoot && [|x|].ticket >  [|x|].serving };
 
-constraint holdLock(x)     * holdTick(y, t)  -> x != y || %{ #1.serving != #2 }(y, t);
+constraint holdLock(x)     * holdTick(y, t)  -> x != y || %{ [|y|].serving != [|t|] };
 constraint holdTick(x, ta) * holdTick(y, tb) -> x != y || ta != tb;
 
 constraint holdLock(x)    * holdLock(y) -> x != y;

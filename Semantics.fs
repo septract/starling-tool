@@ -416,8 +416,8 @@ let traverseMicrocode
         let tml = tchainL tm id
 
         match mc with
-        | Symbol { Sentence = s; Args = xs } ->
-            tchainL rtrav (fun xs' -> Symbol { Sentence = s; Args = xs' }) ctx xs
+        | Symbol s ->
+            tchainL (tliftOverSymbolicWord rtrav) Symbol ctx s
         | Assign (lv, Some rv) ->
             tchain2 ltrav rtrav (pairMap id Some >> Assign) ctx (lv, rv)
         | Assign (lv, None) ->

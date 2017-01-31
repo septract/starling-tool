@@ -261,8 +261,11 @@ module Pretty =
                     x)
 
     let printSymbolicGrass (pArg : 'Arg -> Doc) (s : Symbolic<'Arg>) : Doc =
-        let { Sentence = ws; Args = xs } = s
-        printInterpolatedSymbolicSentence pArg ws xs
+        let p =
+            function
+            | SymString s -> String s
+            | SymArg a -> pArg a
+        hjoin (List.map p s)
 
     /// Pretty-prints a symbolic sentence
     let rec printSymGrass (pReg : 'Var -> Doc) (sym : Sym<'Var>) : Doc =

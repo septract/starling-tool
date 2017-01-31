@@ -750,12 +750,9 @@ and modelBoolExpr
                              TypeMismatch
                                 (expected = Fuzzy "bool", got = Exact (typeOf vr)))))
                 (wrapMessages Var (VarMap.lookup env) v)
-        | Symbolic { Sentence = sen; Args = args } ->
+        | Symbolic sa ->
             // Symbols have an indefinite subtype.
-            args
-            |> List.map me
-            |> collect
-            |> lift (fun a -> indefBool (BVar (Sym { Sentence = sen; Args = a })))
+            lift (fun a -> indefBool (BVar (Sym a))) (tryMapSym me sa)
         | ArraySubscript (arr, idx) ->
             let arrR = ma arr
             // Indices always have to be of type 'int'.
@@ -880,12 +877,9 @@ and modelIntExpr
                                 (v,
                                  TypeMismatch
                                     (expected = Fuzzy "int", got = Exact (typeOf vr)))))
-         | Symbolic { Sentence = sen; Args = args } ->
+         | Symbolic sa ->
             // Symbols have indefinite subtype.
-            args
-            |> List.map me
-            |> collect
-            |> lift (fun a -> indefInt (IVar (Sym { Sentence = sen; Args = a })))
+            lift (fun a -> indefInt (IVar (Sym a))) (tryMapSym me sa)
         | ArraySubscript (arr, idx) ->
             let arrR = ma arr
             // Indices always have to be of type 'int'.
@@ -1736,21 +1730,15 @@ let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> 
             // TODO(CaptainHayashi): split out.
             let allVarsR =
                 mapMessages SymVarError (VarMap.combine ctx.ThreadVars ctx.SharedVars)
-            let symArgsMR =
+            let symMR =
                 bind
                     (fun allVars ->
-                        (collect
-                            (List.map
-                                (wrapMessages BadExpr
+                        (tryMapSym
+                            (wrapMessages BadExpr
                                     (modelExpr allVars ctx.ThreadVars id))
-                                sym.Args)))
+                             sym))
                     allVarsR
-            lift
-                (fun symArgsM ->
-                    SymC
-                        { Sentence = sym.Sentence
-                          Args = symArgsM })
-                symArgsMR
+            lift SymC symMR
 
     lift
         (function
