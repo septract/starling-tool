@@ -9,43 +9,61 @@ import itertools
 import subprocess
 import collections
 
+# This file should contain records of the form
+# filepath: failing-term1 failing-term2 ... failing-termN
+SPEC_FILE = './testresults'
+
+Z3_SCRIPT = './starling.sh'
+Z3_PASS_DIR = './Examples/Pass'
+Z3_FAIL_DIR = './Examples/Fail'
+
+GH_SCRIPT = './starling-gh.sh'
+GH_PASS_DIR = './Examples/PassGH'
+GH_FAIL_DIR = './Examples/FailGH'
+
 CVF_RE = re.compile('^\S*\.cvf$')
 ARGS = None
 
 def verbose(fmt, *args):
-    ''' printf
-
-    Only prints in verbose mod
-    '''
+    """Prints to stdout, but only in verbose mode."""
     if ARGS.verbose:
         print(fmt.format(*args))
 
 def err(fmt, *args):
-    ''' printfe
-    '''
+    """Prints to stderr."""
     print(fmt.format(*args), file=sys.stderr)
 
-def starling(file_name):
-    ''' Yields all failing clauses from file_name
-    '''
-    p = subprocess.Popen(['./starling.sh', file_name], stdout=subprocess.PIPE)
+def run_and_get_stdout(script_name, file_name):
+    """Runs script_name on file_name, returning the stdout lines as UTF-8."""
+    p = subprocess.Popen([script_name, file_name], stdout=subprocess.PIPE)
     stdout = p.stdout.read()
+    return stdout.decode('utf-8').split('\n')
 
+
+def z3(file_name):
+    """Runs Starling in Z3 mode on file_name, yielding all failing clauses."""
     # outputs in form
     # "clause_name: (success | fail)
-    for line in stdout.decode('utf-8').split('\n'):
+    for line in run_and_get_stdout(Z3_SCRIPT, file_name):
         name, _, status = line.partition(':')
         name, status = name.strip(), status.strip()
         if status == 'fail':
             yield name
 
-def make_failure_dict():
-    '''Creates a lookup of all expected failures from "testresults"
-    returning a dict of (name: str -> failure_names: set[str])
-    '''
+def grasshopper(file_name):
+    """Runs Starling/GRASShopper mode on file_name, yielding failing clauses."""
+    # The GRASShopper output needs some significant massaging.
+    for line in run_and_get_stdout(GH_SCRIPT, file_name):
+        pass
+
+def make_failure_dict(spec_file):
+    """Creates a lookup of all expected failures from spec_file.
+
+    Returns a dict of (name: str -> failure_names: set[str])
+    """
     expected_failures = {}
 
-    with open('testresults', 'r') as f:
+    with open(spec_file, 'r') as f:
         for line in f:
             name, _, failures = line.partition(':')
             name, failures = name.strip(), failures.strip()
@@ -70,30 +88,41 @@ def find(root, regexp):
             for dir in dirs:
                 roots.append(os.path.join(root, dir))
 
-def main():
-    ''' Run starling on the Examples/Pass and Examples/Fail directories
-    and check that there are no unexpected failures. Exiting with exit code 1
-    if there are
-    '''
-    found_unexpected_failure = False
-    expected_failures = make_failure_dict()
-
-    pass_z3 = find('./Examples/Pass', CVF_RE)
-    fail_z3 = find('./Examples/Fail', CVF_RE)
-
-    for file in itertools.chain(pass_z3, fail_z3):
+def check_z3(files, expected_failures):
+    """Runs Starling/Z3 on each file in files, and reports failures."""
+    failed_overall = False
+    for file in files:
         verbose('check {}', file)
+
+        if file not in expected_failures:
+            err('[{}]', file)
+            err('test data missing')
+            return True
+
         failed = False
-        for fail in starling(file):
+        for fail in z3(file):
             if fail not in expected_failures[file]:
                 if not failed:
                     failed = True
                     err('[{}]', file)
                     err(' unexpected failures:', file)
                 err('>  {}', fail)
-                found_unexpected_failure = True
+                failed_overall = True
 
-    if found_unexpected_failure:
+    return failed_overall
+
+def main():
+    ''' Run starling on the Examples/Pass and Examples/Fail directories
+    and check that there are no unexpected failures. Exiting with exit code 1
+    if there are
+    '''
+    expected_failures = make_failure_dict(SPEC_FILE)
+
+    pass_z3 = find(Z3_PASS_DIR, CVF_RE)
+    fail_z3 = find(Z3_FAIL_DIR, CVF_RE)
+    failed = check_z3(itertools.chain(pass_z3, fail_z3), expected_failures)
+
+    if failed:
         verbose('')
         print('FAIL.')
         sys.exit(1)

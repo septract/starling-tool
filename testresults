@@ -6,6 +6,7 @@
 ./Examples/Fail/ticketLockBad2.cvf: lock_C000_000 lock_C000_002 unlock_C000_000
 ./Examples/Fail/ticketLockFlippedLoop.cvf: lock_C002_001 lock_C002_004 lock_C003_002 lock_C003_003 lock_C003_005
 ./Examples/Pass/arc.cvf:
+./Examples/Pass/arc2.cvf:
 ./Examples/Pass/multicounter.cvf:
 ./Examples/Pass/peterson.cvf:
 ./Examples/Pass/petersonArray.cvf:
