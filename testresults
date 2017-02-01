@@ -5,6 +5,7 @@
 ./Examples/Fail/ticketLockBad.cvf: unlock_C000_002 unlock_C000_003
 ./Examples/Fail/ticketLockBad2.cvf: lock_C000_000 lock_C000_002 unlock_C000_000
 ./Examples/Fail/ticketLockFlippedLoop.cvf: lock_C002_001 lock_C002_004 lock_C003_002 lock_C003_003 lock_C003_005
+./Examples/FailGH/ticketLockFlippedIf.cvf: lock_C001_003 lock_C001_004 lock_C001_006 lock_C002_002 lock_C002_005 lock_C003_003 lock_C003_004 lock_C003_006
 ./Examples/Pass/arc.cvf:
 ./Examples/Pass/arc2.cvf:
 ./Examples/Pass/multicounter.cvf:
@@ -15,12 +16,17 @@
 ./Examples/Pass/petersonMultiCmd.cvf:
 ./Examples/Pass/seqCmd.cvf:
 ./Examples/Pass/singleWriterMultiReaderLock.cvf: 
-./Examples/Pass/spinLockAdvisory.cvf:
 ./Examples/Pass/spinLock.cvf:
+./Examples/Pass/spinLockAdvisory.cvf:
 ./Examples/Pass/spinLockInt.cvf:
 ./Examples/Pass/spinLockMultiCmd.cvf:
 ./Examples/Pass/ticketLock.cvf:
 ./Examples/Pass/ticketLockNoIf.cvf:
 ./Examples/Pass/ticketLockNoInvariant.cvf:
-./Examples/Pass/ticketLockNonAtomicRelease2.cvf:
 ./Examples/Pass/ticketLockNonAtomicRelease.cvf:
+./Examples/Pass/ticketLockNonAtomicRelease2.cvf:
+./Examples/PassGH/arc.cvf:
+./Examples/PassGH/clhLock.cvf:
+./Examples/PassGH/lclist.cvf:
+./Examples/PassGH/spinLock.cvf:
+./Examples/PassGH/ticketLock.cvf:

@@ -24,6 +24,9 @@ GH_FAIL_DIR = './Examples/FailGH'
 CVF_RE = re.compile('^\S*\.cvf$')
 ARGS = None
 
+# Used to match GRASShopper failures
+GH_FAIL_RE = re.compile('^A postcondition of (?P<term>[^ ]+) might not hold at this return point$')
+
 def verbose(fmt, *args):
     """Prints to stdout, but only in verbose mode."""
     if ARGS.verbose:
@@ -54,7 +57,9 @@ def grasshopper(file_name):
     """Runs Starling/GRASShopper mode on file_name, yielding failing clauses."""
     # The GRASShopper output needs some significant massaging.
     for line in run_and_get_stdout(GH_SCRIPT, file_name):
-        pass
+        m = GH_FAIL_RE.match(line)
+        if m:
+            yield m.group('term')
 
 def make_failure_dict(spec_file):
     """Creates a lookup of all expected failures from spec_file.
@@ -88,8 +93,8 @@ def find(root, regexp):
             for dir in dirs:
                 roots.append(os.path.join(root, dir))
 
-def check_z3(files, expected_failures):
-    """Runs Starling/Z3 on each file in files, and reports failures."""
+def check(files, checker, expected_failures):
+    """Runs a checker on each file in files, and reports failures."""
     failed_overall = False
     for file in files:
         verbose('check {}', file)
@@ -100,7 +105,7 @@ def check_z3(files, expected_failures):
             return True
 
         failed = False
-        for fail in z3(file):
+        for fail in checker(file):
             if fail not in expected_failures[file]:
                 if not failed:
                     failed = True
@@ -120,7 +125,12 @@ def main():
 
     pass_z3 = find(Z3_PASS_DIR, CVF_RE)
     fail_z3 = find(Z3_FAIL_DIR, CVF_RE)
-    failed = check_z3(itertools.chain(pass_z3, fail_z3), expected_failures)
+    failed = check(itertools.chain(pass_z3, fail_z3), z3, expected_failures)
+
+    if not failed:
+        pass_gh = find(GH_PASS_DIR, CVF_RE)
+        fail_gh = find(GH_FAIL_DIR, CVF_RE)
+        failed = check(itertools.chain(pass_gh, fail_gh), grasshopper, expected_failures)
 
     if failed:
         verbose('')
