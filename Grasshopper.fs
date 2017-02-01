@@ -471,20 +471,6 @@ let grassMicrocode (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list 
                         (normalBool x)
                 lift (fun x -> [ PureAssume x ]) (mapMessages Traversal grassifyR)
 
-(*            | Assume (NoSym x) ->
-                // Pure assumption.
-                let grassifyR =
-                    liftWithoutContext
-                        (Starling >> Reg >> ok)
-                        (tliftOverCTyped >> tliftToExprDest >> tliftToBoolSrc)
-                        (normalBool x)
-                lift (fun x -> [ PureAssume x ]) (mapMessages Traversal grassifyR)
-            | Assume _ ->
-                fail
-                    (CommandNotImplemented
-                        (cmd = ent,
-                         why = "Impure assumptions not yet supported.")) *)
-
         lift List.concat (collect (List.map grassMicrocodeInstruction ent))
     lift List.concat (collect (List.map grassMicrocodeEntry routine))
 

@@ -783,7 +783,7 @@ and modelBoolExpr
                     match o with
                     | And -> mkAnd2
                     | Or -> mkOr2
-                    | Imp -> mkImpl
+                    | Imp -> mkImplies
                     | _ -> failwith "unreachable[modelBoolExpr::BoolIn]"
 
                 (* Both sides of the expression need to be unifiable to the
