@@ -292,7 +292,9 @@ module Pretty =
     ///     The <see cref="Doc"/> resulting from printing <paramref name="s"/>.
     /// </returns> 
     and printSymbolic (s : Symbolic<Expression>) : Doc =
-        String "%" <-> braced (printSymbolic s)
+        String "%"
+        <->
+        braced (Starling.Core.Symbolic.Pretty.printSymbolic printExpression s)
 
     /// Pretty-prints views.
     let rec printView : View -> Doc =
