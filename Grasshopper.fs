@@ -149,9 +149,12 @@ module Pretty =
 
     /// Print infix operator (generic)
     let infexprG (combine : string -> Doc -> Doc) (op : string) (pxs : 'x -> Doc) (xs : seq<'x>) : Doc =
-        let mapped = Seq.map pxs xs
-        let resseq = Seq.map (combine op) (Seq.tail mapped)
-        parened (hsep [Seq.head mapped; (hsep resseq)])
+        match (List.map pxs (List.ofSeq xs)) with
+        | [] -> Nop
+        | [p] -> p
+        | p::ps ->
+            let resseq = Seq.map (combine op) ps
+            parened (hsep [p; (hsep resseq)])
 
     /// Print infix operator across multiple lines
     let infexprV (op : string) (pxs : 'x -> Doc) (xs : seq<'x>) : Doc =
