@@ -19,56 +19,56 @@ method deleteVal(int v) {
   {| wf(v) |}
     <prev = head>;
   {| wf(v) * isHead(prev) |}
-   <{ %{ waitLock(#1); takeLock(#1) }(prev); }>;
+   <{ %{ waitLock([|prev|]); takeLock([|prev|]) }; }>;
   {| wf(v) * has1LockAnon(prev) * isHead(prev) |}
-   curr = (%{ #1.next }(prev));
+   curr = %{ [|prev|].next };
   {| wf(v) * has1Lock(prev, curr) * isHead(prev) |}
-   <{ %{ waitLock(#1); takeLock(#1) }(curr); }>;
+   <{ %{ waitLock([|curr|]); takeLock([|curr|]) }; }>;
   {| wf(v) * has2Lock(prev, curr) |}
-   cv = (%{ #1.val }(curr));
+   cv = %{ [|curr|].val };
   {| wf(v) * has2Lock(prev,curr) * isVal(curr, cv) |}
     while (cv < v ) {
       {| wf(v) * wf(cv) * has2Lock(prev, curr) * isVal(curr, cv) |}
-        <%{ releaseLock(#1) }(prev)>;
+        <%{ releaseLock([|prev|]) }>;
       {| wf(v) * wf(cv) * has1LockAnon(curr) * isVal(curr, cv) |}
         prev = curr;
-        curr = (%{ #1.next }(curr));
+        curr = %{ [|curr|].next };
       {| wf(v) * wf(cv) * has1Lock(prev, curr) * isVal(prev,cv) |}
-        <{ %{ waitLock(#1); takeLock(#1) }(curr); }>;
+        <{ %{ waitLock([|curr|]); takeLock([|curr|]) }; }>;
       {| wf(v) * has2Lock(prev, curr) |}
-        cv = (%{ #1.val }(curr));
+        cv = %{ [|curr|].val };
       {| wf(v) * has2Lock(prev, curr) * isVal(curr,cv) |}
     }
   {| wf(v) * has2Lock(prev, curr) * isVal(curr, cv) |}
-    if ( cv == v) {
+    if (cv == v) {
       {| wf(cv) * has2Lock(prev, curr) * isVal(curr, cv) |}
         // Merged these two to avoid dangling nodes
-        <{ %{ #1.next := #2.next }(prev, curr);
-           %{ disposeNode(#1) }(curr); }>;
+        <{ %{ [|prev|].next := [|curr|].next };
+           %{ disposeNode([|curr|]) }; }>;
       {| has1LockAnon(prev) |}
     }
     else {
       {| has2Lock(prev, curr) |}
-        <%{ releaseLock(#1)}(curr)>;
+        <%{ releaseLock([|curr|])}>;
       {| has1LockAnon(prev) |}
     }
   {| has1LockAnon(prev) |}
-    <%{ releaseLock(#1) }(prev)>;
+    <%{ releaseLock([|prev|]) }>;
   {| emp |}
 }
 
-constraint emp -> %{ isListG(X, #1,#2) }(head,ub);
+constraint emp -> %{ isListG(X, [|head|], [|ub|]) };
 
 constraint wf(v)      ->  v < ub;
 constraint isHead(x)  ->  x == head;
 
-constraint has1Lock(a,b)    ->  %{ has1LockG(X, #1,#2) }(a,b);
-constraint has1LockAnon(a)  ->  %{ exists e: Node :: has1LockG(X, #1, e) }(a);
-constraint has2Lock(a,b)    ->  %{ exists e: Node :: has2LockG(X, #1, #2, e) }(a,b);
+constraint has1Lock(a,b)    ->  %{ has1LockG(X, [|a|], [|b|]) };
+constraint has1LockAnon(a)  ->  %{ exists e: Node :: has1LockG(X, [|a|], e) };
+constraint has2Lock(a,b)    ->  %{ exists e: Node :: has2LockG(X, [|a|], [|b|], e) };
 
-constraint has1Lock(a, b)  * isVal(node,v)  ->  a == node => %{ isValG(X,#1,#2) }(node, v);
-constraint has1LockAnon(a) * isVal(node,v)  ->  a == node => %{ isValG(X,#1,#2) }(node, v);
-constraint has2Lock(a, b)  * isVal(node,v)  ->  b == node => %{ isValG(X,#1,#2) }(node, v);
+constraint has1Lock(a, b)  * isVal(node,v)  ->  a == node => %{ isValG(X,[|node|],[|v|]) };
+constraint has1LockAnon(a) * isVal(node,v)  ->  a == node => %{ isValG(X,[|node|],[|v|]) };
+constraint has2Lock(a, b)  * isVal(node,v)  ->  b == node => %{ isValG(X,[|node|],[|v|]) };
 
 // Constraints on view interactions
 constraint has1Lock(a,b)   * has1Lock(c,d)    ->  a != c;

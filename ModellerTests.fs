@@ -323,15 +323,15 @@ module Atomics =
             (command' "!BLoad" ast [ normalBoolExpr (sbVar "baz") ] [ normalBoolExpr (sbVar "y") ])
 
     [<Test>]
-    let ``model symbolic store <x = %{foo}(baz)>`` () =
+    let ``model symbolic store <x = %{foo [|baz|]}>`` () =
         let ast =
             freshNode
                 (Fetch
                     (freshNode (Identifier "x"),
                      freshNode
                         (Symbolic
-                          { Sentence = [ SymString "foo" ]
-                            Args = [ freshNode (Identifier "baz") ] }),
+                            [ SymString "foo"
+                              SymArg (freshNode (Identifier "baz")) ]),
                      Direct))
         check
             ast
@@ -342,9 +342,9 @@ module Atomics =
                       LValue = IVar (Reg "x")
                       RValue =
                         IVar
-                            (sym
-                                [ SymString "foo" ]
-                                [ normalBoolExpr (BVar (Reg "baz")) ] ) } ))
+                            (Sym
+                                [ SymString "foo"
+                                  SymArg (normalBoolExpr (BVar (Reg "baz")))] ) }))
 
 
 module CommandAxioms =
@@ -396,8 +396,8 @@ module CommandAxioms =
                 (freshNode (Identifier "baz"))
                 (freshNode
                     (Symbolic
-                        { Sentence = [ SymString "foo" ]
-                          Args = [ freshNode (Identifier "bar") ] }))
+                        [ SymString "foo"
+                          SymArg (freshNode (Identifier "bar")) ] ))
 
         check
             ast
@@ -409,9 +409,9 @@ module CommandAxioms =
                           LValue = BVar (Reg "baz")
                           RValue =
                             BVar
-                                (sym
-                                    [ SymString "foo" ]
-                                    [ normalIntExpr (IVar (Reg "bar")) ])})])
+                                (Sym
+                                    [ SymString "foo"
+                                      SymArg (normalIntExpr (IVar (Reg "bar"))) ])})])
 
 
 module ViewDefs =

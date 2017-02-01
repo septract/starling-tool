@@ -13,9 +13,9 @@ view newLock(Lock x), holdLock(Lock x), isLock(Lock x);
 
 method newLock() {
   {| emp |}
-    ret = %{new Lock}();
+    ret = %{new Lock};
   {| newLock(ret) |}
-    <%{#1.lock := false}(ret)>;
+    <%{[|ret|].lock := false}>;
   {| isLock(ret) |}
 }
 
@@ -25,7 +25,7 @@ method lock(Lock x) {
       {| isLock(x) |}
         test = false;
       {| if test == false then isLock(x) else False() |}
-        test = %{ CAS_to_true(#1) }(x);
+        test = %{ CAS_to_true([|x|]) };
       {| if test == false then isLock(x) else holdLock(x) |}
     } while (test == false);
   {| holdLock(x) |}
@@ -33,7 +33,7 @@ method lock(Lock x) {
 
 method unlock(Lock x) {
   {| holdLock(x) |}
-    <%{#1.lock := false}(x)>;
+    <%{[|x|].lock := false}>;
   {| isLock(x) |}
 }
 
@@ -47,9 +47,9 @@ method split(Lock x) {
 view False();
 constraint False() -> false;
 
-constraint holdLock(x)  ->  %{ #1 in LockFoot && #1.lock == true }(x);
-constraint isLock(x)    ->  %{ #1 in LockFoot }(x);
-constraint newLock(x)   ->  %{ #1 in LockFoot }(x);
+constraint holdLock(x)  ->  %{ [|x|] in LockFoot && [|x|].lock };
+constraint isLock(x)    ->  %{ [|x|] in LockFoot };
+constraint newLock(x)   ->  %{ [|x|] in LockFoot };
 
 constraint isLock(x)   * newLock(y)   ->  x != y;
 constraint holdLock(x) * newLock(y)   ->  x != y;

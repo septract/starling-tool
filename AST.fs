@@ -293,8 +293,8 @@ module Pretty =
     /// </returns> 
     and printSymbolic (s : Symbolic<Expression>) : Doc =
         String "%"
-        <-> printSymbolicSentence s.Sentence
-        <-> parened (commaSep (List.map printExpression s.Args))
+        <->
+        braced (Starling.Core.Symbolic.Pretty.printSymbolic printExpression s)
 
     /// Pretty-prints views.
     let rec printView : View -> Doc =

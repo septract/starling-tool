@@ -69,6 +69,8 @@ let inSquareBrackets p = inBrackets "[" "]" p
 let inBraces p = inBrackets "{" "}" p
 /// Parser for items in {|view braces|}.
 let inViewBraces p = inBrackets "{|" "|}" p
+/// Parser for items in {|interpolate braces|}.
+let inInterpBraces p = inBrackets "[|" "|]" p
 /// Parser for items in <angle brackets>.
 let inAngles p = inBrackets "<" ">" p
 
@@ -152,8 +154,12 @@ let nodify v =
 /// </summary>
 let parseSymbolicSentence =
     many
-        ((many1Chars (noneOf "}#") |>> SymString)
-         <|> (pchar '#' >>. pint32 |>> SymParamRef))
+        (choice
+            [ inInterpBraces parseExpression |>> SymArg <?> "interpolated expression"
+              many1Chars (noneOf "}[") |>> SymString <?> "symbol body"
+              // TODO(MattWindsor91): this is a bit crap.
+              (pchar '[' .>>. noneOf "|"
+                |>> fun (x, y) -> SymString (System.String.Concat [| x; y |])) ] )
 
 /// <summary>
 ///     Parser for symbolic expressions.
@@ -164,10 +170,7 @@ let parseSymbolicSentence =
 ///     </para>
 /// </summary>
 let parseSymbolic =
-    (pipe2ws
-        (pstring "%" >>. inBraces parseSymbolicSentence)
-        (parseParamList parseExpression)
-        (fun s es -> { Sentence = s; Args = es })) <?> "symbolic"
+    pstring "%" >>. inBraces (parseSymbolicSentence) <?> "symbolic"
 
 /// Parser for primary expressions.
 let parsePrimaryExpression =

@@ -80,14 +80,14 @@ module BoolApprox =
         check
             BFalse
             (Context.positive ())
-            (BVar (Sym { Sentence = [ SymString "test" ]; Args = ([] : SMExpr list) } ))
+            (BVar (Sym [ SymString "test" ] ))
 
     [<Test>]
     let ``Rewrite -ve param-less Bool symbol to true`` () =
         check
             BTrue
             (Context.negative ())
-            (BVar (Sym { Sentence = [ SymString "test" ]; Args = ([] : SMExpr list) } ))
+            (BVar (Sym [ SymString "test" ] ))
 
     [<Test>]
     let ``Rewrite +ve Reg-params Bool symbol to false`` () =
@@ -96,10 +96,9 @@ module BoolApprox =
             (Context.positive ())
             (BVar
                 (Sym
-                    { Sentence = [ SymString "test" ]
-                      Args =
-                        [ normalIntExpr (siBefore "foo")
-                          normalBoolExpr (sbAfter "bar") ] } ))
+                    [ SymString "test"
+                      SymArg (normalIntExpr (siBefore "foo"))
+                      SymArg (normalBoolExpr (sbAfter "bar")) ] ))
 
     [<Test>]
     let ``Rewrite -ve Reg-params Bool symbol to true`` () =
@@ -108,10 +107,9 @@ module BoolApprox =
             (Context.negative ())
             (BVar
                 (Sym
-                    { Sentence = [ SymString "test" ]
-                      Args =
-                        [ normalIntExpr (siBefore "foo")
-                          normalBoolExpr (sbAfter "bar") ] } ))
+                    [ SymString "test" 
+                      SymArg (normalIntExpr (siBefore "foo"))
+                      SymArg (normalBoolExpr (sbAfter "bar")) ] ))
 
     [<Test>]
     let ``Rewrite +ve implication correctly`` () =
@@ -121,16 +119,14 @@ module BoolApprox =
             (BImplies
                 (BVar
                     (Sym
-                        { Sentence = [ SymString "test1" ]
-                          Args =
-                            [ normalIntExpr (siBefore "foo")
-                              normalBoolExpr (sbAfter "bar") ] } ),
+                        [ SymString "test1"
+                          SymArg (normalIntExpr (siBefore "foo"))
+                          SymArg (normalBoolExpr (sbAfter "bar")) ] ),
                  BVar
                     (Sym
-                        { Sentence = [ SymString "test2" ]
-                          Args =
-                              [ normalIntExpr (siBefore "baz")
-                                normalBoolExpr (sbAfter "barbaz") ] } )))
+                        [ SymString "test2"
+                          SymArg (normalIntExpr (siBefore "baz"))
+                          SymArg (normalBoolExpr (sbAfter "barbaz")) ] )))
 
     [<Test>]
     let ``Rewrite -ve implication correctly`` () =
@@ -140,16 +136,14 @@ module BoolApprox =
             (BImplies
                 (BVar
                     (Sym
-                        { Sentence = [ SymString "test1" ]
-                          Args =
-                            [ normalIntExpr (siBefore "foo")
-                              normalBoolExpr (sbAfter "bar") ] } ),
+                        [ SymString "test1"
+                          SymArg (normalIntExpr (siBefore "foo"))
+                          SymArg (normalBoolExpr (sbAfter "bar")) ] ),
                  BVar
                     (Sym
-                        { Sentence = [ SymString "test2" ]
-                          Args =
-                            [ normalIntExpr (siBefore "baz")
-                              normalBoolExpr (sbAfter "barbaz") ] } )))
+                        [ SymString "test2"
+                          SymArg (normalIntExpr (siBefore "baz"))
+                          SymArg (normalBoolExpr (sbAfter "barbaz")) ] )))
 
 
 /// <summary>
@@ -215,9 +209,9 @@ module FindSMVarsCases =
               normalBoolVar (After "baz") ]
             (normalBoolExpr
                 (BVar
-                    (sym [ SymString "foo" ]
-                        [ normalIntExpr (siBefore "bar")
-                          normalBoolExpr (sbAfter "baz") ] )))
+                    (Sym [ SymString "foo"  
+                           SymArg (normalIntExpr (siBefore "bar"))
+                           SymArg (normalBoolExpr (sbAfter "baz")) ] )))
 
     [<Test>]
     let ``Finding vars in an integer symbol works correctly`` () =
@@ -225,9 +219,10 @@ module FindSMVarsCases =
             [ normalIntVar (Before "bar"); normalBoolVar (After "baz") ]
             (normalIntExpr
                 (IVar
-                    (sym [ SymString "foo" ]
-                        [ normalIntExpr (siBefore "bar")
-                          normalBoolExpr (sbAfter "baz") ] )))
+                    (Sym
+                        [ SymString "foo"
+                          SymArg (normalIntExpr (siBefore "bar"))
+                          SymArg (normalBoolExpr (sbAfter "baz")) ] )))
 
 
 /// <summary>
@@ -237,40 +232,12 @@ module Pretty =
     open Starling.Core.Symbolic.Pretty
 
     [<Test>]
-    let ``Pretty-printing a symbolic sentence without interpolation works`` () =
-        let sentence =
-            [ SymString "foo("
-              SymParamRef 2
-              SymString ", "
-              SymParamRef 1
-              SymString ")" ]
-        "foo(#2, #1)"
-            ?=? printUnstyled (printSymbolicSentence sentence)
-
-    [<Test>]
     let ``Pretty-printing a valid Sym interpolates variables properly`` () =
         let sentence =
             [ SymString "foo("
-              SymParamRef 2
+              SymArg (normalIntExpr (siVar "bar"))
               SymString ", "
-              SymParamRef 1
+              SymArg (normalBoolExpr (sbVar "baz"))
               SymString ")" ]
-        let args = [ normalIntExpr (siVar "bar"); normalBoolExpr (sbVar "baz") ]
-
-        "(sym 'foo(baz, bar)')"
-            ?=? printUnstyled (printSym String (sym sentence args))
-
-    [<Test>]
-    let ``Pretty-printing an invalid Sym interpolates errors properly`` () =
-        let sentence =
-            [ SymString "nope("
-              SymParamRef 2
-              SymString ", "
-              SymParamRef 0 // error
-              SymString ", "
-              SymParamRef 3 // error
-              SymString ")" ]
-        let args = [ normalIntExpr (siVar "bar"); normalBoolExpr (sbVar "baz") ]
-
-        "(sym 'nope(baz, #ERROR#, #ERROR#)')"
-            ?=? printUnstyled (printSym String (sym sentence args))
+        "(sym 'foo([|bar|], [|baz|])')"
+            ?=? printUnstyled (printSym String (Sym sentence))

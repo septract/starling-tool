@@ -68,7 +68,12 @@ module Types =
         ///     We found a symbolic variable somewhere we didn't expect
         ///     one.
         /// </summary>
-        | UnwantedSym of sym: SymbolicSentence
+        | UnwantedVarSym of sym: Symbolic<Expr<Sym<Var>>>
+        /// <summary>
+        ///     We found a symbolic marked-variable somewhere we didn't expect
+        ///     one.
+        /// </summary>
+        | UnwantedMarkedVarSym of sym: Symbolic<Expr<Sym<MarkedVar>>>
         /// <summary>
         ///     We tried to substitute parameters, but one parameter was free
         ///     (not bound to an expression) somehow.
@@ -137,10 +142,14 @@ module Pretty =
         | IndefiniteConstraint (view) ->
             fmt "indefinite 'constraint {0} -> ?' not allowed here"
                 [ printDFunc view ]
-        | UnwantedSym sym ->
+        | UnwantedVarSym sym ->
             // TODO(CaptainHayashi): this is a bit shoddy.
             fmt "encountered uninterpreted symbol {0}"
-                [ printSymbolicSentence sym ]
+                [ printSymbolic (printExpr (printSym printVar)) sym ]
+        | UnwantedMarkedVarSym sym ->
+            // TODO(CaptainHayashi): this is a bit shoddy.
+            fmt "encountered uninterpreted symbol {0}"
+                [ printSymbolic (printExpr (printSym printMarkedVar)) sym ]
         | FreeVarInSub var ->
             // TODO(CaptainHayashi): this is a bit shoddy.
             error
@@ -298,7 +307,7 @@ module DefinerFilter =
         defs
         |> List.map
                (fun (f, d) ->
-                    let trav = removeSymFromBoolExpr UnwantedSym
+                    let trav = removeSymFromBoolExpr UnwantedVarSym
                     let result = mapTraversal trav (normalBool d)
                     lift (mkPair f) result)
         |> collect
@@ -367,7 +376,7 @@ module DefinerFilter =
         let stripSymbolT =
             tliftOverCmdTerm
                 (tliftOverExpr
-                    (tliftOverCTyped (removeSymFromVar UnwantedSym)))
+                    (tliftOverCTyped (removeSymFromVar UnwantedMarkedVarSym)))
 
         let stripSymbols = mapTraversal stripSymbolT >> mapMessages Traversal
         let axiomFilterResult = tryMapAxioms stripSymbols model
@@ -432,7 +441,7 @@ module Phase =
             (* The above might have left some symbols, eg in integer position.
                Try to remove them, and fail if we can't. *)
             let elimBoolExprR =
-                bind (normalBool >> mapTraversal (removeSymFromBoolExpr UnwantedSym))
+                bind (normalBool >> mapTraversal (removeSymFromBoolExpr UnwantedMarkedVarSym))
                     approxBoolExprR
             // Finally, tidy up the resulting expression.
             mapMessages Traversal (lift simp elimBoolExprR)
@@ -518,7 +527,12 @@ module Phase =
             let convParamsR = collect (List.map exprToSym ps)
 
             let defR =
-                lift (sym [ SymString (sprintf "!UNDEF:%A" n) ] >> BVar)
+                lift (
+                    fun convParams ->
+                        BVar
+                            (Sym 
+                                (SymString (sprintf "!UNDEF:%A" n)
+                                 :: List.map SymArg convParams)))
                     convParamsR
 
             lift (mkPair (func n ps)) defR

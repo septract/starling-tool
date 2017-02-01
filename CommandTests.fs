@@ -128,19 +128,19 @@ module Observable =
     [<Test>]
     let ``symbolics with are observable after the empty command`` () =
         check true
-            [ SymC { Sentence = [ SymString "foo" ]; Args = [] } ]
+            [ SymC [ SymString "foo" ] ]
             []
 
     [<Test>]
     let ``symbolics are observable after a local stored command`` () =
         check true
-            [ SymC { Sentence = [ SymString "foo" ]; Args = [] } ]
+            [ SymC [ SymString "foo" ] ]
             [ command "Foo" [ normalIntExpr (siVar "y") ] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]
     let ``symbolics are observable after a nonlocal stored command`` () =
         check true
-            [ SymC { Sentence = [ SymString "foo" ]; Args = [] } ]
+            [ SymC [ SymString "foo" ] ]
             [ command "Foo" [ normalIntExpr (siVar "g") ] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]

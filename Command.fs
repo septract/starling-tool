@@ -267,11 +267,16 @@ module Queries =
     /// Retrieves the type annotated vars from the arguments to a
     /// command as a list
     let commandArgs (cmd : Command) =
+        let argsOnly =
+            function
+            | SymArg a -> Some a
+            | _ -> None
+
         let f prim =
             match prim with
             // TODO(CaptainHayashi): is this sensible!?
-            | Stored { Args = xs }
-            | SymC {  Args = xs } -> List.map symExprVars xs
+            | Stored { Args = xs } -> List.map symExprVars xs
+            | SymC s -> List.map symExprVars (List.choose argsOnly s)
             | Intrinsic (IAssign { RValue = y } ) -> [ symExprVars (indefIntExpr y) ]
             | Intrinsic (BAssign { RValue = y } ) -> [ symExprVars (indefBoolExpr y) ]
             | Intrinsic (Havoc _) -> []
@@ -445,7 +450,7 @@ module Pretty =
     let printSymCommand (sym : Symbolic<Expr<Sym<Var>>>) : Doc =
         // TODO(CaptainHayashi): redundant?
         String "%{"
-        <-> printInterpolatedSymbolicSentence (printExpr (printSym printVar)) sym.Sentence sym.Args
+        <-> printSymbolic (printExpr (printSym printVar)) sym
         <-> String "}"
 
     /// Pretty-prints a PrimCommand.
@@ -481,10 +486,7 @@ module Pretty =
         match instr with
         | Symbol sym ->
             String "SYMBOL"
-            <+> braced
-                (printInterpolatedSymbolicSentence (printExpr pRV)
-                    sym.Sentence
-                    sym.Args)
+            <+> braced (printSymbolic (printExpr pRV) sym)
         | Assign (lvalue, Some rvalue) ->
             String "ASSIGN" <+> pL lvalue <&> printExpr pRV rvalue
         | Assign (lvalue, None) ->
