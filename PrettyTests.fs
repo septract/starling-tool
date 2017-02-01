@@ -5,24 +5,36 @@ module Starling.Tests.Pretty
 
 open NUnit.Framework
 open Starling
+open Starling.Utils.Testing
 open Starling.Core.Var
 open Starling.Lang.AST
 open Starling.Lang.AST.Pretty
 
-/// Tests for the pretty printer.
-type PrettyTests() =
+/// <summary>
+///     Tests for <see cref="printExpression"/>.
+/// </summary>
+module ExpressionTests =
+    let check expr str =
+        Core.Pretty.printUnstyled (printExpression (freshNode expr)) ?=? str
 
-    /// Test cases for printExpression.
-    static member Exprs =
-        [ TestCaseData(freshNode <| Num 5L).Returns("5")
-          TestCaseData(freshNode <| BopExpr(Div, freshNode <| Num 6L, freshNode <| Identifier "bar")).Returns("(6 / bar)")
+    [<Test>]
+    let ``expression '5' is printed correctly`` =
+        check (Num 5L) "5"
 
-          TestCaseData(freshNode <| BopExpr(Mul, freshNode <| BopExpr(Add, freshNode <| Num 1L, freshNode <| Num 2L), freshNode <| Num 3L)).Returns("((1 + 2) * 3)") ]
-        |> List.map (fun d -> d.SetName(sprintf "Print expression %A" d.ExpectedResult))
+    [<Test>]
+    let ``expression '(6 / bar)' is printed correctly`` =
+        check
+            (BopExpr(Div, freshNode <| Num 6L, freshNode <| Identifier "bar"))
+            "(6 / bar)"
 
-    [<TestCaseSource("Exprs")>]
-    /// Tests whether printExpression behaves itself.
-    member x.``printExpression correctly prints expressions`` expr =
-        expr
-        |> printExpression
-        |> Core.Pretty.printUnstyled
+    [<Test>]
+    let ``expression '((1 + 2) * 3)' is printed correctly`` =
+        check
+            (BopExpr
+                (Mul,
+                 freshNode <| BopExpr
+                    (Add,
+                     freshNode (Num 1L),
+                     freshNode (Num 2L)),
+                 freshNode (Num 3L)))
+            "((1 + 2) * 3)"
