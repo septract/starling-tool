@@ -509,7 +509,8 @@ let sepInts (f : int64 -> int64 -> int64) (u: int64) (e : IntExpr<'var> list)
 /// </summary>
 let foldInts (f : int64 -> int64 -> int64) (u: int64) (e : IntExpr<'var> list) =
     let intBit, rest = sepInts f u e
-    if intBit = u then rest else (IInt intBit :: rest)
+    // Shuffling to back is inefficient but gives more natural expressions.
+    if intBit = u then rest else (rest @ [IInt intBit])
 
 
 /// Curried wrapper over BGt.
@@ -522,6 +523,10 @@ let mkGt (a : TypedIntExpr<'var>) (b : TypedIntExpr<'var>) : BoolExpr<'var> =
     | IAdd xs, IInt y ->
         let yk, xs' = sepInts (+) 0L xs
         BGt (updateTypedSub a (IAdd xs'), updateTypedSub b (IInt (y - yk)))
+    // x - k > z <-> c > x + k
+    // TODO(MattWindsor91): generalise this?
+    | ISub [ x; IInt k ], IInt y ->
+        BGt (updateTypedSub a x, updateTypedSub b (IInt (y + k)))
     | _ -> BGt (a, b)
 /// As mkGt, but uses the 'int' subtype.
 let mkIntGt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
@@ -536,6 +541,10 @@ let mkGe (a : TypedIntExpr<'var>) (b : TypedIntExpr<'var>) : BoolExpr<'var> =
     | IAdd xs, IInt y ->
         let yk, xs' = sepInts (+) 0L xs
         BGe (updateTypedSub a (IAdd xs'), updateTypedSub b (IInt (y - yk)))
+    // x - k >= z <-> c >= x + k
+    // TODO(MattWindsor91): generalise this?
+    | ISub [ x; IInt k ], IInt y ->
+        BGe (updateTypedSub a x, updateTypedSub b (IInt (y + k)))
     | _ -> BGe (a, b)
 /// As mkGe, but uses the 'int' subtype.
 let mkIntGe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
@@ -550,6 +559,10 @@ let mkLt (a : TypedIntExpr<'var>) (b : TypedIntExpr<'var>) : BoolExpr<'var> =
     | IAdd xs, IInt y ->
         let yk, xs' = sepInts (+) 0L xs
         BLt (updateTypedSub a (IAdd xs'), updateTypedSub b (IInt (y - yk)))
+    // x - k < z <-> c < x + k
+    // TODO(MattWindsor91): generalise this?
+    | ISub [ x; IInt k ], IInt y ->
+        BLt (updateTypedSub a x, updateTypedSub b (IInt (y + k)))
     | _ -> BLt (a, b)
 /// As mkLt, but uses the 'int' subtype.
 let mkIntLt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
@@ -564,6 +577,10 @@ let mkLe (a : TypedIntExpr<'var>) (b : TypedIntExpr<'var>) : BoolExpr<'var> =
     | IAdd xs, IInt y ->
         let yk, xs' = sepInts (+) 0L xs
         BLe (updateTypedSub a (IAdd xs'), updateTypedSub b (IInt (y - yk)))
+    // x - k <= z <-> c <= x + k
+    // TODO(MattWindsor91): generalise this?
+    | ISub [ x; IInt k ], IInt y ->
+        BLe (updateTypedSub a x, updateTypedSub b (IInt (y + k)))
     | _ -> BLe (a, b)
 /// As mkLe, but uses the 'int' subtype.
 let mkIntLe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
@@ -731,14 +748,29 @@ let mkNot (x : BoolExpr<'var>) : BoolExpr<'var> = simp (BNot x)
 let mkNeq (l : Expr<'var>) (r : Expr<'var>) : BoolExpr<'var> =
     mkEq l r |> mkNot
 
-/// Makes an Add out of a pair of two expressions.
-let mkAdd2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
+/// Makes a Sub out of a pair of two expressions.
+let rec mkSub2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
     match (l, r) with
-    | (IInt 0L, x) | (x, IInt 0L)  -> x
-    | (IInt x, IInt y)             -> IInt (x + y)
-    | (IAdd xs, IAdd ys)           -> IAdd (foldInts (+) 0L (xs @ ys))
-    | (IAdd xs, y) | (y, IAdd xs)  -> IAdd (foldInts (+) 0L (y :: xs))
-    | _                            -> IAdd (foldInts (+) 0L [ l; r ])
+    | (IInt x , IInt y)  -> IInt (x - y)
+    | (x      , IInt 0L) -> x
+    | (x      , IInt k ) when k < 0L -> mkAdd2 x (IInt k)
+    | (ISub xs, x      ) -> ISub (xs @ [ x ])
+    | _                  -> ISub [ l; r ]
+/// Makes an Add out of a pair of two expressions.
+and mkAdd2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
+    match (l, r) with
+    | (IInt 0L, x) | (x, IInt 0L)   -> x
+    | (IInt x, IInt y)              -> IInt (x + y)
+    | (IAdd xs, IAdd ys)            -> IAdd (foldInts (+) 0L (xs @ ys))
+    | (IAdd xs, y) | (y, IAdd xs)   -> IAdd (foldInts (+) 0L (y :: xs))
+    // Try to move common subtractions outside the addition
+    // TODO(MattWindsor91): this could do with being generalised.
+
+    // (x + (y - k)) -> ((x + y) - k)
+    | (x, (ISub [ y; IInt k ]))     -> mkSub2 (mkAdd2 x y) (IInt k)
+    // ((x - k) + l) -> (x - (k-l)) but only when k, l are integers
+    | (ISub [ x ; IInt k ], IInt l) -> mkSub2 x (IInt (k - l))
+    | _                             -> IAdd (foldInts (+) 0L [ l; r ])
 
 /// Makes a variable increment expression.
 let incVar (x : 'Var) : IntExpr<'Var> = mkAdd2 (IVar x) (IInt 1L)
@@ -748,11 +780,6 @@ let mkAdd (xs : IntExpr<'var> seq) : IntExpr<'var> =
     // TODO(CaptainHayashi): produce a trimmed list, instead of mkAdd2ing.
     Seq.fold mkAdd2 (IInt 0L) xs
 
-/// Makes a Sub out of a pair of two expressions.
-let mkSub2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
-    match (l, r) with
-    | (IInt x, IInt y) -> IInt (x - y)
-    | _                -> ISub [ l; r ]
 /// Makes a Mul out of a pair of two expressions.
 let mkMul2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
     match (l, r) with
