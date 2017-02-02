@@ -149,9 +149,12 @@ module Pretty =
 
     /// Print infix operator (generic)
     let infexprG (combine : string -> Doc -> Doc) (op : string) (pxs : 'x -> Doc) (xs : seq<'x>) : Doc =
-        let mapped = Seq.map pxs xs
-        let resseq = Seq.map (combine op) (Seq.tail mapped)
-        parened (hsep [Seq.head mapped; (hsep resseq)])
+        match (List.map pxs (List.ofSeq xs)) with
+        | [] -> Nop
+        | [p] -> p
+        | p::ps ->
+            let resseq = Seq.map (combine op) ps
+            parened (hsep [p; (hsep resseq)])
 
     /// Print infix operator across multiple lines
     let infexprV (op : string) (pxs : 'x -> Doc) (xs : seq<'x>) : Doc =
@@ -470,20 +473,6 @@ let grassMicrocode (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list 
                         (tliftOverSym >> tliftOverCTyped >> tliftToExprDest >> tliftToBoolSrc)
                         (normalBool x)
                 lift (fun x -> [ PureAssume x ]) (mapMessages Traversal grassifyR)
-
-(*            | Assume (NoSym x) ->
-                // Pure assumption.
-                let grassifyR =
-                    liftWithoutContext
-                        (Starling >> Reg >> ok)
-                        (tliftOverCTyped >> tliftToExprDest >> tliftToBoolSrc)
-                        (normalBool x)
-                lift (fun x -> [ PureAssume x ]) (mapMessages Traversal grassifyR)
-            | Assume _ ->
-                fail
-                    (CommandNotImplemented
-                        (cmd = ent,
-                         why = "Impure assumptions not yet supported.")) *)
 
         lift List.concat (collect (List.map grassMicrocodeInstruction ent))
     lift List.concat (collect (List.map grassMicrocodeEntry routine))

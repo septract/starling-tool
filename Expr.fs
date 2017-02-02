@@ -486,6 +486,106 @@ let rec unfoldAnds (expr : BoolExpr<'Var>) : BoolExpr<'Var> list =
     | BAnd xs -> concatMap unfoldAnds xs
     | x -> [x]
 
+/// <summary>
+///     Collects all of the ints in a list of integer expressions, folds
+///     them together with a given operator and unit, and returns them
+///     separately from the rest of the expression.
+/// </summary>
+let sepInts (f : int64 -> int64 -> int64) (u: int64) (e : IntExpr<'var> list)
+  : int64 * IntExpr<'var> list =
+    let accum acc x =
+        match x with
+        | IInt k -> (f acc k, None  )
+        | _      -> (acc    , Some x)
+
+    let intBit, restMaybe = mapAccumL accum u e
+    let rest = List.choose id restMaybe
+    (intBit, rest)
+
+/// <summary>
+///     Collects all of the ints in a list of integer expressions, folds
+///     them together with a given operator and unit, and appends the result if
+///     it is not the unit.
+/// </summary>
+let foldInts (f : int64 -> int64 -> int64) (u: int64) (e : IntExpr<'var> list) =
+    let intBit, rest = sepInts f u e
+    // Shuffling to back is inefficient but gives more natural expressions.
+    if intBit = u then rest else (rest @ [IInt intBit])
+
+
+/// Curried wrapper over BGt.
+let mkGt (a : TypedIntExpr<'var>) (b : TypedIntExpr<'var>) : BoolExpr<'var> =
+    match (stripTypeRec a, stripTypeRec b) with
+    | IInt x, IInt y when x >  y -> BTrue
+    | IInt x, IInt y when x <= y -> BFalse
+    | IVar x, IVar y when x =  y -> BFalse
+    // x + k > z <-> c > x - k
+    | IAdd xs, IInt y ->
+        let yk, xs' = sepInts (+) 0L xs
+        BGt (updateTypedSub a (IAdd xs'), updateTypedSub b (IInt (y - yk)))
+    // x - k > z <-> c > x + k
+    // TODO(MattWindsor91): generalise this?
+    | ISub [ x; IInt k ], IInt y ->
+        BGt (updateTypedSub a x, updateTypedSub b (IInt (y + k)))
+    | _ -> BGt (a, b)
+/// As mkGt, but uses the 'int' subtype.
+let mkIntGt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
+    mkGt (mkTypedSub normalRec a) (mkTypedSub normalRec b)
+/// Curried wrapper over BGe.
+let mkGe (a : TypedIntExpr<'var>) (b : TypedIntExpr<'var>) : BoolExpr<'var> =
+    match (stripTypeRec a, stripTypeRec b) with
+    | IInt x, IInt y when x >= y -> BTrue
+    | IInt x, IInt y when x <  y -> BFalse
+    | IVar x, IVar y when x =  y -> BTrue
+    // x + k >= z <-> c >= x - k
+    | IAdd xs, IInt y ->
+        let yk, xs' = sepInts (+) 0L xs
+        BGe (updateTypedSub a (IAdd xs'), updateTypedSub b (IInt (y - yk)))
+    // x - k >= z <-> c >= x + k
+    // TODO(MattWindsor91): generalise this?
+    | ISub [ x; IInt k ], IInt y ->
+        BGe (updateTypedSub a x, updateTypedSub b (IInt (y + k)))
+    | _ -> BGe (a, b)
+/// As mkGe, but uses the 'int' subtype.
+let mkIntGe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
+    mkGe (mkTypedSub normalRec a) (mkTypedSub normalRec b)
+/// Curried wrapper over BLt.
+let mkLt (a : TypedIntExpr<'var>) (b : TypedIntExpr<'var>) : BoolExpr<'var> =
+    match (stripTypeRec a, stripTypeRec b) with
+    | IInt x, IInt y when x <  y -> BTrue
+    | IInt x, IInt y when x >= y -> BFalse
+    | IVar x, IVar y when x =  y -> BFalse
+    // x + k < z <-> c < x - k
+    | IAdd xs, IInt y ->
+        let yk, xs' = sepInts (+) 0L xs
+        BLt (updateTypedSub a (IAdd xs'), updateTypedSub b (IInt (y - yk)))
+    // x - k < z <-> c < x + k
+    // TODO(MattWindsor91): generalise this?
+    | ISub [ x; IInt k ], IInt y ->
+        BLt (updateTypedSub a x, updateTypedSub b (IInt (y + k)))
+    | _ -> BLt (a, b)
+/// As mkLt, but uses the 'int' subtype.
+let mkIntLt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
+    mkLt (mkTypedSub normalRec a) (mkTypedSub normalRec b)
+/// Curried wrapper over BLe.
+let mkLe (a : TypedIntExpr<'var>) (b : TypedIntExpr<'var>) : BoolExpr<'var> =
+    match (stripTypeRec a, stripTypeRec b) with
+    | IInt x, IInt y when x <= y -> BTrue
+    | IInt x, IInt y when x >  y -> BFalse
+    | IVar x, IVar y when x =  y -> BTrue
+    // x + k <= z <-> c <= x - k
+    | IAdd xs, IInt y ->
+        let yk, xs' = sepInts (+) 0L xs
+        BLe (updateTypedSub a (IAdd xs'), updateTypedSub b (IInt (y - yk)))
+    // x - k <= z <-> c <= x + k
+    // TODO(MattWindsor91): generalise this?
+    | ISub [ x; IInt k ], IInt y ->
+        BLe (updateTypedSub a x, updateTypedSub b (IInt (y + k)))
+    | _ -> BLe (a, b)
+/// As mkLe, but uses the 'int' subtype.
+let mkIntLe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
+    mkLe (mkTypedSub normalRec a) (mkTypedSub normalRec b)
+
 /// Recursively simplify a formula
 /// Note: this does _not_ simplify variables.
 let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
@@ -506,9 +606,11 @@ let rec simp (ax : BoolExpr<'var>) : BoolExpr<'var> =
         | y          -> BNot y
     // x = x is always true.
     | BEq (x, y) when x = y -> BTrue
-    // As are x >= x, and x <= x.
-    | BGe (x, y)
-    | BLe (x, y) when x = y -> BTrue
+    // Use the integer simplifiers for inequalities.
+    | BGt (x, y) -> mkGt x y
+    | BGe (x, y) -> mkGe x y
+    | BLe (x, y) -> mkLe x y
+    | BLt (x, y) -> mkLt x y
     | BImplies (x, y) ->
         match simp x, simp y with
         | BFalse, _
@@ -599,43 +701,6 @@ let varMapToExprs
 // TODO(CaptainHayashi): move these optimisations into an integer simplification
 // function and hook it up to simp.
 
-/// Curried wrapper over BGt.
-let mkGt (a : TypedIntExpr<'var>) (b : TypedIntExpr<'var>) : BoolExpr<'var> =
-    match (stripTypeRec a, stripTypeRec b) with
-    | IInt x, IInt y when x >  y -> BTrue
-    | IInt x, IInt y when x <= y -> BFalse
-    | _ -> BGt (a, b)
-/// As mkGt, but uses the 'int' subtype.
-let mkIntGt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
-    mkGt (mkTypedSub normalRec a) (mkTypedSub normalRec b)
-/// Curried wrapper over BGe.
-let mkGe (a : TypedIntExpr<'var>) (b : TypedIntExpr<'var>) : BoolExpr<'var> =
-    match (stripTypeRec a, stripTypeRec b) with
-    | IInt x, IInt y when x >= y -> BTrue
-    | IInt x, IInt y when x <  y -> BFalse
-    | _ -> BGe (a, b)
-/// As mkGe, but uses the 'int' subtype.
-let mkIntGe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
-    mkGe (mkTypedSub normalRec a) (mkTypedSub normalRec b)
-/// Curried wrapper over BLt.
-let mkLt (a : TypedIntExpr<'var>) (b : TypedIntExpr<'var>) : BoolExpr<'var> =
-    match (stripTypeRec a, stripTypeRec b) with
-    | IInt x, IInt y when x <  y -> BTrue
-    | IInt x, IInt y when x >= y -> BFalse
-    | _ -> BLt (a, b)
-/// As mkLt, but uses the 'int' subtype.
-let mkIntLt (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
-    mkLt (mkTypedSub normalRec a) (mkTypedSub normalRec b)
-/// Curried wrapper over BLe.
-let mkLe (a : TypedIntExpr<'var>) (b : TypedIntExpr<'var>) : BoolExpr<'var> =
-    match (stripTypeRec a, stripTypeRec b) with
-    | IInt x, IInt y when x <= y -> BTrue
-    | IInt x, IInt y when x >  y -> BFalse
-    | _ -> BLe (a, b)
-/// As mkLe, but uses the 'int' subtype.
-let mkIntLe (a : IntExpr<'var>) (b : IntExpr<'var>) : BoolExpr<'var> =
-    mkLe (mkTypedSub normalRec a) (mkTypedSub normalRec b)
-
 /// Curried wrapper over BEq.
 let mkEq (a : Expr<'var>) (b : Expr<'var>) : BoolExpr<'var> = BEq (a, b)
 
@@ -665,7 +730,8 @@ let mkAnd (xs : BoolExpr<'var> list) : BoolExpr<'var> = simp (BAnd xs)
 let mkOr (xs : BoolExpr<'var> list) : BoolExpr<'var> = simp (BOr xs)
 
 /// Makes a BImplies
-let mkImpl (a : BoolExpr<'var>) (b : BoolExpr<'var>) : BoolExpr<'var> = simp (BImplies(a, b))
+let mkImplies (a : BoolExpr<'var>) (b : BoolExpr<'var>) : BoolExpr<'var> =
+    simp (BImplies(a, b))
 
 /// Makes an And from a pair of two expressions.
 let mkAnd2 (l : BoolExpr<'var>) (r : BoolExpr<'var>) : BoolExpr<'var> =
@@ -682,16 +748,29 @@ let mkNot (x : BoolExpr<'var>) : BoolExpr<'var> = simp (BNot x)
 let mkNeq (l : Expr<'var>) (r : Expr<'var>) : BoolExpr<'var> =
     mkEq l r |> mkNot
 
-/// Makes an implication from a pair of two expressions.
-let mkImplies (l : BoolExpr<'var>) (r : BoolExpr<'var>) : BoolExpr<'var> =
-    BImplies (l, r) |> simp
-
-/// Makes an Add out of a pair of two expressions.
-let mkAdd2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
+/// Makes a Sub out of a pair of two expressions.
+let rec mkSub2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
     match (l, r) with
-    | (IInt 0L, x) | (x, IInt 0L) -> x
-    | (IInt x, IInt y)            -> IInt (x + y)
-    | _                           -> IAdd [ l; r ]
+    | (IInt x , IInt y)  -> IInt (x - y)
+    | (x      , IInt 0L) -> x
+    | (x      , IInt k ) when k < 0L -> mkAdd2 x (IInt k)
+    | (ISub xs, x      ) -> ISub (xs @ [ x ])
+    | _                  -> ISub [ l; r ]
+/// Makes an Add out of a pair of two expressions.
+and mkAdd2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
+    match (l, r) with
+    | (IInt 0L, x) | (x, IInt 0L)   -> x
+    | (IInt x, IInt y)              -> IInt (x + y)
+    | (IAdd xs, IAdd ys)            -> IAdd (foldInts (+) 0L (xs @ ys))
+    | (IAdd xs, y) | (y, IAdd xs)   -> IAdd (foldInts (+) 0L (y :: xs))
+    // Try to move common subtractions outside the addition
+    // TODO(MattWindsor91): this could do with being generalised.
+
+    // (x + (y - k)) -> ((x + y) - k)
+    | (x, (ISub [ y; IInt k ]))     -> mkSub2 (mkAdd2 x y) (IInt k)
+    // ((x - k) + l) -> (x - (k-l)) but only when k, l are integers
+    | (ISub [ x ; IInt k ], IInt l) -> mkSub2 x (IInt (k - l))
+    | _                             -> IAdd (foldInts (+) 0L [ l; r ])
 
 /// Makes a variable increment expression.
 let incVar (x : 'Var) : IntExpr<'Var> = mkAdd2 (IVar x) (IInt 1L)
@@ -701,11 +780,6 @@ let mkAdd (xs : IntExpr<'var> seq) : IntExpr<'var> =
     // TODO(CaptainHayashi): produce a trimmed list, instead of mkAdd2ing.
     Seq.fold mkAdd2 (IInt 0L) xs
 
-/// Makes a Sub out of a pair of two expressions.
-let mkSub2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
-    match (l, r) with
-    | (IInt x, IInt y) -> IInt (x - y)
-    | _                -> ISub [ l; r ]
 /// Makes a Mul out of a pair of two expressions.
 let mkMul2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
     match (l, r) with

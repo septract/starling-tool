@@ -203,7 +203,7 @@ module ArithmeticExprs =
                     (mkTypedSub
                         (mkArrayTypeRec (Int (normalRec, ())) (Some 10))
                         (AVar (Reg "nums")),
-                     IAdd [ IVar (Reg "foo"); IInt 3L ])))
+                     mkAdd2 (IVar (Reg "foo")) (IInt 3L))))
 
     [<Test>]
     let ``test modelling shared array access nums[lnode + 1] fails`` ()=
