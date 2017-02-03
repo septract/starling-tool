@@ -49,13 +49,11 @@ let shared =
 
 let context =
     { ViewProtos = ticketLockProtos
-      SharedVars = Map.empty
-      ThreadVars = environ }
+      Env = Env.env environ Map.empty }
 
 let sharedContext =
     { ViewProtos = ticketLockProtos
-      SharedVars = shared
-      ThreadVars = environ }
+      Env = Env.env environ shared }
 
 
 module ViewPass =
@@ -121,15 +119,17 @@ module ArithmeticExprs =
     open Starling.Lang.Modeller.Pretty
 
     let check (env : VarMap) (ast : Expression) (expectedExpr : TypedIntExpr<Sym<Var>>) =
+        let e = Env.env environ env
         assertOkAndEqual
             expectedExpr
-            (modelIntExpr env environ id ast)
+            (modelIntExpr e Env.Shared id ast)
             (printExprError >> printUnstyled)
 
     let checkFail (env : VarMap) (ast : Expression) (expectedErrors : ExprError list) =
+        let e = Env.env environ env
         assertFail
             expectedErrors
-            (modelIntExpr env environ id ast)
+            (modelIntExpr e Env.Shared id ast)
             (stripTypeRec >> printIntExpr (printSym printVar) >> printUnstyled)
 
     [<Test>]
@@ -243,7 +243,8 @@ module ArithmeticExprs =
 
 module BooleanExprs =
     let check (env : VarMap) (ast : Expression) (expectedExpr : TypedBoolExpr<Sym<Var>>) =
-        let actualBoolExpr = okOption <| modelBoolExpr env environ id ast
+        let e = Env.env environ env
+        let actualBoolExpr = okOption <| modelBoolExpr e Env.Shared id ast
         AssertAreEqual(Some expectedExpr, actualBoolExpr)
 
     [<Test>]

@@ -205,6 +205,119 @@ module VarMap =
         Seq.map (fun (name, ty) -> withType ty name) (Map.toSeq vmap)
 
 
+/// <summary>
+///     Module for variable environments.
+/// </summary>
+module Env =
+    /// <summary>
+    ///     A full variable environment.
+    /// </summary>
+    type Env =
+        { /// <summary>The set of thread-local variables.</summary>
+          TVars : VarMap
+          /// <summary>The set of shared variables.</summary>
+          SVars : VarMap }
+
+    /// <summary>
+    ///     Creates an <see cref="Env"/>.
+    /// </summary>
+    /// <param name="tvars">The thread-local variable map.</param>
+    /// <param name="svars">The shared variable map.</param>
+    /// <returns>An environment with the given variable maps.</returns>
+    let env tvars svars = { TVars = tvars; SVars = svars }
+
+    /// <summary>
+    ///     A variable scope.
+    /// </summary>
+    type Scope =
+        | /// <summary>Look up variables in thread-local scope.</summary>
+          Thread
+        | /// <summary>
+          ///     Look up variables in shared scope.
+          ///     Switch to thread scope for indices, and full scope for
+          ///     symbols.
+          /// </summary>
+          Shared
+        | /// <summary>Look up variables in local first, then shared.</summary>
+          Full
+        | /// <summary>
+          ///     Look up variables in the given local map first, then the next
+          ///     scope.
+          /// </summary>
+          WithMap of map : VarMap * rest : Scope
+
+    /// <summary>
+    ///     Given a scope, return the appropriate scope for indices.
+    /// </summary>
+    /// <param name="scope">The scope to change for indices.</param>
+    /// <returns>The appropriate symbol scope.</returns>
+    let rec indexScopeOf (scope : Scope) : Scope =
+        match scope with
+        | WithMap (map, rest) -> WithMap (map, indexScopeOf rest)
+        | x -> Thread
+
+    /// <summary>
+    ///     Given a scope, return the appropriate scope for symbolics.
+    ///
+    ///     <para>
+    ///         This function exists because, when processing a shared-scope
+    ///         expression and encountering a symbol, we allow thread-local
+    ///         variables to appear in the symbol body.
+    ///     </para>
+    /// </summary>
+    /// <param name="scope">The scope to change for symbols.</param>
+    /// <returns>The appropriate symbol scope.</returns>
+    let rec symbolicScopeOf (scope : Scope) : Scope =
+        match scope with
+        | WithMap (map, rest) -> WithMap (map, symbolicScopeOf rest)
+        | Shared -> Full
+        | x -> x
+
+    /// <summary>
+    ///     Looks up a variable in an environment.
+    /// </summary>
+    /// <param name="env">The <see cref="Env"/> to look up.</param>
+    /// <param name="scope">The scope at which to look up.</param>
+    /// <param name="var">The variable to look up.</param>
+    /// <returns>
+    ///     A Chessie result in terms of <see cref="VarMapError"/>, containing
+    ///     the variable record on success.
+    /// </returns>
+    let rec lookup (env : Env) (scope : Scope) (var : Var)
+      : Result<CTyped<string>, VarMapError> =
+        match scope with
+        | Thread ->
+            VarMap.lookup env.TVars var
+        | Shared ->
+            VarMap.lookup env.SVars var
+        | Full ->
+            (* Currently, the order doesn't matter as both are disjoint.
+               However, one day, it might, in which case the thread scope is
+               'closer' to program code. *)
+            match VarMap.lookup env.TVars var with
+            | Ok (x, e) -> Ok (x, e)
+            | _ ->
+                // TODO(MattWindsor91): handle errors properly
+                VarMap.lookup env.SVars var
+        | WithMap (map, rest) ->
+            match VarMap.lookup map var with
+            | Ok (x, e) -> Ok (x, e)
+            | _ -> lookup env rest var
+
+    /// <summary>
+    ///     Tries to look up a variable in an environment.
+    /// </summary>
+    /// <param name="env">The <see cref="Env"/> to look up.</param>
+    /// <param name="scope">The scope at which to look up.</param>
+    /// <param name="var">The variable to look up.</param>
+    /// <returns>
+    ///     An option, containing the variable record on success.
+    /// </returns>
+    let tryLookup (env : Env) (scope : Scope) (var : Var)
+      : CTyped<string> option =
+        okOption (lookup env scope var)
+
+
 (*
  * Variable constructors
  *)

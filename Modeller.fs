@@ -12,6 +12,7 @@ open Starling.Core.Definer
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
+open Starling.Core.Var.Env
 open Starling.Core.Var.VarMap
 open Starling.Core.Symbolic
 open Starling.Core.Model
@@ -57,13 +58,9 @@ module Types =
     /// </summary>
     type MethodContext =
         { /// <summary>
-          ///     The environment of visible shared variables.
+          ///     The environment of visible variables.
           /// </summary>
-          SharedVars : VarMap
-          /// <summary>
-          ///     The environment of visible thread-local variables.
-          /// </summary>
-          ThreadVars : VarMap
+          Env : Env
           /// <summary>
           ///     A definer containing the visible view prototypes.
           /// </summary>
@@ -623,10 +620,9 @@ let checkBoolIsNormalType (bool : TypedBoolExpr<'Var>)
 ///         to be modified by a post-processing function.
 ///     </para>
 /// </summary>
-/// <param name="env">
-///     The <c>VarMap</c> of variables bound where this expression
-///     occurs.  Usually, but not always, these are the thread-local
-///     variables.
+/// <param name="env">The <see cref="Env"/> of variables in the program.</param>
+/// <param name="scope">
+///     The level of variable scope at which this expression occurs.
 /// </param>
 /// <param name="varF">
 ///     A function to transform any variables after they are looked-up,
@@ -648,8 +644,8 @@ let checkBoolIsNormalType (bool : TypedBoolExpr<'Var>)
 ///     expression depend on <paramref name="varF"/>.
 /// </returns>
 let rec modelExpr
-  (env : VarMap)
-  (idxEnv : VarMap)
+  (env : Env)
+  (scope : Scope)
   (varF : Var -> 'var)
   (e : Expression)
   : Result<Expr<Sym<'var>>, ExprError> =
@@ -663,15 +659,15 @@ let rec modelExpr
                     (varF >> Reg >> ok)
                     (tliftOverCTyped >> tliftToExprDest)
                  >> mapMessages BadSub)
-                (wrapMessages Var (VarMap.lookup env) v)
+                (wrapMessages Var (Env.lookup env scope) v)
         | Symbolic sym ->
             fail (AmbiguousSym sym)
         (* If we have an array, then work out what the type of the array's
            elements are, then walk back from there. *)
         | ArraySubscript (arr, idx) ->
-            let arrR = modelArrayExpr env idxEnv varF arr
-            // Indices always have to be of type 'int'.
-            let idxuR = modelIntExpr idxEnv idxEnv varF idx
+            let arrR = modelArrayExpr env scope varF arr
+            // Indices always have to be of type 'int', and be in local scope.
+            let idxuR = modelIntExpr env (indexScopeOf scope) varF idx
             let idxR = bind (checkIntIsNormalType >> mapMessages ExprBadType) idxuR
 
             lift2
@@ -684,8 +680,8 @@ let rec modelExpr
         (* We can use the active patterns above to figure out whether we
          * need to treat this expression as arithmetic or Boolean.
          *)
-        | ArithExp' _ -> lift (liftTypedSub Expr.Int) (modelIntExpr env idxEnv varF e)
-        | BoolExp' _ -> lift (liftTypedSub Expr.Bool) (modelBoolExpr env idxEnv varF e)
+        | ArithExp' _ -> lift (liftTypedSub Expr.Int) (modelIntExpr env scope varF e)
+        | BoolExp' _ -> lift (liftTypedSub Expr.Bool) (modelBoolExpr env scope varF e)
         | _ -> failwith "unreachable[modelExpr]"
 
 /// <summary>
@@ -695,10 +691,9 @@ let rec modelExpr
 ///         See <c>modelExpr</c> for more information.
 ///     </para>
 /// </summary>
-/// <param name="env">
-///     The <c>VarMap</c> of variables bound where this expression
-///     occurs.  Usually, but not always, these are the thread-local
-///     variables.
+/// <param name="env">The <see cref="Env"/> of variables in the program.</param>
+/// <param name="scope">
+///     The level of variable scope at which this expression occurs.
 /// </param>
 /// <param name="varF">
 ///     A function to transform any variables after they are looked-up,
@@ -723,13 +718,13 @@ let rec modelExpr
 ///     <paramref name="varF"/>.
 /// </returns>
 and modelBoolExpr
-  (env : VarMap)
-  (idxEnv : VarMap)
+  (env : Env)
+  (scope : Scope)
   (varF : Var -> 'var)
   (expr : Expression) : Result<TypedBoolExpr<Sym<'var>>, ExprError> =
-    let mi = modelIntExpr env idxEnv varF
-    let me = modelExpr env idxEnv varF
-    let ma = modelArrayExpr env idxEnv varF
+    let mi = modelIntExpr env scope varF
+    let me = modelExpr env scope varF
+    let ma = modelArrayExpr env scope varF
 
     let rec mb e : Result<TypedBoolExpr<Sym<'var>>, ExprError> =
         match e.Node with
@@ -750,15 +745,17 @@ and modelBoolExpr
                             (v,
                              TypeMismatch
                                 (expected = Fuzzy "bool", got = Exact (typeOf vr)))))
-                (wrapMessages Var (VarMap.lookup env) v)
+                (wrapMessages Var (Env.lookup env scope) v)
         | Symbolic sa ->
-            // Symbols have an indefinite subtype.
-            lift (fun a -> indefBool (BVar (Sym a))) (tryMapSym me sa)
+            (* Symbols have an indefinite subtype, and can include thread-local
+               scope. *)
+            lift
+                (fun a -> indefBool (BVar (Sym a)))
+                (tryMapSym (modelExpr env (symbolicScopeOf scope) varF) sa)
         | ArraySubscript (arr, idx) ->
             let arrR = ma arr
-            // Indices always have to be of type 'int'.
-            // Bind array index using its own environment.
-            let idxuR = modelIntExpr idxEnv idxEnv varF idx
+            // Indices always have to be of type 'int', and in local scope.
+            let idxuR = modelIntExpr env (indexScopeOf scope) varF idx
             let idxR = bind (checkIntIsNormalType >> mapMessages ExprBadType) idxuR
 
             bind2
@@ -784,7 +781,7 @@ and modelBoolExpr
                     match o with
                     | And -> mkAnd2
                     | Or -> mkOr2
-                    | Imp -> mkImpl
+                    | Imp -> mkImplies
                     | _ -> failwith "unreachable[modelBoolExpr::BoolIn]"
 
                 (* Both sides of the expression need to be unifiable to the
@@ -824,14 +821,9 @@ and modelBoolExpr
 ///         See <c>modelExpr</c> for more information.
 ///     </para>
 /// </summary>
-/// <param name="env">
-///     The <c>VarMap</c> of variables bound where this expression
-///     occurs.  Usually, but not always, these are the thread-local
-///     variables.
-/// </param>
-/// <param name="idxEnv">
-///     The <c>VarMap</c> of variables available to any array subscripts in this
-///     expression.  This is almost always the thread-local variables.
+/// <param name="env">The <see cref="Env"/> of variables in the program.</param>
+/// <param name="scope">
+///     The level of variable scope at which this expression occurs.
 /// </param>
 /// <param name="varF">
 ///     A function to transform any variables after they are looked-up,
@@ -852,12 +844,12 @@ and modelBoolExpr
 ///     <paramref name="varF"/>.
 /// </returns>
 and modelIntExpr
-  (env : VarMap)
-  (idxEnv : VarMap)
+  (env : Env)
+  (scope : Scope)
   (varF : Var -> 'var)
   (expr : Expression) : Result<TypedIntExpr<Sym<'var>>, ExprError> =
-    let me = modelExpr env idxEnv varF
-    let ma = modelArrayExpr env idxEnv varF
+    let me = modelExpr env scope varF
+    let ma = modelArrayExpr env scope varF
 
     let rec mi e =
         match e.Node with
@@ -868,7 +860,7 @@ and modelIntExpr
              * arithmetic type.
              *)
             v
-            |> wrapMessages Var (VarMap.lookup env)
+            |> wrapMessages Var (Env.lookup env scope)
             |> bind (function
                      | Typed.Int (ty, vn) ->
                          ok (mkTypedSub ty (IVar (Reg (varF vn))))
@@ -880,12 +872,13 @@ and modelIntExpr
                                     (expected = Fuzzy "int", got = Exact (typeOf vr)))))
          | Symbolic sa ->
             // Symbols have indefinite subtype.
-            lift (fun a -> indefInt (IVar (Sym a))) (tryMapSym me sa)
+            lift
+                (fun a -> indefInt (IVar (Sym a)))
+                (tryMapSym (modelExpr env (symbolicScopeOf scope) varF) sa)
         | ArraySubscript (arr, idx) ->
             let arrR = ma arr
-            // Indices always have to be of type 'int'.
-            // Bind array index using its own environment.
-            let idxuR = modelIntExpr idxEnv idxEnv varF idx
+            // Indices always have to be of type 'int' and local scope.
+            let idxuR = modelIntExpr env (indexScopeOf scope) varF idx
             let idxR = bind (checkIntIsNormalType >> mapMessages ExprBadType) idxuR
 
             bind2
@@ -928,14 +921,9 @@ and modelIntExpr
 ///         See <c>modelExpr</c> for more information.
 ///     </para>
 /// </summary>
-/// <param name="env">
-///     The <c>VarMap</c> of variables bound where this expression
-///     occurs.  Usually, but not always, these are the thread-local
-///     variables.
-/// </param>
-/// <param name="idxEnv">
-///     The <c>VarMap</c> of variables available to any array subscripts in this
-///     expression.  This is almost always the thread-local variables.
+/// <param name="env">The <see cref="Env"/> of variables in the program.</param>
+/// <param name="scope">
+///     The level of variable scope at which this expression occurs.
 /// </param>
 /// <param name="varF">
 ///     A function to transform any variables after they are looked-up,
@@ -956,12 +944,12 @@ and modelIntExpr
 ///     <paramref name="varF"/>.
 /// </returns>
 and modelArrayExpr
-  (env : VarMap)
-  (idxEnv : VarMap)
+  (env : Env)
+  (scope : Scope)
   (varF : Var -> 'var)
   (expr : Expression)
   : Result<TypedArrayExpr<Sym<'var>>, ExprError> =
-    let mi = modelIntExpr env idxEnv varF
+    let mi = modelIntExpr env scope varF
 
     let rec ma e =
         match e.Node with
@@ -970,7 +958,7 @@ and modelArrayExpr
              * array type.
              *)
             v
-            |> wrapMessages Var (VarMap.lookup env)
+            |> wrapMessages Var (Env.lookup env scope)
             |> bind (function
                      | Typed.Array (t, vn) ->
                         ok (mkTypedSub t (AVar (Reg (varF vn))))
@@ -987,8 +975,8 @@ and modelArrayExpr
             fail (AmbiguousSym sym)
         | ArraySubscript (arr, idx) ->
             let arrR = ma arr
-            // Indices always have to be of type 'int'.
-            let idxuR = modelIntExpr idxEnv idxEnv varF idx
+            // Indices always have to be of type 'int' and in local scope.
+            let idxuR = modelIntExpr env Thread varF idx
             let idxR = bind (checkIntIsNormalType >> mapMessages ExprBadType) idxuR
 
             bind2
@@ -1057,9 +1045,8 @@ let makeIteratorMap : TypedVar option -> VarMap =
     | Some (Int (t, v)) -> Map.ofList [ v, Type.Int (t, ()) ]
     | _                 -> failwith "Iterator in iterated views must be Int type"
 
-/// Produces the environment created by interpreting the viewdef vds using the
-/// view prototype map vpm.
-let rec localEnvOfViewDef (vds : DView) : Result<VarMap, ViewError> =
+/// Produces the environment created by interpreting the viewdef vds.
+let rec varMapOfViewDef (vds : DView) : Result<VarMap, ViewError> =
     let makeFuncMap { Func = {Params = ps}; Iterator = it } =
         VarMap.ofTypedVarSeq ps >>= (VarMap.combine (makeIteratorMap it))
 
@@ -1069,25 +1056,24 @@ let rec localEnvOfViewDef (vds : DView) : Result<VarMap, ViewError> =
 
     mapMessages ViewError.BadVar singleMap
 
-/// Produces the variable environment for the constraint whose viewdef is v.
-let envOfViewDef (svars : VarMap) : DView -> Result<VarMap, ViewError> =
-    localEnvOfViewDef >> bind (VarMap.combine svars >> mapMessages SVarConflict)
-
 /// Converts a single constraint to its model form.
 let modelViewDef
-  (svars : VarMap)
+  (env : Env)
   (vprotos : FuncDefiner<ProtoInfo>)
   (av : ViewSignature, ad : Expression option)
   : Result<(DView * SVBoolExpr option), ModelError> =
     trial {
         let! vms = wrapMessages CEView (modelViewSignature vprotos) av
         let  v = vms |> Multiset.toFlatList
-        let! e = envOfViewDef svars v |> mapMessages (curry CEView av)
+        let! e = mapMessages (curry CEView av) (varMapOfViewDef v)
+
+        let scope = WithMap (e, Shared)
+
         let! d =
             match ad with
             | Some dad ->
                 dad
-                |> wrapMessages CEExpr (modelBoolExpr e e id)
+                |> wrapMessages CEExpr (modelBoolExpr env scope id)
                 |> bind (checkBoolIsNormalType >> mapMessages (fun t -> CEExpr (dad, ExprBadType t)))
                 |> lift Some
             | None _ -> ok None
@@ -1264,18 +1250,18 @@ let modelViewDefs
 
 /// Models an AFunc as a CFunc.
 let modelCFunc
-  ({ ViewProtos = protos; ThreadVars = tvars } : MethodContext)
+  (ctx : MethodContext)
   (afunc : Func<Expression>) =
     // First, make sure this AFunc actually has a prototype
     // and the correct number of parameters.
     afunc
-    |> lookupFunc protos
+    |> lookupFunc ctx.ViewProtos
     |> bind (fun proto ->
              // First, model the AFunc's parameters.
              afunc.Params
              |> Seq.map (fun e ->
                              e
-                             |> modelExpr tvars tvars id
+                             |> modelExpr ctx.Env Thread id
                              |> mapMessages (curry ViewError.BadExpr e))
              |> collect
              // Then, put them into a VFunc.
@@ -1300,7 +1286,7 @@ let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
            not a subtype. *)
         let teR =
             wrapMessages ViewError.BadExpr
-                (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
+                (modelBoolExpr ctx.Env Thread id)
                 e
         let eR =
             bind
@@ -1328,72 +1314,78 @@ let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
 ///     Models a Boolean lvalue given a potentially valid expression and
 ///     environment.
 /// </summary>
-/// <param name="env">The environment used for variables in the lvalue.</param>
-/// <param name="idxEnv">The environment used for indexes in the lvalue.</param>
+/// <param name="env">The <see cref="Env"/> of variables in the program.</param>
+/// <param name="scope">
+///     The level of variable scope at which this expression occurs.
+/// </param>
 /// <param name="marker">A function that marks (or doesn't mark) vars.</param>
 /// <param name="ex">The possible lvalue to model.</param>
 /// <returns>If the subject is a valid lvalue, the result expression.</returns>
 let modelBoolLValue
-  (env : VarMap) (idxEnv : VarMap) (marker : Var -> 'Var) (ex : Expression)
+  (env : Env) (scope : Scope) (marker : Var -> 'Var) (ex : Expression)
   : Result<TypedBoolExpr<Sym<'Var>>, PrimError> =
     match ex with
     | RValue r -> fail (NeedLValue r)
-    | LValue l -> wrapMessages BadExpr (modelBoolExpr env idxEnv marker) l
+    | LValue l -> wrapMessages BadExpr (modelBoolExpr env scope marker) l
 
 // Models a boolean <LValue | Symbolic>
 // in an analogous way to ``modelIntLValueOrSymbol``
 let modelBoolLValueOrSymbol
-  (env : VarMap) (idxEnv : VarMap) (marker : Var -> 'Var) (ex : Expression)
+  (env : Env) (scope : Scope) (marker : Var -> 'Var) (ex : Expression)
   : Result<TypedBoolExpr<Sym<'Var>>, PrimError> =
     match ex with
     | RValue r ->
         match r.Node with
-        | Symbolic _ -> wrapMessages BadExpr (modelBoolExpr env idxEnv marker) r
+        | Symbolic _ -> wrapMessages BadExpr (modelBoolExpr env scope marker) r
         | _          -> fail (NeedLValue r)
-    | LValue l -> wrapMessages BadExpr (modelBoolExpr env idxEnv marker) l
+    | LValue l -> wrapMessages BadExpr (modelBoolExpr env scope marker) l
 
 /// <summary>
 ///     Models an integer lvalue given a potentially valid expression and
 ///     environment.
 /// </summary>
-/// <param name="env">The environment used for variables in the lvalue.</param>
-/// <param name="idxEnv">The environment used for indexes in the lvalue.</param>
+/// <param name="env">The <see cref="Env"/> of variables in the program.</param>
+/// <param name="scope">
+///     The level of variable scope at which this expression occurs.
+/// </param>
 /// <param name="marker">A function that marks (or doesn't mark) vars.</param>
 /// <param name="ex">The possible lvalue to model.</param>
 /// <returns>If the subject is a valid lvalue, the result expression.</returns>
 let modelIntLValue
-  (env : VarMap) (idxEnv : VarMap) (marker : Var -> 'Var) (ex : Expression)
+  (env : Env) (scope : Scope) (marker : Var -> 'Var) (ex : Expression)
   : Result<TypedIntExpr<Sym<'Var>>, PrimError> =
     match ex with
     | RValue r -> fail (NeedLValue r)
-    | LValue l -> wrapMessages BadExpr (modelIntExpr env idxEnv marker) l
+    | LValue l -> wrapMessages BadExpr (modelIntExpr env scope marker) l
 
 /// Model an expr that's either an IntLValue or a Symbolic Command
 let modelIntLValueOrSymbol
-  (env : VarMap) (idxEnv : VarMap) (marker : Var -> 'Var) (ex : Expression)
+  (env : Env) (scope : Scope) (marker : Var -> 'Var) (ex : Expression)
   : Result<TypedIntExpr<Sym<'Var>>, PrimError> =
     match ex with
     | RValue r ->
         match r.Node with
-        | Symbolic _ -> wrapMessages BadExpr (modelIntExpr env idxEnv marker) r
+        | Symbolic _ -> wrapMessages BadExpr (modelIntExpr env scope marker) r
         | _          -> fail (NeedLValue r)
-    | LValue l -> wrapMessages BadExpr (modelIntExpr env idxEnv marker) l
+    | LValue l -> wrapMessages BadExpr (modelIntExpr env scope marker) l
 
 /// <summary>
 ///     Models an lvalue given a potentially valid expression and
 ///     environment.
 /// </summary>
-/// <param name="env">The environment of variables used for the lvalue.</param>
-/// <param name="idxEnv">The environment used for indexes in the lvalue.</param>
+/// <param name="env">The <see cref="Env"/> of variables in the program.</param>
+/// <param name="scope">
+///     The level of variable scope at which this expression occurs.
+/// </param>
 /// <param name="marker">A function that marks (or doesn't mark) vars.</param>
 /// <param name="ex">The possible lvalue to model.</param>
 /// <returns>If the subject is a valid lvalue, the result expression.</returns>
 let modelLValue
-  (env : VarMap) (idxEnv : VarMap) (marker : Var -> 'Var) (ex : Expression)
+  (env : Env) (scope : Scope) (marker : Var -> 'Var) (ex : Expression)
   : Result<Expr<Sym<'Var>>, PrimError> =
     match ex with
     | RValue r -> fail (NeedLValue r)
-    | LValue l -> wrapMessages BadExpr (modelExpr env idxEnv marker) l
+    | LValue l -> wrapMessages BadExpr (modelExpr env scope marker) l
 
 /// Converts a Boolean load to a Prim.
 let modelBoolLoad
@@ -1420,8 +1412,8 @@ let modelBoolLoad
                     (Exact (typedBoolToType srcE)))
 
     bind2 modelWithExprs
-        (modelBoolLValue ctx.ThreadVars ctx.ThreadVars id dest)
-        (modelBoolLValue ctx.SharedVars ctx.ThreadVars id src)
+        (modelBoolLValue ctx.Env Thread id dest)
+        (modelBoolLValueOrSymbol ctx.Env Shared id src)
 
 /// Converts an integer load to a Prim.
 let modelIntLoad
@@ -1460,16 +1452,9 @@ let modelIntLoad
                     (Exact (typedIntToType dstE))
                     (Exact (typedIntToType srcE)))
 
-    // for symbolics, use combined environment for input variables
-    match combine ctx.ThreadVars ctx.SharedVars with
-    // { there might be a nicer way of doing this
-    | Bad []            -> Bad []
-    | Bad (x :: xs)     ->   mergeMessages (List.map SymVarError xs) <| fail (SymVarError x)
-    // }
-    | Ok(rv, _) ->
-        bind2 modelWithExprs
-            (modelIntLValue ctx.ThreadVars ctx.ThreadVars id dest)
-            (modelIntLValueOrSymbol rv ctx.ThreadVars id src)
+    bind2 modelWithExprs
+        (modelIntLValue ctx.Env Thread id dest)
+        (modelIntLValueOrSymbol ctx.Env Shared id src)
 
 /// Converts a Boolean store to a Prim.
 let modelBoolStore
@@ -1495,14 +1480,9 @@ let modelBoolStore
                     (Exact (typedBoolToType dstE))
                     (Exact (typedBoolToType srcE)))
 
-    // for symbolics, use combined environment for input variables
-    match combine ctx.ThreadVars ctx.SharedVars with
-    | Bad []            -> Bad []
-    | Bad (x :: xs)     ->   mergeMessages (List.map SymVarError xs) <| fail (SymVarError x)
-    | Ok(rv, _) ->
-        bind2 modelWithExprs
-            (modelBoolLValue ctx.SharedVars ctx.ThreadVars id dest)
-            (modelBoolLValueOrSymbol rv ctx.ThreadVars id src)
+    bind2 modelWithExprs
+        (modelBoolLValue ctx.Env Shared id dest)
+        (wrapMessages BadExpr (modelBoolExpr ctx.Env Thread id) src)
 
 /// Converts an integral store to a Prim.
 let modelIntStore
@@ -1542,20 +1522,20 @@ let modelIntStore
                     (Exact (typedIntToType srcE)))
 
     bind2 modelWithExprs
-        (modelIntLValue ctx.SharedVars ctx.ThreadVars id dest)
-        (wrapMessages BadExpr (modelIntExpr ctx.ThreadVars ctx.ThreadVars id) src)
+        (modelIntLValue ctx.Env Shared id dest)
+        (wrapMessages BadExpr (modelIntExpr ctx.Env Thread id) src)
 
 /// <summary>
 ///     Models an Int and checks that it is type-compatible with another type.
 /// </summary>
 let modelIntWithType
   (rtype : Type)
-  (env : VarMap)
-  (idxEnv : VarMap)
+  (env : Env)
+  (scope : Scope)
   (expr : Expression)
   : Result<TypedIntExpr<Sym<Var>>, PrimError> =
     // TODO(CaptainHayashi): proper doc comment.
-    let eR = wrapMessages BadExpr (modelIntExpr env idxEnv id) expr
+    let eR = wrapMessages BadExpr (modelIntExpr env scope id) expr
 
     let checkType e =
         let etype = typedIntToType e
@@ -1569,12 +1549,12 @@ let modelIntWithType
 /// </summary>
 let modelBoolWithType
   (rtype : Type)
-  (env : VarMap)
-  (idxEnv : VarMap)
+  (env : Env)
+  (scope : Scope)
   (expr : Expression)
   : Result<TypedBoolExpr<Sym<Var>>, PrimError> =
     // TODO(CaptainHayashi): proper doc comment.
-    let eR = wrapMessages BadExpr (modelBoolExpr env idxEnv id) expr
+    let eR = wrapMessages BadExpr (modelBoolExpr env scope id) expr
 
     let checkType e =
         let etype = typedBoolToType e
@@ -1604,7 +1584,7 @@ let modelCAS
             when primTypeRecsCompatible dr tr ->
             // set has to be type-compatible with destLV, of course.
             let setR =
-                modelBoolWithType (typeOf destLV) ctx.ThreadVars ctx.ThreadVars set 
+                modelBoolWithType (typeOf destLV) ctx.Env Thread set 
             let modelWithSet setE =
                 command "BCAS"
                     [ destLV; testLV ]
@@ -1614,7 +1594,7 @@ let modelCAS
             when primTypeRecsCompatible dr tr ->
             // set has to be type-compatible with destLV, of course.
             let setR =
-                modelIntWithType (typeOf destLV) ctx.ThreadVars ctx.ThreadVars set 
+                modelIntWithType (typeOf destLV) ctx.Env Thread set 
             let modelWithSet setE =
                 command "ICAS"
                     [ destLV; testLV ]
@@ -1625,10 +1605,8 @@ let modelCAS
                Arbitrarily single out test as the cause of it. *)
             fail (primTypeMismatch test (Exact (typeOf d)) (Exact (typeOf t)))
 
-    let mdl vars = modelLValue vars ctx.ThreadVars id
-    bind2 modelWithDestAndTest
-        (mdl ctx.SharedVars dest)
-        (mdl ctx.ThreadVars test)
+    let mdl scope = modelLValue ctx.Env scope id
+    bind2 modelWithDestAndTest (mdl Shared dest) (mdl Thread test)
 
 /// <summary>
 ///     Gets the underlying variable of an lvalue.
@@ -1647,12 +1625,15 @@ let rec varOfLValue (lv : Expression) : Var =
 ///     Tries to get the type of an lvalue.
 /// </summary>
 /// <param name="env">The map in which the lvalue's variable exists.</param>
+/// <param name="scope">
+///     The level of variable scope to lookup the lvalue in.
+/// </param>
 /// <param name="lv">The lvalue-candidate whose type is needed.</param>
 /// <returns>
 ///     If the lvalue has a valid type, the type of that lvalue; otherwise,
 ///     None.
 /// </returns>
-let typeOfLValue (env : VarMap) (lv : Expression) : Type option =
+let typeOfLValue (env : Env) (scope : Scope) (lv : Expression) : Type option =
     (* We can get the type by traversing the lvalue up to its underlying variable,
        chaining together a sequence of 'matcher functions' that respond to the
        various transformations (subscripts etc.) to that variable by peeling off
@@ -1672,7 +1653,7 @@ let typeOfLValue (env : VarMap) (lv : Expression) : Type option =
             (* We've found a variable x.  Its type is available in env.
                However, if we walked through some []s to get here, we need to
                apply the matcher sequence to extract the eventual element type. *)
-            Option.bind (typeOf >> matcher) (VarMap.tryLookup env v)
+            Option.bind (typeOf >> matcher) (Env.tryLookup env scope v)
         | ArraySubscript (arr, _) ->
             (* If we find x[i], get the type t(x) and then make a note to extract
                t(x)'s element type.  So, if arr is of type int[], we will get int. *)
@@ -1696,13 +1677,13 @@ let modelFetch
     let rec findModeller d =
         match d with
         | LValue _ ->
-            match (typeOfLValue ctx.SharedVars d) with
+            match (typeOfLValue ctx.Env Shared d) with
             | Some (Typed.Int _) -> ok modelIntStore
             | Some (Typed.Bool _) -> ok modelBoolStore
             | Some (Typed.Array (_))
                 -> fail (PrimNotImplemented "array fetch")
             | None ->
-                match (typeOfLValue ctx.ThreadVars d) with
+                match (typeOfLValue ctx.Env Thread d) with
                 | Some (Typed.Int _) -> ok modelIntLoad
                 | Some (Typed.Bool _) -> ok modelBoolLoad
                 | Some (Typed.Array (_))
@@ -1735,11 +1716,11 @@ let modelPostfix (ctx : MethodContext) (operand : Expression) (mode : FetchMode)
         | Decrement, Typed.Int _ -> ok (command "!I--" [ opE ] [ opE ])
         | _, Typed.Array (_) -> fail (PrimNotImplemented "array postfix")
     bind modelWithOperand
-        (modelLValue ctx.SharedVars ctx.ThreadVars id operand)
+        (modelLValue ctx.Env Shared id operand)
 
 /// Converts a single atomic command from AST to part-commands.
-let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> =
-    fun ctx a ->
+let rec modelAtomic
+  (ctx : MethodContext) (a : Atomic) : Result<PrimCommand, PrimError> =
     let prim =
         match a.Node with
         | CompareAndSwap(dest, test, set) -> modelCAS ctx dest test set
@@ -1748,32 +1729,19 @@ let rec modelAtomic : MethodContext -> Atomic -> Result<PrimCommand, PrimError> 
         | Id -> ok (command "Id" [] [])
         | Assume e ->
             e
-            |> wrapMessages BadExpr (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
+            |> wrapMessages BadExpr (modelBoolExpr ctx.Env Thread id)
             |> lift (typedBoolToExpr >> List.singleton >> command "Assume" [])
         | Havoc var ->
-            let allVarsR =
-                mapMessages SymVarError (VarMap.combine ctx.ThreadVars ctx.SharedVars)
-            let varMR =
-                bind
-                    (fun allVars ->
-                        mapMessages SymVarError
-                            (VarMap.lookup allVars var))
-                    allVarsR
+            let varMR = mapMessages SymVarError (Env.lookup ctx.Env Full var)
             lift (fun varM -> Intrinsic (IntrinsicCommand.Havoc varM)) varMR
 
 
         | SymAtomic sym ->
             // TODO(CaptainHayashi): split out.
-            let allVarsR =
-                mapMessages SymVarError (VarMap.combine ctx.ThreadVars ctx.SharedVars)
             let symMR =
-                bind
-                    (fun allVars ->
-                        (tryMapSym
-                            (wrapMessages BadExpr
-                                    (modelExpr allVars ctx.ThreadVars id))
-                             sym))
-                    allVarsR
+                (tryMapSym
+                    (wrapMessages BadExpr (modelExpr ctx.Env Full id))
+                         sym)
             lift SymC symMR
 
     lift
@@ -1794,7 +1762,7 @@ and modelAssign
     let modelWithDest destM =
         match destM with
         | Int (dt, d) ->
-            let srcR = modelIntExpr ctx.ThreadVars ctx.ThreadVars id src
+            let srcR = modelIntExpr ctx.Env Thread id src
             let modelWithSrc srcE =
                 match unifyPrimTypeRecs [ dt; srcE.SRec ] with
                 | Some dst ->
@@ -1813,7 +1781,7 @@ and modelAssign
                             (Exact (typedIntToType srcE)))
             bind modelWithSrc (mapMessages (curry BadExpr src) srcR)
         | Bool (dt, d) ->
-            let srcR = modelBoolExpr ctx.ThreadVars ctx.ThreadVars id src
+            let srcR = modelBoolExpr ctx.Env Thread id src
             let modelWithSrc srcE =
                 match unifyPrimTypeRecs [ dt; srcE.SRec ] with
                 | Some dst ->
@@ -1836,7 +1804,7 @@ and modelAssign
 
     (* The permitted type of src depends on the type of dest.
        (Maybe, if the dest is ambiguous, we should invert this?) *)
-    let destResult = modelLValue ctx.ThreadVars ctx.ThreadVars id dest
+    let destResult = modelLValue ctx.Env Thread id dest
     bind modelWithDest destResult
 
 /// Creates a partially resolved axiom for an if-then-else.
@@ -1849,7 +1817,7 @@ and modelITE
     let iuR =
         wrapMessages
             BadITECondition
-            (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
+            (modelBoolExpr ctx.Env Thread id)
             i
     // An if condition needs to be of type 'bool', not a subtype.
     let iR =
@@ -1884,7 +1852,7 @@ and modelWhile
     let euR = 
         wrapMessages
             BadWhileCondition
-            (modelBoolExpr ctx.ThreadVars ctx.ThreadVars id)
+            (modelBoolExpr ctx.Env Thread id)
             e
     // While conditions have to be of type 'bool', not a subtype.
     let eR =
@@ -2101,6 +2069,7 @@ let model
         // Make variable maps out of the shared and thread variable definitions.
         let! svars = modelVarMap types collated.SharedVars "shared"
         let! tvars = modelVarMap types collated.ThreadVars "thread"
+        let env = Env.env tvars svars
 
         let desugaredMethods, unknownProtos =
             desugar tvars collated.Methods
@@ -2108,12 +2077,11 @@ let model
         let! cprotos = convertViewProtos types collated.VProtos
         let! vprotos = modelViewProtos (Seq.append cprotos unknownProtos)
 
-        let! constraints = modelViewDefs svars vprotos collated
+        let! constraints = modelViewDefs env vprotos collated
 
         let mctx =
             { ViewProtos = vprotos
-              SharedVars = svars
-              ThreadVars = tvars }
+              Env = env }
         let! axioms =
             desugaredMethods
             |> Map.toSeq

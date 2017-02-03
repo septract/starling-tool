@@ -21,11 +21,11 @@ method deleteVal(int v) {
   {| wf(v) * isHead(prev) |}
    <{ %{ waitLock([|prev|]); takeLock([|prev|]) }; }>;
   {| wf(v) * has1LockAnon(prev) * isHead(prev) |}
-   curr = %{ [|prev|].next };
+   < curr = %{ [|prev|].next } >;
   {| wf(v) * has1Lock(prev, curr) * isHead(prev) |}
    <{ %{ waitLock([|curr|]); takeLock([|curr|]) }; }>;
   {| wf(v) * has2Lock(prev, curr) |}
-   cv = %{ [|curr|].val };
+   < cv = %{ [|curr|].val } >;
   {| wf(v) * has2Lock(prev,curr) * isVal(curr, cv) |}
     while (cv < v ) {
       {| wf(v) * wf(cv) * has2Lock(prev, curr) * isVal(curr, cv) |}
