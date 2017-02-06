@@ -23,7 +23,7 @@ method lock(Node mynode) {
   {| queued(mynode, mypred) |}
     do {
       {| queued(mynode, mypred) |}
-        test = %{ [|mypred|].lock };
+        <test = %{ [|mypred|].lock }>;
       {| if test then queued(mynode, mypred) else holdLock(mynode, mypred) |}
     } while (test);
   {| holdLock(mynode, mypred) |}

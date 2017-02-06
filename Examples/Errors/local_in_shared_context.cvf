@@ -1,0 +1,47 @@
+/*
+ * Linux-style ticket lock.
+ */
+
+shared int ticket;  // The next ticket to hand out.
+shared int serving; // The current ticket holding the lock.
+thread int t;  // The thread's current ticket.
+thread int s;  // The thread's current view of serving.
+
+/*
+ * Locks the ticket lock.
+ */
+method lock() {
+  {| emp |}
+    <t = s++>; // <-- Thread-local in shared context
+  {| holdTick(t) |}
+    do {
+      {| holdTick(t) |}
+        <s = serving>;
+      {| if s == t then holdLock() else holdTick(t) |}
+    } while (s != t);
+  {| holdLock() |}
+}
+
+/*
+ * Unlocks the ticket lock.
+ */
+method unlock() {
+  {| holdLock() |}
+    <serving++>;
+  {| emp |}
+}
+
+view holdTick(int t);
+view holdLock();
+
+// Invariant
+constraint emp                         -> ticket >= serving;
+
+// Predicate definitions
+constraint holdTick(t)                 -> ticket > t;
+constraint holdLock()                  -> ticket != serving;
+
+// Interactions
+constraint holdLock()   * holdTick(t)  -> serving != t;
+constraint holdTick(ta) * holdTick(tb) -> ta != tb;
+constraint holdLock()   * holdLock()   -> false;

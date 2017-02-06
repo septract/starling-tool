@@ -58,7 +58,8 @@ let success d = Styled([Green], d)
 let inconclusive d = Styled([Blue], d)
 
 let errorStr s = error (String s)
-let errorInfoStr s = error (String s)
+let errorContextStr s = errorContext (String s)
+let errorInfoStr s = errorInfo (String s)
 
 /// <summary>
 ///     Styles a string with ANSI escape sequences.
@@ -125,7 +126,7 @@ type PrintState =
 let rec printState (state : PrintState) (doc : Doc) : string =
     match doc with
     | Header (heading, incmd) ->
-        printState state heading + ":" + lnIndent state.Level + printState state incmd + lnIndent state.Level
+        printState state heading + ":" + lnIndent state.Level + printState state incmd
     | Separator ->
         "----"
     | Styled (s, d) when state.UseStyles ->
@@ -307,7 +308,9 @@ let printList pItem lst =
 
 /// Formats an error that is wrapping another error.
 let wrapped wholeDesc whole err =
-    headed (sprintf "In %s '%s'" wholeDesc (print whole)) [ err ]
+    cmdHeaded
+        (errorContextStr "->" <+> errorContextStr wholeDesc <+> whole)
+        [ err ]
 
 /// <summary>
 ///     Prints an integer.
