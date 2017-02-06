@@ -358,17 +358,24 @@ module Pretty =
     let printVarMapError =
         function
         | Duplicate vn ->
-            errorStr "variable"
+            errorStr "Variable"
             <+> quoted (String vn)
-            <+> errorStr "is defined multiple times"
+            <+> errorStr "is defined multiple times."
         | VarNotInEnv ->
-            errorStr "this variable is undefined"
+            errorStr "This variable is undefined."
         | VarInWrongScope (expected, got) ->
-            errorStr "expected a variable from the"
-            <+> errorInfo (printScope expected)
-            <+> errorStr "scope, but this variable is in the"
-            <+> errorInfo (printScope got)
-            <+> errorStr "scope"
+            let error =
+                errorStr "Expected a variable from the"
+                <+> errorInfo (printScope expected)
+                <+> errorStr "scope, but this variable is in the"
+                <+> errorInfo (printScope got)
+                <+> errorStr "scope."
+            let hint =
+                match expected with
+                | Thread -> "Consider taking a thread-local copy"
+                | Shared -> "Consider using a local command instead."
+                | _ -> "No hint available."
+            vsep [ error; errorInfoStr hint ]
 
     /// <summary>
     ///     Pretty-prints a <c>MarkedVar</c>.
