@@ -1690,7 +1690,7 @@ let modelFetch
                     -> fail (PrimNotImplemented "array fetch")
                 | None ->
                     let v = varOfLValue d
-                    fail (BadExpr (dest, Var (v, NotFound v)))
+                    fail (BadExpr (dest, Var (v, VarNotInEnv)))
         | RValue _ -> fail (NeedLValue d)
 
     bind (fun f -> f ctx dest test mode) (findModeller dest)

@@ -122,14 +122,14 @@ module ArithmeticExprs =
         let e = Env.env environ env
         assertOkAndEqual
             expectedExpr
-            (modelIntExpr e Env.Shared id ast)
+            (modelIntExpr e Shared id ast)
             (printExprError >> printUnstyled)
 
     let checkFail (env : VarMap) (ast : Expression) (expectedErrors : ExprError list) =
         let e = Env.env environ env
         assertFail
             expectedErrors
-            (modelIntExpr e Env.Shared id ast)
+            (modelIntExpr e Shared id ast)
             (stripTypeRec >> printIntExpr (printSym printVar) >> printUnstyled)
 
     [<Test>]
@@ -244,7 +244,7 @@ module ArithmeticExprs =
 module BooleanExprs =
     let check (env : VarMap) (ast : Expression) (expectedExpr : TypedBoolExpr<Sym<Var>>) =
         let e = Env.env environ env
-        let actualBoolExpr = okOption <| modelBoolExpr e Env.Shared id ast
+        let actualBoolExpr = okOption <| modelBoolExpr e Shared id ast
         AssertAreEqual(Some expectedExpr, actualBoolExpr)
 
     [<Test>]
