@@ -1,0 +1,83 @@
+/* The non-blocking stack algorithm seen on page 87 of Viktor Vafeiadis's
+   thesis (Treiber?). */
+
+typedef int Cell;
+typedef int AbsCell;
+
+pragma grasshopper_include {./grasshopper/lin-stack-module.spl};
+pragma grasshopper_footprint {Foot};
+pragma grasshopper_footprint_sort {Set<Cell>};
+
+shared Cell S;
+
+shared AbsCell Abs; // ghost code
+
+thread Cell t, x, temp;
+thread Cell v;
+thread bool cas;
+
+// StackInv becomes emp, as K => StackInv.
+view K(Cell c);
+view ExistsK();
+view PushNoAbsResult();
+view PushAbsResult(int k);
+view PopNoAbsResult();
+view PopAboutToReturnResult();
+view PopSomeAbsResult(int k);
+view PopAbsResult(int k);
+view LocalCell(Cell c, int v);
+view MaybeTop(Cell c);
+view Pending(Cell c, int v, Cell n);
+
+method push(int v) {
+    {| PushNoAbsResult() |}
+        // TODO(MattWindsor91): this should probably not be atomic.
+        <{ x = %{ new Cell };
+           %{ [|x|].next := null };  // This needs to be explicit for this proof
+           %{ [|x|].data := [|v|] }; }>;
+    {| PushNoAbsResult() * LocalCell(x, v) |}
+        do {
+            {| PushNoAbsResult() * LocalCell(x, v) |}
+                < t = S >;
+            {| PushNoAbsResult() * LocalCell(x, v) * MaybeTop(t) |}
+                < %{ [|x|].next := [|t|] } >;
+            {| PushNoAbsResult() * PendingCell(x, v, t) |}
+                < cas = %{ CASThis([|S|}, [|t|], [|x|]) } >;
+            {| if cas
+               then PushAbsResult(v)
+               else PushNoAbsResult() * LocalCell(x, v) |}
+        } while (!cas);
+    {| PushAbsResult(v) |}
+}
+
+method pop() {
+    {| PopNoAbsResult() |}
+        do {
+            {| PopNoAbsResult() |}
+                <{ t = S;
+                   %{ LinThis(t) |};  // slight change to move '= null' into GH
+                 }>
+            {| if (t == %{ null }
+               then PopAbsResult(%{ null })
+               else PopNoAbsResult() * ExistsK() |}
+                // TODO(MattWindsor91: model returns properly
+                < assume(t != %{ null }) >;
+            {| PopNoAbsResult() * ExistsK() |}
+                < x = %{ [|t|].next } >;
+            {| PopNoAbsResult() * K(x) |}
+                < cas = %{ CASThis([|S|}, [|t|], [|x|]) } >;
+            {| if cas
+               // TODO(MattWindsor91): an existential would help here.
+               // We'd be able to avoid making such a huge view.
+               then PopAboutToReturnResult()
+               else PopNoAbsResult() |}
+        } while (!cas);
+    {| PopAboutToReturnResult() |}
+        < temp = %{ [|t|].data } >;
+    {| PopAbsResult(temp) |}
+}
+
+// StackInv
+constraint emp ->
+    %{ S in Foot && S != null && Abs in Foot && Abs != null
+       && TBC }
