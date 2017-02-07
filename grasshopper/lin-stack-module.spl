@@ -1,0 +1,86 @@
+struct Cell {
+	var next : Cell;
+	var data : Int;
+	var acell : AbsCell;
+}
+
+struct AbsCell {
+	var anext : AbsCell;
+	var adata : Int;
+}
+
+struct Result {
+	var assigned : Bool;
+	var isNull : Bool;
+	var value : Int;
+
+	// this is horrible
+	var casS : Cell;
+	var casAbs : AbsCell;
+}
+
+predicate StackInv(X : Set<Cell>, A : Set<AbsCell>, S : Cell, Abs : AbsCell)
+requires acc(X) {
+	A = { z : AbsCell :: Btwn(anext, Abs, z, null) } &&
+	(forall x : Cell ::
+		(
+			Btwn(next, S, x, null) ==>
+				(x.acell != null
+				 && x.acell in A
+				 && x.acell.adata == x.data
+				 && (x.next != null ==> x.next.acell == x.acell.anext)
+				 && (x.next == null ==> x.acell.anext == null))
+		)
+	)
+}
+
+procedure LinThis(this : Result, t : Cell)
+requires acc(this) &*& acc(t) &*& !this.assigned
+ensures acc(this) &*& acc(t) &*&
+	((t != null ==> !this.assigned)
+	 && (t == null ==> this.assigned && this.isNull))
+{
+	if (t == null) {
+		this.assigned := true;
+		this.isNull := true;
+	}
+}
+
+procedure CASThis(this : Result, Abs : AbsCell, S : Cell, t : Cell, x : Cell)
+returns (res : Bool)
+requires
+	acc(this) &*& acc(Abs) &*& acc(S) &*& acc(t) &*& acc(x)
+	&*& (!this.assigned)
+ensures 
+	acc(this) &*& acc(Abs) &*& acc(S) &*& acc(t) &*& acc(x)
+	&*&
+	(   (S == t ==>
+		(this.casS == x
+		 && this.casAbs == x.acell
+		 && this.assigned
+		 && !this.isNull
+		 && this.value = x.data
+		 && res))
+	 && (S != t ==>
+	 	(this.casS == S
+		 && this.casAbs == Abs
+		 && !this.assigned
+		 && !res)) )
+{
+	if (S == t) {
+		this.casS := x;
+		// Ghost code
+		this.assigned := true;
+		this.isNull := false;
+		this.value := x.data;
+		this.casAbs := x.acell;
+		// End ghost code
+		return true;
+	} else {
+		this.casS := S;
+		// Ghost code
+		this.casAbs := Abs;
+		// End ghost code;
+		return false;
+	}
+}
