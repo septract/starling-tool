@@ -805,8 +805,29 @@ and modelBoolExpr
                     | Eq -> mkEq
                     | Neq -> mkNeq
                     | _ -> failwith "unreachable[modelBoolExpr::AnyIn]"
+                (* If at least one of the operands is a symbol, we need to
+                   try infer its type from the other operand.  Simply modelling
+                   both expressions will result in an ambiguity error. *)
+                let modelExprWithType template e =
+                    match template with
+                    | Int _ -> lift (liftTypedSub Int) (mi e)
+                    | Bool _ -> lift (liftTypedSub Bool) (mb e)
+                    | Array _ -> lift (liftTypedSub Array) (ma e)
+
+                let lR, rR =
+                    match (l.Node, r.Node) with
+                    | Symbolic _, _ ->
+                        let rR = me r
+                        let lR = bind (fun r -> modelExprWithType r l) rR
+                        (lR, rR)
+                    | _, Symbolic _ ->
+                        let lR = me l
+                        let rR = bind (fun l -> modelExprWithType l r) lR
+                        (lR, rR)
+                    | _ -> (me l, me r)
+
                 // We don't know the subtype of this yet...
-                lift indefBool (lift2 oper (me l) (me r))
+                lift indefBool (lift2 oper lR rR)
         | UopExpr (Neg,e) -> lift (mapTypedSub mkNot) (mb e) 
         | _ ->
             fail
