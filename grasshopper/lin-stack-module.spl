@@ -20,9 +20,10 @@ struct Result {
 }
 
 predicate StackInv(X : Set<Cell>, A : Set<AbsCell>, S : Cell, Abs : AbsCell)
-requires acc(X) {
-	A = { z : AbsCell :: Btwn(anext, Abs, z, null) } &&
-	(forall x : Cell ::
+requires acc(X) &*& acc(A) {
+	A = { z : AbsCell :: Btwn(anext, Abs, z, null) }
+	&& S in X
+	&& (forall x : Cell ::
 		(
 			Btwn(next, S, x, null) ==>
 				(x.acell != null
@@ -35,7 +36,10 @@ requires acc(X) {
 }
 
 procedure LinThis(this : Result, t : Cell)
-requires acc(this) &*& acc(t) &*& !this.assigned
+requires
+	acc(this)
+	&*& acc(t)
+	&*& !this.assigned
 ensures acc(this) &*& acc(t) &*&
 	((t != null ==> !this.assigned)
 	 && (t == null ==> this.assigned && this.isNull))
@@ -83,4 +87,10 @@ ensures
 		// End ghost code;
 		return false;
 	}
+}
+
+predicate KG(X : Set<Cell>, t : Cell, y : Cell)
+requires acc(X) &*& (t in X && y in X)
+{
+	y == null || (Btwn(next, t, y, null) ==> t.next == y)
 }
