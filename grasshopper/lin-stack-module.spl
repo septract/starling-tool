@@ -77,42 +77,56 @@ ensures
 	}
 }
 
-procedure CASPushAbs(this : Result, cas : Bool, x : Cell, Abs : AbsCell)
+procedure LinPush(this : Result, cas : Bool, x : Cell, Abs : AbsCell)
 requires
 	acc(this)
-	&*& (x != null ==> acc(x))
-	&*& (!this.assigned)
+	&*& acc(x)
+	&*& (x.next != null ==> acc(x.next))
+	&*& (!this.assigned && x.acell == null)
 ensures 
 	acc(this)
-	&*& (x != null ==> acc(x))
+	&*& acc(x)
+	&*& (x.next != null ==> acc(x.next))
 	&*&
 	(   (cas ==>
-		(   (x == null ==> this.casAbs == null)
-		 && (x != null ==> this.casAbs == x.acell)
-		 && this.assigned
-		 && (this.isNull == (x == null))
-		 && (x != null ==> this.value = x.data)))
+		(true
+		 //&& this.assigned
+		 //&& this.casAbs == x.acell
+		 //&& x.acell != null
+		 //&& x.acell.adata == x.data
+		 //&& (x.next == null ==> x.acell.anext == null)
+		 //&& (x.next != null ==> x.acell.anext == x.next.acell)
+		 //&& !this.isNull
+		 //&& this.value == x.data
+		 ))
 	 && (!cas ==>
-	 	(   this.casAbs = Abs
-		 && !this.assigned)))
+	 	(true
+		 //&& this.casAbs == Abs
+		 //&& !this.assigned
+		 //&& x.acell == null
+		 )))
 {
 	if (cas) {
 		this.assigned := true;
-		if (x != null) {
-			this.isNull := false;
-			this.value := x.data;
-			this.casAbs := x.acell;
+		this.isNull := false;
+		this.value := x.data;
+
+		x.acell := new AbsCell;
+	/*
+		x.acell.adata := x.data;
+		if (x.next != null) {
+			x.acell.anext := x.next.acell;
 		} else {
-			this.isNull := true;
-			this.casAbs := null;
+			x.acell.anext := null;
 		}
+		*/
+		this.casAbs := x.acell;
 	} else {
 		this.casAbs := Abs;
 	}
 }
 
-
-procedure CASAbs(this : Result, cas : Bool, x : Cell, Abs : AbsCell)
+procedure LinPop(this : Result, cas : Bool, x : Cell, Abs : AbsCell)
 requires
 	acc(this)
 	&*& (x != null ==> acc(x))
