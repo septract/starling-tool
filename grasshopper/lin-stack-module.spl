@@ -66,7 +66,8 @@ ensures
 	acc(this)
 	&*&
 	(   (S == t ==> (this.casS == x))
-	 && (S != t ==> (this.casS == S)))
+	 && (S != t ==> (this.casS == S))
+	 && (res == (S == t)))
 {
 	if (S == t) {
 		this.casS := x;
@@ -87,23 +88,24 @@ ensures
 	acc(this)
 	&*& acc(x)
 	&*& (x.next != null ==> acc(x.next))
+	&*& (x.acell != null ==> acc(x.acell))
 	&*&
 	(   (cas ==>
 		(true
-		 //&& this.assigned
-		 //&& this.casAbs == x.acell
-		 //&& x.acell != null
-		 //&& x.acell.adata == x.data
-		 //&& (x.next == null ==> x.acell.anext == null)
-		 //&& (x.next != null ==> x.acell.anext == x.next.acell)
-		 //&& !this.isNull
-		 //&& this.value == x.data
+		 && this.assigned
+		 && this.casAbs == x.acell
+		 && x.acell != null
+		 && x.acell.adata == x.data
+		 && (x.next == null ==> x.acell.anext == null)
+		 && (x.next != null ==> x.acell.anext == x.next.acell)
+		 && !this.isNull
+		 && this.value == x.data
 		 ))
 	 && (!cas ==>
 	 	(true
-		 //&& this.casAbs == Abs
-		 //&& !this.assigned
-		 //&& x.acell == null
+		 && this.casAbs == Abs
+		 && !this.assigned
+		 && x.acell == null
 		 )))
 {
 	if (cas) {
@@ -112,14 +114,12 @@ ensures
 		this.value := x.data;
 
 		x.acell := new AbsCell;
-	/*
 		x.acell.adata := x.data;
 		if (x.next != null) {
 			x.acell.anext := x.next.acell;
 		} else {
 			x.acell.anext := null;
 		}
-		*/
 		this.casAbs := x.acell;
 	} else {
 		this.casAbs := Abs;
@@ -131,7 +131,7 @@ requires
 	acc(this)
 	&*& (x != null ==> acc(x))
 	&*& (!this.assigned
-	     && (x != null ==> (x.acell != null && x.acell.adata == x.data)))
+	     && ((cas && x != null) ==> (x.acell != null && x.acell.adata == x.data)))
 ensures 
 	acc(this)
 	&*& (x != null ==> acc(x))
@@ -214,8 +214,15 @@ ensures
 	}
 }
 
-predicate KG(X : Set<Cell>, S : Cell, t : Cell, y : Cell)
-requires acc(X) &*& (S in X && t in X)
+predicate KG(X : Set<Cell>, A : Set<AbsCell>, S : Cell, t : Cell, y : Cell)
+requires acc(X) &*& acc(A) &*& (S in X && t in X)
 {
-	(Btwn(next, S, t, null) ==> t.next == y && (y != null ==> y in X))
+	(Btwn(next, S, t, null) ==> t.next == y
+	 && (y != null ==>
+	         (y in X && y.acell in A && y.acell.adata == y.data)))
 }
+
+procedure K_stab(X : Set<Cell>, A : Set<AbsCell>, S : Cell, t : Cell, y : Cell)
+requires acc(X) &*& ((y == null || y in X) && KG(X, A, S, t, y))
+ensures acc(X) &*& ((y == null || y in X) && KG(X, A, S, t, y))
+{}

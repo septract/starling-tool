@@ -50,7 +50,7 @@ method push(int v, Cell x, Result this /* ghost code */) {
             {| NoAbsResult(this) * PendingCell(x, v, t) |}
                 <{ cas = %{ CAS([|this|], [|S|], [|t|], [|x|]) };
                    S = %{ [|this|].casS };
-                   %{ CASAbs([|this|], [|cas|], [|x|], [|Abs|]) };
+                   %{ LinPush([|this|], [|cas|], [|x|], [|Abs|]) };
                    Abs = %{ [|this|].casAbs };
                  }>;
             {| if cas
@@ -80,7 +80,7 @@ method pop(Result this /* ghost code */) {
                 // CAS can't modify S.
                 <{ cas = %{ CAS([|this|], [|S|], [|t|], [|x|]) };
                    S = %{ [|this|].casS };
-                   %{ CASAbs([|this|], [|cas|], [|x|], [|Abs|]) };
+                   %{ LinPop([|this|], [|cas|], [|x|], [|Abs|]) };
                    Abs = %{ [|this|].casAbs };
                  }>;
             {| if cas
@@ -98,7 +98,7 @@ method pop(Result this /* ghost code */) {
 constraint emp -> %{ StackInv(Foot, AFoot, [|S|], [|Abs|]) };
 
 constraint K(t, y) ->
-    %{ ([|y|] == null || [|y|] in Foot) && KG(Foot, [|S|], [|t|], [|y|]) };
+    %{ ([|y|] == null || [|y|] in Foot) && KG(Foot, AFoot, [|S|], [|t|], [|y|]) };
 constraint ExistsK(t) ->
     %{ Btwn(next, [|S|], [|t|], null) ==> ([|t|].next == null || [|t|].next in Foot) };
 
@@ -124,6 +124,7 @@ constraint LocalCell(x, vx) * LocalCell(y, vy) -> x != y;
 
 constraint PendingCell(x, v, y) ->
     %{ [|x|] in Foot
+       && [|y|] in Foot
        && [|x|] != [|S|]
        && [|x|].acell == null
        && [|x|].next == [|y|]
