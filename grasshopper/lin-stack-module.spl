@@ -21,19 +21,27 @@ struct Result {
 
 predicate StackInv(X : Set<Cell>, A : Set<AbsCell>, S : Cell, Abs : AbsCell)
 requires acc(X) &*& acc(A) {
-	A = { z : AbsCell :: Btwn(anext, Abs, z, null) }
-	&& S in X
+	A = { z : AbsCell :: Btwn(anext, Abs, z, null) && z != null }
+	&& (S == null || S in X)
+	&& (Abs == null || Abs in A)
 	&& (forall x : Cell ::
 		(
 			Btwn(next, S, x, null) ==>
-				(x.acell != null
+				(x in X
+				 && x.acell != null
 				 && x.acell in A
 				 && x.acell.adata == x.data
-				 && (x.next != null ==> x.next.acell == x.acell.anext)
+				 && (x.next != null ==> (x.next in X && x.next.acell == x.acell.anext))
 				 && (x.next == null ==> x.acell.anext == null))
 		)
 	)
 }
+
+//procedure StackInv_sat(X : Set<Cell>, A : Set<AbsCell>, S : Cell, Abs : AbsCell)
+//requires acc(X) &*& acc(A) &*& StackInv(X, A, S, Abs)
+//ensures false
+//{
+//}
 
 procedure LinThis(this : Result, t : Cell)
 requires
@@ -50,20 +58,118 @@ ensures acc(this) &*& acc(t) &*&
 	}
 }
 
+procedure CAS(this : Result, S : Cell, t : Cell, x : Cell)
+returns (res : Bool)
+requires
+	acc(this)
+ensures
+	acc(this)
+	&*&
+	(   (S == t ==> (this.casS == x))
+	 && (S != t ==> (this.casS == S)))
+{
+	if (S == t) {
+		this.casS := x;
+		return true;
+	} else {
+		this.casS := S;
+		return false;
+	}
+}
+
+procedure CASPushAbs(this : Result, cas : Bool, x : Cell, Abs : AbsCell)
+requires
+	acc(this)
+	&*& (x != null ==> acc(x))
+	&*& (!this.assigned)
+ensures 
+	acc(this)
+	&*& (x != null ==> acc(x))
+	&*&
+	(   (cas ==>
+		(   (x == null ==> this.casAbs == null)
+		 && (x != null ==> this.casAbs == x.acell)
+		 && this.assigned
+		 && (this.isNull == (x == null))
+		 && (x != null ==> this.value = x.data)))
+	 && (!cas ==>
+	 	(   this.casAbs = Abs
+		 && !this.assigned)))
+{
+	if (cas) {
+		this.assigned := true;
+		if (x != null) {
+			this.isNull := false;
+			this.value := x.data;
+			this.casAbs := x.acell;
+		} else {
+			this.isNull := true;
+			this.casAbs := null;
+		}
+	} else {
+		this.casAbs := Abs;
+	}
+}
+
+
+procedure CASAbs(this : Result, cas : Bool, x : Cell, Abs : AbsCell)
+requires
+	acc(this)
+	&*& (x != null ==> acc(x))
+	&*& (!this.assigned
+	     && (x != null ==> (x.acell != null && x.acell.adata == x.data)))
+ensures 
+	acc(this)
+	&*& (x != null ==> acc(x))
+	&*&
+	(   (cas ==>
+		(   (x == null ==> this.casAbs == null)
+		 && (x != null ==>
+		        (this.value = x.data
+			 && this.casAbs == x.acell
+			 && x.acell.adata == x.data
+		        )
+		    )
+		)
+		 && this.assigned
+		 && (this.isNull == (x == null)))
+	 && (!cas ==>
+	 	(   this.casAbs = Abs
+		 && !this.assigned)))
+{
+	if (cas) {
+		this.assigned := true;
+		if (x != null) {
+			this.isNull := false;
+			this.value := x.data;
+			this.casAbs := x.acell;
+		} else {
+			this.isNull := true;
+			this.casAbs := null;
+		}
+	} else {
+		this.casAbs := Abs;
+	}
+}
+
+
 procedure CASThis(this : Result, Abs : AbsCell, S : Cell, t : Cell, x : Cell)
 returns (res : Bool)
 requires
-	acc(this) &*& acc(Abs) &*& acc(S) &*& acc(t) &*& acc(x)
+	acc(this)
+	&*& (x != null ==> acc(x))
 	&*& (!this.assigned)
 ensures 
-	acc(this) &*& acc(Abs) &*& acc(S) &*& acc(t) &*& acc(x)
+	acc(this)
+	&*& (x != null ==> acc(x))
 	&*&
 	(   (S == t ==>
 		(this.casS == x
-		 && this.casAbs == x.acell
+		 && (x == null ==> this.casAbs == null)
+		 && (x != null ==> this.casAbs == x.acell)
 		 && this.assigned
-		 && !this.isNull
-		 && this.value = x.data
+		 && (this.isNull == (x == null))
+		 && (x != null ==> this.value = x.data)
 		 && res))
 	 && (S != t ==>
 	 	(this.casS == S
@@ -75,9 +181,14 @@ ensures
 		this.casS := x;
 		// Ghost code
 		this.assigned := true;
-		this.isNull := false;
-		this.value := x.data;
-		this.casAbs := x.acell;
+		if (x != null) {
+			this.isNull := false;
+			this.value := x.data;
+			this.casAbs := x.acell;
+		} else {
+			this.isNull := true;
+			this.casAbs := null;
+		}
 		// End ghost code
 		return true;
 	} else {
@@ -89,8 +200,8 @@ ensures
 	}
 }
 
-predicate KG(X : Set<Cell>, t : Cell, y : Cell)
-requires acc(X) &*& (t in X && y in X)
+predicate KG(X : Set<Cell>, S : Cell, t : Cell, y : Cell)
+requires acc(X) &*& (S in X && t in X)
 {
-	y == null || (Btwn(next, t, y, null) ==> t.next == y)
+	(Btwn(next, S, t, null) ==> t.next == y && (y != null ==> y in X))
 }

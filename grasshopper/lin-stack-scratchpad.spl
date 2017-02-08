@@ -1,0 +1,64 @@
+include "./lin-stack-module.spl";
+
+procedure push_C002_000 (
+    before_37_1_v: Int,
+    before_Abs: AbsCell,
+    after_Abs: AbsCell,
+    before_37_1_x: Cell,
+    before_S: Cell,
+    before_t: Cell,
+    after_S: Cell,
+    inter_1_S: Cell,
+    before_37_1_this: Result,
+    inter_0_cas: Bool
+)
+requires
+    exists Foot:Set<Cell>, AFoot:Set<AbsCell>, RFoot:Set<Result> :: (
+        acc(Foot) &*& acc(AFoot) &*& acc(RFoot) &*&
+        (
+            ((StackInv(Foot, AFoot, before_S, before_Abs) ) &&
+                (before_37_1_this in RFoot && !before_37_1_this.assigned ) &&
+                (before_37_1_x in Foot
+                       && before_37_1_x != before_S
+                       && before_37_1_x.acell == null
+                       && before_37_1_x.next == before_t
+                       && before_37_1_x.data == before_37_1_v
+                       && (forall z : Cell :: (z in Foot ==> z.next != before_37_1_x)) ))
+        )
+    )
+ensures
+    exists Foot:Set<Cell>, AFoot:Set<AbsCell>, RFoot:Set<Result> :: (
+        acc(Foot) &*& acc(AFoot) &*& acc(RFoot) &*&
+        (
+	//AFoot = { z : AbsCell :: Btwn(anext, after_Abs, z, null) && z != null }
+	(after_S == null || after_S in Foot)
+	&& (after_Abs == null || after_Abs in AFoot)
+	&& (forall x : Cell ::
+		(
+			Btwn(next, after_S, x, null) ==>
+				(x in Foot
+				 && x.acell != null
+				 && x.acell in AFoot
+				 && x.acell.adata == x.data
+				 && (x.next != null ==> (x.next in Foot && x.next.acell == x.acell.anext))
+				 && (x.next == null ==> x.acell.anext == null)
+                                 )
+		)
+	)
+        )
+    )
+{
+    var shadow_inter_0_cas: Bool;
+    shadow_inter_0_cas := CAS(before_37_1_this, before_S, before_t, before_37_1_x) ;
+    pure assume (inter_0_cas == shadow_inter_0_cas);
+    var shadow_inter_1_S: Cell;
+    shadow_inter_1_S := before_37_1_this.casS ;
+    pure assume (inter_1_S == shadow_inter_1_S);
+    CASAbs(before_37_1_this, inter_0_cas, before_37_1_x, before_Abs) ;
+    var shadow_after_Abs: AbsCell;
+    shadow_after_Abs := before_37_1_this.casAbs ;
+    pure assume (after_Abs == shadow_after_Abs);
+    pure assume (after_S == inter_1_S);
+}
+
+

@@ -33,21 +33,26 @@ view LocalCell(Cell c, int v);
 view MaybeTop(Cell c);
 view PendingCell(Cell c, int v, Cell n);
 
-method push(int v, Result this /* ghost code */) {
-    {| NoAbsResult(this) |}
-        // TODO(MattWindsor91): this should probably not be atomic.
+// We're having to push in the cell separately to avoid allocation weirdness.
+method push(int v, Cell x, Result this /* ghost code */) {
+    {| NoAbsResult(this) * LocalCell(x, v) |}
+/*        // TODO(MattWindsor91): this should probably not be atomic.
         <{ x = %{ new Cell };
            %{ [|x|].next := null };  // This needs to be explicit for this proof
            %{ [|x|].acell := null };
            %{ [|x|].data := [|v|] }; }>;
-    {| NoAbsResult(this) * LocalCell(x, v) |}
+    {| NoAbsResult(this) * LocalCell(x, v) |} */
         do {
             {| NoAbsResult(this) * LocalCell(x, v) |}
                 < t = S >;
             {| NoAbsResult(this) * LocalCell(x, v) * MaybeTop(t) |}
                 < %{ [|x|].next := [|t|] } >;
             {| NoAbsResult(this) * PendingCell(x, v, t) |}
-                < cas = %{ CASThis([|this|], [|Abs|], [|S|], [|t|], [|x|]) } >;
+                <{ cas = %{ CAS([|this|], [|S|], [|t|], [|x|]) };
+                   S = %{ [|this|].casS };
+                   %{ CASAbs([|this|], [|cas|], [|x|], [|Abs|]) };
+                   Abs = %{ [|this|].casAbs };
+                 }>;
             {| if cas
                then AbsResult(this, v)
                else NoAbsResult(this) * LocalCell(x, v) |}
@@ -73,9 +78,11 @@ method pop(Result this /* ghost code */) {
                 // This is an attempt to get round the fact that the Starling
                 // CAS is limited to integers and Booleans, and the GRASShopper
                 // CAS can't modify S.
-                <{ cas = %{ CASThis([|this|], [|Abs|], [|S|], [|t|], [|x|]) };
+                <{ cas = %{ CAS([|this|], [|S|], [|t|], [|x|]) };
                    S = %{ [|this|].casS };
-                   Abs = %{ [|this|].casAbs }; }>;
+                   %{ CASAbs([|this|], [|cas|], [|x|], [|Abs|]) };
+                   Abs = %{ [|this|].casAbs };
+                 }>;
             {| if cas
                // TODO(MattWindsor91): an existential would help here.
                // We'd be able to avoid making such a huge view.
@@ -90,8 +97,10 @@ method pop(Result this /* ghost code */) {
 // StackInv
 constraint emp -> %{ StackInv(Foot, AFoot, [|S|], [|Abs|]) };
 
-constraint K(t, y) -> %{ KG(Foot, [|t|], [|y|]) };
-constraint ExistsK(t) -> %{ exists y : Cell :: KG(Foot, [|t|], y) };
+constraint K(t, y) ->
+    %{ ([|y|] == null || [|y|] in Foot) && KG(Foot, [|S|], [|t|], [|y|]) };
+constraint ExistsK(t) ->
+    %{ Btwn(next, [|S|], [|t|], null) ==> ([|t|].next == null || [|t|].next in Foot) };
 
 constraint NoAbsResult(a) -> %{ [|a|] in RFoot && ![|a|].assigned };
 constraint AbsResult(a, x) ->
@@ -106,10 +115,22 @@ constraint MaybeTop(x) ->
 
 constraint LocalCell(x, v) ->
     %{ [|x|] in Foot
+       && [|x|] != [|S|]
        && [|x|].acell == null
        && [|x|].next == null
-       && [|x|].data == [|v|] };
-constraint LocalCell(x, vc) * LocalCell(y, vy) -> x != y;
+       && [|x|].data == [|v|]
+       && (forall y : Cell :: (y in Foot ==> y.next != [|x|])) };
+constraint LocalCell(x, vx) * LocalCell(y, vy) -> x != y;
+
+constraint PendingCell(x, v, y) ->
+    %{ [|x|] in Foot
+       && [|x|] != [|S|]
+       && [|x|].acell == null
+       && [|x|].next == [|y|]
+       && [|x|].data == [|v|]
+       && (forall z : Cell :: (z in Foot ==> z.next != [|x|])) };
+constraint LocalCell(x, vx) * PendingCell(y, vy, ny) -> x != y;
+constraint PendingCell(x, vx, nx) * PendingCell(y, vy, ny) -> x != y;
 
 // AbsResults are unique to a method call.
 constraint NoAbsResult(a)   * NoAbsResult(b)    -> a != b;
