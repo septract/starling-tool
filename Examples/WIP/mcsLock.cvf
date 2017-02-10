@@ -1,0 +1,84 @@
+typedef int Node;
+
+pragma grasshopper_include {./grasshopper/MCSlock-module.spl};
+pragma grasshopper_footprint {Foot};
+pragma grasshopper_footprint_sort {Set<Node>};
+
+shared Node tail; 
+thread Node pred, tmp; 
+thread bool test; 
+
+method lock (Node qnode) { 
+  < pred = tail; 
+    tail = qnode;>; 
+  if ( pred != null ) { 
+    <%{ [|mynode|].locked := true }>; 
+    <%{ [|pred|].next := [|qnode|] }>; 
+    do { 
+      <test = %{ [|qnode|].locked }>; 
+    } while (test); 
+  } 
+} 
+
+method unlock (Node qnode) { 
+  <test = %{ [|qnode|].next == null }>;  
+  if (test) { 
+    < test = ( tail == qnode ); 
+      tail = %{ if ( [|test|] ) { null } else { [|tail|] } }; > ;  
+    do { 
+      <test = %{ [|qnode|].next == null }>;  
+    } while (! test);  
+    < %{[|qnode|].next.locked := false}>; 
+    < %{[|qnode|].next := false}>; 
+  } 
+} 
+
+
+// thread Node mynode, mypred;
+// 
+// view loose(Node x, bool isLocked);
+// view queued(Node x, Node xp);
+// view holdLock(Node x, Node xp);
+// 
+// method lock(Node mynode) {
+//   {| loose(mynode, false) |}
+//     < %{ [|mynode|].lock := true } >;
+//   {| loose(mynode, true) |}
+//     <{ mypred = tail;
+//        tail = mynode;
+//        %{[|tail|].pred := [|mypred|]}; }>;  // Ghost code
+//   {| queued(mynode, mypred) |}
+//     do {
+//       {| queued(mynode, mypred) |}
+//         <test = %{ [|mypred|].lock }>;
+//       {| if test then queued(mynode, mypred) else holdLock(mynode, mypred) |}
+//     } while (test);
+//   {| holdLock(mynode, mypred) |}
+// }
+// 
+// method unlock(Node mynode, Node mypred) {
+//   {| holdLock(mynode, mypred) |}
+//     <{ %{ [|mynode|].lock := false };
+//        %{ [|mynode|].pred := null };  // Ghost code
+//        head = mynode;  // Ghost code
+//        }>;
+//   {| loose(mypred, false) |}
+//     mynode = mypred;
+//   {| loose(mynode, false) |}
+// }
+// 
+// constraint emp -> %{ CLHfoot(Foot, [|head|], [|tail|]) };
+// 
+// constraint queued(a, ap) -> %{ queuedG(Foot, [|a|], [|head|], [|tail|], [|ap|]) };
+// constraint queued(a, ap) * queued(b, bp) -> a != b;
+// 
+// // Loose means the node is unlinked from the queue.
+// constraint loose(a, l) -> %{ looseG(Foot, [|a|], [|head|]) && [|a|].lock == [|l|] };
+// constraint loose(a, al) * loose(b, bl) -> a != b;
+// // loose and queued are contradictory by definition
+// 
+// constraint holdLock(a, ap) -> %{ queuedG(Foot, [|a|], [|head|], [|tail|], [|ap|]) && [|ap|] == [|head|] };
+// 
+// constraint holdLock(a, ap) * queued(b, bp) -> a != b;
+// constraint holdLock(a, ap) * holdLock(b, bp) -> false;
+// 
