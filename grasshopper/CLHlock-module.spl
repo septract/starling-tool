@@ -11,7 +11,7 @@ requires acc(Foot) {
     && tail in Foot
     && Reach(pred, tail, head)
     && !head.lock
-    && (forall x : Node :: (x in Foot && !x.lock) ==> x.pred == null)
+    && (forall x : Node :: (x in Foot && x.pred != null) ==> x.lock)
 }
 
 predicate looseG(Foot : Set<Node>, a : Node, head : Node)
