@@ -73,6 +73,10 @@ module Types =
         | Assume of Expression // <assume(e)>
         | SymAtomic of symbol : Symbolic<Expression> // %{xyz}(x, y)
         | Havoc of var : string // havoc var
+        | ACond of
+            cond : Expression
+            * trueBranch : Atomic list
+            * falseBranch : (Atomic list) option
     and Atomic = Node<Atomic'>
 
     /// <summary>
@@ -240,6 +244,43 @@ module Pretty =
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Var.Pretty
 
+    /// <summary>
+    ///     Hidden building-blocks for AST pretty-printers.
+    /// </summary>
+    module private Helpers =
+        /// Pretty-prints blocks with the given indent level (in spaces).
+        let printBlock (pCmd : 'Cmd -> Doc) (c : 'Cmd list) : Doc =
+            braced (ivsep (List.map (pCmd >> Indent) c))
+
+        /// <summary>
+        ///     Pretty-prints an if-then-else.
+        /// </summary>
+        /// <param name="pCond">Pretty-printer for conditionals.</param>
+        /// <param name="pLeg">Pretty-printer for 'then'/'else' legs.</param>
+        /// <param name="cond">The conditional to print.</param>
+        /// <param name="thenLeg">The 'then' leg to print.</param>
+        /// <param name="elseLeg">The optional 'else' leg to print.</param>
+        /// <typeparam name="Cond">Type of conditionals.</typeparam>
+        /// <typeparam name="Leg">Type of 'then'/'else' leg items.</typeparam>
+        /// <returns>
+        ///     A <see cref="Doc"/> capturing the if-then-else form.
+        /// </returns>
+        let printITE
+          (pCond : 'Cond -> Doc)
+          (pLeg : 'Leg -> Doc)
+          (cond : 'Cond)
+          (thenLeg : 'Leg list)
+          (elseLeg : ('Leg list) option)
+          : Doc =
+            syntaxStr "if"
+            <+> parened (pCond cond)
+            <+> printBlock pLeg thenLeg
+            <+> (maybe
+                    Nop
+                    (fun e -> syntaxStr "else" <+> printBlock pLeg e)
+                    elseLeg)
+
+
     /// Pretty-prints Boolean operations.
     let printBinOp : BinOp -> Doc =
         function
@@ -290,7 +331,7 @@ module Pretty =
     /// <param name="s">The symbolic to print.</param>
     /// <returns>
     ///     The <see cref="Doc"/> resulting from printing <paramref name="s"/>.
-    /// </returns> 
+    /// </returns>
     and printSymbolic (s : Symbolic<Expression>) : Doc =
         String "%"
         <->
@@ -360,7 +401,7 @@ module Pretty =
         equality (printExpression dest) (printExpression src)
 
     /// Pretty-prints atomic actions.
-    let printAtomic' : Atomic' -> Doc =
+    let rec printAtomic' : Atomic' -> Doc =
         function
         | CompareAndSwap(l, f, t) ->
             func "CAS" [ printExpression l
@@ -376,13 +417,9 @@ module Pretty =
         | Assume e -> func "assume" [ printExpression e ]
         | SymAtomic sym -> printSymbolic sym
         | Havoc var -> String "havoc" <+> String var
-    let printAtomic (x : Atomic) : Doc = printAtomic' x.Node
-
-    /// Pretty-prints blocks with the given indent level (in spaces).
-    let printBlock (pCmd : 'cmd -> Doc)
-                   (c : 'cmd list)
-                   : Doc =
-        braced (ivsep (List.map (pCmd >> Indent) c))
+        | ACond (cond = c; trueBranch = t; falseBranch = f) ->
+            Helpers.printITE printExpression printAtomic c t f
+    and printAtomic (x : Atomic) : Doc = printAtomic' x.Node
 
     /// Pretty-prints commands.
     let rec printCommand' (cmd : Command') : Doc =
@@ -397,32 +434,32 @@ module Pretty =
                          |> semiSep |> withSemi |> braced |> angled)
                   yield! Seq.map (uncurry printAssign) qs }
             |> semiSep |> withSemi
-        | Command'.If(c, t, fo) ->
-            hsep [ "if" |> String |> syntax
-                   c |> printExpression |> parened
-                   t |> printBlock printCommand
-                   (maybe Nop
-                        (fun f ->
-                            hsep
-                                [ "else" |> String |> syntax
-                                  printBlock printCommand f ])
-                        fo) ]
+        | Command'.If(c, t, f) ->
+            Helpers.printITE printExpression printCommand c t f
         | Command'.While(c, b) ->
             hsep [ "while" |> String |> syntax
                    c |> printExpression |> parened
-                   b |> printBlock printCommand ]
+                   b |> Helpers.printBlock printCommand ]
         | Command'.DoWhile(b, c) ->
             hsep [ "do" |> String |> syntax
-                   b |> printBlock printCommand
+                   b |> Helpers.printBlock printCommand
                    "while" |> String |> syntax
                    c |> printExpression |> parened ]
             |> withSemi
         | Command'.Blocks bs ->
             bs
-            |> List.map (printBlock printCommand)
+            |> List.map (Helpers.printBlock printCommand)
             |> hsepStr "||"
         | Command'.ViewExpr v -> printMarkedView printView v
     and printCommand (x : Command) : Doc = printCommand' x.Node
+
+    /// <summary>
+    ///     Prints a command block.
+    /// </summary>
+    /// <param name="block">The block to print.</param>
+    /// <returns>A <see cref="Doc"/> capturing <paramref name="block"/>.
+    let printCommandBlock (block : Command list) : Doc =
+        Helpers.printBlock printCommand block
 
     /// <summary>
     ///     Pretty-prints a type literal.
@@ -454,7 +491,7 @@ module Pretty =
                     : Doc =
         hsep [ "method" |> String |> syntax
                printFunc (printParam >> syntaxIdent) s
-               printBlock pCmd b ]
+               Helpers.printBlock pCmd b ]
 
     /// Pretty-prints a general view prototype.
     let printGeneralViewProto (pParam : 'Param -> Doc)(vp : GeneralViewProto<'Param>) : Doc =

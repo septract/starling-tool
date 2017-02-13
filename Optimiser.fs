@@ -576,7 +576,7 @@ module Graph =
                     | Ok (pvars, _) ->
                         Seq.forall typedVarIsThreadLocal (Set.toSeq pvars)
 
-        let isLocalPrim prim =
+        let rec isLocalPrim prim =
             match prim with
             | // TODO(CaptainHayashi): too conservative?
               SymC _ -> false
@@ -585,6 +585,10 @@ module Graph =
             | // TODO(CaptainHayashi): is this correct?
               Intrinsic (Havoc v) -> typedVarIsThreadLocal v
             | Stored { Args = ps } -> Seq.forall isLocalArg ps
+            | PrimBranch (trueBranch = t; falseBranch = f) ->
+                List.forall isLocalPrim t
+                && maybe true (List.forall isLocalPrim) f
+                
 
         List.forall isLocalPrim cmd
 

@@ -617,10 +617,10 @@ let microcodeRoutineToBool
 /// <param name="semantics">The map from command to microcode schemata.</param>
 /// <param name="prim">The primitive command to instantiate.</param>
 /// <returns>
-///     If the instantiation succeeded, the resulting list of parallel-composed
+///     If the instantiation succeeded, the resulting list of
 ///     <see cref="Microcode"/> instructions.
 /// </returns>
-let instantiateToMicrocode
+let rec instantiateToMicrocode
   (semantics : PrimSemanticsMap)
   (prim : PrimCommand)
   : Result<Microcode<Expr<Sym<Var>>, Sym<Var>> list, Error> =
@@ -650,6 +650,16 @@ let instantiateToMicrocode
             mapMessages Traversal (mapTraversal subInMCode s.Body)
 
         bind instantiate typeCheckedDefR
+    | PrimBranch (cond = c; trueBranch = t; falseBranch = f) ->
+        let inst =
+            List.map (instantiateToMicrocode semantics)
+            >> collect
+            >> lift List.concat
+
+        lift2 
+            (fun tM fM -> [ Branch (c, tM, fM) ])
+            (inst t)
+            (maybe (ok []) inst f)
 
 /// <summary>
 ///     Translates a command to a multi-state Boolean expression.

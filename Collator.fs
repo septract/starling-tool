@@ -80,7 +80,7 @@ module Pretty =
               vsep <| Seq.map (printScriptVar "shared") cs.SharedVars
               vsep <| Seq.map (printScriptVar "thread") cs.ThreadVars
               vsep <| Seq.map (uncurry printConstraint) cs.Constraints
-              printMap Indented String (printBlock printCommand) cs.Methods ]
+              printMap Indented String printCommandBlock cs.Methods ]
 
         // Add in search, but only if it actually exists.
         let all =
@@ -188,7 +188,7 @@ module ParamDesugar =
         let rewriteAFunc { Name = n; Params = ps } =
             { Name = n; Params = List.map rewriteExpression ps }
 
-        let rewriteAtomic atom =
+        let rec rewriteAtomic atom =
             let rewriteAtomic' =
                 function
                 | CompareAndSwap (src, test, dest) ->
@@ -202,6 +202,11 @@ module ParamDesugar =
                 | SymAtomic sym ->
                     SymAtomic (rewriteSymbolic sym)
                 | Havoc v -> Havoc (rewriteVar v)
+                | ACond (cond = c; trueBranch = t; falseBranch = f) ->
+                    ACond
+                        (rewriteExpression c,
+                         List.map rewriteAtomic t,
+                         Option.map (List.map rewriteAtomic) f)
             { atom with Node = rewriteAtomic' atom.Node }
 
         let rewritePrimSet { PreAssigns = ps; Atomics = ts; PostAssigns = qs } =

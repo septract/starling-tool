@@ -166,6 +166,8 @@ module Types =
         | PrimNotImplemented of what : string
         /// <summary>Handling variables in symbolic prims caused an error.</summary>
         | SymVarError of err : VarMapError
+        /// <summary>An atomic branch contains a bad if-then-else condition.</summary>
+        | BadAtomicITECondition of expr: AST.Types.Expression * err: ExprError
 
     /// Represents an error when converting a method.
     type MethodError =
@@ -378,6 +380,9 @@ module Pretty =
         | SymVarError err ->
             errorStr "error in translating symbolic command"
             <&> printVarMapError err
+        | BadAtomicITECondition (expr, err) ->
+            wrapped "if-then-else condition" (printExpression expr)
+                                             (printExprError err)
 
     /// Pretty-prints method errors.
     let printMethodError (err : MethodError) : Doc =
@@ -1721,8 +1726,8 @@ let modelPostfix (ctx : MethodContext) (operand : Expression) (mode : FetchMode)
 /// Converts a single atomic command from AST to part-commands.
 let rec modelAtomic
   (ctx : MethodContext) (a : Atomic) : Result<PrimCommand, PrimError> =
-    let prim =
-        match a.Node with
+    let rec prim n =
+        match n.Node with
         | CompareAndSwap(dest, test, set) -> modelCAS ctx dest test set
         | Fetch(dest, src, mode) -> modelFetch ctx dest src mode
         | Postfix(operand, mode) -> modelPostfix ctx operand mode
@@ -1734,8 +1739,6 @@ let rec modelAtomic
         | Havoc var ->
             let varMR = mapMessages SymVarError (Env.lookup ctx.Env Full var)
             lift (fun varM -> Intrinsic (IntrinsicCommand.Havoc varM)) varMR
-
-
         | SymAtomic sym ->
             // TODO(CaptainHayashi): split out.
             let symMR =
@@ -1743,12 +1746,25 @@ let rec modelAtomic
                     (wrapMessages BadExpr (modelExpr ctx.Env Full id))
                          sym)
             lift SymC symMR
+        | ACond (cond = c; trueBranch = t; falseBranch = f) ->
+            let cTMR =
+                wrapMessages BadExpr (modelBoolExpr ctx.Env Full id) c
+            // An if condition needs to be of type 'bool', not a subtype.
+            let cMR =
+                bind
+                    (checkBoolIsNormalType
+                     >> mapMessages (fun m -> BadAtomicITECondition (c, ExprBadType m)))
+                    cTMR
+            let tMR = collect (List.map prim t)
+            let fMR = maybe (ok None) (List.map prim >> collect >> lift Some) f
+            lift3 (curry3 PrimBranch) cMR tMR fMR
+
 
     lift
         (function
          | Stored cmd -> Stored { cmd with Node = Some a }
          | x -> x)
-        prim
+        (prim a)
 
 /// Converts a local variable assignment to a Prim.
 and modelAssign
