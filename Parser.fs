@@ -206,10 +206,9 @@ let parseBinaryExpressionLevel nextLevel expList =
         // TODO(CaptainHayashi): can this be solved without backtracking?
         nodify (pstring ops)
         .>>? ws
-        (* A binary operator cannot ever be followed by a semicolon, + or -.
-           This check removes ambiguity between > and <atomic braces>;,
-           + and ++, and - and --. *)
-        .>>? notFollowedBy (anyOf ";+-")
+        (* A binary operator cannot ever be followed by + or -.
+           This check removes ambiguity between + and ++, and - and --. *)
+        .>>? notFollowedBy (anyOf "+-")
         |>> fun x -> fun a b -> { Node = BopExpr(op, a, b); Position = x.Position }
     chainl1 (nextLevel .>> ws)
             (choice
