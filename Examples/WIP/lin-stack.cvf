@@ -36,12 +36,6 @@ view PendingCell(Cell c, int v, Cell n);
 // We're having to push in the cell separately to avoid allocation weirdness.
 method push(int v, Cell x, Result this /* ghost code */) {
     {| NoAbsResult(this) * LocalCell(x, v) |}
-/*        // TODO(MattWindsor91): this should probably not be atomic.
-        <{ x = %{ new Cell };
-           %{ [|x|].next := null };  // This needs to be explicit for this proof
-           %{ [|x|].acell := null };
-           %{ [|x|].data := [|v|] }; }>;
-    {| NoAbsResult(this) * LocalCell(x, v) |} */
         do {
             {| NoAbsResult(this) * LocalCell(x, v) |}
                 < t = S >;
@@ -111,7 +105,7 @@ constraint SomeAbsResult(a) ->
     %{ [|a|] in RFoot && [|a|].assigned && ![|a|].isNull };
 
 constraint MaybeTop(x) ->
-    %{ [|x|] in Foot };
+    %{ [|x|] in Foot && ([|x|].next != null ==> [|x|].next in Foot) };
 
 constraint LocalCell(x, v) ->
     %{ [|x|] in Foot

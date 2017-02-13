@@ -22,33 +22,45 @@ struct Result {
 predicate StackInv(X : Set<Cell>, A : Set<AbsCell>, S : Cell, Abs : AbsCell)
 requires acc(X) &*& acc(A) {
 	A = { z : AbsCell :: Btwn(anext, Abs, z, null) && z != null }
-	&& (S == null || S in X)
+	&& (S == null || S in X && Abs == S.acell)
 	&& (Abs == null || Abs in A)
 	&& (forall x : Cell ::
 		(
-			Btwn(next, S, x, null) ==>
-				(x in X
-				 && x.acell != null
-				 && x.acell in A
-				 && x.acell.adata == x.data
-				 && (x.next != null ==> (x.next in X && x.next.acell == x.acell.anext))
-				 && (x.next == null ==> x.acell.anext == null))
+			((x in X && x.next != null) ==> x.next in X)
+			&&
+			(
+				Reach(next, S, x) ==>
+					(x in X
+					 && x.acell != null
+					 && x.acell in A
+					 && x.acell.adata == x.data
+					 && (x.next != null ==>
+					     (x.next in X
+					      && (!Reach(next, x.next, x))
+					      && x.next.acell == x.acell.anext))
+					 && (x.next == null ==> x.acell.anext == null))
+			)
 		)
 	)
 }
 
-//procedure StackInv_sat(X : Set<Cell>, A : Set<AbsCell>, S : Cell, Abs : AbsCell)
-//requires acc(X) &*& acc(A) &*& StackInv(X, A, S, Abs)
-//ensures false
-//{
-//}
+/*
+procedure StackInv_sat(X : Set<Cell>, A : Set<AbsCell>, S : Cell, Abs : AbsCell)
+requires acc(X) &*& acc(A) &*& StackInv(X, A, S, Abs)
+ensures false
+{
+}
+*/
 
 procedure LinThis(this : Result, t : Cell)
 requires
 	acc(this)
-	&*& acc(t)
+	&*& (t != null ==> acc(t))
 	&*& !this.assigned
-ensures acc(this) &*& acc(t) &*&
+ensures
+	acc(this)
+	&*& (t != null ==> acc(t))
+	&*&
 	((t != null ==> !this.assigned)
 	 && (t == null ==> this.assigned && this.isNull))
 {
