@@ -12,11 +12,11 @@ thread int s;  // The thread's current view of serving.
  */
 method lock() {
   {| emp |}
-    <t = ticket++>;
+    <| t = ticket++; |>
   {| holdTickLock(t, false) |}
     do {
       {| holdTickLock(t, false) |}
-        <s = serving>;
+        <| s = serving; |>
       {| holdTickLock(t, s == t) |}
     } while (s != t);
   {| holdTickLock(t, true) |}
@@ -27,7 +27,7 @@ method lock() {
  */
 method unlock() {
   {| holdTickLock(t, true) |}
-    <serving++>;
+    <| serving++; |>
   {| emp |}
 }
 

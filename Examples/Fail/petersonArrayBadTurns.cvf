@@ -27,15 +27,15 @@ view holdLock(int me);  // 'me' holds the lock.
  */
 method lock() {
   {| flagDown(i) |}
-    <flag[i] = true>;
+    <| flag[i] = true; |>
   {| flagUp(i) |}
-    <turn = (i + 1) % 2>; // oops!
+    <| turn = (i + 1) % 2; |> // oops!
   {| waiting(i) |}
     do {
       {| waiting(i) |}
-        <oFlag = flag[(i + 1) % 2]>;
+        <| oFlag = flag[(i + 1) % 2]; |>
       {| if (oFlag) then waiting(i) else holdLock(i) |}
-        <oTurn = turn>;
+        <| oTurn = turn; |>
       {| if (oFlag && oTurn == i) then waiting(i) else holdLock(i) |}
     } while (oFlag && (oTurn == i));
   {| holdLock(i) |}
@@ -46,7 +46,7 @@ method lock() {
  */
 method unlock() {
   {| holdLock(i) |}
-    <flag[i] = false>;
+    <| flag[i] = false; |>
   {| flagDown(i) |}
 }
 

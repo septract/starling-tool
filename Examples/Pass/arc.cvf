@@ -10,14 +10,14 @@ thread int c;
 
 // Assumption: clone() cannot be called when there are no references
 method clone() {
-  {| arc() |} < count++ >; {| arc() * arc() |}
+  {| arc() |} <| count++; |> {| arc() * arc() |}
 }
 
 // Try to prove that print() when holding a reference is always valid
 // i.e. free can never be true when {| arc() |} is held
 method print() {
   {| arc() |}
-    <f = free>;
+    <| f = free; |>
   {| arc() * specialViewForFree(f) |}
     // Test for disposal
     if (f == true) {
@@ -28,11 +28,11 @@ method print() {
 
 method drop() {
   {| arc() |}
-    < c = count-- >;
+    <| c = count--; |>
   {| specialViewForC(c) |}
     if (c == 1) {
       {| noCnt() |}
-        <free = (true)>;
+        <| free = true; |>
       {| emp |}
     }
   {| emp |}

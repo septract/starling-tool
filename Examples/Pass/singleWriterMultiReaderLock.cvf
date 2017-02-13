@@ -16,11 +16,11 @@ thread int m;         // Hack used to make maxCount thread-local.
 
 method readAcquire() {
   {| emp |}
-    <t = ticket++>;
+    <| t = ticket++; |>
   {| holdTick(t) |}
     do {
       {| holdTick(t) |}
-        <s = serving>;
+        <| s = serving; |>
       {| if s == t then holdInnerLock() else holdTick(t) |}
     } while (s != t);
   {| holdInnerLock() |}
@@ -28,31 +28,31 @@ method readAcquire() {
       // Diverge if there are too many readers.
       // TODO: rescind the inner lock before spinning?
       {| holdInnerLock() |}
-        <{r = readCount; m = maxCount;}>;
+        <| r = readCount; m = maxCount; |>
       {| if r > (m - 1) then holdInnerLock() else canHoldReadLock() |}
     } while (r > (m - 1));
   {| canHoldReadLock() |}
 
-  <readCount++>;
+  <| readCount++; |>
   {| holdInnerLock() * holdReadLock() |}
-    <serving++>;
+    <| serving++; |>
   {| holdReadLock() |}
 }
 
 method readRelease() {
   {| holdReadLock() |}
-    <readCount-->;
+    <| readCount--; |>
   {| emp |}
 }
 
 
 method writeAcquire() {
   {| emp |}
-    <t = ticket++>;
+    <| t = ticket++; |>
   {| holdTick(t) |}
     do {
       {| holdTick(t) |}
-        <s = serving>;
+        <| s = serving; |>
       {| if s == t then holdInnerLock() else holdTick(t) |}
     } while (s != t);
   {| holdInnerLock() |}
@@ -60,7 +60,7 @@ method writeAcquire() {
       // Diverge if there are any readers.
       // TODO: rescind the inner lock before spinning?
      {| holdInnerLock() |}
-       <r = readCount>;
+       <| r = readCount; |>
      {| if r == 0 then holdWriteLock() else holdInnerLock() |}
    } while (r != 0);
   {| holdWriteLock() |}
@@ -72,7 +72,7 @@ method writeAcquire() {
  */
 method writeRelease() {
   {| holdWriteLock() |}
-    <serving++>;
+    <| serving++; |>
   {| emp |}
 }
 

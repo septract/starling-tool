@@ -13,9 +13,9 @@ view newLock(Lock x), holdLock(Lock x), isLock(Lock x);
 
 method newLock() {
   {| emp |}
-    <ret = %{new Lock}>;
+    <| ret = %{new Lock}; |>
   {| newLock(ret) |}
-    <%{[|ret|].lock := false}>;
+    <| %{[|ret|].lock := false}; |>
   {| isLock(ret) |}
 }
 
@@ -25,7 +25,7 @@ method lock(Lock x) {
       {| isLock(x) |}
         test = false;
       {| if test == false then isLock(x) else False() |}
-        <test = %{ CAS_to_true([|x|]) }>;
+        <| test = %{ CAS_to_true([|x|]) }; |>
       {| if test == false then isLock(x) else holdLock(x) |}
     } while (test == false);
   {| holdLock(x) |}
@@ -33,7 +33,7 @@ method lock(Lock x) {
 
 method unlock(Lock x) {
   {| holdLock(x) |}
-    <%{[|x|].lock := false}>;
+    <| %{[|x|].lock := false}; |>
   {| isLock(x) |}
 }
 

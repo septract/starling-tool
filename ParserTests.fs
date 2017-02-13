@@ -232,26 +232,15 @@ module AtomicActionTests =
 
 module AtomicSetTests =
     [<Test>]
-    let ``<foo++>``() =
-        check parseAtomicSet "<foo++>"
-            [ node "" 1L 2L <| Postfix
-                (node "" 1L 2L (Identifier "foo"),
-                 Increment) ]
-
-    [<Test>]
-    let ``Multiple outside block invalid``() =
-        checkFail parseAtomicSet "<foo++; bar-->"
-
-    [<Test>]
     let ``Single atomic block``() =
-        check parseAtomicSet "<{ foo++; }>"
+        check parseAtomicSet "<| foo++; |>"
             [ node "" 1L 4L <| Postfix
                 (node "" 1L 4L (Identifier "foo"),
                  Increment) ]
 
     [<Test>]
     let ``Multiple in block valid``() =
-        check parseAtomicSet "<{ foo++; bar--; }>"
+        check parseAtomicSet "<| foo++; bar--; |>"
             [ node "" 1L 4L <| Postfix
                 (node "" 1L 4L (Identifier "foo"),
                  Increment)

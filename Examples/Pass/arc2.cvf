@@ -17,39 +17,39 @@ view error();
 constraint error() -> false;
 
 method clone() {
-  {| arc() |} 
-    < count++ >; 
+  {| arc() |}
+    <| count++ ; |>
   {| arc() * arc() |}
 }
 
 method print() {
   {| arc() |}
-    <f = free>;
+    <| f = free; |>
   {| if f == true then error() else arc() |}
     if (f == true) {
-      {| error() |} 
+      {| error() |}
     }
   {| arc() |}
 }
 
 method drop() {
   {| arc() |}
-    < c = count-- >;
+    <| c = count--; |>
   {| countCopy(c) |}
     if (c == 1) {
       {| countCopy(1) |}
-        <free = (true)>;
+        <| free = true; |>
       {| emp |}
     }
   {| emp |}
 }
 
-constraint iter[n] arc() -> 
+constraint iter[n] arc() ->
     n > 0 => (free == false && n <= count);
 
-constraint countCopy(c) ->  
+constraint countCopy(c) ->
     c == 1 => (free == false && count == 0);
 
-constraint countCopy(m) * countCopy(n) -> 
-    (m != 1) || (n != 1);  
+constraint countCopy(m) * countCopy(n) ->
+    (m != 1) || (n != 1);
 

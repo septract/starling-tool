@@ -49,15 +49,15 @@ view v8(int f, int t);
  */
 method lockA() {
   {| aFlagDown() |}
-    <aFlag = 1>;
+    <| aFlag = 1; |>
   {| v0(oFlag, oTurn) |}
-    <turn = 0>;
+    <| turn = 0; |>
   {| v2(oFlag, oTurn) |}
     do {
       {| v2(oFlag, oTurn) |}
-        <oFlag = bFlag>;
+        <| oFlag = bFlag; |>
       {| v3(oFlag, oTurn) |}
-        <oTurn = turn>;
+        <| oTurn = turn; |>
       {| if (oFlag == 1 && oTurn == 0) then v2(oFlag, oTurn) else aHoldLock() |}
     } while (oFlag == 1 && oTurn == 0);
   {| aHoldLock() |}
@@ -68,7 +68,7 @@ method lockA() {
  */
 method unlockA() {
   {| aHoldLock() |}
-    <aFlag = 0>;
+    <| aFlag = 0; |>
   {| aFlagDown() |}
 }
 
@@ -77,15 +77,15 @@ method unlockA() {
  */
 method lockB() {
   {| bFlagDown() |}
-    <bFlag = 1>;
+    <| bFlag = 1; |>
   {| v5(oFlag, oTurn) |}
-    <turn = 1>;
+    <| turn = 1; |>
   {| v7(oFlag, oTurn) |}
     do {
       {| v7(oFlag, oTurn) |}
-        <oFlag = aFlag>;
+        <| oFlag = aFlag; |>
       {| v8(oFlag, oTurn) |}
-        <oTurn = turn>;
+        <| oTurn = turn; |>
       {| if (oFlag == 1 && oTurn == 1) then v7(oFlag, oTurn) else bHoldLock() |}
     } while (oFlag == 1 && oTurn == 1);
   {| bHoldLock() |}
@@ -96,7 +96,7 @@ method lockB() {
  */
 method unlockB() {
   {| bHoldLock() |}
-    <bFlag = 0>;
+    <| bFlag = 0; |>
   {| bFlagDown() |}
 }
 

@@ -58,22 +58,35 @@ let parseIdentifier =
 
 // Bracket parsers.
 
-/// Parser for items in a pair of matching brackets.
-/// Automatically parses any whitespace after `bra`, and before `ket`.
+/// <summary>
+///     Parser for items in a pair of matching brackets.
+///     Automatically parses any whitespace after `bra`, and before `ket`.
+/// </summary>
 let inBrackets bra ket = between (pstring bra .>> ws) (ws >>. pstring ket)
-/// Parser for items in (parentheses).
+/// <summary>
+///     Parser for items in <c>(parentheses)</c>.
+/// </summary>
 let inParens p = inBrackets "(" ")" p
-/// Parser for items in [brackets].
+/// <summary>
+///     Parser for items in <c>[brackets]</c>.
+/// </summary>
 let inSquareBrackets p = inBrackets "[" "]" p
-/// Parser for items in {braces}.
+/// <summary>
+///     Parser for items in <c>{braces}</c>.
+/// </summary>
 let inBraces p = inBrackets "{" "}" p
-/// Parser for items in {|view braces|}.
+/// <summary>
+///     Parser for items in <c>{|view braces|}</c>.
+/// </summary>
 let inViewBraces p = inBrackets "{|" "|}" p
-/// Parser for items in {|interpolate braces|}.
+/// <summary>
+///     Parser for items in <c>[|interpolate braces|]</c>.
+/// </summary>
 let inInterpBraces p = inBrackets "[|" "|]" p
-/// Parser for items in <angle brackets>.
-let inAngles p = inBrackets "<" ">" p
-
+/// <summary>
+///     Parser for items in <c><|atomic braces|></c>.
+/// </summary>
+let inAtomicBraces p = inBrackets "<|" "|>" p
 
 (*
  * Forwards.
@@ -330,12 +343,7 @@ let parseAtomic =
 
 /// Parser for a collection of atomic actions.
 let parseAtomicSet =
-    inAngles (
-        // Either one atomic...
-        (parseAtomic |>> List.singleton)
-        <|>
-        // ...or an atomic{} block.
-        (inBraces (many (parseAtomic .>> wsSemi .>> ws))))
+    inAtomicBraces (many1 (parseAtomic .>> wsSemi .>> ws))
 
 /// Parses a Func given the argument parser argp.
 let parseFunc argp =
@@ -540,7 +548,7 @@ let parsePrimSet =
        2 is easier to spot, so we try it first. *)
     let parseAtomicFirstPrimSet =
         pipe2
-          (parseAtomicSet .>> wsSemi .>> ws)
+          (parseAtomicSet .>> ws)
           (many (attempt (parseAssign .>> wsSemi .>> ws)))
           (fun atom rassigns ->
               Prim { PreAssigns = []; Atomics = atom; PostAssigns = rassigns } )
@@ -549,7 +557,7 @@ let parsePrimSet =
         pipe2
             (many1 (parseAssign .>> wsSemi .>> ws))
             (opt
-                (parseAtomicSet .>> wsSemi .>> ws
+                (parseAtomicSet .>> ws
                  .>>. many (parseAssign .>> wsSemi .>> ws)))
             (fun lassigns tail ->
                let (atom, rassigns) = withDefault ([], []) tail
