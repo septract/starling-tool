@@ -273,7 +273,7 @@ module MicrocodeToBool =
       (svars : VarMap)
       (tvars : VarMap)
       (expected : BoolExpr<Sym<MarkedVar>>)
-      (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list list)
+      (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
       : unit =
         // Try to make the check order-independent.
         let rec trySort bool =
@@ -305,26 +305,6 @@ module MicrocodeToBool =
             []
 
     [<Test>]
-    let ``the singleton empty command is translated properly`` () =
-        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-                [ iEq (siAfter "serving") (siBefore "serving")
-                  iEq (siAfter "ticket") (siBefore "ticket")
-                  iEq (siAfter "s") (siBefore "s")
-                  iEq (siAfter "t") (siBefore "t") ] )
-            [ [] ]
-
-    [<Test>]
-    let ``a composition of empty commands is translated properly`` () =
-        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-                [ iEq (siAfter "serving") (siBefore "serving")
-                  iEq (siAfter "ticket") (siBefore "ticket")
-                  iEq (siAfter "s") (siBefore "s")
-                  iEq (siAfter "t") (siBefore "t") ] )
-            [ []; []; []; ]
-
-    [<Test>]
     let ``lone assumes are translated properly`` () =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
             (BAnd
@@ -333,7 +313,7 @@ module MicrocodeToBool =
                   iEq (siAfter "s") (siBefore "s")
                   iEq (siAfter "t") (siBefore "t")
                   iEq (siBefore "s") (siBefore "t") ])
-            [ [ Assume (iEq (siVar "s") (siVar "t")) ] ]
+            [ Assume (iEq (siVar "s") (siVar "t")) ]
 
     [<Test>]
     let ``lone havocs are translated properly`` () =
@@ -342,7 +322,7 @@ module MicrocodeToBool =
                 [ iEq (siAfter "serving") (siBefore "serving")
                   iEq (siAfter "ticket") (siBefore "ticket")
                   iEq (siAfter "t") (siBefore "t") ])
-            [ [ havoc (normalIntExpr (siVar "s")) ] ]
+            [ havoc (normalIntExpr (siVar "s")) ]
 
     [<Test>]
     let ``lone assigns are translated properly`` () =
@@ -352,7 +332,7 @@ module MicrocodeToBool =
                   iEq (siAfter "ticket") (siBefore "ticket")
                   iEq (siAfter "s") (siBefore "t")
                   iEq (siAfter "t") (siBefore "t") ])
-            [ [ normalIntExpr (siVar "s") *<- normalIntExpr (siVar "t") ] ]
+            [ normalIntExpr (siVar "s") *<- normalIntExpr (siVar "t") ]
 
     [<Test>]
     let ``unchained assigns are translated properly`` () =
@@ -363,8 +343,8 @@ module MicrocodeToBool =
                   iEq (siAfter "s") (siBefore "t")
                   iEq (siAfter "t") (siBefore "t")
                   iEq (siInter 0I "s") (siBefore "serving") ])
-            [ [ normalIntExpr (siVar "s") *<- normalIntExpr (siVar "serving") ]
-              [ normalIntExpr (siVar "s") *<- normalIntExpr (siVar "t") ]  ]
+            [ normalIntExpr (siVar "s") *<- normalIntExpr (siVar "serving")
+              normalIntExpr (siVar "s") *<- normalIntExpr (siVar "t") ] 
 
     [<Test>]
     let ``chained assigns are translated properly`` () =
@@ -375,8 +355,8 @@ module MicrocodeToBool =
                   iEq (siAfter "s") (siInter 0I "t")
                   iEq (siAfter "t") (siInter 0I "t")
                   iEq (siInter 0I "t") (siBefore "serving") ])
-            [ [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "serving") ]
-              [ normalIntExpr (siVar "s") *<- normalIntExpr (siVar "t") ] ]
+            [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "serving")
+              normalIntExpr (siVar "s") *<- normalIntExpr (siVar "t") ]
 
     [<Test>]
     let ``chained assigns and assumptions are translated properly`` () =
@@ -388,8 +368,8 @@ module MicrocodeToBool =
                   iEq (siBefore "s") (siInter 0I "t")
                   iEq (siAfter "t") (siInter 0I "t")
                   iEq (siInter 0I "t") (siBefore "serving") ])
-            [ [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "serving") ]
-              [ Assume (iEq (siVar "s") (siVar "t")) ] ]
+            [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "serving")
+              Assume (iEq (siVar "s") (siVar "t")) ]
 
     [<Test>]
     let ``well-formed branches are translated properly`` () =
@@ -404,10 +384,10 @@ module MicrocodeToBool =
                   (mkImplies
                     (mkNot (iEq (siBefore "s") (siBefore "t")))
                     (iEq (siAfter "t") (siBefore "ticket"))) ])
-            [ [ Branch
-                    (iEq (siVar "s") (siVar "t"),
+            [ Branch
+                  (iEq (siVar "s") (siVar "t"),
                      [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "serving") ],
-                     [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "ticket") ]) ] ]
+                     [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "ticket") ]) ]
 
     [<Test>]
     let ``long compositions are translated properly`` () =
@@ -419,28 +399,9 @@ module MicrocodeToBool =
                  iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
                  iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L))
                  iEq (siAfter "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ] )
-            [ [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ]
-              [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ]
-              [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ] ]
-
-    [<Test>]
-    let ``parallel compositions are translated properly`` () =
-        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-               [ iEq (siAfter "serving") (siBefore "serving")
-                 iEq (siAfter "ticket") (siBefore "ticket")
-                 iEq (siInter 0I "s") (mkSub2 (siBefore "s") (IInt 1L))
-                 iEq (siInter 1I "s") (mkSub2 (siInter 0I "s") (IInt 1L))
-                 iEq (siAfter "s") (mkSub2 (siInter 1I "s") (IInt 1L))
-                 iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
-                 iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L))
-                 iEq (siAfter "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ] )
-            [ [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L))
-                normalIntExpr (siVar "s") *<- normalIntExpr (mkSub2 (siVar "s") (IInt 1L)) ]
-              [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L))
-                normalIntExpr (siVar "s") *<- normalIntExpr (mkSub2 (siVar "s") (IInt 1L)) ]
-              [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L))
-                normalIntExpr (siVar "s") *<- normalIntExpr (mkSub2 (siVar "s") (IInt 1L)) ] ]
+            [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L))
+              normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L))
+              normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ]
 
     [<Test>]
     let ``pre-state havocs are translated properly`` () =
@@ -451,9 +412,9 @@ module MicrocodeToBool =
                  iEq (siAfter "s") (siBefore "s")
                  iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L))
                  iEq (siAfter "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ] )
-            [ [ havoc (normalIntExpr (siVar "t")) ]
-              [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ]
-              [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ] ]
+            [ havoc (normalIntExpr (siVar "t"))
+              normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L))
+              normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ]
 
     [<Test>]
     let ``intermediate havocs are translated properly`` () =
@@ -464,9 +425,9 @@ module MicrocodeToBool =
                  iEq (siAfter "s") (siBefore "s")
                  iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
                  iEq (siAfter "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ] )
-            [ [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ]
-              [ havoc (normalIntExpr (siVar "t")) ]
-              [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ] ]
+            [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L))
+              havoc (normalIntExpr (siVar "t"))
+              normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ]
 
     [<Test>]
     let ``post-state havocs are translated properly`` () =
@@ -477,9 +438,9 @@ module MicrocodeToBool =
                  iEq (siAfter "s") (siBefore "s")
                  iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
                  iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L)) ] )
-            [ [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ]
-              [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ]
-              [ havoc (normalIntExpr (siVar "t")) ] ]
+            [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L))
+              normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L))
+              havoc (normalIntExpr (siVar "t")) ]
 
     [<Test>]
     let ``single-dimensional arrays are normalised and translated properly`` () =
@@ -503,16 +464,16 @@ module MicrocodeToBool =
                                 (normalBoolExpr BTrue)))
                         (siBefore "y")
                         (normalBoolExpr  BFalse)) ])
-            [ [ normalBoolExpr
-                    (BIdx
-                        (mkTypedArrayExpr (Bool (normalRec, ())) (Some 10) (AVar (Reg "foo")),
-                         IVar (Reg "x")))
-                *<- normalBoolExpr BTrue
-                normalBoolExpr
-                    (BIdx
-                        (mkTypedArrayExpr (Bool (normalRec, ())) (Some 10) (AVar (Reg "foo")),
-                         IVar (Reg "y")))
-                *<- normalBoolExpr BFalse ] ]
+            [ normalBoolExpr
+                  (BIdx
+                      (mkTypedArrayExpr (Bool (normalRec, ())) (Some 10) (AVar (Reg "foo")),
+                       IVar (Reg "x")))
+              *<- normalBoolExpr BTrue
+              normalBoolExpr
+                  (BIdx
+                      (mkTypedArrayExpr (Bool (normalRec, ())) (Some 10) (AVar (Reg "foo")),
+                       IVar (Reg "y")))
+              *<- normalBoolExpr BFalse ]
 
     [<Test>]
     let ``multi-dimensional arrays are normalised and translated properly`` () =
@@ -550,13 +511,13 @@ module MicrocodeToBool =
                             (normalIntExpr <| mkAdd2
                                 (IIdx ((gridx Before), siBefore "y"))
                                 (IInt 1L)))) ] )
-            [ [ normalIntExpr
-                   (IIdx (gridxv, IVar (Reg "y")))
-                *<-
-                normalIntExpr
-                    (mkAdd2
-                        (IIdx (gridxv, siVar "y"))
-                        (IInt 1L)) ] ]
+            [ normalIntExpr
+                 (IIdx (gridxv, IVar (Reg "y")))
+              *<-
+              normalIntExpr
+                  (mkAdd2
+                      (IIdx (gridxv, siVar "y"))
+                      (IInt 1L)) ]
 
 
 module CommandTests =

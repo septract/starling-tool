@@ -34,9 +34,9 @@ module Types =
         /// <summary>A diverging assertion.</summary>
         | Assume of assumption : BoolExpr<'RV>
         /// <summary>A conditional.</summary>
-        | Branch of conditional : BoolExpr<'RV>
-                  * ifTrue : Microcode<'L, 'RV> list
-                  * ifFalse : Microcode<'L, 'RV> list
+        | Branch of cond : BoolExpr<'RV>
+                  * trueBranch : Microcode<'L, 'RV> list
+                  * falseBranch : Microcode<'L, 'RV> list
         override this.ToString() = sprintf "%A" this
 
     /// <summary>
@@ -131,7 +131,7 @@ module Types =
         { /// <summary>The original command.</summary>
           Cmd : Command
           /// <summary>The command's microcode instantiation.</summary>
-          Microcode : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list list
+          Microcode : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list
           /// <summary>
           ///     The assignment map for the command.
           ///     This maps the post-state of each variable reachable by the
