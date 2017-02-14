@@ -467,28 +467,6 @@ let rec markMicrocode
     traverseMicrocode lt rt
 
 /// <summary>
-///     Updates a map from variables to their last marker with the assignments
-///     in a microcode listing.
-/// </summary>
-let rec updateState
-  (state : Map<TypedVar, MarkedVar>)
-  (listing : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
-  : Map<TypedVar, MarkedVar> =
-    let updateOne (s : Map<TypedVar, MarkedVar>) m =
-        // TODO(CaptainHayashi): de-duplicate this
-        match m with
-        | Symbol _ | Assume _ -> s
-        | Assign (lv, rv) ->
-            // Assumption: this is monotone, eg. rv >= s.[lv]
-            // TODO(CaptainHayashi): check this?
-            match (valueOf lv) with
-            | Before l | After l | Intermediate (_, l) | Goal (_, l) ->
-                s.Add(withType (typeOf lv) l, valueOf lv)
-        | Branch (i, t, e) ->
-            updateState (updateState s t) e
-    List.fold updateOne state listing
-
-/// <summary>
 ///     Converts a microcode instruction into a two-state Boolean predicate.
 /// </summary>
 let rec markedMicrocodeToBool
@@ -571,6 +549,12 @@ let mergeBranch
 
     Seq.foldBack insertMapping (Map.toSeq tMap) ([], [], Map.empty)
 
+let updateState (st : Map<TypedVar, MarkedVar>) (vars : CTyped<MarkedVar> list)
+  : Map<TypedVar, MarkedVar> =
+    let updateOne (st' : Map<TypedVar, MarkedVar>) var =
+        st'.Add (unmark var, valueOf var)
+    List.fold updateOne st vars
+
 /// <summary>
 ///     Normalises and marks an entire microcode routine with variable states.
 /// </summary>
@@ -589,13 +573,6 @@ let processMicrocodeRoutine
   : Result<( Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list
              * Map<TypedVar, MarkedVar> ),
            Error> =
-    // TODO(CaptainHayashi): flatten into a single list
-    // TODO(CaptainHayashi): compose array accesses properly
-
-    (* Each item in 'routine' represents a microcode instruction, and has a
-       corresponding variable state: the first is Intermediate 0, the second
-       Intermediate 1, and so on until the last stage assigns to After. *)
-
     (* First, normalise the listing.
        This ensures only whole variables are written to, which allows us to
        track the assignment later. *)
@@ -604,7 +581,7 @@ let processMicrocodeRoutine
     (* Next, we annotate each command with the corresponding state marker.
        This is inherently recursive, because the microcode can contain
        branches. *)
-    let rec markInstructions afterIndex topState instrs
+    let rec markInstructions topState instrs
       : Result<Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list
                * Map<TypedVar, MarkedVar>,
                TraversalError<Error>> =
@@ -620,15 +597,10 @@ let processMicrocodeRoutine
                      fail (Inner (BadSemantics "somehow referenced variable not in scope"))
                 | Some mv ->
                     let markedVar = markFun mv
-                    let pushVarMaybe ctx var =
-                        match ctx with
-                        | Vars _ -> pushVar ctx var
-                        | _ -> ok ctx
-
                     lift
                         (fun ctx' ->
                             (ctx', withType (typeOf var) (varFun markedVar)))
-                        (pushVarMaybe ctx (withType (typeOf var) markedVar))
+                        (tryPushVar ctx (withType (typeOf var) markedVar))
 
         let markRValue state ctx var = markVar id Reg state ctx var
 
@@ -636,10 +608,6 @@ let processMicrocodeRoutine
           : Result<Map<TypedVar, MarkedVar>
                    * Microcode<CTyped<MarkedVar>, Sym<MarkedVar>>,
                    TraversalError<Error>> =
-            (* If we've hit the final instruction of the entire routine, it
-               assigns to After, regardless of any other circumstances. *)
-            let isFinal = Some index = afterIndex
-
             let rt =
                 tliftToExprSrc
                     (tliftToTypedSymVarSrc (tliftToExprDest (markRValue state)))
@@ -660,19 +628,12 @@ let processMicrocodeRoutine
                         (normalBool a))
             (* Branches require a recursive mark-up with some patching up.
                Since the two branches will have different assignment maps,
-               we have to inject new assignments into the branches to 
-
-               If we are at the end of the microcode routine, then we
-               distribute the After marking to the ends of the branches. *)
+               we have to inject new assignments into the branches to make them
+               agree on the same map. *)
             | Branch (cond = c; trueBranch = t; falseBranch = f) ->
-                let tAfterIndex =
-                    if isFinal then None else Some (List.length t - 1)
-                let fAfterIndex =
-                    if isFinal then None else Some (List.length f - 1)
-
                 let cR = mapTraversal (traverseBoolAsExpr rt) (normalBool c)
-                let tR = markInstructions tAfterIndex state t
-                let fR = markInstructions fAfterIndex state f
+                let tR = markInstructions state t
+                let fR = markInstructions state f
                 lift3
                     (fun c' (tMarked, tState) (fMarked, fState) ->
                         let tAdd, fAdd, state = mergeBranch tState fState
@@ -686,10 +647,8 @@ let processMicrocodeRoutine
             | Assign (l, r) ->
                 let incMarker mv =
                     match mv with
-                    | Before x ->
-                        if isFinal then After x else Intermediate (0I, x)
-                    | Intermediate (k, x) ->
-                        if isFinal then After x else Intermediate (k + 1I, x)
+                    | Before x -> Intermediate (0I, x)
+                    | Intermediate (k, x) -> Intermediate (k + 1I, x)
                     | After _ -> failwith "markMicrocode: unexpected After"
                     | Goal _ -> failwith "markMicrocode: unexpected Goal"
                 let lT = markVar incMarker id state
@@ -699,11 +658,6 @@ let processMicrocodeRoutine
 
                 (* The lvalue traversal will have returned variables that need
                    updating in state. *)
-                let updateState (st : Map<TypedVar, MarkedVar>) vars =
-                    let updateOne (st' : Map<TypedVar, MarkedVar>) var =
-                        st'.Add (unmark var, valueOf var)
-                    List.fold updateOne st vars
-
                 lift2
                     (fun (ctx, l') r' ->
                         match ctx with
@@ -721,10 +675,50 @@ let processMicrocodeRoutine
     let initialState =
         Map.ofSeq (Seq.map (fun var -> (var, Before (valueOf var))) vars)
 
-    bind
-        (markInstructions (Some (List.length routine - 1)) initialState
-         >> mapMessages Traversal)
+    (* The above generates a decent marking, where every assignment creates
+       an intermediate variable.  However, we can go one better by replacing
+       every final intermediate variable with After in a second pass. *)
+    let intermediateMarkedR =
+        bind
+            (markInstructions initialState >> mapMessages Traversal)
             normalisedR
+
+    let capInstruction (state : Map<TypedVar, MarkedVar>) instr
+      : Result<Map<TypedVar, MarkedVar>
+               * Microcode<CTyped<MarkedVar>, Sym<MarkedVar>>,
+               TraversalError<Error>> =
+        (* As above, patch up the lvalues in the instruction, generating a
+           list of variables that need replacing in the state.  We need not
+           change rvalues as they will never mention the final intermediates. *)
+        let capVar =
+            fun ctx var ->
+                match state.TryFind (unmark var) with
+                | None ->
+                    fail (Inner (BadSemantics "somehow referenced variable not in scope"))
+                | Some (Before _) | Some (After _) -> ok (ctx, var)
+                | Some (Intermediate (_, v)) ->
+                    lift
+                        (fun ctx' -> (ctx', withType (typeOf var) (After v)))
+                        (tryPushVar ctx (withType (typeOf var) (After v)))
+                | Some _ ->
+                    fail (Inner (BadSemantics "unexpected goal variable"))
+        let rt = ignoreContext ok
+        let R = traverseMicrocode capVar rt (Vars []) instr
+        lift
+            (fun (ctx, instr') ->
+                match ctx with
+                | Vars modVars ->
+                    (updateState state modVars, instr')
+                | _ -> failwith "markMicrocode: bad context")
+            R
+    let markedR =
+        bind
+            (fun (instrs, finalState) ->
+                mapMessages Traversal
+                    (bindAccumL capInstruction finalState instrs))
+            intermediateMarkedR
+    lift (fun (st, xs) -> (xs, st)) markedR
+
 
 /// <summary>
 ///     Converts a processed microcode routine into a two-state Boolean predicate.

@@ -776,6 +776,17 @@ let pushVar (ctx : TraversalContext<'Var>) (v : CTyped<'Var>)
     | c -> fail (ContextMismatch ("vars context", stripVars c))
 
 /// <summary>
+///     As <see cref="pushVar"/>, but does not crash on invalid context.
+/// </summary>
+let tryPushVar (ctx : TraversalContext<'Var>) (v : CTyped<'Var>)
+  : Result<TraversalContext<'Var>, TraversalError<'Error>>=
+    // TODO(CaptainHayashi): proper doc comment.
+    match ctx with
+    | Vars _ -> pushVar ctx v
+    | _ -> ok ctx
+
+
+/// <summary>
 ///     Traversal for accumulating variables.
 /// <summary>
 let collectVars : Traversal<CTyped<'Var>, CTyped<'Var>, 'Error, 'Var>  =
