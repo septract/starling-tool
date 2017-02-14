@@ -620,10 +620,15 @@ let processMicrocodeRoutine
                      fail (Inner (BadSemantics "somehow referenced variable not in scope"))
                 | Some mv ->
                     let markedVar = markFun mv
+                    let pushVarMaybe ctx var =
+                        match ctx with
+                        | Vars _ -> pushVar ctx var
+                        | _ -> ok ctx
+
                     lift
                         (fun ctx' ->
                             (ctx', withType (typeOf var) (varFun markedVar)))
-                        (pushVar ctx (withType (typeOf var) markedVar))
+                        (pushVarMaybe ctx (withType (typeOf var) markedVar))
 
         let markRValue state ctx var = markVar id Reg state ctx var
 
