@@ -448,15 +448,19 @@ module MicrocodeToBool =
                         (mkTypedArrayExpr
                             (Bool (normalRec, ()))
                             (Some 10)
-                            (aupd'
-                                (mkTypedArrayExpr
-                                    (Bool (normalRec, ()))
-                                    (Some 10)
-                                    (AVar (Reg (Before "foo"))))
-                                (siBefore "x")
-                                (normalBoolExpr BTrue)))
+                            (AVar (Reg (Intermediate (0I, "foo")))))
+                        (siBefore "x")
+                        (normalBoolExpr BTrue))
+                  BEq
+                    (typedArrayToExpr
+                        (mkTypedArrayExpr (Bool (normalRec, ())) (Some 10) (AVar (Reg (Intermediate (0I, "foo"))))),
+                     aupd
+                        (mkTypedArrayExpr
+                            (Bool (normalRec, ()))
+                            (Some 10)
+                            (AVar (Reg (Before "foo"))))
                         (siBefore "y")
-                        (normalBoolExpr  BFalse)) ])
+                        (normalBoolExpr BFalse)) ])
             [ normalBoolExpr
                   (BIdx
                       (mkTypedArrayExpr (Bool (normalRec, ())) (Some 10) (AVar (Reg "foo")),
