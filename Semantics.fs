@@ -415,8 +415,66 @@ let mergeBranch
 let updateState (st : Map<TypedVar, MarkedVar>) (vars : CTyped<MarkedVar> list)
   : Map<TypedVar, MarkedVar> =
     let updateOne (st' : Map<TypedVar, MarkedVar>) var =
-        st'.Add (unmark var, valueOf var)
+        let uv = unmark var
+        match st'.TryFind uv, valueOf var with
+        (* Defensive code: try catch attempts to assign to a _lower_ state
+           than previous. *)
+        | None, v
+        | Some (After _), (After _ as v)
+        | Some (Before _), (Before _ as v)
+        | Some (Before _), (Intermediate _ as v)
+        | Some (Before _), (After _ as v) 
+        | Some (Intermediate _), (After _ as v) ->
+            st'.Add (unmark var, valueOf var)
+        | Some (Intermediate (k, _)), (Intermediate (l, _) as v)
+            when k <= l ->
+            st'.Add (unmark var, valueOf var)
+        | Some x, y ->
+            failwith
+                (sprintf "updateState: tried to reduce assign level from %A to %A"
+                    x y)
+                
     List.fold updateOne st vars
+
+/// <summary>
+///     Rewrites any intermediate variables in a microcode instruction
+///     to post-state variables when the intermediate stage is the most
+///     recently assigned in an assignment map.
+/// </summary>
+let capInstruction
+  (state : Map<TypedVar, MarkedVar>)
+  (instr : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>>)
+  : Result<Map<TypedVar, MarkedVar>
+           * Microcode<CTyped<MarkedVar>, Sym<MarkedVar>>,
+           TraversalError<Error>> =
+    // TODO(MattWindsor91): proper doc comment.
+    (* As above, patch up the lvalues and rvalues in the instruction, generating a
+        list of variables that need replacing in the state. *)
+    let capVar =
+        fun ctx var ->
+            match valueOf var, state.TryFind (unmark var) with
+            | _, None ->
+                fail (Inner (BadSemantics "somehow referenced variable not in scope"))
+            | (Intermediate (k, _), Some (Intermediate (l, v))) when k > l ->
+                fail (Inner (BadSemantics "assignment without corresponding map write"))
+            | (Intermediate (k, _), Some (Intermediate (l, v))) when k = l ->
+                lift
+                    (fun ctx' -> (ctx', withType (typeOf var) (After v)))
+                    (tryPushVar ctx (withType (typeOf var) (After v)))
+            | _, Some (Before _) | _, Some (After _)
+            | Before _, _ | After _, _
+            | Intermediate _, Some (Intermediate _) -> ok (ctx, var)
+            | _, Some _ ->
+                fail (Inner (BadSemantics "unexpected goal variable"))
+    let rt = tliftToExprSrc (tliftToTypedSymVarSrc (tchain capVar (mapCTyped Reg >> mkVarExp)))
+    let R = traverseMicrocode capVar rt (Vars []) instr
+    lift
+        (fun (ctx, instr') ->
+            match ctx with
+            | Vars modVars ->
+                (updateState state modVars, instr')
+            | _ -> failwith "markMicrocode: bad context")
+            R
 
 /// <summary>
 ///     Normalises and marks an entire microcode routine with variable states.
@@ -546,34 +604,6 @@ let processMicrocodeRoutine
             (markInstructions initialState >> mapMessages Traversal)
             normalisedR
 
-    let capInstruction (state : Map<TypedVar, MarkedVar>) instr
-      : Result<Map<TypedVar, MarkedVar>
-               * Microcode<CTyped<MarkedVar>, Sym<MarkedVar>>,
-               TraversalError<Error>> =
-        (* As above, patch up the lvalues in the instruction, generating a
-           list of variables that need replacing in the state.  We need not
-           change rvalues as they will never mention the final intermediates. *)
-        let capVar =
-            fun ctx var ->
-                match state.TryFind (unmark var) with
-                | None ->
-                    fail (Inner (BadSemantics "somehow referenced variable not in scope"))
-                | Some (Before _) | Some (After _) -> ok (ctx, var)
-                | Some (Intermediate (_, v)) ->
-                    lift
-                        (fun ctx' -> (ctx', withType (typeOf var) (After v)))
-                        (tryPushVar ctx (withType (typeOf var) (After v)))
-                | Some _ ->
-                    fail (Inner (BadSemantics "unexpected goal variable"))
-        let rt = ignoreContext ok
-        let R = traverseMicrocode capVar rt (Vars []) instr
-        lift
-            (fun (ctx, instr') ->
-                match ctx with
-                | Vars modVars ->
-                    (updateState state modVars, instr')
-                | _ -> failwith "markMicrocode: bad context")
-            R
     let markedR =
         bind
             (fun (instrs, finalState) ->

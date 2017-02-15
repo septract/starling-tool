@@ -20,6 +20,66 @@ open Starling.Semantics
 open Starling.Tests.Studies
 
 
+/// <summary>
+///     Tests for instruction capping.
+/// </summary>
+module Cap =
+    open Starling.Core.Pretty
+    open Starling.Core.Traversal.Pretty
+    open Starling.Semantics.Pretty
+
+    /// <summary>
+    ///     Checks the capped instruction generated from an assign map against
+    ///     a given instruction.
+    /// </summary>
+    /// <param name="expectedMap">The expected capped instruction.</param>
+    /// <param name="expectedInstr">The expected capped instruction.</param>
+    /// <param name="map">The assign map to use.</param>
+    /// <param name="instr">The instruction to cap.</param>
+    let check
+      (expectedMap : Map<TypedVar, MarkedVar>)
+      (expectedInstr : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>>)
+      (map : Map<TypedVar, MarkedVar>)
+      (instr : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>>)
+      : unit =
+        assertOkAndEqual
+            (expectedMap, expectedInstr)
+            (capInstruction map instr)
+            (printTraversalError printSemanticsError >> printUnstyled)
+
+    [<Test>]
+    let ``capping rewrites lvalues in assignments`` () =
+        check
+            (Map.ofList
+                [ (Int (normalRec, "foo"), After "foo")
+                  (Int (normalRec, "bar"), Before "bar") ])
+            (Assign
+                (Int (normalRec, After "foo"),
+                 Some (Expr.Int (normalRec, IVar (Reg (Intermediate (4I, "foo")))))))
+            (Map.ofList
+                [ (Int (normalRec, "foo"), Intermediate (5I, "foo"))
+                  (Int (normalRec, "bar"), Before "bar") ])
+            (Assign
+                (Int (normalRec, Intermediate (5I, "foo")),
+                 Some (Expr.Int (normalRec, IVar (Reg (Intermediate (4I, "foo")))))))
+
+    [<Test>]
+    let ``capping rewrites rvalues in assignments`` () =
+        check
+            (Map.ofList
+                [ (Int (normalRec, "foo"), After "foo")
+                  (Int (normalRec, "bar"), After "bar") ])
+            (Assign
+                (Int (normalRec, After "foo"),
+                 Some (Expr.Int (normalRec, IVar (Reg (After "bar"))))))
+            (Map.ofList
+                [ (Int (normalRec, "foo"), After ("foo"))
+                  (Int (normalRec, "bar"), Intermediate (2I, "bar")) ])
+            (Assign
+                (Int (normalRec, After "foo"),
+                 Some (Expr.Int (normalRec, IVar (Reg (Intermediate (2I, "bar")))))))
+
+
 /// Shorthand for expressing an array update.
 let aupd' arr idx var : ArrayExpr<'Var> =
     AUpd (stripTypeRec arr, idx, var)
