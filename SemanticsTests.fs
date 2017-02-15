@@ -20,71 +20,6 @@ open Starling.Semantics
 open Starling.Tests.Studies
 
 
-module WriteMaps =
-    [<Test>]
-    let ``variable and index path of x[3][i] <- 3 is correct`` () =
-        Some
-            (TypedVar.Array
-                (mkArrayTypeRec
-                    (mkArrayType
-                        (Int (normalRec, ()))
-                        (Some 320))
-                    (Some 240),
-                 "x"),
-             [ IInt 3L; IVar (Reg "i") ])
-        ?=? varAndIdxPath
-                (normalIntExpr
-                    (IIdx
-                        (mkTypedSub
-                             (mkArrayTypeRec (Int (normalRec, ())) (Some 320))
-                             (AIdx
-                                 (mkTypedSub
-                                    (mkArrayTypeRec
-                                        (mkArrayType (Int (normalRec, ())) (Some 320))
-                                        (Some 240))
-                                    (AVar (Reg "x")),
-                                  IInt 3L)),
-                         IVar (Reg "i"))))
-
-    [<Test>]
-    let ``write map of x[3][i] <- 3; y[j] <- 4 is correct`` () =
-        Map.ofList
-            [ (Array
-                (mkArrayTypeRec
-                    (mkArrayType (Int (normalRec, ())) (Some 320))
-                    (Some 240),
-                    "x"),
-               Indices <| Map.ofList
-                [ (IInt 3L,
-                    Indices <| Map.ofList
-                        [ (IVar (Reg "i"), Entire (Some (normalIntExpr (IInt 3L)))) ]) ] )
-              (Array
-                (mkArrayTypeRec (Int (normalRec, ())) (Some 320), "y"),
-               Indices <| Map.ofList
-                [ (IVar (Reg "j"), Entire (Some (normalIntExpr (IInt 4L)))) ] ) ]
-        ?=?
-        makeWriteMap
-            [ (normalIntExpr
-                (IIdx
-                    (mkTypedSub
-                         (mkArrayTypeRec (Int (normalRec, ())) (Some 320))
-                         (AIdx
-                             (mkTypedSub
-                                (mkArrayTypeRec
-                                    (mkArrayType (Int (normalRec, ())) (Some 320))
-                                    (Some 240))
-                                (AVar (Reg "x")),
-                              IInt 3L)),
-                     IVar (Reg "i"))),
-               Some (Int (normalRec, IInt 3L)))
-              (normalIntExpr
-                (IIdx
-                    (mkTypedSub
-                        (mkArrayTypeRec (Int (normalRec, ())) (Some 320))
-                        (AVar (Reg "y")),
-                     (IVar (Reg "j")))),
-               Some (Int (normalRec, IInt 4L))) ]
-
 /// Shorthand for expressing an array update.
 let aupd' arr idx var : ArrayExpr<'Var> =
     AUpd (stripTypeRec arr, idx, var)
@@ -132,12 +67,6 @@ module Normalisation =
     open Starling.Core.Pretty
     open Starling.Semantics.Pretty
 
-    let checkAssigns expected actual : unit =
-        assertOkAndEqual
-            (Set.ofList expected)
-            (lift Set.ofList (normaliseAssigns actual))
-            (printSemanticsError >> printUnstyled)
-
     let checkMicrocode expected actual : unit =
         assertOkAndEqual
             (Set.ofList expected)
@@ -145,22 +74,47 @@ module Normalisation =
             (printSemanticsError >> printUnstyled)
 
     [<Test>]
-    let ``assign normalisation of x[3][i] <- 3; y[j] <- 4 is correct`` () =
-        checkAssigns
-            [ (TypedVar.Array
-                   (mkArrayTypeRec
-                        (mkArrayType
+    let ``microcode normalisation of x[3][i] <- 3; y[j] <- 4 is correct`` () =
+        checkMicrocode
+            [ Assign
+                (TypedVar.Array
+                    (mkArrayTypeRec
+                            (mkArrayType
+                                (Int (normalRec, ()))
+                                (Some 320))
+                            (Some 240),
+                            "x"),
+                Some <| aupd
+                    (mkTypedArrayExpr
+                            (mkArrayType (Int (normalRec, ())) (Some 320))
+                            (Some 240)
+                            (AVar (Reg "x")))
+                    (IInt 3L)
+                    (aupd
+                            (mkTypedArrayExpr
+                                (Int (normalRec, ()))
+                                (Some 320)
+                                (AIdx
+                                    (mkTypedArrayExpr
+                                        (mkArrayType (Int (normalRec, ())) (Some 320))
+                                        (Some 240)
+                                        (AVar (Reg "x")),
+                                    IInt 3L)))
+                            (IVar (Reg "i"))
+                            (normalIntExpr (IInt 3L))))
+              Assign
+                (TypedVar.Array
+                    (mkArrayTypeRec (Int (normalRec, ())) (Some 320), "y"),
+                Some <| aupd
+                    (mkTypedArrayExpr
                             (Int (normalRec, ()))
-                            (Some 320))
-                        (Some 240),
-                        "x"),
-               Some <| aupd
-                   (mkTypedArrayExpr
-                        (mkArrayType (Int (normalRec, ())) (Some 320))
-                        (Some 240)
-                        (AVar (Reg "x")))
-                   (IInt 3L)
-                   (aupd
+                            (Some 320)
+                            (AVar (Reg "y")))
+                    (IVar (Reg "j"))
+                    (normalIntExpr (IInt 4L))) ]
+            [ Assign
+                (normalIntExpr
+                    (IIdx
                         (mkTypedArrayExpr
                             (Int (normalRec, ()))
                             (Some 320)
@@ -169,39 +123,18 @@ module Normalisation =
                                     (mkArrayType (Int (normalRec, ())) (Some 320))
                                     (Some 240)
                                     (AVar (Reg "x")),
-                                 IInt 3L)))
-                        (IVar (Reg "i"))
-                        (normalIntExpr (IInt 3L))))
-              (TypedVar.Array
-                   (mkArrayTypeRec (Int (normalRec, ())) (Some 320), "y"),
-               Some <| aupd
-                   (mkTypedArrayExpr
-                        (Int (normalRec, ()))
-                        (Some 320)
-                        (AVar (Reg "y")))
-                   (IVar (Reg "j"))
-                   (normalIntExpr (IInt 4L))) ]
-            [ (normalIntExpr
-                (IIdx
-                    (mkTypedArrayExpr
-                         (Int (normalRec, ()))
-                         (Some 320)
-                         (AIdx
-                             (mkTypedArrayExpr
-                                 (mkArrayType (Int (normalRec, ())) (Some 320))
-                                 (Some 240)
-                                 (AVar (Reg "x")),
-                              IInt 3L)),
-                     IVar (Reg "i"))),
-               Some (normalIntExpr (IInt 3L)))
-              (normalIntExpr
-                (IIdx
-                    (mkTypedArrayExpr
-                        (Int (normalRec, ()))
-                        (Some 320)
-                        (AVar (Reg "y")),
-                     (IVar (Reg "j")))),
-               Some (normalIntExpr (IInt 4L))) ]
+                                IInt 3L)),
+                        IVar (Reg "i"))),
+                Some (normalIntExpr (IInt 3L)))
+              Assign
+                (normalIntExpr
+                    (IIdx
+                        (mkTypedArrayExpr
+                            (Int (normalRec, ()))
+                            (Some 320)
+                            (AVar (Reg "y")),
+                        (IVar (Reg "j")))),
+                Some (normalIntExpr (IInt 4L))) ]
 
     [<Test>]
     let ``microcode normalisation of CAS(x[3], d[6], 2) is correct`` () =

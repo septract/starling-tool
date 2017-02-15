@@ -57,23 +57,6 @@ module Types =
         /// </summary>
         | Traversal of TraversalError<Error>
 
-    /// <summary>
-    ///     A write record for an variable.
-    ///
-    ///     <para>
-    ///         Write records are used to build frames, by calculating which bits
-    ///         of an variable have been modified by a command.
-    /// </summary>
-    type Write =
-        /// <summary>The entire lvalue has been written to or havoc'd.</summary>
-        | Entire of newVal : Expr<Sym<Var>> option
-        /// <summary>
-        ///     Only certain parts of the lvalue have been written to,
-        ///     and their recursive write records are enclosed.
-        /// </summary>
-        | Indices of Map<IntExpr<Sym<Var>>, Write>
-        override this.ToString () = sprintf "%A" this
-
 
 /// <summary>
 ///     Pretty printers used in the Semantics stage.
@@ -116,69 +99,17 @@ module Pretty =
             Starling.Core.Traversal.Pretty.printTraversalError printSemanticsError err
 
 /// <summary>
-///     Records a write into a write map.
+///     Generates a well-typed expression for a subscript of a given array.
 /// </summary>
-/// <param name="var">The variable being written to.</param>
-/// <param name="idxPath">
-///     The path of indexes from the variable being written to to the variable.
-///     For example, [3; x; 1+i] would represent a write to A[3][x][1+i].
-/// </param>
-/// <param name="value">The value written to the eventual destination.</param>
-/// <param name="map">The write map being extended.</param>
-/// <returns>The extended write map.</returns>
-let markWrite (var : TypedVar) (idxPath : IntExpr<Sym<Var>> list)
-  (value : Expr<Sym<Var>> option)
-  (map : Map<TypedVar, Write>)
-  : Map<TypedVar, Write> =
-    (* First, consider what it means to add an index write to an index write
-       map. *)
-    let rec markWriteIdx
-      (idx : IntExpr<Sym<Var>>)
-      (idxPathRest : IntExpr<Sym<Var>> list)
-      (imap : Map<IntExpr<Sym<Var>>, Write>) =
-        // Find out if we've already written to this index.
-        let idxRec = imap.TryFind idx
-        let imapLessIdx =
-            maybe imap (fun _ -> imap.Remove idx) (imap.TryFind idx)
-
-        let idxRec' =
-            match idxPathRest with
-            | [] ->
-                (* If there is no subscript, then we must be writing to this
-                   entire index, so mark it as Entire... if it isn't already
-                   written to. *)
-                match idxRec with
-                | Some _ -> failwith "markWriteIdx: tried to write twice with empty path"
-                | None -> Entire value
-            | x::xs ->
-                match idxRec with
-                | Some (Entire _) -> failwith "markWriteIdx: tried to write twice with nonempty path"
-                | Some (Indices imap) -> markWriteIdx x xs imap
-                | None -> markWriteIdx x xs Map.empty
-
-        Indices (Map.add idx idxRec' imapLessIdx)
-
-
-    // Now we can define the top-level.
-
-    let varRec = map.TryFind var
-    let mapLessVar = maybe map (fun _ -> map.Remove var) (map.TryFind var)
-
-    let varRec' =
-        match idxPath with
-        | [] ->
-            (* If there is no subscript, then we must be writing to this entire
-               variable, so mark it as Entire... if it isn't already written to. *)
-            match varRec with
-            | Some _ -> failwith "markWrite: tried to write twice with empty path"
-            | None -> Entire value
-        | (x::xs) ->
-            match varRec with
-            | Some (Entire _) -> failwith "markWrite: tried to write twice with nonempty path"
-            | Some (Indices imap) -> markWriteIdx x xs imap
-            | None -> markWriteIdx x xs Map.empty
-
-    Map.add var varRec' mapLessVar
+/// <param name="array">The fully typed array to subscript.</param>
+/// <param name="idx">The index to subscript by.</param>
+/// <returns>A well-typed <see cref="Expr"/> capturing the subscript.</returns>
+let mkIdx (arr : TypedArrayExpr<Sym<Var>>) (idx : IntExpr<Sym<Var>>)
+  : Expr<Sym<Var>> =
+    match arr.SRec.ElementType with
+    | Type.Int (ty, ()) -> Expr.Int (ty, IIdx (arr, idx))
+    | Type.Bool (ty, ()) -> Expr.Bool (ty, BIdx (arr, idx))
+    | Type.Array (ty, ()) -> Expr.Array (ty, AIdx (arr, idx))
 
 /// <summary>
 ///     Tries to extract the variable and index path from a lvalue.
@@ -211,113 +142,7 @@ let varAndIdxPath (expr : Expr<Sym<Var>>)
     match expr with
     | Int (ty, ix) -> getInInt (mkTypedSub ty ix) []
     | Bool (ty, bx) -> getInBool (mkTypedSub ty bx) []
-    | Array (ty, ax) -> getInArray (mkTypedSub ty ax) []
-
-/// <summary>
-///     Generates a write record map for a given assignment list.
-/// </summary>
-/// <param name="assigns">The assignment list to investigate.</param>
-/// <returns>The write map for that microcode list.</returns>
-let makeWriteMap (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>> option) list)
-  : Map<TypedVar, Write> =
-    let addToWriteMap map (lv, rv) =
-        // TODO(CaptainHayashi): complain if lv isn't a lvalue?
-        maybe map (fun (var, idx) -> markWrite var idx rv map) (varAndIdxPath lv)
-    List.fold addToWriteMap Map.empty assigns
-
-/// <summary>
-///     Partitions a list of microcode instructions.
-/// </summary>
-/// <param name="instrs">The instructions to partition.</param>
-/// <typeparam name="L">The type of lvalues.</typeparam>
-/// <typeparam name="RV">The type of rvalue variables.</typeparam>
-/// <returns>
-///     A triple containing a list of symbolics, a list of assignments, a list
-///     of assumptions, and a list of (unpartitioned) microcode branches.
-/// </returns>
-let partitionMicrocode (instrs : Microcode<'L, 'RV> list)
-  : (Symbolic<Expr<'RV>> list
-     * ('L * Expr<'RV> option) list
-     * BoolExpr<'RV> list
-     * (BoolExpr<'RV>
-        * Microcode<'L, 'RV> list
-        * Microcode<'L, 'RV> list) list) =
-    let partitionStep (symbols, assigns, assumes, branches) instr =
-        match instr with
-        | Symbol s -> (s::symbols, assigns, assumes, branches)
-        | Assign (l, r) -> (symbols, (l, r)::assigns, assumes, branches)
-        | Assume s -> (symbols, assigns, s::assumes, branches)
-        | Branch (i, t, e) -> (symbols, assigns, assumes, (i, t, e)::branches)
-    List.fold partitionStep ([], [], [], []) instrs
-
-/// <summary>
-///     Generates a well-typed expression for a subscript of a given array.
-/// </summary>
-/// <param name="array">The fully typed array to subscript.</param>
-/// <param name="idx">The index to subscript by.</param>
-/// <returns>A well-typed <see cref="Expr"/> capturing the subscript.</returns>
-let mkIdx (arr : TypedArrayExpr<Sym<Var>>) (idx : IntExpr<Sym<Var>>)
-  : Expr<Sym<Var>> =
-    match arr.SRec.ElementType with
-    | Type.Int (ty, ()) -> Expr.Int (ty, IIdx (arr, idx))
-    | Type.Bool (ty, ()) -> Expr.Bool (ty, BIdx (arr, idx))
-    | Type.Array (ty, ()) -> Expr.Array (ty, AIdx (arr, idx))
-
-/// <summary>
-///     Normalises a list of assignments such that they represent
-///     entire-variable assignments.
-///     <para>
-///         This converts array-subscript assignments into assignments of
-///         arrays to array updates.
-///         This allows the framing logic to frame on a per-variable basis
-///         in the presence of arrays.
-///     </para>
-/// </summary>
-/// <param name="assigns">The assignments to normalise.</param>
-/// <returns>
-///     The assignments in entire-variable form, in arbitrary order.
-/// </returns>
-let normaliseAssigns (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>> option) list)
-  : Result<(TypedVar * Expr<Sym<Var>> option) list, Error> =
-    // First, we convert the assigns to a write map.
-    let wmap = makeWriteMap assigns
-    (* Then, each item in the write map represents an assignment.
-       We need to convert each write map entry into an array update or a
-       direct value. *)
-    let rec translateRhs lhs (value : Write) =
-        match value with
-        | Entire v -> ok v
-        | Indices ixmap ->
-            // TODO(CaptainHayashi): proper errors.
-            let addUpdate
-              (index : IntExpr<Sym<Var>>, value : Write) (lhs' : Expr<Sym<Var>> option)
-              : Result<Expr<Sym<Var>> option, Error> =
-                (* TODO(CaptainHayashi): currently, if an array update havocs,
-                   any future updates also havoc.  This perhaps throws too much
-                   information away! *)
-                match lhs' with
-                | None -> ok None
-                | Some (Array (atype, alhs)) ->
-                    (* Need to translate any further subscripts inside value.
-                       But, to do that, we need to know what the LHS of those
-                       subscripts is! *)
-                    let talhs = mkTypedSub atype alhs
-                    let vlhs = mkIdx talhs index
-                    let vrhsResult = translateRhs vlhs value
-                    lift
-                        (Option.map
-                            (fun vrhs ->
-                                 Expr.Array (atype, AUpd (alhs, index, vrhs))))
-                        vrhsResult
-                | _ -> fail (BadSemantics "tried to index into a non-array")
-            seqBind addUpdate (Some lhs) (Map.toSeq ixmap)
-
-    let translateAssign (lhs : TypedVar, rhs) =
-        // lhs is a typed variable here, but must be an expression for the above
-        let lhsE = mkVarExp (mapCTyped Reg lhs)
-        lift (mkPair lhs) (translateRhs lhsE rhs)
-
-    collect (Seq.map translateAssign (Map.toSeq wmap))
+    | Array (ty, ax) -> getInArray (mkTypedSub ty ax) [] 
 
 /// <summary>
 ///     Normalises a microcode listing.
@@ -327,25 +152,63 @@ let normaliseAssigns (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>> option) list)
 let rec normaliseMicrocode
   (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
   : Result<Microcode<TypedVar, Sym<Var>> list, Error> =
-    let symbols, assigns, assumes, branches = partitionMicrocode instrs
+    (* The only thing normalisation affects is assignments, and it
+       distributes over branches.  We first look at how to normalise
+       assignments. *)
+    
+    let normaliseAssign l rO =
+        (* Currently, only variables and array indices can be normalised,
+           and both are converted to an underlying variable and index
+           path. *)
+        match varAndIdxPath l with
+        | Some (lv, idx) ->
+            let rec normaliseRhs remainingPath currentLhs currentRhs =
+                (* Recursively expand every part of the index path so that
+                   an index x...[a] on the LHS turns into an update
+                   (x.. { a -> }). *)
+                match remainingPath with
+                | [] -> ok currentRhs
+                | x::xs ->
+                    // If we have an index path, this must be an array.
+                    match currentLhs with
+                    | Array (atype, alhs) ->
+                        // In the above, this is x...[a].
+                        let nextLhs = mkIdx (mkTypedSub atype alhs) x
+                        (* TODO(MattWindsor91): this could do with being flipped
+                        so it can be tail-recursive. *)
+                        let recuR = normaliseRhs xs nextLhs currentRhs
+                        lift
+                            (fun recu ->
+                                Expr.Array (atype, AUpd (alhs, x, recu)))
+                            recuR
+                    | _ ->
+                        fail
+                            (BadSemantics
+                                "normaliseAssign: index path without array")
 
-    let normaliseBranch (i, t, e) =
-        let t'Result = normaliseMicrocode t
-        let e'Result = normaliseMicrocode e
-        lift2 (fun t' e' -> (i, t', e')) t'Result e'Result
+            let firstLhs = mkVarExp (mapCTyped Reg lv)
 
-    let branches'Result = collect (Seq.map normaliseBranch branches)
-    let assigns'Result = normaliseAssigns assigns
+            let normalisedRhsR =
+                // Havocs propagate up to the underlying variable.
+                maybe (ok None) (normaliseRhs idx firstLhs >> lift Some) rO
+            lift (fun r' -> Assign (lv, r')) normalisedRhsR
 
-    lift2
-        (fun branches' assigns' ->
-            List.concat
-                [ List.map Symbol symbols
-                  List.map Assign assigns'
-                  List.map Assume assumes
-                  List.map Branch branches' ])
-        branches'Result
-        assigns'Result
+
+        | None ->
+            fail (BadSemantics "assignment target is not a valid lvalue")
+
+    let normaliseInstr instr =
+        match instr with
+        | Assume x -> ok (Assume x)
+        | Symbol x -> ok (Symbol x)
+        | Branch (c, t, f) ->
+            lift2 (fun t' f' -> Branch (c, t', f'))
+                (normaliseMicrocode t)
+                (normaliseMicrocode f)
+        | Assign (l, rO) -> normaliseAssign l rO
+
+    collect (List.map normaliseInstr instrs)
+
 
 let primParamSubFun
   (cmd : StoredCommand)
