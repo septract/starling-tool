@@ -18,6 +18,7 @@
 ./Examples/Pass/singleWriterMultiReaderLock.cvf: 
 ./Examples/Pass/spinLock.cvf:
 ./Examples/Pass/spinLockAdvisory.cvf:
+./Examples/Pass/spinLockAtomicBranch.cvf:
 ./Examples/Pass/spinLockInt.cvf:
 ./Examples/Pass/spinLockMultiCmd.cvf:
 ./Examples/Pass/ticketLock.cvf:

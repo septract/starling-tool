@@ -103,6 +103,10 @@ let parseView, parseViewRef =
 let parseViewSignature, parseViewSignatureRef =
     createParserForwardedToRef<ViewSignature, unit> ()
 
+/// Parser for atomic sets.
+let parseAtomic, parseAtomicRef =
+    createParserForwardedToRef<Atomic, unit> ()
+
 /// Parser for commands.
 let parseCommand, parseCommandRef =
     createParserForwardedToRef<Command, unit> ()
@@ -328,21 +332,29 @@ let parseAssign =
 let parseHavoc =
     skipString "havoc" >>. ws >>. parseIdentifier
 
+/// Parser for if (expr) block else block.
+let parseIfLike pLeg ctor =
+    pipe3ws (pstring "if" >>. ws >>. inParens parseExpression)
+            (inBraces pLeg)
+            (opt (pstring "else" >>. ws >>. inBraces pLeg))
+            ctor
+
 /// Parser for atomic actions.
-let parseAtomic =
+do parseAtomicRef :=
     choice [ (stringReturn "id" Id)
-             // This needs to fire before parseFetchOrPostfix due to
+             // These two needs to fire before parseFetchOrPostfix due to
              // ambiguity.
-             parseSymbolic |>> SymAtomic
-             parseHavoc |>> Havoc
-             parseAssume
-             parseCAS
-             parseFetchOrPostfix ]
+             parseIfLike (many1 (parseAtomic .>> ws)) (curry3 ACond)
+             parseSymbolic .>> wsSemi |>> SymAtomic
+             parseHavoc .>> wsSemi |>> Havoc
+             parseAssume .>> wsSemi 
+             parseCAS .>> wsSemi
+             parseFetchOrPostfix .>> wsSemi ]
     |> nodify
 
 /// Parser for a collection of atomic actions.
 let parseAtomicSet =
-    inAtomicBraces (many1 (parseAtomic .>> wsSemi .>> ws))
+    inAtomicBraces (many1 (parseAtomic .>> ws))
 
 /// Parses a Func given the argument parser argp.
 let parseFunc argp =
@@ -393,13 +405,13 @@ let parseParam : Parser<Param, unit> =
     pipe2ws parseType parseIdentifier buildParam
     // ^ <type> <identifier>
 
-
 (*
  * Views.
  *)
 
 /// Parses a conditional view.
 let parseIfView =
+    // TODO: use parseIflike.
     pipe3ws (pstring "if" >>. ws >>. parseExpression)
             // ^- if <view-exprn> ...
             (pstring "then" >>. ws >>. parseView)
@@ -530,12 +542,11 @@ let parseDoWhile =
                  .>>. (ws >>. parseWhileLeg .>> wsSemi)
                  |>> DoWhile
 
+/// Parser for lists of semicolon-terminated commands.
+let parseCommands = many (parseCommand .>> ws)
+
 /// Parser for if (expr) block else block.
-let parseIf =
-    pipe3ws (pstring "if" >>. ws >>. inParens parseExpression)
-            parseBlock
-            (opt (pstring "else" >>. ws >>. parseBlock))
-            (curry3 If)
+let parseIf = parseIfLike parseCommands (curry3 If)
 
 /// Parser for prim compositions.
 let parsePrimSet =
@@ -597,9 +608,6 @@ do parseCommandRef :=
 (*
  * Blocks.
  *)
-
-/// Parser for lists of semicolon-terminated commands.
-let parseCommands = many (parseCommand .>> ws)
 
 do parseBlockRef := inBraces parseCommands
 
