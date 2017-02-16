@@ -346,6 +346,25 @@ module ProcessMicrocode =
             [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "serving")
               normalIntExpr (siVar "s") *<- normalIntExpr (siVar "t") ]
 
+    [<Test>]
+    let ``unequal branches are processed and capped properly`` () =
+        check true ticketLockModel.SharedVars ticketLockModel.ThreadVars
+            (Map.ofList
+                [ (Int (normalRec, "t"), After "t")
+                  (Int (normalRec, "s"), After "s")
+                  (Int (normalRec, "serving"), Before "serving")
+                  (Int (normalRec, "ticket"), Before "ticket") ] )
+            [ Branch
+                (BEq (normalIntExpr (siBefore "t"), normalIntExpr (siBefore "ticket")),
+                 [ Int (normalRec, After "t") *<- normalIntExpr (siBefore "serving")
+                   Int (normalRec, After "s") *<- normalIntExpr (siBefore "s") ],
+                 [ Int (normalRec, After "s") *<- normalIntExpr (siBefore "serving")
+                   Int (normalRec, After "t") *<- normalIntExpr (siBefore "t") ]) ]
+            [ Branch
+                (BEq (normalIntExpr (siVar "t"), normalIntExpr (siVar "ticket")),
+                 [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "serving") ],
+                 [ normalIntExpr (siVar "s") *<- normalIntExpr (siVar "serving") ]) ]
+
 
 /// <summary>
 ///     Tests for microcode compilation to Boolean expressions.
