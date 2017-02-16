@@ -441,11 +441,11 @@ let updateState (st : Map<TypedVar, MarkedVar>) (vars : CTyped<MarkedVar> list)
 ///     to post-state variables when the intermediate stage is the most
 ///     recently assigned in an assignment map.
 /// </summary>
-let capInstruction
+let capInstructions
   (state : Map<TypedVar, MarkedVar>)
-  (instr : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>>)
+  (instrs : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
   : Result<Map<TypedVar, MarkedVar>
-           * Microcode<CTyped<MarkedVar>, Sym<MarkedVar>>,
+           * Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list,
            TraversalError<Error>> =
     // TODO(MattWindsor91): proper doc comment.
     (* As above, patch up the lvalues and rvalues in the instruction, generating a
@@ -467,17 +467,18 @@ let capInstruction
             | _, Some _ ->
                 fail (Inner (BadSemantics "unexpected goal variable"))
     let rt = tliftToExprSrc (tliftToTypedSymVarSrc (tchain capVar (mapCTyped Reg >> mkVarExp)))
-    let R = traverseMicrocode capVar rt (Vars []) instr
+    let R = tchainL (traverseMicrocode capVar rt) id (Vars []) instrs
     lift
-        (fun (ctx, instr') ->
+        (fun (ctx, instrs') ->
             match ctx with
             | Vars modVars ->
-                (updateState state modVars, instr')
+                (updateState state modVars, instrs')
             | _ -> failwith "markMicrocode: bad context")
             R
 
 /// <summary>
-///     Normalises and marks an entire microcode routine with variable states.
+///     Normalises and marks an entire microcode routine with variable states,
+///     without re-mapping all final intermediates to After.
 /// </summary>
 /// <param name="vars">The list of variables available to the routine.</param>
 /// <param name="routine">The routine to mark.</param>
@@ -488,7 +489,7 @@ let capInstruction
 ///     calculating frames.
 ///     The order of the routine is preserved.
 /// </returns>
-let processMicrocodeRoutine
+let processMicrocodeRoutineUncapped
   (vars : TypedVar list)
   (routine : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
   : Result<( Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list
@@ -596,19 +597,39 @@ let processMicrocodeRoutine
     let initialState =
         Map.ofSeq (Seq.map (fun var -> (var, Before (valueOf var))) vars)
 
+    bind
+        (markInstructions initialState >> mapMessages Traversal)
+        normalisedR
+
+/// <summary>
+///     Normalises and marks an entire microcode routine with variable states.
+/// </summary>
+/// <param name="vars">The list of variables available to the routine.</param>
+/// <param name="routine">The routine to mark.</param>
+/// <returns>
+///     A Chessie result, containing, on success, a pair of the marked
+///     microcode routine and a map from variable post-states to their last
+///     assignment in the microcode routine.  The latter is useful for
+///     calculating frames.
+///     The order of the routine is preserved.
+/// </returns>
+let processMicrocodeRoutine
+  (vars : TypedVar list)
+  (routine : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
+  : Result<( Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list
+             * Map<TypedVar, MarkedVar> ),
+           Error> =
+    let intermediateMarkedR =
+        processMicrocodeRoutineUncapped vars routine
+
     (* The above generates a decent marking, where every assignment creates
        an intermediate variable.  However, we can go one better by replacing
        every final intermediate variable with After in a second pass. *)
-    let intermediateMarkedR =
-        bind
-            (markInstructions initialState >> mapMessages Traversal)
-            normalisedR
 
     let markedR =
         bind
             (fun (instrs, finalState) ->
-                mapMessages Traversal
-                    (bindAccumL capInstruction finalState instrs))
+                mapMessages Traversal (capInstructions finalState instrs))
             intermediateMarkedR
     lift (fun (st, xs) -> (xs, st)) markedR
 
