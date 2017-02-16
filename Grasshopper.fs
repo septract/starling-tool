@@ -55,6 +55,11 @@ module Types =
           Assign of lvalue : ShadowVar * prim : GrassPrim
         | /// <summary>A pure assumption.</summary>
           PureAssume of assumption : BoolExpr<Sym<GrassVar>>
+        | /// <summary>A branch.</summary>
+          Branch of
+            cond : BoolExpr<Sym<GrassVar>>
+            * trueBranch : GrassCommand list
+            * falseBranch : GrassCommand list
 
     /// <summary>A Grasshopper formula.</summary>
     type Formula =
@@ -292,17 +297,26 @@ module Pretty =
     /// <returns>
     ///     A <see cref="Doc"/> representing <paramref name="cmd"/>.
     /// </returns>
-    let printCommand (cmd : GrassCommand) : Doc =
-        let c =
-            match cmd with
-            | VarDecl var -> String "var" <+> printTypedGrass printShadowVar var
-            | NoAssign prim -> printPrim prim
-            | Assign (lvalue, prim) ->
-                printShadowVar lvalue <+> String ":=" <+> printPrim prim
-            | PureAssume assumption ->
-                String "pure assume"
-                    <+> printBoolExprG (printSymGrass printGrassVar) assumption
-        withSemi c
+    let rec printCommand (cmd : GrassCommand) : Doc =
+        let printBlock c = 
+            braced (ivsep (List.map (printCommand >> Indent) c))
+
+        match cmd with
+        | VarDecl var ->
+            withSemi (String "var" <+> printTypedGrass printShadowVar var)
+        | NoAssign prim ->
+            withSemi (printPrim prim)
+        | Assign (lvalue, prim) ->
+            withSemi (printShadowVar lvalue <+> String ":=" <+> printPrim prim)
+        | PureAssume assumption ->
+            withSemi
+                (String "pure assume"
+                    <+> printBoolExprG (printSymGrass printGrassVar) assumption)
+        | Branch (cond = c; trueBranch = t; falseBranch = f) ->
+            String "if"
+            <+> parened (printBoolExprG (printSymGrass printGrassVar) c)
+            <+> printBlock t
+            <+> (if f.IsEmpty then Nop else (String "else" <+> printBlock f))
 
     /// Print a single Grasshopper query.
     let printGrassTerm (name : string) (term : GrassTerm) : Doc =
@@ -404,18 +418,25 @@ let findTermVars (term : Backends.Z3.Types.ZTerm)
 /// <returns>
 ///     A Chessie result, containing a list of Grasshopper commands.
 /// </returns>
-let grassMicrocode (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
+let rec grassMicrocode (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
   : Result<GrassCommand list, Error> =
     let translateAssign (x, y) =
         maybe BTrue (mkEq (mkVarExp (mapCTyped Reg x))) y
 
+    let grassBool x =
+        mapMessages Traversal
+            (liftWithoutContext
+                (Starling >> ok)
+                (tliftOverSym >> tliftOverCTyped >> tliftToExprDest >> tliftToBoolSrc)
+                (normalBool x))
+ 
     let grassMicrocodeInstruction ent =
         match ent with
-        | Branch _ ->
-            fail
-                (CommandNotImplemented
-                    (cmd = ent,
-                     why = "Cannot encode commands with inner conditionals."))
+        | Microcode.Branch (c, t, f) ->
+            lift3 (fun c' t' f' -> [ Branch (c', t', f') ])
+                (grassBool c)
+                (grassMicrocode t)
+                (grassMicrocode f)
         | Symbol cmd ->
             // These translate directly into Grasshopper primitive commands.
             ok [ NoAssign cmd ]
@@ -463,12 +484,7 @@ let grassMicrocode (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
                      why = "Assignments cannot mix symbols and pure expressions."))
         | Assume x ->
             // Pure assumption.
-            let grassifyR =
-                liftWithoutContext
-                    (Starling >> ok)
-                    (tliftOverSym >> tliftOverCTyped >> tliftToExprDest >> tliftToBoolSrc)
-                    (normalBool x)
-            lift (fun x -> [ PureAssume x ]) (mapMessages Traversal grassifyR)
+            lift (fun x -> [ PureAssume x ]) (grassBool x)
 
     lift List.concat (collect (List.map grassMicrocodeInstruction routine))
 
