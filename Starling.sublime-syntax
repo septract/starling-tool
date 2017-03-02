@@ -1,0 +1,114 @@
+%YAML 1.2
+---
+name: Starling
+file_extensions: [cvf]
+scope: source.starling
+
+variables:
+  environments: 'thread|shared'
+  basic_types: 'int|bool'
+  control_keywords: 'do|else|for|if|while'
+  identifier: '[_a-zA-Z]([_0-9a-zA-Z])*'
+
+contexts:
+  prototype:
+    - include: comments
+
+  block_comment:
+    - meta_scope: comment.block.starling
+    - match: /\*
+      scope: punctuation.definition.comment.starling
+      push: block_comment      
+    - match: \*/
+      pop: true
+
+  comments:
+    - match: //
+      scope: punctuation.definition.comment.starling
+      push:
+        - meta_scope: comment.line.double-slash.starling
+        - match: \n
+          pop: true
+    - match: /\*
+      scope: punctuation.definition.comment.starling
+      push: block_comment
+
+  typename:
+    - match: \b({{basic_types}})\b
+      scope: storage.type.starling
+      pop: true
+    - match: \b({{identifier}})\b
+      scope: entity.name.type.starling
+      pop: true
+
+  keywords:
+    - match: \b({{control_keywords}})\b
+      scope: keyword.control.starling
+      # temporary
+    - match: \b(view|pragma)\b
+      scope: keyword.control.starling
+
+  literals:
+    - match: \b([0-9]*(\.[0-9]+)?)\b
+      scope: constant.numeric
+    - match: \b(true|false)\b
+      scope: constant.language.boolean.starling
+
+  constraint_view:
+    - meta_content_scope: string.view.starling
+    - match: ->
+      scope: punctuation.other.constraint_entail.starling
+      pop: true
+
+  constraints:
+    - match: \b(constraint)\b
+      scope: keyword.other.starling
+      push: constraint_view
+
+  method_name:
+    - meta_content_scope: entity.name.function.starling
+    - match: \(
+      pop: true
+
+  methods:
+    - match: \b(method)\b
+      scope: keyword.other.method.starling
+      push: method_name
+
+  views:
+    - match: \{\|
+      scope: [meta.braces, punctuation.section.braces.begin]
+      push:
+      - meta_scope: string.view.starling
+      - match: \|\}
+        scope: [meta.braces, punctuation.section.braces.end]
+        pop: true
+
+  vardecl_after_typename:
+    - match: \b({{identifier}})\b
+      scope: variable.other.vardecl.starling
+    - match: \,
+      scope: punctuation.separator.vardecl.starling
+    - match: ;
+      scope: punctuation.terminator.vardecl.starling
+      pop: true
+
+  vardecls:
+    - match: \b({{environments}})\b
+      scope: storage.modifier.starling
+      set: [vardecl_after_typename, typename]
+
+  typedefs:
+    - match: \b(typedef)\b
+      scope: keyword.control.starling
+      set: [typename, typename]
+
+  main:
+    - include: types
+    - include: keywords
+    - include: literals
+    - include: constraints
+    - include: methods
+    - include: views
+    - include: vardecls
+    - include: typedefs
