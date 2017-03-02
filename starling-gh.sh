@@ -33,7 +33,7 @@ echo "--- GRASSHOPPER ---"
 
 if $GRASSHOPPER ${GHARGS} $tempfile;
 then
-	echo "GRASShopper succeeded."
+	echo "GRASShopper finished."
 else
 	gh_exitc=$?
 	echo "GRASShopper FAILED."
