@@ -1,0 +1,10 @@
+/*
+ * In order to prove the CLH lock with GRASShopper, we need to tell
+ * GRASShopper what Nodes look like in its own syntax.  Then, we can write a
+ * Starling proof around it.
+ */
+
+struct Node {
+    var lock: Bool;
+    /* (Ghost code: */ var pred: Node /*) */ ;
+}

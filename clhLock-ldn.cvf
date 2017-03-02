@@ -1,0 +1,124 @@
+/*
+ * Here we include the GRASShopper module from earlier, and tell Starling
+ * what the footprint set is.
+ */
+pragma grasshopper_include {./clhLock-ldn.spl};
+pragma grasshopper_footprint {Foot};
+pragma grasshopper_footprint_sort {Set<Node>};
+
+/*
+ * Starling needs to know what the 'Node' type is.
+ * From Starling's point of view, node pointers are just integers.
+ * This is ok because we don't manipulate them at the Starling level.
+ */
+typedef int Node;
+
+/*
+ * These variables are shared between threads, but are outside of the heap.
+ */
+shared Node tail;
+shared Node head;  // (Ghost code)
+
+/*
+ * These variables constitute the thread-local store.
+ */
+thread Node mynode, mypred;
+thread bool test;  // Used when trying to take the lock.
+
+/*
+ * Our set of views correlates directly to the node states seen earlier.
+ * We need to keep track of the predecessor when queued or locked.
+ */
+view dormant(Node node);
+view active(Node node);
+view queued(Node node, Node pred);
+view locked(Node node, Node pred);
+
+/*
+ * Now, define the constraints.
+ * First, our goal: mutual exclusion.
+ */
+constraint locked(a, ap) * locked(b, bp) -> false;
+
+/*
+ * System invariant:
+ *   predecessor relation on nodes induces a queue from 'tail' to 'head',
+ *   the head is unlocked, and everything else in the queue is locked.
+ */
+constraint emp -> %{ 
+    [|head|] in Foot
+    && [|tail|] in Foot
+    && Reach(pred, [|tail|], [|head|])
+    && ![|head|].lock
+    && (forall x : Node :: (x in Foot && x.pred != null) ==> x.lock)
+    && (forall x : Node :: (x in Foot && Reach(pred, [|tail|], x) && !x.lock) ==> x == [|head|])
+};
+
+/*
+ * Dormant nodes are unlocked, not the head, and not preceded by any other node.
+ * Active nodes are the same, but are locked.
+ */
+constraint dormant(node) -> %{
+    [|node|] in Foot && [|node|] != [|head|] && [|node|].pred == null 
+    && [|node|].lock == false
+};
+constraint active(node) -> %{
+    [|node|] in Foot && [|node|] != [|head|] && [|node|].pred == null
+    && [|node|].lock == true
+};
+
+/*
+ * Queued nodes are locked, between tail/head, and have the given predecessor.
+ * Locked nodes are the same, but their predecessor is the head.
+ */
+constraint queued(node, pred) -> %{ 
+    [|node|] in Foot
+    && [|pred|] in Foot
+    && [|node|].pred == [|pred|]
+    && [|node|].lock
+    && Btwn(pred, [|tail|], [|node|], [|head|])
+};
+constraint locked(node, pred) -> %{ 
+    [|node|] in Foot
+    && [|pred|] in Foot
+    && [|node|].pred == [|pred|]
+    && Btwn(pred, [|tail|], [|node|], [|head|])
+    && [|pred|] == [|head|]
+};
+
+/*
+ * At most one thread can know a node's state at any given time.
+ * Some constraints elided because they are already given or contradictory.
+ */
+constraint dormant(a) * dormant(b) -> a != b;
+constraint active(a) * active(b) -> a != b;
+constraint queued(a, ap) * queued(b, bp) -> a != b;
+constraint queued(a, ap) * locked(b, bp) -> a != b;
+
+/*
+ * Finally, the proof outline:
+ */
+method lock() {
+  {| dormant(mynode) |}
+    // The %{} here means we're encoding a heap command in GRASShopper syntax.
+    <| %{ [|mynode|].lock := true }; |>
+  {| active(mynode) |}
+    <| mypred = tail; tail = mynode;
+       /* (Ghost code: */ %{[|tail|].pred := [|mypred|]}; /*) */ |>
+  {| queued(mynode, mypred) |}
+    do {
+      {| queued(mynode, mypred) |}
+        <| test = %{ [|mypred|].lock }; |>
+      {| if test then queued(mynode, mypred) else locked(mynode, mypred) |}
+    } while (test);
+  {| locked(mynode, mypred) |}
+}
+
+method unlock() {
+  {| locked(mynode, mypred) |}
+    <| %{ [|mynode|].lock := false };
+       /* (Ghost code: */ %{ [|mynode|].pred := null }; head = mynode; /*) */ |>
+  {| dormant(mypred) |}
+    mynode = mypred;
+  {| dormant(mynode) |}
+}
