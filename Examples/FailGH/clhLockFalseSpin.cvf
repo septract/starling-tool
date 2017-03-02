@@ -2,7 +2,7 @@
  * Here we include the GRASShopper module from earlier, and tell Starling
  * what the footprint set is.
  */
-pragma grasshopper_include {./clhLock-ldn.spl};
+pragma grasshopper_include {./grasshopper/CLHLock-module.spl};
 pragma grasshopper_footprint {Foot};
 pragma grasshopper_footprint_sort {Set<Node>};
 
@@ -108,7 +108,7 @@ method lock() {
   {| queued(mynode, mypred) |}
     do {
       {| queued(mynode, mypred) |}
-        <| test = %{ [|mypred|].lock }; |>
+        <| test = %{ false }; |>
       {| if test then queued(mynode, mypred) else locked(mynode, mypred) |}
     } while (test);
   {| locked(mynode, mypred) |}
