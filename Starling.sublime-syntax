@@ -84,6 +84,10 @@ contexts:
         scope: [meta.braces, punctuation.section.braces.end]
         pop: true
 
+  #
+  # Variable declarations
+  #
+
   vardecl_after_typename:
     - match: \b({{identifier}})\b
       scope: variable.other.vardecl.starling
@@ -97,6 +101,10 @@ contexts:
     - match: \b({{environments}})\b
       scope: storage.modifier.starling
       set: [vardecl_after_typename, typename]
+
+  #
+  # Typedefs
+  #
 
   typedefs:
     - match: \b(typedef)\b
