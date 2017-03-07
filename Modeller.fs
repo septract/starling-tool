@@ -1466,8 +1466,7 @@ let modelIntLoad
                 ok
                     (Intrinsic
                         (IAssign
-                            { AssignType = Load
-                              TypeRec = srec
+                            { TypeRec = srec
                               LValue = stripTypeRec dstE
                               RValue = stripTypeRec srcE } ))
             | Increment -> mkStored "!ILoad++"
@@ -1535,8 +1534,7 @@ let modelIntStore
                 ok
                     (Intrinsic
                         (IAssign
-                            { AssignType = Store
-                              TypeRec = srec
+                            { TypeRec = srec
                               LValue = stripTypeRec dstE
                               RValue = stripTypeRec srcE } ))
             | Increment -> mkStored "!IStore++"
@@ -1806,8 +1804,7 @@ and modelAssign
                     ok
                         (Intrinsic
                             (IAssign
-                                { AssignType = Local
-                                  TypeRec = dst
+                                { TypeRec = dst
                                   LValue = d
                                   RValue = stripTypeRec srcE } ))
                 | None ->
@@ -1825,8 +1822,7 @@ and modelAssign
                     ok
                         (Intrinsic
                             (BAssign
-                                { AssignType = Local
-                                  TypeRec = dst
+                                { TypeRec = dst
                                   LValue = d
                                   RValue = stripTypeRec srcE } ))
                 | None ->

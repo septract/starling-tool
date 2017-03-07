@@ -338,8 +338,7 @@ module Atomics =
             ast
             (Intrinsic
                 (IAssign
-                    { AssignType = Store
-                      TypeRec = normalRec
+                    { TypeRec = normalRec
                       LValue = IVar (Reg "x")
                       RValue =
                         IVar
@@ -405,8 +404,7 @@ module CommandAxioms =
             (Prim
                 [ Intrinsic
                     ( BAssign
-                        { AssignType = Local
-                          TypeRec = normalRec
+                        { TypeRec = normalRec
                           LValue = BVar (Reg "baz")
                           RValue =
                             BVar

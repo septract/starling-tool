@@ -58,23 +58,10 @@ module Types =
         override this.ToString() = sprintf "%A" this
 
     /// <summary>
-    ///     An intrinsic assignment type.
-    /// </summary>
-    type AssignType =
-        /// <summary>Loading into thread lvalue from shared lvalue.</summary>
-        | Load
-        /// <summary>Storing into shared lvalue from thread expression.</summary>
-        | Store
-        /// <summary>Storing into thread lvalue from thread expression.</summary>
-        | Local
-
-    /// <summary>
     ///     An intrinsic primitive assignment record.
     /// </summary>
     type Assignment<'Expr> =
-        { /// <summary>The type of assignment being done.</summary>
-          AssignType : AssignType
-          /// <summary>The extended type record of both sides of the assignment.</summary>
+        { /// <summary>The extended type record of both sides of the assignment.</summary>
           TypeRec : PrimTypeRec
           /// <summary>The lvalue of the assignment.</summary>
           LValue : 'Expr
@@ -428,25 +415,17 @@ module Pretty =
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Symbolic.Pretty
 
-    /// <summary>Pretty-prints an AssignType.</summary>
-    let printAssignType (a : AssignType) : Doc =
-        String
-            (match a with
-             | Store -> "store"
-             | Load  -> "load"
-             | Local -> "local")
-
     /// <summary>Pretty-prints an IntrinsicCommand.</summary>
     let printIntrinsicCommand (cmd : IntrinsicCommand) : Doc =
         match cmd with
-        | BAssign { AssignType = a; TypeRec = ty; LValue = x; RValue = y } ->
+        | BAssign { TypeRec = ty; LValue = x; RValue = y } ->
             parened <| hsep
-                [ String "assign<bool:" <-> printType (Int (ty, ())) <-> String ":" <-> printAssignType a <-> String ">"
+                [ String "assign<bool:" <-> printType (Int (ty, ())) <-> String ">"
                   printBoolExpr (printSym printVar) x
                   printBoolExpr (printSym printVar) y ]
-        | IAssign { AssignType = a; TypeRec = ty; LValue = x; RValue = y } ->
+        | IAssign { TypeRec = ty; LValue = x; RValue = y } ->
             parened <| hsep
-                [ String "assign<int:" <-> printType (Int (ty, ())) <-> String ":" <-> printAssignType a <-> String ">"
+                [ String "assign<int:" <-> printType (Int (ty, ())) <-> String ">"
                   printIntExpr (printSym printVar) x
                   printIntExpr (printSym printVar) y ]
         | Havoc v ->
