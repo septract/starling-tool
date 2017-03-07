@@ -400,9 +400,15 @@ module Pretty =
     let printAssign (dest : Expression) (src : Expression) : Doc =
         equality (printExpression dest) (printExpression src)
 
-    /// Pretty-prints atomic actions.
-    let rec printAtomic' : Atomic' -> Doc =
-        function
+    /// <summary>
+    ///     Pretty-prints atomic actions.
+    /// </summary>
+    /// <param name="a">The <see cref="Atomic'"/> to print.</param>
+    /// <returns>
+    ///     A <see cref="Doc"/> representing <paramref name="a"/>.
+    /// </returns>
+    let rec printAtomic' (a : Atomic') : Doc =
+        match a with
         | CompareAndSwap(l, f, t) ->
             func "CAS" [ printExpression l
                          printExpression f
