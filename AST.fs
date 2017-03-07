@@ -592,7 +592,7 @@ let (|BoolExp'|ArithExp'|AnyExp'|) (e : Expression')
     | ArraySubscript _ -> AnyExp' e
     | Num _ -> ArithExp' e
     | True | False -> BoolExp' e
-    | BopExpr(BoolOp, _, _) | UopExpr(_,_) -> BoolExp' e
+    | BopExpr(BoolOp, _, _) | UopExpr(_) -> BoolExp' e
     | BopExpr(ArithOp, _, _) -> ArithExp' e
 
 /// Active pattern classifying expressions as to whether they are

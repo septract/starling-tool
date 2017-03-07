@@ -755,7 +755,7 @@ and modelBoolExpr
             (* Symbols have an indefinite subtype, and can include thread-local
                scope. *)
             lift
-                (fun a -> indefBool (BVar (Sym a)))
+                (Sym >> BVar >> indefBool)
                 (tryMapSym (modelExpr env (symbolicScopeOf scope) varF) sa)
         | ArraySubscript (arr, idx) ->
             let arrR = ma arr
@@ -899,7 +899,7 @@ and modelIntExpr
          | Symbolic sa ->
             // Symbols have indefinite subtype.
             lift
-                (fun a -> indefInt (IVar (Sym a)))
+                (Sym >> IVar >> indefInt)
                 (tryMapSym (modelExpr env (symbolicScopeOf scope) varF) sa)
         | ArraySubscript (arr, idx) ->
             let arrR = ma arr
@@ -1757,7 +1757,7 @@ let rec modelAtomic
             |> lift (typedBoolToExpr >> List.singleton >> command "Assume" [])
         | Havoc var ->
             let varMR = mapMessages SymVarError (Env.lookup ctx.Env Full var)
-            lift (fun varM -> Intrinsic (IntrinsicCommand.Havoc varM)) varMR
+            lift (IntrinsicCommand.Havoc >> Intrinsic) varMR
         | SymAtomic sym ->
             // TODO(CaptainHayashi): split out.
             let symMR =
@@ -1832,7 +1832,7 @@ and modelAssign
                             (Exact (Bool (dt, ())))
                             (Exact (typedBoolToType srcE)))
             bind modelWithSrc (mapMessages (curry BadExpr src) srcR)
-        | Array (_, _) ->
+        | Array (_) ->
             fail (PrimNotImplemented "array local assign")
 
     (* The permitted type of src depends on the type of dest.
@@ -2088,7 +2088,7 @@ let convertViewProtos
         | NoIterator (func, isAnonymous) ->
             lift (fun f -> NoIterator (f, isAnonymous)) (convertViewFunc vp func)
         | WithIterator func ->
-            lift (fun f -> WithIterator f) (convertViewFunc vp func)
+            lift WithIterator (convertViewFunc vp func)
 
     collect (List.map convertViewProto vps)
 
