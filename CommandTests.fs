@@ -148,14 +148,12 @@ module Observable =
         check true
             [ Intrinsic
                 (IAssign
-                    { AssignType = Local
-                      TypeRec = normalRec
+                    { TypeRec = normalRec
                       LValue = siVar "y"
                       RValue = mkAdd2 (siVar "y") (IInt 1L) } ) ]
             [ Intrinsic
                 (IAssign
-                    { AssignType = Store
-                      TypeRec = normalRec
+                    { TypeRec = normalRec
                       LValue = siVar "g"
                       RValue = mkAdd2 (siVar "y") (IInt 1L) } ) ]
 
@@ -165,14 +163,12 @@ module Observable =
         check true
             [ Intrinsic
                 (IAssign
-                    { AssignType = Local
-                      TypeRec = normalRec
+                    { TypeRec = normalRec
                       LValue = siVar "y"
                       RValue = mkAdd2 (siVar "y") (IInt 1L) } ) ]
             [ Intrinsic
                 (IAssign
-                    { AssignType = Store
-                      TypeRec = normalRec
+                    { TypeRec = normalRec
                       LValue = siVar "g"
                       RValue = siVar "y" } ) ]
 
@@ -181,14 +177,12 @@ module Observable =
         check false
             [ Intrinsic
                 (IAssign
-                    { AssignType = Local
-                      TypeRec = normalRec
+                    { TypeRec = normalRec
                       LValue = siVar "y"
                       RValue = mkAdd2 (siVar "y") (IInt 1L) } ) ]
             [ Intrinsic
                 (IAssign
-                    { AssignType = Load
-                      TypeRec = normalRec
+                    { TypeRec = normalRec
                       LValue = siVar "y"
                       RValue = siVar "g" } ) ]
 

@@ -580,8 +580,10 @@ module Graph =
             match prim with
             | // TODO(CaptainHayashi): too conservative?
               SymC _ -> false
-            | Intrinsic (IAssign { AssignType = t })
-            | Intrinsic (BAssign { AssignType = t }) -> t = Local
+            | Intrinsic (IAssign { TypeRec = t; LValue = l; RValue = r }) ->
+                isLocalArg (Int (t, l)) && isLocalArg (Int (t, l))
+            | Intrinsic (BAssign { TypeRec = t; LValue = l; RValue = r }) ->
+                isLocalArg (Bool (t, l)) && isLocalArg (Bool (t, l))
             | // TODO(CaptainHayashi): is this correct?
               Intrinsic (Havoc v) -> typedVarIsThreadLocal v
             | Stored { Args = ps } -> Seq.forall isLocalArg ps
