@@ -356,6 +356,12 @@ module CommandAxioms =
             (modelCommand sharedContext c)
             (printMethodError >> printUnstyled)
 
+    let checkFail (c : FullCommand) (errors : MethodError list) : unit =
+        assertFail
+            errors
+            (modelCommand sharedContext c)
+            (printPartCmd (printViewExpr printCView) >> printUnstyled)
+
     let prim (atom : Atomic) : FullCommand =
         freshNode
         <| FPrim { PreAssigns = []
@@ -369,10 +375,41 @@ module CommandAxioms =
                    PostAssigns = [] }
 
     [<Test>]
+    let ``modelling local command with nonlocal lvalue fails`` () =
+        let lv = freshNode (Identifier "y")
+        let rv = freshNode (Identifier "bar")
+        checkFail
+            (local lv rv)
+            [ BadAssign
+                (lv,
+                 rv,
+                 BadExpr
+                    (lv,
+                     Var
+                        ("y",
+                         VarInWrongScope (expected = Thread, got = Shared)))) ]
+
+
+    [<Test>]
+    let ``modelling local command with nonlocal rvalue fails`` () =
+        let lv = freshNode (Identifier "foo")
+        let rv = freshNode (Identifier "x")
+        checkFail
+            (local lv rv)
+            [ BadAssign
+                (lv,
+                 rv,
+                 BadExpr
+                    (rv,
+                     Var
+                        ("x",
+                         VarInWrongScope (expected = Thread, got = Shared)))) ]
+
+    [<Test>]
     let ``modelling command <foo = x++> passes`` () =
         let ast = freshNode (Fetch(freshNode (Identifier "foo"), freshNode (Identifier "x"), Increment))
         check
-            (prim <| ast)
+            (prim ast)
             <| Prim ([ command' "!ILoad++"
                         ast
                         [ normalIntExpr (siVar "foo"); normalIntExpr (siVar "x") ]
