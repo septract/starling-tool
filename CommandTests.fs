@@ -128,61 +128,49 @@ module Observable =
     [<Test>]
     let ``symbolics with are observable after the empty command`` () =
         check true
-            [ SymC [ SymString "foo" ] ]
+            [ Symbol [ SymString "foo" ] ]
             []
 
     [<Test>]
     let ``symbolics are observable after a local stored command`` () =
         check true
-            [ SymC [ SymString "foo" ] ]
+            [ Symbol [ SymString "foo" ] ]
             [ command "Foo" [ normalIntExpr (siVar "y") ] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]
     let ``symbolics are observable after a nonlocal stored command`` () =
         check true
-            [ SymC [ SymString "foo" ] ]
+            [ Symbol [ SymString "foo" ] ]
             [ command "Foo" [ normalIntExpr (siVar "g") ] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]
     let ``local assignment is observable after a disjoint assignment`` () =
         check true
-            [ Intrinsic
-                (IAssign
-                    { TypeRec = normalRec
-                      LValue = siVar "y"
-                      RValue = mkAdd2 (siVar "y") (IInt 1L) } ) ]
-            [ Intrinsic
-                (IAssign
-                    { TypeRec = normalRec
-                      LValue = siVar "g"
-                      RValue = mkAdd2 (siVar "y") (IInt 1L) } ) ]
+            [ normalIntExpr (siVar "y")
+              *<- 
+              normalIntExpr (mkAdd2 (siVar "y") (IInt 1L)) ]
+            [ normalIntExpr (siVar "g")
+              *<-
+              normalIntExpr (mkAdd2 (siVar "y") (IInt 1L)) ]
 
 
     [<Test>]
     let ``local assignment is observable after a chained assignment`` () =
         check true
-            [ Intrinsic
-                (IAssign
-                    { TypeRec = normalRec
-                      LValue = siVar "y"
-                      RValue = mkAdd2 (siVar "y") (IInt 1L) } ) ]
-            [ Intrinsic
-                (IAssign
-                    { TypeRec = normalRec
-                      LValue = siVar "g"
-                      RValue = siVar "y" } ) ]
+            [ normalIntExpr (siVar "y")
+              *<-
+              normalIntExpr (mkAdd2 (siVar "y") (IInt 1L)) ]
+            [ normalIntExpr (siVar "g")
+              *<-
+              normalIntExpr (siVar "y") ]
 
     [<Test>]
     let ``local assignment is unobservable after an overwiting assignment`` () =
         check false
-            [ Intrinsic
-                (IAssign
-                    { TypeRec = normalRec
-                      LValue = siVar "y"
-                      RValue = mkAdd2 (siVar "y") (IInt 1L) } ) ]
-            [ Intrinsic
-                (IAssign
-                    { TypeRec = normalRec
-                      LValue = siVar "y"
-                      RValue = siVar "g" } ) ]
+            [ normalIntExpr (siVar "y")
+              *<-
+              normalIntExpr (mkAdd2 (siVar "y") (IInt 1L)) ]
+            [ normalIntExpr (siVar "y")
+              *<-
+              normalIntExpr (siVar "g") ]
 

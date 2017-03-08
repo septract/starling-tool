@@ -433,7 +433,7 @@ module Pretty =
 
 /// Creates a prim from a name, results list, and arguments list.
 let mkPrim (name : string) (results : TypedVar list) (args : TypedVar list)
-  (body : Microcode<TypedVar, Var> list)
+  (body : Microcode<TypedVar, Var, unit> list)
   : PrimSemantics =
     { Name = name; Results = results; Args = args; Body = body }
 
@@ -1454,21 +1454,14 @@ let modelIntLoad
     let modelWithExprs dstE srcE =
         match unifyPrimTypeRecs [ dstE.SRec; srcE.SRec ] with
         | Some srec ->
+            let dstEE = Int (srec, dstE.SExpr)
+            let srcEE = Int (srec, srcE.SExpr)
+
             // Direct loading is an intrinsic; the others aren't.
-            let mkStored cmd =
-                ok
-                    (command cmd
-                        [ typedIntToExpr dstE; typedIntToExpr srcE ]
-                        [ typedIntToExpr srcE ])
+            let mkStored cmd = ok (command cmd [ dstEE; srcEE ] [ srcEE ])
 
             match mode with
-            | Direct ->
-                ok
-                    (Intrinsic
-                        (IAssign
-                            { TypeRec = srec
-                              LValue = stripTypeRec dstE
-                              RValue = stripTypeRec srcE } ))
+            | Direct -> ok (dstEE *<- srcEE)
             | Increment -> mkStored "!ILoad++"
             | Decrement -> mkStored "!ILoad--"
         | None ->  // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
@@ -1522,6 +1515,9 @@ let modelIntStore
     let modelWithExprs dstE srcE =
         match unifyPrimTypeRecs [ dstE.SRec; srcE.SRec ] with
         | Some srec ->
+            let dstEE = Int (srec, dstE.SExpr)
+            let srcEE = Int (srec, srcE.SExpr)
+
             // Direct storage is an intrinsic; the others aren't.
             let mkStored cmd =
                 ok
@@ -1530,13 +1526,7 @@ let modelIntStore
                         [ typedIntToExpr srcE ])
 
             match mode with
-            | Direct ->
-                ok
-                    (Intrinsic
-                        (IAssign
-                            { TypeRec = srec
-                              LValue = stripTypeRec dstE
-                              RValue = stripTypeRec srcE } ))
+            | Direct -> ok (dstEE *<- srcEE)
             | Increment -> mkStored "!IStore++"
             | Decrement -> mkStored "!IStore--"
         | None ->  // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
@@ -1757,14 +1747,14 @@ let rec modelAtomic
             |> lift (typedBoolToExpr >> List.singleton >> command "Assume" [])
         | Havoc var ->
             let varMR = mapMessages SymVarError (Env.lookup ctx.Env Full var)
-            lift (IntrinsicCommand.Havoc >> Intrinsic) varMR
+            lift (mapCTyped Reg >> mkVarExp >> havoc) varMR
         | SymAtomic sym ->
             // TODO(CaptainHayashi): split out.
             let symMR =
                 (tryMapSym
                     (wrapMessages BadExpr (modelExpr ctx.Env Full id))
                          sym)
-            lift SymC symMR
+            lift Symbol symMR
         | ACond (cond = c; trueBranch = t; falseBranch = f) ->
             let cTMR =
                 wrapMessages BadExpr (modelBoolExpr ctx.Env Full id) c
@@ -1775,8 +1765,8 @@ let rec modelAtomic
                      >> mapMessages (fun m -> BadAtomicITECondition (c, ExprBadType m)))
                     cTMR
             let tMR = collect (List.map prim t)
-            let fMR = maybe (ok None) (List.map prim >> collect >> lift Some) f
-            lift3 (curry3 PrimBranch) cMR tMR fMR
+            let fMR = maybe (ok []) (List.map prim >> collect) f
+            lift3 (curry3 Branch) cMR tMR fMR
 
 
     lift
@@ -1801,12 +1791,9 @@ and modelAssign
             let modelWithSrc srcE =
                 match unifyPrimTypeRecs [ dt; srcE.SRec ] with
                 | Some dst ->
-                    ok
-                        (Intrinsic
-                            (IAssign
-                                { TypeRec = dst
-                                  LValue = d
-                                  RValue = stripTypeRec srcE } ))
+                    let srcEE = Int (dst, srcE.SExpr)
+                    let dstEE = Int (dst, d)
+                    ok (dstEE *<- srcEE)
                 | None ->
                     // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
                     fail
@@ -1819,12 +1806,9 @@ and modelAssign
             let modelWithSrc srcE =
                 match unifyPrimTypeRecs [ dt; srcE.SRec ] with
                 | Some dst ->
-                    ok
-                        (Intrinsic
-                            (BAssign
-                                { TypeRec = dst
-                                  LValue = d
-                                  RValue = stripTypeRec srcE } ))
+                    let srcEE = Bool (dst, srcE.SExpr)
+                    let dstEE = Bool (dst, d)
+                    ok (dstEE *<- srcEE)
                 | None ->
                     // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
                     fail
