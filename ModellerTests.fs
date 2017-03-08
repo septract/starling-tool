@@ -300,7 +300,7 @@ module Atomics =
     open Starling.Core.Pretty
     open Starling.Lang.Modeller.Pretty
 
-    let check (ast : Atomic) (cmd : PrimCommand) : unit =
+    let check (ast : Atomic) (cmd : PrimCommand list) : unit =
         assertOkAndEqual
             cmd
             (modelAtomic sharedContext ast)
@@ -311,17 +311,29 @@ module Atomics =
         let ast = freshNode (Fetch(freshNode (Identifier "foo"), freshNode (Identifier "x"), Increment))
         check
             ast
-            <| command' "!ILoad++"
-                ast
-                [ normalIntExpr (siVar "foo"); normalIntExpr (siVar "x") ]
-                [ normalIntExpr (siVar "x") ]
+            [ normalIntExpr (siVar "foo") *<- normalIntExpr (siVar "x")
+              normalIntExpr (siVar "x") *<- normalIntExpr (mkInc (siVar "x")) ]
 
     [<Test>]
     let ``model Boolean load primitive <baz = y>`` ()=
         let ast = freshNode (Fetch(freshNode (Identifier "baz"), freshNode (Identifier "y"), Direct))
         check
             ast
-            (normalBoolExpr (sbVar "baz") *<- normalBoolExpr (sbVar "y"))
+            [ normalBoolExpr (sbVar "baz") *<- normalBoolExpr (sbVar "y") ]
+
+    [<Test>]
+    let ``model Boolean atomic assign from shared to shared memory`` ()=
+        let ast = freshNode (Fetch(freshNode (Identifier "baz"), freshNode (Identifier "emp"), Direct))
+        check
+            ast
+            [ normalBoolExpr (sbVar "baz") *<- normalBoolExpr (sbVar "emp") ]
+
+    [<Test>]
+    let ``model integer atomic assign from local to local memory`` ()=
+        let ast = freshNode (Fetch(freshNode (Identifier "x"), freshNode (Identifier "x"), Direct))
+        check
+            ast
+            [ normalIntExpr (siVar "x") *<- normalIntExpr (siVar "x") ]
 
     [<Test>]
     let ``model symbolic store <x = %{foo [|baz|]}>`` () =
@@ -336,13 +348,13 @@ module Atomics =
                      Direct))
         check
             ast
-            (normalIntExpr (siVar "x")
-             *<-
-             normalIntExpr
+            [ normalIntExpr (siVar "x")
+              *<-
+              normalIntExpr
                 (IVar
                     (Sym
                         [ SymString "foo"
-                          SymArg (normalBoolExpr (BVar (Reg "baz")))] )))
+                          SymArg (normalBoolExpr (BVar (Reg "baz")))] )) ]
 
 
 module CommandAxioms =
@@ -417,10 +429,16 @@ module CommandAxioms =
         let ast = freshNode (Fetch(freshNode (Identifier "foo"), freshNode (Identifier "x"), Increment))
         check
             (prim ast)
-            <| Prim [ command' "!ILoad++"
-                        ast
-                        [ normalIntExpr (siVar "foo"); normalIntExpr (siVar "x") ]
-                        [ normalIntExpr (siVar "x") ] ]
+            <| Prim [ normalIntExpr (siVar "foo") *<- normalIntExpr (siVar "x")
+                      normalIntExpr (siVar "x") *<- normalIntExpr (mkInc (siVar "x")) ]
+
+    [<Test>]
+    let ``modelling command <foo = x--> passes`` () =
+        let ast = freshNode (Fetch(freshNode (Identifier "foo"), freshNode (Identifier "x"), Decrement))
+        check
+            (prim ast)
+            <| Prim [ normalIntExpr (siVar "foo") *<- normalIntExpr (siVar "x")
+                      normalIntExpr (siVar "x") *<- normalIntExpr (mkDec (siVar "x")) ]
 
     [<Test>]
     let ``modelling command <baz = y> passes`` () =
