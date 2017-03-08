@@ -474,9 +474,6 @@ let coreSemantics : PrimSemanticsMap =
       (*
        * Atomic load
        *)
-      // Integer load
-      (mkPrim "!ILoad"  [ normalIntVar "dest" ] [ normalIntVar "src" ]
-            [ normalIntVar "dest" *<- normalIntExpr (IVar "src") ] )
 
       // Integer load-and-increment
       (mkPrim "!ILoad++"  [ normalIntVar "dest"; normalIntVar "srcA" ] [ normalIntVar "srcB" ]
@@ -495,34 +492,6 @@ let coreSemantics : PrimSemanticsMap =
       // Integer decrement
       (mkPrim "!I--"  [ normalIntVar "srcA" ] [ normalIntVar "srcB" ]
             [ normalIntVar "srcA" *<- normalIntExpr (mkSub2 (IVar "srcB") (IInt 1L)) ] )
-
-      // Boolean load
-      (mkPrim "!BLoad"  [ normalBoolVar "dest" ] [ normalBoolVar "src" ]
-            [ normalBoolVar "dest" *<- normalBoolExpr (BVar "src") ] )
-
-      (*
-       * Atomic store
-       *)
-
-      // Integer store
-      (mkPrim "!IStore" [ normalIntVar "dest" ] [ normalIntVar "src" ]
-            [ normalIntVar "dest" *<- normalIntExpr (IVar "src") ] )
-
-      // Boolean store
-      (mkPrim "!BStore" [ normalBoolVar "dest" ] [ normalBoolVar "src" ]
-            [ normalBoolVar "dest" *<- normalBoolExpr (BVar "src") ] )
-
-      (*
-       * Local set
-       *)
-
-      // Integer local set
-      (mkPrim "!ILSet" [ normalIntVar "dest" ] [ normalIntVar "src" ]
-            [ normalIntVar "dest" *<- normalIntExpr (IVar "src") ] )
-
-      // Boolean store
-      (mkPrim "!BLSet" [ normalBoolVar "dest" ] [ normalBoolVar "src" ]
-            [ normalBoolVar "dest" *<- normalBoolExpr (BVar "src") ] )
 
       (*
        * Assumptions
@@ -1425,13 +1394,16 @@ let modelBoolLoad
                           and the fetch mode must be Direct. *)
     let modelWithExprs dstE srcE =
         // Both expressions must have unifiable types.
-        if primTypeRecsCompatible dstE.SRec srcE.SRec
-        then
+        match unifyPrimTypeRecs [ dstE.SRec; srcE.SRec ] with
+        | Some srec ->
+            let dstEE = Bool (srec, dstE.SExpr)
+            let srcEE = Bool (srec, srcE.SExpr)
+
             match mode with
-            | Direct -> ok (command "!BLoad" [ liftTypedSub Bool dstE ] [ liftTypedSub Bool srcE ])
+            | Direct -> ok (dstEE *<- srcEE)
             | Increment -> fail (IncBool src)
             | Decrement -> fail (DecBool src)
-        else  // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
+        | _ ->  // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
             fail
                 (primTypeMismatch src
                     (Exact (typedBoolToType dstE))
@@ -1457,7 +1429,9 @@ let modelIntLoad
             let dstEE = Int (srec, dstE.SExpr)
             let srcEE = Int (srec, srcE.SExpr)
 
-            // Direct loading is an intrinsic; the others aren't.
+            (* Currently, increment/decrement are stored commands;
+               direct can be modelled with a single assignment.
+               This may change later. *)
             let mkStored cmd = ok (command cmd [ dstEE; srcEE ] [ srcEE ])
 
             match mode with
@@ -1486,13 +1460,16 @@ let modelBoolStore
                            and the fetch mode must be Direct. *)
     let modelWithExprs dstE srcE =
         // Both expressions must have unifiable types.
-        if primTypeRecsCompatible dstE.SRec srcE.SRec
-        then
+        match unifyPrimTypeRecs [ dstE.SRec; srcE.SRec ] with
+        | Some srec ->
+            let dstEE = Bool (srec, dstE.SExpr)
+            let srcEE = Bool (srec, srcE.SExpr)
+
             match mode with
-            | Direct -> ok (command "!BStore" [ typedBoolToExpr dstE ] [ typedBoolToExpr srcE ])
+            | Direct -> ok (dstEE *<- srcEE)
             | Increment -> fail (IncBool src)
             | Decrement -> fail (DecBool src)
-        else  // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
+        | _ ->  // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
             fail
                 (primTypeMismatch src
                     (Exact (typedBoolToType dstE))
@@ -1518,7 +1495,9 @@ let modelIntStore
             let dstEE = Int (srec, dstE.SExpr)
             let srcEE = Int (srec, srcE.SExpr)
 
-            // Direct storage is an intrinsic; the others aren't.
+            (* Currently, increment/decrement are stored commands;
+               direct can be modelled with a single assignment.
+               This may change later. *)
             let mkStored cmd =
                 ok
                     (command cmd
@@ -1781,9 +1760,9 @@ and modelAssign
   (dest : Expression)
   (src : Expression)
   : Result<PrimCommand, PrimError> =
-    (* We model assignments as !ILSet or !BLSet, depending on the
-       type of dest, which _must_ be a thread lvalue.
-       We thus also have to make sure that src is the correct type. *)
+    (* Both sides must agree on type and be thread-local; dest
+       must specifically be a thread lvalue. *)
+    // TODO(MattWindsor91): de-duplicate this?
     let modelWithDest destM =
         match destM with
         | Int (dt, d) ->
