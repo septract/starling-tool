@@ -168,6 +168,8 @@ module Types =
         | SymVarError of err : VarMapError
         /// <summary>An atomic branch contains a bad if-then-else condition.</summary>
         | BadAtomicITECondition of expr: AST.Types.Expression * err: ExprError
+        /// <summary>An atomic branch contains a bad assume.</summary>
+        | BadAssume of expr: AST.Types.Expression * err: ExprError
 
     /// Represents an error when converting a method.
     type MethodError =
@@ -383,6 +385,9 @@ module Pretty =
         | BadAtomicITECondition (expr, err) ->
             wrapped "if-then-else condition" (printExpression expr)
                                              (printExprError err)
+        | BadAssume (expr, err) ->
+            wrapped "assumption" (printExpression expr)
+                                 (printExprError err)
 
     /// Pretty-prints method errors.
     let printMethodError (err : MethodError) : Doc =
@@ -475,30 +480,17 @@ let coreSemantics : PrimSemanticsMap =
        * Atomic load
        *)
 
-      // Integer load-and-increment
-      (mkPrim "!ILoad++"  [ normalIntVar "dest"; normalIntVar "srcA" ] [ normalIntVar "srcB" ]
-            [ normalIntVar "dest" *<- normalIntExpr (IVar "srcB")
-              normalIntVar "srcA" *<- normalIntExpr (mkAdd2 (IVar "srcB") (IInt 1L)) ] )
-
-      // Integer load-and-decrement
-      (mkPrim "!ILoad--"  [ normalIntVar "dest"; normalIntVar "srcA" ] [ normalIntVar "srcB" ]
-            [ normalIntVar "dest" *<- normalIntExpr (IVar "srcB")
-              normalIntVar "srcA" *<- normalIntExpr (mkSub2 (IVar "srcB") (IInt 1L)) ] )
-
       // Integer increment
       (mkPrim "!I++"  [ normalIntVar "srcA" ] [ normalIntVar "srcB" ]
-            [ normalIntVar "srcA" *<- normalIntExpr (mkAdd2 (IVar "srcB") (IInt 1L)) ] )
+            [ normalIntVar "srcA" *<- normalIntExpr (mkInc (IVar "srcB")) ] )
 
       // Integer decrement
       (mkPrim "!I--"  [ normalIntVar "srcA" ] [ normalIntVar "srcB" ]
-            [ normalIntVar "srcA" *<- normalIntExpr (mkSub2 (IVar "srcB") (IInt 1L)) ] )
+            [ normalIntVar "srcA" *<- normalIntExpr (mkDec (IVar "srcB")) ] )
 
       (*
        * Assumptions
        *)
-
-      // Identity
-      (mkPrim "Id" [] [] [])
 
       // Assume
       (mkPrim "Assume" [] [normalBoolVar "expr"] [ Microcode.Assume (BVar "expr") ]) ]
@@ -1382,16 +1374,34 @@ let modelLValue
     | RValue r -> fail (NeedLValue r)
     | LValue l -> wrapMessages BadExpr (modelExpr env scope marker) l
 
-/// Converts a Boolean load to a Prim.
-let modelBoolLoad
-  (ctx : MethodContext)
+/// <summary>
+///     Models a Boolean atomic assignment.
+/// </summary>
+/// <param name="env">
+///     The environment in which the assignment is being evaluated.
+/// </param>
+/// <param name="dest">
+///     The destination expression, which must be a thread-local or shared
+///     lvalue.
+/// </param>
+/// <param name="src">
+///     The source expression, which can involve thread-local and shared
+///     variables.
+/// </param>
+/// <param name="mode">
+///     The fetch mode for the rvalue.
+///     For Booleans, only <c>Direct</c> is allowed.
+/// </param>
+/// <returns>
+///     On success, the command representing the assignment;
+///     else, the corresponding error.
+/// </returns>
+let modelBoolAtomicAssign
+  (env : Env)
   (dest : Expression)
   (src : Expression)
   (mode : FetchMode)
-  : Result<PrimCommand, PrimError> =
-    (* In a Boolean load, the destination must be a THREAD Boolean lvalue;
-                          the source must be a SHARED Boolean lvalue;
-                          and the fetch mode must be Direct. *)
+  : Result<PrimCommand list, PrimError> =
     let modelWithExprs dstE srcE =
         // Both expressions must have unifiable types.
         match unifyPrimTypeRecs [ dstE.SRec; srcE.SRec ] with
@@ -1400,7 +1410,7 @@ let modelBoolLoad
             let srcEE = Bool (srec, srcE.SExpr)
 
             match mode with
-            | Direct -> ok (dstEE *<- srcEE)
+            | Direct -> ok [ dstEE *<- srcEE ]
             | Increment -> fail (IncBool src)
             | Decrement -> fail (DecBool src)
         | _ ->  // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
@@ -1410,34 +1420,55 @@ let modelBoolLoad
                     (Exact (typedBoolToType srcE)))
 
     bind2 modelWithExprs
-        (modelBoolLValue ctx.Env Thread id dest)
-        (modelBoolLValueOrSymbol ctx.Env Shared id src)
+        (modelBoolLValue env Any id dest)
+        (wrapMessages BadExpr (modelBoolExpr env Any id) src)
 
-/// Converts an integer load to a Prim.
-let modelIntLoad
-  (ctx : MethodContext)
+/// <summary>
+///     Models an integer atomic assignment.
+/// </summary>
+/// <param name="env">
+///     The environment in which the assignment is being evaluated.
+/// </param>
+/// <param name="dest">
+///     The destination expression, which must be a thread-local or shared
+///     lvalue.
+/// </param>
+/// <param name="src">
+///     The source expression, which can involve thread-local and shared
+///     variables.
+/// </param>
+/// <param name="mode">
+///     The fetch mode for the rvalue.
+/// </param>
+/// <returns>
+///     On success, the command representing the assignment;
+///     else, the corresponding error.
+/// </returns>
+let modelIntAtomicAssign
+  (env : Env)
   (dest : Expression)
   (src : Expression)
   (mode : FetchMode)
-  : Result<PrimCommand, PrimError> =
-    (* In an integer load, the destination must be a THREAD integral lvalue;
-                           the source must be a SHARED integral lvalue;
-                           and the fetch mode is unconstrained. *)
+  : Result<PrimCommand list, PrimError> =
     let modelWithExprs dstE srcE =
         match unifyPrimTypeRecs [ dstE.SRec; srcE.SRec ] with
         | Some srec ->
             let dstEE = Int (srec, dstE.SExpr)
             let srcEE = Int (srec, srcE.SExpr)
 
-            (* Currently, increment/decrement are stored commands;
-               direct can be modelled with a single assignment.
-               This may change later. *)
-            let mkStored cmd = ok (command cmd [ dstEE; srcEE ] [ srcEE ])
+            let mkIncOrDec cmd =
+                (* For increments/decrements to make any sense,
+                   the source must be an lvalue. *)
+                match src with
+                | LValue _ ->
+                    ok [ dstEE *<- srcEE
+                         srcEE *<- Int (srec, cmd srcE.SExpr) ]
+                | _ -> fail (NeedLValue src)
 
             match mode with
-            | Direct -> ok (dstEE *<- srcEE)
-            | Increment -> mkStored "!ILoad++"
-            | Decrement -> mkStored "!ILoad--"
+            | Direct -> ok [ dstEE *<- srcEE ]
+            | Increment -> mkIncOrDec mkInc
+            | Decrement -> mkIncOrDec mkDec
         | None ->  // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
             fail
                 (primTypeMismatch src
@@ -1445,78 +1476,8 @@ let modelIntLoad
                     (Exact (typedIntToType srcE)))
 
     bind2 modelWithExprs
-        (modelIntLValue ctx.Env Thread id dest)
-        (modelIntLValueOrSymbol ctx.Env Shared id src)
-
-/// Converts a Boolean store to a Prim.
-let modelBoolStore
-  (ctx : MethodContext)
-  (dest : Expression)
-  (src : Expression)
-  (mode : FetchMode)
-  : Result<PrimCommand, PrimError> =
-    (* In a Boolean store, the destination must a SHARED Boolean lvalue;
-                           the source must be THREAD Boolean;
-                           and the fetch mode must be Direct. *)
-    let modelWithExprs dstE srcE =
-        // Both expressions must have unifiable types.
-        match unifyPrimTypeRecs [ dstE.SRec; srcE.SRec ] with
-        | Some srec ->
-            let dstEE = Bool (srec, dstE.SExpr)
-            let srcEE = Bool (srec, srcE.SExpr)
-
-            match mode with
-            | Direct -> ok (dstEE *<- srcEE)
-            | Increment -> fail (IncBool src)
-            | Decrement -> fail (DecBool src)
-        | _ ->  // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
-            fail
-                (primTypeMismatch src
-                    (Exact (typedBoolToType dstE))
-                    (Exact (typedBoolToType srcE)))
-
-    bind2 modelWithExprs
-        (modelBoolLValue ctx.Env Shared id dest)
-        (wrapMessages BadExpr (modelBoolExpr ctx.Env Thread id) src)
-
-/// Converts an integral store to a Prim.
-let modelIntStore
-  (ctx : MethodContext)
-  (dest : Expression)
-  (src : Expression)
-  (mode : FetchMode)
-  : Result<PrimCommand, PrimError> =
-    (* In an integral store, the destination must be SHARED and integral;
-                             the source must be THREAD and integral;
-                             and the fetch mode is unconstrained.  *)
-    let modelWithExprs dstE srcE =
-        match unifyPrimTypeRecs [ dstE.SRec; srcE.SRec ] with
-        | Some srec ->
-            let dstEE = Int (srec, dstE.SExpr)
-            let srcEE = Int (srec, srcE.SExpr)
-
-            (* Currently, increment/decrement are stored commands;
-               direct can be modelled with a single assignment.
-               This may change later. *)
-            let mkStored cmd =
-                ok
-                    (command cmd
-                        [ typedIntToExpr dstE; typedIntToExpr srcE ]
-                        [ typedIntToExpr srcE ])
-
-            match mode with
-            | Direct -> ok (dstEE *<- srcEE)
-            | Increment -> mkStored "!IStore++"
-            | Decrement -> mkStored "!IStore--"
-        | None ->  // Arbitrarily blame src.  TODO(CaptainHayashi): don't?
-            fail
-                (primTypeMismatch src
-                    (Exact (typedIntToType dstE))
-                    (Exact (typedIntToType srcE)))
-
-    bind2 modelWithExprs
-        (modelIntLValue ctx.Env Shared id dest)
-        (wrapMessages BadExpr (modelIntExpr ctx.Env Thread id) src)
+        (modelIntLValue env Any id dest)
+        (wrapMessages BadExpr (modelIntExpr env Any id) src)
 
 /// <summary>
 ///     Models an Int and checks that it is type-compatible with another type.
@@ -1655,38 +1616,26 @@ let typeOfLValue (env : Env) (scope : Scope) (lv : Expression) : Type option =
     walkLValue lv Some
 
 /// Converts an atomic fetch to a model command.
-let modelFetch
-  (ctx : MethodContext)
+let modelAtomicAssign
+  (env : Env)
   (dest : Expression)
   (test : Expression)
   (mode : FetchMode)
-  : Result<PrimCommand, PrimError> =
-    (* First, determine whether we have a fetch from shared to thread
-     * (a load), or a fetch from thread to shared (a store).
-     * Also figure out whether we have a Boolean or arithmetic
-     * version.
+  : Result<PrimCommand list, PrimError> =
+    (* First, determine whether we have a Boolean or integer assignment.
      * We figure this out by looking at dest.
      *)
-    let rec findModeller d =
-        match d with
-        | LValue _ ->
-            match (typeOfLValue ctx.Env Shared d) with
-            | Some (Typed.Int _) -> ok modelIntStore
-            | Some (Typed.Bool _) -> ok modelBoolStore
-            | Some (Typed.Array (_))
-                -> fail (PrimNotImplemented "array fetch")
-            | None ->
-                match (typeOfLValue ctx.Env Thread d) with
-                | Some (Typed.Int _) -> ok modelIntLoad
-                | Some (Typed.Bool _) -> ok modelBoolLoad
-                | Some (Typed.Array (_))
-                    -> fail (PrimNotImplemented "array fetch")
-                | None ->
-                    let v = varOfLValue d
-                    fail (BadExpr (dest, Var (v, VarNotInEnv)))
-        | RValue _ -> fail (NeedLValue d)
-
-    bind (fun f -> f ctx dest test mode) (findModeller dest)
+    match dest with
+    | LValue _ ->
+        match (typeOfLValue env Any dest) with
+        | Some (Typed.Int _) -> modelIntAtomicAssign env dest test mode
+        | Some (Typed.Bool _) -> modelBoolAtomicAssign env dest test mode
+        | Some (Typed.Array (_))
+            -> fail (PrimNotImplemented "array fetch")
+        | None ->
+            let v = varOfLValue dest
+            fail (BadExpr (dest, Var (v, VarNotInEnv)))
+    | RValue _ -> fail (NeedLValue dest)
 
 /// <summary>
 ///     Models a postfix expression as a primitive.
@@ -1713,49 +1662,58 @@ let modelPostfix (ctx : MethodContext) (operand : Expression) (mode : FetchMode)
 
 /// Converts a single atomic command from AST to part-commands.
 let rec modelAtomic
-  (ctx : MethodContext) (a : Atomic) : Result<PrimCommand, PrimError> =
+  (ctx : MethodContext) (a : Atomic) : Result<PrimCommand list, PrimError> =
     let rec prim n =
         match n.Node with
-        | CompareAndSwap(dest, test, set) -> modelCAS ctx dest test set
-        | Fetch(dest, src, mode) -> modelFetch ctx dest src mode
-        | Postfix(operand, mode) -> modelPostfix ctx operand mode
-        | Id -> ok (command "Id" [] [])
+        | CompareAndSwap(dest, test, set) ->
+            lift List.singleton (modelCAS ctx dest test set)
+        | Fetch(dest, src, mode) -> modelAtomicAssign ctx.Env dest src mode
+        | Postfix(operand, mode) ->
+            lift List.singleton (modelPostfix ctx operand mode)
+        | Id -> ok []
         | Assume e ->
-            e
-            |> wrapMessages BadExpr (modelBoolExpr ctx.Env Thread id)
-            |> lift (typedBoolToExpr >> List.singleton >> command "Assume" [])
+            let eModelR = wrapMessages BadExpr (modelBoolExpr ctx.Env Any id) e
+
+            // An assumption needs to be of type 'bool', not a subtype.
+            let eBoolR =
+                bind
+                    (checkBoolIsNormalType
+                        >> mapMessages (fun m -> BadAssume (e, ExprBadType m)))
+                    eModelR
+
+            lift (Microcode.Assume >> List.singleton) eBoolR
         | Havoc var ->
-            let varMR = mapMessages SymVarError (Env.lookup ctx.Env Full var)
-            lift (mapCTyped Reg >> mkVarExp >> havoc) varMR
+            let varMR = mapMessages SymVarError (Env.lookup ctx.Env Any var)
+            lift (mapCTyped Reg >> mkVarExp >> havoc >> List.singleton) varMR
         | SymAtomic sym ->
             // TODO(CaptainHayashi): split out.
             let symMR =
                 (tryMapSym
-                    (wrapMessages BadExpr (modelExpr ctx.Env Full id))
+                    (wrapMessages BadExpr (modelExpr ctx.Env Any id))
                          sym)
-            lift Symbol symMR
+            lift (Symbol >> List.singleton) symMR
         | ACond (cond = c; trueBranch = t; falseBranch = f) ->
             let cTMR =
-                wrapMessages BadExpr (modelBoolExpr ctx.Env Full id) c
+                wrapMessages BadExpr (modelBoolExpr ctx.Env Any id) c
             // An if condition needs to be of type 'bool', not a subtype.
             let cMR =
                 bind
                     (checkBoolIsNormalType
                      >> mapMessages (fun m -> BadAtomicITECondition (c, ExprBadType m)))
                     cTMR
-            let tMR = collect (List.map prim t)
-            let fMR = maybe (ok []) (List.map prim >> collect) f
-            lift3 (curry3 Branch) cMR tMR fMR
+            let tMR = lift List.concat (collect (List.map prim t))
+            let fMR = maybe (ok []) (List.map prim >> collect >> lift List.concat) f
+            lift3 (fun c t f -> [ Branch (c, t, f) ]) cMR tMR fMR
 
+    let addNode (p : PrimCommand) : PrimCommand =
+        match p with
+        | Stored cmd -> Stored { cmd with Node = Some a }
+        | x -> x
 
-    lift
-        (function
-         | Stored cmd -> Stored { cmd with Node = Some a }
-         | x -> x)
-        (prim a)
+    lift (List.map addNode) (prim a)
 
 /// Converts a local variable assignment to a Prim.
-and modelAssign
+and modelLocalAssign
   (ctx : MethodContext)
   (dest : Expression)
   (src : Expression)
@@ -1867,13 +1825,15 @@ and modelPrim
   ({ PreAssigns = ps; Atomics = ts; PostAssigns = qs } : PrimSet)
   : Result<ModellerPartCmd, MethodError> =
 
-    let mAssign = uncurry (wrapMessages2 BadAssign (modelAssign ctx))
+    let mAssign = uncurry (wrapMessages2 BadAssign (modelLocalAssign ctx))
     let mAtomic = wrapMessages BadAtomic (modelAtomic ctx)
 
-    [ Seq.map mAssign ps ; Seq.map mAtomic ts ; Seq.map mAssign qs ]
-    |> Seq.concat
-    |> collect
-    |> lift Prim
+    lift3
+        (fun pM tM qM ->
+            Prim (List.concat (seq { yield pM; yield! tM; yield qM })))
+        (collect (List.map mAssign ps))
+        (collect (List.map mAtomic ts))
+        (collect (List.map mAssign qs))
 
 /// Converts a command to a PartCmd.
 /// The list is enclosed in a Chessie result.

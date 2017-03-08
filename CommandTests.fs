@@ -148,10 +148,10 @@ module Observable =
         check true
             [ normalIntExpr (siVar "y")
               *<- 
-              normalIntExpr (mkAdd2 (siVar "y") (IInt 1L)) ]
+              normalIntExpr (mkInc (siVar "y")) ]
             [ normalIntExpr (siVar "g")
               *<-
-              normalIntExpr (mkAdd2 (siVar "y") (IInt 1L)) ]
+              normalIntExpr (mkInc (siVar "y")) ]
 
 
     [<Test>]
