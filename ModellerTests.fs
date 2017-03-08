@@ -406,6 +406,13 @@ module CommandAxioms =
                          VarInWrongScope (expected = Thread, got = Shared)))) ]
 
     [<Test>]
+    let ``modelling command <foo = x> passes`` () =
+        let ast = freshNode (Fetch(freshNode (Identifier "foo"), freshNode (Identifier "x"), Direct))
+        check
+            (prim ast)
+            <| Prim [ normalIntExpr (siVar "foo") *<- normalIntExpr (siVar "x") ]
+
+    [<Test>]
     let ``modelling command <foo = x++> passes`` () =
         let ast = freshNode (Fetch(freshNode (Identifier "foo"), freshNode (Identifier "x"), Increment))
         check
