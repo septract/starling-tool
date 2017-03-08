@@ -321,7 +321,7 @@ module Atomics =
         let ast = freshNode (Fetch(freshNode (Identifier "baz"), freshNode (Identifier "y"), Direct))
         check
             ast
-            (command' "!BLoad" ast [ normalBoolExpr (sbVar "baz") ] [ normalBoolExpr (sbVar "y") ])
+            (normalBoolExpr (sbVar "baz") *<- normalBoolExpr (sbVar "y"))
 
     [<Test>]
     let ``model symbolic store <x = %{foo [|baz|]}>`` () =
@@ -417,20 +417,17 @@ module CommandAxioms =
         let ast = freshNode (Fetch(freshNode (Identifier "foo"), freshNode (Identifier "x"), Increment))
         check
             (prim ast)
-            <| Prim ([ command' "!ILoad++"
+            <| Prim [ command' "!ILoad++"
                         ast
                         [ normalIntExpr (siVar "foo"); normalIntExpr (siVar "x") ]
-                        [ normalIntExpr (siVar "x") ] ])
+                        [ normalIntExpr (siVar "x") ] ]
 
     [<Test>]
     let ``modelling command <baz = y> passes`` () =
         let ast = freshNode (Fetch(freshNode (Identifier "baz"), freshNode (Identifier "y"), Direct))
         check
             (prim <| ast)
-            <| Prim ([ command' "!BLoad"
-                        ast
-                        [ normalBoolExpr (sbVar "baz") ]
-                        [ normalBoolExpr (sbVar "y") ] ])
+            <| Prim [ normalBoolExpr (sbVar "baz") *<- normalBoolExpr (sbVar "y") ]
 
     [<Test>]
     let ``model local Boolean symbolic load {baz = %{foo}(bar)}`` () =
