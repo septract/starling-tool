@@ -336,19 +336,18 @@ module Atomics =
                      Direct))
         check
             ast
-            (Intrinsic
-                (IAssign
-                    { TypeRec = normalRec
-                      LValue = IVar (Reg "x")
-                      RValue =
-                        IVar
-                            (Sym
-                                [ SymString "foo"
-                                  SymArg (normalBoolExpr (BVar (Reg "baz")))] ) }))
+            (normalIntExpr (siVar "x")
+             *<-
+             normalIntExpr
+                (IVar
+                    (Sym
+                        [ SymString "foo"
+                          SymArg (normalBoolExpr (BVar (Reg "baz")))] )))
 
 
 module CommandAxioms =
     open Starling.Core.Pretty
+    open Starling.Core.View.Pretty
     open Starling.Lang.Modeller.Pretty
 
     let check (c : FullCommand) (cmd : ModellerPartCmd) : unit =
@@ -402,15 +401,13 @@ module CommandAxioms =
         check
             ast
             (Prim
-                [ Intrinsic
-                    ( BAssign
-                        { TypeRec = normalRec
-                          LValue = BVar (Reg "baz")
-                          RValue =
-                            BVar
-                                (Sym
-                                    [ SymString "foo"
-                                      SymArg (normalIntExpr (IVar (Reg "bar"))) ])})])
+                [ (normalBoolExpr (sbVar "baz")
+                   *<-
+                   normalBoolExpr
+                       (BVar
+                           (Sym
+                               [ SymString "foo"
+                                 SymArg (normalIntExpr (IVar (Reg "bar"))) ]))) ] )
 
 
 module ViewDefs =

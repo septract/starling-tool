@@ -102,7 +102,7 @@ module Types =
         { Name: string
           Results: TypedVar list
           Args: TypedVar list
-          Body: Microcode<TypedVar, Var> list }
+          Body: Microcode<TypedVar, Var, unit> list }
     type SemanticsMap<'a> = Map<string, 'a>
     type PrimSemanticsMap = SemanticsMap<PrimSemantics>
 
@@ -180,13 +180,13 @@ module Types =
 /// <summary>
 ///     Creates a deterministic assign.
 /// </summary>
-let ( *<- ) (lv : 'L) (rv : Expr<'RV>) : Microcode<'L, 'RV> =
+let ( *<- ) (lv : 'L) (rv : Expr<'RV>) : Microcode<'L, 'RV, 'S> =
     Assign (lv, Some rv)
 
 /// <summary>
 ///     Creates a nondeterministic assign.
 /// </summary>
-let havoc (lv : 'L) : Microcode<'L, 'RV> =
+let havoc (lv : 'L) : Microcode<'L, 'RV, 'S> =
     Assign (lv, None)
 
 
