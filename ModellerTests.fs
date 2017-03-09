@@ -422,30 +422,30 @@ module CommandAxioms =
         let ast = freshNode (Fetch(freshNode (Identifier "foo"), freshNode (Identifier "x"), Direct))
         check
             (prim ast)
-            <| Prim [ normalIntExpr (siVar "foo") *<- normalIntExpr (siVar "x") ]
+            (Prim [ normalIntExpr (siVar "foo") *<- normalIntExpr (siVar "x") ])
 
     [<Test>]
     let ``modelling command <foo = x++> passes`` () =
         let ast = freshNode (Fetch(freshNode (Identifier "foo"), freshNode (Identifier "x"), Increment))
         check
             (prim ast)
-            <| Prim [ normalIntExpr (siVar "foo") *<- normalIntExpr (siVar "x")
-                      normalIntExpr (siVar "x") *<- normalIntExpr (mkInc (siVar "x")) ]
+            (Prim [ normalIntExpr (siVar "foo") *<- normalIntExpr (siVar "x")
+                    normalIntExpr (siVar "x") *<- normalIntExpr (mkInc (siVar "x")) ])
 
     [<Test>]
     let ``modelling command <foo = x--> passes`` () =
         let ast = freshNode (Fetch(freshNode (Identifier "foo"), freshNode (Identifier "x"), Decrement))
         check
             (prim ast)
-            <| Prim [ normalIntExpr (siVar "foo") *<- normalIntExpr (siVar "x")
-                      normalIntExpr (siVar "x") *<- normalIntExpr (mkDec (siVar "x")) ]
+            (Prim [ normalIntExpr (siVar "foo") *<- normalIntExpr (siVar "x")
+                    normalIntExpr (siVar "x") *<- normalIntExpr (mkDec (siVar "x")) ])
 
     [<Test>]
     let ``modelling command <baz = y> passes`` () =
         let ast = freshNode (Fetch(freshNode (Identifier "baz"), freshNode (Identifier "y"), Direct))
         check
-            (prim <| ast)
-            <| Prim [ normalBoolExpr (sbVar "baz") *<- normalBoolExpr (sbVar "y") ]
+            (prim ast)
+            (Prim [ normalBoolExpr (sbVar "baz") *<- normalBoolExpr (sbVar "y") ])
 
     [<Test>]
     let ``model local Boolean symbolic load {baz = %{foo}(bar)}`` () =
