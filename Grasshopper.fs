@@ -396,7 +396,6 @@ let findTermVars (term : Backends.Z3.Types.ZTerm)
 
     let goalAndWPreVarsR = lift2 Set.union goalVarsL wPreVarsL
 
-    // Remember, traversing a list of lists of microcode!  (Oh the humanity.)
     let cmdVarsT =
         tchainL
             (traverseMicrocode
