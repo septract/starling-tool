@@ -1324,42 +1324,6 @@ let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
 //
 
 /// <summary>
-///     Models a Boolean lvalue given a potentially valid expression and
-///     environment.
-/// </summary>
-/// <param name="env">The <see cref="Env"/> of variables in the program.</param>
-/// <param name="scope">
-///     The level of variable scope at which this expression occurs.
-/// </param>
-/// <param name="marker">A function that marks (or doesn't mark) vars.</param>
-/// <param name="ex">The possible lvalue to model.</param>
-/// <returns>If the subject is a valid lvalue, the result expression.</returns>
-let modelBoolLValue
-  (env : Env) (scope : Scope) (marker : Var -> 'Var) (ex : Expression)
-  : Result<TypedBoolExpr<Sym<'Var>>, PrimError> =
-    match ex with
-    | RValue r -> fail (NeedLValue r)
-    | LValue l -> wrapMessages BadExpr (modelBoolExpr env scope marker) l
-
-/// <summary>
-///     Models an integer lvalue given a potentially valid expression and
-///     environment.
-/// </summary>
-/// <param name="env">The <see cref="Env"/> of variables in the program.</param>
-/// <param name="scope">
-///     The level of variable scope at which this expression occurs.
-/// </param>
-/// <param name="marker">A function that marks (or doesn't mark) vars.</param>
-/// <param name="ex">The possible lvalue to model.</param>
-/// <returns>If the subject is a valid lvalue, the result expression.</returns>
-let modelIntLValue
-  (env : Env) (scope : Scope) (marker : Var -> 'Var) (ex : Expression)
-  : Result<TypedIntExpr<Sym<'Var>>, PrimError> =
-    match ex with
-    | RValue r -> fail (NeedLValue r)
-    | LValue l -> wrapMessages BadExpr (modelIntExpr env scope marker) l
-
-/// <summary>
 ///     Models an lvalue given a potentially valid expression and
 ///     environment.
 /// </summary>
@@ -1414,60 +1378,6 @@ let modelBoolWithType
         then ok e
         else fail (primTypeMismatch expr (Exact rtype) (Exact etype))
     bind checkType eR
-
-/// <summary>
-///     Gets the underlying variable of an lvalue.
-/// </summary>
-/// <param name="lv">The lvalue-candidate whose type is needed.</param>
-/// <returns>
-///     The lvalue's variable; will crash if the expression is not an lvalue.
-/// </returns>
-let rec varOfLValue (lv : Expression) : Var =
-    match lv.Node with
-    | Identifier i -> i
-    | ArraySubscript (arr, _) -> varOfLValue arr
-    | _ -> failwith "called varOfLValue with non-lvalue"
-
-
-/// <summary>
-///     Tries to get the type of an lvalue.
-/// </summary>
-/// <param name="env">The map in which the lvalue's variable exists.</param>
-/// <param name="scope">
-///     The level of variable scope to lookup the lvalue in.
-/// </param>
-/// <param name="lv">The lvalue-candidate whose type is needed.</param>
-/// <returns>
-///     If the lvalue has a valid type, the type of that lvalue; otherwise,
-///     None.
-/// </returns>
-let typeOfLValue (env : Env) (scope : Scope) (lv : Expression) : Type option =
-    (* We can get the type by traversing the lvalue up to its underlying variable,
-       chaining together a sequence of 'matcher functions' that respond to the
-       various transformations (subscripts etc.) to that variable by peeling off
-       bits of the variable's own type. *)
-
-    (* For example, if we go through a [] to get to a variable, we need to remove
-       an Array type. *)
-    let matchArray var =
-        match var with
-        | Array ({ ElementType = eltype }, _) -> Some eltype
-        | _ -> None
-
-    // This is the part that actually traverses the expression.
-    let rec walkLValue lv matcher =
-        match lv.Node with
-        | Identifier v ->
-            (* We've found a variable x.  Its type is available in env.
-               However, if we walked through some []s to get here, we need to
-               apply the matcher sequence to extract the eventual element type. *)
-            Option.bind (typeOf >> matcher) (Env.tryLookup env scope v)
-        | ArraySubscript (arr, _) ->
-            (* If we find x[i], get the type t(x) and then make a note to extract
-               t(x)'s element type.  So, if arr is of type int[], we will get int. *)
-            walkLValue arr (matcher >> Option.bind matchArray)
-        | _ -> None
-    walkLValue lv Some
 
 
 /// <summary>
