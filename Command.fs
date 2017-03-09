@@ -57,7 +57,7 @@ module Types =
         { Name : string
           Results : SVExpr list
           Args : SVExpr list
-          Node : AST.Types.Atomic option }
+          Node : AST.Types.Prim option }
         override this.ToString() = sprintf "%A" this
 
     /// <summary>
@@ -169,9 +169,7 @@ module Queries =
     /// </returns>
     let assumptionOf (prim : PrimCommand) : BoolExpr<Sym<Var>> option =
         match prim with
-        // TODO (CaptainHayashi): more deep analysis here
-        | Stored { Name = n; Args = [ Bool (_, e) ] } when n = "Assume" ->
-            Some e
+        | Assume x -> Some x
         | _ -> None
 
     /// <summary>
@@ -364,7 +362,7 @@ module Create =
     let command (name : string) (results : SVExpr list) (args : SVExpr list) : PrimCommand =
         Stored { Name = name; Results = results; Args = args; Node = None }
 
-    let command' (name : string) (ast : AST.Types.Atomic) (results : SVExpr list) (args : SVExpr list) : PrimCommand =
+    let command' (name : string) (ast : AST.Types.Prim) (results : SVExpr list) (args : SVExpr list) : PrimCommand =
         Stored { Name = name; Results = results; Args = args; Node = Some ast }
 
 /// <summary>

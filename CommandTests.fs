@@ -41,7 +41,7 @@ module Nops =
 
     [<Test>]
     let ``Classify Assume(x!before) as a no-op``() =
-        check [ command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
+        check [ Microcode.Assume (sbVar "x") ]
 
     [<Test>]
     let ``Reject baz <- Foo(bar) as a no-op``() =
@@ -50,7 +50,7 @@ module Nops =
     [<Test>]
     let ``Reject Assume (x!before); baz <- Foo(bar) as a no-op``() =
         checkNot
-            [ command "Assume" [] [ normalBoolExpr (sbVar "x") ]
+            [ Microcode.Assume (sbVar "x")
               command "Foo" [ normalIntExpr (siVar "baz") ] [ normalIntExpr (siVar "bar") ] ]
 
 module Assumes =
@@ -68,12 +68,12 @@ module Assumes =
 
     [<Test>]
     let ``Classify Assume(x!before) as an assume``() =
-        check [ command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
+        check [ Microcode.Assume (sbVar "x") ]
 
     [<Test>]
     let ``Reject baz <- Foo(bar); Assume(x!before) as an Assume`` ()=
         checkNot [ command "Foo" [ normalIntExpr (siVar "baz") ] [ normalIntExpr (siVar "bar") ]
-                   command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
+                   Microcode.Assume (sbVar "x") ]
 
 module Observable =
     open Starling.Core.Command.Queries
@@ -110,19 +110,19 @@ module Observable =
     [<Test>]
     let ``assumes are observable after the empty command`` () =
         check true
-            [ command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
+            [ Microcode.Assume (sbVar "x") ]
             []
 
     [<Test>]
     let ``assumes are observable after a local stored command`` () =
         check true
-            [ command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
+            [ Microcode.Assume (sbVar "x") ]
             [ command "Foo" [ normalIntExpr (siVar "y") ] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]
     let ``assumes are observable after a nonlocal stored command`` () =
         check true
-            [ command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
+            [ Microcode.Assume (sbVar "x") ]
             [ command "Foo" [ normalIntExpr (siVar "g") ] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]

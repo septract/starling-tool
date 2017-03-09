@@ -25,11 +25,7 @@ open Starling.Core.Command
 open Starling.Core.Command.Create
 
 let cId : Command = []
-(* TODO(CaptainHayashi): currently we're assuming Assumed expressions
-   are in pre-state position.  When we move to type-safe renaming this
-   change should happen *here*. *)
-let cAssume (expr : SVBoolExpr) : Command =
-    command "Assume" [] [ Expr.Bool (normalRec, simp expr) ] |> List.singleton
+let cAssume (expr : SVBoolExpr) : Command = [ Assume (simp expr) ]
 let cAssumeNot : SVBoolExpr -> Command = mkNot >> cAssume
 
 /// <summary>

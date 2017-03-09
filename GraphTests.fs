@@ -86,10 +86,7 @@ module Tests =
                               { Name = "lock_C003"
                                 Src = "lock_V004"
                                 Command =
-                                    [ command "Assume" []
-                                           [ normalBoolExpr
-                                                 (iEq (siVar "s")
-                                                      (siVar "t")) ]] },
+                                    [ Microcode.Assume (iEq (siVar "s") (siVar "t")) ] },
                            Exit))
                         ("lock_V003",
                          (Mandatory <| Multiset.singleton (gHoldTick BTrue),
@@ -104,10 +101,7 @@ module Tests =
                               [ { Name = "lock_C002"
                                   Src = "lock_V004"
                                   Command =
-                                      [ command "Assume" []
-                                             [ normalBoolExpr
-                                                   (BNot (iEq (siVar "s")
-                                                              (siVar "t"))) ]] }
+                                      [ Microcode.Assume (BNot (iEq (siVar "s") (siVar "t"))) ] }
                                 { Name = "lock_C004"
                                   Src = "lock_V001"
                                   Command = [] } ],
@@ -121,17 +115,11 @@ module Tests =
                               [ { Name = "lock_C002"
                                   Dest = "lock_V003"
                                   Command =
-                                      [ command "Assume" []
-                                             [ normalBoolExpr
-                                                   (BNot (iEq (siVar "s")
-                                                              (siVar "t"))) ]] }
+                                      [ Microcode.Assume (BNot (iEq (siVar "s") (siVar "t"))) ] }
                                 { Name = "lock_C003"
                                   Dest = "lock_V002"
                                   Command =
-                                      [ command "Assume" []
-                                             [ normalBoolExpr
-                                                   (iEq (siVar "s")
-                                                        (siVar "t")) ]] } ],
+                                      [ Microcode.Assume (iEq (siVar "s") (siVar "t")) ] } ],
                           Set.singleton
                               { Name = "lock_C001"
                                 Src = "lock_V003"
@@ -204,19 +192,11 @@ module Tests =
                                   "lock_V004")
                         ("lock_C002",
                              edge "lock_V004"
-                                  [ command "Assume"
-                                         []
-                                         [ normalBoolExpr
-                                               (BNot (iEq (siVar "s")
-                                                          (siVar "t"))) ]]
+                                  [ Microcode.Assume (BNot (iEq (siVar "s") (siVar "t"))) ]
                                   "lock_V003")
                         ("lock_C003",
                              edge "lock_V004"
-                                  [ command "Assume"
-                                         []
-                                         [ normalBoolExpr
-                                               (iEq (siVar "s")
-                                                    (siVar "t")) ]]
+                                  [ Microcode.Assume (iEq (siVar "s") (siVar "t")) ]
                                   "lock_V002")
                         ("lock_C004",
                              edge "lock_V001"
