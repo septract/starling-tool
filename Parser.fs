@@ -342,7 +342,7 @@ let parseIfLike pLeg ctor =
 /// Parser for atomic actions.
 do parseAtomicRef :=
     choice [ (stringReturn "id" Id)
-             // These two needs to fire before parseFetchOrPostfix due to
+             // These two need to fire before parseFetchOrPostfix due to
              // ambiguity.
              parseIfLike (many1 (parseAtomic .>> ws)) (curry3 ACond)
              parseSymbolic .>> wsSemi |>> SymAtomic
