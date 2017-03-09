@@ -627,7 +627,7 @@ module CommandTests =
     [<Test>]
     let ``Semantically translate <assume(s == t)> using the ticket lock model`` () =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-              [ command "Assume" [] [ normalBoolExpr <| iEq (siVar "s") (siVar "t") ]]
+              [ Assume (iEq (siVar "s") (siVar "t")) ]
         <| Some (Set.ofList
                    [ iEq (siAfter "serving") (siBefore "serving")
                      iEq (siAfter "ticket") (siBefore "ticket")
@@ -660,9 +660,8 @@ module CommandTests =
                 (AIdx (gridv, siVar "x")))
 
         check testShared testThread
-            [ command "!I++"
-                [ normalIntExpr (IIdx (gridxv, siVar "y")) ]
-            [ normalIntExpr (IIdx (gridxv, siVar "y")) ] ]
+            [ normalIntExpr (IIdx (gridxv, siVar "y"))
+              *<- normalIntExpr (mkInc (IIdx (gridxv, siVar "y"))) ]
         <| Some (Set.ofList
             [ iEq (siAfter "x") (siBefore "x")
               iEq (siAfter "y") (siBefore "y")
@@ -699,7 +698,7 @@ module CommandTests =
     [<Test>]
     let ``Semantically translate <serving++> using the ticket lock model``() =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-              [ command "!I++" [ normalIntExpr (siVar "serving") ] [ normalIntExpr <| siVar "serving" ] ]
+              [ normalIntExpr (siVar "serving") *<- normalIntExpr (mkInc (siVar "serving")) ]
         <| Some (Set.ofList
             [
                 iEq (siAfter "s") (siBefore "s")

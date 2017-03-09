@@ -475,25 +475,7 @@ let coreSemantics : PrimSemanticsMap =
                  [ normalBoolVar "destA" *<- normalBoolExpr (BVar "set")
                    normalBoolVar "testA" *<- normalBoolExpr (BVar "testB") ],
                  [ normalBoolVar "destA" *<- normalBoolExpr (BVar "destB")
-                   normalBoolVar "testA" *<- normalBoolExpr (BVar "destB") ] ) ] )
-      (*
-       * Atomic load
-       *)
-
-      // Integer increment
-      (mkPrim "!I++"  [ normalIntVar "srcA" ] [ normalIntVar "srcB" ]
-            [ normalIntVar "srcA" *<- normalIntExpr (mkInc (IVar "srcB")) ] )
-
-      // Integer decrement
-      (mkPrim "!I--"  [ normalIntVar "srcA" ] [ normalIntVar "srcB" ]
-            [ normalIntVar "srcA" *<- normalIntExpr (mkDec (IVar "srcB")) ] )
-
-      (*
-       * Assumptions
-       *)
-
-      // Assume
-      (mkPrim "Assume" [] [normalBoolVar "expr"] [ Microcode.Assume (BVar "expr") ]) ]
+                   normalBoolVar "testA" *<- normalBoolExpr (BVar "destB") ] ) ] ) ]
 
 (*
  * Expression translation
@@ -1640,18 +1622,16 @@ module Atomics =
     let private modelPostfix
       (env : Env) (operand : Expression) (mode : FetchMode)
       : Result<PrimCommand, PrimError> =
-        (* A Postfix is basically a Fetch with no destination, at this point.
-           Thus, the source must be a SHARED LVALUE.
-           We don't allow the Direct fetch mode, as it is useless. *)
         let modelWithOperand opE =
             match mode, opE with
+            // Direct in this case is a nop, so we forbid it.
             | Direct, _ -> fail Useless
             | Increment, Typed.Bool _ -> fail (IncBool operand)
             | Decrement, Typed.Bool _ -> fail (DecBool operand)
-            | Increment, Typed.Int _ -> ok (command "!I++" [ opE ] [ opE ])
-            | Decrement, Typed.Int _ -> ok (command "!I--" [ opE ] [ opE ])
+            | Increment, Typed.Int (rc, e) -> ok (opE *<- Expr.Int (rc, mkInc e))
+            | Decrement, Typed.Int (rc, e) -> ok (opE *<- Expr.Int (rc, mkDec e))
             | _, Typed.Array (_) -> fail (PrimNotImplemented "array postfix")
-        bind modelWithOperand (modelLValue env Shared id operand)
+        bind modelWithOperand (modelLValue env Any id operand)
 
     /// Converts a single atomic command from AST to part-commands.
     let rec model

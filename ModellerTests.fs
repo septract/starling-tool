@@ -322,6 +322,34 @@ module Atomics =
             [ normalBoolExpr (sbVar "baz") *<- normalBoolExpr (sbVar "y") ]
 
     [<Test>]
+    let ``model integer increment on local variable`` () =
+        let ast = freshNode (Postfix(freshNode (Identifier "x"), Increment))
+        check
+            ast
+            [ normalIntExpr (siVar "x") *<- normalIntExpr (mkInc (siVar "x")) ]
+
+    [<Test>]
+    let ``model integer decrement on local variable`` () =
+        let ast = freshNode (Postfix(freshNode (Identifier "x"), Decrement))
+        check
+            ast
+            [ normalIntExpr (siVar "x") *<- normalIntExpr (mkDec (siVar "x")) ]
+
+    [<Test>]
+    let ``model integer increment on shared variable`` () =
+        let ast = freshNode (Postfix(freshNode (Identifier "bar"), Increment))
+        check
+            ast
+            [ normalIntExpr (siVar "bar") *<- normalIntExpr (mkInc (siVar "bar")) ]
+
+    [<Test>]
+    let ``model integer decrement on shared variable`` ()=
+        let ast = freshNode (Postfix(freshNode (Identifier "bar"), Decrement))
+        check
+            ast
+            [ normalIntExpr (siVar "bar") *<- normalIntExpr (mkDec (siVar "bar")) ]
+
+    [<Test>]
     let ``model Boolean atomic assign from shared to shared memory`` ()=
         let ast = freshNode (Fetch(freshNode (Identifier "baz"), freshNode (Identifier "emp"), Direct))
         check
