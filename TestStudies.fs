@@ -70,14 +70,14 @@ let ticketLockLockMethodAST =
       Body =
         [ pos 14L 3L (ViewExpr (Unmarked Unit))
           pos 15L 5L <| Command'.Prim
-               { PreAssigns = []
+               { PreLocals = []
                  Atomics =
-                     [ pos 15L 6L <|
-                           Fetch
-                                (pos 15L 6L (Identifier "t"),
-                                 pos 15L 10L (Identifier "ticket"),
-                                 Increment) ]
-                 PostAssigns = [] }
+                     [ pos 15L 6L <| APrim
+                        (pos 15L 6L <| Fetch
+                            (pos 15L 6L (Identifier "t"),
+                             pos 15L 10L (Identifier "ticket"),
+                             Increment)) ]
+                 PostLocals = [] }
           pos 16L 3L <| ViewExpr
             (Unmarked
                 (View.Func
@@ -90,13 +90,15 @@ let ticketLockLockMethodAST =
                         { Name = "holdTick"
                           Params = [ pos 18L 19L <| Identifier "t" ] }))
                pos 19L 9L <| Command'.Prim
-                { PreAssigns = []
+                { PreLocals = []
                   Atomics =
-                   [ pos 19L 10L <| Fetch
-                       (pos 19L 10L <| Identifier "s",
-                        pos 19L 14L <| Identifier "serving",
-                        Direct) ]
-                  PostAssigns = [] }
+                   [ pos 19L 10L <| APrim
+                       (pos 19L 10L
+                           (Fetch
+                               (pos 19L 10L <| Identifier "s",
+                                pos 19L 14L <| Identifier "serving",
+                                Direct))) ]
+                  PostLocals = [] }
                pos 20L 7L <| ViewExpr
                 (Unmarked
                     (View.If
@@ -122,12 +124,13 @@ let ticketLockUnlockMethodAST =
         [ pos 29L 3L <| ViewExpr
             (Unmarked (View.Func { Name = "holdLock"; Params = [];}))
           pos 30L 5L <| Command'.Prim
-            { PreAssigns = []
+            { PreLocals = []
               Atomics =
-                [ pos 30L 6L <| Postfix
-                    (pos 30L 6L (Identifier "serving"),
-                     Increment) ]
-              PostAssigns = [] }
+                [ pos 30L 6L <| APrim
+                    (pos 30L 6L <| Postfix
+                        (pos 30L 6L (Identifier "serving"),
+                         Increment)) ]
+              PostLocals = [] }
           pos 31L 3L <| ViewExpr (Unmarked Unit) ] }
 
 let ticketLockConstraint01 =

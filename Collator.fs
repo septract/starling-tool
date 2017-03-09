@@ -188,8 +188,8 @@ module ParamDesugar =
         let rewriteAFunc { Name = n; Params = ps } =
             { Name = n; Params = List.map rewriteExpression ps }
 
-        let rec rewriteAtomic atom =
-            let rewriteAtomic' =
+        let rec rewritePrim prim =
+            let rewritePrim' =
                 function
                 | CompareAndSwap (src, test, dest) ->
                     CompareAndSwap (rewriteExpression src, rewriteExpression test, rewriteExpression dest)
@@ -199,9 +199,15 @@ module ParamDesugar =
                     Postfix (rewriteExpression e, fm)
                 | Id -> Id
                 | Assume e -> Assume (rewriteExpression e)
-                | SymAtomic sym ->
-                    SymAtomic (rewriteSymbolic sym)
+                | SymCommand sym ->
+                    SymCommand (rewriteSymbolic sym)
                 | Havoc v -> Havoc (rewriteVar v)
+            { prim with Node = rewritePrim' prim.Node }
+
+        let rec rewriteAtomic atom =
+            let rewriteAtomic' =
+                function
+                | APrim p -> APrim (rewritePrim p)
                 | ACond (cond = c; trueBranch = t; falseBranch = f) ->
                     ACond
                         (rewriteExpression c,
@@ -209,12 +215,10 @@ module ParamDesugar =
                          Option.map (List.map rewriteAtomic) f)
             { atom with Node = rewriteAtomic' atom.Node }
 
-        let rewritePrimSet { PreAssigns = ps; Atomics = ts; PostAssigns = qs } =
-            let rewriteAssign = pairMap rewriteExpression rewriteExpression
-
-            { PreAssigns = List.map rewriteAssign ps
+        let rewritePrimSet { PreLocals = ps; Atomics = ts; PostLocals = qs } =
+            { PreLocals = List.map rewritePrim ps
               Atomics = List.map rewriteAtomic ts
-              PostAssigns = List.map rewriteAssign qs }
+              PostLocals = List.map rewritePrim qs }
 
         let rec rewriteView =
             function

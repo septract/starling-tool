@@ -339,17 +339,23 @@ let parseIfLike pLeg ctor =
             (opt (pstring "else" >>. ws >>. inBraces pLeg))
             ctor
 
+let parsePrim : Parser<Prim, unit> =
+    choice
+        [ // The ordering here is due to ambiguity, I think?
+          (stringReturn "id" Id)
+          parseSymbolic |>> SymCommand
+          parseHavoc |>> Havoc
+          parseAssume
+          parseCAS
+          parseFetchOrPostfix ]
+    |> nodify
+
 /// Parser for atomic actions.
 do parseAtomicRef :=
-    choice [ (stringReturn "id" Id)
-             // These two need to fire before parseFetchOrPostfix due to
-             // ambiguity.
-             parseIfLike (many1 (parseAtomic .>> ws)) (curry3 ACond)
-             parseSymbolic .>> wsSemi |>> SymAtomic
-             parseHavoc .>> wsSemi |>> Havoc
-             parseAssume .>> wsSemi 
-             parseCAS .>> wsSemi
-             parseFetchOrPostfix .>> wsSemi ]
+    choice
+        [ // This needs to fire before parsePrim due to ambiguity.
+          parseIfLike (many1 (parseAtomic .>> ws)) (curry3 ACond)
+          parsePrim .>> wsSemi |>> APrim ]
     |> nodify
 
 /// Parser for a collection of atomic actions.
@@ -559,22 +565,22 @@ let parsePrimSet =
     let parseAtomicFirstPrimSet =
         pipe2
           (parseAtomicSet .>> ws)
-          (many (attempt (parseAssign .>> wsSemi .>> ws)))
-          (fun atom rassigns ->
-              Prim { PreAssigns = []; Atomics = atom; PostAssigns = rassigns } )
+          (many (attempt (parsePrim .>> wsSemi .>> ws)))
+          (fun atom rlocals ->
+              Prim { PreLocals = []; Atomics = atom; PostLocals = rlocals } )
 
     let parseNonAtomicFirstPrimSet =
         pipe2
-            (many1 (parseAssign .>> wsSemi .>> ws))
+            (many1 (parsePrim .>> wsSemi .>> ws))
             (opt
                 (parseAtomicSet .>> ws
-                 .>>. many (parseAssign .>> wsSemi .>> ws)))
-            (fun lassigns tail ->
-               let (atom, rassigns) = withDefault ([], []) tail
+                 .>>. many (parsePrim .>> wsSemi .>> ws)))
+            (fun llocals tail ->
+               let (atom, rlocals) = withDefault ([], []) tail
                Prim
-                ( { PreAssigns = lassigns
+                ( { PreLocals = llocals 
                     Atomics = atom
-                    PostAssigns = rassigns } ))
+                    PostLocals = rlocals } ))
 
     parseAtomicFirstPrimSet <|> parseNonAtomicFirstPrimSet
 
@@ -582,9 +588,9 @@ let parsePrimSet =
 /// Parser for `skip` commands.
 /// Skip is inserted when we're in command position, but see a semicolon.
 let parseSkip
-    = stringReturn ";" (Prim { PreAssigns = []
+    = stringReturn ";" (Prim { PreLocals = []
                                Atomics = []
-                               PostAssigns = [] })
+                               PostLocals = [] })
     // ^- ;
 
 /// Parser for simple commands (atomics, skips, and bracketed commands).
