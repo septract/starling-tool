@@ -303,7 +303,7 @@ module Atomics =
     let check (ast : Atomic) (cmd : PrimCommand list) : unit =
         assertOkAndEqual
             cmd
-            (modelAtomic sharedContext ast)
+            (Atomics.model sharedContext.Env ast)
             (printPrimError >> printUnstyled)
 
     [<Test>]
