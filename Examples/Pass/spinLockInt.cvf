@@ -15,7 +15,7 @@ method lock() {
       {| emp |}
         test = 0;
       {| if test == 0 then emp else False() |}
-        <CAS(lock, test, 1)>;
+        <| CAS(lock, test, 1); |>
       // Starling can't infer that test is always 0 or 1.
       // Thus, we need to flip the condition here.
       {| if test == 1 then emp else holdLock() |}
@@ -28,7 +28,7 @@ method lock() {
  */
 method unlock() {
   {| holdLock() |}
-  <lock = 0>;
+    <| lock = 0; |>
   {| emp |}
 }
 

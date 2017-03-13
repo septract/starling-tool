@@ -15,15 +15,15 @@ view holdLock(Node x, Node xp);
 
 method lock(Node mynode) {
   {| loose(mynode, false) |}
-    < %{ [|mynode|].lock := true } >;
+    <| %{ [|mynode|].lock := true }; |>
   {| loose(mynode, true) |}
-    <{ mypred = tail;
+    <| mypred = tail;
        tail = mynode;
-       %{[|tail|].pred := [|mypred|]}; }>;  // Ghost code
+       %{[|tail|].pred := [|mypred|]}; |>  // Ghost code
   {| queued(mynode, mypred) |}
     do {
       {| queued(mynode, mypred) |}
-        <test = %{ [|mypred|].lock }>;
+        <| test = %{ [|mypred|].lock }; |>
       {| if test then queued(mynode, mypred) else holdLock(mynode, mypred) |}
     } while (test);
   {| holdLock(mynode, mypred) |}
@@ -31,10 +31,10 @@ method lock(Node mynode) {
 
 method unlock(Node mynode, Node mypred) {
   {| holdLock(mynode, mypred) |}
-    <{ %{ [|mynode|].lock := false };
+    <| %{ [|mynode|].lock := false };
        %{ [|mynode|].pred := null };  // Ghost code
        head = mynode;  // Ghost code
-       }>;
+       |>
   {| loose(mypred, false) |}
     mynode = mypred;
   {| loose(mynode, false) |}

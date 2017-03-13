@@ -20,70 +20,99 @@ open Starling.Semantics
 open Starling.Tests.Studies
 
 
-module WriteMaps =
-    [<Test>]
-    let ``variable and index path of x[3][i] <- 3 is correct`` () =
-        Some
-            (TypedVar.Array
-                (mkArrayTypeRec
-                    (mkArrayType
-                        (Int (normalRec, ()))
-                        (Some 320))
-                    (Some 240),
-                 "x"),
-             [ IInt 3L; IVar (Reg "i") ])
-        ?=? varAndIdxPath
-                (normalIntExpr
-                    (IIdx
-                        (mkTypedSub
-                             (mkArrayTypeRec (Int (normalRec, ())) (Some 320))
-                             (AIdx
-                                 (mkTypedSub
-                                    (mkArrayTypeRec
-                                        (mkArrayType (Int (normalRec, ())) (Some 320))
-                                        (Some 240))
-                                    (AVar (Reg "x")),
-                                  IInt 3L)),
-                         IVar (Reg "i"))))
+/// <summary>
+///     Tests for instruction capping.
+/// </summary>
+module Cap =
+    open Starling.Core.Pretty
+    open Starling.Core.Traversal.Pretty
+    open Starling.Semantics.Pretty
+
+    /// <summary>
+    ///     Checks the capped instruction generated from an assign map against
+    ///     a given instruction.
+    /// </summary>
+    /// <param name="expectedMap">The expected capped instruction.</param>
+    /// <param name="expectedInstr">The expected capped instructions.</param>
+    /// <param name="map">The assign map to use.</param>
+    /// <param name="instr">The instructions to cap.</param>
+    let check
+      (expectedMap : Map<TypedVar, MarkedVar>)
+      (expectedInstrs : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
+      (map : Map<TypedVar, MarkedVar>)
+      (instrs : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
+      : unit =
+        assertOkAndEqual
+            (expectedMap, expectedInstrs)
+            (capInstructions map instrs)
+            (printTraversalError printSemanticsError >> printUnstyled)
 
     [<Test>]
-    let ``write map of x[3][i] <- 3; y[j] <- 4 is correct`` () =
-        Map.ofList
-            [ (Array
-                (mkArrayTypeRec
-                    (mkArrayType (Int (normalRec, ())) (Some 320))
-                    (Some 240),
-                    "x"),
-               Indices <| Map.ofList
-                [ (IInt 3L,
-                    Indices <| Map.ofList
-                        [ (IVar (Reg "i"), Entire (Some (normalIntExpr (IInt 3L)))) ]) ] )
-              (Array
-                (mkArrayTypeRec (Int (normalRec, ())) (Some 320), "y"),
-               Indices <| Map.ofList
-                [ (IVar (Reg "j"), Entire (Some (normalIntExpr (IInt 4L)))) ] ) ]
-        ?=?
-        makeWriteMap
-            [ (normalIntExpr
-                (IIdx
-                    (mkTypedSub
-                         (mkArrayTypeRec (Int (normalRec, ())) (Some 320))
-                         (AIdx
-                             (mkTypedSub
-                                (mkArrayTypeRec
-                                    (mkArrayType (Int (normalRec, ())) (Some 320))
-                                    (Some 240))
-                                (AVar (Reg "x")),
-                              IInt 3L)),
-                     IVar (Reg "i"))),
-               Some (Int (normalRec, IInt 3L)))
-              (normalIntExpr
-                (IIdx
-                    (mkTypedSub
-                        (mkArrayTypeRec (Int (normalRec, ())) (Some 320))
-                        (AVar (Reg "y")),
-                     (IVar (Reg "j")))),
-               Some (Int (normalRec, IInt 4L))) ]
+    let ``capping rewrites lvalues in assignments`` () =
+        check
+            (Map.ofList
+                [ (Int (normalRec, "foo"), After "foo")
+                  (Int (normalRec, "bar"), Before "bar") ])
+            [ Assign
+                (Int (normalRec, After "foo"),
+                 Some (Expr.Int (normalRec, IVar (Reg (Intermediate (4I, "foo")))))) ]
+            (Map.ofList
+                [ (Int (normalRec, "foo"), Intermediate (5I, "foo"))
+                  (Int (normalRec, "bar"), Before "bar") ])
+            [ Assign
+                (Int (normalRec, Intermediate (5I, "foo")),
+                 Some (Expr.Int (normalRec, IVar (Reg (Intermediate (4I, "foo")))))) ]
+
+    [<Test>]
+    let ``capping rewrites rvalues in assignments`` () =
+        check
+            (Map.ofList
+                [ (Int (normalRec, "foo"), After "foo")
+                  (Int (normalRec, "bar"), After "bar") ])
+            [ Assign
+                (Int (normalRec, After "foo"),
+                 Some (Expr.Int (normalRec, IVar (Reg (After "bar"))))) ]
+            (Map.ofList
+                [ (Int (normalRec, "foo"), After ("foo"))
+                  (Int (normalRec, "bar"), Intermediate (2I, "bar")) ])
+            [ Assign
+                (Int (normalRec, After "foo"),
+                 Some (Expr.Int (normalRec, IVar (Reg (Intermediate (2I, "bar")))))) ]
+
+    [<Test>]
+    let ``capping rewrites lvalues and rvalues in assignments`` () =
+        check
+            (Map.ofList
+                [ (Int (normalRec, "foo"), After "foo")
+                  (Int (normalRec, "bar"), After "bar") ])
+            [ Assign
+                (Int (normalRec, After "foo"),
+                 Some (Expr.Int (normalRec, IVar (Reg (After "bar"))))) ]
+            (Map.ofList
+                [ (Int (normalRec, "foo"), Intermediate (5I, "foo"))
+                  (Int (normalRec, "bar"), Intermediate (2I, "bar")) ])
+            [ Assign
+                (Int (normalRec, Intermediate (5I, "foo")),
+                 Some (Expr.Int (normalRec, IVar (Reg (Intermediate (2I, "bar")))))) ]
+
+    [<Test>]
+    let ``ticket lock example is capped properly`` () =
+        check 
+            (Map.ofList
+                [ (Int (normalRec, "t"), After "t")
+                  (Int (normalRec, "s"), After "s")
+                  (Int (normalRec, "serving"), Before "serving")
+                  (Int (normalRec, "ticket"), Before "ticket") ] )
+            [ Int (normalRec, After "t") *<- normalIntExpr (siBefore "serving")
+              Int (normalRec, After "s") *<- normalIntExpr (siAfter "t") ]
+            (Map.ofList
+                [ (Int (normalRec, "t"), Intermediate (0I, "t"))
+                  (Int (normalRec, "s"), Intermediate (0I, "s"))
+                  (Int (normalRec, "serving"), Before "serving")
+                  (Int (normalRec, "ticket"), Before "ticket") ] )
+            [ Int (normalRec, Intermediate (0I, "t")) *<- normalIntExpr (siBefore "serving")
+              Int (normalRec, Intermediate (0I, "s")) *<- normalIntExpr (IVar (Reg (Intermediate (0I, "t")))) ]
+
 
 /// Shorthand for expressing an array update.
 let aupd' arr idx var : ArrayExpr<'Var> =
@@ -132,12 +161,6 @@ module Normalisation =
     open Starling.Core.Pretty
     open Starling.Semantics.Pretty
 
-    let checkAssigns expected actual : unit =
-        assertOkAndEqual
-            (Set.ofList expected)
-            (lift Set.ofList (normaliseAssigns actual))
-            (printSemanticsError >> printUnstyled)
-
     let checkMicrocode expected actual : unit =
         assertOkAndEqual
             (Set.ofList expected)
@@ -145,22 +168,47 @@ module Normalisation =
             (printSemanticsError >> printUnstyled)
 
     [<Test>]
-    let ``assign normalisation of x[3][i] <- 3; y[j] <- 4 is correct`` () =
-        checkAssigns
-            [ (TypedVar.Array
-                   (mkArrayTypeRec
-                        (mkArrayType
+    let ``microcode normalisation of x[3][i] <- 3; y[j] <- 4 is correct`` () =
+        checkMicrocode
+            [ Assign
+                (TypedVar.Array
+                    (mkArrayTypeRec
+                            (mkArrayType
+                                (Int (normalRec, ()))
+                                (Some 320))
+                            (Some 240),
+                            "x"),
+                Some <| aupd
+                    (mkTypedArrayExpr
+                            (mkArrayType (Int (normalRec, ())) (Some 320))
+                            (Some 240)
+                            (AVar (Reg "x")))
+                    (IInt 3L)
+                    (aupd
+                            (mkTypedArrayExpr
+                                (Int (normalRec, ()))
+                                (Some 320)
+                                (AIdx
+                                    (mkTypedArrayExpr
+                                        (mkArrayType (Int (normalRec, ())) (Some 320))
+                                        (Some 240)
+                                        (AVar (Reg "x")),
+                                    IInt 3L)))
+                            (IVar (Reg "i"))
+                            (normalIntExpr (IInt 3L))))
+              Assign
+                (TypedVar.Array
+                    (mkArrayTypeRec (Int (normalRec, ())) (Some 320), "y"),
+                Some <| aupd
+                    (mkTypedArrayExpr
                             (Int (normalRec, ()))
-                            (Some 320))
-                        (Some 240),
-                        "x"),
-               Some <| aupd
-                   (mkTypedArrayExpr
-                        (mkArrayType (Int (normalRec, ())) (Some 320))
-                        (Some 240)
-                        (AVar (Reg "x")))
-                   (IInt 3L)
-                   (aupd
+                            (Some 320)
+                            (AVar (Reg "y")))
+                    (IVar (Reg "j"))
+                    (normalIntExpr (IInt 4L))) ]
+            [ Assign
+                (normalIntExpr
+                    (IIdx
                         (mkTypedArrayExpr
                             (Int (normalRec, ()))
                             (Some 320)
@@ -169,39 +217,18 @@ module Normalisation =
                                     (mkArrayType (Int (normalRec, ())) (Some 320))
                                     (Some 240)
                                     (AVar (Reg "x")),
-                                 IInt 3L)))
-                        (IVar (Reg "i"))
-                        (normalIntExpr (IInt 3L))))
-              (TypedVar.Array
-                   (mkArrayTypeRec (Int (normalRec, ())) (Some 320), "y"),
-               Some <| aupd
-                   (mkTypedArrayExpr
-                        (Int (normalRec, ()))
-                        (Some 320)
-                        (AVar (Reg "y")))
-                   (IVar (Reg "j"))
-                   (normalIntExpr (IInt 4L))) ]
-            [ (normalIntExpr
-                (IIdx
-                    (mkTypedArrayExpr
-                         (Int (normalRec, ()))
-                         (Some 320)
-                         (AIdx
-                             (mkTypedArrayExpr
-                                 (mkArrayType (Int (normalRec, ())) (Some 320))
-                                 (Some 240)
-                                 (AVar (Reg "x")),
-                              IInt 3L)),
-                     IVar (Reg "i"))),
-               Some (normalIntExpr (IInt 3L)))
-              (normalIntExpr
-                (IIdx
-                    (mkTypedArrayExpr
-                        (Int (normalRec, ()))
-                        (Some 320)
-                        (AVar (Reg "y")),
-                     (IVar (Reg "j")))),
-               Some (normalIntExpr (IInt 4L))) ]
+                                IInt 3L)),
+                        IVar (Reg "i"))),
+                Some (normalIntExpr (IInt 3L)))
+              Assign
+                (normalIntExpr
+                    (IIdx
+                        (mkTypedArrayExpr
+                            (Int (normalRec, ()))
+                            (Some 320)
+                            (AVar (Reg "y")),
+                        (IVar (Reg "j")))),
+                Some (normalIntExpr (IInt 4L))) ]
 
     [<Test>]
     let ``microcode normalisation of CAS(x[3], d[6], 2) is correct`` () =
@@ -224,13 +251,12 @@ module Normalisation =
         let d6upd v = aupd dav (IInt 6L) v
 
         checkMicrocode
-            // TODO(CaptainHayashi): order shouldn't matter in branches.
             [ Branch
                 (iEq x3 d6,
-                 [ dar *<- d6upd (normalIntExpr d6)
-                   xar *<- x3upd (normalIntExpr (IInt 2L)) ],
-                 [ dar *<- d6upd (normalIntExpr x3)
-                   xar *<- x3upd (normalIntExpr x3) ])
+                 [ xar *<- x3upd (normalIntExpr (IInt 2L))
+                   dar *<- d6upd (normalIntExpr d6) ],
+                 [ xar *<- x3upd (normalIntExpr x3)
+                   dar *<- d6upd (normalIntExpr x3) ])
             ]
             [ Branch
                 (iEq x3 d6,
@@ -260,6 +286,87 @@ let testThread =
 
 
 /// <summary>
+///     Tests for microcode processing.
+/// </summary>
+module ProcessMicrocode =
+    /// <summary>
+    ///     Checks a microcode instruction set against an expected
+    ///     processed instruction set and assignment map.
+    /// </summary>
+    /// <param name="cap">Whether to cap final intermediates.</param>
+    /// <param name="svars">The context shared variables.</param>
+    /// <param name="tvars">The context thread variables.</param>
+    /// <param name="expectedMap">The expected assignment map.</param>
+    /// <param name="expectedInstrs">The expected final instructions.</param>
+    /// <param name="instrs">The instructions to convert.</param>
+    let check (cap : bool) (svars : VarMap) (tvars : VarMap)
+      (expectedMap : Map<TypedVar, MarkedVar>)
+      (expectedInstrs : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
+      (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
+      : unit =
+        let svars = VarMap.toTypedVarSeq svars
+        let tvars = VarMap.toTypedVarSeq tvars
+        let vars = List.ofSeq (Seq.append svars tvars)
+
+        let proc =
+            if cap
+            then processMicrocodeRoutine
+            else processMicrocodeRoutineUncapped
+
+        let processedR = proc vars instrs
+
+        assertOkAndEqual
+            (expectedInstrs, expectedMap)
+            processedR
+            (Pretty.printSemanticsError >> Core.Pretty.printUnstyled)
+     
+    [<Test>]
+    let ``chained assigns are processed properly`` () =
+        check false ticketLockModel.SharedVars ticketLockModel.ThreadVars
+            (Map.ofList
+                [ (Int (normalRec, "t"), Intermediate (0I, "t"))
+                  (Int (normalRec, "s"), Intermediate (0I, "s"))
+                  (Int (normalRec, "serving"), Before "serving")
+                  (Int (normalRec, "ticket"), Before "ticket") ] )
+            [ Int (normalRec, Intermediate (0I, "t")) *<- normalIntExpr (siBefore "serving")
+              Int (normalRec, Intermediate (0I, "s")) *<- normalIntExpr (IVar (Reg (Intermediate (0I, "t")))) ]
+            [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "serving")
+              normalIntExpr (siVar "s") *<- normalIntExpr (siVar "t") ]
+   
+    [<Test>]
+    let ``chained assigns are processed and capped properly`` () =
+        check true ticketLockModel.SharedVars ticketLockModel.ThreadVars
+            (Map.ofList
+                [ (Int (normalRec, "t"), After "t")
+                  (Int (normalRec, "s"), After "s")
+                  (Int (normalRec, "serving"), Before "serving")
+                  (Int (normalRec, "ticket"), Before "ticket") ] )
+            [ Int (normalRec, After "t") *<- normalIntExpr (siBefore "serving")
+              Int (normalRec, After "s") *<- normalIntExpr (siAfter "t") ]
+            [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "serving")
+              normalIntExpr (siVar "s") *<- normalIntExpr (siVar "t") ]
+
+    [<Test>]
+    let ``unequal branches are processed and capped properly`` () =
+        check true ticketLockModel.SharedVars ticketLockModel.ThreadVars
+            (Map.ofList
+                [ (Int (normalRec, "t"), After "t")
+                  (Int (normalRec, "s"), After "s")
+                  (Int (normalRec, "serving"), Before "serving")
+                  (Int (normalRec, "ticket"), Before "ticket") ] )
+            [ Branch
+                (BEq (normalIntExpr (siBefore "t"), normalIntExpr (siBefore "ticket")),
+                 [ Int (normalRec, After "t") *<- normalIntExpr (siBefore "serving")
+                   Int (normalRec, After "s") *<- normalIntExpr (siBefore "s") ],
+                 [ Int (normalRec, After "s") *<- normalIntExpr (siBefore "serving")
+                   Int (normalRec, After "t") *<- normalIntExpr (siBefore "t") ]) ]
+            [ Branch
+                (BEq (normalIntExpr (siVar "t"), normalIntExpr (siVar "ticket")),
+                 [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "serving") ],
+                 [ normalIntExpr (siVar "s") *<- normalIntExpr (siVar "serving") ]) ]
+
+
+/// <summary>
 ///     Tests for microcode compilation to Boolean expressions.
 /// </summary>
 module MicrocodeToBool =
@@ -267,13 +374,15 @@ module MicrocodeToBool =
     ///     Checks a microcode instruction set against an expected
     ///     Boolean expression.
     /// </summary>
+    /// <param name="svars">The context shared variables.</param>
+    /// <param name="tvars">The context thread variables.</param>
     /// <param name="expected">The expected expression.</param>
     /// <param name="instrs">The instructions to convert.</param>
     let check
       (svars : VarMap)
       (tvars : VarMap)
-      (expected : BoolExpr<Sym<MarkedVar>>)
-      (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list list)
+      (expected : BoolExpr<Sym<MarkedVar>> list)
+      (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
       : unit =
         // Try to make the check order-independent.
         let rec trySort bool =
@@ -290,229 +399,168 @@ module MicrocodeToBool =
         let microcodeR = lift (uncurry microcodeRoutineToBool) processedR
 
         assertOkAndEqual
-            (trySort expected)
+            (BAnd (List.sort (List.map trySort expected)))
             (lift trySort microcodeR)
             (Pretty.printSemanticsError >> Core.Pretty.printUnstyled)
 
     [<Test>]
     let ``the empty command is translated properly`` () =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-                [ iEq (siAfter "serving") (siBefore "serving")
-                  iEq (siAfter "ticket") (siBefore "ticket")
-                  iEq (siAfter "s") (siBefore "s")
-                  iEq (siAfter "t") (siBefore "t") ] )
+            [ iEq (siAfter "serving") (siBefore "serving")
+              iEq (siAfter "ticket") (siBefore "ticket")
+              iEq (siAfter "s") (siBefore "s")
+              iEq (siAfter "t") (siBefore "t") ]
             []
-
-    [<Test>]
-    let ``the singleton empty command is translated properly`` () =
-        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-                [ iEq (siAfter "serving") (siBefore "serving")
-                  iEq (siAfter "ticket") (siBefore "ticket")
-                  iEq (siAfter "s") (siBefore "s")
-                  iEq (siAfter "t") (siBefore "t") ] )
-            [ [] ]
-
-    [<Test>]
-    let ``a composition of empty commands is translated properly`` () =
-        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-                [ iEq (siAfter "serving") (siBefore "serving")
-                  iEq (siAfter "ticket") (siBefore "ticket")
-                  iEq (siAfter "s") (siBefore "s")
-                  iEq (siAfter "t") (siBefore "t") ] )
-            [ []; []; []; ]
 
     [<Test>]
     let ``lone assumes are translated properly`` () =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-                [ iEq (siAfter "serving") (siBefore "serving")
-                  iEq (siAfter "ticket") (siBefore "ticket")
-                  iEq (siAfter "s") (siBefore "s")
-                  iEq (siAfter "t") (siBefore "t")
-                  iEq (siBefore "s") (siBefore "t") ])
-            [ [ Assume (iEq (siVar "s") (siVar "t")) ] ]
+            [ iEq (siAfter "serving") (siBefore "serving")
+              iEq (siAfter "ticket") (siBefore "ticket")
+              iEq (siAfter "s") (siBefore "s")
+              iEq (siAfter "t") (siBefore "t")
+              iEq (siBefore "s") (siBefore "t") ]
+            [ Assume (iEq (siVar "s") (siVar "t")) ]
 
     [<Test>]
     let ``lone havocs are translated properly`` () =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-                [ iEq (siAfter "serving") (siBefore "serving")
-                  iEq (siAfter "ticket") (siBefore "ticket")
-                  iEq (siAfter "t") (siBefore "t") ])
-            [ [ havoc (normalIntExpr (siVar "s")) ] ]
+            [ iEq (siAfter "serving") (siBefore "serving")
+              iEq (siAfter "ticket") (siBefore "ticket")
+              iEq (siAfter "t") (siBefore "t") ]
+            [ havoc (normalIntExpr (siVar "s")) ]
 
     [<Test>]
     let ``lone assigns are translated properly`` () =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-                [ iEq (siAfter "serving") (siBefore "serving")
-                  iEq (siAfter "ticket") (siBefore "ticket")
-                  iEq (siAfter "s") (siBefore "t")
-                  iEq (siAfter "t") (siBefore "t") ])
-            [ [ normalIntExpr (siVar "s") *<- normalIntExpr (siVar "t") ] ]
-
-    [<Test>]
-    let ``unchained assigns are translated properly`` () =
-        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-                [ iEq (siAfter "serving") (siBefore "serving")
-                  iEq (siAfter "ticket") (siBefore "ticket")
-                  iEq (siAfter "s") (siBefore "t")
-                  iEq (siAfter "t") (siBefore "t")
-                  iEq (siInter 0I "s") (siBefore "serving") ])
-            [ [ normalIntExpr (siVar "s") *<- normalIntExpr (siVar "serving") ]
-              [ normalIntExpr (siVar "s") *<- normalIntExpr (siVar "t") ]  ]
+            [ iEq (siAfter "serving") (siBefore "serving")
+              iEq (siAfter "ticket") (siBefore "ticket")
+              iEq (siAfter "s") (siBefore "t")
+              iEq (siAfter "t") (siBefore "t") ]
+            [ normalIntExpr (siVar "s") *<- normalIntExpr (siVar "t") ]
 
     [<Test>]
     let ``chained assigns are translated properly`` () =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-                [ iEq (siAfter "serving") (siBefore "serving")
-                  iEq (siAfter "ticket") (siBefore "ticket")
-                  iEq (siAfter "s") (siInter 0I "t")
-                  iEq (siAfter "t") (siInter 0I "t")
-                  iEq (siInter 0I "t") (siBefore "serving") ])
-            [ [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "serving") ]
-              [ normalIntExpr (siVar "s") *<- normalIntExpr (siVar "t") ] ]
+            [ iEq (siAfter "serving") (siBefore "serving")
+              iEq (siAfter "ticket") (siBefore "ticket")
+              iEq (siAfter "s") (siAfter "t")
+              iEq (siAfter "t") (siBefore "serving") ]
+            [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "serving")
+              normalIntExpr (siVar "s") *<- normalIntExpr (siVar "t") ]
 
     [<Test>]
     let ``chained assigns and assumptions are translated properly`` () =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-                [ iEq (siAfter "serving") (siBefore "serving")
-                  iEq (siAfter "ticket") (siBefore "ticket")
-                  iEq (siAfter "s") (siBefore "s")
-                  iEq (siBefore "s") (siInter 0I "t")
-                  iEq (siAfter "t") (siInter 0I "t")
-                  iEq (siInter 0I "t") (siBefore "serving") ])
-            [ [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "serving") ]
-              [ Assume (iEq (siVar "s") (siVar "t")) ] ]
+            [ iEq (siAfter "serving") (siBefore "serving")
+              iEq (siAfter "ticket") (siBefore "ticket")
+              iEq (siAfter "s") (siBefore "s")
+              iEq (siBefore "s") (siAfter "t")
+              iEq (siAfter "t") (siBefore "serving") ]
+            [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "serving")
+              Assume (iEq (siVar "s") (siVar "t")) ]
 
     [<Test>]
     let ``well-formed branches are translated properly`` () =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-                [ iEq (siAfter "serving") (siBefore "serving")
-                  iEq (siAfter "ticket") (siBefore "ticket")
-                  iEq (siAfter "s") (siBefore "s")
-                  (mkImplies
-                    (iEq (siBefore "s") (siBefore "t"))
-                    (iEq (siAfter "t") (siBefore "serving")))
-                  (mkImplies
-                    (mkNot (iEq (siBefore "s") (siBefore "t")))
-                    (iEq (siAfter "t") (siBefore "ticket"))) ])
-            [ [ Branch
-                    (iEq (siVar "s") (siVar "t"),
+            [ iEq (siAfter "serving") (siBefore "serving")
+              iEq (siAfter "ticket") (siBefore "ticket")
+              iEq (siAfter "s") (siBefore "s")
+              (mkImplies
+                (iEq (siBefore "s") (siBefore "t"))
+                (iEq (siAfter "t") (siBefore "serving")))
+              (mkImplies
+                (mkNot (iEq (siBefore "s") (siBefore "t")))
+                (iEq (siAfter "t") (siBefore "ticket"))) ]
+            [ Branch
+                  (iEq (siVar "s") (siVar "t"),
                      [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "serving") ],
-                     [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "ticket") ]) ] ]
+                     [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "ticket") ]) ]
 
     [<Test>]
     let ``long compositions are translated properly`` () =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-               [ iEq (siAfter "serving") (siBefore "serving")
-                 iEq (siAfter "ticket") (siBefore "ticket")
-                 iEq (siAfter "s") (siBefore "s")
-                 iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
-                 iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L))
-                 iEq (siAfter "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ] )
-            [ [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ]
-              [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ]
-              [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ] ]
-
-    [<Test>]
-    let ``parallel compositions are translated properly`` () =
-        check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-               [ iEq (siAfter "serving") (siBefore "serving")
-                 iEq (siAfter "ticket") (siBefore "ticket")
-                 iEq (siInter 0I "s") (mkSub2 (siBefore "s") (IInt 1L))
-                 iEq (siInter 1I "s") (mkSub2 (siInter 0I "s") (IInt 1L))
-                 iEq (siAfter "s") (mkSub2 (siInter 1I "s") (IInt 1L))
-                 iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
-                 iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L))
-                 iEq (siAfter "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ] )
-            [ [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L))
-                normalIntExpr (siVar "s") *<- normalIntExpr (mkSub2 (siVar "s") (IInt 1L)) ]
-              [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L))
-                normalIntExpr (siVar "s") *<- normalIntExpr (mkSub2 (siVar "s") (IInt 1L)) ]
-              [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L))
-                normalIntExpr (siVar "s") *<- normalIntExpr (mkSub2 (siVar "s") (IInt 1L)) ] ]
+            [ iEq (siAfter "serving") (siBefore "serving")
+              iEq (siAfter "ticket") (siBefore "ticket")
+              iEq (siAfter "s") (siBefore "s")
+              iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
+              iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L))
+              iEq (siAfter "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ]
+            [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L))
+              normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L))
+              normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ]
 
     [<Test>]
     let ``pre-state havocs are translated properly`` () =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-               [ iEq (siAfter "serving") (siBefore "serving")
-                 iEq (siAfter "ticket") (siBefore "ticket")
-                 iEq (siAfter "s") (siBefore "s")
-                 iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L))
-                 iEq (siAfter "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ] )
-            [ [ havoc (normalIntExpr (siVar "t")) ]
-              [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ]
-              [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ] ]
+            [ iEq (siAfter "serving") (siBefore "serving")
+              iEq (siAfter "ticket") (siBefore "ticket")
+              iEq (siAfter "s") (siBefore "s")
+              iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L))
+              iEq (siAfter "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ]
+            [ havoc (normalIntExpr (siVar "t"))
+              normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L))
+              normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ]
 
     [<Test>]
     let ``intermediate havocs are translated properly`` () =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-               [ iEq (siAfter "serving") (siBefore "serving")
-                 iEq (siAfter "ticket") (siBefore "ticket")
-                 iEq (siAfter "s") (siBefore "s")
-                 iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
-                 iEq (siAfter "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ] )
-            [ [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ]
-              [ havoc (normalIntExpr (siVar "t")) ]
-              [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ] ]
+            [ iEq (siAfter "serving") (siBefore "serving")
+              iEq (siAfter "ticket") (siBefore "ticket")
+              iEq (siAfter "s") (siBefore "s")
+              iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
+              iEq (siAfter "t") (mkAdd2 (siInter 1I "t") (IInt 1L)) ]
+            [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L))
+              havoc (normalIntExpr (siVar "t"))
+              normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ]
 
     [<Test>]
     let ``post-state havocs are translated properly`` () =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-            (BAnd
-               [ iEq (siAfter "serving") (siBefore "serving")
-                 iEq (siAfter "ticket") (siBefore "ticket")
-                 iEq (siAfter "s") (siBefore "s")
-                 iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
-                 iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L)) ] )
-            [ [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ]
-              [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L)) ]
-              [ havoc (normalIntExpr (siVar "t")) ] ]
+            [ iEq (siAfter "serving") (siBefore "serving")
+              iEq (siAfter "ticket") (siBefore "ticket")
+              iEq (siAfter "s") (siBefore "s")
+              iEq (siInter 0I "t") (mkAdd2 (siBefore "t") (IInt 1L))
+              iEq (siInter 1I "t") (mkAdd2 (siInter 0I "t") (IInt 1L)) ]
+            [ normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L))
+              normalIntExpr (siVar "t") *<- normalIntExpr (mkAdd2 (siVar "t") (IInt 1L))
+              havoc (normalIntExpr (siVar "t")) ]
 
     [<Test>]
     let ``single-dimensional arrays are normalised and translated properly`` () =
         check testShared2 testThread
-            (BAnd
-                [ iEq (siAfter "x") (siBefore "x")
-                  iEq (siAfter "y") (siBefore "y")
-                  BEq
-                    (typedArrayToExpr
-                        (mkTypedArrayExpr (Bool (normalRec, ())) (Some 10) (AVar (Reg (After "foo")))),
-                     aupd
-                        (mkTypedArrayExpr
-                            (Bool (normalRec, ()))
-                            (Some 10)
-                            (aupd'
-                                (mkTypedArrayExpr
-                                    (Bool (normalRec, ()))
-                                    (Some 10)
-                                    (AVar (Reg (Before "foo"))))
-                                (siBefore "x")
-                                (normalBoolExpr BTrue)))
-                        (siBefore "y")
-                        (normalBoolExpr  BFalse)) ])
-            [ [ normalBoolExpr
-                    (BIdx
-                        (mkTypedArrayExpr (Bool (normalRec, ())) (Some 10) (AVar (Reg "foo")),
-                         IVar (Reg "x")))
-                *<- normalBoolExpr BTrue
-                normalBoolExpr
-                    (BIdx
-                        (mkTypedArrayExpr (Bool (normalRec, ())) (Some 10) (AVar (Reg "foo")),
-                         IVar (Reg "y")))
-                *<- normalBoolExpr BFalse ] ]
+             [ iEq (siAfter "x") (siBefore "x")
+               iEq (siAfter "y") (siBefore "y")
+               BEq
+                 (typedArrayToExpr
+                     (mkTypedArrayExpr (Bool (normalRec, ())) (Some 10) (AVar (Reg (Intermediate (0I, "foo"))))),
+                  aupd
+                     (mkTypedArrayExpr
+                         (Bool (normalRec, ()))
+                         (Some 10)
+                         (AVar (Reg (Before "foo"))))
+                     (siBefore "x")
+                     (normalBoolExpr BTrue))
+               BEq
+                 (typedArrayToExpr
+                     (mkTypedArrayExpr (Bool (normalRec, ())) (Some 10) (AVar (Reg (After "foo")))),
+                  aupd
+                     (mkTypedArrayExpr
+                         (Bool (normalRec, ()))
+                         (Some 10)
+                         (AVar (Reg (Intermediate (0I, "foo")))))
+                     (siBefore "y")
+                     (normalBoolExpr BFalse)) ]
+            [ normalBoolExpr
+                  (BIdx
+                      (mkTypedArrayExpr (Bool (normalRec, ())) (Some 10) (AVar (Reg "foo")),
+                       IVar (Reg "x")))
+              *<- normalBoolExpr BTrue
+              normalBoolExpr
+                  (BIdx
+                      (mkTypedArrayExpr (Bool (normalRec, ())) (Some 10) (AVar (Reg "foo")),
+                       IVar (Reg "y")))
+              *<- normalBoolExpr BFalse ]
 
     [<Test>]
     let ``multi-dimensional arrays are normalised and translated properly`` () =
@@ -539,24 +587,23 @@ module MicrocodeToBool =
                 (AIdx (gridv, siVar "x")))
 
         check testShared testThread
-            (BAnd
-                [ iEq (siAfter "x") (siBefore "x")
-                  iEq (siAfter "y") (siBefore "y")
-                  bEq (sbAfter "test") (sbBefore "test")
-                  BEq
-                    (typedArrayToExpr (grid After),
-                     aupd (grid Before) (siBefore "x")
-                        (aupd (gridx Before) (siBefore "y")
-                            (normalIntExpr <| mkAdd2
-                                (IIdx ((gridx Before), siBefore "y"))
-                                (IInt 1L)))) ] )
-            [ [ normalIntExpr
-                   (IIdx (gridxv, IVar (Reg "y")))
-                *<-
-                normalIntExpr
-                    (mkAdd2
-                        (IIdx (gridxv, siVar "y"))
-                        (IInt 1L)) ] ]
+            [ iEq (siAfter "x") (siBefore "x")
+              iEq (siAfter "y") (siBefore "y")
+              bEq (sbAfter "test") (sbBefore "test")
+              BEq
+                (typedArrayToExpr (grid After),
+                 aupd (grid Before) (siBefore "x")
+                    (aupd (gridx Before) (siBefore "y")
+                        (normalIntExpr <| mkAdd2
+                            (IIdx ((gridx Before), siBefore "y"))
+                            (IInt 1L)))) ]
+            [ normalIntExpr
+                 (IIdx (gridxv, IVar (Reg "y")))
+              *<-
+              normalIntExpr
+                  (mkAdd2
+                      (IIdx (gridxv, siVar "y"))
+                      (IInt 1L)) ]
 
 
 module CommandTests =

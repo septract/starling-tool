@@ -1,23 +1,23 @@
-// test variable 
+// test variable
 shared int test;
 
 // Junk variables
-shared int foo; 
-shared int bar; 
+shared int foo;
+shared int bar;
 
-view isZero(); 
-view isThree(); 
+view isZero();
+view isThree();
 
 method addThree() {
   {| isZero() |}
-  <{ test++; 
-     test++; 
-     test++; }>; 
+  <| test++;
+     test++;
+     test++; |>
   {| isThree() |}
 }
 
-constraint isZero() -> test==0;  
-constraint isThree() -> test==3;  
+constraint isZero() -> test==0;
+constraint isThree() -> test==3;
 
-// No-one else is relying on test staying zero 
-constraint isZero() * isZero() -> false; 
+// No-one else is relying on test staying zero
+constraint isZero() * isZero() -> false;

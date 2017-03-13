@@ -55,6 +55,11 @@ module Types =
           Assign of lvalue : ShadowVar * prim : GrassPrim
         | /// <summary>A pure assumption.</summary>
           PureAssume of assumption : BoolExpr<Sym<GrassVar>>
+        | /// <summary>A branch.</summary>
+          Branch of
+            cond : BoolExpr<Sym<GrassVar>>
+            * trueBranch : GrassCommand list
+            * falseBranch : GrassCommand list
 
     /// <summary>A Grasshopper formula.</summary>
     type Formula =
@@ -84,7 +89,7 @@ module Types =
         | /// <summary>
           ///     The given microcode command cannot be expressed in Grasshopper.
           /// </summary>
-          CommandNotImplemented of cmd : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list
+          CommandNotImplemented of cmd : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>>
                                  * why : string
         | /// <summary>
           ///     The given expression cannot be expressed in Grasshopper.
@@ -127,11 +132,10 @@ module Pretty =
         | CommandNotImplemented (cmd, why) ->
             vsep
                 [ cmdHeaded (errorStr "Encountered a command incompatible with Grasshopper")
-                    (List.map
-                        (printMicrocode
-                            (printCTyped printMarkedVar)
-                            (printSym printMarkedVar))
-                        cmd)
+                    [ printMicrocode
+                         (printCTyped printMarkedVar)
+                         (printSym printMarkedVar)
+                         cmd ]
                   errorInfo (String "Reason:" <+> String why) ]
         | ExpressionNotImplemented (expr, why) ->
             vsep
@@ -293,17 +297,26 @@ module Pretty =
     /// <returns>
     ///     A <see cref="Doc"/> representing <paramref name="cmd"/>.
     /// </returns>
-    let printCommand (cmd : GrassCommand) : Doc =
-        let c =
-            match cmd with
-            | VarDecl var -> String "var" <+> printTypedGrass printShadowVar var
-            | NoAssign prim -> printPrim prim
-            | Assign (lvalue, prim) ->
-                printShadowVar lvalue <+> String ":=" <+> printPrim prim
-            | PureAssume assumption ->
-                String "pure assume"
-                    <+> printBoolExprG (printSymGrass printGrassVar) assumption
-        withSemi c
+    let rec printCommand (cmd : GrassCommand) : Doc =
+        let printBlock c = 
+            braced (ivsep (List.map (printCommand >> Indent) c))
+
+        match cmd with
+        | VarDecl var ->
+            withSemi (String "var" <+> printTypedGrass printShadowVar var)
+        | NoAssign prim ->
+            withSemi (printPrim prim)
+        | Assign (lvalue, prim) ->
+            withSemi (printShadowVar lvalue <+> String ":=" <+> printPrim prim)
+        | PureAssume assumption ->
+            withSemi
+                (String "pure assume"
+                    <+> printBoolExprG (printSymGrass printGrassVar) assumption)
+        | Branch (cond = c; trueBranch = t; falseBranch = f) ->
+            String "if"
+            <+> parened (printBoolExprG (printSymGrass printGrassVar) c)
+            <+> printBlock t
+            <+> (if f.IsEmpty then Nop else (String "else" <+> printBlock f))
 
     /// Print a single Grasshopper query.
     let printGrassTerm (name : string) (term : GrassTerm) : Doc =
@@ -383,14 +396,11 @@ let findTermVars (term : Backends.Z3.Types.ZTerm)
 
     let goalAndWPreVarsR = lift2 Set.union goalVarsL wPreVarsL
 
-    // Remember, traversing a list of lists of microcode!  (Oh the humanity.)
     let cmdVarsT =
         tchainL
-            (tchainL
-                (traverseMicrocode
-                    collectVars
-                    (tliftOverExpr collectSymVars))
-                id)
+            (traverseMicrocode
+                collectVars
+                (tliftOverExpr collectSymVars))
             id
     let cmdVarsR =
         findVars cmdVarsT term.Original.Cmd.Microcode
@@ -407,75 +417,75 @@ let findTermVars (term : Backends.Z3.Types.ZTerm)
 /// <returns>
 ///     A Chessie result, containing a list of Grasshopper commands.
 /// </returns>
-let grassMicrocode (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list list)
+let rec grassMicrocode (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
   : Result<GrassCommand list, Error> =
     let translateAssign (x, y) =
         maybe BTrue (mkEq (mkVarExp (mapCTyped Reg x))) y
 
-    let grassMicrocodeEntry ent =
-        let grassMicrocodeInstruction =
-            function
-            | Branch _ ->
-                fail
-                    (CommandNotImplemented
-                        (cmd = ent,
-                         why = "Cannot encode commands with inner conditionals."))
-            | Symbol cmd ->
-                // These translate directly into Grasshopper primitive commands.
-                ok [ NoAssign cmd ]
-            | Microcode.Assign (x, None) ->
-                // These only affect framing.
-                ok []
-            (* We can only translate pure assignments and fully spatial
-               (symbolic) assignments. *)
-            | Microcode.Assign (x, Some (Int (_, IVar (Sym s))))
-            | Microcode.Assign (x, Some (Bool (_, BVar (Sym s))))
-            | Microcode.Assign (x, Some (Array (_, AVar (Sym s)))) ->
-                (* Fully spatial assignment.
-                   Need to create a shadow variable for the command, and use
-                   it as a temporary for the assignment itself. *)
-                let shadow = { Original = valueOf x }
-                let gshadow = Shadow shadow
+    let grassBool x =
+        mapMessages Traversal
+            (liftWithoutContext
+                (Starling >> ok)
+                (tliftOverSym >> tliftOverCTyped >> tliftToExprDest >> tliftToBoolSrc)
+                (normalBool x))
+ 
+    let grassMicrocodeInstruction ent =
+        match ent with
+        | Microcode.Branch (c, t, f) ->
+            lift3 (fun c' t' f' -> [ Branch (c', t', f') ])
+                (grassBool c)
+                (grassMicrocode t)
+                (grassMicrocode f)
+        | Symbol cmd ->
+            // These translate directly into Grasshopper primitive commands.
+            ok [ NoAssign cmd ]
+        | Microcode.Assign (x, None) ->
+            // These only affect framing.
+            ok []
+        (* We can only translate pure assignments and fully spatial
+           (symbolic) assignments. *)
+        | Microcode.Assign (x, Some (Int (_, IVar (Sym s))))
+        | Microcode.Assign (x, Some (Bool (_, BVar (Sym s))))
+        | Microcode.Assign (x, Some (Array (_, AVar (Sym s)))) ->
+            (* Fully spatial assignment.
+               Need to create a shadow variable for the command, and use
+               it as a temporary for the assignment itself. *)
+            let shadow = { Original = valueOf x }
+            let gshadow = Shadow shadow
 
-                let shadowBind =
+            let shadowBind =
+                mkEq
+                    (mkVarExp (mapCTyped (Starling >> Reg) x))
+                    (mkVarExp (withType (typeOf x) (Reg gshadow)))
+
+            ok
+                [ VarDecl (withType (typeOf x) shadow)
+                  Assign (shadow, s)
+                  PureAssume shadowBind ]
+        | Microcode.Assign (x, Some (NoSymE y)) ->
+            // Fully pure assignment, turn into pure assume.
+            let grassifyR =
+                liftWithoutContext
+                    (Starling >> Reg >> ok)
+                    (tliftOverCTyped >> tliftOverExpr)
+                    y
+            let cont grassify =
+                let bind =
                     mkEq
                         (mkVarExp (mapCTyped (Starling >> Reg) x))
-                        (mkVarExp (withType (typeOf x) (Reg gshadow)))
+                        grassify
+                [ PureAssume bind ]
+            lift cont (mapMessages Traversal grassifyR)
+        | Microcode.Assign _ ->
+            fail
+                (CommandNotImplemented
+                    (cmd = ent,
+                     why = "Assignments cannot mix symbols and pure expressions."))
+        | Assume x ->
+            // Pure assumption.
+            lift (fun x -> [ PureAssume x ]) (grassBool x)
 
-                ok
-                    [ VarDecl (withType (typeOf x) shadow)
-                      Assign (shadow, s)
-                      PureAssume shadowBind ]
-            | Microcode.Assign (x, Some (NoSymE y)) ->
-                // Fully pure assignment, turn into pure assume.
-                let grassifyR =
-                    liftWithoutContext
-                        (Starling >> Reg >> ok)
-                        (tliftOverCTyped >> tliftOverExpr)
-                        y
-                let cont grassify =
-                    let bind =
-                        mkEq
-                            (mkVarExp (mapCTyped (Starling >> Reg) x))
-                            grassify
-                    [ PureAssume bind ]
-                lift cont (mapMessages Traversal grassifyR)
-            | Microcode.Assign _ ->
-                fail
-                    (CommandNotImplemented
-                        (cmd = ent,
-                         why = "Assignments cannot mix symbols and pure expressions."))
-            | Assume x ->
-                // Pure assumption.
-                let grassifyR =
-                    liftWithoutContext
-                        (Starling >> ok)
-                        (tliftOverSym >> tliftOverCTyped >> tliftToExprDest >> tliftToBoolSrc)
-                        (normalBool x)
-                lift (fun x -> [ PureAssume x ]) (mapMessages Traversal grassifyR)
-
-        lift List.concat (collect (List.map grassMicrocodeInstruction ent))
-    lift List.concat (collect (List.map grassMicrocodeEntry routine))
+    lift List.concat (collect (List.map grassMicrocodeInstruction routine))
 
 /// <summary>
 ///     Generates pure assumptions for the Starling variable frame associated

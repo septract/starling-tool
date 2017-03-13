@@ -173,21 +173,21 @@ module ExpressionTests =
 module AtomicActionTests =
     [<Test>]
     let ``foo++``() =
-        check parseAtomic "foo++"
+        check parseAtomic "foo++;"
             (node "" 1L 1L <| Postfix
                 (node "" 1L 1L (Identifier "foo"),
                 Increment))
 
     [<Test>]
     let ``foo--`` =
-        check parseAtomic "foo--"
+        check parseAtomic "foo--;"
             (node "" 1L 1L <| Postfix
                 (node "" 1L 1L (Identifier "foo"),
                  Decrement))
 
     [<Test>]
     let ``foo = bar`` =
-        check parseAtomic "foo = bar"
+        check parseAtomic "foo = bar;"
             (node "" 1L 1L <| Fetch
                 (node "" 1L 1L (Identifier "foo"),
                  node "" 1L 7L (Identifier "bar"),
@@ -195,7 +195,7 @@ module AtomicActionTests =
 
     [<Test>]
     let ``foo = bar++`` =
-        check parseAtomic "foo = bar++"
+        check parseAtomic "foo = bar++;"
             (node "" 1L 1L <| Fetch
                 (node "" 1L 1L (Identifier "foo"),
                  node "" 1L 7L (Identifier "bar"),
@@ -203,7 +203,7 @@ module AtomicActionTests =
 
     [<Test>]
     let ``foo = bar--`` =
-        check parseAtomic "foo = bar--"
+        check parseAtomic "foo = bar--;"
             (node "" 1L 1L <| Fetch
                 (node "" 1L 1L (Identifier "foo"),
                  node "" 1L 7L (Identifier "bar"),
@@ -211,7 +211,7 @@ module AtomicActionTests =
 
     [<Test>]
     let ``Compare and swap``() =
-        check parseAtomic "CAS(foo, bar, 2)"
+        check parseAtomic "CAS(foo, bar, 2);"
             (node "" 1L 1L <| CompareAndSwap
                 (node "" 1L 5L (Identifier "foo"),
                  node "" 1L 10L (Identifier "bar"),
@@ -219,11 +219,11 @@ module AtomicActionTests =
 
     [<Test>]
     let ``parse havoc``() =
-        check parseAtomic "havoc y" (node "" 1L 1L <| Havoc "y")
+        check parseAtomic "havoc y;" (node "" 1L 1L <| Havoc "y")
 
     [<Test>]
     let ``parse symbolic atomic``() =
-        check parseAtomic "%{foo([|x|])}"
+        check parseAtomic "%{foo([|x|])};"
             (node "" 1L 1L <| SymAtomic
                [ SymString "foo("
                  SymArg ( node "" 1L 9L (Identifier "x") )
@@ -232,26 +232,15 @@ module AtomicActionTests =
 
 module AtomicSetTests =
     [<Test>]
-    let ``<foo++>``() =
-        check parseAtomicSet "<foo++>"
-            [ node "" 1L 2L <| Postfix
-                (node "" 1L 2L (Identifier "foo"),
-                 Increment) ]
-
-    [<Test>]
-    let ``Multiple outside block invalid``() =
-        checkFail parseAtomicSet "<foo++; bar-->"
-
-    [<Test>]
     let ``Single atomic block``() =
-        check parseAtomicSet "<{ foo++; }>"
+        check parseAtomicSet "<| foo++; |>"
             [ node "" 1L 4L <| Postfix
                 (node "" 1L 4L (Identifier "foo"),
                  Increment) ]
 
     [<Test>]
     let ``Multiple in block valid``() =
-        check parseAtomicSet "<{ foo++; bar--; }>"
+        check parseAtomicSet "<| foo++; bar--; |>"
             [ node "" 1L 4L <| Postfix
                 (node "" 1L 4L (Identifier "foo"),
                  Increment)

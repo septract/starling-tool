@@ -58,22 +58,35 @@ let parseIdentifier =
 
 // Bracket parsers.
 
-/// Parser for items in a pair of matching brackets.
-/// Automatically parses any whitespace after `bra`, and before `ket`.
+/// <summary>
+///     Parser for items in a pair of matching brackets.
+///     Automatically parses any whitespace after `bra`, and before `ket`.
+/// </summary>
 let inBrackets bra ket = between (pstring bra .>> ws) (ws >>. pstring ket)
-/// Parser for items in (parentheses).
+/// <summary>
+///     Parser for items in <c>(parentheses)</c>.
+/// </summary>
 let inParens p = inBrackets "(" ")" p
-/// Parser for items in [brackets].
+/// <summary>
+///     Parser for items in <c>[brackets]</c>.
+/// </summary>
 let inSquareBrackets p = inBrackets "[" "]" p
-/// Parser for items in {braces}.
+/// <summary>
+///     Parser for items in <c>{braces}</c>.
+/// </summary>
 let inBraces p = inBrackets "{" "}" p
-/// Parser for items in {|view braces|}.
+/// <summary>
+///     Parser for items in <c>{|view braces|}</c>.
+/// </summary>
 let inViewBraces p = inBrackets "{|" "|}" p
-/// Parser for items in {|interpolate braces|}.
+/// <summary>
+///     Parser for items in <c>[|interpolate braces|]</c>.
+/// </summary>
 let inInterpBraces p = inBrackets "[|" "|]" p
-/// Parser for items in <angle brackets>.
-let inAngles p = inBrackets "<" ">" p
-
+/// <summary>
+///     Parser for items in <c><|atomic braces|></c>.
+/// </summary>
+let inAtomicBraces p = inBrackets "<|" "|>" p
 
 (*
  * Forwards.
@@ -89,6 +102,10 @@ let parseView, parseViewRef =
 /// Parser for view definitions.
 let parseViewSignature, parseViewSignatureRef =
     createParserForwardedToRef<ViewSignature, unit> ()
+
+/// Parser for atomic sets.
+let parseAtomic, parseAtomicRef =
+    createParserForwardedToRef<Atomic, unit> ()
 
 /// Parser for commands.
 let parseCommand, parseCommandRef =
@@ -193,10 +210,9 @@ let parseBinaryExpressionLevel nextLevel expList =
         // TODO(CaptainHayashi): can this be solved without backtracking?
         nodify (pstring ops)
         .>>? ws
-        (* A binary operator cannot ever be followed by a semicolon, + or -.
-           This check removes ambiguity between > and <atomic braces>;,
-           + and ++, and - and --. *)
-        .>>? notFollowedBy (anyOf ";+-")
+        (* A binary operator cannot ever be followed by + or -.
+           This check removes ambiguity between + and ++, and - and --. *)
+        .>>? notFollowedBy (anyOf "+-")
         |>> fun x -> fun a b -> { Node = BopExpr(op, a, b); Position = x.Position }
     chainl1 (nextLevel .>> ws)
             (choice
@@ -316,26 +332,29 @@ let parseAssign =
 let parseHavoc =
     skipString "havoc" >>. ws >>. parseIdentifier
 
+/// Parser for if (expr) block else block.
+let parseIfLike pLeg ctor =
+    pipe3ws (pstring "if" >>. ws >>. inParens parseExpression)
+            (inBraces pLeg)
+            (opt (pstring "else" >>. ws >>. inBraces pLeg))
+            ctor
+
 /// Parser for atomic actions.
-let parseAtomic =
+do parseAtomicRef :=
     choice [ (stringReturn "id" Id)
-             // This needs to fire before parseFetchOrPostfix due to
+             // These two need to fire before parseFetchOrPostfix due to
              // ambiguity.
-             parseSymbolic |>> SymAtomic
-             parseHavoc |>> Havoc
-             parseAssume
-             parseCAS
-             parseFetchOrPostfix ]
+             parseIfLike (many1 (parseAtomic .>> ws)) (curry3 ACond)
+             parseSymbolic .>> wsSemi |>> SymAtomic
+             parseHavoc .>> wsSemi |>> Havoc
+             parseAssume .>> wsSemi 
+             parseCAS .>> wsSemi
+             parseFetchOrPostfix .>> wsSemi ]
     |> nodify
 
 /// Parser for a collection of atomic actions.
 let parseAtomicSet =
-    inAngles (
-        // Either one atomic...
-        (parseAtomic |>> List.singleton)
-        <|>
-        // ...or an atomic{} block.
-        (inBraces (many (parseAtomic .>> wsSemi .>> ws))))
+    inAtomicBraces (many1 (parseAtomic .>> ws))
 
 /// Parses a Func given the argument parser argp.
 let parseFunc argp =
@@ -386,13 +405,13 @@ let parseParam : Parser<Param, unit> =
     pipe2ws parseType parseIdentifier buildParam
     // ^ <type> <identifier>
 
-
 (*
  * Views.
  *)
 
 /// Parses a conditional view.
 let parseIfView =
+    // TODO: use parseIflike.
     pipe3ws (pstring "if" >>. ws >>. parseExpression)
             // ^- if <view-exprn> ...
             (pstring "then" >>. ws >>. parseView)
@@ -523,12 +542,11 @@ let parseDoWhile =
                  .>>. (ws >>. parseWhileLeg .>> wsSemi)
                  |>> DoWhile
 
+/// Parser for lists of semicolon-terminated commands.
+let parseCommands = many (parseCommand .>> ws)
+
 /// Parser for if (expr) block else block.
-let parseIf =
-    pipe3ws (pstring "if" >>. ws >>. inParens parseExpression)
-            parseBlock
-            (opt (pstring "else" >>. ws >>. parseBlock))
-            (curry3 If)
+let parseIf = parseIfLike parseCommands (curry3 If)
 
 /// Parser for prim compositions.
 let parsePrimSet =
@@ -540,7 +558,7 @@ let parsePrimSet =
        2 is easier to spot, so we try it first. *)
     let parseAtomicFirstPrimSet =
         pipe2
-          (parseAtomicSet .>> wsSemi .>> ws)
+          (parseAtomicSet .>> ws)
           (many (attempt (parseAssign .>> wsSemi .>> ws)))
           (fun atom rassigns ->
               Prim { PreAssigns = []; Atomics = atom; PostAssigns = rassigns } )
@@ -549,7 +567,7 @@ let parsePrimSet =
         pipe2
             (many1 (parseAssign .>> wsSemi .>> ws))
             (opt
-                (parseAtomicSet .>> wsSemi .>> ws
+                (parseAtomicSet .>> ws
                  .>>. many (parseAssign .>> wsSemi .>> ws)))
             (fun lassigns tail ->
                let (atom, rassigns) = withDefault ([], []) tail
@@ -590,9 +608,6 @@ do parseCommandRef :=
 (*
  * Blocks.
  *)
-
-/// Parser for lists of semicolon-terminated commands.
-let parseCommands = many (parseCommand .>> ws)
 
 do parseBlockRef := inBraces parseCommands
 

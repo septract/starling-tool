@@ -34,9 +34,9 @@ module Types =
         /// <summary>A diverging assertion.</summary>
         | Assume of assumption : BoolExpr<'RV>
         /// <summary>A conditional.</summary>
-        | Branch of conditional : BoolExpr<'RV>
-                  * ifTrue : Microcode<'L, 'RV> list
-                  * ifFalse : Microcode<'L, 'RV> list
+        | Branch of cond : BoolExpr<'RV>
+                  * trueBranch : Microcode<'L, 'RV> list
+                  * falseBranch : Microcode<'L, 'RV> list
         override this.ToString() = sprintf "%A" this
 
     /// <summary>
@@ -107,6 +107,11 @@ module Types =
         | Stored of StoredCommand
         /// <summary>An entirely symbolic command.</summary>
         | SymC of Symbolic<Expr<Sym<Var>>>
+        /// <summary>A branching command.</summary>
+        | PrimBranch of
+            cond : BoolExpr<Sym<Var>>
+            * trueBranch : PrimCommand list
+            * falseBranch : (PrimCommand list) option
         override this.ToString() = sprintf "%A" this
 
     /// <summary>
@@ -126,7 +131,7 @@ module Types =
         { /// <summary>The original command.</summary>
           Cmd : Command
           /// <summary>The command's microcode instantiation.</summary>
-          Microcode : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list list
+          Microcode : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list
           /// <summary>
           ///     The assignment map for the command.
           ///     This maps the post-state of each variable reachable by the
@@ -186,12 +191,14 @@ module Queries =
     ///     <c>true</c> if the command is a no-op;
     ///     <c>false</c> otherwise.
     /// </returns>
-    let isNop (prim : PrimCommand) : bool =
+    let rec isNop (prim : PrimCommand) : bool =
         match prim with
         // No Intrinsic commands are no-ops at the moment.
         | Intrinsic _ -> false
         | Stored { Results = ps } -> List.isEmpty ps
         | SymC _ -> false
+        | PrimBranch (trueBranch = t; falseBranch = f) ->
+            List.forall isNop t && maybe true (List.forall isNop) f
     
     /// <summary>
     ///     Active pattern matching no-operation commands.
@@ -237,14 +244,17 @@ module Queries =
 
     /// Combines the results of each command into a list of all results
     let commandResults cs =
-        // TODO(CaptainHayashi): are sym working variables really results?
-        let primResults prim =
+        let rec primResults prim =
             match prim with
             | Intrinsic (IAssign r) -> [ Expr.Int (r.TypeRec, r.LValue) ]
             | Intrinsic (BAssign r) -> [ Expr.Bool (r.TypeRec, r.LValue) ]
             | Intrinsic (Havoc v) -> [ mkVarExp (mapCTyped Reg v) ]
             | Stored { Results = rs } -> rs
             | SymC _ -> []
+            // TODO(MattWindsor91): is this correct?
+            | PrimBranch (trueBranch = t; falseBranch = f) ->
+                concatMap primResults t
+                @ maybe [] (concatMap primResults) f
 
         List.fold (fun a c -> a @ primResults c) [] cs
 
@@ -272,7 +282,7 @@ module Queries =
             | SymArg a -> Some a
             | _ -> None
 
-        let f prim =
+        let rec f prim =
             match prim with
             // TODO(CaptainHayashi): is this sensible!?
             | Stored { Args = xs } -> List.map symExprVars xs
@@ -280,6 +290,10 @@ module Queries =
             | Intrinsic (IAssign { RValue = y } ) -> [ symExprVars (indefIntExpr y) ]
             | Intrinsic (BAssign { RValue = y } ) -> [ symExprVars (indefBoolExpr y) ]
             | Intrinsic (Havoc _) -> []
+            // TODO(CaptainHayashi): is this sensible!?
+            | PrimBranch (trueBranch = t; falseBranch = fb) ->
+                concatMap f t @ maybe [] (concatMap f) fb
+
         let vars = collect (concatMap f cmd)
         lift Set.unionMany vars
 
@@ -454,11 +468,19 @@ module Pretty =
         <-> String "}"
 
     /// Pretty-prints a PrimCommand.
-    let printPrimCommand (prim : PrimCommand) : Doc =
+    let rec printPrimCommand (prim : PrimCommand) : Doc =
         match prim with
         | Intrinsic s -> printIntrinsicCommand s
         | Stored s -> printStoredCommand s
         | SymC s -> printSymCommand s
+        | PrimBranch (cond = c; trueBranch = t; falseBranch = f) ->
+            vsep
+                [ String "if" <+> printBoolExpr (printSym printVar) c
+                  headed "then" (List.map printPrimCommand t)
+                  maybe
+                    Nop
+                    (fun x -> headed "else" (List.map printPrimCommand x))
+                    f ]
 
     /// Pretty-prints a Command.
     let printCommand : Command -> Doc = List.map printPrimCommand >> semiSep

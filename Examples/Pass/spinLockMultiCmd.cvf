@@ -14,7 +14,7 @@ method lock() {
     do {
       {| emp |}
         test = false;
-        <CAS(lock, test, true)>;
+        <| CAS(lock, test, true); |>
       {| if test == false then holdLock() else emp |}
     } while (test == true);
   {| holdLock() |}
@@ -25,7 +25,7 @@ method lock() {
  */
 method unlock() {
   {| holdLock() |}
-  <lock = false>;
+    <| lock = false; |>
   {| emp |}
 }
 

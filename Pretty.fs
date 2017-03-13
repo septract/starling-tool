@@ -57,6 +57,7 @@ let warning d = Styled([Yellow], d)
 let success d = Styled([Green], d)
 let inconclusive d = Styled([Blue], d)
 
+let syntaxStr s = syntax (String s)
 let errorStr s = error (String s)
 let errorContextStr s = errorContext (String s)
 let errorInfoStr s = errorInfo (String s)

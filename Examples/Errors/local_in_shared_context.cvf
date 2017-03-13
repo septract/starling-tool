@@ -12,11 +12,11 @@ thread int s;  // The thread's current view of serving.
  */
 method lock() {
   {| emp |}
-    <t = s++>; // <-- Thread-local in shared context
+    <| t = s++; |> // <-- Thread-local in shared context
   {| holdTick(t) |}
     do {
       {| holdTick(t) |}
-        <s = serving>;
+        <| s = serving; |>
       {| if s == t then holdLock() else holdTick(t) |}
     } while (s != t);
   {| holdLock() |}
@@ -27,7 +27,7 @@ method lock() {
  */
 method unlock() {
   {| holdLock() |}
-    <serving++>;
+    <| serving++; |>
   {| emp |}
 }
 

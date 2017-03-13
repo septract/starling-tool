@@ -19,41 +19,41 @@ thread Int c, pval;
 
 method init() {
   {| emp |}
-    <{ ret = %{new ArcNode};
-       %{[|ret|].count := 1}; }>;
+    <| ret = %{ new ArcNode };
+       %{ [|ret|].count := 1 }; |>
   {| arc(ret) |}
 }
 
 method clone(ArcNode x) {
   {| arc(x) |}
-    <%{[|x|].count := [|x|].count + 1}>;
+    <| %{ [|x|].count := [|x|].count + 1 }; |>
   {| arc(x) * arc(x) |}
 }
 
 method print(ArcNode x) {
   {| arc(x) |}
-    <pval = %{ [|x|].val }>;
+    <| pval = %{ [|x|].val }; |>
   {| arc(x) |}
 }
 
 method drop(ArcNode x) {
   {| arc(x) |}
-    <{ c = %{ [|x|].count };
-       %{ [|x|].count := [|x|].count - 1 }; }>;
+    <| c = %{ [|x|].count };
+       %{ [|x|].count := [|x|].count - 1 }; |>
   {| countCopy(x, c) |}
     if (c == 1) {
       {| countCopy(x, 1) |}
-         < %{ free([|x|]) } >;
+         <| %{ free([|x|]) }; |>
       {| emp |}
     }
   {| emp |}
 }
 
 constraint iter[n] arc(x) ->
-    n > 0 => %{ [|x|] in ArcFoot && [|n|] <= [|x|].count};
+    n > 0 => %{ [|x|] in ArcFoot && [|n|] <= [|x|].count };
 
 constraint countCopy(x, c) ->
-    c == 1 => %{ [|x|] in ArcFoot && [|x|].count == 0};
+    c == 1 => %{ [|x|] in ArcFoot && [|x|].count == 0 };
 
 constraint countCopy(x, m) * countCopy(y, n) ->
     x == y => ((m != 1) || (n != 1));

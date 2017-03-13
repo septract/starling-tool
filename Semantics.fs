@@ -57,23 +57,6 @@ module Types =
         /// </summary>
         | Traversal of TraversalError<Error>
 
-    /// <summary>
-    ///     A write record for an variable.
-    ///
-    ///     <para>
-    ///         Write records are used to build frames, by calculating which bits
-    ///         of an variable have been modified by a command.
-    /// </summary>
-    type Write =
-        /// <summary>The entire lvalue has been written to or havoc'd.</summary>
-        | Entire of newVal : Expr<Sym<Var>> option
-        /// <summary>
-        ///     Only certain parts of the lvalue have been written to,
-        ///     and their recursive write records are enclosed.
-        /// </summary>
-        | Indices of Map<IntExpr<Sym<Var>>, Write>
-        override this.ToString () = sprintf "%A" this
-
 
 /// <summary>
 ///     Pretty printers used in the Semantics stage.
@@ -116,69 +99,17 @@ module Pretty =
             Starling.Core.Traversal.Pretty.printTraversalError printSemanticsError err
 
 /// <summary>
-///     Records a write into a write map.
+///     Generates a well-typed expression for a subscript of a given array.
 /// </summary>
-/// <param name="var">The variable being written to.</param>
-/// <param name="idxPath">
-///     The path of indexes from the variable being written to to the variable.
-///     For example, [3; x; 1+i] would represent a write to A[3][x][1+i].
-/// </param>
-/// <param name="value">The value written to the eventual destination.</param>
-/// <param name="map">The write map being extended.</param>
-/// <returns>The extended write map.</returns>
-let markWrite (var : TypedVar) (idxPath : IntExpr<Sym<Var>> list)
-  (value : Expr<Sym<Var>> option)
-  (map : Map<TypedVar, Write>)
-  : Map<TypedVar, Write> =
-    (* First, consider what it means to add an index write to an index write
-       map. *)
-    let rec markWriteIdx
-      (idx : IntExpr<Sym<Var>>)
-      (idxPathRest : IntExpr<Sym<Var>> list)
-      (imap : Map<IntExpr<Sym<Var>>, Write>) =
-        // Find out if we've already written to this index.
-        let idxRec = imap.TryFind idx
-        let imapLessIdx =
-            maybe imap (fun _ -> imap.Remove idx) (imap.TryFind idx)
-
-        let idxRec' =
-            match idxPathRest with
-            | [] ->
-                (* If there is no subscript, then we must be writing to this
-                   entire index, so mark it as Entire... if it isn't already
-                   written to. *)
-                match idxRec with
-                | Some _ -> failwith "markWriteIdx: tried to write twice with empty path"
-                | None -> Entire value
-            | x::xs ->
-                match idxRec with
-                | Some (Entire _) -> failwith "markWriteIdx: tried to write twice with nonempty path"
-                | Some (Indices imap) -> markWriteIdx x xs imap
-                | None -> markWriteIdx x xs Map.empty
-
-        Indices (Map.add idx idxRec' imapLessIdx)
-
-
-    // Now we can define the top-level.
-
-    let varRec = map.TryFind var
-    let mapLessVar = maybe map (fun _ -> map.Remove var) (map.TryFind var)
-
-    let varRec' =
-        match idxPath with
-        | [] ->
-            (* If there is no subscript, then we must be writing to this entire
-               variable, so mark it as Entire... if it isn't already written to. *)
-            match varRec with
-            | Some _ -> failwith "markWrite: tried to write twice with empty path"
-            | None -> Entire value
-        | (x::xs) ->
-            match varRec with
-            | Some (Entire _) -> failwith "markWrite: tried to write twice with nonempty path"
-            | Some (Indices imap) -> markWriteIdx x xs imap
-            | None -> markWriteIdx x xs Map.empty
-
-    Map.add var varRec' mapLessVar
+/// <param name="array">The fully typed array to subscript.</param>
+/// <param name="idx">The index to subscript by.</param>
+/// <returns>A well-typed <see cref="Expr"/> capturing the subscript.</returns>
+let mkIdx (arr : TypedArrayExpr<Sym<Var>>) (idx : IntExpr<Sym<Var>>)
+  : Expr<Sym<Var>> =
+    match arr.SRec.ElementType with
+    | Type.Int (ty, ()) -> Expr.Int (ty, IIdx (arr, idx))
+    | Type.Bool (ty, ()) -> Expr.Bool (ty, BIdx (arr, idx))
+    | Type.Array (ty, ()) -> Expr.Array (ty, AIdx (arr, idx))
 
 /// <summary>
 ///     Tries to extract the variable and index path from a lvalue.
@@ -211,113 +142,7 @@ let varAndIdxPath (expr : Expr<Sym<Var>>)
     match expr with
     | Int (ty, ix) -> getInInt (mkTypedSub ty ix) []
     | Bool (ty, bx) -> getInBool (mkTypedSub ty bx) []
-    | Array (ty, ax) -> getInArray (mkTypedSub ty ax) []
-
-/// <summary>
-///     Generates a write record map for a given assignment list.
-/// </summary>
-/// <param name="assigns">The assignment list to investigate.</param>
-/// <returns>The write map for that microcode list.</returns>
-let makeWriteMap (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>> option) list)
-  : Map<TypedVar, Write> =
-    let addToWriteMap map (lv, rv) =
-        // TODO(CaptainHayashi): complain if lv isn't a lvalue?
-        maybe map (fun (var, idx) -> markWrite var idx rv map) (varAndIdxPath lv)
-    List.fold addToWriteMap Map.empty assigns
-
-/// <summary>
-///     Partitions a list of microcode instructions.
-/// </summary>
-/// <param name="instrs">The instructions to partition.</param>
-/// <typeparam name="L">The type of lvalues.</typeparam>
-/// <typeparam name="RV">The type of rvalue variables.</typeparam>
-/// <returns>
-///     A triple containing a list of symbolics, a list of assignments, a list
-///     of assumptions, and a list of (unpartitioned) microcode branches.
-/// </returns>
-let partitionMicrocode (instrs : Microcode<'L, 'RV> list)
-  : (Symbolic<Expr<'RV>> list
-     * ('L * Expr<'RV> option) list
-     * BoolExpr<'RV> list
-     * (BoolExpr<'RV>
-        * Microcode<'L, 'RV> list
-        * Microcode<'L, 'RV> list) list) =
-    let partitionStep (symbols, assigns, assumes, branches) instr =
-        match instr with
-        | Symbol s -> (s::symbols, assigns, assumes, branches)
-        | Assign (l, r) -> (symbols, (l, r)::assigns, assumes, branches)
-        | Assume s -> (symbols, assigns, s::assumes, branches)
-        | Branch (i, t, e) -> (symbols, assigns, assumes, (i, t, e)::branches)
-    List.fold partitionStep ([], [], [], []) instrs
-
-/// <summary>
-///     Generates a well-typed expression for a subscript of a given array.
-/// </summary>
-/// <param name="array">The fully typed array to subscript.</param>
-/// <param name="idx">The index to subscript by.</param>
-/// <returns>A well-typed <see cref="Expr"/> capturing the subscript.</returns>
-let mkIdx (arr : TypedArrayExpr<Sym<Var>>) (idx : IntExpr<Sym<Var>>)
-  : Expr<Sym<Var>> =
-    match arr.SRec.ElementType with
-    | Type.Int (ty, ()) -> Expr.Int (ty, IIdx (arr, idx))
-    | Type.Bool (ty, ()) -> Expr.Bool (ty, BIdx (arr, idx))
-    | Type.Array (ty, ()) -> Expr.Array (ty, AIdx (arr, idx))
-
-/// <summary>
-///     Normalises a list of assignments such that they represent
-///     entire-variable assignments.
-///     <para>
-///         This converts array-subscript assignments into assignments of
-///         arrays to array updates.
-///         This allows the framing logic to frame on a per-variable basis
-///         in the presence of arrays.
-///     </para>
-/// </summary>
-/// <param name="assigns">The assignments to normalise.</param>
-/// <returns>
-///     The assignments in entire-variable form, in arbitrary order.
-/// </returns>
-let normaliseAssigns (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>> option) list)
-  : Result<(TypedVar * Expr<Sym<Var>> option) list, Error> =
-    // First, we convert the assigns to a write map.
-    let wmap = makeWriteMap assigns
-    (* Then, each item in the write map represents an assignment.
-       We need to convert each write map entry into an array update or a
-       direct value. *)
-    let rec translateRhs lhs (value : Write) =
-        match value with
-        | Entire v -> ok v
-        | Indices ixmap ->
-            // TODO(CaptainHayashi): proper errors.
-            let addUpdate
-              (index : IntExpr<Sym<Var>>, value : Write) (lhs' : Expr<Sym<Var>> option)
-              : Result<Expr<Sym<Var>> option, Error> =
-                (* TODO(CaptainHayashi): currently, if an array update havocs,
-                   any future updates also havoc.  This perhaps throws too much
-                   information away! *)
-                match lhs' with
-                | None -> ok None
-                | Some (Array (atype, alhs)) ->
-                    (* Need to translate any further subscripts inside value.
-                       But, to do that, we need to know what the LHS of those
-                       subscripts is! *)
-                    let talhs = mkTypedSub atype alhs
-                    let vlhs = mkIdx talhs index
-                    let vrhsResult = translateRhs vlhs value
-                    lift
-                        (Option.map
-                            (fun vrhs ->
-                                 Expr.Array (atype, AUpd (alhs, index, vrhs))))
-                        vrhsResult
-                | _ -> fail (BadSemantics "tried to index into a non-array")
-            seqBind addUpdate (Some lhs) (Map.toSeq ixmap)
-
-    let translateAssign (lhs : TypedVar, rhs) =
-        // lhs is a typed variable here, but must be an expression for the above
-        let lhsE = mkVarExp (mapCTyped Reg lhs)
-        lift (mkPair lhs) (translateRhs lhsE rhs)
-
-    collect (Seq.map translateAssign (Map.toSeq wmap))
+    | Array (ty, ax) -> getInArray (mkTypedSub ty ax) [] 
 
 /// <summary>
 ///     Normalises a microcode listing.
@@ -327,25 +152,63 @@ let normaliseAssigns (assigns : (Expr<Sym<Var>> * Expr<Sym<Var>> option) list)
 let rec normaliseMicrocode
   (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
   : Result<Microcode<TypedVar, Sym<Var>> list, Error> =
-    let symbols, assigns, assumes, branches = partitionMicrocode instrs
+    (* The only thing normalisation affects is assignments, and it
+       distributes over branches.  We first look at how to normalise
+       assignments. *)
+    
+    let normaliseAssign l rO =
+        (* Currently, only variables and array indices can be normalised,
+           and both are converted to an underlying variable and index
+           path. *)
+        match varAndIdxPath l with
+        | Some (lv, idx) ->
+            let rec normaliseRhs remainingPath currentLhs currentRhs =
+                (* Recursively expand every part of the index path so that
+                   an index x...[a] on the LHS turns into an update
+                   (x.. { a -> }). *)
+                match remainingPath with
+                | [] -> ok currentRhs
+                | x::xs ->
+                    // If we have an index path, this must be an array.
+                    match currentLhs with
+                    | Array (atype, alhs) ->
+                        // In the above, this is x...[a].
+                        let nextLhs = mkIdx (mkTypedSub atype alhs) x
+                        (* TODO(MattWindsor91): this could do with being flipped
+                        so it can be tail-recursive. *)
+                        let recuR = normaliseRhs xs nextLhs currentRhs
+                        lift
+                            (fun recu ->
+                                Expr.Array (atype, AUpd (alhs, x, recu)))
+                            recuR
+                    | _ ->
+                        fail
+                            (BadSemantics
+                                "normaliseAssign: index path without array")
 
-    let normaliseBranch (i, t, e) =
-        let t'Result = normaliseMicrocode t
-        let e'Result = normaliseMicrocode e
-        lift2 (fun t' e' -> (i, t', e')) t'Result e'Result
+            let firstLhs = mkVarExp (mapCTyped Reg lv)
 
-    let branches'Result = collect (Seq.map normaliseBranch branches)
-    let assigns'Result = normaliseAssigns assigns
+            let normalisedRhsR =
+                // Havocs propagate up to the underlying variable.
+                maybe (ok None) (normaliseRhs idx firstLhs >> lift Some) rO
+            lift (fun r' -> Assign (lv, r')) normalisedRhsR
 
-    lift2
-        (fun branches' assigns' ->
-            List.concat
-                [ List.map Symbol symbols
-                  List.map Assign assigns'
-                  List.map Assume assumes
-                  List.map Branch branches' ])
-        branches'Result
-        assigns'Result
+
+        | None ->
+            fail (BadSemantics "assignment target is not a valid lvalue")
+
+    let normaliseInstr instr =
+        match instr with
+        | Assume x -> ok (Assume x)
+        | Symbol x -> ok (Symbol x)
+        | Branch (c, t, f) ->
+            lift2 (fun t' f' -> Branch (c, t', f'))
+                (normaliseMicrocode t)
+                (normaliseMicrocode f)
+        | Assign (l, rO) -> normaliseAssign l rO
+
+    collect (List.map normaliseInstr instrs)
+
 
 let primParamSubFun
   (cmd : StoredCommand)
@@ -467,46 +330,22 @@ let rec markMicrocode
     traverseMicrocode lt rt
 
 /// <summary>
-///     Updates a map from variables to their last marker with the assignments
-///     in a microcode listing.
-/// </summary>
-let rec updateState
-  (state : Map<TypedVar, MarkedVar>)
-  (listing : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
-  : Map<TypedVar, MarkedVar> =
-    let updateOne (s : Map<TypedVar, MarkedVar>) m =
-        // TODO(CaptainHayashi): de-duplicate this
-        match m with
-        | Symbol _ | Assume _ -> s
-        | Assign (lv, rv) ->
-            // Assumption: this is monotone, eg. rv >= s.[lv]
-            // TODO(CaptainHayashi): check this?
-            match (valueOf lv) with
-            | Before l | After l | Intermediate (_, l) | Goal (_, l) ->
-                s.Add(withType (typeOf lv) l, valueOf lv)
-        | Branch (i, t, e) ->
-            updateState (updateState s t) e
-    List.fold updateOne state listing
-
-/// <summary>
-///     Converts a microcode instruction set into a two-state Boolean predicate.
+///     Converts a microcode instruction into a two-state Boolean predicate.
 /// </summary>
 let rec markedMicrocodeToBool
-  (instrs : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
+  (instr : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>>)
   : BoolExpr<Sym<MarkedVar>> =
-    let translateInstr instr =
-        match instr with
-        | Symbol s -> BVar (Sym s)
-        // Havoc
-        | Assign (x, None) -> BTrue
-        // Deterministic assignment
-        | Assign (x, Some y) -> mkEq (mkVarExp (mapCTyped Reg x)) y
-        | Assume x -> x
-        | Branch (i, t, e) ->
-            let tX = markedMicrocodeToBool t
-            let eX = markedMicrocodeToBool e
-            mkAnd2 (mkImplies i tX) (mkImplies (mkNot i) eX)
-    mkAnd (List.map translateInstr instrs)
+    match instr with
+    | Symbol s -> BVar (Sym s)
+    // Havoc
+    | Assign (x, None) -> BTrue
+    // Deterministic assignment
+    | Assign (x, Some y) -> mkEq (mkVarExp (mapCTyped Reg x)) y
+    | Assume x -> x
+    | Branch (i, t, e) ->
+        let tX = mkAnd (List.map markedMicrocodeToBool t)
+        let eX = mkAnd (List.map markedMicrocodeToBool e)
+        mkAnd2 (mkImplies i tX) (mkImplies (mkNot i) eX)
 
 /// <summary>
 ///     Generates a frame from a state assignment map.
@@ -525,6 +364,244 @@ let makeFrame (states : Map<TypedVar, MarkedVar>) : BoolExpr<Sym<MarkedVar>> lis
     List.choose maybeFrame (Map.toList states)
 
 /// <summary>
+///     Given two assignment maps from opposite branches of a microcode
+///     routine, generate extra microcode assignments to make the assignment
+///     maps equal.
+/// </summary>
+/// <param name="tMap">The assignments from the 'true' branch.</param>
+/// <param name="fMap">The assignments from the 'false' branch.</param>
+/// <returns>
+///     A triple containing the extra assignments for the true branch,
+///     the extra assignments for the false branch, and the resulting
+///     equal map.
+/// </returns>
+let mergeBranch
+  (tMap : Map<TypedVar, MarkedVar>)
+  (fMap : Map<TypedVar, MarkedVar>)
+  : (Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list
+     * Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list
+     * Map<TypedVar, MarkedVar>) =
+    let assign tvar high low =
+        let ttype = typeOf tvar
+        Assign (withType ttype high, Some (mkVarExp (withType ttype (Reg low))))
+
+    // Assume that both maps have the same set of keys.
+    let insertMapping (tvar, tmvar) (tx, fx, state : Map<TypedVar, MarkedVar>) =
+        let fmvar = fMap.[tvar]
+        match tmvar, fmvar with
+        | // We shouldn't ever see goal variables here.
+          (Goal _, _)
+        | (_, Goal _) -> failwith "mergeBranch: unexpected 'goal' variable"
+        | // Both branches are equal, so just add the record into the new state.
+          (After _, After _) | (Before _, Before _) ->
+            (tx, fx, state.Add (tvar, tmvar))
+        | (Intermediate (x, _), Intermediate (y, _)) when x = y ->
+            (tx, fx, state.Add (tvar, tmvar))
+        | (* The 'true' branch assigned higher than the 'false' branch.
+             Thus, the 'false' branch needs an extra assignment. *)
+          (After _, _) | (_, Before _) ->
+            let fx' = (assign tvar tmvar fmvar) :: fx
+            (tx, fx', state.Add (tvar, tmvar))
+        | (Intermediate (x, _), Intermediate (y, _)) when x > y ->
+            let fx' = (assign tvar tmvar fmvar) :: fx
+            (tx, fx', state.Add (tvar, tmvar))
+        | // Otherwise, the 'true' branch needs the extra assignment.
+          _ ->
+            let tx' = (assign tvar fmvar tmvar) :: tx
+            (tx', fx, state.Add (tvar, fmvar))
+
+    Seq.foldBack insertMapping (Map.toSeq tMap) ([], [], Map.empty)
+
+let updateState (st : Map<TypedVar, MarkedVar>) (vars : CTyped<MarkedVar> list)
+  : Map<TypedVar, MarkedVar> =
+    let updateOne (st' : Map<TypedVar, MarkedVar>) var =
+        let uv = unmark var
+        match st'.TryFind uv, valueOf var with
+        (* Defensive code: try catch attempts to assign to a _lower_ state
+           than previous. *)
+        | None, v
+        | Some (After _), (After _ as v)
+        | Some (Before _), (Before _ as v)
+        | Some (Before _), (Intermediate _ as v)
+        | Some (Before _), (After _ as v) 
+        | Some (Intermediate _), (After _ as v) ->
+            st'.Add (unmark var, valueOf var)
+        | Some (Intermediate (k, _)), (Intermediate (l, _) as v)
+            when k <= l ->
+            st'.Add (unmark var, valueOf var)
+        | Some x, y ->
+            failwith
+                (sprintf "updateState: tried to reduce assign level from %A to %A"
+                    x y)
+                
+    List.fold updateOne st vars
+
+/// <summary>
+///     Rewrites any intermediate variables in a microcode instruction
+///     to post-state variables when the intermediate stage is the most
+///     recently assigned in an assignment map.
+/// </summary>
+let capInstructions
+  (state : Map<TypedVar, MarkedVar>)
+  (instrs : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
+  : Result<Map<TypedVar, MarkedVar>
+           * Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list,
+           TraversalError<Error>> =
+    // TODO(MattWindsor91): proper doc comment.
+    (* As above, patch up the lvalues and rvalues in the instruction, generating a
+        list of variables that need replacing in the state. *)
+    let capVar =
+        fun ctx var ->
+            match valueOf var, state.TryFind (unmark var) with
+            | _, None ->
+                fail (Inner (BadSemantics "somehow referenced variable not in scope"))
+            | (Intermediate (k, _), Some (Intermediate (l, v))) when k > l ->
+                fail (Inner (BadSemantics "assignment without corresponding map write"))
+            | (Intermediate (k, _), Some (Intermediate (l, v))) when k = l ->
+                lift
+                    (fun ctx' -> (ctx', withType (typeOf var) (After v)))
+                    (tryPushVar ctx (withType (typeOf var) (After v)))
+            | _, Some (Before _) | _, Some (After _)
+            | Before _, _ | After _, _
+            | Intermediate _, Some (Intermediate _) -> ok (ctx, var)
+            | _, Some _ ->
+                fail (Inner (BadSemantics "unexpected goal variable"))
+    let rt = tliftToExprSrc (tliftToTypedSymVarSrc (tchain capVar (mapCTyped Reg >> mkVarExp)))
+    let R = tchainL (traverseMicrocode capVar rt) id (Vars []) instrs
+    lift
+        (fun (ctx, instrs') ->
+            match ctx with
+            | Vars modVars ->
+                (updateState state modVars, instrs')
+            | _ -> failwith "markMicrocode: bad context")
+            R
+
+/// <summary>
+///     Normalises and marks an entire microcode routine with variable states,
+///     without re-mapping all final intermediates to After.
+/// </summary>
+/// <param name="vars">The list of variables available to the routine.</param>
+/// <param name="routine">The routine to mark.</param>
+/// <returns>
+///     A Chessie result, containing, on success, a pair of the marked
+///     microcode routine and a map from variable post-states to their last
+///     assignment in the microcode routine.  The latter is useful for
+///     calculating frames.
+///     The order of the routine is preserved.
+/// </returns>
+let processMicrocodeRoutineUncapped
+  (vars : TypedVar list)
+  (routine : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
+  : Result<( Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list
+             * Map<TypedVar, MarkedVar> ),
+           Error> =
+    (* First, normalise the listing.
+       This ensures only whole variables are written to, which allows us to
+       track the assignment later. *)
+    let normalisedR = normaliseMicrocode routine
+
+    (* Next, we annotate each command with the corresponding state marker.
+       This is inherently recursive, because the microcode can contain
+       branches. *)
+    let rec markInstructions topState instrs
+      : Result<Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list
+               * Map<TypedVar, MarkedVar>,
+               TraversalError<Error>> =
+        (* Generic logic to go through a traversable and, whenever we see a
+           variable, mark it with according to its previous assignment stage,
+           and put it in a list of variables to be possibly updated in the
+           next assignment map. *)
+        let markVar markFun (varFun : MarkedVar -> 'Var) (state : Map<TypedVar, MarkedVar>)
+          : Traversal<TypedVar, CTyped<'Var>, Error, MarkedVar> =
+            fun ctx var ->
+                match state.TryFind var with
+                | None ->
+                     fail (Inner (BadSemantics "somehow referenced variable not in scope"))
+                | Some mv ->
+                    let markedVar = markFun mv
+                    lift
+                        (fun ctx' ->
+                            (ctx', withType (typeOf var) (varFun markedVar)))
+                        (tryPushVar ctx (withType (typeOf var) markedVar))
+
+        let markRValue state ctx var = markVar id Reg state ctx var
+
+        let markInstruction state (index, instr)
+          : Result<Map<TypedVar, MarkedVar>
+                   * Microcode<CTyped<MarkedVar>, Sym<MarkedVar>>,
+                   TraversalError<Error>> =
+            let rt =
+                tliftToExprSrc
+                    (tliftToTypedSymVarSrc (tliftToExprDest (markRValue state)))
+
+            match instr with
+            (* First, get all of the non-assigning instructions out of the way.
+               Anything that isn't an assign contains only rvalues, which we
+               can mark using the pre-state only. *)
+            | Symbol s ->
+                lift
+                    (mkPair state)
+                    (mapTraversal (tchainL (tliftOverSymbolicWord rt) Symbol) s)
+            | Assume a ->
+                lift
+                    (mkPair state)
+                    (mapTraversal
+                        (tchain (traverseBoolAsExpr rt) Assume)
+                        (normalBool a))
+            (* Branches require a recursive mark-up with some patching up.
+               Since the two branches will have different assignment maps,
+               we have to inject new assignments into the branches to make them
+               agree on the same map. *)
+            | Branch (cond = c; trueBranch = t; falseBranch = f) ->
+                let cR = mapTraversal (traverseBoolAsExpr rt) (normalBool c)
+                let tR = markInstructions state t
+                let fR = markInstructions state f
+                lift3
+                    (fun c' (tMarked, tState) (fMarked, fState) ->
+                        let tAdd, fAdd, state = mergeBranch tState fState
+                        let instrMarked =
+                            Branch (c', tMarked @ tAdd, fMarked @ fAdd)
+                        (state, instrMarked))
+                    cR tR fR
+            (* Assignments push the lvalue one intermediate higher, or to After
+               if we're on the last command.  This also means that we need an
+               update to the state map. *)
+            | Assign (l, r) ->
+                let incMarker mv =
+                    match mv with
+                    | Before x -> Intermediate (0I, x)
+                    | Intermediate (k, x) -> Intermediate (k + 1I, x)
+                    | After _ -> failwith "markMicrocode: unexpected After"
+                    | Goal _ -> failwith "markMicrocode: unexpected Goal"
+                let lT = markVar incMarker id state
+
+                let lR = lT (Vars []) l
+                let rR = maybe (ok None) (mapTraversal rt >> lift Some) r
+
+                (* The lvalue traversal will have returned variables that need
+                   updating in state. *)
+                lift2
+                    (fun (ctx, l') r' ->
+                        match ctx with
+                        | Vars modVars ->
+                            (updateState state modVars, Assign (l', r'))
+                        | _ -> failwith "markMicrocode: bad context")
+                    lR rR
+
+
+        let indexed = Seq.mapi mkPair instrs
+        let R = bindAccumL markInstruction topState (List.ofSeq indexed)
+        lift (fun (st, xs) -> (xs, st)) R
+
+    // To begin with, each variable is assigned its own pre-state.
+    let initialState =
+        Map.ofSeq (Seq.map (fun var -> (var, Before (valueOf var))) vars)
+
+    bind
+        (markInstructions initialState >> mapMessages Traversal)
+        normalisedR
+
+/// <summary>
 ///     Normalises and marks an entire microcode routine with variable states.
 /// </summary>
 /// <param name="vars">The list of variables available to the routine.</param>
@@ -538,73 +615,30 @@ let makeFrame (states : Map<TypedVar, MarkedVar>) : BoolExpr<Sym<MarkedVar>> lis
 /// </returns>
 let processMicrocodeRoutine
   (vars : TypedVar list)
-  (routine : Microcode<Expr<Sym<Var>>, Sym<Var>> list list)
-  : Result<( Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list list
+  (routine : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
+  : Result<( Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list
              * Map<TypedVar, MarkedVar> ),
            Error> =
-    // TODO(CaptainHayashi): flatten into a single list
-    // TODO(CaptainHayashi): compose array accesses properly
+    let intermediateMarkedR =
+        processMicrocodeRoutineUncapped vars routine
 
-    (* Each item in 'routine' represents a stage in the sequential composition
-       of microcode listings.  Each stage has a corresponding variable state:
-       the first is Intermediate 0, the second Intermediate 1, and so on until
-       the last stage assigns to After.
+    (* The above generates a decent marking, where every assignment creates
+       an intermediate variable.  However, we can go one better by replacing
+       every final intermediate variable with After in a second pass. *)
 
-       To begin translation, we annotate each stage with the corresponding
-       state marker. *)
-    let decideMarker index stage =
-        (stage,
-         if index = routine.Length - 1
-         then After
-         else (curry Intermediate (bigint index)))
-    let markedStages = Seq.mapi decideMarker routine
+    let markedR =
+        bind
+            (fun (instrs, finalState) ->
+                mapMessages Traversal (capInstructions finalState instrs))
+            intermediateMarkedR
+    lift (fun (st, xs) -> (xs, st)) markedR
 
-    (* Throughout the translation, we keep a record of the last variable state
-       that was assigned to for each variable.  To begin with, each variable
-       is assigned its own pre-state. *)
-    let initialState =
-        Map.ofSeq (Seq.map (fun var -> (var, Before (valueOf var))) vars)
-
-    (* The main process is a fold over all of the individual stages.
-       For each, we normalise the listing to assign whole variables instead of
-       lvalues, then translate the lvalues to the last assigned state of their
-       variable and rvalues to the expected assigned state of this stage.
-       Finally, we repopulate the state with the new assignments.
-
-       This way, 'state' always tells us which values were assigned in the last
-       stage, several stages ago, or not at all. *)
-    let processListing (listing, marker) (xs, state) =
-        (* First, normalise the listing.
-           This ensures only whole variables are written to, which allows us to
-           track the assignment later. *)
-        let normalisedR = normaliseMicrocode listing
-
-        (* Next, make the microcode state-aware.
-           This means that each lvalue is translated with this
-           stage's marker, and each rvalue is translated according to the state
-           map. *)
-        let stateAwareR =
-            let makeAware normalised =
-                mapMessages Traversal
-                    (mapTraversal (tchainL (markMicrocode marker state) id)
-                        normalised)
-            bind makeAware normalisedR
-
-        (* Finally, we need to repopulate the table with all assignments made
-           in this command, and return the listing. *)
-        lift
-            (fun stateAware -> (stateAware :: xs, updateState state stateAware))
-            stateAwareR
-    // The listing is being built up in reverse order, so correct that.
-    lift
-        (pairMap List.rev id)
-        (seqBind processListing ([], initialState) markedStages)
 
 /// <summary>
 ///     Converts a processed microcode routine into a two-state Boolean predicate.
 /// </summary>
 let microcodeRoutineToBool
-  (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list list)
+  (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
   (assignMap : Map<TypedVar, MarkedVar>)
   : BoolExpr<Sym<MarkedVar>> =
     let bools = List.map markedMicrocodeToBool routine
@@ -617,10 +651,10 @@ let microcodeRoutineToBool
 /// <param name="semantics">The map from command to microcode schemata.</param>
 /// <param name="prim">The primitive command to instantiate.</param>
 /// <returns>
-///     If the instantiation succeeded, the resulting list of parallel-composed
+///     If the instantiation succeeded, the resulting list of
 ///     <see cref="Microcode"/> instructions.
 /// </returns>
-let instantiateToMicrocode
+let rec instantiateToMicrocode
   (semantics : PrimSemanticsMap)
   (prim : PrimCommand)
   : Result<Microcode<Expr<Sym<Var>>, Sym<Var>> list, Error> =
@@ -650,6 +684,16 @@ let instantiateToMicrocode
             mapMessages Traversal (mapTraversal subInMCode s.Body)
 
         bind instantiate typeCheckedDefR
+    | PrimBranch (cond = c; trueBranch = t; falseBranch = f) ->
+        let inst =
+            List.map (instantiateToMicrocode semantics)
+            >> collect
+            >> lift List.concat
+
+        lift2 
+            (fun tM fM -> [ Branch (c, tM, fM) ])
+            (inst t)
+            (maybe (ok []) inst f)
 
 /// <summary>
 ///     Translates a command to a multi-state Boolean expression.
@@ -667,7 +711,9 @@ let semanticsOfCommand
   (tvars : VarMap)
   (cmd : Command) : Result<CommandSemantics<SMBoolExpr>, Error> =
     // First, get the microcode representation of each part of the command.
-    let microcodeR = collect (Seq.map (instantiateToMicrocode semantics) cmd)
+    let microcodeR =
+        lift List.concat
+            (collect (Seq.map (instantiateToMicrocode semantics) cmd))
 
     (* Then, normalise and mark the microcode, and get the assign map.
        This requires us to provide all variables in the environment for framing

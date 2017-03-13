@@ -39,14 +39,14 @@ view bHoldLock();       // B holds the lock.
  */
 method lockA() {
   {| aFlagDown() |}
-    <aFlag = true>;
+    <| aFlag = true; |>
   {| aFlagUp() |}
-    <turn = 1>;
+    <| turn = 1; |>
   {| aWaiting() |}
     do {
       {| aWaiting() |}
         // This is _one_ atomic action
-        <{oFlag = bFlag; oTurn = turn; }>;
+        <| oFlag = bFlag; oTurn = turn; |>
       {| if (oFlag && oTurn == 1) then aWaiting() else aHoldLock() |}
     } while (oFlag && (oTurn == 1));
   {| aHoldLock() |}
@@ -57,7 +57,7 @@ method lockA() {
  */
 method unlockA() {
   {| aHoldLock() |}
-    <aFlag = false>;
+    <| aFlag = false; |>
   {| aFlagDown() |}
 }
 
@@ -66,13 +66,13 @@ method unlockA() {
  */
 method lockB() {
   {| bFlagDown() |}
-    <bFlag = true>;
+    <| bFlag = true; |>
   {| bFlagUp() |}
-    <turn = 2>;
+    <| turn = 2; |>
   {| bWaiting() |}
     do {
       {| bWaiting() |}
-       <{ oFlag = aFlag; oTurn = turn; }>;
+       <| oFlag = aFlag; oTurn = turn; |>
       {| if (oFlag && oTurn == 2) then bWaiting() else bHoldLock() |}
     } while (oFlag && (oTurn == 2));
   {| bHoldLock() |}
@@ -83,7 +83,7 @@ method lockB() {
  */
 method unlockB() {
   {| bHoldLock() |}
-    <bFlag = false>;
+    <| bFlag = false; |>
   {| bFlagDown() |}
 }
 

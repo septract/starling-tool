@@ -364,6 +364,37 @@ let seqBind
   : 'T seq -> Result<'State, 'Error> =
     Seq.fold (fun s x -> bind (f x) s) (ok initialS)
 
+/// <summary>
+///     Behaves like <see cref="mapAccumL"/>, but with a possibly failing
+///     computation.
+/// </summary>
+/// <param name="f">The partial mapping function.</param>
+/// <param name="init">The initial accumulator.</param>
+/// <param name="lst">The list to map.</param>
+/// <typeparam name="Acc">The type of the accumulator.</typeparam>
+/// <typeparam name="Src">The type of variables in the list to map.</typeparam>
+/// <typeparam name="Dst">The type of variables in the final list.</typeparam>
+/// <returns>
+///     A Chessie result containing, on success, a tuple of the final
+///     accumulator and mapped list.
+/// </returns>
+let bindAccumL
+  (f : 'Acc -> 'Src -> Result<'Acc * 'Dst, 'Error>)
+  (init : 'Acc)
+  (lst : 'Src list)
+  : Result<'Acc * 'Dst list, 'Error> =
+    let rec it accDstR srcs =
+        bind
+            (fun (acc, dsts) ->
+             match srcs with
+             | [] -> ok (acc, List.rev dsts)
+             | x::xs ->
+                let fR = f acc x
+                let accDstR' = lift (fun (acc', x') -> (acc', x'::dsts)) fR
+                it accDstR' xs)
+            accDstR
+    it (ok (init, [])) lst
+
 
 /// Fold that can be terminated earlier by the step function f returning None.
 /// If Any step returns None, the whole fold returns None.
