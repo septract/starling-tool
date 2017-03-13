@@ -232,7 +232,12 @@ module Types =
     type Constraint' =
         | /// <summary>
           ///     A search directive, of form <c>search N</c>.
+          /// </summary>
           Search of depth : int
+        | /// <summary>
+          ///     A saturate directive, of form <c>saturate exclusive</c>.
+          /// </summary>
+          Saturate
         | /// <summary>
           ///     A normal constraint, of form <c>constraint X => Y;</c>.
           /// </summary>
@@ -587,6 +592,7 @@ module Pretty =
     /// </returns>
     let printConstraint' (item : Constraint') : Doc =
         match item with
+        | Saturate -> syntaxStr "saturate exclusive"
         | Search i -> printSearch i
         | Normal (pattern, defn) -> printNormalConstraint pattern (Some defn)
         | Inferred pattern -> printNormalConstraint pattern None

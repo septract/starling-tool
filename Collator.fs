@@ -37,6 +37,8 @@ module Types =
           ///     </para>
           /// </remarks>
           Search : int option
+          /// <summary>Whether or not to saturate exclusive constraints.</summary>
+          Saturate : bool
           /// <summary>The typedef list.</summary>
           Typedefs : (TypeLiteral * string) list
           VProtos : ViewProto list
@@ -82,11 +84,15 @@ module Pretty =
               vsep <| Seq.map (uncurry printNormalConstraint) cs.Constraints
               printMap Indented String printCommandBlock cs.Methods ]
 
-        // Add in search, but only if it actually exists.
-        let all =
+        // Add in search and saturate, but only if they actually exist.
+        let withSearch =
             match cs.Search with
             | None -> definites
             | Some s -> printSearch s :: definites
+        let all =
+            if cs.Saturate
+            then syntaxStr "saturate exclusive" :: withSearch
+            else withSearch   
 
         VSep(all, (vsep [ VSkip; Separator; Nop ]))
 
@@ -99,6 +105,7 @@ let empty : CollatedScript =
       Constraints = []
       Methods = Map.empty
       Typedefs = []
+      Saturate = false
       Search = None
       VProtos = []
       SharedVars = []
@@ -301,6 +308,7 @@ let collate (script : ScriptItem list) : CollatedScript =
             { cs with Methods = cs.Methods.Add(sigt.Name, ParamDesugar.rewriteBlock tsubs body)
                       ThreadVars = tvars }
         | Constraint { Node = Search i } -> { cs with Search = Some i }
+        | Constraint { Node = Saturate } -> { cs with Saturate = true }
         | Constraint { Node = Normal (v, d) } -> { cs with Constraints = (v, Some d)::cs.Constraints }
         | Constraint { Node = Inferred v } -> { cs with Constraints = (v, None)::cs.Constraints }
         | Constraint { Node = Exclusive xs } -> 

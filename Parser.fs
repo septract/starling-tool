@@ -689,6 +689,16 @@ let parseSearch =
     // ^- ... ;
     |>> Search
 
+/// Parses a saturate directive.
+let parseSaturate =
+    pstring "saturate"
+    >>. ws
+    // ^- saturate
+    >>. stringReturn "exclusive" Saturate
+    // ^- ... exclusive
+    .>> wsSemi
+    // ^- ... ;
+
 /// Parses a typedef.
 let parseTypedef =
     // TODO(CaptainHayashi): forbid 'typedef bool int'.
@@ -724,6 +734,8 @@ let parseConstraint : Parser<Constraint, unit> =
               // ^- disjoint <view>, <view>, ... ;
               parseSearch
               // ^- search 0 ;
+              parseSaturate
+              // ^- saturate exclusive ;
             ])
 
 /// Parses a script of zero or more methods, including leading and trailing whitespace.

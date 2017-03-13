@@ -359,6 +359,7 @@ let ticketLockCollated =
           [ (TInt, "t")
             (TInt, "s") ]
       Search = None
+      Saturate = false
       VProtos =
           [ NoIterator
                 ({ Name = "holdTick"
