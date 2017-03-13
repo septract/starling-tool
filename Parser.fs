@@ -632,7 +632,7 @@ let parseConstraintRhs : Parser<Expression option, unit> =
     // ^ <expression>
 
 /// Parses a constraint.
-let parseConstraint : Parser<ViewSignature * Expression option, unit> =
+let parseNormalConstraint : Parser<Constraint', unit> =
     pstring "constraint" >>. ws
     // ^- constraint ..
     >>. pipe3ws
@@ -640,22 +640,25 @@ let parseConstraint : Parser<ViewSignature * Expression option, unit> =
             // ^- <view> ...
             (pstring "->")
             parseConstraintRhs
-            (fun d _ v -> (d, v))
-    .>> pstring ";"
+            (fun d _ v ->
+                match v with
+                | Some vv -> Normal (d, vv)
+                | None -> Inferred d)
+    .>> wsSemi
 
 
 /// parse an exclusivity constraint
-let parseExclusive : Parser<List<StrFunc>, unit> = 
+let parseExclusive : Parser<Constraint', unit> = 
     pstring "exclusive" >>. ws
     // ^- exclusive ..  
-    >>. parseDefs (parseFunc parseIdentifier)
+    >>. (parseDefs (parseFunc parseIdentifier) |>> Exclusive)
     .>> wsSemi 
        
 /// parse a disjointness constraint
-let parseDisjoint : Parser<List<StrFunc>, unit> = 
+let parseDisjoint : Parser<Constraint', unit> = 
     pstring "disjoint" >>. ws
     // ^- exclusive ..  
-    >>. parseDefs (parseFunc parseIdentifier) 
+    >>. (parseDefs (parseFunc parseIdentifier) |>> Disjoint)
     .>> wsSemi 
        
 
@@ -677,11 +680,14 @@ let parseVarDecl kw (atype : VarDecl -> ScriptItem') =
 
 /// Parses a search directive.
 let parseSearch =
-    pstring "search" >>. ws
+    pstring "search"
+    >>. ws
     // ^- search
-                     >>. pint32
-                     // ^- ... <depth>
-                     .>> wsSemi
+    >>. pint32
+    // ^- ... <depth>
+    .>> wsSemi
+    // ^- ... ;
+    |>> Search
 
 /// Parses a typedef.
 let parseTypedef =
@@ -706,6 +712,20 @@ let parsePragma =
         (fun k v -> { Key = k; Value = v })
     .>> wsSemi
 
+/// Parses a constraint stanza.
+let parseConstraint : Parser<Constraint, unit> =
+    nodify
+        (choice
+            [ parseNormalConstraint
+              // ^- constraint <view> -> <expression> ;
+              parseExclusive
+              // ^- exclusive <view>, <view>, ... ;
+              parseDisjoint
+              // ^- disjoint <view>, <view>, ... ;
+              parseSearch
+              // ^- search 0 ;
+            ])
+
 /// Parses a script of zero or more methods, including leading and trailing whitespace.
 let parseScript =
     // TODO(CaptainHayashi): parse things that aren't methods:
@@ -716,16 +736,9 @@ let parseScript =
                              parseMethod |>> Method
                              // ^- method <identifier> <arg-list> <block>
                              parseConstraint |>> Constraint
-                             // ^- constraint <view> -> <expression> ;
-                             parseExclusive |>> Exclusive
-                             // ^- exclusive <view>, <view>, ... ;
-                             parseDisjoint |>> Disjoint
-                             // ^- disjoint <view>, <view>, ... ;
                              parseViewProtoSet |>> ViewProtos
                              // ^- view <identifier> ;
                              //  | view <identifier> <view-proto-param-list> ;
-                             parseSearch |>> Search
-                             // ^- search 0;
                              parseTypedef
                              // ^- typedef int Node;
                              parseVarDecl "shared" SharedVars

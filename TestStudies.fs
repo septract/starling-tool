@@ -135,7 +135,6 @@ let ticketLockUnlockMethodAST =
 
 let ticketLockConstraint01 =
     (ViewSignature.Unit,
-     Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 38L;
                    Column = 50L;};
@@ -153,7 +152,6 @@ let ticketLockConstraint01 =
 let ticketLockConstraint02 =
     (ViewSignature.Func {Name = "holdTick";
             Params = ["t"];},
-     Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 41L;
                    Column = 50L;};
@@ -171,7 +169,6 @@ let ticketLockConstraint02 =
 let ticketLockConstraint03 =
     (ViewSignature.Func {Name = "holdLock";
             Params = [];},
-     Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 42L;
                    Column = 50L;};
@@ -191,7 +188,6 @@ let ticketLockConstraint04 =
                              Params = [];},
                  ViewSignature.Func {Name = "holdTick";
                              Params = ["t"];}),
-     Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 45L;
                    Column = 51L;};
@@ -211,7 +207,6 @@ let ticketLockConstraint05 =
                              Params = ["ta"];},
                  ViewSignature.Func {Name = "holdTick";
                              Params = ["tb"];}),
-     Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 46L;
                    Column = 46L;};
@@ -231,7 +226,6 @@ let ticketLockConstraint06 =
                              Params = [];},
                  ViewSignature.Func {Name = "holdLock";
                              Params = [];}),
-     Some
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 47L;
                    Column = 43L;};
@@ -254,41 +248,77 @@ let ticketLockParsed =
         Node =
             ViewProtos
                 [ NoIterator ({ Name = "holdLock"; Params = [] }, false) ] }
-      { Position = {StreamName = "Examples/Pass/ticketLock.cvf";
-                   Line = 38L;
-                   Column = 1L;};
-       Node =
-        Constraint ticketLockConstraint01}
+      { Position =
+          { StreamName = "Examples/Pass/ticketLock.cvf"
+            Line = 38L
+            Column = 1L }
+        Node =
+          Constraint
+            { Position =
+                { StreamName = "Examples/Pass/ticketLock.cvf"
+                  Line = 38L
+                  Column = 1L }
+              Node = Normal ticketLockConstraint01 } }
 
-      {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
-                   Line = 41L;
-                   Column = 1L;};
-       Node =
-        Constraint ticketLockConstraint02}
+      { Position =
+          { StreamName = "Examples/Pass/ticketLock.cvf"
+            Line = 41L
+            Column = 1L }
+        Node =
+          Constraint
+            { Position =
+                { StreamName = "Examples/Pass/ticketLock.cvf"
+                  Line = 41L
+                  Column = 1L }
+              Node = Normal ticketLockConstraint02 } }
 
-      {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
-                   Line = 42L;
-                   Column = 1L;};
-       Node =
-        Constraint ticketLockConstraint03}
+      { Position =
+          { StreamName = "Examples/Pass/ticketLock.cvf"
+            Line = 42L
+            Column = 1L }
+        Node =
+          Constraint
+            { Position =
+                { StreamName = "Examples/Pass/ticketLock.cvf"
+                  Line = 42L
+                  Column = 1L }
+              Node = Normal ticketLockConstraint03 } }
 
-      {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
-                   Line = 45L;
-                   Column = 1L;};
-       Node =
-        Constraint ticketLockConstraint04}
+      { Position =
+          { StreamName = "Examples/Pass/ticketLock.cvf"
+            Line = 45L
+            Column = 1L }
+        Node =
+          Constraint
+            { Position =
+                { StreamName = "Examples/Pass/ticketLock.cvf"
+                  Line = 45L
+                  Column = 1L }
+              Node = Normal ticketLockConstraint04 } }
 
-      {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
-                   Line = 46L;
-                   Column = 1L;};
-       Node =
-        Constraint ticketLockConstraint05}
+      { Position =
+          { StreamName = "Examples/Pass/ticketLock.cvf"
+            Line = 46L
+            Column = 1L }
+        Node =
+          Constraint
+             { Position =
+                { StreamName = "Examples/Pass/ticketLock.cvf"
+                  Line = 46L
+                  Column = 1L }
+               Node = Normal ticketLockConstraint05 } }
 
-      {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
-                   Line = 47L;
-                   Column = 1L;};
-       Node =
-        Constraint ticketLockConstraint06}
+      { Position =
+          { StreamName = "Examples/Pass/ticketLock.cvf"
+            Line = 47L
+            Column = 1L }
+        Node =
+          Constraint
+             { Position =
+                 { StreamName = "Examples/Pass/ticketLock.cvf"
+                   Line = 47L
+                   Column = 1L }
+               Node = Normal ticketLockConstraint06 } }
 
       {Position = {StreamName = "Examples/Pass/ticketLock.cvf";
                    Line = 5L
@@ -338,17 +368,17 @@ let ticketLockCollated =
                    Params = [] }, false) ]
       Constraints =
           [ // constraint emp -> ticket >= serving;
-            ticketLockConstraint01
+            pairMap id Some ticketLockConstraint01
             // constraint holdTick(t) -> ticket > t;
-            ticketLockConstraint02
+            pairMap id Some ticketLockConstraint02
             // constraint holdLock() -> ticket > serving;
-            ticketLockConstraint03
+            pairMap id Some ticketLockConstraint03
             // constraint holdLock() * holdTick(t) -> serving != t;
-            ticketLockConstraint04
+            pairMap id Some ticketLockConstraint04
             // constraint holdTick(ta) * holdTick(tb) -> ta != tb;
-            ticketLockConstraint05
+            pairMap id Some ticketLockConstraint05
             // constraint holdLock() * holdLock() -> false;
-            ticketLockConstraint06 ]
+            pairMap id Some ticketLockConstraint06 ]
       Methods =
           Map.ofList
               [ ("lock", ticketLockLockMethodAST.Body)

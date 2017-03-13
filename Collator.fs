@@ -79,7 +79,7 @@ module Pretty =
             [ vsep <| Seq.map (fun p -> printViewProtoList [p]) cs.VProtos
               vsep <| Seq.map (printScriptVar "shared") cs.SharedVars
               vsep <| Seq.map (printScriptVar "thread") cs.ThreadVars
-              vsep <| Seq.map (uncurry printConstraint) cs.Constraints
+              vsep <| Seq.map (uncurry printNormalConstraint) cs.Constraints
               printMap Indented String printCommandBlock cs.Methods ]
 
         // Add in search, but only if it actually exists.
@@ -295,17 +295,18 @@ let collate (script : ScriptItem list) : CollatedScript =
             let s = List.map (mkPair t) vs
             { cs with ThreadVars = s @ cs.ThreadVars }
         | ViewProtos v -> { cs with VProtos = v @ cs.VProtos }
-        | Search i -> { cs with Search = Some i }
         | Method { Signature = sigt; Body = body } ->
             let tvars, tsubs = 
                 ParamDesugar.desugarMethodParams sigt.Params item.Position cs.ThreadVars
             { cs with Methods = cs.Methods.Add(sigt.Name, ParamDesugar.rewriteBlock tsubs body)
                       ThreadVars = tvars }
-        | Constraint (v, d) -> { cs with Constraints = (v, d)::cs.Constraints }
-        | Exclusive xs -> 
+        | Constraint { Node = Search i } -> { cs with Search = Some i }
+        | Constraint { Node = Normal (v, d) } -> { cs with Constraints = (v, Some d)::cs.Constraints }
+        | Constraint { Node = Inferred v } -> { cs with Constraints = (v, None)::cs.Constraints }
+        | Constraint { Node = Exclusive xs } -> 
             let views = List.map ViewSignature.Func xs 
             { cs with Constraints = List.concat [makeExclusive views; cs.Constraints] } 
-        | Disjoint xs -> 
+        | Constraint { Node = Disjoint xs } -> 
             { cs with Constraints = List.concat [makeDisjoint xs; cs.Constraints] } 
 
     // We foldBack instead of fold to preserve the original order.

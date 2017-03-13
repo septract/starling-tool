@@ -253,7 +253,7 @@ and graphBlockStep
 
      // Add the postcondition onto the outer subgraph.
      let oGraphR2 = trial {
-         let pGraph = { Nodes = Map.ofList [(iQ, (iQview, if last then Exit else Normal))]
+         let pGraph = { Nodes = Map.ofList [(iQ, (iQview, if last then Exit else NodeKind.Normal))]
                         Edges = Map.empty }
          let! oGraph = oGraphR
          return! combine oGraph pGraph }
@@ -290,7 +290,7 @@ and graphBlock
     // First, generate the ID for the precondition.
     let oP = vg ()
 
-    let initState = (oP, ok { Nodes = Map.ofList [(oP, (bPre, if topLevel then Entry else Normal))]
+    let initState = (oP, ok { Nodes = Map.ofList [(oP, (bPre, if topLevel then Entry else NodeKind.Normal))]
                               Edges = Map.empty } )
 
     (* We flip through every entry in the block, extracting its postcondition

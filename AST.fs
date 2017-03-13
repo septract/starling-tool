@@ -226,6 +226,32 @@ module Types =
           ///<summary>The value of the pragma.</summary>
           Value : string }
 
+    /// <summary>
+    ///     A constraint item.
+    /// </summary>
+    type Constraint' =
+        | /// <summary>
+          ///     A search directive, of form <c>search N</c>.
+          Search of depth : int
+        | /// <summary>
+          ///     A normal constraint, of form <c>constraint X => Y;</c>.
+          /// </summary>
+          Normal of pattern : ViewSignature * defn : Expression
+        | /// <summary>
+          ///     An inferred constraint, of form <c>constraint X => ?;</c>.
+          /// </summary>
+          Inferred of pattern : ViewSignature
+        | /// <summary>
+          ///     A disjoint constraint, of form <c>disjoint X, Y, Z;</c>.
+          /// </summary>
+          Disjoint of List<StrFunc>
+        | /// <summary>
+          ///     An exclusive constraint, of form <c>exclusive X, Y, Z;</c>.
+          /// </summary>
+          Exclusive of List<StrFunc>
+        override this.ToString() = sprintf "%A" this
+    and Constraint = Node<Constraint'>
+
     /// A top-level item in a Starling script.
     type ScriptItem' =
         | Pragma of Pragma // pragma ...;
@@ -233,11 +259,8 @@ module Types =
         | SharedVars of VarDecl // shared int name1, name2, name3;
         | ThreadVars of VarDecl // thread int name1, name2, name3;
         | Method of Method<Command> // method main(argv, argc) { ... }
-        | Search of int // search 0;
         | ViewProtos of ViewProto list // view name(int arg);
-        | Constraint of ViewSignature * Expression option // constraint emp => true
-        | Exclusive of List<StrFunc> // exclusive p(x), q(x), r(x) 
-        | Disjoint of List<StrFunc> // disjoint p(x), q(x), r(x) 
+        | Constraint of Constraint // constraint emp => true
         override this.ToString() = sprintf "%A" this
     and ScriptItem = Node<ScriptItem'>
 
@@ -374,8 +397,8 @@ module Pretty =
         | ViewSignature.Join(l, r) -> binop "*" (printViewSignature l) (printViewSignature r)
         | ViewSignature.Iterated(f, e) -> hsep [String "iter" |> syntaxView; hjoin [String "[" |> syntaxView; String e; String "]" |> syntaxView]; printFunc String f]
 
-    /// Pretty-prints constraints.
-    let printConstraint (view : ViewSignature) (def : Expression option) : Doc =
+    /// Pretty-prints normal-style constraints.
+    let printNormalConstraint (view : ViewSignature) (def : Expression option) : Doc =
         hsep [ String "constraint" |> syntax
                printViewSignature view
                String "->" |> syntax
@@ -554,6 +577,22 @@ module Pretty =
     /// </returns>
     let printPragma (pragma : Pragma) : Doc =
         String pragma.Key <+> braced (String pragma.Value)
+    
+    /// <summary>
+    ///     Pretty-prints constraint items.
+    /// </summary>
+    /// <param name="item">The constraint to print.</param>
+    /// <returns>
+    ///     A <see cref="Doc"/> for printing <paramref name="item"/>.
+    /// </returns>
+    let printConstraint' (item : Constraint') : Doc =
+        match item with
+        | Search i -> printSearch i
+        | Normal (pattern, defn) -> printNormalConstraint pattern (Some defn)
+        | Inferred pattern -> printNormalConstraint pattern None
+        | Exclusive xs -> printExclusive xs 
+        | Disjoint xs -> printDisjoint xs 
+    let printConstraint (x : Constraint) : Doc = printConstraint' x.Node
 
     /// Pretty-prints script lines.
     let printScriptItem' (item : ScriptItem') : Doc =
@@ -567,10 +606,7 @@ module Pretty =
             fun mdoc -> vsep [Nop; mdoc; Nop]
             <| printMethod printCommand m
         | ViewProtos v -> printViewProtoList v
-        | Search i -> printSearch i
-        | Constraint (view, def) -> printConstraint view def
-        | Exclusive xs -> printExclusive xs 
-        | Disjoint xs -> printDisjoint xs 
+        | Constraint c -> printConstraint c
     let printScriptItem (x : ScriptItem) : Doc = printScriptItem' x.Node
 
     /// Pretty-prints scripts.

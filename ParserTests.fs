@@ -264,23 +264,27 @@ module ConstraintTests =
     [<Test>]
     let ``emp -> true``() =
         check parseConstraint "constraint emp -> true;"
-           (ViewSignature.Unit, Some <| node "" 1L 19L True)
+            (node "" 1L 1L
+                (Constraint'.Normal
+                    (ViewSignature.Unit, node "" 1L 19L True)))
 
     [<Test>]
     let ``Func(a,b) -> c > a + b``() =
         check parseConstraint "constraint Func(a, b) -> c > a + b;"
-        <| (ViewSignature.Func { Name = "Func"; Params = [ "a"; "b" ] },
-                 Some
-                   (node "" 1L 28L
-                    <| BopExpr (Gt,
-                                node "" 1L 26L (Identifier "c"),
-                                node "" 1L 32L
-                                <| BopExpr(Add,
-                                       node "" 1L 30L (Identifier "a"),
-                                       node "" 1L 34L (Identifier "b")))))
+            (node "" 1L 1L
+                (Constraint'.Normal
+                    (ViewSignature.Func { Name = "Func"; Params = [ "a"; "b" ] },
+                       (node "" 1L 28L
+                        <| BopExpr (Gt,
+                                    node "" 1L 26L (Identifier "c"),
+                                    node "" 1L 32L
+                                    <| BopExpr(Add,
+                                        node "" 1L 30L (Identifier "a"),
+                                        node "" 1L 34L (Identifier "b")))))))
 
     [<Test>]
     let ``Func(a,b) -> ?;``() =
         check parseConstraint "constraint Func(a, b) -> ?;"
-        <| (ViewSignature.Func { Name = "Func"; Params = [ "a"; "b" ] },
-                 (None : Expression option))
+            (node "" 1L 1L
+                (Constraint'.Inferred
+                    (ViewSignature.Func { Name = "Func"; Params = [ "a"; "b" ] })))
