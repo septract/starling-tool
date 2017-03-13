@@ -1133,45 +1133,31 @@ let inDefiner : ViewDefiner<SVBoolExpr option> -> DView -> bool =
                     && List.forall2 namesEqual view dview)
 
 /// <summary>
-///     Converts a <c>DView</c> to an indefinite <c>ViewDef</c>.
-///
-///     <para>
-///         This instantiates the <c>DView</c> with fresh parameter
-///         names, and sets its definition to <c>None</c>.
-///     </para>
+///     Freshens every parameter in a <see cref="DView"/>.
 /// </summary>
 /// <param name="dview">
 ///     The <c>DView</c> to convert.
 /// </param>
-/// <returns>
-///     An indefinite constraint over <paramref name="dview" />.
-/// </returns>
-let searchViewToConstraint
-  (dview : DView)
-  : (DView * SVBoolExpr option) =
+/// <returns>The freshened view pattern.</returns>
+let private freshenSynthesisedView (dview : DView) : DView =
     (* To ensure likewise-named parameters in separate DFuncs don't
        clash, append fresh identifiers to all of them.
-
-       We don't use the parameter names anyway, so this is ok.
 
        Do _NOT_ make dview implicit, it causes freshGen () to evaluate only
        once for the entire function (!), ruining everything. *)
     let fg = freshGen ()
 
-    let dview' =
-        List.map
-            (fun { Func = { Name = name; Params = ps }; Iterator = it } ->
-                 let nps =
-                     List.map
-                         (fun p ->
-                             (withType
-                                 (typeOf p)
-                                    (sprintf "%s%A" (valueOf p) (getFresh fg))))
-                         ps
-                 { Func = { Name = name; Params = nps }; Iterator = it })
-            dview
-
-    (dview', None)
+    List.map
+        (fun { Func = { Name = name; Params = ps }; Iterator = it } ->
+                let nps =
+                    List.map
+                        (fun p ->
+                            (withType
+                                (typeOf p)
+                                (sprintf "%s%A" (valueOf p) (getFresh fg))))
+                        ps
+                { Func = { Name = name; Params = nps }; Iterator = it })
+        dview
 
 /// <summary>
 ///     Generates all views of the given size, from the given funcs.
@@ -1186,7 +1172,7 @@ let searchViewToConstraint
 ///     A set of all <c>View</c>s of maximum size <paramref name="depth" />,
 ///     whose <c>Func</c>s are taken from <paramref name="funcs" />
 /// </returns>
-let genAllViewsAt depth (funcs : DFunc seq) : Set<DView> =
+let private genAllViewsAt depth (funcs : DFunc seq) : Set<DView> =
     let rec f depth existing =
         match depth with
         // Multiset and set conversion removes duplicate views.
@@ -1205,6 +1191,41 @@ let genAllViewsAt depth (funcs : DFunc seq) : Set<DView> =
     f depth (Seq.singleton [])
 
 /// <summary>
+///     Generates a series of view definitions from every
+///     <paramref name="depth" />-combination of the views in
+///     <paramref name="vprotos" />, given a body generator function.
+/// </summary>
+/// <param name="vprotos">
+///     The map of view prototypes to use in the generated constraints.
+/// </param>
+/// <param name="depth">
+///     The maximum view size to generate.
+///     A depth of 0 causes no new constraints to be generated.
+/// </param>
+/// <param name="constrain">The function generating constraint RHSes.</param>
+/// <param name="definer">The existing view definer.</param>
+/// <returns>
+///    <paramref name="definer"/> extended with the constraints generated
+///    from the above parameters.
+/// </returns>
+let private synthesiseConstraints
+  (vprotos : FuncDefiner<ProtoInfo>)
+  (depth : int)
+  (constrain : DView -> SVBoolExpr option)
+  (definer : ViewDefiner<SVBoolExpr option>)
+  : ViewDefiner<SVBoolExpr option> =
+    let funclist = Seq.map fst (FuncDefiner.toSeq vprotos)
+
+    let allDViews = genAllViewsAt depth funclist
+    let newDViews = Set.filter (inDefiner definer >> not) allDViews
+    let freshDViews = Seq.map freshenSynthesisedView newDViews
+
+    let newConstraints = Seq.map (fun x -> x, constrain x) freshDViews
+
+    ViewDefiner.ofSeq (Seq.append (ViewDefiner.toSeq definer) newConstraints)
+
+
+/// <summary>
 ///     Completes a viewdef list by generating indefinite constraints of size
 ///     <paramref name="depth" />.
 /// </summary>
@@ -1215,12 +1236,12 @@ let genAllViewsAt depth (funcs : DFunc seq) : Set<DView> =
 ///     The maximum view size to represent in the viewdef list.
 ///     A depth of 0 causes no new constraints to be generated.
 /// </param>
-/// <param name="viewdefs">
-///     The existing viewdef list.
+/// <param name="definer">
+///     The existing view definer.
 /// </param>
 /// <returns>
-///     If <paramref name="depth" /> is <c>None</c>, <paramref name="viewdefs" />.
-///     Else, <paramref name="viewdefs" /> extended with indefinite
+///     If <paramref name="depth" /> is <c>None</c>, <paramref name="definer" />.
+///     Else, <paramref name="definer" /> extended with indefinite
 ///     constraints for all views of size <paramref name="depth" />
 ///     generated from the views at <paramref name="vprotos" />.
 /// </returns>
@@ -1232,32 +1253,38 @@ let addSearchDefs
     match depth with
     | None -> definer
     | Some n ->
-        vprotos
-        // Convert the definer back into a list of funcs.
-        |> FuncDefiner.toSeq
-        |> Seq.map fst
-        // Then, generate the view that is the *-conjunction of all of the
-        // view protos.
-        |> genAllViewsAt n
-        // Then, throw out any views that already exist in viewdefs...
-        |> Set.filter (inDefiner definer >> not)
-        // Finally, convert the view to a constraint.
-        |> Set.toList
-        |> Seq.map searchViewToConstraint
-        // And add the result to the original definer.
-        |> Seq.append (ViewDefiner.toSeq definer)
-        |> ViewDefiner.ofSeq
+        synthesiseConstraints vprotos n (fun _ -> None) definer
+
+/// <summary>
+///     Saturates all possible exclusive constraints of size 2.
+/// </summary>
+/// <param name="vprotos">
+///     The map of view prototypes to use in the generated constraints.
+/// </param>
+/// <param name="definer">
+///     The existing viewdef list.
+/// </param>
+/// <returns>
+///     <paramref name="definer" /> extended with exclusive
+///     constraints for all views of size 2.
+/// </returns>
+let addSaturateDefs 
+  (vprotos : FuncDefiner<ProtoInfo>)
+  (definer : ViewDefiner<SVBoolExpr option>)
+  : ViewDefiner<SVBoolExpr option> =
+    synthesiseConstraints vprotos 2 (fun _ -> Some BFalse) definer
 
 /// Extracts the view definitions from a CollatedScript, turning each into a
 /// ViewDef.
 let modelViewDefs
   svars
   (vprotos : FuncDefiner<ProtoInfo>)
-  { Search = s; Constraints = cs } =
+  { Search = s; Saturate = a; Constraints = cs } =
     cs
     |> List.map (modelViewDef svars vprotos)
     |> collect
     |> lift (addSearchDefs vprotos s)
+    |> if a then lift (addSaturateDefs vprotos) else id
 
 //
 // View applications
