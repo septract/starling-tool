@@ -1214,7 +1214,13 @@ let private synthesiseConstraints
   (constrain : DView -> SVBoolExpr option)
   (definer : ViewDefiner<SVBoolExpr option>)
   : ViewDefiner<SVBoolExpr option> =
-    let funclist = Seq.map fst (FuncDefiner.toSeq vprotos)
+    (* TODO(MattWindsor91):
+    
+       Currently, we cannot ever synthesise iterated constraints, so we just
+       count them as non-existent for the purpose of running a synthesiser. *)
+    let isNonIter (dv, { IsIterated = i }) =
+        if i then None else Some dv
+    let funclist = Seq.choose isNonIter (FuncDefiner.toSeq vprotos)
 
     let allDViews = genAllViewsAt depth funclist
     let newDViews = Set.filter (inDefiner definer >> not) allDViews
