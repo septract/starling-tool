@@ -27,22 +27,11 @@ module Types =
           SharedVars : (TypeLiteral * string) list
           /// <summary>The thread-local variables declared.</summary>
           ThreadVars : (TypeLiteral * string) list
-          /// <summary>
-          ///     The search depth, defaulting to <c>None</c> (no search).
-          /// </summary>
-          /// <remarks>
-          ///     <para>
-          ///          No search is different from a search of depth 0:
-          ///          the latter includes the empty view.
-          ///     </para>
-          /// </remarks>
-          Search : int option
-          /// <summary>Whether or not to saturate exclusive constraints.</summary>
-          Saturate : bool
           /// <summary>The typedef list.</summary>
           Typedefs : (TypeLiteral * string) list
           VProtos : ViewProto list
-          Constraints : (ViewSignature * Expression option) list
+          /// <summary>The constraint list.</summary>
+          Constraints : Constraint list
           /// <summary>
           ///     Map from method names to their bodies.
           ///     <para>
@@ -81,20 +70,10 @@ module Pretty =
             [ vsep <| Seq.map (fun p -> printViewProtoList [p]) cs.VProtos
               vsep <| Seq.map (printScriptVar "shared") cs.SharedVars
               vsep <| Seq.map (printScriptVar "thread") cs.ThreadVars
-              vsep <| Seq.map (uncurry printNormalConstraint) cs.Constraints
+              vsep <| Seq.map printConstraint cs.Constraints
               printMap Indented String printCommandBlock cs.Methods ]
 
-        // Add in search and saturate, but only if they actually exist.
-        let withSearch =
-            match cs.Search with
-            | None -> definites
-            | Some s -> printSearch s :: definites
-        let all =
-            if cs.Saturate
-            then syntaxStr "saturate exclusive" :: withSearch
-            else withSearch   
-
-        VSep(all, (vsep [ VSkip; Separator; Nop ]))
+        VSep(definites, (vsep [ VSkip; Separator; Nop ]))
 
 
 /// <summary>
@@ -105,8 +84,6 @@ let empty : CollatedScript =
       Constraints = []
       Methods = Map.empty
       Typedefs = []
-      Saturate = false
-      Search = None
       VProtos = []
       SharedVars = []
       ThreadVars = [] }
@@ -307,15 +284,7 @@ let collate (script : ScriptItem list) : CollatedScript =
                 ParamDesugar.desugarMethodParams sigt.Params item.Position cs.ThreadVars
             { cs with Methods = cs.Methods.Add(sigt.Name, ParamDesugar.rewriteBlock tsubs body)
                       ThreadVars = tvars }
-        | Constraint { Node = Search i } -> { cs with Search = Some i }
-        | Constraint { Node = Saturate } -> { cs with Saturate = true }
-        | Constraint { Node = Normal (v, d) } -> { cs with Constraints = (v, Some d)::cs.Constraints }
-        | Constraint { Node = Inferred v } -> { cs with Constraints = (v, None)::cs.Constraints }
-        | Constraint { Node = Exclusive xs } -> 
-            let views = List.map ViewSignature.Func xs 
-            { cs with Constraints = List.concat [makeExclusive views; cs.Constraints] } 
-        | Constraint { Node = Disjoint xs } -> 
-            { cs with Constraints = List.concat [makeDisjoint xs; cs.Constraints] } 
+        | Constraint c -> { cs with Constraints = c::cs.Constraints }
 
     // We foldBack instead of fold to preserve the original order.
     List.foldBack collateStep script empty

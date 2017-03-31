@@ -97,13 +97,16 @@ constraint canHoldReadLock()                       -> ticket != serving && readC
 constraint holdInnerLock()   * holdTick(t)      -> serving != t;
 constraint holdWriteLock()   * holdTick(t)      -> serving != t;
 constraint holdTick(ta)      * holdTick(tb)     -> ta != tb;
-constraint holdInnerLock()   * holdInnerLock()  -> false;
-constraint holdInnerLock()   * holdWriteLock()  -> false;
-constraint holdWriteLock()   * holdWriteLock()  -> false;
+
+saturate exclusive;
+
+//constraint holdInnerLock()   * holdInnerLock()  -> false;
+//constraint holdInnerLock()   * holdWriteLock()  -> false;
+//constraint holdWriteLock()   * holdWriteLock()  -> false;
 
 constraint canHoldReadLock() * holdTick(t)      -> serving != t;
-constraint canHoldReadLock() * holdInnerLock() -> false;
-constraint canHoldReadLock() * canHoldReadLock() -> false;
-constraint canHoldReadLock() * holdWriteLock() -> false;
+//constraint canHoldReadLock() * holdInnerLock() -> false;
+//constraint canHoldReadLock() * canHoldReadLock() -> false;
+//constraint canHoldReadLock() * holdWriteLock() -> false;
 
 constraint iter[n] holdReadLock() -> n <= readCount && n <= maxCount;
