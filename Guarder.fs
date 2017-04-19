@@ -39,6 +39,8 @@ let guardCView (cview : CView) : GuarderView =
                 [ guardCViewIn (suffix.Add expr) (Multiset.toFlatList tviews)
                   guardCViewIn (suffix.Add (mkNot expr))
                       (Multiset.toFlatList fviews) ]
+        | CFunc.CLocal c ->
+            failwith "FIXME: CLocal not yet supported"
     and guardCViewIn suffix = concatMap (guardCFuncIn suffix)
 
     // TODO(CaptainHayashi): woefully inefficient.

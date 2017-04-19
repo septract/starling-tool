@@ -33,7 +33,11 @@ open Starling.Lang.ViewDesugar
 module Types =
     /// A conditional (flat or if-then-else) func.
     type CFunc =
-        | ITE of SVBoolExpr * CView * CView
+        /// <summary>An if-then-else view.</summary>
+        | ITE of BoolExpr<Sym<Var>> * CView * CView
+        /// <summary>A local observation view.</summary>
+        | CLocal of BoolExpr<Sym<Var>>
+        /// <summary>An abstract-predicate view.</summary>
         | Func of SVFunc
         override this.ToString() = sprintf "CFunc(%A)" this
 
@@ -221,8 +225,8 @@ module Pretty =
     open Starling.Lang.ViewDesugar.Pretty
 
     /// Pretty-prints a CFunc.
-    let rec printCFunc : CFunc -> Doc =
-        function
+    let rec printCFunc (f : CFunc) : Doc =
+        match f with
         | CFunc.ITE(i, t, e) ->
             hsep [ String "if"
                    printSVBoolExpr i
@@ -230,6 +234,8 @@ module Pretty =
                    t |> printCView |> ssurround "[" "]"
                    String "else"
                    e |> printCView |> ssurround "[" "]" ]
+        | CLocal e ->
+            String "local" <+> braced (printSVBoolExpr e)
         | Func v -> printSVFunc v
 
     /// Pretty-prints a CView.
@@ -1293,36 +1299,36 @@ let modelCFunc
 /// Takes an environment of local variables, and the AST itself.
 let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
     let mkCView cfunc = Multiset.singleton ({ Func = cfunc; Iterator = None })
-    function
-    | View.Func afunc ->
-        modelCFunc ctx afunc |> lift mkCView
-    | View.If(e, l, ro) ->
+    let mkCond (e : Expression) =
         (* Booleans in the condition position must be of type 'bool',
            not a subtype. *)
         let teR =
             wrapMessages ViewError.BadExpr
                 (modelBoolExpr ctx.Env Thread id)
                 e
-        let eR =
-            bind
-                (checkBoolIsNormalType
-                 >> mapMessages (ExprBadType >> fun r -> ViewError.BadExpr (e, r)))
-                teR
 
+        bind
+            (checkBoolIsNormalType
+                >> mapMessages (ExprBadType >> fun r -> ViewError.BadExpr (e, r)))
+            teR
+
+    function
+    | View.Func afunc -> lift mkCView (modelCFunc ctx afunc)
+    | View.If(e, l, ro) ->
         // If the RHS view is missing, it's taken to be `emp`.
         let r = withDefault Unit ro
 
-        lift3 (fun em lm rm -> mkCView (CFunc.ITE(em, lm, rm)))
-              eR
+        lift3 (fun em lm rm -> mkCView (CFunc.ITE (em, lm, rm)))
+              (mkCond e)
               (modelCView ctx l)
               (modelCView ctx r)
-    | Unit -> Multiset.empty |> ok
+    | Unit -> ok (Multiset.empty)
     | Join(l, r) ->
         lift2 (Multiset.append)
               (modelCView ctx l)
               (modelCView ctx r)
-    | Falsehood -> failwith "FIXME: Falsehood not implemented yet"
-    | Local _ -> failwith "FIXME: Local not implemented yet"
+    | Falsehood -> ok (mkCView (CLocal BFalse))
+    | Local e -> lift (CLocal >> mkCView) (mkCond e)
 
 //
 // Axioms
