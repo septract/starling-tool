@@ -424,7 +424,7 @@ let parseIfView =
             // ^-                 ... then <view> ...
             (pstring "else" >>. ws >>. parseView)
             // ^-                                 ... else <view>
-            (curry3 View.If)
+            (fun i t e -> View.If (i, t, Some e))
 
 /// Parses a functional view.
 let parseFuncView = parseFunc parseExpression |>> View.Func

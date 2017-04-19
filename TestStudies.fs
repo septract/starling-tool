@@ -107,7 +107,7 @@ let ticketLockLockMethodAST =
                              pos 20L 13L (Identifier "s"),
                              pos 20L 18L (Identifier "t")),
                          View.Func { Name = "holdLock"; Params = [] },
-                         View.Func
+                         Some <| View.Func
                              { Name = "holdTick"
                                Params = [ pos 20L 50L (Identifier "t") ] }))) ],
              pos 21L 16L <| BopExpr

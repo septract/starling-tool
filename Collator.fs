@@ -223,9 +223,16 @@ module ParamDesugar =
         let rec rewriteView =
             function
             | Unit -> Unit
+            | Falsehood -> Falsehood
             | Join (l, r) -> Join (rewriteView l, rewriteView r)
             | Func f -> Func (rewriteAFunc f)
-            | View.If (i, t, e) -> View.If (rewriteExpression i, rewriteView t, rewriteView e)
+            | View.If (i, t, e) ->
+                View.If
+                    (rewriteExpression i,
+                     rewriteView t,
+                     Option.map rewriteView e)
+            | Local e ->
+                Local (rewriteExpression e)
         and rewriteCommand cmd =
             let rewriteCommand' =
                 function

@@ -1296,7 +1296,7 @@ let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
     function
     | View.Func afunc ->
         modelCFunc ctx afunc |> lift mkCView
-    | View.If(e, l, r) ->
+    | View.If(e, l, ro) ->
         (* Booleans in the condition position must be of type 'bool',
            not a subtype. *)
         let teR =
@@ -1309,6 +1309,9 @@ let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
                  >> mapMessages (ExprBadType >> fun r -> ViewError.BadExpr (e, r)))
                 teR
 
+        // If the RHS view is missing, it's taken to be `emp`.
+        let r = withDefault Unit ro
+
         lift3 (fun em lm rm -> mkCView (CFunc.ITE(em, lm, rm)))
               eR
               (modelCView ctx l)
@@ -1318,6 +1321,8 @@ let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
         lift2 (Multiset.append)
               (modelCView ctx l)
               (modelCView ctx r)
+    | Falsehood -> failwith "FIXME: Falsehood not implemented yet"
+    | Local _ -> failwith "FIXME: Local not implemented yet"
 
 //
 // Axioms

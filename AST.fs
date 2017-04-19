@@ -177,10 +177,18 @@ module Types =
 
     /// A view.
     type View =
+          /// <summary>The unit view, `emp`.</summary>
         | Unit
+          /// <summary>The always-false view, `false`.</summary>
+        | Falsehood
+          /// <summary>A `*`-conjunction of two views.</summary>
         | Join of View * View
+          /// <summary>An abstract-predicate view.</summary>
         | Func of AFunc
-        | If of Expression * View * View
+          /// <summary>A local view, `local { P }`.
+        | Local of Expression
+          /// <summary>A conditional view, `if P { V1 } [else { V2 }]`.
+        | If of Expression * View * View option
 
     /// A set of primitives.
     type PrimSet =
@@ -256,8 +264,9 @@ module Pretty =
     /// </summary>
     module private Helpers =
         /// Pretty-prints blocks with the given indent level (in spaces).
+        /// This does not include the curly braces.
         let printBlock (pCmd : 'Cmd -> Doc) (c : 'Cmd list) : Doc =
-            braced (ivsep (List.map (pCmd >> Indent) c))
+            ivsep (List.map (pCmd >> Indent) c)
 
         /// <summary>
         ///     Pretty-prints an if-then-else.
@@ -276,15 +285,15 @@ module Pretty =
           (pCond : 'Cond -> Doc)
           (pLeg : 'Leg -> Doc)
           (cond : 'Cond)
-          (thenLeg : 'Leg list)
-          (elseLeg : ('Leg list) option)
+          (thenLeg : 'Leg)
+          (elseLeg : 'Leg option)
           : Doc =
             syntaxStr "if"
             <+> parened (pCond cond)
-            <+> printBlock pLeg thenLeg
+            <+> braced (pLeg thenLeg)
             <+> (maybe
                     Nop
-                    (fun e -> syntaxStr "else" <+> printBlock pLeg e)
+                    (fun e -> syntaxStr "else" <+> braced (pLeg e))
                     elseLeg)
 
 
@@ -349,14 +358,10 @@ module Pretty =
         function
         | View.Func f -> printFunc printExpression f
         | View.Unit -> String "emp" |> syntaxView
+        | View.Falsehood -> String "false" |> syntaxView
         | View.Join(l, r) -> binop "*" (printView l) (printView r)
-        | View.If(e, l, r) ->
-            hsep [ String "if" |> syntaxView
-                   printExpression e
-                   String "then" |> syntaxView
-                   printView l
-                   String "else" |> syntaxView
-                   printView r ]
+        | View.If(e, l, r) -> Helpers.printITE printExpression printView e l r
+        | View.Local l -> syntaxView (String "local") <+> braced (printExpression l)
 
     /// Pretty-prints marked view lines.
     let rec printMarkedView (pView : 'view -> Doc) : Marked<'view> -> Doc =
@@ -443,7 +448,7 @@ module Pretty =
         match a with
         | APrim p -> printPrim p
         | ACond (cond = c; trueBranch = t; falseBranch = f) ->
-            Helpers.printITE printExpression printAtomic c t f
+            Helpers.printITE printExpression (Helpers.printBlock printAtomic) c t f
     and printAtomic (x : Atomic) : Doc = printAtomic' x.Node
 
     /// Pretty-prints commands.
@@ -460,7 +465,7 @@ module Pretty =
                   yield! Seq.map printPrim qs }
             |> semiSep |> withSemi
         | Command'.If(c, t, f) ->
-            Helpers.printITE printExpression printCommand c t f
+            Helpers.printITE printExpression (Helpers.printBlock printCommand) c t f
         | Command'.While(c, b) ->
             hsep [ "while" |> String |> syntax
                    c |> printExpression |> parened
