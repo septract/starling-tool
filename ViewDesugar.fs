@@ -528,6 +528,42 @@ module Tests =
             check checkCtx [] Unit
 
         [<Test>]
+        let ``Desugar a local expression`` () =
+            check
+                { checkCtx with
+                    LocalLiftView =
+                        Some
+                            (NoIterator
+                                (Func = func "__lift_0" [ normalBoolVar "x" ],
+                                IsAnonymous = false));
+                    GeneratedProtos =
+                        Set.ofList
+                            [ (NoIterator
+                                    (Func = func "__lift_0" [ normalBoolVar "x" ],
+                                    IsAnonymous = false)) ] }
+                [ (freshNode True, func "__lift_0" [ freshNode (Identifier "bar") ]) ]
+                (Local (freshNode (Identifier "bar")))
+
+        [<Test>]
+        let ``Desugar a falsehood`` () =
+            check
+                { checkCtx with
+                    LocalLiftView =
+                        Some
+                            (NoIterator
+                                (Func = func "__lift_0" [ normalBoolVar "x" ],
+                                IsAnonymous = false));
+                    GeneratedProtos =
+                        Set.ofList
+                            [ (NoIterator
+                                    (Func = func "__lift_0" [ normalBoolVar "x" ],
+                                    IsAnonymous = false)) ] }
+                [ (freshNode True, func "__lift_0" [ freshNode (False) ]) ]
+                Falsehood
+
+
+
+        [<Test>]
         let ``Desugar a flat join`` () =
             check
                 checkCtx
