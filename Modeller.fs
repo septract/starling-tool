@@ -1225,13 +1225,29 @@ let addSearchDefs
 /// Extracts the view definitions from a CollatedScript, turning each into a
 /// ViewDef.
 let modelViewDefs
-  svars
+  (env : Env)
   (vprotos : FuncDefiner<ProtoInfo>)
-  { Search = s; Constraints = cs } =
-    cs
-    |> List.map (modelViewDef svars vprotos)
-    |> collect
-    |> lift (addSearchDefs vprotos s)
+  (liftName : string option)
+  (collated : CollatedScript) =
+    let { Search = s; Constraints = cs } = collated
+
+    let explicitDefsR = collect (List.map (modelViewDef env vprotos) cs)
+    let withSearchDefsR = lift (addSearchDefs vprotos s) explicitDefsR
+
+    let addLiftConstraint defs =
+        // TODO(MattWindsor91): remove assumption that lift's parameter is 'x'.
+        maybe
+            defs
+            (fun n ->
+                let ldef = 
+                    ( [ iterated (func n [ normalBoolVar "x" ] ) None ],
+                      Some (sbVar "x") )
+                
+                ViewDefiner.combine defs (ViewDefiner.ofSeq [ldef]))
+            liftName
+
+    lift addLiftConstraint withSearchDefsR
+
 
 //
 // View applications
@@ -1888,13 +1904,13 @@ let model
         let desugarContext, desugaredMethods =
             desugar tvars collated.VProtos collated.Methods
 
-        // TODO: synth constraint for lift view
-
         let! cprotos = convertViewProtos types collated.VProtos
         let nprotos = desugarContext.GeneratedProtos
         let! vprotos = modelViewProtos (Seq.append cprotos nprotos)
 
-        let! constraints = modelViewDefs env vprotos collated
+        // We have to synthesise a constraint for the lifting view, if any.
+        let liftname = Option.map protoName desugarContext.LocalLiftView
+        let! constraints = modelViewDefs env vprotos liftname collated
 
         let mctx =
             { ViewProtos = vprotos
