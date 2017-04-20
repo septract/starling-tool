@@ -86,9 +86,6 @@ let requestList : (string * (string * Request)) list =
       ("model",
        ("Stops Starling frontend processing at initial modelling.",
         Request.Frontend Lang.Frontend.Request.Model))
-      ("guard",
-       ("Stops Starling frontend processing at guarded view generation.",
-        Request.Frontend Lang.Frontend.Request.Guard))
       ("graph",
        ("Outputs an unoptimised control-flow graph series.",
         Request.Frontend Lang.Frontend.Request.Graph))

@@ -11,6 +11,7 @@ open Starling.Core
 open Starling.Core.TypeSystem
 open Starling.Core.Definer
 open Starling.Core.Expr
+open Starling.Core.GuardedView
 open Starling.Core.Var
 open Starling.Core.Symbolic
 open Starling.Core.View
@@ -57,58 +58,64 @@ let sharedContext =
 
 
 module ViewPass =
-    let check (view : View) (expectedCView : CView) =
-        let actualCView = okOption <| modelCView context view
-        AssertAreEqual(Some expectedCView, actualCView)
+    let check
+      (expected : IteratedGView<Sym<Var>>)
+      (view : DesugaredGView)
+      : unit =
+        assertOkAndEqual
+            expected 
+            (modelView context view)
+            (Starling.Core.Pretty.printUnstyled <<
+                Starling.Lang.Modeller.Pretty.printViewError)
+
 
     [<Test>]
     let ``check emp`` () =
-        check View.Unit Multiset.empty
+        check Multiset.empty []
 
     [<Test>]
     let ``test correct func``() =
         check
-            (View.Func <| afunc "holdLock" [])
             (Multiset.singleton
                 (iterated
-                    (CFunc.Func (vfunc "holdLock" []))
-                    None))
+                    (gfunc BTrue "holdLock" [])
+                    (IInt 1L)))
+            [ ( freshNode True, afunc "holdLock" [] ) ]
 
 
 module ViewFail =
-    let check (view : View) (expectedFailures : ViewError list) =
-        let actualErrors = failOption <| modelCView context view
-        AssertAreEqual(Some expectedFailures, actualErrors)
+    let check (expected : ViewError list) (view : DesugaredGView) : unit =
+        assertEqual (Some expected) (failOption (modelView context view))
 
     [<Test>]
     let ``test unknown func`` () =
         check
-            (View.Func <| afunc "badfunc" [])
-            ([ NoSuchView "badfunc" ])
+            [ NoSuchView "badfunc" ]
+            [ (freshNode True, afunc "badfunc" []) ]
 
     [<Test>]
     let ``test missing parameter`` () =
         check
-            (View.Func <| afunc "holdTick" [])
-            ([ LookupError ("holdTick", CountMismatch(0, 1)) ])
+            [ LookupError ("holdTick", CountMismatch(0, 1)) ]
+            [ (freshNode True, afunc "holdTick" []) ]
 
     [<Test>]
     let ``test bad parameter type`` () =
         check
-          (View.Func <| afunc "holdTick" [freshNode Expression'.True])
-          ([ LookupError
+          [ LookupError
                ( "holdTick",
                  Error.TypeMismatch
-                   (Int (normalRec, "t"), Type.Bool (indefRec, ()))) ])
+                   (Int (normalRec, "t"), Type.Bool (indefRec, ()))) ]
+          [ (freshNode True, afunc "holdTick" [freshNode Expression'.True]) ]
 
     [<Test>]
     let ``test bad parameter subtype`` () =
         check
-          (View.Func <| afunc "holdTick" [freshNode (Identifier "lnode")])
-          ([ LookupError
+          [ LookupError
                ( "holdTick",
                  Error.TypeMismatch
-                   (normalIntVar "t", Type.Int ({ PrimSubtype = Named "Node" }, ()))) ])
+                   (normalIntVar "t", Type.Int ({ PrimSubtype = Named "Node" }, ()))) ]
+          [ (freshNode True, afunc "holdTick" [freshNode (Identifier "lnode")]) ]
 
 
 module ArithmeticExprs =
@@ -397,6 +404,9 @@ module Atomics =
 module CommandAxioms =
     open Starling.Core.Pretty
     open Starling.Core.View.Pretty
+    open Starling.Core.GuardedView.Pretty
+    open Starling.Core.Symbolic.Pretty
+    open Starling.Core.Var.Pretty
     open Starling.Lang.Modeller.Pretty
 
     let check (c : FullCommand) (cmd : ModellerPartCmd) : unit =
@@ -409,7 +419,7 @@ module CommandAxioms =
         assertFail
             errors
             (modelCommand sharedContext c)
-            (printPartCmd (printViewExpr printCView) >> printUnstyled)
+            (printPartCmd (printViewExpr (printIteratedGView (printSym printVar))) >> printUnstyled)
 
     let prim (atom : Atomic) : FullCommand =
         freshNode

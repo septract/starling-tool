@@ -17,6 +17,7 @@ open Starling.Core.Var.VarMap
 open Starling.Core.Symbolic
 open Starling.Core.Model
 open Starling.Core.View
+open Starling.Core.GuardedView
 open Starling.Core.Command
 open Starling.Core.Command.Create
 open Starling.Core.Instantiate
@@ -31,19 +32,6 @@ open Starling.Lang.ViewDesugar
 /// </summary>
 [<AutoOpen>]
 module Types =
-    /// A conditional (flat or if-then-else) func.
-    type CFunc =
-        /// <summary>An if-then-else view.</summary>
-        | ITE of BoolExpr<Sym<Var>> * CView * CView
-        /// <summary>A local observation view.</summary>
-        | CLocal of BoolExpr<Sym<Var>>
-        /// <summary>An abstract-predicate view.</summary>
-        | Func of SVFunc
-        override this.ToString() = sprintf "CFunc(%A)" this
-
-    /// A conditional view, or multiset of CFuncs.
-    and CView = Multiset<IteratedContainer<CFunc, Sym<Var> option>>
-
     /// A partially resolved command.
     type PartCmd<'view> =
         | Prim of Starling.Core.Command.Types.Command
@@ -70,7 +58,7 @@ module Types =
           /// </summary>
           ViewProtos : FuncDefiner<ProtoInfo> }
 
-    type ModellerViewExpr = ViewExpr<CView>
+    type ModellerViewExpr = ViewExpr<IteratedGView<Sym<Var>>>
     type ModellerPartCmd = PartCmd<ModellerViewExpr>
     type ModellerBlock = FullBlock<ModellerViewExpr, PartCmd<ModellerViewExpr>>
 
@@ -188,7 +176,7 @@ module Types =
         /// The method contains a bad while condition.
         | BadWhileCondition of expr: AST.Types.Expression * err: ExprError
         /// The method contains a bad view.
-        | BadView of view : ViewExpr<AST.Types.View> * err : ViewError
+        | BadView of view : ViewExpr<DesugaredGView> * err : ViewError
         /// The method contains an command not yet implemented in Starling.
         | CommandNotImplemented of cmd : FullCommand
 
@@ -223,26 +211,6 @@ module Pretty =
     open Starling.Core.View.Pretty
     open Starling.Lang.AST.Pretty
     open Starling.Lang.ViewDesugar.Pretty
-
-    /// Pretty-prints a CFunc.
-    let rec printCFunc (f : CFunc) : Doc =
-        match f with
-        | CFunc.ITE(i, t, e) ->
-            hsep [ String "if"
-                   printSVBoolExpr i
-                   String "then"
-                   t |> printCView |> ssurround "[" "]"
-                   String "else"
-                   e |> printCView |> ssurround "[" "]" ]
-        | CLocal e ->
-            String "local" <+> braced (printSVBoolExpr e)
-        | Func v -> printSVFunc v
-
-    /// Pretty-prints a CView.
-    and printCView : CView -> Doc =
-        printMultiset
-            (printIteratedContainer printCFunc (maybe Nop (printSym printVar)))
-        >> ssurround "[|" "|]"
 
     /// Pretty-prints a part-cmd at the given indent level.
     let rec printPartCmd (pView : 'view -> Doc) (pc : PartCmd<'view>) : Doc =
@@ -413,7 +381,7 @@ module Pretty =
             wrapped "while-loop condition" (printExpression expr)
                                            (printExprError err)
         | BadView (view, err) ->
-            wrapped "view expression" (printViewExpr printView view)
+            wrapped "view expression" (printViewExpr printDesugaredGView view)
                                       (printViewError err)
         | CommandNotImplemented cmd ->
             fmt "command {0} not yet implemented" [ printFullCommand cmd ]
@@ -1269,10 +1237,11 @@ let modelViewDefs
 // View applications
 //
 
-/// Models an AFunc as a CFunc.
-let modelCFunc
+/// Models a part-desugared view func.
+let modelFunc
   (ctx : MethodContext)
-  (afunc : Func<Expression>) =
+  (afunc : Func<Expression>)
+  : Result<Func<Expr<Sym<Var>>>, ViewError> =
     // First, make sure this AFunc actually has a prototype
     // and the correct number of parameters.
     afunc
@@ -1293,11 +1262,13 @@ let modelCFunc
              |> bind (fun vfunc ->
                           FuncDefiner.checkParamTypes vfunc proto
                           |> mapMessages (curry LookupError vfunc.Name)))
-    |> lift CFunc.Func
 
-/// Tries to flatten a view AST into a CView.
+/// Tries to model a view AST.
 /// Takes an environment of local variables, and the AST itself.
-let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
+let rec modelView
+  (ctx : MethodContext)
+  (ast : DesugaredGView)
+  : Result<IteratedGView<Sym<Var>>, ViewError> =
     let mkCView cfunc = Multiset.singleton ({ Func = cfunc; Iterator = None })
     let mkCond (e : Expression) =
         (* Booleans in the condition position must be of type 'bool',
@@ -1312,23 +1283,18 @@ let rec modelCView (ctx : MethodContext) : View -> Result<CView, ViewError> =
                 >> mapMessages (ExprBadType >> fun r -> ViewError.BadExpr (e, r)))
             teR
 
-    function
-    | View.Func afunc -> lift mkCView (modelCFunc ctx afunc)
-    | View.If(e, l, ro) ->
-        // If the RHS view is missing, it's taken to be `emp`.
-        let r = withDefault Unit ro
-
-        lift3 (fun em lm rm -> mkCView (CFunc.ITE (em, lm, rm)))
-              (mkCond e)
-              (modelCView ctx l)
-              (modelCView ctx r)
-    | Unit -> ok (Multiset.empty)
-    | Join(l, r) ->
-        lift2 (Multiset.append)
-              (modelCView ctx l)
-              (modelCView ctx r)
-    | Falsehood -> ok (mkCView (CLocal BFalse))
-    | Local e -> lift (CLocal >> mkCView) (mkCond e)
+    let modelGFunc (g, f) =
+        let gR = mkCond g
+        let fR = modelFunc ctx f
+        lift2
+            (fun gM fM -> 
+                (* Each of these exists once, so put it through as having
+                   iterator 1. *)
+                iterated { Cond = gM; Item = fM } (IInt 1L))
+                gR fR
+    
+    let funclist = collect (List.map modelGFunc ast)
+    lift Multiset.ofFlatList funclist
 
 //
 // Axioms
@@ -1657,8 +1623,8 @@ let modelAtomic (env : Env) (atomicAST : Atomic)
 let rec modelITE
   (ctx : MethodContext)
   (i : Expression)
-  (t : FullBlock<ViewExpr<View>, FullCommand>)
-  (fo : FullBlock<ViewExpr<View>, FullCommand> option)
+  (t : FullBlock<ViewExpr<DesugaredGView>, FullCommand>)
+  (fo : FullBlock<ViewExpr<DesugaredGView>, FullCommand> option)
   : Result<ModellerPartCmd, MethodError> =
     let iuR =
         wrapMessages
@@ -1689,7 +1655,7 @@ and modelWhile
   (isDo : bool)
   (ctx : MethodContext)
   (e : Expression)
-  (b : FullBlock<ViewExpr<View>, FullCommand>)
+  (b : FullBlock<ViewExpr<DesugaredGView>, FullCommand>)
   : Result<ModellerPartCmd, MethodError> =
     (* A while is also not fully resolved.
      * Similarly, we convert the condition, recursively find the axioms,
@@ -1742,15 +1708,15 @@ and modelCommand
 
 /// Converts a view expression into a CView.
 and modelViewExpr (ctx : MethodContext)
-  : ViewExpr<View> -> Result<ModellerViewExpr, ViewError> =
+  : ViewExpr<DesugaredGView> -> Result<ModellerViewExpr, ViewError> =
     function
-    | Mandatory v -> modelCView ctx v |> lift Mandatory
-    | Advisory v -> modelCView ctx v |> lift Advisory
+    | Mandatory v -> modelView ctx v |> lift Mandatory
+    | Advisory v -> modelView ctx v |> lift Advisory
 
 /// Converts a pair of view and command.
 and modelViewedCommand
   (ctx : MethodContext)
-  (vc : FullCommand * ViewExpr<View>)
+  (vc : FullCommand * ViewExpr<DesugaredGView>)
       : Result<ModellerPartCmd * ModellerViewExpr, MethodError> =
     let command, post = vc
     lift2 mkPair
@@ -1762,7 +1728,7 @@ and modelViewedCommand
 /// The converted block is enclosed in a Chessie result.
 and modelBlock
   (ctx : MethodContext)
-  (block : FullBlock<ViewExpr<View>, FullCommand>)
+  (block : FullBlock<ViewExpr<DesugaredGView>, FullCommand>)
   : Result<ModellerBlock, MethodError> =
     lift2 (fun bPreM bContentsM -> {Pre = bPreM; Cmds = bContentsM})
           (wrapMessages MethodError.BadView (modelViewExpr ctx) block.Pre)
@@ -1772,7 +1738,7 @@ and modelBlock
 /// The converted method is enclosed in a Chessie result.
 let modelMethod
   (ctx : MethodContext)
-  (meth : string * FullBlock<ViewExpr<View>, FullCommand>)
+  (meth : string * FullBlock<ViewExpr<DesugaredGView>, FullCommand>)
   : Result<string * ModellerBlock, ModelError> =
     let (n, b) = meth
     let bmR = mapMessages (curry BadMethod n) (modelBlock ctx b)
@@ -1919,11 +1885,14 @@ let model
         let! tvars = modelVarMap types collated.ThreadVars "thread"
         let env = Env.env tvars svars
 
-        let desugaredMethods, unknownProtos =
-            desugar tvars collated.Methods
+        let desugarContext, desugaredMethods =
+            desugar tvars collated.VProtos collated.Methods
+
+        // TODO: synth constraint for lift view
 
         let! cprotos = convertViewProtos types collated.VProtos
-        let! vprotos = modelViewProtos (Seq.append cprotos unknownProtos)
+        let nprotos = desugarContext.GeneratedProtos
+        let! vprotos = modelViewProtos (Seq.append cprotos nprotos)
 
         let! constraints = modelViewDefs env vprotos collated
 

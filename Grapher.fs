@@ -20,7 +20,6 @@ open Starling.Core.GuardedView
 open Starling.Core.Graph
 open Starling.Lang.AST
 open Starling.Lang.Modeller
-open Starling.Lang.Guarder.Types
 open Starling.Core.Command
 open Starling.Core.Command.Create
 
@@ -62,7 +61,7 @@ let rec graphWhile
   (oQ : EdgeID)
   (isDo : bool)
   (expr : SVBoolExpr)
-  (inner : GuarderBlock)
+  (inner : ModellerBlock)
   : Result<Subgraph, Error> =
     trial {
         (* If isDo:
@@ -138,8 +137,8 @@ and graphITE
   (oP : NodeID)
   (oQ : NodeID)
   (expr : SVBoolExpr)
-  (inTrue : GuarderBlock)
-  (inFalse : GuarderBlock option)
+  (inTrue : ModellerBlock)
+  (inFalse : ModellerBlock option)
   : Result<Subgraph, Error> =
     trial {
         (* First, we need to convert the expression into an assert.
@@ -217,7 +216,7 @@ and graphCommand
   (cg : unit -> EdgeID)
   (oP : NodeID)
   (oQ : NodeID)
-  : GuarderPartCmd -> Result<Subgraph, Error> =
+  : ModellerPartCmd -> Result<Subgraph, Error> =
     function
     | Prim cmd ->
         /// Each prim is an edge by itself, so just make a one-edge graph.
@@ -244,7 +243,7 @@ and graphBlockStep
   (vg : unit -> NodeID)
   (cg : unit -> EdgeID)
   ((iP, oGraphR) : NodeID * Result<Subgraph, Error>)
-  ((cmd, iQview) : GuarderPartCmd * GuarderViewExpr)
+  ((cmd, iQview) : ModellerPartCmd * ModellerViewExpr)
   : NodeID * Result<Subgraph, Error> =
     (* We already know the precondition's ID--it's in pre.
      * However, we now need to create an ID for the postcondition.
@@ -285,7 +284,7 @@ and graphBlock
   (topLevel : bool)
   (vg : unit -> NodeID)
   (cg : unit -> NodeID)
-  ({Pre = bPre; Cmds = bContents} : GuarderBlock)
+  ({Pre = bPre; Cmds = bContents} : ModellerBlock)
   : Result<NodeID * NodeID * Subgraph, Error> =
     // First, generate the ID for the precondition.
     let oP = vg ()
@@ -315,7 +314,7 @@ and graphBlock
 /// <summary>
 ///     Constructs a control-flow graph for an outer block representing a method.
 /// </summary>
-let graphMethod (name : string) (body : GuarderBlock) : Result<Graph, Error> =
+let graphMethod (name : string) (body : ModellerBlock) : Result<Graph, Error> =
     let vgen = freshGen ()
     let viewName () =
        getFresh vgen
@@ -341,5 +340,5 @@ let graphMethod (name : string) (body : GuarderBlock) : Result<Graph, Error> =
 ///     A model whose axioms are the graphs resulting from the
 ///     methods of <paramref name="model"/>.
 /// </returns>
-let graph (model : Model<GuarderBlock, _>) : Result<Model<Graph, _>, Error> =
+let graph (model : Model<ModellerBlock, _>) : Result<Model<Graph, _>, Error> =
     tryMapAxiomsWithNames graphMethod model

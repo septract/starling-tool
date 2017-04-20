@@ -18,7 +18,6 @@ open Starling.Core.GuardedView
 open Starling.Lang.AST
 open Starling.Lang.Collator
 open Starling.Lang.Modeller
-open Starling.Lang.Guarder
 open Starling.Lang.ViewDesugar
 
 
@@ -357,17 +356,6 @@ let ticketLockCollated =
 /// Shorthand for Multiset.singleton.
 let sing = Multiset.singleton
 
-/// The conditional holdLock view.
-let holdLock =
-    { Func = Func (svfunc "holdLock" [])
-      Iterator = None }
-
-/// The conditional holdTick view.
-let holdTick =
-    { Func = Func (svfunc "holdTick" [normalIntExpr (siVar "t")])
-      Iterator = None }
-
-
 let oneGFunc (cnd : BoolExpr<Sym<Var>>) (name : string)
   (ps : Expr<Sym<Var>> list)
   : IteratedGFunc<Sym<Var>> =
@@ -384,50 +372,8 @@ let gHoldTick cnd : IteratedGFunc<Sym<Var>> =
 /// Produces the expression 's!before == t!before'.
 let sIsT = iEq (siVar "s") (siVar "t")
 
-/// The ticket lock's lock method.
-let ticketLockLock =
-    { Pre = Mandatory <| Multiset.empty
-      Cmds =
-        [ ( command "!ILoad++"
-                [ normalIntExpr (siVar "t"); normalIntExpr (siVar "ticket") ]
-                [ normalIntExpr (siVar "ticket") ]
-            |> List.singleton |> Prim,
-            Mandatory <| sing holdTick )
-          ( While (isDo = true,
-                   expr = BNot sIsT,
-                   inner =
-                       { Pre = Mandatory <| sing holdTick
-                         Cmds =
-                             [ ( command "!ILoad"
-                                    [ normalIntExpr (siVar "s") ]
-                                    [ normalIntExpr (siVar "serving") ]
-                                 |> List.singleton |> Prim,
-                                 { Func =
-                                     CFunc.ITE
-                                      (sIsT,
-                                       sing holdLock,
-                                       sing holdTick)
-                                   Iterator = None }
-                                  |> Multiset.singleton
-                                  |> Mandatory ) ] } ),
-            Mandatory <| sing holdLock ) ] }
-
-/// The ticket lock's unlock method.
-let ticketLockUnlock =
-      { Pre = Mandatory <| sing holdLock
-        Cmds =
-            [ ( command "!I++" [ normalIntExpr (siVar "serving") ] [ normalIntExpr (siVar "serving") ]
-                |> List.singleton |> Prim,
-                Mandatory <| Multiset.empty ) ] }
-
-/// The methods of the ticket lock.
-let ticketLockMethods =
-    [ ("lock", ticketLockLock)
-      ("unlock", ticketLockUnlock) ] |> Map.ofList
-
-
 /// The ticket lock's lock method, in guarded form.
-let ticketLockGuardedLock : GuarderBlock =
+let ticketLockLock : ModellerBlock =
       { Pre = Mandatory <| Multiset.empty
         Cmds =
             [ ( command "!ILoad++"
@@ -452,12 +398,17 @@ let ticketLockGuardedLock : GuarderBlock =
                 Mandatory <| sing (gHoldLock BTrue) ) ] } 
 
 /// The ticket lock's unlock method, in guarded form.
-let ticketLockGuardedUnlock : GuarderBlock =
+let ticketLockUnlock : ModellerBlock =
       { Pre = Mandatory <| sing (gHoldLock BTrue)
         Cmds =
             [ ( command "!I++" [ normalIntExpr (siVar "serving") ] [ normalIntExpr (siVar "serving") ]
                 |> List.singleton |> Prim,
                 Mandatory <| Multiset.empty ) ] }
+
+/// The methods of the ticket lock.
+let ticketLockMethods =
+    [ ("lock", ticketLockLock)
+      ("unlock", ticketLockUnlock) ] |> Map.ofList
 
 /// The view definitions of the ticket lock model.
 let ticketLockViewDefs =

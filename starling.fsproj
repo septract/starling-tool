@@ -69,7 +69,6 @@
     <Compile Include="ViewDesugar.fs" />
     <Compile Include="Instantiate.fs" />
     <Compile Include="Modeller.fs" />
-    <Compile Include="Guarder.fs" />
     <Compile Include="Grapher.fs" />
     <Compile Include="Semantics.fs" />
     <Compile Include="TermGen.fs" />
@@ -91,7 +90,6 @@
     <Compile Include="PrettyTests.fs" />
     <Compile Include="ParserTests.fs" />
     <Compile Include="ModellerTests.fs" />
-    <Compile Include="GuarderTests.fs" />
     <Compile Include="GuardedViewTests.fs" />
     <Compile Include="ReifierTests.fs" />
     <Compile Include="SemanticsTests.fs" />
