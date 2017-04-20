@@ -18,7 +18,7 @@ method readAcquire() {
     do {
       {| holdTick(t) |}
         <s = serving>;
-      {| if s == t then holdInnerLock() else holdTick(t) |}
+      {| if (s == t) { holdInnerLock() } else { holdTick(t) } |}
     } while (s != t);
   {| holdInnerLock() |}
   <readCount++>;
@@ -41,13 +41,13 @@ method writeAcquire() {
     do {
       {| holdTick(t) |}
         <s = serving>;
-      {| if s == t then holdInnerLock() else holdTick(t) |}
+      {| if (s == t) { holdInnerLock() } else { holdTick(t) } |}
     } while (s != t);
   {| holdInnerLock() |}
    do {
      {| holdInnerLock() |}
      <r = readCount>;
-	 {| if r == 0 then holdWriteLock() else holdInnerLock() |}
+	 {| if (r == 0) { holdWriteLock() } else { holdInnerLock() } |}
    } while (r != 0);
   {| holdWriteLock() |}
 }

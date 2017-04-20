@@ -13,9 +13,9 @@ method lock() {
     do {
       {| emp |}
         test = false;
-      {| if test == false then emp else False() |}
+      {| local { test == false } |}
         <| if (lock == test) { lock = true; } test = lock; |>
-      {| if test == false then holdLock() else emp |}
+      {| if (test == false) { holdLock() } |}
     } while (test == true);
   {| holdLock() |}
 }

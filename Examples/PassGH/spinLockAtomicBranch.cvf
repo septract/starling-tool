@@ -28,7 +28,7 @@ method lock(Lock x) {
                test = true;
                %{ [|x|].lock := true };
            } |>
-      {| if test == false then isLock(x) else holdLock(x) |}
+      {| if (test == false) { isLock(x) } else { holdLock(x) } |}
     } while (test == false);
   {| holdLock(x) |}
 }

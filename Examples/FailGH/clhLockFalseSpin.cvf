@@ -109,7 +109,7 @@ method lock() {
     do {
       {| queued(mynode, mypred) |}
         <| test = %{ false }; |>
-      {| if test then queued(mynode, mypred) else locked(mynode, mypred) |}
+      {| if (test) { queued(mynode, mypred) } else { locked(mynode, mypred) } |}
     } while (test);
   {| locked(mynode, mypred) |}
 }

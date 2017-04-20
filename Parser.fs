@@ -417,27 +417,26 @@ let parseParam : Parser<Param, unit> =
 
 /// Parses a conditional view.
 let parseIfView =
-    // TODO: use parseIflike.
-    pipe3ws (pstring "if" >>. ws >>. parseExpression)
-            // ^- if <view-exprn> ...
-            (pstring "then" >>. ws >>. parseView)
-            // ^-                 ... then <view> ...
-            (pstring "else" >>. ws >>. parseView)
-            // ^-                                 ... else <view>
-            (fun i t e -> View.If (i, t, Some e))
+    parseIfLike parseView (curry3 View.If)
+
+/// Parses a local view.
+let parseLocalView =
+    pstring "local" >>. ws >>. inBraces parseExpression |>> View.Local
+
 
 /// Parses a functional view.
 let parseFuncView = parseFunc parseExpression |>> View.Func
 
-/// Parses the unit view (`emp`, for our purposes).
-let parseUnit = stringReturn "emp" Unit
-
 /// Parses a `basic` view (unit, if, named, or bracketed).
 let parseBasicView =
-    choice [ parseUnit
-             // ^- `emp'
+    choice [ stringReturn "emp" Unit
+             // ^- `emp`
+             stringReturn "false" Falsehood
+             // ^- `false`
+             parseLocalView
+             // ^- local
              parseIfView
-             // ^- if <view-exprn> then <view> else <view>
+             // ^- if (<view-exprn>) { <view> } else { <view> }
              parseFuncView
              // ^- <identifier>
              //  | <identifier> <arg-list>
@@ -513,8 +512,7 @@ do parseViewSignatureRef := parseViewLike parseBasicViewSignature ViewSignature.
 let parseViewProto =
     // TODO (CaptainHayashi): so much backtracking...
     (pstring "iter" >>. ws >>. 
-      (parseFunc parseParam
-         |>> (fun lhs -> WithIterator lhs))) 
+      (parseFunc parseParam |>> WithIterator))
     <|> 
       (parseFunc parseParam
          |>> (fun lhs -> NoIterator (lhs, false)))

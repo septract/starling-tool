@@ -58,9 +58,9 @@ method lockA() {
     do {
       {| aWaiting() |}
         <oFlag = bFlag>;
-      {| if (oFlag == 1) then aWaiting() else aHoldLock() |}
+      {| if (oFlag == 1)) { aWaiting() } else { aHoldLock() } |}
         <oTurn = turn>;
-      {| if (oFlag == 1 && oTurn == 0) then aWaiting() else aHoldLock() |}
+      {| if (oFlag == 1 && oTurn == 0)) { aWaiting() } else { aHoldLock() } |}
     } while (oFlag == 1 && oTurn == 0);
   {| aHoldLock() |}
 }
@@ -86,9 +86,9 @@ method lockB() {
     do {
       {| bWaiting() |}
         <oFlag = aFlag>;
-      {| if (oFlag == 1) then bWaiting() else bHoldLock() |}
+      {| if (oFlag == 1)) { bWaiting() } else { bHoldLock() } |}
         <oTurn = turn>;
-      {| if (oFlag == 1 && oTurn == 1) then bWaiting() else bHoldLock() |}
+      {| if (oFlag == 1 && oTurn == 1)) { bWaiting() } else { bHoldLock() } |}
     } while (oFlag == 1 && oTurn == 1);
   {| bHoldLock() |}
 }

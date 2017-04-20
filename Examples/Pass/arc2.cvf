@@ -13,9 +13,6 @@ thread int c;
 view iter arc();
 view countCopy(int c);
 
-view error();
-constraint error() -> false;
-
 method clone() {
   {| arc() |}
     <| count++ ; |>
@@ -25,9 +22,9 @@ method clone() {
 method print() {
   {| arc() |}
     <| f = free; |>
-  {| if f == true then error() else arc() |}
+  {| if (f == true) { false } else { arc() } |}
     if (f == true) {
-      {| error() |}
+      {| false |}
     }
   {| arc() |}
 }

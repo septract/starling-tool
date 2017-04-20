@@ -1,6 +1,7 @@
 // Allocatable version of Examples/Pass/spinLock.cvf.
 
 typedef int Lock;
+typedef bool Bool;
 
 pragma grasshopper_include {./grasshopper/spinlock-module.spl};
 pragma grasshopper_footprint {LockFoot};
@@ -9,13 +10,19 @@ pragma grasshopper_footprint_sort {Set<Lock>};
 thread Lock x, ret;
 thread bool test;  // Used when trying to take the lock.
 
-view newLock(Lock x), holdLock(Lock x), isLock(Lock x);
+view holdLock(Lock x);
+view isLock(Lock x);
 
 method newLock() {
   {| emp |}
-    <| ret = %{new Lock}; |>
+    ret = %{new Lock}();
+<<<<<<< HEAD
+  {| isLock(ret) |}
+    <%{#1.lock := false}(ret)[heap]>;
+=======
   {| newLock(ret) |}
-    <| %{[|ret|].lock := false}; |>
+    <%{#1.lock := false}(ret)[]>;
+>>>>>>> GRASShopper: tidy up examples a bit
   {| isLock(ret) |}
 }
 
@@ -25,15 +32,15 @@ method lock(Lock x) {
       {| isLock(x) |}
         test = false;
       {| if (test == false) { isLock(x) } else { False() } |}
-        <| test = %{ CAS_to_true([|x|]) }; |>
+        test = %{ CAS_to_true(#1) }(x);
       {| if (test == false) { isLock(x) } else { holdLock(x) } |}
-    } while (test == false);
+    } while (test == true);
   {| holdLock(x) |}
 }
 
 method unlock(Lock x) {
   {| holdLock(x) |}
-    <| %{[|x|].lock := false}; |>
+    <%{#1.lock := false}(x)[]>;
   {| isLock(x) |}
 }
 
@@ -47,12 +54,20 @@ method split(Lock x) {
 view False();
 constraint False() -> false;
 
-constraint holdLock(x)  ->  %{ [|x|] in LockFoot && [|x|].lock };
-constraint isLock(x)    ->  %{ [|x|] in LockFoot };
-constraint newLock(x)   ->  %{ [|x|] in LockFoot };
+constraint holdLock(x) * holdLock(y) -> x != y;
+
+constraint holdLock(x)  ->  %{ #1 in LockFoot && #1.lock == true }(x);
+<<<<<<< HEAD
+
+constraint isLock(x)  ->  %{ #1 in LockFoot }(x);
+
+=======
+constraint isLock(x)    ->  %{ #1 in LockFoot }(x);
+constraint newLock(x)   ->  %{ #1 in LockFoot }(x);
 
 constraint isLock(x)   * newLock(y)   ->  x != y;
 constraint holdLock(x) * newLock(y)   ->  x != y;
 constraint newLock(x)  * newLock(y)   ->  x != y;
 
 constraint holdLock(x) * holdLock(y)  ->  x != y;
+>>>>>>> GRASShopper: tidy up examples a bit
