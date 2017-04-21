@@ -21,7 +21,17 @@ fi
 
 echo "--- STARLING ---"
 # no-smt-reduce is needed to give HSF enough contraints to be practical.
-./starling.sh -shsf -Bno-smt-reduce $* | tee $tempfile
+if ./starling.sh -shsf -Bno-smt-reduce $* > $tempfile;
+then
+	echo "Starling succeeded:"
+	cat $tempfile
+else
+	starling_exitc=$?
+	echo "Starling FAILED."
+    rm $tempfile
+	exit $starling_exitc
+fi
+
 echo "--- HSF ---"
 $QARMC -get-model $tempfile
 rm $tempfile
