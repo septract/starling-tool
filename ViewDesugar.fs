@@ -111,9 +111,9 @@ module Pretty =
     /// </returns>
     let printDesugaredGView (v : DesugaredGView) : Doc =
         let pv (g, b) =
-            printExpression g
-            <+> String "->"
-            <+> func b.Name (List.map printExpression b.Params)
+            String "if"
+            <+> parened (printExpression g)
+            <+> braced (func b.Name (List.map printExpression b.Params))
         hsepStr " * " (List.map pv v)
 
     /// <summary>
