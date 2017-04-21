@@ -24,7 +24,7 @@ open Starling.Core.Instantiate
 open Starling.Core.Traversal
 open Starling.Lang.AST
 open Starling.Lang.Collator
-open Starling.Lang.ViewDesugar
+open Starling.Lang.Desugar
 
 
 /// <summary>
@@ -210,7 +210,7 @@ module Pretty =
     open Starling.Core.Symbolic.Pretty
     open Starling.Core.View.Pretty
     open Starling.Lang.AST.Pretty
-    open Starling.Lang.ViewDesugar.Pretty
+    open Starling.Lang.Desugar.Pretty
 
     /// Pretty-prints a part-cmd at the given indent level.
     let rec printPartCmd (pView : 'view -> Doc) (pc : PartCmd<'view>) : Doc =
@@ -1872,7 +1872,7 @@ let convertParam
 /// </summary>
 let convertViewProtos
   (types : Map<string, TypeLiteral>)
-  (vps : ViewProto list)
+  (vps : ViewProto seq)
   : Result<DesugaredViewProto list, ModelError> =
     // TODO(CaptainHayashi): proper doc comment.
     let convertViewFunc vp { Name = n; Params = ps } =
@@ -1887,7 +1887,7 @@ let convertViewProtos
         | WithIterator func ->
             lift WithIterator (convertViewFunc vp func)
 
-    collect (List.map convertViewProto vps)
+    collect (Seq.map convertViewProto vps)
 
 /// Converts a collated script to a model.
 let model
@@ -1901,15 +1901,14 @@ let model
         let! tvars = modelVarMap types collated.ThreadVars "thread"
         let env = Env.env tvars svars
 
-        let desugarContext, desugaredMethods =
-            desugar tvars collated.VProtos collated.Methods
+        let desugarContext, desugaredMethods = desugar collated
 
-        let! cprotos = convertViewProtos types collated.VProtos
-        let nprotos = desugarContext.GeneratedProtos
-        let! vprotos = modelViewProtos (Seq.append cprotos nprotos)
+        let sprotos = Seq.append desugarContext.GeneratedProtos desugarContext.ExistingProtos
+        let! cprotos = convertViewProtos types sprotos
+        let! vprotos = modelViewProtos cprotos
 
         // We have to synthesise a constraint for the lifting view, if any.
-        let liftname = Option.map protoName desugarContext.LocalLiftView
+        let liftname = desugarContext.LocalLiftView
         let! constraints = modelViewDefs env vprotos liftname collated
 
         let mctx =

@@ -18,7 +18,7 @@ open Starling.Core.GuardedView
 open Starling.Lang.AST
 open Starling.Lang.Collator
 open Starling.Lang.Modeller
-open Starling.Lang.ViewDesugar
+open Starling.Lang.Desugar
 
 
 /// The raw form of the ticket lock.

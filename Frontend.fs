@@ -24,7 +24,7 @@ open Starling.Core.Var.Pretty
 open Starling.Lang.AST.Pretty
 open Starling.Lang.Modeller
 open Starling.Lang.Modeller.Pretty
-open Starling.Lang.ViewDesugar.Pretty
+open Starling.Lang.Desugar.Pretty
 
 
 (*

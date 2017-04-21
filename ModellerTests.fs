@@ -19,7 +19,7 @@ open Starling.Core.Command
 open Starling.Core.Command.Create
 open Starling.Core.Instantiate
 open Starling.Lang.AST
-open Starling.Lang.ViewDesugar
+open Starling.Lang.Desugar
 open Starling.Core.Model
 open Starling.Lang.Modeller
 open Starling.Tests.Studies

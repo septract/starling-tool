@@ -1,7 +1,7 @@
 /// <summary>
-///     Module for inserting and expanding out unknown views.
+///     Module for performing desugaring operations on a collated AST.
 /// </summary>
-module Starling.Lang.ViewDesugar
+module Starling.Lang.Desugar
 
 open Chessie.ErrorHandling
 
@@ -13,6 +13,7 @@ open Starling.Core.Var
 open Starling.Core.Expr
 open Starling.Core.GuardedView
 open Starling.Lang.AST
+open Starling.Lang.Collator
 
 
 /// <summary>
@@ -42,12 +43,12 @@ type DesugaredGView = DesugaredGFunc list
 ///     desugaring.
 /// </summary>
 type DesugarContext =
-    { /// <summary>The list of parameters to use for ?-views.</summary>
-      UnknownViewParams : TypedVar list
-      /// <summary>The prototype of the local lift view, if any.</summary>
-      LocalLiftView : DesugaredViewProto option
+    { /// <summary>The list of thread variables to use for ?-views.</summary>
+      ThreadVars : (TypeLiteral * string) list
+      /// <summary>The name of the local lift view, if any.</summary>
+      LocalLiftView : string option
       /// <summary>The list of fresh views generated.</summary>
-      GeneratedProtos : Set<DesugaredViewProto>
+      GeneratedProtos : Set<ViewProto>
       /// <summary>The list of views already present in the system.</summary>
       ExistingProtos : Set<ViewProto> 
     }
@@ -188,10 +189,10 @@ let protoName (p : GeneralViewProto<'P>) : string =
 /// <param name="pars">The parameters to use for the view prototype.</param>
 /// <param name="ctx">The <see cref="DesugarContext"/> to extend.</param>
 /// <returns>
-///     A pair of the context updated with the new view, and its prototype.
+///     A pair of the context updated with the new view, and its name.
 /// </returns>
-let genView (prefix : string) (pars : TypedVar list) (ctx : DesugarContext)
-  : DesugarContext * DesugaredViewProto =
+let genView (prefix : string) (pars : Param list) (ctx : DesugarContext)
+  : DesugarContext * string =
     let vnames =
         // Can't union-map because the proto types are different.
         Set.union
@@ -208,7 +209,7 @@ let genView (prefix : string) (pars : TypedVar list) (ctx : DesugarContext)
 
     let newName = tryGenName 0I
     let newProto = NoIterator ({ Name = newName; Params = pars }, false)
-    ({ ctx with GeneratedProtos = ctx.GeneratedProtos.Add newProto }, newProto)
+    ({ ctx with GeneratedProtos = ctx.GeneratedProtos.Add newProto }, newName)
 
 /// <summary>
 ///     Generates the lifter view in a context, if it does not exist.
@@ -216,15 +217,16 @@ let genView (prefix : string) (pars : TypedVar list) (ctx : DesugarContext)
 /// <param name="ctx">The current desugaring context.</param>
 /// <returns>
 ///     <paramref name="ctx"/> updated to contain a lifter if it didn't
-///     already, and the lifter prototype.
+///     already, and the lifter's name.
 /// </returns>
-let genLifter (ctx : DesugarContext) : DesugarContext * DesugaredViewProto =
+let genLifter (ctx : DesugarContext) : DesugarContext * string =
     match ctx.LocalLiftView with
     | Some n -> (ctx, n)
     | None ->
         (* We need to generate the view, then set the context to use it as the
            lifter.  The lifter has one parameter: the lifted Boolean. *)
-        let ctxR, n = genView "lift" [ normalBoolVar "x" ] ctx
+        let ctxR, n =
+            genView "lift" [ { ParamName = "x"; ParamType = TBool } ] ctx
         ({ ctxR with LocalLiftView = Some n }, n)
 
 /// <summary>
@@ -249,8 +251,7 @@ let desugarView
         | Local e ->
             (* Treat {| local { x } |} as {| lift(x) |} for simplicity.
                Generate lift if it doesn't exist. *)
-            let (c', liftProto) = genLifter c
-            let liftName = protoName liftProto
+            let (c', liftName) = genLifter c
             desugarIn suffix c' (Func { Name = liftName; Params = [e] })
         | Func v -> (c, [ (suffix, v) ])
         | Join (x, y) -> desugarJoin c suffix x suffix y
@@ -297,11 +298,14 @@ let desugarMarkedView (ctx : DesugarContext) (marked : Marked<View>)
     | Unknown ->
         (* We assume that the UnknownViewParams are named to correspond to
            thread-local variables. *)
-        let tvars = ctx.UnknownViewParams
-        let texprs = List.map (valueOf >> Identifier >> freshNode) tvars
+        let tvars = ctx.ThreadVars
+        let texprs = List.map (snd >> Identifier >> freshNode) tvars
+        let tpars =
+            List.map (fun (t, n) -> { ParamName = n; ParamType = t })
+                tvars
     
-        let ctx', vproto = genView "unknown" ctx.UnknownViewParams ctx
-        (ctx', Advisory [ (freshNode True, func (protoName vproto) texprs ) ])
+        let ctx', vname = genView "unknown" tpars ctx
+        (ctx', Advisory [ (freshNode True, func vname texprs ) ])
 
 /// <summary>
 ///     Converts a command whose views can be unknown into one
@@ -416,12 +420,12 @@ and desugarBlock (ctx : DesugarContext) (block : Command list)
 /// <summary>
 ///     Creates an initial desugaring context.
 /// </summary>
-/// <param name="tvars">The map of thread-local variables.</param>
+/// <param name="tvars">The list of thread-local variables.</param>
 /// <param name="vprotos">The sequence of existing view prototypes.</param>
 /// <returns>An initial <see cref="DesugarContext"/>.</returns>
-let initialContext (tvars : VarMap) (vprotos : ViewProto seq)
+let initialContext (tvars : (TypeLiteral * string) seq) (vprotos : ViewProto seq)
   : DesugarContext =
-    { UnknownViewParams = List.ofSeq (VarMap.toTypedVarSeq tvars)
+    { ThreadVars = List.ofSeq tvars
       LocalLiftView = None 
       GeneratedProtos = Set.empty
       ExistingProtos = Set.ofSeq vprotos }
@@ -454,13 +458,11 @@ let initialContext (tvars : VarMap) (vprotos : ViewProto seq)
 ///     desugar.
 /// </returns>
 let desugar
-  (tvars : VarMap)
-  (vprotos : ViewProto seq)
-  (methods : Map<string, Command list>)
+  (collated : CollatedScript)
   : (DesugarContext * Map<string, FullBlock<ViewExpr<DesugaredGView>, FullCommand>>) =
-    let ctx = initialContext tvars vprotos
+    let ctx = initialContext collated.ThreadVars collated.VProtos
     
-    let ms = Map.toList methods
+    let ms = Map.toList collated.Methods
     let (ctx', ms') =
         mapAccumL
             (fun c (n, b) ->
@@ -480,9 +482,8 @@ module Tests =
 
     let checkCtx : DesugarContext =
         let tvars =
-            (Map.ofList
-                [ ("s", Type.Int (normalRec, ()))
-                  ("t", Type.Int (normalRec, ())) ])
+            [ (TInt, "s")
+              (TInt, "t") ]
         let vprotos = Seq.empty
         initialContext tvars vprotos
 
@@ -501,7 +502,8 @@ module Tests =
                 NoIterator
                     (Func = 
                         func "__unknown_0"
-                            [ normalIntVar "s"; normalIntVar "t" ],
+                            [ { ParamName = "s"; ParamType = TInt }
+                              { ParamName = "t"; ParamType = TInt } ],
                      IsAnonymous = false)
 
             check
@@ -531,15 +533,11 @@ module Tests =
         let ``Desugar a local expression`` () =
             check
                 { checkCtx with
-                    LocalLiftView =
-                        Some
-                            (NoIterator
-                                (Func = func "__lift_0" [ normalBoolVar "x" ],
-                                IsAnonymous = false));
+                    LocalLiftView = Some "__lift_0"
                     GeneratedProtos =
                         Set.ofList
                             [ (NoIterator
-                                    (Func = func "__lift_0" [ normalBoolVar "x" ],
+                                    (Func = func "__lift_0" [ { ParamName = "x"; ParamType = TBool } ],
                                     IsAnonymous = false)) ] }
                 [ (freshNode True, func "__lift_0" [ freshNode (Identifier "bar") ]) ]
                 (Local (freshNode (Identifier "bar")))
@@ -548,15 +546,11 @@ module Tests =
         let ``Desugar a falsehood`` () =
             check
                 { checkCtx with
-                    LocalLiftView =
-                        Some
-                            (NoIterator
-                                (Func = func "__lift_0" [ normalBoolVar "x" ],
-                                IsAnonymous = false));
+                    LocalLiftView = Some "__lift_0"
                     GeneratedProtos =
                         Set.ofList
                             [ (NoIterator
-                                    (Func = func "__lift_0" [ normalBoolVar "x" ],
+                                    (Func = func "__lift_0" [ { ParamName = "x"; ParamType = TBool } ],
                                     IsAnonymous = false)) ] }
                 [ (freshNode True, func "__lift_0" [ freshNode (False) ]) ]
                 Falsehood
