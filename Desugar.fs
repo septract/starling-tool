@@ -288,8 +288,9 @@ module private Generators =
     ///     type `bool`.
     /// </returns>
     /// <remarks>
-    ///     It is currently the modeller's responsibility to generate and
-    ///     constrain on the okay variable.
+    ///     It is currently the modeller's responsibility to constrain on the
+    ///     okay variable.  This function does add the okay variable to the
+    ///     list of shared variables, though.
     /// </remarks>
     let genOkay (ctx : DesugarContext) : DesugarContext * string =
         match ctx.OkayBool with
@@ -300,7 +301,9 @@ module private Generators =
                     (Seq.map snd
                         (Seq.append ctx.SharedVars ctx.ThreadVars))
             let n = genName vars "ok"
-            ({ ctx with OkayBool = Some n }, n)
+            ({ ctx with
+                OkayBool = Some n
+                SharedVars = (TBool, n) :: ctx.SharedVars }, n)
 
 
 /// <summary>
@@ -676,7 +679,9 @@ module Tests =
         [<Test>]
         let ``Desugar assert into an assignment to the okay variable`` () =
             check
-                { normalCtx with OkayBool = Some "__ok_0" }
+                { normalCtx with
+                    OkayBool = Some "__ok_0"
+                    SharedVars = (TBool, "__ok_0") :: normalCtx.SharedVars }
                 (DAPrim
                     (freshNode
                         (Fetch
@@ -690,7 +695,9 @@ module Tests =
         [<Test>]
         let ``Desugar error into a false assignment to the okay variable`` () =
             check
-                { normalCtx with OkayBool = Some "__ok_0" }
+                { normalCtx with
+                    OkayBool = Some "__ok_0"
+                    SharedVars = (TBool, "__ok_0") :: normalCtx.SharedVars }
                 (DAPrim
                     (freshNode
                         (Fetch
@@ -703,7 +710,9 @@ module Tests =
         [<Test>]
         let ``Desugar assert properly when normal okay is taken`` () =
             check
-                { dupeCtx with OkayBool = Some "__ok_2" }
+                { dupeCtx with
+                    OkayBool = Some "__ok_2"
+                    SharedVars = (TBool, "__ok_2") :: dupeCtx.SharedVars }
                 (DAPrim
                     (freshNode
                         (Fetch
@@ -717,7 +726,9 @@ module Tests =
         [<Test>]
         let ``Desugar error properly when normal okay is taken`` () =
             check
-                { dupeCtx with OkayBool = Some "__ok_2" }
+                { dupeCtx with
+                    OkayBool = Some "__ok_2"
+                    SharedVars = (TBool, "__ok_2") :: dupeCtx.SharedVars }
                 (DAPrim
                     (freshNode
                         (Fetch

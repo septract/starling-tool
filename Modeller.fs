@@ -1894,14 +1894,14 @@ let model
   (collated : CollatedScript)
   : Result<Model<ModellerBlock, ViewDefiner<SVBoolExpr option>>, ModelError> =
     trial {
+        let desugarContext, desugaredMethods = desugar collated
+
         let types = Map.ofSeq (Seq.map (fun (x, y) -> (y, x)) collated.Typedefs)
 
         // Make variable maps out of the shared and thread variable definitions.
-        let! svars = modelVarMap types collated.SharedVars "shared"
-        let! tvars = modelVarMap types collated.ThreadVars "thread"
+        let! svars = modelVarMap types desugarContext.SharedVars "shared"
+        let! tvars = modelVarMap types desugarContext.ThreadVars "thread"
         let env = Env.env tvars svars
-
-        let desugarContext, desugaredMethods = desugar collated
 
         let sprotos = Seq.append desugarContext.GeneratedProtos desugarContext.ExistingProtos
         let! cprotos = convertViewProtos types sprotos
