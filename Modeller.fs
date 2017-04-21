@@ -182,6 +182,14 @@ module Types =
 
     /// Represents an error when converting a model.
     type ModelError =
+        /// <summary>
+        ///     The view definer tried to constrain a view pattern as both
+        ///     indefinite and definite at the same time.
+        /// </summary>
+        /// <remarks>
+        ///     This restriction may be lifted eventually.
+        /// </remarks>
+        | ConjoinDefAndIndef of pattern : ViewSignature
         /// A view prototype in the program generated a `ViewProtoError`.
         | BadVProto of proto : DesugaredViewProto * err : ViewProtoError
         /// A view prototype's parameter in the program generated a `TypeError`.
@@ -389,6 +397,10 @@ module Pretty =
     /// Pretty-prints model conversion errors.
     let printModelError (err : ModelError) : Doc =
         match err with
+        | ConjoinDefAndIndef pattern ->
+            errorStr "view pattern"
+            <+> printViewSignature pattern
+            <+> errorStr "is constrained as both definite and indefinite"
         | BadConstraint(constr, err) ->
             wrapped "constraint" (printViewSignature constr)
                                  (printConstraintError err)
@@ -1227,11 +1239,41 @@ let addSearchDefs
 let modelViewDefs
   (env : Env)
   (vprotos : FuncDefiner<ProtoInfo>)
-  (liftName : string option)
+  (dctx : DesugarContext)
   (collated : CollatedScript) =
+    let { LocalLiftView = liftName; OkayBool = okay } = dctx
     let { Search = s; Constraints = cs } = collated
 
-    let explicitDefsR = collect (List.map (modelViewDef env vprotos) cs)
+    (* Add the okay variable into the emp constraint if it exists.
+       If okay exists but emp is unconstrained, make a new constraint.
+
+       TODO(MattWindsor91): this is a hack until we implement conjunctive
+                            constraints. *)
+    let injectOkay okay injectedAlready c = 
+        let injectedNow, rhs =
+            match c with
+            | (ViewSignature.Unit, None) ->
+                (fail (ConjoinDefAndIndef (fst c)), None)
+            | (ViewSignature.Unit, Some e) ->
+                (lift (fun _ -> true) injectedAlready,
+                 Some (freshNode (BopExpr (And, e, okay))))
+            | (_, r) -> (injectedAlready, r)
+        (injectedNow, (fst c, rhs))
+    let okayDefsR =
+        match okay with
+        | Some oname ->
+            let okay = freshNode (Identifier oname)
+            let injectedR, csI = mapAccumL (injectOkay okay) (ok false) cs
+            lift
+                (fun injected ->
+                    if injected
+                    then csI
+                    else (ViewSignature.Unit, Some okay) :: csI)
+                injectedR
+        | None -> ok cs
+
+    let explicitDefsR =
+        bind (List.map (modelViewDef env vprotos) >> collect) okayDefsR
     let withSearchDefsR = lift (addSearchDefs vprotos s) explicitDefsR
 
     let addLiftConstraint defs =
@@ -1907,9 +1949,7 @@ let model
         let! cprotos = convertViewProtos types sprotos
         let! vprotos = modelViewProtos cprotos
 
-        // We have to synthesise a constraint for the lifting view, if any.
-        let liftname = desugarContext.LocalLiftView
-        let! constraints = modelViewDefs env vprotos liftname collated
+        let! constraints = modelViewDefs env vprotos desugarContext collated
 
         let mctx =
             { ViewProtos = vprotos
