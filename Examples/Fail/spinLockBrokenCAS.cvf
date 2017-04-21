@@ -30,11 +30,6 @@ method unlock() {
   {| emp |}
 }
 
-
-// False is a hack to implement local variable reasoning.
-view False();
-constraint False() -> false;
-
 view holdLock();
 constraint holdLock() -> lock == true;  // Identity of lock.
 constraint holdLock() * holdLock() -> false;  // Mutual exclusion

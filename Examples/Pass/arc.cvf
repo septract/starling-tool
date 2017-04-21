@@ -1,5 +1,7 @@
 /* Atomic reference counter
- * Example taken from Derek: http://www.mpi-sws.org/~dreyer/talks/talk-dagstuhl16.pdf
+ * Example taken from Derek / Rust: http://www.mpi-sws.org/~dreyer/talks/talk-dagstuhl16.pdf
+ * Modified from Examples/Pass/arc.cvf
+ * Non-allocated version of Examples/PassGH/arc.cvf
  */
 
 shared bool free;
@@ -8,20 +10,21 @@ shared int count;
 thread bool f;
 thread int c;
 
-// Assumption: clone() cannot be called when there are no references
+view iter arc();
+view countCopy(int c);
+
 method clone() {
-  {| arc() |} <| count++; |> {| arc() * arc() |}
+  {| arc() |}
+    <| count++ ; |>
+  {| arc() * arc() |}
 }
 
-// Try to prove that print() when holding a reference is always valid
-// i.e. free can never be true when {| arc() |} is held
 method print() {
   {| arc() |}
     <| f = free; |>
-  {| arc() * specialViewForFree(f) |}
-    // Test for disposal
+  {| if (f == true) { false } else { arc() } |}
     if (f == true) {
-      {| error() |}
+      {| false |} <| error; |> {| false |}
     }
   {| arc() |}
 }
@@ -29,35 +32,21 @@ method print() {
 method drop() {
   {| arc() |}
     <| c = count--; |>
-  {| specialViewForC(c) |}
+  {| countCopy(c) |}
     if (c == 1) {
-      {| noCnt() |}
+      {| countCopy(1) |}
         <| free = true; |>
       {| emp |}
     }
   {| emp |}
 }
 
-view error();
-view iter arc();
-view noCnt();
+constraint iter[n] arc() ->
+    n > 0 => (free == false && n <= count);
 
-// These views just add free=f and count=c to the final proof predicates
-view specialViewForC(int c);
-view specialViewForFree(bool f);
+constraint countCopy(c) ->
+    c == 1 => (free == false && count == 0);
 
-constraint emp -> count >= 0;
-constraint noCnt() -> count == 0;
+constraint countCopy(m) * countCopy(n) ->
+    (m != 1) || (n != 1);
 
-constraint specialViewForC(c) -> c == 1 => count == 0;
-
-// specialViewForFree(f) * arc() -> f = free;
-constraint specialViewForFree(f) -> count > 0 => f == free;
-
-// holds less than count arc()'s
-//  and if holding at least 1 then it can't have been freed
-constraint iter[n] arc() -> n <= count
-                            && (n > 0 => (free == false));
-
-// goal
-constraint error() -> false;

@@ -2,7 +2,7 @@
 ./Examples/Fail/badInc2.cvf: badInc_C000_000
 ./Examples/Fail/petersonArrayBadTurns.cvf: lock_C001_005
 ./Examples/Fail/petersonBadTurns.cvf: lockA_C001_019 lockB_C001_018
-./Examples/Fail/spinLockBrokenCAS.cvf: lock_C001__lock_C003_002
+./Examples/Fail/spinLockBrokenCAS.cvf: lock_C001__lock_C003_001
 ./Examples/Fail/ticketLockBad.cvf: unlock_C000_002 unlock_C000_003
 ./Examples/Fail/ticketLockBad2.cvf: lock_C000_000 lock_C000_002 unlock_C000_000
 ./Examples/Fail/ticketLockFlippedLoop.cvf: lock_C002_001 lock_C002_004 lock_C003_002 lock_C003_003 lock_C003_005
@@ -10,7 +10,6 @@
 ./Examples/FailGH/clhLockFlippedIf.cvf: lock_C004_000 lock_C004_005
 ./Examples/FailGH/ticketLockFlippedIf.cvf: lock_C001_003 lock_C001_004 lock_C001_006 lock_C002_002 lock_C002_005 lock_C003_003 lock_C003_004 lock_C003_006
 ./Examples/Pass/arc.cvf:
-./Examples/Pass/arc2.cvf:
 ./Examples/Pass/multicounter.cvf:
 ./Examples/Pass/peterson.cvf:
 ./Examples/Pass/petersonArray.cvf:

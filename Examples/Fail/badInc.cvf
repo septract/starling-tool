@@ -1,7 +1,6 @@
 /* A bad increment */
 
 thread int x; 
-view False(); 
 
 method badInc() { 
   {| local { x==0 } |} 

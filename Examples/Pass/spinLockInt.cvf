@@ -33,10 +33,6 @@ method unlock() {
 }
 
 
-// False is a hack to implement local variable reasoning.
-view False();
-constraint False() -> false;
-
 constraint emp -> 0 <= lock && lock <= 1;
 
 view holdLock();

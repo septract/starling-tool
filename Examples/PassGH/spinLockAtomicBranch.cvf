@@ -45,10 +45,6 @@ method split(Lock x) {
   {| isLock(x) * isLock(x) |}
 }
 
-// False is a hack to implement local variable reasoning.
-view False();
-constraint False() -> false;
-
 constraint holdLock(x)  ->  %{ [|x|] in LockFoot && [|x|].lock };
 constraint isLock(x)    ->  %{ [|x|] in LockFoot };
 constraint newLock(x)   ->  %{ [|x|] in LockFoot };
