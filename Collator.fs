@@ -155,7 +155,8 @@ let rec makeDisjoint (xs : List<StrFunc>) =
 module ParamDesugar =
     open Starling.Collections
     open Starling.Core.Symbolic
-    // TODO(CaptainHayashi): move this?
+    (* TODO(MattWindsor91): this needs to be rolled into the Desugar
+       module, once Desugar is spun out of Modeller. *)
  
     /// <summary>
     ///     Rewrites a block with a variable rewriting map.
@@ -208,6 +209,8 @@ module ParamDesugar =
             let rewriteAtomic' =
                 function
                 | APrim p -> APrim (rewritePrim p)
+                | AError -> AError
+                | AAssert c -> AAssert (rewriteExpression c)
                 | ACond (cond = c; trueBranch = t; falseBranch = f) ->
                     ACond
                         (rewriteExpression c,

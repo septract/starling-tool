@@ -80,6 +80,8 @@ module Types =
     /// An atomic action.
     type Atomic' =
         | APrim of Prim
+        | AError
+        | AAssert of cond : Expression
         | ACond of
             cond : Expression
             * trueBranch : Atomic list
@@ -447,6 +449,8 @@ module Pretty =
     let rec printAtomic' (a : Atomic') : Doc =
         match a with
         | APrim p -> printPrim p
+        | AError -> syntaxStr "error"
+        | AAssert e -> syntaxStr "assert" <+> parened (printExpression e)
         | ACond (cond = c; trueBranch = t; falseBranch = f) ->
             Helpers.printITE printExpression (Helpers.printBlock printAtomic) c t f
     and printAtomic (x : Atomic) : Doc = printAtomic' x.Node

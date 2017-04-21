@@ -1621,6 +1621,10 @@ let modelAtomic (env : Env) (atomicAST : Atomic)
         | APrim primAST ->
             // Atomic actions can access variables in _any_ scope.
             Prim.model env Any primAST
+        // TODO(MattWindsor91): implement these
+        | AError -> ma (freshNode (AAssert (freshNode False)))
+        | AAssert cond ->
+            failwith "AAssert not yet implemented"
         | ACond (cond = c; trueBranch = t; falseBranch = f) ->
             let cTMR =
                 wrapMessages BadExpr (modelBoolExpr env Any id) c
