@@ -172,6 +172,22 @@ module ExpressionTests =
 
 module AtomicActionTests =
     [<Test>]
+    let ``error`` () =
+        check parseAtomic "error;"
+            (node "" 1L 1L AError)
+
+    [<Test>]
+    let ``assert(3 > 4)`` () =
+        check parseAtomic "assert(3 > 4);"
+            (node "" 1L 1L <| AAssert
+                (* TODO(MattWindsor91): this is weird, and suggests we need to
+                   rethink the AST encoding of BopExprs. *)
+                (node "" 1L 10L <| BopExpr
+                    (Gt,
+                     node "" 1L 8L <| Num 3L,
+                     node "" 1L 12L <| Num 4L)))
+
+    [<Test>]
     let ``foo++``() =
         check parseAtomic "foo++;"
             (node "" 1L 1L <| APrim
@@ -180,7 +196,7 @@ module AtomicActionTests =
                     Increment)))
 
     [<Test>]
-    let ``foo--`` =
+    let ``foo--`` () =
         check parseAtomic "foo--;"
             (node "" 1L 1L <| APrim
                 (node "" 1L 1L <| Postfix
@@ -188,7 +204,7 @@ module AtomicActionTests =
                     Decrement)))
 
     [<Test>]
-    let ``foo = bar`` =
+    let ``foo = bar`` () =
         check parseAtomic "foo = bar;"
             (node "" 1L 1L <| APrim
                 (node "" 1L 1L <| Fetch
@@ -197,7 +213,7 @@ module AtomicActionTests =
                     Direct)))
 
     [<Test>]
-    let ``foo = bar++`` =
+    let ``foo = bar++`` () =
         check parseAtomic "foo = bar++;"
             (node "" 1L 1L <| APrim
                 (node "" 1L 1L <| Fetch
@@ -206,7 +222,7 @@ module AtomicActionTests =
                     Increment)))
 
     [<Test>]
-    let ``foo = bar--`` =
+    let ``foo = bar--`` () =
         check parseAtomic "foo = bar--;"
             (node "" 1L 1L <| APrim
                 (node "" 1L 1L <| Fetch
@@ -215,7 +231,7 @@ module AtomicActionTests =
                     Decrement)))
 
     [<Test>]
-    let ``Compare and swap``() =
+    let ``Compare and swap`` () =
         check parseAtomic "CAS(foo, bar, 2);"
             (node "" 1L 1L <| APrim
                 (node "" 1L 1L <| CompareAndSwap
@@ -224,13 +240,13 @@ module AtomicActionTests =
                     node "" 1L 15L (Num 2L))))
 
     [<Test>]
-    let ``parse havoc``() =
+    let ``parse havoc`` () =
         check parseAtomic "havoc y;"
             (node "" 1L 1L <| APrim
                 (node "" 1L 1L <| Havoc "y"))
 
     [<Test>]
-    let ``parse symbolic atomic``() =
+    let ``parse symbolic atomic`` () =
         check parseAtomic "%{foo([|x|])};"
             (node "" 1L 1L <| APrim
                 (node "" 1L 1L <| SymCommand
@@ -241,7 +257,7 @@ module AtomicActionTests =
 
 module AtomicSetTests =
     [<Test>]
-    let ``Single atomic block``() =
+    let ``Single atomic block`` () =
         check parseAtomicSet "<| foo++; |>"
             [ node "" 1L 4L <| APrim
                 (node "" 1L 4L <| Postfix
@@ -249,7 +265,7 @@ module AtomicSetTests =
                      Increment)) ]
 
     [<Test>]
-    let ``Multiple in block valid``() =
+    let ``Multiple in block valid`` () =
         check parseAtomicSet "<| foo++; bar--; |>"
             [ node "" 1L 4L <| APrim
                 (node "" 1L 4L <| Postfix

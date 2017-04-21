@@ -352,11 +352,12 @@ let parsePrim : Parser<Prim, unit> =
 
 /// Parser for atomic actions.
 do parseAtomicRef :=
-    choice
-        [ // This needs to fire before parsePrim due to ambiguity.
+    nodify <| choice
+        [ // These need to fire before parsePrim due to ambiguity.
           parseIfLike (many1 (parseAtomic .>> ws)) (curry3 ACond)
+          stringReturn "error" AError
+          pstring "assert" >>. ws >>. inParens parseExpression |>> AAssert
           parsePrim .>> wsSemi |>> APrim ]
-    |> nodify
 
 /// Parser for a collection of atomic actions.
 let parseAtomicSet =
