@@ -170,7 +170,7 @@ module Types =
         /// The method contains a semantically invalid local action.
         | BadLocal of prim : Prim * err : PrimError
         /// The method contains a semantically invalid atomic action.
-        | BadAtomic of atom : Atomic * err : PrimError
+        | BadAtomic of atom : DesugaredAtomic * err : PrimError
         /// The method contains a bad if-then-else condition.
         | BadITECondition of expr: AST.Types.Expression * err: ExprError
         /// The method contains a bad while condition.
@@ -373,7 +373,7 @@ module Pretty =
         | BadLocal (prim, err) ->
             wrapped "local action" (printPrim prim) (printPrimError err)
         | BadAtomic (atom, err) ->
-            wrapped "atomic action" (printAtomic atom) (printPrimError err)
+            wrapped "atomic action" (printDesugaredAtomic atom) (printPrimError err)
         | BadITECondition (expr, err) ->
             wrapped "if-then-else condition" (printExpression expr)
                                              (printExprError err)
@@ -1608,24 +1608,20 @@ module private Prim =
 ///     The environment in which the command is being evaluated.
 /// </param>
 /// <param name="atomicAST">
-///     The syntax tree for the primitive to model.
+///     The desugared syntax tree for the primitive to model.
 /// </param>
 /// <returns>
 ///     On success, the list of commands representing the atomic command;
 ///     else, the corresponding error.
 /// </returns>
-let modelAtomic (env : Env) (atomicAST : Atomic)
+let modelAtomic (env : Env) (atomicAST : DesugaredAtomic)
     : Result<PrimCommand list, PrimError> =
     let rec ma a =
-        match a.Node with
-        | APrim primAST ->
+        match a with
+        | DAPrim primAST ->
             // Atomic actions can access variables in _any_ scope.
             Prim.model env Any primAST
-        // TODO(MattWindsor91): implement these
-        | AError -> ma (freshNode (AAssert (freshNode False)))
-        | AAssert cond ->
-            failwith "AAssert not yet implemented"
-        | ACond (cond = c; trueBranch = t; falseBranch = f) ->
+        | DACond (cond = c; trueBranch = t; falseBranch = f) ->
             let cTMR =
                 wrapMessages BadExpr (modelBoolExpr env Any id) c
             // An if condition needs to be of type 'bool', not a subtype.
@@ -1635,7 +1631,7 @@ let modelAtomic (env : Env) (atomicAST : Atomic)
                     >> mapMessages (fun m -> BadAtomicITECondition (c, ExprBadType m)))
                         cTMR
             let tMR = lift List.concat (collect (List.map ma t))
-            let fMR = maybe (ok []) (List.map ma >> collect >> lift List.concat) f
+            let fMR = lift List.concat (collect (List.map ma f))
             lift3 (fun c t f -> [ Branch (c, t, f) ]) cMR tMR fMR
     ma atomicAST
 
@@ -1700,7 +1696,7 @@ and modelWhile
 /// Converts a PrimSet to a PartCmd.
 and modelPrimSet
   (ctx : MethodContext)
-  ({ PreLocals = ps; Atomics = ts; PostLocals = qs } : PrimSet)
+  ({ PreLocals = ps; Atomics = ts; PostLocals = qs } : PrimSet<DesugaredAtomic>)
   : Result<ModellerPartCmd, MethodError> =
 
     let mLocal = wrapMessages BadLocal (Prim.model ctx.Env Thread)

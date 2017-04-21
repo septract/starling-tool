@@ -43,7 +43,9 @@ type DesugaredGView = DesugaredGFunc list
 ///     desugaring.
 /// </summary>
 type DesugarContext =
-    { /// <summary>The list of thread variables to use for ?-views.</summary>
+    { /// <summary>The list of shared variables in the program.</summary>
+      SharedVars : (TypeLiteral * string) list
+      /// <summary>The list of thread variables in the program.</summary>
       ThreadVars : (TypeLiteral * string) list
       /// <summary>The name of the local lift view, if any.</summary>
       LocalLiftView : string option
@@ -51,7 +53,20 @@ type DesugarContext =
       GeneratedProtos : Set<ViewProto>
       /// <summary>The list of views already present in the system.</summary>
       ExistingProtos : Set<ViewProto> 
+      /// <summary>The name of the 'ok' Boolean, if any.</summary>
+      OkayBool : string option
     }
+
+/// <summary>
+///     An atomic command with errors and asserts desugared,
+///     and missing branches inserted.
+/// </summary>
+type DesugaredAtomic =
+    | DAPrim of Prim
+    | DACond of
+        cond : Expression
+        * trueBranch : DesugaredAtomic list
+        * falseBranch : DesugaredAtomic list
 
 /// <summary>
 ///     A block whose missing views have been filled up.
@@ -67,7 +82,7 @@ type FullBlock<'view, 'cmd> =
 /// <summary>A non-view command with FullBlocks.</summary>
 type FullCommand' =
     /// A set of sequentially composed primitives.
-    | FPrim of PrimSet
+    | FPrim of PrimSet<DesugaredAtomic>
     /// An if-then-else statement, with optional else.
     | FIf of ifCond : Expression
           * thenBlock : FullBlock<ViewExpr<DesugaredGView>, FullCommand>
@@ -85,6 +100,19 @@ module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.View.Pretty
     open Starling.Lang.AST.Pretty
+
+    /// <summary>
+    ///     Pretty-prints desugared atomic actions.
+    /// </summary>
+    /// <param name="a">The <see cref="DesugaredAtomic'"/> to print.</param>
+    /// <returns>
+    ///     A <see cref="Doc"/> representing <paramref name="a"/>.
+    /// </returns>
+    let rec printDesugaredAtomic (a : DesugaredAtomic) : Doc =
+        match a with
+        | DAPrim p -> printPrim p
+        | DACond (cond = c; trueBranch = t; falseBranch = f) ->
+            printITE printDesugaredAtomic c t (Some f)
 
     /// <summary>
     ///     Prints a <see cref="FullCommand'"/>.
@@ -133,7 +161,7 @@ module Pretty =
         | FPrim { PreLocals = ps; Atomics = ts; PostLocals = qs } ->
             seq { yield! Seq.map printPrim ps
                   yield (ts
-                         |> Seq.map printAtomic
+                         |> Seq.map printDesugaredAtomic
                          |> semiSep |> withSemi |> braced |> angled)
                   yield! Seq.map printPrim qs }
             |> semiSep |> withSemi
@@ -176,58 +204,104 @@ let protoName (p : GeneralViewProto<'P>) : string =
     | NoIterator (f, _) -> f.Name
     | WithIterator f -> f.Name
 
+module private Generators =
+    /// <summary>
+    ///     Given a set of existing names and a prefix, generate a fresh name
+    ///     not contained in that set.
+    ///     <para>
+    ///        This has worst-case time O(n), where n is the number of elements
+    ///        in <paramref name="existing"/>.
+    ///     </para>
+    /// </summary>
+    /// <param name="existing">The set of existing names.</param>
+    /// <param name="prefix">The prefix to use when generating names.</param>
+    /// <returns>
+    ///     A name containing <paramref name="prefix"/> and not contained in
+    ///     <paramref name="existing"/>.
+    /// </returns>
+    let genName (existing : Set<string>) (prefix : string) : string =
+        (* Keep spinning a number up until we get to a fresh name.
+           Inefficient, but simple. *)
+        let rec tryGenName (k : bigint) : string =
+            let name = sprintf "__%s_%A" prefix k
+            if existing.Contains name then tryGenName (k + 1I) else name
+        tryGenName 0I
 
-/// <summary>
-///     Generates a fresh view with a given name prefix and parameter list.
-///     Inserts that view into the given context.
-///     <para>
-///         The view is guaranteed to have a name that does not clash with
-///         an generated or existing view.
-///     </para>
-/// </summary>
-/// <param name="prefix">The prefix to use when generating the name.</param>
-/// <param name="pars">The parameters to use for the view prototype.</param>
-/// <param name="ctx">The <see cref="DesugarContext"/> to extend.</param>
-/// <returns>
-///     A pair of the context updated with the new view, and its name.
-/// </returns>
-let genView (prefix : string) (pars : Param list) (ctx : DesugarContext)
-  : DesugarContext * string =
-    let vnames =
-        // Can't union-map because the proto types are different.
-        Set.union
-            (Set.map protoName ctx.ExistingProtos)
-            (Set.map protoName ctx.GeneratedProtos)
+    /// <summary>
+    ///     Generates a fresh view with a given name prefix and parameter list.
+    ///     Inserts that view into the given context.
+    ///     <para>
+    ///         The view is guaranteed to have a name that does not clash with
+    ///         an generated or existing view.
+    ///     </para>
+    /// </summary>
+    /// <param name="prefix">The prefix to use when generating the name.</param>
+    /// <param name="pars">The parameters to use for the view prototype.</param>
+    /// <param name="ctx">The <see cref="DesugarContext"/> to extend.</param>
+    /// <returns>
+    ///     A pair of the context updated with the new view, and its name.
+    /// </returns>
+    let genView (prefix : string) (pars : Param list) (ctx : DesugarContext)
+      : DesugarContext * string =
+        let vnames =
+            // Can't union-map because the proto types are different.
+            Set.union
+                (Set.map protoName ctx.ExistingProtos)
+                (Set.map protoName ctx.GeneratedProtos)
 
-    (* Keep spinning the prefix number until we get to a fresh view.
-       Inefficient, but simple. *)
-    let rec tryGenName (k : bigint) : string =
-        let vname = sprintf "__%s_%A" prefix k
-        if vnames.Contains vname
-        then tryGenName (k + 1I)
-        else vname
+        let newName = genName vnames prefix
+        let newProto = NoIterator ({ Name = newName; Params = pars }, false)
+        let ctx' = { ctx with GeneratedProtos = ctx.GeneratedProtos.Add newProto }
+        (ctx', newName)
 
-    let newName = tryGenName 0I
-    let newProto = NoIterator ({ Name = newName; Params = pars }, false)
-    ({ ctx with GeneratedProtos = ctx.GeneratedProtos.Add newProto }, newName)
+    /// <summary>
+    ///     Generates the lifter view in a context, if it does not exist.
+    /// </summary>
+    /// <param name="ctx">The current desugaring context.</param>
+    /// <returns>
+    ///     <paramref name="ctx"/> updated to contain a lifter if it didn't
+    ///     already, and the lifter's name.  The lifter always takes one
+    ///     parameter, `bool x`.
+    /// </returns>
+    let genLifter (ctx : DesugarContext) : DesugarContext * string =
+        match ctx.LocalLiftView with
+        | Some n -> (ctx, n)
+        | None ->
+            (* We need to generate the view, then set the context to use it as
+               the lifter.  The lifter has one parameter: the lifted Boolean. *)
+            let ctxR, n =
+                genView "lift" [ { ParamName = "x"; ParamType = TBool } ] ctx
+            ({ ctxR with LocalLiftView = Some n }, n)
+    
+    /// <summary>
+    ///     Generates the okay variable in a context, if it does not exist.
+    ///     <para>
+    ///         The okay variable is used when a program contains an assertion
+    ///         or error command, and is used to represent the failure of the
+    ///         program when an error occurs.
+    ///     </para> 
+    /// </summary>
+    /// <param name="ctx">The current desugaring context.</param>
+    /// <returns>
+    ///     <paramref name="ctx"/> updated to contain an okay variable if it
+    ///     didn't already, and the variable's name.  The variable is always of
+    ///     type `bool`.
+    /// </returns>
+    /// <remarks>
+    ///     It is currently the modeller's responsibility to generate and
+    ///     constrain on the okay variable.
+    /// </remarks>
+    let genOkay (ctx : DesugarContext) : DesugarContext * string =
+        match ctx.OkayBool with
+        | Some n -> (ctx, n)
+        | None ->
+            let vars =
+                Set.ofSeq
+                    (Seq.map snd
+                        (Seq.append ctx.SharedVars ctx.ThreadVars))
+            let n = genName vars "ok"
+            ({ ctx with OkayBool = Some n }, n)
 
-/// <summary>
-///     Generates the lifter view in a context, if it does not exist.
-/// </summary>
-/// <param name="ctx">The current desugaring context.</param>
-/// <returns>
-///     <paramref name="ctx"/> updated to contain a lifter if it didn't
-///     already, and the lifter's name.
-/// </returns>
-let genLifter (ctx : DesugarContext) : DesugarContext * string =
-    match ctx.LocalLiftView with
-    | Some n -> (ctx, n)
-    | None ->
-        (* We need to generate the view, then set the context to use it as the
-           lifter.  The lifter has one parameter: the lifted Boolean. *)
-        let ctxR, n =
-            genView "lift" [ { ParamName = "x"; ParamType = TBool } ] ctx
-        ({ ctxR with LocalLiftView = Some n }, n)
 
 /// <summary>
 ///     Performs desugaring operations on a view, possibly creating new
@@ -251,7 +325,7 @@ let desugarView
         | Local e ->
             (* Treat {| local { x } |} as {| lift(x) |} for simplicity.
                Generate lift if it doesn't exist. *)
-            let (c', liftName) = genLifter c
+            let (c', liftName) = Generators.genLifter c
             desugarIn suffix c' (Func { Name = liftName; Params = [e] })
         | Func v -> (c, [ (suffix, v) ])
         | Join (x, y) -> desugarJoin c suffix x suffix y
@@ -304,12 +378,65 @@ let desugarMarkedView (ctx : DesugarContext) (marked : Marked<View>)
             List.map (fun (t, n) -> { ParamName = n; ParamType = t })
                 tvars
     
-        let ctx', vname = genView "unknown" tpars ctx
+        let ctx', vname = Generators.genView "unknown" tpars ctx
         (ctx', Advisory [ (freshNode True, func vname texprs ) ])
 
 /// <summary>
-///     Converts a command whose views can be unknown into one
-///     over known views.
+///     Desugars an atomic command.
+/// </summary>
+/// <param name="ctx">The current desugaring context.</param>
+/// <param name="a">The <see cref="Atomic"/> to desugar.</param>
+/// <returns>The resulting <see cref="DesugaredAtomic"/>.</returns>
+let rec desugarAtomic (ctx : DesugarContext) (a : Atomic)
+  : DesugarContext * DesugaredAtomic =
+    match a.Node with
+    | AAssert k ->
+        (* assert(x) is lowered into 'ok = x'.
+           Generate the variable 'ok' if it doesn't exist yet. *)
+        let ctx', ok = Generators.genOkay ctx
+
+        let assignOk =
+            freshNode
+                (Fetch
+                    (freshNode (Identifier ok),
+                    k,
+                    Direct))
+
+        (ctx', DAPrim assignOk)
+    | AError ->
+        (* error is lowered into 'assert(false)' and then
+           re-lowered. *)
+        desugarAtomic ctx (freshNode (AAssert (freshNode False)))
+    | APrim p ->
+        // Primitives are carried over unharmed.
+        (ctx, DAPrim p)
+    | ACond (cond, trueBranch, falseBranchO) ->
+        (* Desugaring distributes over ACond.
+           We desugar a missing false branch into an empty one. *)
+        let falseBranch = withDefault [] falseBranchO
+
+        let ctxT, trueBranch' = mapAccumL desugarAtomic ctx trueBranch
+        let ctx', falseBranch' = mapAccumL desugarAtomic ctxT falseBranch
+
+        (ctx', DACond (cond, trueBranch', falseBranch'))
+
+/// <summary>
+///     Desugars a primitive set.
+/// </summary>
+/// <param name="ctx">The current desugaring context.</param>
+/// <param name="ps">The <see cref="PrimSet"/> to desugar.</param>
+/// <returns>The desugared <see cref="PrimSet"/>.</returns>
+let desugarPrimSet (ctx : DesugarContext) (ps : PrimSet<Atomic>)
+  : DesugarContext * PrimSet<DesugaredAtomic> =
+    let ctx', ats = mapAccumL desugarAtomic ctx ps.Atomics
+
+    (ctx',
+     { PreLocals = ps.PreLocals
+       Atomics = ats
+       PostLocals = ps.PostLocals } )
+
+/// <summary>
+///     Performs desugaring on a command.
 /// </summary>
 /// <param name="ctx">The current desugaring context.</param>
 /// <param name="cmd">The command whose views are to be converted.</param>
@@ -318,27 +445,30 @@ let desugarMarkedView (ctx : DesugarContext) (marked : Marked<View>)
 /// </returns>
 let rec desugarCommand (ctx : DesugarContext) (cmd : Command)
   : DesugarContext * FullCommand =
-    let f = fun (a, b) -> (a, cmd |=> b)
-    f <| match cmd.Node with
-            | ViewExpr v -> failwith "should have been handled at block level"
-            | If (e, t, fo) ->
-                let (tc, t') = desugarBlock ctx t
-                let (fc, f') =
-                    match fo with
-                    | None -> tc, None
-                    | Some f -> pairMap id Some (desugarBlock tc f)
-                let ast = FIf (e, t', f')
-                (fc, ast)
-            | While (e, b) ->
-                let (ctx', b') = desugarBlock ctx b
-                (ctx', FWhile (e, b'))
-            | DoWhile (b, e) ->
-                let (ctx', b') = desugarBlock ctx b
-                (ctx', FDoWhile (b', e))
-            | Blocks bs ->
-                let (ctx', bs') = mapAccumL desugarBlock ctx bs
-                (ctx', FBlocks bs')
-            | Prim ps -> (ctx, FPrim ps)
+    let ctx', cmd' =
+        match cmd.Node with
+        | ViewExpr v -> failwith "should have been handled at block level"
+        | If (e, t, fo) ->
+            let (tc, t') = desugarBlock ctx t
+            let (fc, f') =
+                match fo with
+                | None -> tc, None
+                | Some f -> pairMap id Some (desugarBlock tc f)
+            let ast = FIf (e, t', f')
+            (fc, ast)
+        | While (e, b) ->
+            let (ctx', b') = desugarBlock ctx b
+            (ctx', FWhile (e, b'))
+        | DoWhile (b, e) ->
+            let (ctx', b') = desugarBlock ctx b
+            (ctx', FDoWhile (b', e))
+        | Blocks bs ->
+            let (ctx', bs') = mapAccumL desugarBlock ctx bs
+            (ctx', FBlocks bs')
+        | Prim ps ->
+            let ctx', ps' = desugarPrimSet ctx ps
+            (ctx', FPrim ps')
+    (ctx', cmd |=> cmd')
 
 /// <summary>
 ///     Converts a block whose views can be unknown into a block over known
@@ -423,10 +553,15 @@ and desugarBlock (ctx : DesugarContext) (block : Command list)
 /// <param name="tvars">The list of thread-local variables.</param>
 /// <param name="vprotos">The sequence of existing view prototypes.</param>
 /// <returns>An initial <see cref="DesugarContext"/>.</returns>
-let initialContext (tvars : (TypeLiteral * string) seq) (vprotos : ViewProto seq)
+let initialContext
+  (svars : (TypeLiteral * string) seq)
+  (tvars : (TypeLiteral * string) seq)
+  (vprotos : ViewProto seq)
   : DesugarContext =
-    { ThreadVars = List.ofSeq tvars
+    { SharedVars = List.ofSeq svars
+      ThreadVars = List.ofSeq tvars
       LocalLiftView = None 
+      OkayBool = None
       GeneratedProtos = Set.empty
       ExistingProtos = Set.ofSeq vprotos }
 
@@ -460,7 +595,8 @@ let initialContext (tvars : (TypeLiteral * string) seq) (vprotos : ViewProto seq
 let desugar
   (collated : CollatedScript)
   : (DesugarContext * Map<string, FullBlock<ViewExpr<DesugaredGView>, FullCommand>>) =
-    let ctx = initialContext collated.ThreadVars collated.VProtos
+    let ctx =
+        initialContext collated.SharedVars collated.ThreadVars collated.VProtos
     
     let ms = Map.toList collated.Methods
     let (ctx', ms') =
@@ -480,20 +616,30 @@ module Tests =
     open NUnit.Framework
     open Starling.Utils.Testing
 
-    let checkCtx : DesugarContext =
-        let tvars =
-            [ (TInt, "s")
-              (TInt, "t") ]
+    let normalCtx : DesugarContext =
+        let svars = [ (TInt, "serving"); (TInt, "ticket") ]
+        let tvars = [ (TInt, "s"); (TInt, "t") ]
         let vprotos = Seq.empty
-        initialContext tvars vprotos
+        initialContext svars tvars vprotos
+
+    let dupeCtx : DesugarContext =
+        let svars =
+            [ (TInt, "__ok_0")
+              (TBool, "__ok_1")
+              (TInt, "serving")
+              (TInt, "ticket") ]
+        let tvars = [ (TInt, "s"); (TInt, "t") ]
+        let vprotos = Seq.empty
+        initialContext svars tvars vprotos
 
     module DesugarMarkedView =
         let check
           (expectedCtx : DesugarContext)
           (expectedView : ViewExpr<DesugaredGView>)
+          (ctx : DesugarContext)
           (ast : Marked<View>)
           : unit =
-            let got = desugarMarkedView checkCtx ast
+            let got = desugarMarkedView ctx ast
             assertEqual (expectedCtx, expectedView) got
 
         [<Test>]
@@ -507,32 +653,100 @@ module Tests =
                      IsAnonymous = false)
 
             check
-                { checkCtx with GeneratedProtos = Set.singleton nfunc }
+                { normalCtx with GeneratedProtos = Set.singleton nfunc }
                 (Advisory
                     [ (freshNode True,
                        func "__unknown_0"
                         [ freshNode (Identifier "s")
                           freshNode (Identifier "t") ] ) ] )
+                normalCtx
                 Unknown
 
-    /// Tests for the single-view desugarer.
+    /// <summary>Tests for the atomic command desugarer.</summary>
+    module DesugarAtomic =
+        let check
+          (expectedCtx : DesugarContext)
+          (expectedAtom : DesugaredAtomic)
+          (ctx : DesugarContext)
+          (ast : Atomic)
+          : unit =
+            let got = desugarAtomic ctx ast
+            assertEqual (expectedCtx, expectedAtom) got
+
+        [<Test>]
+        let ``Desugar assert into an assignment to the okay variable`` () =
+            check
+                { normalCtx with OkayBool = Some "__ok_0" }
+                (DAPrim
+                    (freshNode
+                        (Fetch
+                            (freshNode (Identifier "__ok_0"),
+                             freshNode (Identifier "foobar"),
+                             Direct))))
+                normalCtx
+                (freshNode
+                    (AAssert (freshNode (Identifier "foobar"))))
+
+        [<Test>]
+        let ``Desugar error into a false assignment to the okay variable`` () =
+            check
+                { normalCtx with OkayBool = Some "__ok_0" }
+                (DAPrim
+                    (freshNode
+                        (Fetch
+                            (freshNode (Identifier "__ok_0"),
+                             freshNode False,
+                             Direct))))
+                normalCtx
+                (freshNode AError)
+
+        [<Test>]
+        let ``Desugar assert properly when normal okay is taken`` () =
+            check
+                { dupeCtx with OkayBool = Some "__ok_2" }
+                (DAPrim
+                    (freshNode
+                        (Fetch
+                            (freshNode (Identifier "__ok_2"),
+                             freshNode (Identifier "foobar"),
+                             Direct))))
+                dupeCtx
+                (freshNode
+                    (AAssert (freshNode (Identifier "foobar"))))
+
+        [<Test>]
+        let ``Desugar error properly when normal okay is taken`` () =
+            check
+                { dupeCtx with OkayBool = Some "__ok_2" }
+                (DAPrim
+                    (freshNode
+                        (Fetch
+                            (freshNode (Identifier "__ok_2"),
+                             freshNode False,
+                             Direct))))
+                dupeCtx
+                (freshNode AError)
+
+
+    /// <summary>Tests for the single-view desugarer.</summary>
     module DesugarView =
         let check
           (expectedCtx : DesugarContext)
           (expectedView : DesugaredGView)
+          (ctx : DesugarContext)
           (ast : View)
           : unit =
-            let got = desugarView checkCtx ast
+            let got = desugarView ctx ast
             assertEqual (expectedCtx, expectedView) got
         
         [<Test>]
         let ``Desugar the empty view into an empty view`` () =
-            check checkCtx [] Unit
+            check normalCtx [] normalCtx Unit
 
         [<Test>]
         let ``Desugar a local expression`` () =
             check
-                { checkCtx with
+                { normalCtx with
                     LocalLiftView = Some "__lift_0"
                     GeneratedProtos =
                         Set.ofList
@@ -540,12 +754,13 @@ module Tests =
                                     (Func = func "__lift_0" [ { ParamName = "x"; ParamType = TBool } ],
                                     IsAnonymous = false)) ] }
                 [ (freshNode True, func "__lift_0" [ freshNode (Identifier "bar") ]) ]
+                normalCtx
                 (Local (freshNode (Identifier "bar")))
 
         [<Test>]
         let ``Desugar a falsehood`` () =
             check
-                { checkCtx with
+                { normalCtx with
                     LocalLiftView = Some "__lift_0"
                     GeneratedProtos =
                         Set.ofList
@@ -553,6 +768,7 @@ module Tests =
                                     (Func = func "__lift_0" [ { ParamName = "x"; ParamType = TBool } ],
                                     IsAnonymous = false)) ] }
                 [ (freshNode True, func "__lift_0" [ freshNode (False) ]) ]
+                normalCtx
                 Falsehood
 
 
@@ -560,9 +776,10 @@ module Tests =
         [<Test>]
         let ``Desugar a flat join`` () =
             check
-                checkCtx
+                normalCtx
                 [ (freshNode True, func "foo" [ freshNode (Identifier "bar") ])
                   (freshNode True, func "bar" [ freshNode (Identifier "baz") ]) ] 
+                normalCtx
                 (Join
                     (Func (afunc "foo" [ freshNode (Identifier "bar") ]),
                      Func (afunc "bar" [ freshNode (Identifier "baz") ])))
@@ -570,11 +787,12 @@ module Tests =
         [<Test>]
         let ``Desugar a single conditional`` () =
             check
-                checkCtx
+                normalCtx
                 [ (freshNode (Identifier "s"),
                    func "foo" [ freshNode (Identifier "bar") ] )
                   (freshNode (UopExpr (Neg, freshNode (Identifier "s"))),
                    func "bar" [ freshNode (Identifier "baz") ] ) ]
+                normalCtx
                 (View.If
                     (freshNode (Identifier "s"),
                      Func (afunc "foo" [ freshNode (Identifier "bar") ] ),
@@ -583,9 +801,10 @@ module Tests =
         [<Test>]
         let ``Desugar a single conditional with no else`` () =
             check
-                checkCtx
+                normalCtx
                 [ (freshNode (Identifier "s"),
                    func "foo" [ freshNode (Identifier "bar") ] ) ]
+                normalCtx
                 (View.If
                     (freshNode (Identifier "s"),
                      Func (afunc "foo" [ freshNode (Identifier "bar") ] ),
@@ -595,7 +814,7 @@ module Tests =
         [<Test>]
         let ``Convert a complex-nested CondView-list to a GuarView-list with complex guards`` () =
             check
-                checkCtx
+                normalCtx
                 [ (freshNode
                     (BopExpr
                         (And,
@@ -620,6 +839,7 @@ module Tests =
                   (freshNode
                      (UopExpr (Neg, freshNode (Identifier "s"))),
                    func "ding" [ freshNode (Identifier "dong") ] ) ]
+                normalCtx
                 (View.If
                     (freshNode (Identifier "s"),
                      Join

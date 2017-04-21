@@ -304,12 +304,12 @@ module VarLists =
             ([ VarMapError.Duplicate "foo" ])
 
 
-let aprim (p : Prim') : Atomic = freshNode (APrim (freshNode p))
+let aprim (p : Prim') : DesugaredAtomic = DAPrim (freshNode p)
 
 module Atomics =
     open Starling.Core.Pretty
     open Starling.Lang.Modeller.Pretty
-    let check (ast : Atomic) (cmd : PrimCommand list) : unit =
+    let check (ast : DesugaredAtomic) (cmd : PrimCommand list) : unit =
         assertOkAndEqual
             cmd
             (modelAtomic sharedContext.Env ast)
@@ -421,7 +421,7 @@ module CommandAxioms =
             (modelCommand sharedContext c)
             (printPartCmd (printViewExpr (printIteratedGView (printSym printVar))) >> printUnstyled)
 
-    let prim (atom : Atomic) : FullCommand =
+    let prim (atom : DesugaredAtomic) : FullCommand =
         freshNode
         <| FPrim { PreLocals = []
                    Atomics = [ atom ]
