@@ -14,10 +14,12 @@ import collections
 SPEC_FILE = './testresults'
 
 Z3_SCRIPT = './starling.sh'
+Z3_ARGS = ['-ssmt-sat']
 Z3_PASS_DIR = './Examples/Pass'
 Z3_FAIL_DIR = './Examples/Fail'
 
 GH_SCRIPT = './starling-gh.sh'
+GH_ARGS = []
 GH_PASS_DIR = './Examples/PassGH'
 GH_FAIL_DIR = './Examples/FailGH'
 
@@ -36,9 +38,10 @@ def err(fmt, *args):
     """Prints to stderr."""
     print(fmt.format(*args), file=sys.stderr)
 
-def run_and_get_stdout(script_name, file_name):
+def run_and_get_stdout(script_name, script_args, file_name):
     """Runs script_name on file_name, returning the stdout lines as UTF-8."""
-    p = subprocess.Popen([script_name, file_name], stdout=subprocess.PIPE)
+    args = [script_name] + script_args + [file_name]
+    p = subprocess.Popen(args, stdout=subprocess.PIPE)
     stdout = p.stdout.read()
     return stdout.decode('utf-8').split('\n')
 
@@ -47,7 +50,7 @@ def z3(file_name):
     """Runs Starling in Z3 mode on file_name, yielding all failing clauses."""
     # outputs in form
     # "clause_name: (success | fail)
-    for line in run_and_get_stdout(Z3_SCRIPT, file_name):
+    for line in run_and_get_stdout(Z3_SCRIPT, Z3_ARGS, file_name):
         name, _, status = line.partition(':')
         name, status = name.strip(), status.strip()
         if status == 'fail':
@@ -56,7 +59,7 @@ def z3(file_name):
 def grasshopper(file_name):
     """Runs Starling/GRASShopper mode on file_name, yielding failing clauses."""
     # The GRASShopper output needs some significant massaging.
-    for line in run_and_get_stdout(GH_SCRIPT, file_name):
+    for line in run_and_get_stdout(GH_SCRIPT, GH_ARGS, file_name):
         m = GH_FAIL_RE.match(line)
         if m:
             yield m.group('term')

@@ -155,7 +155,7 @@ let requestList : (string * (string * Request)) list =
 let requestFromStage (ostage : string option) : Request option =
     let pickStage stageName = List.tryFind (fun (x, _) -> x = stageName) requestList
 
-    (withDefault "smt-sat" ostage).ToLower()
+    (withDefault "smt-failures" ostage).ToLower()
     |> pickStage
     |> Option.map (snd >> snd)
 
