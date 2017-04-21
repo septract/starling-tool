@@ -355,7 +355,7 @@ do parseAtomicRef :=
     nodify <| choice
         [ // These need to fire before parsePrim due to ambiguity.
           parseIfLike (many1 (parseAtomic .>> ws)) (curry3 ACond)
-          stringReturn "error" AError
+          stringReturn "error" AError .>> wsSemi
           pstring "assert" >>. ws >>. inParens parseExpression |>> AAssert
           parsePrim .>> wsSemi |>> APrim ]
 
