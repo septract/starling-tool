@@ -6,47 +6,21 @@ import re
 import sys
 import argparse
 import itertools
-import subprocess
 import collections
-import tempfile
+from starling_common import *
 
 # This file should contain records of the form
 # filepath: failing-term1 failing-term2 ... failing-termN
 SPEC_FILE = 'testresults'
 
-Z3_ARGS = ['-ssmt-sat']
 Z3_PASS_DIR = os.path.join('Examples', 'Pass')
 Z3_FAIL_DIR = os.path.join('Examples', 'Fail')
 
-GH_ARGS = ['-sgrass', '-Btry-approx']
 GH_PASS_DIR = os.path.join('Examples', 'PassGH')
 GH_FAIL_DIR = os.path.join('Examples', 'FailGH')
 
 CVF_RE = re.compile('^\S*\.cvf$')
 ARGS = None
-
-# Used to match GRASShopper failures
-GH_FAIL_RE = re.compile('^A postcondition of (?P<term>[^ ]+) might not hold at this return point$')
-
-def get_starling():
-    """Tries to find the correct invocation for Starling on this platform.
-
-    Returns:
-        A list, where the zeroth element is the program to run, and all
-        subsequent elements are arguments.
-    """
-
-    # Assume the binary went in its usual location.
-    path = os.path.join('bin', 'Debug', 'starling.exe')
-
-    # On Windows, we can run .NET assemblies directly.
-    if os.name == 'nt':
-        verbose('Running Windows, can execute {} directly.', path)
-        return [path]
-
-    # On other platforms, we assume we have access to mono.
-    verbose('Not running Windows, will use Mono to execute {}.', path)
-    return ['mono', path]
 
 def verbose(fmt, *args):
     """Prints to stdout, but only in verbose mode."""
@@ -68,9 +42,8 @@ def z3(starling_args, file_name):
     Yields:
         Each failing clause resulting from running Starling.
     """
-    args = starling_args + Z3_ARGS + [file_name]
-
-    for line in subprocess.check_output(args).decode('utf-8').split('\n'):
+    lines, _ = run_starling_z3(starling_args, file_name)
+    for line in lines:
         # outputs in form
         # "clause_name: (success | fail)
         name, _, status = line.partition(':')
@@ -91,23 +64,7 @@ def grasshopper(starling_args, grasshopper_args, file_name):
     Yields:
         Each failing clause resulting from running Starling.
     """
-    # GRASShopper can't read from stdin, so we have to make a temporary file.
-    sargs = starling_args + GH_ARGS + [file_name]
-    # Having the current directory as dir is a nasty hack.
-    with tempfile.NamedTemporaryFile(dir='', suffix='.spl', delete=False) as tempf:
-        sname = os.path.basename(tempf.name)
-        print(sname)
-        starling = subprocess.Popen(sargs, stdout=tempf)
-        starling.wait()
-
-    gargs = grasshopper_args + [sname]
-    gh = subprocess.Popen(gargs, stdout=subprocess.PIPE)
-    lines = gh.communicate()[0].decode('utf-8').split('\n')
-
-    print(lines)
-
-    os.unlink(sname)
-
+    lines, _ = run_starling_grasshopper(starling_args, grasshopper_args, file_name)
     # The GRASShopper output needs some significant massaging.
     for line in lines:
         m = GH_FAIL_RE.match(line)
