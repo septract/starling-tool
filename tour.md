@@ -15,6 +15,11 @@ From the `starling-tool` directory, the full list of available scripts is:
   and output details of any failing proof terms.
 * `starling-gh.sh FILENAME`: Run Starling in GRASShopper mode, and output
   the GRASShopper output for the generated verification conditions.
+* `python -v regress.py`: Run the Starling regression tests (described below).
+* `unit.sh`: Run the Starling unit tests (described below).
+* `bench.sh`: Run proofs for the files described in _Example Files_ below,
+  and print out benchmarks for them in a form similar to that in Figure 4
+  of the paper.
 
 For information on the command-line arguments Starling supports, run
 `starling.sh -h`.
