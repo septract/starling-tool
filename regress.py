@@ -13,12 +13,10 @@ import collections
 # filepath: failing-term1 failing-term2 ... failing-termN
 SPEC_FILE = 'testresults'
 
-Z3_SCRIPT = 'starling.sh'
 Z3_ARGS = ['-ssmt-sat']
 Z3_PASS_DIR = os.path.join('Examples', 'Pass')
 Z3_FAIL_DIR = os.path.join('Examples', 'Fail')
 
-GH_SCRIPT = 'starling-gh.sh'
 GH_ARGS = []
 GH_PASS_DIR = os.path.join('Examples', 'PassGH')
 GH_FAIL_DIR = os.path.join('Examples', 'FailGH')
@@ -87,7 +85,7 @@ def z3(starling_args, file_name):
         if status == 'fail':
             yield name
 
-def grasshopper(file_name):
+def grasshopper(starling_args, grasshopper_args, file_name):
     """Runs Starling/GRASShopper mode on file_name, yielding failing clauses.
 
     Args:
@@ -104,8 +102,7 @@ def grasshopper(file_name):
     sargs = starling_args + GH_ARGS + [file_name]
     starling = subprocess.Popen(sargs, stdout=PIPE)
 
-    gargs = ['grasshopper.native']
-    grasshopper = subprocess.Popen(gargs, stdin=starling.stdout, stdout=PIPE)
+    grasshopper = subprocess.Popen(grasshopper_args, stdin=starling.stdout, stdout=PIPE)
 
     starling.stdout.close()
     lines = starling.communicate()[0].decode('utf-8').split('\n')
@@ -177,15 +174,18 @@ def main():
     if there are
     """
     expected_failures = make_failure_dict(SPEC_FILE)
+    starling_args = get_starling()
 
     pass_z3 = find(Z3_PASS_DIR, CVF_RE)
     fail_z3 = find(Z3_FAIL_DIR, CVF_RE)
-    failed = check(itertools.chain(pass_z3, fail_z3), z3, expected_failures)
+    z = lambda fn: z3(starling_args, fn)
+    failed = check(itertools.chain(pass_z3, fail_z3), z, expected_failures)
 
     if not failed:
         pass_gh = find(GH_PASS_DIR, CVF_RE)
         fail_gh = find(GH_FAIL_DIR, CVF_RE)
-        failed = check(itertools.chain(pass_gh, fail_gh), grasshopper, expected_failures)
+        g = lambda fn: grasshopper(starling_args, ['grasshopper.native'], fn)
+        failed = check(itertools.chain(pass_gh, fail_gh), g, expected_failures)
 
     if failed:
         verbose('')
