@@ -102,7 +102,7 @@ def grasshopper(starling_args, grasshopper_args, file_name):
     sargs = starling_args + GH_ARGS + [file_name]
     starling = subprocess.Popen(sargs, stdout=PIPE)
 
-    grasshopper = subprocess.Popen(grasshopper_args, stdin=starling.stdout, stdout=PIPE)
+    grasshopper = subprocess.Popen(grasshopper_args, stdin=starling.stdout, stdout=subprocess.PIPE)
 
     starling.stdout.close()
     lines = starling.communicate()[0].decode('utf-8').split('\n')
@@ -176,12 +176,15 @@ def main():
     expected_failures = make_failure_dict(SPEC_FILE)
     starling_args = get_starling()
 
-    pass_z3 = find(Z3_PASS_DIR, CVF_RE)
-    fail_z3 = find(Z3_FAIL_DIR, CVF_RE)
-    z = lambda fn: z3(starling_args, fn)
-    failed = check(itertools.chain(pass_z3, fail_z3), z, expected_failures)
+    failed = False
 
-    if not failed:
+    if not ARGS.noz3:
+        pass_z3 = find(Z3_PASS_DIR, CVF_RE)
+        fail_z3 = find(Z3_FAIL_DIR, CVF_RE)
+        z = lambda fn: z3(starling_args, fn)
+        failed = check(itertools.chain(pass_z3, fail_z3), z, expected_failures)
+
+    if not (failed or ARGS.nogh):
         pass_gh = find(GH_PASS_DIR, CVF_RE)
         fail_gh = find(GH_FAIL_DIR, CVF_RE)
         g = lambda fn: grasshopper(starling_args, ['grasshopper.native'], fn)
@@ -199,5 +202,7 @@ def main():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--verbose', action='store_true', help='turn on verbose output')
+    parser.add_argument('-z', '--noz3', action='store_true', help='do not check Z3 examples')
+    parser.add_argument('-g', '--nogh', action='store_true', help='do not check GRASShopper examples')
     ARGS = parser.parse_args()
     main()
