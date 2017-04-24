@@ -24,13 +24,31 @@ From the `starling-tool` directory, the full list of available scripts is:
 For information on the command-line arguments Starling supports, run
 `starling.sh -h`.
 
-## Example Files
+## Figure 4: Benchmarks
 
-Figure 4 of the submitted paper mentions several benchmarked examples.
-These correspond to the following invocations of Starling, with the
-following files.
+To run the entire benchmark suite used for Figure 4 of the paper,
+use `bench.sh`.
 
-### SMT/Z3
+To see how Starling's benchmark system runs, read `bench.sh` and its
+included files.  These are written in POSIX shell language and the
+`awk` text transformer tool.  We give pointers for further scrutiny
+below.
+
+### Examples used in benchmarks
+
+Assignments from benchmark name to file are tracked by the file
+`benchmarks.in`, which tells the benchmark scripts which files to run.
+`benchmarks.in` is commented.
+
+The `benchmarks.in` assignments used in the paper correspond to the
+following invocations of Starling, with the following files:
+
+**Note: There have been several minor syntactic changes made to the
+proof scripts since the preprint.  Also, a bug in the CLH
+lock proof was found and corrected after submission.  These changes
+will be reflected in the final paper.**
+
+#### SMT/Z3
 
 These can be run using `starling.sh Examples/Pass/FILE`, where `FILE` is:
 
@@ -40,7 +58,7 @@ These can be run using `starling.sh Examples/Pass/FILE`, where `FILE` is:
 * Reader/writer lock: `singleWriterMultiReaderLock.cvf`
 * Peterson’s algorithm: `petersonArray.cvf`
 
-### GRASShopper
+#### GRASShopper
 
 These can be run using `starling-gh.sh Examples/PassGH/FILE`, where `FILE` is:
 
@@ -50,7 +68,7 @@ These can be run using `starling-gh.sh Examples/PassGH/FILE`, where `FILE` is:
 * CLH queue-lock: `clhLock.cvf`
 * Lock-coupling list: `lclist-module.cvf`
 
-### Additional Examples
+## Additional Examples
 
 Starling also comes with additional examples in the `Pass` and `PassGH`
 directories, most of which correspond to minor variations on the benchmarked
@@ -60,16 +78,6 @@ The `Fail` and `FailGH` directories contain failing examples, which can be
 used to validate Starling's response to ill-formed proofs.  We also suggest
 editing the passing scripts to add typoes and bugs, to exercise Starling's
 error handling and failing proof behaviour.
-
-### Validation
-
-These assignments from benchmark name to file are tracked by the file
-`benchmarks.in`, which tells the benchmark scripts which files to run.
-`benchmarks.in` is commented.
-
-To see how Starling's benchmark system runs, read `bench.sh` and its
-included files.  These are written in POSIX shell language and the
-`awk` text transformer tool.
 
 ## Test Suites
 
