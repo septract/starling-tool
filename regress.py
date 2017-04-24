@@ -100,7 +100,7 @@ def grasshopper(starling_args, grasshopper_args, file_name):
     """
     # The GRASShopper output needs some significant massaging.
     sargs = starling_args + GH_ARGS + [file_name]
-    starling = subprocess.Popen(sargs, stdout=PIPE)
+    starling = subprocess.Popen(sargs, stdout=subprocess.PIPE)
 
     grasshopper = subprocess.Popen(grasshopper_args, stdin=starling.stdout, stdout=subprocess.PIPE)
 
