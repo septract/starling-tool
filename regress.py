@@ -36,7 +36,7 @@ def get_starling():
     """
 
     # Assume the binary went in its usual location.
-    path = os.path.join('Bin', 'Debug', 'starling.exe')
+    path = os.path.join('bin', 'Debug', 'starling.exe')
 
     # On Windows, we can run .NET assemblies directly.
     if os.name == 'nt':
