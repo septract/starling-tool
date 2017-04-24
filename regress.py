@@ -8,6 +8,7 @@ import argparse
 import itertools
 import subprocess
 import collections
+import tempfile
 
 # This file should contain records of the form
 # filepath: failing-term1 failing-term2 ... failing-termN
@@ -17,7 +18,7 @@ Z3_ARGS = ['-ssmt-sat']
 Z3_PASS_DIR = os.path.join('Examples', 'Pass')
 Z3_FAIL_DIR = os.path.join('Examples', 'Fail')
 
-GH_ARGS = []
+GH_ARGS = ['-sgrass', '-Btry-approx']
 GH_PASS_DIR = os.path.join('Examples', 'PassGH')
 GH_FAIL_DIR = os.path.join('Examples', 'FailGH')
 
@@ -56,14 +57,6 @@ def err(fmt, *args):
     """Prints to stderr."""
     print(fmt.format(*args), file=sys.stderr)
 
-def run_and_get_stdout(script_name, script_args, file_name):
-    """Runs script_name on file_name, returning the stdout lines as UTF-8."""
-    args = [script_name] + script_args + [file_name]
-    p = subprocess.Popen(args, stdout=subprocess.PIPE)
-    stdout = p.stdout.read()
-    return stdout.decode('utf-8').split('\n')
-
-
 def z3(starling_args, file_name):
     """Runs Starling in Z3 mode on file_name, yielding all failing clauses.
 
@@ -98,15 +91,24 @@ def grasshopper(starling_args, grasshopper_args, file_name):
     Yields:
         Each failing clause resulting from running Starling.
     """
-    # The GRASShopper output needs some significant massaging.
+    # GRASShopper can't read from stdin, so we have to make a temporary file.
     sargs = starling_args + GH_ARGS + [file_name]
-    starling = subprocess.Popen(sargs, stdout=subprocess.PIPE)
+    # Having the current directory as dir is a nasty hack.
+    with tempfile.NamedTemporaryFile(dir='', suffix='.spl', delete=False) as tempf:
+        sname = os.path.basename(tempf.name)
+        print(sname)
+        starling = subprocess.Popen(sargs, stdout=tempf)
+        starling.wait()
 
-    grasshopper = subprocess.Popen(grasshopper_args, stdin=starling.stdout, stdout=subprocess.PIPE)
+    gargs = grasshopper_args + [sname]
+    gh = subprocess.Popen(gargs, stdout=subprocess.PIPE)
+    lines = gh.communicate()[0].decode('utf-8').split('\n')
 
-    starling.stdout.close()
-    lines = starling.communicate()[0].decode('utf-8').split('\n')
+    print(lines)
 
+    os.unlink(sname)
+
+    # The GRASShopper output needs some significant massaging.
     for line in lines:
         m = GH_FAIL_RE.match(line)
         if m:
@@ -187,7 +189,7 @@ def main():
     if not (failed or ARGS.nogh):
         pass_gh = find(GH_PASS_DIR, CVF_RE)
         fail_gh = find(GH_FAIL_DIR, CVF_RE)
-        g = lambda fn: grasshopper(starling_args, ['grasshopper.native'], fn)
+        g = lambda fn: grasshopper(starling_args, ['grasshopper.native', '-robust'], fn)
         failed = check(itertools.chain(pass_gh, fail_gh), g, expected_failures)
 
     if failed:
