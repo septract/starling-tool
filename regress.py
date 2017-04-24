@@ -11,23 +11,43 @@ import collections
 
 # This file should contain records of the form
 # filepath: failing-term1 failing-term2 ... failing-termN
-SPEC_FILE = './testresults'
+SPEC_FILE = 'testresults'
 
-Z3_SCRIPT = './starling.sh'
+Z3_SCRIPT = 'starling.sh'
 Z3_ARGS = ['-ssmt-sat']
-Z3_PASS_DIR = './Examples/Pass'
-Z3_FAIL_DIR = './Examples/Fail'
+Z3_PASS_DIR = os.path.join('Examples', 'Pass')
+Z3_FAIL_DIR = os.path.join('Examples', 'Fail')
 
-GH_SCRIPT = './starling-gh.sh'
+GH_SCRIPT = 'starling-gh.sh'
 GH_ARGS = []
-GH_PASS_DIR = './Examples/PassGH'
-GH_FAIL_DIR = './Examples/FailGH'
+GH_PASS_DIR = os.path.join('Examples', 'PassGH')
+GH_FAIL_DIR = os.path.join('Examples', 'FailGH')
 
 CVF_RE = re.compile('^\S*\.cvf$')
 ARGS = None
 
 # Used to match GRASShopper failures
 GH_FAIL_RE = re.compile('^A postcondition of (?P<term>[^ ]+) might not hold at this return point$')
+
+def get_starling():
+    """Tries to find the correct invocation for Starling on this platform.
+
+    Returns:
+        A list, where the zeroth element is the program to run, and all
+        subsequent elements are arguments.
+    """
+
+    # Assume the binary went in its usual location.
+    path = os.path.join('Bin', 'Debug', 'starling.exe')
+
+    # On Windows, we can run .NET assemblies directly.
+    if os.name == 'nt':
+        verbose('Running Windows, can execute {} directly.', path)
+        return [path]
+
+    # On other platforms, we assume we have access to mono.
+    verbose('Not running Windows, will use Mono to execute {}.', path)
+    return ['mono', path]
 
 def verbose(fmt, *args):
     """Prints to stdout, but only in verbose mode."""
@@ -46,20 +66,51 @@ def run_and_get_stdout(script_name, script_args, file_name):
     return stdout.decode('utf-8').split('\n')
 
 
-def z3(file_name):
-    """Runs Starling in Z3 mode on file_name, yielding all failing clauses."""
-    # outputs in form
-    # "clause_name: (success | fail)
-    for line in run_and_get_stdout(Z3_SCRIPT, Z3_ARGS, file_name):
+def z3(starling_args, file_name):
+    """Runs Starling in Z3 mode on file_name, yielding all failing clauses.
+
+    Args:
+        starling_args: A list containing the program name, and zero or
+            more arguments, needed to run Starling.
+        file_name: The name of the file to check.
+
+    Yields:
+        Each failing clause resulting from running Starling.
+    """
+    args = starling_args + Z3_ARGS + [file_name]
+
+    for line in subprocess.check_output(args).decode('utf-8').split('\n'):
+        # outputs in form
+        # "clause_name: (success | fail)
         name, _, status = line.partition(':')
         name, status = name.strip(), status.strip()
         if status == 'fail':
             yield name
 
 def grasshopper(file_name):
-    """Runs Starling/GRASShopper mode on file_name, yielding failing clauses."""
+    """Runs Starling/GRASShopper mode on file_name, yielding failing clauses.
+
+    Args:
+        starling_args: A list containing the program name, and zero or
+            more arguments, needed to run Starling.
+        grasshopper_args: A list containing the program name, and zero or
+            more arguments, needed to run GRASShopper.
+        file_name: The name of the file to check.
+
+    Yields:
+        Each failing clause resulting from running Starling.
+    """
     # The GRASShopper output needs some significant massaging.
-    for line in run_and_get_stdout(GH_SCRIPT, GH_ARGS, file_name):
+    sargs = starling_args + GH_ARGS + [file_name]
+    starling = subprocess.Popen(sargs, stdout=PIPE)
+
+    gargs = ['grasshopper.native']
+    grasshopper = subprocess.Popen(gargs, stdin=starling.stdout, stdout=PIPE)
+
+    starling.stdout.close()
+    lines = starling.communicate()[0].decode('utf-8').split('\n')
+
+    for line in lines:
         m = GH_FAIL_RE.match(line)
         if m:
             yield m.group('term')
@@ -73,17 +124,18 @@ def make_failure_dict(spec_file):
 
     with open(spec_file, 'r') as f:
         for line in f:
-            name, _, failures = line.partition(':')
-            name, failures = name.strip(), failures.strip()
-            expected_failures[name] = set()
+            records = [ r.strip() for r in line.split(':') ]
+            bucket, name, failures = records
+            path = os.path.join('Examples', bucket, name)
+            expected_failures[path] = set()
             for failure in failures.split(None):
-                expected_failures[name].add(failure.strip())
+                expected_failures[path].add(failure.strip())
 
     return expected_failures
 
 def find(root, regexp):
-    '''find all files under `root` that match regexp
-    '''
+    """find all files under `root` that match regexp
+    """
     roots = collections.deque([root])
     while roots:
         root = roots.popleft()
@@ -120,10 +172,10 @@ def check(files, checker, expected_failures):
     return failed_overall
 
 def main():
-    ''' Run starling on the Examples/Pass and Examples/Fail directories
+    """ Run starling on the Examples/Pass and Examples/Fail directories
     and check that there are no unexpected failures. Exiting with exit code 1
     if there are
-    '''
+    """
     expected_failures = make_failure_dict(SPEC_FILE)
 
     pass_z3 = find(Z3_PASS_DIR, CVF_RE)
