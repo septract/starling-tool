@@ -66,3 +66,39 @@ error handling and failing proof behaviour.
 These assignments from benchmark name to file are tracked by the file
 `benchmarks.in`, which tells the benchmark scripts which files to run.
 `benchmarks.in` is commented.
+
+To see how Starling's benchmark system runs, read `bench.sh` and its
+included files.  These are written in POSIX shell language and the
+`awk` text transformer tool.
+
+## Test Suites
+
+Starling comes with two test suites, both of which can be
+run using a single command.
+
+The unit tester, `unit.sh`, runs NUnit (if available) on
+a compiled copy of Starling, and reports the number of
+passed and failed tests.  For AEC copies of Starling, all
+tests should pass.
+
+The regression tester, `regress.py`, is a wrapper around
+`starling.sh` and `starling-gh.sh` that runs those scripts
+on all of the example files, and checks the resulting failed
+proof terms against a manifest, `testresults`.  This manifest
+outlines the expected failures, and is useful for checking
+that Starling is finding the correct proof failures.
+
+## Source Code
+
+The Starling source code is contained in the `.fs` files in
+the root directory.  This is written in F#, a language
+similar to OCaml but based on the .NET Framework.
+
+Files of interest include:
+
+* `Parser.fs`: the language parser, which is useful as a lasy
+  resort guide to how the Starling language works;
+* `Grasshopper.fs` and `Z3.fs`: the interfaces to the proof
+  back-ends.  Z3 is tightly integrated into Starling using its
+  C# bindings, while for GRASShopper we currently output a
+  separate file to use as input to that proof tool.
