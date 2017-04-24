@@ -1,0 +1,50 @@
+# This file tells `regress.py` which failures are expected in Starling
+# examples.
+#
+# Each line is formatted as follows:
+#
+# Bucket:Name:Failure1 Failure2 ... FailureN
+#
+# where the filename is Bucket/Name.cvf.
+#
+# Note that `regress.py` checks ALL files in [Pass,PassGH,Fail,FailGH]:
+# removing or omitting the corresponding line here will cause it to fail with
+# a 'missing results' error!
+#
+# Blank lines (after #-stripping) are discarded.
+Fail:badInc: badInc_C000_000
+Fail:badInc2: badInc_C000_000
+Fail:petersonArrayBadTurns: lock_C001_005
+Fail:petersonBadTurns: lockA_C001_019 lockB_C001_018
+Fail:spinLockBrokenCAS: lock_C001__lock_C003_001
+Fail:ticketLockBad: unlock_C000_002 unlock_C000_003
+Fail:ticketLockBad2: lock_C000_000 lock_C000_002 unlock_C000_000
+Fail:ticketLockFlippedLoop: lock_C002_001 lock_C002_004 lock_C003_002 lock_C003_003 lock_C003_005
+FailGH:clhLockFalseSpin: lock_C002__lock_C004_000 lock_C002__lock_C004_005
+FailGH:clhLockFlippedIf: lock_C004_000 lock_C004_005
+FailGH:ticketLockFlippedIf: lock_C001_003 lock_C001_004 lock_C001_006 lock_C002_002 lock_C002_005 lock_C003_003 lock_C003_004 lock_C003_006
+Pass:arc:
+Pass:multicounter:
+Pass:peterson:
+Pass:petersonArray:
+Pass:petersonInt:
+Pass:petersonIntMissingSynthesised:
+Pass:petersonMultiCmd:
+Pass:seqCmd:
+Pass:singleWriterMultiReaderLock:
+Pass:spinLock:
+Pass:spinLockAdvisory:
+Pass:spinLockAtomicBranch:
+Pass:spinLockInt:
+Pass:spinLockMultiCmd:
+Pass:ticketLock:
+Pass:ticketLockNoIf:
+Pass:ticketLockNoInvariant:
+Pass:ticketLockNonAtomicRelease:
+Pass:ticketLockNonAtomicRelease2:
+PassGH:arc:
+PassGH:clhLock:
+PassGH:lclist:
+PassGH:spinLock:
+PassGH:spinLockAtomicBranch:
+PassGH:ticketLock:

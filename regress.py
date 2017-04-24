@@ -10,8 +10,8 @@ import collections
 from starling_common import *
 
 # This file should contain records of the form
-# filepath: failing-term1 failing-term2 ... failing-termN
-SPEC_FILE = 'testresults'
+# bucket:name: failing-term1 failing-term2 ... failing-termN
+SPEC_FILE = 'regress.in'
 
 Z3_PASS_DIR = os.path.join('Examples', 'Pass')
 Z3_FAIL_DIR = os.path.join('Examples', 'Fail')
@@ -80,9 +80,13 @@ def make_failure_dict(spec_file):
 
     with open(spec_file, 'r') as f:
         for line in f:
-            records = [ r.strip() for r in line.split(':') ]
+            sline, _, _ = line.partition('#')
+            if sline.strip() == '':
+                continue
+
+            records = [ r.strip() for r in sline.split(':') ]
             bucket, name, failures = records
-            path = os.path.join('Examples', bucket, name)
+            path = os.path.join('Examples', bucket, name) + ".cvf"
             expected_failures[path] = set()
             for failure in failures.split(None):
                 expected_failures[path].add(failure.strip())
