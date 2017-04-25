@@ -2,7 +2,7 @@
  * Here we include the GRASShopper module from earlier, and tell Starling
  * what the footprint set is.
  */
-pragma grasshopper_include {./grasshopper/CLHLock-module.spl};
+pragma grasshopper_include {./grasshopper/clhLock-module.spl};
 pragma grasshopper_footprint {Foot};
 pragma grasshopper_footprint_sort {Set<Node>};
 
