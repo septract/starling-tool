@@ -78,18 +78,11 @@ def make_failure_dict(spec_file):
     """
     expected_failures = {}
 
-    with open(spec_file, 'r') as f:
-        for line in f:
-            sline, _, _ = line.partition('#')
-            if sline.strip() == '':
-                continue
-
-            records = [ r.strip() for r in sline.split(':') ]
-            bucket, name, failures = records
-            path = os.path.join('Examples', bucket, name) + ".cvf"
-            expected_failures[path] = set()
-            for failure in failures.split(None):
-                expected_failures[path].add(failure.strip())
+    for (bucket, name, failures) in read_infile(spec_file):
+        path = inflate_example_name(bucket, name)
+        expected_failures[path] = set()
+        for failure in failures.split(None):
+            expected_failures[path].add(failure.strip())
 
     return expected_failures
 

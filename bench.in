@@ -1,0 +1,21 @@
+# This file tells `bench.sh` which benchmarks to run.
+#
+# Each line is formatted as follows:
+#
+# Description:Bucket:Name:GRASShopper module name
+#
+# If the third is missing, the proof is run as a Z3 proof.
+#
+# Benchmarks are emitted as a LaTeX table, sorted alphabetically and grouped by Group.
+#
+# Lines starting with # are discarded.  Whitespace is significant.
+ARC (static):Pass:arc:
+Ticket lock (static):Pass:ticketLock:
+Spinlock (static):Pass:spinLock:
+Reader/writer lock:Pass:singleWriterMultiReaderLock:
+Peterson's algorithm:Pass:petersonArray:
+ARC (allocated):PassGH:arc:arc-module
+Ticket lock (allocated):PassGH:ticketLock:ticketlock-module
+Spin lock (allocated):PassGH:spinLock:spinlock-module
+CLH queue-lock:PassGH:clhLock:clhLock-module
+Lock-coupling list:PassGH:lclist:lclist-module
