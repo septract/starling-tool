@@ -303,7 +303,7 @@ if __name__ == "__main__":
 
     # TODO: Find out why this happens.
     if platform.system() == 'FreeBSD':
-        print("WARNING: Working set metrics may be incorrectly reported as '0'.", file=sys.stderr)
+        print("WARNING: Memory usage metrics may be incorrectly reported as '0'.", file=sys.stderr)
         print("If this happens, try running eg. `command time -l ./starling.sh FILE`", file=sys.stderr)
 
     for desc, bucket, name, grass in read_infile(SPEC_FILE):
