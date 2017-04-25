@@ -27,6 +27,24 @@ For information on the command-line arguments Starling supports, run
 `./starling.sh -h`.
 
 
+### Inspecting GRASShopper output
+
+To dump the GRASShopper output from a Starling/GRASShopper proof (to inspect,
+or so that GRASShopper can be run separately to measure time/resource usage),
+use, for instance,
+
+```
+./starling.sh -sgrass -Btry-approx Examples/PassGH/arc.cvf > temp.spl
+
+# Get timing information on any POSIX-style operating system
+# Assuming 'grasshopper.native' is in PATH
+time grasshopper.native temp.spl
+
+# This command will work on BSD and macOS, and give resource information
+command time -l grasshopper.native temp.spl
+```
+
+
 ## Figure 1: Shared-variable ARC
 
 This figure corresponds, with some minor changes, to the file
@@ -66,6 +84,14 @@ To run the entire benchmark suite used for Figure 4 of the paper, use
 `bench.py` (requires Python 2.7).  This calls Starling and GRASShopper
 several times, using Starling's built-in profiling support (and Python's
 statement timing support for GRASShopper).
+
+### Known issue: Working set metric is 0 on some operating systems
+
+On some operating systems (such as FreeBSD, as used in the AEC VM), Starling
+(and `bench.py`) will report a working set usage of `0`.
+An alternative metric that works on FreeBSD is to run
+`command time -l ./starling.sh path/to/example` and compare the results for
+'maximum resident set size'.
 
 ### Examples used in benchmarks
 

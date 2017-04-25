@@ -5,6 +5,8 @@ import argparse
 import collections
 import os
 import string
+import sys
+import platform
 import timeit
 
 from starling_common import *
@@ -59,7 +61,7 @@ def count_terms(starling_args, path):
         starling_args: The list containing the Starling program
             and its arguments, eg. from get_starling().
         path: The path to the Starling file to run.
- 
+
     Returns:
         A pair of the total number of terms, and the number of
         those that generated an 'success' result from SMT
@@ -74,14 +76,14 @@ def count_terms(starling_args, path):
         _, sep, result = line.partition(':')
         if sep == '':
             continue
-        
+
         ntotal = ntotal + 1
 
         is_success = result.strip() == 'success'
         nsuccess = nsuccess + 1 if is_success else nsuccess
 
     return ntotal, nsuccess
-    
+
 
 def z3_times(starling_args, starling_path):
     """Performs time and memory analysis on Starling/Z3.
@@ -130,7 +132,7 @@ def z3_times(starling_args, starling_path):
         for metric in phases[phase]:
             phases[phase][metric] = (sum(phases[phase][metric])
                                      / len(phases[phase][metric]))
-    
+
     # Working set is returned in KiB, but Starling emits in B.
     wset = long(phases['Eliminate']['WorkingSet'] / 1024)
 
@@ -220,7 +222,7 @@ def count_loc(starling_path, grass_path):
     lgh = "-" if grass_path is None else loc(starling_path)
     lproof = 0 if grass_path is None else lgh
     lproof = lproof + proof_loc(starling_path)
-    
+
     return lstarling, lgh, lproof
 
 
@@ -282,7 +284,7 @@ def bench(starling_args, bucket, name, grass):
 
     fact("No. lines gen GH", loc(ghpath))
 
-    # This overestimates by adding Python overhead, but should be ok. 
+    # This overestimates by adding Python overhead, but should be ok.
     ghtime = timeit.timeit('starling_common.run_and_cook(["grasshopper.native","' + ghpath + '"])',
                            setup='import starling_common',
                            number=GH_TIMES)
@@ -299,8 +301,10 @@ if __name__ == "__main__":
 
     starling_args = get_starling()
 
-    if os.name != 'posix' and not ARGS.nogh:
-        print("WARNING: GRASShopper timing may fail on non-POSIX systems.")
+    # TODO: Find out why this happens.
+    if platform.system() == 'FreeBSD':
+        print("WARNING: Working set metrics may be incorrectly reported as '0'.", file=sys.stderr)
+        print("If this happens, try running eg. `command time -l ./starling.sh FILE`", file=sys.stderr)
 
     for desc, bucket, name, grass in read_infile(SPEC_FILE):
         example(desc)
