@@ -219,7 +219,7 @@ def count_loc(starling_path, grass_path):
             - Number of proof input lines (guesstimate).
     """
     lstarling = loc(starling_path)
-    lgh = "-" if grass_path is None else loc(starling_path)
+    lgh = "-" if grass_path is None else loc(grass_path)
     lproof = 0 if grass_path is None else lgh
     lproof = lproof + proof_loc(starling_path)
 
