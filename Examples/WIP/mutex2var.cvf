@@ -1,0 +1,44 @@
+shared int x, y;   // two shared vars
+thread int xl, yl; // local copies 
+
+shared bool lock;  // True iff the lock is taken.
+thread bool test;  // Used when trying to take the lock.
+
+method changeVal(int v) {
+  {| emp |} 
+   lock(); 
+  {| holdLock() * xyEqual() |} 
+   <| x = v; |>
+  {| holdLock() * xVal(v) |} 
+   <| y = v; |>
+  {| holdLock() * xyEqual() |} 
+   unlock(); 
+  {| emp |} 
+}
+
+method testVal() { 
+  {| emp |}  
+   lock();  
+  {| holdLock() * xyEqual() |}  
+   xl = x; 
+  {| holdLock() * xyEqual() * xVal(xl) |}  
+   yl = y; 
+  {| holdLock() * xyEqual() * xVal(xl) * yVal(yl) |}  
+   if (xl != yl) { 
+     {| false |}  
+      error; 
+     {| false |}  
+   }  
+  {| holdLock() * xyEqual() |}  
+   unlock(); 
+  {| emp |} 
+} 
+
+constraint emp  ->  lock == false  ==>  x == y; 
+
+constraint holdLock() * holdLock()   ->   false; 
+
+constrant xyEqual()  ->  x == y;  
+
+constraint xVal(int v)  ->  x == v; 
+constraint yVal(int v)  ->  y == v; 
