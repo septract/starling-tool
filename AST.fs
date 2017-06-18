@@ -457,11 +457,6 @@ module Pretty =
     and printPrim (x : Prim) : Doc = printPrim' x.Node
 
     /// <summary>
-    ///     Prints an if-then-else block.
-    /// </summary>
-    /// <param name="pLeg">The 
-
-    /// <summary>
     ///     Pretty-prints atomic actions.
     /// </summary>
     /// <param name="a">The <see cref="Atomic'"/> to print.</param>
