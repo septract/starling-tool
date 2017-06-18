@@ -45,7 +45,7 @@ constraint locked(a, ap) * locked(b, bp) -> false;
  *   predecessor relation on nodes induces a queue from 'tail' to 'head',
  *   the head is unlocked, and everything else in the queue is locked.
  */
-constraint emp -> %{ 
+constraint emp -> %{
     [|head|] in Foot
     && [|tail|] in Foot
     && Reach(pred, [|tail|], [|head|])
@@ -59,7 +59,7 @@ constraint emp -> %{
  * Active nodes are the same, but are locked.
  */
 constraint dormant(node) -> %{
-    [|node|] in Foot && [|node|] != [|head|] && [|node|].pred == null 
+    [|node|] in Foot && [|node|] != [|head|] && [|node|].pred == null
     && [|node|].lock == false
 };
 constraint active(node) -> %{
@@ -71,14 +71,14 @@ constraint active(node) -> %{
  * Queued nodes are locked, between tail/head, and have the given predecessor.
  * Locked nodes are the same, but their predecessor is the head.
  */
-constraint queued(node, pred) -> %{ 
+constraint queued(node, pred) -> %{
     [|node|] in Foot
     && [|pred|] in Foot
     && [|node|].pred == [|pred|]
     && [|node|].lock
     && Btwn(pred, [|tail|], [|node|], [|head|])
 };
-constraint locked(node, pred) -> %{ 
+constraint locked(node, pred) -> %{
     [|node|] in Foot
     && [|pred|] in Foot
     && [|node|].pred == [|pred|]
