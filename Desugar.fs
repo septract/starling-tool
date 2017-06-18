@@ -585,22 +585,21 @@ let rec desugarCommand (ctx : BlockContext) (cmd : Command)
   : BlockContext * FullCommand =
     let ctx', cmd' =
         match cmd.Node with
-        | VarDecl vs ->
-            let rawctx = LocalRewriting.desugarMethodParams ctx.DCtx vs cmd.Position
-            // We need to overlay the rewrites from the above desugaring over
-            // those from the previous one.
-            let unchanged =
-                Map.filter
-                    (fun k _ -> not (rawctx.LocalRewrites.ContainsKey k))
-                    ctx.LocalRewrites
+        | VarDecl { VarType = ty; VarNames = ns } ->
+            let desugarVar (tvs, tmap) name =
+                // TODO(MattWindsor91):
+                // duplicate checking, or finer grained positioning.
+                let newName = Generators.genNameFromPosition cmd.Position name
+                ((ty, newName) :: tvs, Map.add name newName tmap)
 
+            let tvars, tsubs =
+                List.fold desugarVar (ctx.DCtx.ThreadVars, ctx.LocalRewrites)
+                    ns
             let ctx' =
-                { ctx with
-                    LocalRewrites = mapAppend unchanged rawctx.LocalRewrites }
-
-            // TODO(MattWindsor91): it'd be nice not to inject an Id here.
+                { DCtx = { ctx.DCtx with ThreadVars = tvars }
+                  LocalRewrites = tsubs }
+            
             let id = { PreLocals = []; Atomics = []; PostLocals = [] }
-
             (ctx', FullCommand'.FPrim id)
         | ViewExpr v -> failwith "should have been handled at block level"
         | If (e, t, fo) ->

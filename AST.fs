@@ -203,7 +203,7 @@ module Types =
         /// A view expression.
         | ViewExpr of Marked<View>
         /// <summary>A variable declaration.</summary>
-        | VarDecl of Param list
+        | VarDecl of VarDecl
         /// A set of sequentially composed primitives.
         | Prim of PrimSet<Atomic>
         /// An if-then-else statement, with optional else.
@@ -498,6 +498,11 @@ module Pretty =
             [ printTypeLiteral par.ParamType
               syntaxLiteral (String par.ParamName) ]
 
+    /// Pretty-prints a variable declaration, without semicolon.
+    let printVarDecl (vs : VarDecl) : Doc =
+        let vsp = commaSep (List.map printVar vs.VarNames)
+        hsep [ printTypeLiteral vs.VarType; vsp ]
+
     /// Pretty-prints commands.
     let rec printCommand' (cmd : Command') : Doc =
         match cmd with
@@ -529,7 +534,7 @@ module Pretty =
             |> hsepStr "||"
         | Command'.ViewExpr v -> printMarkedView printView v
         | Command'.VarDecl vs ->
-            syntaxStr "thread" <+> commaSep (List.map printParam vs)
+            withSemi (syntaxStr "thread" <+> printVarDecl vs)
     and printCommand (x : Command) : Doc = printCommand' x.Node
 
     /// <summary>
@@ -567,11 +572,6 @@ module Pretty =
     let printSearch (i : int) : Doc =
         hsep [ String "search" |> syntax
                sprintf "%d" i |> String ]
-
-    /// Pretty-prints a variable declaration, without semicolon.
-    let printVarDecl (vs : VarDecl) : Doc =
-        let vsp = commaSep (List.map printVar vs.VarNames)
-        hsep [ printTypeLiteral vs.VarType; vsp ]
 
     /// Pretty-prints a script variable list of the given class.
     let printScriptVars (cls : string) (vs : VarDecl) : Doc =

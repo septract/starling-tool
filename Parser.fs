@@ -592,11 +592,19 @@ let parseSkip
                                PostLocals = [] })
     // ^- ;
 
+/// Parses a variable declaration with the given initial keyword and AST type.
+let parseVarDecl (kw : string) : Parser<VarDecl, unit> =
+    let parseList = parseParams parseIdentifier .>> wsSemi
+    let buildVarDecl t vs = { VarType = t; VarNames = vs }
+    pstring kw >>. ws >>. pipe2ws parseType parseList buildVarDecl
+
 /// Parser for simple commands (atomics, skips, and bracketed commands).
 do parseCommandRef :=
     nodify <|
     (choice [parseSkip
              // ^- ;
+             parseVarDecl "thread" |>> VarDecl
+             // ^- thread <type> <name> ...
              parseViewExpr |>> ViewExpr
              // ^ {| ... |}
              parseIf
@@ -668,12 +676,6 @@ let parseMethod =
                 // ^-                             ... <block>
                 (fun s b -> {Signature = s ; Body = b} )
 
-/// Parses a variable declaration with the given initial keyword and AST type.
-let parseVarDecl kw (atype : VarDecl -> ScriptItem') =
-    let parseList = parseParams parseIdentifier .>> wsSemi
-    let buildVarDecl t vs = atype { VarType = t; VarNames = vs }
-    pstring kw >>. ws >>. pipe2ws parseType parseList buildVarDecl
-
 /// Parses a search directive.
 let parseSearch =
     pstring "search" >>. ws
@@ -727,9 +729,9 @@ let parseScript =
                              // ^- search 0;
                              parseTypedef
                              // ^- typedef int Node;
-                             parseVarDecl "shared" SharedVars
+                             parseVarDecl "shared" |>> SharedVars
                              // ^- shared <type> <identifier> ;
-                             parseVarDecl "thread" ThreadVars]) .>> ws ) eof
+                             parseVarDecl "thread" |>> ThreadVars]) .>> ws ) eof
                              // ^- thread <type> <identifier> ;
 
 (*
