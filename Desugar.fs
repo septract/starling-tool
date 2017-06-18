@@ -585,6 +585,23 @@ let rec desugarCommand (ctx : BlockContext) (cmd : Command)
   : BlockContext * FullCommand =
     let ctx', cmd' =
         match cmd.Node with
+        | VarDecl vs ->
+            let rawctx = LocalRewriting.desugarMethodParams ctx.DCtx vs cmd.Position
+            // We need to overlay the rewrites from the above desugaring over
+            // those from the previous one.
+            let unchanged =
+                Map.filter
+                    (fun k _ -> not (rawctx.LocalRewrites.ContainsKey k))
+                    ctx.LocalRewrites
+
+            let ctx' =
+                { ctx with
+                    LocalRewrites = mapAppend unchanged rawctx.LocalRewrites }
+
+            // TODO(MattWindsor91): it'd be nice not to inject an Id here.
+            let id = { PreLocals = []; Atomics = []; PostLocals = [] }
+
+            (ctx', FullCommand'.FPrim id)
         | ViewExpr v -> failwith "should have been handled at block level"
         | If (e, t, fo) ->
             let (tc, t') = desugarBlock ctx t
@@ -786,6 +803,48 @@ module Tests =
                 Map.ofList
                     [ ("s", "0_32_s")
                       ("t", "10_9_t") ] }
+
+    /// <summary>
+    ///     Tests for the block level of the desugaring layer.
+    ///     <para>
+    ///         This module will be quite sparse, because most desugars
+    ///         can be tested more efficiently at lower levels.
+    ///     </para>
+    /// </summary>
+    module DesugarBlock =
+        let check
+          (expectedCtx : BlockContext)
+          (expectedBlock : FullBlock<ViewExpr<DesugaredGView>, FullCommand>)
+          (ctx : BlockContext)
+          (ast : Command list)
+          : unit =
+            let got = desugarBlock ctx ast
+            assertEqual (expectedCtx, expectedBlock) got
+
+        [<Test>]
+        let ``desugaring the empty block generates an unknown view`` () : unit =
+            let nfunc =
+                NoIterator
+                    (Func =
+                        func "__unknown_0"
+                            [ { ParamName = "s"; ParamType = TInt }
+                              { ParamName = "t"; ParamType = TInt } ],
+                     IsAnonymous = false)
+
+            check
+                { normalCtx with
+                    DCtx =
+                    { normalCtx.DCtx with
+                        GeneratedProtos = Set.singleton nfunc } }
+                { Pre =
+                    (Advisory
+                        [ (freshNode True,
+                           func "__unknown_0"
+                            [ freshNode (Identifier "s")
+                              freshNode (Identifier "t") ] ) ] )
+                  Cmds = [] }
+                normalCtx
+                []
 
     module DesugarMarkedView =
         let check

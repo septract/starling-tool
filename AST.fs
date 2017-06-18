@@ -187,9 +187,9 @@ module Types =
         | Join of View * View
           /// <summary>An abstract-predicate view.</summary>
         | Func of AFunc
-          /// <summary>A local view, `local { P }`.
+          /// <summary>A local view, `local { P }`.</summary>
         | Local of Expression
-          /// <summary>A conditional view, `if P { V1 } [else { V2 }]`.
+          /// <summary>A conditional view, `if P { V1 } [else { V2 }]`.</summary>
         | If of Expression * View * View option
 
     /// A set of primitives.
@@ -202,6 +202,8 @@ module Types =
     type Command' =
         /// A view expression.
         | ViewExpr of Marked<View>
+        /// <summary>A variable declaration.</summary>
+        | VarDecl of Param list
         /// A set of sequentially composed primitives.
         | Prim of PrimSet<Atomic>
         /// An if-then-else statement, with optional else.
@@ -472,6 +474,30 @@ module Pretty =
             printITE printAtomic c t f
     and printAtomic (x : Atomic) : Doc = printAtomic' x.Node
 
+    /// <summary>
+    ///     Pretty-prints a type literal.
+    /// </summary>
+    /// <param name="lit">The <see cref="TypeLiteral"/> to print.</param>
+    /// <returns>
+    ///     A <see cref="Doc"/> representing the given type literal.
+    /// </returns>
+    let printTypeLiteral (lit : TypeLiteral) : Doc =
+        let rec pl lit suffix =
+            match lit with
+            | TInt -> syntaxIdent (String ("int")) <-> suffix
+            | TBool -> syntaxIdent (String ("bool")) <-> suffix
+            | TUser s -> syntaxLiteral (String s) <-> suffix
+            | TArray (len, contents) ->
+                let lenSuffix = squared (String (sprintf "%d" len))
+                pl contents (suffix <-> lenSuffix)
+        pl lit Nop
+
+    /// Pretty-prints parameters.
+    let printParam (par : Param) : Doc =
+        hsep
+            [ printTypeLiteral par.ParamType
+              syntaxLiteral (String par.ParamName) ]
+
     /// Pretty-prints commands.
     let rec printCommand' (cmd : Command') : Doc =
         match cmd with
@@ -502,6 +528,8 @@ module Pretty =
             |> List.map (Helpers.printBlock printCommand)
             |> hsepStr "||"
         | Command'.ViewExpr v -> printMarkedView printView v
+        | Command'.VarDecl vs ->
+            syntaxStr "thread" <+> commaSep (List.map printParam vs)
     and printCommand (x : Command) : Doc = printCommand' x.Node
 
     /// <summary>
@@ -511,30 +539,6 @@ module Pretty =
     /// <returns>A <see cref="Doc"/> capturing <paramref name="block"/>.
     let printCommandBlock (block : Command list) : Doc =
         Helpers.printBlock printCommand block
-
-    /// <summary>
-    ///     Pretty-prints a type literal.
-    /// </summary>
-    /// <param name="lit">The <see cref="TypeLiteral"/> to print.</param>
-    /// <returns>
-    ///     A <see cref="Doc"/> representing the given type literal.
-    /// </returns>
-    let printTypeLiteral (lit : TypeLiteral) : Doc =
-        let rec pl lit suffix =
-            match lit with
-            | TInt -> syntaxIdent (String ("int")) <-> suffix
-            | TBool -> syntaxIdent (String ("bool")) <-> suffix
-            | TUser s -> syntaxLiteral (String s) <-> suffix
-            | TArray (len, contents) ->
-                let lenSuffix = squared (String (sprintf "%d" len))
-                pl contents (suffix <-> lenSuffix)
-        pl lit Nop
-
-    /// Pretty-prints parameters.
-    let printParam (par : Param) : Doc =
-        hsep
-            [ printTypeLiteral par.ParamType
-              syntaxLiteral (String par.ParamName) ]
 
     /// Pretty-prints methods.
     let printMethod (pCmd : 'cmd -> Doc)
