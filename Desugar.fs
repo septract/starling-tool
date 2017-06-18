@@ -204,6 +204,135 @@ let protoName (p : GeneralViewProto<'P>) : string =
     | NoIterator (f, _) -> f.Name
     | WithIterator f -> f.Name
 
+/// <summary>
+///     Desugar method parameters into thread-local variables.
+/// </summary>
+module private ParamDesugar =
+    open Starling.Collections
+    open Starling.Core.Symbolic
+    (* TODO(MattWindsor91): this needs to be rolled into the Desugar
+       module, once Desugar is spun out of Modeller. *)
+ 
+    /// <summary>
+    ///     Rewrites a block with a variable rewriting map.
+    /// </summary>
+    let rec rewriteBlock (rmap : Map<string, string>) (block : Command list)
+      : Command list =
+        // TODO(CaptainHayashi): this is a royal mess...
+        let rewriteVar n = withDefault n (rmap.TryFind n)
+
+        let rec rewriteSymbolic s =
+            List.map
+                (function
+                 | SymArg a -> SymArg (rewriteExpression a)
+                 | SymString t -> SymString t)
+                s
+        and rewriteExpression expr =
+            let rewriteExpression' =
+                function
+                | True -> True
+                | False -> False
+                | Num k -> Num k
+                | Identifier n -> Identifier (rewriteVar n)
+                | Symbolic s -> Symbolic (rewriteSymbolic s)
+                | BopExpr (bop, l, r) -> BopExpr (bop, rewriteExpression l, rewriteExpression r)
+                | UopExpr (uop, l) -> UopExpr (uop, rewriteExpression l)
+                | ArraySubscript (arr, sub) -> ArraySubscript (rewriteExpression arr, rewriteExpression sub)
+            { expr with Node = rewriteExpression' expr.Node }
+
+
+        let rewriteAFunc { Name = n; Params = ps } =
+            { Name = n; Params = List.map rewriteExpression ps }
+
+        let rec rewritePrim prim =
+            let rewritePrim' =
+                function
+                | CompareAndSwap (src, test, dest) ->
+                    CompareAndSwap (rewriteExpression src, rewriteExpression test, rewriteExpression dest)
+                | Fetch (l, r, fm) ->
+                    Fetch (rewriteExpression l, rewriteExpression r, fm)
+                | Postfix (e, fm) ->
+                    Postfix (rewriteExpression e, fm)
+                | Id -> Id
+                | Assume e -> Assume (rewriteExpression e)
+                | SymCommand sym ->
+                    SymCommand (rewriteSymbolic sym)
+                | Havoc v -> Havoc (rewriteVar v)
+            { prim with Node = rewritePrim' prim.Node }
+
+        let rec rewriteAtomic atom =
+            let rewriteAtomic' =
+                function
+                | APrim p -> APrim (rewritePrim p)
+                | AError -> AError
+                | AAssert c -> AAssert (rewriteExpression c)
+                | ACond (cond = c; trueBranch = t; falseBranch = f) ->
+                    ACond
+                        (rewriteExpression c,
+                         List.map rewriteAtomic t,
+                         Option.map (List.map rewriteAtomic) f)
+            { atom with Node = rewriteAtomic' atom.Node }
+
+        let rewritePrimSet { PreLocals = ps; Atomics = ts; PostLocals = qs } =
+            { PreLocals = List.map rewritePrim ps
+              Atomics = List.map rewriteAtomic ts
+              PostLocals = List.map rewritePrim qs }
+
+        let rec rewriteView =
+            function
+            | Unit -> Unit
+            | Falsehood -> Falsehood
+            | Join (l, r) -> Join (rewriteView l, rewriteView r)
+            | Func f -> Func (rewriteAFunc f)
+            | View.If (i, t, e) ->
+                View.If
+                    (rewriteExpression i,
+                     rewriteView t,
+                     Option.map rewriteView e)
+            | Local e ->
+                Local (rewriteExpression e)
+        and rewriteCommand cmd =
+            let rewriteCommand' =
+                function
+                | ViewExpr v -> ViewExpr (rewriteMarkedView v)
+                | Prim ps -> Prim (rewritePrimSet ps)
+                | If (i, t, e) -> If (rewriteExpression i, rewriteBlock rmap t, Option.map (rewriteBlock rmap) e)
+                | While (c, b) -> While (rewriteExpression c, rewriteBlock rmap b)
+                | DoWhile (b, c) -> DoWhile (rewriteBlock rmap b, rewriteExpression c)
+                | Blocks bs -> Blocks (List.map (rewriteBlock rmap) bs)
+            { cmd with Node = rewriteCommand' cmd.Node }
+        and rewriteMarkedView =
+            function
+            | Unmarked v -> Unmarked (rewriteView v)
+            | Questioned v -> Questioned (rewriteView v)
+            | Unknown -> Unknown
+        List.map rewriteCommand block
+
+    /// <summary>
+    ///     Converts method parameters to thread-local variables.
+    /// </summary>
+    /// <param name="pars">The params to desugar.</param>
+    /// <param name="pos">
+    ///     The position of the method.
+    ///     This is used to freshen the parameter names.
+    /// </param>
+    /// <param name="tvars">The existing thread variable list to extend.</params>
+    /// <returns>
+    ///     <paramref name="tvars"/> extended to contain the thread-local variable
+    ///     equivalent of <paramref name="pars"/>, as well as a substitution map to
+    ///     use to rename accesses to the thread-local variable in the method
+    ///     itself.
+    /// </returns>
+    let desugarMethodParams
+      (pars : Param list) (pos : SourcePosition) (tvars : (TypeLiteral * string) list)
+      : (TypeLiteral * string) list * Map<string, string> =
+        let desugarParam (tvs, tmap) par =
+            // This should be fine, because users can't start names with numbers.
+            let newName = sprintf "%d_%d_%s" pos.Line pos.Column par.ParamName
+            ((par.ParamType, newName) :: tvs, Map.add par.ParamName newName tmap)
+        List.fold desugarParam (tvars, Map.empty) pars
+
+
 module private Generators =
     /// <summary>
     ///     Given a set of existing names and a prefix, generate a fresh name
@@ -600,16 +729,22 @@ let desugar
   : (DesugarContext * Map<string, FullBlock<ViewExpr<DesugaredGView>, FullCommand>>) =
     let ctx =
         initialContext collated.SharedVars collated.ThreadVars collated.VProtos
+
+    // TODO(MattWindsor91): factor out into the main desugaring system.
+    let desugarParams ctx pos pars body =
+        let tvars, tsubs = 
+            ParamDesugar.desugarMethodParams pars pos ctx.ThreadVars
+        let ctxP = { ctx with ThreadVars = tvars }
+        (ctxP, ParamDesugar.rewriteBlock tsubs body)
     
-    let ms = Map.toList collated.Methods
-    let (ctx', ms') =
-        mapAccumL
-            (fun c (n, b) ->
-                 let c', b' = desugarBlock c b
-                 (c', (n, b')))
-            ctx
-            ms
-    (ctx', Map.ofSeq ms')
+    let desugarMethod ctx (pos, { Signature = sigt; Body = body }) =
+        let ctxP, bodyP = desugarParams ctx pos sigt.Params body
+        let ctxB, bodyB = desugarBlock ctxP bodyP
+        (ctxB, (sigt.Name, bodyB))
+
+    let ctxM, methodsM = mapAccumL desugarMethod ctx collated.Methods
+
+    (ctxM, Map.ofSeq methodsM)
 
 
 /// <summary>
