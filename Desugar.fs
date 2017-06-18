@@ -579,10 +579,12 @@ let desugarPrimSet (ctx : BlockContext) (ps : PrimSet<Atomic>)
 /// <param name="ctx">The current block desugaring context.</param>
 /// <param name="cmd">The command whose views are to be converted.</param>
 /// <returns>
-///     A pair of the new block desugar context and desugared command.
+///     A pair of the new block desugar context and optional 
+///     desugared command (the desugar could have removed the command
+///     entirely).
 /// </returns>
 let rec desugarCommand (ctx : BlockContext) (cmd : Command)
-  : BlockContext * FullCommand =
+  : BlockContext * FullCommand option =
     let ctx', cmd' =
         match cmd.Node with
         | VarDecl { VarType = ty; VarNames = ns } ->
@@ -599,8 +601,7 @@ let rec desugarCommand (ctx : BlockContext) (cmd : Command)
                 { DCtx = { ctx.DCtx with ThreadVars = tvars }
                   LocalRewrites = tsubs }
             
-            let id = { PreLocals = []; Atomics = []; PostLocals = [] }
-            (ctx', FullCommand'.FPrim id)
+            (ctx', None)
         | ViewExpr v -> failwith "should have been handled at block level"
         | If (e, t, fo) ->
             let (tc, t') = desugarBlock ctx t
@@ -609,20 +610,20 @@ let rec desugarCommand (ctx : BlockContext) (cmd : Command)
                 | None -> tc, None
                 | Some f -> pairMap id Some (desugarBlock tc f)
             let ast = FIf (LocalRewriting.rewriteExpression ctx e, t', f')
-            (fc, ast)
+            (fc, Some ast)
         | While (e, b) ->
             let (ctx', b') = desugarBlock ctx b
-            (ctx', FWhile (LocalRewriting.rewriteExpression ctx e, b'))
+            (ctx', Some (FWhile (LocalRewriting.rewriteExpression ctx e, b')))
         | DoWhile (b, e) ->
             let (ctx', b') = desugarBlock ctx b
-            (ctx', FDoWhile (b', LocalRewriting.rewriteExpression ctx e))
+            (ctx', Some (FDoWhile (b', LocalRewriting.rewriteExpression ctx e)))
         | Blocks bs ->
             let (ctx', bs') = mapAccumL desugarBlock ctx bs
-            (ctx', FBlocks bs')
+            (ctx', Some (FBlocks bs'))
         | Prim ps ->
             let ctx', ps' = desugarPrimSet ctx ps
-            (ctx', FPrim ps')
-    (ctx', cmd |=> cmd')
+            (ctx', Some (FPrim ps'))
+    (ctx', Option.map (fun c -> cmd |=> c) cmd')
 
 /// <summary>
 ///     Performs desugaring over a command block.
@@ -678,16 +679,20 @@ and desugarBlock (ctx : BlockContext) (block : Command list)
            3. If we see ({| view |}, cmd), ignore it.  Either the view is the
               precondition at the start, which is accounted for, or it was just
               added through rule 1. and can be ignored;
-           3. If we see (cmd, cmd), add (cmd, {| ? |}) to the full block.
+           4. If we see (vardecl, command), add (vardecl, None) to the full
+              block. When we come to the next stage of desugaring, we'll resolve
+              vardecl to None, and drop the entire viewed command.
+           5. If we see (cmd, cmd), add (cmd, {| ? |}) to the full block.
               We'll add the next command on the next pass. *)
         let blockPairs = Seq.windowed 2 blockPQ
 
         let fillBlock bsf pair =
             match pair with
-            | [| { Node = ViewExpr x }; { Node = ViewExpr y } |] -> (skip (), x) :: bsf
-            | [| cx                   ; { Node = ViewExpr y } |] -> (cx, y) :: bsf
-            | [| { Node = ViewExpr x }; cx                    |] -> bsf
-            | [| cx                   ; _                     |] -> (cx, Unknown) :: bsf
+            | [| { Node = ViewExpr x }      ; { Node = ViewExpr y } |] -> (skip (), Some x) :: bsf
+            | [| cx                         ; { Node = ViewExpr y } |] -> (cx, Some y) :: bsf
+            | [| { Node = ViewExpr x }      ; _                     |] -> bsf
+            | [| { Node = VarDecl  _ } as cx; _                     |] -> (cx, None) :: bsf
+            | [| cx                         ; _                     |] -> (cx, Some Unknown) :: bsf
             | x -> failwith (sprintf "unexpected window in fillBlock: %A" x)
 
         // The above built the block backwards, so reverse it.
@@ -697,13 +702,26 @@ and desugarBlock (ctx : BlockContext) (block : Command list)
        This is where variable rewriting etc. starts to happen. *)
     let desugarViewedCommand c (cmd, post) =
         let cc, cmd' = desugarCommand c cmd
-        let cp, post' = desugarMarkedView cc post
-        (cp, (cmd', post'))
+        (* If the commmand was a vardecl, it will have been erased.
+           The user may or may not have put a view in after it.
+           If they have, we need to generate an id step; if not, we can
+           eliminate the entire viewed command. *)
+        match cmd', post with
+        | None, None -> (cc, None)
+        | Some c, Some p ->
+            let cp, post' = desugarMarkedView cc p
+            (cp, Some (c, post'))
+        | None, Some p ->
+            // TODO(MattWindsor91): this is horrible.
+            let cp, post' = desugarMarkedView cc p
+            let id = FPrim { PreLocals = []; Atomics = []; PostLocals = [] }
+            (cp, Some (freshNode id, post'))
+        | Some _, None -> failwith "expected a view for the end of this command"
 
     let pc, pre' = desugarMarkedView ctx pre
     let ctx', cmds' = mapAccumL desugarViewedCommand pc cmds
 
-    let block' = { Pre = pre' ; Cmds = cmds' }
+    let block' = { Pre = pre' ; Cmds = List.choose id cmds' }
 
     (* Throw away any changes to ctx that weren't to the global context.
        This is to make sure that any changes to substitution tables
