@@ -868,15 +868,18 @@ module Pretty =
                           iterator is zero"
                     [ errorInfo <| printBoolExpr (printSym printVar) emp ] ]
         | TooManyIteratedFuncs (view, count) ->
-            fmt "constraint '{0}' contains {1} iterated funcs, but iterated \
-                 definitions can only contain at most one"
-                [ printDView view
-                  String (sprintf "%i" count) ]
+            String "constraint"
+            <+> quoted (printDView view)
+            <+> String "contains"
+            <+> String (sprintf "%i" count)
+            <+> String "iterated funcs, but iterated definitions can only contain at most one"
         | MixedFuncType view ->
-            fmt "constraint '{0}' mixes iterated and non-iterated views"
-                [ printDView view ]
-        | NoSuchView name
-            -> fmt "no view prototype for '{0}'" [ printDFunc name ]
+            String "constraint"
+            <+> quoted (printDView view)
+            <+> String "mixes iterated and non-iterated views"
+        | NoSuchView name ->
+            String "no view prototype for"
+            <+> quoted (printDFunc name)
         | LookupError(func, err) ->
             wrapped "lookup for view"
                 (printDFunc func)
@@ -898,11 +901,14 @@ module Pretty =
                         func)
             <+> errorStr "is not iterated, but used as iterated in a constraint"
         | BadIteratorType (view, ty) ->
-            fmt "iterator on constraint '{0}' is of type {1}, should be int"
-                [ printDView view
-                  printType ty ]
+            String "iterator on constraint"
+            <+> quoted (printDView view)
+            <+> String "is of type"
+            <+> quoted (printType ty)
+            <&> String "should be int"
         | MissingIterator view ->
-            fmt "constraint '{0}' should have an iterator, but does not"
-                [ printDView view ]
+            String "constraint"
+            <+> quoted (printDView view)
+            <+> String "should have an iterator, but does not"
         | Traversal err -> printTraversalError printError err
         |> error

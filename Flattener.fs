@@ -137,6 +137,7 @@ let flatten
 /// Stage that flattens the Iterator's from GuardedFunc's
 module Iter =
     open Starling.Core.Instantiate
+    open Starling.Core.Pretty
 
     /// <summary>
     ///     Type of errors that can occur during iterator lowering.
@@ -169,23 +170,22 @@ module Iter =
     let printError : Error -> Core.Pretty.Doc =
         function
         | ProtoLookupError (func, error) ->
-            Core.Pretty.wrapped
+            wrapped
                 "prototype lookup for func"
-                (Core.Pretty.String func)
+                (String func)
                 (Core.Definer.Pretty.printError error)
         | ProtoMissing func ->
-            Core.Pretty.fmt
-                "prototype missing for func '{0}'"
-                [ Core.Pretty.String func ]
+            String "prototype missing for func" <+> quoted (String func)
         | CannotEvalIterator (func, iterator) ->
-            Core.Pretty.fmt
-                "non-iterated func '{0}' is used with iterator '{1}', which
-                 cannot be resolved to an integer"
-                [ Core.View.Pretty.printSMVFunc func
-                  Core.Expr.Pretty.printIntExpr
+            String "non-iterated func"
+            <+> quoted (Core.View.Pretty.printSMVFunc func)
+            <+> String "is used with iterator"
+            <+> quoted
+                  (Core.Expr.Pretty.printIntExpr
                       (Core.Symbolic.Pretty.printSym
                            Core.Var.Pretty.printMarkedVar)
-                      iterator ]
+                      iterator) 
+            <&> String "which cannot be resolved to an integer"
 
     /// <summary>
     ///     Decides whether a func should be interpreted as iterated by looking
@@ -262,14 +262,14 @@ module Iter =
     /// </summary>
     let lowerIterDFunc
       : FuncDefiner<ProtoInfo> -> IteratedDFunc -> Result<DFunc, Error> =
-        fun protos { Func = dfunc; Iterator = it } ->
-            dfunc
+        fun protos { Func = df; Iterator = it } ->
+            df
             |> checkIterated protos
             |> lift
                 (function
                  // TODO(CaptainHayashi): assuming n here is silly
-                 | true -> func dfunc.Name (withDefault (Int (normalRec, "n")) it :: dfunc.Params)
-                 | false -> dfunc)
+                 | true -> dfunc df.Name (withDefault (Int (normalRec, "n")) it :: df.Params)
+                 | false -> df)
 
     /// <summary>
     ///     Lowers an iterated SMVFunc into a list of SMVFuncs.
@@ -288,7 +288,7 @@ module Iter =
                 (function
                  | Some k -> [ for i in 1L .. k -> vfunc ]
                  | None ->
-                    [ func vfunc.Name (Int (normalRec, it) :: vfunc.Params) ])
+                    [ Starling.Collections.func vfunc.Name (Int (normalRec, it) :: vfunc.Params) ])
 
     /// flattens an entire IteratedSubview into a flat GView
     let lowerIteratedSubview

@@ -74,18 +74,23 @@ module Pretty =
         function
         | Instantiate (prim, error) ->
           colonSep
-              [ fmt "couldn't instantiate primitive '{0}'"
-                    [ printPrimCommand prim ]
+              [ String "couldn't instantiate primitive"
+                <+> quoted (printPrimCommand prim)
                 printSemanticsError error ]
         | MissingDef prim ->
-            fmt "primitive '{0}' has no semantic definition"
-                [ printStoredCommand prim ]
+            String "primitive"
+            <+> quoted (printStoredCommand prim)
+            <+> String "has no semantic definition"
         | TypeMismatch (par, atype) ->
-            fmt "parameter '{0}' conflicts with argument of type '{1}'"
-                [ printTypedVar par; printType atype ]
+            String "parameter"
+            <+> quoted (printTypedVar par)
+            <+> String "conflicts with argument of type"
+            <+> quoted (printType atype)
         | CountMismatch (fn, dn) ->
-            fmt "view usage has {0} parameter(s), but its definition has {1}"
-                [ fn |> sprintf "%d" |> String; dn |> sprintf "%d" |> String ]
+            String "view usage has"
+            <+> String (sprintf "%d" fn)
+            <+> String "parameter(s), but its definition has"
+            <+> String (sprintf "%d" dn)
         | BadSemantics why ->
             errorStr "internal semantics error:" <+> errorStr why
         | FreeVarInSub var ->

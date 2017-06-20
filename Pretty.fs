@@ -187,13 +187,6 @@ let vmerge a b =
            VSep (Seq.ofList xy, Nop)
     | _ -> Nop
 
-
-let fmt fstr xs =
-    (* This weird casting dance is how we tell Format to use the obj[] overload.
-     * Otherwise, it might try to print xss as if it's one argument!
-     *)
-    let xss : obj[] = xs |> Seq.map (print >> fun x -> x :> obj) |> Seq.toArray
-    System.String.Format(fstr, xss) |> String
 let vsep xs = VSep(xs, Nop)
 let hsepStr s c = HSep(c, String s)
 
