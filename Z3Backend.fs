@@ -31,6 +31,7 @@ open Starling.Core.Symbolic
 open Starling.Core.Symbolic.Traversal
 open Starling.Core.TypeSystem
 open Starling.Core.Z3
+open Starling.Reifier
 
 
 /// <summary>
@@ -144,6 +145,7 @@ module Pretty =
     open Starling.Core.Var.Pretty
     open Starling.Core.View.Pretty
     open Starling.Core.Z3.Pretty
+    open Starling.Reifier.Pretty
 
     /// Pretty-prints a partial satisfiability result.
     let printMaybeSat (sat : Z3.Status option) : Doc =
@@ -163,7 +165,7 @@ module Pretty =
             [ headed "Original term" <|
                 [ printCmdTerm
                     (printBoolExpr (printSym printMarkedVar))
-                    (printGView (printSym printMarkedVar))
+                    (printReified (printGView (printSym printMarkedVar)))
                     (printVFunc (printSym printMarkedVar))
                     zterm.Original ]
               headed "After instantiation" <|
@@ -195,7 +197,10 @@ module Pretty =
                 [ printCommand term.Original.Cmd.Cmd
                   genpred <| printBoolExpr (printSym printMarkedVar) term.Original.Cmd.Semantics ]
               cmdHeaded (error (String "under the weakest precondition"))
-                [ printGView (printSym printMarkedVar) term.Original.WPre
+                [ printIteratedGView (printSym printMarkedVar) term.Original.WPre.Original
+                  errorInfo
+                    (headed "which was reified into"
+                        [ printGView (printSym printMarkedVar) term.Original.WPre.Reified ] )
                   genpred <| printBoolExpr (printSym printMarkedVar) term.SymBool.WPre ]
               cmdHeaded (error (String "establishes"))
                 [ printVFunc (printSym printMarkedVar) term.Original.Goal

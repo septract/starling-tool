@@ -31,6 +31,7 @@ open Starling.Core.Symbolic.Traversal
 open Starling.Core.TypeSystem
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Traversal
+open Starling.Reifier
 
 
 /// <summary>
@@ -43,7 +44,7 @@ module Types =
     /// </summary>
     type FinalTerm =
         CmdTerm<BoolExpr<Sym<MarkedVar>>,
-                GView<Sym<MarkedVar>>,
+                Reified<GView<Sym<MarkedVar>>>,
                 Func<Expr<Sym<MarkedVar>>>>
 
     /// <summary>
@@ -131,6 +132,7 @@ module Pretty =
     open Starling.Core.Symbolic.Pretty
     open Starling.Core.Expr.Pretty
     open Starling.Core.View.Pretty
+    open Starling.Reifier.Pretty
 
     /// Pretty-prints instantiation errors.
     let rec printError : Error -> Doc =
@@ -164,7 +166,7 @@ module Pretty =
             [ headed "Original term" <|
                 [ printCmdTerm
                     (printBoolExpr (printSym printMarkedVar))
-                    (printGView (printSym printMarkedVar))
+                    (printReified (printGView (printSym printMarkedVar)))
                     (printVFunc (printSym printMarkedVar))
                     sterm.Original ]
               headed "After instantiation" <|
@@ -369,9 +371,9 @@ module DefinerFilter =
     ///     definitions.
     /// </returns>
     let filterModelNonSymbolicConstraints
-      (model : Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
+      (model : Model<CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc>,
                      FuncDefiner<SVBoolExpr option>> )
-      : Result<Model<CmdTerm<MBoolExpr, GView<MarkedVar>, MVFunc>,
+      : Result<Model<CmdTerm<MBoolExpr, Reified<GView<MarkedVar>>, MVFunc>,
                      FuncDefiner<VBoolExpr option>>, Error> =
         let stripSymbolT =
             tliftOverCmdTerm
@@ -473,7 +475,7 @@ module Phase =
         let interpretedR =
             tryMapTerm
                 (fun { CommandSemantics.Semantics = c } -> ok c)
-                (interpretGView definer)
+                (fun g -> interpretGView definer g.Reified)
                 (interpretVFunc definer)
                 term
 
@@ -560,7 +562,7 @@ module Phase =
     /// </returns>
     let run
       (approxMode : ApproxMode)
-      (model : Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
+      (model : Model<CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc>,
                      FuncDefiner<SVBoolExpr option>>)
       : Result<Model<SymProofTerm, FuncDefiner<SVBoolExpr option>>, Error> =
       let vsR = symboliseIndefinites model.ViewDefs

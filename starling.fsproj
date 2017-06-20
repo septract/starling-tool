@@ -67,12 +67,12 @@
     <Compile Include="Graph.fs" />
     <Compile Include="Collator.fs" />
     <Compile Include="Desugar.fs" />
-    <Compile Include="Instantiate.fs" />
     <Compile Include="Modeller.fs" />
     <Compile Include="Grapher.fs" />
     <Compile Include="Semantics.fs" />
     <Compile Include="TermGen.fs" />
     <Compile Include="Reifier.fs" />
+    <Compile Include="Instantiate.fs" />
     <Compile Include="Flattener.fs" />
     <Compile Include="Optimiser.fs" />
     <Compile Include="Horn.fs" />

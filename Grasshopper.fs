@@ -393,7 +393,7 @@ let findTermVars (term : Backends.Z3.Types.ZTerm)
 
     let goalVarsL = findVars (tliftOverFunc exprVarsT) term.Original.Goal
     let wPreVarsL =
-        findVars (tchainM (tliftOverGFunc exprVarsT) id) term.Original.WPre
+        findVars (tchainM (tliftOverGFunc exprVarsT) id) term.Original.WPre.Reified
 
     let goalAndWPreVarsR = lift2 Set.union goalVarsL wPreVarsL
 

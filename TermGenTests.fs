@@ -247,60 +247,6 @@ module Tests =
                             (iterated
                                 (smgfunc (sbBefore "G") "A" [ normalBoolExpr (sbAfter "y") ])
                                 (siAfter "k"))))
-
-
-    module TestIterFlatten =
-        open Starling.TermGen.Iter
-
-        module TestLowerGuards =
-            let protos =
-                FuncDefiner.ofSeq
-                    [ (dfunc "f" [Bool (normalRec, "x")], { IsIterated = true; IsAnonymous = false })
-                      (dfunc "g" [Bool (normalRec, "x")], { IsIterated = false; IsAnonymous = false }) ]
-
-            [<Test>]
-            let ``Drop iterated subview down to non-iterated subview`` ()=
-                Assert.That(
-                    okOption <|
-                    lowerIteratedSubview
-                        protos
-                        { Cond = BTrue
-                          Item =
-                            [ iterated
-                                (smvfunc "f" [normalBoolExpr BTrue])
-                                (IInt 3L) ] },
-                    Is.EqualTo(
-                        Some <|
-                        { Cond = (BTrue : BoolExpr<Sym<MarkedVar>>)
-                          Item = [ smvfunc "f" [normalIntExpr (IInt 3L); normalBoolExpr BTrue] ] }))
-
-            [<Test>]
-            let ``Drop iterated SMVFunc down to non-iterated SMVFunc`` ()=
-                Assert.That(
-                    okOption <|
-                    lowerIterSMVFunc
-                        protos
-                        (iterated
-                            (smvfunc "f" [normalBoolExpr (sbAfter "x")])
-                            (mkMul2 (IInt 2L) (siBefore "n"))),
-                    Is.EqualTo(
-                        Some <|
-                        [ smvfunc "f"
-                            [ normalIntExpr (mkMul2 (IInt 2L) (siBefore "n"))
-                              normalBoolExpr (sbAfter "x") ]]))
-
-            [<Test>]
-            let ``Drop non-iterated IteratedSMVFunc's down to non-iterated SMVFunc`` ()=
-                Assert.That(
-                    okOption <|
-                    lowerIterSMVFunc
-                        protos
-                        (iterated
-                            (smvfunc "g" [normalBoolExpr (sbAfter "z")])
-                            (IInt 4L)),
-                    Is.EqualTo(
-                        Some <|
-                        [ for x in 1..4 -> smvfunc "g" [ normalBoolExpr (sbAfter "z") ]]))
 (*
  *  old termgen test before iterated views were added
  *

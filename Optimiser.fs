@@ -30,6 +30,7 @@ open Starling.Core.Traversal
 open Starling.Core.View
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Traversal
+open Starling.Reifier
 
 
 /// <summary>
@@ -1084,8 +1085,8 @@ module Term =
     /// If x!after = f(x!before) in the action, we replace x!after with
     /// f(x!before) in the precondition and postcondition.
     let eliminateAfters
-      (term : CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc> )
-      : Result<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>, TermOptError> =
+      (term : CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc> )
+      : Result<CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc>, TermOptError> =
         // TODO(CaptainHayashi): make this more general and typesystem agnostic.
         let sub = afterSubs (term.Cmd.Semantics |> findArithAfters |> Map.ofList)
                             (term.Cmd.Semantics |> findBoolAfters  |> Map.ofList)
@@ -1102,8 +1103,8 @@ module Term =
         mapMessages TermOptError.Traversal result
 
     let eliminateInters
-      : CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>
-        -> Result<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
+      : CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc>
+        -> Result<CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc>,
                   TermOptError> =
         fun term ->
         let sub = interSubs (term.Cmd.Semantics |> findArithInters |> Map.ofList)
@@ -1143,12 +1144,12 @@ module Term =
 
     /// Reduce the guards in a Term.
     let guardReduce
-      ({Cmd = c; WPre = w; Goal = g} : CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>)
-      : Result<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
+      ({Cmd = c; WPre = w; Goal = g} : CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc>)
+      : Result<CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc>,
                TermOptError> =
 
         let fs = Set.ofList (unfoldAnds c.Semantics)
-        ok {Cmd = c; WPre = reduceGView fs w; Goal = g}
+        ok {Cmd = c; WPre = reifyMap (reduceGView fs) w; Goal = g}
 
     (*
      * Boolean simplification
@@ -1156,8 +1157,8 @@ module Term =
 
     /// Performs expression simplification on a term.
     let simpTerm
-      : CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>
-        -> Result<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
+      : CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc>
+        -> Result<CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc>,
                   TermOptError> =
         let simpExpr : Expr<Sym<MarkedVar>> -> Expr<Sym<MarkedVar>> =
             function
@@ -1174,8 +1175,8 @@ module Term =
     /// Optimises a model's terms.
     let optimise
       (opts : (string * bool) list)
-      : Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>, _>
-      -> Result<Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>, _>,
+      : Model<CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc>, _>
+      -> Result<Model<CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc>, _>,
                 TermOptError> =
         let optimiseTerm =
             Utils.optimiseWith opts

@@ -33,6 +33,8 @@ open Starling.Core.GuardedView.Traversal
 open Starling.Core.GuardedView.Pretty
 open Starling.Core.Axiom
 open Starling.Core.Axiom.Pretty
+open Starling.Reifier
+open Starling.Reifier.Pretty
 
 
 /// Enumeration of possible requests to Starling.
@@ -180,16 +182,20 @@ type Response =
     | TermGen of Model<CmdTerm<SMBoolExpr, IteratedGView<Sym<MarkedVar>>, IteratedOView>,
                        ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term reification.
-    | Reify of Model<CmdTerm<SMBoolExpr, Set<GuardedIteratedSubview>, IteratedOView>,
+    | Reify of Model<CmdTerm<SMBoolExpr,
+                             Reified<Set<GuardedIteratedSubview>>, IteratedOView>,
                      ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term generation.
-    | IterLower of Model<CmdTerm<SMBoolExpr, Set<GuardedSubview>, OView>,
+    | IterLower of Model<CmdTerm<SMBoolExpr,
+                                 Reified<Set<GuardedSubview>>, OView>,
                          ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term flattening.
-    | Flatten of Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
+    | Flatten of Model<CmdTerm<SMBoolExpr,
+                               Reified<GView<Sym<MarkedVar>>>, SMVFunc>,
                        FuncDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term optimisation.
-    | TermOptimise of Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
+    | TermOptimise of Model<CmdTerm<SMBoolExpr,
+                                    Reified<GView<Sym<MarkedVar>>>, SMVFunc>,
                             FuncDefiner<BoolExpr<Sym<Var>> option>>
     /// Stop at symbolic proof calculation.
     | SymProof of Model<SymProofTerm, FuncDefiner<BoolExpr<Sym<Var>> option>>
@@ -237,10 +243,11 @@ let printResponse (mview : ModelView) : Response -> Doc =
                 printSMBoolExpr
                 (printIteratedGView (printSym printMarkedVar))
                 printIteratedOView) m
-    | Reify m -> printVModel (printCmdTerm printSMBoolExpr (printSubviewSet printGuardedIteratedSubview) printIteratedOView) m
-    | IterLower m -> printVModel (printCmdTerm printSMBoolExpr (printSubviewSet printGuardedSubview) printOView) m
-    | Flatten m -> printFModel (printCmdTerm printSMBoolExpr printSMGView printSMVFunc) m
-    | TermOptimise m -> printFModel (printCmdTerm printSMBoolExpr printSMGView printSMVFunc) m
+    | Reify m ->
+        printVModel (printCmdTerm printSMBoolExpr (printReified (printSubviewSet printGuardedIteratedSubview)) printIteratedOView) m
+    | IterLower m -> printVModel (printCmdTerm printSMBoolExpr (printReified (printSubviewSet printGuardedSubview)) printOView) m
+    | Flatten m -> printFModel (printCmdTerm printSMBoolExpr (printReified printSMGView) printSMVFunc) m
+    | TermOptimise m -> printFModel (printCmdTerm printSMBoolExpr (printReified printSMGView) printSMVFunc) m
     | SymProof m -> printUModel printSymProofTerm m
     | Eliminate m -> printUModel Backends.Z3.Pretty.printZTerm m
     | SMTProof z -> Backends.Z3.Pretty.printResponse mview z
@@ -284,7 +291,7 @@ type Error =
     /// <summary>
     ///     An error occurred during iterator lowering.
     /// </summary>
-    | IterLowerError of TermGen.Iter.Error
+    | IterLowerError of Flattener.Iter.Error
     /// <summary>
     ///     A backend required the model to be filtered for indefinite
     ///     and/or uninterpreted viewdefs, but the filter failed.
@@ -326,7 +333,7 @@ let rec printError (err : Error) : Doc =
                [ TermGen.Pretty.printError e ]
     | IterLowerError e ->
         headed "Iterator lowering failed"
-               [ TermGen.Iter.printError e ]
+               [ Flattener.Iter.printError e ]
     | Grasshopper e -> Backends.Grasshopper.Pretty.printError e 
     | ModelFilterError e ->
         headed "View definitions are incompatible with this backend"
@@ -524,7 +531,7 @@ let runStarling (request : Request)
     let reify = bind (Starling.Reifier.reify >> mapMessages Error.Reify)
     let termGen = bind (Starling.TermGen.termGen >> mapMessages Error.TermGen)
     let iterLower =
-        bind (Starling.TermGen.Iter.flatten >> mapMessages IterLowerError)
+        bind (Starling.Flattener.Iter.flatten >> mapMessages IterLowerError)
     let goalAdd = lift Starling.Core.Axiom.goalAdd
     let semantics =
         bind (Starling.Semantics.translate
@@ -555,7 +562,13 @@ let runStarling (request : Request)
                 let npmNoSymbolicConstraintsR =
                     Core.Instantiate.DefinerFilter.filterModelNonSymbolicConstraints
                         nonProvenModel
-                mapMessages ModelFilterError npmNoSymbolicConstraintsR)
+                // Remove the reified wrappers on each term, for now.
+                let npmReifyEraseR =
+                    lift
+                        (mapAxioms (mapTerm id (fun f -> f.Reified) id))
+                        npmNoSymbolicConstraintsR
+
+                mapMessages ModelFilterError npmReifyEraseR)
 
     let symproof : Result<Model<_, _>, Error> -> Result<Model<_, _>, Error> =
         bind (Core.Instantiate.Phase.run approxMode

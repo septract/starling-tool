@@ -20,7 +20,6 @@ open Starling.Core.View
 open Starling.Core.GuardedView
 open Starling.Core.Command
 open Starling.Core.Command.Create
-open Starling.Core.Instantiate
 open Starling.Core.Traversal
 open Starling.Lang.AST
 open Starling.Lang.Collator
