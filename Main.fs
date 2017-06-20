@@ -347,8 +347,64 @@ let rec printError (err : Error) : Doc =
     | Other e -> String e
     | Traversal err -> Core.Traversal.Pretty.printTraversalError printError err
 
+
+/// <summary>Configuration system for view options.</summary>
+module private ViewConfig =
+    /// <summary>Structure for collecting view options.</summary>
+    type Config =
+        { /// <summary>Whether to use colour in output.</summary>
+          Colour : bool }
+
+    /// <summary>
+    ///     Map of known view parameters.
+    /// </summary>
+    let rec configMap ()
+      : Map<string, string * (Config -> Config)> =
+        Map.ofList
+            [ ("colour",
+               ("Colourise the output.",
+                 fun ps -> { ps with Colour = true } ))
+              ("no-colour",
+               ("Do not colourise the output.",
+                 fun ps -> { ps with Colour = false } ))
+              ("list",
+               ("Lists all view options.",
+                fun ps ->
+                    eprintfn "View options:\n"
+                    Map.iter
+                        (fun name (descr, _) -> eprintfn "%s: %s\n" name descr)
+                        (configMap ())
+                    eprintfn "--\n"
+                    ps)) ]
+
+    /// <summary>
+    ///     Extracts the view options from the configuration string given.
+    /// </summary>
+    /// <param name="config">
+    ///     The optional configuration string for view options.
+    /// </param>
+    /// <returns>
+    ///     The view parameters structure, populated with the view options
+    ///     given in the configuration string.
+    /// </returns>
+    let get (config : string option) : Config =
+        let bp = configMap ()
+
+        config
+        |> maybe (Seq.empty) Utils.parseOptionString
+        |> Seq.fold
+            (fun opts str ->
+                match bp.TryFind str with
+                | Some (_, f) -> f opts
+                | None ->
+                    eprintfn "unknown view param %s ignored (try 'list')" str
+                    opts)
+            { Colour = false }
+
+
+
 /// Prints an ok result to stdout.
-let printOk (pOk : 'Ok -> Doc) (pBad : 'Warn -> Doc)
+let private printOk (vconf : ViewConfig.Config) (pOk : 'Ok -> Doc) (pBad : 'Warn -> Doc)
   : ('Ok * 'Warn list) -> unit =
     pairMap pOk (List.map pBad)
     >> function
@@ -358,12 +414,15 @@ let printOk (pOk : 'Ok -> Doc) (pBad : 'Warn -> Doc)
                             Separator
                             VSkip
                             headed "Warnings" ws ]
-    >> print
+    >> if vconf.Colour then printStyled else printUnstyled
     >> printfn "%s"
 
 /// Prints an err result to stderr.
-let printErr (pBad : 'Error -> Doc) : 'Error list -> unit =
-    List.map pBad >> headed "Errors" >> print >> eprintfn "%s"
+let private printErr (vconf : ViewConfig.Config) (pBad : 'Error -> Doc) : 'Error list -> unit =
+    List.map pBad
+    >> headed "Errors"
+    >> if vconf.Colour then printStyled else printUnstyled
+    >> eprintfn "%s"
 
 /// Shorthand for the raw proof output stage.
 /// TODO: Keep around the CommandSemantics types longer
@@ -394,58 +453,84 @@ let rec profilerFlags ()
            ("Lists all profiler flags.",
             ListProfilerFlags)) ]
 
-/// <summary>
-///     Type of the backend parameter structure.
-/// </summary>
-type BackendParams =
-    // TODO(CaptainHayashi): distribute into the target backends?
-    { /// <summary>
-      ///     The approximation mode to use.
-      /// </summary>
-      ApproxMode : ApproxMode
-      /// <summary>
-      ///     Whether SMT reduction is being suppressed.
-      /// </summary>
-      NoSMTReduce : bool
-      /// <summary>
-      ///     Whether reals are being substituted for integers in Z3 proofs.
-      /// </summary>
-      Reals : bool }
 
-/// <summary>
-///     Map of known backend parameters.
-/// </summary>
-let rec backendParams ()
-  : Map<string, string * (BackendParams -> BackendParams)> =
-    Map.ofList
-        [ ("approx",
-           ("Replace all symbols in a proof with their under-approximation.\n\
-             Allows some symbolic terms to be discharged by SMT, but the \
-             resulting proof may be incomplete.",
-             fun ps -> { ps with ApproxMode = Approx } ))
-          ("try-approx",
-           ("As 'approx', but don't fail if a term cannot be approximated.\
-             Instead, proceed for that term as if approximation was not\
-             requested.",
-             fun ps -> { ps with ApproxMode = TryApprox } ))
-          ("no-smt-reduce",
-           ("Don't remove SMT-solved proof terms before applying the backend.\n\
-             This can speed up some solvers due to overconstraining the search \
-             space.",
-             fun ps -> { ps with NoSMTReduce = true } ))
-          ("reals",
-           ("In Z3/muZ3 proofs, model integers as reals.\n\
-             This may speed up the proof at the cost of soundness.",
-             fun ps -> { ps with Reals = true } ))
-          ("list",
-           ("Lists all backend parameters.",
-            fun ps ->
-                eprintfn "Backend parameters:\n"
-                Map.iter
-                    (fun name (descr, _) -> eprintfn "%s: %s\n" name descr)
-                    (backendParams ())
-                eprintfn "--\n"
-                ps)) ]
+/// <summary>Configuration system for backend options.</summary>
+module private BackendConfig =
+    /// <summary>Structure for collecting backend options.</summary>
+    type Config =
+        // TODO(CaptainHayashi): distribute into the target backends?
+        { /// <summary>
+          ///     The approximation mode to use.
+          /// </summary>
+          ApproxMode : ApproxMode
+          /// <summary>
+          ///     Whether SMT reduction is being suppressed.
+          /// </summary>
+          NoSMTReduce : bool
+          /// <summary>
+          ///     Whether reals are being substituted for integers in Z3 proofs.
+          /// </summary>
+          Reals : bool }
+
+    /// <summary>
+    ///     Map of known backend parameters.
+    /// </summary>
+    let rec configMap ()
+      : Map<string, string * (Config -> Config)> =
+        Map.ofList
+            [ ("approx",
+               ("Replace all symbols in a proof with their under-approximation.\n\
+                 Allows some symbolic terms to be discharged by SMT, but the \
+                 resulting proof may be incomplete.",
+                 fun ps -> { ps with ApproxMode = Approx } ))
+              ("try-approx",
+               ("As 'approx', but don't fail if a term cannot be approximated.\
+                 Instead, proceed for that term as if approximation was not\
+                 requested.",
+                 fun ps -> { ps with ApproxMode = TryApprox } ))
+              ("no-smt-reduce",
+               ("Don't remove SMT-solved proof terms before applying the backend.\n\
+                 This can speed up some solvers due to overconstraining the search \
+                 space.",
+                 fun ps -> { ps with NoSMTReduce = true } ))
+              ("reals",
+               ("In Z3/muZ3 proofs, model integers as reals.\n\
+                 This may speed up the proof at the cost of soundness.",
+                 fun ps -> { ps with Reals = true } ))
+              ("list",
+               ("Lists all backend options.",
+                fun ps ->
+                    eprintfn "Backend options:\n"
+                    Map.iter
+                        (fun name (descr, _) -> eprintfn "%s: %s\n" name descr)
+                        (configMap ())
+                    eprintfn "--\n"
+                    ps)) ]
+
+    /// <summary>
+    ///     Extracts the backend options from the configuration string given.
+    /// </summary>
+    /// <param name="config">
+    ///     The optional configuration string for backend options.
+    /// </param>
+    /// <returns>
+    ///     The backend parameters structure, populated with the backend options
+    ///     given in the configuration string.
+    /// </returns>
+    let get (config : string option) : Config =
+        let bp = configMap ()
+
+        config
+        |> maybe (Seq.empty) Utils.parseOptionString
+        |> Seq.fold
+            (fun opts str ->
+                match bp.TryFind str with
+                | Some (_, f) -> f opts
+                | None ->
+                    eprintfn "unknown backend param %s ignored (try 'list')" str
+                    opts)
+            { ApproxMode = NoApprox; NoSMTReduce = false; Reals = false }
+
 
 /// <summary>
 ///     Runs a Starling request.
@@ -469,24 +554,13 @@ let runStarling (request : Request)
         |> Seq.toList
         |> Optimiser.Utils.parseOptimisationString
 
-    let bp = backendParams ()
-    let { ApproxMode = approxMode
-          NoSMTReduce = noSMTReduce
-          Reals = shouldUseRealsForInts } =
-        config.backendOpts
-        |> maybe (Seq.empty) Utils.parseOptionString
-        |> Seq.fold
-               (fun opts str ->
-                    match (bp.TryFind str) with
-                    | Some (_, f) -> f opts
-                    | None ->
-                        eprintfn "unknown backend param %s ignored (try 'list')"
-                            str
-                        opts)
-               { ApproxMode = NoApprox; NoSMTReduce = false; Reals = false }
+    let { BackendConfig.Config.ApproxMode = approxMode
+          BackendConfig.Config.NoSMTReduce = noSMTReduce
+          BackendConfig.Config.Reals = shouldUseRealsForInts } =
+        BackendConfig.get config.backendOpts
+   
 
     let pf = profilerFlags ()
-
     let pfset =
         config.profilerFlags
         |> maybe (Seq.empty) Utils.parseOptionString
@@ -624,6 +698,7 @@ let runStarling (request : Request)
 let mainWithOptions (options : Options) : int =
     _configRef := options
     let config = config ()
+    let vconf = ViewConfig.get config.viewOpts
 
     let starlingR =
         match (requestFromStage config.stage) with
@@ -645,8 +720,8 @@ let mainWithOptions (options : Options) : int =
                       else printResponse mview
 
     either
-        (printOk pfn printError >> fun _ -> 0)
-        (printErr printError >> fun _ -> 1)
+        (printOk vconf pfn printError >> fun _ -> 0)
+        (printErr vconf printError >> fun _ -> 1)
         starlingR
 
 [<EntryPoint>]

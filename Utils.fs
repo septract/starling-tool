@@ -53,8 +53,6 @@ module Config =
                 HelpText =
                     "Comma-delimited set of profiling options (pass 'list' for details")>]
           profilerFlags : string option
-          [<Option('c', HelpText = "Enable color printing")>]
-          color : bool
           [<Value(
                 0,
                 MetaName = "input",
@@ -73,7 +71,6 @@ module Config =
         verbose         = false;
         profilerFlags   = None;
         input           = None;
-        color           = false;
     }
 
     let _configRef : Options ref = ref _emptyOpts

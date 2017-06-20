@@ -163,12 +163,6 @@ let printStyled = printState { Level = 0; CurrentStyle = None; UseStyles = true 
 let printUnstyled = printState { Level = 0; CurrentStyle = None; UseStyles = false }
 
 
-/// <summary>
-///     Prints a <see cref="Doc"/>.
-/// </summary>
-let print = if config().color then printStyled else printUnstyled
-
-
 (*
  * Shortcuts
  *)

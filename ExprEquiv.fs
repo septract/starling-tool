@@ -209,10 +209,10 @@ module Tests =
                 fun d -> d.SetName(sprintf "%s and %s are %s negation"
                                             (((d.OriginalArguments.[1])
                                               :?> VBoolExpr)
-                                             |> printVBoolExpr |> print)
+                                             |> printVBoolExpr |> printUnstyled)
                                             (((d.OriginalArguments.[0])
                                               :?> VBoolExpr)
-                                             |> printVBoolExpr |> print)
+                                             |> printVBoolExpr |> printUnstyled)
                                             (if (d.ExpectedResult :?> bool)
                                              then "a" else "not a")))
 
