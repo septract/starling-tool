@@ -353,7 +353,11 @@ module private ViewConfig =
     /// <summary>Structure for collecting view options.</summary>
     type Config =
         { /// <summary>Whether to use colour in output.</summary>
-          Colour : bool }
+          Colour : bool
+          /// <summary>
+          ///    Whether to dump raw objects instead of pretty-printing.
+          /// </summary>
+          Raw : bool }
 
     /// <summary>
     ///     Map of known view parameters.
@@ -364,9 +368,9 @@ module private ViewConfig =
             [ ("colour",
                ("Colourise the output.",
                  fun ps -> { ps with Colour = true } ))
-              ("no-colour",
-               ("Do not colourise the output.",
-                 fun ps -> { ps with Colour = false } ))
+              ("raw",
+               ("Emit the raw internal representation of any output, instead of pretty-printing.",
+                 fun ps -> { ps with Raw = true } ))
               ("list",
                ("Lists all view options.",
                 fun ps ->
@@ -399,7 +403,7 @@ module private ViewConfig =
                 | None ->
                     eprintfn "unknown view param %s ignored (try 'list')" str
                     opts)
-            { Colour = false }
+            { Colour = false; Raw = false }
 
 
 
@@ -716,8 +720,7 @@ let mainWithOptions (options : Options) : int =
         | _ -> Model
 
     let pfn =
-        if config.raw then (sprintf "%A" >> String)
-                      else printResponse mview
+        if vconf.Raw then (sprintf "%A" >> String) else printResponse mview
 
     either
         (printOk vconf pfn printError >> fun _ -> 0)

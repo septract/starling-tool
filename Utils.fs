@@ -18,11 +18,6 @@ module Config =
     [<NoComparison>]
     type Options =
         { [<Option(
-                'r',
-                HelpText =
-                    "Dump results in raw format instead of pretty-printing.")>]
-          raw : bool
-          [<Option(
                 'B',
                 HelpText =
                     "Comma-delimited set of backend options (pass 'list' for details)")>]
@@ -61,7 +56,6 @@ module Config =
           input : string option }
 
     let _emptyOpts : Options = {
-        raw             = false;
         backendOpts     = None;
         stage           = None;
         term            = None;
