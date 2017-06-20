@@ -215,7 +215,9 @@ type Response =
 
 
 /// Pretty-prints a response.
-let printResponse (mview : ModelView) : Response -> Doc =
+let printResponse
+  (mview : ModelView) (emitReifiedWPre : bool) (emitBackendTranslation : bool)
+  : Response -> Doc =
     let printVModel paxiom m =
         printModelView
             paxiom
@@ -250,7 +252,7 @@ let printResponse (mview : ModelView) : Response -> Doc =
     | TermOptimise m -> printFModel (printCmdTerm printSMBoolExpr (printReified printSMGView) printSMVFunc) m
     | SymProof m -> printUModel printSymProofTerm m
     | Eliminate m -> printUModel Backends.Z3.Pretty.printZTerm m
-    | SMTProof z -> Backends.Z3.Pretty.printResponse mview z
+    | SMTProof z -> Backends.Z3.Pretty.printResponse mview emitReifiedWPre emitBackendTranslation z
     | MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
     | HSF h -> Backends.Horn.Pretty.printHorns h
     | Grasshopper g -> Backends.Grasshopper.Pretty.printQuery g 
@@ -357,7 +359,16 @@ module private ViewConfig =
           /// <summary>
           ///    Whether to dump raw objects instead of pretty-printing.
           /// </summary>
-          Raw : bool }
+          Raw : bool
+          /// <summary>
+          ///    Whether to emit the reified weakest precondition in
+          ///    proof failures.
+          /// </summary>
+          ShowReifiedWPre : bool
+          /// <summary>
+          ///    Whether to emit the backend translations in proof failures.
+          /// </summary>
+          ShowBackendTranslation : bool }
 
     /// <summary>
     ///     Map of known view parameters.
@@ -371,6 +382,12 @@ module private ViewConfig =
               ("raw",
                ("Emit the raw internal representation of any output, instead of pretty-printing.",
                  fun ps -> { ps with Raw = true } ))
+              ("show-reified-wpre",
+               ("Emit the reified weakest precondition in proof failures.",
+                 fun ps -> { ps with ShowReifiedWPre = true } ))
+              ("show-backend-translation",
+               ("Emit the backend translations in proof failures.",
+                 fun ps -> { ps with ShowBackendTranslation = true }))
               ("list",
                ("Lists all view options.",
                 fun ps ->
@@ -403,7 +420,7 @@ module private ViewConfig =
                 | None ->
                     eprintfn "unknown view param %s ignored (try 'list')" str
                     opts)
-            { Colour = false; Raw = false }
+            { Colour = false; Raw = false; ShowReifiedWPre = false; ShowBackendTranslation = false; }
 
 
 
@@ -720,7 +737,9 @@ let mainWithOptions (options : Options) : int =
         | _ -> Model
 
     let pfn =
-        if vconf.Raw then (sprintf "%A" >> String) else printResponse mview
+        if vconf.Raw
+        then (sprintf "%A" >> String)
+        else printResponse mview vconf.ShowReifiedWPre vconf.ShowBackendTranslation
 
     either
         (printOk vconf pfn printError >> fun _ -> 0)

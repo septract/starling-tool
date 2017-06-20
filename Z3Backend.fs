@@ -189,26 +189,37 @@ module Pretty =
     /// <returns>
     ///     The <see cref="Doc"/> corresponding to <paramref name="term"/>.
     /// </returns>
-    let printFailure (name : string) (term : ZTerm) : Doc =
-        let genpred p =
-            errorInfo (headed "which was translated into" [ p ])
+    let printFailure (emitReifiedWPre : bool) (emitBackendTranslations : bool) (name : string) (term : ZTerm) : Doc =
+        let backendTranslation b =
+            if emitBackendTranslations
+            then
+                let p = printBoolExpr (printSym printMarkedVar) b
+                errorInfo (headed "which was translated into" [ p ])
+            else Nop
+        let reifiedWPre =
+            if emitReifiedWPre
+            then
+                errorInfo
+                    (headed "which was reified into"
+                        [ printGView (printSym printMarkedVar) term.Original.WPre.Reified ] )
+            else Nop
+
         cmdHeaded (errorContext (String name) <+> printMaybeSat term.Status)
             [ cmdHeaded (error (String "Could not prove that this command"))
                 [ printCommand term.Original.Cmd.Cmd
-                  genpred <| printBoolExpr (printSym printMarkedVar) term.Original.Cmd.Semantics ]
+                  backendTranslation term.Original.Cmd.Semantics ]
               cmdHeaded (error (String "under the weakest precondition"))
                 [ printIteratedGView (printSym printMarkedVar) term.Original.WPre.Original
-                  errorInfo
-                    (headed "which was reified into"
-                        [ printGView (printSym printMarkedVar) term.Original.WPre.Reified ] )
-                  genpred <| printBoolExpr (printSym printMarkedVar) term.SymBool.WPre ]
+                  reifiedWPre
+                  backendTranslation term.SymBool.WPre ]
               cmdHeaded (error (String "establishes"))
                 [ printVFunc (printSym printMarkedVar) term.Original.Goal
-                  genpred <| printBoolExpr (printSym printMarkedVar) term.SymBool.Goal ]
+                  backendTranslation term.SymBool.Goal ]
             ]
 
     /// Pretty-prints a response.
-    let printResponse (mview : ModelView) (response : Response) : Doc =
+    let printResponse
+      (mview : ModelView) (emitReifiedWPre : bool) (emitBackendWPre : bool) (response : Response) : Doc =
         // Add deferred checks to a response if and only if there are some.
         let attachChecks doc deferredChecks =
             match deferredChecks with
@@ -230,7 +241,10 @@ module Pretty =
                 then success (String "No proof failures")
                 else
                     cmdHeaded (error (String "Proof failures"))
-                        (Seq.map (uncurry printFailure) (Map.toSeq map))
+                        (Seq.map
+                            (uncurry
+                                (printFailure emitReifiedWPre emitBackendWPre))
+                            (Map.toSeq map))
             attachChecks mapDoc dcs
         | AllTerms (map, dcs) ->
             let mapDoc = printMap Indented String printZTerm map
