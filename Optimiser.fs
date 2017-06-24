@@ -579,15 +579,14 @@ module Graph =
         let rec isLocalPrim prim =
             match prim with
             | // TODO(CaptainHayashi): too conservative?
-              SymC _ -> false
-            | Intrinsic (IAssign { AssignType = t })
-            | Intrinsic (BAssign { AssignType = t }) -> t = Local
-            | // TODO(CaptainHayashi): is this correct?
-              Intrinsic (Havoc v) -> typedVarIsThreadLocal v
-            | Stored { Args = ps } -> Seq.forall isLocalArg ps
-            | PrimBranch (trueBranch = t; falseBranch = f) ->
-                List.forall isLocalPrim t
-                && maybe true (List.forall isLocalPrim) f
+              Symbol _ -> false
+            | Assign (l, ro) ->
+                isLocalArg l && maybe true isLocalArg ro
+            | // TODO(CaptainHayashi): too conservative?
+              Microcode.Assume l -> isLocalArg (normalBoolExpr l)
+            | Microcode.Stored { StoredCommand.Args = ps } -> Seq.forall isLocalArg ps
+            | Branch (trueBranch = t; falseBranch = f) ->
+                List.forall isLocalPrim t && List.forall isLocalPrim f
                 
 
         List.forall isLocalPrim cmd

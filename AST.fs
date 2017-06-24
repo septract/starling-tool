@@ -61,8 +61,10 @@ module Types =
         | ArraySubscript of array : Expression * subscript : Expression
     and Expression = Node<Expression'>
 
-    /// An atomic action.
-    type Atomic' =
+    /// <summary>
+    ///     A primitive command.
+    /// </summary>
+    type Prim' =
         | CompareAndSwap of
             src : Expression
             * test : Expression
@@ -71,8 +73,13 @@ module Types =
         | Postfix of Expression * FetchMode // <a++> or <a-->
         | Id // <id>
         | Assume of Expression // <assume(e)>
-        | SymAtomic of symbol : Symbolic<Expression> // %{xyz}(x, y)
+        | SymCommand of symbol : Symbolic<Expression> // %{xyz}(x, y)
         | Havoc of var : string // havoc var
+    and Prim = Node<Prim'>
+
+    /// An atomic action.
+    type Atomic' =
+        | APrim of Prim
         | ACond of
             cond : Expression
             * trueBranch : Atomic list
@@ -177,9 +184,9 @@ module Types =
 
     /// A set of primitives.
     type PrimSet =
-        { PreAssigns: (Expression * Expression) list
+        { PreLocals: Prim list
           Atomics: Atomic list
-          PostAssigns: (Expression * Expression) list }
+          PostLocals: Prim list }
 
     /// A statement in the command language.
     type Command' =
@@ -401,14 +408,14 @@ module Pretty =
         equality (printExpression dest) (printExpression src)
 
     /// <summary>
-    ///     Pretty-prints atomic actions.
+    ///     Pretty-prints primitive actions.
     /// </summary>
-    /// <param name="a">The <see cref="Atomic'"/> to print.</param>
+    /// <param name="p">The <see cref="Prim'"/> to print.</param>
     /// <returns>
-    ///     A <see cref="Doc"/> representing <paramref name="a"/>.
+    ///     A <see cref="Doc"/> representing <paramref name="p"/>.
     /// </returns>
-    let rec printAtomic' (a : Atomic') : Doc =
-        match a with
+    let rec printPrim' (p : Prim') : Doc =
+        match p with
         | CompareAndSwap(l, f, t) ->
             func "CAS" [ printExpression l
                          printExpression f
@@ -421,8 +428,20 @@ module Pretty =
             hjoin [ printExpression l; printFetchMode m ]
         | Id -> String "id"
         | Assume e -> func "assume" [ printExpression e ]
-        | SymAtomic sym -> printSymbolic sym
+        | SymCommand sym -> printSymbolic sym
         | Havoc var -> String "havoc" <+> String var
+    and printPrim (x : Prim) : Doc = printPrim' x.Node
+
+    /// <summary>
+    ///     Pretty-prints atomic actions.
+    /// </summary>
+    /// <param name="a">The <see cref="Atomic'"/> to print.</param>
+    /// <returns>
+    ///     A <see cref="Doc"/> representing <paramref name="a"/>.
+    /// </returns>
+    let rec printAtomic' (a : Atomic') : Doc =
+        match a with
+        | APrim p -> printPrim p
         | ACond (cond = c; trueBranch = t; falseBranch = f) ->
             Helpers.printITE printExpression printAtomic c t f
     and printAtomic (x : Atomic) : Doc = printAtomic' x.Node
@@ -433,12 +452,12 @@ module Pretty =
         (* The trick here is to make Prim [] appear as ;, but
            Prim [x; y; z] appear as x; y; z;, and to do the same with
            atomic lists. *)
-        | Command'.Prim { PreAssigns = ps; Atomics = ts; PostAssigns = qs } ->
-            seq { yield! Seq.map (uncurry printAssign) ps
+        | Command'.Prim { PreLocals = ps; Atomics = ts; PostLocals = qs } ->
+            seq { yield! Seq.map printPrim ps
                   yield (ts
                          |> Seq.map printAtomic
                          |> semiSep |> withSemi |> braced |> angled)
-                  yield! Seq.map (uncurry printAssign) qs }
+                  yield! Seq.map printPrim qs }
             |> semiSep |> withSemi
         | Command'.If(c, t, f) ->
             Helpers.printITE printExpression printCommand c t f
@@ -592,7 +611,7 @@ let (|BoolExp'|ArithExp'|AnyExp'|) (e : Expression')
     | ArraySubscript _ -> AnyExp' e
     | Num _ -> ArithExp' e
     | True | False -> BoolExp' e
-    | BopExpr(BoolOp, _, _) | UopExpr(_,_) -> BoolExp' e
+    | BopExpr(BoolOp, _, _) | UopExpr(_) -> BoolExp' e
     | BopExpr(ArithOp, _, _) -> ArithExp' e
 
 /// Active pattern classifying expressions as to whether they are

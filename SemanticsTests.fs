@@ -38,9 +38,9 @@ module Cap =
     /// <param name="instr">The instructions to cap.</param>
     let check
       (expectedMap : Map<TypedVar, MarkedVar>)
-      (expectedInstrs : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
+      (expectedInstrs : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>, unit> list)
       (map : Map<TypedVar, MarkedVar>)
-      (instrs : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
+      (instrs : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>, unit> list)
       : unit =
         assertOkAndEqual
             (expectedMap, expectedInstrs)
@@ -301,8 +301,8 @@ module ProcessMicrocode =
     /// <param name="instrs">The instructions to convert.</param>
     let check (cap : bool) (svars : VarMap) (tvars : VarMap)
       (expectedMap : Map<TypedVar, MarkedVar>)
-      (expectedInstrs : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
-      (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
+      (expectedInstrs : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>, unit> list)
+      (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>, unit> list)
       : unit =
         let svars = VarMap.toTypedVarSeq svars
         let tvars = VarMap.toTypedVarSeq tvars
@@ -382,7 +382,7 @@ module MicrocodeToBool =
       (svars : VarMap)
       (tvars : VarMap)
       (expected : BoolExpr<Sym<MarkedVar>> list)
-      (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
+      (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>, unit> list)
       : unit =
         // Try to make the check order-independent.
         let rec trySort bool =
@@ -627,7 +627,7 @@ module CommandTests =
     [<Test>]
     let ``Semantically translate <assume(s == t)> using the ticket lock model`` () =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-              [ command "Assume" [] [ normalBoolExpr <| iEq (siVar "s") (siVar "t") ]]
+              [ Assume (iEq (siVar "s") (siVar "t")) ]
         <| Some (Set.ofList
                    [ iEq (siAfter "serving") (siBefore "serving")
                      iEq (siAfter "ticket") (siBefore "ticket")
@@ -660,9 +660,8 @@ module CommandTests =
                 (AIdx (gridv, siVar "x")))
 
         check testShared testThread
-            [ command "!I++"
-                [ normalIntExpr (IIdx (gridxv, siVar "y")) ]
-            [ normalIntExpr (IIdx (gridxv, siVar "y")) ] ]
+            [ normalIntExpr (IIdx (gridxv, siVar "y"))
+              *<- normalIntExpr (mkInc (IIdx (gridxv, siVar "y"))) ]
         <| Some (Set.ofList
             [ iEq (siAfter "x") (siBefore "x")
               iEq (siAfter "y") (siBefore "y")
@@ -678,7 +677,7 @@ module CommandTests =
     [<Test>]
     let ``Semantically translate <%{foo([|serving|]}> using the ticket lock model``() =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-              [ SymC
+              [ Symbol
                     [ SymString "foo("
                       SymArg (normalIntExpr (siVar "serving") )
                       SymString ")" ] ]
@@ -699,7 +698,7 @@ module CommandTests =
     [<Test>]
     let ``Semantically translate <serving++> using the ticket lock model``() =
         check ticketLockModel.SharedVars ticketLockModel.ThreadVars
-              [ command "!I++" [ normalIntExpr (siVar "serving") ] [ normalIntExpr <| siVar "serving" ] ]
+              [ normalIntExpr (siVar "serving") *<- normalIntExpr (mkInc (siVar "serving")) ]
         <| Some (Set.ofList
             [
                 iEq (siAfter "s") (siBefore "s")

@@ -65,12 +65,12 @@ module Types =
           Thread
         | /// <summary>
           ///     Look up variables in shared scope.
-          ///     Switch to thread scope for indices, and full scope for
+          ///     Switch to thread scope for indices, and Any scope for
           ///     symbols.
           /// </summary>
           Shared
         | /// <summary>Look up variables in local first, then shared.</summary>
-          Full
+          Any
         | /// <summary>
           ///     Look up variables in the given local map first, then the next
           ///     scope.
@@ -185,7 +185,7 @@ module VarMap =
 /// </summary>
 module Env =
     /// <summary>
-    ///     A full variable environment.
+    ///     A Any variable environment.
     /// </summary>
     type Env =
         { /// <summary>The set of thread-local variables.</summary>
@@ -225,7 +225,7 @@ module Env =
     let rec symbolicScopeOf (scope : Scope) : Scope =
         match scope with
         | WithMap (map, rest) -> WithMap (map, symbolicScopeOf rest)
-        | Shared -> Full
+        | Shared -> Any
         | x -> x
 
     /// <summary>
@@ -263,7 +263,7 @@ module Env =
                         fail
                             (VarInWrongScope (expected = Shared, got = Thread)))
                     (VarMap.tryLookup env.TVars var)
-        | Full ->
+        | Any ->
             (* Currently, the order doesn't matter as both are disjoint.
                However, one day, it might, in which case the thread scope is
                'closer' to program code. *)
@@ -352,7 +352,7 @@ module Pretty =
         | WithMap (_, r) -> String "local arguments or" <+> printScope r
         | Thread -> String "thread"
         | Shared -> String "shared"
-        | Full -> String "thread or shared"
+        | Any -> String "thread or shared"
 
     /// Pretty-prints variable conversion errors.
     let printVarMapError =

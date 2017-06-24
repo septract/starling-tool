@@ -105,12 +105,12 @@ module Pretty =
         (* The trick here is to make Prim [] appear as ;, but
            Prim [x; y; z] appear as x; y; z;, and to do the same with
            atomic lists. *)
-        | FPrim { PreAssigns = ps; Atomics = ts; PostAssigns = qs } ->
-            seq { yield! Seq.map (uncurry printAssign) ps
+        | FPrim { PreLocals = ps; Atomics = ts; PostLocals = qs } ->
+            seq { yield! Seq.map printPrim ps
                   yield (ts
                          |> Seq.map printAtomic
                          |> semiSep |> withSemi |> braced |> angled)
-                  yield! Seq.map (uncurry printAssign) qs }
+                  yield! Seq.map printPrim qs }
             |> semiSep |> withSemi
         | FIf(c, t, fo) ->
             hsep [ "if" |> String |> syntax
@@ -252,7 +252,7 @@ and desugarBlock (tvars: Map<string, Type>) (fg: bigint ref)
     let (blockP, pre) = cap block
 
     let skip () =
-        freshNode (Prim { PreAssigns = []; Atomics = []; PostAssigns = [] })
+        freshNode (Prim { PreLocals = []; Atomics = []; PostLocals = [] })
 
     (* If the last item isn't a view, we have to synthesise a block
        postcondition.

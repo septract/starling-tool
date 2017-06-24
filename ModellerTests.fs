@@ -296,37 +296,86 @@ module VarLists =
                Int  (normalRec,  "foo") ])
             ([ VarMapError.Duplicate "foo" ])
 
+
+let aprim (p : Prim') : Atomic = freshNode (APrim (freshNode p))
+
 module Atomics =
     open Starling.Core.Pretty
     open Starling.Lang.Modeller.Pretty
-
-    let check (ast : Atomic) (cmd : PrimCommand) : unit =
+    let check (ast : Atomic) (cmd : PrimCommand list) : unit =
         assertOkAndEqual
             cmd
-            (modelAtomic sharedContext ast)
+            (modelAtomic sharedContext.Env ast)
             (printPrimError >> printUnstyled)
 
     [<Test>]
     let ``model integer load primitive <foo = x++>`` ()=
-        let ast = freshNode (Fetch(freshNode (Identifier "foo"), freshNode (Identifier "x"), Increment))
+        let ast =
+            aprim (Fetch(freshNode (Identifier "foo"), freshNode (Identifier "x"), Increment))
+
         check
             ast
-            <| command' "!ILoad++"
-                ast
-                [ normalIntExpr (siVar "foo"); normalIntExpr (siVar "x") ]
-                [ normalIntExpr (siVar "x") ]
+            [ normalIntExpr (siVar "foo") *<- normalIntExpr (siVar "x")
+              normalIntExpr (siVar "x") *<- normalIntExpr (mkInc (siVar "x")) ]
 
     [<Test>]
     let ``model Boolean load primitive <baz = y>`` ()=
-        let ast = freshNode (Fetch(freshNode (Identifier "baz"), freshNode (Identifier "y"), Direct))
+        let ast =
+            aprim (Fetch(freshNode (Identifier "baz"), freshNode (Identifier "y"), Direct))
         check
             ast
-            (command' "!BLoad" ast [ normalBoolExpr (sbVar "baz") ] [ normalBoolExpr (sbVar "y") ])
+            [ normalBoolExpr (sbVar "baz") *<- normalBoolExpr (sbVar "y") ]
+
+    [<Test>]
+    let ``model integer increment on local variable`` () =
+        let ast =
+            aprim (Postfix(freshNode (Identifier "x"), Increment))
+        check
+            ast
+            [ normalIntExpr (siVar "x") *<- normalIntExpr (mkInc (siVar "x")) ]
+
+    [<Test>]
+    let ``model integer decrement on local variable`` () =
+        let ast = aprim (Postfix(freshNode (Identifier "x"), Decrement))
+        check
+            ast
+            [ normalIntExpr (siVar "x") *<- normalIntExpr (mkDec (siVar "x")) ]
+
+    [<Test>]
+    let ``model integer increment on shared variable`` () =
+        let ast = aprim (Postfix(freshNode (Identifier "bar"), Increment))
+        check
+            ast
+            [ normalIntExpr (siVar "bar") *<- normalIntExpr (mkInc (siVar "bar")) ]
+
+    [<Test>]
+    let ``model integer decrement on shared variable`` ()=
+        let ast = aprim (Postfix(freshNode (Identifier "bar"), Decrement))
+        check
+            ast
+            [ normalIntExpr (siVar "bar") *<- normalIntExpr (mkDec (siVar "bar")) ]
+
+    [<Test>]
+    let ``model Boolean atomic assign from shared to shared memory`` ()=
+        let ast =
+            aprim
+                (Fetch(freshNode (Identifier "baz"), freshNode (Identifier "emp"), Direct))
+        check
+            ast
+            [ normalBoolExpr (sbVar "baz") *<- normalBoolExpr (sbVar "emp") ]
+
+    [<Test>]
+    let ``model integer atomic assign from local to local memory`` () =
+        let ast =
+            aprim (Fetch(freshNode (Identifier "x"), freshNode (Identifier "x"), Direct))
+        check
+            ast
+            [ normalIntExpr (siVar "x") *<- normalIntExpr (siVar "x") ]
 
     [<Test>]
     let ``model symbolic store <x = %{foo [|baz|]}>`` () =
         let ast =
-            freshNode
+            aprim
                 (Fetch
                     (freshNode (Identifier "x"),
                      freshNode
@@ -336,20 +385,18 @@ module Atomics =
                      Direct))
         check
             ast
-            (Intrinsic
-                (IAssign
-                    { AssignType = Store
-                      TypeRec = normalRec
-                      LValue = IVar (Reg "x")
-                      RValue =
-                        IVar
-                            (Sym
-                                [ SymString "foo"
-                                  SymArg (normalBoolExpr (BVar (Reg "baz")))] ) }))
+            [ normalIntExpr (siVar "x")
+              *<-
+              normalIntExpr
+                (IVar
+                    (Sym
+                        [ SymString "foo"
+                          SymArg (normalBoolExpr (BVar (Reg "baz")))] )) ]
 
 
 module CommandAxioms =
     open Starling.Core.Pretty
+    open Starling.Core.View.Pretty
     open Starling.Lang.Modeller.Pretty
 
     let check (c : FullCommand) (cmd : ModellerPartCmd) : unit =
@@ -358,42 +405,89 @@ module CommandAxioms =
             (modelCommand sharedContext c)
             (printMethodError >> printUnstyled)
 
+    let checkFail (c : FullCommand) (errors : MethodError list) : unit =
+        assertFail
+            errors
+            (modelCommand sharedContext c)
+            (printPartCmd (printViewExpr printCView) >> printUnstyled)
+
     let prim (atom : Atomic) : FullCommand =
         freshNode
-        <| FPrim { PreAssigns = []
+        <| FPrim { PreLocals = []
                    Atomics = [ atom ]
-                   PostAssigns = [] }
+                   PostLocals = [] }
 
-    let local (lvalue : Expression) (rvalue : Expression) : FullCommand =
+    let lassign (lvalue : Expression) (rvalue : Expression) : FullCommand =
         freshNode
-        <| FPrim { PreAssigns = [ (lvalue, rvalue) ]
+        <| FPrim { PreLocals = [ freshNode (Prim'.Fetch (lvalue, rvalue, Direct)) ]
                    Atomics = []
-                   PostAssigns = [] }
+                   PostLocals = [] }
+
+    [<Test>]
+    let ``modelling local command with nonlocal lvalue fails`` () =
+        let lv = freshNode (Identifier "y")
+        let rv = freshNode (Identifier "bar")
+        checkFail
+            (lassign lv rv)
+            [ BadLocal
+                (freshNode (Prim'.Fetch (lv, rv, Direct)),
+                 BadExprPair
+                    (lv,
+                     rv,
+                     Var
+                        ("y",
+                         VarInWrongScope (expected = Thread, got = Shared)))) ]
+
+
+    [<Test>]
+    let ``modelling local command with nonlocal rvalue fails`` () =
+        let lv = freshNode (Identifier "foo")
+        let rv = freshNode (Identifier "x")
+        checkFail
+            (lassign lv rv)
+            [ BadLocal
+                (freshNode (Prim'.Fetch (lv, rv, Direct)),
+                 BadExprPair
+                    (lv,
+                     rv,
+                     Var
+                        ("x",
+                         VarInWrongScope (expected = Thread, got = Shared)))) ]
+
+    [<Test>]
+    let ``modelling command <foo = x> passes`` () =
+        let ast = aprim (Fetch(freshNode (Identifier "foo"), freshNode (Identifier "x"), Direct))
+        check
+            (prim ast)
+            (Prim [ normalIntExpr (siVar "foo") *<- normalIntExpr (siVar "x") ])
 
     [<Test>]
     let ``modelling command <foo = x++> passes`` () =
-        let ast = freshNode (Fetch(freshNode (Identifier "foo"), freshNode (Identifier "x"), Increment))
+        let ast = aprim (Fetch(freshNode (Identifier "foo"), freshNode (Identifier "x"), Increment))
         check
-            (prim <| ast)
-            <| Prim ([ command' "!ILoad++"
-                        ast
-                        [ normalIntExpr (siVar "foo"); normalIntExpr (siVar "x") ]
-                        [ normalIntExpr (siVar "x") ] ])
+            (prim ast)
+            (Prim [ normalIntExpr (siVar "foo") *<- normalIntExpr (siVar "x")
+                    normalIntExpr (siVar "x") *<- normalIntExpr (mkInc (siVar "x")) ])
+
+    [<Test>]
+    let ``modelling command <foo = x--> passes`` () =
+        let ast = aprim (Fetch(freshNode (Identifier "foo"), freshNode (Identifier "x"), Decrement))
+        check
+            (prim ast)
+            (Prim [ normalIntExpr (siVar "foo") *<- normalIntExpr (siVar "x")
+                    normalIntExpr (siVar "x") *<- normalIntExpr (mkDec (siVar "x")) ])
 
     [<Test>]
     let ``modelling command <baz = y> passes`` () =
-        let ast = freshNode (Fetch(freshNode (Identifier "baz"), freshNode (Identifier "y"), Direct))
+        let ast = aprim (Fetch(freshNode (Identifier "baz"), freshNode (Identifier "y"), Direct))
         check
-            (prim <| ast)
-            <| Prim ([ command' "!BLoad"
-                        ast
-                        [ normalBoolExpr (sbVar "baz") ]
-                        [ normalBoolExpr (sbVar "y") ] ])
+            (prim ast)
+            (Prim [ normalBoolExpr (sbVar "baz") *<- normalBoolExpr (sbVar "y") ])
 
     [<Test>]
     let ``model local Boolean symbolic load {baz = %{foo}(bar)}`` () =
         let ast =
-            local
+            lassign
                 (freshNode (Identifier "baz"))
                 (freshNode
                     (Symbolic
@@ -403,16 +497,13 @@ module CommandAxioms =
         check
             ast
             (Prim
-                [ Intrinsic
-                    ( BAssign
-                        { AssignType = Local
-                          TypeRec = normalRec
-                          LValue = BVar (Reg "baz")
-                          RValue =
-                            BVar
-                                (Sym
-                                    [ SymString "foo"
-                                      SymArg (normalIntExpr (IVar (Reg "bar"))) ])})])
+                [ (normalBoolExpr (sbVar "baz")
+                   *<-
+                   normalBoolExpr
+                       (BVar
+                           (Sym
+                               [ SymString "foo"
+                                 SymArg (normalIntExpr (IVar (Reg "bar"))) ]))) ] )
 
 
 module ViewDefs =

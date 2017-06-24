@@ -772,8 +772,15 @@ and mkAdd2 (l : IntExpr<'var>) (r : IntExpr<'var>) : IntExpr<'var> =
     | (ISub [ x ; IInt k ], IInt l) -> mkSub2 x (IInt (k - l))
     | _                             -> IAdd (foldInts (+) 0L [ l; r ])
 
+/// Makes an increment expression.
+let mkInc (x : IntExpr<'Var>) : IntExpr<'Var> = mkAdd2 x (IInt 1L)
+
 /// Makes a variable increment expression.
-let incVar (x : 'Var) : IntExpr<'Var> = mkAdd2 (IVar x) (IInt 1L)
+let incVar (x : 'Var) : IntExpr<'Var> = mkInc (IVar x)
+
+/// Makes a decrement expression.
+let mkDec (x : IntExpr<'Var>) : IntExpr<'Var> = mkSub2 x (IInt 1L)
+
 
 /// Makes an Add out of a sequence of expressions.
 let mkAdd (xs : IntExpr<'var> seq) : IntExpr<'var> =
