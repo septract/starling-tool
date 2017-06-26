@@ -1,0 +1,68 @@
+/*
+ * Modifying two variables in lockstep.
+ * Pseudo-modular code with uniqueness values in the view.
+ */
+
+shared int x;
+shared bool lock;  // True iff the lock is taken.
+
+shared int _uniq;
+
+method setTest(int v) {
+  {| emp |}
+    thread int xl;
+
+    // Inlined lock
+    thread bool test;
+
+    thread int id;
+    // Ghost code: add uniqueness
+    <| id = _uniq++; |>
+  {| uniq(id) |}
+
+    do {
+      {| uniq(id) |}
+        test = false;
+      {| uniq(id) * local { test == false } |}
+        <| CAS(lock, test, true); |>
+      {| uniq(id) * if (test == false) { holdLock(id) } |}
+    } while (test == true);
+
+    {| uniq(id) * holdLock(id) |}
+
+    // End inlined lock
+
+  {| uniq(id) * holdLock(id) |}
+   <| x = v; |>
+  {| holdLock(id) * XVal(id, v) |}
+   <| xl = x; |>
+  {| holdLock(id) * XVal(id, v) * local{ xl == v } |}
+    if (xl != v) {
+      {| false |}
+       <| error; |>
+      {| false |}
+    }
+  {| uniq(id) * holdLock(id) |}
+
+    // Inlined unlock
+
+    <| lock = false; |>
+
+    // End inlined unlock
+
+  {| emp |}
+}
+
+view uniq(int id), holdLock(int id), XVal(int id, int v);
+
+constraint uniq(id) -> id < _uniq;
+constraint XVal(id, v) -> id < _uniq;
+constraint uniq(id1) * uniq(id2) -> id1 != id2;
+constraint uniq(id1) * XVal(id2, v) -> id1 != id2;
+
+constraint holdLock(id1) -> lock;
+exclusive holdLock(id), holdLock(id2);
+
+constraint holdLock(id1) * XVal(id2, v) -> id1 == id2 => x == v;
+constraint XVal(id1, v1) * XVal(id2, v2) -> id1 != id2;
+
