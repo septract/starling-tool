@@ -342,7 +342,6 @@ let parseIfLike pLeg ctor =
 let parsePrim : Parser<Prim, unit> =
     choice
         [ // The ordering here is due to ambiguity, I think?
-          (stringReturn "id" Id)
           parseSymbolic |>> SymCommand
           parseHavoc |>> Havoc
           parseAssume

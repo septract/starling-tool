@@ -388,7 +388,6 @@ module private LocalRewriting =
                 Fetch (rewriteExpression ctx l, rewriteExpression ctx r, fm)
             | Postfix (e, fm) ->
                 Postfix (rewriteExpression ctx e, fm)
-            | Id -> Id
             | Assume e -> Assume (rewriteExpression ctx e)
             | SymCommand sym ->
                 SymCommand (rewriteSymbolic ctx sym)

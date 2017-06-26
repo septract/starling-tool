@@ -71,7 +71,6 @@ module Types =
             * dest : Expression // <CAS(a, b, c)>
         | Fetch of Expression * Expression * FetchMode // <a = b??>
         | Postfix of Expression * FetchMode // <a++> or <a-->
-        | Id // <id>
         | Assume of Expression // <assume(e)>
         | SymCommand of symbol : Symbolic<Expression> // %{xyz}(x, y)
         | Havoc of var : string // havoc var
@@ -452,7 +451,6 @@ module Pretty =
                 (hjoin [ printExpression r; printFetchMode m ])
         | Postfix(l, m) ->
             hjoin [ printExpression l; printFetchMode m ]
-        | Id -> String "id"
         | Assume e -> func "assume" [ printExpression e ]
         | SymCommand sym -> printSymbolic sym
         | Havoc var -> String "havoc" <+> String var

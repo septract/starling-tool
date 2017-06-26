@@ -1617,7 +1617,6 @@ module private Prim =
             | Fetch(dest, src, mode) -> modelAssign env scope dest src mode
             | Postfix(operand, mode) ->
                 lift List.singleton (modelPostfix env operand mode)
-            | Id -> ok []
             | Assume e ->
                 let eModelR = wrapMessages BadExpr (modelBoolExpr env scope id) e
 
