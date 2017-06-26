@@ -74,6 +74,185 @@ type Request =
     /// Run the Grasshopper backend (experimental) 
     | Grasshopper 
 
+
+/// Type of possible outputs from a Starling run.
+[<NoComparison>]
+type Response =
+    /// List all available requests.
+    | List of string list
+    /// The result of frontend processing.
+    | Frontend of Lang.Frontend.Response
+    /// Stop at graph optimisation.
+    | GraphOptimise of Model<Graph, ViewDefiner<BoolExpr<Sym<Var>> option>>
+    /// Stop at graph axiomatisation.
+    | Axiomatise of Model<Axiom<IteratedGView<Sym<Var>>, Command>,
+                          ViewDefiner<BoolExpr<Sym<Var>> option>>
+    /// The result of goal-axiom-pair generation.
+    | GoalAdd of Model<GoalAxiom<Command>, ViewDefiner<BoolExpr<Sym<Var>> option>>
+    /// The result of semantic expansion.
+    | Semantics of Model<GoalAxiom<CommandSemantics<SMBoolExpr>>, ViewDefiner<BoolExpr<Sym<Var>> option>>
+    /// The result of term generation.
+    | TermGen of Model<CmdTerm<SMBoolExpr, IteratedGView<Sym<MarkedVar>>, IteratedOView>,
+                       ViewDefiner<BoolExpr<Sym<Var>> option>>
+    /// The result of term reification.
+    | Reify of Model<CmdTerm<SMBoolExpr,
+                             Reified<Set<GuardedIteratedSubview>>, IteratedOView>,
+                     ViewDefiner<BoolExpr<Sym<Var>> option>>
+    /// The result of term generation.
+    | IterLower of Model<CmdTerm<SMBoolExpr,
+                                 Reified<Set<GuardedSubview>>, OView>,
+                         ViewDefiner<BoolExpr<Sym<Var>> option>>
+    /// The result of term flattening.
+    | Flatten of Model<CmdTerm<SMBoolExpr,
+                               Reified<GView<Sym<MarkedVar>>>, SMVFunc>,
+                       FuncDefiner<BoolExpr<Sym<Var>> option>>
+    /// The result of term optimisation.
+    | TermOptimise of Model<CmdTerm<SMBoolExpr,
+                                    Reified<GView<Sym<MarkedVar>>>, SMVFunc>,
+                            FuncDefiner<BoolExpr<Sym<Var>> option>>
+    /// Stop at symbolic proof calculation.
+    | SymProof of Model<SymProofTerm, FuncDefiner<BoolExpr<Sym<Var>> option>>
+    /// Stop at SMT term elimination.
+    | Eliminate of Backends.Z3.Types.ZModel
+    (*
+     * Proof backends
+     *)
+    /// Output the results of using SMT elimination as a proof, if possible.
+    | SMTProof of Backends.Z3.Types.Response
+    /// The result of MuZ3 backend processing.
+    | MuZ3 of Backends.MuZ3.Types.Response
+    /// The result of HSF processing.
+    | HSF of Backends.Horn.Types.Horn list
+    /// The results of Grasshopper 
+    | Grasshopper of Backends.Grasshopper.Types.GrassModel
+
+
+/// A top-level program error.
+type Error =
+    /// An error occurred in the frontend.
+    | Frontend of Lang.Frontend.Error
+    /// An error occurred in semantic translation.
+    | Semantics of Semantics.Types.Error
+    /// <summary>
+    ///     An error occurred in the HSF backend.
+    /// </summary>
+    | HSF of Backends.Horn.Types.Error
+    /// An error occurred in the Grasshopper backend. 
+    | Grasshopper of Backends.Grasshopper.Types.Error
+    /// <summary>
+    ///     An error occurred in the MuZ3 backend.
+    /// </summary>
+    | MuZ3 of Backends.MuZ3.Types.Error
+    /// <summary>
+    ///     An error occurred during reifying.
+    /// </summary>
+    | Reify of Reifier.Types.Error
+    /// <summary>
+    ///     An error occurred during term generation.
+    /// </summary>
+    | TermGen of TermGen.Error
+    /// <summary>
+    ///     An error occurred during the graph optimiser pass.
+    /// </summary>
+    | GraphOptimiser of Optimiser.Types.GraphOptError
+    /// <summary>
+    ///     An error occurred during the term optimiser pass.
+    /// </summary>
+    | TermOptimiser of Optimiser.Types.TermOptError
+    /// <summary>
+    ///     An error occurred during iterator lowering.
+    /// </summary>
+    | IterLowerError of Flattener.Iter.Error
+    /// <summary>
+    ///     A backend required the model to be filtered for indefinite
+    ///     and/or uninterpreted viewdefs, but the filter failed.
+    /// </summary>
+    | ModelFilterError of Core.Instantiate.Types.Error
+    /// <summary>
+    ///     A main-level traversal went belly-up.
+    /// </summary>
+    | Traversal of TraversalError<Error>
+    /// A stage was requested using the -s flag that does not exist.
+    | BadStage
+    /// A miscellaneous (internal) error has occurred.
+    | Other of string
+
+
+/// <summary>Configuration system for view options.</summary>
+module private ViewConfig =
+    /// <summary>Structure for collecting view options.</summary>
+    type Config =
+        { /// <summary>Whether to use colour in output.</summary>
+          Colour : bool
+          /// <summary>
+          ///    Whether to dump raw objects instead of pretty-printing.
+          /// </summary>
+          Raw : bool
+          /// <summary>
+          ///    View options for the Z3 backend.
+          /// </summary>
+          Z3 : Starling.Backends.Z3.Types.ViewConfig }
+
+    let updateZ3
+      (f : Starling.Backends.Z3.Types.ViewConfig ->
+           Starling.Backends.Z3.Types.ViewConfig) 
+      (c : Config) : Config =
+        // TODO(MattWindsor91): doc comment.
+        { c with Z3 = f c.Z3 }
+
+    /// <summary>
+    ///     Map of known view parameters.
+    /// </summary>
+    let rec configMap ()
+      : Map<string, string * (Config -> Config)> =
+        Map.ofList
+            [ ("colour",
+               ("Colourise the output.",
+                 fun ps -> { ps with Colour = true } ))
+              ("raw",
+               ("Emit the raw internal representation of any output, instead of pretty-printing.",
+                 fun ps -> { ps with Raw = true } ))
+              ("show-reified-wpre",
+               ("Emit the reified weakest precondition in proof failures.",
+                 updateZ3 (fun ps -> { ps with ShowReifiedWPre = true } )))
+              ("show-backend-translation",
+               ("Emit the backend translations in proof failures.",
+                 updateZ3 (fun ps -> { ps with ShowBackendTranslation = true })))
+              ("list",
+               ("Lists all view options.",
+                fun ps ->
+                    eprintfn "View options:\n"
+                    Map.iter
+                        (fun name (descr, _) -> eprintfn "%s: %s\n" name descr)
+                        (configMap ())
+                    eprintfn "--\n"
+                    ps)) ]
+
+    /// <summary>
+    ///     Extracts the view options from the configuration string given.
+    /// </summary>
+    /// <param name="config">
+    ///     The optional configuration string for view options.
+    /// </param>
+    /// <returns>
+    ///     The view parameters structure, populated with the view options
+    ///     given in the configuration string.
+    /// </returns>
+    let get (config : string option) : Config =
+        let bp = configMap ()
+
+        config
+        |> maybe (Seq.empty) Utils.parseOptionString
+        |> Seq.fold
+            (fun opts str ->
+                match bp.TryFind str with
+                | Some (_, f) -> f opts
+                | None ->
+                    eprintfn "unknown view param %s ignored (try 'list')" str
+                    opts)
+            { Colour = false; Raw = false; Z3 = Starling.Backends.Z3.initialViewConfig () }
+
+
 /// Map of -s stage names to Request items.
 let requestList : (string * (string * Request)) list =
     [ ("list",
@@ -152,6 +331,7 @@ let requestList : (string * (string * Request)) list =
        ("Outputs a proof in Grasshopper format.",
         Request.Grasshopper))]
 
+
 /// Converts an optional -s stage name to a request item.
 /// If none is given, the latest stage is selected.
 let requestFromStage (ostage : string option) : Request option =
@@ -161,152 +341,6 @@ let requestFromStage (ostage : string option) : Request option =
     |> pickStage
     |> Option.map (snd >> snd)
 
-
-/// Type of possible outputs from a Starling run.
-[<NoComparison>]
-type Response =
-    /// List all available requests.
-    | List of string list
-    /// The result of frontend processing.
-    | Frontend of Lang.Frontend.Response
-    /// Stop at graph optimisation.
-    | GraphOptimise of Model<Graph, ViewDefiner<BoolExpr<Sym<Var>> option>>
-    /// Stop at graph axiomatisation.
-    | Axiomatise of Model<Axiom<IteratedGView<Sym<Var>>, Command>,
-                          ViewDefiner<BoolExpr<Sym<Var>> option>>
-    /// The result of goal-axiom-pair generation.
-    | GoalAdd of Model<GoalAxiom<Command>, ViewDefiner<BoolExpr<Sym<Var>> option>>
-    /// The result of semantic expansion.
-    | Semantics of Model<GoalAxiom<CommandSemantics<SMBoolExpr>>, ViewDefiner<BoolExpr<Sym<Var>> option>>
-    /// The result of term generation.
-    | TermGen of Model<CmdTerm<SMBoolExpr, IteratedGView<Sym<MarkedVar>>, IteratedOView>,
-                       ViewDefiner<BoolExpr<Sym<Var>> option>>
-    /// The result of term reification.
-    | Reify of Model<CmdTerm<SMBoolExpr,
-                             Reified<Set<GuardedIteratedSubview>>, IteratedOView>,
-                     ViewDefiner<BoolExpr<Sym<Var>> option>>
-    /// The result of term generation.
-    | IterLower of Model<CmdTerm<SMBoolExpr,
-                                 Reified<Set<GuardedSubview>>, OView>,
-                         ViewDefiner<BoolExpr<Sym<Var>> option>>
-    /// The result of term flattening.
-    | Flatten of Model<CmdTerm<SMBoolExpr,
-                               Reified<GView<Sym<MarkedVar>>>, SMVFunc>,
-                       FuncDefiner<BoolExpr<Sym<Var>> option>>
-    /// The result of term optimisation.
-    | TermOptimise of Model<CmdTerm<SMBoolExpr,
-                                    Reified<GView<Sym<MarkedVar>>>, SMVFunc>,
-                            FuncDefiner<BoolExpr<Sym<Var>> option>>
-    /// Stop at symbolic proof calculation.
-    | SymProof of Model<SymProofTerm, FuncDefiner<BoolExpr<Sym<Var>> option>>
-    /// Stop at SMT term elimination.
-    | Eliminate of Backends.Z3.Types.ZModel
-    (*
-     * Proof backends
-     *)
-    /// Output the results of using SMT elimination as a proof, if possible.
-    | SMTProof of Backends.Z3.Types.Response
-    /// The result of MuZ3 backend processing.
-    | MuZ3 of Backends.MuZ3.Types.Response
-    /// The result of HSF processing.
-    | HSF of Backends.Horn.Types.Horn list
-    /// The results of Grasshopper 
-    | Grasshopper of Backends.Grasshopper.Types.GrassModel
-
-
-/// Pretty-prints a response.
-let printResponse
-  (mview : ModelView) (emitReifiedWPre : bool) (emitBackendTranslation : bool)
-  : Response -> Doc =
-    let printVModel paxiom m =
-        printModelView
-            paxiom
-            (printViewDefiner
-                (maybe (String "?") (printBoolExpr (printSym printVar))))
-            mview m
-    let printFModel paxiom m =
-        printModelView paxiom
-            (printFuncDefiner
-                (maybe (String "?") (printBoolExpr (printSym printVar))))
-            mview m
-    let printUModel paxiom m =
-        printModelView paxiom (fun _ -> Seq.empty) mview m
-
-    function
-    | List l -> printList String l
-    | Frontend f -> Lang.Frontend.printResponse mview f
-    | GraphOptimise g -> printVModel printGraph g
-    | Axiomatise m -> printVModel (printAxiom printIteratedSVGView printCommand) m
-    | GoalAdd m -> printVModel (printGoalAxiom printCommand) m
-    | Semantics m -> printVModel (printGoalAxiom (printCommandSemantics printSMBoolExpr)) m
-    | TermGen m ->
-        printVModel
-            (printCmdTerm
-                printSMBoolExpr
-                (printIteratedGView (printSym printMarkedVar))
-                printIteratedOView) m
-    | Reify m ->
-        printVModel (printCmdTerm printSMBoolExpr (printReified (printSubviewSet printGuardedIteratedSubview)) printIteratedOView) m
-    | IterLower m -> printVModel (printCmdTerm printSMBoolExpr (printReified (printSubviewSet printGuardedSubview)) printOView) m
-    | Flatten m -> printFModel (printCmdTerm printSMBoolExpr (printReified printSMGView) printSMVFunc) m
-    | TermOptimise m -> printFModel (printCmdTerm printSMBoolExpr (printReified printSMGView) printSMVFunc) m
-    | SymProof m -> printUModel printSymProofTerm m
-    | Eliminate m -> printUModel Backends.Z3.Pretty.printZTerm m
-    | SMTProof z -> Backends.Z3.Pretty.printResponse mview emitReifiedWPre emitBackendTranslation z
-    | MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
-    | HSF h -> Backends.Horn.Pretty.printHorns h
-    | Grasshopper g -> Backends.Grasshopper.Pretty.printQuery g 
-
-
-/// A top-level program error.
-type Error =
-    /// An error occurred in the frontend.
-    | Frontend of Lang.Frontend.Error
-    /// An error occurred in semantic translation.
-    | Semantics of Semantics.Types.Error
-    /// <summary>
-    ///     An error occurred in the HSF backend.
-    /// </summary>
-    | HSF of Backends.Horn.Types.Error
-    /// An error occurred in the Grasshopper backend. 
-    | Grasshopper of Backends.Grasshopper.Types.Error
-    /// <summary>
-    ///     An error occurred in the MuZ3 backend.
-    /// </summary>
-    | MuZ3 of Backends.MuZ3.Types.Error
-    /// <summary>
-    ///     An error occurred during reifying.
-    /// </summary>
-    | Reify of Reifier.Types.Error
-    /// <summary>
-    ///     An error occurred during term generation.
-    /// </summary>
-    | TermGen of TermGen.Error
-    /// <summary>
-    ///     An error occurred during the graph optimiser pass.
-    /// </summary>
-    | GraphOptimiser of Optimiser.Types.GraphOptError
-    /// <summary>
-    ///     An error occurred during the term optimiser pass.
-    /// </summary>
-    | TermOptimiser of Optimiser.Types.TermOptError
-    /// <summary>
-    ///     An error occurred during iterator lowering.
-    /// </summary>
-    | IterLowerError of Flattener.Iter.Error
-    /// <summary>
-    ///     A backend required the model to be filtered for indefinite
-    ///     and/or uninterpreted viewdefs, but the filter failed.
-    /// </summary>
-    | ModelFilterError of Core.Instantiate.Types.Error
-    /// <summary>
-    ///     A main-level traversal went belly-up.
-    /// </summary>
-    | Traversal of TraversalError<Error>
-    /// A stage was requested using the -s flag that does not exist.
-    | BadStage
-    /// A miscellaneous (internal) error has occurred.
-    | Other of string
 
 /// <summary>
 ///     Prints a top-level program error.
@@ -350,77 +384,48 @@ let rec printError (err : Error) : Doc =
     | Traversal err -> Core.Traversal.Pretty.printTraversalError printError err
 
 
-/// <summary>Configuration system for view options.</summary>
-module private ViewConfig =
-    /// <summary>Structure for collecting view options.</summary>
-    type Config =
-        { /// <summary>Whether to use colour in output.</summary>
-          Colour : bool
-          /// <summary>
-          ///    Whether to dump raw objects instead of pretty-printing.
-          /// </summary>
-          Raw : bool
-          /// <summary>
-          ///    Whether to emit the reified weakest precondition in
-          ///    proof failures.
-          /// </summary>
-          ShowReifiedWPre : bool
-          /// <summary>
-          ///    Whether to emit the backend translations in proof failures.
-          /// </summary>
-          ShowBackendTranslation : bool }
 
-    /// <summary>
-    ///     Map of known view parameters.
-    /// </summary>
-    let rec configMap ()
-      : Map<string, string * (Config -> Config)> =
-        Map.ofList
-            [ ("colour",
-               ("Colourise the output.",
-                 fun ps -> { ps with Colour = true } ))
-              ("raw",
-               ("Emit the raw internal representation of any output, instead of pretty-printing.",
-                 fun ps -> { ps with Raw = true } ))
-              ("show-reified-wpre",
-               ("Emit the reified weakest precondition in proof failures.",
-                 fun ps -> { ps with ShowReifiedWPre = true } ))
-              ("show-backend-translation",
-               ("Emit the backend translations in proof failures.",
-                 fun ps -> { ps with ShowBackendTranslation = true }))
-              ("list",
-               ("Lists all view options.",
-                fun ps ->
-                    eprintfn "View options:\n"
-                    Map.iter
-                        (fun name (descr, _) -> eprintfn "%s: %s\n" name descr)
-                        (configMap ())
-                    eprintfn "--\n"
-                    ps)) ]
+/// Pretty-prints a response.
+let private printResponse (mview : ModelView) (vconf : ViewConfig.Config)
+  : Response -> Doc =
+    let printVModel paxiom m =
+        printModelView
+            paxiom
+            (printViewDefiner
+                (maybe (String "?") (printBoolExpr (printSym printVar))))
+            mview m
+    let printFModel paxiom m =
+        printModelView paxiom
+            (printFuncDefiner
+                (maybe (String "?") (printBoolExpr (printSym printVar))))
+            mview m
+    let printUModel paxiom m =
+        printModelView paxiom (fun _ -> Seq.empty) mview m
 
-    /// <summary>
-    ///     Extracts the view options from the configuration string given.
-    /// </summary>
-    /// <param name="config">
-    ///     The optional configuration string for view options.
-    /// </param>
-    /// <returns>
-    ///     The view parameters structure, populated with the view options
-    ///     given in the configuration string.
-    /// </returns>
-    let get (config : string option) : Config =
-        let bp = configMap ()
-
-        config
-        |> maybe (Seq.empty) Utils.parseOptionString
-        |> Seq.fold
-            (fun opts str ->
-                match bp.TryFind str with
-                | Some (_, f) -> f opts
-                | None ->
-                    eprintfn "unknown view param %s ignored (try 'list')" str
-                    opts)
-            { Colour = false; Raw = false; ShowReifiedWPre = false; ShowBackendTranslation = false; }
+    function
+    | List l -> printList String l
+    | Response.Frontend f -> Lang.Frontend.printResponse mview f
+    | GraphOptimise g -> printVModel printGraph g
+    | Axiomatise m -> printVModel (printAxiom printIteratedSVGView printCommand) m
+    | GoalAdd m -> printVModel (printGoalAxiom printCommand) m
+    | Response.Semantics m -> printVModel (printGoalAxiom (printCommandSemantics printSMBoolExpr)) m
+    | Response.TermGen m ->
+        printVModel
+            (printCmdTerm
+                printSMBoolExpr
+                (printIteratedGView (printSym printMarkedVar))
+                printIteratedOView) m
+    | Response.Reify m ->
+        printVModel (printCmdTerm printSMBoolExpr (printReified (printSubviewSet printGuardedIteratedSubview)) printIteratedOView) m
+    | IterLower m -> printVModel (printCmdTerm printSMBoolExpr (printReified (printSubviewSet printGuardedSubview)) printOView) m
+    | Flatten m -> printFModel (printCmdTerm printSMBoolExpr (printReified printSMGView) printSMVFunc) m
+    | TermOptimise m -> printFModel (printCmdTerm printSMBoolExpr (printReified printSMGView) printSMVFunc) m
+    | SymProof m -> printUModel printSymProofTerm m
+    | Eliminate m -> printUModel Backends.Z3.Pretty.printZTerm m
+    | SMTProof z -> Backends.Z3.Pretty.printResponse mview vconf.Z3 z
+    | Response.MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
+    | Response.HSF h -> Backends.Horn.Pretty.printHorns h
+    | Response.Grasshopper g -> Backends.Grasshopper.Pretty.printQuery g 
 
 
 
@@ -739,7 +744,7 @@ let mainWithOptions (options : Options) : int =
     let pfn =
         if vconf.Raw
         then (sprintf "%A" >> String)
-        else printResponse mview vconf.ShowReifiedWPre vconf.ShowBackendTranslation
+        else printResponse mview vconf
 
     either
         (printOk vconf pfn printError >> fun _ -> 0)

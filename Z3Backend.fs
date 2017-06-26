@@ -40,6 +40,20 @@ open Starling.Reifier
 [<AutoOpen>]
 module Types =
     /// <summary>
+    ///     Configuration for formatting the output of the Z3 backend.
+    /// </summary>
+    type ViewConfig =
+        { /// <summary>
+          ///    Whether to emit the reified weakest precondition in
+          ///    proof failures.
+          /// </summary>
+          ShowReifiedWPre : bool
+          /// <summary>
+          ///    Whether to emit the backend translations in proof failures.
+          /// </summary>
+          ShowBackendTranslation : bool }
+
+    /// <summary>
     ///     A term combining a fully preprocessed Starling term and its Z3
     ///     equivalent.
     /// </summary>
@@ -184,20 +198,21 @@ module Pretty =
     /// <summary>
     ///     Pretty-prints a <see cref="ZTerm"/> as a failure report.
     /// </summary>
-    /// <param ref="name">The name of the proof term to print.</param>
-    /// <param ref="term">The <see cref="ZTerm"/> to print.</param>
+    /// <param name="vconf">The view configuration for printing failures.</param>
+    /// <param name="name">The name of the proof term to print.</param>
+    /// <param name="term">The <see cref="ZTerm"/> to print.</param>
     /// <returns>
     ///     The <see cref="Doc"/> corresponding to <paramref name="term"/>.
     /// </returns>
-    let printFailure (emitReifiedWPre : bool) (emitBackendTranslations : bool) (name : string) (term : ZTerm) : Doc =
+    let printFailure (vconf : ViewConfig) (name : string) (term : ZTerm) : Doc =
         let backendTranslation b =
-            if emitBackendTranslations
+            if vconf.ShowBackendTranslation
             then
                 let p = printBoolExpr (printSym printMarkedVar) b
                 errorInfo (headed "which was translated into" [ p ])
             else Nop
         let reifiedWPre =
-            if emitReifiedWPre
+            if vconf.ShowReifiedWPre
             then
                 errorInfo
                     (headed "which was reified into"
@@ -218,8 +233,7 @@ module Pretty =
             ]
 
     /// Pretty-prints a response.
-    let printResponse
-      (mview : ModelView) (emitReifiedWPre : bool) (emitBackendWPre : bool) (response : Response) : Doc =
+    let printResponse (mview : ModelView) (vconf : ViewConfig) (response : Response) : Doc =
         // Add deferred checks to a response if and only if there are some.
         let attachChecks doc deferredChecks =
             match deferredChecks with
@@ -241,10 +255,7 @@ module Pretty =
                 then success (String "No proof failures")
                 else
                     cmdHeaded (error (String "Proof failures"))
-                        (Seq.map
-                            (uncurry
-                                (printFailure emitReifiedWPre emitBackendWPre))
-                            (Map.toSeq map))
+                        (Seq.map (uncurry (printFailure vconf)) (Map.toSeq map))
             attachChecks mapDoc dcs
         | AllTerms (map, dcs) ->
             let mapDoc = printMap Indented String printZTerm map
@@ -254,6 +265,16 @@ module Pretty =
                 printMap Indented String (printBoolExpr (printSym printMarkedVar))
                     map
             attachChecks mapDoc dcs
+
+/// <summary>
+///     Creates an initial Z3 view config struct.
+/// </summary>
+/// <returns>
+///     An initial Z3 view config struct.
+/// </returns>
+let initialViewConfig () : ViewConfig =
+    { ShowBackendTranslation = false
+      ShowReifiedWPre = false }
 
 /// <summary>
 ///     Uses Z3 to mark some proof terms as eliminated.

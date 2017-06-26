@@ -251,17 +251,17 @@ module Tests =
  *  old termgen test before iterated views were added
  *
     /// <summary>
-    ///     NUnit tests for <c>TermGen</c>.
+    ///     nunit tests for <c>termgen</c>.
     /// </summary>
-    type NUnit () =
+    type nunit () =
         /// <summary>
-        ///     Test cases for <c>termGenWPreMinus</c>.
+        ///     test cases for <c>termgenwpreminus</c>.
         /// </summary>
 
         /// <summary>
-        ///     Tests <c>termGenWPreMinus</c>.
+        ///     tests <c>termgenwpreminus</c>.
         /// </summary>
-        [<TestCaseSource("FrameSubtracts")>]
-        member x.``termGenWPreMinus performs multiset minus correctly`` r q =
-            termGenWPreMinus r q
+        [<testcasesource("framesubtracts")>]
+        member x.``termgenwpreminus performs multiset minus correctly`` r q =
+            termgenwpreminus r q
 *)
