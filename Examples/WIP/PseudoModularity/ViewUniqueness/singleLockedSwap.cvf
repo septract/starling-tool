@@ -1,0 +1,74 @@
+/*
+ * Swapping two variables around with only one lock between them.
+ * Pseudo-modular code with uniqueness values in the view.
+ */
+
+shared int x, y;
+shared bool lock;
+
+shared int _uniq;
+
+method setTest(int v) {
+  {| emp |}
+    thread int xl;
+
+  // Inlined lock
+    thread bool test;
+
+  // Ghost code: add uniqueness
+    thread int id;
+    <| id = _uniq++; |>
+  {| uniqX(id) * uniqY(id) |}
+
+    do {
+      {| uniqX(id) * uniqY(id) |}
+        test = false;
+      {| uniqX(id) * uniqY(id) * local { test == false } |}
+        <| CAS(lock, test, true); |>
+      {| uniqX(id) * uniqY(id) * if (test == false) { holdLock(id) } |}
+    } while (test);
+
+  {| uniqX(id) * uniqY(id) * holdLock(id) |}
+
+  // End inlined lock
+
+    thread int tmpX, tmpY;
+    <| tmpX = x; |>
+  {| XVal(id, tmpX) * uniqY(id) * holdLock(id) |}
+    <| tmpY = y; |>
+  {| XVal(id, tmpX) * YVal(id, tmpY) * holdLock(id) |}
+    <| x = tmpY; |>
+  {| XVal(id, tmpY) * YVal(id, tmpY) * holdLock(id) |}
+    <| y = tmpX; |>
+  {| XVal(id, tmpY) * YVal(id, tmpX) * holdLock(id) |}
+
+  // Inlined unlock
+
+    <| lock = false; |>
+
+  {| emp |}
+}
+
+view holdLock(int id);
+view uniqX(int id), XVal(int id, int v);
+view uniqY(int id), YVal(int id, int v);
+
+constraint holdLock(id1) -> lock;
+exclusive holdLock(id), holdLock(id2);
+
+constraint uniqX(id) -> id < _uniq;
+constraint XVal(id, v) -> id < _uniq;
+constraint uniqX(id1) * uniqX(id2) -> id1 != id2;
+constraint uniqX(id1) * XVal(id2, v) -> id1 != id2;
+
+constraint holdLock(id1) * XVal(id2, v) -> id1 == id2 => x == v;
+constraint XVal(id1, v1) * XVal(id2, v2) -> id1 != id2;
+
+constraint uniqY(id) -> id < _uniq;
+constraint YVal(id, v) -> id < _uniq;
+constraint uniqY(id1) * uniqY(id2) -> id1 != id2;
+constraint uniqY(id1) * YVal(id2, v) -> id1 != id2;
+
+constraint holdLock(id1) * YVal(id2, v) -> id1 == id2 => y == v;
+constraint YVal(id1, v1) * YVal(id2, v2) -> id1 != id2;
+
