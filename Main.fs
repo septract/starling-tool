@@ -212,9 +212,12 @@ module private ViewConfig =
               ("raw",
                ("Emit the raw internal representation of any output, instead of pretty-printing.",
                  fun ps -> { ps with Raw = true } ))
+              ("show-all-iterators",
+               ("Show all atom iterators in proof failures, even if they are '1'.",
+                 updateZ3 (fun ps -> { ps with ShowAllIterators = true })))
               ("show-reified-wpre",
                ("Emit the reified weakest precondition in proof failures.",
-                 updateZ3 (fun ps -> { ps with ShowReifiedWPre = true } )))
+                 updateZ3 (fun ps -> { ps with ShowReifiedWPre = true })))
               ("show-backend-translation",
                ("Emit the backend translations in proof failures.",
                  updateZ3 (fun ps -> { ps with ShowBackendTranslation = true })))

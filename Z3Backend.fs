@@ -44,14 +44,18 @@ module Types =
     /// </summary>
     type ViewConfig =
         { /// <summary>
-          ///    Whether to emit the reified weakest precondition in
-          ///    proof failures.
+          ///     Whether to emit the reified weakest precondition in
+          ///     proof failures.
           /// </summary>
           ShowReifiedWPre : bool
           /// <summary>
-          ///    Whether to emit the backend translations in proof failures.
+          ///     Whether to emit the backend translations in proof failures.
           /// </summary>
-          ShowBackendTranslation : bool }
+          ShowBackendTranslation : bool
+          /// <summary>
+          ///     Whether to show all iterators in printed views.
+          /// </summary>
+          ShowAllIterators : bool }
 
     /// <summary>
     ///     A term combining a fully preprocessed Starling term and its Z3
@@ -205,6 +209,14 @@ module Pretty =
     ///     The <see cref="Doc"/> corresponding to <paramref name="term"/>.
     /// </returns>
     let printFailure (vconf : ViewConfig) (name : string) (term : ZTerm) : Doc =
+        let printWPre =
+            let piter =
+                if vconf.ShowAllIterators
+                then printIntExpr
+                else printExprIterator
+            let pvar = printSym printMarkedVar
+            printIteratedGViewWith pvar (piter pvar)
+
         let backendTranslation b =
             if vconf.ShowBackendTranslation
             then
@@ -224,7 +236,7 @@ module Pretty =
                 [ printCommand term.Original.Cmd.Cmd
                   backendTranslation term.Original.Cmd.Semantics ]
               cmdHeaded (error (String "under the weakest precondition"))
-                [ printIteratedGView (printSym printMarkedVar) term.Original.WPre.Original
+                [ printWPre term.Original.WPre.Original
                   reifiedWPre
                   backendTranslation term.SymBool.WPre ]
               cmdHeaded (error (String "establishes"))
@@ -274,7 +286,8 @@ module Pretty =
 /// </returns>
 let initialViewConfig () : ViewConfig =
     { ShowBackendTranslation = false
-      ShowReifiedWPre = false }
+      ShowReifiedWPre = false
+      ShowAllIterators = false }
 
 /// <summary>
 ///     Uses Z3 to mark some proof terms as eliminated.

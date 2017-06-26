@@ -488,10 +488,34 @@ module Pretty =
         printMultiset (printGFunc pVar)
         >> ssurround "<|" "|>"
 
-    let printIteratedGView (pVar : 'var -> Doc) : IteratedGView<'var> -> Doc =
-        printMultiset
-            (printIteratedContainer (printGFunc pVar) (printIntExpr pVar))
-        >> ssurround "<|" "|>"
+    /// <summary>
+    ///     Pretty-prints an iterated guarded view with a specific
+    ///     iterator printer.
+    /// </summary>
+    /// <param name="pVar">
+    ///     A pretty-printer for variables in the <c>Cond</c>.
+    /// </param>
+    /// <param name="pIter">
+    ///     A pretty-printer for the iterator expressions.
+    ///     Usually use either <see cref="printIntExpr"/> or
+    ///     <see cref="printExprIter"/>.
+    /// </param>
+    /// <param name="gview">The <c>IteratedGView</c> to print.</param>
+    /// <typeparam name="Var">The type of variables in the view.</typeparam>
+    /// <returns>
+    ///     A pretty-printer command to print the <c>IteratedGView</c>.
+    /// </returns>
+    let printIteratedGViewWith
+      (pVar : 'Var -> Doc) (pIter : IntExpr<'Var> -> Doc)
+      (gview : IteratedGView<'Var>)
+      : Doc =
+        ssurround "{|" "|}"
+            (printMultiset
+                (printIteratedContainer (printGFunc pVar) pIter)
+                gview)
+
+    let printIteratedGView (pVar : 'Var -> Doc) (gview : IteratedGView<'Var>) : Doc =
+        printIteratedGViewWith pVar (printIntExpr pVar) gview
 
     /// <summary>
     ///     Pretty-prints a guarded view over <c>MarkedVar</c>s.
