@@ -19,6 +19,91 @@ open Starling.Core.GuardedView
 
 
 /// <summary>
+///     Wrapper containing a goal view before flattening, and the
+///     flattened result.
+/// </summary>
+/// <typeparam name="Flat">The type of the flattened result.</typeparam>
+type Flattened<'Flat> =
+    { Original : IteratedOView
+      Flattened : 'Flat }
+
+/// <summary>
+///     Type of terms after complete flattening.
+/// </summary>
+/// <typeparam name="Var">The type of variables in the term.</typeparam>
+type FlatTerm<'Var> when 'Var : equality and 'Var : comparison =
+    Term<
+        CommandSemantics<BoolExpr<'Var>>,
+        Reified<GView<'Var>>,
+        Flattened<Func<Expr<'Var>>>>
+
+
+/// <summary>
+///    Maps a function over a flattened view.
+/// </summary>
+/// <param name="f">The function to apply to the flattened view.</param>
+/// <param name="view">The flattened view to map.</param>
+/// <typeparam name="A">The original inner view type.</typeparam>
+/// <typeparam name="B">The resulting inner view type.</typeparam>
+/// <returns>
+///     A new <see cref="Flattened"/> with the same original view, but
+///     with the flattened view set to the result of running
+///     <paramref name="f"/> over <paramref name="view"/>'s inner
+///     reified view.
+/// </returns>
+let flattenedMap (f : 'A -> 'B) (view : Flattened<'A>) : Flattened<'B> =
+    { Original = view.Original; Flattened = f view.Flattened }
+
+/// <summary>
+///     Pretty-prints the flattened component of a flattened view.
+/// </summary>
+/// <param name="pNewView">The printer for the wrapped view.</param>
+/// <param name="v">The flattened view to print.</param>
+/// <typeparam name="NewView">The type of the wrapped view.</typeparam>
+/// <returns>
+///     A <see cref="Doc"/> representing the flattened view.
+/// </returns>
+let printFlattened (pNewView : 'NewView -> Core.Pretty.Doc) (v : Flattened<'NewView>)
+  : Core.Pretty.Doc =
+    pNewView v.Flattened
+ 
+module Traversal =
+    open Starling.Core.Traversal
+    open Starling.Core.Command.Traversal
+    open Starling.Core.GuardedView.Traversal
+    open Starling.Core.View.Traversal
+
+    /// <summary>
+    ///     Lifts a <c>Traversal</c> over all variables in a reified
+    ///     <see cref="FlatTerm"/>.
+    /// </summary>
+    /// <param name="traversal">
+    ///     The <c>Traversal</c> to map over all variables in the term.
+    ///     This should map from typed variables to expressions.
+    /// </param>
+    /// <typeparam name="Error">
+    ///     The type of any returned errors.
+    /// </typeparam>
+    /// <typeparam name="SrcVar">The type of initial variables.</typeparam>
+    /// <typeparam name="DstVar">The type of final variables.</typeparam>
+    /// <typeparam name="Var">The type of context variables.</typeparam>
+    /// <returns>The lifted <see cref="Traversal"/>.</returns>
+    let tliftOverFlatTerm
+      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error, 'Var>)
+      : Traversal<FlatTerm<'SrcVar>, FlatTerm<'DstVar>, 'Error, 'Var> =
+        fun ctx { Cmd = c ; WPre = w; Goal = g } ->
+            let tCmd = tliftOverCommandSemantics traversal
+            let tWPre = tchainM (tliftOverGFunc traversal) id
+            let tGoal = tliftOverFunc traversal
+            tchain3 tCmd tWPre tGoal
+                (fun (c', wr, gr) ->
+                    let w' = { Original = w.Original; Reified = wr }
+                    let g' = { Original = g.Original; Flattened = gr }
+                    { Cmd = c'; WPre = w'; Goal = g' })
+                ctx
+                (c, w.Reified, g.Flattened)
+
+/// <summary>
 ///     Extracts a sequence of all of the parameters in a func sequence
 /// </summary>
 let paramsOfFuncSeq (funcs : Func<'var> seq) : 'var seq =
@@ -86,13 +171,13 @@ let flattenOView (svarExprs : Expr<Sym<MarkedVar>> seq) (oview : OView)
 /// </returns>
 let flattenTerm
   (globalsF : (Var -> MarkedVar) -> SMExpr seq)
-  : Term<_, Reified<Set<GuardedSubview>>, OView>
-  -> Term<_, Reified<GView<Sym<MarkedVar>>>, SMVFunc> =
+  : Term<_, Reified<Set<GuardedSubview>>, Flattened<OView>>
+  -> Term<_, Reified<GView<Sym<MarkedVar>>>, Flattened<SMVFunc>> =
     mapTerm id
             (reifyMap
                 (Seq.map (mapItem (flattenOView (globalsF Before)))
                  >> Multiset.ofFlatSeq))
-            (flattenOView (globalsF After))
+            (flattenedMap (flattenOView (globalsF After)))
 
 /// <summary>
 ///    Flattens all func sequences in a model, turning them into funcs.
@@ -110,9 +195,9 @@ let flattenTerm
 ///     The flattened model.
 /// </returns>
 let flatten
-  (model : Model<Term<_, Reified<Set<GuardedSubview>>, OView>,
+  (model : Model<Term<_, Reified<Set<GuardedSubview>>, Flattened<OView>>,
                  ViewDefiner<SVBoolExpr option>>)
-  : Model<Term<_, Reified<GView<Sym<MarkedVar>>>, SMVFunc>,
+  : Model<Term<_, Reified<GView<Sym<MarkedVar>>>, Flattened<SMVFunc>>,
           FuncDefiner<SVBoolExpr option>> =
     /// Build a function making a list of global arguments, for view assertions.
     let globalsF marker = varMapToExprs (marker >> Reg) model.SharedVars
@@ -136,7 +221,6 @@ let flatten
 
 /// Stage that flattens the Iterator's from GuardedFunc's
 module Iter =
-    open Starling.Core.Instantiate
     open Starling.Core.Pretty
 
     /// <summary>
@@ -302,20 +386,17 @@ module Iter =
 
     /// flattens an entire IteratedOView into a flat OView
     /// with no iterators
-    let lowerIteratedOView : FuncDefiner<ProtoInfo> -> IteratedOView
-      -> Result<OView, Error> =
-        fun protos iteroview ->
-            iteroview
-            |> List.map (lowerIterSMVFunc protos)
-            |> collect
-            |> lift List.concat
+    let lowerIteratedOView (protos : FuncDefiner<ProtoInfo>) (v : IteratedOView)
+      : Result<Flattened<OView>, Error> =
+        let flatR = collect (List.map (lowerIterSMVFunc protos) v)
+        lift (fun flat -> { Original = v; Flattened = List.concat flat }) flatR
 
     /// Flattens both the W/Pre and the Goal of a Term, removing the Iterators
     /// and returning the new flattened Term
     let lowerIteratedTerm :
       FuncDefiner<ProtoInfo>
       -> Term<_, Reified<Set<GuardedIteratedSubview>>, IteratedOView>
-      -> Result<Term<_, Reified<Set<GuardedSubview>>, OView>, Error> =
+      -> Result<Term<_, Reified<Set<GuardedSubview>>, Flattened<OView>>, Error> =
         fun proto ->
             let lowerIteratedSubviewSet =
                 Set.toSeq
@@ -333,5 +414,5 @@ module Iter =
     /// and returning that new model
     let flatten
         (model : Model<Term<_, Reified<Set<GuardedIteratedSubview>>, IteratedOView>, _>)
-            : Result<Model<Term<_, Reified<Set<GuardedSubview>>, OView>, _>, Error> =
+            : Result<Model<Term<_, Reified<Set<GuardedSubview>>, Flattened<OView>>, _>, Error> =
         tryMapAxioms (lowerIteratedTerm model.ViewProtos) model

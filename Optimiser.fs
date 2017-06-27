@@ -30,6 +30,8 @@ open Starling.Core.Traversal
 open Starling.Core.View
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Traversal
+open Starling.Flattener
+open Starling.Flattener.Traversal
 open Starling.Reifier
 
 
@@ -1084,9 +1086,8 @@ module Term =
     /// Eliminates bound before/after pairs in the term.
     /// If x!after = f(x!before) in the action, we replace x!after with
     /// f(x!before) in the precondition and postcondition.
-    let eliminateAfters
-      (term : CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc> )
-      : Result<CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc>, TermOptError> =
+    let eliminateAfters (term : FlatTerm<Sym<MarkedVar>>)
+      : Result<FlatTerm<Sym<MarkedVar>>, TermOptError> =
         // TODO(CaptainHayashi): make this more general and typesystem agnostic.
         let sub = afterSubs (term.Cmd.Semantics |> findArithAfters |> Map.ofList)
                             (term.Cmd.Semantics |> findBoolAfters  |> Map.ofList)
@@ -1097,21 +1098,18 @@ module Term =
          *)
 
         let trav =
-            tliftOverCmdTerm
+            tliftOverFlatTerm
                 (tliftToExprSrc (tliftToTypedSymVarSrc sub))
         let result = mapTraversal trav term
         mapMessages TermOptError.Traversal result
 
-    let eliminateInters
-      : CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc>
-        -> Result<CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc>,
-                  TermOptError> =
-        fun term ->
+    let eliminateInters (term : FlatTerm<Sym<MarkedVar>>)
+        : Result<FlatTerm<Sym<MarkedVar>>, TermOptError> =
         let sub = interSubs (term.Cmd.Semantics |> findArithInters |> Map.ofList)
                             (term.Cmd.Semantics |> findBoolInters  |> Map.ofList)
 
         let trav =
-            tliftOverCmdTerm
+            tliftOverFlatTerm
                 (tliftToExprSrc (tliftToTypedSymVarSrc sub))
         let result = mapTraversal trav term
         mapMessages TermOptError.Traversal result
@@ -1144,12 +1142,10 @@ module Term =
 
     /// Reduce the guards in a Term.
     let guardReduce
-      ({Cmd = c; WPre = w; Goal = g} : CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc>)
-      : Result<CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc>,
-               TermOptError> =
-
-        let fs = Set.ofList (unfoldAnds c.Semantics)
-        ok {Cmd = c; WPre = reifyMap (reduceGView fs) w; Goal = g}
+      (t : FlatTerm<Sym<MarkedVar>>)
+      : Result<FlatTerm<Sym<MarkedVar>>, TermOptError> =
+        let fs = Set.ofList (unfoldAnds t.Cmd.Semantics)
+        ok (mapTerm id (reifyMap (reduceGView fs)) id t)
 
     (*
      * Boolean simplification
@@ -1157,15 +1153,15 @@ module Term =
 
     /// Performs expression simplification on a term.
     let simpTerm
-      : CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc>
-        -> Result<CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc>,
+      : CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, Flattened<SMVFunc>>
+        -> Result<CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, Flattened<SMVFunc>>,
                   TermOptError> =
         let simpExpr : Expr<Sym<MarkedVar>> -> Expr<Sym<MarkedVar>> =
             function
             | Bool (ty, b) -> Bool (ty, simp b)
             | x -> x
         let sub = ignoreContext (simpExpr >> ok)
-        let trav = tliftOverCmdTerm sub
+        let trav = tliftOverFlatTerm sub
         mapTraversal trav >> mapMessages TermOptError.Traversal
 
     (*
@@ -1175,9 +1171,8 @@ module Term =
     /// Optimises a model's terms.
     let optimise
       (opts : (string * bool) list)
-      : Model<CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc>, _>
-      -> Result<Model<CmdTerm<SMBoolExpr, Reified<GView<Sym<MarkedVar>>>, SMVFunc>, _>,
-                TermOptError> =
+      : Model<FlatTerm<Sym<MarkedVar>>, _>
+      -> Result<Model<FlatTerm<Sym<MarkedVar>>, _>, TermOptError> =
         let optimiseTerm =
             Utils.optimiseWith opts
                 [ ("term-remove-after", true, eliminateAfters)

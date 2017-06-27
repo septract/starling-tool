@@ -21,6 +21,7 @@ open Starling.Core.Symbolic
 open Starling.Core.Symbolic.Pretty
 open Starling.Semantics
 open Starling.Semantics.Pretty
+open Starling.Flattener
 open Starling.Core.Instantiate
 open Starling.Core.Instantiate.Pretty
 open Starling.Core.Command
@@ -100,15 +101,15 @@ type Response =
                      ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term generation.
     | IterLower of Model<CmdTerm<SMBoolExpr,
-                                 Reified<Set<GuardedSubview>>, OView>,
+                                 Reified<Set<GuardedSubview>>, Flattened<OView>>,
                          ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term flattening.
     | Flatten of Model<CmdTerm<SMBoolExpr,
-                               Reified<GView<Sym<MarkedVar>>>, SMVFunc>,
+                               Reified<GView<Sym<MarkedVar>>>, Flattened<SMVFunc>>,
                        FuncDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of term optimisation.
     | TermOptimise of Model<CmdTerm<SMBoolExpr,
-                                    Reified<GView<Sym<MarkedVar>>>, SMVFunc>,
+                                    Reified<GView<Sym<MarkedVar>>>, Flattened<SMVFunc>>,
                             FuncDefiner<BoolExpr<Sym<Var>> option>>
     /// Stop at symbolic proof calculation.
     | SymProof of Model<SymProofTerm, FuncDefiner<BoolExpr<Sym<Var>> option>>
@@ -215,6 +216,9 @@ module private ViewConfig =
               ("show-all-iterators",
                ("Show all atom iterators in proof failures, even if they are '1'.",
                  updateZ3 (fun ps -> { ps with ShowAllIterators = true })))
+              ("show-flattened-goal",
+               ("Emit the flattened goal clause in proof failures.",
+                 updateZ3 (fun ps -> { ps with ShowFlattenedGoal = true })))
               ("show-reified-wpre",
                ("Emit the reified weakest precondition in proof failures.",
                  updateZ3 (fun ps -> { ps with ShowReifiedWPre = true })))
@@ -419,10 +423,17 @@ let private printResponse (mview : ModelView) (vconf : ViewConfig.Config)
                 (printIteratedGView (printSym printMarkedVar))
                 printIteratedOView) m
     | Response.Reify m ->
-        printVModel (printCmdTerm printSMBoolExpr (printReified (printSubviewSet printGuardedIteratedSubview)) printIteratedOView) m
-    | IterLower m -> printVModel (printCmdTerm printSMBoolExpr (printReified (printSubviewSet printGuardedSubview)) printOView) m
-    | Flatten m -> printFModel (printCmdTerm printSMBoolExpr (printReified printSMGView) printSMVFunc) m
-    | TermOptimise m -> printFModel (printCmdTerm printSMBoolExpr (printReified printSMGView) printSMVFunc) m
+        printVModel
+            (printCmdTerm printSMBoolExpr (printReified (printSubviewSet printGuardedIteratedSubview)) printIteratedOView) m
+    | IterLower m ->
+        printVModel
+            (printCmdTerm printSMBoolExpr (printReified (printSubviewSet printGuardedSubview)) (printFlattened printOView)) m
+    | Flatten m ->
+        printFModel
+            (printCmdTerm printSMBoolExpr (printReified printSMGView) (printFlattened printSMVFunc)) m
+    | TermOptimise m ->
+        printFModel
+            (printCmdTerm printSMBoolExpr (printReified printSMGView) (printFlattened printSMVFunc)) m
     | SymProof m -> printUModel printSymProofTerm m
     | Eliminate m -> printUModel Backends.Z3.Pretty.printZTerm m
     | SMTProof z -> Backends.Z3.Pretty.printResponse mview vconf.Z3 z
@@ -668,7 +679,11 @@ let runStarling (request : Request)
                 // Remove the reified wrappers on each term, for now.
                 let npmReifyEraseR =
                     lift
-                        (mapAxioms (mapTerm id (fun f -> f.Reified) id))
+                        (mapAxioms
+                            (mapTerm
+                                id
+                                (fun w -> w.Reified)
+                                (fun g -> g.Flattened)))
                         npmNoSymbolicConstraintsR
 
                 mapMessages ModelFilterError npmReifyEraseR)

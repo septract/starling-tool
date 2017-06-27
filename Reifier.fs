@@ -161,42 +161,6 @@ let tryReifyMap
     lift
         (fun nview -> reifyMap (fun _ -> nview) view)
         (f view.Reified)
- 
-/// <summary>
-///     Lifts a <c>Traversal</c> over all variables in a reified
-///     <see cref="CmdTerm"/>.
-/// </summary>
-/// <param name="traversal">
-///     The <c>Traversal</c> to map over all variables in the term.
-///     This should map from typed variables to expressions.
-/// </param>
-/// <typeparam name="SrcVar">
-///     The type of variables before traversal.
-/// </typeparam>
-/// <typeparam name="DstVar">
-///     The type of variables after traversal.
-/// </typeparam>
-/// <typeparam name="Error">
-///     The type of any returned errors.
-/// </typeparam>
-/// <typeparam name="Var">The type of context variables.</typeparam>
-/// <returns>The lifted <see cref="Traversal"/>.</returns>
-let tliftOverCmdTerm
-  (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error, 'Var>)
-  : Traversal<CmdTerm<BoolExpr<'SrcVar>, Reified<GView<'SrcVar>>, VFunc<'SrcVar>>,
-              CmdTerm<BoolExpr<'DstVar>, Reified<GView<'DstVar>>, VFunc<'DstVar>>,
-              'Error, 'Var> =
-    fun ctx { Cmd = c ; WPre = w; Goal = g } ->
-        let tCmd = tliftOverCommandSemantics traversal
-        let tWPre = tchainM (tliftOverGFunc traversal) id
-        let tGoal = tliftOverFunc traversal
-        tchain3 tCmd tWPre tGoal
-            (fun (c', wr, g') ->
-                let w' = { Original = w.Original; Reified = wr }
-                { Cmd = c'; WPre = w'; Goal = g' })
-            ctx
-            (c, w.Reified, g)
-
 
 /// <summary>
 ///     Downclosure checking.

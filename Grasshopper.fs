@@ -391,7 +391,7 @@ let findTermVars (term : Backends.Z3.Types.ZTerm)
        optimised. *)
     let exprVarsT = tliftOverExpr collectSymVars
 
-    let goalVarsL = findVars (tliftOverFunc exprVarsT) term.Original.Goal
+    let goalVarsL = findVars (tliftOverFunc exprVarsT) term.Original.Goal.Flattened
     let wPreVarsL =
         findVars (tchainM (tliftOverGFunc exprVarsT) id) term.Original.WPre.Reified
 

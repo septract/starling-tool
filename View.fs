@@ -246,14 +246,15 @@ module Pretty =
     let printIteratedDFunc : IteratedDFunc -> Doc =
         printIteratedContainer printDFunc (maybe Nop printTypedVar)
 
+    /// Pretty-prints an IteratedOView as a document list.
+    let printIteratedOViewAsListWith (pIter : IntExpr<Sym<MarkedVar>> -> Doc)
+      (v : IteratedOView) : Doc list =
+        List.map (printIteratedContainer printSMVFunc pIter) v
+
     /// Pretty-prints an IteratedOView.
     let printIteratedOView : IteratedOView -> Doc =
-        List.map
-            (printIteratedContainer
-                 printSMVFunc
-                 (printExprIterator (printSym printMarkedVar)))
-        >> semiSep
-        >> squared
+        printIteratedOViewAsListWith (printExprIterator (printSym printMarkedVar))
+        >> semiSep >> squared
 
     let printOView : OView -> Doc =
         List.map printSMVFunc

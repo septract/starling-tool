@@ -49,6 +49,10 @@ module Types =
           /// </summary>
           ShowReifiedWPre : bool
           /// <summary>
+          ///     Whether to emit the flattened goal in proof failures.
+          /// </summary>
+          ShowFlattenedGoal : bool
+          /// <summary>
           ///     Whether to emit the backend translations in proof failures.
           /// </summary>
           ShowBackendTranslation : bool
@@ -65,15 +69,13 @@ module Types =
         { /// <summary>
           ///     The original, fully preprocessed Starling term.
           /// <summary>
-          Original: Core.Instantiate.Types.FinalTerm
+          Original: Flattener.FlatTerm<Sym<MarkedVar>>
 
           /// <summary>
           ///     The above as a Boolean expression with all non-Z3-native parts
           ///     converted to symbols.
           /// </summary>
-          SymBool: Term<BoolExpr<Sym<MarkedVar>>,
-                        BoolExpr<Sym<MarkedVar>>,
-                        BoolExpr<Sym<MarkedVar>>>
+          SymBool: Core.Instantiate.Types.BoolTerm<Sym<MarkedVar>>
 
           /// <summary>
           ///     The Z3-reified equivalent, which may be optional if the
@@ -163,6 +165,7 @@ module Pretty =
     open Starling.Core.Var.Pretty
     open Starling.Core.View.Pretty
     open Starling.Core.Z3.Pretty
+    open Starling.Flattener
     open Starling.Reifier.Pretty
 
     /// Pretty-prints a partial satisfiability result.
@@ -184,7 +187,7 @@ module Pretty =
                 [ printCmdTerm
                     (printBoolExpr (printSym printMarkedVar))
                     (printReified (printGView (printSym printMarkedVar)))
-                    (printVFunc (printSym printMarkedVar))
+                    (printFlattened (printVFunc (printSym printMarkedVar)))
                     zterm.Original ]
               headed "After instantiation" <|
                 [ printTerm
@@ -211,13 +214,17 @@ module Pretty =
     /// </returns>
     let printFailure (vconf : ViewConfig) (name : string) (term : ZTerm)
       : Doc * Doc =
+        let piter =
+            if vconf.ShowAllIterators
+            then printIntExpr
+            else printExprIterator
+
         let printWPre =
-            let piter =
-                if vconf.ShowAllIterators
-                then printIntExpr
-                else printExprIterator
             let pvar = printSym printMarkedVar
             printIteratedGViewAsListWith pvar (piter pvar) >> vsep
+        
+        let printGoal =
+            printIteratedOViewAsListWith (piter (printSym printMarkedVar)) >> vsep
 
         let backendTranslation b =
             seq {
@@ -226,26 +233,31 @@ module Pretty =
                     let p = printBoolExpr (printSym printMarkedVar) b
                     yield errorInfo (headed "which was translated into" [ p ])
             }
-        let reifiedWPre =
+
+        let wpreStanza =
             seq {
-                if vconf.ShowReifiedWPre
-                then
+                yield printWPre term.Original.WPre.Original
+
+                if vconf.ShowReifiedWPre then
                     yield
                         errorInfo
                             (headed "which was reified into"
                                 [ printGView (printSym printMarkedVar) term.Original.WPre.Reified ])
-            }
-        
-        let wpreStanza =
-            seq {
-                yield printWPre term.Original.WPre.Original
-                yield! reifiedWPre
+
                 yield! backendTranslation term.SymBool.WPre
             }
 
         let goalStanza =
             seq {
-                yield printVFunc (printSym printMarkedVar) term.Original.Goal
+                yield printGoal term.Original.Goal.Original
+
+                if vconf.ShowFlattenedGoal then
+                    yield
+                        errorInfo
+                            (headed "which was flattened into"
+                                [ printVFunc (printSym printMarkedVar)
+                                    term.Original.Goal.Flattened ])
+
                 yield! backendTranslation term.SymBool.Goal
             }
 
@@ -314,6 +326,7 @@ module Pretty =
 let initialViewConfig () : ViewConfig =
     { ShowBackendTranslation = false
       ShowReifiedWPre = false
+      ShowFlattenedGoal = false
       ShowAllIterators = false }
 
 /// <summary>
