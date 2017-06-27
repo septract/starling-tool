@@ -778,7 +778,9 @@ let desugar
     let ctx =
         initialContext collated.SharedVars collated.ThreadVars collated.VProtos
 
-    let desugarMethod ctx (pos, { Signature = sigt; Body = body }) =
+    let desugarMethod ctx mnode =
+        let { Signature = sigt; Body = body } = mnode.Node
+        let pos = mnode.Position
         let ctxP = LocalRewriting.desugarMethodParams ctx sigt.Params pos
         let ctxB, bodyB = desugarBlock ctxP body
         (ctxB.DCtx, (sigt.Name, bodyB))

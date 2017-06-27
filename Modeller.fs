@@ -725,7 +725,7 @@ and modelBoolExpr
     let me = modelExpr env scope varF
     let ma = modelArrayExpr env scope varF
 
-    let rec mb e : Result<TypedBoolExpr<Sym<'var>>, ExprError> =
+    let rec mb (e : Expression) : Result<TypedBoolExpr<Sym<'var>>, ExprError> =
         match e.Node with
         // These two have a indefinite subtype.
         | True -> ok (indefBool BTrue)
@@ -855,7 +855,7 @@ and modelIntExpr
     let me = modelExpr env scope varF
     let ma = modelArrayExpr env scope varF
 
-    let rec mi e =
+    let rec mi (e : Expression) =
         match e.Node with
         // Numbers have indefinite subtype.
         | Num i -> ok (indefInt (IInt i))
@@ -955,7 +955,7 @@ and modelArrayExpr
   : Result<TypedArrayExpr<Sym<'var>>, ExprError> =
     let mi = modelIntExpr env scope varF
 
-    let rec ma e =
+    let rec ma (e : Expression) =
         match e.Node with
         | Identifier v ->
             (* Look-up the variable to ensure it a) exists and b) is of an
@@ -1610,7 +1610,7 @@ module private Prim =
     let model
       (env : Env) (scope : Scope) (primAST : Prim)
       : Result<PrimCommand list, PrimError> =
-        let rec prim n =
+        let rec prim (n : Prim) =
             match n.Node with
             | CompareAndSwap(dest, test, set) ->
                 lift List.singleton (modelCAS env scope dest test set)

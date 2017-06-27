@@ -4,7 +4,9 @@
 /// </summary>
 module Starling.Lang.Collator
 
+open Starling.Collections
 open Starling.Utils
+
 open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.View
@@ -44,7 +46,7 @@ module Types =
           /// <summary>
           ///     List of methods, combined with their script position.
           /// </summary>
-          Methods : (SourcePosition * Method<Command>) list }
+          Methods : Node<Method<Command>> list }
 
 
 /// <summary>
@@ -76,7 +78,7 @@ module Pretty =
               vsep <| Seq.map (printScriptVar "shared") cs.SharedVars
               vsep <| Seq.map (printScriptVar "thread") cs.ThreadVars
               vsep <| Seq.map (uncurry printConstraint) cs.Constraints
-              vsep <| Seq.map (snd >> printMethod printCommand) cs.Methods ]
+              vsep <| Seq.map (fun n -> printMethod printCommand n.Node) cs.Methods ]
 
         // Add in search, but only if it actually exists.
         let all =
@@ -176,7 +178,7 @@ let collate (script : ScriptItem list) : CollatedScript =
             { cs with ThreadVars = s @ cs.ThreadVars }
         | ViewProtos v -> { cs with VProtos = v @ cs.VProtos }
         | Search i -> { cs with Search = Some i }
-        | Method m -> { cs with Methods = (pos, m) :: cs.Methods }
+        | Method m -> { cs with Methods = (item |=> m) :: cs.Methods }
         | Constraint (v, d) -> { cs with Constraints = (v, d)::cs.Constraints }
         | Exclusive xs -> 
             let views = List.map ViewSignature.Func xs 

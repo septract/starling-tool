@@ -606,7 +606,7 @@ let mapEdges (f : FullEdge -> 'result) (graph : Graph) : 'result seq =
 
     m
     |> Map.toSeq
-    |> Seq.map
+    |> Seq.collect
            (fun (srcName, (srcView, outEdges, inEdges, _)) ->
                 Seq.map
                     (fun { OutEdge.Name = edgeName
@@ -620,7 +620,6 @@ let mapEdges (f : FullEdge -> 'result) (graph : Graph) : 'result seq =
                              FullEdge.DestName = destName
                              FullEdge.DestView = dv } )
                     outEdges)
-    |> Seq.concat
 
 /// <summary>
 ///     Returns true if a node is present and has the given view.

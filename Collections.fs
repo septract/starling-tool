@@ -396,3 +396,18 @@ module Multiset =
         /// Pretty-prints a multiset given a printer for its contents.
         let printMultiset (pItem : 'Item -> Doc) (m : Multiset<'Item>) : Doc =
             semiSep (printMultisetAsList pItem m)
+
+[<AutoOpen>]
+module Positioning =
+    type SourcePosition =
+        { StreamName: string; Line: int64; Column: int64; }
+        override this.ToString() = sprintf "SourcePosition { StreamName = \"%s\"; Line = %d; Column = %d; };" this.StreamName this.Line this.Column
+
+    /// A Node in the AST which annotates the data with information about position
+    //type Node<'a> = { lineno : int; Node : 'a; }
+    type Node<'a> =
+        { Position: SourcePosition; Node: 'a }
+        static member (|>>) (n, f) = { Position = n.Position; Node = f n.Node }
+        static member (|=>) (n, b) = { Position = n.Position; Node = b }
+        override this.ToString() = sprintf "<%A: %A>" this.Position this.Node
+

@@ -349,8 +349,8 @@ let ticketLockCollated =
             // constraint holdLock() * holdLock() -> false;
             ticketLockConstraint06 ]
       Methods =
-          [ (emptyPosition, ticketLockLockMethodAST)
-            (emptyPosition, ticketLockUnlockMethodAST) ] }
+          [ {Position = emptyPosition; Node = ticketLockLockMethodAST}
+            {Position = emptyPosition; Node = ticketLockUnlockMethodAST} ] }
 
 /// Shorthand for Multiset.singleton.
 let sing = Multiset.singleton
