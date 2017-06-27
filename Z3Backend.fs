@@ -230,19 +230,39 @@ module Pretty =
                     (headed "which was reified into"
                         [ printGView (printSym printMarkedVar) term.Original.WPre.Reified ] )
             else Nop
-
-        cmdHeaded (errorContext (String name) <+> printMaybeSat term.Status)
-            [ cmdHeaded (error (String "Could not prove that this command"))
-                [ printCommand term.Original.Cmd.Cmd
-                  backendTranslation term.Original.Cmd.Semantics ]
-              cmdHeaded (error (String "under the weakest precondition"))
+        
+        let wpreStanza =
+            List.filter (fun x -> x <> Nop)
                 [ printWPre term.Original.WPre.Original
                   reifiedWPre
                   backendTranslation term.SymBool.WPre ]
-              cmdHeaded (error (String "establishes"))
+
+        let goalStanza =
+            List.filter (fun x -> x <> Nop)
                 [ printVFunc (printSym printMarkedVar) term.Original.Goal
                   backendTranslation term.SymBool.Goal ]
-            ]
+        
+        let errHeaded msg x = cmdHeaded (error (String msg)) x
+
+        (* Show a more friendly body if the command is empty, ie. this is a
+           semantic entailment rather than a command step. *)
+        let cmd = term.Original.Cmd
+        let body =
+            if cmd.Cmd.IsEmpty
+            then
+                [ errHeaded "Could not prove that the weakest precondition"
+                    wpreStanza
+                  errHeaded "semantically entails" goalStanza ]
+            else
+                [ errHeaded "Could not prove that this command"
+                    [ printCommand term.Original.Cmd.Cmd
+                      backendTranslation term.Original.Cmd.Semantics ]
+                  errHeaded "under the weakest precondition" wpreStanza
+                  errHeaded "establishes" goalStanza ]
+
+        cmdHeaded
+            (errorContext (String name) <+> printMaybeSat term.Status)
+            body
 
     /// Pretty-prints a response.
     let printResponse (mview : ModelView) (vconf : ViewConfig) (response : Response) : Doc =
