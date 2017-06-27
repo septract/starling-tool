@@ -243,7 +243,7 @@ and graphBlockStep
   (vg : unit -> NodeID)
   (cg : unit -> EdgeID)
   ((iP, oGraphR) : NodeID * Result<Subgraph, Error>)
-  ((cmd, iQview) : ModellerPartCmd * ModellerViewExpr)
+  ((cmd, iQview) : ModellerPartCmd * Node<ModellerViewExpr>)
   : NodeID * Result<Subgraph, Error> =
     (* We already know the precondition's ID--it's in pre.
      * However, we now need to create an ID for the postcondition.
@@ -252,7 +252,7 @@ and graphBlockStep
 
      // Add the postcondition onto the outer subgraph.
      let oGraphR2 = trial {
-         let pGraph = { Nodes = Map.ofList [(iQ, (iQview, if last then Exit else Normal))]
+         let pGraph = { Nodes = Map.ofList [(iQ, (iQview.Node, if last then Exit else Normal))]
                         Edges = Map.empty }
          let! oGraph = oGraphR
          return! combine oGraph pGraph }
@@ -289,7 +289,7 @@ and graphBlock
     // First, generate the ID for the precondition.
     let oP = vg ()
 
-    let initState = (oP, ok { Nodes = Map.ofList [(oP, (bPre, if topLevel then Entry else Normal))]
+    let initState = (oP, ok { Nodes = Map.ofList [(oP, (bPre.Node, if topLevel then Entry else Normal))]
                               Edges = Map.empty } )
 
     (* We flip through every entry in the block, extracting its postcondition
@@ -306,7 +306,14 @@ and graphBlock
      * precondition for the next line.  Otherwise, our axiom list turns into a
      * failure.
      *)
-    let ((oQ, graphR), _) = bContents |> List.fold (fun (state,i) cmd -> (graphBlockStep (topLevel && bContents.Length = i) vg cg state cmd, i+1)) (initState,1)
+    let ((oQ, graphR), _) =
+        List.fold
+            (fun (state,i) cmd ->
+                (graphBlockStep
+                    (topLevel && bContents.Length = i)
+                    vg cg state cmd, i+1))
+            (initState,1)
+            bContents
 
     // Pull the whole set of returns into one Result.
     lift (fun gr -> (oP, oQ, gr)) graphR

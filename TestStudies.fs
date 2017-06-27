@@ -373,36 +373,37 @@ let sIsT = iEq (siVar "s") (siVar "t")
 
 /// The ticket lock's lock method, in guarded form.
 let ticketLockLock : ModellerBlock =
-      { Pre = Mandatory <| Multiset.empty
+      { Pre = freshNode (Mandatory <| Multiset.empty)
         Cmds =
             [ ( command "!ILoad++"
                      [ normalIntExpr (siVar "t"); normalIntExpr (siVar "ticket") ]
                      [ normalIntExpr (siVar "t");
                        normalIntExpr (siVar "ticket"); ]
                 |> List.singleton |> Prim,
-                Mandatory <| sing (gHoldTick BTrue) )
+                freshNode (Mandatory <| sing (gHoldTick BTrue)) )
               ( While (isDo = true,
                        expr = BNot sIsT,
                        inner =
-                           { Pre = Mandatory <| sing (gHoldTick BTrue)
+                           { Pre = freshNode (Mandatory <| sing (gHoldTick BTrue))
                              Cmds =
                                  [ ( command "!ILoad"
                                           [ normalIntExpr (siVar "s") ]
                                           [ normalIntExpr (siVar "serving"); ]
                                      |> List.singleton |> Prim,
-                                     Mandatory <|
-                                     Multiset.ofFlatList
-                                         [ gHoldLock sIsT
-                                           gHoldTick (BNot sIsT) ] ) ] } ),
-                Mandatory <| sing (gHoldLock BTrue) ) ] } 
+                                     freshNode (
+                                       Mandatory <|
+                                       Multiset.ofFlatList
+                                           [ gHoldLock sIsT
+                                             gHoldTick (BNot sIsT) ] )) ] } ),
+                freshNode (Mandatory <| sing (gHoldLock BTrue)) ) ] } 
 
 /// The ticket lock's unlock method, in guarded form.
 let ticketLockUnlock : ModellerBlock =
-      { Pre = Mandatory <| sing (gHoldLock BTrue)
+      { Pre = freshNode (Mandatory <| sing (gHoldLock BTrue))
         Cmds =
             [ ( command "!I++" [ normalIntExpr (siVar "serving") ] [ normalIntExpr (siVar "serving") ]
                 |> List.singleton |> Prim,
-                Mandatory <| Multiset.empty ) ] }
+                freshNode (Mandatory <| Multiset.empty )) ] }
 
 /// The methods of the ticket lock.
 let ticketLockMethods =

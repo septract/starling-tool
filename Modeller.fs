@@ -175,7 +175,7 @@ module Types =
         /// The method contains a bad while condition.
         | BadWhileCondition of expr: AST.Types.Expression * err: ExprError
         /// The method contains a bad view.
-        | BadView of view : ViewExpr<DesugaredGView> * err : ViewError
+        | BadView of view : Node<ViewExpr<DesugaredGView>> * err : ViewError
         /// The method contains an command not yet implemented in Starling.
         | CommandNotImplemented of cmd : FullCommand
 
@@ -376,6 +376,19 @@ module Pretty =
             wrapped "assumption" (printExpression expr)
                                  (printExprError err)
 
+    /// Formats an error that is wrapping another error with a position.
+    let wrappedPos
+      (wholeDesc : string)
+      (whole : Doc)
+      (pos : SourcePosition)
+      (err : Doc)
+      : Doc =
+        cmdHeaded
+            (errorContextStr "->" <+> errorContextStr wholeDesc <+> whole
+             <+> errorContextStr "at"
+             <+> Starling.Collections.Positioning.Pretty.printPosition pos)
+            [ err ]
+
     /// Pretty-prints method errors.
     let printMethodError (err : MethodError) : Doc =
         match err with
@@ -390,25 +403,14 @@ module Pretty =
             wrapped "while-loop condition" (printExpression expr)
                                            (printExprError err)
         | BadView (view, err) ->
-            wrapped "view expression" (printViewExpr printDesugaredGView view)
-                                      (printViewError err)
+            wrappedPos "view expression"
+                (printViewExpr printDesugaredGView view.Node)
+                view.Position
+                (printViewError err)
         | CommandNotImplemented cmd ->
             String "command"
             <+> quoted (printFullCommand cmd)
             <+> String "not yet implemented"
-
-    /// Formats an error that is wrapping another error with a position.
-    let wrappedPos
-      (wholeDesc : string)
-      (whole : Doc)
-      (pos : SourcePosition)
-      (err : Doc)
-      : Doc =
-        cmdHeaded
-            (errorContextStr "->" <+> errorContextStr wholeDesc <+> whole
-             <+> errorContextStr "at"
-             <+> Starling.Collections.Positioning.Pretty.printPosition pos)
-            [ err ]
 
     /// Pretty-prints model conversion errors.
     let printModelError (err : ModelError) : Doc =
@@ -1781,21 +1783,23 @@ and modelCommand
 
 /// Converts a view expression into a CView.
 and modelViewExpr (ctx : MethodContext)
-  : ViewExpr<DesugaredGView> -> Result<ModellerViewExpr, ViewError> =
-    function
-    | Mandatory v -> modelView ctx v |> lift Mandatory
-    | Advisory v -> modelView ctx v |> lift Advisory
+  (vnode : Node<ViewExpr<DesugaredGView>>)
+  : Result<Node<ModellerViewExpr>, ViewError> =
+    let renodify v = vnode |=> v
+
+    match vnode.Node with
+    | Mandatory v -> modelView ctx v |> lift (Mandatory >> renodify)
+    | Advisory v -> modelView ctx v |> lift (Advisory >> renodify)
 
 /// Converts a pair of view and command.
 and modelViewedCommand
   (ctx : MethodContext)
-  (vc : FullCommand * ViewExpr<DesugaredGView>)
-      : Result<ModellerPartCmd * ModellerViewExpr, MethodError> =
+  (vc : FullCommand * Node<ViewExpr<DesugaredGView>>)
+      : Result<ModellerPartCmd * Node<ModellerViewExpr>, MethodError> =
     let command, post = vc
     lift2 mkPair
           (modelCommand ctx command)
-          (post |> modelViewExpr ctx
-                |> mapMessages (curry MethodError.BadView post))
+          (wrapMessages MethodError.BadView (modelViewExpr ctx) post)
 
 /// Converts the views and commands in a block.
 /// The converted block is enclosed in a Chessie result.

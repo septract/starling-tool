@@ -18,7 +18,7 @@ method setTest(int v) {
     thread int id;
     // Ghost code: add uniqueness
     <| id = _uniq++; |>
-  {| uniiq(id) |}
+  {| uniq(id) |}
 
     do {
       {| uniq(id) |}

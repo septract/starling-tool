@@ -90,11 +90,11 @@ type DesugaredAtomic =
 /// </summary>
 type FullBlock<'view, 'cmd> =
     { /// <summary> The precondition of the block.</summary>
-      Pre : 'view
+      Pre : Node<'view>
       /// <summary>
       ///     The commands in the block, and their subsequent views.
       /// </summary>
-      Cmds : ('cmd * 'view) list }
+      Cmds : ('cmd * Node<'view>) list }
 
 /// <summary>A non-view command with FullBlocks.</summary>
 type FullCommand' =
@@ -144,8 +144,8 @@ module Pretty =
     /// </returns>
     let printFullBlock (pView : 'View -> Doc) (pCmd : 'Cmd -> Doc)
       (fb : FullBlock<'View, 'Cmd>) : Doc =
-        let printStep (c, v) = vsep [ Indent (pCmd c); pView v ]
-        let indocs = pView fb.Pre :: List.map printStep fb.Cmds
+        let printStep (c, v) = vsep [ Indent (pCmd c); pView v.Node ]
+        let indocs = pView fb.Pre.Node :: List.map printStep fb.Cmds
         braced (ivsep indocs)
 
     /// <summary>
@@ -651,8 +651,8 @@ and desugarBlock (ctx : BlockContext) (block : Command list)
     // Add an Unknown view to the start of a block without one.
     let cap l =
         match l with
-        | { Node = ViewExpr v } :: _ -> (l, v)
-        | _ -> (freshNode (ViewExpr Unknown) :: l, Unknown)
+        | ({ Node = ViewExpr v } as c) :: _ -> (l, c |=> v)
+        | _ -> (freshNode (ViewExpr Unknown) :: l, freshNode Unknown)
 
     (* If the first item isn't a view, we have to synthesise a block
        precondition. *)
@@ -687,11 +687,11 @@ and desugarBlock (ctx : BlockContext) (block : Command list)
 
         let fillBlock bsf pair =
             match pair with
-            | [| { Node = ViewExpr x }      ; { Node = ViewExpr y } |] -> (skip (), Some x) :: bsf
-            | [| cx                         ; { Node = ViewExpr y } |] -> (cx, Some y) :: bsf
-            | [| { Node = ViewExpr x }      ; _                     |] -> bsf
-            | [| { Node = VarDecl  _ } as cx; _                     |] -> (cx, None) :: bsf
-            | [| cx                         ; _                     |] -> (cx, Some Unknown) :: bsf
+            | [| { Node = ViewExpr x } as nx; { Node = ViewExpr y } as ny |] -> (skip (), Some (nx |=> x)) :: bsf
+            | [| cx                         ; { Node = ViewExpr y } as ny |] -> (cx, Some (ny |=> y)) :: bsf
+            | [| { Node = ViewExpr x } as nx; _                           |] -> bsf
+            | [| { Node = VarDecl  _ } as cx; _                           |] -> (cx, None) :: bsf
+            | [| cx                         ; _                           |] -> (cx, Some (freshNode Unknown)) :: bsf
             | x -> failwith (sprintf "unexpected window in fillBlock: %A" x)
 
         // The above built the block backwards, so reverse it.
@@ -708,19 +708,19 @@ and desugarBlock (ctx : BlockContext) (block : Command list)
         match cmd', post with
         | None, None -> (cc, None)
         | Some c, Some p ->
-            let cp, post' = desugarMarkedView cc p
-            (cp, Some (c, post'))
+            let cp, post' = desugarMarkedView cc p.Node
+            (cp, Some (c, p |=> post'))
         | None, Some p ->
             // TODO(MattWindsor91): this is horrible.
-            let cp, post' = desugarMarkedView cc p
+            let cp, post' = desugarMarkedView cc p.Node
             let id = FPrim { PreLocals = []; Atomics = []; PostLocals = [] }
-            (cp, Some (freshNode id, post'))
+            (cp, Some (freshNode id, p |=> post'))
         | Some _, None -> failwith "expected a view for the end of this command"
 
-    let pc, pre' = desugarMarkedView ctx pre
+    let pc, pre' = desugarMarkedView ctx pre.Node
     let ctx', cmds' = mapAccumL desugarViewedCommand pc cmds
 
-    let block' = { Pre = pre' ; Cmds = List.choose id cmds' }
+    let block' = { Pre = pre |=> pre' ; Cmds = List.choose id cmds' }
 
     (* Throw away any changes to ctx that weren't to the global context.
        This is to make sure that any changes to substitution tables
@@ -857,11 +857,12 @@ module Tests =
                     { normalCtx.DCtx with
                         GeneratedProtos = Set.singleton nfunc } }
                 { Pre =
-                    (Advisory
-                        [ (freshNode True,
-                           func "__unknown_0"
-                            [ freshNode (Identifier "s")
-                              freshNode (Identifier "t") ] ) ] )
+                    freshNode
+                        (Advisory
+                            [ (freshNode True,
+                               func "__unknown_0"
+                                [ freshNode (Identifier "s")
+                                  freshNode (Identifier "t") ] ) ] )
                   Cmds = [] }
                 normalCtx
                 []
