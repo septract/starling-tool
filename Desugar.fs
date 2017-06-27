@@ -774,7 +774,9 @@ let initialContext
 /// </returns>
 let desugar
   (collated : CollatedScript)
-  : (DesugarContext * Map<string, FullBlock<ViewExpr<DesugaredGView>, FullCommand>>) =
+  : (DesugarContext *
+     Map<string,
+         Node<FullBlock<ViewExpr<DesugaredGView>, FullCommand>>>) =
     let ctx =
         initialContext collated.SharedVars collated.ThreadVars collated.VProtos
 
@@ -783,7 +785,7 @@ let desugar
         let pos = mnode.Position
         let ctxP = LocalRewriting.desugarMethodParams ctx sigt.Params pos
         let ctxB, bodyB = desugarBlock ctxP body
-        (ctxB.DCtx, (sigt.Name, bodyB))
+        (ctxB.DCtx, (sigt.Name, mnode |=> bodyB))
 
     let ctxM, methodsM = mapAccumL desugarMethod ctx collated.Methods
 

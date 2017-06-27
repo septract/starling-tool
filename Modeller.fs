@@ -196,7 +196,7 @@ module Types =
         /// A constraint in the program generated a `ConstraintError`.
         | BadConstraint of constr : AST.Types.ViewSignature * err : ConstraintError
         /// A method in the program generated an `MethodError`.
-        | BadMethod of methname : string * err : MethodError
+        | BadMethod of methname : string * methloc : SourcePosition * err : MethodError
         /// A variable in the program generated a `VarMapError`.
         | BadVar of scope: string * err : VarMapError
         /// A variable declaration in the program generated a `TypeError`.
@@ -397,6 +397,19 @@ module Pretty =
             <+> quoted (printFullCommand cmd)
             <+> String "not yet implemented"
 
+    /// Formats an error that is wrapping another error with a position.
+    let wrappedPos
+      (wholeDesc : string)
+      (whole : Doc)
+      (pos : SourcePosition)
+      (err : Doc)
+      : Doc =
+        cmdHeaded
+            (errorContextStr "->" <+> errorContextStr wholeDesc <+> whole
+             <+> errorContextStr "at"
+             <+> Starling.Collections.Positioning.Pretty.printPosition pos)
+            [ err ]
+
     /// Pretty-prints model conversion errors.
     let printModelError (err : ModelError) : Doc =
         match err with
@@ -409,8 +422,8 @@ module Pretty =
                                  (printConstraintError err)
         | BadVar(scope, err) ->
             wrapped "variables in scope" (String scope) (printVarMapError err)
-        | BadMethod(methname, err) ->
-            wrapped "method" (String methname) (printMethodError err)
+        | BadMethod(methname, position, err) ->
+            wrappedPos "method" (String methname) position (printMethodError err)
         | BadVProto(vproto, err) ->
             wrapped "view prototype" (printGeneralViewProto printTypedVar vproto)
                                      (printViewProtoError err)
@@ -1798,10 +1811,13 @@ and modelBlock
 /// The converted method is enclosed in a Chessie result.
 let modelMethod
   (ctx : MethodContext)
-  (meth : string * FullBlock<ViewExpr<DesugaredGView>, FullCommand>)
+  (n : string)
+  (b : Node<FullBlock<ViewExpr<DesugaredGView>, FullCommand>>)
   : Result<string * ModellerBlock, ModelError> =
-    let (n, b) = meth
-    let bmR = mapMessages (curry BadMethod n) (modelBlock ctx b)
+    let bmR =
+        mapMessages
+            (curry3 BadMethod n b.Position)
+            (modelBlock ctx b.Node)
     lift (mkPair n) bmR
 
 /// Checks a view prototype to see if it contains duplicate parameters.
@@ -1959,7 +1975,7 @@ let model
         let! axioms =
             desugaredMethods
             |> Map.toSeq
-            |> Seq.map (modelMethod mctx)
+            |> Seq.map (uncurry (modelMethod mctx))
             |> collect
             |> lift Map.ofSeq
 

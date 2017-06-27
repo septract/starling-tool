@@ -411,3 +411,11 @@ module Positioning =
         static member (|=>) (n, b) = { Position = n.Position; Node = b }
         override this.ToString() = sprintf "<%A: %A>" this.Position this.Node
 
+    module Pretty =
+        open Starling.Core.Pretty
+
+        /// Prints a source position.
+        let printPosition (pos : SourcePosition) : Doc =
+            String pos.StreamName
+            <-> String ":" <-> String (sprintf "%d" pos.Line)
+            <-> String ":" <-> String (sprintf "%d" pos.Column)

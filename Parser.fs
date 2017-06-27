@@ -748,7 +748,12 @@ let parseFile name =
                 eprintfn "note: no input filename given, reading from stdin"
                 (Console.OpenStandardInput (), "(stdin)")
             | Some("-") -> (Console.OpenStandardInput (), "(stdin)")
-            | Some(nam) -> (IO.File.OpenRead(nam) :> IO.Stream, nam)
+            | Some(nam) ->
+                (* TODO(MattWindsor91):
+                   if we're receiving multiple files at once, we
+                   might need to hold onto more of 'nam' here. *)
+                let fnam = IO.Path.GetFileName nam
+                (IO.File.OpenRead(nam) :> IO.Stream, fnam)
 
         runParserOnStream parseScript () streamName stream Text.Encoding.UTF8
         |> function | Success (result, _, _) -> ok result
