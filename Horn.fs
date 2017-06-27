@@ -286,7 +286,7 @@ let checkArith
                     (toVar >> ok) (tliftOverCTyped >> tliftOverExpr)
                     xExpr
             bind
-                (fun xVarExpr -> fail (UnsupportedExpr xVarExpr))
+                (UnsupportedExpr >> fail)
                 (mapMessages Traversal xVarExprR)
     ca
 

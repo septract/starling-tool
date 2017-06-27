@@ -107,7 +107,7 @@ module Traversal =
 ///     Extracts a sequence of all of the parameters in a func sequence
 /// </summary>
 let paramsOfFuncSeq (funcs : Func<'var> seq) : 'var seq =
-    funcs |> Seq.map (fun v -> v.Params) |> Seq.concat
+    Seq.collect (fun v -> v.Params) funcs
 
 /// <summary>
 ///     Constructs a (hopefully) unique name for a Func resulting from
@@ -148,7 +148,7 @@ let paramsFromIteratedFunc
 /// </returns>
 let flattenDView (svars : TypedVar seq) (dview : DView) : DFunc =
     // TODO: What if iterators share names? e.g. iterated A [n] * iterated B [n]
-    let ownParams = Seq.concat (Seq.map paramsFromIteratedFunc dview)
+    let ownParams = Seq.collect paramsFromIteratedFunc dview
     let allParams = Seq.append svars ownParams
     { Name = genFlatIteratedFuncName dview; Params = Seq.toList allParams }
 

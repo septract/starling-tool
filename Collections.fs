@@ -161,11 +161,9 @@ module Multiset =
     ///     The sorted, flattened sequence.
     /// </returns>
     let toFlatSeq (MSet ms : Multiset<'item>) : 'item seq =
-        // TODO(CaptainHayashi): this will be removed when itviews land.
-        ms
-        |> Map.toSeq
-        |> Seq.map (fun (k, amount) -> Seq.replicate amount k)
-        |> Seq.concat
+        Seq.collect
+            (fun (k, amount) -> Seq.replicate amount k)
+            (Map.toSeq ms)
 
     /// <summary>
     ///     Converts a multiset to a sorted, flattened list.
@@ -180,10 +178,7 @@ module Multiset =
     ///     The sorted, flattened list.
     /// </returns>
     let toFlatList (ms : Multiset<'item>) : 'item list =
-        // TODO(CaptainHayashi): this will be removed when itviews land.
-        ms
-        |> toFlatSeq
-        |> List.ofSeq
+        List.ofSeq (toFlatSeq ms)
 
     /// <summary>
     ///     Converts a multiset to a set, removing duplicates.
@@ -334,12 +329,12 @@ module Multiset =
     let map (f : 'src -> 'dst)
             (MSet xs : Multiset<'src>)
             : Multiset<'dst> =
-        let rec repeat_add map k n =
+        let rec repeatAdd map k n =
             match n with
             | 0 -> map
-            | n -> repeat_add (add map (f k)) k (n-1)
+            | n -> repeatAdd (add map (f k)) k (n-1)
         //Note that this is used with side-effecting f, so must be called n times for each addition.
-        Map.fold repeat_add empty xs
+        Map.fold repeatAdd empty xs
 
     /// <summary>
     ///     Collapses a multiset of results to a result on a multiset.

@@ -420,10 +420,11 @@ module Translator =
       (toVar : 'var -> Var)
       (ctx : Z3.Context)
       (funcDecls : Map<string, Z3.FuncDecl>)
-      : GView<'var> -> Z3.BoolExpr =
-        Multiset.toFlatSeq
-        >> Seq.choose
-               (fun { Cond = g ; Item = v } ->
+      (v : GView<'var>) : Z3.BoolExpr =
+        let vseq = Multiset.toFlatSeq v
+        let tvs =
+            Seq.choose
+                (fun { Cond = g ; Item = v } ->
                    // Guards are always 'bool'
                    let gT = mkTypedSub normalRec g
 
@@ -435,8 +436,8 @@ module Translator =
                             (if (isTrue g)
                              then vZ
                              else (ctx.MkImplies (boolToZ3 reals toVar ctx gT, vZ))))
-        >> Seq.toArray
-        >> (fun a -> ctx.MkAnd a)
+                vseq
+        ctx.MkAnd (Seq.toArray tvs)
 
     (*
      * Rule building
