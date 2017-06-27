@@ -28,7 +28,7 @@ type Doc =
 /// Determines whether a print construct is horizontal or vertical.
 let rec (|Horizontal|Vertical|) =
     function
-    | (VSep(_, _) | VSkip | Separator | Header (_, _) | Surround (_, Vertical _, _) | Indent (Vertical _)) as a -> Vertical a
+    | (VSep(_) | VSkip | Separator | Header (_) | Surround (_, Vertical _, _) | Indent (Vertical _)) as a -> Vertical a
     | a -> Horizontal a
 
 (*
@@ -61,6 +61,8 @@ let syntaxStr s = syntax (String s)
 let errorStr s = error (String s)
 let errorContextStr s = errorContext (String s)
 let errorInfoStr s = errorInfo (String s)
+
+let successStr s = success (String s)
 
 /// <summary>
 ///     Styles a string with ANSI escape sequences.
@@ -167,20 +169,6 @@ let printUnstyled = printState { Level = 0; CurrentStyle = None; UseStyles = fal
  * Shortcuts
  *)
 
-
-// Hacky merge between two VSep sequences
-let vmerge a b =
-  let rec interleave = function //same as: let rec interleave (xs, ys) = match xs, ys with
-    |([], ys) -> ys
-    |(xs, []) -> xs
-    |(x::xs, y::ys) -> x :: y :: interleave (xs,ys)
-
-  match a, b with
-    | (VSep (xs, i), VSep (ys, j))  ->
-           let xy = interleave (List.ofSeq xs, List.ofSeq ys) in
-           VSep (Seq.ofList xy, Nop)
-    | _ -> Nop
-
 let vsep xs = VSep(xs, Nop)
 let hsepStr s c = HSep(c, String s)
 
@@ -229,6 +217,9 @@ let ivsep c = c |> vsep |> Indent
 
 let cmdHeaded header cmds =
     ivsep cmds |> (curry Header) header
+
+let errHeaded (msg : string) (docs : Doc seq) : Doc =
+    cmdHeaded (errorStr msg) docs
 
 let headed name = cmdHeaded (String name)
 

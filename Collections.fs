@@ -393,8 +393,11 @@ module Multiset =
 
     module Pretty =
         open Starling.Core.Pretty
+        /// Pretty-prints a multiset as a list of content documents.
+        let printMultisetAsList (pItem : 'Item -> Doc) 
+          (m : Multiset<'Item>) : Doc list =
+            List.map pItem (toFlatList m)
+
         /// Pretty-prints a multiset given a printer for its contents.
-        let printMultiset pItem =
-            toFlatList
-            >> List.map pItem
-            >> semiSep
+        let printMultiset (pItem : 'Item -> Doc) (m : Multiset<'Item>) : Doc =
+            semiSep (printMultisetAsList pItem m)

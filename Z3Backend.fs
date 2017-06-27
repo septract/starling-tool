@@ -206,43 +206,48 @@ module Pretty =
     /// <param name="name">The name of the proof term to print.</param>
     /// <param name="term">The <see cref="ZTerm"/> to print.</param>
     /// <returns>
-    ///     The <see cref="Doc"/> corresponding to <paramref name="term"/>.
+    ///     The pair of <see cref="Doc"/>s corresponding to
+    ///     <paramref name="term"/>'s failure header and body.
     /// </returns>
-    let printFailure (vconf : ViewConfig) (name : string) (term : ZTerm) : Doc =
+    let printFailure (vconf : ViewConfig) (name : string) (term : ZTerm)
+      : Doc * Doc =
         let printWPre =
             let piter =
                 if vconf.ShowAllIterators
                 then printIntExpr
                 else printExprIterator
             let pvar = printSym printMarkedVar
-            printIteratedGViewWith pvar (piter pvar)
+            printIteratedGViewAsListWith pvar (piter pvar) >> vsep
 
         let backendTranslation b =
-            if vconf.ShowBackendTranslation
-            then
-                let p = printBoolExpr (printSym printMarkedVar) b
-                errorInfo (headed "which was translated into" [ p ])
-            else Nop
+            seq {
+                if vconf.ShowBackendTranslation
+                then
+                    let p = printBoolExpr (printSym printMarkedVar) b
+                    yield errorInfo (headed "which was translated into" [ p ])
+            }
         let reifiedWPre =
-            if vconf.ShowReifiedWPre
-            then
-                errorInfo
-                    (headed "which was reified into"
-                        [ printGView (printSym printMarkedVar) term.Original.WPre.Reified ] )
-            else Nop
+            seq {
+                if vconf.ShowReifiedWPre
+                then
+                    yield
+                        errorInfo
+                            (headed "which was reified into"
+                                [ printGView (printSym printMarkedVar) term.Original.WPre.Reified ])
+            }
         
         let wpreStanza =
-            List.filter (fun x -> x <> Nop)
-                [ printWPre term.Original.WPre.Original
-                  reifiedWPre
-                  backendTranslation term.SymBool.WPre ]
+            seq {
+                yield printWPre term.Original.WPre.Original
+                yield! reifiedWPre
+                yield! backendTranslation term.SymBool.WPre
+            }
 
         let goalStanza =
-            List.filter (fun x -> x <> Nop)
-                [ printVFunc (printSym printMarkedVar) term.Original.Goal
-                  backendTranslation term.SymBool.Goal ]
-        
-        let errHeaded msg x = cmdHeaded (error (String msg)) x
+            seq {
+                yield printVFunc (printSym printMarkedVar) term.Original.Goal
+                yield! backendTranslation term.SymBool.Goal
+            }
 
         (* Show a more friendly body if the command is empty, ie. this is a
            semantic entailment rather than a command step. *)
@@ -250,19 +255,20 @@ module Pretty =
         let body =
             if cmd.Cmd.IsEmpty
             then
-                [ errHeaded "Could not prove that the weakest precondition"
-                    wpreStanza
+                [ errHeaded "Could not prove that the view" wpreStanza
                   errHeaded "semantically entails" goalStanza ]
             else
-                [ errHeaded "Could not prove that this command"
-                    [ printCommand term.Original.Cmd.Cmd
-                      backendTranslation term.Original.Cmd.Semantics ]
+                let cmdStanza =
+                    seq {
+                        yield printCommand term.Original.Cmd.Cmd
+                        yield! backendTranslation term.Original.Cmd.Semantics
+                    }
+
+                [ errHeaded "Could not prove that this command" cmdStanza
                   errHeaded "under the weakest precondition" wpreStanza
                   errHeaded "establishes" goalStanza ]
 
-        cmdHeaded
-            (errorContext (String name) <+> printMaybeSat term.Status)
-            body
+        (errorContext (String name) <+> printMaybeSat term.Status, vsep body)
 
     /// Pretty-prints a response.
     let printResponse (mview : ModelView) (vconf : ViewConfig) (response : Response) : Doc =
@@ -273,8 +279,7 @@ module Pretty =
             | xs ->
                 vsep
                     [ doc
-                      cmdHeaded
-                        (error (String "These sanity checks could not be established"))
+                      errHeaded "These sanity checks could not be established"
                         (Seq.map printDeferredCheck xs)]
 
         match response with
@@ -284,10 +289,12 @@ module Pretty =
         | Failures (map, dcs) ->
             let mapDoc =
                 if Map.isEmpty map
-                then success (String "No proof failures")
+                then successStr "No proof failures"
                 else
-                    cmdHeaded (error (String "Proof failures"))
-                        (Seq.map (uncurry (printFailure vconf)) (Map.toSeq map))
+                    errHeaded "Proof failures"
+                        [ printAssoc Indented
+                             (Seq.map (uncurry (printFailure vconf))
+                                 (Map.toSeq map)) ]
             attachChecks mapDoc dcs
         | AllTerms (map, dcs) ->
             let mapDoc = printMap Indented String printZTerm map
