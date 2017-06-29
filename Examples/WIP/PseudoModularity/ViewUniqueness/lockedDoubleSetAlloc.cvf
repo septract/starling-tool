@@ -1,0 +1,84 @@
+/*
+ * Modifying two variables in lockstep.
+ * Pseudo-modular code with uniqueness values in the view.
+ * Uses the allocatable form of the spinlock.
+ */
+
+pragma grasshopper_include {./grasshopper/spinlock-module.spl};
+pragma grasshopper_footprint {LockFoot};
+pragma grasshopper_footprint_sort {Set<Lock>};
+
+typedef int Lock;
+
+shared int x;
+shared int _uniq;
+
+view newLock(Lock l), holdLock(Lock l, int id), isLock(Lock l);
+
+method setTest(int v) {
+  {| emp |}
+    thread int xl;
+
+// Inlined lock allocate.
+    thread Lock l;
+    <| l = %{new Lock}; |>
+  {| newLock(l) |}
+    <| %{[|l|].lock := false}; |>
+  {| isLock(l) |}
+// End inlined lock allocate.
+
+    thread bool test;
+    thread int id;
+    // Ghost code: add uniqueness
+    <| id = _uniq++; |>
+  {| uniq(id) * isLock(l) |}
+
+// Inlined lock.
+    do {
+      {| uniq(id) * isLock(l) |}
+        test = false;
+      {| uniq(id) * if (test == false) { isLock(l) } else { false } |}
+        <| test = %{ CAS_to_true([|l|]) }; |>
+      {| uniq(id) * if (test == false) { isLock(l) } else { holdLock(l, id) } |}
+    } while (test == false);
+  {| uniq(id) * holdLock(l, id) |}
+// End inlined lock.
+
+   <| x = v; |>
+   // For some reason, this transition currently doesn't work
+  {| holdLock(l, id) * XVal(id, v) |}
+   <| xl = x; |>
+  {| holdLock(l, id) * XVal(id, v) * local{ xl == v } |}
+    if (xl != v) {
+      {| false |}
+       <| error; |>
+      {| false |}
+    }
+  {| holdLock(l, id) * uniq(id) |}
+
+    // Inlined unlock
+
+    <| %{[|l|].lock := false}; |>
+
+    // End inlined unlock
+
+  {| isLock(l) |}
+}
+
+constraint holdLock(l, id)  ->  %{ [|l|] in LockFoot && [|l|].lock };
+constraint isLock(l)        ->  %{ [|l|] in LockFoot };
+constraint newLock(l)       ->  %{ [|l|] in LockFoot };
+constraint isLock(l)        * newLock(y)        ->  l != y;
+constraint holdLock(l, id)  * newLock(y)        ->  l != y;
+constraint newLock(l)       * newLock(y)        ->  l != y;
+constraint holdLock(l, idl) * holdLock(y, idy)  ->  l != y;
+
+view uniq(int id), XVal(int id, int v);
+
+constraint uniq(id) -> id < _uniq;
+constraint XVal(id, v) -> id < _uniq;
+constraint uniq(id1) * uniq(id2) -> id1 != id2;
+constraint uniq(id1) * XVal(id2, v) -> id1 != id2;
+constraint XVal(id1, v1) * XVal(id2, v2) -> id1 != id2;
+
+constraint holdLock(l, id1) * XVal(id2, v) -> (id1 == id2) => x == v;

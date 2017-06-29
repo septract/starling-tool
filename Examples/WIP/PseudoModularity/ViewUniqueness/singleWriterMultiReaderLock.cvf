@@ -1,0 +1,140 @@
+/*
+ * Linux-style ticket lock.
+ * Adapted to allow several readers
+ */
+
+shared int ticket;    // The next ticket to hand out.
+shared int serving;   // The current ticket holding the lock.
+shared int readCount; // Number of readers in the lock.
+thread int t;         // The thread's current ticket.
+thread int s;         // The thread's current view of serving.
+thread int r;         // The thread's current view of readCount.
+
+// TODO: this should be a constant.
+shared int maxCount;  // The maximum number of threads.
+thread int m;         // Hack used to make maxCount thread-local.
+
+shared int x;
+shared int _XRead;
+
+method ReadTest(int v) {
+  {| emp |}
+    thread int id;
+    <| id = _XRead++; |>
+// Inlined readAcquire()
+  {| XRead(id) |}
+    <| t = ticket++; |>
+  {| XRead(id) * holdTick(t) |}
+    do {
+      {| XRead(id) * holdTick(t) |}
+        <| s = serving; |>
+      {| XRead(id) * if (s == t) { holdInnerLock() } else { holdTick(t) } |}
+    } while (s != t);
+  {| XRead(id) * holdInnerLock() |}
+    do {
+      // Diverge if there are too many readers.
+      // TODO: rescind the inner lock before spinning?
+      {| XRead(id) * holdInnerLock() |}
+        <| r = readCount; m = maxCount; |>
+      {| XRead(id) * if (r > (m - 1)) { holdInnerLock() } else { canHoldReadLock() } |}
+    } while (r > (m - 1));
+  {| XRead(id) * canHoldReadLock() |}
+
+  <| readCount++; |>
+  {| XRead(id) * holdOneReadLock(id) * holdInnerLock() * holdReadLock() |}
+    <| serving++; |>
+  {| XRead(id) * holdOneReadLock(id) * holdReadLock() |}
+// End inlined readAcquire
+
+    <| x = v; |>
+  {| holdReadLock() * holdOneReadLock(id) * XVal(id, v) |}
+    thread int xl;
+    <| xl = x; |>
+  {| holdReadLock() * holdOneReadLock(id) * XVal(id, v) * local{ xl == v } |}
+    if (xl != v) {
+      {| false |}
+       <| error; |>
+      {| false |}
+    }
+
+// Begin inlined readRelease
+  {| XRead(id) * holdOneReadLock(id) * holdReadLock() |}
+    <| readCount--; |>
+  {| emp |}
+}
+
+
+method writeAcquire() {
+  {| emp |}
+    <| t = ticket++; |>
+  {| holdTick(t) |}
+    do {
+      {| holdTick(t) |}
+        <| s = serving; |>
+      {| if (s == t) { holdInnerLock() } else { holdTick(t) } |}
+    } while (s != t);
+  {| holdInnerLock() |}
+   do {
+      // Diverge if there are any readers.
+      // TODO: rescind the inner lock before spinning?
+     {| holdInnerLock() |}
+       <| r = readCount; |>
+     {| if (r == 0) { holdWriteLock() } else { holdInnerLock() } |}
+   } while (r != 0);
+  {| holdWriteLock() |}
+}
+
+
+/*
+ * Unlocks the ticket lock.
+ */
+method writeRelease() {
+  {| holdWriteLock() |}
+    <| serving++; |>
+  {| emp |}
+}
+
+view holdOneReadLock(int id);
+view XRead(int id), XVal(int id, int v);
+constraint XRead(id) -> id < _XRead;
+constraint XVal(id, v) -> id < _XRead;
+constraint XRead(id1) * XRead(id2) -> id1 != id2;
+constraint XRead(id1) * XVal(id2, v) -> id1 != id2;
+constraint XVal(id1, v1) * XVal(id2, v2) -> id1 != id2;
+
+constraint holdOneReadLock(id1) * holdOneReadLock(id2) -> id1 != id2;
+constraint holdOneReadLock(id1) * holdWriteLock() -> false;
+
+constraint holdOneReadLock(id) -> 1 <= readCount && 1 <= maxCount;
+constraint holdOneReadLock(id1) * XVal(id2, v) -> (id1 == id2) => x == v;
+
+view holdTick(int t);
+view holdInnerLock();
+view holdWriteLock();
+view canHoldReadLock();
+view iter holdReadLock();
+
+// Invariant
+constraint emp                                  -> ticket >= serving && readCount >= 0 && maxCount > 0;
+
+// Predicate definitions
+constraint holdTick(t)                          -> ticket > t;
+constraint holdInnerLock()                      -> ticket != serving;
+constraint holdWriteLock()                      -> ticket != serving && readCount == 0;
+constraint canHoldReadLock()                       -> ticket != serving && readCount <= (maxCount - 1);
+
+
+// Interactions
+constraint holdInnerLock()   * holdTick(t)      -> serving != t;
+constraint holdWriteLock()   * holdTick(t)      -> serving != t;
+constraint holdTick(ta)      * holdTick(tb)     -> ta != tb;
+constraint holdInnerLock()   * holdInnerLock()  -> false;
+constraint holdInnerLock()   * holdWriteLock()  -> false;
+constraint holdWriteLock()   * holdWriteLock()  -> false;
+
+constraint canHoldReadLock() * holdTick(t)      -> serving != t;
+constraint canHoldReadLock() * holdInnerLock() -> false;
+constraint canHoldReadLock() * canHoldReadLock() -> false;
+constraint canHoldReadLock() * holdWriteLock() -> false;
+
+constraint iter[n] holdReadLock() -> n <= readCount && n <= maxCount;
