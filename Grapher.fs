@@ -221,7 +221,7 @@ and graphCommand
     match c with
     | Miracle ->
         /// Miracles become holes in the graph.
-        ok { Nodes = Map.empty ; Edges = Map.empty }
+        ok { Nodes = Map.empty ; Edges = Map.ofList [(cg (), medge oP oQ)] }
     | Prim cmd ->
         /// Each prim is an edge by itself, so just make a one-edge graph.
         ok { Nodes = Map.empty ; Edges = Map.ofList [(cg (), edge oP cmd oQ)] }

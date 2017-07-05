@@ -55,12 +55,13 @@ module Tests =
                            Set.singleton
                               { OutEdge.Name = "lock_C000"
                                 OutEdge.Dest = "lock_V001"
-                                OutEdge.Command =
-                                    [ command "!ILoad++"
-                                           [ normalIntExpr (siVar "t")
-                                             normalIntExpr (siVar "ticket") ]
-                                           [ normalIntExpr (siVar "t")
-                                             normalIntExpr (siVar "ticket")]] },
+                                OutEdge.Payload =
+                                    ECommand
+                                        [ command "!ILoad++"
+                                               [ normalIntExpr (siVar "t")
+                                                 normalIntExpr (siVar "ticket") ]
+                                               [ normalIntExpr (siVar "t")
+                                                 normalIntExpr (siVar "ticket")]] },
                            Set.empty,
                            Entry)))
                         ("lock_V001",
@@ -68,16 +69,17 @@ module Tests =
                           Set.singleton
                               { Name = "lock_C004"
                                 Dest = "lock_V003"
-                                Command = [] },
+                                Payload = ECommand [] },
                           Set.singleton
                               { Name = "lock_C000"
                                 Src = "lock_V000"
-                                Command =
-                                    [ command "!ILoad++"
-                                           [ normalIntExpr (siVar "t")
-                                             normalIntExpr (siVar "ticket"); ]
-                                           [ normalIntExpr (siVar "t")
-                                             normalIntExpr (siVar "ticket") ]] },
+                                Payload =
+                                    ECommand
+                                        [ command "!ILoad++"
+                                               [ normalIntExpr (siVar "t")
+                                                 normalIntExpr (siVar "ticket"); ]
+                                               [ normalIntExpr (siVar "t")
+                                                 normalIntExpr (siVar "ticket") ]] },
                           NodeKind.Normal ))
                         ("lock_V002",
                          (Mandatory <| Multiset.singleton (gHoldLock BTrue),
@@ -85,26 +87,29 @@ module Tests =
                           Set.singleton
                               { Name = "lock_C003"
                                 Src = "lock_V004"
-                                Command =
-                                    [ Microcode.Assume (iEq (siVar "s") (siVar "t")) ] },
+                                Payload =
+                                    ECommand
+                                        [ Microcode.Assume (iEq (siVar "s") (siVar "t")) ] },
                            Exit))
                         ("lock_V003",
                          (Mandatory <| Multiset.singleton (gHoldTick BTrue),
                           Set.singleton
                               { Name = "lock_C001"
                                 Dest = "lock_V004"
-                                Command =
-                                    [ command "!ILoad"
-                                           [ normalIntExpr (siVar "s") ]
-                                           [ normalIntExpr (siVar "serving") ]] },
+                                Payload =
+                                    ECommand
+                                        [ command "!ILoad"
+                                               [ normalIntExpr (siVar "s") ]
+                                               [ normalIntExpr (siVar "serving") ]] },
                           Set.ofList
                               [ { Name = "lock_C002"
                                   Src = "lock_V004"
-                                  Command =
+                                  Payload =
+                                    ECommand
                                       [ Microcode.Assume (BNot (iEq (siVar "s") (siVar "t"))) ] }
                                 { Name = "lock_C004"
                                   Src = "lock_V001"
-                                  Command = [] } ],
+                                  Payload = ECommand [] } ],
                            NodeKind.Normal))
                         ("lock_V004",
                          (Mandatory <|
@@ -114,19 +119,22 @@ module Tests =
                           Set.ofList
                               [ { Name = "lock_C002"
                                   Dest = "lock_V003"
-                                  Command =
+                                  Payload =
+                                    ECommand
                                       [ Microcode.Assume (BNot (iEq (siVar "s") (siVar "t"))) ] }
                                 { Name = "lock_C003"
                                   Dest = "lock_V002"
-                                  Command =
+                                  Payload =
+                                    ECommand
                                       [ Microcode.Assume (iEq (siVar "s") (siVar "t")) ] } ],
                           Set.singleton
                               { Name = "lock_C001"
                                 Src = "lock_V003"
-                                Command =
-                                    [ command "!ILoad"
-                                           [ normalIntExpr (siVar "s") ]
-                                           [ normalIntExpr (siVar "serving") ]] },
+                                Payload =
+                                    ECommand
+                                        [ command "!ILoad"
+                                               [ normalIntExpr (siVar "s") ]
+                                               [ normalIntExpr (siVar "serving") ]] },
 
                           NodeKind.Normal)) ] }
 
@@ -142,10 +150,11 @@ module Tests =
                           Set.singleton
                               { Name = "unlock_C000"
                                 Dest = "unlock_V001"
-                                Command =
-                                    [ command "!I++"
-                                           [ normalIntExpr (siVar "serving") ]
-                                           [ normalIntExpr (siVar "serving") ]] },
+                                Payload =
+                                    ECommand
+                                        [ command "!I++"
+                                               [ normalIntExpr (siVar "serving") ]
+                                               [ normalIntExpr (siVar "serving") ]] },
                           Set.empty,
                           Entry))
                         ("unlock_V001",
@@ -154,10 +163,11 @@ module Tests =
                           Set.singleton
                               { Name = "unlock_C000"
                                 Src = "unlock_V000"
-                                Command =
-                                    [ command "!I++"
-                                           [ normalIntExpr (siVar "serving") ]
-                                           [ normalIntExpr (siVar "serving") ]] },
+                                Payload =
+                                    ECommand
+                                        [ command "!I++"
+                                               [ normalIntExpr (siVar "serving") ]
+                                               [ normalIntExpr (siVar "serving") ]] },
                            Exit)) ] }
 
         /// The partial CFG for the ticket lock lock method.
@@ -241,28 +251,30 @@ module Tests =
                           Set.singleton
                               { Name = "unlock_C000"
                                 Dest = "unlock_V001"
-                                Command =
-                                    [ command "!I++"
-                                           [ normalIntExpr (siVar "serving") ]
-                                           [ normalIntExpr (siVar "serving") ]] },
+                                Payload =
+                                    ECommand
+                                        [ command "!I++"
+                                               [ normalIntExpr (siVar "serving") ]
+                                               [ normalIntExpr (siVar "serving") ]] },
                           Set.singleton
                               { Name = "unlock_N0"
                                 Src = "unlock_V001"
-                                Command = [] },
+                                Payload = ECommand [] },
                           Entry ))
                         ("unlock_V001",
                          (Mandatory <| Multiset.empty,
                           Set.singleton
                               { Name = "unlock_N0"
                                 Dest = "unlock_V000"
-                                Command = [] },
+                                Payload = ECommand [] },
                           Set.singleton
                               { Name = "unlock_C000"
                                 Src = "unlock_V000"
-                                Command =
-                                    [ command "!I++"
-                                           [ normalIntExpr (siVar "serving") ]
-                                           [ normalIntExpr (siVar "serving") ]] },
+                                Payload =
+                                    ECommand
+                                        [ command "!I++"
+                                               [ normalIntExpr (siVar "serving") ]
+                                               [ normalIntExpr (siVar "serving") ]] },
                           Exit)) ] )
                 .SetName("Adding a valid, unique edge to unlock works")]
 
@@ -273,7 +285,7 @@ module Tests =
         member x.``mkEdgeBetween adds edges correctly`` nsd =
               let n, s, d = nsd
               Studies.ticketLockUnlockGraph
-              |> mkEdgeBetween s d n []
+              |> mkEdgeBetween s d n (ECommand [])
               |> Option.map (fun g -> g.Contents)
 
 

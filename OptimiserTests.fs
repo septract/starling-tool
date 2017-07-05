@@ -235,9 +235,9 @@ module GraphOptGuards =
                 [ ("x",
                     (Advisory (Multiset.empty),
                      Set.ofList
-                        [ { Name = "xloop"; Dest = "x"; Command = [] } ],
+                        [ { Name = "xloop"; Dest = "x"; Payload = ECommand [] } ],
                      Set.ofList
-                        [ { Name = "xloop"; Src = "x"; Command = [] } ],
+                        [ { Name = "xloop"; Src = "x"; Payload = ECommand [] } ],
                      Normal)
                   ) ] }
 
@@ -246,5 +246,13 @@ module GraphOptGuards =
         Assert.False (nopConnected nopCycle "x" "x")
 
     [<Test>]
+    let ``canCollapseUnobservable cannot collapse {p}...{p}...{p}`` () =
+        Assert.False
+            (canCollapseUnobservable
+                Map.empty nopCycle "x" EMiracle "x" EMiracle "x")
+
+    [<Test>]
     let ``canCollapseUnobservable cannot collapse {p}nop{p}nop{p}`` () =
-        Assert.False (canCollapseUnobservable Map.empty nopCycle "x" [] "x" [] "x")
+        Assert.False
+            (canCollapseUnobservable
+                Map.empty nopCycle "x" (ECommand []) "x" (ECommand []) "x")

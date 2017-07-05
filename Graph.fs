@@ -80,6 +80,13 @@ module Types =
       /// </summary>
       CommandEdge of Axiom<NodeID, Command>
 
+    /// <summary>The payload of an edge in a full graph.</summary>
+    type EdgePayload =
+    | /// <summary>An edge carrying a command.</summary>
+      ECommand of Command
+    | /// <summary>An edge carrying a miracle.</summary>
+      EMiracle
+
     /// <summary>
     ///     The container for a partial control-flow graph.
     ///
@@ -114,9 +121,9 @@ module Types =
           /// </summary>
           Src : NodeID
           /// <summary>
-          ///      The command this edge represents.
+          ///      The payload this edge carries.
           /// </summary>
-          Command : Command }
+          Payload : EdgePayload }
 
     /// <summary>
     ///     An out edge in a standalone control-flow graph.
@@ -131,9 +138,9 @@ module Types =
           /// </summary>
           Dest : NodeID
           /// <summary>
-          ///      The command this edge represents.
+          ///      The payload this edge carries.
           /// </summary>
-          Command : Command }
+          Payload : EdgePayload }
 
     /// <summary>
     ///     A fully resolved edge, containing views.
@@ -160,9 +167,9 @@ module Types =
           /// </summary>
           DestView : GraphViewExpr
           /// <summary>
-          ///      The command this edge represents.
+          ///      The payload this edge carries.
           /// </summary>
-          Command : Command }
+          Payload : EdgePayload }
 
     /// <summary>
     ///     A standalone control-flow graph.
@@ -263,8 +270,11 @@ let toSubgraph (graph : Graph) : Subgraph =
           |> Seq.map
                  (fun (fromName, (_, outEdges, _, _)) ->
                       Seq.map
-                          (fun { Name = n; Dest = toName; Command = cmd } ->
-                               (n, edge fromName cmd toName))
+                          (fun { Name = n; Dest = toName; Payload = p } ->
+                            (n,
+                                match p with
+                                | ECommand cmd -> edge fromName cmd toName
+                                | EMiracle -> medge fromName toName))
                           outEdges)
           |> Seq.concat
           |> Map.ofSeq }
@@ -296,6 +306,10 @@ let graph (name : string) (sg : Subgraph) : Result<Graph, Error> =
     if Seq.isEmpty oobEdges
     then
         let processNode nodeName (nodeView, nodeKind) =
+            let mkOutEdge n src dst p : OutEdge option =
+                if src = nodeName
+                then Some { Name = n; Payload = p; Dest = dst }
+                else None
             let outEdges =
                 sg.Edges
                 |> Map.toSeq
@@ -303,14 +317,14 @@ let graph (name : string) (sg : Subgraph) : Result<Graph, Error> =
                     (fun (edgeName, edge) ->
                         match edge with
                         | CommandEdge { Pre = src; Post = dst; Cmd = cmd } ->
-                            if src = nodeName
-                            then (Some { OutEdge.Name = edgeName
-                                         OutEdge.Command = cmd
-                                         OutEdge.Dest = dst })
-                            else None
-                        // TODO(MattWindsor91): don't delete miracle edges?
-                        | MiracleEdge _ -> None)
+                            mkOutEdge edgeName src dst (ECommand cmd)
+                        | MiracleEdge (src, dst) ->
+                            mkOutEdge edgeName src dst EMiracle)
                 |> Set.ofSeq
+            let mkInEdge n src dst p : InEdge option =
+                if dst = nodeName
+                then Some { Name = n; Payload = p; Src = src }
+                else None
             let inEdges =
                 sg.Edges
                 |> Map.toSeq
@@ -318,13 +332,9 @@ let graph (name : string) (sg : Subgraph) : Result<Graph, Error> =
                     (fun (edgeName, edge) ->
                         match edge with
                         | CommandEdge { Pre = src; Post = dst; Cmd = cmd } ->
-                            if dst = nodeName
-                            then (Some { InEdge.Name = edgeName
-                                         InEdge.Command = cmd
-                                         InEdge.Src = src })
-                            else None
-                        // TODO(MattWindsor91): don't delete miracle edges?
-                        | MiracleEdge _ -> None)
+                            mkInEdge edgeName src dst (ECommand cmd)
+                        | MiracleEdge (src, dst) ->
+                            mkInEdge edgeName src dst EMiracle)
                 |> Set.ofSeq
             (nodeView, outEdges, inEdges, nodeKind)
 
@@ -510,8 +520,8 @@ let mapNodePair
 ///     A name for the parameter.
 ///     This must be unique.
 /// </param>
-/// <param name="cmd">
-///     The command occurring on the edge.
+/// <param name="p">
+///     The payload carried by the edge.
 /// </param>
 /// <param name="graph">
 ///     The graph to extend.
@@ -520,14 +530,14 @@ let mapNodePair
 ///     An Option: None if either <paramref name="src" /> or
 ///     <paramref name="dest" /> point out of the graph.
 ///     Else, the graph resulting from adding an edge from
-///     <paramref name="src" /> to <paramref name="dest" />, with command
-///     <paramref name="cmd"/>, to <paramref name="graph"/>.
+///     <paramref name="src" /> to <paramref name="dest" />, with payload
+///     <paramref name="p"/>, to <paramref name="graph"/>.
 /// </returns>
 let mkEdgeBetween
   (src : NodeID)
   (dest : NodeID)
   (name : EdgeID)
-  (cmd : Command)
+  (p : EdgePayload)
   (graph : Graph)
   : Graph option =
     // TODO(CaptainHayashi): signal an error if name is taken.
@@ -537,12 +547,12 @@ let mkEdgeBetween
 
              let srcOut' = Set.add { Name = name
                                      Dest = dest
-                                     Command = cmd }
+                                     Payload = p }
                                    srcOut
 
              let destIn' = Set.add { Name = name
                                      Src = src
-                                     Command = cmd }
+                                     Payload = p }
                                     destIn
 
              (srcOut', destIn'))
@@ -645,11 +655,11 @@ let mapEdges (f : FullEdge -> 'result) (graph : Graph) : 'result seq =
            (fun (srcName, (srcView, outEdges, inEdges, _)) ->
                 Seq.map
                     (fun { OutEdge.Name = edgeName
-                           OutEdge.Command = cmd
+                           OutEdge.Payload = p
                            OutEdge.Dest = destName } ->
                          let dv, _, _, _ = m.[destName]
                          f { FullEdge.Name = edgeName
-                             FullEdge.Command = cmd
+                             FullEdge.Payload = p
                              FullEdge.SrcName = srcName
                              FullEdge.SrcView = srcView
                              FullEdge.DestName = destName
@@ -687,20 +697,26 @@ let nodeHasView
 /// <summary>
 ///     Returns the axioms characterising a graph.
 /// </summary>
-/// <param name="_arg1">
+/// <param name="g">
 ///     The graph whose axioms are to be given.
 /// </param>
 /// <returns>
-///     The edges of <paramref name="_arg1" />, as name-edge pairs.
+///     The command edges of <paramref name="g" />, as name-edge pairs.
 ///     This is wrapped in a Chessie result over <c>Error</c>.
 /// </returns>
-let axiomatiseGraph
-  : Graph -> (string * Axiom<GraphView, Command>) seq =
-    mapEdges
-        (fun { Name = n; SrcView = s ; DestView = t ; Command = c } ->
-            (n, { Pre = match s with InnerView v -> v
-                  Post = match t with InnerView v -> v
-                  Cmd = c } ))
+let axiomatiseGraph (g : Graph) : (string * Axiom<GraphView, Command>) seq =
+    let edgeseqs =
+        mapEdges
+            (fun { Name = n; SrcView = s ; DestView = t ; Payload = p } ->
+                match p with
+                | ECommand c ->
+                    Seq.singleton
+                        (n, { Pre = match s with InnerView v -> v
+                              Post = match t with InnerView v -> v
+                              Cmd = c } )
+                | EMiracle -> Seq.empty)
+            g
+    Seq.concat edgeseqs
 
 /// <summary>
 ///     Converts a list of control-flow graphs into a list of axioms.

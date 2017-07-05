@@ -102,7 +102,7 @@ module Types =
         ///    Abort transformation if the nodes do not exist.
         /// </summary>
         | MkEdgeBetween of src : string * dest : string
-                         * name : string * cmd : Command
+                         * name : string * p : EdgePayload
         /// <summary>
         ///    Merges the node <c>src</c> into <c>dest</c>,
         ///    substituting the latter for the former in all edges.
@@ -391,12 +391,16 @@ module Graph =
                 rmEdgesBetween src dest ((=) name)
             | RmAllEdgesBetween (src, dest) -> rmEdgesBetween src dest always
             | MkCombinedEdge (inE, outE) ->
-                mkEdgeBetween inE.Src
-                              outE.Dest
-                              (glueNames inE outE)
-                              (inE.Command @ outE.Command)
-            | MkEdgeBetween (src, dest, name, cmd) ->
-                mkEdgeBetween src dest name cmd
+                // TODO(MattWindsor91): handle miracles gracefully?
+                match inE.Payload, outE.Payload with
+                | ECommand ins, ECommand outs ->
+                    mkEdgeBetween inE.Src
+                                  outE.Dest
+                                  (glueNames inE outE)
+                                  (ECommand (ins @ outs))
+                | _ -> fun _ -> None
+            | MkEdgeBetween (src, dest, name, p) ->
+                mkEdgeBetween src dest name p
             | Unify (src, dest, mode) ->
                 match mode with
                 | MakeConnectionsCycles -> unify src dest
@@ -473,6 +477,11 @@ module Graph =
         let yView, _, _, _ = graph.Contents.[y]
         let cons = connections x y graph
 
+        let isNopPayload p =
+            match p with
+            | EMiracle -> false
+            | ECommand cs -> List.forall isNop cs
+
         // Different names?
         (x <> y)
         // Same view?
@@ -480,7 +489,7 @@ module Graph =
         // Connected?
         && not (Seq.isEmpty cons)
         // All edges from x to y and y to x are nop?
-        && Seq.forall (fun { OutEdge.Command = c } -> List.forall isNop c) cons
+        && Seq.forall (fun { OutEdge.Payload = p } -> isNopPayload p ) cons
 
     /// <summary>
     ///     Plumbs a function over various properties of a graph and
@@ -594,6 +603,12 @@ module Graph =
 
         List.forall isLocalPrim cmd
 
+    /// Determines whether a payload is local.
+    let isLocalPayload (tVars : VarMap) (p : EdgePayload) : bool =
+        match p with
+        | EMiracle -> false
+        | ECommand c -> isLocalCommand tVars c
+
     /// Decides whether a given Command contains any `assume` command
     /// in any of the sequentially composed primitives inside it
     let hasAssume (c : Command) : bool =
@@ -690,8 +705,8 @@ module Graph =
                 match (Set.toList outEdges, Set.toList inEdges) with
                 (* Are there only two out edges, and only one in edge?
                     Are the out edges assumes, and are they non-symbolic? *)
-                | ( [ { Dest = iN; Command = Assume (NoSym iA) } as out1
-                      { Dest = jN; Command = Assume (NoSym jA) } as out2 ],
+                | ( [ { Dest = iN; Payload = ECommand (Assume (NoSym iA)) } as out1
+                      { Dest = jN; Payload = ECommand (Assume (NoSym jA)) } as out2 ],
                     [ inE ] )
                     when iteProjects xA xV yA yV iA iN jA jN ->
                         seq { // Remove the existing edges first.
@@ -739,8 +754,8 @@ module Graph =
                && (Set.forall (fun (e : OutEdge) -> e.Dest <> nName) outEdges)
                && (Set.forall (fun (e : InEdge) -> e.Src <> nName) inEdges)
                (* Commands must be local on either the in or the out.*)
-               && ((Set.forall (fun (e : OutEdge) -> isLocalCommand locals e.Command) outEdges)
-                  || (Set.forall (fun (e : InEdge) -> isLocalCommand locals e.Command) inEdges))
+               && ((Set.forall (fun (e : OutEdge) -> isLocalPayload locals e.Payload) outEdges)
+                  || (Set.forall (fun (e : InEdge) -> isLocalPayload locals e.Payload) inEdges))
             then
                 seq {
                     for inE in inEdges do
@@ -765,9 +780,14 @@ module Graph =
         let opt node nView outEdges inEdges nk =
             let disjoint (a : TypedVar list) (b : Set<TypedVar>) = List.forall (b.Contains >> not) a
 
+            let payloadLocal p =
+                match p with
+                | EMiracle -> None
+                | ECommand c -> if (isLocalResults locals c) then Some c else None
+
             let processEdge (e : OutEdge) =
-                if isLocalResults locals e.Command
-                then
+                match payloadLocal e.Payload with
+                | Some cmd ->
                     let pViewexpr = nView
                     let qViewexpr = (fun (viewexpr, _, _, _) -> viewexpr) <| ctx.Graph.Contents.[e.Dest]
                     // strip away mandatory/advisory and just look at the internal view
@@ -776,7 +796,7 @@ module Graph =
                     | InnerView pView, InnerView qView ->
                         let varResultSet = Set.map iteratedGFuncVars (Multiset.toSet pView)
                         let varsResults = lift Set.unionMany (collect varResultSet)
-                        let cmdVarsResults = commandResultVars e.Command
+                        let cmdVarsResults = commandResultVars cmd
                         // TODO: Better equality?
                         match varsResults, cmdVarsResults with
                         | Ok (vars, _), Ok (cmdVars, _) ->
@@ -789,7 +809,7 @@ module Graph =
                                 }
                             else Seq.empty
                         | _, _ -> Seq.empty
-                else Seq.empty
+                | None -> Seq.empty
             seq { for e in outEdges do yield! (processEdge e) }
 
         expandNodeIn ctx opt
@@ -801,24 +821,27 @@ module Graph =
       (tvars : VarMap)
       (graph : Graph)
       (p : NodeID)
-      (c : Command)
+      (c : EdgePayload)
       (q : NodeID)
-      (d : Command)
+      (d : EdgePayload)
       (r : NodeID)
       : bool =
-        // We can't collapse {p}c{p}d{r} or {p}c{r}d{r}.
-        let noCycle = p <> q && q <> r
+        match c, d with
+        | ECommand ccmd, ECommand dcmd ->
+            // We can't collapse {p}c{p}d{r} or {p}c{r}d{r}.
+            let noCycle = p <> q && q <> r
 
-        // We can't collapse if {q} is mandatory.
-        let qViewexpr, _, _, _ = graph.Contents.[q]
-        let qAdvisory = match qViewexpr with | Advisory _ -> true | _ -> false
+            // We can't collapse if {q} is mandatory.
+            let qViewexpr, _, _, _ = graph.Contents.[q]
+            let qAdvisory = match qViewexpr with | Advisory _ -> true | _ -> false
 
-        let cHidden =
-            match isObservable tvars c d with
-            | Pass false -> true
-            | _ -> false
+            let cHidden =
+                match isObservable tvars ccmd dcmd with
+                | Pass false -> true
+                | _ -> false
 
-        noCycle && qAdvisory && cHidden
+            noCycle && qAdvisory && cHidden
+        | _ -> false
 
     /// Collapses edges {p}c{q}d{r} to {p}d{r} iff c is unobservable
     /// i.e. c writes to local variables overwritten by d
@@ -836,7 +859,7 @@ module Graph =
                 Set.map processDEdge dEdges
 
             let processTriple (pViewexpr, (cEdge : OutEdge), (dEdge : OutEdge)) =
-                let c, d = cEdge.Command, dEdge.Command
+                let c, d = cEdge.Payload, dEdge.Payload
                 if canCollapseUnobservable tvars ctx.Graph node c cEdge.Dest d dEdge.Dest
                 then
                     seq {
@@ -848,8 +871,8 @@ module Graph =
                         yield RmNode cEdge.Dest
                         // Then, add the new edges {p}d{q}
                         yield MkCombinedEdge
-                            ({ Name = node;       Src = dEdge.Dest;   Command = d },
-                             { Name = dEdge.Dest; Dest = node;        Command = d })
+                            ({ Name = node;       Src = dEdge.Dest;   Payload = d },
+                             { Name = dEdge.Dest; Dest = node;        Payload = d })
                     }
                 else Seq.empty
 
