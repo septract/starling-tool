@@ -208,7 +208,7 @@ and graphITE
 /// <param name="oQ">
 ///     The outer postcondition for the command.
 /// </param>
-/// <param name="_arg1">
+/// <param name="c">
 ///     The command to graph.
 /// </param>
 and graphCommand
@@ -216,8 +216,12 @@ and graphCommand
   (cg : unit -> EdgeID)
   (oP : NodeID)
   (oQ : NodeID)
-  : ModellerPartCmd -> Result<Subgraph, Error> =
-    function
+  (c : ModellerPartCmd)
+  : Result<Subgraph, Error> =
+    match c with
+    | Miracle ->
+        /// Miracles become holes in the graph.
+        ok { Nodes = Map.empty ; Edges = Map.empty }
     | Prim cmd ->
         /// Each prim is an edge by itself, so just make a one-edge graph.
         ok { Nodes = Map.empty ; Edges = Map.ofList [(cg (), edge oP cmd oQ)] }

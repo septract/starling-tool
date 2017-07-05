@@ -64,11 +64,20 @@ module Types =
         | Havoc of var : string // havoc var
     and Prim = Node<Prim'>
 
-    /// An atomic action.
+    /// <summary>
+    ///     An atomic action.
+    /// </summary>
     type Atomic' =
+        /// <summary>An atomic primitive.</summary>
         | APrim of Prim
+        /// <summary>
+        ///     A failure command.
+        ///     This is semantically equivalent to <c>AAssert False</c>.
+        /// </summary>
         | AError
+        /// <summary>An assertion.</summary>
         | AAssert of cond : Expression
+        /// <summary>An atomic conditional.</summary>
         | ACond of
             cond : Expression
             * trueBranch : Atomic list
@@ -191,6 +200,11 @@ module Types =
         | ViewExpr of Marked<View>
         /// <summary>A variable declaration.</summary>
         | VarDecl of VarDecl
+        /// <summary>
+        ///     A miracle command.
+        ///     Miracles atomically establish their postcondition.
+        /// </summary>
+        | Miracle
         /// A set of sequentially composed primitives.
         | Prim of PrimSet<Atomic>
         /// An if-then-else statement, with optional else.
@@ -502,6 +516,7 @@ module Pretty =
                          |> semiSep |> withSemi |> braced |> angled)
                   yield! Seq.map printPrim qs }
             |> semiSep |> withSemi
+        | Command'.Miracle -> syntaxStr "..."
         | Command'.If(c, t, f) ->
             printITE printCommand c t f
         | Command'.While(c, b) ->

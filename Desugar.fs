@@ -98,6 +98,10 @@ type FullBlock<'view, 'cmd> =
 
 /// <summary>A non-view command with FullBlocks.</summary>
 type FullCommand' =
+    /// <summary>
+    ///     A miracle (atomically establishes its postcondition).
+    /// </summary>
+    | FMiracle
     /// A set of sequentially composed primitives.
     | FPrim of PrimSet<DesugaredAtomic>
     /// An if-then-else statement, with optional else.
@@ -172,6 +176,7 @@ module Pretty =
     let rec printFullCommand' (fc : FullCommand') : Doc =
         // TODO(CaptainHayashi): dedupe with PrintCommand'.
         match fc with
+        | FMiracle -> syntaxStr "..."
         (* The trick here is to make Prim [] appear as ;, but
            Prim [x; y; z] appear as x; y; z;, and to do the same with
            atomic lists. *)
@@ -602,6 +607,7 @@ let rec desugarCommand (ctx : BlockContext) (cmd : Command)
             
             (ctx', None)
         | ViewExpr v -> failwith "should have been handled at block level"
+        | Miracle -> (ctx, Some FMiracle)
         | If (e, t, fo) ->
             let (tc, t') = desugarBlock ctx t
             let (fc, f') =

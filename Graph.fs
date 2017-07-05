@@ -58,14 +58,27 @@ module Types =
     type NodeKind = Normal | Entry | Exit | EntryExit
 
     /// <summary>
-    ///     Type synonym for graph edges.
-    ///
-    ///     <para>
-    ///         Graph edges are axioms, in that they directly correspond to
-    ///         Hoare triples.
-    ///     </para>
+    ///     Type for graph edges.
     /// </summary>
-    type Edge = Axiom<NodeID, Command>
+    type Edge =
+    | /// <summary>
+      ///     An edge corresponding to a miracle command.
+      ///
+      ///     <para>
+      ///         Miracles are holes in the CFG, but we represent them
+      ///         as edges for simplicity.
+      ///     </para>
+      /// </summary>
+      MiracleEdge of source : NodeID * target : NodeID
+    | /// <summary>
+      ///     An edge with a command across it.
+      ///
+      ///     <para>
+      ///         Command edges are axioms, in that they directly correspond to
+      ///         Hoare triples.
+      ///     </para>
+      /// </summary>
+      CommandEdge of Axiom<NodeID, Command>
 
     /// <summary>
     ///     The container for a partial control-flow graph.
@@ -180,7 +193,7 @@ module Types =
         /// <summary>
         ///     The given edge has an invalid node index.
         /// </summary>
-        | EdgeOutOfBounds of Edge
+        | EdgeOutOfBounds of id : EdgeID * edge : Edge
         /// <summary>
         ///     The given node was duplicated when trying to merge graphs.
         /// </summary>
@@ -194,23 +207,39 @@ module Types =
         /// </summary>
         | Traversal of err : TraversalError<Error>
 
-
 /// <summary>
-///     Creates a single <c>Edge</c>.
+///     Creates a single miracle <c>Edge</c>.
 /// </summary>
-/// <param name="_arg1">
+/// <param name="p">
 ///     The source view.
 /// </param>
-/// <param name="_arg2">
-///     The command making up the edge.
-/// </param>
-/// <param name="_arg3">
+/// <param name="q">
 ///     The target view.
 /// </param>
 /// <returns>
 ///     An <c>Edge</c> with the above properties.
 /// </returns>
-let edge : NodeID -> Command -> NodeID -> Edge = axiom
+let medge (p : NodeID) (q : NodeID) : Edge =
+    MiracleEdge (p, q)
+
+
+/// <summary>
+///     Creates a single command <c>Edge</c>.
+/// </summary>
+/// <param name="p">
+///     The source view.
+/// </param>
+/// <param name="c">
+///     The command making up the edge.
+/// </param>
+/// <param name="q">
+///     The target view.
+/// </param>
+/// <returns>
+///     An <c>Edge</c> with the above properties.
+/// </returns>
+let edge (p : NodeID) (c : Command) (q : NodeID) : Edge =
+    CommandEdge (axiom p c q)
 
 /// <summary>
 ///     Converts a <c>Graph</c> to a <c>Subgraph</c>.
@@ -256,45 +285,51 @@ let toSubgraph (graph : Graph) : Subgraph =
 /// </returns>
 let graph (name : string) (sg : Subgraph) : Result<Graph, Error> =
     // Are any of the node indices out of bounds?
-    match (Map.filter
-               (fun _ {Pre = s; Post = t} ->
-                    not (Map.containsKey s sg.Nodes &&
-                         Map.containsKey t sg.Nodes))
-               sg.Edges) |> Map.toList with
-    | [] ->
-        sg.Nodes
-        |> Map.map
-               (fun nodeName (nodeView,nodeKind) ->
-                    let outEdges =
-                        sg.Edges
-                        |> Map.toSeq
-                        |> Seq.choose
-                               (fun (edgeName, { Pre = src
-                                                 Post = dst
-                                                 Cmd = cmd }) ->
-                                if src = nodeName
-                                then (Some { OutEdge.Name = edgeName
-                                             OutEdge.Command = cmd
-                                             OutEdge.Dest = dst })
-                                else None)
-                         |> Set.ofSeq
-                    let inEdges =
-                        sg.Edges
-                        |> Map.toSeq
-                        |> Seq.choose
-                               (fun (edgeName, { Pre = src
-                                                 Post = dst
-                                                 Cmd = cmd }) ->
-                                if dst = nodeName
-                                then (Some { InEdge.Name = edgeName
-                                             InEdge.Command = cmd
-                                             InEdge.Src = src })
-                                else None)
-                         |> Set.ofSeq
-                    (nodeView, outEdges, inEdges, nodeKind))
-        |> fun m -> { Name = name ; Contents = m }
-        |> ok
-    | xs -> xs |> List.map (snd >> EdgeOutOfBounds) |> Bad
+    let oob s t = not (Map.containsKey s sg.Nodes && Map.containsKey t sg.Nodes)
+    let oobEdges =
+        seq {
+            for edge in sg.Edges do
+                match edge.Value with
+                | CommandEdge { Pre = s; Post = t } ->
+                    if oob s t then yield EdgeOutOfBounds (edge.Key, edge.Value)
+                | MiracleEdge _ -> () }
+    if Seq.isEmpty oobEdges
+    then
+        let processNode nodeName (nodeView, nodeKind) =
+            let outEdges =
+                sg.Edges
+                |> Map.toSeq
+                |> Seq.choose
+                    (fun (edgeName, edge) ->
+                        match edge with
+                        | CommandEdge { Pre = src; Post = dst; Cmd = cmd } ->
+                            if src = nodeName
+                            then (Some { OutEdge.Name = edgeName
+                                         OutEdge.Command = cmd
+                                         OutEdge.Dest = dst })
+                            else None
+                        // TODO(MattWindsor91): don't delete miracle edges?
+                        | MiracleEdge _ -> None)
+                |> Set.ofSeq
+            let inEdges =
+                sg.Edges
+                |> Map.toSeq
+                |> Seq.choose
+                    (fun (edgeName, edge) ->
+                        match edge with
+                        | CommandEdge { Pre = src; Post = dst; Cmd = cmd } ->
+                            if dst = nodeName
+                            then (Some { InEdge.Name = edgeName
+                                         InEdge.Command = cmd
+                                         InEdge.Src = src })
+                            else None
+                        // TODO(MattWindsor91): don't delete miracle edges?
+                        | MiracleEdge _ -> None)
+                |> Set.ofSeq
+            (nodeView, outEdges, inEdges, nodeKind)
+
+        ok { Name = name; Contents = Map.map processNode sg.Nodes }
+    else Bad (List.ofSeq oobEdges)
 
 /// <summary>
 ///    Combines two subgraphs.
@@ -777,21 +812,30 @@ module Pretty =
     /// <param name="id">
     ///     The unique ID of the node.
     /// </param>
-    /// <param name="_arg1">
+    /// <param name="e">
     ///     The <c>Edge</c> to print.
     /// </param>
     /// <returns>
     ///     A pretty-printer <c>Command</c> representing
     ///     <paramref name="_arg1" />.
     /// </returns>
-    let printEdge (id : EdgeID) ({ Pre = s; Post = t; Cmd = cmd } : Edge)
-      : Doc =
-        hsep [ s |> String
-               String "->"
-               t |> String
-               [ id |> String
-                 cmd |> printCommand ] |> colonSep |> printLabel ]
-        |> withSemi
+    let printEdge (id : EdgeID) (e : Edge) : Doc =
+        let printNormalisedEdge s t cl =
+            withSemi
+                (String s
+                 <+> String "->"
+                 <+> String t
+                 <+> printLabel cl)
+
+        match e with
+        | CommandEdge { Pre = s; Post = t; Cmd = cmd } ->
+            printNormalisedEdge
+                s t
+                (colonSep [ String id; printCommand cmd ])
+        | MiracleEdge (s, t) ->
+            printNormalisedEdge
+                s t
+                (String id <+> String "...")
 
     /// <summary>
     ///     Prints a <c>Subgraph</c>.
@@ -840,12 +884,11 @@ module Pretty =
     /// </returns>
     let rec printError (err : Error) : Doc =
         match err with
-        | EdgeOutOfBounds edge ->
+        | EdgeOutOfBounds (edgeID, edge) ->
             colonSep
-                [ String "edge out of bounds: "
-                  printAxiom String printCommand edge ]
+                [ String "edge out of bounds"; printEdge edgeID edge ]
         | DuplicateNode node ->
-            colonSep [ String "node duplicated: "; String node ]
+            colonSep [ String "node duplicated"; String node ]
         | DuplicateEdge edge ->
-            colonSep [ String "edge duplicated: "; String edge ]
+            colonSep [ String "edge duplicated"; String edge ]
         | Traversal err -> Starling.Core.Traversal.Pretty.printTraversalError printError err

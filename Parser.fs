@@ -602,6 +602,8 @@ do parseCommandRef :=
     nodify <|
     (choice [parseSkip
              // ^- ;
+             stringReturn "..." Miracle
+             /// ^- '...'
              parseVarDecl "thread" |>> VarDecl
              // ^- thread <type> <name> ...
              parseViewExpr |>> ViewExpr

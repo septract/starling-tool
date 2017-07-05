@@ -33,6 +33,7 @@ open Starling.Lang.Desugar
 module Types =
     /// A partially resolved command.
     type PartCmd<'view> =
+        | Miracle
         | Prim of Starling.Core.Command.Types.Command
         | While of
             isDo : bool
@@ -223,6 +224,7 @@ module Pretty =
     let rec printPartCmd (pView : 'view -> Doc) (pc : PartCmd<'view>) : Doc =
         let pfb = printFullBlock pView (printPartCmd pView)
         match pc with
+        | PartCmd.Miracle -> String "Miracle"
         | PartCmd.Prim prim -> Command.Pretty.printCommand prim
         | PartCmd.While(isDo, expr, inner) ->
             cmdHeaded (hsep [ String(if isDo then "Do-while" else "While")
@@ -1775,6 +1777,7 @@ and modelCommand
   (n : FullCommand)
   : Result<ModellerPartCmd, MethodError> =
     match n.Node with
+    | FMiracle -> ok Miracle
     | FPrim p -> modelPrimSet ctx p
     | FIf(i, t, e) -> modelITE ctx i t e
     | FWhile(e, b) -> modelWhile false ctx e b
