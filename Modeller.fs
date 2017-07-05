@@ -826,7 +826,7 @@ and modelBoolExpr
 
                 // We don't know the subtype of this yet...
                 lift indefBool (lift (uncurry oper) lrR)
-        | UopExpr (Neg,e) -> lift (mapTypedSub mkNot) (mb e) 
+        | UopExpr (Neg,e) -> lift (mapTypedSub mkNot) (mb e)
         | _ ->
             fail
                 (ExprBadType
@@ -1267,7 +1267,7 @@ let modelViewDefs
 
        TODO(MattWindsor91): this is a hack until we implement conjunctive
                             constraints. *)
-    let injectOkay okay injectedAlready c = 
+    let injectOkay okay injectedAlready c =
         let injectedNow, rhs =
             match c with
             | (ViewSignature.Unit, None) ->
@@ -1299,10 +1299,10 @@ let modelViewDefs
         maybe
             defs
             (fun n ->
-                let ldef = 
+                let ldef =
                     ( [ iterated (func n [ normalBoolVar "x" ] ) None ],
                       Some (sbVar "x") )
-                
+
                 ViewDefiner.combine defs (ViewDefiner.ofSeq [ldef]))
             liftName
 
@@ -1363,12 +1363,12 @@ let rec modelView
         let gR = mkCond g
         let fR = modelFunc ctx f
         lift2
-            (fun gM fM -> 
+            (fun gM fM ->
                 (* Each of these exists once, so put it through as having
                    iterator 1. *)
                 iterated { Cond = gM; Item = fM } (IInt 1L))
                 gR fR
-    
+
     let funclist = collect (List.map modelGFunc ast)
     lift Multiset.ofFlatList funclist
 
@@ -1545,7 +1545,7 @@ module private Prim =
                 when primTypeRecsCompatible dr tr ->
                 // set has to be type-compatible with destLV, of course.
                 let setR =
-                    modelBoolWithType (typeOf destLV) env Thread set 
+                    modelBoolWithType (typeOf destLV) env Thread set
                 let modelWithSet setE =
                     command "BCAS"
                         [ destLV; testLV ]
@@ -1555,7 +1555,7 @@ module private Prim =
                 when primTypeRecsCompatible dr tr ->
                 // set has to be type-compatible with destLV, of course.
                 let setR =
-                    modelIntWithType (typeOf destLV) env Thread set 
+                    modelIntWithType (typeOf destLV) env Thread set
                 let modelWithSet setE =
                     command "ICAS"
                         [ destLV; testLV ]
@@ -1736,7 +1736,7 @@ and modelWhile
      * Similarly, we convert the condition, recursively find the axioms,
      * inject a placeholder, and add in the recursive axioms.
      *)
-    let euR = 
+    let euR =
         wrapMessages
             BadWhileCondition
             (modelBoolExpr ctx.Env Thread id)

@@ -230,12 +230,12 @@ do parsePostfixExpressionRef :=
     parsePrimaryExpression .>> ws >>= parseArraySubscript
 
 
-/// Parser for unary expressions 
-/// TODO(CaptainHayashi): this is a bit hacky, could unify postfix / unary expr? 
-let parseUnaryExpression = 
+/// Parser for unary expressions
+/// TODO(CaptainHayashi): this is a bit hacky, could unify postfix / unary expr?
+let parseUnaryExpression =
      parsePostfixExpression
-     <|> 
-     nodify (skipString "!" >>. ws >>. parsePostfixExpression |>> (fun x -> UopExpr (Neg, x )))  
+     <|>
+     nodify (skipString "!" >>. ws >>. parsePostfixExpression |>> (fun x -> UopExpr (Neg, x )))
 
 
 /// Parser for multiplicative expressions.
@@ -386,7 +386,7 @@ let parseViewLike basic join =
 /// Parses a builtin primitive type.
 let parseBuiltinPrimType : Parser<TypeLiteral, unit> =
     choice [
-        stringReturn "int" TInt 
+        stringReturn "int" TInt
         stringReturn "bool" TBool
     ]
 
@@ -511,9 +511,9 @@ do parseViewSignatureRef := parseViewLike parseBasicViewSignature ViewSignature.
 /// Parses a view prototype (a LHS followed optionally by an iterator).
 let parseViewProto =
     // TODO (CaptainHayashi): so much backtracking...
-    (pstring "iter" >>. ws >>. 
+    (pstring "iter" >>. ws >>.
       (parseFunc parseParam |>> WithIterator))
-    <|> 
+    <|>
       (parseFunc parseParam
          |>> (fun lhs -> NoIterator (lhs, false)))
 
@@ -576,7 +576,7 @@ let parsePrimSet =
             (fun llocals tail ->
                let (atom, rlocals) = withDefault ([], []) tail
                Prim
-                ( { PreLocals = llocals 
+                ( { PreLocals = llocals
                     Atomics = atom
                     PostLocals = rlocals } ))
 
@@ -651,19 +651,19 @@ let parseConstraint : Parser<ViewSignature * Expression option, unit> =
 
 
 /// parse an exclusivity constraint
-let parseExclusive : Parser<List<StrFunc>, unit> = 
+let parseExclusive : Parser<List<StrFunc>, unit> =
     pstring "exclusive" >>. ws
-    // ^- exclusive ..  
+    // ^- exclusive ..
     >>. parseDefs (parseFunc parseIdentifier)
-    .>> wsSemi 
-       
+    .>> wsSemi
+
 /// parse a disjointness constraint
-let parseDisjoint : Parser<List<StrFunc>, unit> = 
+let parseDisjoint : Parser<List<StrFunc>, unit> =
     pstring "disjoint" >>. ws
-    // ^- exclusive ..  
-    >>. parseDefs (parseFunc parseIdentifier) 
-    .>> wsSemi 
-       
+    // ^- exclusive ..
+    >>. parseDefs (parseFunc parseIdentifier)
+    .>> wsSemi
+
 
 /// Parses a single method, excluding leading or trailing whitespace.
 let parseMethod =
