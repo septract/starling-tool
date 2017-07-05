@@ -186,11 +186,15 @@ module private ViewConfig =
         { /// <summary>Whether to use colour in output.</summary>
           Colour : bool
           /// <summary>
-          ///    Whether to dump raw objects instead of pretty-printing.
+          ///     Whether to dump raw objects instead of pretty-printing.
           /// </summary>
           Raw : bool
           /// <summary>
-          ///    View options for the Z3 backend.
+          ///     The view configuration for graph printing.
+          /// </summary>
+          Graph : Starling.Core.Graph.Pretty.Config
+          /// <summary>
+          ///     View options for the Z3 backend.
           /// </summary>
           Z3 : Starling.Backends.Z3.Types.ViewConfig }
 
@@ -213,6 +217,9 @@ module private ViewConfig =
               ("raw",
                ("Emit the raw internal representation of any output, instead of pretty-printing.",
                  fun ps -> { ps with Raw = true } ))
+              ("fancy-graphs",
+               ("Use colour and styling in Graphviz graph output.",
+                 fun ps -> { ps with Graph = Starling.Core.Graph.Pretty.Fancy } ))
               ("show-all-iterators",
                ("Show all atom iterators in proof failures, even if they are '1'.",
                  updateZ3 (fun ps -> { ps with ShowAllIterators = true })))
@@ -257,7 +264,10 @@ module private ViewConfig =
                 | None ->
                     eprintfn "unknown view param %s ignored (try 'list')" str
                     opts)
-            { Colour = false; Raw = false; Z3 = Starling.Backends.Z3.initialViewConfig () }
+            { Colour = false
+              Raw = false
+              Graph = Starling.Core.Graph.Pretty.Plain
+              Z3 = Starling.Backends.Z3.initialViewConfig () }
 
 
 /// Map of -s stage names to Request items.
@@ -411,8 +421,8 @@ let private printResponse (mview : ModelView) (vconf : ViewConfig.Config)
 
     function
     | List l -> printList String l
-    | Response.Frontend f -> Lang.Frontend.printResponse mview f
-    | GraphOptimise g -> printVModel printGraph g
+    | Response.Frontend f -> Lang.Frontend.printResponse vconf.Graph mview f
+    | GraphOptimise g -> printVModel (printGraph vconf.Graph) g
     | Axiomatise m -> printVModel (printAxiom printIteratedSVGView printCommand) m
     | GoalAdd m -> printVModel (printGoalAxiom printCommand) m
     | Response.Semantics m -> printVModel (printGoalAxiom (printCommandSemantics printSMBoolExpr)) m

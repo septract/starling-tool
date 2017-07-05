@@ -83,6 +83,7 @@ type Error =
 /// <summary>
 ///     Pretty-prints a response.
 /// </summary>
+/// <param name="gcfg">The graph view config.</param>
 /// <param name="mview">
 ///     The ModelView instructing this pretty-printer on how to print
 ///     models.
@@ -90,7 +91,8 @@ type Error =
 /// <returns>
 ///     A function converting Responses to Docs.
 /// </returns>
-let printResponse (mview : ModelView) : Response -> Doc =
+let printResponse (gcfg : Starling.Core.Graph.Pretty.Config)
+  (mview : ModelView) : Response -> Doc =
     let printVModel paxiom m =
         printModelView
             paxiom
@@ -108,7 +110,7 @@ let printResponse (mview : ModelView) : Response -> Doc =
                 (printPartCmd (printViewExpr (printIteratedGView (printSym printVar)))))
             m
     | Response.Graph m ->
-        printVModel printGraph m
+        printVModel (printGraph gcfg) m
 
 /// <summary>
 ///     Pretty-prints an error.

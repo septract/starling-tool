@@ -557,57 +557,11 @@ module Graph =
             |> Seq.map (fun other -> Unify (other, node, RemoveConnections))
         expandNodeIn ctx opt
 
-    /// <summary>
-    ///     Decides whether a command is local.
-    /// </summary>
-    /// <param name="tVars">
-    ///     A <c>VarMap</c> of thread-local variables.
-    /// </param>
-    /// <param name="cmd">The command to check.</param>
-    /// <returns>
-    ///     A function returning True only if (but not necessarily if)
-    ///     the given command is local (uses only local variables).
-    /// </returns>
-    let isLocalCommand (tVars : VarMap) (cmd : Command) : bool =
-        // TODO(CaptainHayashi): overlap with isLocalResults?
-        let typedVarIsThreadLocal var =
-             match tVars.TryFind (valueOf var) with
-             | Some _ -> true
-             | _ -> false
-
-        let isLocalArg arg =
-            // Forbid symbols in arguments.
-            match (mapTraversal (removeSymFromExpr ignore) arg) with
-                // TODO(CaptainHayashi): propagate if traversal error
-                | Bad _ -> false
-                | Ok (sp, _) ->
-                    // Now check if all the variables in the argument are local.
-                    let getVars = tliftOverExpr collectVars
-                    match findVars getVars sp with
-                    | Bad _ -> false
-                    | Ok (pvars, _) ->
-                        Seq.forall typedVarIsThreadLocal (Set.toSeq pvars)
-
-        let rec isLocalPrim prim =
-            match prim with
-            | // TODO(CaptainHayashi): too conservative?
-              Symbol _ -> false
-            | Assign (l, ro) ->
-                isLocalArg l && maybe true isLocalArg ro
-            | // TODO(CaptainHayashi): too conservative?
-              Microcode.Assume l -> isLocalArg (normalBoolExpr l)
-            | Microcode.Stored { StoredCommand.Args = ps } -> Seq.forall isLocalArg ps
-            | Branch (trueBranch = t; falseBranch = f) ->
-                List.forall isLocalPrim t && List.forall isLocalPrim f
-                
-
-        List.forall isLocalPrim cmd
-
     /// Determines whether a payload is local.
     let isLocalPayload (tVars : VarMap) (p : EdgePayload) : bool =
         match p with
         | EMiracle -> false
-        | ECommand c -> isLocalCommand tVars c
+        | ECommand c -> List.forall (isLocal tVars) c
 
     /// Decides whether a given Command contains any `assume` command
     /// in any of the sequentially composed primitives inside it

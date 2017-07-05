@@ -770,6 +770,7 @@ module Pretty =
     open Starling.Core.Model.Pretty
     open Starling.Core.Command.Pretty
     open Starling.Core.Axiom.Pretty
+    open Starling.Core.Expr.Pretty
     open Starling.Core.View.Pretty
     open Starling.Core.GuardedView.Pretty
     open Starling.Core.Symbolic.Pretty
@@ -786,89 +787,222 @@ module Pretty =
         printIteratedGView (printSym printVar) view
 
     /// <summary>
-    ///     Prints a GraphViz label directive.
+    ///     A configuration for graph pretty-printing.
     /// </summary>
-    /// <param name="labelCmd">
-    ///     The pretty-printer command to use as the label.
-    /// </param>
-    /// <returns>
-    ///     A pretty-printer command representing
-    ///     [label = "<paramref name="labelCmd" />"].
-    /// </returns>
-    let printLabel (labelCmd : Doc) : Doc =
-        [ String "label"
-          String "="
-          labelCmd |> ssurround "\"" "\"" ]
-        |> hsep |> squared
+    type Config =
+        | /// <summary>
+          ///     Use shapes and colours to differentiate node and edge
+          ///     kinds, making the graph human-readable.
+          /// </summary>
+          Fancy
+        | /// <summary>
+          ///     Use verbose labels to differentiate node and edge
+          ///     kinds, making the graph machine-readable.
+          /// </summary>
+          Plain
+        /// <summary>
+        ///     Prints an associated list of GraphViz directives.
+        /// </summary>
+        /// <param name="assoc">The associated list.</param>
+        /// <returns>A pretty-printer command for the directive list.</returns>
+        member private cfg.PrintDirectiveList
+          (assoc : (string * Doc) list) : Doc =
+            let pPair (k, v) = String k <+> String "=" <+> v
+            squared (hsep (List.map pPair assoc))
 
-    /// <summary>
-    ///     Prints a node.
-    /// </summary>
-    /// <param name="id">
-    ///     The unique ID of the node.
-    /// </param>
-    /// <param name="view">
-    ///     The <c>GraphViewExpr</c> contained in the node.
-    /// </param>
-    /// <returns>
-    ///     A pretty-printer <c>Command</c> representing the node.
-    /// </returns>
-    let printNode (id : NodeID) (view : GraphViewExpr, nk : NodeKind)
-      : Doc =
-        let list = match nk with Normal -> [] | Entry -> [String "(Entry)"] | Exit -> [String "(Exit)"] | EntryExit -> [String "(EntryExit)"]
-        hsep [ String id
-               ([ String id; printViewExpr printGraphView view ] @ list)
-                |> colonSep |> printLabel
-             ]
-        |> withSemi
+        /// <summary>
+        ///     Prints a plain GraphViz label directive.
+        /// </summary>
+        /// <param name="labelCmd">
+        ///     The pretty-printer command to use as the label.
+        /// </param>
+        /// <returns>
+        ///     A pretty-printer command representing
+        ///     [label = "<paramref name="labelCmd" />"].
+        /// </returns>
+        member private cfg.PrintPlainLabel (labelCmd : Doc) : Doc =
+            cfg.PrintDirectiveList
+                [ ("label", ssurround "\"" "\"" labelCmd) ]
 
-    /// <summary>
-    ///     Prints an edge.
-    /// </summary>
-    /// <param name="id">
-    ///     The unique ID of the node.
-    /// </param>
-    /// <param name="e">
-    ///     The <c>Edge</c> to print.
-    /// </param>
-    /// <returns>
-    ///     A pretty-printer <c>Command</c> representing
-    ///     <paramref name="_arg1" />.
-    /// </returns>
-    let printEdge (id : EdgeID) (e : Edge) : Doc =
-        let printNormalisedEdge s t cl =
+        /// <summary>
+        ///     Prints a view in a fancy manner.
+        /// </summary>
+        /// <param name="id">The ID of the view to print.</param>
+        /// <param name="view">
+        ///     The <c>GraphViewExpr</c> to print.
+        /// </param>
+        /// <param name="nk">
+        ///     The kind of the node.
+        /// </param>
+        /// <returns>
+        ///     A pretty-printer <c>Doc</c> representing the view.
+        /// </returns>
+        member private cfg.PrintFancyView
+          (id : NodeID) (view : GraphViewExpr) (nk : NodeKind) : Doc =
+            let hrow content =
+                ssurround "<TR><TD COLSPAN=\"3\">" "</TD></TR>" (String content)
+
+            let v, comment =
+                match view with
+                | Mandatory v -> Multiset.toFlatSeq v, Nop 
+                | Advisory v -> Multiset.toFlatSeq v, hrow "(Advisory)"
+
+            let funcToRow (v : IteratedGFunc<Sym<Var>>) =
+                ssurround "<TR>" "</TR>"
+                    ((ssurround "<TD>" "</TD>" 
+                        (printIntExpr (printSym printVar) v.Iterator))
+                     <->
+                     (ssurround "<TD>" "</TD>" 
+                        (printBoolExpr (printSym printVar) v.Func.Cond))
+                     <->
+                     (ssurround "<TD>" "</TD>" (printSVFunc v.Func.Item)))
+
+            let vrows = Seq.map funcToRow v
+            let header = hrow id <-> comment
+
+            // Differentiate nodekinds by colour.
+            let colour =
+                match nk with
+                | Normal -> "beige"
+                | Entry -> "coral"
+                | Exit -> "aquamarine"
+                | EntryExit -> "cornflowerblue"
+
+            Surround
+                (String "<TABLE CELLSPACING=\"0\" BGCOLOR=\"" <-> String colour <-> String "\">",
+                 header <-> hsep vrows,
+                 String "</TABLE>")
+
+
+        /// <summary>
+        ///     Prints a node.
+        /// </summary>
+        /// <param name="id">
+        ///     The unique ID of the node.
+        /// </param>
+        /// <param name="view">
+        ///     The <c>GraphViewExpr</c> contained in the node.
+        /// </param>
+        /// <param name="nk">
+        ///     The kind of the node.
+        /// </param>
+        /// <returns>
+        ///     A pretty-printer <c>Command</c> representing the node.
+        /// </returns>
+        member private cfg.PrintNode
+          (id : NodeID)
+          (view : GraphViewExpr)
+          (nk : NodeKind)
+          : Doc =
+            let nodeRhs =
+                match cfg with
+                | Plain ->
+                    let elements =
+                        seq {
+                           yield String id
+                           yield printViewExpr printGraphView view
+                           match nk with
+                           | Normal -> ()
+                           | Entry -> yield String "(Entry)"
+                           | Exit -> yield String "(Exit)"
+                           | EntryExit -> yield String "(EntryExit)"
+                        }
+                    cfg.PrintPlainLabel (colonSep elements)
+                | Fancy ->
+                    cfg.PrintDirectiveList
+                        [ ("label", 
+                            ssurround "<" ">" (cfg.PrintFancyView id view nk))
+                          ("shape", String "plain") ]
+            withSemi (String id <+> nodeRhs)
+
+        /// <summary>
+        ///     Prints the properties list of a command edge.
+        /// </summary>
+        /// <param name="id">The name of the edge.</param>
+        /// <param name="cmd">The command of the edge.</param>
+        /// <returns>
+        ///     A pretty-printer <c>Doc</c> representing the edge properties.
+        /// </returns>
+        member private cfg.PrintCommandEdgeRhs (id : EdgeID) (cmd : Command) =
+            match cfg with
+            | Plain ->
+                cfg.PrintPlainLabel (colonSep [ String id; printCommand cmd ])
+            | Fancy ->
+                // Colour certain commands based on their nature.
+                let colour =
+                    match cmd with
+                    | Starling.Core.Command.Queries.Assume _ -> "blue"
+                    | Starling.Core.Command.Queries.NopCmd _ -> "green"
+                    | _ -> "black"
+
+                cfg.PrintDirectiveList
+                    [ ("label",
+                       ssurround "<" ">"
+                        (hsep
+                            [ String id
+                              String "<BR/>"
+                              printCommand cmd ]))
+                      ("color", String colour) ]
+
+        /// <summary>
+        ///     Prints the properties list of a miracle edge.
+        /// </summary>
+        /// <param name="id">The name of the edge.</param>
+        /// <returns>
+        ///     A pretty-printer <c>Doc</c> representing the edge properties.
+        /// </returns>
+        member private cfg.PrintMiracleEdgeRhs (id : EdgeID) =
+            match cfg with
+            | Plain ->
+                cfg.PrintPlainLabel (colonSep [ String id; String "(miracle)" ])
+            | Fancy ->
+                cfg.PrintDirectiveList
+                    [ ("label",
+                       ssurround "<" ">" (String id))
+                      ("style", String "dotted")
+                      ("color", String "gray") ]
+
+        /// <summary>
+        ///     Prints an edge.
+        /// </summary>
+        /// <param name="id">
+        ///     The unique ID of the node.
+        /// </param>
+        /// <param name="e">
+        ///     The <c>Edge</c> to print.
+        /// </param>
+        /// <returns>
+        ///     A pretty-printer <c>Command</c> representing
+        ///     <paramref name="e" />.
+        /// </returns>
+        member cfg.PrintEdge (id : EdgeID) (e : Edge) : Doc =
+            let s, t, rhs =
+                match e with
+                | CommandEdge { Pre = s; Post = t; Cmd = cmd } ->
+                    s, t, cfg.PrintCommandEdgeRhs id cmd
+                | MiracleEdge (s, t) ->
+                    s, t, cfg.PrintMiracleEdgeRhs id
+
             withSemi
-                (String s
-                 <+> String "->"
-                 <+> String t
-                 <+> printLabel cl)
+                (String s <+> String "->" <+> String t <+> rhs)
 
-        match e with
-        | CommandEdge { Pre = s; Post = t; Cmd = cmd } ->
-            printNormalisedEdge
-                s t
-                (colonSep [ String id; printCommand cmd ])
-        | MiracleEdge (s, t) ->
-            printNormalisedEdge
-                s t
-                (String id <+> String "...")
-
-    /// <summary>
-    ///     Prints a <c>Subgraph</c>.
-    /// </summary>
-    /// <param name="_arg1">
-    ///     The subgraph to print.
-    /// </param>
-    /// <returns>
-    ///     A pretty-printer <c>Command</c> that prints
-    ///     <paramref name="_arg1" />.
-    /// </returns>
-    let printSubgraph ({ Nodes = nodes ; Edges = edges } : Subgraph)
-      : Doc =
-        Seq.append
-            (nodes |> Map.toSeq |> Seq.map (uncurry printNode))
-            (edges |> Map.toSeq |> Seq.map (uncurry printEdge))
-        |> ivsep |> braced
+        /// <summary>
+        ///     Prints a <c>Subgraph</c>.
+        /// </summary>
+        /// <param name="s">The subgraph to print.</param>
+        /// <returns>
+        ///     A pretty-printer <c>Command</c> that prints
+        ///     <paramref name="_arg1" />.
+        /// </returns>
+        member cfg.PrintSubgraph (s : Subgraph) : Doc =
+            let docs =
+                seq {
+                    for (id, (node, kind)) in Map.toSeq s.Nodes do
+                        yield cfg.PrintNode id node kind
+                    for (id, edge) in Map.toSeq s.Edges do
+                        yield cfg.PrintEdge id edge
+                }
+            braced (ivsep docs)
 
     /// <summary>
     ///     Prints a <c>Graph</c>.
@@ -877,6 +1011,7 @@ module Pretty =
     ///         This pretty printer should create a dot-compatible digraph.
     ///     </para>
     /// </summary>
+    /// <param name="cfg">Configuration for the graph pretty-printer.</param>
     /// <param name="graph">
     ///     The graph to print.
     /// </param>
@@ -884,12 +1019,12 @@ module Pretty =
     ///     A pretty-printer <c>Command</c> that prints
     ///     <paramref name="graph" />.
     /// </returns>
-    let printGraph (graph : Graph) : Doc =
+    let printGraph (cfg : Config) (graph : Graph) : Doc =
         hsep [ String "digraph"
                String graph.Name
 
                // TODO(CaptainHayashi): don't convert here?
-               graph |> toSubgraph |> printSubgraph ]
+               graph |> toSubgraph |> cfg.PrintSubgraph ]
 
     /// <summary>
     ///     Pretty-prints graph construction errors.
@@ -902,7 +1037,7 @@ module Pretty =
         match err with
         | EdgeOutOfBounds (edgeID, edge) ->
             colonSep
-                [ String "edge out of bounds"; printEdge edgeID edge ]
+                [ String "edge out of bounds"; Plain.PrintEdge edgeID edge ]
         | DuplicateNode node ->
             colonSep [ String "node duplicated"; String node ]
         | DuplicateEdge edge ->

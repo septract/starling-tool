@@ -12,6 +12,7 @@ open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
+open Starling.Core.Symbolic.Traversal
 open Starling.Core.Traversal
 
 
@@ -190,6 +191,55 @@ module Queries =
         function
         | [x] -> assumptionOf x
         | _ -> None
+
+    /// <summary>
+    ///     Decides whether a prim is local.
+    /// </summary>
+    /// <param name="tVars">
+    ///     A <c>VarMap</c> of thread-local variables.
+    /// </param>
+    /// <param name="prim">The prim to check.</param>
+    /// <returns>
+    ///     A function returning True only if (but not necessarily if)
+    ///     the given command is local (uses only local variables).
+    /// </returns>
+    let rec isLocal (tVars : VarMap) (prim : PrimCommand) : bool =
+        // TODO(CaptainHayashi): overlap with isLocalResults?
+        let typedVarIsThreadLocal var =
+             match tVars.TryFind (valueOf var) with
+             | Some _ -> true
+             | _ -> false
+
+        let isLocalArg arg =
+            // Forbid symbols in arguments.
+            match (mapTraversal (removeSymFromExpr ignore) arg) with
+                // TODO(CaptainHayashi): propagate if traversal error
+                | Bad _ -> false
+                | Ok (sp, _) ->
+                    // Now check if all the variables in the argument are local.
+                    let getVars = tliftOverExpr collectVars
+                    match findVars getVars sp with
+                    | Bad _ -> false
+                    | Ok (pvars, _) ->
+                        Seq.forall typedVarIsThreadLocal (Set.toSeq pvars)
+
+        match prim with
+        | // TODO(CaptainHayashi): too conservative?
+          Symbol _ -> false
+        | Assign (l, ro) ->
+            isLocalArg l && maybe true isLocalArg ro
+        | // TODO(CaptainHayashi): too conservative?
+          Microcode.Assume l -> isLocalArg (normalBoolExpr l)
+        | Microcode.Stored { StoredCommand.Args = ps } -> Seq.forall isLocalArg ps
+        | Branch (trueBranch = t; falseBranch = f) ->
+            List.forall (isLocal tVars) t && List.forall (isLocal tVars) f
+
+    /// <summary>
+    ///     Active pattern matching local commands.
+    /// </summary>
+    let (|Local|NonLocal|) (vc : VarMap * Command) =
+        let (tvars, c) = vc
+        if List.forall (isLocal tvars) c then Local else NonLocal
 
     /// Combines the results of each command into a list of all results
     let commandResults cs =
