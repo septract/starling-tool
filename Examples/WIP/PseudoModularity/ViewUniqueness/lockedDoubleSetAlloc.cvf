@@ -71,7 +71,7 @@ constraint newLock(l)       ->  %{ [|l|] in LockFoot };
 constraint isLock(l)        * newLock(y)        ->  l != y;
 constraint holdLock(l, id)  * newLock(y)        ->  l != y;
 constraint newLock(l)       * newLock(y)        ->  l != y;
-constraint holdLock(l, idl) * holdLock(y, idy)  ->  l != y;
+constraint holdLock(l, idl) * holdLock(y, idy)  ->  l != y && idl != idy;
 
 view uniq(int id), XVal(int id, int v);
 

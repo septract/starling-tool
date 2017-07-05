@@ -103,10 +103,10 @@ constraint XRead(id1) * XVal(id2, v) -> id1 != id2;
 constraint XVal(id1, v1) * XVal(id2, v2) -> id1 != id2;
 
 constraint holdOneReadLock(id1) * holdOneReadLock(id2) -> id1 != id2;
-constraint holdOneReadLock(id1) * holdWriteLock() -> false;
 
-constraint holdOneReadLock(id) -> 1 <= readCount && 1 <= maxCount;
-constraint holdOneReadLock(id1) * XVal(id2, v) -> (id1 == id2) => x == v;
+constraint holdOneReadLock(id) -> true;
+constraint holdOneReadLock(id1) * XVal(id2, v) -> (
+   1 <= readCount && 1 <= maxCount && id1 == id2) => x == v;
 
 view holdTick(int t);
 view holdInnerLock();
@@ -121,7 +121,7 @@ constraint emp                                  -> ticket >= serving && readCoun
 constraint holdTick(t)                          -> ticket > t;
 constraint holdInnerLock()                      -> ticket != serving;
 constraint holdWriteLock()                      -> ticket != serving && readCount == 0;
-constraint canHoldReadLock()                       -> ticket != serving && readCount <= (maxCount - 1);
+constraint canHoldReadLock()                    -> ticket != serving && readCount <= (maxCount - 1);
 
 
 // Interactions
