@@ -104,12 +104,6 @@ module Traversal =
                 (c, w.Reified, g.Flattened)
 
 /// <summary>
-///     Extracts a sequence of all of the parameters in a func sequence
-/// </summary>
-let paramsOfFuncSeq (funcs : Func<'var> seq) : 'var seq =
-    Seq.collect (fun v -> v.Params) funcs
-
-/// <summary>
 ///     Constructs a (hopefully) unique name for a Func resulting from
 ///     the flattening of a func sequence
 /// </summary>
@@ -155,8 +149,12 @@ let flattenDView (svars : TypedVar seq) (dview : DView) : DFunc =
 /// Flattens an OView into an SMVFunc given the set of globals
 let flattenOView (svarExprs : Expr<Sym<MarkedVar>> seq) (oview : OView)
   : SMVFunc =
-    { Name = genFlatFuncSeqName oview
-      Params = Seq.toList (Seq.append svarExprs (paramsOfFuncSeq oview)) }
+    let oname = genFlatFuncSeqName oview
+
+    let fpars f = f.Params
+    let ps = oview |> Seq.collect fpars |> Seq.append svarExprs |> Seq.toList
+
+    { Name = oname; Params = ps }
 
 /// <summary>
 ///     Flattens a term by converting all of its OViews into single funcs.
