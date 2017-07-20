@@ -1,0 +1,81 @@
+/*
+ * Modifying two variables in lockstep.
+ * Pseudo-modular code with uniqueness values in the view.
+ */
+
+shared int bcount;
+shared int _uniq;
+
+method ptake(int nballs) {
+  {| Taken(0) * local{ nballs > 0 } |}
+    thread bool fin;
+    do {
+      {| Taken(0) * local { nballs > 0 } |}
+        // Take a token for the lock
+        thread int id;
+        <| id = _uniq++; |>
+      {| Taken(0) * Token(id) * local { nballs > 0 } |}
+        // Miracle lock
+        ...
+      {| Taken(0) * Token(id) * Lock(id) * local { nballs > 0 } |}
+        // Do we have enough balls?
+        thread int tmp;
+        <| tmp = bcount; |>
+      {| Taken(0) * Balls(id, tmp) * Lock(id) * local { nballs > 0 } |}
+        if (tmp >= nballs) {
+          {| Taken(0) * Balls(id, tmp) * Lock(id) * local{ tmp >= nballs && nballs > 0 } |}
+            <| bcount = tmp - nballs; |>
+          {| Taken(nballs) * Lock(id) * local { nballs > 0 } |}
+            fin = true;
+          {| if (fin) { Taken(nballs) } else { Taken(0) } * Lock(id) * local { nballs > 0 } |}
+        } else {
+          {| Taken(0) * Lock(id) * local { nballs > 0 } |}
+            fin = false;
+          {| if (fin) { Taken(nballs) } else { Taken(0) } * Lock(id) * local { nballs > 0 } |}
+        }
+      {| if (fin) { Taken(nballs) } else { Taken(0) } * Lock(id) * local { nballs > 0 } |}
+        // Miracle unlock
+      {| if (fin) { Taken(nballs) } else { Taken(0) } * local { nballs > 0 } |}
+    } while (!fin);
+  {| Taken(nballs) |}
+}
+
+method pgive(int nballs) {
+  {| Taken(nballs) |}
+    // Take a token for the lock
+    thread int id;
+    <| id = _uniq++; |>
+  {| Taken(nballs) * Token(id) |}
+    // Miracle lock
+    ...
+  {| Taken(nballs) * Token(id) * Lock(id) |}
+    thread int tmp;
+    <| tmp = bcount; |>
+  {| Taken(nballs) * Balls(id, tmp) * Lock(id) |}
+    <| bcount = tmp + nballs; |>
+  {| Taken(0) * Lock(id) |}
+    // Miracle unlock
+  {| Taken(0) |}
+}
+
+view Token(int id), Lock(int id), Balls(int id, int v);
+view Taken(int nballs);
+
+constraint emp -> 0 <= bcount && bcount <= 5;
+
+constraint Token(id) -> id < _uniq;
+constraint Balls(id, v) -> id < _uniq;
+constraint Token(id1) * Token(id2) -> id1 != id2;
+constraint Token(id1) * Balls(id2, v) -> id1 != id2;
+
+constraint Taken(n) -> 0 <= n && n + bcount <= 5;
+constraint Taken(n1) * Taken(n2) -> n1 + n2 + bcount <= 5;
+constraint Taken(n1) * Taken(n2) * Taken(n3) -> n1 + n2 + n3 + bcount == 5;
+constraint Taken(n1) * Taken(n2) * Taken(n3) * Taken(n4) -> false;
+// TODO: make this iterated
+
+exclusive Lock(id), Lock(id2);
+
+constraint Lock(id1) * Balls(id2, v) -> id1 == id2 => bcount == v;
+constraint Balls(id1, v1) * Balls(id2, v2) -> id1 != id2;
+
