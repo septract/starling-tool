@@ -219,12 +219,18 @@ module Pretty =
             then printIntExpr
             else printExprIterator
 
+        let fmtViewList (l : Doc list) : Doc =
+            if l.IsEmpty then String "the invariant" else vsep l
+
         let printWPre =
             let pvar = printSym printMarkedVar
-            printIteratedGViewAsListWith pvar (piter pvar) >> vsep
+            fmtViewList << printIteratedGViewAsListWith pvar (piter pvar)
         
-        let printGoal =
-            printIteratedOViewAsListWith (piter (printSym printMarkedVar)) >> vsep
+        let printGoal (g : Core.View.Types.IteratedOView) : Doc =
+            fmtViewList
+                (printIteratedOViewAsListWith
+                    (piter (printSym printMarkedVar))
+                    g)
 
         let backendTranslation b =
             seq {
