@@ -381,9 +381,9 @@ let ensureArith : TypedVar -> Result<IntExpr<Var>, Error> =
 /// and some validator on the parameters.
 let predOfFunc
   (parT : 'par -> Result<VIntExpr, Error>)
-  ({ Name = n; Params = pars } : Func<'par>)
+  ({ Name = n; Params = pars; FuncType = ft } : Func<'par>)
   : Result<Func<VIntExpr>, Error> =
-    lift (fun parR -> { Name = n; Params = parR })
+    lift (fun parR -> { Name = n; Params = parR; FuncType = ft })
          (pars |> Seq.map parT |> collect)
 
 (*
@@ -391,8 +391,8 @@ let predOfFunc
  *)
 
 /// Generates a query_naming clause for a viewdef.
-let queryNaming ({ Name = n ; Params = ps } : DFunc) : Horn =
-    QueryNaming { Name = n ; Params = List.map valueOf ps }
+let queryNaming ({ Name = n ; Params = ps ; FuncType = ft } : DFunc) : Horn =
+    QueryNaming { Name = n ; Params = List.map valueOf ps ; FuncType = ft }
 
 /// Constructs a full constraint in HSF.
 /// The map of active globals should be passed as sharedVars.
@@ -434,8 +434,7 @@ let predOfEmp (svars : VarMap) : Result<Func<VIntExpr>, Error> =
                  | var -> fail (NonArithVar var))
                 svarSeq)
 
-    bind (fun empParams -> predOfFunc ok { Name = "emp"; Params = empParams })
-        empParamsR
+    bind (func "emp" >> predOfFunc ok) empParamsR
 
 /// Constructs a Horn clause for initialising an integer variable.
 /// Returns an error if the variable is not an integer.
@@ -550,7 +549,7 @@ let mapIteratorParam
         match param with
         | IVar var when var = iterator -> f var
         | x -> x
-    { func with Params = List.map fOnIter func.Params }
+    Func.updateParams func (List.map fOnIter func.Params)
 
 /// <summary>
 ///     Constructs a Horn clause for a base downclosure check on a given func.

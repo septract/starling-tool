@@ -161,6 +161,8 @@ module Types =
     type Model<'axiom, 'viewdefs> =
         { /// <summary>Special instructions to backends.</summary>
           Pragmata : (string * string) list
+          /// <summary>The name of the view used for local lifts.</summary>
+          LocalLiftView : string option
           /// <summary>The shared variable environment.</summary>
           SharedVars : VarMap
           /// <summary>The thread-local variable environment.</summary>
@@ -504,6 +506,7 @@ let axioms ({Axioms = xs} : Model<'Axiom, _>) : Map<string, 'Axiom> = xs
 let withAxioms (xs : Map<string, 'y>) (model : Model<'x, 'dview>)
     : Model<'y, 'dview> =
     { Pragmata = model.Pragmata
+      LocalLiftView = model.LocalLiftView
       SharedVars = model.SharedVars
       ThreadVars = model.ThreadVars
       ViewDefs = model.ViewDefs
@@ -541,6 +544,7 @@ let withViewDefs (ds : 'Definer2)
                  (model : Model<'Axiom, 'Definer1>)
                  : Model<'Axiom, 'Definer2> =
     { Pragmata = model.Pragmata
+      LocalLiftView = model.LocalLiftView
       SharedVars = model.SharedVars
       ThreadVars = model.ThreadVars
       ViewDefs = ds

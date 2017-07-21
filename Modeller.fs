@@ -1166,15 +1166,15 @@ let searchViewToConstraint
 
     let dview' =
         List.map
-            (fun { Func = { Name = name; Params = ps }; Iterator = it } ->
+            (fun { Func = f; Iterator = it } ->
                  let nps =
                      List.map
                          (fun p ->
                              (withType
                                  (typeOf p)
                                     (sprintf "%s%A" (valueOf p) (getFresh fg))))
-                         ps
-                 { Func = { Name = name; Params = nps }; Iterator = it })
+                         f.Params
+                 { Func = Func.updateParams f nps; Iterator = it })
             dview
 
     (dview', None)
@@ -1301,9 +1301,8 @@ let modelViewDefs
         maybe
             defs
             (fun n ->
-                let ldef =
-                    ( [ iterated (func n [ normalBoolVar "x" ] ) None ],
-                      Some (sbVar "x") )
+                let func = { Name = n; Params = [ normalBoolVar "x" ]; FuncType = LocalSynth }
+                let ldef = ( [ iterated func None ], Some (sbVar "x") )
 
                 ViewDefiner.combine defs (ViewDefiner.ofSeq [ldef]))
             liftName
@@ -1333,7 +1332,7 @@ let modelFunc
                              |> mapMessages (curry ViewError.BadExpr e))
              |> collect
              // Then, put them into a VFunc.
-             |> lift (vfunc afunc.Name)
+             |> lift (Func.updateParams afunc)
              // Now, we can use Definer's type checker to ensure
              // the params in the VFunc are of the types mentioned
              // in proto.
@@ -1942,10 +1941,10 @@ let convertViewProtos
   (vps : ViewProto seq)
   : Result<DesugaredViewProto list, ModelError> =
     // TODO(CaptainHayashi): proper doc comment.
-    let convertViewFunc vp { Name = n; Params = ps } =
+    let convertViewFunc vp func =
         let conv = wrapMessages (fun (p, e) -> BadVProtoParamType (vp, p, e)) (convertParam types)
-        let ps'Result = ps |> List.map conv |> collect
-        lift (func n) ps'Result
+        let ps'Result = func.Params |> List.map conv |> collect
+        lift (Func.updateParams func) ps'Result
 
     let convertViewProto vp =
         match vp with
@@ -1990,6 +1989,7 @@ let model
 
         return
             { Pragmata = pragmata
+              LocalLiftView = desugarContext.LocalLiftView
               SharedVars = svars
               ThreadVars = tvars
               ViewDefs = constraints

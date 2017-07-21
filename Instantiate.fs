@@ -519,19 +519,19 @@ module Phase =
 
         (* Constructs a definite view definition, given an indefinite view
            definition as a pair. *)
-        let indefiniteFuncToSym ({ Name = n ; Params = ps }, _) =
-            let convParamsR = collect (List.map exprToSym ps)
+        let indefiniteFuncToSym (f, _) =
+            let convParamsR = collect (List.map exprToSym f.Params)
 
             let defR =
                 lift (
                     fun convParams ->
                         BVar
                             (Sym 
-                                (SymString (sprintf "!UNDEF:%A" n)
+                                (SymString (sprintf "!UNDEF:%A" f.Name)
                                  :: List.map SymArg convParams)))
                     convParamsR
 
-            lift (mkPair (func n ps)) defR
+            lift (mkPair f) defR
 
         // Now apply the above to all indefinites to create a new definer.
         let indefSeq = FuncDefiner.toSeq indef

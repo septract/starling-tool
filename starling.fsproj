@@ -1,49 +1,56 @@
-<?xml version="1.0" encoding="utf-8"?>
-
-<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
+    <AssemblyName>starling</AssemblyName>
+    <RootNamespace>starling</RootNamespace>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
-    <ProjectGuid>{FB248950-5C1B-4AE6-B7AE-E167C623D60F}</ProjectGuid>
+    <ProjectGuid>fb248950-5c1b-4ae6-b7ae-e167c623d60f</ProjectGuid>
     <OutputType>Exe</OutputType>
-    <RootNamespace>starling</RootNamespace>
-    <AssemblyName>starling</AssemblyName>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
     <DebugSymbols>true</DebugSymbols>
+    <Optimize>false</Optimize>
     <OutputPath>bin\Debug</OutputPath>
-    <ErrorReport>prompt</ErrorReport>
-    <Externalconsole>true</Externalconsole>
-    <StartArguments>Examples\Pass\ticketLock.cvf</StartArguments>
-    <StartWorkingDirectory>..\..</StartWorkingDirectory>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>5</WarningLevel>
     <PlatformTarget>x86</PlatformTarget>
-    <Optimize>false</Optimize>
-    <DocumentationFile>bin\Debug\starling.XML</DocumentationFile>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
     <OutputPath>bin\Release</OutputPath>
-    <ErrorReport>prompt</ErrorReport>
-    <Externalconsole>true</Externalconsole>
+    <DefineConstants>TRACE</DefineConstants>
     <WarningLevel>5</WarningLevel>
     <PlatformTarget>x86</PlatformTarget>
-    <DefineConstants>TRACE</DefineConstants>
   </PropertyGroup>
-  <Choose>
-    <When Condition="'$(VisualStudioVersion)' == '11.0'">
-      <PropertyGroup>
-        <FSharpTargetsPath>$(MSBuildExtensionsPath32)\..\Microsoft SDKs\F#\3.0\Framework\v4.0\Microsoft.FSharp.Targets</FSharpTargetsPath>
-      </PropertyGroup>
-    </When>
-    <Otherwise>
-      <PropertyGroup>
-        <FSharpTargetsPath>$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\FSharp\Microsoft.FSharp.Targets</FSharpTargetsPath>
-      </PropertyGroup>
-    </Otherwise>
-  </Choose>
-  <Import Project="$(FSharpTargetsPath)" Condition="Exists('$(FSharpTargetsPath)')" />
+  <ItemGroup>
+    <Reference Include="mscorlib" />
+    <Reference Include="nunit.framework">
+      <HintPath>packages\NUnit.3.0.1\lib\net40\nunit.framework.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Numerics" />
+    <Reference Include="Chessie">
+      <HintPath>packages\Chessie.0.2.2\lib\net40\Chessie.dll</HintPath>
+    </Reference>
+    <Reference Include="FParsec">
+      <HintPath>packages\FParsec-Big-Data-Edition.1.0.2\lib\net40-client\FParsec.dll</HintPath>
+    </Reference>
+    <Reference Include="FParsecCS">
+      <HintPath>packages\FParsec-Big-Data-Edition.1.0.2\lib\net40-client\FParsecCS.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Z3">
+      <HintPath>packages\z3x86win.4.3.2.1\lib\Microsoft.Z3.dll</HintPath>
+    </Reference>
+    <Reference Include="CommandLine">
+      <HintPath>packages\CommandLineParser.2.0.275-beta\lib\net40\CommandLine.dll</HintPath>
+    </Reference>
+    <Reference Include="FSharp.Core">
+      <HintPath>packages\FSharp.Core.4.0.0.1\lib\net40\FSharp.Core.dll</HintPath>
+    </Reference>
+  </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Utils.fs" />
@@ -101,52 +108,37 @@
     <Compile Include="Grasshopper.fs" />
     <Compile Include="Main.fs" />
     <None Include="packages.config" />
-    <None Include="Examples\Pass\arc.cvf" />
-    <None Include="Examples\Pass\ticketLock.cvf" />
-    <None Include="Examples\Pass\ticketLockNoIf.cvf" />
-    <None Include="Examples\Pass\ticketLockNonAtomicRelease.cvf" />
-    <None Include="Examples\Pass\singleWriterMultiReaderLock.cvf" />
-    <None Include="Examples\Pass\multicounter.cvf" />
-    <None Include="Examples\Pass\spinLock.cvf" />
-    <None Include="Examples\PassHSF\ticketLockIndefinite.cvf" />
-    <None Include="Examples\WIP\dekker.cvf" />
-    <None Include="Examples\WIP\duplicateVars.cvf" />
-    <None Include="Examples\WIP\errors.cvf" />
-    <None Include="Examples\WIP\filterLock.cvf" />
-    <None Include="Examples\WIP\peterson.cvf" />
-    <None Include="Examples\WIP\sppool.cvf" />
-    <None Include="Examples\WIP\tests.cvf" />
-    <None Include="Examples\Fail\badInc.cvf" />
-    <None Include="Examples\Fail\badInc2.cvf" />
-    <None Include="Examples\Fail\ticketLockBad.cvf" />
-    <None Include="Examples\Fail\ticketLockBad2.cvf" />
+    <None Include="Examples/Pass/arc.cvf" />
+    <None Include="Examples/Pass/ticketLock.cvf" />
+    <None Include="Examples/Pass/ticketLockNoIf.cvf" />
+    <None Include="Examples/Pass/ticketLockNonAtomicRelease.cvf" />
+    <None Include="Examples/Pass/singleWriterMultiReaderLock.cvf" />
+    <None Include="Examples/Pass/multicounter.cvf" />
+    <None Include="Examples/Pass/spinLock.cvf" />
+    <None Include="Examples/PassHSF/ticketLockIndefinite.cvf" />
+    <None Include="Examples/WIP/dekker.cvf" />
+    <None Include="Examples/WIP/duplicateVars.cvf" />
+    <None Include="Examples/WIP/errors.cvf" />
+    <None Include="Examples/WIP/filterLock.cvf" />
+    <None Include="Examples/WIP/peterson.cvf" />
+    <None Include="Examples/WIP/sppool.cvf" />
+    <None Include="Examples/WIP/tests.cvf" />
+    <None Include="Examples/Fail/badInc.cvf" />
+    <None Include="Examples/Fail/badInc2.cvf" />
+    <None Include="Examples/Fail/ticketLockBad.cvf" />
+    <None Include="Examples/Fail/ticketLockBad2.cvf" />
   </ItemGroup>
-  <ItemGroup>
-    <Reference Include="mscorlib" />
-    <Reference Include="nunit.framework">
-      <HintPath>packages\NUnit.3.0.1\lib\net40\nunit.framework.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Numerics" />
-    <Reference Include="Chessie">
-      <HintPath>packages\Chessie.0.2.2\lib\net40\Chessie.dll</HintPath>
-    </Reference>
-    <Reference Include="FParsec">
-      <HintPath>packages\FParsec-Big-Data-Edition.1.0.2\lib\net40-client\FParsec.dll</HintPath>
-    </Reference>
-    <Reference Include="FParsecCS">
-      <HintPath>packages\FParsec-Big-Data-Edition.1.0.2\lib\net40-client\FParsecCS.dll</HintPath>
-    </Reference>
-    <Reference Include="Microsoft.Z3">
-      <HintPath>packages\z3x86win.4.3.2.1\lib\Microsoft.Z3.dll</HintPath>
-    </Reference>
-    <Reference Include="CommandLine">
-      <HintPath>packages\CommandLineParser.2.0.275-beta\lib\net40\CommandLine.dll</HintPath>
-    </Reference>
-    <Reference Include="FSharp.Core">
-      <HintPath>packages\FSharp.Core.4.0.0.1\lib\net40\FSharp.Core.dll</HintPath>
-    </Reference>
-  </ItemGroup>
+  <Choose>
+    <When Condition="'$(VisualStudioVersion)' == '11.0'">
+      <PropertyGroup>
+        <FSharpTargetsPath>$(MSBuildExtensionsPath32)\..\Microsoft SDKs\F#\3.0\Framework\v4.0\Microsoft.FSharp.Targets</FSharpTargetsPath>
+      </PropertyGroup>
+    </When>
+    <Otherwise>
+      <PropertyGroup>
+        <FSharpTargetsPath>$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\FSharp\Microsoft.FSharp.Targets</FSharpTargetsPath>
+      </PropertyGroup>
+    </Otherwise>
+  </Choose>
+  <Import Project="$(FSharpTargetsPath)" Condition="Exists('$(FSharpTargetsPath)')" />
 </Project>

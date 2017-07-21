@@ -144,7 +144,9 @@ let flattenDView (svars : TypedVar seq) (dview : DView) : DFunc =
     // TODO: What if iterators share names? e.g. iterated A [n] * iterated B [n]
     let ownParams = Seq.collect paramsFromIteratedFunc dview
     let allParams = Seq.append svars ownParams
-    { Name = genFlatIteratedFuncName dview; Params = Seq.toList allParams }
+    { Name = genFlatIteratedFuncName dview
+      Params = Seq.toList allParams
+      FuncType = Erased }
 
 /// Flattens an OView into an SMVFunc given the set of globals
 let flattenOView (svarExprs : Expr<Sym<MarkedVar>> seq) (oview : OView)
@@ -154,7 +156,7 @@ let flattenOView (svarExprs : Expr<Sym<MarkedVar>> seq) (oview : OView)
     let fpars f = f.Params
     let ps = oview |> Seq.collect fpars |> Seq.append svarExprs |> Seq.toList
 
-    { Name = oname; Params = ps }
+    { Name = oname; Params = ps; FuncType = Erased }
 
 /// <summary>
 ///     Flattens a term by converting all of its OViews into single funcs.
@@ -204,6 +206,7 @@ let flatten
     let globalsP = VarMap.toTypedVarSeq model.SharedVars
 
     { Pragmata = model.Pragmata
+      LocalLiftView = model.LocalLiftView
       SharedVars = model.SharedVars
       ThreadVars = model.ThreadVars
       Axioms = Map.map (fun _ x -> flattenTerm globalsF x) model.Axioms
@@ -350,7 +353,7 @@ module Iter =
             |> lift
                 (function
                  // TODO(CaptainHayashi): assuming n here is silly
-                 | true -> dfunc df.Name (withDefault (Int (normalRec, "n")) it :: df.Params)
+                 | true -> Func.updateParams df (withDefault (Int (normalRec, "n")) it :: df.Params)
                  | false -> df)
 
     /// <summary>
@@ -370,7 +373,7 @@ module Iter =
                 (function
                  | Some k -> [ for i in 1L .. k -> vfunc ]
                  | None ->
-                    [ Starling.Collections.func vfunc.Name (Int (normalRec, it) :: vfunc.Params) ])
+                    [ Func.updateParams vfunc (Int (normalRec, it) :: vfunc.Params) ])
 
     /// flattens an entire IteratedSubview into a flat GView
     let lowerIteratedSubview

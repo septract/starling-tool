@@ -311,7 +311,7 @@ module Translator =
                         which we need to convert to expression format first.
                         dex uses Unmarked constants, so we do too. *)
                      let eparams = List.map mkVarExp vs.Params
-                     let vfunc = { Name = vs.Name ; Params = eparams }
+                     let vfunc = Func.updateParams vs eparams
 
                      (vfunc, dex))
                 ex
@@ -781,7 +781,7 @@ module Translator =
             |> collect
             |> lift mkAnd
 
-        let head = { Name = "emp" ; Params = vpars }
+        let head = func "emp" vpars
 
         let ruleResult =
             bind

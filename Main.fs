@@ -196,11 +196,11 @@ module private ViewConfig =
           /// <summary>
           ///     View options for the Z3 backend.
           /// </summary>
-          Z3 : Starling.Backends.Z3.Types.ViewConfig }
+          Z3 : Starling.Backends.Z3.Pretty.ViewConfig }
 
     let updateZ3
-      (f : Starling.Backends.Z3.Types.ViewConfig ->
-           Starling.Backends.Z3.Types.ViewConfig) 
+      (f : Starling.Backends.Z3.Pretty.ViewConfig ->
+           Starling.Backends.Z3.Pretty.ViewConfig) 
       (c : Config) : Config =
         // TODO(MattWindsor91): doc comment.
         { c with Z3 = f c.Z3 }
@@ -267,7 +267,7 @@ module private ViewConfig =
             { Colour = false
               Raw = false
               Graph = Starling.Core.Graph.Pretty.Plain
-              Z3 = Starling.Backends.Z3.initialViewConfig () }
+              Z3 = Starling.Backends.Z3.Pretty.initialViewConfig () }
 
 
 /// Map of -s stage names to Request items.
@@ -446,7 +446,7 @@ let private printResponse (mview : ModelView) (vconf : ViewConfig.Config)
             (printCmdTerm printSMBoolExpr (printReified printSMGView) (printFlattened printSMVFunc)) m
     | SymProof m -> printUModel printSymProofTerm m
     | Eliminate m -> printUModel Backends.Z3.Pretty.printZTerm m
-    | SMTProof z -> Backends.Z3.Pretty.printResponse mview vconf.Z3 z
+    | SMTProof z -> vconf.Z3.PrintResponse mview z
     | Response.MuZ3 z -> Backends.MuZ3.Pretty.printResponse mview z
     | Response.HSF h -> Backends.Horn.Pretty.printHorns h
     | Response.Grasshopper g -> Backends.Grasshopper.Pretty.printQuery g 

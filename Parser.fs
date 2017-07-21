@@ -364,7 +364,7 @@ let parseAtomicSet =
 
 /// Parses a Func given the argument parser argp.
 let parseFunc argp =
-    pipe2ws parseIdentifier (parseParamList argp) (fun f xs -> {Name = f; Params = xs})
+    pipe2ws parseIdentifier (parseParamList argp) func
 
 (*
  * View-likes (views and view definitions).

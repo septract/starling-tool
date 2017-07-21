@@ -40,28 +40,6 @@ open Starling.Reifier
 [<AutoOpen>]
 module Types =
     /// <summary>
-    ///     Configuration for formatting the output of the Z3 backend.
-    /// </summary>
-    type ViewConfig =
-        { /// <summary>
-          ///     Whether to emit the reified weakest precondition in
-          ///     proof failures.
-          /// </summary>
-          ShowReifiedWPre : bool
-          /// <summary>
-          ///     Whether to emit the flattened goal in proof failures.
-          /// </summary>
-          ShowFlattenedGoal : bool
-          /// <summary>
-          ///     Whether to emit the backend translations in proof failures.
-          /// </summary>
-          ShowBackendTranslation : bool
-          /// <summary>
-          ///     Whether to show all iterators in printed views.
-          /// </summary>
-          ShowAllIterators : bool }
-
-    /// <summary>
     ///     A term combining a fully preprocessed Starling term and its Z3
     ///     equivalent.
     /// </summary>
@@ -169,7 +147,7 @@ module Pretty =
     open Starling.Reifier.Pretty
 
     /// Pretty-prints a partial satisfiability result.
-    let printMaybeSat (sat : Z3.Status option) : Doc =
+    let private printMaybeSat (sat : Z3.Status option) : Doc =
         match sat with
         | None -> warning (String "not SMT solvable")
         | Some s -> printSat s
@@ -203,137 +181,158 @@ module Pretty =
               colonSep [ String "Status"; printMaybeSat zterm.Status ] ]
 
     /// <summary>
-    ///     Pretty-prints a <see cref="ZTerm"/> as a failure report.
+    ///     Configuration for formatting the output of the Z3 backend.
     /// </summary>
-    /// <param name="vconf">The view configuration for printing failures.</param>
-    /// <param name="name">The name of the proof term to print.</param>
-    /// <param name="term">The <see cref="ZTerm"/> to print.</param>
-    /// <returns>
-    ///     The pair of <see cref="Doc"/>s corresponding to
-    ///     <paramref name="term"/>'s failure header and body.
-    /// </returns>
-    let printFailure (vconf : ViewConfig) (name : string) (term : ZTerm)
-      : Doc * Doc =
-        let piter =
-            if vconf.ShowAllIterators
-            then printIntExpr
-            else printExprIterator
+    type ViewConfig =
+        { /// <summary>
+          ///     Whether to emit the reified weakest precondition in
+          ///     proof failures.
+          /// </summary>
+          ShowReifiedWPre : bool
+          /// <summary>
+          ///     Whether to emit the flattened goal in proof failures.
+          /// </summary>
+          ShowFlattenedGoal : bool
+          /// <summary>
+          ///     Whether to emit the backend translations in proof failures.
+          /// </summary>
+          ShowBackendTranslation : bool
+          /// <summary>
+          ///     Whether to show all iterators in printed views.
+          /// </summary>
+          ShowAllIterators : bool }
 
-        let fmtViewList (l : Doc list) : Doc =
-            if l.IsEmpty then String "the invariant" else vsep l
+        /// <summary>
+        ///     Pretty-prints a <see cref="ZTerm"/> as a failure report.
+        /// </summary>
+        /// <param name="name">The name of the proof term to print.</param>
+        /// <param name="term">The <see cref="ZTerm"/> to print.</param>
+        /// <returns>
+        ///     The pair of <see cref="Doc"/>s corresponding to
+        ///     <paramref name="term"/>'s failure header and body.
+        /// </returns>
+        member private vconf.PrintFailure (name : string) (term : ZTerm)
+          : Doc * Doc =
+            let piter =
+                if vconf.ShowAllIterators
+                then printIntExpr
+                else printExprIterator
 
-        let printWPre =
-            let pvar = printSym printMarkedVar
-            fmtViewList << printIteratedGViewAsListWith pvar (piter pvar)
-        
-        let printGoal (g : Core.View.Types.IteratedOView) : Doc =
-            fmtViewList
-                (printIteratedOViewAsListWith
-                    (piter (printSym printMarkedVar))
-                    g)
+            let fmtViewList (l : Doc list) : Doc =
+                if l.IsEmpty then String "the invariant" else vsep l
 
-        let backendTranslation b =
-            seq {
-                if vconf.ShowBackendTranslation
+            let printWPre =
+                let pvar = printSym printMarkedVar
+                fmtViewList << printIteratedGViewAsListWith pvar (piter pvar)
+            
+            let printGoal (g : Core.View.Types.IteratedOView) : Doc =
+                fmtViewList
+                    (printIteratedOViewAsListWith
+                        (piter (printSym printMarkedVar))
+                        g)
+
+            let backendTranslation b =
+                seq {
+                    if vconf.ShowBackendTranslation
+                    then
+                        let p = printBoolExpr (printSym printMarkedVar) b
+                        yield errorInfo (headed "which was translated into" [ p ])
+                }
+
+            let wpreStanza =
+                seq {
+                    yield printWPre term.Original.WPre.Original
+
+                    if vconf.ShowReifiedWPre then
+                        yield
+                            errorInfo
+                                (headed "which was reified into"
+                                    [ printGView (printSym printMarkedVar) term.Original.WPre.Reified ])
+
+                    yield! backendTranslation term.SymBool.WPre
+                }
+
+            let goalStanza =
+                seq {
+                    yield printGoal term.Original.Goal.Original
+
+                    if vconf.ShowFlattenedGoal then
+                        yield
+                            errorInfo
+                                (headed "which was flattened into"
+                                    [ printVFunc (printSym printMarkedVar)
+                                        term.Original.Goal.Flattened ])
+
+                    yield! backendTranslation term.SymBool.Goal
+                }
+
+            (* Show a more friendly body if the command is empty, ie. this is a
+               semantic entailment rather than a command step. *)
+            let cmd = term.Original.Cmd
+            let body =
+                if cmd.Cmd.IsEmpty
                 then
-                    let p = printBoolExpr (printSym printMarkedVar) b
-                    yield errorInfo (headed "which was translated into" [ p ])
-            }
-
-        let wpreStanza =
-            seq {
-                yield printWPre term.Original.WPre.Original
-
-                if vconf.ShowReifiedWPre then
-                    yield
-                        errorInfo
-                            (headed "which was reified into"
-                                [ printGView (printSym printMarkedVar) term.Original.WPre.Reified ])
-
-                yield! backendTranslation term.SymBool.WPre
-            }
-
-        let goalStanza =
-            seq {
-                yield printGoal term.Original.Goal.Original
-
-                if vconf.ShowFlattenedGoal then
-                    yield
-                        errorInfo
-                            (headed "which was flattened into"
-                                [ printVFunc (printSym printMarkedVar)
-                                    term.Original.Goal.Flattened ])
-
-                yield! backendTranslation term.SymBool.Goal
-            }
-
-        (* Show a more friendly body if the command is empty, ie. this is a
-           semantic entailment rather than a command step. *)
-        let cmd = term.Original.Cmd
-        let body =
-            if cmd.Cmd.IsEmpty
-            then
-                [ errHeaded "Could not prove that the view" wpreStanza
-                  errHeaded "semantically entails" goalStanza ]
-            else
-                let cmdStanza =
-                    seq {
-                        yield printCommand term.Original.Cmd.Cmd
-                        yield! backendTranslation term.Original.Cmd.Semantics
-                    }
-
-                [ errHeaded "Could not prove that this command" cmdStanza
-                  errHeaded "under the weakest precondition" wpreStanza
-                  errHeaded "establishes" goalStanza ]
-
-        (errorContext (String name) <+> printMaybeSat term.Status, vsep body)
-
-    /// Pretty-prints a response.
-    let printResponse (mview : ModelView) (vconf : ViewConfig) (response : Response) : Doc =
-        // Add deferred checks to a response if and only if there are some.
-        let attachChecks doc deferredChecks =
-            match deferredChecks with
-            | [] -> doc
-            | xs ->
-                vsep
-                    [ doc
-                      errHeaded "These sanity checks could not be established"
-                        (Seq.map printDeferredCheck xs)]
-
-        match response with
-        | SatMap (map, dcs) ->
-            let mapDoc = printMap Inline String printMaybeSat map
-            attachChecks mapDoc dcs
-        | Failures (map, dcs) ->
-            let mapDoc =
-                if Map.isEmpty map
-                then successStr "No proof failures"
+                    [ errHeaded "Could not prove that the view" wpreStanza
+                      errHeaded "semantically entails" goalStanza ]
                 else
-                    errHeaded "Proof failures"
-                        [ printAssoc Indented
-                             (Seq.map (uncurry (printFailure vconf))
-                                 (Map.toSeq map)) ]
-            attachChecks mapDoc dcs
-        | AllTerms (map, dcs) ->
-            let mapDoc = printMap Indented String printZTerm map
-            attachChecks mapDoc dcs
-        | RemainingSymBools (map, dcs) ->
-            let mapDoc =
-                printMap Indented String (printBoolExpr (printSym printMarkedVar))
-                    map
-            attachChecks mapDoc dcs
+                    let cmdStanza =
+                        seq {
+                            yield printCommand term.Original.Cmd.Cmd
+                            yield! backendTranslation term.Original.Cmd.Semantics
+                        }
 
-/// <summary>
-///     Creates an initial Z3 view config struct.
-/// </summary>
-/// <returns>
-///     An initial Z3 view config struct.
-/// </returns>
-let initialViewConfig () : ViewConfig =
-    { ShowBackendTranslation = false
-      ShowReifiedWPre = false
-      ShowFlattenedGoal = false
-      ShowAllIterators = false }
+                    [ errHeaded "Could not prove that this command" cmdStanza
+                      errHeaded "under the weakest precondition" wpreStanza
+                      errHeaded "establishes" goalStanza ]
+
+            (errorContext (String name) <+> printMaybeSat term.Status, vsep body)
+
+        /// Pretty-prints a response.
+        member vconf.PrintResponse (mview : ModelView) (response : Response) : Doc =
+            // Add deferred checks to a response if and only if there are some.
+            let attachChecks doc deferredChecks =
+                match deferredChecks with
+                | [] -> doc
+                | xs ->
+                    vsep
+                        [ doc
+                          errHeaded "These sanity checks could not be established"
+                            (Seq.map printDeferredCheck xs)]
+
+            match response with
+            | SatMap (map, dcs) ->
+                let mapDoc = printMap Inline String printMaybeSat map
+                attachChecks mapDoc dcs
+            | Failures (map, dcs) ->
+                let mapDoc =
+                    if Map.isEmpty map
+                    then successStr "No proof failures"
+                    else
+                        errHeaded "Proof failures"
+                            [ printAssoc Indented
+                                 (Seq.map (uncurry vconf.PrintFailure)
+                                     (Map.toSeq map)) ]
+                attachChecks mapDoc dcs
+            | AllTerms (map, dcs) ->
+                let mapDoc = printMap Indented String printZTerm map
+                attachChecks mapDoc dcs
+            | RemainingSymBools (map, dcs) ->
+                let mapDoc =
+                    printMap Indented String (printBoolExpr (printSym printMarkedVar))
+                        map
+                attachChecks mapDoc dcs
+
+    /// <summary>
+    ///     Creates an initial Z3 view config struct.
+    /// </summary>
+    /// <returns>
+    ///     An initial Z3 view config struct.
+    /// </returns>
+    let initialViewConfig () : ViewConfig =
+        { ShowBackendTranslation = false
+          ShowReifiedWPre = false
+          ShowFlattenedGoal = false
+          ShowAllIterators = false }
 
 /// <summary>
 ///     Uses Z3 to mark some proof terms as eliminated.

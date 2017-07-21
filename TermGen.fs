@@ -82,8 +82,8 @@ let rec minusViewByFunc (qstep : IteratedGFunc<TermGenVar>)
   (rdone : IteratedGView<TermGenVar>)
   : IteratedGView<TermGenVar> =
     // Let qstep = (g2 -> w(ybar)^k).
-    let { Func = { Cond = g2; Item = { Name = w; Params = ybar } }
-          Iterator = k } = qstep
+    let { Func = { Cond = g2; Item = w }; Iterator = k } = qstep
+    let ybar = w.Params
 
     // If g2 is never true, then _nothing_ in r can ever be minused by it.
     if isFalse g2 then Multiset.append r rdone
@@ -96,13 +96,13 @@ let rec minusViewByFunc (qstep : IteratedGFunc<TermGenVar>)
             let rstep = normalise rstepU i
 
             // Let rstep = (g1 -> v(xbar)^n),
-            let { Func = { Cond = g1; Item = { Name = v; Params = xbar } }
-                  Iterator = n } = rstep
+            let { Func = { Cond = g1; Item = v }; Iterator = n } = rstep
+            let xbar = v.Params
 
             (* If v <> w, then the two funcs are disjoint, minusing does
                nothing, and we continue to the next element in r with no
                modification to rstep or qstep. *)
-            if v <> w
+            if v.Name <> w.Name
             then minusViewByFunc qstep rnext (Multiset.add rdone rstep)
             (* If g1 is trivially false, then rstep simplifies to emp,
                cannot be minused, and we continue as if rstep never existed. *)
@@ -121,7 +121,10 @@ let rec minusViewByFunc (qstep : IteratedGFunc<TermGenVar>)
                    (rsucc, rfail, qsucc, qfail) is.  Each has a similar format,
                    which is captured by mkfunc. *)
                 let mkfunc guard args iter =
-                    iterated (gfunc guard v args) iter
+                    iterated
+                        { Cond = guard
+                          Item = Func.updateParams v args }
+                        iter
 
                 let barEq = List.map2 mkEq xbar ybar |> mkAnd
 

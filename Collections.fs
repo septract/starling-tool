@@ -7,6 +7,25 @@ open Chessie.ErrorHandling
 open Starling.Utils
 
 /// <summary>
+///     A type of Func.
+/// </summary>
+type FuncType =
+    /// <summary>A func coming from some ordinary Starling source.</summary>
+    | Regular
+    /// <summary>A func lifting local-variable expressions to views.</summary>
+    | LocalSynth
+    /// <summary>A func that was created by an unknown view.</summary>
+    | UnknownSynth
+    /// <summary>A func that has had its type erased by flattening.</summary>
+    | Erased
+    override this.ToString () =
+        match this with
+        | Regular -> "regular"
+        | LocalSynth -> "lift"
+        | UnknownSynth -> "unknown"
+        | Erased -> "?"
+
+/// <summary>
 ///     A function-like construct.
 /// </summary>
 /// <remarks>
@@ -26,7 +45,9 @@ type Func<'param> =
     { /// The name of a Func.
       Name : string
       /// The parameters of a Func.
-      Params : 'param list }
+      Params : 'param list
+      /// The type of the Func.
+      FuncType : FuncType }
     override this.ToString () = sprintf "Func: %s(%A)" this.Name this.Params
 
 /// <summary>
@@ -44,14 +65,25 @@ type Func<'param> =
 let func (name : string)
          (pars : 'param seq)
          : Func<'param> =
-    { Name = name; Params = List.ofSeq pars }
+    { Name = name; Params = List.ofSeq pars; FuncType = Regular }
 
 module Func =
+    /// Replaces the parameters in a Func with another set.
+    let updateParams (f : Func<_>) (ps : 'Param seq) : Func<'Param> =
+        { Name = f.Name
+          Params = List.ofSeq ps
+          FuncType = f.FuncType }
+
     module Pretty =
         open Starling.Core
+        open Starling.Core.Pretty
 
         /// Pretty-prints Funcs using pxs to print parameters.
-        let printFunc pxs { Name = f; Params = xs } = Pretty.func f (Seq.map pxs xs)
+        let printFunc pxs f =
+            match f.FuncType with
+            | LocalSynth ->
+                syntaxStr "local" <+> braced (commaSep (Seq.map pxs f.Params))
+            | _ -> Pretty.func f.Name (Seq.map pxs f.Params)
 
 /// <summary>
 ///     A multiset, or ordered list.

@@ -416,5 +416,5 @@ module Traversal =
     let tliftOverFunc
       (traversal : Traversal<'SrcPar, 'DstPar, 'Error, 'Var>)
       : Traversal<Func<'SrcPar>, Func<'DstPar>, 'Error, 'Var> =
-        fun context { Name = n ; Params = ps } ->
-            tchainL traversal (func n) context ps
+        fun context f ->
+            tchainL traversal (Func.updateParams f) context f.Params

@@ -124,8 +124,8 @@ let rec makeDisjoint (xs : List<StrFunc>) =
       freshNode (Identifier s) 
 
     let makeNeqArgs 
-         ({Name = fx; Params = px}: StrFunc) 
-         ({Name = fy; Params = py}: StrFunc) : Expression = 
+         ({Params = px}: StrFunc) 
+         ({Params = py}: StrFunc) : Expression = 
       List.zip (List.map str2Expr px) (List.map str2Expr py) 
       |> 
       List.map (fun (a,b) -> freshNode (BopExpr(Neq,a,b))) 

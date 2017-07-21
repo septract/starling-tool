@@ -213,12 +213,12 @@ module AfterFuncs =
     [<Test>]
     let ``Substitute afters in a func with all-after params`` () =
         check
-            { Name = "foo"
-              Params = [ normalIntExpr (IAdd [siBefore "serving"; IInt 1L])
-                         normalBoolExpr (BNot (sbBefore "flag")) ] }
-            { Name = "foo"
-              Params = [ normalIntExpr (siAfter "serving")
-                         normalBoolExpr (sbAfter "flag") ] }
+            (Starling.Collections.func "foo"
+              [ normalIntExpr (IAdd [siBefore "serving"; IInt 1L])
+                normalBoolExpr (BNot (sbBefore "flag")) ] )
+            (Starling.Collections.func "foo"
+              [ normalIntExpr (siAfter "serving")
+                normalBoolExpr (sbAfter "flag") ] )
 
 
 /// <summary>
@@ -230,8 +230,8 @@ module GraphOptGuards =
     /// A graph consisting of one no-operation cycle.
     let nopCycle =
         { Name = "test"
-          Contents =
-              Map.ofList
+          Contents = 
+            Map.ofList
                 [ ("x",
                     (Advisory (Multiset.empty),
                      Set.ofList

@@ -271,20 +271,21 @@ module private Generators =
         tryGenName 0I
 
     /// <summary>
-    ///     Generates a fresh view with a given name prefix and parameter list.
+    ///     Generates a fresh view with a given func type and parameter list.
     ///     Inserts that view into the given context.
+    ///     The view's name is derived from its given func type.
     ///     <para>
     ///         The view is guaranteed to have a name that does not clash with
     ///         an generated or existing view.
     ///     </para>
     /// </summary>
-    /// <param name="prefix">The prefix to use when generating the name.</param>
+    /// <param name="ftype">The type of func to generate.</param>
     /// <param name="pars">The parameters to use for the view prototype.</param>
     /// <param name="ctx">The <see cref="DesugarContext"/> to extend.</param>
     /// <returns>
     ///     A pair of the context updated with the new view, and its name.
     /// </returns>
-    let genView (prefix : string) (pars : Param list) (ctx : DesugarContext)
+    let genView (ftype : FuncType) (pars : Param list) (ctx : DesugarContext)
       : DesugarContext * string =
         let vnames =
             // Can't union-map because the proto types are different.
@@ -292,8 +293,10 @@ module private Generators =
                 (Set.map protoName ctx.ExistingProtos)
                 (Set.map protoName ctx.GeneratedProtos)
 
-        let newName = genName vnames prefix
-        let newProto = NoIterator ({ Name = newName; Params = pars }, false)
+        let newName = genName vnames (ftype.ToString ())
+        let newProto =
+            NoIterator
+                ({ Name = newName; Params = pars; FuncType = ftype }, false)
         let ctx' = { ctx with GeneratedProtos = ctx.GeneratedProtos.Add newProto }
         (ctx', newName)
 
@@ -313,7 +316,7 @@ module private Generators =
             (* We need to generate the view, then set the context to use it as
                the lifter.  The lifter has one parameter: the lifted Boolean. *)
             let ctxR, n =
-                genView "lift" [ { ParamName = "x"; ParamType = TBool } ] ctx
+                genView LocalSynth [ { ParamName = "x"; ParamType = TBool } ] ctx
             ({ ctxR with LocalLiftView = Some n }, n)
 
     /// <summary>
@@ -381,9 +384,8 @@ module private LocalRewriting =
         { expr with Node = rewriteExpression' expr.Node }
 
 
-    let rewriteAFunc (ctx : BlockContext) { Name = n; Params = ps } =
-        { Name = n; Params = List.map (rewriteExpression ctx) ps }
-
+    let rewriteAFunc (ctx : BlockContext) (func : AFunc) : AFunc =
+        Func.updateParams func (List.map (rewriteExpression ctx) func.Params) 
     let rec rewritePrim (ctx : BlockContext) prim =
         let rewritePrim' =
             function
@@ -452,7 +454,8 @@ let desugarView
                Generate lift if it doesn't exist. *)
             let (dc', liftName) = Generators.genLifter c.DCtx
             let c' = { c with DCtx = dc' }
-            desugarIn suffix c' (Func { Name = liftName; Params = [e] })
+            desugarIn suffix c'
+                (Func { Name = liftName; Params = [e]; FuncType = LocalSynth })
         | Func v -> (c, [ (suffix, LocalRewriting.rewriteAFunc ctx v) ])
         | Join (x, y) -> desugarJoin c suffix x suffix y
         | View.If (i, t, eo) ->
@@ -512,7 +515,7 @@ let desugarMarkedView (ctx : BlockContext) (marked : Marked<View>)
             List.map (fun (t, n) -> { ParamName = n; ParamType = t })
                 tvars
 
-        let dctx, vname = Generators.genView "unknown" tpars ctx.DCtx
+        let dctx, vname = Generators.genView UnknownSynth tpars ctx.DCtx
         ({ ctx with DCtx = dctx },
          Advisory [ (freshNode True, func vname texprs ) ])
 
