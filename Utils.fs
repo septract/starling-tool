@@ -53,7 +53,7 @@ module Config =
                 MetaName = "input",
                 HelpText =
                     "The file to load (omit, or supply -, for standard input).")>]
-          input : string option }
+          input : string }
 
     let _emptyOpts : Options = {
         backendOpts     = None;
@@ -64,7 +64,7 @@ module Config =
         viewOpts        = None;
         verbose         = false;
         profilerFlags   = None;
-        input           = None;
+        input           = "";
     }
 
     let _configRef : Options ref = ref _emptyOpts

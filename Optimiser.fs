@@ -204,7 +204,7 @@ module Utils =
     let optAllowed (prefixes : Set<string>) (opt : string) : bool =
         // Check for the most obvious (and O(1)) case first.
         Set.contains opt prefixes ||
-        Set.exists opt.StartsWith prefixes
+        Set.exists<string> opt.StartsWith prefixes
 
     /// <summary>
     ///     Applies a pair of optimisation removes and adds to an optimisation
@@ -238,7 +238,7 @@ module Utils =
         let config = config()
         let optimisationSet = new HashSet<string>();
         // try add or remove from prefix
-        let addFromPrefix prefix =
+        let addFromPrefix (prefix: string) =
             for (optName : string, _, _) in allOpts do
                 if optName.StartsWith(prefix) then
                     if config.verbose && not (optimisationSet.Contains(optName)) then
@@ -246,7 +246,7 @@ module Utils =
 
                     ignore <| optimisationSet.Add(prefix)
 
-        let removeFromPrefix prefix =
+        let removeFromPrefix (prefix: string) =
             for (optName, _, _) in allOpts do
                 if optName.StartsWith(prefix) then
                     if config.verbose && optimisationSet.Contains(optName) then

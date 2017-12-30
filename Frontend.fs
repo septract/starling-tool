@@ -140,7 +140,7 @@ let run
   (continuation
      : Result<Model<Graph, ViewDefiner<BoolExpr<Sym<Var>> option>>, 'error>
      -> Result<'response, 'error>)
-  : string option -> Result<'response, 'error> =
+  : string -> Result<'response, 'error> =
     let printTimes = pfset.Contains PhaseTime
     let printWS = pfset.Contains PhaseWorkingSet
     let printVM = pfset.Contains PhaseVirtual

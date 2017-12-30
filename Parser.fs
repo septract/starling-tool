@@ -746,11 +746,11 @@ let parseFile name =
         // If - or no name was given, parse from the console.
         let stream, streamName =
             match name with
-            | None ->
+            | "" ->
                 eprintfn "note: no input filename given, reading from stdin"
                 (Console.OpenStandardInput (), "(stdin)")
-            | Some("-") -> (Console.OpenStandardInput (), "(stdin)")
-            | Some(nam) ->
+            | "-" -> (Console.OpenStandardInput (), "(stdin)")
+            | nam ->
                 (* TODO(MattWindsor91):
                    if we're receiving multiple files at once, we
                    might need to hold onto more of 'nam' here. *)
@@ -761,4 +761,4 @@ let parseFile name =
         |> function | Success (result, _, _) -> ok result
                     | Failure (errorMsg, _, _) -> fail errorMsg
     with
-    | :? System.IO.FileNotFoundException  -> fail ("File not found: " + Option.get name)
+    | :? System.IO.FileNotFoundException  -> fail ("File not found: " + name)

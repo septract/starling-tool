@@ -594,7 +594,7 @@ module private BackendConfig =
 ///     <c>Result</c> over <c>Response</c> and <c>Error</c>.
 /// </returns>
 let runStarling (request : Request)
-  : string option -> Result<Response, Error> =
+  : string -> Result<Response, Error> =
 
     let config = config()
 
