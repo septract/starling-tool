@@ -4,7 +4,7 @@ view error();
 shared int a, b; 
 
 method testNeg() { 
-  {| if (! false) then foo() else error() |} 
+  {| if (! false)) { foo() } else { error() } |} 
    ; 
   {| foo() |} 
 } 

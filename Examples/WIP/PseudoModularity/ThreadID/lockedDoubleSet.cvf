@@ -1,0 +1,56 @@
+/*
+ * Modifying two variables in lockstep.
+ * Pseudo-modular code with fused values.
+ */
+
+shared int x;
+shared bool lock;  // True iff the lock is taken.
+
+method setTest(int id, int v) {
+  {| thread(id) |}
+    thread int xl;
+
+    // Inlined lock
+    thread bool test;
+
+    do {
+      {| thread(id) |}
+        test = false;
+      {| thread(id) * local { test == false } |}
+        <| CAS(lock, test, true); |>
+      {| thread(id) * if (test == false) { holdLock(id) } |}
+    } while (test == true);
+
+    // End inlined lock
+
+  {| thread(id) * holdLock(id) |}
+   <| x = v; |>
+  {| holdLock(id) * XVal(id, v) |}
+   <| xl = x; |>
+  {| holdLock(id) * XVal(id, v) * local{ xl == v } |}
+    if (xl != v) {
+      {| false |}
+       <| error; |>
+      {| false |}
+    }
+  {| thread(id) * holdLock(id) |}
+
+    // Inlined unlock
+
+    <| lock = false; |>
+
+    // End inlined unlock
+
+  {| thread(id) |}
+}
+
+view thread(int id), holdLock(int id), XVal(int id, int v);
+
+constraint holdLock(id) -> lock;
+exclusive holdLock(id), holdLock(id2);
+
+constraint holdLock(id1) * XVal(id2, v) -> id1 == id2 => x == v;
+constraint XVal(id1, v1) * XVal(id2, v2) -> id1 != id2;
+constraint thread(id1) * XVal(id2, v2) -> id1 != id2;
+constraint thread(id1) * thread(id2) -> id1 != id2;
+

@@ -18,11 +18,6 @@ module Config =
     [<NoComparison>]
     type Options =
         { [<Option(
-                'r',
-                HelpText =
-                    "Dump results in raw format instead of pretty-printing.")>]
-          raw : bool
-          [<Option(
                 'B',
                 HelpText =
                     "Comma-delimited set of backend options (pass 'list' for details)")>]
@@ -53,8 +48,6 @@ module Config =
                 HelpText =
                     "Comma-delimited set of profiling options (pass 'list' for details")>]
           profilerFlags : string option
-          [<Option('c', HelpText = "Enable color printing")>]
-          color : bool
           [<Value(
                 0,
                 MetaName = "input",
@@ -63,7 +56,6 @@ module Config =
           input : string option }
 
     let _emptyOpts : Options = {
-        raw             = false;
         backendOpts     = None;
         stage           = None;
         term            = None;
@@ -73,7 +65,6 @@ module Config =
         verbose         = false;
         profilerFlags   = None;
         input           = None;
-        color           = false;
     }
 
     let _configRef : Options ref = ref _emptyOpts

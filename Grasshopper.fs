@@ -89,7 +89,7 @@ module Types =
         | /// <summary>
           ///     The given microcode command cannot be expressed in Grasshopper.
           /// </summary>
-          CommandNotImplemented of cmd : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>>
+          CommandNotImplemented of cmd : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>, unit>
                                  * why : string
         | /// <summary>
           ///     The given expression cannot be expressed in Grasshopper.
@@ -135,6 +135,7 @@ module Pretty =
                     [ printMicrocode
                          (printCTyped printMarkedVar)
                          (printSym printMarkedVar)
+                         (fun _ -> String "?")
                          cmd ]
                   errorInfo (String "Reason:" <+> String why) ]
         | ExpressionNotImplemented (expr, why) ->
@@ -390,9 +391,9 @@ let findTermVars (term : Backends.Z3.Types.ZTerm)
        optimised. *)
     let exprVarsT = tliftOverExpr collectSymVars
 
-    let goalVarsL = findVars (tliftOverFunc exprVarsT) term.Original.Goal
+    let goalVarsL = findVars (tliftOverFunc exprVarsT) term.Original.Goal.Flattened
     let wPreVarsL =
-        findVars (tchainM (tliftOverGFunc exprVarsT) id) term.Original.WPre
+        findVars (tchainM (tliftOverGFunc exprVarsT) id) term.Original.WPre.Reified
 
     let goalAndWPreVarsR = lift2 Set.union goalVarsL wPreVarsL
 
@@ -417,7 +418,7 @@ let findTermVars (term : Backends.Z3.Types.ZTerm)
 /// <returns>
 ///     A Chessie result, containing a list of Grasshopper commands.
 /// </returns>
-let rec grassMicrocode (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
+let rec grassMicrocode (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>, unit> list)
   : Result<GrassCommand list, Error> =
     let translateAssign (x, y) =
         maybe BTrue (mkEq (mkVarExp (mapCTyped Reg x))) y
@@ -481,6 +482,11 @@ let rec grassMicrocode (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> l
                 (CommandNotImplemented
                     (cmd = ent,
                      why = "Assignments cannot mix symbols and pure expressions."))
+        | Microcode.Stored _ ->
+            fail
+                (CommandNotImplemented
+                    (cmd = ent,
+                     why = "Somehow arrived at a stored command here."))
         | Assume x ->
             // Pure assumption.
             lift (fun x -> [ PureAssume x ]) (grassBool x)

@@ -30,16 +30,16 @@ view bHoldLock();       // B holds the lock.
  */
 method lockA() {
   {| aFlagDown() |}
-    <| aFlag = (true); |>
+    <| aFlag = true; |>
   {| aFlagUp() |}
     <| turn = 2; |>  // oops!
   {| aWaiting() |}
     do {
       {| aWaiting() |}
         <| oFlag = bFlag; |>
-      {| if (oFlag) then aWaiting() else aHoldLock() |}
+      {| if (oFlag) { aWaiting() } else { aHoldLock() } |}
         <| oTurn = turn; |>
-      {| if (oFlag && oTurn == 1) then aWaiting() else aHoldLock() |}
+      {| if (oFlag && (oTurn == 1)) { aWaiting() } else { aHoldLock() } |}
     } while (oFlag && (oTurn == 1));
   {| aHoldLock() |}
 }
@@ -49,7 +49,7 @@ method lockA() {
  */
 method unlockA() {
   {| aHoldLock() |}
-    <| aFlag = (false); |>
+    <| aFlag = false; |>
   {| aFlagDown() |}
 }
 
@@ -65,9 +65,9 @@ method lockB() {
     do {
       {| bWaiting() |}
         <| oFlag = aFlag; |>
-      {| if (oFlag) then bWaiting() else bHoldLock() |}
+      {| if (oFlag) { bWaiting() } else { bHoldLock() } |}
         <| oTurn = turn; |>
-      {| if (oFlag && oTurn == 2) then bWaiting() else bHoldLock() |}
+      {| if (oFlag && (oTurn == 2)) { bWaiting() } else { bHoldLock() } |}
     } while (oFlag && (oTurn == 2));
   {| bHoldLock() |}
 }

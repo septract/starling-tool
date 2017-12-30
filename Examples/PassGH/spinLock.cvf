@@ -24,9 +24,9 @@ method lock(Lock x) {
     do {
       {| isLock(x) |}
         test = false;
-      {| if test == false then isLock(x) else False() |}
+      {| if (test == false) { isLock(x) } else { false } |}
         <| test = %{ CAS_to_true([|x|]) }; |>
-      {| if test == false then isLock(x) else holdLock(x) |}
+      {| if (test == false) { isLock(x) } else { holdLock(x) } |}
     } while (test == false);
   {| holdLock(x) |}
 }
@@ -42,10 +42,6 @@ method split(Lock x) {
     ;
   {| isLock(x) * isLock(x) |}
 }
-
-// False is a hack to implement local variable reasoning.
-view False();
-constraint False() -> false;
 
 constraint holdLock(x)  ->  %{ [|x|] in LockFoot && [|x|].lock };
 constraint isLock(x)    ->  %{ [|x|] in LockFoot };

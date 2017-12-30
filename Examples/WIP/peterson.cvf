@@ -21,9 +21,9 @@ method lockA() {
     do {
       {| aHoldFlag() |}
         <oFlag = aFlag>;
-      {| aHoldFlag() * if oFlag then aHoldFlag() else bHoldFlag() |}
+      {| aHoldFlag() * if (oFlag) { aHoldFlag() } else { bHoldFlag() } |}
 	<oTurn = aTurn>;
-      {| aHoldFlag() * if oTurn && oFlag then aHoldLock() else aHoldFlag() |}
+      {| aHoldFlag() * if (oTurn && oFlag) { aHoldLock() } else { aHoldFlag() } |}
     } while ((oFlag == false) && (oTurn == false));
   {| aHoldLock() |}
 }

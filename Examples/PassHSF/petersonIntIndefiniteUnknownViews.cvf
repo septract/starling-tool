@@ -47,11 +47,11 @@ method init() {
  */
 method lockA() {
   {| aFlagDown() |}
-    <aFlag = 1>;
-    <turn = 0>;
+    <| aFlag = 1; |>
+    <| turn = 0; |>
     do {
-        <oFlag = bFlag>;
-        <oTurn = turn>;
+        <| oFlag = bFlag; |>
+        <| oTurn = turn; |>
     } while (oFlag == 1 && oTurn == 0);
   {| aHoldLock() |}
 }
@@ -61,7 +61,7 @@ method lockA() {
  */
 method unlockA() {
   {| aHoldLock() |}
-    <aFlag = 0>;
+    <| aFlag = 0; |>
   {| aFlagDown() |}
 }
 
@@ -70,11 +70,11 @@ method unlockA() {
  */
 method lockB() {
   {| bFlagDown() |}
-    <bFlag = 1>;
-    <turn = 1>;
+    <| bFlag = 1; |>
+    <| turn = 1; |>
     do {
-        <oFlag = aFlag>;
-        <oTurn = turn>;
+        <| oFlag = aFlag; |>
+        <| oTurn = turn; |>
     } while (oFlag == 1 && oTurn == 1);
   {| bHoldLock() |}
 }
@@ -84,7 +84,7 @@ method lockB() {
  */
 method unlockB() {
   {| bHoldLock() |}
-    <bFlag = 0>;
+    <| bFlag = 0; |>
   {| bFlagDown() |}
 }
 

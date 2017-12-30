@@ -11,4 +11,4 @@ then
 	exit 1
 fi
 
-./starling.sh -s graph -t "$2" "$1" | $DOT -Tpdf > "${2}.pdf"
+./starling.sh -Vfancy-graphs -s graph -t "$2" "$1" | $DOT -Tpdf > "${2}.pdf"

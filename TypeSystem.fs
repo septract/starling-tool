@@ -244,9 +244,8 @@ let rec unifyArrayTypeRecs (xs : ArrayTypeRec list) : ArrayTypeRec option =
             match recSoFar with
             | None -> None
             | Some rs ->
-                // TODO(CaptainHayashi): unify element types.
-                match unifyTwoTypes rs.ElementType nextRec.ElementType with
-                | Some et ->
+                match unifyTypedPair rs.ElementType nextRec.ElementType with
+                | Some (et, _) ->
                     (* Currently, favour the type with the most defined length.
                        This should really pull the unified type from above
                        instead of taking one or the other. *)
@@ -276,23 +275,42 @@ and arrayTypeRecsCompatible (x : ArrayTypeRec) (y : ArrayTypeRec) : bool =
     | None -> false
 
 /// <summary>
-///     Tries to unify two types.
+///     Tries to unify the types of two typed items.
 /// </summary>
-/// <param name="x">The first type to unify.</param>
-/// <param name="y">The second type to unify.</param>
+/// <param name="x">The first typed item to unify.</param>
+/// <param name="y">The second typed item to unify.</param>
+/// <typeparam name="Int">
+///     The meta-type of the item when it is typed as <c>Int</c>.
+/// </typeparam>
+/// <typeparam name="Bool">
+///     The meta-type of the item when it is typed as <c>Bool</c>.
+/// </typeparam>
+/// <typeparam name="Array">
+///     The meta-type of the item when it is typed as <c>Array</c>.
+/// </typeparam>
 /// <returns>
-///     The unified record, if unification is possible; None otherwise.
+///     If the types are unifiable, a pair of both items converted to the
+///     unified type and wrapped in Some; None otherwise.
 /// </returns>
-and unifyTwoTypes (x : Type) (y : Type) : Type option =
+and unifyTypedPair<'Int, 'Bool, 'Array>
+  (x : Typed<'Int, 'Bool, 'Array>)
+  (y : Typed<'Int, 'Bool, 'Array>)
+  : (Typed<'Int, 'Bool, 'Array> * Typed<'Int, 'Bool, 'Array>) option =
     (* Types are can be unified when their base types are equal and their
        extended type records are unifiable. *)
     match (x, y) with
-    | (AnIntR xr, AnIntR yr) ->
-        Option.map (fun tr -> Int (tr, ())) (unifyPrimTypeRecs [xr; yr])
-    | (ABoolR xr, ABoolR yr) ->
-        Option.map (fun tr -> Bool (tr, ())) (unifyPrimTypeRecs [xr; yr])
-    | (AnArrayR xr, AnArrayR yr) ->
-        Option.map (fun tr -> Array (tr, ())) (unifyArrayTypeRecs [xr; yr])
+    | (Int (xr, xv), Int (yr, yv)) ->
+        Option.map
+            (fun tr -> (Int (tr, xv), Int (tr, yv)))
+            (unifyPrimTypeRecs [xr; yr])
+    | (Bool (xr, xv), Bool (yr, yv)) ->
+        Option.map
+            (fun tr -> (Bool (tr, xv), Bool (tr, yv)))
+            (unifyPrimTypeRecs [xr; yr])
+    | (Array (xr, xv), Array (yr, yv)) ->
+        Option.map
+            (fun tr -> (Array (tr, xv), Array (tr, yv)))
+            (unifyArrayTypeRecs [xr; yr])
     | _ -> None
 
 /// <summary>
@@ -305,7 +323,7 @@ and unifyTwoTypes (x : Type) (y : Type) : Type option =
 ///     <paramref name="y"/>, or vice versa; false otherwise.
 /// </returns>
 and typesCompatible (x : Type) (y : Type) : bool =
-    match unifyTwoTypes x y with
+    match unifyTypedPair x y with
     | Some _ -> true
     | None -> false
 

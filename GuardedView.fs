@@ -488,10 +488,59 @@ module Pretty =
         printMultiset (printGFunc pVar)
         >> ssurround "<|" "|>"
 
-    let printIteratedGView (pVar : 'var -> Doc) : IteratedGView<'var> -> Doc =
-        printMultiset
-            (printIteratedContainer (printGFunc pVar) (printIntExpr pVar))
-        >> ssurround "<|" "|>"
+    /// <summary>
+    ///     Pretty-prints an iterated guarded view as a document list with a
+    ///     specific iterator printer.
+    /// </summary>
+    /// <param name="pVar">
+    ///     A pretty-printer for variables in the <c>Cond</c>.
+    /// </param>
+    /// <param name="pIter">
+    ///     A pretty-printer for the iterator expressions.
+    ///     Usually use either <see cref="printIntExpr"/> or
+    ///     <see cref="printExprIter"/>.
+    /// </param>
+    /// <param name="gview">The <c>IteratedGView</c> to print.</param>
+    /// <typeparam name="Var">The type of variables in the view.</typeparam>
+    /// <returns>
+    ///     A pretty-printer command to print the <c>IteratedGView</c> as a
+    ///     list. 
+    /// </returns>
+    let printIteratedGViewAsListWith
+      (pVar : 'Var -> Doc) (pIter : IntExpr<'Var> -> Doc)
+      (gview : IteratedGView<'Var>)
+      : Doc list =
+        (printMultisetAsList
+            (printIteratedContainer (printGFunc pVar) pIter) gview)
+
+    /// <summary>
+    ///     Pretty-prints an iterated guarded view with a specific
+    ///     iterator printer.
+    /// </summary>
+    /// <param name="pVar">
+    ///     A pretty-printer for variables in the <c>Cond</c>.
+    /// </param>
+    /// <param name="pIter">
+    ///     A pretty-printer for the iterator expressions.
+    ///     Usually use either <see cref="printIntExpr"/> or
+    ///     <see cref="printExprIter"/>.
+    /// </param>
+    /// <param name="gview">The <c>IteratedGView</c> to print.</param>
+    /// <typeparam name="Var">The type of variables in the view.</typeparam>
+    /// <returns>
+    ///     A pretty-printer command to print the <c>IteratedGView</c>.
+    /// </returns>
+    let printIteratedGViewWith
+      (pVar : 'Var -> Doc) (pIter : IntExpr<'Var> -> Doc)
+      (gview : IteratedGView<'Var>)
+      : Doc =
+        ssurround "{|" "|}"
+            (printMultiset
+                (printIteratedContainer (printGFunc pVar) pIter)
+                gview)
+
+    let printIteratedGView (pVar : 'Var -> Doc) (gview : IteratedGView<'Var>) : Doc =
+        printIteratedGViewWith pVar (printIntExpr pVar) gview
 
     /// <summary>
     ///     Pretty-prints a guarded view over <c>MarkedVar</c>s.
@@ -676,39 +725,6 @@ module Traversal =
                 ctx
                 // None of these items can have extended types, I think?
                 (normalBool c, w, g)
-
-    /// <summary>
-    ///     Lifts a <c>Traversal</c> over all variables in a
-    ///     <see cref="CmdTerm"/>.
-    /// </summary>
-    /// <param name="traversal">
-    ///     The <c>Traversal</c> to map over all variables in the term.
-    ///     This should map from typed variables to expressions.
-    /// </param>
-    /// <typeparam name="SrcVar">
-    ///     The type of variables before traversal.
-    /// </typeparam>
-    /// <typeparam name="DstVar">
-    ///     The type of variables after traversal.
-    /// </typeparam>
-    /// <typeparam name="Error">
-    ///     The type of any returned errors.
-    /// </typeparam>
-    /// <typeparam name="Var">The type of context variables.</typeparam>
-    /// <returns>The lifted <see cref="Traversal"/>.</returns>
-    let tliftOverCmdTerm
-      (traversal : Traversal<Expr<'SrcVar>, Expr<'DstVar>, 'Error, 'Var>)
-      : Traversal<CmdTerm<BoolExpr<'SrcVar>, GView<'SrcVar>, VFunc<'SrcVar>>,
-                  CmdTerm<BoolExpr<'DstVar>, GView<'DstVar>, VFunc<'DstVar>>,
-                  'Error, 'Var> =
-        fun ctx { Cmd = c ; WPre = w; Goal = g } ->
-            let tCmd = tliftOverCommandSemantics traversal
-            let tWPre = tchainM (tliftOverGFunc traversal) id
-            let tGoal = tliftOverFunc traversal
-            tchain3 tCmd tWPre tGoal
-                (fun (c', w', g') -> { Cmd = c'; WPre = w'; Goal = g' })
-                ctx
-                (c, w, g)
 
 /// Gets set of TypedVar's from a GFunc
 let gFuncVars (gfunc : GFunc<Sym<Var>>)

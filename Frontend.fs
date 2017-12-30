@@ -24,8 +24,7 @@ open Starling.Core.Var.Pretty
 open Starling.Lang.AST.Pretty
 open Starling.Lang.Modeller
 open Starling.Lang.Modeller.Pretty
-open Starling.Lang.ViewDesugar.Pretty
-open Starling.Lang.Guarder
+open Starling.Lang.Desugar.Pretty
 
 
 (*
@@ -42,9 +41,6 @@ type Request =
     | Collate
     /// Parse, collate, and model a Starling script; return `Response.Model`.
     | Model
-    /// Parse, collate, model, and guard a Starling script;
-    /// return `Response.Guard`.
-    | Guard
     /// Parse, collate, model, guard, and graph a Starling script;
     /// return `Response.Graph`.
     | Graph
@@ -62,9 +58,7 @@ type Response =
     | Collate of Collator.Types.CollatedScript
     /// Output of the parsing, collation, and modelling steps.
     | Model of Model<ModellerBlock, ViewDefiner<BoolExpr<Sym<Var>> option>>
-    /// Output of the parsing, collation, modelling, and guarding stages.
-    | Guard of Model<GuarderBlock, ViewDefiner<BoolExpr<Sym<Var>> option>>
-    /// Output of the parsing, collation, modelling, guarding and destructuring stages.
+    /// Output of the parsing, collation, modelling, and destructuring stages.
     | Graph of Model<Graph, ViewDefiner<BoolExpr<Sym<Var>> option>>
 
 (*
@@ -89,6 +83,7 @@ type Error =
 /// <summary>
 ///     Pretty-prints a response.
 /// </summary>
+/// <param name="gcfg">The graph view config.</param>
 /// <param name="mview">
 ///     The ModelView instructing this pretty-printer on how to print
 ///     models.
@@ -96,7 +91,8 @@ type Error =
 /// <returns>
 ///     A function converting Responses to Docs.
 /// </returns>
-let printResponse (mview : ModelView) : Response -> Doc =
+let printResponse (gcfg : Starling.Core.Graph.Pretty.Config)
+  (mview : ModelView) : Response -> Doc =
     let printVModel paxiom m =
         printModelView
             paxiom
@@ -110,17 +106,11 @@ let printResponse (mview : ModelView) : Response -> Doc =
     | Response.Model m ->
         printVModel
             (printFullBlock
-                (printViewExpr printCView)
-                (printPartCmd (printViewExpr printCView)))
-            m
-    | Response.Guard m ->
-        printVModel
-            (printFullBlock
-                (printViewExpr (printIteratedGView (printSym String)))
-                (printPartCmd (printViewExpr (printIteratedGView (printSym String)))))
+                (printViewExpr (printIteratedGView (printSym printVar)))
+                (printPartCmd (printViewExpr (printIteratedGView (printSym printVar)))))
             m
     | Response.Graph m ->
-        printVModel printGraph m
+        printVModel (printGraph gcfg) m
 
 /// <summary>
 ///     Pretty-prints an error.
@@ -164,13 +154,11 @@ let run
     let parse = Parser.parseFile >> mapMessages Error.Parse
     let collate = lift Collator.collate
     let model = bind (Modeller.model >> mapMessages Error.Model)
-    let guard = lift Guarder.guard
     let graph = bind (Grapher.graph >> mapMessages Error.Graph)
 
     let ( ** ) = ( <| )
     phase    parse   Request.Parse   Response.Parse
     ** phase collate Request.Collate Response.Collate
     ** phase model   Request.Model   Response.Model
-    ** phase guard   Request.Guard   Response.Guard
     ** phase graph   Request.Graph   Response.Graph
     ** (mapMessages error >> continuation)

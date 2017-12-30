@@ -62,7 +62,7 @@ method remove(int key) {
                             {| wf(key) * lockedAndValidated(pred, curr) |}
                                 present = false;
                                 done = true;
-                            {| wf(key) * hasLock(pred) * hasLock(curr) * if present == true then removed(key) else emp |}
+                            {| wf(key) * hasLock(pred) * hasLock(curr) * if (present == true) { removed(key) } else { emp } |}
                         } else {
                             {| wf(key)
                                * isEntry(curr)  // from wf(key) and ckey == key
@@ -80,23 +80,23 @@ method remove(int key) {
                             |}
                                 present = true;
                                 done = true;
-                            {| wf(key) * hasLock(pred) * hasLock(curr) * if present == true then removed(key) else emp |}
+                            {| wf(key) * hasLock(pred) * hasLock(curr) * if (present == true) { removed(key) } else { emp } |}
                         }
-                    {| wf(key) * hasLock(pred) * hasLock(curr) * if present == true then removed(key) else emp |}
+                    {| wf(key) * hasLock(pred) * hasLock(curr) * if (present == true) { removed(key) } else { emp } |}
                 } else {
                     {| wf(key) * hasLock(pred) * hasLock(curr) |}
                         // We shouldn't need to do this...?
                         present = false;
                         done = false;
-                    {| wf(key) * hasLock(pred) * hasLock(curr) * if present == true then removed(key) else emp |}
+                    {| wf(key) * hasLock(pred) * hasLock(curr) * if (present == true) { removed(key) } else { emp } |}
                 }
-            {| wf(key) * hasLock(pred) * hasLock(curr) * if present == true then removed(key) else emp |}
+            {| wf(key) * hasLock(pred) * hasLock(curr) * if (present == true) { removed(key) } else { emp } |}
                 <%{ releaseLock(#1) }(curr)[]>;
-            {| wf(key) * hasLock(pred) * if present == true then removed(key) else emp |}
+            {| wf(key) * hasLock(pred) * if (present == true) { removed(key) } else { emp } |}
                 <%{ releaseLock(#1) }(pred)[]>;
-            {| wf(key) * if present == true then removed(key) else emp |}
+            {| wf(key) * if (present == true) { removed(key) } else { emp } |}
         } while (done == false);
-    {| if present == true then removed(key) else emp |}
+    {| if (present == true) { removed(key) } else { emp } |}
 }
 
 method add(Entry e, int key) {
@@ -137,7 +137,7 @@ method add(Entry e, int key) {
                                 // Already exists
                                 present = true;
                                 done = true;
-                            {| fresh(e, key) * hasLock(pred) * hasLock(curr) * if done then exists(key) else emp |}
+                            {| fresh(e, key) * hasLock(pred) * hasLock(curr) * if (done) { exists(key) } else { emp } |}
                         } else {
                             {| fresh(e, key) * isEntry(curr) * lockedAndValidated(pred, curr)
                                * less(pred, e) * less(e, curr)
@@ -149,21 +149,21 @@ method add(Entry e, int key) {
                             {| hasLock(pred) * hasLock(curr) * exists(key) |}
                                 present = false;
                                 done = true;
-                            {| hasLock(pred) * hasLock(curr) * if done then exists(key) else emp |}
+                            {| hasLock(pred) * hasLock(curr) * if (done) { exists(key) } else { emp } |}
                         }
-                    {| hasLock(pred) * hasLock(curr) * if done then exists(key) else emp |}
+                    {| hasLock(pred) * hasLock(curr) * if (done) { exists(key) } else { emp } |}
                 } else {
                     {| hasLock(pred) * hasLock(curr) |}
                         // We shouldn't need to do this...?
                         present = false;
                         done = false;
-                    {| hasLock(pred) * hasLock(curr) * if done then exists(key) else emp |}
+                    {| hasLock(pred) * hasLock(curr) * if (done) { exists(key) } else { emp } |}
                 }
-            {| hasLock(pred) * hasLock(curr) * if done then exists(key) else emp |}
+            {| hasLock(pred) * hasLock(curr) * if (done) { exists(key) } else { emp } |}
                 <%{ releaseLock(#1) }(curr)[]>;
-            {| hasLock(pred) * if done then exists(key) else emp |}
+            {| hasLock(pred) * if (done) { exists(key) } else { emp } |}
                 <%{ releaseLock(#1) }(pred)[]>;
-            {| if done then exists(key) else emp |}
+            {| if (done) { exists(key) } else { emp } |}
         } while (!done);
     {| exists(key) |}
 }

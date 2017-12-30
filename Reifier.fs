@@ -10,15 +10,17 @@ open Starling.Utils
 open Starling.Core.Definer
 open Starling.Core.Expr
 open Starling.Core.View
+open Starling.Core.View.Traversal
 open Starling.Core.Var
 open Starling.Core.Model
 open Starling.Core.Command
+open Starling.Core.Command.Traversal
 open Starling.Core.GuardedView
+open Starling.Core.GuardedView.Traversal
 open Starling.Core.Symbolic
 open Starling.Core.Symbolic.Traversal
 open Starling.Core.Traversal
 open Starling.Core.TypeSystem
-open Starling.TermGen.Iter
 
 [<AutoOpen>]
 module Types =
@@ -108,7 +110,57 @@ module Types =
         ///     An expression traversal went belly-up.
         /// </summary>
         | Traversal of TraversalError<Error>
+    
+    /// <summary>
+    ///    A reified view, paired with its original, unreified state.
+    /// </summary>
+    /// <typeparam name="NewView">
+    ///    The type of the reified, and perhaps further processed, view.
+    /// </typeparam>
+    type Reified<'NewView> =
+        { /// <summary>The view before reification.</summary>
+          Original : IteratedGView<Sym<MarkedVar>>
+          /// <summary>The view after reification.</summary>
+          Reified : 'NewView }
 
+/// <summary>
+///    Maps a function over a reified view.
+/// </summary>
+/// <param name="f">The function to apply to the reified view.</param>
+/// <param name="view">The reified view to map.</param>
+/// <typeparam name="A">The original inner view type.</typeparam>
+/// <typeparam name="B">The resulting inner view type.</typeparam>
+/// <returns>
+///     A new <see cref="Reified"/> with the same original view, but
+///     with the reified view set to the result of running
+///     <paramref name="f"/> over <paramref name="view"/>'s inner
+///     reified view.
+/// </returns>
+let reifyMap (f : 'A -> 'B) (view : Reified<'A>) : Reified<'B> =
+    { Original = view.Original; Reified = f view.Reified }
+
+/// <summary>
+///    Maps a partial function over a reified view.
+/// </summary>
+/// <param name="f">The function to apply to the reified view.</param>
+/// <param name="view">The reified view to map.</param>
+/// <typeparam name="A">The original inner view type.</typeparam>
+/// <typeparam name="B">The resulting inner view type.</typeparam>
+/// <typeparam name="Err">The type of errors.</typeparam>
+/// <returns>
+///     A result, containing, if successful,
+///     a new <see cref="Reified"/> with the same original view, but
+///     with the reified view set to the result of running
+///     <paramref name="f"/> over <paramref name="view"/>'s inner
+///     reified view.
+/// </returns>
+
+let tryReifyMap
+  (f : 'A -> Result<'B, 'Err>)
+  (view : Reified<'A>) : Result<Reified<'B>, 'Err> =
+    lift
+        (fun nview -> reifyMap (fun _ -> nview) view)
+        (f view.Reified)
 
 /// <summary>
 ///     Downclosure checking.
@@ -678,11 +730,15 @@ let reifyView
   (protos : FuncDefiner<ProtoInfo>)
   (definer : ViewDefiner<SVBoolExpr option>)
   (view : IteratedGView<Sym<MarkedVar>>)
-  : Set<GuardedIteratedSubview> =
+  : Reified<Set<GuardedIteratedSubview>> =
     let goal = preprocessView protos view
-    definer
-    |> ViewDefiner.toSeq
-    |> Seq.fold (reifySingleDef protos goal) Set.empty
+
+    let reified =
+        definer
+        |> ViewDefiner.toSeq
+        |> Seq.fold (reifySingleDef protos goal) Set.empty
+    
+    { Original = view; Reified = reified }
 
 /// Performs sanity checking on the model, possibly producing deferred checks.
 let sanityCheckModel
@@ -702,7 +758,7 @@ let sanityCheckModel
 let reify
   (model : Model<Term<'a, IteratedGView<Sym<MarkedVar>>, IteratedOView>,
                  ViewDefiner<SVBoolExpr option>>)
-  : Result<Model<Term<'a, Set<GuardedIteratedSubview>, IteratedOView>,
+  : Result<Model<Term<'a, Reified<Set<GuardedIteratedSubview>>, IteratedOView>,
                  ViewDefiner<SVBoolExpr option>>, Error> =
     let checkedModelR = sanityCheckModel model
     lift
@@ -716,11 +772,38 @@ let reify
 module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Expr.Pretty
+    open Starling.Core.GuardedView.Pretty
     open Starling.Core.Symbolic.Pretty
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Var.Pretty
     open Starling.Core.View.Pretty
     open Starling.Core.Traversal.Pretty
+
+    /// <summary>
+    ///     Pretty-prints the original component of a reified view.
+    /// </summary>
+    /// <param name="v">The reified view to print.</param>
+    /// <typeparam name="NewView">The type of the wrapped view.</typeparam>
+    /// <returns>
+    ///     A <see cref="Doc"/> representing the unreified form of the
+    ///     given reified view.
+    /// </returns>
+    let printReifiedOriginal (v : Reified<'NewView>)
+      : Doc =
+        printIteratedGView (printSym printMarkedVar) v.Original
+
+    /// <summary>
+    ///     Pretty-prints the reified component of a reified view.
+    /// </summary>
+    /// <param name="pNewView">The printer for the wrapped view.</param>
+    /// <param name="v">The reified view to print.</param>
+    /// <typeparam name="NewView">The type of the wrapped view.</typeparam>
+    /// <returns>
+    ///     A <see cref="Doc"/> representing the reified view.
+    /// </returns>
+    let printReified (pNewView : 'NewView -> Doc) (v : Reified<'NewView>)
+      : Doc =
+        pNewView v.Reified
 
     /// <summary>
     ///     Pretty-prints an <see cref="Error"/>.
@@ -749,15 +832,18 @@ module Pretty =
                           iterator is zero"
                     [ errorInfo <| printBoolExpr (printSym printVar) emp ] ]
         | TooManyIteratedFuncs (view, count) ->
-            fmt "constraint '{0}' contains {1} iterated funcs, but iterated \
-                 definitions can only contain at most one"
-                [ printDView view
-                  String (sprintf "%i" count) ]
+            String "constraint"
+            <+> quoted (printDView view)
+            <+> String "contains"
+            <+> String (sprintf "%i" count)
+            <+> String "iterated funcs, but iterated definitions can only contain at most one"
         | MixedFuncType view ->
-            fmt "constraint '{0}' mixes iterated and non-iterated views"
-                [ printDView view ]
-        | NoSuchView name
-            -> fmt "no view prototype for '{0}'" [ printDFunc name ]
+            String "constraint"
+            <+> quoted (printDView view)
+            <+> String "mixes iterated and non-iterated views"
+        | NoSuchView name ->
+            String "no view prototype for"
+            <+> quoted (printDFunc name)
         | LookupError(func, err) ->
             wrapped "lookup for view"
                 (printDFunc func)
@@ -779,11 +865,14 @@ module Pretty =
                         func)
             <+> errorStr "is not iterated, but used as iterated in a constraint"
         | BadIteratorType (view, ty) ->
-            fmt "iterator on constraint '{0}' is of type {1}, should be int"
-                [ printDView view
-                  printType ty ]
+            String "iterator on constraint"
+            <+> quoted (printDView view)
+            <+> String "is of type"
+            <+> quoted (printType ty)
+            <&> String "should be int"
         | MissingIterator view ->
-            fmt "constraint '{0}' should have an iterator, but does not"
-                [ printDView view ]
+            String "constraint"
+            <+> quoted (printDView view)
+            <+> String "should have an iterator, but does not"
         | Traversal err -> printTraversalError printError err
         |> error

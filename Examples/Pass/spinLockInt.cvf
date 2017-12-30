@@ -14,11 +14,11 @@ method lock() {
     do {
       {| emp |}
         test = 0;
-      {| if test == 0 then emp else False() |}
+      {| local { test == 0 } |}
         <| CAS(lock, test, 1); |>
       // Starling can't infer that test is always 0 or 1.
       // Thus, we need to flip the condition here.
-      {| if test == 1 then emp else holdLock() |}
+      {| if (test != 1) { holdLock() } |}
     } while (test == 1);
   {| holdLock() |}
 }
@@ -32,10 +32,6 @@ method unlock() {
   {| emp |}
 }
 
-
-// False is a hack to implement local variable reasoning.
-view False();
-constraint False() -> false;
 
 constraint emp -> 0 <= lock && lock <= 1;
 

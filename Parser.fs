@@ -230,12 +230,12 @@ do parsePostfixExpressionRef :=
     parsePrimaryExpression .>> ws >>= parseArraySubscript
 
 
-/// Parser for unary expressions 
-/// TODO(CaptainHayashi): this is a bit hacky, could unify postfix / unary expr? 
-let parseUnaryExpression = 
+/// Parser for unary expressions
+/// TODO(CaptainHayashi): this is a bit hacky, could unify postfix / unary expr?
+let parseUnaryExpression =
      parsePostfixExpression
-     <|> 
-     nodify (skipString "!" >>. ws >>. parsePostfixExpression |>> (fun x -> UopExpr (Neg, x )))  
+     <|>
+     nodify (skipString "!" >>. ws >>. parsePostfixExpression |>> (fun x -> UopExpr (Neg, x )))
 
 
 /// Parser for multiplicative expressions.
@@ -339,18 +339,24 @@ let parseIfLike pLeg ctor =
             (opt (pstring "else" >>. ws >>. inBraces pLeg))
             ctor
 
+let parsePrim : Parser<Prim, unit> =
+    choice
+        [ // The ordering here is due to ambiguity, I think?
+          parseSymbolic |>> SymCommand
+          parseHavoc |>> Havoc
+          parseAssume
+          parseCAS
+          parseFetchOrPostfix ]
+    |> nodify
+
 /// Parser for atomic actions.
 do parseAtomicRef :=
-    choice [ (stringReturn "id" Id)
-             // These two need to fire before parseFetchOrPostfix due to
-             // ambiguity.
-             parseIfLike (many1 (parseAtomic .>> ws)) (curry3 ACond)
-             parseSymbolic .>> wsSemi |>> SymAtomic
-             parseHavoc .>> wsSemi |>> Havoc
-             parseAssume .>> wsSemi 
-             parseCAS .>> wsSemi
-             parseFetchOrPostfix .>> wsSemi ]
-    |> nodify
+    nodify <| choice
+        [ // These need to fire before parsePrim due to ambiguity.
+          parseIfLike (many1 (parseAtomic .>> ws)) (curry3 ACond)
+          stringReturn "error" AError .>> wsSemi
+          pstring "assert" >>. ws >>. inParens parseExpression |>> AAssert
+          parsePrim .>> wsSemi |>> APrim ]
 
 /// Parser for a collection of atomic actions.
 let parseAtomicSet =
@@ -358,7 +364,7 @@ let parseAtomicSet =
 
 /// Parses a Func given the argument parser argp.
 let parseFunc argp =
-    pipe2ws parseIdentifier (parseParamList argp) (fun f xs -> {Name = f; Params = xs})
+    pipe2ws parseIdentifier (parseParamList argp) func
 
 (*
  * View-likes (views and view definitions).
@@ -380,7 +386,7 @@ let parseViewLike basic join =
 /// Parses a builtin primitive type.
 let parseBuiltinPrimType : Parser<TypeLiteral, unit> =
     choice [
-        stringReturn "int" TInt 
+        stringReturn "int" TInt
         stringReturn "bool" TBool
     ]
 
@@ -411,27 +417,26 @@ let parseParam : Parser<Param, unit> =
 
 /// Parses a conditional view.
 let parseIfView =
-    // TODO: use parseIflike.
-    pipe3ws (pstring "if" >>. ws >>. parseExpression)
-            // ^- if <view-exprn> ...
-            (pstring "then" >>. ws >>. parseView)
-            // ^-                 ... then <view> ...
-            (pstring "else" >>. ws >>. parseView)
-            // ^-                                 ... else <view>
-            (curry3 View.If)
+    parseIfLike parseView (curry3 View.If)
+
+/// Parses a local view.
+let parseLocalView =
+    pstring "local" >>. ws >>. inBraces parseExpression |>> View.Local
+
 
 /// Parses a functional view.
 let parseFuncView = parseFunc parseExpression |>> View.Func
 
-/// Parses the unit view (`emp`, for our purposes).
-let parseUnit = stringReturn "emp" Unit
-
 /// Parses a `basic` view (unit, if, named, or bracketed).
 let parseBasicView =
-    choice [ parseUnit
-             // ^- `emp'
+    choice [ stringReturn "emp" Unit
+             // ^- `emp`
+             stringReturn "false" Falsehood
+             // ^- `false`
+             parseLocalView
+             // ^- local
              parseIfView
-             // ^- if <view-exprn> then <view> else <view>
+             // ^- if (<view-exprn>) { <view> } else { <view> }
              parseFuncView
              // ^- <identifier>
              //  | <identifier> <arg-list>
@@ -506,10 +511,9 @@ do parseViewSignatureRef := parseViewLike parseBasicViewSignature ViewSignature.
 /// Parses a view prototype (a LHS followed optionally by an iterator).
 let parseViewProto =
     // TODO (CaptainHayashi): so much backtracking...
-    (pstring "iter" >>. ws >>. 
-      (parseFunc parseParam
-         |>> (fun lhs -> WithIterator lhs))) 
-    <|> 
+    (pstring "iter" >>. ws >>.
+      (parseFunc parseParam |>> WithIterator))
+    <|>
       (parseFunc parseParam
          |>> (fun lhs -> NoIterator (lhs, false)))
 
@@ -559,22 +563,22 @@ let parsePrimSet =
     let parseAtomicFirstPrimSet =
         pipe2
           (parseAtomicSet .>> ws)
-          (many (attempt (parseAssign .>> wsSemi .>> ws)))
-          (fun atom rassigns ->
-              Prim { PreAssigns = []; Atomics = atom; PostAssigns = rassigns } )
+          (many (attempt (parsePrim .>> wsSemi .>> ws)))
+          (fun atom rlocals ->
+              Prim { PreLocals = []; Atomics = atom; PostLocals = rlocals } )
 
     let parseNonAtomicFirstPrimSet =
         pipe2
-            (many1 (parseAssign .>> wsSemi .>> ws))
+            (many1 (parsePrim .>> wsSemi .>> ws))
             (opt
                 (parseAtomicSet .>> ws
-                 .>>. many (parseAssign .>> wsSemi .>> ws)))
-            (fun lassigns tail ->
-               let (atom, rassigns) = withDefault ([], []) tail
+                 .>>. many (parsePrim .>> wsSemi .>> ws)))
+            (fun llocals tail ->
+               let (atom, rlocals) = withDefault ([], []) tail
                Prim
-                ( { PreAssigns = lassigns
+                ( { PreLocals = llocals
                     Atomics = atom
-                    PostAssigns = rassigns } ))
+                    PostLocals = rlocals } ))
 
     parseAtomicFirstPrimSet <|> parseNonAtomicFirstPrimSet
 
@@ -582,16 +586,26 @@ let parsePrimSet =
 /// Parser for `skip` commands.
 /// Skip is inserted when we're in command position, but see a semicolon.
 let parseSkip
-    = stringReturn ";" (Prim { PreAssigns = []
+    = stringReturn ";" (Prim { PreLocals = []
                                Atomics = []
-                               PostAssigns = [] })
+                               PostLocals = [] })
     // ^- ;
+
+/// Parses a variable declaration with the given initial keyword and AST type.
+let parseVarDecl (kw : string) : Parser<VarDecl, unit> =
+    let parseList = parseParams parseIdentifier .>> wsSemi
+    let buildVarDecl t vs = { VarType = t; VarNames = vs }
+    pstring kw >>. ws >>. pipe2ws parseType parseList buildVarDecl
 
 /// Parser for simple commands (atomics, skips, and bracketed commands).
 do parseCommandRef :=
     nodify <|
     (choice [parseSkip
              // ^- ;
+             stringReturn "..." Miracle
+             /// ^- '...'
+             parseVarDecl "thread" |>> VarDecl
+             // ^- thread <type> <name> ...
              parseViewExpr |>> ViewExpr
              // ^ {| ... |}
              parseIf
@@ -639,19 +653,19 @@ let parseConstraint : Parser<ViewSignature * Expression option, unit> =
 
 
 /// parse an exclusivity constraint
-let parseExclusive : Parser<List<StrFunc>, unit> = 
+let parseExclusive : Parser<List<StrFunc>, unit> =
     pstring "exclusive" >>. ws
-    // ^- exclusive ..  
+    // ^- exclusive ..
     >>. parseDefs (parseFunc parseIdentifier)
-    .>> wsSemi 
-       
+    .>> wsSemi
+
 /// parse a disjointness constraint
-let parseDisjoint : Parser<List<StrFunc>, unit> = 
+let parseDisjoint : Parser<List<StrFunc>, unit> =
     pstring "disjoint" >>. ws
-    // ^- exclusive ..  
-    >>. parseDefs (parseFunc parseIdentifier) 
-    .>> wsSemi 
-       
+    // ^- exclusive ..
+    >>. parseDefs (parseFunc parseIdentifier)
+    .>> wsSemi
+
 
 /// Parses a single method, excluding leading or trailing whitespace.
 let parseMethod =
@@ -662,12 +676,6 @@ let parseMethod =
                 parseBlock
                 // ^-                             ... <block>
                 (fun s b -> {Signature = s ; Body = b} )
-
-/// Parses a variable declaration with the given initial keyword and AST type.
-let parseVarDecl kw (atype : VarDecl -> ScriptItem') =
-    let parseList = parseParams parseIdentifier .>> wsSemi
-    let buildVarDecl t vs = atype { VarType = t; VarNames = vs }
-    pstring kw >>. ws >>. pipe2ws parseType parseList buildVarDecl
 
 /// Parses a search directive.
 let parseSearch =
@@ -722,9 +730,9 @@ let parseScript =
                              // ^- search 0;
                              parseTypedef
                              // ^- typedef int Node;
-                             parseVarDecl "shared" SharedVars
+                             parseVarDecl "shared" |>> SharedVars
                              // ^- shared <type> <identifier> ;
-                             parseVarDecl "thread" ThreadVars]) .>> ws ) eof
+                             parseVarDecl "thread" |>> ThreadVars]) .>> ws ) eof
                              // ^- thread <type> <identifier> ;
 
 (*
@@ -742,7 +750,12 @@ let parseFile name =
                 eprintfn "note: no input filename given, reading from stdin"
                 (Console.OpenStandardInput (), "(stdin)")
             | Some("-") -> (Console.OpenStandardInput (), "(stdin)")
-            | Some(nam) -> (IO.File.OpenRead(nam) :> IO.Stream, nam)
+            | Some(nam) ->
+                (* TODO(MattWindsor91):
+                   if we're receiving multiple files at once, we
+                   might need to hold onto more of 'nam' here. *)
+                let fnam = IO.Path.GetFileName nam
+                (IO.File.OpenRead(nam) :> IO.Stream, fnam)
 
         runParserOnStream parseScript () streamName stream Text.Encoding.UTF8
         |> function | Success (result, _, _) -> ok result

@@ -38,11 +38,11 @@ method lock(int tid) {
         <want[tid] = true>;
     {| Want(tid) |}
         <other_wants = want[tid]>;
-    {| if other_wants then MightBackOff(tid) else HoldLock(tid) |}
+    {| if (other_wants) { MightBackOff(tid) } else { HoldLock(tid) } |}
         while (other_wants) {
             {| MightBackOff(tid) |}
                 <other_turn = turn>;
-            {| if other_turn != tid then BackingOff(tid) else Want(tid) |}
+            {| if (other_turn != tid) { BackingOff(tid) } else { Want(tid) } |}
                 if (other_turn != tid) {
                     {| BackingOff(tid) |}
                         <want[tid] = false>;
@@ -50,7 +50,7 @@ method lock(int tid) {
                         do {
                             {| BackedOff(tid) |}
                             <other_turn = turn>;
-                            {| if other_turn != tid then BackedOff(tid) else Resuming(tid) |}
+                            {| if (other_turn != tid) { BackedOff(tid) } else { Resuming(tid) } |}
                         } while (other_turn != tid);
                     {| Resuming(tid) |}
                         <want[tid] = true>;
@@ -58,7 +58,7 @@ method lock(int tid) {
                 }
             {| Want(tid) |}
                 <other_wants = want[tid]>;
-            {| if other_wants then MightBackOff(tid) else HoldLock(tid) |}
+            {| if (other_wants) { MightBackOff(tid) } else { HoldLock(tid) } |}
         }
     {| HoldLock(tid) |}
 }

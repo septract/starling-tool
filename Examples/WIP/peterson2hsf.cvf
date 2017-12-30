@@ -21,9 +21,9 @@ method lockA() {
     do {
       {| aHoldFlag() |}
         <oFlag = bFlag>;
-      {| aHoldFlag() * if (oFlag == 1) then emp else bNotHoldFlag() |}
+      {| aHoldFlag() * if (oFlag == 1)) { emp } else { bNotHoldFlag() } |}
 	<oTurn = turn>;
-      {| aHoldFlag() * if (oFlag == 1 && oTurn == 1) then emp else aHoldLock() |}
+      {| aHoldFlag() * if (oFlag == 1 && oTurn == 1)) { emp } else { aHoldLock() } |}
     } while ((oFlag == 1) && (oTurn == 1));
   {| aHoldLock() |}
 }
@@ -49,9 +49,9 @@ method lockB() {
     do {
       {| bHoldFlag() |}
         <oFlag = aFlag>;
-      {| bHoldFlag() * if (oFlag == 1) then emp else aNotHoldFlag() |}
+      {| bHoldFlag() * if (oFlag == 1)) { emp } else { aNotHoldFlag() } |}
 	<oTurn = turn>;
-      {| bHoldFlag() * if (oFlag == 1 && oTurn == 2) then emp else bHoldLock() |}
+      {| bHoldFlag() * if (oFlag == 1 && oTurn == 2)) { emp } else { bHoldLock() } |}
     } while ((oFlag == 1) && (oTurn == 2));
   {| bHoldLock() |}
 }

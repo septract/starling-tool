@@ -7,6 +7,25 @@ open Chessie.ErrorHandling
 open Starling.Utils
 
 /// <summary>
+///     A type of Func.
+/// </summary>
+type FuncType =
+    /// <summary>A func coming from some ordinary Starling source.</summary>
+    | Regular
+    /// <summary>A func lifting local-variable expressions to views.</summary>
+    | LocalSynth
+    /// <summary>A func that was created by an unknown view.</summary>
+    | UnknownSynth
+    /// <summary>A func that has had its type erased by flattening.</summary>
+    | Erased
+    override this.ToString () =
+        match this with
+        | Regular -> "regular"
+        | LocalSynth -> "lift"
+        | UnknownSynth -> "unknown"
+        | Erased -> "?"
+
+/// <summary>
 ///     A function-like construct.
 /// </summary>
 /// <remarks>
@@ -26,7 +45,9 @@ type Func<'param> =
     { /// The name of a Func.
       Name : string
       /// The parameters of a Func.
-      Params : 'param list }
+      Params : 'param list
+      /// The type of the Func.
+      FuncType : FuncType }
     override this.ToString () = sprintf "Func: %s(%A)" this.Name this.Params
 
 /// <summary>
@@ -44,14 +65,25 @@ type Func<'param> =
 let func (name : string)
          (pars : 'param seq)
          : Func<'param> =
-    { Name = name; Params = List.ofSeq pars }
+    { Name = name; Params = List.ofSeq pars; FuncType = Regular }
 
 module Func =
+    /// Replaces the parameters in a Func with another set.
+    let updateParams (f : Func<_>) (ps : 'Param seq) : Func<'Param> =
+        { Name = f.Name
+          Params = List.ofSeq ps
+          FuncType = f.FuncType }
+
     module Pretty =
         open Starling.Core
+        open Starling.Core.Pretty
 
         /// Pretty-prints Funcs using pxs to print parameters.
-        let printFunc pxs { Name = f; Params = xs } = Pretty.func f (Seq.map pxs xs)
+        let printFunc pxs f =
+            match f.FuncType with
+            | LocalSynth ->
+                syntaxStr "local" <+> braced (commaSep (Seq.map pxs f.Params))
+            | _ -> Pretty.func f.Name (Seq.map pxs f.Params)
 
 /// <summary>
 ///     A multiset, or ordered list.
@@ -161,11 +193,9 @@ module Multiset =
     ///     The sorted, flattened sequence.
     /// </returns>
     let toFlatSeq (MSet ms : Multiset<'item>) : 'item seq =
-        // TODO(CaptainHayashi): this will be removed when itviews land.
-        ms
-        |> Map.toSeq
-        |> Seq.map (fun (k, amount) -> Seq.replicate amount k)
-        |> Seq.concat
+        Seq.collect
+            (fun (k, amount) -> Seq.replicate amount k)
+            (Map.toSeq ms)
 
     /// <summary>
     ///     Converts a multiset to a sorted, flattened list.
@@ -180,10 +210,7 @@ module Multiset =
     ///     The sorted, flattened list.
     /// </returns>
     let toFlatList (ms : Multiset<'item>) : 'item list =
-        // TODO(CaptainHayashi): this will be removed when itviews land.
-        ms
-        |> toFlatSeq
-        |> List.ofSeq
+        List.ofSeq (toFlatSeq ms)
 
     /// <summary>
     ///     Converts a multiset to a set, removing duplicates.
@@ -334,12 +361,12 @@ module Multiset =
     let map (f : 'src -> 'dst)
             (MSet xs : Multiset<'src>)
             : Multiset<'dst> =
-        let rec repeat_add map k n =
+        let rec repeatAdd map k n =
             match n with
             | 0 -> map
-            | n -> repeat_add (add map (f k)) k (n-1)
+            | n -> repeatAdd (add map (f k)) k (n-1)
         //Note that this is used with side-effecting f, so must be called n times for each addition.
-        Map.fold repeat_add empty xs
+        Map.fold repeatAdd empty xs
 
     /// <summary>
     ///     Collapses a multiset of results to a result on a multiset.
@@ -393,8 +420,34 @@ module Multiset =
 
     module Pretty =
         open Starling.Core.Pretty
+        /// Pretty-prints a multiset as a list of content documents.
+        let printMultisetAsList (pItem : 'Item -> Doc) 
+          (m : Multiset<'Item>) : Doc list =
+            List.map pItem (toFlatList m)
+
         /// Pretty-prints a multiset given a printer for its contents.
-        let printMultiset pItem =
-            toFlatList
-            >> List.map pItem
-            >> semiSep
+        let printMultiset (pItem : 'Item -> Doc) (m : Multiset<'Item>) : Doc =
+            semiSep (printMultisetAsList pItem m)
+
+[<AutoOpen>]
+module Positioning =
+    type SourcePosition =
+        { StreamName: string; Line: int64; Column: int64; }
+        override this.ToString() = sprintf "SourcePosition { StreamName = \"%s\"; Line = %d; Column = %d; };" this.StreamName this.Line this.Column
+
+    /// A Node in the AST which annotates the data with information about position
+    //type Node<'a> = { lineno : int; Node : 'a; }
+    type Node<'a> =
+        { Position: SourcePosition; Node: 'a }
+        static member (|>>) (n, f) = { Position = n.Position; Node = f n.Node }
+        static member (|=>) (n, b) = { Position = n.Position; Node = b }
+        override this.ToString() = sprintf "<%A: %A>" this.Position this.Node
+
+    module Pretty =
+        open Starling.Core.Pretty
+
+        /// Prints a source position.
+        let printPosition (pos : SourcePosition) : Doc =
+            String pos.StreamName
+            <-> String ":" <-> String (sprintf "%d" pos.Line)
+            <-> String ":" <-> String (sprintf "%d" pos.Column)

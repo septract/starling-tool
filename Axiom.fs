@@ -102,11 +102,12 @@ let instantiateGoal (fg : FreshGen)
                     : IteratedOView =
     let instantiateParam = mapCTyped (goalVar fg >> Reg) >> mkVarExp
 
-    dvs |> List.map (function
-        | { Iterator = i; Func = { Name = n; Params = ps } } ->
+    dvs |> List.map
+        (function
+         | { Iterator = i; Func = f } ->
             { Iterator =
                 maybe (IInt 1L) (IVar << Reg << goalVar fg << valueOf) i
-              Func = { Name = n; Params = List.map instantiateParam ps } } )
+              Func = Func.updateParams f (List.map instantiateParam f.Params) })
 
 /// Converts an axiom into a list of framed axioms, by combining it with the
 /// defining views of a model.

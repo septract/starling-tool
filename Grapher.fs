@@ -20,16 +20,11 @@ open Starling.Core.GuardedView
 open Starling.Core.Graph
 open Starling.Lang.AST
 open Starling.Lang.Modeller
-open Starling.Lang.Guarder.Types
 open Starling.Core.Command
 open Starling.Core.Command.Create
 
 let cId : Command = []
-(* TODO(CaptainHayashi): currently we're assuming Assumed expressions
-   are in pre-state position.  When we move to type-safe renaming this
-   change should happen *here*. *)
-let cAssume (expr : SVBoolExpr) : Command =
-    command "Assume" [] [ Expr.Bool (normalRec, simp expr) ] |> List.singleton
+let cAssume (expr : SVBoolExpr) : Command = [ Assume (simp expr) ]
 let cAssumeNot : SVBoolExpr -> Command = mkNot >> cAssume
 
 /// <summary>
@@ -66,7 +61,7 @@ let rec graphWhile
   (oQ : EdgeID)
   (isDo : bool)
   (expr : SVBoolExpr)
-  (inner : GuarderBlock)
+  (inner : ModellerBlock)
   : Result<Subgraph, Error> =
     trial {
         (* If isDo:
@@ -142,8 +137,8 @@ and graphITE
   (oP : NodeID)
   (oQ : NodeID)
   (expr : SVBoolExpr)
-  (inTrue : GuarderBlock)
-  (inFalse : GuarderBlock option)
+  (inTrue : ModellerBlock)
+  (inFalse : ModellerBlock option)
   : Result<Subgraph, Error> =
     trial {
         (* First, we need to convert the expression into an assert.
@@ -213,7 +208,7 @@ and graphITE
 /// <param name="oQ">
 ///     The outer postcondition for the command.
 /// </param>
-/// <param name="_arg1">
+/// <param name="c">
 ///     The command to graph.
 /// </param>
 and graphCommand
@@ -221,8 +216,12 @@ and graphCommand
   (cg : unit -> EdgeID)
   (oP : NodeID)
   (oQ : NodeID)
-  : GuarderPartCmd -> Result<Subgraph, Error> =
-    function
+  (c : ModellerPartCmd)
+  : Result<Subgraph, Error> =
+    match c with
+    | Miracle ->
+        /// Miracles become holes in the graph.
+        ok { Nodes = Map.empty ; Edges = Map.ofList [(cg (), medge oP oQ)] }
     | Prim cmd ->
         /// Each prim is an edge by itself, so just make a one-edge graph.
         ok { Nodes = Map.empty ; Edges = Map.ofList [(cg (), edge oP cmd oQ)] }
@@ -248,7 +247,7 @@ and graphBlockStep
   (vg : unit -> NodeID)
   (cg : unit -> EdgeID)
   ((iP, oGraphR) : NodeID * Result<Subgraph, Error>)
-  ((cmd, iQview) : GuarderPartCmd * GuarderViewExpr)
+  ((cmd, iQview) : ModellerPartCmd * Node<ModellerViewExpr>)
   : NodeID * Result<Subgraph, Error> =
     (* We already know the precondition's ID--it's in pre.
      * However, we now need to create an ID for the postcondition.
@@ -257,7 +256,7 @@ and graphBlockStep
 
      // Add the postcondition onto the outer subgraph.
      let oGraphR2 = trial {
-         let pGraph = { Nodes = Map.ofList [(iQ, (iQview, if last then Exit else Normal))]
+         let pGraph = { Nodes = Map.ofList [(iQ, (iQview.Node, if last then Exit else Normal))]
                         Edges = Map.empty }
          let! oGraph = oGraphR
          return! combine oGraph pGraph }
@@ -289,12 +288,12 @@ and graphBlock
   (topLevel : bool)
   (vg : unit -> NodeID)
   (cg : unit -> NodeID)
-  ({Pre = bPre; Cmds = bContents} : GuarderBlock)
+  ({Pre = bPre; Cmds = bContents} : ModellerBlock)
   : Result<NodeID * NodeID * Subgraph, Error> =
     // First, generate the ID for the precondition.
     let oP = vg ()
 
-    let initState = (oP, ok { Nodes = Map.ofList [(oP, (bPre, if topLevel then Entry else Normal))]
+    let initState = (oP, ok { Nodes = Map.ofList [(oP, (bPre.Node, if topLevel then Entry else Normal))]
                               Edges = Map.empty } )
 
     (* We flip through every entry in the block, extracting its postcondition
@@ -311,7 +310,14 @@ and graphBlock
      * precondition for the next line.  Otherwise, our axiom list turns into a
      * failure.
      *)
-    let ((oQ, graphR), _) = bContents |> List.fold (fun (state,i) cmd -> (graphBlockStep (topLevel && bContents.Length = i) vg cg state cmd, i+1)) (initState,1)
+    let ((oQ, graphR), _) =
+        List.fold
+            (fun (state,i) cmd ->
+                (graphBlockStep
+                    (topLevel && bContents.Length = i)
+                    vg cg state cmd, i+1))
+            (initState,1)
+            bContents
 
     // Pull the whole set of returns into one Result.
     lift (fun gr -> (oP, oQ, gr)) graphR
@@ -319,7 +325,7 @@ and graphBlock
 /// <summary>
 ///     Constructs a control-flow graph for an outer block representing a method.
 /// </summary>
-let graphMethod (name : string) (body : GuarderBlock) : Result<Graph, Error> =
+let graphMethod (name : string) (body : ModellerBlock) : Result<Graph, Error> =
     let vgen = freshGen ()
     let viewName () =
        getFresh vgen
@@ -345,5 +351,5 @@ let graphMethod (name : string) (body : GuarderBlock) : Result<Graph, Error> =
 ///     A model whose axioms are the graphs resulting from the
 ///     methods of <paramref name="model"/>.
 /// </returns>
-let graph (model : Model<GuarderBlock, _>) : Result<Model<Graph, _>, Error> =
+let graph (model : Model<ModellerBlock, _>) : Result<Model<Graph, _>, Error> =
     tryMapAxiomsWithNames graphMethod model

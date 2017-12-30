@@ -74,18 +74,23 @@ module Pretty =
         function
         | Instantiate (prim, error) ->
           colonSep
-              [ fmt "couldn't instantiate primitive '{0}'"
-                    [ printPrimCommand prim ]
+              [ String "couldn't instantiate primitive"
+                <+> quoted (printPrimCommand prim)
                 printSemanticsError error ]
         | MissingDef prim ->
-            fmt "primitive '{0}' has no semantic definition"
-                [ printStoredCommand prim ]
+            String "primitive"
+            <+> quoted (printStoredCommand prim)
+            <+> String "has no semantic definition"
         | TypeMismatch (par, atype) ->
-            fmt "parameter '{0}' conflicts with argument of type '{1}'"
-                [ printTypedVar par; printType atype ]
+            String "parameter"
+            <+> quoted (printTypedVar par)
+            <+> String "conflicts with argument of type"
+            <+> quoted (printType atype)
         | CountMismatch (fn, dn) ->
-            fmt "view usage has {0} parameter(s), but its definition has {1}"
-                [ fn |> sprintf "%d" |> String; dn |> sprintf "%d" |> String ]
+            String "view usage has"
+            <+> String (sprintf "%d" fn)
+            <+> String "parameter(s), but its definition has"
+            <+> String (sprintf "%d" dn)
         | BadSemantics why ->
             errorStr "internal semantics error:" <+> errorStr why
         | FreeVarInSub var ->
@@ -150,8 +155,8 @@ let varAndIdxPath (expr : Expr<Sym<Var>>)
 /// <param name="instrs">The set of instructions to normalise.</param>
 /// <returns>On success, the normalised listing (in arbitrary order).</returns>
 let rec normaliseMicrocode
-  (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
-  : Result<Microcode<TypedVar, Sym<Var>> list, Error> =
+  (instrs : Microcode<Expr<Sym<Var>>, Sym<Var>, unit> list)
+  : Result<Microcode<TypedVar, Sym<Var>, unit> list, Error> =
     (* The only thing normalisation affects is assignments, and it
        distributes over branches.  We first look at how to normalise
        assignments. *)
@@ -206,6 +211,7 @@ let rec normaliseMicrocode
                 (normaliseMicrocode t)
                 (normaliseMicrocode f)
         | Assign (l, rO) -> normaliseAssign l rO
+        | Stored () -> ok (Stored ())
 
     collect (List.map normaliseInstr instrs)
 
@@ -271,8 +277,8 @@ let checkParamTypesPrim (prim : StoredCommand) (sem : PrimSemantics) : Result<Pr
 let traverseMicrocode
   (ltrav : Traversal<'L, 'LO, 'Error, 'Var>)
   (rtrav : Traversal<Expr<'RV>, Expr<'RVO>, 'Error, 'Var>)
-  : Traversal<Microcode<'L, 'RV>,
-              Microcode<'LO, 'RVO>, 'Error, 'Var> =
+  : Traversal<Microcode<'L, 'RV, unit>,
+              Microcode<'LO, 'RVO, unit>, 'Error, 'Var> =
     let brtrav = traverseBoolAsExpr rtrav
 
     let rec tm ctx mc =
@@ -287,6 +293,7 @@ let traverseMicrocode
             tchain ltrav (flip mkPair None >> Assign) ctx lv
         | Assume assumption -> tchain brtrav Assume ctx (mkTypedSub normalRec assumption)
         | Branch (i, t, e) -> tchain3 brtrav tml tml Branch ctx (mkTypedSub normalRec i, t, e)
+        | Stored () -> ok (ctx, Stored ())
     tm
 
 /// <summary>
@@ -300,8 +307,8 @@ let traverseMicrocode
 /// </returns>
 let tliftToMicrocode
   (trav : Traversal<TypedVar, Expr<Sym<Var>>, Error, 'Var>)
-  : Traversal<Microcode<TypedVar, Var>,
-              Microcode<Expr<Sym<Var>>, Sym<Var>>, Error, 'Var> =
+  : Traversal<Microcode<TypedVar, Var, unit>,
+              Microcode<Expr<Sym<Var>>, Sym<Var>, unit>, Error, 'Var> =
     traverseMicrocode trav (tliftToExprSrc trav)
 
 /// <summary>
@@ -311,8 +318,8 @@ let tliftToMicrocode
 let rec markMicrocode
   (postMark : Var -> MarkedVar)
   (preStates : Map<TypedVar, MarkedVar>)
-  : Traversal<Microcode<TypedVar, Sym<Var>>,
-              Microcode<CTyped<MarkedVar>, Sym<MarkedVar>>,
+  : Traversal<Microcode<TypedVar, Sym<Var>, unit>,
+              Microcode<CTyped<MarkedVar>, Sym<MarkedVar>, unit>,
               Error, 'Var> =
     // Define marker functions for lvalues and rvalues...
     let lf var = ok (postMark var)
@@ -333,7 +340,7 @@ let rec markMicrocode
 ///     Converts a microcode instruction into a two-state Boolean predicate.
 /// </summary>
 let rec markedMicrocodeToBool
-  (instr : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>>)
+  (instr : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>, unit>)
   : BoolExpr<Sym<MarkedVar>> =
     match instr with
     | Symbol s -> BVar (Sym s)
@@ -346,6 +353,7 @@ let rec markedMicrocodeToBool
         let tX = mkAnd (List.map markedMicrocodeToBool t)
         let eX = mkAnd (List.map markedMicrocodeToBool e)
         mkAnd2 (mkImplies i tX) (mkImplies (mkNot i) eX)
+    | Stored () -> BTrue
 
 /// <summary>
 ///     Generates a frame from a state assignment map.
@@ -378,8 +386,8 @@ let makeFrame (states : Map<TypedVar, MarkedVar>) : BoolExpr<Sym<MarkedVar>> lis
 let mergeBranch
   (tMap : Map<TypedVar, MarkedVar>)
   (fMap : Map<TypedVar, MarkedVar>)
-  : (Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list
-     * Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list
+  : (Microcode<CTyped<MarkedVar>, Sym<MarkedVar>, unit> list
+     * Microcode<CTyped<MarkedVar>, Sym<MarkedVar>, unit> list
      * Map<TypedVar, MarkedVar>) =
     let assign tvar high low =
         let ttype = typeOf tvar
@@ -443,9 +451,9 @@ let updateState (st : Map<TypedVar, MarkedVar>) (vars : CTyped<MarkedVar> list)
 /// </summary>
 let capInstructions
   (state : Map<TypedVar, MarkedVar>)
-  (instrs : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
+  (instrs : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>, unit> list)
   : Result<Map<TypedVar, MarkedVar>
-           * Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list,
+           * Microcode<CTyped<MarkedVar>, Sym<MarkedVar>, unit> list,
            TraversalError<Error>> =
     // TODO(MattWindsor91): proper doc comment.
     (* As above, patch up the lvalues and rvalues in the instruction, generating a
@@ -491,8 +499,8 @@ let capInstructions
 /// </returns>
 let processMicrocodeRoutineUncapped
   (vars : TypedVar list)
-  (routine : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
-  : Result<( Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list
+  (routine : Microcode<Expr<Sym<Var>>, Sym<Var>, unit> list)
+  : Result<( Microcode<CTyped<MarkedVar>, Sym<MarkedVar>, unit> list
              * Map<TypedVar, MarkedVar> ),
            Error> =
     (* First, normalise the listing.
@@ -504,7 +512,7 @@ let processMicrocodeRoutineUncapped
        This is inherently recursive, because the microcode can contain
        branches. *)
     let rec markInstructions topState instrs
-      : Result<Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list
+      : Result<Microcode<CTyped<MarkedVar>, Sym<MarkedVar>, unit> list
                * Map<TypedVar, MarkedVar>,
                TraversalError<Error>> =
         (* Generic logic to go through a traversable and, whenever we see a
@@ -528,7 +536,7 @@ let processMicrocodeRoutineUncapped
 
         let markInstruction state (index, instr)
           : Result<Map<TypedVar, MarkedVar>
-                   * Microcode<CTyped<MarkedVar>, Sym<MarkedVar>>,
+                   * Microcode<CTyped<MarkedVar>, Sym<MarkedVar>, unit>,
                    TraversalError<Error>> =
             let rt =
                 tliftToExprSrc
@@ -538,6 +546,7 @@ let processMicrocodeRoutineUncapped
             (* First, get all of the non-assigning instructions out of the way.
                Anything that isn't an assign contains only rvalues, which we
                can mark using the pre-state only. *)
+            | Stored () -> ok (state, Stored ())
             | Symbol s ->
                 lift
                     (mkPair state)
@@ -588,7 +597,6 @@ let processMicrocodeRoutineUncapped
                         | _ -> failwith "markMicrocode: bad context")
                     lR rR
 
-
         let indexed = Seq.mapi mkPair instrs
         let R = bindAccumL markInstruction topState (List.ofSeq indexed)
         lift (fun (st, xs) -> (xs, st)) R
@@ -615,8 +623,8 @@ let processMicrocodeRoutineUncapped
 /// </returns>
 let processMicrocodeRoutine
   (vars : TypedVar list)
-  (routine : Microcode<Expr<Sym<Var>>, Sym<Var>> list)
-  : Result<( Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list
+  (routine : Microcode<Expr<Sym<Var>>, Sym<Var>, unit> list)
+  : Result<( Microcode<CTyped<MarkedVar>, Sym<MarkedVar>, unit> list
              * Map<TypedVar, MarkedVar> ),
            Error> =
     let intermediateMarkedR =
@@ -638,15 +646,14 @@ let processMicrocodeRoutine
 ///     Converts a processed microcode routine into a two-state Boolean predicate.
 /// </summary>
 let microcodeRoutineToBool
-  (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list)
+  (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>, unit> list)
   (assignMap : Map<TypedVar, MarkedVar>)
   : BoolExpr<Sym<MarkedVar>> =
     let bools = List.map markedMicrocodeToBool routine
     mkAnd (makeFrame assignMap @ bools)
 
 /// <summary>
-///     Converts a primitive command to its representation as a disjoint
-///     parallel composition of microcode instructions.
+///     Converts a primitive command to stored-command-less microcode.
 /// </summary>
 /// <param name="semantics">The map from command to microcode schemata.</param>
 /// <param name="prim">The primitive command to instantiate.</param>
@@ -657,22 +664,8 @@ let microcodeRoutineToBool
 let rec instantiateToMicrocode
   (semantics : PrimSemanticsMap)
   (prim : PrimCommand)
-  : Result<Microcode<Expr<Sym<Var>>, Sym<Var>> list, Error> =
+  : Result<Microcode<Expr<Sym<Var>>, Sym<Var>, unit> list, Error> =
     match prim with
-    | SymC s ->
-        (* A symbol is passed through directly. *)
-        ok [ Symbol s]
-    | Intrinsic s ->
-        (* An intrinsic can be directly converted into microcode,
-           throwing away the actual direction of the intrinsic. *)
-        match s with
-        | IAssign { TypeRec = ty; LValue = x; RValue = y } ->
-            ok [ Expr.Int (ty, x) *<- Expr.Int (ty, y) ]
-        | BAssign { TypeRec = ty; LValue = x; RValue = y } ->
-            ok [ Expr.Bool (ty, x) *<- Expr.Bool (ty, y) ]
-        | Havoc var ->
-            (* A havoc is converted to an expression. *)
-            ok [ havoc (mkVarExp (mapCTyped Reg var)) ]
     | Stored sc ->
         // A stored command is a lookup into a microcode table.
         let primDefR = lookupPrim sc semantics
@@ -684,7 +677,7 @@ let rec instantiateToMicrocode
             mapMessages Traversal (mapTraversal subInMCode s.Body)
 
         bind instantiate typeCheckedDefR
-    | PrimBranch (cond = c; trueBranch = t; falseBranch = f) ->
+    | Branch (cond = c; trueBranch = t; falseBranch = f) ->
         let inst =
             List.map (instantiateToMicrocode semantics)
             >> collect
@@ -693,7 +686,13 @@ let rec instantiateToMicrocode
         lift2 
             (fun tM fM -> [ Branch (c, tM, fM) ])
             (inst t)
-            (maybe (ok []) inst f)
+            (inst f)
+    (* Anything else is passed through verbatim.
+       We have to destruct and re-construct the Microcode line because of the
+       type change. *)
+    | Assign (l, r) -> ok [ Assign (l, r) ]
+    | Assume l -> ok [ Assume l ]
+    | Symbol s -> ok [ Symbol s ]
 
 /// <summary>
 ///     Translates a command to a multi-state Boolean expression.

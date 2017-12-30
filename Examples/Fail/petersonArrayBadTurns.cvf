@@ -34,9 +34,9 @@ method lock() {
     do {
       {| waiting(i) |}
         <| oFlag = flag[(i + 1) % 2]; |>
-      {| if (oFlag) then waiting(i) else holdLock(i) |}
+      {| if (oFlag) { waiting(i) } else { holdLock(i) } |}
         <| oTurn = turn; |>
-      {| if (oFlag && oTurn == i) then waiting(i) else holdLock(i) |}
+      {| if (oFlag && (oTurn == i)) { waiting(i) } else { holdLock(i) } |}
     } while (oFlag && (oTurn == i));
   {| holdLock(i) |}
 }

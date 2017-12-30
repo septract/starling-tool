@@ -15,7 +15,7 @@ method lock() {
       {| emp |}
         test = false;
         <| CAS(lock, test, true); |>
-      {| if test == false then holdLock() else emp |}
+      {| if (test == false) { holdLock() } |}
     } while (test == true);
   {| holdLock() |}
 }
@@ -29,10 +29,6 @@ method unlock() {
   {| emp |}
 }
 
-
-// False is a hack to implement local variable reasoning.
-view False();
-constraint False() -> false;
 
 view holdLock();
 constraint holdLock() -> lock == true;  // Identity of lock.

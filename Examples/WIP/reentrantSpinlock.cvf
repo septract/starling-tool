@@ -1,0 +1,108 @@
+view iter Lock(int tid);
+
+// Thread FSM
+view InnerLock  (int tid           );  // Lock used to stabilise FSM
+view Thread     (int tid           );  // No special information
+view ThreadClear(int tid           );  // Hold count is stably 0
+view ThreadOwned(int tid, int owner);  // Thread owner is stably owner
+
+shared int owner, holdCount;
+shared bool lock;
+
+shared bool condition;
+
+method lock(int me) {
+	{| Thread(me) |}
+		... // innerLock
+	{| Thread(me) * InnerLock(me) |}
+		thread int o;
+		<| o = owner; |>
+	{| ThreadOwned(me, o) * InnerLock(me) |}
+		if (o != me) {
+			{| Thread(me) * InnerLock(me) |}
+				thread int h;
+				do {
+					{| Thread(me) * InnerLock(me) |}
+						... // innerUnlock
+					{| Thread(me) |}
+						thread bool c;
+						do {
+							{| Thread(me) |}
+								<| c = condition; |>
+							{| Thread(me) |}
+						} while (!c);
+					{| Thread(me) |}
+						... // innerLock
+					{| Thread(me) * InnerLock(me) |}
+						<| h = holdCount; |>
+					{| if (h == 0) { ThreadClear(me) } else { Thread(me) } * InnerLock(me) |}
+				} while (h != 0);
+			{| ThreadClear(me) * InnerLock(me) |}
+				<| condition = false; |>
+			{| ThreadClear(me) * InnerLock(me) |}
+				<| owner = me; |>
+			{| ThreadOwned(me, me) * InnerLock(me) |}
+		}
+	{| ThreadOwned(me, me) * InnerLock(me) |}
+		<| holdCount++; |>
+	{| Thread(me) * InnerLock(me) * Lock(me) |}
+		... // innerUnlock
+	{| Thread(me) * Lock(me) |}
+}
+
+method unlock(int me) {
+	{| Thread(me) * Lock(me) |}
+		... // innerLock
+	{| Thread(me) * Lock(me) * InnerLock(me) |}
+		thread int hc;
+		<| hc = holdCount--; |>
+	{| if (hc == 1) { ThreadClear(me) } else { Thread(me) } * InnerLock(me) |}
+		if (hc == 1) {
+			{| ThreadClear(me) * InnerLock(me) |}
+				<| condition = true; |>
+			{| Thread(me) * InnerLock(me) |}
+		}
+	{| Thread(me) * InnerLock(me) |}
+		... // innerUnlock
+	{| Thread(me) |}
+}
+
+// TODO: this uniqueness requirement somewhat breaks modularity.
+
+method innerLockThread(int me) {
+	{| Thread(me) |}
+		thread bool l;
+		do {
+			{| Thread(me) |}
+				l = false;
+			{| Thread(me) * local { !l } |}
+				<| CAS(lock, l, true); |>
+			{| Thread(me) * if (!l) { InnerLock(me) } |}
+		} while (l);
+	{| Thread(me) * InnerLock(me) |}
+}
+
+method innerUnlock(int me) {
+	{| InnerLock(me) |}
+		<| lock = false; |>
+	{| emp |}
+}
+
+// Thread FSM: interactions
+constraint Thread     (t1    ) * Thread     (t2    ) -> t1 != t2;
+constraint Thread     (t1    ) * ThreadClear(t2    ) -> t1 != t2;
+constraint Thread     (t1    ) * ThreadOwned(t2, o2) -> t1 != t2;
+constraint ThreadClear(t1    ) * ThreadClear(t2    ) -> t1 != t2;
+constraint ThreadClear(t1    ) * ThreadOwned(t2, o2) -> t1 != t2;
+constraint ThreadOwned(t1, o1) * ThreadOwned(t2, o2) -> t1 != t2;
+// Thread FSM: lock-stabilised predicates
+constraint ThreadClear(t1    ) * InnerLock(t2) -> t1 == t2 => holdCount == 0;
+constraint ThreadOwned(t1,  o) * InnerLock(t2) -> t1 == t2 => owner     == o;
+
+constraint emp -> 0 <= holdCount;
+
+
+constraint InnerLock(me) -> lock;
+constraint InnerLock(me1) * InnerLock(me2) -> false;
+
+constraint iter[n] Lock(tid) -> (0 < n => owner == tid) && n <= holdCount;

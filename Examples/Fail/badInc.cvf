@@ -1,12 +1,9 @@
 /* A bad increment */
 
 thread int x; 
-view False(); 
 
 method badInc() { 
-  {| if x==0 then emp else False() |} 
+  {| local { x==0 } |} 
     x = x+1;  
-  {| if x==2 then emp else False() |} 
+  {| local { x==2 } |} 
 } 
-
-constraint False() -> false; 

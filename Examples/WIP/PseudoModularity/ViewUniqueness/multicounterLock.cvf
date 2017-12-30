@@ -1,0 +1,48 @@
+/*
+ * Owicki-style parallel counter increment.
+ */
+
+shared int counter;
+
+method multiIncrement() {
+  {| Count(0) |}
+  thread int t;
+  t = 0;
+  {| Count(t) |}
+  do {
+    {| Count(t) |}
+      thread int i;
+      ...
+    {| Count(t) * Token(i) |}
+      ...
+    {| Count(t) * Token(i) * HoldLock(i) |}
+      t++;
+    {| Count(t-1) * Token(i) * HoldLock(i) |}
+      thread int c;
+      <| c = counter; |>
+    {| Count(t-1) * CountExact(i, c) * HoldLock(i) |}
+      c++;
+    {| Count(t-1) * CountExact(i, c-1) * HoldLock(i) |}
+      <| counter = c; |>
+    {| Count(t) * CountExact(i, c) * HoldLock(i) |}
+      ...
+    {| Count(t) |}
+  } while (t != 10);
+  {| Count(10) |}
+}
+
+
+view Count(int t);
+view CountExact(int id, int t);
+
+constraint CountExact(ia, ta) * HoldLock(ib) -> ia == ib => counter == ta;
+constraint CountExact(ia, ta) * CountExact(ib, tb) -> ia != ib;
+
+// We can also constrain count(t) -> counter >= t, but need not.
+constraint Count(ta) * Count(tb) -> counter == ta + tb;
+constraint Count(ta) * Count(tb) * Count(tc) -> false;
+
+view Token(int id), HoldLock(int id);
+constraint Token(ia) * Token(ib) -> ia != ib;
+constraint Token(ia) * CountExact(ib, tb) -> ia != ib;
+constraint HoldLock(ia) * HoldLock(ib) -> false;

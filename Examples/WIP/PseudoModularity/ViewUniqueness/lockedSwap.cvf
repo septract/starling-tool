@@ -1,0 +1,108 @@
+/*
+ * Swapping two variables around.
+ * Pseudo-modular code with uniqueness values in the view.
+ */
+
+shared int x, y;
+shared bool lockX, lockY;
+
+shared int _uniqX, _uniqY;
+
+method setTest(int v) {
+  {| emp |}
+    thread int xl;
+
+  // Inlined lock for X
+    thread bool testX;
+
+  // Ghost code: add uniqueness
+    thread int idX;
+    <| idX = _uniqX++; |>
+  {| uniqX(idX) |}
+
+    do {
+      {| uniqX(idX) |}
+        testX = false;
+      {| uniqX(idX) * local { testX == false } |}
+        <| CAS(lockX, testX, true); |>
+      {| uniqX(idX) * if (testX == false) { holdLockX(idX) } |}
+    } while (testX);
+
+  {| uniqX(idX) * holdLockX(idX) |}
+
+  // End inlined lock for X
+
+  // Inlined lock for Y
+    thread bool testY;
+
+  // Ghost code: add uniqueness
+    thread int idY;
+    <| idY = _uniqY++; |>
+  {| uniqX(idX) * holdLockX(idX) * uniqY(idY) |}
+
+    do {
+      {| uniqX(idX) * holdLockX(idX) * uniqY(idY) |}
+        testY = false;
+      {| uniqX(idX) * holdLockX(idX) * uniqY(idY) * local { testY == false } |}
+        <| CAS(lockY, testY, true); |>
+      {| uniqX(idX) * holdLockX(idX) * uniqY(idY) * if (testY == false) { holdLockY(idY) } |}
+    } while (testY);
+
+    {| uniqX(idX) * holdLockX(idX) * uniqY(idY) * holdLockY(idY) |}
+
+    // End inlined lock for Y
+
+  {| uniqX(idX) * holdLockX(idX) * uniqY(idY) * holdLockY(idY) |}
+
+    thread int tmpX, tmpY;
+    <| tmpX = x; |>
+  {| XVal(idX, tmpX) * holdLockX(idX) * uniqY(idY) * holdLockY(idY) |}
+    <| tmpY = y; |>
+  {| XVal(idX, tmpX) * holdLockX(idX) * YVal(idY, tmpY) * holdLockY(idY) |}
+    <| x = tmpY; |>
+  {| XVal(idX, tmpY) * holdLockX(idX) * YVal(idY, tmpY) * holdLockY(idY) |}
+    <| y = tmpX; |>
+  {| XVal(idX, tmpY) * holdLockX(idX) * YVal(idY, tmpX) * holdLockY(idY) |}
+
+  // Inlined unlock for X
+
+    <| lockX = false; |>
+
+  // End inlined unlock
+
+  {| YVal(idY, tmpX) * holdLockY(idY) |}
+
+  // Inlined unlock for X
+
+    <| lockY = false; |>
+
+  // End inlined unlock
+
+  {| emp |}
+}
+
+view uniqX(int id), holdLockX(int id), XVal(int id, int v);
+view uniqY(int id), holdLockY(int id), YVal(int id, int v);
+
+constraint uniqX(id) -> id < _uniqX;
+constraint XVal(id, v) -> id < _uniqX;
+constraint uniqX(id1) * uniqX(id2) -> id1 != id2;
+constraint uniqX(id1) * XVal(id2, v) -> id1 != id2;
+
+constraint holdLockX(id1) -> lockX;
+exclusive holdLockX(id), holdLockX(id2);
+
+constraint holdLockX(id1) * XVal(id2, v) -> id1 == id2 => x == v;
+constraint XVal(id1, v1) * XVal(id2, v2) -> id1 != id2;
+
+constraint uniqY(id) -> id < _uniqY;
+constraint YVal(id, v) -> id < _uniqY;
+constraint uniqY(id1) * uniqY(id2) -> id1 != id2;
+constraint uniqY(id1) * YVal(id2, v) -> id1 != id2;
+
+constraint holdLockY(id1) -> lockY;
+exclusive holdLockY(id), holdLockY(id2);
+
+constraint holdLockY(id1) * YVal(id2, v) -> id1 == id2 => y == v;
+constraint YVal(id1, v1) * YVal(id2, v2) -> id1 != id2;
+

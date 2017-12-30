@@ -17,7 +17,7 @@ method lock() {
     do {
       {| holdTick(t) |}
         <| s = serving; |>
-      {| if s == t then holdLock() else holdTick(t) |}
+      {| if (s == t) { holdLock() } else { holdTick(t) } |}
     } while (s == t);
   {| holdLock() |}
 }

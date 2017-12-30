@@ -213,12 +213,12 @@ module AfterFuncs =
     [<Test>]
     let ``Substitute afters in a func with all-after params`` () =
         check
-            { Name = "foo"
-              Params = [ normalIntExpr (IAdd [siBefore "serving"; IInt 1L])
-                         normalBoolExpr (BNot (sbBefore "flag")) ] }
-            { Name = "foo"
-              Params = [ normalIntExpr (siAfter "serving")
-                         normalBoolExpr (sbAfter "flag") ] }
+            (Starling.Collections.func "foo"
+              [ normalIntExpr (IAdd [siBefore "serving"; IInt 1L])
+                normalBoolExpr (BNot (sbBefore "flag")) ] )
+            (Starling.Collections.func "foo"
+              [ normalIntExpr (siAfter "serving")
+                normalBoolExpr (sbAfter "flag") ] )
 
 
 /// <summary>
@@ -230,14 +230,14 @@ module GraphOptGuards =
     /// A graph consisting of one no-operation cycle.
     let nopCycle =
         { Name = "test"
-          Contents =
-              Map.ofList
+          Contents = 
+            Map.ofList
                 [ ("x",
                     (Advisory (Multiset.empty),
                      Set.ofList
-                        [ { Name = "xloop"; Dest = "x"; Command = [] } ],
+                        [ { Name = "xloop"; Dest = "x"; Payload = ECommand [] } ],
                      Set.ofList
-                        [ { Name = "xloop"; Src = "x"; Command = [] } ],
+                        [ { Name = "xloop"; Src = "x"; Payload = ECommand [] } ],
                      Normal)
                   ) ] }
 
@@ -246,5 +246,13 @@ module GraphOptGuards =
         Assert.False (nopConnected nopCycle "x" "x")
 
     [<Test>]
+    let ``canCollapseUnobservable cannot collapse {p}...{p}...{p}`` () =
+        Assert.False
+            (canCollapseUnobservable
+                Map.empty nopCycle "x" EMiracle "x" EMiracle "x")
+
+    [<Test>]
     let ``canCollapseUnobservable cannot collapse {p}nop{p}nop{p}`` () =
-        Assert.False (canCollapseUnobservable Map.empty nopCycle "x" [] "x" [] "x")
+        Assert.False
+            (canCollapseUnobservable
+                Map.empty nopCycle "x" (ECommand []) "x" (ECommand []) "x")

@@ -15,18 +15,6 @@ open Starling.Core.Var.Types
 /// </summary>
 [<AutoOpen>]
 module Types =
-    type SourcePosition =
-        { StreamName: string; Line: int64; Column: int64; }
-        override this.ToString() = sprintf "SourcePosition { StreamName = \"%s\"; Line = %d; Column = %d; };" this.StreamName this.Line this.Column
-
-    /// A Node in the AST which annotates the data with information about position
-    //type Node<'a> = { lineno : int; Node : 'a; }
-    type Node<'a> =
-        { Position: SourcePosition; Node: 'a }
-        static member (|>>) (n, f) = { Position = n.Position; Node = f n.Node }
-        static member (|=>) (n, b) = { Position = n.Position; Node = b }
-        override this.ToString() = sprintf "<%A: %A>" this.Position this.Node
-
     /// A Boolean operator.
     type BinOp =
         | Mul // a * b
@@ -44,8 +32,8 @@ module Types =
         | And // a && b
         | Or // a || b
 
-    /// A unary operator. 
-    type UnOp = 
+    /// A unary operator.
+    type UnOp =
         | Neg // ! a
 
     /// An untyped, raw expression.
@@ -57,22 +45,39 @@ module Types =
         | Identifier of string // foobaz
         | Symbolic of Symbolic<Expression> // %{foo}(exprs)
         | BopExpr of BinOp * Expression * Expression // a BOP b
-        | UopExpr of UnOp * Expression // UOP a 
+        | UopExpr of UnOp * Expression // UOP a
         | ArraySubscript of array : Expression * subscript : Expression
     and Expression = Node<Expression'>
 
-    /// An atomic action.
-    type Atomic' =
+    /// <summary>
+    ///     A primitive command.
+    /// </summary>
+    type Prim' =
         | CompareAndSwap of
             src : Expression
             * test : Expression
             * dest : Expression // <CAS(a, b, c)>
         | Fetch of Expression * Expression * FetchMode // <a = b??>
         | Postfix of Expression * FetchMode // <a++> or <a-->
-        | Id // <id>
         | Assume of Expression // <assume(e)>
-        | SymAtomic of symbol : Symbolic<Expression> // %{xyz}(x, y)
+        | SymCommand of symbol : Symbolic<Expression> // %{xyz}(x, y)
         | Havoc of var : string // havoc var
+    and Prim = Node<Prim'>
+
+    /// <summary>
+    ///     An atomic action.
+    /// </summary>
+    type Atomic' =
+        /// <summary>An atomic primitive.</summary>
+        | APrim of Prim
+        /// <summary>
+        ///     A failure command.
+        ///     This is semantically equivalent to <c>AAssert False</c>.
+        /// </summary>
+        | AError
+        /// <summary>An assertion.</summary>
+        | AAssert of cond : Expression
+        /// <summary>An atomic conditional.</summary>
         | ACond of
             cond : Expression
             * trueBranch : Atomic list
@@ -108,7 +113,7 @@ module Types =
     type AFunc = Func<Expression>
 
     /// A function view definition
-    type StrFunc = Func<string> 
+    type StrFunc = Func<string>
 
     /// <summary>
     ///     An AST type literal.
@@ -155,7 +160,7 @@ module Types =
     type ViewSignature =
         | Unit
         | Join of ViewSignature * ViewSignature
-        | Func of StrFunc 
+        | Func of StrFunc
         | Iterated of StrFunc * string
 
     /// <summary>
@@ -170,23 +175,38 @@ module Types =
 
     /// A view.
     type View =
+          /// <summary>The unit view, `emp`.</summary>
         | Unit
+          /// <summary>The always-false view, `false`.</summary>
+        | Falsehood
+          /// <summary>A `*`-conjunction of two views.</summary>
         | Join of View * View
+          /// <summary>An abstract-predicate view.</summary>
         | Func of AFunc
-        | If of Expression * View * View
+          /// <summary>A local view, `local { P }`.</summary>
+        | Local of Expression
+          /// <summary>A conditional view, `if P { V1 } [else { V2 }]`.</summary>
+        | If of Expression * View * View option
 
     /// A set of primitives.
-    type PrimSet =
-        { PreAssigns: (Expression * Expression) list
-          Atomics: Atomic list
-          PostAssigns: (Expression * Expression) list }
+    type PrimSet<'Atomic> =
+        { PreLocals: Prim list
+          Atomics: 'Atomic list
+          PostLocals: Prim list }
 
     /// A statement in the command language.
     type Command' =
         /// A view expression.
         | ViewExpr of Marked<View>
+        /// <summary>A variable declaration.</summary>
+        | VarDecl of VarDecl
+        /// <summary>
+        ///     A miracle command.
+        ///     Miracles atomically establish their postcondition.
+        /// </summary>
+        | Miracle
         /// A set of sequentially composed primitives.
-        | Prim of PrimSet
+        | Prim of PrimSet<Atomic>
         /// An if-then-else statement, with optional else.
         | If of ifCond : Expression
               * thenBlock : Command list
@@ -229,8 +249,8 @@ module Types =
         | Search of int // search 0;
         | ViewProtos of ViewProto list // view name(int arg);
         | Constraint of ViewSignature * Expression option // constraint emp => true
-        | Exclusive of List<StrFunc> // exclusive p(x), q(x), r(x) 
-        | Disjoint of List<StrFunc> // disjoint p(x), q(x), r(x) 
+        | Exclusive of List<StrFunc> // exclusive p(x), q(x), r(x)
+        | Disjoint of List<StrFunc> // disjoint p(x), q(x), r(x)
         override this.ToString() = sprintf "%A" this
     and ScriptItem = Node<ScriptItem'>
 
@@ -249,36 +269,9 @@ module Pretty =
     /// </summary>
     module private Helpers =
         /// Pretty-prints blocks with the given indent level (in spaces).
+        /// This does not include the curly braces.
         let printBlock (pCmd : 'Cmd -> Doc) (c : 'Cmd list) : Doc =
-            braced (ivsep (List.map (pCmd >> Indent) c))
-
-        /// <summary>
-        ///     Pretty-prints an if-then-else.
-        /// </summary>
-        /// <param name="pCond">Pretty-printer for conditionals.</param>
-        /// <param name="pLeg">Pretty-printer for 'then'/'else' legs.</param>
-        /// <param name="cond">The conditional to print.</param>
-        /// <param name="thenLeg">The 'then' leg to print.</param>
-        /// <param name="elseLeg">The optional 'else' leg to print.</param>
-        /// <typeparam name="Cond">Type of conditionals.</typeparam>
-        /// <typeparam name="Leg">Type of 'then'/'else' leg items.</typeparam>
-        /// <returns>
-        ///     A <see cref="Doc"/> capturing the if-then-else form.
-        /// </returns>
-        let printITE
-          (pCond : 'Cond -> Doc)
-          (pLeg : 'Leg -> Doc)
-          (cond : 'Cond)
-          (thenLeg : 'Leg list)
-          (elseLeg : ('Leg list) option)
-          : Doc =
-            syntaxStr "if"
-            <+> parened (pCond cond)
-            <+> printBlock pLeg thenLeg
-            <+> (maybe
-                    Nop
-                    (fun e -> syntaxStr "else" <+> printBlock pLeg e)
-                    elseLeg)
+            ivsep (List.map (pCmd >> Indent) c)
 
 
     /// Pretty-prints Boolean operations.
@@ -300,10 +293,10 @@ module Pretty =
         | Or -> "||"
         >> String >> syntax
 
-    let printUnOp : UnOp -> Doc = 
-        function 
-        | Neg -> "!" 
-        >> String >> syntax 
+    let printUnOp : UnOp -> Doc =
+        function
+        | Neg -> "!"
+        >> String >> syntax
 
     /// Pretty-prints expressions.
     /// This is not guaranteed to produce an optimal expression.
@@ -319,9 +312,9 @@ module Pretty =
                    printBinOp op
                    printExpression b ]
             |> parened
-        | UopExpr(op, a) -> 
+        | UopExpr(op, a) ->
             hsep [ printUnOp op
-                   printExpression a ] 
+                   printExpression a ]
         | ArraySubscript (array, subscript) ->
             printExpression array <-> squared (printExpression subscript)
     and printExpression (x : Expression) : Doc = printExpression' x.Node
@@ -337,19 +330,60 @@ module Pretty =
         <->
         braced (Starling.Core.Symbolic.Pretty.printSymbolic printExpression s)
 
+    /// <summary>
+    ///     Pretty-prints an if-then-else-like construct.
+    /// </summary>
+    /// <param name="pLeg">Pretty-printer for 'then'/'else' legs.</param>
+    /// <param name="cond">The conditional to print.</param>
+    /// <param name="thenLeg">The 'then' leg to print.</param>
+    /// <param name="elseLeg">The optional 'else' leg to print.</param>
+    /// <typeparam name="Leg">Type of 'then'/'else' leg items.</typeparam>
+    /// <returns>
+    ///     A <see cref="Doc"/> capturing the if-then-else form.
+    /// </returns>
+    let printITELike
+        (pLeg : 'Leg -> Doc)
+        (cond : Expression)
+        (thenLeg : 'Leg)
+        (elseLeg : 'Leg option)
+        : Doc =
+        syntaxStr "if"
+        <+> parened (printExpression cond)
+        <+> braced (pLeg thenLeg)
+        <+> (maybe
+                Nop
+                (fun e -> syntaxStr "else" <+> braced (pLeg e))
+                    elseLeg)
+
+    /// <summary>
+    ///     Pretty-prints an if-then-else.
+    /// </summary>
+    /// <param name="pCmd">Pretty-printer for commands.</param>
+    /// <param name="cond">The conditional to print.</param>
+    /// <param name="thenCmds">The 'then' leg to print.</param>
+    /// <param name="elseCmds">The optional 'else' leg to print.</param>
+    /// <typeparam name="Cmd">Type of commands</typeparam>
+    /// <returns>
+    ///     A <see cref="Doc"/> capturing the if-then-else form.
+    /// </returns>
+    let printITE
+        (pCmd : 'Cmd -> Doc)
+        (cond : Expression)
+        (thenCmds : 'Cmd list)
+        (elseCmds : ('Cmd list) option)
+        : Doc =
+            printITELike (Helpers.printBlock pCmd) cond thenCmds elseCmds
+
+
     /// Pretty-prints views.
     let rec printView : View -> Doc =
         function
         | View.Func f -> printFunc printExpression f
         | View.Unit -> String "emp" |> syntaxView
+        | View.Falsehood -> String "false" |> syntaxView
         | View.Join(l, r) -> binop "*" (printView l) (printView r)
-        | View.If(e, l, r) ->
-            hsep [ String "if" |> syntaxView
-                   printExpression e
-                   String "then" |> syntaxView
-                   printView l
-                   String "else" |> syntaxView
-                   printView r ]
+        | View.If(e, l, r) -> printITELike printView e l r
+        | View.Local l -> syntaxView (String "local") <+> braced (printExpression l)
 
     /// Pretty-prints marked view lines.
     let rec printMarkedView (pView : 'view -> Doc) : Marked<'view> -> Doc =
@@ -379,14 +413,14 @@ module Pretty =
 
     /// Pretty-prints exclusivity constraints.
     let printExclusive (xs : List<StrFunc>) : Doc =
-        hsep ((String "exclusive") :: 
-              (List.map (printFunc String) xs)) 
+        hsep ((String "exclusive") ::
+              (List.map (printFunc String) xs))
         |> withSemi
 
     /// Pretty-prints exclusivity constraints.
     let printDisjoint (xs : List<StrFunc>) : Doc =
-        hsep ((String "disjoint") :: 
-              (List.map (printFunc String) xs)) 
+        hsep ((String "disjoint") ::
+              (List.map (printFunc String) xs))
         |> withSemi
 
     /// Pretty-prints fetch modes.
@@ -401,14 +435,14 @@ module Pretty =
         equality (printExpression dest) (printExpression src)
 
     /// <summary>
-    ///     Pretty-prints atomic actions.
+    ///     Pretty-prints primitive actions.
     /// </summary>
-    /// <param name="a">The <see cref="Atomic'"/> to print.</param>
+    /// <param name="p">The <see cref="Prim'"/> to print.</param>
     /// <returns>
-    ///     A <see cref="Doc"/> representing <paramref name="a"/>.
+    ///     A <see cref="Doc"/> representing <paramref name="p"/>.
     /// </returns>
-    let rec printAtomic' (a : Atomic') : Doc =
-        match a with
+    let rec printPrim' (p : Prim') : Doc =
+        match p with
         | CompareAndSwap(l, f, t) ->
             func "CAS" [ printExpression l
                          printExpression f
@@ -419,53 +453,26 @@ module Pretty =
                 (hjoin [ printExpression r; printFetchMode m ])
         | Postfix(l, m) ->
             hjoin [ printExpression l; printFetchMode m ]
-        | Id -> String "id"
         | Assume e -> func "assume" [ printExpression e ]
-        | SymAtomic sym -> printSymbolic sym
+        | SymCommand sym -> printSymbolic sym
         | Havoc var -> String "havoc" <+> String var
-        | ACond (cond = c; trueBranch = t; falseBranch = f) ->
-            Helpers.printITE printExpression printAtomic c t f
-    and printAtomic (x : Atomic) : Doc = printAtomic' x.Node
-
-    /// Pretty-prints commands.
-    let rec printCommand' (cmd : Command') : Doc =
-        match cmd with
-        (* The trick here is to make Prim [] appear as ;, but
-           Prim [x; y; z] appear as x; y; z;, and to do the same with
-           atomic lists. *)
-        | Command'.Prim { PreAssigns = ps; Atomics = ts; PostAssigns = qs } ->
-            seq { yield! Seq.map (uncurry printAssign) ps
-                  yield (ts
-                         |> Seq.map printAtomic
-                         |> semiSep |> withSemi |> braced |> angled)
-                  yield! Seq.map (uncurry printAssign) qs }
-            |> semiSep |> withSemi
-        | Command'.If(c, t, f) ->
-            Helpers.printITE printExpression printCommand c t f
-        | Command'.While(c, b) ->
-            hsep [ "while" |> String |> syntax
-                   c |> printExpression |> parened
-                   b |> Helpers.printBlock printCommand ]
-        | Command'.DoWhile(b, c) ->
-            hsep [ "do" |> String |> syntax
-                   b |> Helpers.printBlock printCommand
-                   "while" |> String |> syntax
-                   c |> printExpression |> parened ]
-            |> withSemi
-        | Command'.Blocks bs ->
-            bs
-            |> List.map (Helpers.printBlock printCommand)
-            |> hsepStr "||"
-        | Command'.ViewExpr v -> printMarkedView printView v
-    and printCommand (x : Command) : Doc = printCommand' x.Node
+    and printPrim (x : Prim) : Doc = printPrim' x.Node
 
     /// <summary>
-    ///     Prints a command block.
+    ///     Pretty-prints atomic actions.
     /// </summary>
-    /// <param name="block">The block to print.</param>
-    /// <returns>A <see cref="Doc"/> capturing <paramref name="block"/>.
-    let printCommandBlock (block : Command list) : Doc =
-        Helpers.printBlock printCommand block
+    /// <param name="a">The <see cref="Atomic'"/> to print.</param>
+    /// <returns>
+    ///     A <see cref="Doc"/> representing <paramref name="a"/>.
+    /// </returns>
+    let rec printAtomic' (a : Atomic') : Doc =
+        match a with
+        | APrim p -> printPrim p
+        | AError -> syntaxStr "error"
+        | AAssert e -> syntaxStr "assert" <+> parened (printExpression e)
+        | ACond (cond = c; trueBranch = t; falseBranch = f) ->
+            printITE printAtomic c t f
+    and printAtomic (x : Atomic) : Doc = printAtomic' x.Node
 
     /// <summary>
     ///     Pretty-prints a type literal.
@@ -490,6 +497,54 @@ module Pretty =
         hsep
             [ printTypeLiteral par.ParamType
               syntaxLiteral (String par.ParamName) ]
+
+    /// Pretty-prints a variable declaration, without semicolon.
+    let printVarDecl (vs : VarDecl) : Doc =
+        let vsp = commaSep (List.map printVar vs.VarNames)
+        hsep [ printTypeLiteral vs.VarType; vsp ]
+
+    /// Pretty-prints commands.
+    let rec printCommand' (cmd : Command') : Doc =
+        match cmd with
+        (* The trick here is to make Prim [] appear as ;, but
+           Prim [x; y; z] appear as x; y; z;, and to do the same with
+           atomic lists. *)
+        | Command'.Prim { PreLocals = ps; Atomics = ts; PostLocals = qs } ->
+            seq { yield! Seq.map printPrim ps
+                  yield (ts
+                         |> Seq.map printAtomic
+                         |> semiSep |> withSemi |> braced |> angled)
+                  yield! Seq.map printPrim qs }
+            |> semiSep |> withSemi
+        | Command'.Miracle -> syntaxStr "..."
+        | Command'.If(c, t, f) ->
+            printITE printCommand c t f
+        | Command'.While(c, b) ->
+            hsep [ "while" |> String |> syntax
+                   c |> printExpression |> parened
+                   b |> Helpers.printBlock printCommand ]
+        | Command'.DoWhile(b, c) ->
+            hsep [ "do" |> String |> syntax
+                   b |> Helpers.printBlock printCommand
+                   "while" |> String |> syntax
+                   c |> printExpression |> parened ]
+            |> withSemi
+        | Command'.Blocks bs ->
+            bs
+            |> List.map (Helpers.printBlock printCommand)
+            |> hsepStr "||"
+        | Command'.ViewExpr v -> printMarkedView printView v
+        | Command'.VarDecl vs ->
+            withSemi (syntaxStr "thread" <+> printVarDecl vs)
+    and printCommand (x : Command) : Doc = printCommand' x.Node
+
+    /// <summary>
+    ///     Prints a command block.
+    /// </summary>
+    /// <param name="block">The block to print.</param>
+    /// <returns>A <see cref="Doc"/> capturing <paramref name="block"/>.
+    let printCommandBlock (block : Command list) : Doc =
+        Helpers.printBlock printCommand block
 
     /// Pretty-prints methods.
     let printMethod (pCmd : 'cmd -> Doc)
@@ -519,11 +574,6 @@ module Pretty =
         hsep [ String "search" |> syntax
                sprintf "%d" i |> String ]
 
-    /// Pretty-prints a variable declaration, without semicolon.
-    let printVarDecl (vs : VarDecl) : Doc =
-        let vsp = commaSep (List.map printVar vs.VarNames)
-        hsep [ printTypeLiteral vs.VarType; vsp ]
-
     /// Pretty-prints a script variable list of the given class.
     let printScriptVars (cls : string) (vs : VarDecl) : Doc =
         withSemi (hsep [ String cls |> syntax; printVarDecl vs ])
@@ -550,8 +600,8 @@ module Pretty =
         | ViewProtos v -> printViewProtoList v
         | Search i -> printSearch i
         | Constraint (view, def) -> printConstraint view def
-        | Exclusive xs -> printExclusive xs 
-        | Disjoint xs -> printDisjoint xs 
+        | Exclusive xs -> printExclusive xs
+        | Disjoint xs -> printDisjoint xs
     let printScriptItem (x : ScriptItem) : Doc = printScriptItem' x.Node
 
     /// Pretty-prints scripts.
@@ -592,7 +642,7 @@ let (|BoolExp'|ArithExp'|AnyExp'|) (e : Expression')
     | ArraySubscript _ -> AnyExp' e
     | Num _ -> ArithExp' e
     | True | False -> BoolExp' e
-    | BopExpr(BoolOp, _, _) | UopExpr(_,_) -> BoolExp' e
+    | BopExpr(BoolOp, _, _) | UopExpr(_) -> BoolExp' e
     | BopExpr(ArithOp, _, _) -> ArithExp' e
 
 /// Active pattern classifying expressions as to whether they are

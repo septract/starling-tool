@@ -1,7 +1,7 @@
 // Intentionally buggy version of Examples/PassGH/ticketLock.cvf.
 //
 // This version has a deliberate fault in the line 
-//       {| if s != t then holdLock(x) else holdTick(x, t) |}
+//       {| if (s != t) { holdLock(x) } else { holdTick(x, t) } |}
 // (the condition has been flipped from its usual 's == t').
 //
 // This is a test to ensure GRASShopper is failing invalid proofs properly.
@@ -33,7 +33,7 @@ method lock(Lock x) {
     do {
       {| holdTick(x, t) |}
         s = %{ [|x|].serving };
-      {| if s != t then holdLock(x) else holdTick(x, t) |}
+      {| if (s != t) { holdLock(x) } else { holdTick(x, t) } |}
     } while (s != t);
   {| holdLock(x) |}
 }

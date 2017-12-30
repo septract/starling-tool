@@ -1,128 +1,28 @@
-<?xml version="1.0" encoding="utf-8"?>
-
-<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
+    <AssemblyName>starling</AssemblyName>
+    <RootNamespace>starling</RootNamespace>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
-    <ProjectGuid>{FB248950-5C1B-4AE6-B7AE-E167C623D60F}</ProjectGuid>
+    <ProjectGuid>fb248950-5c1b-4ae6-b7ae-e167c623d60f</ProjectGuid>
     <OutputType>Exe</OutputType>
-    <RootNamespace>starling</RootNamespace>
-    <AssemblyName>starling</AssemblyName>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
     <DebugSymbols>true</DebugSymbols>
+    <Optimize>false</Optimize>
     <OutputPath>bin\Debug</OutputPath>
-    <ErrorReport>prompt</ErrorReport>
-    <Externalconsole>true</Externalconsole>
-    <StartArguments>Examples\Pass\ticketLock.cvf</StartArguments>
-    <StartWorkingDirectory>..\..</StartWorkingDirectory>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>5</WarningLevel>
     <PlatformTarget>x86</PlatformTarget>
-    <Optimize>false</Optimize>
-    <DocumentationFile>bin\Debug\starling.XML</DocumentationFile>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
     <OutputPath>bin\Release</OutputPath>
-    <ErrorReport>prompt</ErrorReport>
-    <Externalconsole>true</Externalconsole>
+    <DefineConstants>TRACE</DefineConstants>
     <WarningLevel>5</WarningLevel>
     <PlatformTarget>x86</PlatformTarget>
-    <DefineConstants>TRACE</DefineConstants>
   </PropertyGroup>
-  <Choose>
-    <When Condition="'$(VisualStudioVersion)' == '11.0'">
-      <PropertyGroup>
-        <FSharpTargetsPath>$(MSBuildExtensionsPath32)\..\Microsoft SDKs\F#\3.0\Framework\v4.0\Microsoft.FSharp.Targets</FSharpTargetsPath>
-      </PropertyGroup>
-    </When>
-    <Otherwise>
-      <PropertyGroup>
-        <FSharpTargetsPath>$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\FSharp\Microsoft.FSharp.Targets</FSharpTargetsPath>
-      </PropertyGroup>
-    </Otherwise>
-  </Choose>
-  <Import Project="$(FSharpTargetsPath)" Condition="Exists('$(FSharpTargetsPath)')" />
-  <ItemGroup>
-    <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="Utils.fs" />
-    <Compile Include="Pretty.fs" />
-    <Compile Include="Collections.fs" />
-    <Compile Include="TypeSystem.fs" />
-    <Compile Include="Expr.fs" />
-    <Compile Include="Var.fs" />
-    <Compile Include="Traversal.fs" />
-    <Compile Include="Symbolic.fs" />
-    <Compile Include="AST.fs" />
-    <Compile Include="Parser.fs" />
-    <Compile Include="View.fs" />
-    <Compile Include="Z3.fs" />
-    <Compile Include="ExprEquiv.fs" />
-    <Compile Include="Command.fs" />
-    <Compile Include="Definer.fs" />
-    <Compile Include="Model.fs" />
-    <Compile Include="GuardedView.fs" />
-    <Compile Include="Axiom.fs" />
-    <Compile Include="Graph.fs" />
-    <Compile Include="Collator.fs" />
-    <Compile Include="ViewDesugar.fs" />
-    <Compile Include="Instantiate.fs" />
-    <Compile Include="Modeller.fs" />
-    <Compile Include="Guarder.fs" />
-    <Compile Include="Grapher.fs" />
-    <Compile Include="Semantics.fs" />
-    <Compile Include="TermGen.fs" />
-    <Compile Include="Reifier.fs" />
-    <Compile Include="Flattener.fs" />
-    <Compile Include="Optimiser.fs" />
-    <Compile Include="Horn.fs" />
-    <Compile Include="Frontend.fs" />
-    <Compile Include="Z3Backend.fs" />
-    <Compile Include="MuZ3Backend.fs" />
-    <Compile Include="CollectionsTests.fs" />
-    <Compile Include="TermGenTests.fs" />
-    <Compile Include="TestStudies.fs" />
-    <Compile Include="FlattenerTests.fs" />
-    <Compile Include="ExprTests.fs" />
-    <Compile Include="GraphTests.fs" />
-    <Compile Include="GrapherTests.fs" />
-    <Compile Include="InstantiateTests.fs" />
-    <Compile Include="PrettyTests.fs" />
-    <Compile Include="ParserTests.fs" />
-    <Compile Include="ModellerTests.fs" />
-    <Compile Include="GuarderTests.fs" />
-    <Compile Include="GuardedViewTests.fs" />
-    <Compile Include="ReifierTests.fs" />
-    <Compile Include="SemanticsTests.fs" />
-    <Compile Include="TraversalTests.fs" />
-    <Compile Include="SymbolicTests.fs" />
-    <Compile Include="OptimiserTests.fs" />
-    <Compile Include="HornTests.fs" />
-    <Compile Include="CommandTests.fs" />
-    <Compile Include="Grasshopper.fs" />
-    <Compile Include="Main.fs" />
-    <None Include="packages.config" />
-    <None Include="Examples\Pass\arc.cvf" />
-    <None Include="Examples\Pass\ticketLock.cvf" />
-    <None Include="Examples\Pass\ticketLockNoIf.cvf" />
-    <None Include="Examples\Pass\ticketLockNonAtomicRelease.cvf" />
-    <None Include="Examples\Pass\singleWriterMultiReaderLock.cvf" />
-    <None Include="Examples\Pass\multicounter.cvf" />
-    <None Include="Examples\Pass\spinLock.cvf" />
-    <None Include="Examples\PassHSF\ticketLockIndefinite.cvf" />
-    <None Include="Examples\WIP\dekker.cvf" />
-    <None Include="Examples\WIP\duplicateVars.cvf" />
-    <None Include="Examples\WIP\errors.cvf" />
-    <None Include="Examples\WIP\filterLock.cvf" />
-    <None Include="Examples\WIP\peterson.cvf" />
-    <None Include="Examples\WIP\sppool.cvf" />
-    <None Include="Examples\WIP\tests.cvf" />
-    <None Include="Examples\Fail\badInc.cvf" />
-    <None Include="Examples\Fail\badInc2.cvf" />
-    <None Include="Examples\Fail\ticketLockBad.cvf" />
-    <None Include="Examples\Fail\ticketLockBad2.cvf" />
-  </ItemGroup>
   <ItemGroup>
     <Reference Include="mscorlib" />
     <Reference Include="nunit.framework">
@@ -151,4 +51,94 @@
       <HintPath>packages\FSharp.Core.4.0.0.1\lib\net40\FSharp.Core.dll</HintPath>
     </Reference>
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="Utils.fs" />
+    <Compile Include="Pretty.fs" />
+    <Compile Include="Collections.fs" />
+    <Compile Include="TypeSystem.fs" />
+    <Compile Include="Expr.fs" />
+    <Compile Include="Var.fs" />
+    <Compile Include="Traversal.fs" />
+    <Compile Include="Symbolic.fs" />
+    <Compile Include="AST.fs" />
+    <Compile Include="Parser.fs" />
+    <Compile Include="View.fs" />
+    <Compile Include="Z3.fs" />
+    <Compile Include="ExprEquiv.fs" />
+    <Compile Include="Command.fs" />
+    <Compile Include="Definer.fs" />
+    <Compile Include="Model.fs" />
+    <Compile Include="GuardedView.fs" />
+    <Compile Include="Axiom.fs" />
+    <Compile Include="Graph.fs" />
+    <Compile Include="Collator.fs" />
+    <Compile Include="Desugar.fs" />
+    <Compile Include="Modeller.fs" />
+    <Compile Include="Grapher.fs" />
+    <Compile Include="Semantics.fs" />
+    <Compile Include="TermGen.fs" />
+    <Compile Include="Reifier.fs" />
+    <Compile Include="Flattener.fs" />
+    <Compile Include="Instantiate.fs" />
+    <Compile Include="Optimiser.fs" />
+    <Compile Include="Horn.fs" />
+    <Compile Include="Frontend.fs" />
+    <Compile Include="Z3Backend.fs" />
+    <Compile Include="MuZ3Backend.fs" />
+    <Compile Include="CollectionsTests.fs" />
+    <Compile Include="TermGenTests.fs" />
+    <Compile Include="TestStudies.fs" />
+    <Compile Include="FlattenerTests.fs" />
+    <Compile Include="ExprTests.fs" />
+    <Compile Include="GraphTests.fs" />
+    <Compile Include="GrapherTests.fs" />
+    <Compile Include="InstantiateTests.fs" />
+    <Compile Include="PrettyTests.fs" />
+    <Compile Include="ParserTests.fs" />
+    <Compile Include="ModellerTests.fs" />
+    <Compile Include="GuardedViewTests.fs" />
+    <Compile Include="ReifierTests.fs" />
+    <Compile Include="SemanticsTests.fs" />
+    <Compile Include="TraversalTests.fs" />
+    <Compile Include="SymbolicTests.fs" />
+    <Compile Include="OptimiserTests.fs" />
+    <Compile Include="HornTests.fs" />
+    <Compile Include="CommandTests.fs" />
+    <Compile Include="Grasshopper.fs" />
+    <Compile Include="Main.fs" />
+    <None Include="packages.config" />
+    <None Include="Examples/Pass/arc.cvf" />
+    <None Include="Examples/Pass/ticketLock.cvf" />
+    <None Include="Examples/Pass/ticketLockNoIf.cvf" />
+    <None Include="Examples/Pass/ticketLockNonAtomicRelease.cvf" />
+    <None Include="Examples/Pass/singleWriterMultiReaderLock.cvf" />
+    <None Include="Examples/Pass/multicounter.cvf" />
+    <None Include="Examples/Pass/spinLock.cvf" />
+    <None Include="Examples/PassHSF/ticketLockIndefinite.cvf" />
+    <None Include="Examples/WIP/dekker.cvf" />
+    <None Include="Examples/WIP/duplicateVars.cvf" />
+    <None Include="Examples/WIP/errors.cvf" />
+    <None Include="Examples/WIP/filterLock.cvf" />
+    <None Include="Examples/WIP/peterson.cvf" />
+    <None Include="Examples/WIP/sppool.cvf" />
+    <None Include="Examples/WIP/tests.cvf" />
+    <None Include="Examples/Fail/badInc.cvf" />
+    <None Include="Examples/Fail/badInc2.cvf" />
+    <None Include="Examples/Fail/ticketLockBad.cvf" />
+    <None Include="Examples/Fail/ticketLockBad2.cvf" />
+  </ItemGroup>
+  <Choose>
+    <When Condition="'$(VisualStudioVersion)' == '11.0'">
+      <PropertyGroup>
+        <FSharpTargetsPath>$(MSBuildExtensionsPath32)\..\Microsoft SDKs\F#\3.0\Framework\v4.0\Microsoft.FSharp.Targets</FSharpTargetsPath>
+      </PropertyGroup>
+    </When>
+    <Otherwise>
+      <PropertyGroup>
+        <FSharpTargetsPath>$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\FSharp\Microsoft.FSharp.Targets</FSharpTargetsPath>
+      </PropertyGroup>
+    </Otherwise>
+  </Choose>
+  <Import Project="$(FSharpTargetsPath)" Condition="Exists('$(FSharpTargetsPath)')" />
 </Project>

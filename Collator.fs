@@ -4,7 +4,9 @@
 /// </summary>
 module Starling.Lang.Collator
 
+open Starling.Collections
 open Starling.Utils
+
 open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.View
@@ -42,13 +44,9 @@ module Types =
           VProtos : ViewProto list
           Constraints : (ViewSignature * Expression option) list
           /// <summary>
-          ///     Map from method names to their bodies.
-          ///     <para>
-          ///         At this stage, we have already dealt with the method
-          ///         parameters.
-          ///    </para>
+          ///     List of methods, combined with their script position.
           /// </summary>
-          Methods : Map<string, Command list> }
+          Methods : Node<Method<Command>> list }
 
 
 /// <summary>
@@ -80,7 +78,7 @@ module Pretty =
               vsep <| Seq.map (printScriptVar "shared") cs.SharedVars
               vsep <| Seq.map (printScriptVar "thread") cs.ThreadVars
               vsep <| Seq.map (uncurry printConstraint) cs.Constraints
-              printMap Indented String printCommandBlock cs.Methods ]
+              vsep <| Seq.map (fun n -> printMethod printCommand n.Node) cs.Methods ]
 
         // Add in search, but only if it actually exists.
         let all =
@@ -97,7 +95,7 @@ module Pretty =
 let empty : CollatedScript =
     { Pragmata = []
       Constraints = []
-      Methods = Map.empty
+      Methods = []
       Typedefs = []
       Search = None
       VProtos = []
@@ -126,8 +124,8 @@ let rec makeDisjoint (xs : List<StrFunc>) =
       freshNode (Identifier s) 
 
     let makeNeqArgs 
-         ({Name = fx; Params = px}: StrFunc) 
-         ({Name = fy; Params = py}: StrFunc) : Expression = 
+         ({Params = px}: StrFunc) 
+         ({Params = py}: StrFunc) : Expression = 
       List.zip (List.map str2Expr px) (List.map str2Expr py) 
       |> 
       List.map (fun (a,b) -> freshNode (BopExpr(Neq,a,b))) 
@@ -150,120 +148,6 @@ let rec makeDisjoint (xs : List<StrFunc>) =
     | [] -> [] 
 
 /// <summary>
-///     Desugar method parameters into thread-local variables.
-/// </summary>
-module ParamDesugar =
-    open Starling.Collections
-    open Starling.Core.Symbolic
-    // TODO(CaptainHayashi): move this?
- 
-    /// <summary>
-    ///     Rewrites a block with a variable rewriting map.
-    /// </summary>
-    let rec rewriteBlock (rmap : Map<string, string>) (block : Command list)
-      : Command list =
-        // TODO(CaptainHayashi): this is a royal mess...
-        let rewriteVar n = withDefault n (rmap.TryFind n)
-
-        let rec rewriteSymbolic s =
-            List.map
-                (function
-                 | SymArg a -> SymArg (rewriteExpression a)
-                 | SymString t -> SymString t)
-                s
-        and rewriteExpression expr =
-            let rewriteExpression' =
-                function
-                | True -> True
-                | False -> False
-                | Num k -> Num k
-                | Identifier n -> Identifier (rewriteVar n)
-                | Symbolic s -> Symbolic (rewriteSymbolic s)
-                | BopExpr (bop, l, r) -> BopExpr (bop, rewriteExpression l, rewriteExpression r)
-                | UopExpr (uop, l) -> UopExpr (uop, rewriteExpression l)
-                | ArraySubscript (arr, sub) -> ArraySubscript (rewriteExpression arr, rewriteExpression sub)
-            { expr with Node = rewriteExpression' expr.Node }
-
-
-        let rewriteAFunc { Name = n; Params = ps } =
-            { Name = n; Params = List.map rewriteExpression ps }
-
-        let rec rewriteAtomic atom =
-            let rewriteAtomic' =
-                function
-                | CompareAndSwap (src, test, dest) ->
-                    CompareAndSwap (rewriteExpression src, rewriteExpression test, rewriteExpression dest)
-                | Fetch (l, r, fm) ->
-                    Fetch (rewriteExpression l, rewriteExpression r, fm)
-                | Postfix (e, fm) ->
-                    Postfix (rewriteExpression e, fm)
-                | Id -> Id
-                | Assume e -> Assume (rewriteExpression e)
-                | SymAtomic sym ->
-                    SymAtomic (rewriteSymbolic sym)
-                | Havoc v -> Havoc (rewriteVar v)
-                | ACond (cond = c; trueBranch = t; falseBranch = f) ->
-                    ACond
-                        (rewriteExpression c,
-                         List.map rewriteAtomic t,
-                         Option.map (List.map rewriteAtomic) f)
-            { atom with Node = rewriteAtomic' atom.Node }
-
-        let rewritePrimSet { PreAssigns = ps; Atomics = ts; PostAssigns = qs } =
-            let rewriteAssign = pairMap rewriteExpression rewriteExpression
-
-            { PreAssigns = List.map rewriteAssign ps
-              Atomics = List.map rewriteAtomic ts
-              PostAssigns = List.map rewriteAssign qs }
-
-        let rec rewriteView =
-            function
-            | Unit -> Unit
-            | Join (l, r) -> Join (rewriteView l, rewriteView r)
-            | Func f -> Func (rewriteAFunc f)
-            | View.If (i, t, e) -> View.If (rewriteExpression i, rewriteView t, rewriteView e)
-        and rewriteCommand cmd =
-            let rewriteCommand' =
-                function
-                | ViewExpr v -> ViewExpr (rewriteMarkedView v)
-                | Prim ps -> Prim (rewritePrimSet ps)
-                | If (i, t, e) -> If (rewriteExpression i, rewriteBlock rmap t, Option.map (rewriteBlock rmap) e)
-                | While (c, b) -> While (rewriteExpression c, rewriteBlock rmap b)
-                | DoWhile (b, c) -> DoWhile (rewriteBlock rmap b, rewriteExpression c)
-                | Blocks bs -> Blocks (List.map (rewriteBlock rmap) bs)
-            { cmd with Node = rewriteCommand' cmd.Node }
-        and rewriteMarkedView =
-            function
-            | Unmarked v -> Unmarked (rewriteView v)
-            | Questioned v -> Questioned (rewriteView v)
-            | Unknown -> Unknown
-        List.map rewriteCommand block
-
-    /// <summary>
-    ///     Converts method parameters to thread-local variables.
-    /// </summary>
-    /// <param name="pars">The params to desugar.</param>
-    /// <param name="pos">
-    ///     The position of the method.
-    ///     This is used to freshen the parameter names.
-    /// </param>
-    /// <param name="tvars">The existing thread variable list to extend.</params>
-    /// <returns>
-    ///     <paramref name="tvars"/> extended to contain the thread-local variable
-    ///     equivalent of <paramref name="pars"/>, as well as a substitution map to
-    ///     use to rename accesses to the thread-local variable in the method
-    ///     itself.
-    /// </returns>
-    let desugarMethodParams
-      (pars : Param list) (pos : SourcePosition) (tvars : (TypeLiteral * string) list)
-      : (TypeLiteral * string) list * Map<string, string> =
-        let desugarParam (tvs, tmap) par =
-            // This should be fine, because users can't start names with numbers.
-            let newName = sprintf "%d_%d_%s" pos.Line pos.Column par.ParamName
-            ((par.ParamType, newName) :: tvs, Map.add par.ParamName newName tmap)
-        List.fold desugarParam (tvars, Map.empty) pars
-
-/// <summary>
 ///     Collates a script, grouping all like-typed items together.
 /// </summary>
 /// <param name="script">
@@ -277,6 +161,8 @@ let collate (script : ScriptItem list) : CollatedScript =
     // TODO(CaptainHayashi): rewrite this into a recursion for perf?
 
     let collateStep item (cs : CollatedScript) =
+        let pos = item.Position
+
         match item.Node with
         | Pragma p ->
             { cs with Pragmata = p :: cs.Pragmata }
@@ -292,11 +178,7 @@ let collate (script : ScriptItem list) : CollatedScript =
             { cs with ThreadVars = s @ cs.ThreadVars }
         | ViewProtos v -> { cs with VProtos = v @ cs.VProtos }
         | Search i -> { cs with Search = Some i }
-        | Method { Signature = sigt; Body = body } ->
-            let tvars, tsubs = 
-                ParamDesugar.desugarMethodParams sigt.Params item.Position cs.ThreadVars
-            { cs with Methods = cs.Methods.Add(sigt.Name, ParamDesugar.rewriteBlock tsubs body)
-                      ThreadVars = tvars }
+        | Method m -> { cs with Methods = (item |=> m) :: cs.Methods }
         | Constraint (v, d) -> { cs with Constraints = (v, d)::cs.Constraints }
         | Exclusive xs -> 
             let views = List.map ViewSignature.Func xs 

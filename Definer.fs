@@ -280,6 +280,29 @@ module ViewDefiner =
         // representation we make later (eg. to maps).
         Seq.toList fseq
 
+    /// <summary>
+    ///     Merges two definers.
+    /// </summary>
+    /// <param name="x">The first <see cref="ViewDefiner"/> to merge.</param>
+    /// <param name="y">The second <see cref="ViewDefiner"/> to merge.</param>
+    /// <typeparam name="Defn">
+    ///     The type of <c>View</c> definitions.  May be <c>unit</c>.
+    /// </typeparam>
+    /// <returns>
+    ///     The <see cref="FuncDefiner"/> containing definitions from both
+    ///     <paramref name="x"/> and <paramref name="y"/>.
+    /// </returns>
+    /// <remarks>
+    ///    This does not yet check for duplicates.
+    /// </remarks>
+    let combine
+      (x : ViewDefiner<'Defn>) (y : ViewDefiner<'Defn>) : ViewDefiner<'Defn> =
+        // TODO(CaptainHayashi): duplicate checking.
+        let xs = toSeq x
+        let ys = toSeq y
+        let xys = Seq.append x y
+        ofSeq xys
+
 
 /// <summary>
 ///     Pretty printers used for definers.

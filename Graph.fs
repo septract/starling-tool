@@ -58,14 +58,34 @@ module Types =
     type NodeKind = Normal | Entry | Exit | EntryExit
 
     /// <summary>
-    ///     Type synonym for graph edges.
-    ///
-    ///     <para>
-    ///         Graph edges are axioms, in that they directly correspond to
-    ///         Hoare triples.
-    ///     </para>
+    ///     Type for graph edges.
     /// </summary>
-    type Edge = Axiom<NodeID, Command>
+    type Edge =
+    | /// <summary>
+      ///     An edge corresponding to a miracle command.
+      ///
+      ///     <para>
+      ///         Miracles are holes in the CFG, but we represent them
+      ///         as edges for simplicity.
+      ///     </para>
+      /// </summary>
+      MiracleEdge of source : NodeID * target : NodeID
+    | /// <summary>
+      ///     An edge with a command across it.
+      ///
+      ///     <para>
+      ///         Command edges are axioms, in that they directly correspond to
+      ///         Hoare triples.
+      ///     </para>
+      /// </summary>
+      CommandEdge of Axiom<NodeID, Command>
+
+    /// <summary>The payload of an edge in a full graph.</summary>
+    type EdgePayload =
+    | /// <summary>An edge carrying a command.</summary>
+      ECommand of Command
+    | /// <summary>An edge carrying a miracle.</summary>
+      EMiracle
 
     /// <summary>
     ///     The container for a partial control-flow graph.
@@ -101,9 +121,9 @@ module Types =
           /// </summary>
           Src : NodeID
           /// <summary>
-          ///      The command this edge represents.
+          ///      The payload this edge carries.
           /// </summary>
-          Command : Command }
+          Payload : EdgePayload }
 
     /// <summary>
     ///     An out edge in a standalone control-flow graph.
@@ -118,9 +138,9 @@ module Types =
           /// </summary>
           Dest : NodeID
           /// <summary>
-          ///      The command this edge represents.
+          ///      The payload this edge carries.
           /// </summary>
-          Command : Command }
+          Payload : EdgePayload }
 
     /// <summary>
     ///     A fully resolved edge, containing views.
@@ -147,9 +167,9 @@ module Types =
           /// </summary>
           DestView : GraphViewExpr
           /// <summary>
-          ///      The command this edge represents.
+          ///      The payload this edge carries.
           /// </summary>
-          Command : Command }
+          Payload : EdgePayload }
 
     /// <summary>
     ///     A standalone control-flow graph.
@@ -180,7 +200,7 @@ module Types =
         /// <summary>
         ///     The given edge has an invalid node index.
         /// </summary>
-        | EdgeOutOfBounds of Edge
+        | EdgeOutOfBounds of id : EdgeID * edge : Edge
         /// <summary>
         ///     The given node was duplicated when trying to merge graphs.
         /// </summary>
@@ -194,23 +214,39 @@ module Types =
         /// </summary>
         | Traversal of err : TraversalError<Error>
 
-
 /// <summary>
-///     Creates a single <c>Edge</c>.
+///     Creates a single miracle <c>Edge</c>.
 /// </summary>
-/// <param name="_arg1">
+/// <param name="p">
 ///     The source view.
 /// </param>
-/// <param name="_arg2">
-///     The command making up the edge.
-/// </param>
-/// <param name="_arg3">
+/// <param name="q">
 ///     The target view.
 /// </param>
 /// <returns>
 ///     An <c>Edge</c> with the above properties.
 /// </returns>
-let edge : NodeID -> Command -> NodeID -> Edge = axiom
+let medge (p : NodeID) (q : NodeID) : Edge =
+    MiracleEdge (p, q)
+
+
+/// <summary>
+///     Creates a single command <c>Edge</c>.
+/// </summary>
+/// <param name="p">
+///     The source view.
+/// </param>
+/// <param name="c">
+///     The command making up the edge.
+/// </param>
+/// <param name="q">
+///     The target view.
+/// </param>
+/// <returns>
+///     An <c>Edge</c> with the above properties.
+/// </returns>
+let edge (p : NodeID) (c : Command) (q : NodeID) : Edge =
+    CommandEdge (axiom p c q)
 
 /// <summary>
 ///     Converts a <c>Graph</c> to a <c>Subgraph</c>.
@@ -234,8 +270,11 @@ let toSubgraph (graph : Graph) : Subgraph =
           |> Seq.map
                  (fun (fromName, (_, outEdges, _, _)) ->
                       Seq.map
-                          (fun { Name = n; Dest = toName; Command = cmd } ->
-                               (n, edge fromName cmd toName))
+                          (fun { Name = n; Dest = toName; Payload = p } ->
+                            (n,
+                                match p with
+                                | ECommand cmd -> edge fromName cmd toName
+                                | EMiracle -> medge fromName toName))
                           outEdges)
           |> Seq.concat
           |> Map.ofSeq }
@@ -256,45 +295,51 @@ let toSubgraph (graph : Graph) : Subgraph =
 /// </returns>
 let graph (name : string) (sg : Subgraph) : Result<Graph, Error> =
     // Are any of the node indices out of bounds?
-    match (Map.filter
-               (fun _ {Pre = s; Post = t} ->
-                    not (Map.containsKey s sg.Nodes &&
-                         Map.containsKey t sg.Nodes))
-               sg.Edges) |> Map.toList with
-    | [] ->
-        sg.Nodes
-        |> Map.map
-               (fun nodeName (nodeView,nodeKind) ->
-                    let outEdges =
-                        sg.Edges
-                        |> Map.toSeq
-                        |> Seq.choose
-                               (fun (edgeName, { Pre = src
-                                                 Post = dst
-                                                 Cmd = cmd }) ->
-                                if src = nodeName
-                                then (Some { OutEdge.Name = edgeName
-                                             OutEdge.Command = cmd
-                                             OutEdge.Dest = dst })
-                                else None)
-                         |> Set.ofSeq
-                    let inEdges =
-                        sg.Edges
-                        |> Map.toSeq
-                        |> Seq.choose
-                               (fun (edgeName, { Pre = src
-                                                 Post = dst
-                                                 Cmd = cmd }) ->
-                                if dst = nodeName
-                                then (Some { InEdge.Name = edgeName
-                                             InEdge.Command = cmd
-                                             InEdge.Src = src })
-                                else None)
-                         |> Set.ofSeq
-                    (nodeView, outEdges, inEdges, nodeKind))
-        |> fun m -> { Name = name ; Contents = m }
-        |> ok
-    | xs -> xs |> List.map (snd >> EdgeOutOfBounds) |> Bad
+    let oob s t = not (Map.containsKey s sg.Nodes && Map.containsKey t sg.Nodes)
+    let oobEdges =
+        seq {
+            for edge in sg.Edges do
+                match edge.Value with
+                | CommandEdge { Pre = s; Post = t } ->
+                    if oob s t then yield EdgeOutOfBounds (edge.Key, edge.Value)
+                | MiracleEdge _ -> () }
+    if Seq.isEmpty oobEdges
+    then
+        let processNode nodeName (nodeView, nodeKind) =
+            let mkOutEdge n src dst p : OutEdge option =
+                if src = nodeName
+                then Some { Name = n; Payload = p; Dest = dst }
+                else None
+            let outEdges =
+                sg.Edges
+                |> Map.toSeq
+                |> Seq.choose
+                    (fun (edgeName, edge) ->
+                        match edge with
+                        | CommandEdge { Pre = src; Post = dst; Cmd = cmd } ->
+                            mkOutEdge edgeName src dst (ECommand cmd)
+                        | MiracleEdge (src, dst) ->
+                            mkOutEdge edgeName src dst EMiracle)
+                |> Set.ofSeq
+            let mkInEdge n src dst p : InEdge option =
+                if dst = nodeName
+                then Some { Name = n; Payload = p; Src = src }
+                else None
+            let inEdges =
+                sg.Edges
+                |> Map.toSeq
+                |> Seq.choose
+                    (fun (edgeName, edge) ->
+                        match edge with
+                        | CommandEdge { Pre = src; Post = dst; Cmd = cmd } ->
+                            mkInEdge edgeName src dst (ECommand cmd)
+                        | MiracleEdge (src, dst) ->
+                            mkInEdge edgeName src dst EMiracle)
+                |> Set.ofSeq
+            (nodeView, outEdges, inEdges, nodeKind)
+
+        ok { Name = name; Contents = Map.map processNode sg.Nodes }
+    else Bad (List.ofSeq oobEdges)
 
 /// <summary>
 ///    Combines two subgraphs.
@@ -475,8 +520,8 @@ let mapNodePair
 ///     A name for the parameter.
 ///     This must be unique.
 /// </param>
-/// <param name="cmd">
-///     The command occurring on the edge.
+/// <param name="p">
+///     The payload carried by the edge.
 /// </param>
 /// <param name="graph">
 ///     The graph to extend.
@@ -485,14 +530,14 @@ let mapNodePair
 ///     An Option: None if either <paramref name="src" /> or
 ///     <paramref name="dest" /> point out of the graph.
 ///     Else, the graph resulting from adding an edge from
-///     <paramref name="src" /> to <paramref name="dest" />, with command
-///     <paramref name="cmd"/>, to <paramref name="graph"/>.
+///     <paramref name="src" /> to <paramref name="dest" />, with payload
+///     <paramref name="p"/>, to <paramref name="graph"/>.
 /// </returns>
 let mkEdgeBetween
   (src : NodeID)
   (dest : NodeID)
   (name : EdgeID)
-  (cmd : Command)
+  (p : EdgePayload)
   (graph : Graph)
   : Graph option =
     // TODO(CaptainHayashi): signal an error if name is taken.
@@ -502,12 +547,12 @@ let mkEdgeBetween
 
              let srcOut' = Set.add { Name = name
                                      Dest = dest
-                                     Command = cmd }
+                                     Payload = p }
                                    srcOut
 
              let destIn' = Set.add { Name = name
                                      Src = src
-                                     Command = cmd }
+                                     Payload = p }
                                     destIn
 
              (srcOut', destIn'))
@@ -606,21 +651,20 @@ let mapEdges (f : FullEdge -> 'result) (graph : Graph) : 'result seq =
 
     m
     |> Map.toSeq
-    |> Seq.map
+    |> Seq.collect
            (fun (srcName, (srcView, outEdges, inEdges, _)) ->
                 Seq.map
                     (fun { OutEdge.Name = edgeName
-                           OutEdge.Command = cmd
+                           OutEdge.Payload = p
                            OutEdge.Dest = destName } ->
                          let dv, _, _, _ = m.[destName]
                          f { FullEdge.Name = edgeName
-                             FullEdge.Command = cmd
+                             FullEdge.Payload = p
                              FullEdge.SrcName = srcName
                              FullEdge.SrcView = srcView
                              FullEdge.DestName = destName
                              FullEdge.DestView = dv } )
                     outEdges)
-    |> Seq.concat
 
 /// <summary>
 ///     Returns true if a node is present and has the given view.
@@ -653,20 +697,26 @@ let nodeHasView
 /// <summary>
 ///     Returns the axioms characterising a graph.
 /// </summary>
-/// <param name="_arg1">
+/// <param name="g">
 ///     The graph whose axioms are to be given.
 /// </param>
 /// <returns>
-///     The edges of <paramref name="_arg1" />, as name-edge pairs.
+///     The command edges of <paramref name="g" />, as name-edge pairs.
 ///     This is wrapped in a Chessie result over <c>Error</c>.
 /// </returns>
-let axiomatiseGraph
-  : Graph -> (string * Axiom<GraphView, Command>) seq =
-    mapEdges
-        (fun { Name = n; SrcView = s ; DestView = t ; Command = c } ->
-            (n, { Pre = match s with InnerView v -> v
-                  Post = match t with InnerView v -> v
-                  Cmd = c } ))
+let axiomatiseGraph (g : Graph) : (string * Axiom<GraphView, Command>) seq =
+    let edgeseqs =
+        mapEdges
+            (fun { Name = n; SrcView = s ; DestView = t ; Payload = p } ->
+                match p with
+                | ECommand c ->
+                    Seq.singleton
+                        (n, { Pre = match s with InnerView v -> v
+                              Post = match t with InnerView v -> v
+                              Cmd = c } )
+                | EMiracle -> Seq.empty)
+            g
+    Seq.concat edgeseqs
 
 /// <summary>
 ///     Converts a list of control-flow graphs into a list of axioms.
@@ -720,6 +770,7 @@ module Pretty =
     open Starling.Core.Model.Pretty
     open Starling.Core.Command.Pretty
     open Starling.Core.Axiom.Pretty
+    open Starling.Core.Expr.Pretty
     open Starling.Core.View.Pretty
     open Starling.Core.GuardedView.Pretty
     open Starling.Core.Symbolic.Pretty
@@ -736,80 +787,222 @@ module Pretty =
         printIteratedGView (printSym printVar) view
 
     /// <summary>
-    ///     Prints a GraphViz label directive.
+    ///     A configuration for graph pretty-printing.
     /// </summary>
-    /// <param name="labelCmd">
-    ///     The pretty-printer command to use as the label.
-    /// </param>
-    /// <returns>
-    ///     A pretty-printer command representing
-    ///     [label = "<paramref name="labelCmd" />"].
-    /// </returns>
-    let printLabel (labelCmd : Doc) : Doc =
-        [ String "label"
-          String "="
-          labelCmd |> ssurround "\"" "\"" ]
-        |> hsep |> squared
+    type Config =
+        | /// <summary>
+          ///     Use shapes and colours to differentiate node and edge
+          ///     kinds, making the graph human-readable.
+          /// </summary>
+          Fancy
+        | /// <summary>
+          ///     Use verbose labels to differentiate node and edge
+          ///     kinds, making the graph machine-readable.
+          /// </summary>
+          Plain
+        /// <summary>
+        ///     Prints an associated list of GraphViz directives.
+        /// </summary>
+        /// <param name="assoc">The associated list.</param>
+        /// <returns>A pretty-printer command for the directive list.</returns>
+        member private cfg.PrintDirectiveList
+          (assoc : (string * Doc) list) : Doc =
+            let pPair (k, v) = String k <+> String "=" <+> v
+            squared (hsep (List.map pPair assoc))
 
-    /// <summary>
-    ///     Prints a node.
-    /// </summary>
-    /// <param name="id">
-    ///     The unique ID of the node.
-    /// </param>
-    /// <param name="view">
-    ///     The <c>GraphViewExpr</c> contained in the node.
-    /// </param>
-    /// <returns>
-    ///     A pretty-printer <c>Command</c> representing the node.
-    /// </returns>
-    let printNode (id : NodeID) (view : GraphViewExpr, nk : NodeKind)
-      : Doc =
-        let list = match nk with Normal -> [] | Entry -> [String "(Entry)"] | Exit -> [String "(Exit)"] | EntryExit -> [String "(EntryExit)"]
-        hsep [ String id
-               ([ String id; printViewExpr printGraphView view ] @ list)
-                |> colonSep |> printLabel
-             ]
-        |> withSemi
+        /// <summary>
+        ///     Prints a plain GraphViz label directive.
+        /// </summary>
+        /// <param name="labelCmd">
+        ///     The pretty-printer command to use as the label.
+        /// </param>
+        /// <returns>
+        ///     A pretty-printer command representing
+        ///     [label = "<paramref name="labelCmd" />"].
+        /// </returns>
+        member private cfg.PrintPlainLabel (labelCmd : Doc) : Doc =
+            cfg.PrintDirectiveList
+                [ ("label", ssurround "\"" "\"" labelCmd) ]
 
-    /// <summary>
-    ///     Prints an edge.
-    /// </summary>
-    /// <param name="id">
-    ///     The unique ID of the node.
-    /// </param>
-    /// <param name="_arg1">
-    ///     The <c>Edge</c> to print.
-    /// </param>
-    /// <returns>
-    ///     A pretty-printer <c>Command</c> representing
-    ///     <paramref name="_arg1" />.
-    /// </returns>
-    let printEdge (id : EdgeID) ({ Pre = s; Post = t; Cmd = cmd } : Edge)
-      : Doc =
-        hsep [ s |> String
-               String "->"
-               t |> String
-               [ id |> String
-                 cmd |> printCommand ] |> colonSep |> printLabel ]
-        |> withSemi
+        /// <summary>
+        ///     Prints a view in a fancy manner.
+        /// </summary>
+        /// <param name="id">The ID of the view to print.</param>
+        /// <param name="view">
+        ///     The <c>GraphViewExpr</c> to print.
+        /// </param>
+        /// <param name="nk">
+        ///     The kind of the node.
+        /// </param>
+        /// <returns>
+        ///     A pretty-printer <c>Doc</c> representing the view.
+        /// </returns>
+        member private cfg.PrintFancyView
+          (id : NodeID) (view : GraphViewExpr) (nk : NodeKind) : Doc =
+            let hrow content =
+                ssurround "<TR><TD COLSPAN=\"3\">" "</TD></TR>" (String content)
 
-    /// <summary>
-    ///     Prints a <c>Subgraph</c>.
-    /// </summary>
-    /// <param name="_arg1">
-    ///     The subgraph to print.
-    /// </param>
-    /// <returns>
-    ///     A pretty-printer <c>Command</c> that prints
-    ///     <paramref name="_arg1" />.
-    /// </returns>
-    let printSubgraph ({ Nodes = nodes ; Edges = edges } : Subgraph)
-      : Doc =
-        Seq.append
-            (nodes |> Map.toSeq |> Seq.map (uncurry printNode))
-            (edges |> Map.toSeq |> Seq.map (uncurry printEdge))
-        |> ivsep |> braced
+            let v, comment =
+                match view with
+                | Mandatory v -> Multiset.toFlatSeq v, Nop 
+                | Advisory v -> Multiset.toFlatSeq v, hrow "(Advisory)"
+
+            let funcToRow (v : IteratedGFunc<Sym<Var>>) =
+                ssurround "<TR>" "</TR>"
+                    ((ssurround "<TD>" "</TD>" 
+                        (printIntExpr (printSym printVar) v.Iterator))
+                     <->
+                     (ssurround "<TD>" "</TD>" 
+                        (printBoolExpr (printSym printVar) v.Func.Cond))
+                     <->
+                     (ssurround "<TD>" "</TD>" (printSVFunc v.Func.Item)))
+
+            let vrows = Seq.map funcToRow v
+            let header = hrow id <-> comment
+
+            // Differentiate nodekinds by colour.
+            let colour =
+                match nk with
+                | Normal -> "beige"
+                | Entry -> "coral"
+                | Exit -> "aquamarine"
+                | EntryExit -> "cornflowerblue"
+
+            Surround
+                (String "<TABLE CELLSPACING=\"0\" BGCOLOR=\"" <-> String colour <-> String "\">",
+                 header <-> hsep vrows,
+                 String "</TABLE>")
+
+
+        /// <summary>
+        ///     Prints a node.
+        /// </summary>
+        /// <param name="id">
+        ///     The unique ID of the node.
+        /// </param>
+        /// <param name="view">
+        ///     The <c>GraphViewExpr</c> contained in the node.
+        /// </param>
+        /// <param name="nk">
+        ///     The kind of the node.
+        /// </param>
+        /// <returns>
+        ///     A pretty-printer <c>Command</c> representing the node.
+        /// </returns>
+        member private cfg.PrintNode
+          (id : NodeID)
+          (view : GraphViewExpr)
+          (nk : NodeKind)
+          : Doc =
+            let nodeRhs =
+                match cfg with
+                | Plain ->
+                    let elements =
+                        seq {
+                           yield String id
+                           yield printViewExpr printGraphView view
+                           match nk with
+                           | Normal -> ()
+                           | Entry -> yield String "(Entry)"
+                           | Exit -> yield String "(Exit)"
+                           | EntryExit -> yield String "(EntryExit)"
+                        }
+                    cfg.PrintPlainLabel (colonSep elements)
+                | Fancy ->
+                    cfg.PrintDirectiveList
+                        [ ("label", 
+                            ssurround "<" ">" (cfg.PrintFancyView id view nk))
+                          ("shape", String "plain") ]
+            withSemi (String id <+> nodeRhs)
+
+        /// <summary>
+        ///     Prints the properties list of a command edge.
+        /// </summary>
+        /// <param name="id">The name of the edge.</param>
+        /// <param name="cmd">The command of the edge.</param>
+        /// <returns>
+        ///     A pretty-printer <c>Doc</c> representing the edge properties.
+        /// </returns>
+        member private cfg.PrintCommandEdgeRhs (id : EdgeID) (cmd : Command) =
+            match cfg with
+            | Plain ->
+                cfg.PrintPlainLabel (colonSep [ String id; printCommand cmd ])
+            | Fancy ->
+                // Colour certain commands based on their nature.
+                let colour =
+                    match cmd with
+                    | Starling.Core.Command.Queries.Assume _ -> "blue"
+                    | Starling.Core.Command.Queries.NopCmd _ -> "green"
+                    | _ -> "black"
+
+                cfg.PrintDirectiveList
+                    [ ("label",
+                       ssurround "<" ">"
+                        (hsep
+                            [ String id
+                              String "<BR/>"
+                              printCommand cmd ]))
+                      ("color", String colour) ]
+
+        /// <summary>
+        ///     Prints the properties list of a miracle edge.
+        /// </summary>
+        /// <param name="id">The name of the edge.</param>
+        /// <returns>
+        ///     A pretty-printer <c>Doc</c> representing the edge properties.
+        /// </returns>
+        member private cfg.PrintMiracleEdgeRhs (id : EdgeID) =
+            match cfg with
+            | Plain ->
+                cfg.PrintPlainLabel (colonSep [ String id; String "(miracle)" ])
+            | Fancy ->
+                cfg.PrintDirectiveList
+                    [ ("label",
+                       ssurround "<" ">" (String id))
+                      ("style", String "dotted")
+                      ("color", String "gray") ]
+
+        /// <summary>
+        ///     Prints an edge.
+        /// </summary>
+        /// <param name="id">
+        ///     The unique ID of the node.
+        /// </param>
+        /// <param name="e">
+        ///     The <c>Edge</c> to print.
+        /// </param>
+        /// <returns>
+        ///     A pretty-printer <c>Command</c> representing
+        ///     <paramref name="e" />.
+        /// </returns>
+        member cfg.PrintEdge (id : EdgeID) (e : Edge) : Doc =
+            let s, t, rhs =
+                match e with
+                | CommandEdge { Pre = s; Post = t; Cmd = cmd } ->
+                    s, t, cfg.PrintCommandEdgeRhs id cmd
+                | MiracleEdge (s, t) ->
+                    s, t, cfg.PrintMiracleEdgeRhs id
+
+            withSemi
+                (String s <+> String "->" <+> String t <+> rhs)
+
+        /// <summary>
+        ///     Prints a <c>Subgraph</c>.
+        /// </summary>
+        /// <param name="s">The subgraph to print.</param>
+        /// <returns>
+        ///     A pretty-printer <c>Command</c> that prints
+        ///     <paramref name="_arg1" />.
+        /// </returns>
+        member cfg.PrintSubgraph (s : Subgraph) : Doc =
+            let docs =
+                seq {
+                    for (id, (node, kind)) in Map.toSeq s.Nodes do
+                        yield cfg.PrintNode id node kind
+                    for (id, edge) in Map.toSeq s.Edges do
+                        yield cfg.PrintEdge id edge
+                }
+            braced (ivsep docs)
 
     /// <summary>
     ///     Prints a <c>Graph</c>.
@@ -818,6 +1011,7 @@ module Pretty =
     ///         This pretty printer should create a dot-compatible digraph.
     ///     </para>
     /// </summary>
+    /// <param name="cfg">Configuration for the graph pretty-printer.</param>
     /// <param name="graph">
     ///     The graph to print.
     /// </param>
@@ -825,12 +1019,12 @@ module Pretty =
     ///     A pretty-printer <c>Command</c> that prints
     ///     <paramref name="graph" />.
     /// </returns>
-    let printGraph (graph : Graph) : Doc =
+    let printGraph (cfg : Config) (graph : Graph) : Doc =
         hsep [ String "digraph"
                String graph.Name
 
                // TODO(CaptainHayashi): don't convert here?
-               graph |> toSubgraph |> printSubgraph ]
+               graph |> toSubgraph |> cfg.PrintSubgraph ]
 
     /// <summary>
     ///     Pretty-prints graph construction errors.
@@ -841,12 +1035,11 @@ module Pretty =
     /// </returns>
     let rec printError (err : Error) : Doc =
         match err with
-        | EdgeOutOfBounds edge ->
+        | EdgeOutOfBounds (edgeID, edge) ->
             colonSep
-                [ String "edge out of bounds: "
-                  printAxiom String printCommand edge ]
+                [ String "edge out of bounds"; Plain.PrintEdge edgeID edge ]
         | DuplicateNode node ->
-            colonSep [ String "node duplicated: "; String node ]
+            colonSep [ String "node duplicated"; String node ]
         | DuplicateEdge edge ->
-            colonSep [ String "edge duplicated: "; String edge ]
+            colonSep [ String "edge duplicated"; String edge ]
         | Traversal err -> Starling.Core.Traversal.Pretty.printTraversalError printError err

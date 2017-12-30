@@ -58,7 +58,7 @@ method lockA() {
         <| oFlag = bFlag; |>
       {| v3(oFlag, oTurn) |}
         <| oTurn = turn; |>
-      {| if (oFlag == 1 && oTurn == 0) then v2(oFlag, oTurn) else aHoldLock() |}
+      {| if (oFlag == 1 && oTurn == 0) { v2(oFlag, oTurn) } else { aHoldLock() } |}
     } while (oFlag == 1 && oTurn == 0);
   {| aHoldLock() |}
 }
@@ -86,7 +86,7 @@ method lockB() {
         <| oFlag = aFlag; |>
       {| v8(oFlag, oTurn) |}
         <| oTurn = turn; |>
-      {| if (oFlag == 1 && oTurn == 1) then v7(oFlag, oTurn) else bHoldLock() |}
+      {| if (oFlag == 1 && oTurn == 1) { v7(oFlag, oTurn) } else { bHoldLock() } |}
     } while (oFlag == 1 && oTurn == 1);
   {| bHoldLock() |}
 }

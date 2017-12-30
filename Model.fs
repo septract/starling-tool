@@ -102,7 +102,7 @@ module Types =
         { Name: string
           Results: TypedVar list
           Args: TypedVar list
-          Body: Microcode<TypedVar, Var> list }
+          Body: Microcode<TypedVar, Var, unit> list }
     type SemanticsMap<'a> = Map<string, 'a>
     type PrimSemanticsMap = SemanticsMap<PrimSemantics>
 
@@ -161,6 +161,8 @@ module Types =
     type Model<'axiom, 'viewdefs> =
         { /// <summary>Special instructions to backends.</summary>
           Pragmata : (string * string) list
+          /// <summary>The name of the view used for local lifts.</summary>
+          LocalLiftView : string option
           /// <summary>The shared variable environment.</summary>
           SharedVars : VarMap
           /// <summary>The thread-local variable environment.</summary>
@@ -180,13 +182,13 @@ module Types =
 /// <summary>
 ///     Creates a deterministic assign.
 /// </summary>
-let ( *<- ) (lv : 'L) (rv : Expr<'RV>) : Microcode<'L, 'RV> =
+let ( *<- ) (lv : 'L) (rv : Expr<'RV>) : Microcode<'L, 'RV, 'S> =
     Assign (lv, Some rv)
 
 /// <summary>
 ///     Creates a nondeterministic assign.
 /// </summary>
-let havoc (lv : 'L) : Microcode<'L, 'RV> =
+let havoc (lv : 'L) : Microcode<'L, 'RV, 'S> =
     Assign (lv, None)
 
 
@@ -504,6 +506,7 @@ let axioms ({Axioms = xs} : Model<'Axiom, _>) : Map<string, 'Axiom> = xs
 let withAxioms (xs : Map<string, 'y>) (model : Model<'x, 'dview>)
     : Model<'y, 'dview> =
     { Pragmata = model.Pragmata
+      LocalLiftView = model.LocalLiftView
       SharedVars = model.SharedVars
       ThreadVars = model.ThreadVars
       ViewDefs = model.ViewDefs
@@ -541,6 +544,7 @@ let withViewDefs (ds : 'Definer2)
                  (model : Model<'Axiom, 'Definer1>)
                  : Model<'Axiom, 'Definer2> =
     { Pragmata = model.Pragmata
+      LocalLiftView = model.LocalLiftView
       SharedVars = model.SharedVars
       ThreadVars = model.ThreadVars
       ViewDefs = ds

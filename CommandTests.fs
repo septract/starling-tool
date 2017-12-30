@@ -41,7 +41,7 @@ module Nops =
 
     [<Test>]
     let ``Classify Assume(x!before) as a no-op``() =
-        check [ command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
+        check [ Microcode.Assume (sbVar "x") ]
 
     [<Test>]
     let ``Reject baz <- Foo(bar) as a no-op``() =
@@ -50,7 +50,7 @@ module Nops =
     [<Test>]
     let ``Reject Assume (x!before); baz <- Foo(bar) as a no-op``() =
         checkNot
-            [ command "Assume" [] [ normalBoolExpr (sbVar "x") ]
+            [ Microcode.Assume (sbVar "x")
               command "Foo" [ normalIntExpr (siVar "baz") ] [ normalIntExpr (siVar "bar") ] ]
 
 module Assumes =
@@ -68,12 +68,12 @@ module Assumes =
 
     [<Test>]
     let ``Classify Assume(x!before) as an assume``() =
-        check [ command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
+        check [ Microcode.Assume (sbVar "x") ]
 
     [<Test>]
     let ``Reject baz <- Foo(bar); Assume(x!before) as an Assume`` ()=
         checkNot [ command "Foo" [ normalIntExpr (siVar "baz") ] [ normalIntExpr (siVar "bar") ]
-                   command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
+                   Microcode.Assume (sbVar "x") ]
 
 module Observable =
     open Starling.Core.Command.Queries
@@ -110,85 +110,67 @@ module Observable =
     [<Test>]
     let ``assumes are observable after the empty command`` () =
         check true
-            [ command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
+            [ Microcode.Assume (sbVar "x") ]
             []
 
     [<Test>]
     let ``assumes are observable after a local stored command`` () =
         check true
-            [ command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
+            [ Microcode.Assume (sbVar "x") ]
             [ command "Foo" [ normalIntExpr (siVar "y") ] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]
     let ``assumes are observable after a nonlocal stored command`` () =
         check true
-            [ command "Assume" [] [ normalBoolExpr (sbVar "x") ] ]
+            [ Microcode.Assume (sbVar "x") ]
             [ command "Foo" [ normalIntExpr (siVar "g") ] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]
     let ``symbolics with are observable after the empty command`` () =
         check true
-            [ SymC [ SymString "foo" ] ]
+            [ Symbol [ SymString "foo" ] ]
             []
 
     [<Test>]
     let ``symbolics are observable after a local stored command`` () =
         check true
-            [ SymC [ SymString "foo" ] ]
+            [ Symbol [ SymString "foo" ] ]
             [ command "Foo" [ normalIntExpr (siVar "y") ] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]
     let ``symbolics are observable after a nonlocal stored command`` () =
         check true
-            [ SymC [ SymString "foo" ] ]
+            [ Symbol [ SymString "foo" ] ]
             [ command "Foo" [ normalIntExpr (siVar "g") ] [ normalBoolExpr (sbVar "x") ] ]
 
     [<Test>]
     let ``local assignment is observable after a disjoint assignment`` () =
         check true
-            [ Intrinsic
-                (IAssign
-                    { AssignType = Local
-                      TypeRec = normalRec
-                      LValue = siVar "y"
-                      RValue = mkAdd2 (siVar "y") (IInt 1L) } ) ]
-            [ Intrinsic
-                (IAssign
-                    { AssignType = Store
-                      TypeRec = normalRec
-                      LValue = siVar "g"
-                      RValue = mkAdd2 (siVar "y") (IInt 1L) } ) ]
+            [ normalIntExpr (siVar "y")
+              *<- 
+              normalIntExpr (mkInc (siVar "y")) ]
+            [ normalIntExpr (siVar "g")
+              *<-
+              normalIntExpr (mkInc (siVar "y")) ]
 
 
     [<Test>]
     let ``local assignment is observable after a chained assignment`` () =
         check true
-            [ Intrinsic
-                (IAssign
-                    { AssignType = Local
-                      TypeRec = normalRec
-                      LValue = siVar "y"
-                      RValue = mkAdd2 (siVar "y") (IInt 1L) } ) ]
-            [ Intrinsic
-                (IAssign
-                    { AssignType = Store
-                      TypeRec = normalRec
-                      LValue = siVar "g"
-                      RValue = siVar "y" } ) ]
+            [ normalIntExpr (siVar "y")
+              *<-
+              normalIntExpr (mkAdd2 (siVar "y") (IInt 1L)) ]
+            [ normalIntExpr (siVar "g")
+              *<-
+              normalIntExpr (siVar "y") ]
 
     [<Test>]
     let ``local assignment is unobservable after an overwiting assignment`` () =
         check false
-            [ Intrinsic
-                (IAssign
-                    { AssignType = Local
-                      TypeRec = normalRec
-                      LValue = siVar "y"
-                      RValue = mkAdd2 (siVar "y") (IInt 1L) } ) ]
-            [ Intrinsic
-                (IAssign
-                    { AssignType = Load
-                      TypeRec = normalRec
-                      LValue = siVar "y"
-                      RValue = siVar "g" } ) ]
+            [ normalIntExpr (siVar "y")
+              *<-
+              normalIntExpr (mkAdd2 (siVar "y") (IInt 1L)) ]
+            [ normalIntExpr (siVar "y")
+              *<-
+              normalIntExpr (siVar "g") ]
 

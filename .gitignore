@@ -20,3 +20,6 @@
 # Misc
 /packages
 .DS_Store
+*.dll
+*.tmp
+*.exe

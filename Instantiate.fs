@@ -31,6 +31,9 @@ open Starling.Core.Symbolic.Traversal
 open Starling.Core.TypeSystem
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Traversal
+open Starling.Flattener
+open Starling.Flattener.Traversal
+open Starling.Reifier
 
 
 /// <summary>
@@ -39,17 +42,9 @@ open Starling.Core.GuardedView.Traversal
 [<AutoOpen>]
 module Types =
     /// <summary>
-    ///     Type of terms going into instantiation.
-    /// </summary>
-    type FinalTerm =
-        CmdTerm<BoolExpr<Sym<MarkedVar>>,
-                GView<Sym<MarkedVar>>,
-                Func<Expr<Sym<MarkedVar>>>>
-
-    /// <summary>
     ///     Type of models going into instantiation.
     /// </summary>
-    type FinalModel = Model<FinalTerm, FuncDefiner<Sym<Var>>>
+    type FinalModel = Model<FlatTerm<Sym<MarkedVar>>, FuncDefiner<Sym<Var>>>
 
     /// <summary>
     ///     Type of Chessie errors arising from Instantiate.
@@ -85,24 +80,28 @@ module Types =
         /// </summary>
         | Traversal of TraversalError<Error>
 
+    /// <summary>
+    ///     A term in which each component is a Boolean expression.
+    /// </summary>
+    /// <typeparam name="Var">Type of expression variables.</typeparam>
+    type BoolTerm<'Var> when 'Var : equality =
+        Term<BoolExpr<'Var>, BoolExpr<'Var>, BoolExpr<'Var>>
+
     /// Terms in a Proof are boolean expression pre/post conditions with Command's
     type SymProofTerm =
         { /// <summary>
           ///    The proof term before symbolic conversion.
           /// </summary>
-          Original: FinalTerm
+          Original: FlatTerm<Sym<MarkedVar>>
           /// <summary>
           ///     The proof term after symbolic conversion.
           /// </summary>
-          SymBool: Term<SMBoolExpr, SMBoolExpr, SMBoolExpr>
+          SymBool: BoolTerm<Sym<MarkedVar>>
           /// <summary>
           ///     An approximate of the proof term with all symbols removed.
           ///     Only appears if approximation was requested.
           /// </summary>
-          Approx : Term<MBoolExpr, MBoolExpr, MBoolExpr> option }
-
-    /// Terms in a Proof are over boolean expressions
-    type ProofTerm = CmdTerm<MBoolExpr, MBoolExpr, MBoolExpr>
+          Approx : BoolTerm<MarkedVar> option }
 
     /// <summary>
     ///     The approximation mode.
@@ -131,6 +130,7 @@ module Pretty =
     open Starling.Core.Symbolic.Pretty
     open Starling.Core.Expr.Pretty
     open Starling.Core.View.Pretty
+    open Starling.Reifier.Pretty
 
     /// Pretty-prints instantiation errors.
     let rec printError : Error -> Doc =
@@ -140,16 +140,17 @@ module Pretty =
                 (printVFunc (printSym printMarkedVar) func)
                 (Starling.Core.Definer.Pretty.printError err)
         | IndefiniteConstraint (view) ->
-            fmt "indefinite 'constraint {0} -> ?' not allowed here"
-                [ printDFunc view ]
+            String "indefinite 'constraint"
+            <+> printDFunc view
+            <+> String "-> ?' not allowed here"
         | UnwantedVarSym sym ->
             // TODO(CaptainHayashi): this is a bit shoddy.
-            fmt "encountered uninterpreted symbol {0}"
-                [ printSymbolic (printExpr (printSym printVar)) sym ]
+            String "encountered uninterpreted symbol"
+            <+> printSymbolic (printExpr (printSym printVar)) sym
         | UnwantedMarkedVarSym sym ->
             // TODO(CaptainHayashi): this is a bit shoddy.
-            fmt "encountered uninterpreted symbol {0}"
-                [ printSymbolic (printExpr (printSym printMarkedVar)) sym ]
+            String "encountered uninterpreted symbol"
+            <+> printSymbolic (printExpr (printSym printMarkedVar)) sym
         | FreeVarInSub var ->
             // TODO(CaptainHayashi): this is a bit shoddy.
             error
@@ -164,8 +165,8 @@ module Pretty =
             [ headed "Original term" <|
                 [ printCmdTerm
                     (printBoolExpr (printSym printMarkedVar))
-                    (printGView (printSym printMarkedVar))
-                    (printVFunc (printSym printMarkedVar))
+                    (printReified (printGView (printSym printMarkedVar)))
+                    (printFlattened (printVFunc (printSym printMarkedVar)))
                     sterm.Original ]
               headed "After instantiation" <|
                 [ printTerm
@@ -182,9 +183,6 @@ module Pretty =
                         (printBoolExpr printMarkedVar)
                         (printBoolExpr printMarkedVar)
                         a ]) ]
-
-    let printProofTerm : ProofTerm -> Doc =
-        printCmdTerm printMBoolExpr printMBoolExpr printMBoolExpr
 
 
 /// <summary>
@@ -369,12 +367,10 @@ module DefinerFilter =
     ///     definitions.
     /// </returns>
     let filterModelNonSymbolicConstraints
-      (model : Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
-                     FuncDefiner<SVBoolExpr option>> )
-      : Result<Model<CmdTerm<MBoolExpr, GView<MarkedVar>, MVFunc>,
-                     FuncDefiner<VBoolExpr option>>, Error> =
+      (model : Model<FlatTerm<Sym<MarkedVar>>, FuncDefiner<SVBoolExpr option>> )
+      : Result<Model<FlatTerm<MarkedVar>, FuncDefiner<VBoolExpr option>>, Error> =
         let stripSymbolT =
-            tliftOverCmdTerm
+            tliftOverFlatTerm
                 (tliftOverExpr
                     (tliftOverCTyped (removeSymFromVar UnwantedMarkedVarSym)))
 
@@ -468,13 +464,13 @@ module Phase =
     let interpretTerm
       (definer : FuncDefiner<SVBoolExpr>)
       (approxMode : ApproxMode)
-      (term : FinalTerm)
+      (term : FlatTerm<Sym<MarkedVar>>)
       : Result<SymProofTerm, Error> =
         let interpretedR =
             tryMapTerm
-                (fun { CommandSemantics.Semantics = c } -> ok c)
-                (interpretGView definer)
-                (interpretVFunc definer)
+                (fun (c : CommandSemantics<_>) -> ok c.Semantics)
+                (fun w -> interpretGView definer w.Reified)
+                (fun g -> interpretVFunc definer g.Flattened)
                 term
 
         let approxR =
@@ -523,19 +519,19 @@ module Phase =
 
         (* Constructs a definite view definition, given an indefinite view
            definition as a pair. *)
-        let indefiniteFuncToSym ({ Name = n ; Params = ps }, _) =
-            let convParamsR = collect (List.map exprToSym ps)
+        let indefiniteFuncToSym (f, _) =
+            let convParamsR = collect (List.map exprToSym f.Params)
 
             let defR =
                 lift (
                     fun convParams ->
                         BVar
                             (Sym 
-                                (SymString (sprintf "!UNDEF:%A" n)
+                                (SymString (sprintf "!UNDEF:%A" f.Name)
                                  :: List.map SymArg convParams)))
                     convParamsR
 
-            lift (mkPair (func n ps)) defR
+            lift (mkPair f) defR
 
         // Now apply the above to all indefinites to create a new definer.
         let indefSeq = FuncDefiner.toSeq indef
@@ -560,8 +556,7 @@ module Phase =
     /// </returns>
     let run
       (approxMode : ApproxMode)
-      (model : Model<CmdTerm<SMBoolExpr, GView<Sym<MarkedVar>>, SMVFunc>,
-                     FuncDefiner<SVBoolExpr option>>)
+      (model : Model<FlatTerm<Sym<MarkedVar>>, FuncDefiner<SVBoolExpr option>>)
       : Result<Model<SymProofTerm, FuncDefiner<SVBoolExpr option>>, Error> =
       let vsR = symboliseIndefinites model.ViewDefs
       bind (fun vs -> tryMapAxioms (interpretTerm vs approxMode) model) vsR

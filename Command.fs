@@ -12,6 +12,7 @@ open Starling.Core.TypeSystem
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic
+open Starling.Core.Symbolic.Traversal
 open Starling.Core.Traversal
 
 
@@ -26,7 +27,8 @@ module Types =
     /// </summary>
     /// <typeparam name="L">The type of lvalues.</typeparam>
     /// <typeparam name="RV">The type of rvalue variables.</typeparam>
-    type Microcode<'L, 'RV> when 'RV : equality =
+    /// <typeparam name="S">The type of stored commands, if any.</typeparam>
+    type Microcode<'L, 'RV, 'S> when 'RV : equality =
         /// <summary>A symbolic command.</summary>
         | Symbol of Symbolic<Expr<'RV>>
         /// <summary>An assignment, perhaps nondeterministic.</summary>
@@ -35,8 +37,10 @@ module Types =
         | Assume of assumption : BoolExpr<'RV>
         /// <summary>A conditional.</summary>
         | Branch of cond : BoolExpr<'RV>
-                  * trueBranch : Microcode<'L, 'RV> list
-                  * falseBranch : Microcode<'L, 'RV> list
+                  * trueBranch : Microcode<'L, 'RV, 'S> list
+                  * falseBranch : Microcode<'L, 'RV, 'S> list
+        /// <summary>A lookup into the stored command list.</summary>
+        | Stored of 'S
         override this.ToString() = sprintf "%A" this
 
     /// <summary>
@@ -54,65 +58,13 @@ module Types =
         { Name : string
           Results : SVExpr list
           Args : SVExpr list
-          Node : AST.Types.Atomic option }
+          Node : AST.Types.Prim option }
         override this.ToString() = sprintf "%A" this
-
-    /// <summary>
-    ///     An intrinsic assignment type.
-    /// </summary>
-    type AssignType =
-        /// <summary>Loading into thread lvalue from shared lvalue.</summary>
-        | Load
-        /// <summary>Storing into shared lvalue from thread expression.</summary>
-        | Store
-        /// <summary>Storing into thread lvalue from thread expression.</summary>
-        | Local
-
-    /// <summary>
-    ///     An intrinsic primitive assignment record.
-    /// </summary>
-    type Assignment<'Expr> =
-        { /// <summary>The type of assignment being done.</summary>
-          AssignType : AssignType
-          /// <summary>The extended type record of both sides of the assignment.</summary>
-          TypeRec : PrimTypeRec
-          /// <summary>The lvalue of the assignment.</summary>
-          LValue : 'Expr
-          /// <summary>The rvalue of the assignment.</summary>
-          RValue : 'Expr }
-
-    /// <summary>
-    ///     A built-in Starling command.
-    ///
-    ///     <para>
-    ///         Intrinsic commands are basic commands such as assignment that
-    ///         need to be handled in a high-level manner.
-    ///     </para>
-    /// </summary>
-    type IntrinsicCommand =
-        /// <summary>An atomic integer assign.</summary>
-        | IAssign of Assignment<IntExpr<Sym<Var>>>
-        /// <summary>An atomic Boolean assign.</summary>
-        | BAssign of Assignment<BoolExpr<Sym<Var>>>
-        /// <summary>A havoc action.</summary>
-        | Havoc of TypedVar
 
     /// <summary>
     ///     A primitive atomic command.
     /// </summary>
-    type PrimCommand =
-        /// <summary>An intrinsic command.</summary>
-        | Intrinsic of IntrinsicCommand
-        /// <summary>A lookup into the model's commands table.</summary>
-        | Stored of StoredCommand
-        /// <summary>An entirely symbolic command.</summary>
-        | SymC of Symbolic<Expr<Sym<Var>>>
-        /// <summary>A branching command.</summary>
-        | PrimBranch of
-            cond : BoolExpr<Sym<Var>>
-            * trueBranch : PrimCommand list
-            * falseBranch : (PrimCommand list) option
-        override this.ToString() = sprintf "%A" this
+    type PrimCommand = Microcode<Expr<Sym<Var>>, Sym<Var>, StoredCommand>
 
     /// <summary>
     ///     A command.
@@ -131,7 +83,7 @@ module Types =
         { /// <summary>The original command.</summary>
           Cmd : Command
           /// <summary>The command's microcode instantiation.</summary>
-          Microcode : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>> list
+          Microcode : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>, unit> list
           /// <summary>
           ///     The assignment map for the command.
           ///     This maps the post-state of each variable reachable by the
@@ -193,12 +145,12 @@ module Queries =
     /// </returns>
     let rec isNop (prim : PrimCommand) : bool =
         match prim with
-        // No Intrinsic commands are no-ops at the moment.
-        | Intrinsic _ -> false
+        | Symbol _ -> false
+        | Assign _ -> false
+        | Assume _ -> true
         | Stored { Results = ps } -> List.isEmpty ps
-        | SymC _ -> false
-        | PrimBranch (trueBranch = t; falseBranch = f) ->
-            List.forall isNop t && maybe true (List.forall isNop) f
+        | Branch (trueBranch = t; falseBranch = f) ->
+            List.forall isNop t && List.forall isNop f
     
     /// <summary>
     ///     Active pattern matching no-operation commands.
@@ -218,9 +170,7 @@ module Queries =
     /// </returns>
     let assumptionOf (prim : PrimCommand) : BoolExpr<Sym<Var>> option =
         match prim with
-        // TODO (CaptainHayashi): more deep analysis here
-        | Stored { Name = n; Args = [ Bool (_, e) ] } when n = "Assume" ->
-            Some e
+        | Assume x -> Some x
         | _ -> None
 
     /// <summary>
@@ -242,19 +192,66 @@ module Queries =
         | [x] -> assumptionOf x
         | _ -> None
 
+    /// <summary>
+    ///     Decides whether a prim is local.
+    /// </summary>
+    /// <param name="tVars">
+    ///     A <c>VarMap</c> of thread-local variables.
+    /// </param>
+    /// <param name="prim">The prim to check.</param>
+    /// <returns>
+    ///     A function returning True only if (but not necessarily if)
+    ///     the given command is local (uses only local variables).
+    /// </returns>
+    let rec isLocal (tVars : VarMap) (prim : PrimCommand) : bool =
+        // TODO(CaptainHayashi): overlap with isLocalResults?
+        let typedVarIsThreadLocal var =
+             match tVars.TryFind (valueOf var) with
+             | Some _ -> true
+             | _ -> false
+
+        let isLocalArg arg =
+            // Forbid symbols in arguments.
+            match (mapTraversal (removeSymFromExpr ignore) arg) with
+                // TODO(CaptainHayashi): propagate if traversal error
+                | Bad _ -> false
+                | Ok (sp, _) ->
+                    // Now check if all the variables in the argument are local.
+                    let getVars = tliftOverExpr collectVars
+                    match findVars getVars sp with
+                    | Bad _ -> false
+                    | Ok (pvars, _) ->
+                        Seq.forall typedVarIsThreadLocal (Set.toSeq pvars)
+
+        match prim with
+        | // TODO(CaptainHayashi): too conservative?
+          Symbol _ -> false
+        | Assign (l, ro) ->
+            isLocalArg l && maybe true isLocalArg ro
+        | // TODO(CaptainHayashi): too conservative?
+          Microcode.Assume l -> isLocalArg (normalBoolExpr l)
+        | Microcode.Stored { StoredCommand.Args = ps } -> Seq.forall isLocalArg ps
+        | Branch (trueBranch = t; falseBranch = f) ->
+            List.forall (isLocal tVars) t && List.forall (isLocal tVars) f
+
+    /// <summary>
+    ///     Active pattern matching local commands.
+    /// </summary>
+    let (|Local|NonLocal|) (vc : VarMap * Command) =
+        let (tvars, c) = vc
+        if List.forall (isLocal tvars) c then Local else NonLocal
+
     /// Combines the results of each command into a list of all results
     let commandResults cs =
         let rec primResults prim =
             match prim with
-            | Intrinsic (IAssign r) -> [ Expr.Int (r.TypeRec, r.LValue) ]
-            | Intrinsic (BAssign r) -> [ Expr.Bool (r.TypeRec, r.LValue) ]
-            | Intrinsic (Havoc v) -> [ mkVarExp (mapCTyped Reg v) ]
+            | Assign (l, _) -> [ l ]
             | Stored { Results = rs } -> rs
-            | SymC _ -> []
+            | Microcode.Assume _ -> []
+            | Symbol _ -> []
             // TODO(MattWindsor91): is this correct?
-            | PrimBranch (trueBranch = t; falseBranch = f) ->
-                concatMap primResults t
-                @ maybe [] (concatMap primResults) f
+            | Branch (trueBranch = t; falseBranch = f) ->
+                concatMap primResults t @ concatMap primResults f
 
         List.fold (fun a c -> a @ primResults c) [] cs
 
@@ -286,13 +283,13 @@ module Queries =
             match prim with
             // TODO(CaptainHayashi): is this sensible!?
             | Stored { Args = xs } -> List.map symExprVars xs
-            | SymC s -> List.map symExprVars (List.choose argsOnly s)
-            | Intrinsic (IAssign { RValue = y } ) -> [ symExprVars (indefIntExpr y) ]
-            | Intrinsic (BAssign { RValue = y } ) -> [ symExprVars (indefBoolExpr y) ]
-            | Intrinsic (Havoc _) -> []
+            | Symbol s -> List.map symExprVars (List.choose argsOnly s)
+            | Assign (_, Some y) -> [ symExprVars y ]
+            | Assign (_, None) -> []
+            | Microcode.Assume _ -> []
             // TODO(CaptainHayashi): is this sensible!?
-            | PrimBranch (trueBranch = t; falseBranch = fb) ->
-                concatMap f t @ maybe [] (concatMap f) fb
+            | Branch (trueBranch = tb; falseBranch = fb) ->
+                concatMap f tb @ concatMap f fb
 
         let vars = collect (concatMap f cmd)
         lift Set.unionMany vars
@@ -350,7 +347,7 @@ module Queries =
             let canModifyShared = not (isLocalResults tvars c)
 
             // TODO(CaptainHayashi): this is an over-approximation.
-            let isSymC = function | SymC _ -> true | _ -> false
+            let isSymC = function | Symbol _ -> true | _ -> false
             let isReferentiallyOpaque = List.exists isSymC c
 
             let footprintSubset = Set.isSubset cVars dVars
@@ -415,7 +412,7 @@ module Create =
     let command (name : string) (results : SVExpr list) (args : SVExpr list) : PrimCommand =
         Stored { Name = name; Results = results; Args = args; Node = None }
 
-    let command' (name : string) (ast : AST.Types.Atomic) (results : SVExpr list) (args : SVExpr list) : PrimCommand =
+    let command' (name : string) (ast : AST.Types.Prim) (results : SVExpr list) (args : SVExpr list) : PrimCommand =
         Stored { Name = name; Results = results; Args = args; Node = Some ast }
 
 /// <summary>
@@ -427,33 +424,6 @@ module Pretty =
     open Starling.Core.Var.Pretty
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Symbolic.Pretty
-
-    /// <summary>Pretty-prints an AssignType.</summary>
-    let printAssignType (a : AssignType) : Doc =
-        String
-            (match a with
-             | Store -> "store"
-             | Load  -> "load"
-             | Local -> "local")
-
-    /// <summary>Pretty-prints an IntrinsicCommand.</summary>
-    let printIntrinsicCommand (cmd : IntrinsicCommand) : Doc =
-        match cmd with
-        | BAssign { AssignType = a; TypeRec = ty; LValue = x; RValue = y } ->
-            parened <| hsep
-                [ String "assign<bool:" <-> printType (Int (ty, ())) <-> String ":" <-> printAssignType a <-> String ">"
-                  printBoolExpr (printSym printVar) x
-                  printBoolExpr (printSym printVar) y ]
-        | IAssign { AssignType = a; TypeRec = ty; LValue = x; RValue = y } ->
-            parened <| hsep
-                [ String "assign<int:" <-> printType (Int (ty, ())) <-> String ":" <-> printAssignType a <-> String ">"
-                  printIntExpr (printSym printVar) x
-                  printIntExpr (printSym printVar) y ]
-        | Havoc v ->
-            parened <| hsep
-                [ String "havoc"
-                  printTypedVar v ]
-
 
     /// Pretty-prints a StoredCommand.
     let printStoredCommand { Name = name; Args = xs; Results = ys } =
@@ -467,43 +437,24 @@ module Pretty =
         <-> printSymbolic (printExpr (printSym printVar)) sym
         <-> String "}"
 
-    /// Pretty-prints a PrimCommand.
-    let rec printPrimCommand (prim : PrimCommand) : Doc =
-        match prim with
-        | Intrinsic s -> printIntrinsicCommand s
-        | Stored s -> printStoredCommand s
-        | SymC s -> printSymCommand s
-        | PrimBranch (cond = c; trueBranch = t; falseBranch = f) ->
-            vsep
-                [ String "if" <+> printBoolExpr (printSym printVar) c
-                  headed "then" (List.map printPrimCommand t)
-                  maybe
-                    Nop
-                    (fun x -> headed "else" (List.map printPrimCommand x))
-                    f ]
-
-    /// Pretty-prints a Command.
-    let printCommand : Command -> Doc = List.map printPrimCommand >> semiSep
-
-    /// Printing a CommandSemantics prints just the semantic boolexpr associated with it
-    let printCommandSemantics pSem sem =
-        pSem sem.Semantics
-
     /// <summary>
     ///     Prints a microcode instruction.
     /// </summary>
     /// <param name="pL">The printer for lvalues.</param>
     /// <param name="pRV">The printer for rvalue variables.</param>
+    /// <param name="pS">The printer for stored commands.</param>
     /// <param name="instr">The instruction to print.</param>
-    /// <typeparam name="pL">The type for lvalues.</typeparam>
-    /// <typeparam name="pRV">The type for rvalue variables.</typeparam>
+    /// <typeparam name="L">The type for lvalues.</typeparam>
+    /// <typeparam name="RV">The type for rvalue variables.</typeparam>
+    /// <typeparam name="S">The type for stored commands.</typeparam>
     /// <returns>
     ///     The <see cref="Doc"/> representing <paramref name="instr"/>.
     /// </returns>
     let rec printMicrocode
       (pL : 'L -> Doc)
       (pRV : 'RV -> Doc)
-      (instr : Microcode<'L, 'RV>)
+      (pS : 'S -> Doc)
+      (instr : Microcode<'L, 'RV, 'S>)
       : Doc =
         match instr with
         | Symbol sym ->
@@ -519,7 +470,25 @@ module Pretty =
             vsep
                 [ String "IF" <+> printBoolExpr pRV conditional
                   String "THEN"
-                  ivsep (List.map (printMicrocode pL pRV) ifTrue)
+                  ivsep (List.map (printMicrocode pL pRV pS) ifTrue)
                   String "ELSE"
-                  ivsep (List.map (printMicrocode pL pRV) ifFalse) ]
+                  ivsep (List.map (printMicrocode pL pRV pS) ifFalse) ]
+        | Stored s ->
+            String "STORED" <+> pS s
  
+    /// Pretty-prints a PrimCommand.
+    let rec printPrimCommand (prim : PrimCommand) : Doc =
+        printMicrocode
+            (printExpr (printSym printVar))
+            (printSym printVar)
+            printStoredCommand
+            prim
+
+    /// Pretty-prints a Command.
+    let printCommand (cmd : Command) : Doc =
+        semiSep (List.map printPrimCommand cmd)
+
+    /// Printing a CommandSemantics prints just the semantic boolexpr associated with it
+    let printCommandSemantics (pSem : 'B -> Doc) (sem : CommandSemantics<'B>) : Doc =
+        pSem sem.Semantics
+

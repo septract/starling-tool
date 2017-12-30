@@ -13,7 +13,7 @@ method lock() {
   do { 
    {| holdSlot(slot) |} 
     <f = flag[slot]>; 
-   {| if f == false then holdSlot(slot) else holdLock(slot) |} 
+   {| if (f == false) { holdSlot(slot) } else { holdLock(slot) } |} 
   } while ( f != true );
  {| holdLock(slot) |} 
 } 

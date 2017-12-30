@@ -1,0 +1,54 @@
+/*
+ * Modifying two variables in lockstep.
+ * Pseudo-modular code with fused values.
+ */
+
+shared int x;
+shared bool lock;  // True iff the lock is taken.
+
+method setTest(int v) {
+  {| emp |}
+    thread int xl;
+
+    // Inlined lock
+    thread bool test;
+
+    do {
+      {| emp |}
+        test = false;
+      {| local { test == false } |}
+        <| CAS(lock, test, true); |>
+      {| if (test == false) { holdLock() } |}
+    } while (test == true);
+
+    // End inlined lock
+
+  {| holdLock() |}
+   <| x = v; |>
+  {| holdLockXVal(v) |}
+   <| xl = x; |>
+  {| holdLockXVal(v) * local{ xl == v } |}
+    if (xl != v) {
+      {| false |}
+       <| error; |>
+      {| false |}
+    }
+  {| holdLock() |}
+
+    // Inlined unlock
+
+    <| lock = false; |>
+
+    // End inlined unlock
+
+  {| emp |}
+}
+
+view holdLock(), holdLockXVal(int v);
+
+constraint holdLock() -> lock;
+constraint holdLock() * holdLock() -> false;
+
+constraint holdLockXVal(v) -> lock && x == v;
+constraint holdLockXVal(v) * holdLockXVal(v2) -> false;
+constraint holdLockXVal(v) * holdLock() -> false;
