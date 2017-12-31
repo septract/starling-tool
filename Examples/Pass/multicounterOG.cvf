@@ -1,0 +1,94 @@
+// Manual encoding of Owicki-Gries multi-counter proof.
+
+thread int i, j;
+shared int c, c1, c2;
+
+method threadA() {
+	{| A1(i) |}
+		i = 0;
+	{| A2(i) |}
+		while (i < 20) {
+			{| A3(i) |}
+				<| c = c + 1; c1 = c1 + 1; |>
+			{| A4(i) |}
+				i++;
+			{| A5(i) |}
+		}
+	{| A6(i) |}
+}
+
+method threadB() {
+	{| B1(j) |}
+		j = 0;
+	{| B2(j) |}
+		while (j < 20) {
+			{| B3(j) |}
+				<| c = c + 1; c2 = c2 + 1; |>
+			{| B4(j) |}
+				j++;
+			{| B5(j) |}
+		}
+	{| B6(j) |}
+}
+
+view A1(int i), A2(int i), A3(int i), A4(int i), A5(int i), A6(int i);
+view B1(int i), B2(int i), B3(int i), B4(int i), B5(int i), B6(int i);
+
+constraint A1(i) -> c == c1 + c2 && c1 == 0;
+constraint A2(i) -> c == c1 + c2 && c1 == i && i == 0;
+constraint A3(i) -> c == c1 + c2 && c1 == i && i < 20;
+constraint A4(i) -> c == c1 + c2 && c1 == i + 1 && i < 20;
+constraint A5(i) -> c == c1 + c2 && c1 == i && i <= 20;
+constraint A6(i) -> c == c1 + c2 && c1 == 20;
+
+constraint A1(i1) * A1(i2) -> false;
+constraint A1(i1) * A2(i2) -> false;
+constraint A1(i1) * A3(i2) -> false;
+constraint A1(i1) * A4(i2) -> false;
+constraint A1(i1) * A5(i2) -> false;
+constraint A1(i1) * A6(i2) -> false;
+constraint A2(i1) * A2(i2) -> false;
+constraint A2(i1) * A3(i2) -> false;
+constraint A2(i1) * A4(i2) -> false;
+constraint A2(i1) * A5(i2) -> false;
+constraint A2(i1) * A6(i2) -> false;
+constraint A3(i1) * A3(i2) -> false;
+constraint A3(i1) * A4(i2) -> false;
+constraint A3(i1) * A5(i2) -> false;
+constraint A3(i1) * A6(i2) -> false;
+constraint A4(i1) * A4(i2) -> false;
+constraint A4(i1) * A5(i2) -> false;
+constraint A4(i1) * A6(i2) -> false;
+constraint A5(i1) * A5(i2) -> false;
+constraint A5(i1) * A6(i2) -> false;
+constraint A6(i1) * A6(i2) -> false;
+
+constraint B1(j) -> c == c1 + c2 && c2 == 0;
+constraint B2(j) -> c == c1 + c2 && c2 == j && j == 0;
+constraint B3(j) -> c == c1 + c2 && c2 == j && j < 20;
+constraint B4(j) -> c == c1 + c2 && c2 == j + 1 && j < 20;
+constraint B5(j) -> c == c1 + c2 && c2 == j && j <= 20;
+constraint B6(j) -> c == c1 + c2 && c2 == 20;
+
+constraint B1(i1) * B1(i2) -> false;
+constraint B1(i1) * B2(i2) -> false;
+constraint B1(i1) * B3(i2) -> false;
+constraint B1(i1) * B4(i2) -> false;
+constraint B1(i1) * B5(i2) -> false;
+constraint B1(i1) * B6(i2) -> false;
+constraint B2(i1) * B2(i2) -> false;
+constraint B2(i1) * B3(i2) -> false;
+constraint B2(i1) * B4(i2) -> false;
+constraint B2(i1) * B5(i2) -> false;
+constraint B2(i1) * B6(i2) -> false;
+constraint B3(i1) * B3(i2) -> false;
+constraint B3(i1) * B4(i2) -> false;
+constraint B3(i1) * B5(i2) -> false;
+constraint B3(i1) * B6(i2) -> false;
+constraint B4(i1) * B4(i2) -> false;
+constraint B4(i1) * B5(i2) -> false;
+constraint B4(i1) * B6(i2) -> false;
+constraint B5(i1) * B5(i2) -> false;
+constraint B5(i1) * B6(i2) -> false;
+constraint B6(i1) * B6(i2) -> false;
+
