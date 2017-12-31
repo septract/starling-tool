@@ -1,5 +1,4 @@
-# Starling 
-[![Build Status](https://travis-ci.org/septract/starling-tool.svg?branch=master)](https://travis-ci.org/septract/starling-tool)
+# Starling (Matt Windsor's experimental fork)
 
 _Starling_ is an automated verification tool for concurrent programs.
 It accepts programs written in a C-like language and annotated with
@@ -9,6 +8,10 @@ program's shared state, and tries to prove soundness.
 
 For a quick example of the flavour of Starling scripts, see
 `Examples/Pass/ticketLock.cvf`.
+
+This is an experimental fork adding .NET Core support.  For a more stable
+experience, see the `mw-locals` branch of
+[`septract/starling-tool`](https://github.com/septract/starling-tool).
 
 ## Current work
 
@@ -35,10 +38,14 @@ using the `Z3` SMT solver, or combined with other tools:
 
 ## Requirements
 
-A F# 4.0 development environment (tested with mono on Linux),
-NuGet, and the native Z3 library for your platform.
-
-NuGet should be able to restore the rest of the prerequisites.
+- [.NET Core SDK 2](https://www.microsoft.com/net/learn/get-started/);
+- [F# 4.1](http://fsharp.org) or newer;
+- Due to [this issue](https://github.com/fsprojects/Paket/issues/2875),
+  installing packages with Paket still requires
+  [Mono](http://www.mono-project.com);
+- [Z3 4.6.0](http://z3prover.github.io): -both the native library (`libz3`) and the .NET Core bindings
+  (`Microsoft.Z3.dll`).  At the time of writing, the .NET Core build needs a
+  few workarounds (to be documented).
 
 The helper scripts mentioned below require a POSIX environment:
 cygwin or MSYS should work on Windows.
@@ -52,6 +59,12 @@ To use GRASShopper, you will need a copy of `grasshopper.native`.
 This can be compiled from source available at
 [this GitHub repository](https://github.com/wies/grasshopper).  Install it
 in your `PATH` to be able to use `starling-gh.sh`.
+
+## Build
+
+- Compile `Microsoft.Z3.dll` for .NET Core, and copy it to the root directory.
+- Run `dotnet build`, which should fetch the packages needed and run the F#
+  compiler.
 
 ## Usage
 
@@ -70,9 +83,9 @@ is available in `syntax/starling-mode.el`.  This is fairly outdated.
 
 ## People
 
-* [Matthew Windsor](https://www-users.cs.york.ac.uk/~mbw500/)
+* [Matt Windsor](https://www-users.cs.york.ac.uk/~mbw500/)
 * [Mike Dodds](https://www-users.cs.york.ac.uk/~miked/)
-* [Matthew Parkinson](http://research.microsoft.com/en-us/people/mattpark/) 
+* [Matthew Parkinson](http://research.microsoft.com/en-us/people/mattpark/)
 * Ben Simner
 
 ## Licence

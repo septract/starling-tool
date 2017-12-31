@@ -172,6 +172,6 @@ module Run =
     ///     Runs Z3 on a single Boolean Z3 expression.
     /// </summary>
     let runTerm (ctx: Z3.Context) term =
-        let solver = ctx.MkSimpleSolver()
+        let solver = ctx.MkSimpleSolver ()
         solver.Assert [| term |]
-        solver.Check [||]
+        solver.Check ()

@@ -1,40 +1,34 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 14
-VisualStudioVersion = 14.0.25123.0
-MinimumVisualStudioVersion = 10.0.40219.1
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "starling", "starling.fsproj", "{FB248950-5C1B-4AE6-B7AE-E167C623D60F}"
+# Visual Studio 15
+VisualStudioVersion = 15.0.26124.0
+MinimumVisualStudioVersion = 15.0.26124.0
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "starling", "starling.fsproj", "{F626F3AF-CF06-44C0-84BC-974F9F2903AB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
 		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
 		Release|x86 = Release|x86
-	EndGlobalSection
-	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{FB248950-5C1B-4AE6-B7AE-E167C623D60F}.Debug|x86.ActiveCfg = Debug|x86
-		{FB248950-5C1B-4AE6-B7AE-E167C623D60F}.Debug|x86.Build.0 = Debug|x86
-		{FB248950-5C1B-4AE6-B7AE-E167C623D60F}.Release|x86.ActiveCfg = Release|x86
-		{FB248950-5C1B-4AE6-B7AE-E167C623D60F}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
-	GlobalSection(MonoDevelopProperties) = preSolution
-		StartupItem = starling.fsproj
-		Policies = $0
-		$0.TextStylePolicy = $1
-		$1.inheritsSet = VisualStudio
-		$1.inheritsScope = text/plain
-		$1.scope = text/x-fsharp
-		$0.FSharpFormattingPolicy = $2
-		$2.DefaultFormat = $3
-		$3.IndentOnTryWith = False
-		$3.ReorderOpenDeclaration = False
-		$3.SpaceAfterComma = True
-		$3.SpaceAfterSemicolon = True
-		$3.SpaceAroundDelimiter = True
-		$3.SpaceBeforeArgument = True
-		$3.SpaceBeforeColon = True
-		$2.scope = text/x-fsharp
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F626F3AF-CF06-44C0-84BC-974F9F2903AB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F626F3AF-CF06-44C0-84BC-974F9F2903AB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F626F3AF-CF06-44C0-84BC-974F9F2903AB}.Debug|x64.ActiveCfg = Debug|x64
+		{F626F3AF-CF06-44C0-84BC-974F9F2903AB}.Debug|x64.Build.0 = Debug|x64
+		{F626F3AF-CF06-44C0-84BC-974F9F2903AB}.Debug|x86.ActiveCfg = Debug|x86
+		{F626F3AF-CF06-44C0-84BC-974F9F2903AB}.Debug|x86.Build.0 = Debug|x86
+		{F626F3AF-CF06-44C0-84BC-974F9F2903AB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F626F3AF-CF06-44C0-84BC-974F9F2903AB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F626F3AF-CF06-44C0-84BC-974F9F2903AB}.Release|x64.ActiveCfg = Release|x64
+		{F626F3AF-CF06-44C0-84BC-974F9F2903AB}.Release|x64.Build.0 = Release|x64
+		{F626F3AF-CF06-44C0-84BC-974F9F2903AB}.Release|x86.ActiveCfg = Release|x86
+		{F626F3AF-CF06-44C0-84BC-974F9F2903AB}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
 EndGlobal

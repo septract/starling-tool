@@ -973,7 +973,7 @@ module Run =
         let fixedpoint = ctx.MkFixedpoint ()
 
         let pars = ctx.MkParams ()
-        pars.Add("engine", ctx.MkSymbol("pdr"))
+        ignore <| pars.Add("engine", ctx.MkSymbol("pdr"))
         fixedpoint.Parameters <- pars
 
         let unsafe = ctx.MkFuncDecl ("unsafe", [||], ctx.MkBoolSort () :> Z3.Sort)
