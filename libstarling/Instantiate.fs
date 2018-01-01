@@ -28,9 +28,7 @@ open Starling.Core.Model
 open Starling.Core.Traversal
 open Starling.Core.Symbolic
 open Starling.Core.Symbolic.Traversal
-open Starling.Core.TypeSystem
 open Starling.Core.GuardedView
-open Starling.Core.GuardedView.Traversal
 open Starling.Flattener
 open Starling.Flattener.Traversal
 open Starling.Reifier

@@ -16,9 +16,7 @@
 module Starling.Backends.Z3
 
 open Microsoft
-open Chessie.ErrorHandling
 open Starling
-open Starling.Collections
 open Starling.Utils
 open Starling.Core.Definer
 open Starling.Core.Expr
@@ -29,7 +27,6 @@ open Starling.Core.Instantiate
 open Starling.Core.Traversal
 open Starling.Core.Symbolic
 open Starling.Core.Symbolic.Traversal
-open Starling.Core.TypeSystem
 open Starling.Core.Z3
 open Starling.Reifier
 

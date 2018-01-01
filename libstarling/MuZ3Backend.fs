@@ -29,7 +29,6 @@ open Chessie.ErrorHandling
 open Microsoft
 open Starling
 open Starling.Collections
-open Starling.Semantics
 open Starling.Core.TypeSystem
 open Starling.Core.Definer
 open Starling.Core.Expr
@@ -39,12 +38,9 @@ open Starling.Core.View
 open Starling.Core.View.Traversal
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Traversal
-open Starling.Core.Instantiate
 open Starling.Core.Traversal
 open Starling.Core.Symbolic
 open Starling.Core.Z3
-open Starling.Reifier
-open Starling.Optimiser
 
 
 /// <summary>

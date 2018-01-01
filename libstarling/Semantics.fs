@@ -14,10 +14,8 @@
 module Starling.Semantics
 
 open Chessie.ErrorHandling
-open Starling.Collections
 open Starling.Core.TypeSystem
 open Starling.Core.Command
-open Starling.Core.GuardedView
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Symbolic

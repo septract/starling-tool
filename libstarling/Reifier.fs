@@ -10,13 +10,9 @@ open Starling.Utils
 open Starling.Core.Definer
 open Starling.Core.Expr
 open Starling.Core.View
-open Starling.Core.View.Traversal
 open Starling.Core.Var
 open Starling.Core.Model
-open Starling.Core.Command
-open Starling.Core.Command.Traversal
 open Starling.Core.GuardedView
-open Starling.Core.GuardedView.Traversal
 open Starling.Core.Symbolic
 open Starling.Core.Symbolic.Traversal
 open Starling.Core.Traversal

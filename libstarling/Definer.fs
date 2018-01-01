@@ -6,7 +6,6 @@ module Starling.Core.Definer
 open Chessie.ErrorHandling
 
 open Starling.Collections
-open Starling.Utils
 open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.View

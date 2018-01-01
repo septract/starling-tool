@@ -18,7 +18,6 @@
 /// </summary>
 module Starling.Core.TypeSystem
 
-open Chessie.ErrorHandling
 open Starling.Utils
 
 

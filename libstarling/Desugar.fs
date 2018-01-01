@@ -3,15 +3,10 @@
 /// </summary>
 module Starling.Lang.Desugar
 
-open Chessie.ErrorHandling
-
 open Starling.Collections
 open Starling.Utils
-open Starling.Core.TypeSystem
 open Starling.Core.View
 open Starling.Core.Var
-open Starling.Core.Expr
-open Starling.Core.GuardedView
 open Starling.Lang.AST
 open Starling.Lang.Collator
 

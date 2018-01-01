@@ -28,7 +28,6 @@
 module Starling.Core.Symbolic
 
 open Chessie.ErrorHandling
-open Starling.Collections
 open Starling.Utils
 open Starling.Core.TypeSystem
 open Starling.Core.Expr

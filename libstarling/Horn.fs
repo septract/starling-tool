@@ -5,7 +5,6 @@ module Starling.Backends.Horn
 
 open Chessie.ErrorHandling
 open Starling.Collections
-open Starling.Semantics
 open Starling.Utils
 open Starling.Core.Definer
 open Starling.Core.TypeSystem
@@ -15,7 +14,6 @@ open Starling.Core.View
 open Starling.Core.Traversal
 open Starling.Core.Model
 open Starling.Core.Symbolic
-open Starling.Core.Instantiate
 open Starling.Core.GuardedView
 
 

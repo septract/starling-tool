@@ -17,7 +17,6 @@ open Starling.Core.Model
 open Starling.Semantics
 open Starling.Core.Symbolic
 open Starling.Core.Symbolic.Traversal
-open Starling.Core.Instantiate
 open Starling.Core.GuardedView
 open Starling.Core.GuardedView.Traversal
 open Starling.Core.View
