@@ -6,7 +6,7 @@ open Chessie.ErrorHandling
 
 open Starling
 open Starling.Utils
-open Starling.Utils.Config
+open Starling.Cli.Config
 open Starling.Core.Pretty
 open Starling.Core.Graph
 open Starling.Core.Graph.Pretty
@@ -30,7 +30,6 @@ open Starling.Core.Traversal
 open Starling.Core.View
 open Starling.Core.View.Pretty
 open Starling.Core.GuardedView
-open Starling.Core.GuardedView.Traversal
 open Starling.Core.GuardedView.Pretty
 open Starling.Core.Axiom
 open Starling.Core.Axiom.Pretty
@@ -256,7 +255,7 @@ module private ViewConfig =
         let bp = configMap ()
 
         config
-        |> maybe (Seq.empty) Utils.parseOptionString
+        |> maybe (Seq.empty) parseOptionString
         |> Seq.fold
             (fun opts str ->
                 match bp.TryFind str with
@@ -571,7 +570,7 @@ module private BackendConfig =
         let bp = configMap ()
 
         config
-        |> maybe (Seq.empty) Utils.parseOptionString
+        |> maybe (Seq.empty) parseOptionString
         |> Seq.fold
             (fun opts str ->
                 match bp.TryFind str with
@@ -600,7 +599,7 @@ let runStarling (request : Request)
 
     let opts =
         config.optimisers
-        |> maybe (Seq.empty) Utils.parseOptionString
+        |> maybe (Seq.empty) parseOptionString
         |> Seq.toList
         |> Optimiser.Utils.parseOptimisationString
 
@@ -613,7 +612,7 @@ let runStarling (request : Request)
     let pf = profilerFlags ()
     let pfset =
         config.profilerFlags
-        |> maybe (Seq.empty) Utils.parseOptionString
+        |> maybe (Seq.empty) parseOptionString
         |> Seq.fold
                (fun flags str ->
                     match (pf.TryFind str) with
@@ -635,7 +634,6 @@ let runStarling (request : Request)
     let printTimes = pfset.Contains PhaseTime
     let printWS = pfset.Contains PhaseWorkingSet
     let printVM = pfset.Contains PhaseVirtual
-    let withProfiling = profilePhase printTimes printWS printVM
 
     // Shorthand for the various stages available.
     let hsf = bind (Backends.Horn.hsfModel >> mapMessages Error.HSF)

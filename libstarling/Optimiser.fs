@@ -16,8 +16,6 @@ open Chessie.ErrorHandling
 open Starling.Core.TypeSystem
 open Starling.Collections
 open Starling.Utils
-open Starling.Utils.Config
-open Starling.Semantics
 open Starling.Core.Expr
 open Starling.Core.ExprEquiv
 open Starling.Core.Var
@@ -29,7 +27,6 @@ open Starling.Core.Command.Queries
 open Starling.Core.Traversal
 open Starling.Core.View
 open Starling.Core.GuardedView
-open Starling.Core.GuardedView.Traversal
 open Starling.Flattener
 open Starling.Flattener.Traversal
 open Starling.Reifier
@@ -210,17 +207,14 @@ module Utils =
     ///     Applies a pair of optimisation removes and adds to an optimisation
     ///     set.
     /// </summary>
-    /// <param name="opts">
+    /// <param name="allOpts">
     ///     A list of triples of optimiser name, whether it's enabled by
     ///     default, and function.
     /// </param>
-    /// <param name="removes">
-    ///     The set of optimisation names to remove.  If this contains 'all',
-    ///     no optimisations will be permitted.
-    /// </param>
-    /// <param name="adds">
-    ///     The set of optimisation names to adds.  If this contains 'all',
-    ///     all optimisations will be permitted.
+    /// <param name="opts">
+    ///     The set of optimisation overrides, as tuples of name and
+    ///     whether they're forced on (if not, they're forced off).
+    ///     'all' forces all optimisations on or off.
     /// </param>
     /// <typeparam name="A">
     ///     The type of items being optimised.
@@ -235,23 +229,16 @@ module Utils =
       (allOpts : (string * bool * ('A -> Result<'A, 'Error>)) list)
       (opts : (string * bool) seq)
       : ('A -> Result<'A, 'Error>) list =
-        let config = config()
         let optimisationSet = new HashSet<string>();
         // try add or remove from prefix
         let addFromPrefix (prefix: string) =
             for (optName : string, _, _) in allOpts do
                 if optName.StartsWith(prefix) then
-                    if config.verbose && not (optimisationSet.Contains(optName)) then
-                        eprintfn "note: forced %s on" optName
-
                     ignore <| optimisationSet.Add(prefix)
 
         let removeFromPrefix (prefix: string) =
             for (optName, _, _) in allOpts do
                 if optName.StartsWith(prefix) then
-                    if config.verbose && optimisationSet.Contains(optName) then
-                        eprintfn "note: forced %s off" optName
-
                     ignore <| optimisationSet.Remove(prefix)
 
         for (optName, enabledByDefault, _) in allOpts do
@@ -261,16 +248,11 @@ module Utils =
         for (optName, forceEnabled) in opts do
             if optName = "all" then
                 if forceEnabled then
-                    if config.verbose then
-                        eprintfn "note: forced all optimisations on"
-                    for (optName, enabledByDefault, _) in allOpts do
+                    for (optName, _, _) in allOpts do
                         ignore <| optimisationSet.Add(optName)
                 else
-                    if config.verbose then
-                        eprintfn "note: forced all optimisations off"
                     optimisationSet.Clear()
             else
-
                 if forceEnabled then
                     addFromPrefix optName
                 else
@@ -289,13 +271,8 @@ module Utils =
     ///
     ///     Enabling or disabling them based off the command-line arguments and whether they're enabled by default
     /// </summary>
-    /// <param name="removes">
-    ///     The set of optimisation names to remove.  If this contains 'all',
-    ///     no optimisations will be permitted.
-    /// </param>
-    /// <param name="adds">
-    ///     The set of optimisation names to add.  If this contains 'all',
-    ///     all optimisations will be permitted.
+    /// <param name="args">
+    ///     The set of optimisation overrides
     /// </param>
     /// <param name="opts">
     ///     A list of triples of optimiser name, whether it's enabled by

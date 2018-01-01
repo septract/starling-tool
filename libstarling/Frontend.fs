@@ -146,7 +146,6 @@ let run
     let printVM = pfset.Contains PhaseVirtual
 
     let phase op test output continuation m =
-        let time = System.Diagnostics.Stopwatch.StartNew()
         // TODO(MattWindsor91): we should be able to lambda abstract this, but can't
         profilePhase printTimes printWS printVM (sprintf "%A" test) (fun () -> op m)
         |> if request = test then lift (output >> success) >> mapMessages error else continuation

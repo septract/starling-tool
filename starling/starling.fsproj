@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="CollectionsTests.fs" />
+    <Compile Include="Config.fs" />
     <Compile Include="TermGenTests.fs" />
     <Compile Include="TestStudies.fs" />
     <Compile Include="FlattenerTests.fs" />
@@ -24,7 +25,6 @@
     <Compile Include="OptimiserTests.fs" />
     <Compile Include="HornTests.fs" />
     <Compile Include="CommandTests.fs" />
-    <Compile Include="Frontend.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>

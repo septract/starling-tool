@@ -4,8 +4,6 @@
 module Starling.Core.Pretty
 
 open Starling.Utils
-open Starling.Utils.Config
-
 
 type FontColor =
     Black | Red | Green | Yellow | Blue | Magenta | Cyan | White

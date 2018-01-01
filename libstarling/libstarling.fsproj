@@ -37,6 +37,7 @@
     <Compile Include="Z3Backend.fs" />
     <Compile Include="MuZ3Backend.fs" />
     <Compile Include="Grasshopper.fs" />
+    <Compile Include="Frontend.fs" />
   </ItemGroup>
   <!-- Z3 wraps a native DLL, so it's next to impossible to include a package
        for it portably.  Instead, we expect the user to build 'Microsoft.Z3.dll'
