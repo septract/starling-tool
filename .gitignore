@@ -1,6 +1,11 @@
+# Paket
+/paket-files
+
 # Output
 /bin
+*/bin
 /obj
+*/obj
 /output
 /templates
 *.suo
