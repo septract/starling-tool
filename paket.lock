@@ -1,4 +1,4 @@
-RESTRICTION: == netcoreapp2.0
+RESTRICTION: || (== netcoreapp2.0) (== netstandard2.0)
 NUGET
   remote: https://www.nuget.org/api/v2
     Chessie (0.6)
@@ -109,6 +109,13 @@ NUGET
       Microsoft.NETCore.Targets (>= 1.1)
       System.Runtime (>= 4.3)
     System.Diagnostics.DiagnosticSource (4.4.1)
+      System.Collections (>= 4.3) - restriction: || (&& (== netcoreapp2.0) (< netstandard1.3)) (== netstandard2.0)
+      System.Diagnostics.Debug (>= 4.3) - restriction: == netstandard2.0
+      System.Diagnostics.Tracing (>= 4.3) - restriction: || (&& (== netcoreapp2.0) (< netstandard1.3)) (== netstandard2.0)
+      System.Reflection (>= 4.3) - restriction: || (&& (== netcoreapp2.0) (< netstandard1.3)) (== netstandard2.0)
+      System.Runtime (>= 4.3) - restriction: || (&& (== netcoreapp2.0) (< netstandard1.3)) (== netstandard2.0)
+      System.Runtime.Extensions (>= 4.3) - restriction: == netstandard2.0
+      System.Threading (>= 4.3) - restriction: || (&& (== netcoreapp2.0) (< netstandard1.3)) (== netstandard2.0)
     System.Diagnostics.Tools (4.3)
       Microsoft.NETCore.Platforms (>= 1.1)
       Microsoft.NETCore.Targets (>= 1.1)
@@ -320,7 +327,7 @@ NUGET
       System.Security.Cryptography.Primitives (>= 4.3)
       System.Text.Encoding (>= 4.3)
     System.Security.Cryptography.Cng (4.4)
-      Microsoft.NETCore.Platforms (>= 2.0)
+      Microsoft.NETCore.Platforms (>= 2.0) - restriction: || (== netcoreapp2.0) (&& (== netstandard2.0) (>= netcoreapp2.0))
     System.Security.Cryptography.Csp (4.3)
       Microsoft.NETCore.Platforms (>= 1.1)
       System.IO (>= 4.3)
@@ -349,7 +356,7 @@ NUGET
       System.Security.Cryptography.Primitives (>= 4.3)
       System.Text.Encoding (>= 4.3)
     System.Security.Cryptography.OpenSsl (4.4)
-      Microsoft.NETCore.Platforms (>= 2.0)
+      Microsoft.NETCore.Platforms (>= 2.0) - restriction: || (== netcoreapp2.0) (&& (== netstandard2.0) (>= netcoreapp2.0))
     System.Security.Cryptography.Primitives (4.3)
       System.Diagnostics.Debug (>= 4.3)
       System.Globalization (>= 4.3)
@@ -389,7 +396,12 @@ NUGET
       Microsoft.NETCore.Targets (>= 1.1)
       System.Runtime (>= 4.3)
     System.Text.RegularExpressions (4.3)
+      System.Collections (>= 4.3) - restriction: || (&& (== netcoreapp2.0) (< netcoreapp1.1)) (&& (== netcoreapp2.0) (< portable-net45+win8+wp8+wpa81)) (== netstandard2.0)
+      System.Globalization (>= 4.3) - restriction: || (&& (== netcoreapp2.0) (< netcoreapp1.1)) (&& (== netcoreapp2.0) (< portable-net45+win8+wp8+wpa81)) (== netstandard2.0)
+      System.Resources.ResourceManager (>= 4.3) - restriction: || (&& (== netcoreapp2.0) (< netcoreapp1.1)) (&& (== netcoreapp2.0) (< portable-net45+win8+wp8+wpa81)) (== netstandard2.0)
       System.Runtime (>= 4.3)
+      System.Runtime.Extensions (>= 4.3) - restriction: || (&& (== netcoreapp2.0) (< netcoreapp1.1)) (&& (== netcoreapp2.0) (< portable-net45+win8+wp8+wpa81)) (== netstandard2.0)
+      System.Threading (>= 4.3) - restriction: || (&& (== netcoreapp2.0) (< netcoreapp1.1)) (&& (== netcoreapp2.0) (< portable-net45+win8+wp8+wpa81)) (== netstandard2.0)
     System.Threading (4.3)
       System.Runtime (>= 4.3)
       System.Threading.Tasks (>= 4.3)

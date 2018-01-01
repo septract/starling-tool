@@ -1,11 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp2.0</TargetFramework>
+    <TargetFramework>netstandard2.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Utils.fs" />
     <Compile Include="Pretty.fs" />
     <Compile Include="Collections.fs" />
@@ -36,39 +34,17 @@
     <Compile Include="Instantiate.fs" />
     <Compile Include="Optimiser.fs" />
     <Compile Include="Horn.fs" />
-    <Compile Include="Frontend.fs" />
     <Compile Include="Z3Backend.fs" />
     <Compile Include="MuZ3Backend.fs" />
-    <Compile Include="CollectionsTests.fs" />
-    <Compile Include="TermGenTests.fs" />
-    <Compile Include="TestStudies.fs" />
-    <Compile Include="FlattenerTests.fs" />
-    <Compile Include="ExprTests.fs" />
-    <Compile Include="GraphTests.fs" />
-    <Compile Include="GrapherTests.fs" />
-    <Compile Include="InstantiateTests.fs" />
-    <Compile Include="PrettyTests.fs" />
-    <Compile Include="ParserTests.fs" />
-    <Compile Include="ModellerTests.fs" />
-    <Compile Include="GuardedViewTests.fs" />
-    <Compile Include="ReifierTests.fs" />
-    <Compile Include="SemanticsTests.fs" />
-    <Compile Include="TraversalTests.fs" />
-    <Compile Include="SymbolicTests.fs" />
-    <Compile Include="OptimiserTests.fs" />
-    <Compile Include="HornTests.fs" />
-    <Compile Include="CommandTests.fs" />
     <Compile Include="Grasshopper.fs" />
-    <Compile Include="Program.fs" />
   </ItemGroup>
-  <Import Project=".paket\Paket.Restore.targets" />
-
   <!-- Z3 wraps a native DLL, so it's next to impossible to include a package
        for it portably.  Instead, we expect the user to build 'Microsoft.Z3.dll'
        locally, and copy it to the Starling directory. -->
   <ItemGroup>
     <Reference Include="Microsoft.Z3">
-        <HintPath>Microsoft.Z3.dll</HintPath>
+      <HintPath>..\Microsoft.Z3.dll</HintPath>
     </Reference>
   </ItemGroup>
+  <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>
