@@ -4,8 +4,10 @@
 module Starling.Tests.Core.Symbolic
 
 open NUnit.Framework
+
+open Starling.Tests.TestUtils
+
 open Starling.Collections
-open Starling.Utils.Testing
 open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.Expr

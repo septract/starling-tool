@@ -4,9 +4,10 @@
 module Starling.Tests.Core.Traversal
 
 open NUnit.Framework
-open Starling.Utils.Testing
+
+open Starling.Tests.TestUtils
+
 open Starling.Core.Expr
-open Starling.Core.TypeSystem
 open Starling.Core.Var
 open Starling.Core.Traversal
 

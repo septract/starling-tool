@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netcoreapp2.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="TestUtils.fs" />
+    <Compile Include="TestStudies.fs" />
+    <Compile Include="CollectionsTests.fs" />
+    <Compile Include="CommandTests.fs" />
+    <Compile Include="DesugarTests.fs" />
+    <Compile Include="ExprEquivTests.fs" />
+    <Compile Include="ExprTests.fs" />
+    <Compile Include="FlattenerTests.fs" />
+    <Compile Include="GraphTests.fs" />
+    <Compile Include="GrapherTests.fs" />
+    <Compile Include="GuardedViewTests.fs" />
+    <Compile Include="HornTests.fs" />
+    <Compile Include="InstantiateTests.fs" />
+    <Compile Include="ModellerTests.fs" />
+    <Compile Include="OptimiserTests.fs" />
+    <Compile Include="ParserTests.fs" />
+    <Compile Include="PrettyTests.fs" />
+    <Compile Include="ReifierTests.fs" />
+    <Compile Include="SemanticsTests.fs" />
+    <Compile Include="SymbolicTests.fs" />
+    <Compile Include="TermGenTests.fs" />
+    <Compile Include="TraversalTests.fs" />
+    <Compile Include="UtilTests.fs" />
+    <Compile Include="VarTests.fs" />
+    <Compile Include="Z3Tests.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\libstarling\libstarling.fsproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Microsoft.Z3">
+      <HintPath>..\Microsoft.Z3.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <Import Project="..\.paket\Paket.Restore.targets" />
+</Project>

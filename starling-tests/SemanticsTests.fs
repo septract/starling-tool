@@ -5,10 +5,12 @@ module Starling.Tests.Semantics
 
 open Chessie.ErrorHandling
 open NUnit.Framework
+
+open Starling.Tests.TestUtils
+
 open Starling
 open Starling.Collections
 open Starling.Utils
-open Starling.Utils.Testing
 open Starling.Core.Command
 open Starling.Core.Command.Create
 open Starling.Core.TypeSystem

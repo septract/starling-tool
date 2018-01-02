@@ -5,7 +5,7 @@ module Starling.Tests.Core.Command
 
 open Starling.Core.TypeSystem
 open NUnit.Framework
-open Starling.Utils.Testing
+open Starling.Tests.TestUtils
 
 open Starling.Core.Command
 open Starling.Core.Command.Create
@@ -147,7 +147,7 @@ module Observable =
     let ``local assignment is observable after a disjoint assignment`` () =
         check true
             [ normalIntExpr (siVar "y")
-              *<- 
+              *<-
               normalIntExpr (mkInc (siVar "y")) ]
             [ normalIntExpr (siVar "g")
               *<-

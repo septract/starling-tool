@@ -6,7 +6,7 @@ module Starling.Tests.Instantiate
 open NUnit.Framework
 open Starling.Collections
 open Starling.Utils
-open Starling.Utils.Testing
+open Starling.Tests.TestUtils
 open Starling.Core.TypeSystem
 open Starling.Core.Definer
 open Starling.Core.Expr

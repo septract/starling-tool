@@ -4,7 +4,7 @@
 module Starling.Tests.Reifier
 
 open NUnit.Framework
-open Starling.Utils.Testing
+open Starling.Tests.TestUtils
 open Starling.Core.Definer
 open Starling.Core.Expr
 open Starling.Core.Symbolic

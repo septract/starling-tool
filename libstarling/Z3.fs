@@ -148,22 +148,6 @@ module Expr =
         | Expr.Int (t, i) -> intToZ3 reals toStr ctx (mkTypedSub t i) :> Z3.Expr
         | Expr.Array (t, a) -> arrayToZ3 reals toStr ctx (mkTypedSub t a) :> Z3.Expr
 
-    /// <summary>
-    ///     Z3 tests for expressions.
-    /// </summary>
-    module Tests =
-        // TODO(CaptainHayashi): move this to a separate module.
-
-        open NUnit.Framework
-        open Starling.Utils.Testing
-
-        [<Test>]
-        let ``modulo expressions are translated correctly when reals is disabled`` () =
-            use ctx = new Z3.Context ()
-            assertEqual
-                (ctx.MkMod (ctx.MkIntConst "foo", ctx.MkInt 5L) :> Z3.ArithExpr)
-                (intToZ3 false id ctx (normalInt (mkMod (IVar "foo") (IInt 5L))))
-
 /// <summary>
 ///     Z3 invocation.
 /// </summary>

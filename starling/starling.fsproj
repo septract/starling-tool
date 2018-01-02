@@ -5,26 +5,7 @@
     <TargetFramework>netcoreapp2.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="CollectionsTests.fs" />
     <Compile Include="Config.fs" />
-    <Compile Include="TermGenTests.fs" />
-    <Compile Include="TestStudies.fs" />
-    <Compile Include="FlattenerTests.fs" />
-    <Compile Include="ExprTests.fs" />
-    <Compile Include="GraphTests.fs" />
-    <Compile Include="GrapherTests.fs" />
-    <Compile Include="InstantiateTests.fs" />
-    <Compile Include="PrettyTests.fs" />
-    <Compile Include="ParserTests.fs" />
-    <Compile Include="ModellerTests.fs" />
-    <Compile Include="GuardedViewTests.fs" />
-    <Compile Include="ReifierTests.fs" />
-    <Compile Include="SemanticsTests.fs" />
-    <Compile Include="TraversalTests.fs" />
-    <Compile Include="SymbolicTests.fs" />
-    <Compile Include="OptimiserTests.fs" />
-    <Compile Include="HornTests.fs" />
-    <Compile Include="CommandTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>

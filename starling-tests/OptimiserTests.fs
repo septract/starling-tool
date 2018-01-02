@@ -110,7 +110,8 @@ type OptimiserTests() =
 
 /// Test cases for rewriting Boolean expressions containing afters.
 module AfterExprs =
-    open Starling.Utils.Testing
+    open Starling.Tests.TestUtils
+
     open Starling.Core.Pretty
     open Starling.Core.Traversal.Pretty
     open Starling.Optimiser.Pretty
@@ -194,7 +195,8 @@ module AfterExprs =
 
 /// Test cases for substituting afters in a func.
 module AfterFuncs =
-    open Starling.Utils.Testing
+    open Starling.Tests.TestUtils
+
     open Starling.Core.Pretty
     open Starling.Core.Traversal.Pretty
     open Starling.Optimiser.Pretty

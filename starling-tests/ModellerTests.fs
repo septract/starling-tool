@@ -5,7 +5,7 @@ module Starling.Tests.Modeller
 
 open NUnit.Framework
 open Starling
-open Starling.Utils.Testing
+open Starling.Tests.TestUtils
 open Starling.Collections
 open Starling.Core
 open Starling.Core.TypeSystem
@@ -63,7 +63,7 @@ module ViewPass =
       (view : DesugaredGView)
       : unit =
         assertOkAndEqual
-            expected 
+            expected
             (modelView context view)
             (Starling.Core.Pretty.printUnstyled <<
                 Starling.Lang.Modeller.Pretty.printViewError)

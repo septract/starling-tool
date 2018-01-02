@@ -6,7 +6,7 @@ module Starling.Tests.Lang.Parser
 open NUnit.Framework
 
 open Starling.Collections
-open Starling.Utils.Testing
+open Starling.Tests.TestUtils
 open Starling.Core.Var
 open Starling.Core.Symbolic
 open Starling.Core.TypeSystem

@@ -585,7 +585,7 @@ module Graph =
         match (Multiset.toFlatList ms) with
         | [ { Func = { Cond = NoSym xc; Item = xi }; Iterator = xit }
             { Func = { Cond = NoSym yc; Item = yi }; Iterator = yit } ]
-              when (equivHolds id (negates xc yc)) ->
+              when negates id xc yc ->
             Some (xc, Multiset.singleton { Func = { Cond = BTrue; Item = xi }; Iterator = xit },
                   yc, Multiset.singleton { Func = { Cond = BTrue; Item = yi }; Iterator = yit })
         // {| G -> P |} is trivially equivalent to {| G -> P * ¬G -> emp |}.

@@ -831,38 +831,3 @@ let (|SimpleExpr|CompoundExpr|) : Expr<_> -> Choice<unit, unit> =
     | Bool (_, SimpleBool) -> SimpleExpr
     | Int (_, SimpleInt) -> SimpleExpr
     | _ -> CompoundExpr
-
-/// <summary>
-///     Tests for <c>Expr</c>.
-/// </summary>
-module Tests =
-    open NUnit.Framework
-
-    /// <summary>
-    ///     NUnit tests for <c>Expr</c>.
-    /// </summary>
-    type NUnit () =
-        /// Test cases for testing simple/compound arithmetic classification.
-        static member IntSimpleCompound =
-            [ TestCaseData(IInt 1L)
-                .Returns(false)
-                .SetName("Classify '1' as simple")
-              TestCaseData(IAdd [IInt 1L; IInt 2L])
-                .Returns(true)
-                .SetName("Classify '1+2' as compound")
-              TestCaseData(ISub [IAdd [IInt 1L; IInt 2L]; IInt 3L])
-                .Returns(true)
-                .SetName("Classify '(1+2)-3' as compound")
-              TestCaseData(IVar "foo")
-                .Returns(false)
-                .SetName("Classify 'foo' as simple")
-              TestCaseData(IMul [IVar "foo"; IVar "bar"])
-                .Returns(true)
-                .SetName("Classify 'foo * bar' as compound") ]
-
-        /// Tests whether the simple/compound arithmetic patterns work correctly
-        [<TestCaseSource("IntSimpleCompound")>]
-        member x.``SimpleInt and CompoundInt classify properly`` e =
-            match e with
-            | SimpleInt -> false
-            | CompoundInt -> true

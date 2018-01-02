@@ -397,37 +397,3 @@ module Pretty =
     let printMBoolExpr = printBoolExpr printMarkedVar
     /// Pretty-prints a MIntExpr.
     let printMIntExpr = printIntExpr printMarkedVar
-
-
-
-
-/// <summary>
-///     Tests for <c>Var</c>.
-/// </summary>
-module Tests =
-    open NUnit.Framework
-
-    /// <summary>
-    ///     NUnit tests for <c>Var</c>.
-    /// </summary>
-    type NUnit () =
-        /// Test cases for testing goal rewriting.
-        static member GoalConstants =
-            [ TestCaseData( [ "foo"; "foo"; "foo"] )
-                  .Returns( [ Goal (0I, "foo")
-                              Goal (1I, "foo")
-                              Goal (2I, "foo") ] )
-              TestCaseData( ["foo"; "bar"; "baz"] )
-                  .Returns( [ Goal (0I, "foo")
-                              Goal (1I, "bar")
-                              Goal (2I, "baz") ] ) ]
-
-        /// Tests that the frame name generator works fine.
-        [<TestCaseSource("GoalConstants")>]
-        member x.``goal generation uses fresh variables properly`` xs =
-            // TODO(CaptainHayashi): move this to AxiomTests.
-            let fg = freshGen ()
-
-            // The fun x boilerplate seems to be necessary.
-            // Otherwise, mutations to fg apparently don't propagate!
-            List.map (fun x -> goalVar fg x) xs

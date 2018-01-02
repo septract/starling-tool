@@ -6,6 +6,8 @@ Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "starling", "starling\starli
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "libstarling", "libstarling\libstarling.fsproj", "{E80B8DF5-CC4A-452B-BF2B-6CA192256026}"
 EndProject
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "starling-tests", "starling-tests\starling-tests.fsproj", "{C815D703-56B7-4286-866C-53EDE44EF1A3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -40,6 +42,18 @@ Global
 		{E80B8DF5-CC4A-452B-BF2B-6CA192256026}.Release|x64.Build.0 = Release|Any CPU
 		{E80B8DF5-CC4A-452B-BF2B-6CA192256026}.Release|x86.ActiveCfg = Release|Any CPU
 		{E80B8DF5-CC4A-452B-BF2B-6CA192256026}.Release|x86.Build.0 = Release|Any CPU
+		{C815D703-56B7-4286-866C-53EDE44EF1A3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C815D703-56B7-4286-866C-53EDE44EF1A3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C815D703-56B7-4286-866C-53EDE44EF1A3}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{C815D703-56B7-4286-866C-53EDE44EF1A3}.Debug|x64.Build.0 = Debug|Any CPU
+		{C815D703-56B7-4286-866C-53EDE44EF1A3}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{C815D703-56B7-4286-866C-53EDE44EF1A3}.Debug|x86.Build.0 = Debug|Any CPU
+		{C815D703-56B7-4286-866C-53EDE44EF1A3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C815D703-56B7-4286-866C-53EDE44EF1A3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C815D703-56B7-4286-866C-53EDE44EF1A3}.Release|x64.ActiveCfg = Release|Any CPU
+		{C815D703-56B7-4286-866C-53EDE44EF1A3}.Release|x64.Build.0 = Release|Any CPU
+		{C815D703-56B7-4286-866C-53EDE44EF1A3}.Release|x86.ActiveCfg = Release|Any CPU
+		{C815D703-56B7-4286-866C-53EDE44EF1A3}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
