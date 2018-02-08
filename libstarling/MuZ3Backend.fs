@@ -612,7 +612,7 @@ module Translator =
             match param with
             | Int (t, var) when var = iterator -> Int (t, f var)
             | v -> mkVarExp v
-        func dfunc.Name (List.map trans dfunc.Params)
+        func dfunc.Name (List.map trans dfunc.Params) dfunc.FuncType
 
     /// <summary>
     ///     Constructs a rule for a base downclosure check on a given func.
@@ -687,7 +687,7 @@ module Translator =
         let flatDFunc = Starling.Flattener.flattenDView svarSeq [func]
 
         let normFuncResult =
-            ok (vfunc flatDFunc.Name (List.map mkVarExp flatDFunc.Params))
+            ok (Starling.Collections.func flatDFunc.Name (List.map mkVarExp flatDFunc.Params) flatDFunc.FuncType)
         let succFuncResult =
             lift (fun it -> instantiate it incVar flatDFunc) iterVarResult
         let succViewResult = lift Multiset.singleton succFuncResult
@@ -777,7 +777,7 @@ module Translator =
             |> collect
             |> lift mkAnd
 
-        let head = func "emp" vpars
+        let head = func "emp" vpars Regular
 
         let ruleResult =
             bind

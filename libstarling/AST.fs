@@ -678,17 +678,3 @@ let node (streamname : string)
          (a : 'a)
          : Node<'a> =
     { Position = { StreamName = streamname; Line = line; Column = column }; Node = a }
-
-/// <summary>
-///     Type-constrained version of <c>func</c> for <c>AFunc</c>s.
-/// </summary>
-/// <parameter name="name">
-///   The name of the <c>AFunc</c>.
-/// </parameter>
-/// <parameter name="pars">
-///   The parameters of the <c>AFunc</c>, as a sequence.
-/// </parameter>
-/// <returns>
-///   A new <c>AFunc</c> with the given name and parameters.
-/// </returns>
-let afunc (name : string) (pars : Expression list) : AFunc = func name pars

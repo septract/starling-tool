@@ -432,7 +432,9 @@ let predOfEmp (svars : VarMap) : Result<Func<VIntExpr>, Error> =
                  | var -> fail (NonArithVar var))
                 svarSeq)
 
-    bind (func "emp" >> predOfFunc ok) empParamsR
+    let buildFunc pars = predOfFunc ok (func "emp" pars Regular)
+
+    bind buildFunc empParamsR
 
 /// Constructs a Horn clause for initialising an integer variable.
 /// Returns an error if the variable is not an integer.

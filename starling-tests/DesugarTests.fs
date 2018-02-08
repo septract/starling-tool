@@ -63,7 +63,8 @@ module DesugarBlock =
                 (Func =
                     func "__unknown_0"
                         [ { ParamName = "s"; ParamType = TInt }
-                          { ParamName = "t"; ParamType = TInt } ],
+                          { ParamName = "t"; ParamType = TInt } ]
+                        UnknownSynth,
                  IsAnonymous = false)
 
         check
@@ -77,7 +78,8 @@ module DesugarBlock =
                         [ (freshNode True,
                            func "__unknown_0"
                             [ freshNode (Identifier "s")
-                              freshNode (Identifier "t") ] ) ] )
+                              freshNode (Identifier "t") ]
+                            UnknownSynth ) ] )
               Cmds = [] }
             normalCtx
             []
@@ -99,7 +101,8 @@ module DesugarMarkedView =
                 (Func =
                     func "__unknown_0"
                         [ { ParamName = "s"; ParamType = TInt }
-                          { ParamName = "t"; ParamType = TInt } ],
+                          { ParamName = "t"; ParamType = TInt } ]
+                        UnknownSynth,
                  IsAnonymous = false)
 
         check
@@ -111,7 +114,8 @@ module DesugarMarkedView =
                 [ (freshNode True,
                    func "__unknown_0"
                     [ freshNode (Identifier "s")
-                      freshNode (Identifier "t") ] ) ] )
+                      freshNode (Identifier "t") ]
+                    UnknownSynth) ] )
             normalCtx
             Unknown
 
@@ -123,7 +127,8 @@ module DesugarMarkedView =
                 (Func =
                     func "__unknown_0"
                         [ { ParamName = "s"; ParamType = TInt }
-                          { ParamName = "t"; ParamType = TInt } ],
+                          { ParamName = "t"; ParamType = TInt } ]
+                        UnknownSynth,
                  IsAnonymous = false)
 
         check
@@ -135,7 +140,8 @@ module DesugarMarkedView =
                 [ (freshNode True,
                    func "__unknown_0"
                     [ freshNode (Identifier "s")
-                      freshNode (Identifier "t") ] ) ] )
+                      freshNode (Identifier "t") ]
+                    UnknownSynth) ] )
             rewritingCtx
             Unknown
 
@@ -273,9 +279,9 @@ module DesugarView =
                     GeneratedProtos =
                         Set.ofList
                             [ (NoIterator
-                                    (Func = func "__lift_0" [ { ParamName = "x"; ParamType = TBool } ],
+                                    (Func = func "__lift_0" [ { ParamName = "x"; ParamType = TBool } ] LocalSynth,
                                     IsAnonymous = false)) ] } }
-            [ (freshNode True, func "__lift_0" [ freshNode (Identifier "bar") ]) ]
+            [ (freshNode True, func "__lift_0" [ freshNode (Identifier "bar") ] LocalSynth) ]
             normalCtx
             (Local (freshNode (Identifier "bar")))
 
@@ -289,7 +295,7 @@ module DesugarView =
                     GeneratedProtos =
                         Set.ofList
                             [ (NoIterator
-                                    (Func = func "__lift_0" [ { ParamName = "x"; ParamType = TBool } ],
+                                    (Func = func "__lift_0" [ { ParamName = "x"; ParamType = TBool } ] LocalSynth,
                                     IsAnonymous = false)) ] } }
             [ (freshNode True,
                func "__lift_0"
@@ -297,7 +303,8 @@ module DesugarView =
                         (BopExpr
                             (Eq,
                              freshNode (Identifier "0_32_s"),
-                             freshNode (Identifier "10_9_t"))) ] ) ]
+                             freshNode (Identifier "10_9_t"))) ]
+                   LocalSynth) ]
             rewritingCtx
             (Local
                 (freshNode
@@ -317,9 +324,9 @@ module DesugarView =
                     GeneratedProtos =
                         Set.ofList
                             [ (NoIterator
-                                    (Func = func "__lift_0" [ { ParamName = "x"; ParamType = TBool } ],
+                                    (Func = func "__lift_0" [ { ParamName = "x"; ParamType = TBool } ] LocalSynth,
                                     IsAnonymous = false)) ] } }
-            [ (freshNode True, func "__lift_0" [ freshNode (False) ]) ]
+            [ (freshNode True, func "__lift_0" [ freshNode (False) ] LocalSynth) ]
             normalCtx
             Falsehood
 
@@ -327,37 +334,37 @@ module DesugarView =
     let ``Desugar a flat join`` () =
         check
             normalCtx
-            [ (freshNode True, func "foo" [ freshNode (Identifier "bar") ])
-              (freshNode True, func "bar" [ freshNode (Identifier "baz") ]) ]
+            [ (freshNode True, regFunc "foo" [ freshNode (Identifier "bar") ])
+              (freshNode True, regFunc "bar" [ freshNode (Identifier "baz") ]) ]
             normalCtx
             (Join
-                (Func (afunc "foo" [ freshNode (Identifier "bar") ]),
-                 Func (afunc "bar" [ freshNode (Identifier "baz") ])))
+                (Func (regFunc "foo" [ freshNode (Identifier "bar") ]),
+                 Func (regFunc "bar" [ freshNode (Identifier "baz") ])))
 
     [<Test>]
     let ``Desugar a single conditional`` () =
         check
             normalCtx
             [ (freshNode (Identifier "s"),
-               func "foo" [ freshNode (Identifier "bar") ] )
+               regFunc "foo" [ freshNode (Identifier "bar") ] )
               (freshNode (UopExpr (Neg, freshNode (Identifier "s"))),
-               func "bar" [ freshNode (Identifier "baz") ] ) ]
+               regFunc "bar" [ freshNode (Identifier "baz") ] ) ]
             normalCtx
             (View.If
                 (freshNode (Identifier "s"),
-                 Func (afunc "foo" [ freshNode (Identifier "bar") ] ),
-                 Some (Func (afunc "bar" [ freshNode (Identifier "baz") ] ))))
+                 Func (regFunc "foo" [ freshNode (Identifier "bar") ] ),
+                 Some (Func (regFunc "bar" [ freshNode (Identifier "baz") ] ))))
 
     [<Test>]
     let ``Desugar a single conditional with no else`` () =
         check
             normalCtx
             [ (freshNode (Identifier "s"),
-               func "foo" [ freshNode (Identifier "bar") ] ) ]
+               regFunc "foo" [ freshNode (Identifier "bar") ] ) ]
             normalCtx
             (View.If
                 (freshNode (Identifier "s"),
-                 Func (afunc "foo" [ freshNode (Identifier "bar") ] ),
+                 Func (regFunc "foo" [ freshNode (Identifier "bar") ] ),
                  None))
 
     [<Test>]
@@ -365,11 +372,11 @@ module DesugarView =
         check
             rewritingCtx
             [ (freshNode (Identifier "0_32_s"),
-               func "foo" [ freshNode (Identifier "bar") ] ) ]
+               regFunc "foo" [ freshNode (Identifier "bar") ] ) ]
             rewritingCtx
             (View.If
                 (freshNode (Identifier "s"),
-                 Func (afunc "foo" [ freshNode (Identifier "bar") ] ),
+                 Func (regFunc "foo" [ freshNode (Identifier "bar") ] ),
                  None))
 
     [<Test>]
@@ -381,25 +388,25 @@ module DesugarView =
                     (And,
                      freshNode (Identifier "s"),
                      freshNode (Identifier "t"))),
-               func "foo" [ freshNode (Identifier "bar") ] )
+               regFunc "foo" [ freshNode (Identifier "bar") ] )
               (freshNode
                  (BopExpr
                      (And,
                       freshNode (Identifier "s"),
                       freshNode (Identifier "t"))),
-               func "bar" [ freshNode (Identifier "baz") ] )
+               regFunc "bar" [ freshNode (Identifier "baz") ] )
               (freshNode
                  (BopExpr
                      (And,
                       freshNode (Identifier "s"),
                       freshNode
                          (UopExpr (Neg, (freshNode (Identifier "t")))))),
-               func "fizz" [ freshNode (Identifier "buzz") ] )
+               regFunc "fizz" [ freshNode (Identifier "buzz") ] )
               (freshNode (Identifier "s"),
-               func "in" [ freshNode (Identifier "out") ] )
+               regFunc "in" [ freshNode (Identifier "out") ] )
               (freshNode
                  (UopExpr (Neg, freshNode (Identifier "s"))),
-               func "ding" [ freshNode (Identifier "dong") ] ) ]
+               regFunc "ding" [ freshNode (Identifier "dong") ] ) ]
             normalCtx
             (View.If
                 (freshNode (Identifier "s"),
@@ -407,8 +414,8 @@ module DesugarView =
                     (View.If
                         (freshNode (Identifier "t"),
                          Join
-                            (Func (afunc "foo" [ freshNode (Identifier "bar") ] ),
-                             Func (afunc "bar" [ freshNode (Identifier "baz") ] )),
-                         Some (Func (afunc "fizz" [ freshNode (Identifier "buzz") ] ))),
-                     Func (afunc "in" [ freshNode (Identifier "out") ])),
-                 Some (Func (afunc "ding" [ freshNode (Identifier "dong") ]))))
+                            (Func (regFunc "foo" [ freshNode (Identifier "bar") ] ),
+                             Func (regFunc "bar" [ freshNode (Identifier "baz") ] )),
+                         Some (Func (regFunc "fizz" [ freshNode (Identifier "buzz") ] ))),
+                     Func (regFunc "in" [ freshNode (Identifier "out") ])),
+                 Some (Func (regFunc "ding" [ freshNode (Identifier "dong") ]))))

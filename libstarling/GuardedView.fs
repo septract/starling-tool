@@ -139,7 +139,7 @@ module Types =
  *)
 
 /// <summary>
-///     Creates a new <c>GFunc</c>.
+///     Creates a new regular <c>GFunc</c>.
 /// </summary>
 /// <param name="guard">
 ///     The guard on which the <c>GFunc</c> is conditional.
@@ -161,61 +161,7 @@ let gfunc
   (name : string)
   (pars : Expr<'var> seq)
   : GFunc<'var> =
-    { Cond = guard ; Item = vfunc name pars }
-
-/// <summary>
-///     Creates a new <c>SVGFunc</c>.
-/// </summary>
-/// <param name="guard">
-///     The guard on which the <c>SVGFunc</c> is conditional.
-/// </param>
-/// <param name="name">
-///     The name of the <c>SVGFunc</c>.
-/// </param>
-/// <param name="pars">
-///     The parameters of the <c>SVGFunc</c>, as a sequence.
-/// </param>
-/// <returns>
-///     A new <c>SVGFunc</c> with the given guard, name, and parameters.
-/// </returns>
-let svgfunc (guard : SVBoolExpr) (name : string) (pars : SVExpr seq) : SVGFunc =
-    gfunc guard name pars
-
-/// <summary>
-///     Creates a new <c>MGFunc</c>.
-/// </summary>
-/// <param name="guard">
-///     The guard on which the <c>MGFunc</c> is conditional.
-/// </param>
-/// <param name="name">
-///     The name of the <c>MGFunc</c>.
-/// </param>
-/// <param name="pars">
-///     The parameters of the <c>MGFunc</c>, as a sequence.
-/// </param>
-/// <returns>
-///     A new <c>MGFunc</c> with the given guard, name, and parameters.
-/// </returns>
-let mgfunc (guard : MBoolExpr) (name : string) (pars : MExpr seq) : MGFunc =
-    gfunc guard name pars
-
-/// <summary>
-///     Creates a new <c>SMGFunc</c>.
-/// </summary>
-/// <param name="guard">
-///     The guard on which the <c>SMGFunc</c> is conditional.
-/// </param>
-/// <param name="name">
-///     The name of the <c>SMGFunc</c>.
-/// </param>
-/// <param name="pars">
-///     The parameters of the <c>SMGFunc</c>, as a sequence.
-/// </param>
-/// <returns>
-///     A new <c>SMGFunc</c> with the given guard, name, and parameters.
-/// </returns>
-let smgfunc (guard : SMBoolExpr) (name : string) (pars : SMExpr seq) : SMGFunc =
-    gfunc guard name pars
+    { Cond = guard ; Item = regFunc name pars }
 
 /// <summary>
 ///     Constructs an iterated guarded func.

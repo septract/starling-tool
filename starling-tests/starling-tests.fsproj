@@ -1,9 +1,10 @@
-<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netcoreapp2.0</TargetFramework>
-    <IsPackable>false</IsPackable>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\libstarling\libstarling.fsproj" />
+  </ItemGroup>
   <ItemGroup>
     <Compile Include="TestUtils.fs" />
     <Compile Include="TestStudies.fs" />
@@ -18,9 +19,9 @@
     <Compile Include="GuardedViewTests.fs" />
     <Compile Include="HornTests.fs" />
     <Compile Include="InstantiateTests.fs" />
-    <Compile Include="ModellerTests.fs" />
     <Compile Include="OptimiserTests.fs" />
     <Compile Include="ParserTests.fs" />
+    <Compile Include="ModellerTests.fs" />
     <Compile Include="PrettyTests.fs" />
     <Compile Include="ReifierTests.fs" />
     <Compile Include="SemanticsTests.fs" />
@@ -31,9 +32,6 @@
     <Compile Include="VarTests.fs" />
     <Compile Include="Z3Tests.fs" />
     <Compile Include="Program.fs" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\libstarling\libstarling.fsproj" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Microsoft.Z3">

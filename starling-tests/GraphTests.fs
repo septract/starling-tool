@@ -6,6 +6,7 @@ module Starling.Tests.Graph
 open NUnit.Framework
 
 open Starling.Collections
+open Starling.Tests.TestUtils
 open Starling.Utils
 open Starling.Core.Command
 open Starling.Core.Command.Create
@@ -24,7 +25,7 @@ let npset : (string * string) list -> Set<(string * string)> = Set.ofList
 let oneGFunc (cnd : BoolExpr<Sym<Var>>) (name : string)
   (ps : Expr<Sym<Var>> list)
   : IteratedGFunc<Sym<Var>> =
-    iterated (svgfunc cnd name ps) (IInt 1L)
+    iterated (gfunc cnd name ps) (IInt 1L)
 
 /// <summary>
 ///     Case studies for testing <c>Graph</c>.
@@ -364,26 +365,28 @@ type NUnit () =
         s |> graph n |> okOption
 
 
-    /// <summary>
-    ///     Test cases for <c>InnerView</c>.
+    // Test cases for InnerView>.
+    // (TODO(@MattWindsor91): clean up and rename these)
     /// </summary>
-    static member ViewExprFlattens =
-        [ TestCaseData(Mandatory (Multiset.singleton (smgfunc BTrue "holdLock" [])))
-              .Returns(Multiset.singleton (smgfunc BTrue "holdLock" []))
-              .SetName("Flattening a mandatory viewexpr returns its view")
-          TestCaseData(Advisory
-                           (Multiset.singleton
-                                (smgfunc BTrue "holdTick"
-                                     [ normalIntExpr (siBefore "t") ] )))
-              .Returns(Multiset.singleton
-                           (smgfunc BTrue "holdTick"
-                                [ normalIntExpr (siBefore "t") ] ))
-              .SetName("Flattening an advisory viewexpr returns its view") ]
+   
+    member x.checkInnerView inner outer =
+        let extract = match outer with InnerView v -> v
+        assertEqual inner extract
 
-    /// <summary>
-    ///     Tests <c>InnerView</c>.
-    /// </summary>
-    [<TestCaseSource("ViewExprFlattens")>]
-    member x.``View expressions can be flattened into views``
-        (ve : ViewExpr<GView<Sym<MarkedVar>>>) =
-        match ve with InnerView v -> v
+    [<Test>]
+    member x.``Flattening a mandatory viewexpr returns its view`` () =
+        x.checkInnerView 
+            (Multiset.singleton
+                (gfunc BTrue "holdTick" [ normalIntExpr (siBefore "t") ] ))
+            (Mandatory
+                (Multiset.singleton
+                    (gfunc BTrue "holdTick" [ normalIntExpr (siBefore "t") ] )))
+
+    [<Test>]
+    member x.``Flattening an advisory viewexpr returns its view`` () =
+        x.checkInnerView 
+            (Multiset.singleton
+                (gfunc BTrue "holdTick" [ normalIntExpr (siBefore "t") ] ))
+            (Advisory
+                (Multiset.singleton
+                    (gfunc BTrue "holdTick" [ normalIntExpr (siBefore "t") ] )))

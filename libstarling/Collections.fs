@@ -59,13 +59,36 @@ type Func<'param> =
 /// <parameter name="pars">
 ///     The parameters of the <c>Func</c>, as a sequence.
 /// </parameter>
+/// <parameter name="ftype">
+///     The type of the <c>Func</c>.
+/// </parameter>
 /// <returns>
 ///     A new <c>Func</c> with the given name and parameters.
 /// </returns>
 let func (name : string)
          (pars : 'param seq)
+         (ftype : FuncType)
          : Func<'param> =
-    { Name = name; Params = List.ofSeq pars; FuncType = Regular }
+    { Name = name; Params = List.ofSeq pars; FuncType = ftype }
+
+/// <summary>
+///     Creates a new <c>Func</c> with a regular type.
+/// </summary>
+/// <parameter name="name">
+///     The name of the <c>Func</c>.
+/// </parameter>
+/// <parameter name="pars">
+///     The parameters of the <c>Func</c>, as a sequence.
+/// </parameter>
+/// <parameter name="ftype">
+///     The type of the <c>Func</c>
+/// </parameter>
+/// <returns>
+///     A new <c>Func</c> with the given name and parameters, and type
+///     <c>Regular</c>.
+/// </returns>
+let regFunc (name: string) (pars: 'param seq) : Func<'param> =
+    func name pars Regular
 
 module Func =
     /// Replaces the parameters in a Func with another set.

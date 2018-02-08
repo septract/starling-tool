@@ -52,7 +52,7 @@ module ViewProtoTests =
         check parseViewProtoSet "view foo(int a, int b);"
             [ NoIterator
                 (Func =
-                    func "foo"
+                    regFunc "foo"
                         [ { ParamType = TInt; ParamName = "a" }
                           { ParamType = TInt; ParamName = "b" } ],
                  IsAnonymous = false) ]
@@ -62,13 +62,13 @@ module ViewProtoTests =
         check parseViewProtoSet "view foo(int a, int b), bar(int c, bool d);"
             [ NoIterator
                 (Func =
-                    func "foo"
+                    regFunc "foo"
                         [ { ParamType = TInt; ParamName = "a" }
                           { ParamType = TInt; ParamName = "b" } ],
                  IsAnonymous = false)
               NoIterator
                 (Func =
-                    func "bar"
+                    regFunc "bar"
                         [ { ParamType = TInt; ParamName = "c" }
                           { ParamType = TBool; ParamName = "d" } ],
                  IsAnonymous = false) ]
@@ -285,7 +285,7 @@ module ConstraintTests =
     [<Test>]
     let ``Func(a,b) -> c > a + b``() =
         check parseConstraint "constraint Func(a, b) -> c > a + b;"
-        <| (ViewSignature.Func (func "Func" [ "a"; "b" ] ),
+        <| (ViewSignature.Func (regFunc "Func" [ "a"; "b" ] ),
                  Some
                    (node "" 1L 28L
                     <| BopExpr (Gt,
@@ -298,5 +298,5 @@ module ConstraintTests =
     [<Test>]
     let ``Func(a,b) -> ?;``() =
         check parseConstraint "constraint Func(a, b) -> ?;"
-        <| (ViewSignature.Func (func "Func" [ "a"; "b" ] ),
+        <| (ViewSignature.Func (regFunc "Func" [ "a"; "b" ] ),
                  (None : Expression option))

@@ -5,6 +5,7 @@ module Starling.Tests.Reifier
 
 open NUnit.Framework
 open Starling.Tests.TestUtils
+open Starling.Collections
 open Starling.Core.Definer
 open Starling.Core.Expr
 open Starling.Core.Symbolic
@@ -52,8 +53,8 @@ module ParamEqualities =
     let ``Parameter equalities on a set of nullary funcs are empty`` () =
         [] ?=?
         paramEqualities
-            [ iterated (smvfunc "A" []) (IInt 1L)
-              iterated (smvfunc "A" []) (IInt 1L) ]
+            [ iterated (regFunc "A" []) (IInt 1L)
+              iterated (regFunc "A" []) (IInt 1L) ]
 
     [<Test>]
     let ``Parameter equalities on parameterised funcs are correct`` () =
@@ -93,9 +94,9 @@ module ViewPreprocess =
     /// </summary>
     let protos : FuncDefiner<ProtoInfo> =
         FuncDefiner.ofSeq
-            [ (dfunc "A" [ normalIntVar "x"; normalIntVar "y"; normalBoolVar "z" ],
+            [ (regFunc "A" [ normalIntVar "x"; normalIntVar "y"; normalBoolVar "z" ],
                { IsIterated = true ; IsAnonymous = false })
-              (dfunc "B" [ normalIntVar "n" ],
+              (regFunc "B" [ normalIntVar "n" ],
                { IsIterated = false ; IsAnonymous = false }) ]
 
     [<Test>]

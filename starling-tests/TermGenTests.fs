@@ -63,15 +63,15 @@ module TestWPreCreation =
         assertEqual
             (Multiset.singleton <|
                 iterated
-                    (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 1L))
             (termGenWPreMinus
                 [ iterated
-                    (smvfunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    (regFunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 1L) ]
                 (Multiset.singleton
                     (iterated
-                        (smgfunc BTrue "blop" [ normalBoolExpr (sbGoal 0I "bar") ])
+                        (gfunc BTrue "blop" [ normalBoolExpr (sbGoal 0I "bar") ])
                         (IInt 11L))))
 
     [<Test>]
@@ -79,11 +79,11 @@ module TestWPreCreation =
         assertEqual
             (Multiset.singleton <|
                 iterated
-                    (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 1L))
             (termGenWPreMinus
                 [ iterated
-                    (smvfunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    (regFunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 1L) ]
                 Multiset.empty)
 
@@ -95,7 +95,7 @@ module TestWPreCreation =
                 []
                 (Multiset.singleton
                     (iterated
-                        (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                        (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                         (IInt 1L))))
 
     [<Test>]
@@ -103,11 +103,11 @@ module TestWPreCreation =
         assertEqual
             (Multiset.singleton <|
                 iterated
-                    (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 10L))
             (termGenWPreMinus
                 [ iterated
-                    (smvfunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    (regFunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 10L) ]
                 Multiset.empty)
 
@@ -117,11 +117,11 @@ module TestWPreCreation =
             Multiset.empty
             (termGenWPreMinus
                 [ iterated
-                    (smvfunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    (regFunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 9L) ]
                 (Multiset.singleton
                     (iterated
-                        (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                        (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                         (IInt 9L))))
 
     [<Test>]
@@ -130,11 +130,11 @@ module TestWPreCreation =
             Multiset.empty
             (termGenWPreMinus
                 [ iterated
-                    (smvfunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    (regFunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 10L) ]
                 (Multiset.singleton
                     (iterated
-                        (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                        (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                         (IInt 11L))))
 
     [<Test>]
@@ -142,15 +142,15 @@ module TestWPreCreation =
         assertEqual
             (Multiset.singleton <|
                 iterated
-                    (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 4L))
             (termGenWPreMinus
                 [ iterated
-                    (smvfunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    (regFunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 10L) ]
                 (Multiset.singleton
                     (iterated
-                        (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                        (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                         (IInt 6L))))
 
     [<Test>]
@@ -158,18 +158,18 @@ module TestWPreCreation =
         assertEqual
             (Multiset.singleton <|
                 iterated
-                    (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 2L))
             (termGenWPreMinus
                 [ iterated
-                    (smvfunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    (regFunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 5L)
                   iterated
-                    (smvfunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    (regFunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 3L) ]
                 (Multiset.singleton
                     (iterated
-                        (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                        (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                         (IInt 6L))))
 
     [<Test>]
@@ -177,18 +177,18 @@ module TestWPreCreation =
         assertEqual
             (Multiset.singleton <|
                 iterated
-                    (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 2L))
             (termGenWPreMinus
                 [ iterated
-                    (smvfunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    (regFunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 10L) ]
                 (Multiset.ofFlatList
                     [ iterated
-                        (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                        (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                         (IInt 5L)
                       iterated
-                        (smgfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                        (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                         (IInt 3L) ] ))
 
 
@@ -197,18 +197,18 @@ module TestWPreCreation =
         assertEqual
             (Multiset.singleton
                 (iterated
-                    (smgfunc
+                    (gfunc
                         (BNot (bEq (sbGoal 0I "bar")
                                     (sbAfter "baz")))
                         "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 1L)))
             (termGenWPreMinus
                 [ iterated
-                    (smvfunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    (regFunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 1L) ]
                 (Multiset.singleton
                     (iterated
-                        (smgfunc BTrue "foo" [ normalBoolExpr (sbAfter "baz") ])
+                        (gfunc BTrue "foo" [ normalBoolExpr (sbAfter "baz") ])
                         (IInt 1L))))
 
     [<Test>]
@@ -216,7 +216,7 @@ module TestWPreCreation =
         assertEqual
             (Multiset.ofFlatList
                 [ (iterated
-                    (smgfunc
+                    (gfunc
                         (mkNot
                             (mkAnd
                                 [ sbBefore "G"
@@ -224,7 +224,7 @@ module TestWPreCreation =
                         "A" [ normalBoolExpr (sbAfter "x") ])
                     (siAfter "n"))
                   (iterated
-                    (smgfunc
+                    (gfunc
                         (BAnd
                             [ sbBefore "G"
                               bEq (sbAfter "x") (sbAfter "y")
@@ -233,9 +233,9 @@ module TestWPreCreation =
                     (mkSub2 (siAfter "n") (siAfter "k"))) ])
             (termGenWPreMinus
                 [ iterated
-                    (smvfunc "A" [ normalBoolExpr (sbAfter "x") ])
+                    (regFunc "A" [ normalBoolExpr (sbAfter "x") ])
                     (siAfter "n") ]
                 (Multiset.singleton
                     (iterated
-                        (smgfunc (sbBefore "G") "A" [ normalBoolExpr (sbAfter "y") ])
+                        (gfunc (sbBefore "G") "A" [ normalBoolExpr (sbAfter "y") ])
                         (siAfter "k"))))

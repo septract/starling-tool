@@ -215,10 +215,10 @@ module AfterFuncs =
     [<Test>]
     let ``Substitute afters in a func with all-after params`` () =
         check
-            (Starling.Collections.func "foo"
+            (regFunc "foo"
               [ normalIntExpr (IAdd [siBefore "serving"; IInt 1L])
                 normalBoolExpr (BNot (sbBefore "flag")) ] )
-            (Starling.Collections.func "foo"
+            (regFunc "foo"
               [ normalIntExpr (siAfter "serving")
                 normalBoolExpr (sbAfter "flag") ] )
 

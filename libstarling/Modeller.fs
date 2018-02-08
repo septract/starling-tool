@@ -1041,7 +1041,7 @@ let modelDFunc
     func
     |> lookupFunc protos
     |> lift (fun proto ->
-                 dfunc func.Name (funcViewParMerge proto.Params func.Params)
+                 Starling.Collections.func func.Name (funcViewParMerge proto.Params func.Params) func.FuncType
                  |> Multiset.singleton)
 
 /// Tries to convert a view def into its model (multiset) form.

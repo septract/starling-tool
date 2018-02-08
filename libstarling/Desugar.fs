@@ -511,7 +511,7 @@ let desugarMarkedView (ctx : BlockContext) (marked : Marked<View>)
 
         let dctx, vname = Generators.genView UnknownSynth tpars ctx.DCtx
         ({ ctx with DCtx = dctx },
-         Advisory [ (freshNode True, func vname texprs ) ])
+         Advisory [ (freshNode True, func vname texprs UnknownSynth ) ])
 
 /// <summary>
 ///     Desugars an atomic command.

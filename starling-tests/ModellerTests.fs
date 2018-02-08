@@ -26,8 +26,8 @@ open Starling.Tests.Studies
 
 let ticketLockProtos: FuncDefiner<ProtoInfo> =
     FuncDefiner.ofSeq
-        [ (func "holdLock" [], { IsIterated = false ; IsAnonymous = false })
-          (func "holdTick" [ Int (normalRec, "t") ], { IsIterated = false ; IsAnonymous = false }) ]
+        [ (regFunc "holdLock" [], { IsIterated = false ; IsAnonymous = false })
+          (regFunc "holdTick" [ Int (normalRec, "t") ], { IsIterated = false ; IsAnonymous = false }) ]
 
 let environ =
     Map.ofList [ ("foo", Type.Int (normalRec, ()))
@@ -74,13 +74,13 @@ module ViewPass =
         check Multiset.empty []
 
     [<Test>]
-    let ``test correct func``() =
+    let ``test correct regFunc``() =
         check
             (Multiset.singleton
                 (iterated
                     (gfunc BTrue "holdLock" [])
                     (IInt 1L)))
-            [ ( freshNode True, afunc "holdLock" [] ) ]
+            [ (freshNode True, regFunc "holdLock" []) ]
 
 
 module ViewFail =
@@ -91,13 +91,13 @@ module ViewFail =
     let ``test unknown func`` () =
         check
             [ NoSuchView "badfunc" ]
-            [ (freshNode True, afunc "badfunc" []) ]
+            [ (freshNode True, regFunc "badfunc" []) ]
 
     [<Test>]
     let ``test missing parameter`` () =
         check
             [ LookupError ("holdTick", CountMismatch(0, 1)) ]
-            [ (freshNode True, afunc "holdTick" []) ]
+            [ (freshNode True, regFunc "holdTick" []) ]
 
     [<Test>]
     let ``test bad parameter type`` () =
@@ -106,7 +106,7 @@ module ViewFail =
                ( "holdTick",
                  Error.TypeMismatch
                    (Int (normalRec, "t"), Type.Bool (indefRec, ()))) ]
-          [ (freshNode True, afunc "holdTick" [freshNode Expression'.True]) ]
+          [ (freshNode True, regFunc "holdTick" [freshNode Expression'.True]) ]
 
     [<Test>]
     let ``test bad parameter subtype`` () =
@@ -115,7 +115,7 @@ module ViewFail =
                ( "holdTick",
                  Error.TypeMismatch
                    (normalIntVar "t", Type.Int ({ PrimSubtype = Named "Node" }, ()))) ]
-          [ (freshNode True, afunc "holdTick" [freshNode (Identifier "lnode")]) ]
+          [ (freshNode True, regFunc "holdTick" [freshNode (Identifier "lnode")]) ]
 
 
 module ArithmeticExprs =
@@ -560,19 +560,19 @@ module ViewDefs =
         check (Some 1) []
             (indefinites
                 [ []
-                  [ iterated (func "holdLock" []) None ]
-                  [ iterated (func "holdTick" [ Int (normalRec, "t0") ]) None ] ])
+                  [ iterated (regFunc "holdLock" []) None ]
+                  [ iterated (regFunc "holdTick" [ Int (normalRec, "t0") ]) None ] ])
 
     [<Test>]
     let ``Search for size-2 viewdefs yields viewdefs up to size 2``() =
         check (Some 2) []
             (indefinites
                 [ []
-                  [ iterated (func "holdLock" []) None ]
-                  [ iterated (func "holdLock" []) None
-                    iterated (func "holdLock" []) None ]
-                  [ iterated (func "holdLock" []) None
-                    iterated (func "holdTick" [ Int (normalRec, "t0") ]) None ]
-                  [ iterated (func "holdTick" [ Int (normalRec, "t0") ]) None ]
-                  [ iterated (func "holdTick" [ Int (normalRec, "t0") ]) None
-                    iterated (func "holdTick" [ Int (normalRec, "t1") ]) None ] ] )
+                  [ iterated (regFunc "holdLock" []) None ]
+                  [ iterated (regFunc "holdLock" []) None
+                    iterated (regFunc "holdLock" []) None ]
+                  [ iterated (regFunc "holdLock" []) None
+                    iterated (regFunc "holdTick" [ Int (normalRec, "t0") ]) None ]
+                  [ iterated (regFunc "holdTick" [ Int (normalRec, "t0") ]) None ]
+                  [ iterated (regFunc "holdTick" [ Int (normalRec, "t0") ]) None
+                    iterated (regFunc "holdTick" [ Int (normalRec, "t1") ]) None ] ] )

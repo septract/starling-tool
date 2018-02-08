@@ -363,7 +363,7 @@ let parseAtomicSet =
 
 /// Parses a Func given the argument parser argp.
 let parseFunc argp =
-    pipe2ws parseIdentifier (parseParamList argp) func
+    pipe2ws parseIdentifier (parseParamList argp) regFunc
 
 (*
  * View-likes (views and view definitions).

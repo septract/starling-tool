@@ -86,7 +86,7 @@ module TermTraversal =
                       gfunc (BGt (normalInt (IInt 1L), normalInt (IInt 1L))) "barbaz"
                         [ normalIntExpr (IAdd [ IInt 0L; IInt 0L ]) ] ]
               Goal =
-                (vfunc "bar" [ normalIntExpr (IInt 1L); normalBoolExpr BTrue ]) }
+                (regFunc "bar" [ normalIntExpr (IInt 1L); normalBoolExpr BTrue ]) }
             (Context.positive ())
             { Cmd =
                 BAnd
@@ -101,7 +101,7 @@ module TermTraversal =
                         [ normalIntExpr
                             (IAdd [ IVar "foobaz"; IVar "bazbaz" ]) ] ]
               Goal =
-                vfunc "bar"
+                regFunc "bar"
                     [ normalIntExpr (IVar "baz")
                       normalBoolExpr (BVar "barbaz") ] }
 
@@ -117,7 +117,7 @@ module TermTraversal =
                       gfunc (BGt (normalInt (IInt 0L), normalInt (IInt 0L))) "barbaz"
                         [ normalIntExpr (IAdd [ IInt 1L; IInt 1L ]) ] ]
               Goal =
-                vfunc "bar" [ normalIntExpr (IInt 0L); normalBoolExpr BFalse ] }
+                regFunc "bar" [ normalIntExpr (IInt 0L); normalBoolExpr BFalse ] }
             (Context.negative ())
             { Cmd =
                 BAnd
@@ -131,7 +131,7 @@ module TermTraversal =
                         [ normalIntExpr
                             (IAdd [ IVar "foobaz"; IVar "bazbaz" ]) ] ]
               Goal =
-                vfunc "bar"
+                regFunc "bar"
                    [ normalIntExpr (IVar "baz"); normalBoolExpr (BVar "barbaz") ] }
 
 /// <summary>

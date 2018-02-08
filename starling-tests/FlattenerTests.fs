@@ -8,6 +8,7 @@ open NUnit.Framework
 
 open Starling.Tests.TestUtils
 
+open Starling.Collections
 open Starling.Flattener
 open Starling.Core.TypeSystem
 open Starling.Core.Expr
@@ -50,7 +51,7 @@ module NamingTests =
     let ``Encode name of view 'foo() * bar_baz()' as 'v_foo_bar__bazo'`` () =
         assertEqual
             "v_foo_bar__baz"
-            (genFlatFuncSeqName [ smvfunc "foo" []; smvfunc "bar_baz" [] ])
+            (genFlatFuncSeqName [ regFunc "foo" []; regFunc "bar_baz" [] ])
 
     [<Test>]
     let ``Encode name of view '' as 'emp'`` () =
@@ -65,14 +66,15 @@ module DViewFlattening =
     [<Test>]
     let ``Convert non-iterated DView to defining func`` () =
         assertEqual
-            (dfunc "v_holdLock_holdTick"
+            (func "v_holdLock_holdTick"
                 [ TypedVar.Int (normalRec, "serving")
                   TypedVar.Int (normalRec, "ticket")
-                  TypedVar.Int (normalRec, "t") ] )
+                  TypedVar.Int (normalRec, "t") ]
+                Erased)
             (flattenDView
                 svarSeq
-                [ iterated (dfunc "holdLock" []) None
-                  iterated (dfunc "holdTick" [ TypedVar.Int (normalRec, "t") ]) None ])
+                [ iterated (regFunc "holdLock" []) None
+                  iterated (regFunc "holdTick" [ TypedVar.Int (normalRec, "t") ]) None ])
 
     // TODO(CaptainHayashi): iterated DView tests
     //   (that, or move the iterator lowering to IterLower where it belongs)
@@ -85,14 +87,15 @@ module OViewFlattening =
     [<Test>]
     let ``Convert arity-2 OView to func`` () =
         assertEqual
-            (smvfunc "v_holdLock_holdTick"
+            (func "v_holdLock_holdTick"
                 [ normalIntExpr (siBefore "serving")
                   normalIntExpr (siBefore "ticket")
-                  normalIntExpr (siBefore "t") ] )
+                  normalIntExpr (siBefore "t") ]
+                Erased)
             (flattenOView
                 svarExprSeq
-                [ smvfunc "holdLock" []
-                  smvfunc "holdTick" [ normalIntExpr (siBefore "t") ]])
+                [ regFunc "holdLock" []
+                  regFunc "holdTick" [ normalIntExpr (siBefore "t") ]])
 
 /// <summary>
 ///     Tests for the iterator flattener.
@@ -107,49 +110,43 @@ module TestIterFlatten =
     module TestLowerGuards =
         let protos =
             FuncDefiner.ofSeq
-                [ (dfunc "f" [Bool (normalRec, "x")], { IsIterated = true; IsAnonymous = false })
-                  (dfunc "g" [Bool (normalRec, "x")], { IsIterated = false; IsAnonymous = false }) ]
+                [ (regFunc "f" [Bool (normalRec, "x")], { IsIterated = true; IsAnonymous = false })
+                  (regFunc "g" [Bool (normalRec, "x")], { IsIterated = false; IsAnonymous = false }) ]
 
         [<Test>]
         let ``Drop iterated subview down to non-iterated subview`` ()=
-            Assert.That(
-                okOption <|
-                lowerIteratedSubview
+            assertOkAndEqual
+                ({ Cond = (BTrue : BoolExpr<Sym<MarkedVar>>)
+                   Item = [ regFunc "f" [normalIntExpr (IInt 3L); normalBoolExpr BTrue] ] })
+                (lowerIteratedSubview
                     protos
                     { Cond = BTrue
                       Item =
                         [ iterated
-                            (smvfunc "f" [normalBoolExpr BTrue])
-                            (IInt 3L) ] },
-                Is.EqualTo(
-                    Some <|
-                    { Cond = (BTrue : BoolExpr<Sym<MarkedVar>>)
-                      Item = [ smvfunc "f" [normalIntExpr (IInt 3L); normalBoolExpr BTrue] ] }))
+                            (regFunc "f" [normalBoolExpr BTrue])
+                            (IInt 3L) ] })
+                (printError >> Starling.Core.Pretty.printUnstyled)
 
         [<Test>]
         let ``Drop iterated SMVFunc down to non-iterated SMVFunc`` ()=
-            Assert.That(
-                okOption <|
-                lowerIterSMVFunc
+            assertOkAndEqual
+                [ regFunc "f"
+                    [ normalIntExpr (mkMul2 (IInt 2L) (siBefore "n"))
+                      normalBoolExpr (sbAfter "x") ]]
+                (lowerIterSMVFunc
                     protos
                     (iterated
-                        (smvfunc "f" [normalBoolExpr (sbAfter "x")])
-                        (mkMul2 (IInt 2L) (siBefore "n"))),
-                Is.EqualTo(
-                    Some <|
-                    [ smvfunc "f"
-                        [ normalIntExpr (mkMul2 (IInt 2L) (siBefore "n"))
-                          normalBoolExpr (sbAfter "x") ]]))
+                        (regFunc "f" [normalBoolExpr (sbAfter "x")])
+                        (mkMul2 (IInt 2L) (siBefore "n"))))
+                (printError >> Starling.Core.Pretty.printUnstyled)
 
         [<Test>]
         let ``Drop non-iterated IteratedSMVFunc's down to non-iterated SMVFunc`` ()=
-            Assert.That(
-                okOption <|
-                lowerIterSMVFunc
+            assertOkAndEqual
+                [ for _ in 1..4 -> regFunc "g" [ normalBoolExpr (sbAfter "z") ]]
+                (lowerIterSMVFunc
                     protos
                     (iterated
-                        (smvfunc "g" [normalBoolExpr (sbAfter "z")])
-                        (IInt 4L)),
-                Is.EqualTo(
-                    Some <|
-                    [ for x in 1..4 -> smvfunc "g" [ normalBoolExpr (sbAfter "z") ]]))
+                        (regFunc "g" [normalBoolExpr (sbAfter "z")])
+                        (IInt 4L)))
+                (printError >> Starling.Core.Pretty.printUnstyled)

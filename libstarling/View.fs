@@ -159,7 +159,7 @@ module Types =
     let iteratedFunc
       (name : string) (pars : Expr<'Var> seq) (iterator : IntExpr<'Var>)
       : IteratedFunc<'Var> =
-      iterated (func name pars) iterator
+      iterated (regFunc name pars) iterator
 
     /// <summary>
     ///     A basic view, as an ordered list of VFuncs.
@@ -288,81 +288,6 @@ module Pretty =
     /// </returns>
     let printSymbol s =
         hjoin [ String "%" ; s |> String |> braced ]
-
-
-/// <summary>
-///     Type-constrained version of <c>func</c> for <c>DFunc</c>s.
-/// </summary>
-/// <parameter name="name">
-///     The name of the <c>DFunc</c>.
-/// </parameter>
-/// <parameter name="pars">
-///     The parameters of the <c>DFunc</c>, as a sequence.
-/// </parameter>
-/// <returns>
-///     A new <c>DFunc</c> with the given name and parameters.
-/// </returns>
-let dfunc name (pars : TypedVar seq) : DFunc = func name pars
-
-/// <summary>
-///     Type-constrained version of <c>func</c> for <c>VFunc</c>s.
-/// </summary>
-/// <param name="name">
-///     The name of the <c>VFunc</c>.
-/// </param>
-/// <param name="pars">
-///     The parameters of the <c>VFunc</c>, as a sequence.
-/// </param>
-/// <typeparam name="var">
-///     The type of variables in the <c>VFunc</c>'s parameters.
-/// </typeparam>
-/// <returns>
-///     A new <c>VFunc</c> with the given name and parameters.
-/// </returns>
-let vfunc name (pars : Expr<'var> seq) : VFunc<'var> = func name pars
-
-/// <summary>
-///     Type-constrained version of <c>vfunc</c> for <c>MVFunc</c>s.
-/// </summary>
-/// <param name="name">
-///     The name of the <c>MVFunc</c>.
-/// </param>
-/// <param name="pars">
-///     The parameters of the <c>MVFunc</c>, as a sequence.
-/// </param>
-/// <returns>
-///     A new <c>MVFunc</c> with the given name and parameters.
-/// </returns>
-let mvfunc name (pars : MExpr seq) : MVFunc = vfunc name pars
-
-/// <summary>
-///     Type-constrained version of <c>vfunc</c> for <c>SVFunc</c>s.
-/// </summary>
-/// <param name="name">
-///     The name of the <c>SVFunc</c>.
-/// </param>
-/// <param name="pars">
-///     The parameters of the <c>SVFunc</c>, as a sequence.
-/// </param>
-/// <returns>
-///     A new <c>SVFunc</c> with the given name and parameters.
-/// </returns>
-let svfunc name (pars : SVExpr seq) : SVFunc = vfunc name pars
-
-
-/// <summary>
-///     Type-constrained version of <c>vfunc</c> for <c>SMVFunc</c>s.
-/// </summary>
-/// <param name="name">
-///     The name of the <c>SMVFunc</c>.
-/// </param>
-/// <param name="pars">
-///     The parameters of the <c>SMVFunc</c>, as a sequence.
-/// </param>
-/// <returns>
-///     A new <c>SMVFunc</c> with the given name and parameters.
-/// </returns>
-let smvfunc name (pars : SMExpr seq) : SMVFunc = vfunc name pars
 
 /// <summary>
 ///     Active pattern extracting a View from a ViewExpr.
