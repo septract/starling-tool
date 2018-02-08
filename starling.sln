@@ -2,11 +2,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.27130.2010
 MinimumVisualStudioVersion = 15.0.26124.0
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "starling", "starling\starling.fsproj", "{94E280BC-70DF-43E9-8BC6-7779DED71F1F}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "starling", "starling/starling.fsproj", "{94E280BC-70DF-43E9-8BC6-7779DED71F1F}"
 EndProject
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "libstarling", "libstarling\libstarling.fsproj", "{E80B8DF5-CC4A-452B-BF2B-6CA192256026}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "libstarling", "libstarling/libstarling.fsproj", "{E80B8DF5-CC4A-452B-BF2B-6CA192256026}"
 EndProject
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "starling-tests", "starling-tests\starling-tests.fsproj", "{C815D703-56B7-4286-866C-53EDE44EF1A3}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "starling-tests", "starling-tests/starling-tests.fsproj", "{C815D703-56B7-4286-866C-53EDE44EF1A3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
