@@ -69,10 +69,9 @@ module TestWPreCreation =
                 [ iterated
                     (regFunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 1L) ]
-                (Multiset.singleton
-                    (iterated
-                        (gfunc BTrue "blop" [ normalBoolExpr (sbGoal 0I "bar") ])
-                        (IInt 11L))))
+                (Multiset.repeated
+                    (gfunc BTrue "blop" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    11))
 
     [<Test>]
     let ``Subtracting emp from a single func yields the original func`` () =
@@ -94,9 +93,7 @@ module TestWPreCreation =
             (termGenWPreMinus
                 []
                 (Multiset.singleton
-                    (iterated
-                        (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
-                        (IInt 1L))))
+                    (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])))
 
     [<Test>]
     let ``Subtracting emp from an iterated func yields the original func`` () =
@@ -119,10 +116,9 @@ module TestWPreCreation =
                 [ iterated
                     (regFunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 9L) ]
-                (Multiset.singleton
-                    (iterated
-                        (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
-                        (IInt 9L))))
+                (Multiset.repeated
+                    (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    9))
 
     [<Test>]
     let ``Over-subtracting an iterated func from itself truncates`` () =
@@ -132,10 +128,9 @@ module TestWPreCreation =
                 [ iterated
                     (regFunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 10L) ]
-                (Multiset.singleton
-                    (iterated
-                        (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
-                        (IInt 11L))))
+                (Multiset.repeated
+                    (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    11))
 
     [<Test>]
     let ``Under-subtracting an iterated func from itself leaves a remainder`` () =
@@ -148,10 +143,9 @@ module TestWPreCreation =
                 [ iterated
                     (regFunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 10L) ]
-                (Multiset.singleton
-                    (iterated
-                        (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
-                        (IInt 6L))))
+                (Multiset.repeated
+                    (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    6))
 
     [<Test>]
     let ``Subtraction normalises the subtracted view correctly`` () =
@@ -167,10 +161,9 @@ module TestWPreCreation =
                   iterated
                     (regFunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 3L) ]
-                (Multiset.singleton
-                    (iterated
-                        (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
-                        (IInt 6L))))
+                (Multiset.repeated
+                    (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
+                    6))
 
     [<Test>]
     let ``Subtraction normalises the subtracting view correctly`` () =
@@ -183,13 +176,13 @@ module TestWPreCreation =
                 [ iterated
                     (regFunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 10L) ]
-                (Multiset.ofFlatList
-                    [ iterated
+                (Multiset.append
+                    (Multiset.repeated
                         (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
-                        (IInt 5L)
-                      iterated
+                        5)
+                    (Multiset.repeated
                         (gfunc BTrue "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
-                        (IInt 3L) ] ))
+                        3)))
 
 
     [<Test>]
@@ -207,9 +200,7 @@ module TestWPreCreation =
                     (regFunc "foo" [ normalBoolExpr (sbGoal 0I "bar") ])
                     (IInt 1L) ]
                 (Multiset.singleton
-                    (iterated
-                        (gfunc BTrue "foo" [ normalBoolExpr (sbAfter "baz") ])
-                        (IInt 1L))))
+                    (gfunc BTrue "foo" [ normalBoolExpr (sbAfter "baz") ])))
 
     [<Test>]
     let ``General-case subtraction on one func produces the correct rewrite`` () =
@@ -228,14 +219,12 @@ module TestWPreCreation =
                         (BAnd
                             [ sbBefore "G"
                               bEq (sbAfter "x") (sbAfter "y")
-                              mkIntGt (siAfter "n") (siAfter "k") ])
+                              mkIntGt (siAfter "n") (IInt 1L) ])
                         "A" [ normalBoolExpr (sbAfter "x") ])
-                    (mkSub2 (siAfter "n") (siAfter "k"))) ])
+                    (mkDec (siAfter "n"))) ])
             (termGenWPreMinus
                 [ iterated
                     (regFunc "A" [ normalBoolExpr (sbAfter "x") ])
                     (siAfter "n") ]
                 (Multiset.singleton
-                    (iterated
-                        (gfunc (sbBefore "G") "A" [ normalBoolExpr (sbAfter "y") ])
-                        (siAfter "k"))))
+                    (gfunc (sbBefore "G") "A" [ normalBoolExpr (sbAfter "y") ])))

@@ -349,18 +349,13 @@ let ticketLockCollated =
 /// Shorthand for Multiset.singleton.
 let sing = Multiset.singleton
 
-let oneGFunc (cnd : BoolExpr<Sym<Var>>) (name : string)
-  (ps : Expr<Sym<Var>> list)
-  : IteratedGFunc<Sym<Var>> =
-    iterated (gfunc cnd name ps) (IInt 1L)
-
 /// The guarded holdLock view.
-let gHoldLock cnd : IteratedGFunc<Sym<Var>> =
-    oneGFunc cnd "holdLock" []
+let gHoldLock cnd : GFunc<Sym<Var>> =
+    gfunc cnd "holdLock" []
 
 /// The guarded holdTick view.
-let gHoldTick cnd : IteratedGFunc<Sym<Var>> =
-    oneGFunc cnd "holdTick" [normalIntExpr (siVar "t")]
+let gHoldTick cnd : GFunc<Sym<Var>> =
+    gfunc cnd "holdTick" [normalIntExpr (siVar "t")]
 
 /// Produces the expression 's!before == t!before'.
 let sIsT = iEq (siVar "s") (siVar "t")

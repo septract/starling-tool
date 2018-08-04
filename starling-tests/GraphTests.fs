@@ -22,22 +22,17 @@ open Starling.Core.Graph
 /// </summary>
 let npset : (string * string) list -> Set<(string * string)> = Set.ofList
 
-let oneGFunc (cnd : BoolExpr<Sym<Var>>) (name : string)
-  (ps : Expr<Sym<Var>> list)
-  : IteratedGFunc<Sym<Var>> =
-    iterated (gfunc cnd name ps) (IInt 1L)
-
 /// <summary>
 ///     Case studies for testing <c>Graph</c>.
 /// </summary>
 module Studies =
     /// The guarded holdLock view.
-    let gHoldLock cnd : IteratedGFunc<Sym<Var>> =
-        oneGFunc cnd "holdLock" []
+    let gHoldLock cnd : GFunc<Sym<Var>> =
+        gfunc cnd "holdLock" []
 
     /// The guarded holdTick view.
-    let gHoldTick cnd : IteratedGFunc<Sym<Var>> =
-        oneGFunc cnd "holdTick" [normalIntExpr (siVar "t")]
+    let gHoldTick cnd : GFunc<Sym<Var>> =
+        gfunc cnd "holdTick" [normalIntExpr (siVar "t")]
 
     let ticketLockLockGraph : Graph =
         { Name = "lock"
@@ -139,7 +134,7 @@ module Studies =
                   [ ("unlock_V000",
                      (Mandatory <|
                       Multiset.singleton
-                              (oneGFunc BTrue "holdLock" [] ),
+                              (gfunc BTrue "holdLock" [] ),
                       Set.singleton
                           { Name = "unlock_C000"
                             Dest = "unlock_V001"
@@ -213,7 +208,7 @@ module Studies =
                   [ ("unlock_V000",
                          (Mandatory <|
                           Multiset.singleton
-                             (oneGFunc BTrue "holdLock" [] ), Entry))
+                             (gfunc BTrue "holdLock" [] ), Entry))
                     ("unlock_V001", (Mandatory <| Multiset.empty, Exit)) ]
           Edges =
                Map.ofList
@@ -294,7 +289,7 @@ type NUnit () =
                           [ ("unlock_V000",
                              (Mandatory <|
                               Multiset.singleton
-                                 (oneGFunc BTrue "holdLock" [] ),
+                                 (gfunc BTrue "holdLock" [] ),
                               EntryExit)) ]
                   Edges =
                       Map.ofList

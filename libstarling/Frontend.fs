@@ -106,8 +106,8 @@ let printResponse (gcfg : Starling.Core.Graph.Pretty.Config)
     | Response.Model m ->
         printVModel
             (printFullBlock
-                (printViewExpr (printIteratedGView (printSym printVar)))
-                (printPartCmd (printViewExpr (printIteratedGView (printSym printVar)))))
+                (printViewExpr (printGView (printSym printVar)))
+                (printPartCmd (printViewExpr (printGView (printSym printVar)))))
             m
     | Response.Graph m ->
         printVModel (printGraph gcfg) m

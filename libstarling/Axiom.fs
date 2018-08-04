@@ -52,7 +52,7 @@ module Types =
     /// An axiom combined with a goal view.
     type GoalAxiom<'cmd> =
         { /// The axiom to be checked for soundness under Goal.
-          Axiom : Axiom<IteratedGView<Sym<Var>>, 'cmd>
+          Axiom : Axiom<GView<Sym<Var>>, 'cmd>
           /// The view representing the goal for any terms over Axiom.
           Goal : IteratedOView }
 
@@ -78,7 +78,7 @@ module Pretty =
                        ({ Axiom = a; Goal = f } : GoalAxiom<'cmd>)
                        : Doc =
         vsep [ headed "Axiom"
-                      (a |> printAxiom (printIteratedGView (printSym String)) printCmd |> Seq.singleton)
+                      (a |> printAxiom (printGView (printSym String)) printCmd |> Seq.singleton)
                headed "Goal" (f |> printIteratedOView |> Seq.singleton) ]
 
 
@@ -110,7 +110,7 @@ let instantiateGoal (fg : FreshGen)
 let goalAddAxiom
   (ds : ViewDefiner<_>)
   (fg : FreshGen)
-  ((name, axiom) : (string * Axiom<IteratedGView<Sym<Var>>, 'cmd>))
+  ((name, axiom) : (string * Axiom<GView<Sym<Var>>, 'cmd>))
   : (string * GoalAxiom<'cmd>) list =
     // Each axiom comes in with a name like method_0,
     // where the 0 is the edge number.
@@ -137,7 +137,7 @@ let goalAddAxiom
 ///     The new <c>Model</c>, over <c>GoalAxiom</c>s.
 /// </returns>
 let goalAdd
-  (mdl : Model<Axiom<IteratedGView<Sym<Var>>, 'cmd>, _>)
+  (mdl : Model<Axiom<GView<Sym<Var>>, 'cmd>, _>)
   : Model<GoalAxiom<'cmd>, _> =
     // We use a fresh ID generator to ensure every goal variable is unique.
     let fg = freshGen ()

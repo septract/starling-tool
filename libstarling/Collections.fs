@@ -198,6 +198,22 @@ module Multiset =
     /// </returns>
     let singleton (x : 'item) : Multiset<'item> = add empty x
 
+    /// <summary>
+    ///     Creates a multiset with one item repeated <paramref name="n"/>
+    ///     times.
+    /// </summary>
+    /// <param name="x">
+    ///     The item to place in the multiset.
+    /// </param>
+    /// <param name="n">The number of times to place it in the multiset.</param>
+    /// <typeparam name="item">
+    ///     The type of items in the multiset.
+    /// </typeparam>
+    /// <returns>
+    ///     A singleton multiset.
+    /// </returns>
+    let repeated (x : 'item) (n : int) : Multiset<'item> = addn empty x n
+
 
     (*
      * Destruction

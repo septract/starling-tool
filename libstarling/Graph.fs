@@ -31,7 +31,7 @@ module Types =
     /// <summary>
     ///     A view of the type permitted in a Graph.
     /// </summary>
-    type GraphView = IteratedGView<Sym<Var>>
+    type GraphView = GView<Sym<Var>>
 
     /// <summary>
     ///     A <see cref="ViewExpr"/> of the type permitted in a Graph.
@@ -784,7 +784,7 @@ module Pretty =
     ///     The resulting <see cref="Doc"/> from <paramref name="view"/>.
     /// </returns>
     let printGraphView (view : GraphView) : Doc =
-        printIteratedGView (printSym printVar) view
+        printGView (printSym printVar) view
 
     /// <summary>
     ///     A configuration for graph pretty-printing.
@@ -847,15 +847,12 @@ module Pretty =
                 | Mandatory v -> Multiset.toFlatSeq v, Nop 
                 | Advisory v -> Multiset.toFlatSeq v, hrow "(Advisory)"
 
-            let funcToRow (v : IteratedGFunc<Sym<Var>>) =
+            let funcToRow (v : GFunc<Sym<Var>>) =
                 ssurround "<TR>" "</TR>"
                     ((ssurround "<TD>" "</TD>" 
-                        (printIntExpr (printSym printVar) v.Iterator))
+                        (printBoolExpr (printSym printVar) v.Cond))
                      <->
-                     (ssurround "<TD>" "</TD>" 
-                        (printBoolExpr (printSym printVar) v.Func.Cond))
-                     <->
-                     (ssurround "<TD>" "</TD>" (printSVFunc v.Func.Item)))
+                     (ssurround "<TD>" "</TD>" (printSVFunc v.Item)))
 
             let vrows = Seq.map funcToRow v
             let header = hrow id <-> comment

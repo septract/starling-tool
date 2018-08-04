@@ -73,12 +73,12 @@ let normalise (func : IteratedGFunc<TermGenVar>) (i : int)
 ///     The result of performing the view minus, merged with
 ///     <paramref name="rdone"/>.
 /// </returns>
-let rec minusViewByFunc (qstep : IteratedGFunc<TermGenVar>)
+let rec minusViewByFunc (qstep : GFunc<TermGenVar>)
   (r : IteratedGView<TermGenVar>)
   (rdone : IteratedGView<TermGenVar>)
   : IteratedGView<TermGenVar> =
     // Let qstep = (g2 -> w(ybar)^k).
-    let { Func = { Cond = g2; Item = w }; Iterator = k } = qstep
+    let { Cond = g2; Item = w } = qstep
     let ybar = w.Params
 
     // If g2 is never true, then _nothing_ in r can ever be minused by it.
@@ -104,47 +104,54 @@ let rec minusViewByFunc (qstep : IteratedGFunc<TermGenVar>)
                cannot be minused, and we continue as if rstep never existed. *)
             else if isFalse g1 then minusViewByFunc qstep rnext rdone
             else
-                (* Otherwise, we apply the rewrite rule from the meta-theory:
-
-                   ((g1 -> v(xbar)^n) * rnext) \ (g2 -> v(ybar)^k)
-                   =   (g1 ^ g2 ^ xbar=ybar ^ n>k -> v(xbar)^n-k)       =rsucc
-                     * (g1 ^ !(g2 ^ xbar=ybar)    -> v(xbar)^n)         =rfail
-                     * ((rnext
-                         \ (g2 ^ g1 ^ xbar=ybar ^ k>n -> v(ybar)^k-n))  =qsucc
-                        \  (g2 ^ !(g1 ^ xbar=ybar)    -> v(ybar)^k)))   =qfail
-
-                   Our first task is to decide what each guarded func
-                   (rsucc, rfail, qsucc, qfail) is.  Each has a similar format,
+                (* Otherwise, we apply the rewrite rule from the meta-theory.
+                   This leaves us with three guarded funcs
+                   (rsucc, rfail, qfail).  Each 'fail' func turns on if the
+                   minus failed; the 'rsucc' func turns on if it succeeded.
+                   Each has a similar format,
                    which is captured by mkfunc. *)
                 let mkfunc guard args iter =
                     iterated
                         { Cond = guard
                           Item = Func.updateParams v args }
                         iter
+                
+                (* This is the 'equality guard', that tells us when the
+                   r and q funcs actually match. *)
+                let barEqG = List.map2 mkEq xbar ybar |> mkAnd
 
-                let barEq = List.map2 mkEq xbar ybar |> mkAnd
+                (* Do we have a remainder?
+                   If n = 1, then the minus eliminates r and we needn't
+                   (and shouldn't) carry it around anymore.
+                   If n = 0, r never existed.
+                   Otherwise, we minus one from r. *) 
+                let hasRemainderG = mkIntGt n (IInt 1L)
 
-                let rSuccG = mkAnd [ g1; g2; barEq; mkIntGt n k ]
-                let rSucc = mkfunc rSuccG xbar (mkSub2 n k)
+                (* This func represents any remainder. *)
+                let rSuccG = mkAnd [ g1; g2; barEqG; hasRemainderG ]
+                let rSucc = mkfunc rSuccG xbar (mkDec n)
 
-                let rFailG = mkAnd [ g1; mkNot (mkAnd2 g2 barEq) ]
+                (* This func makes 'r' reappear if the minus failed.
+                   (If the minus failed due to 'r' having iterator 0,
+                   this func disappears regardless, so we don't check that
+                   in the guard.) *)
+                let rFailG = mkAnd [ g1; mkNot (mkAnd2 g2 barEqG) ]
                 let rFail = mkfunc rFailG xbar n
 
-                let qSuccG = mkAnd [ g2; g1; barEq; mkIntGt k n ]
-                let qSucc = mkfunc qSuccG ybar (mkSub2 k n)
+                (* We don't have a remainder for 'q'.
+                   Why not?  Because, if the subtraction succeeded,
+                   then all 1 atoms in 'q' must have been used up in the
+                   subtraction.
 
-                let qFailG = mkAnd [ g2; mkNot (mkAnd2 g1 barEq) ]
-                let qFail = mkfunc qFailG ybar k
+                   A previous version of this algorithm got this wrong, and
+                   failed to terminate! *)
 
-                (* Now, we have to minus qSucc and qFail from rnext.  The first
-                   one is done in isolation (because eg. if we added rdone we'd
-                   accidentally calculate rdone/qFail!), but we can optimise the
-                   second one by passing through all the already-minused bits of
-                   (rdone, rSucc, rFail) as the new rdone. *)
-
-                // No need to check whether qSuccG/qFailG are trivially false:
-                // it's the first thing we'll do in each recursive call.
-                let innerMinus = minusViewByFunc qSucc rnext Multiset.empty
+                (* To work out whether we carry over 'q' to the next atom,
+                   we *do* need to take into consideration whether the minus
+                   failed due to 'r' not existing. *)
+                let rExistsG = mkIntGt n (IInt 0L)
+                let qFailG = mkAnd [ g2; mkNot (mkAnd [g1; barEqG; rExistsG]) ]
+                let qFail = { Cond = qFailG; Item = Func.updateParams v ybar }
 
                 (* rSucc and rFail now get added to rdone for the tail call,
                    but we can optimise here by not doing so if their guards are
@@ -160,7 +167,7 @@ let rec minusViewByFunc (qstep : IteratedGFunc<TermGenVar>)
 
                 minusViewByFunc
                     qFail
-                    innerMinus
+                    rnext
                     (optAdd (optAdd rdone rSuccG rSucc) rFailG rFail)
 
 /// <summary>
@@ -174,13 +181,15 @@ let rec minusViewByFunc (qstep : IteratedGFunc<TermGenVar>)
 /// </param>
 /// <param name="q">
 ///     The view representing the postcondition to subtract.
+///     The postcondition never has any iterators, as non-constant
+///     iterators can't be expressed.
 /// </param>
 /// <returns>
 ///     The subtracted frame view.
 /// </returns>
 let termGenWPreMinus
   (r : IteratedOView)
-  (q : IteratedGView<Sym<MarkedVar>>)
+  (q : GView<Sym<MarkedVar>>)
   : IteratedGView<Sym<MarkedVar>> =
     (* Since R is unguarded and ordered at the start of the minus, we lift
        it to the guarded unordered view (forall f in R, (true -> Rn)). *)
@@ -195,12 +204,26 @@ let termGenWPreMinus
        Q into a series of calls over a single func.  Thankfully, we have
        the law
          R \ (Qstep * Qrest) = (R \ Qstep) \ Qrest
-       which turns our job into a simple fold over Q. *)
-    Multiset.fold
-        (fun rSoFar qStep i ->
-             minusViewByFunc (normalise qStep i) rSoFar Multiset.empty)
+       which turns our job into a simple fold over Q.
+       
+       NOTE: we fold over q as a sequence so as to fold over each
+             func in q separately, rather than batching them up into
+             equivalence classes as 'Multiset.fold' would do. *)
+    Seq.fold
+        (fun rSoFar qStep ->
+             minusViewByFunc qStep rSoFar Multiset.empty)
         rGuard
-        q
+        (Multiset.toFlatSeq q)
+
+/// Folds a precondition into a normalised iterated view.
+let iteratePre
+  (pre : GView<Sym<MarkedVar>>)
+  : IteratedGView<Sym<MarkedVar>> =
+    Multiset.fold
+        (fun ipre gfunc i ->
+            Multiset.add ipre (iterated gfunc (IInt (int64 i))))
+        Multiset.empty
+        pre
 
 /// Generates a (weakest) precondition from a framed axiom.
 let termGenWPre
@@ -219,7 +242,7 @@ let termGenWPre
     let markView mark =
         mapTraversal
             (tchainM
-                (tliftOverIteratedGFunc
+                (tliftOverGFunc
                     (tliftOverExpr (traverseTypedSymWithMarker mark)))
                 id)
         >> mapMessages Traversal
@@ -228,7 +251,7 @@ let termGenWPre
     let postResult = markView After gax.Axiom.Post
     let goal = gax.Goal
 
-    lift2 (fun pre post -> Multiset.append pre (termGenWPreMinus goal post))
+    lift2 (fun pre post -> Multiset.append (iteratePre pre) (termGenWPreMinus goal post))
         preResult
         postResult
 

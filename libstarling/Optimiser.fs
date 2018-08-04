@@ -579,18 +579,18 @@ module Graph =
     ///         <c>GView</c>s, but with a <c>BTrue</c> guard.
     ///     </para>
     /// </summary>
-    let (|ITEGuards|_|) (ms: IteratedGView<Sym<Var>>)
-      : (BoolExpr<Var> * IteratedGView<Sym<Var>>
-         * BoolExpr<Var> * IteratedGView<Sym<Var>>) option =
+    let (|ITEGuards|_|) (ms: GView<Sym<Var>>)
+      : (BoolExpr<Var> * GView<Sym<Var>>
+         * BoolExpr<Var> * GView<Sym<Var>>) option =
         match (Multiset.toFlatList ms) with
-        | [ { Func = { Cond = NoSym xc; Item = xi }; Iterator = xit }
-            { Func = { Cond = NoSym yc; Item = yi }; Iterator = yit } ]
+        | [ { Cond = NoSym xc; Item = xi }
+            { Cond = NoSym yc; Item = yi } ]
               when negates id xc yc ->
-            Some (xc, Multiset.singleton { Func = { Cond = BTrue; Item = xi }; Iterator = xit },
-                  yc, Multiset.singleton { Func = { Cond = BTrue; Item = yi }; Iterator = yit })
+            Some (xc, Multiset.singleton { Cond = BTrue; Item = xi },
+                  yc, Multiset.singleton { Cond = BTrue; Item = yi })
         // {| G -> P |} is trivially equivalent to {| G -> P * ¬G -> emp |}.
-        | [ { Func = { Cond = NoSym xc; Item = xi }; Iterator = it } ] ->
-            Some (xc, Multiset.singleton { Func = { Cond = BTrue; Item = xi }; Iterator = it },
+        | [ { Cond = NoSym xc; Item = xi } ] ->
+            Some (xc, Multiset.singleton { Cond = BTrue; Item = xi },
                   mkNot xc, Multiset.empty)
         | _ -> None
 
@@ -725,7 +725,7 @@ module Graph =
                     // (TODO: do something with the ViewExpr annotations?)
                     match (pViewexpr, qViewexpr) with
                     | InnerView pView, InnerView qView ->
-                        let varResultSet = Set.map iteratedGFuncVars (Multiset.toSet pView)
+                        let varResultSet = Set.map gFuncVars (Multiset.toSet pView)
                         let varsResults = lift Set.unionMany (collect varResultSet)
                         let cmdVarsResults = commandResultVars cmd
                         // TODO: Better equality?

@@ -85,7 +85,7 @@ type Response =
     /// Stop at graph optimisation.
     | GraphOptimise of Model<Graph, ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// Stop at graph axiomatisation.
-    | Axiomatise of Model<Axiom<IteratedGView<Sym<Var>>, Command>,
+    | Axiomatise of Model<Axiom<GView<Sym<Var>>, Command>,
                           ViewDefiner<BoolExpr<Sym<Var>> option>>
     /// The result of goal-axiom-pair generation.
     | GoalAdd of Model<GoalAxiom<Command>, ViewDefiner<BoolExpr<Sym<Var>> option>>
@@ -422,7 +422,7 @@ let private printResponse (mview : ModelView) (vconf : ViewConfig.Config)
     | List l -> printList String l
     | Response.Frontend f -> Lang.Frontend.printResponse vconf.Graph mview f
     | GraphOptimise g -> printVModel (printGraph vconf.Graph) g
-    | Axiomatise m -> printVModel (printAxiom printIteratedSVGView printCommand) m
+    | Axiomatise m -> printVModel (printAxiom printSVGView printCommand) m
     | GoalAdd m -> printVModel (printGoalAxiom printCommand) m
     | Response.Semantics m -> printVModel (printGoalAxiom (printCommandSemantics printSMBoolExpr)) m
     | Response.TermGen m ->

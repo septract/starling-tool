@@ -58,7 +58,7 @@ module Types =
           /// </summary>
           ViewProtos : FuncDefiner<ProtoInfo> }
 
-    type ModellerViewExpr = ViewExpr<IteratedGView<Sym<Var>>>
+    type ModellerViewExpr = ViewExpr<GView<Sym<Var>>>
     type ModellerPartCmd = PartCmd<ModellerViewExpr>
     type ModellerBlock = FullBlock<ModellerViewExpr, PartCmd<ModellerViewExpr>>
 
@@ -1345,8 +1345,7 @@ let modelFunc
 let rec modelView
   (ctx : MethodContext)
   (ast : DesugaredGView)
-  : Result<IteratedGView<Sym<Var>>, ViewError> =
-    let mkCView cfunc = Multiset.singleton ({ Func = cfunc; Iterator = None })
+  : Result<GView<Sym<Var>>, ViewError> =
     let mkCond (e : Expression) =
         (* Booleans in the condition position must be of type 'bool',
            not a subtype. *)
@@ -1364,10 +1363,7 @@ let rec modelView
         let gR = mkCond g
         let fR = modelFunc ctx f
         lift2
-            (fun gM fM ->
-                (* Each of these exists once, so put it through as having
-                   iterator 1. *)
-                iterated { Cond = gM; Item = fM } (IInt 1L))
+            (fun gM fM -> { Cond = gM; Item = fM })
                 gR fR
 
     let funclist = collect (List.map modelGFunc ast)

@@ -59,7 +59,7 @@ let sharedContext =
 
 module ViewPass =
     let check
-      (expected : IteratedGView<Sym<Var>>)
+      (expected : GView<Sym<Var>>)
       (view : DesugaredGView)
       : unit =
         assertOkAndEqual
@@ -76,10 +76,7 @@ module ViewPass =
     [<Test>]
     let ``test correct regFunc``() =
         check
-            (Multiset.singleton
-                (iterated
-                    (gfunc BTrue "holdLock" [])
-                    (IInt 1L)))
+            (Multiset.singleton (gfunc BTrue "holdLock" []))
             [ (freshNode True, regFunc "holdLock" []) ]
 
 
@@ -419,7 +416,7 @@ module CommandAxioms =
         assertFail
             errors
             (modelCommand sharedContext c)
-            (printPartCmd (printViewExpr (printIteratedGView (printSym printVar))) >> printUnstyled)
+            (printPartCmd (printViewExpr (printGView (printSym printVar))) >> printUnstyled)
 
     let prim (atom : DesugaredAtomic) : FullCommand =
         freshNode
