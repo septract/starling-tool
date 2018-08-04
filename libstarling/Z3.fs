@@ -22,8 +22,8 @@ module Pretty =
         match sat with
         (* Remember: we're trying to _refute_ the proof term with Z3.
            Thus, sat is what we're trying to _avoid_ here. *)
-        | Z3.Status.SATISFIABLE -> error (String "fail")
-        | Z3.Status.UNSATISFIABLE -> success (String "success")
+        | Z3.Status.SATISFIABLE -> errorStr "fail"
+        | Z3.Status.UNSATISFIABLE -> successStr "success"
         | _ -> inconclusive (String "unknown")
 
 
