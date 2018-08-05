@@ -9,51 +9,62 @@ type Options =
     {
         [<Option(
             'B',
+            Default = "",
             HelpText =
                 "Comma-delimited set of backend options (pass 'list' for details)")>]
-        backendOpts : string option
+        backendOpts : string
         [<Option(
             's',
+            Default = "",
             HelpText =
                 "The stage at which Starling should stop and output.")>]
-        stage : string option
+        stage : string
         [<Option(
             't',
+            Default = "",
             HelpText =
                 "Show specific axiom or term in term-refinement stages.")>]
-        term : string option
+        term : string
         [<Option('m', HelpText = "Show full model in term-refinement stages.")>]
         showModel : bool
-        [<Option('O', HelpText = "Switches given optimisations on or off.")>]
-        optimisers : string option
+        [<Option(
+            'O',
+            Default = "",
+            HelpText = "Switches given optimisations on or off.")>]
+        optimisers : string
         [<Option(
             'V',
+            Default = "",
             HelpText =
                 "Comma-delimited set of output options (pass 'list' for details)")>]
-        viewOpts : string option
+        viewOpts : string
         [<Option('v', HelpText = "Increases verbosity.")>]
         verbose : bool
         [<Option(
             'P',
+            Default = "",
             HelpText =
                 "Comma-delimited set of profiling options (pass 'list' for details")>]
-        profilerFlags : string option
+        profilerFlags : string
         [<Value(
             0,
+            (* Use "" here, not "-", to make sure Starling prints a 'reading
+               from stdin' message. *)
+            Default = "",
             MetaName = "input",
             HelpText =
                 "The file to load (omit, or supply -, for standard input).")>]
         input : string }
 
 let _emptyOpts : Options = {
-    backendOpts     = None;
-    stage           = None;
-    term            = None;
+    backendOpts     = "";
+    stage           = "";
+    term            = "";
     showModel       = false;
-    optimisers      = None;
-    viewOpts        = None;
+    optimisers      = "";
+    viewOpts        = "";
     verbose         = false;
-    profilerFlags   = None;
+    profilerFlags   = "";
     input           = "";
 }
 
@@ -65,6 +76,7 @@ let config () : Options = ! _configRef
 /// </summary>
 /// <param name="str">
 ///     A string containing a comma or semicolon-separated list of words.
+///     May be null or empty.
 /// </param>
 /// <returns>
 ///     The sequence of split words, downcased and trimmed.
@@ -75,8 +87,11 @@ let config () : Options = ! _configRef
 ///     force-enables (or force-disables) all optimisations.
 /// </returns>
 let parseOptionString (str : string) : string seq =
-    str.ToLower()
-        .Split([| "," ; ";" |],
-               System.StringSplitOptions.RemoveEmptyEntries)
-    |> Seq.toList
-    |> Seq.map (fun x -> x.Trim())
+    if str = null || str = ""
+    then Seq.empty
+    else
+        str.ToLower()
+            .Split([| "," ; ";" |],
+                   System.StringSplitOptions.RemoveEmptyEntries)
+        |> Seq.toList
+        |> Seq.map (fun x -> x.Trim())

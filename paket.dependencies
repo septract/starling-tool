@@ -1,7 +1,7 @@
 framework: netcoreapp2.0, netstandard2.0
 source https://www.nuget.org/api/v2
 nuget chessie ~> 0.6
-nuget commandlineparser ~> 2.1 prerelease
+nuget commandlineparser ~> 2.2
 nuget fparsec ~> 1.0
 nuget nunit ~> 3.9
 nuget NUnit3TestAdapter ~> 3.9

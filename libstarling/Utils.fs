@@ -82,6 +82,10 @@ let maybe (d : 'Out) (f : 'In -> 'Out) (input: 'In option) : 'Out =
 /// Returns `a` if the input is `Some a`, or `d` otherwise.
 let withDefault (d : 'A) : 'A option -> 'A = maybe d id
 
+/// Returns `a` if the given string is empty, or `d` otherwise.
+let withDefaultString (d : string) (a : string) : string =
+    if a = "" then d else a
+
 /// Maps a function f through a sequence, and concatenates the resulting
 /// list of lists into one set.
 let unionMap (f : 'A -> Set<'B>) : 'A seq -> Set<'B> =

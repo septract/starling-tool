@@ -245,17 +245,18 @@ module private ViewConfig =
     ///     Extracts the view options from the configuration string given.
     /// </summary>
     /// <param name="config">
-    ///     The optional configuration string for view options.
+    ///     The configuration string for view options.  If empty,
+    ///     no options are given.
     /// </param>
     /// <returns>
     ///     The view parameters structure, populated with the view options
     ///     given in the configuration string.
     /// </returns>
-    let get (config : string option) : Config =
+    let get (config : string) : Config =
         let bp = configMap ()
 
         config
-        |> maybe (Seq.empty) parseOptionString
+        |> parseOptionString
         |> Seq.fold
             (fun opts str ->
                 match bp.TryFind str with
@@ -350,10 +351,10 @@ let requestList : (string * (string * Request)) list =
 
 /// Converts an optional -s stage name to a request item.
 /// If none is given, the latest stage is selected.
-let requestFromStage (ostage : string option) : Request option =
+let requestFromStage (ostage : string) : Request option =
     let pickStage stageName = List.tryFind (fun (x, _) -> x = stageName) requestList
 
-    (withDefault "smt-failures" ostage).ToLower()
+    (withDefaultString "smt-failures" ostage).ToLower()
     |> pickStage
     |> Option.map (snd >> snd)
 
@@ -560,17 +561,18 @@ module private BackendConfig =
     ///     Extracts the backend options from the configuration string given.
     /// </summary>
     /// <param name="config">
-    ///     The optional configuration string for backend options.
+    ///     The configuration string for backend options.
+    ///     If empty, no options are set.
     /// </param>
     /// <returns>
     ///     The backend parameters structure, populated with the backend options
     ///     given in the configuration string.
     /// </returns>
-    let get (config : string option) : Config =
+    let get (config : string) : Config =
         let bp = configMap ()
 
         config
-        |> maybe (Seq.empty) parseOptionString
+        |> parseOptionString
         |> Seq.fold
             (fun opts str ->
                 match bp.TryFind str with
@@ -599,7 +601,7 @@ let runStarling (request : Request)
 
     let opts =
         config.optimisers
-        |> maybe (Seq.empty) parseOptionString
+        |> parseOptionString
         |> Seq.toList
         |> Optimiser.Utils.parseOptimisationString
 
@@ -612,7 +614,7 @@ let runStarling (request : Request)
     let pf = profilerFlags ()
     let pfset =
         config.profilerFlags
-        |> maybe (Seq.empty) parseOptionString
+        |> parseOptionString
         |> Seq.fold
                (fun flags str ->
                     match (pf.TryFind str) with
@@ -763,9 +765,9 @@ let mainWithOptions (options : Options) : int =
 
     let mview =
         match config.term, config.showModel with
-        | Some i, _ -> Term i
-        | None, false -> Terms
-        | _ -> Model
+            | "", true -> Model
+            | "", false -> Terms
+            | i, _ -> Term i
 
     let pfn =
         if vconf.Raw
