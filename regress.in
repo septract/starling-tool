@@ -31,6 +31,7 @@ Pass:petersonArray:
 Pass:petersonInt:
 Pass:petersonIntMissingSynthesised:
 Pass:petersonMultiCmd:
+Pass:regressIter:
 Pass:seqCmd:
 Pass:singleWriterMultiReaderLock:
 Pass:spinLock:

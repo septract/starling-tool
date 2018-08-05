@@ -1,0 +1,11 @@
+// In previous versions of starling-tool, this example caused an infinite loop.
+// This example serves as a regression test to make sure it doesn't do so anymore.
+
+method bad() {
+	{| foo(1) |}
+		;
+	{| foo(1) * foo(2) |}
+}
+
+view iter foo(int x);
+constraint iter[n] foo(x) -> true;
