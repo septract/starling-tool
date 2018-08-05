@@ -55,15 +55,9 @@ def get_starling():
         subsequent elements are arguments.
     """
 
-    # Assume the binary went in its usual location.
-    path = os.path.join('bin', 'Debug', 'starling.exe')
-
-    # On Windows, we can run .NET assemblies directly.
-    if os.name == 'nt':
-        return [path]
-
-    # On other platforms, we assume we have access to mono.
-    return ['mono', path]
+    # This method used to do some platform-specific stuff, but now we just
+    # assume the .NET Core runtime exists.
+    return ['dotnet', 'run', '--no-build', '--project', 'starling']
 
 
 def run_and_cook(args):
