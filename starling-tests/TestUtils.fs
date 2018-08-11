@@ -26,7 +26,6 @@ let assertFail
         let fmsg = sprintf "Got successful result:\n%s" (pVal v)
         Assert.Fail(fmsg)
 
-
 let assertOkAndEqual
     (expected: 'Val)
     (actualResult : Result<'Val, 'Error>)

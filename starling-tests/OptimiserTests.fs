@@ -20,7 +20,6 @@ open Starling.Core.Traversal
 open Starling.Optimiser.Graph
 open Starling.Optimiser.Term
 
-
 /// Tests for the term optimiser.
 type OptimiserTests() =
     (*
@@ -107,7 +106,6 @@ type OptimiserTests() =
     member x.``Boolean expressions should be simplified properly`` (b : BoolExpr<MarkedVar>) =
         simp b
 
-
 /// Test cases for rewriting Boolean expressions containing afters.
 module AfterExprs =
     open Starling.Tests.TestUtils
@@ -192,7 +190,6 @@ module AfterExprs =
                     (sbAfter "flag",
                     BGt (normalInt (siAfter "serving"), normalInt (siAfter "t")))))
 
-
 /// Test cases for substituting afters in a func.
 module AfterFuncs =
     open Starling.Tests.TestUtils
@@ -222,7 +219,6 @@ module AfterFuncs =
               [ normalIntExpr (siAfter "serving")
                 normalBoolExpr (sbAfter "flag") ] )
 
-
 /// <summary>
 ///     Test cases for deciding whether to allow graph optimisations.
 /// </summary>
@@ -232,7 +228,7 @@ module GraphOptGuards =
     /// A graph consisting of one no-operation cycle.
     let nopCycle =
         { Name = "test"
-          Contents = 
+          Contents =
             Map.ofList
                 [ ("x",
                     (Advisory (Multiset.empty),

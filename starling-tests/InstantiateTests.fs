@@ -19,7 +19,6 @@ open Starling.Core.Pretty
 open Starling.Core.Traversal
 open Starling.Core.Instantiate.Pretty
 
-
 /// Tests for the func instantiation functions.
 module FuncInstantiate =
     /// Environment of test funcs.

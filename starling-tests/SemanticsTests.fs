@@ -21,7 +21,6 @@ open Starling.Core.Model
 open Starling.Semantics
 open Starling.Tests.Studies
 
-
 /// <summary>
 ///     Tests for instruction capping.
 /// </summary>
@@ -99,7 +98,7 @@ module Cap =
 
     [<Test>]
     let ``ticket lock example is capped properly`` () =
-        check 
+        check
             (Map.ofList
                 [ (Int (normalRec, "t"), After "t")
                   (Int (normalRec, "s"), After "s")
@@ -115,13 +114,11 @@ module Cap =
             [ Int (normalRec, Intermediate (0I, "t")) *<- normalIntExpr (siBefore "serving")
               Int (normalRec, Intermediate (0I, "s")) *<- normalIntExpr (IVar (Reg (Intermediate (0I, "t")))) ]
 
-
 /// Shorthand for expressing an array update.
 let aupd' arr idx var : ArrayExpr<'Var> =
     AUpd (stripTypeRec arr, idx, var)
 let aupd arr idx var =
     typedArrayToExpr (mkTypedSub arr.SRec (aupd' arr idx var))
-
 
 /// <summary>
 ///     Tests for frame generation.
@@ -137,7 +134,7 @@ module MakeFrame =
       (expected : BoolExpr<Sym<MarkedVar>> list)
       (toFrame : Map<TypedVar, MarkedVar>)
       : unit =
-        List.sort expected ?=? List.sort (makeFrame toFrame) 
+        List.sort expected ?=? List.sort (makeFrame toFrame)
 
     [<Test>]
     let ``the empty assign list generates the empty frame`` () =
@@ -154,7 +151,6 @@ module MakeFrame =
                   (Int (normalRec, "ticket"), Before "ticket")
                   (Int (normalRec, "t"), Intermediate (0I, "t"))
                   (Int (normalRec, "s"), After "s") ] )
-
 
 /// <summary>
 ///     Tests for microcode normalisation.
@@ -268,7 +264,6 @@ module Normalisation =
                    normalIntExpr d6 *<- normalIntExpr x3 ])
             ]
 
-
 let testShared =
     Map.ofList
         [ ("grid",
@@ -285,7 +280,6 @@ let testThread =
     Map.ofList
         [ ("x", Type.Int (normalRec, ()))
           ("y", Type.Int (normalRec, ())) ]
-
 
 /// <summary>
 ///     Tests for microcode processing.
@@ -321,7 +315,7 @@ module ProcessMicrocode =
             (expectedInstrs, expectedMap)
             processedR
             (Pretty.printSemanticsError >> Core.Pretty.printUnstyled)
-     
+
     [<Test>]
     let ``chained assigns are processed properly`` () =
         check false ticketLockModel.SharedVars ticketLockModel.ThreadVars
@@ -334,7 +328,7 @@ module ProcessMicrocode =
               Int (normalRec, Intermediate (0I, "s")) *<- normalIntExpr (IVar (Reg (Intermediate (0I, "t")))) ]
             [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "serving")
               normalIntExpr (siVar "s") *<- normalIntExpr (siVar "t") ]
-   
+
     [<Test>]
     let ``chained assigns are processed and capped properly`` () =
         check true ticketLockModel.SharedVars ticketLockModel.ThreadVars
@@ -366,7 +360,6 @@ module ProcessMicrocode =
                 (BEq (normalIntExpr (siVar "t"), normalIntExpr (siVar "ticket")),
                  [ normalIntExpr (siVar "t") *<- normalIntExpr (siVar "serving") ],
                  [ normalIntExpr (siVar "s") *<- normalIntExpr (siVar "serving") ]) ]
-
 
 /// <summary>
 ///     Tests for microcode compilation to Boolean expressions.
@@ -566,7 +559,7 @@ module MicrocodeToBool =
 
     [<Test>]
     let ``multi-dimensional arrays are normalised and translated properly`` () =
-        let grid marker = 
+        let grid marker =
             (mkTypedArrayExpr
                 (mkArrayType (Int (normalRec, ())) (Some 320))
                 (Some 240)
@@ -577,7 +570,7 @@ module MicrocodeToBool =
                 (Some 320)
                 (AIdx (grid marker, IVar (Reg (marker "x")))))
 
-        let gridv = 
+        let gridv =
             (mkTypedArrayExpr
                 (mkArrayType (Int (normalRec, ())) (Some 320))
                 (Some 240)
@@ -606,7 +599,6 @@ module MicrocodeToBool =
                   (mkAdd2
                       (IIdx (gridxv, siVar "y"))
                       (IInt 1L)) ]
-
 
 module CommandTests =
     let check svars tvars command expectedValues =
@@ -639,7 +631,7 @@ module CommandTests =
 
     [<Test>]
     let ``Semantically translate <grid[x][y]++> using the test environments``() =
-        let grid marker = 
+        let grid marker =
             (mkTypedArrayExpr
                 (mkArrayType (Int (normalRec, ())) (Some 320))
                 (Some 240)
@@ -650,7 +642,7 @@ module CommandTests =
                 (Some 320)
                 (AIdx (grid marker, IVar (Reg (marker "x")))))
 
-        let gridv = 
+        let gridv =
             (mkTypedArrayExpr
                 (mkArrayType (Int (normalRec, ())) (Some 320))
                 (Some 240)

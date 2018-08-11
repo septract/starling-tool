@@ -16,7 +16,6 @@ open Starling.Core.Model
 open Starling.Core.Symbolic
 open Starling.Core.GuardedView
 
-
 /// <summary>
 ///     Types for the Horn clause backend, including errors.
 /// </summary>
@@ -83,7 +82,6 @@ module Types =
         ///     A traversal blew up somewhere.
         /// </summary>
         | Traversal of err : TraversalError<Error>
-
 
 /// <summary>
 ///     Pretty printers for the Horn clause generator.
@@ -237,7 +235,6 @@ module Pretty =
                  <-> String "' failed:"
                  <+> String why)
         | Traversal err -> printTraversalError printError err
-
 
 (*
  * Expression generation

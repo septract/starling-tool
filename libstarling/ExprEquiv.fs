@@ -18,7 +18,6 @@ open Starling.Core.Expr
 open Starling.Core.Var
 open Starling.Core.Z3
 
-
 /// <summary>
 ///     Type for equivalence checks.
 /// </summary>

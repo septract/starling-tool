@@ -16,7 +16,6 @@ open Starling.Core.Var
 open Starling.Core.View
 open Starling.Core.Symbolic
 
-
 /// <summary>
 ///     The shared variables environment used in the tests.
 /// </summary>
@@ -41,7 +40,6 @@ let svarExprSeq : Expr<Sym<MarkedVar>> seq =
             | TypedVar.Bool (t, x) -> Expr.Bool (t, sbBefore x)
             | TypedVar.Array (t, x) -> Expr.Array (t, AVar (Reg (Before x))))
         svarSeq
-
 
 /// <summary>
 ///     Tests for the flattened func name mangler.
@@ -78,7 +76,6 @@ module DViewFlattening =
 
     // TODO(CaptainHayashi): iterated DView tests
     //   (that, or move the iterator lowering to IterLower where it belongs)
-
 
 /// <summary>
 ///     Tests for the main view flattener.

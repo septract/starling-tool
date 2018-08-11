@@ -31,7 +31,6 @@ module Multiset =
                      (5, 2)
                      (7, 1) ]
 
-
         module TestToFlatList =
             let check lst flatList =
                 let mset = Map.ofList lst |> MSet

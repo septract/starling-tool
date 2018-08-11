@@ -82,7 +82,6 @@ module Types =
         ///     A regular, non-symbolic variable.
         | Reg of 'var
 
-
 /// <summary>
 ///     Type synonyms for expressions over various forms of symbolic
 ///     variable.
@@ -114,7 +113,6 @@ module SymExprs =
     ///     An expression of integral type using symbolic <c>MarkedVar</c>s.
     /// </summary>
     type SMIntExpr = IntExpr<Sym<MarkedVar>>
-
 
 /// <summary>
 ///     Utilities for creating symbolic variables.
@@ -150,7 +148,6 @@ module Create =
 
     /// Creates an intermediate-marked Boolean sym-variable.
     let sbInter i c = (i, c) |> Intermediate |> Reg |> BVar
-
 
 /// <summary>
 ///     Utilities to traverse or eliminate symbolic variables.
@@ -207,7 +204,7 @@ module Traversal =
             | Sym s ->
                 let wsub =
                     tliftOverSymbolicWord
-                        (tliftToExprSrc 
+                        (tliftToExprSrc
                             (tliftToTypedSymVarSrc
                                 (tliftToExprDest (tliftOverCTyped sub))))
                 tchainL wsub Sym ctx s
@@ -350,7 +347,7 @@ module Traversal =
       : Result<BoolExpr<Sym<MarkedVar>>, TraversalError<'Error>> =
         mapTraversal
             (tliftToBoolSrc
-                (tliftToExprDest 
+                (tliftToExprDest
                     (traverseTypedSymWithMarker Before))) expr
 
     /// <summary>
@@ -468,7 +465,7 @@ module Pretty =
     let rec printSym (pReg : 'Reg -> Doc) (sym : Sym<'Reg>) : Doc =
         match sym with
         | Reg r -> pReg r
-        | Sym s -> 
+        | Sym s ->
             let pArg = printExpr (printSym pReg)
             parened (String "sym" <+> quoted (printSymbolic pArg s))
 

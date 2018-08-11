@@ -53,7 +53,6 @@ let positionTestSub : Traversal<Expr<Var>, Expr<Var>, unit, unit> =
         ok (ctx, exp)
     tliftToExprSrc ptsVar
 
-
 /// <summary>
 ///     Case studies for testing Term traversal.
 /// </summary>
@@ -104,7 +103,6 @@ module TermTraversal =
                 regFunc "bar"
                     [ normalIntExpr (IVar "baz")
                       normalBoolExpr (BVar "barbaz") ] }
-
 
     [<Test>]
     let ``Successfully translate a negative DTerm`` () =
@@ -170,7 +168,6 @@ module GFuncTraversal =
             (Context.negative ())
             (gfunc (BVar "foo") "bar"
                 [ normalIntExpr (IVar "baz"); normalBoolExpr (BVar "fizz") ])
-
 
 /// <summary>
 ///     Case studies for testing GView traversal.
