@@ -317,7 +317,7 @@ let parseFetchOrPostfix =
 
 /// Parser for assume actions.
 let parseAssume =
-    pstring "assume" >>. ws >>. inParens parseExpression |>> Assume
+    pstring "assume" >>. ws >>. parseExpression |>> Assume
 
 /// Parser for local assignments.
 let parseAssign =
@@ -354,7 +354,7 @@ do parseAtomicRef :=
         [ // These need to fire before parsePrim due to ambiguity.
           parseIfLike parseExpression (many1 (parseAtomic .>> ws)) (curry3 ACond)
           stringReturn "error" AError .>> wsSemi
-          pstring "assert" >>. ws >>. inParens parseExpression |>> AAssert
+          pstring "assert" >>. ws >>. parseExpression |>> AAssert
           parsePrim .>> wsSemi |>> APrim ]
 
 /// Parser for a collection of atomic actions.
@@ -532,7 +532,7 @@ let parseParSet =
 
 /// Parser for the 'while (expr)' leg of while and do-while commands.
 let parseWhileLeg =
-    pstring "while" >>. ws >>. inParens parseExpression
+    pstring "while" >>. ws >>. parseExpression
 
 /// Parser for while (expr) block.
 let parseWhile =
