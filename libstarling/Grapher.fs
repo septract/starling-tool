@@ -147,46 +147,127 @@ and graphITE
                         (tliftToExprDest
                             (traverseTypedSymWithMarker Before)))
                     (mkTypedSub normalRec expr))
-
-        (* We definitely have an inner graph for the true leg, so get that
+        return!
+            graphITEOrChoice
+                vg cg oP oQ (cAssume expr) inTrue (cAssumeNot expr) inFalse
+    }
+/// <summary>
+///     Constructs a graph from a nondeterministic choice statement.
+/// </summary>
+/// <param name="vg">
+///     The fresh identifier generator to use for view IDs.
+/// </param>
+/// <param name="cg">
+///     The fresh identifier generator to use for command IDs.
+/// </param>
+/// <param name="oP">
+///     The ID of the node forming the precondition of the choice statement.
+/// </param>
+/// <param name="oQ">
+///     The ID of the node forming the postcondition of the choice statement.
+/// </param>
+/// <param name="left">
+///     The block of actions inside the left leg of the choice statement.
+/// </param>
+/// <param name="right">
+///     The block of actions inside the right leg of the choice statement,
+///     which is optional (there may be no right leg).
+/// </param>
+/// <returns>
+///     A Chessie result containing the graph of this choice statement.
+/// </returns>
+and graphChoice
+  (vg : unit -> NodeID)
+  (cg : unit -> EdgeID)
+  (oP : NodeID)
+  (oQ : NodeID)
+  (inLeft : ModellerBlock)
+  (inRight : ModellerBlock option)
+  : Result<Subgraph, Error> =
+        graphITEOrChoice
+            vg cg oP oQ cId inLeft cId inRight
+/// <summary>
+///     Constructs a graph from an if or nondeterministic choice statement.
+/// </summary>
+/// <param name="vg">
+///     The fresh identifier generator to use for view IDs.
+/// </param>
+/// <param name="cg">
+///     The fresh identifier generator to use for command IDs.
+/// </param>
+/// <param name="oP">
+///     The ID of the node forming the precondition of the statement.
+/// </param>
+/// <param name="oQ">
+///     The ID of the node forming the postcondition of the statement.
+/// </param>
+/// <param name="leftGuard">
+///     The command guarding the left leg; may be id.
+/// </param>
+/// <param name="left">
+///     The block of actions inside the left leg.
+/// </param>
+/// <param name="rightGuard">
+///     The command, if any, guarding the right leg; may be id.  In the
+///     case of if statements, this should be an assumption of the converse of
+///     <paramref name="rightGuard"/>.
+/// </param>
+/// <param name="right">
+///     The block of actions inside the right leg of the statement,
+///     which is optional (there may be no right leg).
+/// </param>
+/// <returns>
+///     A Chessie result containing the graph of this if statement.
+/// </returns>
+and graphITEOrChoice
+  (vg : unit -> NodeID)
+  (cg : unit -> EdgeID)
+  (oP : NodeID)
+  (oQ : NodeID)
+  (leftGuard : Command)
+  (left : ModellerBlock)
+  (rightGuard : Command)
+  (right : ModellerBlock option) =
+    trial {
+        (* We definitely have an inner graph for the left leg, so get that
            out of the way first. *)
-        let! tP, tQ, tGraph = graphBlock false vg cg inTrue
+        let! lP, lQ, lGraph = graphBlock false vg cg left
 
         // We also definitely have these edges.
-        let tEdges =
-            [ // {|oP|} assume C {|tP|}: enter true block
-              (cg (), edge oP (cAssume expr) tP)
-              // {|tQ|} id {|oQ|}: exit true block
-              (cg (), edge tQ cId oQ) ]
+        let lEdges =
+            [ // {|oP|} assume C {|lP|}: enter true block
+              (cg (), edge oP leftGuard lP)
+              // {|lQ|} id {|oQ|}: exit left block
+              (cg (), edge lQ cId oQ) ]
 
         // Model the remainder, which depends on whether we have a false leg.
-        let! tfGraph, fEdges =
-            match inFalse with
+        let! lrGraph, rEdges =
+            match right with
             | None ->
-                // [|oP|] if (C) { [|tP|] [|tQ|] } [|oQ|].
+                // [|oP|] if (C) { [|lP|] [|lQ|] } [|oQ|].
                 ok
-                    (// No additional graph for the false leg
-                     tGraph,
-                     // {|oP|} assume ¬C {|fP|}: bypass true block
-                     [ cg (), edge oP (cAssumeNot expr) oQ ])
+                    (// No additional graph for the right leg
+                     lGraph,
+                     // {|oP|} assume ¬C {|fP|}: bypass left block
+                     [ cg (), edge oP rightGuard oQ ])
             | Some f ->
                 // [|oP|] if (C) { [|tP|] [|tQ|] } else { [|fP|] [|fQ|] } [|oQ|].
                 trial {
-                    let! fP, fQ, fGraph = graphBlock false vg cg f
-                    let! tfGraph = combine tGraph fGraph
+                    let! rP, rQ, rGraph = graphBlock false vg cg f
+                    let! lrGraph = combine lGraph rGraph
 
                     return
-                        (tfGraph,
-                         [ // {|oP|} assume ¬C {|fP|}: enter false block
-                           (cg (), edge oP (cAssumeNot expr) fP)
-                           // {|fQ|} id {|oQ|}: exit false block
-                           (cg (), edge fQ cId oQ) ]) }
+                        (lrGraph,
+                         [ // {|oP|} assume ¬C {|rP|}: enter right block
+                           (cg (), edge oP rightGuard rP)
+                           // {|rQ|} id {|oQ|}: exit right block
+                           (cg (), edge rQ cId oQ) ]) }
 
         // We don't add anything into the graph here.
         let cGraph = { Nodes = Map.empty
-                       Edges = Map.ofSeq (Seq.append tEdges fEdges) }
+                       Edges = Map.ofSeq (Seq.append lEdges rEdges) }
 
-        return! combine cGraph tfGraph }
+        return! combine cGraph lrGraph }
 
 /// <summary>
 ///     Creates a control-flow graph for a command.
@@ -224,6 +305,8 @@ and graphCommand
         graphWhile vg cg oP oQ isDo expr inner
     | ITE (expr, inTrue, inFalse) ->
         graphITE vg cg oP oQ expr inTrue inFalse
+    | Choice (inLeft, inRight) ->
+        graphChoice vg cg oP oQ inLeft inRight
 
 /// <summary>
 ///     Performs one step in creating a control-flow graph from a block.

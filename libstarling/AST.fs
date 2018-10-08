@@ -208,7 +208,8 @@ module Types =
         /// A set of sequentially composed primitives.
         | Prim of PrimSet<Atomic>
         /// An if-then-else statement, with optional else.
-        | If of ifCond : Expression
+        /// If 'ifCond' is missing, then this is a nondeterministic choice.
+        | If of ifCond : Expression option
               * thenBlock : Command list
               * elseBlock : Command list option
         /// A while loop.
@@ -342,13 +343,14 @@ module Pretty =
     ///     A <see cref="Doc"/> capturing the if-then-else form.
     /// </returns>
     let printITELike
+        (pCond : 'Cond -> Doc)
         (pLeg : 'Leg -> Doc)
-        (cond : Expression)
+        (cond : 'Cond)
         (thenLeg : 'Leg)
         (elseLeg : 'Leg option)
         : Doc =
         syntaxStr "if"
-        <+> parened (printExpression cond)
+        <+> pCond cond
         <+> braced (pLeg thenLeg)
         <+> (maybe
                 Nop
@@ -358,6 +360,7 @@ module Pretty =
     /// <summary>
     ///     Pretty-prints an if-then-else.
     /// </summary>
+    /// <param name="pCond">Pretty-printer for conditions.</param>
     /// <param name="pCmd">Pretty-printer for commands.</param>
     /// <param name="cond">The conditional to print.</param>
     /// <param name="thenCmds">The 'then' leg to print.</param>
@@ -367,12 +370,13 @@ module Pretty =
     ///     A <see cref="Doc"/> capturing the if-then-else form.
     /// </returns>
     let printITE
+        (pCond : 'Cond -> Doc)
         (pCmd : 'Cmd -> Doc)
-        (cond : Expression)
+        (cond : 'Cond)
         (thenCmds : 'Cmd list)
         (elseCmds : ('Cmd list) option)
         : Doc =
-            printITELike (Helpers.printBlock pCmd) cond thenCmds elseCmds
+            printITELike pCond (Helpers.printBlock pCmd) cond thenCmds elseCmds
 
 
     /// Pretty-prints views.
@@ -382,7 +386,7 @@ module Pretty =
         | View.Unit -> String "emp" |> syntaxView
         | View.Falsehood -> String "false" |> syntaxView
         | View.Join(l, r) -> binop "*" (printView l) (printView r)
-        | View.If(e, l, r) -> printITELike printView e l r
+        | View.If(e, l, r) -> printITELike printExpression printView e l r
         | View.Local l -> syntaxView (String "local") <+> braced (printExpression l)
 
     /// Pretty-prints marked view lines.
@@ -471,7 +475,7 @@ module Pretty =
         | AError -> syntaxStr "error"
         | AAssert e -> syntaxStr "assert" <+> parened (printExpression e)
         | ACond (cond = c; trueBranch = t; falseBranch = f) ->
-            printITE printAtomic c t f
+            printITE printExpression printAtomic c t f
     and printAtomic (x : Atomic) : Doc = printAtomic' x.Node
 
     /// <summary>
@@ -503,6 +507,10 @@ module Pretty =
         let vsp = commaSep (List.map printVar vs.VarNames)
         hsep [ printTypeLiteral vs.VarType; vsp ]
 
+    /// Pretty-prints if-then-else conditions.
+    let printCondition (cond : Expression option) : Doc =
+        maybe (syntaxStr "*") printExpression cond
+
     /// Pretty-prints commands.
     let rec printCommand' (cmd : Command') : Doc =
         match cmd with
@@ -518,7 +526,7 @@ module Pretty =
             |> semiSep |> withSemi
         | Command'.Miracle -> syntaxStr "..."
         | Command'.If(c, t, f) ->
-            printITE printCommand c t f
+            printITE printCondition printCommand c t f
         | Command'.While(c, b) ->
             hsep [ "while" |> String |> syntax
                    c |> printExpression |> parened

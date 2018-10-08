@@ -332,8 +332,8 @@ let parseHavoc =
     skipString "havoc" >>. ws >>. parseIdentifier
 
 /// Parser for if (expr) block else block.
-let parseIfLike pLeg ctor =
-    pipe3ws (pstring "if" >>. ws >>. inParens parseExpression)
+let parseIfLike pCond pLeg ctor =
+    pipe3ws (pstring "if" >>. ws >>. pCond)
             (inBraces pLeg)
             (opt (pstring "else" >>. ws >>. inBraces pLeg))
             ctor
@@ -352,7 +352,7 @@ let parsePrim : Parser<Prim, unit> =
 do parseAtomicRef :=
     nodify <| choice
         [ // These need to fire before parsePrim due to ambiguity.
-          parseIfLike (many1 (parseAtomic .>> ws)) (curry3 ACond)
+          parseIfLike parseExpression (many1 (parseAtomic .>> ws)) (curry3 ACond)
           stringReturn "error" AError .>> wsSemi
           pstring "assert" >>. ws >>. inParens parseExpression |>> AAssert
           parsePrim .>> wsSemi |>> APrim ]
@@ -416,7 +416,7 @@ let parseParam : Parser<Param, unit> =
 
 /// Parses a conditional view.
 let parseIfView =
-    parseIfLike parseView (curry3 View.If)
+    parseIfLike parseExpression parseView (curry3 View.If)
 
 /// Parses a local view.
 let parseLocalView =
@@ -548,8 +548,14 @@ let parseDoWhile =
 /// Parser for lists of semicolon-terminated commands.
 let parseCommands = many (parseCommand .>> ws)
 
+/// Parser for if conditions.
+let parseCondition =
+    stringReturn "*" None // Nondeterminism
+    <|>
+    (parseExpression |>> Some)
+
 /// Parser for if (expr) block else block.
-let parseIf = parseIfLike parseCommands (curry3 If)
+let parseIf = parseIfLike parseCondition parseCommands (curry3 If)
 
 /// Parser for prim compositions.
 let parsePrimSet =

@@ -33,7 +33,8 @@ method drop() {
   {| arc() |}
     <| c = count--; |>
   {| countCopy(c) |}
-    if c == 1 {
+    // Sometimes free, sometimes don't.
+    if * {
       {| countCopy(1) |}
         <| free = true; |>
       {| emp |}

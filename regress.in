@@ -12,6 +12,7 @@
 # a 'missing results' error!
 #
 # Blank lines (after #-stripping) are discarded.
+Fail:arcNondet: drop_C002_002 drop_C002_003
 Fail:badInc: badInc_C000_000
 Fail:badInc2: badInc_C000_000
 Fail:petersonArrayBadTurns: lock_C001_005

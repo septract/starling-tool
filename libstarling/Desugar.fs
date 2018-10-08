@@ -99,7 +99,7 @@ type FullCommand' =
     /// A set of sequentially composed primitives.
     | FPrim of PrimSet<DesugaredAtomic>
     /// An if-then-else statement, with optional else.
-    | FIf of ifCond : Expression
+    | FIf of ifCond : Expression option
           * thenBlock : FullBlock<ViewExpr<DesugaredGView>, FullCommand>
           * elseBlock : FullBlock<ViewExpr<DesugaredGView>, FullCommand> option
     /// A while loop.
@@ -127,7 +127,7 @@ module Pretty =
         match a with
         | DAPrim p -> printPrim p
         | DACond (cond = c; trueBranch = t; falseBranch = f) ->
-            printITE printDesugaredAtomic c t (Some f)
+            printITE printExpression printDesugaredAtomic c t (Some f)
 
     /// <summary>
     ///     Prints a <see cref="FullCommand'"/>.
@@ -183,7 +183,7 @@ module Pretty =
             |> semiSep |> withSemi
         | FIf(c, t, fo) ->
             hsep [ "if" |> String |> syntax
-                   c |> printExpression |> parened
+                   c |> printCondition |> parened
                    t |> printFullBlock (printViewExpr printDesugaredGView) printFullCommand
                    (maybe Nop
                         (fun f ->
@@ -611,7 +611,7 @@ let rec desugarCommand (ctx : BlockContext) (cmd : Command)
                 match fo with
                 | None -> tc, None
                 | Some f -> pairMap id Some (desugarBlock tc f)
-            let ast = FIf (LocalRewriting.rewriteExpression ctx e, t', f')
+            let ast = FIf (Option.map (LocalRewriting.rewriteExpression ctx) e, t', f')
             (fc, Some ast)
         | While (e, b) ->
             let (ctx', b') = desugarBlock ctx b

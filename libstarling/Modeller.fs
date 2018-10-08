@@ -43,6 +43,9 @@ module Types =
             expr : SVBoolExpr
             * inTrue : FullBlock<'view, PartCmd<'view>>
             * inFalse : FullBlock<'view, PartCmd<'view>> option
+        | Choice of
+            left : FullBlock<'view, PartCmd<'view>>
+            * right : FullBlock<'view, PartCmd<'view>> option
         override this.ToString() = sprintf "PartCmd(%A)" this
 
     /// <summary>
@@ -230,6 +233,10 @@ module Pretty =
             cmdHeaded (hsep [ String(if isDo then "Do-while" else "While")
                               (printSVBoolExpr expr) ])
                       [ pfb inner ]
+        | PartCmd.Choice(inLeft, inRight) ->
+            cmdHeaded (String "begin choice")
+                      [ headed "Left" [ pfb inLeft ]
+                        maybe Nop (fun f -> headed "Right" [ pfb f]) inRight ]
         | PartCmd.ITE(expr, inTrue, inFalse) ->
             cmdHeaded (hsep [ String "begin if"; printSVBoolExpr expr ])
                       [ headed "True" [ pfb inTrue ]
@@ -1691,25 +1698,29 @@ let modelAtomic (env : Env) (atomicAST : DesugaredAtomic)
             lift3 (fun c t f -> [ Branch (c, t, f) ]) cMR tMR fMR
     ma atomicAST
 
-/// Creates a partially resolved axiom for an if-then-else.
-let rec modelITE
+let modelCondition
   (ctx : MethodContext)
   (i : Expression)
-  (t : FullBlock<ViewExpr<DesugaredGView>, FullCommand>)
-  (fo : FullBlock<ViewExpr<DesugaredGView>, FullCommand> option)
-  : Result<ModellerPartCmd, MethodError> =
+  : Result<SVBoolExpr, MethodError> =
     let iuR =
         wrapMessages
             BadITECondition
-            (modelBoolExpr ctx.Env Thread id)
+                (modelBoolExpr ctx.Env Thread id)
             i
-    // An if condition needs to be of type 'bool', not a subtype.
-    let iR =
-        bind
-            (checkBoolIsNormalType
-             >> mapMessages (fun m -> BadITECondition (i, ExprBadType m)))
-            iuR
 
+    // An if condition needs to be of type 'bool', not a subtype.
+    bind
+        (checkBoolIsNormalType
+         >> mapMessages (fun m -> BadITECondition (i, ExprBadType m)))
+        iuR
+
+/// Creates a partially resolved axiom for an if-then-else.
+let rec modelITE
+  (ctx : MethodContext)
+  (io : Expression option)
+  (t  : FullBlock<ViewExpr<DesugaredGView>, FullCommand>)
+  (fo : FullBlock<ViewExpr<DesugaredGView>, FullCommand> option)
+  : Result<ModellerPartCmd, MethodError> =
     (* We need to calculate the recursive axioms first, because we
        need the inner cpairs for each to store the ITE placeholder.  *)
     let tR = modelBlock ctx t
@@ -1718,7 +1729,12 @@ let rec modelITE
         | Some f -> lift Some (modelBlock ctx f)
         | None -> ok None
 
-    lift3 (curry3 ITE) iR tR fR
+    match io with
+    | Some i ->
+        let iR = modelCondition ctx i
+        lift3 (curry3 ITE) iR tR fR
+    | None ->
+        lift2 (curry Choice) tR fR
 
 /// Converts a while or do-while to a PartCmd.
 /// Which is being modelled is determined by the isDo parameter.
