@@ -153,7 +153,6 @@ module Observable =
               *<-
               normalIntExpr (mkInc (siVar "y")) ]
 
-
     [<Test>]
     let ``local assignment is observable after a chained assignment`` () =
         check true
@@ -173,4 +172,3 @@ module Observable =
             [ normalIntExpr (siVar "y")
               *<-
               normalIntExpr (siVar "g") ]
-

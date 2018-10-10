@@ -72,7 +72,6 @@ module Context =
         | InIndex of bool
         override this.ToString () = sprintf "%A" this
 
-
     /// <summary>
     ///     Removes the variables from a variable context.
     /// </summary>
@@ -229,7 +228,6 @@ module Context =
     /// </summary>
     let negative () : TraversalContext<unit> = Positions [Negative]
 
-
 /// <summary>
 ///     Error type for variable substitutions.
 /// </summary>
@@ -250,7 +248,6 @@ type TraversalError<'Inner> =
     ///     A substitution produced a context that wasn't expected.
     /// </summary>
     | ContextMismatch of expectedType : string * got : TraversalContext<unit>
-
 
 /// <summary>
 ///     A generic traversal.
@@ -419,7 +416,7 @@ let expectInt (typerec : PrimTypeRec) (expr : Expr<'Var>)
 ///     On success, the array expression nested inside <paramref name="expr"/>.
 ///     On failure, a <see cref="TraversalError"/> explaining why.
 /// </returns>
-let expectBool (typerec : PrimTypeRec) (expr : Expr<'Var>) 
+let expectBool (typerec : PrimTypeRec) (expr : Expr<'Var>)
   : Result<BoolExpr<'Var>, TraversalError<_>> =
     match expr with
     | Expr.Bool (t, x) when primTypeRecsCompatible typerec t -> ok x
@@ -785,7 +782,6 @@ let tryPushVar (ctx : TraversalContext<'Var>) (v : CTyped<'Var>)
     | Vars _ -> pushVar ctx v
     | _ -> ok ctx
 
-
 /// <summary>
 ///     Traversal for accumulating variables.
 /// <summary>
@@ -829,7 +825,6 @@ module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.TypeSystem.Pretty
     open Starling.Core.Var.Pretty
-
 
     /// <summary>
     ///     Pretty-prints a <see cref="TraversalContext"/>.

@@ -11,7 +11,6 @@ open Starling.Core.Var
 open Starling.Core.View
 open Starling.Core.TypeSystem
 
-
 /// <summary>
 ///     A definer function mapping views to their meanings.
 /// </summary>
@@ -53,7 +52,6 @@ type Error =
     ///     definition has <c>dn</c> parameters.
     /// </summary>
     | CountMismatch of fn: int * dn: int
-
 
 module FuncDefiner =
     /// <summary>
@@ -238,7 +236,6 @@ module FuncDefiner =
                      (checkParamTypes func dfunc))
             unchecked
 
-
 module ViewDefiner =
     /// <summary>
     ///     Converts a <c>ViewDefiner</c> to a sequence of pairs of
@@ -301,7 +298,6 @@ module ViewDefiner =
         let ys = toSeq y
         let xys = Seq.append x y
         ofSeq xys
-
 
 /// <summary>
 ///     Pretty printers used for definers.

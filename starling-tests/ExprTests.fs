@@ -5,7 +5,7 @@ module Starling.Tests.Core.Expr
 
 open NUnit.Framework
 
-open Starling.Core.Expr 
+open Starling.Core.Expr
 
 /// <summary>
 ///     Tests for expression classification.
@@ -45,37 +45,37 @@ module Classifiers =
 /// </sumary>
 module ExprSimp =
 
-  [<Test>] 
-  let ``Expression simplification on trivial conjunctions.`` () = 
+  [<Test>]
+  let ``Expression simplification on trivial conjunctions.`` () =
     Assert.AreEqual (
-      (simp (BAnd [BTrue; BTrue])), 
+      (simp (BAnd [BTrue; BTrue])),
       BTrue
     )
 
-  [<Test>] 
-  let ``Expression de-duplication, conjuction removal.`` () = 
+  [<Test>]
+  let ``Expression de-duplication, conjuction removal.`` () =
     Assert.AreEqual (
-     simp (BAnd [ BEq 
-                   (normalIntExpr (IVar "foo"), 
+     simp (BAnd [ BEq
+                   (normalIntExpr (IVar "foo"),
                     normalIntExpr (IVar "bar"));
-                  BEq 
-                   (normalIntExpr (IVar "bar"), 
+                  BEq
+                   (normalIntExpr (IVar "bar"),
                     normalIntExpr (IVar "foo"))
-               ]), 
-     BEq (normalIntExpr (IVar "foo"), 
+               ]),
+     BEq (normalIntExpr (IVar "foo"),
           normalIntExpr (IVar "bar"))
-   ) 
+   )
 
-  [<Test>] 
-  let ``Expression de-duplication, disjunction removal.`` () = 
+  [<Test>]
+  let ``Expression de-duplication, disjunction removal.`` () =
     Assert.AreEqual (
-     simp (BOr [ BEq 
-                   (normalIntExpr (IVar "foo"), 
+     simp (BOr [ BEq
+                   (normalIntExpr (IVar "foo"),
                     normalIntExpr (IVar "bar"));
-                  BEq 
-                   (normalIntExpr (IVar "bar"), 
+                  BEq
+                   (normalIntExpr (IVar "bar"),
                     normalIntExpr (IVar "foo"))
-               ]), 
-     BEq (normalIntExpr (IVar "foo"), 
+               ]),
+     BEq (normalIntExpr (IVar "foo"),
           normalIntExpr (IVar "bar"))
-   ) 
+   )

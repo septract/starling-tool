@@ -1,0 +1,129 @@
+/*
+ * Circular buffer
+ *
+ * This Starling proof checks various properties of a simple single-reader,
+ * single-writer circular buffer implementation:
+ *
+ * 1) The threads only ever underestimate the capacity available to them,
+ *    and never over-estimate;
+ * 2) The buffer never overflows (write capacity goes above 100) or
+ *    underflows (read capacity goes above 100);
+ * 3) If we synchronise both reader and writer, we can flush the buffer by
+ *    resetting the capacities and pointers.
+ *
+ * It doesn't actually check the consistency of the data added, nor does
+ * it make sure the pointers are properly synchronised.
+ */
+
+// The circular buffer itself.
+shared int[100] circ_buf;
+
+// Capacities.
+shared int r_capacity;
+shared int w_capacity;
+
+// Local state: the reader and writer both have an inner pointer and a
+// local buffer.
+thread int      pointer;
+thread int[100] local_buf;
+
+method write(int c)
+{
+  {| Writer(pointer, 0) * local{0 <= c && c <= 100} |}
+    thread int wc;
+    <| wc = w_capacity; |>
+  {| Writer(pointer, wc) * local{0 <= c && c <= 100} |}
+    if (wc < c) {
+      {| Writer(pointer, wc) * local{0 <= c && c <= 100} |}
+        c = wc;
+      {| Writer(pointer, wc) * local{0 <= c && c <= wc} |}
+    }
+  {| Writer(pointer, wc) * local{0 <= c && c <= wc} |}
+    thread int wrote;
+    wrote = 0;
+  {| Writer(pointer, wc) * local{0 <= wrote && wrote <= c && c <= wc} |}
+    while (wrote < c) {
+      {| Writer(pointer, wc) * local{0 <= wrote && wrote < c && c <= wc} |}
+        <| circ_buf[pointer] = local_buf[wrote]; |>
+        pointer = (pointer + 1) % 100;
+        wrote++;
+      {| Writer(pointer, wc) * local{0 < wrote && wrote <= c && c <= wc} |}
+    }
+  {| Writer(pointer, wc) * local{0 <= wrote && wrote <= wc} |}
+    <| w_capacity = w_capacity - wrote;
+       r_capacity = r_capacity + wrote; |>
+  {| Writer(pointer, wc - wrote) |}
+}
+
+method read(int c)
+{
+  {| Reader(pointer, 0) * local{0 <= c && c <= 100} |}
+    thread int rc;
+    <| rc = r_capacity; |>
+  {| Reader(pointer, rc) * local{0 <= c && c <= 100} |}
+    if (rc < c) {
+      {| Reader(pointer, rc) * local{0 <= c && c <= 100} |}
+        c = rc;
+      {| Reader(pointer, rc) * local{0 <= c && c <= rc} |}
+    }
+  {| Reader(pointer, rc) * local{0 <= c && c <= rc} |}
+    thread int read;
+    read = 0;
+  {| Reader(pointer, rc) * local{0 <= read && read <= c && c <= rc} |}
+    while (read < c) {
+      {| Reader(pointer, rc) * local{0 <= read && read < c && c <= rc} |}
+        <| local_buf[read] = circ_buf[pointer]; |>
+        pointer = (pointer + 1) % 100;
+        read++;
+      {| Reader(pointer, rc) * local{0 < read && read <= c && c <= rc} |}
+    }
+  {| Reader(pointer, rc) * local{0 <= read && read <= rc} |}
+    <| r_capacity = r_capacity - read;
+       w_capacity = w_capacity + read; |>
+  {| Reader(pointer, rc - read) |}
+}
+
+method flush(int p1, int p2)
+{
+  {| Reader(p1, 0) * Writer(p2, 0) |}
+    <| r_capacity = 0;
+       w_capacity = 100; |>
+  {| Reader(0, 0) * Writer(0, 100) |}
+}
+
+/* The above specifications require the reader and writer to have a capacity
+   estimate of 0, so we show here that we can always forget the last capacity
+   estimate we had. */
+
+method forget_rcap(int c)
+{
+  {| Reader(pointer, c) |}
+  ;
+  {| Reader(pointer, 0) |}
+}
+
+method forget_wcap(int c)
+{
+  {| Reader(pointer, c) |}
+  ;
+  {| Reader(pointer, 0) |}
+}
+
+constraint emp ->
+    0 <= w_capacity &&
+    0 <= r_capacity &&
+    w_capacity + r_capacity == 100;
+
+view Writer(int pointer, int cap_estimate);
+constraint Writer(pointer, cap_estimate) ->
+  0 <= pointer && pointer < 100 &&
+  0 <= cap_estimate && cap_estimate <= w_capacity;
+// Single writer
+constraint Writer(xp, xc) * Writer(yp, yc) -> false;
+
+view Reader(int pointer, int cap_estimate);
+constraint Reader(pointer, cap_estimate) ->
+  0 <= pointer && pointer < 100 &&
+  0 <= cap_estimate && cap_estimate <= r_capacity;
+// Single reader
+constraint Reader(xp, xc) * Reader(yp, yc) -> false;

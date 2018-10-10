@@ -17,7 +17,6 @@ open Starling.Core.Var
 open Starling.Core.Command
 open Starling.Core.GuardedView
 
-
 /// <summary>
 ///     Wrapper containing a goal view before flattening, and the
 ///     flattened result.
@@ -36,7 +35,6 @@ type FlatTerm<'Var> when 'Var : equality and 'Var : comparison =
         CommandSemantics<BoolExpr<'Var>>,
         Reified<GView<'Var>>,
         Flattened<Func<Expr<'Var>>>>
-
 
 /// <summary>
 ///    Maps a function over a flattened view.
@@ -66,7 +64,7 @@ let flattenedMap (f : 'A -> 'B) (view : Flattened<'A>) : Flattened<'B> =
 let printFlattened (pNewView : 'NewView -> Core.Pretty.Doc) (v : Flattened<'NewView>)
   : Core.Pretty.Doc =
     pNewView v.Flattened
- 
+
 module Traversal =
     open Starling.Core.Traversal
     open Starling.Core.Command.Traversal
@@ -219,7 +217,6 @@ let flatten
       ViewProtos = model.ViewProtos
       DeferredChecks = model.DeferredChecks }
 
-
 /// Stage that flattens the Iterator's from GuardedFunc's
 module Iter =
     open Starling.Core.Pretty
@@ -269,7 +266,7 @@ module Iter =
                   (Core.Expr.Pretty.printIntExpr
                       (Core.Symbolic.Pretty.printSym
                            Core.Var.Pretty.printMarkedVar)
-                      iterator) 
+                      iterator)
             <&> String "which cannot be resolved to an integer"
 
     /// <summary>

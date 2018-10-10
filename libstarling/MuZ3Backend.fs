@@ -42,7 +42,6 @@ open Starling.Core.Traversal
 open Starling.Core.Symbolic
 open Starling.Core.Z3
 
-
 /// <summary>
 ///     Types for the MuZ3 backend.
 /// </summary>
@@ -124,7 +123,6 @@ module Types =
         /// Output of the MuZ3 proof.
         | Sat of MuSat
 
-
 /// <summary>
 ///     Pretty printers for the MuZ3 types.
 /// </summary>
@@ -196,7 +194,6 @@ module Pretty =
             String (mf.ToString ())
         | Response.Sat s ->
             printMuSat s
-
 
 /// <summary>
 ///     Functions for translating Starling elements into MuZ3.
@@ -622,7 +619,7 @@ module Translator =
       (ctx : Z3.Context)
       (funcDecls : Map<string, Z3.FuncDecl>)
       (svars : VarMap)
-      (func : IteratedDFunc) 
+      (func : IteratedDFunc)
       (defn : BoolExpr<Sym<Var>> option)
       (reason : string)
       : Result<(string * Z3.BoolExpr) option, Error> =
@@ -786,7 +783,6 @@ module Translator =
                 bodyResult
         lift (maybe Seq.empty (fun x -> Seq.singleton ("init", x))) ruleResult
 
-
     (*
      * Terms
      *)
@@ -860,7 +856,6 @@ module Translator =
             drulesResult
             vrulesResult
             trulesResult
-
 
 /// <summary>
 ///     Proof execution using MuZ3.

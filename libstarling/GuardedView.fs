@@ -26,7 +26,6 @@ open Starling.Core.View.Traversal
 open Starling.Core.Symbolic
 open Starling.Core.Model
 
-
 /// <summary>
 ///     Guarded view types.
 /// </summary>
@@ -202,7 +201,6 @@ let (|Never|_|)
   : 'item option =
     if isFalse c then Some i else None
 
-
 (*
  * Destructuring and mapping.
  *)
@@ -220,7 +218,6 @@ let (|Never|_|)
 let gFuncTuple
   ({ Cond = c ; Item = i } : Guarded<'var, 'item>)
   : BoolExpr<'var> * 'item = (c, i)
-
 
 /// <summary>
 ///     Maps over the condition of a guard.
@@ -450,7 +447,7 @@ module Pretty =
     /// <typeparam name="Var">The type of variables in the view.</typeparam>
     /// <returns>
     ///     A pretty-printer command to print the <c>IteratedGView</c> as a
-    ///     list. 
+    ///     list.
     /// </returns>
     let printIteratedGViewAsListWith
       (pVar : 'Var -> Doc) (pIter : IntExpr<'Var> -> Doc)

@@ -108,7 +108,6 @@ module Types =
           /// </summary>
           Traversal of TraversalError<Error>
 
-
 module Pretty =
     open Starling.Core.Pretty
     open Starling.Core.Var.Pretty
@@ -231,7 +230,6 @@ module Pretty =
                     "[printIntExprG] Unimplemented for Grasshopper: %A"
                     x)
 
-
     /// Pretty-prints a Boolean expression.
     and printBoolExprG (pVar : 'Var -> Doc) (b : BoolExpr<'Var>) : Doc =
         match b with
@@ -298,7 +296,7 @@ module Pretty =
     ///     A <see cref="Doc"/> representing <paramref name="cmd"/>.
     /// </returns>
     let rec printCommand (cmd : GrassCommand) : Doc =
-        let printBlock c = 
+        let printBlock c =
             braced (ivsep (List.map (printCommand >> Indent) c))
 
         match cmd with
@@ -379,7 +377,6 @@ module Pretty =
 
         VSep (docseq, VSkip)
 
-
 /// <summary>
 ///     Get the set of accessed variables in a term.
 /// </summary>
@@ -428,7 +425,7 @@ let rec grassMicrocode (routine : Microcode<CTyped<MarkedVar>, Sym<MarkedVar>, u
                 (Starling >> ok)
                 (tliftOverSym >> tliftOverCTyped >> tliftToExprDest >> tliftToBoolSrc)
                 (normalBool x))
- 
+
     let grassMicrocodeInstruction ent =
         match ent with
         | Microcode.Branch (c, t, f) ->
@@ -710,7 +707,6 @@ let grassModelInductiveDownclosure
                 (CannotCheckDeferred
                     (NeedsBaseDownclosure (func, defn, reason), "cannot infer func"))
 
-
     (* To do the inductive downclosure, we need to replace all instances of
        the iterator in the definition with (iterator + 1) in one version. *)
     let succDefnR =
@@ -752,7 +748,6 @@ let grassModelInductiveDownclosure
             sdBeforeR
             bdBeforeR
     bind2 mkProc succDefnR baseDefnR
-
 
 /// <summary>
 ///     Converts deferred checks into GRASShopper procedures.
@@ -813,6 +808,5 @@ let grassModel (model : Backends.Z3.Types.ZModel) : Result<GrassModel,Error> =
                 let unifiedR = lift2 (@) grassTermPairsR dcR
                 lift Map.ofSeq unifiedR)
             addFootprintR
-
 
     lift (fun terms -> withAxioms terms model) grassTermsR

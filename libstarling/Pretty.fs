@@ -22,7 +22,6 @@ type Doc =
     | HSep of cmds : Doc seq * separator : Doc
     | Nop
 
-
 /// Determines whether a print construct is horizontal or vertical.
 let rec (|Horizontal|Vertical|) =
     function
@@ -161,7 +160,6 @@ let printStyled = printState { Level = 0; CurrentStyle = None; UseStyles = true 
 ///     Prints a <see cref="Doc"/> with no styling.
 /// </summary>
 let printUnstyled = printState { Level = 0; CurrentStyle = None; UseStyles = false }
-
 
 (*
  * Shortcuts

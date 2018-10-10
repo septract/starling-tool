@@ -19,7 +19,6 @@ open Starling.Core.Pretty
 open Starling.Core.Traversal.Pretty
 open Starling.Core.Symbolic.Pretty
 
-
 /// <summary>
 ///     Unit tests for symbolic post-state rewriting.
 /// </summary>
@@ -51,7 +50,6 @@ module PostStateRewrite =
     [<Test>]
     let ``Rewrite expression with no variables to post-state`` () =
         checkInt (IDiv (IInt 6L, IInt 0L)) (IDiv (IInt 6L, IInt 0L))
-
 
 /// <summary>
 ///     Test cases for testing underapproximation of Booleans.
@@ -109,7 +107,7 @@ module BoolApprox =
             (Context.negative ())
             (BVar
                 (Sym
-                    [ SymString "test" 
+                    [ SymString "test"
                       SymArg (normalIntExpr (siBefore "foo"))
                       SymArg (normalBoolExpr (sbAfter "bar")) ] ))
 
@@ -146,7 +144,6 @@ module BoolApprox =
                         [ SymString "test2"
                           SymArg (normalIntExpr (siBefore "baz"))
                           SymArg (normalBoolExpr (sbAfter "barbaz")) ] )))
-
 
 /// <summary>
 ///     Test cases for finding variables in expressions.
@@ -211,7 +208,7 @@ module FindSMVarsCases =
               normalBoolVar (After "baz") ]
             (normalBoolExpr
                 (BVar
-                    (Sym [ SymString "foo"  
+                    (Sym [ SymString "foo"
                            SymArg (normalIntExpr (siBefore "bar"))
                            SymArg (normalBoolExpr (sbAfter "baz")) ] )))
 
@@ -225,7 +222,6 @@ module FindSMVarsCases =
                         [ SymString "foo"
                           SymArg (normalIntExpr (siBefore "bar"))
                           SymArg (normalBoolExpr (sbAfter "baz")) ] )))
-
 
 /// <summary>
 ///     Tests on the symbolic pretty printer.

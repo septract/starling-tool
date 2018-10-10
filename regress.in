@@ -25,6 +25,7 @@ FailGH:clhLockFalseSpin: lock_C002__lock_C004_000 lock_C002__lock_C004_005
 FailGH:clhLockFlippedIf: lock_C004_000 lock_C004_005
 FailGH:ticketLockFlippedIf: lock_C001_003 lock_C001_004 lock_C001_006 lock_C002_002 lock_C002_005 lock_C003_003 lock_C003_004 lock_C003_006
 Pass:arc:
+Pass:circular:
 Pass:multicounter:
 Pass:multicounterOG:
 Pass:peterson:

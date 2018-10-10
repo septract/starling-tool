@@ -106,7 +106,7 @@ module Types =
         ///     An expression traversal went belly-up.
         /// </summary>
         | Traversal of TraversalError<Error>
-    
+
     /// <summary>
     ///    A reified view, paired with its original, unreified state.
     /// </summary>
@@ -733,7 +733,7 @@ let reifyView
         definer
         |> ViewDefiner.toSeq
         |> Seq.fold (reifySingleDef protos goal) Set.empty
-    
+
     { Original = view; Reified = reified }
 
 /// Performs sanity checking on the model, possibly producing deferred checks.
@@ -760,7 +760,6 @@ let reify
     lift
         (mapAxioms (mapTerm id (reifyView model.ViewProtos model.ViewDefs) id))
         checkedModelR
-
 
 /// <summary>
 ///     Pretty printers for the reifier types.

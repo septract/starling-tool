@@ -7,7 +7,6 @@ open Microsoft
 open Starling.Core.Expr
 open Starling.Core.TypeSystem
 
-
 /// <summary>
 ///     Pretty printers for the Z3 types.
 /// </summary>
@@ -25,7 +24,6 @@ module Pretty =
         | Z3.Status.SATISFIABLE -> errorStr "fail"
         | Z3.Status.UNSATISFIABLE -> successStr "success"
         | _ -> inconclusive (String "unknown")
-
 
 /// <summary>
 ///     Functions for translating Starling expressions into Z3.
@@ -134,7 +132,6 @@ module Expr =
             let idxZ3 = intToZ3 reals toStr ctx (mkTypedSub normalRec idx)
             let updZ3 = exprToZ3 reals toStr ctx upd
             ctx.MkStore (arrZ3, idxZ3, updZ3)
-
 
     /// Converts a Starling expression to a Z3 Expr.
     and exprToZ3

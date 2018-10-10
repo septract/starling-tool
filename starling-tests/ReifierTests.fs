@@ -13,7 +13,6 @@ open Starling.Core.TypeSystem
 open Starling.Core.View
 open Starling.Reifier
 
-
 /// <summary>
 ///     Tests for powerset generation.
 /// </summary>
@@ -35,7 +34,6 @@ module Powerset =
         List.sort <| [[]; [1]; [2]; [3]; [1; 2]; [1; 3]; [2; 3]; [1; 2; 3]]
         ?=?
         (List.sort <| List.ofSeq (powerset [1; 2; 3]))
-
 
 /// <summary>
 ///     Tests for parameter equality calculation.

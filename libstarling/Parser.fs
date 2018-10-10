@@ -360,6 +360,7 @@ do parseAtomicRef :=
 /// Parser for a collection of atomic actions.
 let parseAtomicSet =
     inAtomicBraces (many1 (parseAtomic .>> ws))
+    .>> notFollowedByL wsSemi "semicolon after atomic set (remove this semicolon)"
 
 /// Parses a Func given the argument parser argp.
 let parseFunc argp =
