@@ -749,8 +749,8 @@ and modelBoolExpr
     let me = modelExpr env scope varF
     let ma = modelArrayExpr env scope varF
 
-    let rec mb (e : Expression) : Result<TypedBoolExpr<Sym<'var>>, ExprError> =
-        match e.Node with
+    let rec mb : Expression' -> Result<TypedBoolExpr<Sym<'var>>, ExprError> =
+        function
         // These two have a indefinite subtype.
         | True -> ok (indefBool BTrue)
         | False -> ok (indefBool BFalse)
@@ -797,8 +797,14 @@ and modelBoolExpr
                     | Le -> mkLe
                     | Lt -> mkLt
                     | _ -> failwith "unreachable[modelBoolExpr::ArithIn]"
-                // We don't know the subtype of this yet...
-                lift indefBool (lift2 oper (mi l) (mi r))
+                match l.Node with
+                | BopExpr (ArithIn as o', l', mid) ->
+                    // Expand eg. (x < y <= z) to (x < y && y <= z).
+                    handleBoolBop
+                        mkAnd2 (BopExpr (o', l', mid)) (BopExpr (o, mid, r))
+                | _ ->
+                    // We don't know the subtype of this yet...
+                    lift indefBool (lift2 oper (mi l) (mi r))
             | BoolIn as o ->
                 let oper =
                     match o with
@@ -806,22 +812,7 @@ and modelBoolExpr
                     | Or -> mkOr2
                     | Imp -> mkImplies
                     | _ -> failwith "unreachable[modelBoolExpr::BoolIn]"
-
-                (* Both sides of the expression need to be unifiable to the
-                   same type. *)
-                bind2
-                    (fun ml mr ->
-                        match unifyPrimTypeRecs [ ml.SRec; mr.SRec ] with
-                        | Some t ->
-                            ok (mkTypedSub t (oper (stripTypeRec ml) (stripTypeRec mr)))
-                        | None ->
-                            fail
-                                (ExprBadType
-                                    (TypeMismatch
-                                        (expected = Exact (Type.Bool (ml.SRec, ())),
-                                         got = Exact (Type.Bool (mr.SRec, ()))))))
-                    (mb l)
-                    (mb r)
+                handleBoolBop oper l.Node r.Node
             | AnyIn as o ->
                 let oper =
                     match o with
@@ -835,12 +826,29 @@ and modelBoolExpr
 
                 // We don't know the subtype of this yet...
                 lift indefBool (lift (uncurry oper) lrR)
-        | UopExpr (Neg,e) -> lift (mapTypedSub mkNot) (mb e)
+        | UopExpr (Neg,e) -> lift (mapTypedSub mkNot) (mb e.Node)
         | _ ->
             fail
                 (ExprBadType
                     (TypeMismatch (expected = Fuzzy "bool", got = Fuzzy "unknown non-bool")))
-    mb expr
+    and handleBoolBop op l r =
+        (* Both sides of the expression need to be unifiable to the
+           same type. *)
+        bind2
+            (fun ml mr ->
+                match unifyPrimTypeRecs [ ml.SRec; mr.SRec ] with
+                | Some t ->
+                    ok (mkTypedSub t (op (stripTypeRec ml) (stripTypeRec mr)))
+                | None ->
+                    fail
+                        (ExprBadType
+                            (TypeMismatch
+                                (expected = Exact (Type.Bool (ml.SRec, ())),
+                                 got = Exact (Type.Bool (mr.SRec, ()))))))
+            (mb l)
+            (mb r)
+
+    mb expr.Node
 
 /// <summary>
 ///     Models a Starling integral expression as an <c>IntExpr</c>.

@@ -252,6 +252,33 @@ module BooleanExprs =
         AssertAreEqual(Some expectedExpr, actualBoolExpr)
 
     [<Test>]
+    let ``model transitive relational expression`` () =
+        check environ
+            (freshNode <|
+                BopExpr(
+                    Lt,
+                    freshNode (
+                        BopExpr (
+                            Lt,
+                            freshNode (Identifier "foo"),
+                            freshNode (Identifier "bar")
+                        )
+                    ),
+                    freshNode (Num 4L)
+                )
+            )
+            (indefBool
+                (mkAnd2
+                    (mkLt
+                        (normalInt (siVar "foo"))
+                        (normalInt (siVar "bar")))
+                    (mkLt
+                        (normalInt (siVar "bar"))
+                        (indefInt (IInt 4L)))
+                )
+            )
+
+    [<Test>]
     let ``model (true || true) && false`` () =
         check environ
             (freshNode <| BopExpr(And, freshNode <| BopExpr(Or, freshNode True, freshNode True), freshNode False))

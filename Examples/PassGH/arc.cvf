@@ -1,10 +1,9 @@
-/* Atomic reference counter  
+/* Atomic reference counter
  * Example taken from Derek / Rust: http://www.mpi-sws.org/~dreyer/talks/talk-dagstuhl16.pdf
  * Allocated version of Examples/Pass/arc2.cvf
- */ 
+ */
 
 typedef int ArcNode;
-typedef bool Bool;
 typedef int Int;
 
 pragma grasshopper_include {./grasshopper/arc-module.spl};
@@ -14,10 +13,7 @@ pragma grasshopper_footprint_sort {Set<ArcNode>};
 view iter arc(ArcNode x);
 view countCopy(ArcNode x, Int c);
 
-thread ArcNode x, ret;
-thread Int c, pval;
-
-method init() {
+method init(ArcNode ret) {
   {| emp |}
     <| ret = %{ new ArcNode };
        %{ [|ret|].count := 1 }; |>
@@ -32,16 +28,18 @@ method clone(ArcNode x) {
 
 method print(ArcNode x) {
   {| arc(x) |}
+    thread Int pval;
     <| pval = %{ [|x|].val }; |>
   {| arc(x) |}
 }
 
 method drop(ArcNode x) {
   {| arc(x) |}
+    thread Int c;
     <| c = %{ [|x|].count };
        %{ [|x|].count := [|x|].count - 1 }; |>
   {| countCopy(x, c) |}
-    if (c == 1) {
+    if c == 1 {
       {| countCopy(x, 1) |}
          <| %{ free([|x|]) }; |>
       {| emp |}

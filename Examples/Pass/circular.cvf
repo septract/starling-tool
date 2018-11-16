@@ -116,14 +116,12 @@ constraint emp ->
 
 view Writer(int pointer, int cap_estimate);
 constraint Writer(pointer, cap_estimate) ->
-  0 <= pointer && pointer < 100 &&
-  0 <= cap_estimate && cap_estimate <= w_capacity;
+  0 <= pointer < 100 && 0 <= cap_estimate <= w_capacity;
 // Single writer
 constraint Writer(xp, xc) * Writer(yp, yc) -> false;
 
 view Reader(int pointer, int cap_estimate);
 constraint Reader(pointer, cap_estimate) ->
-  0 <= pointer && pointer < 100 &&
-  0 <= cap_estimate && cap_estimate <= r_capacity;
+  0 <= pointer < 100 && 0 <= cap_estimate <= r_capacity;
 // Single reader
 constraint Reader(xp, xc) * Reader(yp, yc) -> false;

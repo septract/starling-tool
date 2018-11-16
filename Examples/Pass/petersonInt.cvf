@@ -94,8 +94,7 @@ method unlockB() {
 
 // Invariant: either it's A's turn, or B's turn.
 // Also flags are either 0 or 1.
-constraint emp -> turn >= 0 && turn < 2 && aFlag >= 0 && aFlag < 2
-                                        && bFlag >= 0 && bFlag < 2;
+constraint emp -> 0 <= turn < 2 && 0 <= aFlag < 2 && 0 <= bFlag < 2;
 
 /*
  * Predicate definitions.
