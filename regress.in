@@ -15,6 +15,7 @@
 Fail:arcNondet: drop_C002_002 drop_C002_003
 Fail:badInc: badInc_C000_000
 Fail:badInc2: badInc_C000_000
+Fail:circularNoFlushSync: flush_C000_003
 Fail:petersonArrayBadTurns: lock_C001_005
 Fail:petersonBadTurns: lockA_C001_019 lockB_C001_018
 Fail:spinLockBrokenCAS: lock_C001__lock_C003_001

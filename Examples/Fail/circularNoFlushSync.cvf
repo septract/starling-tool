@@ -1,18 +1,6 @@
 /*
- * Circular buffer
- *
- * This Starling proof checks various properties of a simple single-reader,
- * single-writer circular buffer implementation:
- *
- * 1) The threads only ever underestimate the capacity available to them,
- *    and never over-estimate;
- * 2) The buffer never overflows (write capacity goes above 100) or
- *    underflows (read capacity goes above 100);
- * 3) If we synchronise both reader and writer, we can flush the buffer by
- *    resetting the capacities and pointers.
- *
- * It doesn't actually check the consistency of the data added, nor does
- * it make sure the pointers are properly synchronised.
+ * Circular buffer with an erroneous lack of synchrononisation when
+ * flushing.
  */
 
 // The circular buffer itself.
@@ -82,13 +70,15 @@ method read(int c)
   {| Reader(pointer, rc - read) |}
 }
 
-method flush(int p1, int p2)
+// Erroneous flush
+method flush()
 {
-  {| Reader(p1, 0) * Writer(p2, 0) |}
+  {| emp |}
     <| r_capacity = 0;
        w_capacity = 100; |>
-  {| Reader(p1, 0) * Writer(p2, 100) |}
+  {| emp |}
 }
+// End erroneous flush
 
 /* The above specifications require the reader and writer to have a capacity
    estimate of 0, so we show here that we can always forget the last capacity
