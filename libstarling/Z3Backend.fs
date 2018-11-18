@@ -177,6 +177,14 @@ module Pretty =
                     zterm.Z3 ]
               colonSep [ String "Status"; printMaybeSat zterm.Status ] ]
 
+    let fmtViewList (l : Doc list) : Doc =
+        if l.IsEmpty then String "the invariant" else vsep l
+
+    let headedStanza heading = function
+        | [] -> errorStr heading <+> errorInfoStr "(empty)"
+        | [doc] -> errorStr (heading + ":") <+> doc
+        | stanza -> errHeaded heading stanza
+ 
     /// <summary>
     ///     Configuration for formatting the output of the Z3 backend.
     /// </summary>
@@ -199,6 +207,79 @@ module Pretty =
           /// </summary>
           ShowAllIterators : bool }
 
+        member private vconf.PrintWPre wpre =
+            let pvar = printSym printMarkedVar
+            fmtViewList
+                (printIteratedGViewAsListWith
+                    pvar
+                    (vconf.PrintIterator pvar)
+                    wpre)
+
+        member private vconf.MakeBackendTranslation b =
+            seq {
+                if vconf.ShowBackendTranslation
+                then
+                    let p = printBoolExpr (printSym printMarkedVar) b
+                    yield errorInfo (headed "which was translated into" [ p ])
+            }
+
+        member private vconf.MakeWPreStanza (term : ZTerm) : Doc seq =
+            seq {
+                yield vconf.PrintWPre term.Original.WPre.Original
+
+                if vconf.ShowReifiedWPre then
+                    yield
+                        errorInfo
+                            (headed "which was reified into"
+                                [ printGView (printSym printMarkedVar) term.Original.WPre.Reified ])
+
+                yield! vconf.MakeBackendTranslation term.SymBool.WPre
+            }
+
+         member private vconf.PrintIterator pvar =
+            (if vconf.ShowAllIterators
+             then printIntExpr 
+             else printExprIterator) pvar
+
+        member private vconf.PrintGoal (g : Core.View.Types.IteratedOView) : Doc =
+
+            fmtViewList
+                (printIteratedOViewAsListWith
+                    (vconf.PrintIterator (printSym printMarkedVar))
+                    g)
+       
+        member private vconf.MakeGoalStanza (term : ZTerm) : Doc seq =
+            seq {
+                yield vconf.PrintGoal term.Original.Goal.Original
+
+                if vconf.ShowFlattenedGoal then
+                    yield
+                        errorInfo
+                            (headed "which was flattened into"
+                                [ printVFunc (printSym printMarkedVar)
+                                    term.Original.Goal.Flattened ])
+
+                yield! vconf.MakeBackendTranslation term.SymBool.Goal
+            }
+
+        member private vconf.MakeEntailmentFailureBody wpreStanza goalStanza =
+            [ errHeaded "Could not prove that the view" wpreStanza
+              errHeaded "semantically entails" goalStanza ]
+
+        member private vconf.MakeCommandFailureBody
+          (cmd : Core.Command.Types.CommandSemantics<BoolExpr<Sym<MarkedVar>>>)
+          wpreStanza goalStanza =
+            let cmdStanza =
+                List.ofSeq (
+                    seq {
+                        yield printCommand cmd.Cmd
+                        yield! vconf.MakeBackendTranslation cmd.Semantics
+                    }
+                )
+            [ headedStanza "Could not prove action" cmdStanza
+              headedStanza "under weakest precondition" wpreStanza
+              headedStanza "establishes" goalStanza ]
+
         /// <summary>
         ///     Pretty-prints a <see cref="ZTerm"/> as a failure report.
         /// </summary>
@@ -210,79 +291,19 @@ module Pretty =
         /// </returns>
         member private vconf.PrintFailure (name : string) (term : ZTerm)
           : Doc * Doc =
-            let piter =
-                if vconf.ShowAllIterators
-                then printIntExpr
-                else printExprIterator
 
-            let fmtViewList (l : Doc list) : Doc =
-                if l.IsEmpty then String "the invariant" else vsep l
-
-            let printWPre =
-                let pvar = printSym printMarkedVar
-                fmtViewList << printIteratedGViewAsListWith pvar (piter pvar)
-            
-            let printGoal (g : Core.View.Types.IteratedOView) : Doc =
-                fmtViewList
-                    (printIteratedOViewAsListWith
-                        (piter (printSym printMarkedVar))
-                        g)
-
-            let backendTranslation b =
-                seq {
-                    if vconf.ShowBackendTranslation
-                    then
-                        let p = printBoolExpr (printSym printMarkedVar) b
-                        yield errorInfo (headed "which was translated into" [ p ])
-                }
-
-            let wpreStanza =
-                seq {
-                    yield printWPre term.Original.WPre.Original
-
-                    if vconf.ShowReifiedWPre then
-                        yield
-                            errorInfo
-                                (headed "which was reified into"
-                                    [ printGView (printSym printMarkedVar) term.Original.WPre.Reified ])
-
-                    yield! backendTranslation term.SymBool.WPre
-                }
-
-            let goalStanza =
-                seq {
-                    yield printGoal term.Original.Goal.Original
-
-                    if vconf.ShowFlattenedGoal then
-                        yield
-                            errorInfo
-                                (headed "which was flattened into"
-                                    [ printVFunc (printSym printMarkedVar)
-                                        term.Original.Goal.Flattened ])
-
-                    yield! backendTranslation term.SymBool.Goal
-                }
+            let wpreStanza = List.ofSeq (vconf.MakeWPreStanza term)
+            let goalStanza = List.ofSeq (vconf.MakeGoalStanza term)
 
             (* Show a more friendly body if the command is empty, ie. this is a
                semantic entailment rather than a command step. *)
             let cmd = term.Original.Cmd
             let body =
                 if cmd.Cmd.IsEmpty
-                then
-                    [ errHeaded "Could not prove that the view" wpreStanza
-                      errHeaded "semantically entails" goalStanza ]
-                else
-                    let cmdStanza =
-                        seq {
-                            yield printCommand term.Original.Cmd.Cmd
-                            yield! backendTranslation term.Original.Cmd.Semantics
-                        }
+                then vconf.MakeEntailmentFailureBody wpreStanza goalStanza
+                else vconf.MakeCommandFailureBody cmd wpreStanza goalStanza
 
-                    [ errHeaded "Could not prove that this command" cmdStanza
-                      errHeaded "under the weakest precondition" wpreStanza
-                      errHeaded "establishes" goalStanza ]
-
-            (errorContext (String name) <+> printMaybeSat term.Status, vsep body)
+            (errorContextStr name <+> printMaybeSat term.Status, vsep body)
 
         /// Pretty-prints a response.
         member vconf.PrintResponse (mview : ModelView) (response : Response) : Doc =
