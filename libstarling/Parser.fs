@@ -366,6 +366,13 @@ let parseAtomicSet =
 let parseFunc argp =
     pipe2ws parseIdentifier (parseParamList argp) regFunc
 
+let parseOptionalParamList argp =
+    opt (parseParamList argp) |>> withDefault []
+
+// As parseFunc, but with optional parameters.
+let parseFuncOptionalParams argp =
+    pipe2ws parseIdentifier (parseOptionalParamList argp) regFunc
+
 (*
  * View-likes (views and view definitions).
  *)
@@ -425,7 +432,8 @@ let parseLocalView =
 
 
 /// Parses a functional view.
-let parseFuncView = parseFunc parseExpression |>> View.Func
+let parseFuncView =
+    parseFuncOptionalParams parseExpression |>> View.Func
 
 /// Parses a `basic` view (unit, if, named, or bracketed).
 let parseBasicView =
@@ -465,8 +473,9 @@ let parseViewExpr =
  * View definitions.
  *)
 
-/// Parses a functional view definition.
-let parseStrFuncView = parseFunc parseIdentifier |>> ViewSignature.Func
+/// Parses a functional view signature.
+let parseStrFuncView =
+    parseFuncOptionalParams parseIdentifier |>> ViewSignature.Func
 
 /// Parses the unit view definition.
 let parseDUnit = stringReturn "emp" ViewSignature.Unit
@@ -487,7 +496,7 @@ let parseIteratedContainer
 /// Parses an iterated view definition.
 let parseDIterated =
     parseIteratedContainer
-        (parseFunc parseIdentifier)
+        (parseFuncOptionalParams parseIdentifier)
         (fun e f -> ViewSignature.Iterated(f, e))
 
 /// Parses a `basic` view definition (unit, if, named, or bracketed).
@@ -512,9 +521,9 @@ do parseViewSignatureRef := parseViewLike parseBasicViewSignature ViewSignature.
 let parseViewProto =
     // TODO (CaptainHayashi): so much backtracking...
     (pstring "iter" >>. ws >>.
-      (parseFunc parseParam |>> WithIterator))
+      (parseFuncOptionalParams parseParam |>> WithIterator))
     <|>
-      (parseFunc parseParam
+      (parseFuncOptionalParams parseParam
          |>> (fun lhs -> NoIterator (lhs, false)))
 
 /// Parses a set of one or more view prototypes.

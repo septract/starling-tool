@@ -10,19 +10,17 @@ shared int count;
 thread bool f;
 thread int c;
 
-view iter arc();
-view countCopy(int c);
+view iter Arc;
+view CountWas(int c);
 
 method clone() {
-  {| arc() |}
-    <| count++ ; |>
-  {| arc() * arc() |}
+  {| Arc |} <| count++; |> {| Arc * Arc |}
 }
 
 method print() {
   {| arc() |}
     <| f = free; |>
-  {| if f == true { false } else { arc() } |}
+  {| if f == true { false } else { Arc } |}
     if f == true {
       {| false |} <| error; |> {| false |}
     }
@@ -30,23 +28,21 @@ method print() {
 }
 
 method drop() {
-  {| arc() |}
+  {| Arc |}
     <| c = count--; |>
-  {| countCopy(c) |}
+  {| CountWas(c) |}
     if c == 1 {
-      {| countCopy(1) |}
-        <| free = true; |>
-      {| emp |}
+      {| CountWas(1) |} <| free = true; |> {| emp |}
     }
   {| emp |}
 }
 
-constraint iter[n] arc() ->
+constraint iter[n] Arc ->
     n > 0 => (free == false && n <= count);
 
-constraint countCopy(c) ->
+constraint CountWas(c) ->
     c == 1 => (free == false && count == 0);
 
-constraint countCopy(m) * countCopy(n) ->
+constraint CountWas(m) * CountWas(n) ->
     (m != 1) || (n != 1);
 
