@@ -18,13 +18,13 @@ method clone() {
 }
 
 method print() {
-  {| arc() |}
+  {| Arc |}
     <| f = free; |>
   {| if f == true { false } else { Arc } |}
     if f == true {
       {| false |} <| error; |> {| false |}
     }
-  {| arc() |}
+  {| Arc |}
 }
 
 method drop() {
