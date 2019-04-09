@@ -10,6 +10,7 @@
 #
 # Lines starting with # are discarded.  Whitespace is significant.
 ARC (static):Pass:arc:
+Circular buffer:Pass:circular:
 Ticket lock (static):Pass:ticketLock:
 Spinlock (static):Pass:spinLock:
 Reader/writer lock:Pass:singleWriterMultiReaderLock:

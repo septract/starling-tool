@@ -1,49 +1,52 @@
-#!/usr/bin/env python
-from __future__ import print_function
-
+#!/usr/bin/env python3
+import functools
 import os
 import re
 import sys
 import argparse
 import itertools
 import collections
+from typing import Iterator
+
 from starling_common import *
 
 # This file should contain records of the form
 # bucket:name: failing-term1 failing-term2 ... failing-termN
 SPEC_FILE = 'regress.in'
 
-Z3_PASS_DIR = os.path.join('Examples', 'Pass')
-Z3_FAIL_DIR = os.path.join('Examples', 'Fail')
+Z3_PASS_DIR: pathlib.Path = pathlib.Path('Examples', 'Pass')
+Z3_FAIL_DIR: pathlib.Path = pathlib.Path('Examples', 'Fail')
 
-GH_PASS_DIR = os.path.join('Examples', 'PassGH')
-GH_FAIL_DIR = os.path.join('Examples', 'FailGH')
+GH_PASS_DIR: pathlib.Path = pathlib.Path('Examples', 'PassGH')
+GH_FAIL_DIR: pathlib.Path = pathlib.Path('Examples', 'FailGH')
 
-CVF_RE = re.compile('^\S*\.cvf$')
+CVF_PATTERN: str = '**/*.cvf'
 ARGS = None
+
 
 def verbose(fmt, *args):
     """Prints to stdout, but only in verbose mode."""
     if ARGS.verbose:
         print(fmt.format(*args))
 
+
 def err(fmt, *args):
     """Prints to stderr."""
     print(fmt.format(*args), file=sys.stderr)
 
-def z3(starling_args, file_name):
+
+def z3(starling: Starling, file_name):
     """Runs Starling in Z3 mode on file_name, yielding all failing clauses.
 
     Args:
-        starling_args: A list containing the program name, and zero or
-            more arguments, needed to run Starling.
+        starling: The Starling object to use.
         file_name: The name of the file to check.
 
     Yields:
         Each failing clause resulting from running Starling.
     """
-    lines, _ = run_starling_z3(starling_args, file_name)
-    for line in lines:
+    output = starling.run_z3(file_name)
+    for line in output.stdout:
         # outputs in form
         # "clause_name: (success | fail)
         name, _, status = line.partition(':')
@@ -51,12 +54,12 @@ def z3(starling_args, file_name):
         if status == 'fail':
             yield name
 
-def grasshopper(starling_args, grasshopper_args, file_name):
+
+def grasshopper(starling: Starling, grasshopper_args, file_name):
     """Runs Starling/GRASShopper mode on file_name, yielding failing clauses.
 
     Args:
-        starling_args: A list containing the program name, and zero or
-            more arguments, needed to run Starling.
+        starling: The Starling object to use.
         grasshopper_args: A list containing the program name, and zero or
             more arguments, needed to run GRASShopper.
         file_name: The name of the file to check.
@@ -64,12 +67,13 @@ def grasshopper(starling_args, grasshopper_args, file_name):
     Yields:
         Each failing clause resulting from running Starling.
     """
-    lines, _ = run_starling_grasshopper(starling_args, grasshopper_args, file_name)
+    output = starling.run_grasshopper(grasshopper_args, file_name)
     # The GRASShopper output needs some significant massaging.
-    for line in lines:
+    for line in output.stdout:
         m = GH_FAIL_RE.match(line)
         if m:
             yield m.group('term')
+
 
 def make_failure_dict(spec_file):
     """Creates a lookup of all expected failures from spec_file.
@@ -86,22 +90,8 @@ def make_failure_dict(spec_file):
 
     return expected_failures
 
-def find(root, regexp):
-    """find all files under `root` that match regexp
-    """
-    roots = collections.deque([root])
-    while roots:
-        root = roots.popleft()
 
-        for root, dirs, files in os.walk(root):
-            for file in files:
-                if regexp.search(file):
-                    yield os.path.join(root, file)
-
-            for dir in dirs:
-                roots.append(os.path.join(root, dir))
-
-def check(files, checker, expected_failures):
+def check(files: Iterator[pathlib.Path], checker, expected_failures):
     """Runs a checker on each file in files, and reports failures."""
     failed_overall = False
     for file in files:
@@ -124,26 +114,27 @@ def check(files, checker, expected_failures):
 
     return failed_overall
 
+
 def main():
     """ Run starling on the Examples/Pass and Examples/Fail directories
     and check that there are no unexpected failures. Exiting with exit code 1
     if there are
     """
     expected_failures = make_failure_dict(SPEC_FILE)
-    starling_args = get_starling()
+    starling = get_starling()
 
     failed = False
 
     if not ARGS.noz3:
-        pass_z3 = find(Z3_PASS_DIR, CVF_RE)
-        fail_z3 = find(Z3_FAIL_DIR, CVF_RE)
-        z = lambda fn: z3(starling_args, fn)
+        pass_z3 = Z3_PASS_DIR.glob(CVF_PATTERN)
+        fail_z3 = Z3_FAIL_DIR.glob(CVF_PATTERN)
+        z = functools.partial(z3, starling)
         failed = check(itertools.chain(pass_z3, fail_z3), z, expected_failures)
 
     if not (failed or ARGS.nogh):
-        pass_gh = find(GH_PASS_DIR, CVF_RE)
-        fail_gh = find(GH_FAIL_DIR, CVF_RE)
-        g = lambda fn: grasshopper(starling_args, ['grasshopper.native', '-robust'], fn)
+        pass_gh = GH_PASS_DIR.glob(CVF_PATTERN)
+        fail_gh = GH_FAIL_DIR.glob(CVF_PATTERN)
+        g = functools.partial(grasshopper, starling, ['grasshopper.native', '-robust'])
         failed = check(itertools.chain(pass_gh, fail_gh), g, expected_failures)
 
     if failed:
@@ -154,6 +145,7 @@ def main():
         verbose('')
         print('OK.')
         sys.exit(0)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
