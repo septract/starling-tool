@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>netcoreapp2.0</TargetFramework>
+    <TargetFramework>net5.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\libstarling\libstarling.fsproj" />
@@ -31,12 +31,6 @@
     <Compile Include="UtilTests.fs" />
     <Compile Include="VarTests.fs" />
     <Compile Include="Z3Tests.fs" />
-    <Compile Include="Program.fs" />
-  </ItemGroup>
-  <ItemGroup>
-    <Reference Include="Microsoft.Z3">
-      <HintPath>..\Microsoft.Z3.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>

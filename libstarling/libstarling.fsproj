@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>net5.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Utils.fs" />
@@ -38,14 +38,6 @@
     <Compile Include="MuZ3Backend.fs" />
     <Compile Include="Grasshopper.fs" />
     <Compile Include="Frontend.fs" />
-  </ItemGroup>
-  <!-- Z3 wraps a native DLL, so it's next to impossible to include a package
-       for it portably.  Instead, we expect the user to build 'Microsoft.Z3.dll'
-       locally, and copy it to the Starling directory. -->
-  <ItemGroup>
-    <Reference Include="Microsoft.Z3">
-      <HintPath>..\Microsoft.Z3.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>
