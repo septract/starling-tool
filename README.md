@@ -38,11 +38,7 @@ using the `Z3` SMT solver, or combined with other tools:
 
 ## Requirements
 
-- [.NET Core SDK 2](https://www.microsoft.com/net/learn/get-started/);
-- [F# 4.1](http://fsharp.org) or newer;
-- Due to [this issue](https://github.com/fsprojects/Paket/issues/2875),
-  installing packages with Paket still requires
-  [Mono](http://www.mono-project.com);
+- [.NET SDK 5](https://www.microsoft.com/net/learn/get-started/), and its version of FSharp;
 - [Z3 4.6.0](http://z3prover.github.io): -both the native library (`libz3`) and the .NET Core bindings
   (`Microsoft.Z3.dll`).  At the time of writing, the .NET Core build needs a
   few workarounds (to be documented).
@@ -63,8 +59,10 @@ in your `PATH` to be able to use `starling-gh.sh`.
 ## Build
 
 - Compile `Microsoft.Z3.dll` for .NET Core, and copy it to the root directory.
-- Run `dotnet build`, which should fetch the packages needed and run the F#
-  compiler.
+- Run:
+  - `dotnet tool restore`;
+  - `dotnet paket restore`;
+  - `dotnet build`.
 
 ## Usage
 
